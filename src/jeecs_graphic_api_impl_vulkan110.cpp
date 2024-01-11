@@ -377,9 +377,69 @@ VK_API_PLATFORM_API_LIST
         std::vector<jevk11_framebuffer*>    _vk_swapchain_framebuffer;
         std::vector<jevk11_texture*>        _vk_swapchain_textures_for_free;
 
+        template<VkDescriptorType DESC_SET_TYPE, size_t MAX_COUNT>
+        struct single_descriptor_set_allocator
+        {
+            std::vector<VkDescriptorPool>  m_pools;
+            size_t                         m_next;
+            std::vector<VkDescriptorSet>   m_sets;
+
+            VkDescriptorSet allocate_descriptor_set()
+            {
+                if (m_next < m_sets.size())
+                    return m_sets[m_next++];
+
+                VkDescriptorSet result;
+                for (;;)
+                {
+                    if (!m_pools.empty())
+                    {
+                        VkDescriptorSetAllocateInfo ubo_set_alloc_info = {};
+                        ubo_set_alloc_info.sType = VkStructureType::VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+                        ubo_set_alloc_info.pNext = nullptr;
+                        ubo_set_alloc_info.descriptorPool = m_pools.back();
+                        ubo_set_alloc_info.descriptorSetCount = 1;
+                        ubo_set_alloc_info.pSetLayouts = &m_layout;
+
+                        auto alloc_result = _vk_this_context->vkAllocateDescriptorSets(
+                            _vk_this_context->_vk_logic_device, &ubo_set_alloc_info, &result);
+
+                        if (VK_SUCCESS == alloc_result)
+                        {
+                            m_sets.push_back(result);
+                            m_next++;
+                            return result;
+                        }
+                    }
+
+                    VkDescriptorPool new_created_pool;
+
+                    VkDescriptorPoolSize pool_sizes[1] = {};
+                    pool_sizes[0].type = DESC_SET_TYPE;
+                    pool_sizes[0].descriptorCount = 128;
+
+                    VkDescriptorPoolCreateInfo pool_create_info = {};
+                    pool_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+                    pool_create_info.pNext = nullptr;
+                    pool_create_info.flags = 0;
+                    pool_create_info.maxSets = 128;
+                    pool_create_info.poolSizeCount = 1;
+                    pool_create_info.pPoolSizes = pool_sizes;
+
+                    if (VK_SUCCESS != _vk_this_context->vkCreateDescriptorPool(
+                        _vk_this_context->_vk_logic_device, &pool_create_info, nullptr, &new_created_pool))
+                    {
+                        jeecs::debug::logfatal("Failed to create vk110 descriptor pool.");
+                    }
+                    m_pools.push_back(new_created_pool);
+                }
+            }
+        };
+
+        template<size_t _MAX_LAYOUT_COUNT>
         struct descriptor_set_allocator
         {
-            constexpr static size_t MAX_LAYOUT_COUNT = 16;
+            constexpr static size_t MAX_LAYOUT_COUNT = _MAX_LAYOUT_COUNT;
             constexpr static size_t MAX_UBO_LAYOUT = MAX_LAYOUT_COUNT;
             constexpr static size_t MAX_TEXTURE_LAYOUT = MAX_LAYOUT_COUNT;
             constexpr static size_t MAX_SAMPLER_LAYOUT = MAX_LAYOUT_COUNT;
@@ -908,9 +968,11 @@ VK_API_PLATFORM_API_LIST
 
         };
 
-        descriptor_set_allocator* _vk_descriptor_set_allocator;
+        descriptor_set_allocator<16>* _vk_descriptor_set_allocator;
+        descriptor_set_allocator<1>* _vk_dear_imgui_descriptor_set_allocator;
         command_buffer_allocator* _vk_command_buffer_allocator;
 
+        VkSampler _vk_dear_imgui_sampler;
         VkDescriptorPool _vk_dear_imgui_descriptor_pool;
 
         // Following is runtime vk states.
@@ -1751,7 +1813,8 @@ VK_API_PLATFORM_API_LIST
             assert(_vk_logic_device_graphic_queue != nullptr);
             assert(_vk_logic_device_present_queue != nullptr);
 
-            _vk_descriptor_set_allocator = new descriptor_set_allocator(this);
+            _vk_descriptor_set_allocator = new descriptor_set_allocator<16>(this);
+            _vk_dear_imgui_descriptor_set_allocator = new descriptor_set_allocator<1>(this);
             _vk_command_buffer_allocator = new command_buffer_allocator(this);
 
             // 为imgui创建描述符集池
@@ -1787,6 +1850,13 @@ VK_API_PLATFORM_API_LIST
             recreate_swap_chain_for_current_surface(
                 _vk_jegl_interface->m_interface_width,
                 _vk_jegl_interface->m_interface_height);
+
+            _vk_dear_imgui_sampler = create_sampler(
+                jegl_shader::fliter_mode::NEAREST,
+                jegl_shader::fliter_mode::NEAREST,
+                jegl_shader::fliter_mode::NEAREST,
+                jegl_shader::wrap_mode::CLAMP,
+                jegl_shader::wrap_mode::CLAMP);
         }
         void pre_shutdown()
         {
@@ -1794,10 +1864,13 @@ VK_API_PLATFORM_API_LIST
         }
         void shutdown()
         {
+            delete _vk_dear_imgui_descriptor_set_allocator;
             delete _vk_descriptor_set_allocator;
             delete _vk_command_buffer_allocator;
 
             destroy_swap_chain();
+            
+            vkDestroySampler(_vk_logic_device, _vk_dear_imgui_sampler, nullptr);
 
             vkDestroyDescriptorPool(_vk_logic_device, _vk_dear_imgui_descriptor_pool, nullptr);
 
@@ -1910,6 +1983,95 @@ VK_API_PLATFORM_API_LIST
             vkBindBufferMemory(_vk_logic_device, *out_device_buffer, *out_device_memory, 0);
         }
         /////////////////////////////////////////////////////
+        VkSampler create_sampler(
+            jegl_shader::fliter_mode mag, 
+            jegl_shader::fliter_mode min, 
+            jegl_shader::fliter_mode mip, 
+            jegl_shader::wrap_mode u,
+            jegl_shader::wrap_mode v)
+        {
+            VkSamplerCreateInfo sampler_create_info = {};
+            sampler_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+            sampler_create_info.pNext = nullptr;
+            sampler_create_info.flags = 0;
+
+            // 线性或临近采样
+            switch (mag)
+            {
+            case jegl_shader::fliter_mode::LINEAR:
+                sampler_create_info.magFilter = VkFilter::VK_FILTER_LINEAR;
+                break;
+            case jegl_shader::fliter_mode::NEAREST:
+                sampler_create_info.magFilter = VkFilter::VK_FILTER_NEAREST;
+                break;
+            }
+            switch (min)
+            {
+            case jegl_shader::fliter_mode::LINEAR:
+                sampler_create_info.minFilter = VkFilter::VK_FILTER_LINEAR;
+                break;
+            case jegl_shader::fliter_mode::NEAREST:
+                sampler_create_info.minFilter = VkFilter::VK_FILTER_NEAREST;
+                break;
+            }
+            switch (mip)
+            {
+            case jegl_shader::fliter_mode::LINEAR:
+                sampler_create_info.mipmapMode = VkSamplerMipmapMode::VK_SAMPLER_MIPMAP_MODE_LINEAR;
+                break;
+            case jegl_shader::fliter_mode::NEAREST:
+                sampler_create_info.mipmapMode = VkSamplerMipmapMode::VK_SAMPLER_MIPMAP_MODE_NEAREST;
+                break;
+            }
+
+            // 边缘采样方式
+            switch (u)
+            {
+            case jegl_shader::wrap_mode::CLAMP:
+                sampler_create_info.addressModeU = VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+                break;
+            case jegl_shader::wrap_mode::REPEAT:
+                sampler_create_info.addressModeU = VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_REPEAT;
+                break;
+            }
+            switch (v)
+            {
+            case jegl_shader::wrap_mode::CLAMP:
+                sampler_create_info.addressModeV = VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+                break;
+            case jegl_shader::wrap_mode::REPEAT:
+                sampler_create_info.addressModeV = VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_REPEAT;
+                break;
+            }
+            // JoyEngine的纹理没有W方向，现在先随便塞个值
+            sampler_create_info.addressModeW = VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_REPEAT;
+
+            // 边缘采样颜色， 由于引擎没有提供边缘采样颜色的选项，所以这里也是随便填一个
+            sampler_create_info.borderColor = VkBorderColor::VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+
+            // 乱七八糟的其他设置，统统忽略
+            sampler_create_info.mipLodBias = 0.0f;
+
+            // 各向异性滤波，此处也简单忽略。不启用
+            sampler_create_info.anisotropyEnable = VK_FALSE;
+
+            sampler_create_info.maxAnisotropy = 1.0f;
+            sampler_create_info.compareEnable = VK_FALSE;
+            sampler_create_info.compareOp = VkCompareOp::VK_COMPARE_OP_ALWAYS;
+            sampler_create_info.minLod = 0.0f;
+            sampler_create_info.maxLod = 0.0f;
+
+            VkSampler result;
+            if (VK_SUCCESS != vkCreateSampler(
+                _vk_logic_device,
+                &sampler_create_info,
+                nullptr,
+                &result))
+            {
+                jeecs::debug::logfatal("Failed to create vk110 sampler.");
+            }
+            return result;
+        }
         jevk11_shader_blob* create_shader_blob(jegl_resource* resource)
         {
             jevk11_shader_blob::blob_data* shader_blob = new jevk11_shader_blob::blob_data{};
@@ -1924,84 +2086,14 @@ VK_API_PLATFORM_API_LIST
             for (size_t i = 0; i < resource->m_raw_shader_data->m_sampler_count; ++i)
             {
                 const jegl_shader::sampler_method& method = resource->m_raw_shader_data->m_sampler_methods[i];
-
-                VkSamplerCreateInfo sampler_create_info = {};
-                sampler_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-                sampler_create_info.pNext = nullptr;
-                sampler_create_info.flags = 0;
-
-                // 线性或临近采样
-                switch (method.m_mag)
-                {
-                case jegl_shader::fliter_mode::LINEAR:
-                    sampler_create_info.magFilter = VkFilter::VK_FILTER_LINEAR;
-                    break;
-                case jegl_shader::fliter_mode::NEAREST:
-                    sampler_create_info.magFilter = VkFilter::VK_FILTER_NEAREST;
-                    break;
-                }
-                switch (method.m_min)
-                {
-                case jegl_shader::fliter_mode::LINEAR:
-                    sampler_create_info.minFilter = VkFilter::VK_FILTER_LINEAR;
-                    break;
-                case jegl_shader::fliter_mode::NEAREST:
-                    sampler_create_info.minFilter = VkFilter::VK_FILTER_NEAREST;
-                    break;
-                }
-                switch (method.m_mip)
-                {
-                case jegl_shader::fliter_mode::LINEAR:
-                    sampler_create_info.mipmapMode = VkSamplerMipmapMode::VK_SAMPLER_MIPMAP_MODE_LINEAR;
-                    break;
-                case jegl_shader::fliter_mode::NEAREST:
-                    sampler_create_info.mipmapMode = VkSamplerMipmapMode::VK_SAMPLER_MIPMAP_MODE_NEAREST;
-                    break;
-                }
-
-                // 边缘采样方式
-                switch (method.m_uwrap)
-                {
-                case jegl_shader::wrap_mode::CLAMP:
-                    sampler_create_info.addressModeU = VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-                    break;
-                case jegl_shader::wrap_mode::REPEAT:
-                    sampler_create_info.addressModeU = VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_REPEAT;
-                    break;
-                }
-                switch (method.m_vwrap)
-                {
-                case jegl_shader::wrap_mode::CLAMP:
-                    sampler_create_info.addressModeV = VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-                    break;
-                case jegl_shader::wrap_mode::REPEAT:
-                    sampler_create_info.addressModeV = VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_REPEAT;
-                    break;
-                }
-                // JoyEngine的纹理没有W方向，现在先随便塞个值
-                sampler_create_info.addressModeW = VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_REPEAT;
-
-                // 边缘采样颜色， 由于引擎没有提供边缘采样颜色的选项，所以这里也是随便填一个
-                sampler_create_info.borderColor = VkBorderColor::VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-
-                // 乱七八糟的其他设置，统统忽略
-                sampler_create_info.mipLodBias = 0.0f;
-                // 各向异性滤波，此处也简单忽略。不启用
-                sampler_create_info.anisotropyEnable = VK_FALSE;
-                sampler_create_info.maxAnisotropy = 1.0f;
-                sampler_create_info.compareEnable = VK_FALSE;
-                sampler_create_info.compareOp = VkCompareOp::VK_COMPARE_OP_ALWAYS;
-                sampler_create_info.minLod = 0.0f;
-                sampler_create_info.maxLod = 0.0f;
-
-                if (VK_SUCCESS != vkCreateSampler(
-                    _vk_logic_device,
-                    &sampler_create_info,
-                    nullptr,
-                    &shader_blob->m_samplers[i].m_vk_sampler))
-                {
-                    jeecs::debug::logfatal("Failed to create vk110 sampler.");
-                }
+                
+                shader_blob->m_samplers[i].m_vk_sampler = 
+                    create_sampler(
+                    method.m_mag,
+                    method.m_min,
+                    method.m_mip,
+                    method.m_uwrap,
+                    method.m_vwrap);
                 shader_blob->m_samplers[i].m_sampler_id = method.m_sampler_id;
             }
 
@@ -2379,7 +2471,7 @@ VK_API_PLATFORM_API_LIST
             pipeline_layout_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
             pipeline_layout_create_info.pNext = nullptr;
             pipeline_layout_create_info.flags = 0;
-            pipeline_layout_create_info.setLayoutCount = (uint32_t)descriptor_set_allocator::DescriptorSetType::COUNT;
+            pipeline_layout_create_info.setLayoutCount = (uint32_t)descriptor_set_allocator<16>::DescriptorSetType::COUNT;
             pipeline_layout_create_info.pSetLayouts = _vk_descriptor_set_allocator->m_vk_global_descriptor_set_layouts;
             pipeline_layout_create_info.pushConstantRangeCount = 0;
             pipeline_layout_create_info.pPushConstantRanges = nullptr;
@@ -2658,7 +2750,7 @@ VK_API_PLATFORM_API_LIST
                 texture->m_vk_texture_format = vk_attachment_format;
 
                 transition_image_layout(
-                    texture->m_vk_texture_image, 
+                    texture->m_vk_texture_image,
                     vk_attachment_format,
                     VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED,
                     VkImageLayout::VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -2685,14 +2777,14 @@ VK_API_PLATFORM_API_LIST
                 {
                     barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
 
-                    if (format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT) 
+                    if (format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT)
                         barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
                 }
                 else
                 {
                     barrier.subresourceRange.aspectMask = VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT;
                 }
-                
+
                 barrier.subresourceRange.baseMipLevel = 0;
                 barrier.subresourceRange.levelCount = 1;
                 barrier.subresourceRange.baseArrayLayer = 0;
@@ -2719,7 +2811,7 @@ VK_API_PLATFORM_API_LIST
                     source_stage = VkPipelineStageFlagBits::VK_PIPELINE_STAGE_TRANSFER_BIT;
                     destination_stage = VkPipelineStageFlagBits::VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
                 }
-                else if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) 
+                else if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
                 {
                     barrier.srcAccessMask = 0;
                     barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
@@ -2727,7 +2819,7 @@ VK_API_PLATFORM_API_LIST
                     source_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
                     destination_stage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
                 }
-                else if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) 
+                else if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
                 {
                     barrier.srcAccessMask = 0;
                     barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
@@ -3013,10 +3105,10 @@ VK_API_PLATFORM_API_LIST
             _vk_last_command_buffer_semaphore = new_semphore;
             if (_vk_current_target_framebuffer == _vk_current_swapchain_framebuffer)
                 _vk_wait_for_last_command_buffer_stage =
-                    VkPipelineStageFlagBits::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+                VkPipelineStageFlagBits::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
             else
                 _vk_wait_for_last_command_buffer_stage =
-                    VkPipelineStageFlagBits::VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+                VkPipelineStageFlagBits::VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 
             _vk_current_target_framebuffer = nullptr;
             _vk_current_command_buffer = nullptr;
@@ -3045,6 +3137,7 @@ VK_API_PLATFORM_API_LIST
 
             vkQueuePresentKHR(_vk_logic_device_present_queue, &present_info);
 
+            _vk_dear_imgui_descriptor_set_allocator->flush_descriptor_set_allocator();
             _vk_descriptor_set_allocator->flush_descriptor_set_allocator();
             _vk_command_buffer_allocator->flush_command_buffer_allocator();
 
@@ -3111,9 +3204,9 @@ VK_API_PLATFORM_API_LIST
             assert(_vk_current_swapchain_framebuffer ==
                 _vk_swapchain_framebuffer[_vk_presenting_swapchain_image_index]);
 
-            
+
             cmd_begin_frame_buffer(_vk_current_swapchain_framebuffer, 0, 0, 0, 0);
-            
+
             jegui_update_vk110(_vk_current_command_buffer);
 
             finish_frame_buffer();
@@ -3429,14 +3522,52 @@ VK_API_PLATFORM_API_LIST
         auto cmdbuf = context->begin_temp_command_buffer_records();
 
         jegui_init_vk110(
-            [](auto* res)->void* {return nullptr; },
-            [](auto* res) {},
+            [](jegl_resource* res)->void*
+            {
+                auto vk11_texture = reinterpret_cast<jevk11_texture*>(res->m_handle.m_ptr);
+                auto desc_set = jegl_vk110_context::_vk_this_context
+                    ->_vk_dear_imgui_descriptor_set_allocator
+                    ->allocate_descriptor_set(
+                        jegl_vk110_context::descriptor_set_allocator<1>::DescriptorSetType::TEXTURE);
+
+                // 更新set
+                VkWriteDescriptorSet write_desc_set = {};
+                write_desc_set.sType = VkStructureType::VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                write_desc_set.pNext = nullptr;
+                write_desc_set.dstSet = desc_set;
+                write_desc_set.dstBinding = 0;
+                write_desc_set.dstArrayElement = 0;
+                write_desc_set.descriptorCount = 1;
+                write_desc_set.descriptorType = VkDescriptorType::VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+
+                VkDescriptorImageInfo image_info = {};
+                image_info.sampler = nullptr;
+                image_info.imageView = vk11_texture->m_vk_texture_image_view;   
+                image_info.imageLayout = VkImageLayout::VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+                write_desc_set.pImageInfo = &image_info;
+                write_desc_set.pBufferInfo = nullptr;
+                write_desc_set.pTexelBufferView = nullptr;
+
+                vkUpdateDescriptorSets(
+                    jegl_vk110_context::_vk_this_context->_vk_logic_device,
+                    1,
+                    &write_desc_set,
+                    0,
+                    nullptr);
+                
+                return desc_set;                
+            },
+            [](auto* res) 
+            {
+                abort();
+            },
             context->_vk_jegl_interface->native_handle(),
             reboot,
             &init_info,
             context->_vk_swapchain_framebuffer.front()->m_rendpass,
             cmdbuf);
-    TODO https://zhuanlan.zhihu.com/p/548747027 
+        // TODO https://zhuanlan.zhihu.com/p/548747027 
         context->end_temp_command_buffer_record(cmdbuf);
 
         return context;
@@ -3759,7 +3890,7 @@ VK_API_PLATFORM_API_LIST
 VkResult vkWaitForFences(
     VkDevice                                    device,
     uint32_t                                    fenceCount,
-    const VkFence*                              pFences,
+    const VkFence* pFences,
     VkBool32                                    waitAll,
     uint64_t                                    timeout)
 {
@@ -3770,7 +3901,7 @@ VkResult vkWaitForFences(
 VkResult vkResetFences(
     VkDevice                                    device,
     uint32_t                                    fenceCount,
-    const VkFence*                              pFences)
+    const VkFence* pFences)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkResetFences(device, fenceCount, pFences);
@@ -3779,9 +3910,9 @@ VkResult vkResetFences(
 void vkUpdateDescriptorSets(
     VkDevice                                    device,
     uint32_t                                    descriptorWriteCount,
-    const VkWriteDescriptorSet*                 pDescriptorWrites,
+    const VkWriteDescriptorSet* pDescriptorWrites,
     uint32_t                                    descriptorCopyCount,
-    const VkCopyDescriptorSet*                  pDescriptorCopies)
+    const VkCopyDescriptorSet* pDescriptorCopies)
 {
     using namespace jeecs::graphic::api::vk110;
     jegl_vk110_context::_vk_this_context->vkUpdateDescriptorSets(
@@ -3798,7 +3929,7 @@ VkResult vkMapMemory(
     VkDeviceSize                                offset,
     VkDeviceSize                                size,
     VkMemoryMapFlags                            flags,
-    void**                                      ppData)
+    void** ppData)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkMapMemory(
@@ -3833,7 +3964,7 @@ VkResult vkResetCommandBuffer(
 VkResult vkQueueSubmit(
     VkQueue                                     queue,
     uint32_t                                    submitCount,
-    const VkSubmitInfo*                         pSubmits,
+    const VkSubmitInfo* pSubmits,
     VkFence                                     fence)
 {
     using namespace jeecs::graphic::api::vk110;
@@ -3846,7 +3977,7 @@ VkResult vkQueueSubmit(
 
 VkResult vkQueuePresentKHR(
     VkQueue                                     queue,
-    const VkPresentInfoKHR*                     pPresentInfo)
+    const VkPresentInfoKHR* pPresentInfo)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkQueuePresentKHR(
@@ -3857,8 +3988,8 @@ VkResult vkQueuePresentKHR(
 VkResult vkGetSwapchainImagesKHR(
     VkDevice                                    device,
     VkSwapchainKHR                              swapchain,
-    uint32_t*                                   pSwapchainImageCount,
-    VkImage*                                    pSwapchainImages)
+    uint32_t* pSwapchainImageCount,
+    VkImage* pSwapchainImages)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkGetSwapchainImagesKHR(
@@ -3872,7 +4003,7 @@ VkResult vkGetPhysicalDeviceSurfaceSupportKHR(
     VkPhysicalDevice                            physicalDevice,
     uint32_t                                    queueFamilyIndex,
     VkSurfaceKHR                                surface,
-    VkBool32*                                   pSupported)
+    VkBool32* pSupported)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkGetPhysicalDeviceSurfaceSupportKHR(
@@ -3885,8 +4016,8 @@ VkResult vkGetPhysicalDeviceSurfaceSupportKHR(
 VkResult vkGetPhysicalDeviceSurfacePresentModesKHR(
     VkPhysicalDevice                            physicalDevice,
     VkSurfaceKHR                                surface,
-    uint32_t*                                   pPresentModeCount,
-    VkPresentModeKHR*                           pPresentModes)
+    uint32_t* pPresentModeCount,
+    VkPresentModeKHR* pPresentModes)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkGetPhysicalDeviceSurfacePresentModesKHR(
@@ -3899,8 +4030,8 @@ VkResult vkGetPhysicalDeviceSurfacePresentModesKHR(
 VkResult vkGetPhysicalDeviceSurfaceFormatsKHR(
     VkPhysicalDevice                            physicalDevice,
     VkSurfaceKHR                                surface,
-    uint32_t*                                   pSurfaceFormatCount,
-    VkSurfaceFormatKHR*                         pSurfaceFormats)
+    uint32_t* pSurfaceFormatCount,
+    VkSurfaceFormatKHR* pSurfaceFormats)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkGetPhysicalDeviceSurfaceFormatsKHR(
@@ -3913,7 +4044,7 @@ VkResult vkGetPhysicalDeviceSurfaceFormatsKHR(
 VkResult vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
     VkPhysicalDevice                            physicalDevice,
     VkSurfaceKHR                                surface,
-    VkSurfaceCapabilitiesKHR*                   pSurfaceCapabilities)
+    VkSurfaceCapabilitiesKHR* pSurfaceCapabilities)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
@@ -3924,7 +4055,7 @@ VkResult vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
 
 void vkGetPhysicalDeviceMemoryProperties(
     VkPhysicalDevice                            physicalDevice,
-    VkPhysicalDeviceMemoryProperties*           pMemoryProperties)
+    VkPhysicalDeviceMemoryProperties* pMemoryProperties)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkGetPhysicalDeviceMemoryProperties(
@@ -3934,7 +4065,7 @@ void vkGetPhysicalDeviceMemoryProperties(
 
 PFN_vkVoidFunction vkGetInstanceProcAddr(
     VkInstance                                  instance,
-    const char*                                 pName)
+    const char* pName)
 {
     using namespace jeecs::graphic::api::vk110;
     return jeecs::graphic::api::vk110::vkGetInstanceProcAddr(
@@ -3945,7 +4076,7 @@ PFN_vkVoidFunction vkGetInstanceProcAddr(
 void vkGetImageMemoryRequirements(
     VkDevice                                    device,
     VkImage                                     image,
-    VkMemoryRequirements*                       pMemoryRequirements)
+    VkMemoryRequirements* pMemoryRequirements)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkGetImageMemoryRequirements(
@@ -3957,7 +4088,7 @@ void vkGetImageMemoryRequirements(
 void vkGetBufferMemoryRequirements(
     VkDevice                                    device,
     VkBuffer                                    buffer,
-    VkMemoryRequirements*                       pMemoryRequirements)
+    VkMemoryRequirements* pMemoryRequirements)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkGetBufferMemoryRequirements(
@@ -3969,7 +4100,7 @@ void vkGetBufferMemoryRequirements(
 void vkFreeMemory(
     VkDevice                                    device,
     VkDeviceMemory                              memory,
-    const VkAllocationCallbacks*                pAllocator)
+    const VkAllocationCallbacks* pAllocator)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkFreeMemory(
@@ -3982,7 +4113,7 @@ VkResult vkFreeDescriptorSets(
     VkDevice                                    device,
     VkDescriptorPool                            descriptorPool,
     uint32_t                                    descriptorSetCount,
-    const VkDescriptorSet*                      pDescriptorSets)
+    const VkDescriptorSet* pDescriptorSets)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkFreeDescriptorSets(
@@ -3996,7 +4127,7 @@ void vkFreeCommandBuffers(
     VkDevice                                    device,
     VkCommandPool                               commandPool,
     uint32_t                                    commandBufferCount,
-    const VkCommandBuffer*                      pCommandBuffers)
+    const VkCommandBuffer* pCommandBuffers)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkFreeCommandBuffers(
@@ -4009,7 +4140,7 @@ void vkFreeCommandBuffers(
 VkResult vkFlushMappedMemoryRanges(
     VkDevice                                    device,
     uint32_t                                    memoryRangeCount,
-    const VkMappedMemoryRange*                  pMemoryRanges)
+    const VkMappedMemoryRange* pMemoryRanges)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkFlushMappedMemoryRanges(
@@ -4037,7 +4168,7 @@ VkResult vkDeviceWaitIdle(
 void vkDestroySwapchainKHR(
     VkDevice                                    device,
     VkSwapchainKHR                              swapchain,
-    const VkAllocationCallbacks*                pAllocator)
+    const VkAllocationCallbacks* pAllocator)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkDestroySwapchainKHR(
@@ -4049,7 +4180,7 @@ void vkDestroySwapchainKHR(
 void vkDestroySurfaceKHR(
     VkInstance                                  instance,
     VkSurfaceKHR                                surface,
-    const VkAllocationCallbacks*                pAllocator)
+    const VkAllocationCallbacks* pAllocator)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkDestroySurfaceKHR(
@@ -4061,7 +4192,7 @@ void vkDestroySurfaceKHR(
 void vkDestroyShaderModule(
     VkDevice                                    device,
     VkShaderModule                              shaderModule,
-    const VkAllocationCallbacks*                pAllocator)
+    const VkAllocationCallbacks* pAllocator)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkDestroyShaderModule(
@@ -4085,7 +4216,7 @@ VkResult vkResetCommandPool(
 void vkDestroySemaphore(
     VkDevice                                    device,
     VkSemaphore                                 semaphore,
-    const VkAllocationCallbacks*                pAllocator)
+    const VkAllocationCallbacks* pAllocator)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkDestroySemaphore(
@@ -4097,7 +4228,7 @@ void vkDestroySemaphore(
 void vkDestroySampler(
     VkDevice                                    device,
     VkSampler                                   sampler,
-    const VkAllocationCallbacks*                pAllocator)
+    const VkAllocationCallbacks* pAllocator)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkDestroySampler(
@@ -4109,7 +4240,7 @@ void vkDestroySampler(
 void vkDestroyRenderPass(
     VkDevice                                    device,
     VkRenderPass                                renderPass,
-    const VkAllocationCallbacks*                pAllocator)
+    const VkAllocationCallbacks* pAllocator)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkDestroyRenderPass(
@@ -4121,7 +4252,7 @@ void vkDestroyRenderPass(
 void vkDestroyPipeline(
     VkDevice                                    device,
     VkPipeline                                  pipeline,
-    const VkAllocationCallbacks*                pAllocator)
+    const VkAllocationCallbacks* pAllocator)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkDestroyPipeline(
@@ -4133,7 +4264,7 @@ void vkDestroyPipeline(
 void vkDestroyPipelineLayout(
     VkDevice                                    device,
     VkPipelineLayout                            pipelineLayout,
-    const VkAllocationCallbacks*                pAllocator)
+    const VkAllocationCallbacks* pAllocator)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkDestroyPipelineLayout(
@@ -4145,7 +4276,7 @@ void vkDestroyPipelineLayout(
 void vkDestroyImage(
     VkDevice                                    device,
     VkImage                                     image,
-    const VkAllocationCallbacks*                pAllocator)
+    const VkAllocationCallbacks* pAllocator)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkDestroyImage(
@@ -4157,7 +4288,7 @@ void vkDestroyImage(
 void vkDestroyImageView(
     VkDevice                                    device,
     VkImageView                                 imageView,
-    const VkAllocationCallbacks*                pAllocator)
+    const VkAllocationCallbacks* pAllocator)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkDestroyImageView(
@@ -4169,7 +4300,7 @@ void vkDestroyImageView(
 void vkDestroyFramebuffer(
     VkDevice                                    device,
     VkFramebuffer                               framebuffer,
-    const VkAllocationCallbacks*                pAllocator)
+    const VkAllocationCallbacks* pAllocator)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkDestroyFramebuffer(
@@ -4181,7 +4312,7 @@ void vkDestroyFramebuffer(
 void vkDestroyFence(
     VkDevice                                    device,
     VkFence                                     fence,
-    const VkAllocationCallbacks*                pAllocator)
+    const VkAllocationCallbacks* pAllocator)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkDestroyFence(
@@ -4193,7 +4324,7 @@ void vkDestroyFence(
 void vkDestroyDescriptorSetLayout(
     VkDevice                                    device,
     VkDescriptorSetLayout                       descriptorSetLayout,
-    const VkAllocationCallbacks*                pAllocator)
+    const VkAllocationCallbacks* pAllocator)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkDestroyDescriptorSetLayout(
@@ -4205,7 +4336,7 @@ void vkDestroyDescriptorSetLayout(
 void vkDestroyDescriptorPool(
     VkDevice                                    device,
     VkDescriptorPool                            descriptorPool,
-    const VkAllocationCallbacks*                pAllocator)
+    const VkAllocationCallbacks* pAllocator)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkDestroyDescriptorPool(
@@ -4217,7 +4348,7 @@ void vkDestroyDescriptorPool(
 void vkDestroyBuffer(
     VkDevice                                    device,
     VkBuffer                                    buffer,
-    const VkAllocationCallbacks*                pAllocator)
+    const VkAllocationCallbacks* pAllocator)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkDestroyBuffer(
@@ -4228,9 +4359,9 @@ void vkDestroyBuffer(
 
 VkResult vkCreateSwapchainKHR(
     VkDevice                                    device,
-    const VkSwapchainCreateInfoKHR*             pCreateInfo,
-    const VkAllocationCallbacks*                pAllocator,
-    VkSwapchainKHR*                             pSwapchain)
+    const VkSwapchainCreateInfoKHR* pCreateInfo,
+    const VkAllocationCallbacks* pAllocator,
+    VkSwapchainKHR* pSwapchain)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkCreateSwapchainKHR(
@@ -4242,9 +4373,9 @@ VkResult vkCreateSwapchainKHR(
 
 VkResult vkCreateShaderModule(
     VkDevice                                    device,
-    const VkShaderModuleCreateInfo*             pCreateInfo,
-    const VkAllocationCallbacks*                pAllocator,
-    VkShaderModule*                             pShaderModule)
+    const VkShaderModuleCreateInfo* pCreateInfo,
+    const VkAllocationCallbacks* pAllocator,
+    VkShaderModule* pShaderModule)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkCreateShaderModule(
@@ -4256,9 +4387,9 @@ VkResult vkCreateShaderModule(
 
 VkResult vkCreateSemaphore(
     VkDevice                                    device,
-    const VkSemaphoreCreateInfo*                pCreateInfo,
-    const VkAllocationCallbacks*                pAllocator,
-    VkSemaphore*                                pSemaphore)
+    const VkSemaphoreCreateInfo* pCreateInfo,
+    const VkAllocationCallbacks* pAllocator,
+    VkSemaphore* pSemaphore)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkCreateSemaphore(
@@ -4270,9 +4401,9 @@ VkResult vkCreateSemaphore(
 
 VkResult vkCreateSampler(
     VkDevice                                    device,
-    const VkSamplerCreateInfo*                  pCreateInfo,
-    const VkAllocationCallbacks*                pAllocator,
-    VkSampler*                                  pSampler)
+    const VkSamplerCreateInfo* pCreateInfo,
+    const VkAllocationCallbacks* pAllocator,
+    VkSampler* pSampler)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkCreateSampler(
@@ -4284,9 +4415,9 @@ VkResult vkCreateSampler(
 
 VkResult vkCreateRenderPass(
     VkDevice                                    device,
-    const VkRenderPassCreateInfo*               pCreateInfo,
-    const VkAllocationCallbacks*                pAllocator,
-    VkRenderPass*                               pRenderPass)
+    const VkRenderPassCreateInfo* pCreateInfo,
+    const VkAllocationCallbacks* pAllocator,
+    VkRenderPass* pRenderPass)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkCreateRenderPass(
@@ -4298,9 +4429,9 @@ VkResult vkCreateRenderPass(
 
 VkResult vkCreatePipelineLayout(
     VkDevice                                    device,
-    const VkPipelineLayoutCreateInfo*           pCreateInfo,
-    const VkAllocationCallbacks*                pAllocator,
-    VkPipelineLayout*                           pPipelineLayout)
+    const VkPipelineLayoutCreateInfo* pCreateInfo,
+    const VkAllocationCallbacks* pAllocator,
+    VkPipelineLayout* pPipelineLayout)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkCreatePipelineLayout(
@@ -4312,9 +4443,9 @@ VkResult vkCreatePipelineLayout(
 
 VkResult vkCreateImageView(
     VkDevice                                    device,
-    const VkImageViewCreateInfo*                pCreateInfo,
-    const VkAllocationCallbacks*                pAllocator,
-    VkImageView*                                pView)
+    const VkImageViewCreateInfo* pCreateInfo,
+    const VkAllocationCallbacks* pAllocator,
+    VkImageView* pView)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkCreateImageView(
@@ -4326,9 +4457,9 @@ VkResult vkCreateImageView(
 
 VkResult vkCreateImage(
     VkDevice                                    device,
-    const VkImageCreateInfo*                    pCreateInfo,
-    const VkAllocationCallbacks*                pAllocator,
-    VkImage*                                    pImage)
+    const VkImageCreateInfo* pCreateInfo,
+    const VkAllocationCallbacks* pAllocator,
+    VkImage* pImage)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkCreateImage(
@@ -4342,9 +4473,9 @@ VkResult vkCreateGraphicsPipelines(
     VkDevice                                    device,
     VkPipelineCache                             pipelineCache,
     uint32_t                                    createInfoCount,
-    const VkGraphicsPipelineCreateInfo*         pCreateInfos,
-    const VkAllocationCallbacks*                pAllocator,
-    VkPipeline*                                 pPipelines)
+    const VkGraphicsPipelineCreateInfo* pCreateInfos,
+    const VkAllocationCallbacks* pAllocator,
+    VkPipeline* pPipelines)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkCreateGraphicsPipelines(
@@ -4358,9 +4489,9 @@ VkResult vkCreateGraphicsPipelines(
 
 VkResult vkCreateFramebuffer(
     VkDevice                                    device,
-    const VkFramebufferCreateInfo*              pCreateInfo,
-    const VkAllocationCallbacks*                pAllocator,
-    VkFramebuffer*                              pFramebuffer)
+    const VkFramebufferCreateInfo* pCreateInfo,
+    const VkAllocationCallbacks* pAllocator,
+    VkFramebuffer* pFramebuffer)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkCreateFramebuffer(
@@ -4372,9 +4503,9 @@ VkResult vkCreateFramebuffer(
 
 VkResult vkCreateFence(
     VkDevice                                    device,
-    const VkFenceCreateInfo*                    pCreateInfo,
-    const VkAllocationCallbacks*                pAllocator,
-    VkFence*                                    pFence)
+    const VkFenceCreateInfo* pCreateInfo,
+    const VkAllocationCallbacks* pAllocator,
+    VkFence* pFence)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkCreateFence(
@@ -4386,9 +4517,9 @@ VkResult vkCreateFence(
 
 VkResult vkCreateDescriptorSetLayout(
     VkDevice                                    device,
-    const VkDescriptorSetLayoutCreateInfo*      pCreateInfo,
-    const VkAllocationCallbacks*                pAllocator,
-    VkDescriptorSetLayout*                      pSetLayout)
+    const VkDescriptorSetLayoutCreateInfo* pCreateInfo,
+    const VkAllocationCallbacks* pAllocator,
+    VkDescriptorSetLayout* pSetLayout)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkCreateDescriptorSetLayout(
@@ -4400,9 +4531,9 @@ VkResult vkCreateDescriptorSetLayout(
 
 VkResult vkCreateCommandPool(
     VkDevice                                    device,
-    const VkCommandPoolCreateInfo*              pCreateInfo,
-    const VkAllocationCallbacks*                pAllocator,
-    VkCommandPool*                              pCommandPool)
+    const VkCommandPoolCreateInfo* pCreateInfo,
+    const VkAllocationCallbacks* pAllocator,
+    VkCommandPool* pCommandPool)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkCreateCommandPool(
@@ -4414,9 +4545,9 @@ VkResult vkCreateCommandPool(
 
 VkResult vkCreateBuffer(
     VkDevice                                    device,
-    const VkBufferCreateInfo*                   pCreateInfo,
-    const VkAllocationCallbacks*                pAllocator,
-    VkBuffer*                                   pBuffer)
+    const VkBufferCreateInfo* pCreateInfo,
+    const VkAllocationCallbacks* pAllocator,
+    VkBuffer* pBuffer)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkCreateBuffer(
@@ -4429,7 +4560,7 @@ VkResult vkCreateBuffer(
 void vkDestroyCommandPool(
     VkDevice                                    device,
     VkCommandPool                               commandPool,
-    const VkAllocationCallbacks*                pAllocator)
+    const VkAllocationCallbacks* pAllocator)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkDestroyCommandPool(
@@ -4442,7 +4573,7 @@ void vkCmdSetViewport(
     VkCommandBuffer                             commandBuffer,
     uint32_t                                    firstViewport,
     uint32_t                                    viewportCount,
-    const VkViewport*                           pViewports)
+    const VkViewport* pViewports)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkCmdSetViewport(
@@ -4456,7 +4587,7 @@ void vkCmdSetScissor(
     VkCommandBuffer                             commandBuffer,
     uint32_t                                    firstScissor,
     uint32_t                                    scissorCount,
-    const VkRect2D*                             pScissors)
+    const VkRect2D* pScissors)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkCmdSetScissor(
@@ -4472,7 +4603,7 @@ void vkCmdPushConstants(
     VkShaderStageFlags                          stageFlags,
     uint32_t                                    offset,
     uint32_t                                    size,
-    const void*                                 pValues)
+    const void* pValues)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkCmdPushConstants(
@@ -4490,11 +4621,11 @@ void vkCmdPipelineBarrier(
     VkPipelineStageFlags                        dstStageMask,
     VkDependencyFlags                           dependencyFlags,
     uint32_t                                    memoryBarrierCount,
-    const VkMemoryBarrier*                      pMemoryBarriers,
+    const VkMemoryBarrier* pMemoryBarriers,
     uint32_t                                    bufferMemoryBarrierCount,
-    const VkBufferMemoryBarrier*                pBufferMemoryBarriers,
+    const VkBufferMemoryBarrier* pBufferMemoryBarriers,
     uint32_t                                    imageMemoryBarrierCount,
-    const VkImageMemoryBarrier*                 pImageMemoryBarriers)
+    const VkImageMemoryBarrier* pImageMemoryBarriers)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkCmdPipelineBarrier(
@@ -4542,7 +4673,7 @@ void vkCmdCopyBufferToImage(
     VkImage                                     dstImage,
     VkImageLayout                               dstImageLayout,
     uint32_t                                    regionCount,
-    const VkBufferImageCopy*                    pRegions)
+    const VkBufferImageCopy* pRegions)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkCmdCopyBufferToImage(
@@ -4558,8 +4689,8 @@ void vkCmdBindVertexBuffers(
     VkCommandBuffer                             commandBuffer,
     uint32_t                                    firstBinding,
     uint32_t                                    bindingCount,
-    const VkBuffer*                             pBuffers,
-    const VkDeviceSize*                         pOffsets)
+    const VkBuffer* pBuffers,
+    const VkDeviceSize* pOffsets)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkCmdBindVertexBuffers(
@@ -4602,9 +4733,9 @@ void vkCmdBindDescriptorSets(
     VkPipelineLayout                            layout,
     uint32_t                                    firstSet,
     uint32_t                                    descriptorSetCount,
-    const VkDescriptorSet*                      pDescriptorSets,
+    const VkDescriptorSet* pDescriptorSets,
     uint32_t                                    dynamicOffsetCount,
-    const uint32_t*                             pDynamicOffsets)
+    const uint32_t* pDynamicOffsets)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkCmdBindDescriptorSets(
@@ -4620,7 +4751,7 @@ void vkCmdBindDescriptorSets(
 
 void vkCmdBeginRenderPass(
     VkCommandBuffer                             commandBuffer,
-    const VkRenderPassBeginInfo*                pRenderPassBegin,
+    const VkRenderPassBeginInfo* pRenderPassBegin,
     VkSubpassContents                           contents)
 {
     using namespace jeecs::graphic::api::vk110;
@@ -4660,7 +4791,7 @@ VkResult vkBindBufferMemory(
 
 VkResult vkBeginCommandBuffer(
     VkCommandBuffer                             commandBuffer,
-    const VkCommandBufferBeginInfo*             pBeginInfo)
+    const VkCommandBufferBeginInfo* pBeginInfo)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkBeginCommandBuffer(
@@ -4670,9 +4801,9 @@ VkResult vkBeginCommandBuffer(
 
 VkResult vkAllocateMemory(
     VkDevice                                    device,
-    const VkMemoryAllocateInfo*                 pAllocateInfo,
-    const VkAllocationCallbacks*                pAllocator,
-    VkDeviceMemory*                             pMemory)
+    const VkMemoryAllocateInfo* pAllocateInfo,
+    const VkAllocationCallbacks* pAllocator,
+    VkDeviceMemory* pMemory)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkAllocateMemory(
@@ -4684,8 +4815,8 @@ VkResult vkAllocateMemory(
 
 VkResult vkAllocateDescriptorSets(
     VkDevice                                    device,
-    const VkDescriptorSetAllocateInfo*          pAllocateInfo,
-    VkDescriptorSet*                            pDescriptorSets)
+    const VkDescriptorSetAllocateInfo* pAllocateInfo,
+    VkDescriptorSet* pDescriptorSets)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkAllocateDescriptorSets(
@@ -4696,8 +4827,8 @@ VkResult vkAllocateDescriptorSets(
 
 VkResult vkAllocateCommandBuffers(
     VkDevice                                    device,
-    const VkCommandBufferAllocateInfo*          pAllocateInfo,
-    VkCommandBuffer*                            pCommandBuffers)
+    const VkCommandBufferAllocateInfo* pAllocateInfo,
+    VkCommandBuffer* pCommandBuffers)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkAllocateCommandBuffers(
@@ -4712,7 +4843,7 @@ VkResult vkAcquireNextImageKHR(
     uint64_t                                    timeout,
     VkSemaphore                                 semaphore,
     VkFence                                     fence,
-    uint32_t*                                   pImageIndex)
+    uint32_t* pImageIndex)
 {
     using namespace jeecs::graphic::api::vk110;
     return jegl_vk110_context::_vk_this_context->vkAcquireNextImageKHR(
