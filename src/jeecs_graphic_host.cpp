@@ -123,7 +123,7 @@ namespace jeecs
                 config.m_reso_x = 1;
                 config.m_reso_y = 1;
 
-                config.m_title = "JoyEngineECS(JoyEngine 4.3)";
+                config.m_title = "JoyEngineECS(JoyEngine 4.4)";
                 
                 config.m_enable_resize = true;
                 config.m_fps = 0;               // 使用垂直同步

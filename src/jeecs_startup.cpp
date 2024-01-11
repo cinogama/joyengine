@@ -65,7 +65,6 @@ void jegl_set_host_graphic_api(jegl_graphic_api_entry api)
 
 jegl_graphic_api_entry jegl_get_host_graphic_api(void)
 {
-    return jegl_using_vulkan110_apis;
     if (_jegl_host_graphic_api == nullptr)
     {
 #if defined(JE_ENABLE_DX11_GAPI)
@@ -400,7 +399,7 @@ void je_finish()
 
 const char* je_build_version()
 {
-    return "JoyEngine 4.3.6 " __TIMESTAMP__;
+    return "JoyEngine 4.4.0 " __TIMESTAMP__;
 }
 
 const char* je_build_commit()

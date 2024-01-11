@@ -93,7 +93,7 @@ build_linux_opengles:
   tags:
     - ubuntu22_arm64
 
-build_win64_dx11_opengl:
+build_win64_dx11_opengl_vk:
   stage: build
   script:
     - echo "%CI_COMMIT_SHA%" > src/jeecs_commit_msg.hpp
@@ -130,7 +130,7 @@ build_win64_dx11_opengl:
   tags:
     - winserver22
 
-build_win64_dx11_opengles:
+build_win64_dx11_opengles_vk:
   stage: build
   script:
     - echo "%CI_COMMIT_SHA%" > src/jeecs_commit_msg.hpp
