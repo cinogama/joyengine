@@ -1022,7 +1022,7 @@ VK_API_PLATFORM_API_LIST
                 attachment.storeOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_STORE;
                 attachment.stencilLoadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_DONT_CARE;
                 attachment.stencilStoreOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_DONT_CARE;
-                attachment.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED;
+                attachment.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
                 attachment.finalLayout = final_layout;
 
                 VkAttachmentReference& attachment_ref = color_attachment_refs[attachment_i];
@@ -1042,7 +1042,7 @@ VK_API_PLATFORM_API_LIST
                 depth_attachment.storeOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_STORE;
                 depth_attachment.stencilLoadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_DONT_CARE;
                 depth_attachment.stencilStoreOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_DONT_CARE;
-                depth_attachment.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED;
+                depth_attachment.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
                 depth_attachment.finalLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
                 depth_attachment_ref.attachment = (uint32_t)color_and_depth_attachments.size() - 1;
@@ -1725,12 +1725,12 @@ VK_API_PLATFORM_API_LIST
             assert(_vk_logic_device_graphic_queue != nullptr);
             assert(_vk_logic_device_present_queue != nullptr);
 
+            _vk_descriptor_set_allocator = new descriptor_set_allocator(this);
+            _vk_command_buffer_allocator = new command_buffer_allocator(this);
+
             recreate_swap_chain_for_current_surface(
                 _vk_jegl_interface->m_interface_width,
                 _vk_jegl_interface->m_interface_height);
-
-            _vk_descriptor_set_allocator = new descriptor_set_allocator(this);
-            _vk_command_buffer_allocator = new command_buffer_allocator(this);
         }
         void pre_shutdown()
         {
@@ -2483,7 +2483,6 @@ VK_API_PLATFORM_API_LIST
             VkImageUsageFlags usage,
             VkMemoryPropertyFlags properties,
             VkImageAspectFlags aspect_flags,
-            VkImageLayout image_layout,
             VkImage* out_image,
             VkImageView* out_image_view,
             VkDeviceMemory* out_memory)
@@ -2558,11 +2557,16 @@ VK_API_PLATFORM_API_LIST
                     VkImageUsageFlagBits::VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
                     VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                     VkImageAspectFlagBits::VK_IMAGE_ASPECT_DEPTH_BIT,
-                    VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
                     &texture->m_vk_texture_image,
                     &texture->m_vk_texture_image_view,
                     &texture->m_vk_texture_image_memory);
                 texture->m_vk_texture_format = _vk_depth_format;
+
+                transition_image_layout(
+                    texture->m_vk_texture_image,
+                    _vk_depth_format,
+                    VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED,
+                    VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
             }
             else
             {
@@ -2588,11 +2592,16 @@ VK_API_PLATFORM_API_LIST
                     VkImageUsageFlagBits::VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                     VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                     VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT,
-                    VkImageLayout::VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                     &texture->m_vk_texture_image,
                     &texture->m_vk_texture_image_view,
                     &texture->m_vk_texture_image_memory);
                 texture->m_vk_texture_format = vk_attachment_format;
+
+                transition_image_layout(
+                    texture->m_vk_texture_image, 
+                    vk_attachment_format,
+                    VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED,
+                    VkImageLayout::VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
             }
 
             return texture;
@@ -2612,7 +2621,18 @@ VK_API_PLATFORM_API_LIST
                 barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
                 barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
                 barrier.image = image;
-                barrier.subresourceRange.aspectMask = VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT;
+                if (new_layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                {
+                    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+
+                    if (format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT) 
+                        barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+                }
+                else
+                {
+                    barrier.subresourceRange.aspectMask = VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT;
+                }
+                
                 barrier.subresourceRange.baseMipLevel = 0;
                 barrier.subresourceRange.levelCount = 1;
                 barrier.subresourceRange.baseArrayLayer = 0;
@@ -2638,6 +2658,22 @@ VK_API_PLATFORM_API_LIST
 
                     source_stage = VkPipelineStageFlagBits::VK_PIPELINE_STAGE_TRANSFER_BIT;
                     destination_stage = VkPipelineStageFlagBits::VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+                }
+                else if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) 
+                {
+                    barrier.srcAccessMask = 0;
+                    barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+                    source_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+                    destination_stage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+                }
+                else if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) 
+                {
+                    barrier.srcAccessMask = 0;
+                    barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+                    source_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+                    destination_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
                 }
                 else
                 {
@@ -2687,7 +2723,6 @@ VK_API_PLATFORM_API_LIST
                     VkImageUsageFlagBits::VK_IMAGE_USAGE_SAMPLED_BIT,
                     VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                     VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT,
-                    VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED,
                     &texture->m_vk_texture_image,
                     &texture->m_vk_texture_image_view,
                     &texture->m_vk_texture_image_memory);
@@ -2724,6 +2759,7 @@ VK_API_PLATFORM_API_LIST
                     image_format,
                     VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED,
                     VkImageLayout::VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
                 VkCommandBuffer command_buffer = begin_temp_command_buffer_records();
                 {
                     VkBufferImageCopy region = {};
