@@ -1,7 +1,7 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
-#if defined(JE_ENABLE_VK110_GAPI) && false
+#if defined(JE_ENABLE_VK110_GAPI)
 #   include "jeecs_imgui_backend_api.hpp"
 
 #   include <imgui.h>
@@ -106,7 +106,8 @@ void jegui_init_vk110(
     void* window_handle,
     bool reboot,
     ImGui_ImplVulkan_InitInfo* vkinfo,
-    VkRenderPass pass)
+    VkRenderPass pass,
+    VkCommandBuffer cmdbuf)
 {
     jegui_init_basic(false, get_img_res, apply_shader_sampler);
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
@@ -116,12 +117,11 @@ void jegui_init_vk110(
 #       error Unsupport platform.
 #   endif
 #else
-    ImGui_ImplGlfw_InitForOpenGL((GLFWwindow*)window_handle, true);
+    ImGui_ImplGlfw_InitForVulkan((GLFWwindow*)window_handle, true);
 #endif
-    ImGui_ImplVulkan_InitInfo info = {};
-
-
     ImGui_ImplVulkan_Init(vkinfo, pass);
+
+    ImGui_ImplVulkan_CreateFontsTexture(cmdbuf);
 }
 
 void jegui_update_vk110(VkCommandBuffer cmdbuf)

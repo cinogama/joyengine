@@ -136,7 +136,6 @@ VK_API_DECL(vkGetImageMemoryRequirements);\
 VK_API_DECL(vkCreateImageView);\
 VK_API_DECL(vkDestroyImageView);\
 \
-VK_API_DECL(vkGetPhysicalDeviceMemoryProperties);\
 VK_API_DECL(vkAllocateMemory);\
 VK_API_DECL(vkFreeMemory);\
 VK_API_DECL(vkMapMemory);\
@@ -145,6 +144,7 @@ VK_API_DECL(vkBindBufferMemory);\
 VK_API_DECL(vkGetBufferMemoryRequirements);\
 VK_API_DECL(vkCreateBuffer);\
 VK_API_DECL(vkDestroyBuffer);\
+VK_API_DECL(vkFlushMappedMemoryRanges);\
 \
 VK_API_DECL(vkCreateShaderModule);\
 VK_API_DECL(vkDestroyShaderModule);\
@@ -160,9 +160,11 @@ VK_API_DECL(vkDestroyFramebuffer);\
 \
 VK_API_DECL(vkCreateCommandPool);\
 VK_API_DECL(vkDestroyCommandPool);\
+VK_API_DECL(vkResetCommandPool);\
 VK_API_DECL(vkAllocateCommandBuffers);\
 VK_API_DECL(vkFreeCommandBuffers);\
 VK_API_DECL(vkBeginCommandBuffer);\
+VK_API_DECL(vkResetCommandBuffer);\
 VK_API_DECL(vkEndCommandBuffer);\
 VK_API_DECL(vkCmdBeginRenderPass);\
 VK_API_DECL(vkCmdEndRenderPass);\
@@ -177,6 +179,10 @@ VK_API_DECL(vkCmdSetPrimitiveRestartEnable);\
 VK_API_DECL(vkCmdBindDescriptorSets);\
 VK_API_DECL(vkCmdCopyBufferToImage);\
 VK_API_DECL(vkCmdPipelineBarrier);\
+VK_API_DECL(vkCmdPushConstants);\
+VK_API_DECL(vkCmdDrawIndexed);\
+VK_API_DECL(vkCmdBindVertexBuffers);\
+VK_API_DECL(vkCmdBindIndexBuffer);\
 \
 VK_API_DECL(vkCreateSemaphore);\
 VK_API_DECL(vkDestroySemaphore);\
@@ -207,6 +213,7 @@ VK_API_DECL(vkGetPhysicalDeviceSurfacePresentModesKHR);\
 VK_API_DECL(vkCreateDebugUtilsMessengerEXT);\
 VK_API_DECL(vkDestroyDebugUtilsMessengerEXT);\
 \
+VK_API_DECL(vkGetPhysicalDeviceMemoryProperties);\
 VK_API_DECL(vkGetPhysicalDeviceProperties2);\
 \
 VK_API_PLATFORM_API_LIST
@@ -344,6 +351,8 @@ VK_API_PLATFORM_API_LIST
 
     struct jegl_vk110_context
     {
+        inline static jegl_vk110_context* _vk_this_context = nullptr;
+
         // 一些配置项
         size_t                      _vk_msaa_config;
 
@@ -901,6 +910,8 @@ VK_API_PLATFORM_API_LIST
 
         descriptor_set_allocator* _vk_descriptor_set_allocator;
         command_buffer_allocator* _vk_command_buffer_allocator;
+
+        VkDescriptorPool _vk_dear_imgui_descriptor_pool;
 
         // Following is runtime vk states.
         uint32_t            _vk_presenting_swapchain_image_index;
@@ -1463,6 +1474,8 @@ VK_API_PLATFORM_API_LIST
 
         void init_vulkan(const jegl_interface_config* config)
         {
+            _vk_this_context = this;
+
             _vk_last_command_buffer_semaphore = nullptr;
             _vk_wait_for_last_command_buffer_stage = VkPipelineStageFlagBits::VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
 
@@ -1741,6 +1754,36 @@ VK_API_PLATFORM_API_LIST
             _vk_descriptor_set_allocator = new descriptor_set_allocator(this);
             _vk_command_buffer_allocator = new command_buffer_allocator(this);
 
+            // 为imgui创建描述符集池
+            VkDescriptorPoolSize pool_sizes[] =
+            {
+                { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+                { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+                { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+                { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+                { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+                { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+                { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+                { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+                { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+                { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+                { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
+            };
+
+            VkDescriptorPoolCreateInfo imgui_descriptor_pool_info = {};
+            imgui_descriptor_pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+            imgui_descriptor_pool_info.pNext = nullptr;
+            imgui_descriptor_pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+            imgui_descriptor_pool_info.maxSets = (uint32_t)(sizeof(pool_sizes) / sizeof(VkDescriptorPoolSize) * 1000);
+            imgui_descriptor_pool_info.poolSizeCount = (uint32_t)(sizeof(pool_sizes) / sizeof(VkDescriptorPoolSize));
+            imgui_descriptor_pool_info.pPoolSizes = pool_sizes;
+
+            if (VK_SUCCESS != vkCreateDescriptorPool(
+                _vk_logic_device, &imgui_descriptor_pool_info, nullptr, &_vk_dear_imgui_descriptor_pool))
+            {
+                jeecs::debug::logfatal("Failed to create vk110 imgui descriptor pool.");
+            }
+
             recreate_swap_chain_for_current_surface(
                 _vk_jegl_interface->m_interface_width,
                 _vk_jegl_interface->m_interface_height);
@@ -1756,6 +1799,8 @@ VK_API_PLATFORM_API_LIST
 
             destroy_swap_chain();
 
+            vkDestroyDescriptorPool(_vk_logic_device, _vk_dear_imgui_descriptor_pool, nullptr);
+
             vkDestroyDevice(_vk_logic_device, nullptr);
 #ifndef NDEBUG
             if (_vk_debug_manager != nullptr)
@@ -1766,6 +1811,8 @@ VK_API_PLATFORM_API_LIST
 #endif
             vkDestroySurfaceKHR(_vk_instance, _vk_surface, nullptr);
             vkDestroyInstance(_vk_instance, nullptr);
+
+            _vk_this_context = nullptr;
         }
         /////////////////////////////////////////////////////
         void begin_command_buffer_record(VkCommandBuffer cmdbuf)
@@ -3024,7 +3071,6 @@ VK_API_PLATFORM_API_LIST
 
                     if (state == VkResult::VK_ERROR_OUT_OF_DATE_KHR || state == VkResult::VK_SUBOPTIMAL_KHR)
                     {
-
                         recreate_swap_chain_for_current_surface(
                             _vk_jegl_interface->m_interface_width,
                             _vk_jegl_interface->m_interface_height
@@ -3065,7 +3111,10 @@ VK_API_PLATFORM_API_LIST
             assert(_vk_current_swapchain_framebuffer ==
                 _vk_swapchain_framebuffer[_vk_presenting_swapchain_image_index]);
 
-            jegui_update_none();
+            
+            cmd_begin_frame_buffer(_vk_current_swapchain_framebuffer, 0, 0, 0, 0);
+            
+            jegui_update_vk110(_vk_current_command_buffer);
 
             finish_frame_buffer();
             return true;
@@ -3364,9 +3413,31 @@ VK_API_PLATFORM_API_LIST
 
         context->init_vulkan(config);
 
-        jegui_init_none(
+        ImGui_ImplVulkan_InitInfo init_info = {};
+        init_info.Instance = context->_vk_instance;
+        init_info.PhysicalDevice = context->_vk_device;
+        init_info.Device = context->_vk_logic_device;
+        init_info.QueueFamily = context->_vk_device_queue_graphic_family_index;
+        init_info.Queue = context->_vk_logic_device_graphic_queue;
+        init_info.PipelineCache = VK_NULL_HANDLE;
+        init_info.DescriptorPool = context->_vk_dear_imgui_descriptor_pool;
+        init_info.Allocator = nullptr;
+        init_info.MinImageCount = (uint32_t)context->_vk_swapchain_framebuffer.size();
+        init_info.ImageCount = (uint32_t)context->_vk_swapchain_framebuffer.size();
+        init_info.CheckVkResultFn = nullptr;
+
+        auto cmdbuf = context->begin_temp_command_buffer_records();
+
+        jegui_init_vk110(
             [](auto* res)->void* {return nullptr; },
-            [](auto* res) {});
+            [](auto* res) {},
+            context->_vk_jegl_interface->native_handle(),
+            reboot,
+            &init_info,
+            context->_vk_swapchain_framebuffer.front()->m_rendpass,
+            cmdbuf);
+    TODO https://zhuanlan.zhihu.com/p/548747027 
+        context->end_temp_command_buffer_record(cmdbuf);
 
         return context;
     }
@@ -3684,6 +3755,976 @@ VK_API_PLATFORM_API_LIST
     }
 }
 
+// 在此处为imgui提供vulkan接口:
+VkResult vkWaitForFences(
+    VkDevice                                    device,
+    uint32_t                                    fenceCount,
+    const VkFence*                              pFences,
+    VkBool32                                    waitAll,
+    uint64_t                                    timeout)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkWaitForFences(device, fenceCount, pFences, waitAll, timeout);
+}
+
+VkResult vkResetFences(
+    VkDevice                                    device,
+    uint32_t                                    fenceCount,
+    const VkFence*                              pFences)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkResetFences(device, fenceCount, pFences);
+}
+
+void vkUpdateDescriptorSets(
+    VkDevice                                    device,
+    uint32_t                                    descriptorWriteCount,
+    const VkWriteDescriptorSet*                 pDescriptorWrites,
+    uint32_t                                    descriptorCopyCount,
+    const VkCopyDescriptorSet*                  pDescriptorCopies)
+{
+    using namespace jeecs::graphic::api::vk110;
+    jegl_vk110_context::_vk_this_context->vkUpdateDescriptorSets(
+        device,
+        descriptorWriteCount,
+        pDescriptorWrites,
+        descriptorCopyCount,
+        pDescriptorCopies);
+}
+
+VkResult vkMapMemory(
+    VkDevice                                    device,
+    VkDeviceMemory                              memory,
+    VkDeviceSize                                offset,
+    VkDeviceSize                                size,
+    VkMemoryMapFlags                            flags,
+    void**                                      ppData)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkMapMemory(
+        device,
+        memory,
+        offset,
+        size,
+        flags,
+        ppData);
+}
+
+void vkUnmapMemory(
+    VkDevice                                    device,
+    VkDeviceMemory                              memory)
+{
+    using namespace jeecs::graphic::api::vk110;
+    jegl_vk110_context::_vk_this_context->vkUnmapMemory(
+        device,
+        memory);
+}
+
+VkResult vkResetCommandBuffer(
+    VkCommandBuffer                             commandBuffer,
+    VkCommandBufferResetFlags                   flags)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkResetCommandBuffer(
+        commandBuffer,
+        flags);
+}
+
+VkResult vkQueueSubmit(
+    VkQueue                                     queue,
+    uint32_t                                    submitCount,
+    const VkSubmitInfo*                         pSubmits,
+    VkFence                                     fence)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkQueueSubmit(
+        queue,
+        submitCount,
+        pSubmits,
+        fence);
+}
+
+VkResult vkQueuePresentKHR(
+    VkQueue                                     queue,
+    const VkPresentInfoKHR*                     pPresentInfo)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkQueuePresentKHR(
+        queue,
+        pPresentInfo);
+}
+
+VkResult vkGetSwapchainImagesKHR(
+    VkDevice                                    device,
+    VkSwapchainKHR                              swapchain,
+    uint32_t*                                   pSwapchainImageCount,
+    VkImage*                                    pSwapchainImages)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkGetSwapchainImagesKHR(
+        device,
+        swapchain,
+        pSwapchainImageCount,
+        pSwapchainImages);
+}
+
+VkResult vkGetPhysicalDeviceSurfaceSupportKHR(
+    VkPhysicalDevice                            physicalDevice,
+    uint32_t                                    queueFamilyIndex,
+    VkSurfaceKHR                                surface,
+    VkBool32*                                   pSupported)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkGetPhysicalDeviceSurfaceSupportKHR(
+        physicalDevice,
+        queueFamilyIndex,
+        surface,
+        pSupported);
+}
+
+VkResult vkGetPhysicalDeviceSurfacePresentModesKHR(
+    VkPhysicalDevice                            physicalDevice,
+    VkSurfaceKHR                                surface,
+    uint32_t*                                   pPresentModeCount,
+    VkPresentModeKHR*                           pPresentModes)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkGetPhysicalDeviceSurfacePresentModesKHR(
+        physicalDevice,
+        surface,
+        pPresentModeCount,
+        pPresentModes);
+}
+
+VkResult vkGetPhysicalDeviceSurfaceFormatsKHR(
+    VkPhysicalDevice                            physicalDevice,
+    VkSurfaceKHR                                surface,
+    uint32_t*                                   pSurfaceFormatCount,
+    VkSurfaceFormatKHR*                         pSurfaceFormats)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkGetPhysicalDeviceSurfaceFormatsKHR(
+        physicalDevice,
+        surface,
+        pSurfaceFormatCount,
+        pSurfaceFormats);
+}
+
+VkResult vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+    VkPhysicalDevice                            physicalDevice,
+    VkSurfaceKHR                                surface,
+    VkSurfaceCapabilitiesKHR*                   pSurfaceCapabilities)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+        physicalDevice,
+        surface,
+        pSurfaceCapabilities);
+}
+
+void vkGetPhysicalDeviceMemoryProperties(
+    VkPhysicalDevice                            physicalDevice,
+    VkPhysicalDeviceMemoryProperties*           pMemoryProperties)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkGetPhysicalDeviceMemoryProperties(
+        physicalDevice,
+        pMemoryProperties);
+}
+
+PFN_vkVoidFunction vkGetInstanceProcAddr(
+    VkInstance                                  instance,
+    const char*                                 pName)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jeecs::graphic::api::vk110::vkGetInstanceProcAddr(
+        instance,
+        pName);
+}
+
+void vkGetImageMemoryRequirements(
+    VkDevice                                    device,
+    VkImage                                     image,
+    VkMemoryRequirements*                       pMemoryRequirements)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkGetImageMemoryRequirements(
+        device,
+        image,
+        pMemoryRequirements);
+}
+
+void vkGetBufferMemoryRequirements(
+    VkDevice                                    device,
+    VkBuffer                                    buffer,
+    VkMemoryRequirements*                       pMemoryRequirements)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkGetBufferMemoryRequirements(
+        device,
+        buffer,
+        pMemoryRequirements);
+}
+
+void vkFreeMemory(
+    VkDevice                                    device,
+    VkDeviceMemory                              memory,
+    const VkAllocationCallbacks*                pAllocator)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkFreeMemory(
+        device,
+        memory,
+        pAllocator);
+}
+
+VkResult vkFreeDescriptorSets(
+    VkDevice                                    device,
+    VkDescriptorPool                            descriptorPool,
+    uint32_t                                    descriptorSetCount,
+    const VkDescriptorSet*                      pDescriptorSets)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkFreeDescriptorSets(
+        device,
+        descriptorPool,
+        descriptorSetCount,
+        pDescriptorSets);
+}
+
+void vkFreeCommandBuffers(
+    VkDevice                                    device,
+    VkCommandPool                               commandPool,
+    uint32_t                                    commandBufferCount,
+    const VkCommandBuffer*                      pCommandBuffers)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkFreeCommandBuffers(
+        device,
+        commandPool,
+        commandBufferCount,
+        pCommandBuffers);
+}
+
+VkResult vkFlushMappedMemoryRanges(
+    VkDevice                                    device,
+    uint32_t                                    memoryRangeCount,
+    const VkMappedMemoryRange*                  pMemoryRanges)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkFlushMappedMemoryRanges(
+        device,
+        memoryRangeCount,
+        pMemoryRanges);
+}
+
+VkResult vkEndCommandBuffer(
+    VkCommandBuffer                             commandBuffer)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkEndCommandBuffer(
+        commandBuffer);
+}
+
+VkResult vkDeviceWaitIdle(
+    VkDevice                                    device)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkDeviceWaitIdle(
+        device);
+}
+
+void vkDestroySwapchainKHR(
+    VkDevice                                    device,
+    VkSwapchainKHR                              swapchain,
+    const VkAllocationCallbacks*                pAllocator)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkDestroySwapchainKHR(
+        device,
+        swapchain,
+        pAllocator);
+}
+
+void vkDestroySurfaceKHR(
+    VkInstance                                  instance,
+    VkSurfaceKHR                                surface,
+    const VkAllocationCallbacks*                pAllocator)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkDestroySurfaceKHR(
+        instance,
+        surface,
+        pAllocator);
+}
+
+void vkDestroyShaderModule(
+    VkDevice                                    device,
+    VkShaderModule                              shaderModule,
+    const VkAllocationCallbacks*                pAllocator)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkDestroyShaderModule(
+        device,
+        shaderModule,
+        pAllocator);
+}
+
+VkResult vkResetCommandPool(
+    VkDevice                                    device,
+    VkCommandPool                               commandPool,
+    VkCommandPoolResetFlags                     flags)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkResetCommandPool(
+        device,
+        commandPool,
+        flags);
+}
+
+void vkDestroySemaphore(
+    VkDevice                                    device,
+    VkSemaphore                                 semaphore,
+    const VkAllocationCallbacks*                pAllocator)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkDestroySemaphore(
+        device,
+        semaphore,
+        pAllocator);
+}
+
+void vkDestroySampler(
+    VkDevice                                    device,
+    VkSampler                                   sampler,
+    const VkAllocationCallbacks*                pAllocator)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkDestroySampler(
+        device,
+        sampler,
+        pAllocator);
+}
+
+void vkDestroyRenderPass(
+    VkDevice                                    device,
+    VkRenderPass                                renderPass,
+    const VkAllocationCallbacks*                pAllocator)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkDestroyRenderPass(
+        device,
+        renderPass,
+        pAllocator);
+}
+
+void vkDestroyPipeline(
+    VkDevice                                    device,
+    VkPipeline                                  pipeline,
+    const VkAllocationCallbacks*                pAllocator)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkDestroyPipeline(
+        device,
+        pipeline,
+        pAllocator);
+}
+
+void vkDestroyPipelineLayout(
+    VkDevice                                    device,
+    VkPipelineLayout                            pipelineLayout,
+    const VkAllocationCallbacks*                pAllocator)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkDestroyPipelineLayout(
+        device,
+        pipelineLayout,
+        pAllocator);
+}
+
+void vkDestroyImage(
+    VkDevice                                    device,
+    VkImage                                     image,
+    const VkAllocationCallbacks*                pAllocator)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkDestroyImage(
+        device,
+        image,
+        pAllocator);
+}
+
+void vkDestroyImageView(
+    VkDevice                                    device,
+    VkImageView                                 imageView,
+    const VkAllocationCallbacks*                pAllocator)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkDestroyImageView(
+        device,
+        imageView,
+        pAllocator);
+}
+
+void vkDestroyFramebuffer(
+    VkDevice                                    device,
+    VkFramebuffer                               framebuffer,
+    const VkAllocationCallbacks*                pAllocator)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkDestroyFramebuffer(
+        device,
+        framebuffer,
+        pAllocator);
+}
+
+void vkDestroyFence(
+    VkDevice                                    device,
+    VkFence                                     fence,
+    const VkAllocationCallbacks*                pAllocator)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkDestroyFence(
+        device,
+        fence,
+        pAllocator);
+}
+
+void vkDestroyDescriptorSetLayout(
+    VkDevice                                    device,
+    VkDescriptorSetLayout                       descriptorSetLayout,
+    const VkAllocationCallbacks*                pAllocator)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkDestroyDescriptorSetLayout(
+        device,
+        descriptorSetLayout,
+        pAllocator);
+}
+
+void vkDestroyDescriptorPool(
+    VkDevice                                    device,
+    VkDescriptorPool                            descriptorPool,
+    const VkAllocationCallbacks*                pAllocator)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkDestroyDescriptorPool(
+        device,
+        descriptorPool,
+        pAllocator);
+}
+
+void vkDestroyBuffer(
+    VkDevice                                    device,
+    VkBuffer                                    buffer,
+    const VkAllocationCallbacks*                pAllocator)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkDestroyBuffer(
+        device,
+        buffer,
+        pAllocator);
+}
+
+VkResult vkCreateSwapchainKHR(
+    VkDevice                                    device,
+    const VkSwapchainCreateInfoKHR*             pCreateInfo,
+    const VkAllocationCallbacks*                pAllocator,
+    VkSwapchainKHR*                             pSwapchain)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkCreateSwapchainKHR(
+        device,
+        pCreateInfo,
+        pAllocator,
+        pSwapchain);
+}
+
+VkResult vkCreateShaderModule(
+    VkDevice                                    device,
+    const VkShaderModuleCreateInfo*             pCreateInfo,
+    const VkAllocationCallbacks*                pAllocator,
+    VkShaderModule*                             pShaderModule)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkCreateShaderModule(
+        device,
+        pCreateInfo,
+        pAllocator,
+        pShaderModule);
+}
+
+VkResult vkCreateSemaphore(
+    VkDevice                                    device,
+    const VkSemaphoreCreateInfo*                pCreateInfo,
+    const VkAllocationCallbacks*                pAllocator,
+    VkSemaphore*                                pSemaphore)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkCreateSemaphore(
+        device,
+        pCreateInfo,
+        pAllocator,
+        pSemaphore);
+}
+
+VkResult vkCreateSampler(
+    VkDevice                                    device,
+    const VkSamplerCreateInfo*                  pCreateInfo,
+    const VkAllocationCallbacks*                pAllocator,
+    VkSampler*                                  pSampler)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkCreateSampler(
+        device,
+        pCreateInfo,
+        pAllocator,
+        pSampler);
+}
+
+VkResult vkCreateRenderPass(
+    VkDevice                                    device,
+    const VkRenderPassCreateInfo*               pCreateInfo,
+    const VkAllocationCallbacks*                pAllocator,
+    VkRenderPass*                               pRenderPass)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkCreateRenderPass(
+        device,
+        pCreateInfo,
+        pAllocator,
+        pRenderPass);
+}
+
+VkResult vkCreatePipelineLayout(
+    VkDevice                                    device,
+    const VkPipelineLayoutCreateInfo*           pCreateInfo,
+    const VkAllocationCallbacks*                pAllocator,
+    VkPipelineLayout*                           pPipelineLayout)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkCreatePipelineLayout(
+        device,
+        pCreateInfo,
+        pAllocator,
+        pPipelineLayout);
+}
+
+VkResult vkCreateImageView(
+    VkDevice                                    device,
+    const VkImageViewCreateInfo*                pCreateInfo,
+    const VkAllocationCallbacks*                pAllocator,
+    VkImageView*                                pView)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkCreateImageView(
+        device,
+        pCreateInfo,
+        pAllocator,
+        pView);
+}
+
+VkResult vkCreateImage(
+    VkDevice                                    device,
+    const VkImageCreateInfo*                    pCreateInfo,
+    const VkAllocationCallbacks*                pAllocator,
+    VkImage*                                    pImage)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkCreateImage(
+        device,
+        pCreateInfo,
+        pAllocator,
+        pImage);
+}
+
+VkResult vkCreateGraphicsPipelines(
+    VkDevice                                    device,
+    VkPipelineCache                             pipelineCache,
+    uint32_t                                    createInfoCount,
+    const VkGraphicsPipelineCreateInfo*         pCreateInfos,
+    const VkAllocationCallbacks*                pAllocator,
+    VkPipeline*                                 pPipelines)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkCreateGraphicsPipelines(
+        device,
+        pipelineCache,
+        createInfoCount,
+        pCreateInfos,
+        pAllocator,
+        pPipelines);
+}
+
+VkResult vkCreateFramebuffer(
+    VkDevice                                    device,
+    const VkFramebufferCreateInfo*              pCreateInfo,
+    const VkAllocationCallbacks*                pAllocator,
+    VkFramebuffer*                              pFramebuffer)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkCreateFramebuffer(
+        device,
+        pCreateInfo,
+        pAllocator,
+        pFramebuffer);
+}
+
+VkResult vkCreateFence(
+    VkDevice                                    device,
+    const VkFenceCreateInfo*                    pCreateInfo,
+    const VkAllocationCallbacks*                pAllocator,
+    VkFence*                                    pFence)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkCreateFence(
+        device,
+        pCreateInfo,
+        pAllocator,
+        pFence);
+}
+
+VkResult vkCreateDescriptorSetLayout(
+    VkDevice                                    device,
+    const VkDescriptorSetLayoutCreateInfo*      pCreateInfo,
+    const VkAllocationCallbacks*                pAllocator,
+    VkDescriptorSetLayout*                      pSetLayout)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkCreateDescriptorSetLayout(
+        device,
+        pCreateInfo,
+        pAllocator,
+        pSetLayout);
+}
+
+VkResult vkCreateCommandPool(
+    VkDevice                                    device,
+    const VkCommandPoolCreateInfo*              pCreateInfo,
+    const VkAllocationCallbacks*                pAllocator,
+    VkCommandPool*                              pCommandPool)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkCreateCommandPool(
+        device,
+        pCreateInfo,
+        pAllocator,
+        pCommandPool);
+}
+
+VkResult vkCreateBuffer(
+    VkDevice                                    device,
+    const VkBufferCreateInfo*                   pCreateInfo,
+    const VkAllocationCallbacks*                pAllocator,
+    VkBuffer*                                   pBuffer)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkCreateBuffer(
+        device,
+        pCreateInfo,
+        pAllocator,
+        pBuffer);
+}
+
+void vkDestroyCommandPool(
+    VkDevice                                    device,
+    VkCommandPool                               commandPool,
+    const VkAllocationCallbacks*                pAllocator)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkDestroyCommandPool(
+        device,
+        commandPool,
+        pAllocator);
+}
+
+void vkCmdSetViewport(
+    VkCommandBuffer                             commandBuffer,
+    uint32_t                                    firstViewport,
+    uint32_t                                    viewportCount,
+    const VkViewport*                           pViewports)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkCmdSetViewport(
+        commandBuffer,
+        firstViewport,
+        viewportCount,
+        pViewports);
+}
+
+void vkCmdSetScissor(
+    VkCommandBuffer                             commandBuffer,
+    uint32_t                                    firstScissor,
+    uint32_t                                    scissorCount,
+    const VkRect2D*                             pScissors)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkCmdSetScissor(
+        commandBuffer,
+        firstScissor,
+        scissorCount,
+        pScissors);
+}
+
+void vkCmdPushConstants(
+    VkCommandBuffer                             commandBuffer,
+    VkPipelineLayout                            layout,
+    VkShaderStageFlags                          stageFlags,
+    uint32_t                                    offset,
+    uint32_t                                    size,
+    const void*                                 pValues)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkCmdPushConstants(
+        commandBuffer,
+        layout,
+        stageFlags,
+        offset,
+        size,
+        pValues);
+}
+
+void vkCmdPipelineBarrier(
+    VkCommandBuffer                             commandBuffer,
+    VkPipelineStageFlags                        srcStageMask,
+    VkPipelineStageFlags                        dstStageMask,
+    VkDependencyFlags                           dependencyFlags,
+    uint32_t                                    memoryBarrierCount,
+    const VkMemoryBarrier*                      pMemoryBarriers,
+    uint32_t                                    bufferMemoryBarrierCount,
+    const VkBufferMemoryBarrier*                pBufferMemoryBarriers,
+    uint32_t                                    imageMemoryBarrierCount,
+    const VkImageMemoryBarrier*                 pImageMemoryBarriers)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkCmdPipelineBarrier(
+        commandBuffer,
+        srcStageMask,
+        dstStageMask,
+        dependencyFlags,
+        memoryBarrierCount,
+        pMemoryBarriers,
+        bufferMemoryBarrierCount,
+        pBufferMemoryBarriers,
+        imageMemoryBarrierCount,
+        pImageMemoryBarriers);
+}
+
+void vkCmdEndRenderPass(
+    VkCommandBuffer                             commandBuffer)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkCmdEndRenderPass(
+        commandBuffer);
+}
+
+void vkCmdDrawIndexed(
+    VkCommandBuffer                             commandBuffer,
+    uint32_t                                    indexCount,
+    uint32_t                                    instanceCount,
+    uint32_t                                    firstIndex,
+    int32_t                                     vertexOffset,
+    uint32_t                                    firstInstance)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkCmdDrawIndexed(
+        commandBuffer,
+        indexCount,
+        instanceCount,
+        firstIndex,
+        vertexOffset,
+        firstInstance);
+}
+
+void vkCmdCopyBufferToImage(
+    VkCommandBuffer                             commandBuffer,
+    VkBuffer                                    srcBuffer,
+    VkImage                                     dstImage,
+    VkImageLayout                               dstImageLayout,
+    uint32_t                                    regionCount,
+    const VkBufferImageCopy*                    pRegions)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkCmdCopyBufferToImage(
+        commandBuffer,
+        srcBuffer,
+        dstImage,
+        dstImageLayout,
+        regionCount,
+        pRegions);
+}
+
+void vkCmdBindVertexBuffers(
+    VkCommandBuffer                             commandBuffer,
+    uint32_t                                    firstBinding,
+    uint32_t                                    bindingCount,
+    const VkBuffer*                             pBuffers,
+    const VkDeviceSize*                         pOffsets)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkCmdBindVertexBuffers(
+        commandBuffer,
+        firstBinding,
+        bindingCount,
+        pBuffers,
+        pOffsets);
+}
+
+void vkCmdBindPipeline(
+    VkCommandBuffer                             commandBuffer,
+    VkPipelineBindPoint                         pipelineBindPoint,
+    VkPipeline                                  pipeline)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkCmdBindPipeline(
+        commandBuffer,
+        pipelineBindPoint,
+        pipeline);
+}
+
+void vkCmdBindIndexBuffer(
+    VkCommandBuffer                             commandBuffer,
+    VkBuffer                                    buffer,
+    VkDeviceSize                                offset,
+    VkIndexType                                 indexType)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkCmdBindIndexBuffer(
+        commandBuffer,
+        buffer,
+        offset,
+        indexType);
+}
+
+void vkCmdBindDescriptorSets(
+    VkCommandBuffer                             commandBuffer,
+    VkPipelineBindPoint                         pipelineBindPoint,
+    VkPipelineLayout                            layout,
+    uint32_t                                    firstSet,
+    uint32_t                                    descriptorSetCount,
+    const VkDescriptorSet*                      pDescriptorSets,
+    uint32_t                                    dynamicOffsetCount,
+    const uint32_t*                             pDynamicOffsets)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkCmdBindDescriptorSets(
+        commandBuffer,
+        pipelineBindPoint,
+        layout,
+        firstSet,
+        descriptorSetCount,
+        pDescriptorSets,
+        dynamicOffsetCount,
+        pDynamicOffsets);
+}
+
+void vkCmdBeginRenderPass(
+    VkCommandBuffer                             commandBuffer,
+    const VkRenderPassBeginInfo*                pRenderPassBegin,
+    VkSubpassContents                           contents)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkCmdBeginRenderPass(
+        commandBuffer,
+        pRenderPassBegin,
+        contents);
+}
+
+VkResult vkBindImageMemory(
+    VkDevice                                    device,
+    VkImage                                     image,
+    VkDeviceMemory                              memory,
+    VkDeviceSize                                memoryOffset)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkBindImageMemory(
+        device,
+        image,
+        memory,
+        memoryOffset);
+}
+
+VkResult vkBindBufferMemory(
+    VkDevice                                    device,
+    VkBuffer                                    buffer,
+    VkDeviceMemory                              memory,
+    VkDeviceSize                                memoryOffset)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkBindBufferMemory(
+        device,
+        buffer,
+        memory,
+        memoryOffset);
+}
+
+VkResult vkBeginCommandBuffer(
+    VkCommandBuffer                             commandBuffer,
+    const VkCommandBufferBeginInfo*             pBeginInfo)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkBeginCommandBuffer(
+        commandBuffer,
+        pBeginInfo);
+}
+
+VkResult vkAllocateMemory(
+    VkDevice                                    device,
+    const VkMemoryAllocateInfo*                 pAllocateInfo,
+    const VkAllocationCallbacks*                pAllocator,
+    VkDeviceMemory*                             pMemory)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkAllocateMemory(
+        device,
+        pAllocateInfo,
+        pAllocator,
+        pMemory);
+}
+
+VkResult vkAllocateDescriptorSets(
+    VkDevice                                    device,
+    const VkDescriptorSetAllocateInfo*          pAllocateInfo,
+    VkDescriptorSet*                            pDescriptorSets)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkAllocateDescriptorSets(
+        device,
+        pAllocateInfo,
+        pDescriptorSets);
+}
+
+VkResult vkAllocateCommandBuffers(
+    VkDevice                                    device,
+    const VkCommandBufferAllocateInfo*          pAllocateInfo,
+    VkCommandBuffer*                            pCommandBuffers)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkAllocateCommandBuffers(
+        device,
+        pAllocateInfo,
+        pCommandBuffers);
+}
+
+VkResult vkAcquireNextImageKHR(
+    VkDevice                                    device,
+    VkSwapchainKHR                              swapchain,
+    uint64_t                                    timeout,
+    VkSemaphore                                 semaphore,
+    VkFence                                     fence,
+    uint32_t*                                   pImageIndex)
+{
+    using namespace jeecs::graphic::api::vk110;
+    return jegl_vk110_context::_vk_this_context->vkAcquireNextImageKHR(
+        device,
+        swapchain,
+        timeout,
+        semaphore,
+        fence,
+        pImageIndex);
+}
+
+// 导出图形接口！ 
 void jegl_using_vulkan110_apis(jegl_graphic_api* write_to_apis)
 {
     using namespace jeecs::graphic::api::vk110;
