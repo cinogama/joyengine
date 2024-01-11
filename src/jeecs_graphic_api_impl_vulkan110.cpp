@@ -1018,11 +1018,11 @@ VK_API_PLATFORM_API_LIST
                 attachment.flags = 0;
                 attachment.format = attachment_colors[attachment_i]->m_vk_texture_format;
                 attachment.samples = VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT;
-                attachment.loadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+                attachment.loadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_LOAD;
                 attachment.storeOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_STORE;
                 attachment.stencilLoadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_DONT_CARE;
                 attachment.stencilStoreOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_DONT_CARE;
-                attachment.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                attachment.initialLayout = final_layout;
                 attachment.finalLayout = final_layout;
 
                 VkAttachmentReference& attachment_ref = color_attachment_refs[attachment_i];
@@ -1038,7 +1038,7 @@ VK_API_PLATFORM_API_LIST
                 depth_attachment.flags = 0;
                 depth_attachment.format = attachment_depth->m_vk_texture_format;
                 depth_attachment.samples = VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT;
-                depth_attachment.loadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+                depth_attachment.loadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_LOAD;
                 depth_attachment.storeOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_STORE;
                 depth_attachment.stencilLoadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_DONT_CARE;
                 depth_attachment.stencilStoreOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -1622,9 +1622,17 @@ VK_API_PLATFORM_API_LIST
                 "VK_EXT_robustness2",
             };
 
+            size_t SKIP_DEVICE = 0;
+
             _vk_device = nullptr;
             for (auto& device : all_physics_devices)
             {
+                if (SKIP_DEVICE)
+                {
+                    --SKIP_DEVICE;
+                    continue;
+                }
+
                 auto info = check_physics_device_is_suatable(
                     device,
                     vk_validation_layer_supported,
