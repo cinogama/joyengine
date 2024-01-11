@@ -1329,6 +1329,12 @@ VK_API_PLATFORM_API_LIST
             _vk_swapchain_framebuffer.resize(swapchain_real_image_count);
             for (uint32_t i = 0; i < swapchain_real_image_count; ++i)
             {
+                transition_image_layout(
+                    swapchain_images[i],
+                    _vk_surface_format.format,
+                    VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED,
+                    VkImageLayout::VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+
                 jevk11_texture* color_attachment = create_framebuf_texture_with_swapchain_image(
                     swapchain_images[i],
                     _vk_surface_format.format,
@@ -1340,7 +1346,6 @@ VK_API_PLATFORM_API_LIST
 
                 _vk_swapchain_textures_for_free.push_back(color_attachment);
                 _vk_swapchain_textures_for_free.push_back(depth_attachment);
-
 
                 _vk_swapchain_framebuffer[i] = create_frame_buffer(
                     (size_t)used_extent.width,
@@ -1355,7 +1360,7 @@ VK_API_PLATFORM_API_LIST
 #define VK_API_DECL(name) PFN_##name name
         VK_API_LIST;
 #undef VK_API_DECL
-
+#undef NDEBUG
 #ifndef NDEBUG
         VkDebugUtilsMessengerEXT _vk_debug_manager;
 
@@ -2609,7 +2614,7 @@ VK_API_PLATFORM_API_LIST
                     texture->m_vk_texture_image, 
                     vk_attachment_format,
                     VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED,
-                    VkImageLayout::VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+                    VkImageLayout::VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
             }
 
             return texture;
@@ -2681,6 +2686,46 @@ VK_API_PLATFORM_API_LIST
                     barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
                     source_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+                    destination_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+                }
+                else if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+                {
+                    barrier.srcAccessMask = 0;
+                    barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+
+                    source_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+                    destination_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+                }
+                else if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+                {
+                    barrier.srcAccessMask = 0;
+                    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+                    source_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+                    destination_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+                }
+                else if (old_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL && new_layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+                {
+                    barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+                    barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+
+                    source_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+                    destination_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+                }
+                else if (old_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL && new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+                {
+                    barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+                    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+                    source_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+                    destination_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+                }
+                else if (old_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL && new_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+                {
+                    barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+                    barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+                    source_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
                     destination_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
                 }
                 else
