@@ -70,7 +70,7 @@ namespace jeapi::welcome
                     TextDisabled("Copyright (c) 2021-2023 Cinogama project.");
                     TextDisabled("Woolang is licensed under the Apache License v2.0");
                     
-                    Text("使用下面这些库为 OpenGL3.3提供支持：");
+                    Text("使用下面这些库为 OpenGL3.3 提供支持：");
 
                     Text("GLEW https://github.com/nigels-com/glew");
                     TextDisabled("The OpenGL Extension Wrangler Library");
@@ -87,6 +87,30 @@ The source code is licensed under the Modified BSD License, the Mesa
                     TextDisabled("Copyright (c) 2002-2006 Marcus Geelnard.");
                     TextDisabled("Copyright (c) 2006-2019 Camilla Löwy.");
                     TextDisabled("GLFW is licensed under the zlib/libpng license.");
+
+                    Text("使用下面这些库为 Vulkan1.3 提供支持：");
+
+                    Text("Vulkan SDK(Header) https://github.com/KhronosGroup/SPIRV-Headers");
+                    TextDisabled("Vulkan SDK(Header) is licensed under the Apache License v2.0 and MIT License");
+                    TextDisabled("Copyright 2015-2023 The Khronos Group Inc.");
+
+                    Text("GLSLang https://github.com/KhronosGroup/glslang");
+                    TextDisabled("GLSLang is licensed under the following Licenses:");
+                    TextDisabled("BSD-2, BSD-3, Apache License v2.0, Apache License v2.0 Header MIT and MIT-0");
+                    TextDisabled("* It's seems that some of source files are licensed under the GPLv3 License?");
+                    TextDisabled("Copyright The Khronos Group Inc.");
+
+                    Text("SPIRV-Cross https://github.com/KhronosGroup/SPIRV-Cross");
+                    TextDisabled("SPIRV-Cross is licensed under the Apache License v2.0 License");
+                    TextDisabled("Copyright The Khronos Group Inc.");
+
+                    Text("SPIRV-Tools https://github.com/KhronosGroup/SPIRV-Tools");
+                    TextDisabled("SPIRV-Tools is licensed under the Apache License v2.0 License");
+                    TextDisabled("Copyright The Khronos Group Inc.");
+
+                    Text("SPIRV-Headers https://github.com/KhronosGroup/SPIRV-Headers");
+                    TextDisabled("SPIRV-Headers is licensed under the MIT License");
+                    TextDisabled("Copyright 2015-2018 The Khronos Group Inc.");
 
                     Text("编辑器环境使用一些按原样提供的第三方工具:");
                     Text("CMake https://cmake.org/");
