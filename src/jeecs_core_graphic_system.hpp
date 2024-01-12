@@ -1693,7 +1693,7 @@ public func frag(_: v2f)
                                     blockarch.translation->world_position -
                                     lightarch.translation->world_position
                                     ).length();
-                                if (lightarch.parallel == nullptr || l2b_distance <= block_range + light_range)
+                                if (lightarch.parallel != nullptr || l2b_distance <= block_range + light_range)
                                 {
                                     block_in_current_layer.push_back(&blockarch);
                                     if (blockarch.block->shadow > 0.f)
