@@ -1591,7 +1591,7 @@ VK_API_PLATFORM_API_LIST
                 "VK_EXT_robustness2",
             };
 
-            size_t SKIP_DEVICE = 1;
+            size_t SKIP_DEVICE = 0;
 
             _vk_device = nullptr;
             for (auto& device : all_physics_devices)
