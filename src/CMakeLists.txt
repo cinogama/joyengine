@@ -99,8 +99,8 @@ if (JE4_ENABLE_DX11_GAPI AND WIN32)
 endif()
 
 # Vulkan 1.1
-if (JE4_ENABLE_VULKAN110_GAPI)
-    add_definitions(-DJE_ENABLE_VK110_GAPI)
+if (JE4_ENABLE_VULKAN130_GAPI)
+    add_definitions(-DJE_ENABLE_VK130_GAPI)
 
     list(APPEND imgui_srcs
         "../3rd/imgui/backends/imgui_impl_vulkan.cpp"
@@ -115,7 +115,7 @@ endif()
 # OpenGL3.3 / OpenGLES3.0 / Vulkan needed:
 if (JE4_ENABLE_OPENGL330_GAPI OR 
     JE4_ENABLE_OPENGLES300_GAPI OR 
-    JE4_ENABLE_VULKAN110_GAPI)
+    JE4_ENABLE_VULKAN130_GAPI)
 
     if (ANDROID)
         list(APPEND imgui_srcs

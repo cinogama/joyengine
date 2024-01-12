@@ -65,14 +65,15 @@ void jegl_set_host_graphic_api(jegl_graphic_api_entry api)
 
 jegl_graphic_api_entry jegl_get_host_graphic_api(void)
 {
+    return jegl_using_vulkan130_apis;
     if (_jegl_host_graphic_api == nullptr)
     {
 #if defined(JE_ENABLE_DX11_GAPI)
         return jegl_using_dx11_apis;
 #elif defined(JE_ENABLE_GL330_GAPI) || defined(JE_ENABLE_GLES300_GAPI)
         return jegl_using_opengl3_apis;
-#elif defined(JE_ENABLE_VK110_GAPI)
-        return jegl_using_vulkan110_apis;
+#elif defined(JE_ENABLE_VK130_GAPI)
+        return jegl_using_vulkan130_apis;
 #elif defined(JE_ENABLE_METAL_GAPI)
         return jegl_using_metal_apis;
 #else
@@ -180,9 +181,9 @@ void je_init(int argc, char** argv)
             else if (value == "gl3")
                 jegl_set_host_graphic_api(jegl_using_opengl3_apis);
 #endif
-#if defined(JE_ENABLE_VK110_GAPI)
-            else if (value == "vk110")
-                jegl_set_host_graphic_api(jegl_using_vulkan110_apis);
+#if defined(JE_ENABLE_VK130_GAPI)
+            else if (value == "vk130")
+                jegl_set_host_graphic_api(jegl_using_vulkan130_apis);
 #endif
 #if defined(JE_ENABLE_METAL_GAPI)
             else if (value == "metal")
@@ -399,7 +400,7 @@ void je_finish()
 
 const char* je_build_version()
 {
-    return "JoyEngine 4.4.0 " __TIMESTAMP__;
+    return "JoyEngine " JE_CORE_VERSION " " __TIMESTAMP__;
 }
 
 const char* je_build_commit()

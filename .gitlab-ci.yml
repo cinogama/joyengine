@@ -17,7 +17,7 @@ build_linux_opengl:
       -DJE4_ENABLE_DX11_GAPI=OFF
       -DJE4_ENABLE_OPENGL330_GAPI=ON
       -DJE4_ENABLE_OPENGLES300_GAPI=OFF
-      -DJE4_ENABLE_VULKAN110_GAPI=OFF
+      -DJE4_ENABLE_VULKAN130_GAPI=OFF
       -DJE4_ENABLE_METAL_GAPI=OFF
     - if [ ! -d pkg ]; then mkdir pkg; fi
     - if [ ! -d builtin ]; then mkdir builtin; fi
@@ -49,7 +49,7 @@ build_linux_a64_opengl:
       -DJE4_ENABLE_DX11_GAPI=OFF
       -DJE4_ENABLE_OPENGL330_GAPI=ON
       -DJE4_ENABLE_OPENGLES300_GAPI=OFF
-      -DJE4_ENABLE_VULKAN110_GAPI=OFF
+      -DJE4_ENABLE_VULKAN130_GAPI=OFF
       -DJE4_ENABLE_METAL_GAPI=OFF
     - if [ ! -d pkg ]; then mkdir pkg; fi
     - if [ ! -d builtin ]; then mkdir builtin; fi
@@ -82,7 +82,7 @@ build_linux_opengles:
       -DJE4_ENABLE_DX11_GAPI=OFF
       -DJE4_ENABLE_OPENGL330_GAPI=OFF
       -DJE4_ENABLE_OPENGLES300_GAPI=ON
-      -DJE4_ENABLE_VULKAN110_GAPI=OFF
+      -DJE4_ENABLE_VULKAN130_GAPI=OFF
       -DJE4_ENABLE_METAL_GAPI=OFF
     - if [ ! -d pkg ]; then mkdir pkg; fi
     - if [ ! -d builtin ]; then mkdir builtin; fi
@@ -110,7 +110,7 @@ build_win64_dx11_opengl_vk:
       -DJE4_ENABLE_DX11_GAPI=ON
       -DJE4_ENABLE_OPENGL330_GAPI=ON
       -DJE4_ENABLE_OPENGLES300_GAPI=OFF
-      -DJE4_ENABLE_VULKAN110_GAPI=ON
+      -DJE4_ENABLE_VULKAN130_GAPI=ON
       -DJE4_ENABLE_METAL_GAPI=OFF
     - MSBuild jedriver.vcxproj -p:Configuration=RelWithDebInfo -m
     - cd ..
@@ -147,7 +147,7 @@ build_win64_dx11_opengles_vk:
       -DJE4_ENABLE_DX11_GAPI=ON
       -DJE4_ENABLE_OPENGL330_GAPI=OFF
       -DJE4_ENABLE_OPENGLES300_GAPI=ON
-      -DJE4_ENABLE_VULKAN110_GAPI=ON
+      -DJE4_ENABLE_VULKAN130_GAPI=ON
       -DJE4_ENABLE_METAL_GAPI=OFF
     - MSBuild jedriver.vcxproj -p:Configuration=RelWithDebInfo -m
   tags:

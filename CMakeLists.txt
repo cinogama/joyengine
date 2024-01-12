@@ -22,7 +22,7 @@ option(JE4_EXECUTE_BUILD_SCRIPT             "Copy liscences & gles-sdk for win32
 option(JE4_ENABLE_DX11_GAPI         "Enable DX11 Graphic api"           OFF)
 option(JE4_ENABLE_OPENGL330_GAPI    "Enable OpenGL 3.3 Graphic API"     OFF)
 option(JE4_ENABLE_OPENGLES300_GAPI  "Enable OpenGLES 3.0 Graphic API"   OFF)
-option(JE4_ENABLE_VULKAN110_GAPI    "Enable Vulkan 1.1 Graphic API"     OFF)
+option(JE4_ENABLE_VULKAN130_GAPI    "Enable Vulkan 1.3 Graphic API"     OFF)
 option(JE4_ENABLE_METAL_GAPI        "Enable Metal Graphic API"          OFF)
 
 
@@ -53,7 +53,7 @@ if (JE4_ENABLE_OPENGL330_GAPI)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glew" FORCE)
     add_subdirectory("3rd/glew/build/cmake")
 endif()
-if (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES300_GAPI OR JE4_ENABLE_VULKAN110_GAPI)
+if (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES300_GAPI OR JE4_ENABLE_VULKAN130_GAPI)
     if (NOT ANDROID)
         set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glfw" FORCE)
         add_subdirectory("3rd/glfw")

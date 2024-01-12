@@ -27,7 +27,7 @@
           "type": "BOOL"
         },
         {
-          "name": "JE4_ENABLE_VULKAN110_GAPI",
+          "name": "JE4_ENABLE_VULKAN130_GAPI",
           "value": "True",
           "type": "BOOL"
         }
@@ -60,7 +60,7 @@
           "type": "BOOL"
         },
         {
-          "name": "JE4_ENABLE_VULKAN110_GAPI",
+          "name": "JE4_ENABLE_VULKAN130_GAPI",
           "value": "True",
           "type": "BOOL"
         }

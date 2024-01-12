@@ -8,6 +8,9 @@
 
 #include "wo.h"
 
+#define JE_VERSION_WRAP(A, B, C) #A "." #B "." #C
+#define JE_CORE_VERSION JE_VERSION_WRAP(4, 4, 1)
+
 #include <cstdint>
 #include <cstring>
 #include <cstdlib>
@@ -2289,13 +2292,13 @@ jegl_using_opengl3_apis [基本接口]
 JE_API void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis);
 
 /*
-jegl_using_vulkan110_apis [基本接口] (暂未实现)
-加载vulkan API v1.1集合，通常与jegl_start_graphic_thread一起使用
+jegl_using_vulkan130_apis [基本接口] (暂未实现)
+加载Vulkan API v1.3集合，通常与jegl_start_graphic_thread一起使用
 用于指定图形线程使用的基本图形库
 请参见：
     jegl_start_graphic_thread
 */
-JE_API void jegl_using_vulkan110_apis(jegl_graphic_api* write_to_apis);
+JE_API void jegl_using_vulkan130_apis(jegl_graphic_api* write_to_apis);
 
 
 /*

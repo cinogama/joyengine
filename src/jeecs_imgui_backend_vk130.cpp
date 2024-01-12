@@ -1,7 +1,7 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
-#if defined(JE_ENABLE_VK110_GAPI)
+#if defined(JE_ENABLE_VK130_GAPI)
 #   include "jeecs_imgui_backend_api.hpp"
 
 #   include <imgui.h>
@@ -100,7 +100,7 @@ int jegui_android_PollUnicodeChars()
 #       include <GLFW/glfw3.h>
 #   endif
 
-void jegui_init_vk110(
+void jegui_init_vk130(
     void* (*get_img_res)(jegl_resource*),
     void (*apply_shader_sampler)(jegl_resource*),
     void* window_handle,
@@ -123,7 +123,7 @@ void jegui_init_vk110(
     ImGui_ImplVulkan_CreateFontsTexture(cmdbuf);
 }
 
-void jegui_update_vk110(VkCommandBuffer cmdbuf)
+void jegui_update_vk130(VkCommandBuffer cmdbuf)
 {
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
 #   ifdef JE_OS_ANDROID
@@ -157,7 +157,7 @@ void jegui_update_vk110(VkCommandBuffer cmdbuf)
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdbuf);
 }
 
-void jegui_shutdown_vk110(bool reboot)
+void jegui_shutdown_vk130(bool reboot)
 {
     jegui_shutdown_basic(reboot);
     ImGui_ImplVulkan_Shutdown();

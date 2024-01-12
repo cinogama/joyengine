@@ -112,6 +112,8 @@ namespace jeecs
         graphic_uhost(jeecs::game_universe _universe, const jegl_interface_config* _config)
             : universe(_universe)
         {
+            auto host_graphic_api = jegl_get_host_graphic_api();
+
             jegl_interface_config config = {};
             if (_config == nullptr)
             {
@@ -123,7 +125,18 @@ namespace jeecs
                 config.m_reso_x = 1;
                 config.m_reso_y = 1;
 
-                config.m_title = "JoyEngineECS(JoyEngine 4.4)";
+                if (host_graphic_api == jegl_using_dx11_apis)
+                    config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " DirectX11)";
+                else if (host_graphic_api == jegl_using_opengl3_apis)
+                    config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " OpenGl3)";
+                else if (host_graphic_api == jegl_using_vulkan130_apis)
+                    config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " Vulkan1.3)";
+                else if (host_graphic_api == jegl_using_metal_apis)
+                    config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " Metal)";
+                else if (host_graphic_api == jegl_using_none_apis)
+                    config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " None)";
+                else
+                    config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " Custon Graphic API)";
                 
                 config.m_enable_resize = true;
                 config.m_fps = 0;               // 使用垂直同步
