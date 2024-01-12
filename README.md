@@ -58,6 +58,10 @@ Thanks to [box2d](https://box2d.org/) for providing nice physical effects, This 
 
 Thanks to [Assimp](https://www.assimp.org/). This is a library that can import and read data from many different 3D model formats, with very powerful functions. In the future, JoyEngine will be able to support 3D game development with the help of this library - but it's too early now; Thanks to the developers of Assymp!
 
+很想感谢 [Khronos](https://www.khronos.org/), 他们提供了 glslang 和非常易用的 vulkan-header，这可以使得开发vulkan摆脱SDK（虽然为了使用验证层还是得装上，但是毕竟不是必选项了），并且翻译SPIR-V也更加方便；但是一想到他们把vulkan设计得十分复杂，一些很常见的功能反而需要各种拓展，Uniform Buffer里的数据居然在绑定之后就不能更新了等等等等；以至于想到这里，我就不怎么想感谢他们了。
+
+I would like to thank [Khronos](https://www.khronos.org/), they provide glslang and the very easy-to-use vulkan-header, which can make developing vulkan without the SDK (although you still have to install it in order to use the verification layer, but after all is not a required option), and it is more convenient to translate SPIR-V; but when I think that they designed vulkan to be very complicated, some very common functions require various extensions, and the data in the Uniform Buffer cannot be updated after binding. , the descriptor set cannot be updated after being bound, etc.; so much so that when I think of this, I don't really want to thank them.
+
 感谢 [woolang](https://github.com/cinogama/woolang) 给JoyEngine提供了一门强类型和静态类型的脚本语言，感谢它的创作者——@mr_cino，额，好像就是我。那么谢谢我自己。
 
 Thanks to [woolang](https://github.com/cinogama/woolang) for providing JoyEngine with a strongly typed and statically typed scripting language, and thanks to its creator - @mr_cino, well, it seems to be me. Then thank myself.
