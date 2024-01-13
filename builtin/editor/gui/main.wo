@@ -239,7 +239,7 @@ namespace editor::gui
 
         // 释放模块
         proj->free_modules_after_close();
-
+        
         // 项目退出了，将编辑器上下文置为 stop, 用于指示窗口应当关闭
         context.m_stopped = true;
         je::editor::unhooklog(context.m_logger);

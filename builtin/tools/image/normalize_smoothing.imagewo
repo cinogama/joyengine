@@ -1,0 +1,45 @@
+import je::editor::graphic;
+import pkg::math;
+
+NAME = "法线抹平";
+
+public func entry(_: je::graphic::texture)
+{
+    return true;
+}
+
+func height(color: (real, real, real, real))
+{
+    let (r, g, b ,a) = color;
+    return a + (0.22 * r + 0.707 * g + 0.071 * b);
+}
+
+public func pixel(t: je::graphic::texture, x: int, y: int)
+    => (real, real, real, real)
+{
+    let (onx, ony, onz, a) = tex(t, x, y);
+
+    let nx = (onx - 0.5) * 2.;
+    let ny = (ony - 0.5) * 2.;
+    let mut nz = (onz - 0.5) * 2.;
+    
+    if (nz >= 0.)
+        nz += 1.;
+    else
+        nz -= 1.;
+
+    let len = math::sqrt(nx * nx + ny * ny + nz * nz);
+    if (len != 0.)
+    {
+        return (
+            nx / len * 0.5 + 0.5,
+            ny / len * 0.5 + 0.5,
+            nz / len * 0.5 + 0.5,
+            a,
+        );
+    }
+    else
+        return (0., 0., 0., a);
+   
+
+}

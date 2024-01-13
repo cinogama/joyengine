@@ -698,6 +698,8 @@ namespace editor
             // 关闭env, 稍后释放模块
             self.m_env->close;          
             self->unlock_this_project();
+
+            gui::drawpannel::close_all_scripts();
         }
         public func free_modules_after_close(self: Project)
         {

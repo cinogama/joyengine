@@ -158,7 +158,9 @@ namespace editor::gui::edit_forms
                                     if (!context->get_project->is_debugging)
                                         cur_e->editor::set_name(new_name);
                                 };
-                            Text(cur_e->chunkinfo);                    
+
+                            let current_entity_chunk_info = cur_e->chunkinfo;
+                            Text(current_entity_chunk_info);                    
 
                             let (chunk_size, entity_size, entity_count) = je::editor::get_entity_arch_information(cur_e);
                             Text(F"区块/实体体积: {chunk_size}/{entity_size}={entity_count}");
@@ -302,7 +304,7 @@ namespace editor::gui::edit_forms
                                             TextDisabled(mname);
                                             
                                             // TODO: 检查字段更新然后干点啥事儿？
-                                            do jeapi::gui::edit_cur_native_value(mname, mtype, mvalue);
+                                            do jeapi::gui::edit_cur_native_value(mname, current_entity_chunk_info, mtype, mvalue);
 
                                             EndGroup();
                                         }

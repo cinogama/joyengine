@@ -26,7 +26,8 @@ public func vert(v: vin)
 {
     return v2f{
         pos = float4::create(v.vertex, 0.5) * 2.,
-        light_vdir = je_mv->float3x3 * float3::new(0., -1., 1.),
+        light_vdir = normalize(
+            je_mv->float3x3 * float3::new(0., -1., 1.)),
     };
 }
 
@@ -78,7 +79,9 @@ public func frag(vf: v2f)
     let uv = uvframebuf((vf.pos->xy / vf.pos->w + float2::new(1., 1.)) /2.);
     let shadow_factor = multi_sampling_for_bias_shadow(shadow_buffer, je_light2d_resolutin, uv);
 
-    let vnormalize = texture(vspace_normalize, uv)->xyz;
+    let normal_z_offset = uniform("normal_z_offset", float::one);
+    let vnormalize = normalize(
+        texture(vspace_normalize, uv)->xyz - float3::create(0., 0., normal_z_offset));
 
     return fout{
         color = float4::create(

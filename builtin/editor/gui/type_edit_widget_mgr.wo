@@ -29,16 +29,16 @@ namespace jeapi::gui
             
         _registed_editor_methods->set(type, method);
     }
-    public func edit_cur_native_value(tag: string, type: je::typeinfo, native_value: je::native_value)
+    public func edit_cur_native_value(tag: string, echunkinfo: string, type: je::typeinfo, native_value: je::native_value)
     {
         let mut result = false;
-        do InvisibleButton(F"##{tag}$PADDING", (2., 1.));
+        do InvisibleButton(F"##{tag}_{echunkinfo}_$PADDING", (2., 1.));
         SameLine();
         BeginGroup();
         match (_registed_editor_methods->get(type))
         {
         value(method)?
-            result = method(tag, native_value);
+            result = method(tag + F"@{echunkinfo}", native_value);
         none?
             {
                 // 没有注册的特殊控件，使用底层自带的to_string方法处理
@@ -54,13 +54,13 @@ namespace jeapi::gui
                     none?
                         TextDisabled(F"未找到编辑{spec_method}的自定义编辑器");
                     value(method)?
-                        do method(tag, member_data->sub(spec_method->len + 2))
+                        do method(tag+ F"@{echunkinfo}", member_data->sub(spec_method->len + 2))
                             ->> \update_str = native_value->parse(type, F"#{spec_method}#" + update_str);
                             ;
                     }
                 }
                 else
-                    do InputText(tag, member_data) 
+                    do InputText(tag + F"##@{echunkinfo}", member_data) 
                         ->> \data_str = native_value->parse(type, data_str);;
             }
         }

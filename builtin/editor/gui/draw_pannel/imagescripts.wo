@@ -61,12 +61,16 @@ extern func name()
             =>> \v = v->invoke("main", [t: dynamic]);
             ->  has;
     }
-    public func update_and_get_scripts(proj: Project)
+    public func close_all_scripts()
     {
         for (let _, vminstance : image_effect_scripts)
         {
             do vminstance->close();
         }
+    }
+    public func update_and_get_scripts(proj: Project)
+    {
+        close_all_scripts();
 
         let r = {}mut: map<string, vm>;
 
