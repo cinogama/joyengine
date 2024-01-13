@@ -2079,7 +2079,6 @@ public func frag(vf: v2f)
         // je_mem_free(file_buf); // No need to free.
         jeecs_file_close(ttf_file);
     }
-
 }
 void jegui_update_basic()
 {

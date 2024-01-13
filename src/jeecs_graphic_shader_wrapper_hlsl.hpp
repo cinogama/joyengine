@@ -16,6 +16,12 @@ namespace jeecs
                     std::to_string(set) + 
                     ")]]\n#endif\n";
             }
+            std::string attrib_location(size_t loc)
+            {
+                return "#ifdef GLSLANG_HLSL_TO_SPIRV\n[[vk::location(" +
+                    std::to_string(loc) + 
+                    ")]]\n#endif\n";
+            }
             virtual std::string get_typename(jegl_shader_value::type type) override
             {
                 switch (type)
@@ -437,8 +443,9 @@ namespace jeecs
                 std::map<size_t, std::string> in_value_wraper;
                 for (auto& indecl : contex._in_value)
                 {
-                    in_value_wraper[indecl.second.first] 
-                        = "    "
+                    in_value_wraper[indecl.second.first]
+                        = attrib_location(indecl.second.first)
+                        + "    "
                         + get_value_typename(indecl.first)
                         + " _in_"
                         + std::to_string(indecl.second.first)

@@ -1328,7 +1328,7 @@ VK_API_PLATFORM_API_LIST
             const VkDebugUtilsMessengerCallbackDataEXT* info,
             void* userdata)
         {
-            debug::logwarn("[Vulkan] %s\n\n", info->pMessage);
+            debug::logwarn("[Vulkan] %s", info->pMessage);
             return VK_FALSE;
         }
 #endif
@@ -1475,7 +1475,7 @@ VK_API_PLATFORM_API_LIST
 #undef JE_VERSION_WRAP
 #define JE_VERSION_WRAP(A, B, C) VK_MAKE_API_VERSION(0, A, B, C)
             application_info.engineVersion = JE_CORE_VERSION;
-            application_info.apiVersion = VK_API_VERSION_1_1;
+            application_info.apiVersion = VK_API_VERSION_1_3;
 
             VkInstanceCreateInfo instance_create_info = {};
             instance_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
