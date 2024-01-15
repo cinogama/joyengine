@@ -72,7 +72,7 @@ jegl_graphic_api_entry jegl_get_host_graphic_api(void)
 #elif defined(JE_ENABLE_GL330_GAPI) || defined(JE_ENABLE_GLES300_GAPI)
         return jegl_using_opengl3_apis;
 #elif defined(JE_ENABLE_VK130_GAPI)
-        return jegl_using_vulkan130_apis;
+        return jegl_using_vk130_apis;
 #elif defined(JE_ENABLE_METAL_GAPI)
         return jegl_using_metal_apis;
 #else
@@ -182,7 +182,7 @@ void je_init(int argc, char** argv)
 #endif
 #if defined(JE_ENABLE_VK130_GAPI)
             else if (value == "vk130")
-                jegl_set_host_graphic_api(jegl_using_vulkan130_apis);
+                jegl_set_host_graphic_api(jegl_using_vk130_apis);
 #endif
 #if defined(JE_ENABLE_METAL_GAPI)
             else if (value == "metal")

@@ -129,7 +129,7 @@ namespace jeecs
                     config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " DirectX11)";
                 else if (host_graphic_api == jegl_using_opengl3_apis)
                     config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " OpenGl3)";
-                else if (host_graphic_api == jegl_using_vulkan130_apis)
+                else if (host_graphic_api == jegl_using_vk130_apis)
                     config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " Vulkan1.3)";
                 else if (host_graphic_api == jegl_using_metal_apis)
                     config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " Metal)";

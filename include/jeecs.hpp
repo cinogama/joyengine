@@ -2298,7 +2298,7 @@ jegl_using_vulkan130_apis [基本接口] (暂未实现)
 请参见：
     jegl_start_graphic_thread
 */
-JE_API void jegl_using_vulkan130_apis(jegl_graphic_api* write_to_apis);
+JE_API void jegl_using_vk130_apis(jegl_graphic_api* write_to_apis);
 
 
 /*

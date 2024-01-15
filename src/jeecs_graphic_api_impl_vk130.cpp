@@ -4754,7 +4754,7 @@ VkResult vkAcquireNextImageKHR(
 }
 
 // 导出图形接口！ 
-void jegl_using_vulkan130_apis(jegl_graphic_api* write_to_apis)
+void jegl_using_vk130_apis(jegl_graphic_api* write_to_apis)
 {
     using namespace jeecs::graphic::api::vk130;
 
@@ -4783,7 +4783,7 @@ void jegl_using_vulkan130_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->set_uniform = set_uniform;
 }
 #else
-void jegl_using_vulkan130_apis(jegl_graphic_api* write_to_apis)
+void jegl_using_vk130_apis(jegl_graphic_api* write_to_apis)
 {
     jeecs::debug::logfatal("vk130 not available.");
 }
