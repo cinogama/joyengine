@@ -1568,32 +1568,32 @@ struct jegl_interface_config
     void* m_userdata;
 };
 
-struct jegl_thread_notifier;
+struct jegl_context_notifier;
 struct jegl_graphic_api;
 
 /*
-jegl_thread [类型]
+jegl_context [类型]
 图形上下文，储存有当前图形线程的各项信息
 */
-struct jegl_thread
+struct jegl_context
 {
-    using custom_thread_data_t = void*;
-    using frame_rend_work_func_t = void(*)(jegl_thread*, void*);
+    using userdata_t = void*;
+    using frame_job_t = void(*)(jegl_context*, void*);
 
-    void* _m_promise;   // std::promise<void>
-    frame_rend_work_func_t  _m_frame_rend_work;
-    void* _m_frame_rend_work_arg;
-    void* _m_sync_callback_arg;
+    void*/*std::promise<void>*/ _m_promise;
+    frame_job_t                 _m_frame_rend_work;
+    void*                       _m_frame_rend_work_arg;
+    void*                       _m_sync_callback_arg;
 
-    jegl_thread_notifier* _m_thread_notifier;
-    void* _m_interface_handle;
+    jegl_context_notifier*      _m_thread_notifier;
+    void*                       _m_interface_handle;
 
-    void* m_universe_instance;
+    void*                       m_universe_instance;
     jeecs::typing::version_t    m_version;
     jegl_interface_config       m_config;
-    jegl_graphic_api* m_apis;
-    void* m_stop_update; // std::atomic_bool
-    custom_thread_data_t        m_userdata;
+    jegl_graphic_api*           m_apis;
+    void*/*std::atomic_bool*/   m_stop_update;
+    userdata_t                  m_userdata;
 };
 
 /*
@@ -1872,7 +1872,7 @@ struct jegl_resource
     };
 
     type m_type;
-    jegl_thread* m_graphic_thread;
+    jegl_context* m_graphic_thread;
     jeecs::typing::version_t m_graphic_thread_version;
 
     union resource_handle
@@ -1913,35 +1913,35 @@ struct jegl_graphic_api
         SKIP_FRAME_WORK,
     };
 
-    using startup_interface_func_t = jegl_thread::custom_thread_data_t(*)(jegl_thread*, const jegl_interface_config*, bool);
-    using shutdown_interface_func_t = void(*)(jegl_thread*, jegl_thread::custom_thread_data_t, bool);
+    using startup_interface_func_t = jegl_context::userdata_t(*)(jegl_context*, const jegl_interface_config*, bool);
+    using shutdown_interface_func_t = void(*)(jegl_context*, jegl_context::userdata_t, bool);
 
-    using pre_or_late_update_interface_func_t = bool(*)(jegl_thread::custom_thread_data_t);
-    using update_interface_func_t = update_result(*)(jegl_thread::custom_thread_data_t);
+    using pre_or_late_update_interface_func_t = bool(*)(jegl_context::userdata_t);
+    using update_interface_func_t = update_result(*)(jegl_context::userdata_t);
 
-    using create_resource_blob_func_t = jegl_resource_blob(*)(jegl_thread::custom_thread_data_t, jegl_resource*);
-    using close_resource_blob_func_t = void(*)(jegl_thread::custom_thread_data_t, jegl_resource_blob);
+    using create_resource_blob_func_t = jegl_resource_blob(*)(jegl_context::userdata_t, jegl_resource*);
+    using close_resource_blob_func_t = void(*)(jegl_context::userdata_t, jegl_resource_blob);
 
-    using init_resource_func_t = void(*)(jegl_thread::custom_thread_data_t, jegl_resource_blob, jegl_resource*);
-    using using_resource_func_t = void(*)(jegl_thread::custom_thread_data_t, jegl_resource*);
-    using close_resource_func_t = void(*)(jegl_thread::custom_thread_data_t, jegl_resource*);
+    using init_resource_func_t = void(*)(jegl_context::userdata_t, jegl_resource_blob, jegl_resource*);
+    using using_resource_func_t = void(*)(jegl_context::userdata_t, jegl_resource*);
+    using close_resource_func_t = void(*)(jegl_context::userdata_t, jegl_resource*);
 
-    using draw_vertex_func_t = void(*)(jegl_thread::custom_thread_data_t, jegl_resource*);
-    using bind_texture_func_t = void(*)(jegl_thread::custom_thread_data_t, jegl_resource*, size_t);
+    using draw_vertex_func_t = void(*)(jegl_context::userdata_t, jegl_resource*);
+    using bind_texture_func_t = void(*)(jegl_context::userdata_t, jegl_resource*, size_t);
 
-    using set_rendbuf_func_t = void(*)(jegl_thread::custom_thread_data_t, jegl_resource*, size_t, size_t, size_t, size_t);
-    using clear_framebuf_color_func_t = void(*)(jegl_thread::custom_thread_data_t, float color[4]);
-    using clear_framebuf_depth_func_t = void(*)(jegl_thread::custom_thread_data_t);
-    using get_uniform_location_func_t = uint32_t(*)(jegl_thread::custom_thread_data_t, jegl_resource*, const char*);
-    using set_uniform_func_t = void(*)(jegl_thread::custom_thread_data_t, uint32_t, jegl_shader::uniform_type, const void*);
+    using set_rendbuf_func_t = void(*)(jegl_context::userdata_t, jegl_resource*, size_t, size_t, size_t, size_t);
+    using clear_framebuf_color_func_t = void(*)(jegl_context::userdata_t, float color[4]);
+    using clear_framebuf_depth_func_t = void(*)(jegl_context::userdata_t);
+    using get_uniform_location_func_t = uint32_t(*)(jegl_context::userdata_t, jegl_resource*, const char*);
+    using set_uniform_func_t = void(*)(jegl_context::userdata_t, uint32_t, jegl_shader::uniform_type, const void*);
 
     startup_interface_func_t    init_interface;
     shutdown_interface_func_t   pre_shutdown_interface;
     shutdown_interface_func_t   shutdown_interface;
 
-    pre_or_late_update_interface_func_t     pre_update_interface;
-    update_interface_func_t     update_interface;
-    pre_or_late_update_interface_func_t     late_update_interface;
+    pre_or_late_update_interface_func_t pre_update_interface;
+    update_interface_func_t             update_interface;
+    pre_or_late_update_interface_func_t late_update_interface;
 
     create_resource_blob_func_t create_resource_blob;
     close_resource_blob_func_t  close_resource_blob;
@@ -1954,7 +1954,6 @@ struct jegl_graphic_api
     bind_texture_func_t         bind_texture;
 
     set_rendbuf_func_t          set_rend_buffer;
-
     clear_framebuf_color_func_t clear_rend_buffer_color;
     clear_framebuf_depth_func_t clear_rend_buffer_depth;
 
@@ -1963,7 +1962,7 @@ struct jegl_graphic_api
 static_assert(sizeof(jegl_graphic_api) % sizeof(void*) == 0);
 
 using jeecs_api_register_func_t = void(*)(jegl_graphic_api*);
-using jeecs_sync_callback_func_t = void(*)(jegl_thread*, void*);
+using jeecs_sync_callback_func_t = void(*)(jegl_context*, void*);
 
 /*
 jegl_register_sync_graphic_callback [基本接口]
@@ -1999,7 +1998,7 @@ jegl_sync_init [基本接口]
     jegl_sync_update
     jegl_sync_shutdown
 */
-JE_API void             jegl_sync_init(jegl_thread* thread, bool isreboot);
+JE_API void             jegl_sync_init(jegl_context* thread, bool isreboot);
 
 /*
 jegl_sync_update [基本接口]
@@ -2020,7 +2019,7 @@ jegl_sync_update [基本接口]
     jegl_sync_init
     jegl_sync_shutdown
 */
-JE_API jegl_sync_state  jegl_sync_update(jegl_thread* thread);
+JE_API jegl_sync_state  jegl_sync_update(jegl_context* thread);
 
 /*
 jegl_sync_shutdown [基本接口]
@@ -2037,7 +2036,7 @@ jegl_sync_shutdown [基本接口]
     jegl_sync_init
     jegl_sync_shutdown
 */
-JE_API bool             jegl_sync_shutdown(jegl_thread* thread, bool isreboot);
+JE_API bool             jegl_sync_shutdown(jegl_context* thread, bool isreboot);
 
 /*
 jegl_start_graphic_thread [基本接口]
@@ -2050,11 +2049,11 @@ jegl_start_graphic_thread [基本接口]
     jegl_update
     jegl_terminate_graphic_thread
 */
-JE_API jegl_thread* jegl_start_graphic_thread(
+JE_API jegl_context* jegl_start_graphic_thread(
     jegl_interface_config config,
     void* universe_instance,
     jeecs_api_register_func_t register_func,
-    void(*frame_rend_work)(jegl_thread*, void*),
+    void(*frame_rend_work)(jegl_context*, void*),
     void* arg);
 
 /*
@@ -2064,7 +2063,7 @@ jegl_terminate_graphic_thread [基本接口]
 请参见：
     jegl_start_graphic_thread
 */
-JE_API void jegl_terminate_graphic_thread(jegl_thread* thread_handle);
+JE_API void jegl_terminate_graphic_thread(jegl_context* thread_handle);
 
 enum jegl_update_sync_mode
 {
@@ -2081,7 +2080,7 @@ jegl_update [基本接口]
         WAIT_LAST_FRAME_END：阻塞直到上一帧渲染完毕（绘制信号发出后立即返回）
         * 更适合CPU密集操作，但需要更复杂的机制以保证数据完整性
 */
-JE_API bool jegl_update(jegl_thread* thread_handle, jegl_update_sync_mode mode);
+JE_API bool jegl_update(jegl_context* thread_handle, jegl_update_sync_mode mode);
 
 /*
 jegl_reboot_graphic_thread [基本接口]
@@ -2089,7 +2088,7 @@ jegl_reboot_graphic_thread [基本接口]
     * 若不需要改变图形配置，请使用nullptr
 */
 JE_API void jegl_reboot_graphic_thread(
-    jegl_thread* thread_handle,
+    jegl_context* thread_handle,
     const jegl_interface_config* config);
 
 /*
@@ -2674,7 +2673,7 @@ jegl_rchain_commit [基本接口]
 将指定的绘制链在图形线程中进行提交
     * 此函数只允许在图形线程内调用
 */
-JE_API void jegl_rchain_commit(jegl_rendchain* chain, jegl_thread* glthread);
+JE_API void jegl_rchain_commit(jegl_rendchain* chain, jegl_context* glthread);
 
 /*
 jegl_uhost_get_or_create_for_universe [基本接口]
@@ -2692,7 +2691,7 @@ JE_API jeecs::graphic_uhost* jegl_uhost_get_or_create_for_universe(
 jegl_uhost_get_gl_thread [基本接口]
 从指定的可编程图形上下文接口获取图形线程的正式描述符
 */
-JE_API jegl_thread* jegl_uhost_get_gl_thread(jeecs::graphic_uhost* host);
+JE_API jegl_context* jegl_uhost_get_gl_thread(jeecs::graphic_uhost* host);
 
 /*
 jegl_uhost_alloc_branch [基本接口]
@@ -7012,13 +7011,13 @@ namespace jeecs
 
             // 建议的当前字符的实际横向占位，通常用于计算下一列字符的起始位置，单位是像素，正数表示向右方延伸
             int                      m_advised_w = 0;
-            // 建议的当前字符的实际纵向占位，通常用于计算下一行字符的起始位置，单位是像素，正数表示向下方延伸
+            // 建议的当前字符的实际纵向占位，通常用于计算下一行字符的起始位置，单位是像素，正数表示向上方延伸
             int                      m_advised_h = 0;
 
             // 当前字符基线横向偏移量，单位是像素，正数表示向右方偏移
             // * 包含边框的影响
             int                      m_baseline_offset_x = 0;
-            // 当前字符基线纵向偏移量，单位是像素，正数表示向下方偏移
+            // 当前字符基线纵向偏移量，单位是像素，正数表示向上方偏移
             // * 包含边框的影响
             int                      m_baseline_offset_y = 0;
         };
@@ -7157,10 +7156,10 @@ namespace jeecs
                         else if (ch != L'\n')
                         {
                             int px_min = next_ch_x + 0 + gcs->m_baseline_offset_x + int(TEXT_OFFSET.x * font_base.m_size);
-                            int py_min = -next_ch_y + 0 + gcs->m_baseline_offset_y - gcs->m_advised_h + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * (float)font_base.m_size);
+                            int py_min = -next_ch_y + 0 - gcs->m_baseline_offset_y + gcs->m_advised_h + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * (float)font_base.m_size);
 
                             int px_max = next_ch_x + (int)gcs->m_texture->width() - 1 + gcs->m_baseline_offset_x + int(TEXT_OFFSET.x * font_base.m_size);
-                            int py_max = -next_ch_y + (int)gcs->m_texture->height() - 1 + gcs->m_baseline_offset_y - gcs->m_advised_h + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size);
+                            int py_max = -next_ch_y + (int)gcs->m_texture->height() - 1 - gcs->m_baseline_offset_y + gcs->m_advised_h + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size);
 
                             min_px = min_px > px_min ? px_min : min_px;
                             min_py = min_py > py_min ? py_min : min_py;
@@ -7174,7 +7173,7 @@ namespace jeecs
                         if (ch == L'\n' || next_ch_x >= int(max_line_character_size * font_base.m_size))
                         {
                             next_ch_x = 0;
-                            next_ch_y -= gcs->m_advised_h;
+                            next_ch_y += gcs->m_advised_h;
                             line_count++;
                         }
                         if (line_count >= max_line_count)
@@ -7319,7 +7318,7 @@ namespace jeecs
                                             auto pdst = new_texture->pix(
                                                 correct_x + next_ch_x + int(fx) + gcs->m_baseline_offset_x + int(TEXT_OFFSET.x * font_base.m_size),
                                                 size_y - 1 -
-                                                (correct_y - next_ch_y + gcs->m_height + gcs->m_baseline_offset_y - 1 - int(fy) - gcs->m_advised_h
+                                                (correct_y - next_ch_y + gcs->m_height - gcs->m_baseline_offset_y - 1 - int(fy) + gcs->m_advised_h
                                                     + int((TEXT_OFFSET.y + TEXT_SCALE - 1.0f) * font_base.m_size))
                                             );
 
@@ -7344,7 +7343,7 @@ namespace jeecs
                         if (ch == L'\n' || next_ch_x >= int(max_line_character_size * font_base.m_size))
                         {
                             next_ch_x = 0;
-                            next_ch_y -= gcs->m_advised_h;
+                            next_ch_y += gcs->m_advised_h;
                             line_count++;
                         }
                         if (line_count >= max_line_count)

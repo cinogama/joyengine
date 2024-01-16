@@ -169,7 +169,7 @@ struct _jegl_destroy_resouce
     _jegl_destroy_resouce* last;
 };
 
-struct jegl_thread_notifier
+struct jegl_context_notifier
 {
     std::atomic_flag m_graphic_terminate_flag;
 
@@ -193,7 +193,7 @@ struct jegl_thread_notifier
     jeecs::basic::atomic_list<_jegl_destroy_resouce> _m_closing_resources;
 };
 
-thread_local jegl_thread* _current_graphic_thread = nullptr;
+thread_local jegl_context* _current_graphic_thread = nullptr;
 
 struct shared_resource_instance
 {
@@ -339,7 +339,7 @@ _je_graphic_shared_context _je_graphic_shared_context_instance;
 
 bool _jegl_rchain_resource_used_by_chain(jegl_rendchain* chain, jegl_resource* resource);
 
-void _jegl_commit_rendchain(jegl_thread* glthread, jegl_rendchain* chain)
+void _jegl_commit_rendchain(jegl_context* glthread, jegl_rendchain* chain)
 {
     glthread->_m_thread_notifier->_m_commited_rendchains.push_back(chain);
 }
@@ -349,13 +349,13 @@ void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader);
 
 //////////////////////////////////// API /////////////////////////////////////////
 
-std::vector<jegl_thread*>   _jegl_alive_glthread_list;
+std::vector<jegl_context*>   _jegl_alive_glthread_list;
 std::shared_mutex           _jegl_alive_glthread_list_mx;
 
 jeecs_sync_callback_func_t _jegl_sync_callback_func = nullptr;
 void* _jegl_sync_callback_arg = nullptr;
 
-void jegl_sync_init(jegl_thread* thread, bool isreboot)
+void jegl_sync_init(jegl_context* thread, bool isreboot)
 {
     if (_current_graphic_thread == nullptr)
         _current_graphic_thread = thread;
@@ -377,7 +377,7 @@ void jegl_sync_init(jegl_thread* thread, bool isreboot)
     ++thread->m_version;
 }
 
-jegl_sync_state jegl_sync_update(jegl_thread* thread)
+jegl_sync_state jegl_sync_update(jegl_context* thread)
 {
     std::unordered_map<_jegl_destroy_resouce*, bool> _waiting_to_free_resource;
 
@@ -476,7 +476,7 @@ jegl_sync_state jegl_sync_update(jegl_thread* thread)
     return jegl_sync_state::JEGL_SYNC_COMPLETE;
 }
 
-bool jegl_sync_shutdown(jegl_thread* thread, bool isreboot)
+bool jegl_sync_shutdown(jegl_context* thread, bool isreboot)
 {
     thread->m_apis->pre_shutdown_interface(
         thread,
@@ -526,20 +526,20 @@ void jegl_register_sync_thread_callback(jeecs_sync_callback_func_t callback, voi
     _jegl_sync_callback_arg = arg;
 }
 
-jegl_thread* jegl_start_graphic_thread(
+jegl_context* jegl_start_graphic_thread(
     jegl_interface_config config,
     void* universe_instance,
     jeecs_api_register_func_t register_func,
-    void(*frame_rend_work)(jegl_thread*, void*),
+    void(*frame_rend_work)(jegl_context*, void*),
     void* arg)
 {
-    jegl_thread* thread_handle = nullptr;
+    jegl_context* thread_handle = nullptr;
     if (register_func != nullptr)
     {
-        thread_handle = new jegl_thread();
+        thread_handle = new jegl_context();
 
         thread_handle->m_version = 0;
-        thread_handle->_m_thread_notifier = new jegl_thread_notifier();
+        thread_handle->_m_thread_notifier = new jegl_context_notifier();
         thread_handle->m_apis = new jegl_graphic_api();
 
         memset(thread_handle->m_apis, 0, sizeof(jegl_graphic_api));
@@ -607,7 +607,7 @@ jegl_thread* jegl_start_graphic_thread(
 
 void jegl_finish()
 {
-    std::vector<jegl_thread*> shutdown_glthreads;
+    std::vector<jegl_context*> shutdown_glthreads;
     do
     {
         std::lock_guard g1(_jegl_alive_glthread_list_mx);
@@ -619,7 +619,7 @@ void jegl_finish()
     }
 }
 
-void jegl_terminate_graphic_thread(jegl_thread* thread)
+void jegl_terminate_graphic_thread(jegl_context* thread)
 {
     do
     {
@@ -663,7 +663,7 @@ void jegl_terminate_graphic_thread(jegl_thread* thread)
     delete thread;
 }
 
-bool jegl_update(jegl_thread* thread, jegl_update_sync_mode mode)
+bool jegl_update(jegl_context* thread, jegl_update_sync_mode mode)
 {
     if (std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->load())
         return false;
@@ -694,7 +694,7 @@ bool jegl_update(jegl_thread* thread, jegl_update_sync_mode mode)
     return true;
 }
 
-void jegl_reboot_graphic_thread(jegl_thread* thread_handle, const jegl_interface_config* config)
+void jegl_reboot_graphic_thread(jegl_context* thread_handle, const jegl_interface_config* config)
 {
     if (config)
         thread_handle->m_config = *config;

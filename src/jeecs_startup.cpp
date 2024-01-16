@@ -131,7 +131,7 @@ WO_API wo_api wojeapi_editor_register_panic_hook(wo_vm vm, wo_value args, size_t
     return wo_ret_void(vm);
 }
 
-void je_default_graphic_interface_sync_func(jegl_thread* gthread, void*)
+void je_default_graphic_interface_sync_func(jegl_context* gthread, void*)
 {
     std::thread([=]()
         {

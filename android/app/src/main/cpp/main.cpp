@@ -28,13 +28,13 @@ class jegl_android_surface_manager
     size_t _je_log_callback;
     jeecs::typing::type_unregister_guard* _je_type_guard;
 
-    jegl_thread* _jegl_graphic_thread;
+    jegl_context* _jegl_graphic_thread;
     jegl_sync_state _jegl_graphic_thread_state;
 
     bool _jegl_android_update_paused;
     _jegl_window_android_app _jegl_window_android_app;
 
-    static void _jegl_android_sync_thread_created(jegl_thread* gthread, void*)
+    static void _jegl_android_sync_thread_created(jegl_context* gthread, void*)
     {
         jeecs::debug::loginfo("Graphic interface created!");
         instance()._jegl_graphic_thread = gthread;

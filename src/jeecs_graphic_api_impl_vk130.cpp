@@ -351,7 +351,7 @@ VK_API_PLATFORM_API_LIST
 
 #undef VK_API_DECL
 
-        inline static jegl_vk130_context* _vk_this_context = nullptr;
+        inline thread_local static jegl_vk130_context* _vk_this_context = nullptr;
 
         // 一些配置项
         size_t                      _vk_msaa_config;
@@ -3454,8 +3454,8 @@ VK_API_PLATFORM_API_LIST
         return m_uniform_variables[m_next_allocate_ubos_for_uniform_variable - 1];
     }
 
-    jegl_thread::custom_thread_data_t
-        startup(jegl_thread* gthread, const jegl_interface_config* config, bool reboot)
+    jegl_context::userdata_t
+        startup(jegl_context* gthread, const jegl_interface_config* config, bool reboot)
     {
         if (!reboot)
             jeecs::debug::log("Graphic thread (Vulkan130) start!");
@@ -3469,13 +3469,13 @@ VK_API_PLATFORM_API_LIST
 
         return context;
     }
-    void pre_shutdown(jegl_thread*, jegl_thread::custom_thread_data_t ctx, bool reboot)
+    void pre_shutdown(jegl_context*, jegl_context::userdata_t ctx, bool reboot)
     {
         jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
 
         context->pre_shutdown();
     }
-    void shutdown(jegl_thread*, jegl_thread::custom_thread_data_t ctx, bool reboot)
+    void shutdown(jegl_context*, jegl_context::userdata_t ctx, bool reboot)
     {
         if (!reboot)
             jeecs::debug::log("Graphic thread (Vulkan130) shutdown!");
@@ -3489,14 +3489,14 @@ VK_API_PLATFORM_API_LIST
         delete context;
     }
 
-    bool pre_update(jegl_thread::custom_thread_data_t ctx)
+    bool pre_update(jegl_context::userdata_t ctx)
     {
         jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
 
         context->pre_update();
         return true;
     }
-    jegl_graphic_api::update_result update(jegl_thread::custom_thread_data_t ctx)
+    jegl_graphic_api::update_result update(jegl_context::userdata_t ctx)
     {
         jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
 
@@ -3511,7 +3511,7 @@ VK_API_PLATFORM_API_LIST
         }
         return result;
     }
-    bool late_update(jegl_thread::custom_thread_data_t ctx)
+    bool late_update(jegl_context::userdata_t ctx)
     {
         jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
 
@@ -3520,7 +3520,7 @@ VK_API_PLATFORM_API_LIST
         return true;
     }
 
-    jegl_resource_blob create_resource_blob(jegl_thread::custom_thread_data_t ctx, jegl_resource* resource)
+    jegl_resource_blob create_resource_blob(jegl_context::userdata_t ctx, jegl_resource* resource)
     {
         jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
         switch (resource->m_type)
@@ -3540,7 +3540,7 @@ VK_API_PLATFORM_API_LIST
         }
         return nullptr;
     }
-    void close_resource_blob(jegl_thread::custom_thread_data_t ctx, jegl_resource_blob blob)
+    void close_resource_blob(jegl_context::userdata_t ctx, jegl_resource_blob blob)
     {
         if (blob != nullptr)
         {
@@ -3552,7 +3552,7 @@ VK_API_PLATFORM_API_LIST
 
     }
 
-    void init_resource(jegl_thread::custom_thread_data_t ctx, jegl_resource_blob blob, jegl_resource* resource)
+    void init_resource(jegl_context::userdata_t ctx, jegl_resource_blob blob, jegl_resource* resource)
     {
         jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
         switch (resource->m_type)
@@ -3629,8 +3629,8 @@ VK_API_PLATFORM_API_LIST
             break;
         }
     }
-    void close_resource(jegl_thread::custom_thread_data_t ctx, jegl_resource* resource);
-    void using_resource(jegl_thread::custom_thread_data_t ctx, jegl_resource* resource)
+    void close_resource(jegl_context::userdata_t ctx, jegl_resource* resource);
+    void using_resource(jegl_context::userdata_t ctx, jegl_resource* resource)
     {
         jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
         switch (resource->m_type)
@@ -3673,7 +3673,7 @@ VK_API_PLATFORM_API_LIST
             break;
         }
     }
-    void close_resource(jegl_thread::custom_thread_data_t ctx, jegl_resource* resource)
+    void close_resource(jegl_context::userdata_t ctx, jegl_resource* resource)
     {
         jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
 
@@ -3701,14 +3701,14 @@ VK_API_PLATFORM_API_LIST
         }
     }
 
-    void draw_vertex_with_shader(jegl_thread::custom_thread_data_t ctx, jegl_resource* vertex)
+    void draw_vertex_with_shader(jegl_context::userdata_t ctx, jegl_resource* vertex)
     {
         jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
         jegl_using_resource(vertex);
         context->cmd_draw_vertex(std::launder(reinterpret_cast<jevk11_vertex*>(vertex->m_handle.m_ptr)));
     }
 
-    void bind_texture(jegl_thread::custom_thread_data_t ctx, jegl_resource* texture, size_t pass)
+    void bind_texture(jegl_context::userdata_t ctx, jegl_resource* texture, size_t pass)
     {
         jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
 
@@ -3720,7 +3720,7 @@ VK_API_PLATFORM_API_LIST
             texture_instance->m_vk_texture_image_view);
     }
 
-    void set_rend_to_framebuffer(jegl_thread::custom_thread_data_t ctx, jegl_resource* framebuf, size_t x, size_t y, size_t w, size_t h)
+    void set_rend_to_framebuffer(jegl_context::userdata_t ctx, jegl_resource* framebuf, size_t x, size_t y, size_t w, size_t h)
     {
         jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
 
@@ -3734,18 +3734,18 @@ VK_API_PLATFORM_API_LIST
         }
         context->cmd_begin_frame_buffer(target_framebuf, x, y, w, h);
     }
-    void clear_framebuffer_color(jegl_thread::custom_thread_data_t ctx, float color[4])
+    void clear_framebuffer_color(jegl_context::userdata_t ctx, float color[4])
     {
         jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
         context->cmd_clear_frame_buffer_color(color);
     }
-    void clear_framebuffer_depth(jegl_thread::custom_thread_data_t ctx)
+    void clear_framebuffer_depth(jegl_context::userdata_t ctx)
     {
         jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
         context->cmd_clear_frame_buffer_depth();
     }
 
-    void set_uniform(jegl_thread::custom_thread_data_t ctx, uint32_t location, jegl_shader::uniform_type type, const void* val)
+    void set_uniform(jegl_context::userdata_t ctx, uint32_t location, jegl_shader::uniform_type type, const void* val)
     {
         jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
 

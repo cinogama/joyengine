@@ -17,7 +17,7 @@ namespace jeecs::graphic
         virtual ~basic_interface() = default;
 
     public:
-        virtual void create_interface(jegl_thread* thread, const jegl_interface_config* config) = 0;
+        virtual void create_interface(jegl_context* thread, const jegl_interface_config* config) = 0;
         virtual void swap() = 0;
         virtual bool update() = 0;
         virtual void shutdown(bool reboot) = 0;

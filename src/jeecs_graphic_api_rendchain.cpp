@@ -282,12 +282,12 @@ void jegl_rchain_bind_pre_texture_group(jegl_rendchain* chain, size_t texture_gr
     chain->m_pre_bind_tetuxre_group.push_back(texture_group);
 }
 
-void _jegl_commit_rendchain(jegl_thread* glthread, jegl_rendchain* chain);
+void _jegl_commit_rendchain(jegl_context* glthread, jegl_rendchain* chain);
 bool _jegl_rchain_resource_used_by_chain(jegl_rendchain* chain, jegl_resource* resource)
 {
     return chain->m_used_resource.find(resource) != chain->m_used_resource.end();
 }
-void jegl_rchain_commit(jegl_rendchain* chain, jegl_thread* glthread)
+void jegl_rchain_commit(jegl_rendchain* chain, jegl_context* glthread)
 {
     _jegl_commit_rendchain(glthread, chain);
 

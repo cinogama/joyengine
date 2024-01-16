@@ -40,7 +40,7 @@ namespace jeecs::graphic
         {
         }
 
-        virtual void create_interface(jegl_thread* thread, const jegl_interface_config* config) override
+        virtual void create_interface(jegl_context* thread, const jegl_interface_config* config) override
         {
             constexpr EGLint attribs[] = {
               EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,

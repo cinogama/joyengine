@@ -129,7 +129,7 @@ namespace jeecs::graphic
 #endif
         }
 
-        virtual void create_interface(jegl_thread* thread, const jegl_interface_config* config) override
+        virtual void create_interface(jegl_context* thread, const jegl_interface_config* config) override
         {
             auto* primary_monitor = glfwGetPrimaryMonitor();
             auto* primary_monitor_video_mode = glfwGetVideoMode(primary_monitor);

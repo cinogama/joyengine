@@ -5,8 +5,8 @@
 
 namespace jeecs::graphic::api::none
 {
-    jegl_thread::custom_thread_data_t
-        startup(jegl_thread* gthread, const jegl_interface_config* config, bool reboot)
+    jegl_context::userdata_t
+        startup(jegl_context* gthread, const jegl_interface_config* config, bool reboot)
     {
         if (!reboot)
             jeecs::debug::log("Graphic thread (None) start!");
@@ -17,10 +17,10 @@ namespace jeecs::graphic::api::none
 
         return nullptr;
     }
-    void pre_shutdown(jegl_thread*, jegl_thread::custom_thread_data_t, bool)
+    void pre_shutdown(jegl_context*, jegl_context::userdata_t, bool)
     {
     }
-    void shutdown(jegl_thread*, jegl_thread::custom_thread_data_t ctx, bool reboot)
+    void shutdown(jegl_context*, jegl_context::userdata_t ctx, bool reboot)
     {
         if (!reboot)
             jeecs::debug::log("Graphic thread (None) shutdown!");
@@ -28,57 +28,57 @@ namespace jeecs::graphic::api::none
         jegui_shutdown_none(reboot);
     }
 
-    bool pre_update(jegl_thread::custom_thread_data_t)
+    bool pre_update(jegl_context::userdata_t)
     {
         return true;
     }
-    jegl_graphic_api::update_result update(jegl_thread::custom_thread_data_t)
+    jegl_graphic_api::update_result update(jegl_context::userdata_t)
     {
         return jegl_graphic_api::update_result::DO_FRAME_WORK;
     }
-    bool late_update(jegl_thread::custom_thread_data_t ctx)
+    bool late_update(jegl_context::userdata_t ctx)
     {
         jegui_update_none();
         return true;
     }
 
-    jegl_resource_blob create_resource_blob(jegl_thread::custom_thread_data_t, jegl_resource*)
+    jegl_resource_blob create_resource_blob(jegl_context::userdata_t, jegl_resource*)
     {
         return nullptr;
     }
-    void close_resource_blob(jegl_thread::custom_thread_data_t, jegl_resource_blob)
+    void close_resource_blob(jegl_context::userdata_t, jegl_resource_blob)
     {
     }
 
-    void init_resource(jegl_thread::custom_thread_data_t, jegl_resource_blob, jegl_resource*)
+    void init_resource(jegl_context::userdata_t, jegl_resource_blob, jegl_resource*)
     {
     }
-    void using_resource(jegl_thread::custom_thread_data_t, jegl_resource*)
+    void using_resource(jegl_context::userdata_t, jegl_resource*)
     {
     }
-    void close_resource(jegl_thread::custom_thread_data_t, jegl_resource*)
-    {
-    }
-
-    void draw_vertex_with_shader(jegl_thread::custom_thread_data_t, jegl_resource*)
+    void close_resource(jegl_context::userdata_t, jegl_resource*)
     {
     }
 
-    void bind_texture(jegl_thread::custom_thread_data_t, jegl_resource*, size_t)
+    void draw_vertex_with_shader(jegl_context::userdata_t, jegl_resource*)
     {
     }
 
-    void set_rend_to_framebuffer(jegl_thread::custom_thread_data_t, jegl_resource*, size_t, size_t, size_t, size_t)
-    {
-    }
-    void clear_framebuffer_color(jegl_thread::custom_thread_data_t, float[4])
-    {
-    }
-    void clear_framebuffer_depth(jegl_thread::custom_thread_data_t)
+    void bind_texture(jegl_context::userdata_t, jegl_resource*, size_t)
     {
     }
 
-    void set_uniform(jegl_thread::custom_thread_data_t, uint32_t, jegl_shader::uniform_type, const void*)
+    void set_rend_to_framebuffer(jegl_context::userdata_t, jegl_resource*, size_t, size_t, size_t, size_t)
+    {
+    }
+    void clear_framebuffer_color(jegl_context::userdata_t, float[4])
+    {
+    }
+    void clear_framebuffer_depth(jegl_context::userdata_t)
+    {
+    }
+
+    void set_uniform(jegl_context::userdata_t, uint32_t, jegl_shader::uniform_type, const void*)
     {
     }
 }

@@ -108,9 +108,9 @@ jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long chcode)
     ch.m_width = x1 - x0 + 2 * (int)font->m_board_size_x;
     ch.m_height = y1 - y0 + 2 * (int)font->m_board_size_y;
     ch.m_advised_w = (int)(real_scalex * (float)advance);
-    ch.m_advised_h = (int)font->m_scale_y;
+    ch.m_advised_h = -(int)font->m_scale_y;
     ch.m_baseline_offset_x = x0 - (int)font->m_board_size_x;
-    ch.m_baseline_offset_y = y0 - (int)font->m_board_size_y;
+    ch.m_baseline_offset_y = -(y0 - (int)font->m_board_size_y);
 
     ch.m_texture =
         jeecs::graphic::texture::create(

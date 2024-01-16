@@ -43,7 +43,7 @@ namespace jeecs
             ++m_allocated_chains_count;
             return rchain;
         }
-        void _commit_frame(jegl_thread* thread)
+        void _commit_frame(jegl_context* thread)
         {
             for (size_t i = 0; i < m_allocated_chains_count; ++i)
                 jegl_rchain_commit(m_allocated_chains[i], thread);
@@ -53,7 +53,7 @@ namespace jeecs
     {
         JECS_DISABLE_MOVE_AND_COPY(graphic_uhost);
 
-        jegl_thread* glthread = nullptr;
+        jegl_context* glthread = nullptr;
         jeecs::game_universe universe;
 
         static void _update_frame_universe_job(void* host)
@@ -153,7 +153,7 @@ namespace jeecs
                 config,
                 universe.handle(),
                 jegl_get_host_graphic_api(),
-                [](jegl_thread* glthread, void* ptr)
+                [](jegl_context* glthread, void* ptr)
                 {
                     ((graphic_uhost*)ptr)->_frame_rend_impl();
                 }, this);
@@ -229,7 +229,7 @@ jeecs::graphic_uhost* jegl_uhost_get_or_create_for_universe(
 {
     return jeecs::graphic_uhost::get_default_graphic_pipeline_instance(universe, config);
 }
-jegl_thread* jegl_uhost_get_gl_thread(jeecs::graphic_uhost* host)
+jegl_context* jegl_uhost_get_gl_thread(jeecs::graphic_uhost* host)
 {
     return host->glthread;
 }
