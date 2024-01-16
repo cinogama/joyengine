@@ -28,18 +28,14 @@ namespace jeecs::graphic::api::none
         jegui_shutdown_none(reboot);
     }
 
-    bool pre_update(jegl_context::userdata_t)
+    jegl_graphic_api::update_action pre_update(jegl_context::userdata_t)
     {
-        return true;
+        return jegl_graphic_api::update_action::CONTINUE;
     }
-    jegl_graphic_api::update_result update(jegl_context::userdata_t)
-    {
-        return jegl_graphic_api::update_result::DO_FRAME_WORK;
-    }
-    bool late_update(jegl_context::userdata_t ctx)
+    jegl_graphic_api::update_action commit_update(jegl_context::userdata_t ctx)
     {
         jegui_update_none();
-        return true;
+        return jegl_graphic_api::update_action::CONTINUE;
     }
 
     jegl_resource_blob create_resource_blob(jegl_context::userdata_t, jegl_resource*)
@@ -50,7 +46,7 @@ namespace jeecs::graphic::api::none
     {
     }
 
-    void init_resource(jegl_context::userdata_t, jegl_resource_blob, jegl_resource*)
+    void create_resource(jegl_context::userdata_t, jegl_resource_blob, jegl_resource*)
     {
     }
     void using_resource(jegl_context::userdata_t, jegl_resource*)
@@ -68,7 +64,7 @@ namespace jeecs::graphic::api::none
     {
     }
 
-    void set_rend_to_framebuffer(jegl_context::userdata_t, jegl_resource*, size_t, size_t, size_t, size_t)
+    void bind_framebuffer(jegl_context::userdata_t, jegl_resource*, size_t, size_t, size_t, size_t)
     {
     }
     void clear_framebuffer_color(jegl_context::userdata_t, float[4])
@@ -87,27 +83,26 @@ void jegl_using_none_apis(jegl_graphic_api* write_to_apis)
 {
     using namespace jeecs::graphic::api::none;
 
-    write_to_apis->init_interface = startup;
-    write_to_apis->pre_shutdown_interface = pre_shutdown;
-    write_to_apis->shutdown_interface = shutdown;
+    write_to_apis->init = startup;
+    write_to_apis->pre_shutdown = pre_shutdown;
+    write_to_apis->post_shutdown = shutdown;
 
-    write_to_apis->pre_update_interface = pre_update;
-    write_to_apis->update_interface = update;
-    write_to_apis->late_update_interface = late_update;
+    write_to_apis->pre_update = pre_update;
+    write_to_apis->commit_update = commit_update;
 
-    write_to_apis->create_resource_blob = create_resource_blob;
-    write_to_apis->close_resource_blob = close_resource_blob;
+    write_to_apis->create_blob = create_resource_blob;
+    write_to_apis->close_blob = close_resource_blob;
 
-    write_to_apis->init_resource = init_resource;
+    write_to_apis->create_resource = create_resource;
     write_to_apis->using_resource = using_resource;
     write_to_apis->close_resource = close_resource;
 
     write_to_apis->draw_vertex = draw_vertex_with_shader;
     write_to_apis->bind_texture = bind_texture;
 
-    write_to_apis->set_rend_buffer = set_rend_to_framebuffer;
-    write_to_apis->clear_rend_buffer_color = clear_framebuffer_color;
-    write_to_apis->clear_rend_buffer_depth = clear_framebuffer_depth;
+    write_to_apis->bind_framebuf = bind_framebuffer;
+    write_to_apis->clear_color = clear_framebuffer_color;
+    write_to_apis->clear_depth = clear_framebuffer_depth;
 
     write_to_apis->set_uniform = set_uniform;
 }

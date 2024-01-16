@@ -748,10 +748,13 @@ namespace jeecs::graphic::api::dx11
 #endif
     }
 
-    jegl_graphic_api::update_result dx11_update(jegl_context::userdata_t ctx)
+    jegl_graphic_api::update_action dx11_pre_update(jegl_context::userdata_t ctx)
     {
         jegl_dx11_context* context =
             std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
+
+        JERCHECK(context->m_dx_swapchain->Present(
+            context->FPS == 0 ? 1 : 0, 0));
 
         MSG msg = { 0 };
         while (PeekMessage(&msg, 0, 0, 0, PM_REMOVE))
@@ -762,7 +765,7 @@ namespace jeecs::graphic::api::dx11
         if (context->m_window_should_close)
         {
             if (jegui_shutdown_callback())
-                return jegl_graphic_api::update_result::STOP_REND;
+                return jegl_graphic_api::update_action::STOP;
             context->m_window_should_close = false;
         }
 
@@ -797,21 +800,13 @@ namespace jeecs::graphic::api::dx11
         if (je_io_fetch_update_windowtitle(&title))
             SetWindowTextA(context->m_window_handle, title);
 
-        return jegl_graphic_api::update_result::DO_FRAME_WORK;
+        return jegl_graphic_api::update_action::CONTINUE;
     }
 
-    bool dx11_pre_update(jegl_context::userdata_t ctx)
-    {
-        jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
-
-        JERCHECK(context->m_dx_swapchain->Present(
-            context->FPS == 0 ? 1 : 0, 0));
-        return true;
-    }
-    bool dx11_lateupdate(jegl_context::userdata_t ctx)
+    jegl_graphic_api::update_action dx11_commit_update(jegl_context::userdata_t)
     {
         jegui_update_dx11();
-        return true;
+        return jegl_graphic_api::update_action::CONTINUE;
     }
 
     struct dx11_resource_blob
@@ -1955,27 +1950,26 @@ void jegl_using_dx11_apis(jegl_graphic_api* write_to_apis)
 {
     using namespace jeecs::graphic::api::dx11;
 
-    write_to_apis->init_interface = dx11_startup;
-    write_to_apis->pre_shutdown_interface = dx11_pre_shutdown;
-    write_to_apis->shutdown_interface = dx11_shutdown;
+    write_to_apis->init = dx11_startup;
+    write_to_apis->pre_shutdown = dx11_pre_shutdown;
+    write_to_apis->post_shutdown = dx11_shutdown;
 
-    write_to_apis->pre_update_interface = dx11_pre_update;
-    write_to_apis->update_interface = dx11_update;
-    write_to_apis->late_update_interface = dx11_lateupdate;
+    write_to_apis->pre_update = dx11_pre_update;
+    write_to_apis->commit_update = dx11_commit_update;
 
-    write_to_apis->create_resource_blob = dx11_create_resource_blob;
-    write_to_apis->close_resource_blob = dx11_close_resource_blob;
+    write_to_apis->create_blob = dx11_create_resource_blob;
+    write_to_apis->close_blob = dx11_close_resource_blob;
 
-    write_to_apis->init_resource = dx11_init_resource;
+    write_to_apis->create_resource = dx11_init_resource;
     write_to_apis->using_resource = dx11_using_resource;
     write_to_apis->close_resource = dx11_close_resource;
 
     write_to_apis->draw_vertex = dx11_draw_vertex_with_shader;
     write_to_apis->bind_texture = dx11_bind_texture;
 
-    write_to_apis->set_rend_buffer = dx11_set_rend_to_framebuffer;
-    write_to_apis->clear_rend_buffer_color = dx11_clear_framebuffer_color;
-    write_to_apis->clear_rend_buffer_depth = dx11_clear_framebuffer_depth;
+    write_to_apis->bind_framebuf = dx11_set_rend_to_framebuffer;
+    write_to_apis->clear_color = dx11_clear_framebuffer_color;
+    write_to_apis->clear_depth = dx11_clear_framebuffer_depth;
 
     write_to_apis->set_uniform = dx11_set_uniform;
 }

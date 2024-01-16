@@ -179,8 +179,6 @@ struct jegl_context_notifier
 
     std::atomic_bool m_reboot_flag;
 
-    std::list<jegl_rendchain*> _m_commited_rendchains;
-
     // Aliving resource.
     std::unordered_set<jegl_resource*> _m_created_resources;
     // Created blobs.
@@ -276,7 +274,7 @@ struct _je_graphic_shared_context
             static_assert(sizeof(uint32_t) == sizeof(std::atomic_uint32_t));
             static_assert(std::atomic_uint32_t::is_always_lock_free);
 
-            resource->m_raw_ref_count = std::launder(reinterpret_cast<uint32_t*>(new std::atomic_uint32_t(1)));
+            resource->m_raw_ref_count = reinterpret_cast<void*>(new std::atomic_uint32_t(1));
             assert(std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_raw_ref_count))->load() == 1);
         }
         std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_raw_ref_count))->fetch_add(1);
@@ -336,14 +334,6 @@ struct _je_graphic_shared_context
 };
 _je_graphic_shared_context _je_graphic_shared_context_instance;
 
-
-bool _jegl_rchain_resource_used_by_chain(jegl_rendchain* chain, jegl_resource* resource);
-
-void _jegl_commit_rendchain(jegl_context* glthread, jegl_rendchain* chain)
-{
-    glthread->_m_thread_notifier->_m_commited_rendchains.push_back(chain);
-}
-
 void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_shader);
 void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader);
 
@@ -371,7 +361,7 @@ void jegl_sync_init(jegl_context* thread, bool isreboot)
             thread->m_universe_instance,
             1.0 / (double)thread->m_config.m_fps);
 
-    thread->m_userdata = thread->m_apis->init_interface(
+    thread->m_userdata = thread->m_apis->init(
         thread, &thread->m_config, isreboot);
 
     ++thread->m_version;
@@ -396,24 +386,23 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
             || thread->_m_thread_notifier->m_reboot_flag)
             goto is_reboot_or_shutdown;
 
-        if (!thread->m_apis->pre_update_interface(thread->m_userdata))
-            // graphic thread want to exit. mark stop update
-            std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->store(true);
-
-        thread->_m_thread_notifier->_m_commited_rendchains.clear();
-
-        auto result = thread->m_apis->update_interface(thread->m_userdata);
-        if (result == jegl_graphic_api::update_result::STOP_REND)
-            // graphic thread want to exit. mark stop update
-            std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->store(true);
-        else if (result == jegl_graphic_api::update_result::DO_FRAME_WORK)
+        switch (thread->m_apis->pre_update(thread->m_userdata))
         {
-            // Invoke frame work
-            thread->_m_frame_rend_work(thread, thread->_m_frame_rend_work_arg);
-        }
-
-        if (!thread->m_apis->late_update_interface(thread->m_userdata))
+        case jegl_graphic_api::update_action::STOP:
+            // graphic thread want to exit. mark stop update
             std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->store(true);
+            break;
+        case jegl_graphic_api::update_action::CONTINUE:
+            // Only clear commited rendchains when update action is CONTINUE.
+            thread->_m_frame_rend_work(thread, thread->_m_frame_rend_work_arg);
+
+            if (thread->m_apis->commit_update(thread->m_userdata) == jegl_graphic_api::update_action::STOP)
+                std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->store(true);
+            break;
+        case jegl_graphic_api::update_action::SKIP:
+            // Skip current frame.
+            break;
+        }
 
         auto* del_res = thread->_m_thread_notifier->_m_closing_resources.pick_all();
         while (del_res)
@@ -425,17 +414,12 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
 
             if (cur_del_res->m_destroy_resource->m_graphic_thread_version == thread->m_version)
             {
-                bool need_release = true;
-                for (auto* chain : thread->_m_thread_notifier->_m_commited_rendchains)
-                {
-                    if (_jegl_rchain_resource_used_by_chain(chain, cur_del_res->m_destroy_resource))
-                    {
-                        thread->_m_thread_notifier->_m_closing_resources.add_one(cur_del_res);
-                        need_release = false;
-                        break;
-                    }
-                }
-                if (need_release)
+                auto* counter = std::launder(reinterpret_cast<std::atomic_uint32_t*>(
+                    cur_del_res->m_destroy_resource->m_binding_count));
+
+                if (counter->load() != 0)
+                    thread->_m_thread_notifier->_m_closing_resources.add_one(cur_del_res);
+                else
                     _waiting_to_free_resource[cur_del_res] = true;
             }
             else
@@ -458,6 +442,8 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
                 thread->m_apis->close_resource(thread->m_userdata, deleting_resource->m_destroy_resource);
                 thread->_m_thread_notifier->_m_created_resources.erase(deleting_resource->m_destroy_resource);
             }
+            delete std::launder(reinterpret_cast<std::atomic_uint32_t*>(
+                deleting_resource->m_destroy_resource->m_binding_count));
             delete deleting_resource->m_destroy_resource;
             delete deleting_resource;
         }
@@ -478,14 +464,14 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
 
 bool jegl_sync_shutdown(jegl_context* thread, bool isreboot)
 {
-    thread->m_apis->pre_shutdown_interface(
+    thread->m_apis->pre_shutdown(
         thread,
         thread->m_userdata,
         isreboot);
 
     for (auto& [_, resource_blob] : thread->_m_thread_notifier->_m_cached_resource_blobs)
     {
-        thread->m_apis->close_resource_blob(thread->m_userdata, resource_blob.m_blob);
+        thread->m_apis->close_blob(thread->m_userdata, resource_blob.m_blob);
     }
     thread->_m_thread_notifier->_m_cached_resource_blobs.clear();
 
@@ -497,7 +483,7 @@ bool jegl_sync_shutdown(jegl_context* thread, bool isreboot)
     }
     thread->_m_thread_notifier->_m_created_resources.clear();
 
-    thread->m_apis->shutdown_interface(
+    thread->m_apis->post_shutdown(
         thread,
         thread->m_userdata,
         isreboot);
@@ -765,13 +751,13 @@ void jegl_using_resource(jegl_resource* resource)
                 {
                     // Clear outdated blob.
                     _current_graphic_thread->m_apis
-                        ->close_resource_blob(_current_graphic_thread->m_userdata, fnd->second.m_blob);
+                        ->close_blob(_current_graphic_thread->m_userdata, fnd->second.m_blob);
                 }
             }
         }
 
         if (resource_blob == nullptr)
-            resource_blob = _current_graphic_thread->m_apis->create_resource_blob(
+            resource_blob = _current_graphic_thread->m_apis->create_blob(
                 _current_graphic_thread->m_userdata, resource);
 
         if (resource->m_path != nullptr)
@@ -783,12 +769,12 @@ void jegl_using_resource(jegl_resource* resource)
             cached_blob.m_blob_version = resource_blob_version;
         }
 
-        // Init resource by blob.
-        _current_graphic_thread->m_apis->init_resource(
+        // Create resource by blob.
+        _current_graphic_thread->m_apis->create_resource(
             _current_graphic_thread->m_userdata, resource_blob, resource);
 
         if (resource->m_path == nullptr)
-            _current_graphic_thread->m_apis->close_resource_blob(
+            _current_graphic_thread->m_apis->close_blob(
                 _current_graphic_thread->m_userdata, resource_blob);
 
         _current_graphic_thread->_m_thread_notifier->_m_created_resources.insert(resource);
@@ -845,6 +831,7 @@ void jegl_using_resource(jegl_resource* resource)
 void _jegl_free_resource_instance(jegl_resource* resource)
 {
     assert(resource != nullptr);
+    assert(resource->m_binding_count != nullptr);
     assert(resource->m_custom_resource == nullptr);
     assert(resource->m_raw_ref_count == nullptr);
 
@@ -864,10 +851,23 @@ void _jegl_free_resource_instance(jegl_resource* resource)
     {
         // 既然这个资源已经没有管理线程了，直接就地杀了埋了
         if (del_res->m_destroy_resource->m_graphic_thread != nullptr)
-            jeecs::debug::logwarn("Resource %p cannot free by correct thread, maybe it is out-dated? Free it!",
+            jeecs::debug::logwarn("Resource %p cannot free by correct graphic context, maybe it is out-dated? Free it!",
                 del_res->m_destroy_resource);
 
-        delete del_res->m_destroy_resource;
+        auto* binding_count = std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_binding_count));
+        if (--*binding_count == jeecs::typing::INVALID_UINT32)
+        {
+            delete binding_count;
+            delete del_res->m_destroy_resource;
+        }
+        else
+        {
+            // 资源尚被其他RendChain使用，将被RendChain负责释放
+            // NOTE: 代码跑到这边只有以下情况：
+            //  * 资源仅被绑定到RendChain上，但是RendChain尚未被提交
+            //  * 资源被绑定到RendChain上，但是被覆盖（一般见于纹理）
+            // 无论哪一种，都无所谓，因为资源并没有被图形实现创建，因此也不必担心释放问题
+        }
         delete del_res;
     }
 }
@@ -943,8 +943,9 @@ void jegl_close_resource(jegl_resource* resource)
 
 jegl_resource* _create_resource()
 {
-    jegl_resource* res = new jegl_resource();
-    memset(res, 0, sizeof(res));
+    jegl_resource* res = new jegl_resource{};
+    res->m_binding_count =
+        reinterpret_cast<void*>(new std::atomic_uint32_t(0));
     return res;
 }
 
@@ -1666,16 +1667,16 @@ void jegl_draw_vertex(jegl_resource* vert)
 
 void jegl_clear_framebuffer_color(float color[4])
 {
-    _current_graphic_thread->m_apis->clear_rend_buffer_color(_current_graphic_thread->m_userdata, color);
+    _current_graphic_thread->m_apis->clear_color(_current_graphic_thread->m_userdata, color);
 }
 void jegl_clear_framebuffer_depth()
 {
-    _current_graphic_thread->m_apis->clear_rend_buffer_depth(_current_graphic_thread->m_userdata);
+    _current_graphic_thread->m_apis->clear_depth(_current_graphic_thread->m_userdata);
 }
 
 void jegl_rend_to_framebuffer(jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
 {
-    _current_graphic_thread->m_apis->set_rend_buffer(_current_graphic_thread->m_userdata, framebuffer, x, y, w, h);
+    _current_graphic_thread->m_apis->bind_framebuf(_current_graphic_thread->m_userdata, framebuffer, x, y, w, h);
 }
 
 void jegl_using_texture(jegl_resource* texture, size_t pass)

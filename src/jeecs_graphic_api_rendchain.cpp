@@ -59,6 +59,26 @@ struct jegl_rendchain
 
     std::vector<jegl_resource*> m_binding_uniform_buffer;
     std::vector<size_t> m_pre_bind_tetuxre_group;
+
+    void using_resource(jegl_resource* res)
+    {
+        auto& [_, inserted] = m_used_resource.insert(res);
+        if (inserted)
+            ++*std::launder(reinterpret_cast<std::atomic_uint32_t*>(res->m_binding_count));
+    }
+    void clear_used_resource()
+    {
+        for (auto* res : m_used_resource)
+        {
+            auto* binding_count = std::launder(reinterpret_cast<std::atomic_uint32_t*>(res->m_binding_count));
+            if (--*binding_count == jeecs::typing::INVALID_UINT32)
+            {
+                delete binding_count;
+                delete res;
+            }
+        }
+        m_used_resource.clear();
+    }
 };
 
 jegl_rendchain* jegl_rchain_create()
@@ -68,6 +88,7 @@ jegl_rendchain* jegl_rchain_create()
 }
 void jegl_rchain_close(jegl_rendchain* chain)
 {
+    chain->clear_used_resource();
     delete chain;
 }
 void jegl_rchain_begin(jegl_rendchain* chain, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
@@ -82,14 +103,15 @@ void jegl_rchain_begin(jegl_rendchain* chain, jegl_resource* framebuffer, size_t
 
     chain->m_clear_target_frame_color_buffer = false;
     chain->m_clear_target_frame_depth_buffer = false;
-    chain->m_used_resource.clear();
+    chain->clear_used_resource();
     chain->m_binding_uniform_buffer.clear();
     chain->m_pre_bind_tetuxre_group.clear();
     chain->m_used_uniform_count = 0;
     chain->m_rend_action_count = 0;
     chain->m_binding_textures_count = 0;
 
-    chain->m_used_resource.insert(framebuffer);
+    if (framebuffer != nullptr)
+        chain->using_resource(framebuffer);
 }
 void jegl_rchain_bind_uniform_buffer(jegl_rendchain* chain, jegl_resource* uniformbuffer)
 {
@@ -136,8 +158,8 @@ jegl_rendchain_rend_action* jegl_rchain_draw(jegl_rendchain* chain, jegl_resourc
     assert(shader->m_type == jegl_resource::type::SHADER);
     assert(vertex->m_type == jegl_resource::type::VERTEX);
 
-    chain->m_used_resource.insert(shader);
-    chain->m_used_resource.insert(vertex);
+    chain->using_resource(shader);
+    chain->using_resource(vertex);
 
     size_t current_id = chain->m_rend_action_count++;
 
@@ -274,7 +296,7 @@ void jegl_rchain_bind_texture(jegl_rendchain* chain, size_t texture_group, size_
     assert(texture_group < chain->m_binding_textures_count);
 
     chain->m_binding_textures[texture_group].m_binding_textures[binding_pass] = texture;
-    chain->m_used_resource.insert(texture);
+    chain->using_resource(texture);
 }
 void jegl_rchain_bind_pre_texture_group(jegl_rendchain* chain, size_t texture_group)
 {
@@ -282,15 +304,8 @@ void jegl_rchain_bind_pre_texture_group(jegl_rendchain* chain, size_t texture_gr
     chain->m_pre_bind_tetuxre_group.push_back(texture_group);
 }
 
-void _jegl_commit_rendchain(jegl_context* glthread, jegl_rendchain* chain);
-bool _jegl_rchain_resource_used_by_chain(jegl_rendchain* chain, jegl_resource* resource)
-{
-    return chain->m_used_resource.find(resource) != chain->m_used_resource.end();
-}
 void jegl_rchain_commit(jegl_rendchain* chain, jegl_context* glthread)
 {
-    _jegl_commit_rendchain(glthread, chain);
-
     // 遍历所有绘制命令，开始提交！
     jegl_rend_to_framebuffer(chain->m_target_frame_buffer, 
         chain->m_target_frame_buffer_viewport[0], 

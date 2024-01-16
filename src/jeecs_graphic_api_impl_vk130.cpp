@@ -3489,35 +3489,30 @@ VK_API_PLATFORM_API_LIST
         delete context;
     }
 
-    bool pre_update(jegl_context::userdata_t ctx)
+    jegl_graphic_api::update_action pre_update(jegl_context::userdata_t ctx)
     {
         jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
 
         context->pre_update();
-        return true;
-    }
-    jegl_graphic_api::update_result update(jegl_context::userdata_t ctx)
-    {
-        jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
 
-        jegl_graphic_api::update_result result = jegl_graphic_api::update_result::DO_FRAME_WORK;
+        jegl_graphic_api::update_action result = jegl_graphic_api::update_action::CONTINUE;
         if (!context->update())
-            result = jegl_graphic_api::update_result::SKIP_FRAME_WORK;
+            result = jegl_graphic_api::update_action::SKIP;
 
         if (!context->_vk_jegl_interface->update())
         {
             if (jegui_shutdown_callback())
-                return jegl_graphic_api::update_result::STOP_REND;
+                return jegl_graphic_api::update_action::STOP;
         }
         return result;
     }
-    bool late_update(jegl_context::userdata_t ctx)
+    jegl_graphic_api::update_action commit_update(jegl_context::userdata_t ctx)
     {
         jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
 
         context->late_update();
 
-        return true;
+        return jegl_graphic_api::update_action::CONTINUE;
     }
 
     jegl_resource_blob create_resource_blob(jegl_context::userdata_t ctx, jegl_resource* resource)
@@ -3552,7 +3547,7 @@ VK_API_PLATFORM_API_LIST
 
     }
 
-    void init_resource(jegl_context::userdata_t ctx, jegl_resource_blob blob, jegl_resource* resource)
+    void create_resource(jegl_context::userdata_t ctx, jegl_resource_blob blob, jegl_resource* resource)
     {
         jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
         switch (resource->m_type)
@@ -3651,7 +3646,7 @@ VK_API_PLATFORM_API_LIST
                     // Modified, free current resource id, reload one.
                     close_resource(ctx, resource);
                     resource->m_handle.m_ptr = nullptr;
-                    init_resource(ctx, nullptr, resource);
+                    create_resource(ctx, nullptr, resource);
                 }
             }
             break;
@@ -4758,27 +4753,26 @@ void jegl_using_vk130_apis(jegl_graphic_api* write_to_apis)
 {
     using namespace jeecs::graphic::api::vk130;
 
-    write_to_apis->init_interface = startup;
-    write_to_apis->pre_shutdown_interface = pre_shutdown;
-    write_to_apis->shutdown_interface = shutdown;
+    write_to_apis->init = startup;
+    write_to_apis->pre_shutdown = pre_shutdown;
+    write_to_apis->post_shutdown = shutdown;
 
-    write_to_apis->pre_update_interface = pre_update;
-    write_to_apis->update_interface = update;
-    write_to_apis->late_update_interface = late_update;
+    write_to_apis->pre_update = pre_update;
+    write_to_apis->commit_update = commit_update;
 
-    write_to_apis->create_resource_blob = create_resource_blob;
-    write_to_apis->close_resource_blob = close_resource_blob;
+    write_to_apis->create_blob = create_resource_blob;
+    write_to_apis->close_blob = close_resource_blob;
 
-    write_to_apis->init_resource = init_resource;
+    write_to_apis->create_resource = create_resource;
     write_to_apis->using_resource = using_resource;
     write_to_apis->close_resource = close_resource;
 
     write_to_apis->draw_vertex = draw_vertex_with_shader;
     write_to_apis->bind_texture = bind_texture;
 
-    write_to_apis->set_rend_buffer = set_rend_to_framebuffer;
-    write_to_apis->clear_rend_buffer_color = clear_framebuffer_color;
-    write_to_apis->clear_rend_buffer_depth = clear_framebuffer_depth;
+    write_to_apis->bind_framebuf = set_rend_to_framebuffer;
+    write_to_apis->clear_color = clear_framebuffer_color;
+    write_to_apis->clear_depth = clear_framebuffer_depth;
 
     write_to_apis->set_uniform = set_uniform;
 }

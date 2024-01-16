@@ -180,29 +180,27 @@ namespace jeecs::graphic::api::gl3
         return context;
     }
 
-    bool gl_pre_update(jegl_context::userdata_t ctx)
+    jegl_graphic_api::update_action gl_pre_update(jegl_context::userdata_t ctx)
     {
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
-
         context->swap();
-        return true;
-    }
 
-    jegl_graphic_api::update_result gl_update(jegl_context::userdata_t ctx)
-    {
-        jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
         if (!context->update())
         {
             if (jegui_shutdown_callback())
-                return jegl_graphic_api::update_result::STOP_REND;
+                return jegl_graphic_api::update_action::STOP;
         }
-        return jegl_graphic_api::update_result::DO_FRAME_WORK;
+        return jegl_graphic_api::update_action::CONTINUE;
     }
 
-    bool gl_lateupdate(jegl_context::userdata_t ctx)
+    jegl_graphic_api::update_action gl_commit_update(jegl_context::userdata_t)
     {
         jegui_update_gl330();
-        return true;
+
+        // 将绘制命令异步地提交给GPU
+        glFlush();        
+
+        return jegl_graphic_api::update_action::CONTINUE;
     }
     void gl_pre_shutdown(jegl_context*, jegl_context::userdata_t, bool)
     {
@@ -979,27 +977,26 @@ void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
 {
     using namespace jeecs::graphic::api::gl3;
 
-    write_to_apis->init_interface = gl_startup;
-    write_to_apis->pre_shutdown_interface = gl_pre_shutdown;
-    write_to_apis->shutdown_interface = gl_shutdown;
+    write_to_apis->init = gl_startup;
+    write_to_apis->pre_shutdown = gl_pre_shutdown;
+    write_to_apis->post_shutdown = gl_shutdown;
 
-    write_to_apis->pre_update_interface = gl_pre_update;
-    write_to_apis->update_interface = gl_update;
-    write_to_apis->late_update_interface = gl_lateupdate;
+    write_to_apis->pre_update = gl_pre_update;
+    write_to_apis->commit_update = gl_commit_update;
 
-    write_to_apis->create_resource_blob = gl_create_resource_blob;
-    write_to_apis->close_resource_blob = gl_close_resource_blob;
+    write_to_apis->create_blob = gl_create_resource_blob;
+    write_to_apis->close_blob = gl_close_resource_blob;
 
-    write_to_apis->init_resource = gl_init_resource;
+    write_to_apis->create_resource = gl_init_resource;
     write_to_apis->using_resource = gl_using_resource;
     write_to_apis->close_resource = gl_close_resource;
 
     write_to_apis->draw_vertex = gl_draw_vertex_with_shader;
     write_to_apis->bind_texture = gl_bind_texture;
 
-    write_to_apis->set_rend_buffer = gl_set_rend_to_framebuffer;
-    write_to_apis->clear_rend_buffer_color = gl_clear_framebuffer_color;
-    write_to_apis->clear_rend_buffer_depth = gl_clear_framebuffer_depth;
+    write_to_apis->bind_framebuf = gl_set_rend_to_framebuffer;
+    write_to_apis->clear_color = gl_clear_framebuffer_color;
+    write_to_apis->clear_depth = gl_clear_framebuffer_depth;
 
     write_to_apis->set_uniform = gl_set_uniform;
 }

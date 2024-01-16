@@ -1855,6 +1855,7 @@ struct jegl_uniform_buffer
 };
 
 using jegl_resource_blob = void*;
+
 /*
 jegl_resource [类型]
 图形资源初级封装，纹理、着色器、帧缓冲区等均为图形资源
@@ -1870,11 +1871,6 @@ struct jegl_resource
         FRAMEBUF,       // Framebuffer
         UNIFORMBUF,     // UniformBlock
     };
-
-    type m_type;
-    jegl_context* m_graphic_thread;
-    jeecs::typing::version_t m_graphic_thread_version;
-
     union resource_handle
     {
         void* m_ptr;
@@ -1885,10 +1881,17 @@ struct jegl_resource
             uint32_t m_uint2;
         };
     };
+
+    type            m_type;
+    jegl_context*   m_graphic_thread;
+    jeecs::typing::version_t 
+                    m_graphic_thread_version;
+
+    void*           m_binding_count;
     resource_handle m_handle;
 
-    const char* m_path;
-    uint32_t* m_raw_ref_count;
+    const char*     m_path;
+    void*           m_raw_ref_count;
     union
     {
         jegl_custom_resource_t m_custom_resource;
@@ -1906,58 +1909,142 @@ jegl_graphic_api [类型]
 */
 struct jegl_graphic_api
 {
-    enum update_result
+    enum update_action
     {
-        STOP_REND,
-        DO_FRAME_WORK,
-        SKIP_FRAME_WORK,
+        CONTINUE,
+        SKIP,
+        STOP,
     };
 
-    using startup_interface_func_t = jegl_context::userdata_t(*)(jegl_context*, const jegl_interface_config*, bool);
-    using shutdown_interface_func_t = void(*)(jegl_context*, jegl_context::userdata_t, bool);
+    using startup_func_t = jegl_context::userdata_t(*)(jegl_context*, const jegl_interface_config*, bool);
+    using shutdown_func_t = void(*)(jegl_context*, jegl_context::userdata_t, bool);
 
-    using pre_or_late_update_interface_func_t = bool(*)(jegl_context::userdata_t);
-    using update_interface_func_t = update_result(*)(jegl_context::userdata_t);
+    using update_func_t = update_action(*)(jegl_context::userdata_t);
 
-    using create_resource_blob_func_t = jegl_resource_blob(*)(jegl_context::userdata_t, jegl_resource*);
-    using close_resource_blob_func_t = void(*)(jegl_context::userdata_t, jegl_resource_blob);
+    using create_blob_func_t = jegl_resource_blob(*)(jegl_context::userdata_t, jegl_resource*);
+    using close_blob_func_t = void(*)(jegl_context::userdata_t, jegl_resource_blob);
 
-    using init_resource_func_t = void(*)(jegl_context::userdata_t, jegl_resource_blob, jegl_resource*);
+    using create_resource_func_t = void(*)(jegl_context::userdata_t, jegl_resource_blob, jegl_resource*);
     using using_resource_func_t = void(*)(jegl_context::userdata_t, jegl_resource*);
     using close_resource_func_t = void(*)(jegl_context::userdata_t, jegl_resource*);
 
     using draw_vertex_func_t = void(*)(jegl_context::userdata_t, jegl_resource*);
     using bind_texture_func_t = void(*)(jegl_context::userdata_t, jegl_resource*, size_t);
 
-    using set_rendbuf_func_t = void(*)(jegl_context::userdata_t, jegl_resource*, size_t, size_t, size_t, size_t);
-    using clear_framebuf_color_func_t = void(*)(jegl_context::userdata_t, float color[4]);
-    using clear_framebuf_depth_func_t = void(*)(jegl_context::userdata_t);
-    using get_uniform_location_func_t = uint32_t(*)(jegl_context::userdata_t, jegl_resource*, const char*);
+    using bind_framebuf_func_t = void(*)(jegl_context::userdata_t, jegl_resource*, size_t, size_t, size_t, size_t);
+    using clear_color_func_t = void(*)(jegl_context::userdata_t, float[4]);
+    using clear_depth_func_t = void(*)(jegl_context::userdata_t);
     using set_uniform_func_t = void(*)(jegl_context::userdata_t, uint32_t, jegl_shader::uniform_type, const void*);
 
-    startup_interface_func_t    init_interface;
-    shutdown_interface_func_t   pre_shutdown_interface;
-    shutdown_interface_func_t   shutdown_interface;
+    /*
+    jegl_graphic_api::init [成员]
+    图形接口在初始化或者被请求重新启动时调用，按照JoyEngine的约定，图形实现应当在此处创建窗口，并完成渲染所需
+    的初始化工作。
+        * 请求重新启动通常是因为需要变更图形设置、例如MSAA设置或窗口标题、帧率等，因此建议图形实现在处理重新启动
+            时，应当保留可以保留的资源以节约开销；若不提供对此的优化支持，也可以直接忽略，按照默认的启停规则进行操作。
+        * 当图形上下文被请求重新启动时，会再次调用此函数，此时第3个参数将被设置为true，否则为 false 。
+    */
+    startup_func_t          init;
 
-    pre_or_late_update_interface_func_t pre_update_interface;
-    update_interface_func_t             update_interface;
-    pre_or_late_update_interface_func_t late_update_interface;
+    /*
+    jegl_graphic_api::pre_shutdown [成员]
+    图形接口在被关闭或请求重新启动时调用，按照JoyEngine的约定，所有申请而暂未释放的图形资源将在调用此函数完成之后
+    执行释放，然后调用 post_shutdown；因此图形实现应当在此做好释放图形资源的准备，例如让渲染设备进入暂停状态。
+        * 请求重新启动通常是因为需要变更图形设置、例如MSAA设置或窗口标题、帧率等，因此建议图形实现在处理重新启动
+            时，应当保留可以保留的资源以节约开销；若不提供对此的优化支持，也可以直接忽略，按照默认的启停规则进行操作。
+        * 当图形上下文被请求重新启动时，会再次调用此函数，此时第3个参数将被设置为true，否则为 false。
+    请参见：
+        jegl_graphic_api::post_shutdown
+    */
+    shutdown_func_t         pre_shutdown;
 
-    create_resource_blob_func_t create_resource_blob;
-    close_resource_blob_func_t  close_resource_blob;
+    /*
+    jegl_graphic_api::post_shutdown [成员]
+    图形接口在被关闭或请求重新启动时调用，按照JoyEngine的约定，图形接口应当在此函数中完成所有资源、设备和窗口的释放。
+        * 此接口将在图形接口被请求关闭之后，在完成调用pre_shutdown接口、进而释放全部未释放的图形资源，最后调用。
+        * 请求重新启动通常是因为需要变更图形设置、例如MSAA设置或窗口标题、帧率等，因此建议图形实现在处理重新启动
+            时，应当保留可以保留的资源以节约开销；若不提供对此的优化支持，也可以直接忽略，按照默认的启停规则进行操作。
+        * 当图形上下文被请求重新启动时，会再次调用此函数，此时第3个参数将被设置为true，否则为 false。
+    请参见：
+        jegl_graphic_api::pre_shutdown
+    */
+    shutdown_func_t         post_shutdown;
 
-    init_resource_func_t        init_resource;
-    using_resource_func_t       using_resource;
-    close_resource_func_t       close_resource;
+    /*
+    jegl_graphic_api::pre_update [成员]
+    图形接口在更新一帧画面的起始位置会调用的接口，图形实现应当在此接口的开头完成前一阵画面的交换以呈现在屏幕上（这样可
+    以获得最佳的画面流畅度），然后做好其他准备：正式的主要渲染任务会在此接口返回后开始。
+        * 接口若返回 update_action::STOP，则表示图形实现请求关闭渲染，主要渲染任务和commit_update将被跳过，并在帧同步
+            工作完成后进入图形线程的退出流程。
+        * 接口若返回 update_action::SKIP，则表示图形实现请求跳过本帧的渲染，主要渲染任务和commit_update将被跳过，但
+            **不会**进入图形线程的退出流程。
+    */
+    update_func_t           pre_update;
 
-    draw_vertex_func_t          draw_vertex;
-    bind_texture_func_t         bind_texture;
+    /*
+    jegl_graphic_api::commit_update [成员]
+    图形接口在完成主要渲染任务之后会调用的接口，图形实现应当在此接口中，将既存的提交任务提交到图形设备中（以最大化利用
+    设备空闲），如果可以，渲染GUI的任务也应当在此处实现，并一并提交。
+        * 接口若返回 update_action::STOP，则表示图形实现请求关闭渲染，在帧同步工作完成后进入图形线程的退出流程。
+        * 接口若返回 update_action::SKIP，由于一帧的任务已经完成，因此事实上如同返回 update_action::CONTINUE，不会跳
+            过任何任务。
+    */
+    update_func_t           commit_update;
 
-    set_rendbuf_func_t          set_rend_buffer;
-    clear_framebuf_color_func_t clear_rend_buffer_color;
-    clear_framebuf_depth_func_t clear_rend_buffer_depth;
+    /*
+    jegl_graphic_api::create_blob [成员]
+    图形接口在创建资源之前会调用此接口以生成运行时缓存。该缓存将被传入create_resource用于加速资源的创建。
+        * 一个常见的用途是，在创建着色器之前，先根据着色器的原始资源创建出预备的缓存，然后在create_resource中使用此缓存
+            实例化真正的着色器实例。
+        * 若确实没有值得缓存的数据，可以返回nullptr，如果这么做，close_blob和create_resource时也将收到nullptr。
+        * 图形实现应当为缓存信息预备能够指示类型信息的字段，以便于close_blob时可以用正确的方法释放缓存。
+    请参见：
+        jegl_graphic_api::close_blob
+        jegl_graphic_api::create_resource
+    */
+    create_blob_func_t      create_blob;
 
-    set_uniform_func_t          set_uniform;
+    /*
+    jegl_graphic_api::close_blob [成员]
+    释放一个图形实现的缓存，这通常是因为图形线程被请求关闭，或者引擎认为该缓存已经过时。
+        * 图形实现应当检查缓存是否为nullptr，以及缓存的类型，然后再释放缓存。
+    */
+    close_blob_func_t       close_blob;
+
+    /*
+    jegl_graphic_api::create_resource [成员]
+    创建一个图形资源，图形实现应当检查资源的类型，通过类型实例中提供的原始数据以初始化创建图形资源，并将资源句柄保存到实例
+    的m_handle字段中。
+    */
+    create_resource_func_t  create_resource;
+
+    /*
+    jegl_graphic_api::using_resource [成员]
+    使用一个图形资源，图形实现应当检查资源的类型，通过类型实例中提供的原始数据以使用图形资源。
+        * 具体的使用方式是图形资源实现的，例如使用纹理、顶点或者其他资源时，此接口可以保持为空实现；不过至少应当保证能够
+        将着色器或一致缓冲区绑定到当前绘制操作中。
+        * 在使用资源的原始数据部分时，请检查原始数据字段是否置空；一些情况下图像任务仍然会使用已经被请求释放的图形资源（
+        这通常是因为相关的绘制操作已经被“录制”），这种图形资源的原始数据已经被销毁并置空；不过JoyEngine保证使用的图形资
+        源本身尚未被close_resource关闭。
+    请参见：
+        jegl_graphic_api::close_resource        
+    */
+    using_resource_func_t   using_resource;
+
+    /*
+    jegl_graphic_api::close_resource [成员]
+    关闭一个图形资源，图形实现应当检查资源的类型，通过类型实例中提供的原始数据以释放图形资源。
+    */
+    close_resource_func_t   close_resource;
+
+    draw_vertex_func_t      draw_vertex;
+    bind_texture_func_t     bind_texture;
+
+    bind_framebuf_func_t    bind_framebuf;
+    clear_color_func_t      clear_color;
+    clear_depth_func_t      clear_depth;
+
+    set_uniform_func_t      set_uniform;
 };
 static_assert(sizeof(jegl_graphic_api) % sizeof(void*) == 0);
 
