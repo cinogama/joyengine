@@ -40,9 +40,6 @@ namespace jeecs::graphic::api::dx11
         MSWRLComPtr<ID3D11DeviceContext> m_dx_context;
         MSWRLComPtr<IDXGISwapChain> m_dx_swapchain;
 
-        size_t WINDOWS_SIZE_WIDTH;
-        size_t WINDOWS_SIZE_HEIGHT;
-
         size_t RESOLUTION_WIDTH;
         size_t RESOLUTION_HEIGHT;
 
@@ -59,10 +56,6 @@ namespace jeecs::graphic::api::dx11
 
         bool m_dx_context_finished;
         bool m_lock_resolution_for_fullscreen;
-
-        bool m_windows_changing;
-        size_t m_windows_changing_width;
-        size_t m_windows_changing_height;
 
         jedx11_shader* m_current_target_shader;
         jedx11_framebuffer* m_current_target_framebuffer;
@@ -139,13 +132,10 @@ namespace jeecs::graphic::api::dx11
         if (w == 0 || h == 0)
             return;
 
-        context->WINDOWS_SIZE_WIDTH = w;
-        context->WINDOWS_SIZE_HEIGHT = h;
-
         if (context->m_lock_resolution_for_fullscreen == false)
         {
-            context->RESOLUTION_WIDTH = context->WINDOWS_SIZE_WIDTH;
-            context->RESOLUTION_HEIGHT = context->WINDOWS_SIZE_HEIGHT;
+            context->RESOLUTION_WIDTH = w;
+            context->RESOLUTION_HEIGHT = h;
         }
 
         // 释放渲染管线输出用到的相关资源
@@ -213,8 +203,8 @@ namespace jeecs::graphic::api::dx11
         D3D11_VIEWPORT viewport;
         viewport.TopLeftX = 0;
         viewport.TopLeftY = 0;
-        viewport.Width = (float)context->WINDOWS_SIZE_WIDTH;
-        viewport.Height = (float)context->WINDOWS_SIZE_HEIGHT;
+        viewport.Width = (float)w;
+        viewport.Height = (float)h;
         viewport.MinDepth = 0.0f;
         viewport.MaxDepth = 1.0f;
 
@@ -234,20 +224,11 @@ namespace jeecs::graphic::api::dx11
         context->m_current_target_shader = nullptr;
         context->m_current_target_framebuffer = nullptr;
         context->m_dx_context_finished = false;
-        context->WINDOWS_SIZE_WIDTH = config->m_width;
-        context->WINDOWS_SIZE_HEIGHT = config->m_height;
-        context->RESOLUTION_WIDTH = context->WINDOWS_SIZE_WIDTH;
-        context->RESOLUTION_HEIGHT = context->WINDOWS_SIZE_HEIGHT;
+        context->RESOLUTION_WIDTH = config->m_width;
+        context->RESOLUTION_HEIGHT = config->m_height;
         context->m_lock_resolution_for_fullscreen = false;
         context->MSAA_LEVEL = config->m_msaa;
         context->FPS = config->m_fps;
-        context->m_windows_changing = false;
-        context->m_windows_changing_width = context->WINDOWS_SIZE_WIDTH;
-        context->m_windows_changing_height = context->WINDOWS_SIZE_HEIGHT;
-
-        je_io_update_windowsize(
-            (int)context->WINDOWS_SIZE_WIDTH,
-            (int)context->WINDOWS_SIZE_HEIGHT);
 
         if (!reboot)
         {
@@ -320,8 +301,8 @@ namespace jeecs::graphic::api::dx11
         // 填充DXGI_SWAP_CHAIN_DESC用以描述交换链
         DXGI_SWAP_CHAIN_DESC sd;
         ZeroMemory(&sd, sizeof(sd));
-        sd.BufferDesc.Width = (UINT)context->WINDOWS_SIZE_WIDTH;
-        sd.BufferDesc.Height = (UINT)context->WINDOWS_SIZE_HEIGHT;
+        sd.BufferDesc.Width = (UINT)config->m_width;
+        sd.BufferDesc.Height = (UINT)config->m_height;
         sd.BufferDesc.RefreshRate.Numerator = (UINT)config->m_fps;
         sd.BufferDesc.RefreshRate.Denominator = 1;
         sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
