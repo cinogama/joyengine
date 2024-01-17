@@ -7,7 +7,9 @@
 
 #include <GLFW/glfw3.h>
 
-#define GLFW_EXPOSE_NATIVE_WIN32 1
+#if defined(JE_OS_WINDOWS) && defined(JE_ENABLE_DX11_GAPI)
+#   define GLFW_EXPOSE_NATIVE_WIN32 1
+#endif
 #include <GLFW/glfw3native.h>
 
 namespace jeecs::graphic
@@ -286,7 +288,7 @@ namespace jeecs::graphic
             return _m_windows;
         }
 
-#ifdef JE_OS_WINDOWS
+#if defined(JE_OS_WINDOWS) && defined(JE_ENABLE_DX11_GAPI)
         HWND win32_handle() const
         {
             return glfwGetWin32Window(_m_windows);
