@@ -9,7 +9,7 @@
 #include "wo.h"
 
 #define JE_VERSION_WRAP(A, B, C) #A "." #B "." #C
-#define JE_CORE_VERSION JE_VERSION_WRAP(4, 4, 3)
+#define JE_CORE_VERSION JE_VERSION_WRAP(4, 4, 4)
 
 #include <cstdint>
 #include <cstring>
@@ -1928,6 +1928,7 @@ struct jegl_graphic_api
     using using_resource_func_t = void(*)(jegl_context::userdata_t, jegl_resource*);
     using close_resource_func_t = void(*)(jegl_context::userdata_t, jegl_resource*);
 
+    using bind_resource_func_t = void(*)(jegl_context::userdata_t, jegl_resource*);
     using draw_vertex_func_t = void(*)(jegl_context::userdata_t, jegl_resource*);
     using bind_texture_func_t = void(*)(jegl_context::userdata_t, jegl_resource*, size_t);
 
@@ -2020,9 +2021,8 @@ struct jegl_graphic_api
 
     /*
     jegl_graphic_api::using_resource [成员]
-    使用一个图形资源，图形实现应当检查资源的类型，通过类型实例中提供的原始数据以使用图形资源。
-        * 具体的使用方式是图形资源实现的，例如使用纹理、顶点或者其他资源时，此接口可以保持为空实现；不过至少应当保证能够
-        将着色器或一致缓冲区绑定到当前绘制操作中。
+    在正式使用一个图形资源之前，会调用此接口对资源进行更新、预备工作；此接口常用于更新纹理、一致缓冲区数据
+        * 具体的操作可以是是图形资源实现的
         * 在使用资源的原始数据部分时，请检查原始数据字段是否置空；一些情况下图像任务仍然会使用已经被请求释放的图形资源（
         这通常是因为相关的绘制操作已经被“录制”），这种图形资源的原始数据已经被销毁并置空；不过JoyEngine保证使用的图形资
         源本身尚未被close_resource关闭。
@@ -2037,13 +2037,53 @@ struct jegl_graphic_api
     */
     close_resource_func_t   close_resource;
 
-    draw_vertex_func_t      draw_vertex;
+    /*
+    jegl_graphic_api::bind_uniform_buffer [成员]
+    绑定一个一致缓冲区到对应位置
+        * 一个提交链（RendChain）只会调用一次此接口，因此允许图形实现不必考虑一致缓冲区易变的情况。
+    */
+    bind_resource_func_t    bind_uniform_buffer;
+
+    /*
+    jegl_graphic_api::bind_texture [成员]
+    绑定一个纹理到对应的通道位置。
+    */
     bind_texture_func_t     bind_texture;
 
+    /*
+    jegl_graphic_api::bind_shader [成员]
+    绑定一个着色器作为当前渲染使用的着色器。
+    */
+    bind_resource_func_t    bind_shader;
+
+    /*
+    jegl_graphic_api::draw_vertex [成员]
+    使用之前绑定的着色器和纹理，绘制给定的顶点模型。
+    */
+    draw_vertex_func_t      draw_vertex;
+
+    /*
+    jegl_graphic_api::bind_framebuf [成员]
+    设置渲染目标，若传入nullptr，则目标为屏幕空间。
+    */
     bind_framebuf_func_t    bind_framebuf;
+
+    /*
+    jegl_graphic_api::clear_color [成员]
+    以指定颜色清除渲染目标的所有颜色附件。
+    */
     clear_color_func_t      clear_color;
+
+    /*
+    jegl_graphic_api::clear_color [成员]
+    以`无穷远`清空渲染目标的深度附件。
+    */
     clear_depth_func_t      clear_depth;
 
+    /*
+    jegl_graphic_api::set_uniform [成员]
+    向当前正在绑定的着色器设置一致变量。
+    */
     set_uniform_func_t      set_uniform;
 };
 static_assert(sizeof(jegl_graphic_api) % sizeof(void*) == 0);
@@ -2361,8 +2401,8 @@ JE_API jegl_graphic_api_entry jegl_get_host_graphic_api(void);
 
 /*
 jegl_using_none_apis [基本接口]
-加载JoyEngine基础图形接口的空实现，通常与jegl_start_graphic_thread一起使用
-用于指定图形线程使用的基本图形库
+加载JoyEngine基础图形接口的空实现，通常与jegl_start_graphic_thread一起使用用于指定图形线程使
+用的基本图形库。
 请参见：
     jegl_start_graphic_thread
 */
@@ -2370,8 +2410,8 @@ JE_API void jegl_using_none_apis(jegl_graphic_api* write_to_apis);
 
 /*
 jegl_using_opengl3_apis [基本接口]
-加载OpenGL 3.3 或 OpenGLES 3.0 API集合，通常与jegl_start_graphic_thread一起使用
-用于指定图形线程使用的基本图形库
+加载OpenGL 3.3 或 OpenGLES 3.0 API集合，通常与jegl_start_graphic_thread一起使用以指定图形线程
+使用的基本图形实现。
 请参见：
     jegl_start_graphic_thread
 */
@@ -2379,8 +2419,8 @@ JE_API void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis);
 
 /*
 jegl_using_vulkan130_apis [基本接口] (暂未实现)
-加载Vulkan API v1.3集合，通常与jegl_start_graphic_thread一起使用
-用于指定图形线程使用的基本图形库
+加载Vulkan API v1.3集合，通常与jegl_start_graphic_thread一起使用以指定图形线程使用的基本图形
+实现。
 请参见：
     jegl_start_graphic_thread
 */
@@ -2389,8 +2429,8 @@ JE_API void jegl_using_vk130_apis(jegl_graphic_api* write_to_apis);
 
 /*
 jegl_using_metal_apis [基本接口] (暂未实现)
-加载Metal API集合，通常与jegl_start_graphic_thread一起使用
-用于指定图形线程使用的基本图形库
+加载Metal API集合，通常与jegl_start_graphic_thread一起使用以指定图形线程使用的基本图形
+实现。
 请参见：
     jegl_start_graphic_thread
 */
@@ -2398,8 +2438,8 @@ JE_API void jegl_using_metal_apis(jegl_graphic_api* write_to_apis);
 
 /*
 jegl_using_dx11_apis [基本接口]
-加载directx 11 API集合，通常与jegl_start_graphic_thread一起使用
-用于指定图形线程使用的基本图形库
+加载directx 11 API集合，通常与jegl_start_graphic_thread一起使用以指定图形线程使用的基本图形
+实现。
 请参见：
     jegl_start_graphic_thread
 */
@@ -2407,12 +2447,13 @@ JE_API void jegl_using_dx11_apis(jegl_graphic_api* write_to_apis);
 
 /*
 jegl_using_resource [基本接口]
-使用指定的资源，一般用于指定使用着色器或一致变量缓冲区，同时根据情况决定是否执行
-资源的初始化操作
+当图形资源即将被使用时，此接口被调用用于创建/更新资源。
+    * 通常不需要手动调用，通常用于在图形线程的外部功能需要初始化资源时调用（例如GUI）
+    * 函数返回true表示此资源在本次调用期间完成初始化
     * 此函数只允许在图形线程内调用
     * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
 */
-JE_API void jegl_using_resource(jegl_resource* resource);
+JE_API bool jegl_using_resource(jegl_resource* resource);
 
 /*
 jegl_close_resource [基本接口]
@@ -2423,25 +2464,36 @@ jegl_close_resource [基本接口]
 JE_API void jegl_close_resource(jegl_resource* resource);
 
 /*
-jegl_using_texture [基本接口]
-将指定的纹理绑定到指定的纹理通道，与jegl_using_resource类似，会根据情况是否执行资源
-的初始化操作
+jegl_bind_texture [基本接口]
+将指定的纹理绑定到指定的纹理通道
     * 此函数只允许在图形线程内调用
     * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
-请参见：
-    jegl_using_resource
 */
-JE_API void jegl_using_texture(jegl_resource* texture, size_t pass);
+JE_API void jegl_bind_texture(jegl_resource* texture, size_t pass);
+
+/*
+jegl_bind_shader [基本接口]
+    * 此函数只允许在图形线程内调用
+    * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
+*/
+JE_API void jegl_bind_shader(jegl_resource* shader);
+
+/*
+jegl_bind_uniform_buffer [基本接口]
+    * 此函数只允许在图形线程内调用
+    * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
+*/
+JE_API void jegl_bind_uniform_buffer(jegl_resource* uniformbuf);
 
 /*
 jegl_draw_vertex [基本接口]
-使用当前着色器（通过jegl_using_resource绑定）和纹理（通过jegl_using_texture绑定）,
-以指定方式绘制一个模型，与jegl_using_resource类似，会根据情况是否执行资源的初始化操作
+使用当前着色器（通过jegl_bind_shader绑定）和纹理（通过jegl_bind_texture绑定）,
+以指定方式绘制一个模型
     * 此函数只允许在图形线程内调用
     * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
 请参见：
-    jegl_using_resource
-    jegl_using_texture
+    jegl_bind_shader
+    jegl_bind_texture
 */
 JE_API void jegl_draw_vertex(jegl_resource* vert);
 
@@ -2450,8 +2502,6 @@ jegl_clear_framebuffer_color [基本接口]
 以color指定的颜色清除当前帧缓冲的颜色信息
     * 此函数只允许在图形线程内调用
     * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
-请参见：
-    jegl_using_resource
 */
 JE_API void jegl_clear_framebuffer_color(float color[4]);
 
@@ -2460,86 +2510,81 @@ jegl_clear_framebuffer [基本接口]
 清除指定帧缓冲的深度信息
     * 此函数只允许在图形线程内调用
     * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
-请参见：
-    jegl_using_resource
 */
 JE_API void jegl_clear_framebuffer_depth();
 
 /*
 jegl_rend_to_framebuffer [基本接口]
 指定接下来的绘制操作作用于指定缓冲区，xywh用于指定绘制剪裁区域的左下角位置和区域大小
-若 framebuffer == nullptr 则绘制目标缓冲区设置为屏幕缓冲区，与jegl_using_resource类
-似，会根据情况是否执行资源的初始化操作
+若 framebuffer == nullptr 则绘制目标缓冲区设置为屏幕缓冲区
     * 此函数只允许在图形线程内调用
     * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
-请参见：
-    jegl_using_resource
 */
 JE_API void jegl_rend_to_framebuffer(jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h);
 
 /*
 jegl_uniform_int [基本接口]
 向当前着色器指定位置的一致变量设置一个整型数值
-jegl_uniform_int 不会初始化着色器，请在操作之前调用 jegl_using_resource
+jegl_uniform_int 不会初始化着色器，请在操作之前调用 jegl_bind_shader
 以确保着色器完成初始化
     * 此函数只允许在图形线程内调用
 请参见：
-    jegl_using_resource
+    jegl_bind_shader
 */
 JE_API void jegl_uniform_int(uint32_t location, int value);
 
 /*
 jegl_uniform_float [基本接口]
 向当前着色器指定位置的一致变量设置一个单精度浮点数值
-jegl_uniform_float 不会初始化着色器，请在操作之前调用 jegl_using_resource
-以确保着色器完成初始化
+    * jegl_uniform_float 不会初始化着色器，请在操作之前调用 jegl_bind_shader
+        以确保着色器完成初始化
     * 此函数只允许在图形线程内调用
 请参见：
-    jegl_using_resource
+    jegl_bind_shader
 */
 JE_API void jegl_uniform_float(uint32_t location, float value);
 
 /*
 jegl_uniform_float2 [基本接口]
 向当前着色器指定位置的一致变量设置一个二维单精度浮点矢量数值
-jegl_uniform_float2 不会初始化着色器，请在操作之前调用 jegl_using_resource
-以确保着色器完成初始化
+    * jegl_uniform_float2 不会初始化着色器，请在操作之前调用 jegl_bind_shader
+        以确保着色器完成初始化
     * 此函数只允许在图形线程内调用
 请参见：
-    jegl_using_resource
+    jegl_bind_shader
 */
 JE_API void jegl_uniform_float2(uint32_t location, float x, float y);
 
 /*
 jegl_uniform_float3 [基本接口]
 向当前着色器指定位置的一致变量设置一个三维单精度浮点矢量数值
-jegl_uniform_float3 不会初始化着色器，请在操作之前调用 jegl_using_resource
-以确保着色器完成初始化
+    * jegl_uniform_float3 不会初始化着色器，请在操作之前调用 jegl_bind_shader
+        以确保着色器完成初始化
     * 此函数只允许在图形线程内调用
 请参见：
-    jegl_using_resource
+    jegl_bind_shader
 */
 JE_API void jegl_uniform_float3(uint32_t location, float x, float y, float z);
 
 /*
 jegl_uniform_float4 [基本接口]
 向当前着色器指定位置的一致变量设置一个四维单精度浮点矢量数值
-jegl_uniform_float4 不会初始化着色器，请在操作之前调用 jegl_using_resource
-以确保着色器完成初始化
+    * jegl_uniform_float4 不会初始化着色器，请在操作之前调用 jegl_bind_shader
+        以确保着色器完成初始化
     * 此函数只允许在图形线程内调用
 请参见：
-    jegl_using_resource
+    jegl_bind_shader
 */
 JE_API void jegl_uniform_float4(uint32_t location, float x, float y, float z, float w);
 
 /*
 jegl_uniform_float4x4 [基本接口]
 向当前着色器指定位置的一致变量设置一个4x4单精度浮点矩阵数值
-jegl_uniform_float4x4 不会初始化着色器，请在操作之前调用 jegl_using_resource
-以确保着色器完成初始化
+    * jegl_uniform_float4x4 不会初始化着色器，请在操作之前调用 jegl_bind_shader
+        以确保着色器完成初始化
     * 此函数只允许在图形线程内调用
 请参见：
-    jegl_using_resource
+    jegl_bind_shader
 */
 JE_API void jegl_uniform_float4x4(uint32_t location, const float(*mat)[4]);
 

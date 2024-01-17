@@ -833,43 +833,29 @@ namespace jeecs::graphic::api::gl3
         glUseProgram(resource->m_handle.m_uint1);
     }
     void gl_close_resource(jegl_context::userdata_t ctx, jegl_resource* resource);
-    inline void _gl_using_texture2d(jegl_context::userdata_t ctx, jegl_resource* resource)
-    {
-        if (resource->m_raw_texture_data != nullptr)
-        {
-            if (resource->m_raw_texture_data->m_modified)
-            {
-                resource->m_raw_texture_data->m_modified = false;
-                // Modified, free current resource id, reload one.
-                gl_close_resource(ctx, resource);
-                resource->m_handle.m_uint1 = 0;
-                gl_init_resource(ctx, nullptr, resource);
-            }
-        }
-        if (0 != ((jegl_texture::format)resource->m_handle.m_uint2 & jegl_texture::format::CUBE))
-            glBindTexture(GL_TEXTURE_CUBE_MAP, resource->m_handle.m_uint1);
-        else
-            glBindTexture(GL_TEXTURE_2D, resource->m_handle.m_uint1);
-    }
 
     void gl_using_resource(jegl_context::userdata_t ctx, jegl_resource* resource)
     {
         switch (resource->m_type)
         {
         case jegl_resource::type::SHADER:
-            _gl_using_shader_program(resource);
             break;
         case jegl_resource::type::TEXTURE:
-            _gl_using_texture2d(ctx, resource);
+            if (resource->m_raw_texture_data != nullptr)
+            {
+                if (resource->m_raw_texture_data->m_modified)
+                {
+                    resource->m_raw_texture_data->m_modified = false;
+                    // Modified, free current resource id, reload one.
+                    gl_close_resource(ctx, resource);
+                    resource->m_handle.m_uint1 = 0;
+                    gl_init_resource(ctx, nullptr, resource);
+                }
+            }
             break;
         case jegl_resource::type::VERTEX:
-        {
-            if (auto vdata = std::launder(reinterpret_cast<gl3_vertex_data*>(resource->m_handle.m_ptr)))
-                glBindVertexArray(vdata->m_vao);
             break;
-        }
         case jegl_resource::type::FRAMEBUF:
-            glBindFramebuffer(GL_FRAMEBUFFER, resource->m_handle.m_uint1);
             break;
         case jegl_resource::type::UNIFORMBUF:
         {
@@ -929,17 +915,32 @@ namespace jeecs::graphic::api::gl3
         }
     }
 
+    void gl_bind_shader(jegl_context::userdata_t, jegl_resource* shader)
+    {
+        _gl_using_shader_program(shader);
+    }
+
+    void gl_bind_uniform_buffer(jegl_context::userdata_t, jegl_resource* uniformbuf)
+    {
+        glBindBufferRange(GL_UNIFORM_BUFFER, (GLuint)uniformbuf->m_raw_uniformbuf_data->m_buffer_binding_place,
+            (GLuint)uniformbuf->m_handle.m_uint1, 0, uniformbuf->m_raw_uniformbuf_data->m_buffer_size);
+    }
+
     void gl_bind_texture(jegl_context::userdata_t, jegl_resource* texture, size_t pass)
     {
         glActiveTexture(GL_TEXTURE0 + (GLint)pass);
-        jegl_using_resource(texture);
+        if (0 != ((jegl_texture::format)texture->m_handle.m_uint2 & jegl_texture::format::CUBE))
+            glBindTexture(GL_TEXTURE_CUBE_MAP, texture->m_handle.m_uint1);
+        else
+            glBindTexture(GL_TEXTURE_2D, texture->m_handle.m_uint1);
     }
 
     void gl_draw_vertex_with_shader(jegl_context::userdata_t, jegl_resource* vert)
     {
-        jegl_using_resource(vert);
-
         gl3_vertex_data* vdata = std::launder(reinterpret_cast<gl3_vertex_data*>(vert->m_handle.m_ptr));
+
+        glBindVertexArray(vdata->m_vao);
+
         if (vdata != nullptr)
             glDrawArrays(vdata->m_method, 0, vdata->m_pointcount);
     }
@@ -951,7 +952,7 @@ namespace jeecs::graphic::api::gl3
         if (nullptr == framebuffer)
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
         else
-            jegl_using_resource(framebuffer);
+            glBindFramebuffer(GL_FRAMEBUFFER, framebuffer->m_handle.m_uint1);
 
         auto* framw_buffer_raw = framebuffer != nullptr ? framebuffer->m_raw_framebuf_data : nullptr;
         if (w == 0)
@@ -991,8 +992,10 @@ void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->using_resource = gl_using_resource;
     write_to_apis->close_resource = gl_close_resource;
 
-    write_to_apis->draw_vertex = gl_draw_vertex_with_shader;
+    write_to_apis->bind_uniform_buffer = gl_bind_uniform_buffer;
     write_to_apis->bind_texture = gl_bind_texture;
+    write_to_apis->bind_shader = gl_bind_shader;
+    write_to_apis->draw_vertex = gl_draw_vertex_with_shader;
 
     write_to_apis->bind_framebuf = gl_set_rend_to_framebuffer;
     write_to_apis->clear_color = gl_clear_framebuffer_color;

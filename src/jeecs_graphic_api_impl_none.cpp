@@ -60,6 +60,14 @@ namespace jeecs::graphic::api::none
     {
     }
 
+    void bind_shader(jegl_context::userdata_t, jegl_resource*)
+    {
+    }
+
+    void bind_uniform_buffer(jegl_context::userdata_t, jegl_resource*)
+    {
+    }
+
     void bind_texture(jegl_context::userdata_t, jegl_resource*, size_t)
     {
     }
@@ -97,8 +105,10 @@ void jegl_using_none_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->using_resource = using_resource;
     write_to_apis->close_resource = close_resource;
 
-    write_to_apis->draw_vertex = draw_vertex_with_shader;
+    write_to_apis->bind_uniform_buffer = bind_uniform_buffer;
     write_to_apis->bind_texture = bind_texture;
+    write_to_apis->bind_shader = bind_shader;
+    write_to_apis->draw_vertex = draw_vertex_with_shader;
 
     write_to_apis->bind_framebuf = bind_framebuffer;
     write_to_apis->clear_color = clear_framebuffer_color;

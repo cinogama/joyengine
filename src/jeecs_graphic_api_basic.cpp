@@ -698,12 +698,15 @@ bool jegl_mark_shared_resources_outdated(const char* path)
     return _je_graphic_shared_context_instance.mark_shared_resources_outdated(path);
 }
 
-void jegl_using_resource(jegl_resource* resource)
+bool jegl_using_resource(jegl_resource* resource)
 {
     bool need_init_resouce = false;
     // This function is not thread safe.
     if (!_current_graphic_thread)
-        return jeecs::debug::logerr("Graphic resource only usable in graphic thread.");
+    {
+        jeecs::debug::logerr("Graphic resource only usable in graphic thread.");
+        return false;
+    }
 
     if (!resource->m_graphic_thread)
     {
@@ -714,7 +717,7 @@ void jegl_using_resource(jegl_resource* resource)
     if (_current_graphic_thread != resource->m_graphic_thread)
     {
         jeecs::debug::logerr("This resource has been used in graphic thread: %p.", resource->m_graphic_thread);
-        return;
+        return false;
     }
     if (resource->m_graphic_thread_version != _current_graphic_thread->m_version)
     {
@@ -783,49 +786,7 @@ void jegl_using_resource(jegl_resource* resource)
     _current_graphic_thread->m_apis->using_resource(
         _current_graphic_thread->m_userdata, resource);
 
-    if (resource->m_type == jegl_resource::SHADER)
-    {
-        auto uniform_vars = resource->m_raw_shader_data != nullptr
-            ? resource->m_raw_shader_data->m_custom_uniforms
-            : nullptr;
-
-        while (uniform_vars)
-        {
-            if (uniform_vars->m_index != jeecs::typing::INVALID_UINT32)
-            {
-                if (uniform_vars->m_updated || need_init_resouce)
-                {
-                    uniform_vars->m_updated = false;
-                    switch (uniform_vars->m_uniform_type)
-                    {
-                    case jegl_shader::uniform_type::FLOAT:
-                        jegl_uniform_float(uniform_vars->m_index, uniform_vars->x);
-                        break;
-                    case jegl_shader::uniform_type::FLOAT2:
-                        jegl_uniform_float2(uniform_vars->m_index, uniform_vars->x, uniform_vars->y);
-                        break;
-                    case jegl_shader::uniform_type::FLOAT3:
-                        jegl_uniform_float3(uniform_vars->m_index, uniform_vars->x, uniform_vars->y, uniform_vars->z);
-                        break;
-                    case jegl_shader::uniform_type::FLOAT4:
-                        jegl_uniform_float4(uniform_vars->m_index, uniform_vars->x, uniform_vars->y, uniform_vars->z, uniform_vars->w);
-                        break;
-                    case jegl_shader::uniform_type::FLOAT4X4:
-                        jegl_uniform_float4x4(uniform_vars->m_index, uniform_vars->mat4x4);
-                        break;
-                    case jegl_shader::uniform_type::INT:
-                    case jegl_shader::uniform_type::TEXTURE:
-                        jegl_uniform_int(uniform_vars->m_index, uniform_vars->n);
-                        break;
-                    default:
-                        jeecs::debug::logerr("Unsupport uniform variable type."); break;
-                        break;
-                    }
-                }
-            }
-            uniform_vars = uniform_vars->m_next;
-        }
-    }
+    return need_init_resouce;
 }
 
 void _jegl_free_resource_instance(jegl_resource* resource)
@@ -1660,8 +1621,64 @@ void jegl_update_uniformbuf(jegl_resource* uniformbuf, const void* buf, size_t u
     }
 }
 
+void jegl_bind_shader(jegl_resource* shader)
+{
+    bool need_init_uvar = jegl_using_resource(shader);
+    _current_graphic_thread->m_apis->bind_shader(_current_graphic_thread->m_userdata, shader);
+
+    assert(shader->m_type == jegl_resource::SHADER);
+
+    auto uniform_vars = shader->m_raw_shader_data != nullptr
+        ? shader->m_raw_shader_data->m_custom_uniforms
+        : nullptr;
+
+    while (uniform_vars)
+    {
+        if (uniform_vars->m_index != jeecs::typing::INVALID_UINT32)
+        {
+            if (uniform_vars->m_updated || need_init_uvar)
+            {
+                uniform_vars->m_updated = false;
+                switch (uniform_vars->m_uniform_type)
+                {
+                case jegl_shader::uniform_type::FLOAT:
+                    jegl_uniform_float(uniform_vars->m_index, uniform_vars->x);
+                    break;
+                case jegl_shader::uniform_type::FLOAT2:
+                    jegl_uniform_float2(uniform_vars->m_index, uniform_vars->x, uniform_vars->y);
+                    break;
+                case jegl_shader::uniform_type::FLOAT3:
+                    jegl_uniform_float3(uniform_vars->m_index, uniform_vars->x, uniform_vars->y, uniform_vars->z);
+                    break;
+                case jegl_shader::uniform_type::FLOAT4:
+                    jegl_uniform_float4(uniform_vars->m_index, uniform_vars->x, uniform_vars->y, uniform_vars->z, uniform_vars->w);
+                    break;
+                case jegl_shader::uniform_type::FLOAT4X4:
+                    jegl_uniform_float4x4(uniform_vars->m_index, uniform_vars->mat4x4);
+                    break;
+                case jegl_shader::uniform_type::INT:
+                case jegl_shader::uniform_type::TEXTURE:
+                    jegl_uniform_int(uniform_vars->m_index, uniform_vars->n);
+                    break;
+                default:
+                    jeecs::debug::logerr("Unsupport uniform variable type."); break;
+                    break;
+                }
+            }
+        }
+        uniform_vars = uniform_vars->m_next;
+    }
+}
+
+void jegl_bind_uniform_buffer(jegl_resource* uniformbuf)
+{
+    jegl_using_resource(uniformbuf);
+    _current_graphic_thread->m_apis->bind_uniform_buffer(_current_graphic_thread->m_userdata, uniformbuf);
+}
+
 void jegl_draw_vertex(jegl_resource* vert)
 {
+    jegl_using_resource(vert);
     _current_graphic_thread->m_apis->draw_vertex(_current_graphic_thread->m_userdata, vert);
 }
 
@@ -1676,11 +1693,15 @@ void jegl_clear_framebuffer_depth()
 
 void jegl_rend_to_framebuffer(jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
 {
+    if (framebuffer != nullptr)
+        jegl_using_resource(framebuffer);
+
     _current_graphic_thread->m_apis->bind_framebuf(_current_graphic_thread->m_userdata, framebuffer, x, y, w, h);
 }
 
-void jegl_using_texture(jegl_resource* texture, size_t pass)
+void jegl_bind_texture(jegl_resource* texture, size_t pass)
 {
+    jegl_using_resource(texture);
     _current_graphic_thread->m_apis->bind_texture(_current_graphic_thread->m_userdata, texture, pass);
 }
 

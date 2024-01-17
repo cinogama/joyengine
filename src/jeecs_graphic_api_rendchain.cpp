@@ -319,11 +319,11 @@ void jegl_rchain_commit(jegl_rendchain* chain, jegl_context* glthread)
         jegl_clear_framebuffer_depth();
 
     for (auto* uniform_buffer : chain->m_binding_uniform_buffer)
-        jegl_using_resource(uniform_buffer);
+        jegl_bind_uniform_buffer(uniform_buffer);
 
     for (auto pre_bind_texture_group_index : chain->m_pre_bind_tetuxre_group)
         for (auto& [pass, texture] : chain->m_binding_textures[pre_bind_texture_group_index].m_binding_textures)
-            jegl_using_texture(texture, pass);
+            jegl_bind_texture(texture, pass);
 
     size_t last_used_texture = SIZE_MAX;
 
@@ -333,11 +333,11 @@ void jegl_rchain_commit(jegl_rendchain* chain, jegl_context* glthread)
 
         if (last_used_texture != action.m_binding_textures && action.m_binding_textures != SIZE_MAX)
             for (auto& [pass, texture] : chain->m_binding_textures[action.m_binding_textures].m_binding_textures)
-                jegl_using_texture(texture, pass);
+                jegl_bind_texture(texture, pass);
 
         last_used_texture = action.m_binding_textures;
 
-        jegl_using_resource(action.m_shader);
+        jegl_bind_shader(action.m_shader);
         if (action.m_shader->m_raw_shader_data != nullptr)
         {
             for (auto& uniform_index : action.m_binding_uniforms)

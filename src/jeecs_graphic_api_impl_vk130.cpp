@@ -2944,7 +2944,7 @@ VK_API_PLATFORM_API_LIST
             memcpy(mdata, data, size);
             vkUnmapMemory(_vk_logic_device, ubuf->m_uniform_buffer_memory);
         }
-        void update_and_bind_uniform_buffer(jegl_resource* resource)
+        void update_uniform_buffer(jegl_resource* resource)
         {
             jevk11_uniformbuf* uniformbuf = std::launder(
                 reinterpret_cast<jevk11_uniformbuf*>(resource->m_handle.m_ptr));
@@ -2961,9 +2961,6 @@ VK_API_PLATFORM_API_LIST
                 resource->m_raw_uniformbuf_data->m_update_begin_offset = 0;
                 resource->m_raw_uniformbuf_data->m_update_length = 0;
             }
-
-            _vk_descriptor_set_allocator->bind_uniform_buffer(
-                uniformbuf->m_real_binding_place, uniformbuf->m_uniform_buffer);
         }
 
         /////////////////////////////////////////////////////
@@ -3631,11 +3628,7 @@ VK_API_PLATFORM_API_LIST
         switch (resource->m_type)
         {
         case jegl_resource::type::SHADER:
-        {
-            auto* shader = std::launder(reinterpret_cast<jevk11_shader*>(resource->m_handle.m_ptr));
-            context->cmd_bind_shader_pipeline(shader);
             break;
-        }
         case jegl_resource::type::TEXTURE:
         {
             if (resource->m_raw_texture_data != nullptr)
@@ -3652,17 +3645,11 @@ VK_API_PLATFORM_API_LIST
             break;
         }
         case jegl_resource::type::VERTEX:
-        {
-            // Nothing to do.
             break;
-        }
         case jegl_resource::type::FRAMEBUF:
-        {
-            // Nothing to do.
             break;
-        }
         case jegl_resource::type::UNIFORMBUF:
-            context->update_and_bind_uniform_buffer(resource);
+            context->update_uniform_buffer(resource);
             break;
         default:
             break;
@@ -3699,15 +3686,29 @@ VK_API_PLATFORM_API_LIST
     void draw_vertex_with_shader(jegl_context::userdata_t ctx, jegl_resource* vertex)
     {
         jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
-        jegl_using_resource(vertex);
+
         context->cmd_draw_vertex(std::launder(reinterpret_cast<jevk11_vertex*>(vertex->m_handle.m_ptr)));
+    }
+
+    void bind_shader(jegl_context::userdata_t ctx, jegl_resource* shader)
+    {
+        jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
+
+        context->cmd_bind_shader_pipeline(std::launder(reinterpret_cast<jevk11_shader*>(shader->m_handle.m_ptr)));
+    }
+    void bind_uniform_buffer(jegl_context::userdata_t ctx, jegl_resource* uniformbuf)
+    {
+        jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
+        jevk11_uniformbuf* uniformbuf_instance = std::launder(
+            reinterpret_cast<jevk11_uniformbuf*>(uniformbuf->m_handle.m_ptr));
+
+        context->_vk_descriptor_set_allocator->bind_uniform_buffer(
+            uniformbuf_instance->m_real_binding_place, uniformbuf_instance->m_uniform_buffer);
     }
 
     void bind_texture(jegl_context::userdata_t ctx, jegl_resource* texture, size_t pass)
     {
         jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
-
-        jegl_using_resource(texture);
 
         auto* texture_instance = std::launder(reinterpret_cast<jevk11_texture*>(texture->m_handle.m_ptr));
         context->_vk_descriptor_set_allocator->bind_texture(
@@ -3724,7 +3725,6 @@ VK_API_PLATFORM_API_LIST
             target_framebuf = context->_vk_current_swapchain_framebuffer;
         else
         {
-            jegl_using_resource(framebuf);
             target_framebuf = std::launder(reinterpret_cast<jevk11_framebuffer*>(framebuf->m_handle.m_ptr));
         }
         context->cmd_begin_frame_buffer(target_framebuf, x, y, w, h);
@@ -4767,8 +4767,10 @@ void jegl_using_vk130_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->using_resource = using_resource;
     write_to_apis->close_resource = close_resource;
 
-    write_to_apis->draw_vertex = draw_vertex_with_shader;
+    write_to_apis->bind_uniform_buffer = bind_uniform_buffer;
     write_to_apis->bind_texture = bind_texture;
+    write_to_apis->bind_shader = bind_shader;
+    write_to_apis->draw_vertex = draw_vertex_with_shader;
 
     write_to_apis->bind_framebuf = set_rend_to_framebuffer;
     write_to_apis->clear_color = clear_framebuffer_color;
