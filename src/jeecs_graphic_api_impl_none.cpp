@@ -6,7 +6,7 @@
 namespace jeecs::graphic::api::none
 {
     jegl_context::userdata_t
-        startup(jegl_context* gthread, const jegl_interface_config* config, bool reboot)
+        startup(jegl_context*, const jegl_interface_config*, bool reboot)
     {
         if (!reboot)
             jeecs::debug::log("Graphic thread (None) start!");
@@ -20,7 +20,7 @@ namespace jeecs::graphic::api::none
     void pre_shutdown(jegl_context*, jegl_context::userdata_t, bool)
     {
     }
-    void shutdown(jegl_context*, jegl_context::userdata_t ctx, bool reboot)
+    void shutdown(jegl_context*, jegl_context::userdata_t, bool reboot)
     {
         if (!reboot)
             jeecs::debug::log("Graphic thread (None) shutdown!");
@@ -56,19 +56,16 @@ namespace jeecs::graphic::api::none
     {
     }
 
-    void draw_vertex_with_shader(jegl_context::userdata_t, jegl_resource*)
-    {
-    }
-
-    void bind_shader(jegl_context::userdata_t, jegl_resource*)
-    {
-    }
-
     void bind_uniform_buffer(jegl_context::userdata_t, jegl_resource*)
     {
     }
-
+    void bind_shader(jegl_context::userdata_t, jegl_resource*)
+    {
+    }
     void bind_texture(jegl_context::userdata_t, jegl_resource*, size_t)
+    {
+    }
+    void draw_vertex_with_shader(jegl_context::userdata_t, jegl_resource*)
     {
     }
 
