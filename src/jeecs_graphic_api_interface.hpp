@@ -17,11 +17,18 @@ namespace jeecs::graphic
         virtual ~basic_interface() = default;
 
     public:
+        enum update_result : uint8_t
+        {
+            NORMAL = 0,
+            RESIZED = 1 << 0,
+            CLOSING = 1 << 1,
+        };
+
         virtual void create_interface(jegl_context* thread, const jegl_interface_config* config) = 0;
         virtual void swap() = 0;
-        virtual bool update() = 0;
+        virtual update_result update() = 0;
         virtual void shutdown(bool reboot) = 0;
 
-        virtual void* native_handle() = 0;
+        virtual void* interface_handle() const = 0;
     };
 }

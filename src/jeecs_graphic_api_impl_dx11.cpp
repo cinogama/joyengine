@@ -13,6 +13,8 @@
 #   include <dxgidebug.h>
 #endif
 
+#include "jeecs_graphic_api_interface_glfw.hpp"
+
 #undef max
 #undef min
 
@@ -28,6 +30,8 @@ namespace jeecs::graphic::api::dx11
 
     struct jegl_dx11_context
     {
+        graphic::glfw* m_interface;
+
         template <class T>
         using MSWRLComPtr = Microsoft::WRL::ComPtr<T>;
 
@@ -35,8 +39,6 @@ namespace jeecs::graphic::api::dx11
         MSWRLComPtr<ID3D11Device> m_dx_device;
         MSWRLComPtr<ID3D11DeviceContext> m_dx_context;
         MSWRLComPtr<IDXGISwapChain> m_dx_swapchain;
-
-        HWND    m_window_handle;
 
         size_t WINDOWS_SIZE_WIDTH;
         size_t WINDOWS_SIZE_HEIGHT;
@@ -49,15 +51,13 @@ namespace jeecs::graphic::api::dx11
 
         size_t FPS;
 
+        HWND WINDOWS_HANDLE;
+
         MSWRLComPtr<ID3D11DepthStencilView> m_dx_main_renderer_target_depth_view;   // 深度模板视图
         MSWRLComPtr<ID3D11Texture2D> m_dx_main_renderer_target_depth_buffer;        // 深度模板缓冲区
         MSWRLComPtr<ID3D11RenderTargetView> m_dx_main_renderer_target_view;         // 渲染目标视图
 
-        WNDCLASS m_win32_window_class;
-        HICON m_win32_window_icon;
-
         bool m_dx_context_finished;
-        bool m_window_should_close;
         bool m_lock_resolution_for_fullscreen;
 
         bool m_windows_changing;
@@ -221,245 +221,19 @@ namespace jeecs::graphic::api::dx11
         context->m_dx_context->RSSetViewports(1, &viewport);
     }
 
-    void dx11_handle_key_state(WPARAM wParam, bool down)
-    {
-        jeecs::input::keycode code = jeecs::input::keycode::UNKNOWN;
-        switch (wParam)
-        {
-        case VK_SHIFT:
-            code = jeecs::input::keycode::L_SHIFT;
-            break;
-        case VK_CONTROL:
-            code = jeecs::input::keycode::L_CTRL;
-            break;
-        case VK_MENU:
-            code = jeecs::input::keycode::L_ALT;
-            break;
-        case VK_TAB:
-            code = jeecs::input::keycode::TAB;
-            break;
-        case VK_RETURN:
-            code = jeecs::input::keycode::ENTER;
-            break;
-        case VK_ESCAPE:
-            code = jeecs::input::keycode::ESC;
-            break;
-        case VK_BACK:
-            code = jeecs::input::keycode::BACKSPACE;
-            break;
-        default:
-            if (wParam >= 'A' && wParam <= 'Z' || wParam >= '0' && wParam <= '9')
-                code = (jeecs::input::keycode)wParam;
-        }
-        je_io_update_keystate(code, down);
-    }
-
-    LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
-    {
-        if (msg == WM_CHAR)
-        {
-            // NOTE: In WIN32, Only support U16.
-            thread_local static char multi_byte_record[2];
-            thread_local static size_t multi_byte_record_index = 0;
-
-            wchar_t wch = 0;
-
-            multi_byte_record[multi_byte_record_index++] = (char)wParam;
-            if (multi_byte_record_index >= 2)
-            {
-                multi_byte_record_index = 0;
-                MultiByteToWideChar(CP_ACP, 0, multi_byte_record, 2, &wch, 1);
-            }
-            else
-            {
-                if (0 == (multi_byte_record[0] & (char)0x80))
-                {
-                    multi_byte_record_index = 0;
-                    wch = (wchar_t)multi_byte_record[0];
-                }
-            }
-            jegui_win32_append_unicode16_char(wch);
-        }
-        else
-        {
-            if (jegui_win32_proc_handler(hwnd, msg, wParam, lParam))
-                return 0;
-        }
-
-
-        switch (msg)
-        {
-            // WM_ACTIVATE is sent when the window is activated or deactivated.  
-            // We pause the game when the window is deactivated and unpause it 
-            // when it becomes active.
-        case WM_CLOSE:
-            _je_dx_current_thread_context->m_window_should_close = true;
-            return 0;
-        case WM_ACTIVATE:
-            return 0;
-            // WM_SIZE is sent when the user resizes the window.  
-        case WM_SIZE:
-            _je_dx_current_thread_context->m_windows_changing_width = (size_t)LOWORD(lParam);
-            _je_dx_current_thread_context->m_windows_changing_height = (size_t)HIWORD(lParam);
-            if (!_je_dx_current_thread_context->m_windows_changing)
-                goto JE_DX11_APPLY_SIZE;
-            return 0;
-        case WM_ENTERSIZEMOVE:
-            _je_dx_current_thread_context->m_windows_changing = true;
-            return 0;
-        case WM_EXITSIZEMOVE:
-        {
-            _je_dx_current_thread_context->m_windows_changing = false;
-        JE_DX11_APPLY_SIZE:
-            dx11_callback_windows_size_changed(
-                _je_dx_current_thread_context,
-                _je_dx_current_thread_context->m_windows_changing_width,
-                _je_dx_current_thread_context->m_windows_changing_height);
-            return 0;
-        }
-        case WM_DESTROY:
-            PostQuitMessage(0);
-            return 0;
-        case WM_MENUCHAR:
-            // Don't beep when we alt-enter.
-            return MAKELRESULT(0, MNC_CLOSE);
-        case WM_GETMINMAXINFO:
-            /*((MINMAXINFO*)lParam)->ptMinTrackSize.x = 200;
-            ((MINMAXINFO*)lParam)->ptMinTrackSize.y = 200;*/
-            return 0;
-        case WM_LBUTTONDOWN:
-            je_io_update_mouse_state(0, jeecs::input::mousecode::LEFT, true);
-            return 0;
-        case WM_MBUTTONDOWN:
-            je_io_update_mouse_state(0, jeecs::input::mousecode::MID, true);
-            return 0;
-        case WM_RBUTTONDOWN:
-            je_io_update_mouse_state(0, jeecs::input::mousecode::RIGHT, true);
-            return 0;
-        case WM_LBUTTONUP:
-            je_io_update_mouse_state(0, jeecs::input::mousecode::LEFT, false);
-            return 0;
-        case WM_MBUTTONUP:
-            je_io_update_mouse_state(0, jeecs::input::mousecode::MID, false);
-            return 0;
-        case WM_RBUTTONUP:
-            je_io_update_mouse_state(0, jeecs::input::mousecode::RIGHT, false);
-            return 0;
-        case WM_SYSKEYDOWN:
-        case WM_KEYDOWN:
-            dx11_handle_key_state(wParam, true);
-            break;
-        case WM_SYSKEYUP:
-        case WM_KEYUP:
-            dx11_handle_key_state(wParam, false);
-            break;
-        case WM_MOUSEWHEEL:
-        {
-            float wx, wy;
-            je_io_get_wheel(0, &wx, &wy);
-            je_io_update_wheel(0, wx, wy + GET_WHEEL_DELTA_WPARAM(wParam) / WHEEL_DELTA);
-            return 0;
-        }
-        case WM_MOUSEMOVE:
-            return 0;
-        default:
-            break;
-        }
-
-        return DefWindowProc(hwnd, msg, wParam, lParam);
-    }
-
-    // Creates an RGBA icon or cursor
-    // (C)GLFW, a little modified.
-    static HICON _dx11_CreateIcon(
-        unsigned char* image_data,
-        LONG width,
-        LONG height)
-    {
-        int i;
-        HDC dc;
-        HICON handle;
-        HBITMAP color, mask;
-        BITMAPV5HEADER bi;
-        ICONINFO ii;
-        unsigned char* target = NULL;
-        unsigned char* source = image_data;
-
-        ZeroMemory(&bi, sizeof(bi));
-        bi.bV5Size = sizeof(bi);
-        bi.bV5Width = width;
-        bi.bV5Height = -height;
-        bi.bV5Planes = 1;
-        bi.bV5BitCount = 32;
-        bi.bV5Compression = BI_BITFIELDS;
-        bi.bV5RedMask = 0x00ff0000;
-        bi.bV5GreenMask = 0x0000ff00;
-        bi.bV5BlueMask = 0x000000ff;
-        bi.bV5AlphaMask = 0xff000000;
-
-        dc = GetDC(NULL);
-        color = CreateDIBSection(dc,
-            (BITMAPINFO*)&bi,
-            DIB_RGB_COLORS,
-            (void**)&target,
-            NULL,
-            (DWORD)0);
-        ReleaseDC(NULL, dc);
-
-        if (!color)
-        {
-            jeecs::debug::logwarn("Failed to create dib section when create icon for dx11 interface window.");
-            return NULL;
-        }
-
-        mask = CreateBitmap(width, height, 1, 1, NULL);
-        if (!mask)
-        {
-            jeecs::debug::logwarn("Failed to create bitmap when create icon for dx11 interface window.");
-            DeleteObject(color);
-            return NULL;
-        }
-
-        for (i = 0; i < width * height; i++)
-        {
-            target[0] = source[2];
-            target[1] = source[1];
-            target[2] = source[0];
-            target[3] = source[3];
-            target += 4;
-            source += 4;
-        }
-
-        ZeroMemory(&ii, sizeof(ii));
-        ii.fIcon = TRUE;
-        ii.xHotspot = 0;
-        ii.yHotspot = 0;
-        ii.hbmMask = mask;
-        ii.hbmColor = color;
-
-        handle = CreateIconIndirect(&ii);
-
-        DeleteObject(color);
-        DeleteObject(mask);
-
-        if (!handle)
-            jeecs::debug::logwarn("Failed to create icon for dx11 interface window.");
-
-        return handle;
-    }
-
     jegl_context::userdata_t dx11_startup(jegl_context* gthread, const jegl_interface_config* config, bool reboot)
     {
         jegl_dx11_context* context = new jegl_dx11_context;
         _je_dx_current_thread_context = context;
 
-        // 禁止高DPI缩放
-        SetProcessDPIAware();
+        context->m_interface = new glfw(reboot ? glfw::HOLD : glfw::DIRECTX11);
+        context->m_interface->create_interface(gthread, config);
+
+        context->WINDOWS_HANDLE = context->m_interface->win32_handle();
 
         context->m_current_target_shader = nullptr;
         context->m_current_target_framebuffer = nullptr;
         context->m_dx_context_finished = false;
-        context->m_window_should_close = false;
         context->WINDOWS_SIZE_WIDTH = config->m_width;
         context->WINDOWS_SIZE_HEIGHT = config->m_height;
         context->RESOLUTION_WIDTH = context->WINDOWS_SIZE_WIDTH;
@@ -467,7 +241,6 @@ namespace jeecs::graphic::api::dx11
         context->m_lock_resolution_for_fullscreen = false;
         context->MSAA_LEVEL = config->m_msaa;
         context->FPS = config->m_fps;
-        context->m_win32_window_icon = nullptr;
         context->m_windows_changing = false;
         context->m_windows_changing_width = context->WINDOWS_SIZE_WIDTH;
         context->m_windows_changing_height = context->WINDOWS_SIZE_HEIGHT;
@@ -481,86 +254,6 @@ namespace jeecs::graphic::api::dx11
             jeecs::debug::log("Graphic thread (DX11) start!");
             // ...
         }
-
-        jeecs::basic::resource<jeecs::graphic::texture> icon = jeecs::graphic::texture::load("@/icon.png");
-        if (icon == nullptr)
-            icon = jeecs::graphic::texture::load("!/builtin/icon/icon.png");
-
-        if (icon != nullptr)
-        {
-            LONG width = (LONG)icon->width();
-            LONG height = (LONG)icon->height();
-            unsigned char* pixels = (unsigned char*)malloc((size_t)(width * height * 4));
-            // Here need a y-direct flip.
-            auto* image_pixels = icon->resouce()->m_raw_texture_data->m_pixels;
-            assert(pixels != nullptr);
-
-            for (size_t iy = 0; iy < (size_t)height; ++iy)
-            {
-                size_t target_place_offset = iy * (size_t)width * 4;
-                size_t origin_place_offset = ((size_t)height - iy - 1) * (size_t)width * 4;
-                memcpy(pixels + target_place_offset, image_pixels + origin_place_offset, (size_t)width * 4);
-            }
-
-            context->m_win32_window_icon = _dx11_CreateIcon(pixels, width, height);
-            je_mem_free(pixels);
-        }
-
-        context->m_win32_window_class.style = CS_HREDRAW | CS_VREDRAW;
-        context->m_win32_window_class.lpfnWndProc = MainWndProc;
-        context->m_win32_window_class.cbClsExtra = 0;
-        context->m_win32_window_class.cbWndExtra = 0;
-        context->m_win32_window_class.hInstance = GetModuleHandle(NULL);
-        context->m_win32_window_class.hIcon =
-            context->m_win32_window_icon == nullptr
-            ? LoadIcon(0, IDI_APPLICATION)
-            : context->m_win32_window_icon;
-        context->m_win32_window_class.hCursor = LoadCursor(0, IDC_ARROW);
-        context->m_win32_window_class.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);
-        context->m_win32_window_class.lpszMenuName = 0;
-        context->m_win32_window_class.lpszClassName = "JoyEngineDX11Form";
-
-        if (!RegisterClassA(&context->m_win32_window_class))
-        {
-            jeecs::debug::logfatal("Failed to create windows for dx11: RegisterClass failed.");
-            return nullptr;
-        }
-
-        // Compute window rectangle dimensions based on requested client area dimensions.
-        RECT R = { 0, 0, (LONG)context->WINDOWS_SIZE_WIDTH, (LONG)context->WINDOWS_SIZE_HEIGHT };
-        AdjustWindowRect(&R, WS_OVERLAPPEDWINDOW, false);
-        LONG width = R.right - R.left;
-        LONG height = R.bottom - R.top;
-
-        DWORD window_style = WS_OVERLAPPEDWINDOW;
-
-        if (config->m_enable_resize == false)
-            window_style &= ~WS_THICKFRAME;
-
-        switch (config->m_display_mode)
-        {
-        case jegl_interface_config::display_mode::BOARDLESS:
-            window_style = WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_POPUP;
-            break;
-        case jegl_interface_config::display_mode::FULLSCREEN:
-            context->m_lock_resolution_for_fullscreen = true;
-            break;
-        case jegl_interface_config::display_mode::WINDOWED:
-            break;
-        }
-
-        context->m_window_handle = CreateWindowA("JoyEngineDX11Form", config->m_title,
-            window_style, CW_USEDEFAULT, CW_USEDEFAULT, width, height, 0, 0,
-            context->m_win32_window_class.hInstance, 0);
-
-        if (!context->m_window_handle)
-        {
-            jeecs::debug::logfatal("Failed to create windows for dx11.");
-            return nullptr;
-        }
-
-        ShowWindow(context->m_window_handle, SW_SHOW);
-        UpdateWindow(context->m_window_handle);
 
         D3D_DRIVER_TYPE dx_driver_types[] =
         {
@@ -658,7 +351,7 @@ namespace jeecs::graphic::api::dx11
 
         sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
         sd.BufferCount = 2;
-        sd.OutputWindow = context->m_window_handle;
+        sd.OutputWindow = context->WINDOWS_HANDLE;
         sd.Windowed = TRUE;
         sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
         sd.Flags = 0;
@@ -666,7 +359,7 @@ namespace jeecs::graphic::api::dx11
             context->m_dx_device.Get(), &sd, context->m_dx_swapchain.GetAddressOf()));
 
         // 可以禁止alt+enter全屏
-        dxgiFactory1->MakeWindowAssociation(context->m_window_handle,
+        dxgiFactory1->MakeWindowAssociation(sd.OutputWindow,
             DXGI_MWA_NO_ALT_ENTER | DXGI_MWA_NO_WINDOW_CHANGES);
 
         // 设置调试对象名
@@ -694,7 +387,7 @@ namespace jeecs::graphic::api::dx11
                         sampler.m_sampler_id, 1, sampler.m_sampler.GetAddressOf());
                 }
             },
-            context->m_window_handle,
+            context->m_interface->interface_handle(),
             context->m_dx_device.Get(),
             context->m_dx_context.Get(),
             reboot);
@@ -720,16 +413,10 @@ namespace jeecs::graphic::api::dx11
         if (context->m_dx_context)
             context->m_dx_context->ClearState();
 
-        DestroyWindow(context->m_window_handle);
-        DestroyIcon(context->m_win32_window_icon);
-
-        if (!UnregisterClassA(
-            context->m_win32_window_class.lpszClassName,
-            context->m_win32_window_class.hInstance))
-        {
-            jeecs::debug::logfatal("Failed to shutdown windows for dx11: UnregisterClass failed.");
-        }
+        context->m_interface->shutdown(reboot);
+        delete context->m_interface;
         delete context;
+
 #ifndef NDEBUG
         if (!reboot)
         {
@@ -762,44 +449,18 @@ namespace jeecs::graphic::api::dx11
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
-        if (context->m_window_should_close)
+
+        auto update_result = context->m_interface->update();
+        if (update_result & basic_interface::update_result::RESIZED)
+            dx11_callback_windows_size_changed(context,
+                context->m_interface->m_interface_width,
+                context->m_interface->m_interface_height);
+
+        if (update_result & basic_interface::update_result::CLOSING)
         {
             if (jegui_shutdown_callback())
                 return jegl_graphic_api::update_action::STOP;
-            context->m_window_should_close = false;
         }
-
-        RECT rect;
-        GetClientRect(context->m_window_handle, &rect);
-        je_io_update_windowsize(rect.right - rect.left, rect.bottom - rect.top);
-
-        POINT point;
-        GetCursorPos(&point);
-        ScreenToClient(context->m_window_handle, &point);
-        je_io_update_mousepos(0, point.x, point.y);
-
-        int mouse_lock_x, mouse_lock_y;
-        if (je_io_get_lock_mouse(&mouse_lock_x, &mouse_lock_y))
-        {
-            point.x = mouse_lock_x;
-            point.y = mouse_lock_y;
-            ClientToScreen(context->m_window_handle, &point);
-            SetCursorPos(point.x, point.y);
-        }
-
-        int window_width, window_height;
-        if (je_io_fetch_update_windowsize(&window_width, &window_height))
-        {
-            RECT rect = { 0, 0, window_width, window_height };
-            SetWindowPos(context->m_window_handle, HWND_TOP,
-                0, 0, rect.right - rect.left, rect.bottom - rect.top,
-                SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOMOVE | SWP_NOZORDER);
-        }
-
-        const char* title;
-        if (je_io_fetch_update_windowtitle(&title))
-            SetWindowTextA(context->m_window_handle, title);
-
         return jegl_graphic_api::update_action::CONTINUE;
     }
 

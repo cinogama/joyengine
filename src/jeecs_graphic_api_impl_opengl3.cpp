@@ -174,7 +174,7 @@ namespace jeecs::graphic::api::gl3
                     }
                 }
             },
-            context->native_handle(),
+            context->interface_handle(),
                 reboot);
 
         return context;
@@ -185,7 +185,8 @@ namespace jeecs::graphic::api::gl3
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
         context->swap();
 
-        if (!context->update())
+        auto update_result = context->update();
+        if (update_result & basic_interface::update_result::CLOSING)
         {
             if (jegui_shutdown_callback())
                 return jegl_graphic_api::update_action::STOP;

@@ -6,14 +6,18 @@
 #include "jeecs.hpp"
 
 #include <GLFW/glfw3.h>
+
+#define GLFW_EXPOSE_NATIVE_WIN32 1
 #include <GLFW/glfw3native.h>
 
 namespace jeecs::graphic
 {
     class glfw : public basic_interface
     {
-        GLFWwindow* _m_windows;
         JECS_DISABLE_MOVE_AND_COPY(glfw);
+
+        GLFWwindow* _m_windows;
+        bool _m_window_resized;
 
     public:
         enum interface_type
@@ -22,6 +26,7 @@ namespace jeecs::graphic
             OPENGL330,
             OPENGLES300,
             VULKAN130,
+            DIRECTX11,
         };
     public:
         static void glfw_callback_windows_size_changed(GLFWwindow* fw, int x, int y)
@@ -32,6 +37,8 @@ namespace jeecs::graphic
             context->m_interface_height = (size_t)y;
 
             je_io_update_windowsize(x, y);
+
+            context->_m_window_resized = true;
         }
         static void glfw_callback_mouse_pos_changed(GLFWwindow* fw, double x, double y)
         {
@@ -88,6 +95,8 @@ namespace jeecs::graphic
     public:
         glfw(interface_type type)
         {
+            _m_window_resized = false;
+
             if (type == interface_type::HOLD)
                 return;
 
@@ -118,6 +127,7 @@ namespace jeecs::graphic
 #endif
                 break;
             case interface_type::VULKAN130:
+            case interface_type::DIRECTX11:
                 glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
                 break;
             default:
@@ -233,9 +243,8 @@ namespace jeecs::graphic
         {
             glfwSwapBuffers(_m_windows);
         }
-        virtual bool update() override
+        virtual update_result update() override
         {
-            glfwPollEvents();
             int mouse_lock_x, mouse_lock_y;
             if (je_io_get_lock_mouse(&mouse_lock_x, &mouse_lock_y))
                 glfwSetCursorPos(_m_windows, mouse_lock_x, mouse_lock_y);
@@ -248,12 +257,22 @@ namespace jeecs::graphic
             if (je_io_fetch_update_windowtitle(&title))
                 glfwSetWindowTitle(_m_windows, title);
 
+            glfwPollEvents();
+
+            update_result result = update_result::NORMAL;
+
             if (glfwWindowShouldClose(_m_windows) == GLFW_TRUE)
             {
                 glfwSetWindowShouldClose(_m_windows, GLFW_FALSE);
-                return false;
+                result = (update_result)(result | update_result::CLOSING);
             }
-            return true;
+
+            if (_m_window_resized)
+            {
+                result = (update_result)(result | update_result::RESIZED);
+                _m_window_resized = false;
+            }
+            return result;
         }
         virtual void shutdown(bool reboot) override
         {
@@ -262,9 +281,16 @@ namespace jeecs::graphic
                 glfwTerminate();
         }
 
-        virtual void* native_handle() override
+        virtual void* interface_handle() const override
         {
             return _m_windows;
         }
+
+#ifdef JE_OS_WINDOWS
+        HWND win32_handle() const
+        {
+            return glfwGetWin32Window(_m_windows);
+        }       
+#endif
     };
 }

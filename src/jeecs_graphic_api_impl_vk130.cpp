@@ -1531,7 +1531,7 @@ VK_API_PLATFORM_API_LIST
             surface_create_info.pNext = nullptr;
             surface_create_info.flags = 0;
             surface_create_info.hinstance = GetModuleHandle(nullptr);
-            surface_create_info.hwnd = (HWND)_vk_jegl_interface->native_handle();
+            surface_create_info.hwnd = (HWND)_vk_jegl_interface->interface_handle();
 
             assert(vkCreateWin32SurfaceKHR != nullptr);
             if (VK_SUCCESS != vkCreateWin32SurfaceKHR(_vk_instance, &surface_create_info, nullptr, &_vk_surface))
@@ -1543,7 +1543,7 @@ VK_API_PLATFORM_API_LIST
             surface_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
             surface_create_info.pNext = nullptr;
             surface_create_info.flags = 0;
-            surface_create_info.window = (ANativeWindow*)_vk_jegl_interface->native_handle();
+            surface_create_info.window = (ANativeWindow*)_vk_jegl_interface->interface_handle();
 
             assert(vkCreateAndroidSurfaceKHR != nullptr);
             if (VK_SUCCESS != vkCreateAndroidSurfaceKHR(_vk_instance, &surface_create_info, nullptr, &_vk_surface))
@@ -1556,8 +1556,8 @@ VK_API_PLATFORM_API_LIST
             surface_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
             surface_create_info.pNext = nullptr;
             surface_create_info.flags = 0;
-            surface_create_info.dpy = (Display*)_vk_jegl_interface->native_handle();
-            surface_create_info.window = (Window)_vk_jegl_interface->native_handle();
+            surface_create_info.dpy = (Display*)_vk_jegl_interface->interface_handle();
+            surface_create_info.window = (Window)_vk_jegl_interface->interface_handle();
 
             assert(vkCreateXlibSurfaceKHR != nullptr);
             if (VK_SUCCESS != vkCreateXlibSurfaceKHR(_vk_instance, &surface_create_info, nullptr, &_vk_surface))
@@ -1567,7 +1567,7 @@ VK_API_PLATFORM_API_LIST
 #   endif
 #else
             if (VK_SUCCESS != glfwCreateWindowSurface(
-                _vk_instance, (GLFWwindow*)_vk_jegl_interface->native_handle(), nullptr, &_vk_surface))
+                _vk_instance, (GLFWwindow*)_vk_jegl_interface->interface_handle(), nullptr, &_vk_surface))
             {
                 jeecs::debug::logfatal("Failed to create vk130 glfw surface.");
             }
@@ -3336,7 +3336,7 @@ VK_API_PLATFORM_API_LIST
                 [](auto* res)
                 {
                 },
-                _vk_jegl_interface->native_handle(),
+                _vk_jegl_interface->interface_handle(),
                 &init_info,
                 _vk_swapchain_framebuffer.front()->m_rendpass,
                 cmdbuf);
@@ -3496,11 +3496,13 @@ VK_API_PLATFORM_API_LIST
         if (!context->update())
             result = jegl_graphic_api::update_action::SKIP;
 
-        if (!context->_vk_jegl_interface->update())
+        auto update_result = context->_vk_jegl_interface->update();
+        if (update_result & basic_interface::update_result::CLOSING)
         {
             if (jegui_shutdown_callback())
                 return jegl_graphic_api::update_action::STOP;
         }
+
         return result;
     }
     jegl_graphic_api::update_action commit_update(jegl_context::userdata_t ctx)

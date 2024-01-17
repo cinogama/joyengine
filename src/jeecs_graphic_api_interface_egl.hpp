@@ -85,15 +85,15 @@ namespace jeecs::graphic
 
 #   ifdef JE_OS_ANDROID
             auto* data = (jegl_gl3_context::_jegl_window_android_app*)thread->_m_sync_callback_arg;
-            context->m_context.m_window = (EGLNativeWindowType)data->m_android_window;
-            context->m_app = (struct android_app*)data->m_android_app;
+            m_context.m_window = (EGLNativeWindowType)data->m_android_window;
+            m_app = (struct android_app*)data->m_android_app;
 #   else
 #       error Unknown platform.
 #   endif
 
             EGLint format;
             eglGetConfigAttrib(display, egl_config, EGL_NATIVE_VISUAL_ID, &format);
-            EGLSurface surface = eglCreateWindowSurface(display, egl_config, context->m_context.m_window, nullptr);
+            EGLSurface surface = eglCreateWindowSurface(display, egl_config, m_context.m_window, nullptr);
 
             // Create a GLES 3 context
             EGLint contextAttribs[] = { EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE };
@@ -107,43 +107,48 @@ namespace jeecs::graphic
             // * MSAA support
             // * Direction ?
             // * Double buffer
-            context->m_context.m_display = display;
-            context->m_context.m_surface = surface;
-            context->m_context.m_context = eglcontext;
+            m_context.m_display = display;
+            m_context.m_surface = surface;
+            m_context.m_context = eglcontext;
 
             if (config->m_fps == 0)
-                eglSwapInterval(context->m_context.m_display, 1);
+                eglSwapInterval(m_context.m_display, 1);
             else
-                eglSwapInterval(context->m_context.m_display, 0);
+                eglSwapInterval(m_context.m_display, 0);
         }
         virtual void swap() override
         {
-            eglSwapBuffers(context->m_context.m_display, context->m_context.m_surface);
+            eglSwapBuffers(m_context.m_display, m_context.m_surface);
         }
-        virtual bool update() override
+        virtual update_result update() override
         {
             EGLint width;
-            eglQuerySurface(context->m_context.m_display, context->m_context.m_surface, EGL_WIDTH, &width);
+            eglQuerySurface(m_context.m_display, m_context.m_surface, EGL_WIDTH, &width);
 
             EGLint height;
-            eglQuerySurface(context->m_context.m_display, context->m_context.m_surface, EGL_HEIGHT, &height);
+            eglQuerySurface(m_context.m_display, m_context.m_surface, EGL_HEIGHT, &height);
 
-            context->WINDOWS_SIZE_WIDTH = width;
-            context->WINDOWS_SIZE_HEIGHT = height;
+            update_result result = update_result::NORMAL;
+
+            if (m_interface_width != (size_t)width || m_interface_height != (size_t)height)
+                result = (update_result)(result | update_result::RESIZED);
+
+            m_interface_width = (size_t)width;
+            m_interface_height = (size_t)height;
 
             je_io_update_windowsize((int)width, (int)height);
 
-            return true;
+            return result;
         }
         virtual void shutdown(bool reboot) override
         {
-            eglMakeCurrent(context->m_context.m_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-            eglDestroyContext(context->m_context.m_display, context->m_context.m_context);
-            eglDestroySurface(context->m_context.m_display, context->m_context.m_surface);
-            eglTerminate(context->m_context.m_display);
+            eglMakeCurrent(m_context.m_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+            eglDestroyContext(m_context.m_display, m_context.m_context);
+            eglDestroySurface(m_context.m_display, m_context.m_surface);
+            eglTerminate(m_context.m_display);
         }
 
-        virtual void* native_handle() override
+        virtual void* interface_handle() const override
         {
 #ifdef JE_OS_ANDROID
             return m_app;
