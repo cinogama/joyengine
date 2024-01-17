@@ -62,8 +62,7 @@ struct jegl_rendchain
 
     void using_resource(jegl_resource* res)
     {
-        auto& [_, inserted] = m_used_resource.insert(res);
-        if (inserted)
+        if (m_used_resource.insert(res).second)
             ++*std::launder(reinterpret_cast<std::atomic_uint32_t*>(res->m_binding_count));
     }
     void clear_used_resource()

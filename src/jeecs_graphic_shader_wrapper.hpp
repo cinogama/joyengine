@@ -491,10 +491,8 @@ protected:
         {
             for (auto& builtin_func_name : context->_used_builtin_func)
             {
-                if (generated_function.find(builtin_func_name) != generated_function.end())
+                if (false == generated_function.insert(builtin_func_name).second)
                     continue;
-
-                generated_function.insert(builtin_func_name);
 
                 auto fnd = wrap->custom_methods.find(builtin_func_name);
                 if (fnd != wrap->custom_methods.end())

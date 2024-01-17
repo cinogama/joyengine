@@ -410,11 +410,9 @@ namespace je::towoo
         auto* script_parser_info = typeinfo->m_script_parser_info;
 
         if (script_parser_info == nullptr
-            || generated_types.find(
-                script_parser_info->m_woolang_typename) != generated_types.end())
+            || false == generated_types.insert(script_parser_info->m_woolang_typename).second)
             continue;
 
-        generated_types.insert(script_parser_info->m_woolang_typename);
         woolang_parsing_type_decl +=
             std::string("// Declear of '")
             + script_parser_info->m_woolang_typename + "'\n"
