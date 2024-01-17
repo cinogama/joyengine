@@ -350,7 +350,7 @@ namespace jeecs::graphic::api::dx11
         context->m_dx_context_finished = true;
 
         dx11_callback_windows_size_changed(context,
-            context->WINDOWS_SIZE_WIDTH, context->WINDOWS_SIZE_HEIGHT);
+            config->m_width, config->m_height);
 
         jegui_init_dx11(
             [](auto* res) {
@@ -1502,10 +1502,12 @@ namespace jeecs::graphic::api::dx11
         }
 
         auto* framw_buffer_raw = framebuffer != nullptr ? framebuffer->m_raw_framebuf_data : nullptr;
-        size_t buf_h = framw_buffer_raw != nullptr ? framw_buffer_raw->m_height : context->WINDOWS_SIZE_HEIGHT;
+
+        size_t buf_w = framw_buffer_raw != nullptr ? framw_buffer_raw->m_width : context->RESOLUTION_WIDTH;
+        size_t buf_h = framw_buffer_raw != nullptr ? framw_buffer_raw->m_height : context->RESOLUTION_HEIGHT;
 
         if (w == 0)
-            w = framw_buffer_raw != nullptr ? framw_buffer_raw->m_width : context->WINDOWS_SIZE_WIDTH;
+            w = buf_w;
         if (h == 0)
             h = buf_h;
 
