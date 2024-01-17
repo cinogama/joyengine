@@ -5546,7 +5546,6 @@ namespace jeecs
 #define CommitUpdate        CommitUpdate    // 用于最终提交(Graphic)
     };
 
-
     inline game_universe game_world::get_universe() const noexcept
     {
         return game_universe(je_ecs_world_in_universe(handle()));
