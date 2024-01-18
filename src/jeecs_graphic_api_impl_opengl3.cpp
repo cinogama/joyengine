@@ -795,17 +795,9 @@ namespace jeecs::graphic::api::gl3
                     {
                     case jegl_shader::fliter_mode::LINEAR:
                         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-                        /* if (sampler.m_mip == jegl_shader::fliter_mode::LINEAR)
-                             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-                         else
-                             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST);*/
                         break;
                     case jegl_shader::fliter_mode::NEAREST:
                         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-                        /*if (sampler.m_mip == jegl_shader::fliter_mode::LINEAR)
-                            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR);
-                        else
-                            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);*/
                         break;
                     default:
                         abort();
