@@ -261,7 +261,7 @@ namespace jeecs::graphic::api::gl3
         }
     }
 
-    struct gl3_vertex_data
+    struct jegl3_vertex_data
     {
         GLuint m_vao;
         GLuint m_vbo;
@@ -269,19 +269,10 @@ namespace jeecs::graphic::api::gl3
         GLsizei m_pointcount;
     };
 
-    struct gl_resource_blob
+    struct jegl3_resource_blob
     {
         GLuint m_vertex_shader;
         GLuint m_fragment_shader;
-
-        JECS_DISABLE_MOVE_AND_COPY(gl_resource_blob);
-
-        gl_resource_blob() = default;
-        ~gl_resource_blob()
-        {
-            glDeleteShader(m_vertex_shader);
-            glDeleteShader(m_fragment_shader);
-        }
     };
 
     jegl_resource_blob gl_create_resource_blob(jegl_context::userdata_t ctx, jegl_resource* resource)
@@ -290,7 +281,7 @@ namespace jeecs::graphic::api::gl3
         {
         case jegl_resource::type::SHADER:
         {
-            gl_resource_blob* blob = new gl_resource_blob;
+            jegl3_resource_blob* blob = new jegl3_resource_blob;
 
             std::string vertex_src
 #ifdef JE_ENABLE_GL330_GAPI
@@ -385,7 +376,12 @@ namespace jeecs::graphic::api::gl3
     void gl_close_resource_blob(jegl_context::userdata_t ctx, jegl_resource_blob blob)
     {
         if (blob != nullptr)
-            delete (gl_resource_blob*)blob;
+        {
+            auto* shader_blob = std::launder(reinterpret_cast<jegl3_resource_blob*>(blob));
+            glDeleteShader(shader_blob->m_vertex_shader);
+            glDeleteShader(shader_blob->m_fragment_shader);
+            delete shader_blob;
+        }
     }
 
     void gl_init_resource(jegl_context::userdata_t ctx, jegl_resource_blob blob, jegl_resource* resource)
@@ -563,7 +559,7 @@ namespace jeecs::graphic::api::gl3
                 GL_TRIANGLE_STRIP,
             };
 
-            auto* vertex_data = new gl3_vertex_data;
+            auto* vertex_data = new jegl3_vertex_data;
             vertex_data->m_vao = vao;
             vertex_data->m_vbo = vbo;
             vertex_data->m_method = DRAW_METHODS[(size_t)resource->m_raw_vertex_data->m_type];
@@ -890,7 +886,7 @@ namespace jeecs::graphic::api::gl3
             break;
         case jegl_resource::type::VERTEX:
         {
-            gl3_vertex_data* vdata = std::launder(reinterpret_cast<gl3_vertex_data*>(resource->m_handle.m_ptr));
+            jegl3_vertex_data* vdata = std::launder(reinterpret_cast<jegl3_vertex_data*>(resource->m_handle.m_ptr));
             glDeleteVertexArrays(1, &vdata->m_vao);
             glDeleteBuffers(1, &vdata->m_vbo);
             delete vdata;
@@ -930,7 +926,7 @@ namespace jeecs::graphic::api::gl3
 
     void gl_draw_vertex_with_shader(jegl_context::userdata_t, jegl_resource* vert)
     {
-        gl3_vertex_data* vdata = std::launder(reinterpret_cast<gl3_vertex_data*>(vert->m_handle.m_ptr));
+        jegl3_vertex_data* vdata = std::launder(reinterpret_cast<jegl3_vertex_data*>(vert->m_handle.m_ptr));
 
         glBindVertexArray(vdata->m_vao);
 
