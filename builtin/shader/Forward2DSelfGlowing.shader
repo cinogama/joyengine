@@ -50,8 +50,9 @@ let self_glowing    = uniform("SelfGlowing", float::one);
 
 public func frag(vf: v2f)
 {
+    let albedo_color = texture(Albedo, vf.uv);
     return fout{
-        albedo = alphatest(texture(Albedo, vf.uv)),
+        albedo = albedo_color,
         self_luminescence = float4::create(albedo_color->xyz * self_glowing, 1.),
         vspace_position = float4::create(vf.vpos, 1.),
         vspace_normalize = float4::create(vf.vnorm, 1.),

@@ -8121,14 +8121,17 @@ namespace jeecs
                 typing::register_member(guard, &Viewport::viewport, "viewport");
             }
         };
+        struct Clear
+        {
+            math::vec4 color = math::vec4(0.f, 0.f, 0.f, 1.f);
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &Clear::color, "color");
+            }
+        };
         struct RendToFramebuffer
         {
             basic::resource<graphic::framebuffer> framebuffer = nullptr;
-            math::vec4 clearcolor = {};
-            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
-            {
-                typing::register_member(guard, &RendToFramebuffer::clearcolor, "clearcolor");
-            }
         };
         struct Fog
         {
@@ -9164,6 +9167,7 @@ namespace jeecs
             type_info::register_type<Camera::PerspectiveProjection>(guard, "Camera::PerspectiveProjection");
             type_info::register_type<Camera::Viewport>(guard, "Camera::Viewport");
             type_info::register_type<Camera::RendToFramebuffer>(guard, "Camera::RendToFramebuffer");
+            type_info::register_type<Camera::Clear>(guard, "Camera::Clear");
 
             type_info::register_type<Light2D::Color>(guard, "Light2D::Color");
             type_info::register_type<Light2D::Parallel>(guard, "Light2D::Parallel");

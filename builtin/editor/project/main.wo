@@ -830,6 +830,7 @@ namespace editor
                 je::typeinfo::load("Camera::Projection")->val,
                 je::typeinfo::load("Camera::FrustumCulling")->val,
                 je::typeinfo::load("Camera::RendToFramebuffer")->val,
+                je::typeinfo::load("Camera::Clear")->val,
             ]);
             editor_camera->je::editor::apply_camera_framebuf_setting(320, 240);
             do editor_camera->editor::set_parent(camera_walker, true);

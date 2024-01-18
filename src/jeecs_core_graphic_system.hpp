@@ -180,6 +180,7 @@ public let frag =
             const Viewport* viewport;
             const RendToFramebuffer* rendToFramebuffer;
             const FrustumCulling* frustumCulling;
+            const Camera::Clear* clear;
 
             bool operator < (const camera_arch& another) const noexcept
             {
@@ -417,12 +418,12 @@ public let frag =
                     }
                 )
                 .exec(
-                    [this](Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf)
+                    [this](Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf, Camera::Clear* clear)
                     {
                         auto* branch = this->allocate_branch(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
                         m_camera_list.emplace_back(
                             camera_arch{
-                                branch, rendqueue, &projection, cameraviewport, rendbuf, nullptr
+                                branch, rendqueue, &projection, cameraviewport, rendbuf, nullptr, clear
                             }
                         );
                     }
@@ -548,19 +549,13 @@ public let frag =
                     &shader_time);
 
                 graphic::framebuffer* rend_aim_buffer = nullptr;
-                float clear_buffer_color[] = { 0.f, 0.f, 0.f, 0.f };
+
                 if (current_camera.rendToFramebuffer)
                 {
                     if (current_camera.rendToFramebuffer->framebuffer == nullptr)
                         continue;
                     else
-                    {
                         rend_aim_buffer = current_camera.rendToFramebuffer->framebuffer.get();
-                        clear_buffer_color[0] = current_camera.rendToFramebuffer->clearcolor.x;
-                        clear_buffer_color[1] = current_camera.rendToFramebuffer->clearcolor.y;
-                        clear_buffer_color[2] = current_camera.rendToFramebuffer->clearcolor.z;
-                        clear_buffer_color[3] = current_camera.rendToFramebuffer->clearcolor.w;
-                    }
                 }
 
                 size_t
@@ -581,9 +576,17 @@ public let frag =
                         rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resouce(),
                         0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
-                // If camera rend to texture, clear the frame buffer (if need)
-                if (rend_aim_buffer)
-                    jegl_rchain_clear_color_buffer(rend_chain, clear_buffer_color);
+                if (current_camera.clear != nullptr)
+                {
+                    float clear_buffer_color[] = { 
+                        current_camera.clear->color.x,
+                        current_camera.clear->color.y,
+                        current_camera.clear->color.z,
+                        current_camera.clear->color.w
+                    };
+                    //jegl_rchain_clear_color_buffer(rend_chain, clear_buffer_color);
+                }
+
                 // Clear depth buffer to overwrite pixels.
                 jegl_rchain_clear_depth_buffer(rend_chain);
 
@@ -724,34 +727,42 @@ public let frag =
                         Rendqueue* rendqueue,
                         Viewport* cameraviewport,
                         RendToFramebuffer* rendbuf,
-                        FrustumCulling* frustumCulling)
+                        FrustumCulling* frustumCulling,
+                        Camera::Clear* clear)
                     {
                         auto* branch = this->allocate_branch(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
                         m_camera_list.emplace_back(
                             camera_arch{
-                                branch, rendqueue, &projection, cameraviewport, rendbuf, frustumCulling
+                                branch, rendqueue, &projection, cameraviewport, rendbuf, frustumCulling, clear
                             }
                         );
                     })
                 //
-                        .except<Light2D::Color, UserInterface::Origin>()
-                        .exec(
-                            [this](Translation& trans, Shaders& shads, Textures* texs, Shape& shape, Rendqueue* rendqueue, Renderer::Color* color)
-                            {
-                                // TODO: Need Impl AnyOf
-                                    // RendOb will be input to a chain and used for swap
-                                m_renderer_list.emplace_back(
-                                    renderer_arch{
-                                        color, rendqueue, &trans, &shape, &shads, texs
-                                    });
-                            })
-                        ;
-                            std::sort(m_camera_list.begin(), m_camera_list.end());
-                            std::sort(m_renderer_list.begin(), m_renderer_list.end());
+                .except<Light2D::Color, UserInterface::Origin>()
+                .exec(
+                    [this](
+                        Translation& trans,
+                        Shaders& shads, 
+                        Textures* texs, 
+                        Shape& shape, 
+                        Rendqueue* rendqueue, 
+                        Renderer::Color* color)
+                    {
+                        // TODO: Need Impl AnyOf
+                            // RendOb will be input to a chain and used for swap
+                        m_renderer_list.emplace_back(
+                            renderer_arch{
+                                color, rendqueue, &trans, &shape, &shads, texs
+                            });
+                    })
+                ;
 
-                            this->branch_allocate_end();
+                std::sort(m_camera_list.begin(), m_camera_list.end());
+                std::sort(m_renderer_list.begin(), m_renderer_list.end());
 
-                            DrawFrame();
+                this->branch_allocate_end();
+
+                DrawFrame();
         }
 
         void DrawFrame()
@@ -774,19 +785,12 @@ public let frag =
             for (auto& current_camera : m_camera_list)
             {
                 graphic::framebuffer* rend_aim_buffer = nullptr;
-                float clear_buffer_color[] = { 0.f, 0.f, 0.f, 0.f };
                 if (current_camera.rendToFramebuffer)
                 {
                     if (current_camera.rendToFramebuffer->framebuffer == nullptr)
                         continue;
                     else
-                    {
                         rend_aim_buffer = current_camera.rendToFramebuffer->framebuffer.get();
-                        clear_buffer_color[0] = current_camera.rendToFramebuffer->clearcolor.x;
-                        clear_buffer_color[1] = current_camera.rendToFramebuffer->clearcolor.y;
-                        clear_buffer_color[2] = current_camera.rendToFramebuffer->clearcolor.z;
-                        clear_buffer_color[3] = current_camera.rendToFramebuffer->clearcolor.w;
-                    }
                 }
 
                 size_t
@@ -832,9 +836,17 @@ public let frag =
                         rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resouce(),
                         0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
-                // If camera rend to texture, clear the frame buffer (if need)
-                if (rend_aim_buffer)
-                    jegl_rchain_clear_color_buffer(rend_chain, clear_buffer_color);
+                if (current_camera.clear != nullptr)
+                {
+                    float clear_buffer_color[] = {
+                        current_camera.clear->color.x,
+                        current_camera.clear->color.y,
+                        current_camera.clear->color.z,
+                        current_camera.clear->color.w
+                    };
+                    //jegl_rchain_clear_color_buffer(rend_chain, clear_buffer_color);
+                }
+
                 // Clear depth buffer to overwrite pixels.
                 jegl_rchain_clear_depth_buffer(rend_chain);
 
@@ -1323,6 +1335,7 @@ public func frag(_: v2f)
             const Shaders* shaders;
             const Textures* textures;
             const FrustumCulling* frustumCulling;
+            const Camera::Clear* clear;
 
             bool operator < (const l2dcamera_arch& another) const noexcept
             {
@@ -1398,7 +1411,8 @@ public func frag(_: v2f)
                         Light2D::CameraPostPass* light2dpostpass,
                         Shaders* shaders,
                         Textures* textures,
-                        FrustumCulling* frustumCulling)
+                        FrustumCulling* frustumCulling,
+                        Camera::Clear* clear)
                     {
                         auto* branch = this->allocate_branch(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
                         m_2dcamera_list.emplace_back(
@@ -1412,7 +1426,8 @@ public func frag(_: v2f)
                                 light2dpostpass,
                                 shaders,
                                 textures,
-                                frustumCulling
+                                frustumCulling,
+                                clear
                             }
                         );
 
@@ -1572,19 +1587,12 @@ public func frag(_: v2f)
             for (auto& current_camera : m_2dcamera_list)
             {
                 graphic::framebuffer* rend_aim_buffer = nullptr;
-                float clear_buffer_color[] = { 0.f, 0.f, 0.f, 0.f };
                 if (current_camera.rendToFramebuffer)
                 {
                     if (current_camera.rendToFramebuffer->framebuffer == nullptr)
                         continue;
                     else
-                    {
                         rend_aim_buffer = current_camera.rendToFramebuffer->framebuffer.get();
-                        clear_buffer_color[0] = current_camera.rendToFramebuffer->clearcolor.x;
-                        clear_buffer_color[1] = current_camera.rendToFramebuffer->clearcolor.y;
-                        clear_buffer_color[2] = current_camera.rendToFramebuffer->clearcolor.z;
-                        clear_buffer_color[3] = current_camera.rendToFramebuffer->clearcolor.w;
-                    }
                 }
 
                 size_t
@@ -1929,8 +1937,17 @@ public func frag(_: v2f)
                             0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
                     // If camera rend to texture, clear the frame buffer (if need)
-                    if (rend_aim_buffer)
-                        jegl_rchain_clear_color_buffer(rend_chain, clear_buffer_color);
+                    if (current_camera.clear != nullptr)
+                    {
+                        float clear_buffer_color[] = {
+                            current_camera.clear->color.x,
+                            current_camera.clear->color.y,
+                            current_camera.clear->color.z,
+                            current_camera.clear->color.w
+                        };
+                        //jegl_rchain_clear_color_buffer(rend_chain, clear_buffer_color);
+                    }
+
                     // Clear depth buffer to overwrite pixels.
                     jegl_rchain_clear_depth_buffer(rend_chain);
                 }
@@ -2176,9 +2193,17 @@ public func frag(_: v2f)
                             rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resouce(),
                             0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
-                    // If camera rend to texture, clear the frame buffer (if need)
-                    if (rend_aim_buffer)
-                        jegl_rchain_clear_color_buffer(final_target_rend_chain, clear_buffer_color);
+                    if (current_camera.clear != nullptr)
+                    {
+                        float clear_buffer_color[] = {
+                            current_camera.clear->color.x,
+                            current_camera.clear->color.y,
+                            current_camera.clear->color.z,
+                            current_camera.clear->color.w
+                        };
+                        //jegl_rchain_clear_color_buffer(final_target_rend_chain, clear_buffer_color);
+                    }
+
                     // Clear depth buffer to overwrite pixels.
                     jegl_rchain_clear_depth_buffer(final_target_rend_chain);
 
