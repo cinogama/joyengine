@@ -2,13 +2,13 @@
 
 import je::shader;
 
-SHARED(false);
-ZTEST(LESS);
-ZWRITE(ENABLE);
-BLEND(ONE, ZERO);
-CULL(NONE);
+SHARED  (false);
+ZTEST   (LESS);
+ZWRITE  (ENABLE);
+BLEND   (ONE, ZERO);
+CULL    (NONE);
 
-VAO_STRUCT! vin{
+VAO_STRUCT! vin {
     vertex  : float3,
     uv      : float2,
     normal  : float3,
@@ -41,11 +41,11 @@ public func vert(v: vin)
     };
 }
 
+let color           = uniform("Color", float4::one);
+let self_glowing    = uniform("SelfGlowing", float::one);
+
 public func frag(vf: v2f)
 {
-    let color = uniform("Color", float4::one);
-    let self_glowing = uniform("SelfGlowing", float::one);
-
     return fout{
         albedo = color,
         self_luminescence = float4::create(color->xyz * self_glowing, 1.),

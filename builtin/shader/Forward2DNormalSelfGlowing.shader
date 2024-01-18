@@ -8,9 +8,9 @@ ZWRITE(ENABLE);
 BLEND(ONE, ZERO);
 CULL(NONE);
 
-VAO_STRUCT!vin{
-    vertex: float3,
-    uv : float2,
+VAO_STRUCT! vin {
+    vertex  : float3,
+    uv      : float2,
 };
 
 using v2f = struct {
@@ -66,15 +66,15 @@ func transed_normal_tangent_map(normal_map: texture2d, vertex_info : v2f)
     );
 }
 
+let NearestSampler  = sampler2d::create(NEAREST, NEAREST, NEAREST, REPEAT, REPEAT);
+let Albedo          = uniform_texture:<texture2d>("Albedo", NearestSampler, 0);
+let Normalize       = uniform_texture:<texture2d>("Normalize", NearestSampler, 1);
+
+let self_glowing    = uniform("SelfGlowing", float::one);
+
 public func frag(vf: v2f)
 {
-    let nearest_repeat = sampler2d::create(NEAREST, NEAREST, NEAREST, REPEAT, REPEAT);
-    let Albedo = uniform_texture:<texture2d>("Albedo", nearest_repeat, 0);
-    let Normalize = uniform_texture:<texture2d>("Normalize", nearest_repeat, 1);
-
     let albedo_color = alphatest(texture(Albedo, vf.uv));
-    let self_glowing = uniform("SelfGlowing", float::one);
-
     return fout{
         albedo = albedo_color,
         self_luminescence = float4::create(albedo_color->xyz * self_glowing, 1.),

@@ -8130,6 +8130,14 @@ namespace jeecs
                 typing::register_member(guard, &RendToFramebuffer::clearcolor, "clearcolor");
             }
         };
+        struct Fog
+        {
+            math::vec4 color = math::vec4(1.f, 1.f, 1.f, 1.f);
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &Fog::color, "color");
+            }
+        };
     }
     namespace Physics2D
     {

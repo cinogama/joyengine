@@ -8,7 +8,7 @@ ZWRITE(ENABLE);
 BLEND(ONE, ZERO);
 CULL(NONE);
 
-VAO_STRUCT! vin{
+VAO_STRUCT! vin {
     vertex  : float3,
     uv      : float2,
     normal  : float3,
@@ -43,16 +43,15 @@ public func vert(v: vin)
     };
 }
 
+let NearestSampler  = sampler2d::create(NEAREST, NEAREST, NEAREST, REPEAT, REPEAT);
+let Albedo          = uniform_texture:<texture2d>("Albedo", NearestSampler, 0);
+
+let self_glowing    = uniform("SelfGlowing", float::one);
+
 public func frag(vf: v2f)
 {
-    let nearest_repeat = sampler2d::create(NEAREST, NEAREST, NEAREST, REPEAT, REPEAT);
-    let Albedo = uniform_texture:<texture2d>("Albedo", nearest_repeat, 0);
-
-    let albedo_color = texture(Albedo, vf.uv);
-    let self_glowing = uniform("SelfGlowing", float::one);
-
     return fout{
-        albedo = alphatest(albedo_color),
+        albedo = alphatest(texture(Albedo, vf.uv)),
         self_luminescence = float4::create(albedo_color->xyz * self_glowing, 1.),
         vspace_position = float4::create(vf.vpos, 1.),
         vspace_normalize = float4::create(vf.vnorm, 1.),

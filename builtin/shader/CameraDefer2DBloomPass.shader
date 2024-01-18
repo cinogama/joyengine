@@ -9,8 +9,7 @@ ZWRITE  (DISABLE);
 BLEND   (ONE, ZERO);
 CULL    (BACK);
 
-VAO_STRUCT!vin
-{
+VAO_STRUCT! vin {
     vertex: float3,
     uv : float2,
 };
@@ -77,14 +76,16 @@ func multi_samping_glowing_bloom(tex: texture2d, uv : float2, bias : float)
     return gos_rgb_hdr_brightness * gos_rgb + (1. - gos_rgb_hdr_brightness) * rgb;
 }
 
+let LinearSampler   = sampler2d::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
+let Light           = uniform_texture:<texture2d>("Light", LinearSampler, 0);
+let Albedo          = je_light2d_defer_albedo;
+let SelfLumine      = je_light2d_defer_self_luminescence;
+// let VPosition       = je_light2d_defer_vspace_position;
+// let VNormalize      = je_light2d_defer_vspace_normalize;
+// let Shadow          = je_light2d_defer_shadow;
+
 public func frag(vf: v2f)
 {
-    let nearest_repeat = sampler2d::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
-
-    let Light = uniform_texture:<texture2d>("Light", nearest_repeat, 0);
-    let Albedo = je_light2d_defer_albedo;
-    let SelfLumine = je_light2d_defer_self_luminescence;
-
     let albedo_color_rgb = pow(texture(Albedo, vf.uv)->xyz, float3::new(2.2, 2.2, 2.2));
 
     let glowing_color_rgb = 

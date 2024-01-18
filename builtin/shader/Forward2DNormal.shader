@@ -66,12 +66,12 @@ func transed_normal_tangent_map(normal_map: texture2d, vertex_info : v2f)
     );
 }
 
+let NearestSampler  = sampler2d::create(NEAREST, NEAREST, NEAREST, REPEAT, REPEAT);
+let Albedo          = uniform_texture:<texture2d>("Albedo", NearestSampler, 0);
+let Normalize       = uniform_texture:<texture2d>("Normalize", NearestSampler, 1);
+
 public func frag(vf: v2f)
 {
-    let nearest_repeat = sampler2d::create(NEAREST, NEAREST, NEAREST, REPEAT, REPEAT);
-    let Albedo = uniform_texture:<texture2d>("Albedo", nearest_repeat, 0);
-    let Normalize = uniform_texture:<texture2d>("Normalize", nearest_repeat, 1);
-
     return fout{
         albedo = alphatest(texture(Albedo, vf.uv)),
         self_luminescence = float4::zero,

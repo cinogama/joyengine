@@ -68,20 +68,21 @@ func apply_parallel_light_effect(
         * je_color->xyz;
 }
 
+//let Albedo      = je_light2d_defer_albedo;
+//let SelfLumine  = je_light2d_defer_self_luminescence;
+//let VPosition   = je_light2d_defer_vspace_position;
+let VNormalize  = je_light2d_defer_vspace_normalize;
+let Shadow      = je_light2d_defer_shadow;
+
+let normal_z_offset = uniform("normal_z_offset", float::one);
+
 public func frag(vf: v2f)
 {
-    // let albedo_buffer = je_light2d_defer_albedo;
-    // let self_lumine = je_light2d_defer_self_luminescence;
-    // let vspace_position = je_light2d_defer_vspace_position;
-    let vspace_normalize = je_light2d_defer_vspace_normalize;
-    let shadow_buffer = je_light2d_defer_shadow;
-
     let uv = uvframebuf((vf.pos->xy / vf.pos->w + float2::new(1., 1.)) /2.);
-    let shadow_factor = multi_sampling_for_bias_shadow(shadow_buffer, je_light2d_resolutin, uv);
+    let shadow_factor = multi_sampling_for_bias_shadow(Shadow, je_light2d_resolutin, uv);
 
-    let normal_z_offset = uniform("normal_z_offset", float::one);
     let vnormalize = normalize(
-        texture(vspace_normalize, uv)->xyz - float3::create(0., 0., normal_z_offset));
+        texture(VNormalize, uv)->xyz - float3::create(0., 0., normal_z_offset));
 
     return fout{
         color = float4::create(

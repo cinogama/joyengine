@@ -82,20 +82,20 @@ func apply_point_light_effect(
         * je_color->xyz;
 }
 
+// let Albedo       = je_light2d_defer_albedo;
+// let SelfLumine   = je_light2d_defer_self_luminescence;
+let VPosition   = je_light2d_defer_vspace_position;
+let VNormalize  = je_light2d_defer_vspace_normalize;
+let Shadow      = je_light2d_defer_shadow;
+
 public func frag(vf: v2f)
-{
-    // let Albedo = je_light2d_defer_albedo;
-    // let SelfLumine = je_light2d_defer_self_luminescence;
-    let VSpacePosition = je_light2d_defer_vspace_position;
-    let VSpaceNormalize = je_light2d_defer_vspace_normalize;
-    let Shadow = je_light2d_defer_shadow;
-   
+{  
     let uv = uvframebuf((vf.pos->xy / vf.pos->w + float2::new(1., 1.)) /2.);
 
     let pixvpos = vf.vpos->xyz / vf.vpos->w;
 
-    let vposition = texture(VSpacePosition, uv)->xyz;
-    let vnormalize = texture(VSpaceNormalize, uv)->xyz;
+    let vposition = texture(VPosition, uv)->xyz;
+    let vnormalize = texture(VNormalize, uv)->xyz;
     let uvdistance = clamp(length((vf.uv - float2::new(0.5, 0.5)) * 2.), 0., 1.);
     let fgdistance = distance(vposition, pixvpos);
 

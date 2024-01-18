@@ -27,9 +27,11 @@ public func vert(v: vin)
     };
 }
 
+let color   = uniform("Color", float4::one);
+
 public func frag(_: v2f)
 {
     return fout{
-        color = uniform("Color", float4::one)
+        color = color,
     };
 }

@@ -39,10 +39,11 @@ public func vert(v: vin)
     };
 }
 
+let color   = uniform("Color", float4::one);
+let decay   = uniform("Decay", float::one);
+
 public func frag(vf: v2f)
 {
-    let color = uniform("Color", float4::one);
-    let decay = uniform("Decay", float::one);
     let dv = clamp(1. - length((vf.uv - float2::new(0.5, 0.5)) * 2.), 0., 1.);
 
     return fout{
