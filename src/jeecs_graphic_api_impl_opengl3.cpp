@@ -394,7 +394,7 @@ namespace jeecs::graphic::api::gl3
         {
             if (blob != nullptr)
             {
-                auto* shader_blob = std::launder(reinterpret_cast<gl_resource_blob*>(blob));
+                auto* shader_blob = std::launder(reinterpret_cast<jegl3_resource_blob*>(blob));
                 GLuint shader_program = glCreateProgram();
                 glAttachShader(shader_program, shader_blob->m_vertex_shader);
                 glAttachShader(shader_program, shader_blob->m_fragment_shader);
