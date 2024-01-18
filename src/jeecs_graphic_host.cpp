@@ -128,7 +128,14 @@ namespace jeecs
                 if (host_graphic_api == jegl_using_dx11_apis)
                     config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " DirectX11)";
                 else if (host_graphic_api == jegl_using_opengl3_apis)
-                    config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " OpenGl3)";
+#ifdef JE_ENABLE_GL330_GAPI
+                    config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " OpenGl3.3)";
+#else
+                    config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " OpenGlES3.0)";
+#   ifndef JE_ENABLE_GLES300_GAPI
+#       error Unknown opengl version.            
+#   endif
+#endif
                 else if (host_graphic_api == jegl_using_vk130_apis)
                     config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " Vulkan1.3)";
                 else if (host_graphic_api == jegl_using_metal_apis)
@@ -136,7 +143,7 @@ namespace jeecs
                 else if (host_graphic_api == jegl_using_none_apis)
                     config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " None)";
                 else
-                    config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " Custon Graphic API)";
+                    config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " Custom Graphic API)";
                 
                 config.m_enable_resize = true;
                 config.m_fps = 0;               // 使用垂直同步

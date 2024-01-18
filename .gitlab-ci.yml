@@ -121,8 +121,10 @@ build_win64_dx11_opengl_vk:
   artifacts:
     name: jeecs-win32-release-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHA
     paths:
-      - build/*.exe
-      - build/*.dll
+      - build/jedriver.exe
+      - build/OpenAL32.dl
+      - build/libjoyecs.dll
+      - build/libwoo.dll
       - build/libjoyecs.lib
       - build/libwoo.lib
       - build/libjoyecs.pdb
