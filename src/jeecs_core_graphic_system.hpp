@@ -584,7 +584,7 @@ public let frag =
                         current_camera.clear->color.z,
                         current_camera.clear->color.w
                     };
-                    //jegl_rchain_clear_color_buffer(rend_chain, clear_buffer_color);
+                    jegl_rchain_clear_color_buffer(rend_chain, clear_buffer_color);
                 }
 
                 // Clear depth buffer to overwrite pixels.
@@ -844,7 +844,7 @@ public let frag =
                         current_camera.clear->color.z,
                         current_camera.clear->color.w
                     };
-                    //jegl_rchain_clear_color_buffer(rend_chain, clear_buffer_color);
+                    jegl_rchain_clear_color_buffer(rend_chain, clear_buffer_color);
                 }
 
                 // Clear depth buffer to overwrite pixels.
@@ -1919,7 +1919,16 @@ public func frag(_: v2f)
                         light2d_rend_aim_buffer,
                         0, 0, 0, 0);
 
-                    jegl_rchain_clear_color_buffer(rend_chain, nullptr);
+                    if (current_camera.clear != nullptr)
+                    {
+                        float clear_buffer_color[] = {
+                            current_camera.clear->color.x,
+                            current_camera.clear->color.y,
+                            current_camera.clear->color.z,
+                            current_camera.clear->color.w
+                        };
+                        jegl_rchain_clear_color_buffer(rend_chain, clear_buffer_color);
+                    }
                     jegl_rchain_clear_depth_buffer(rend_chain);
                 }
                 else
@@ -1945,7 +1954,7 @@ public func frag(_: v2f)
                             current_camera.clear->color.z,
                             current_camera.clear->color.w
                         };
-                        //jegl_rchain_clear_color_buffer(rend_chain, clear_buffer_color);
+                        jegl_rchain_clear_color_buffer(rend_chain, clear_buffer_color);
                     }
 
                     // Clear depth buffer to overwrite pixels.
@@ -2201,7 +2210,7 @@ public func frag(_: v2f)
                             current_camera.clear->color.z,
                             current_camera.clear->color.w
                         };
-                        //jegl_rchain_clear_color_buffer(final_target_rend_chain, clear_buffer_color);
+                        jegl_rchain_clear_color_buffer(final_target_rend_chain, clear_buffer_color);
                     }
 
                     // Clear depth buffer to overwrite pixels.
