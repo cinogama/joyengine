@@ -122,7 +122,7 @@ build_win64_dx11_opengl_vk:
     name: jeecs-win32-release-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHA
     paths:
       - build/jedriver.exe
-      - build/OpenAL32.dl
+      - build/OpenAL32.dll
       - build/libjoyecs.dll
       - build/libwoo.dll
       - build/libjoyecs.lib
