@@ -40,6 +40,9 @@ namespace editor::gui::edit_forms
             if (fsys::extension(originpath)->lower == ".jetileset4")
                 return Action::SKIP;  // 跳过tileset文件
             
+            if (fsys::filename(originpath)->lower == "imgui.ini")
+                return Action::SKIP;  // 跳过imgui.ini
+
             if (fsys::extension(originpath)->lower == ".dmp")
                 return Action::SKIP;  // 跳过崩溃转储文件
 
@@ -87,6 +90,9 @@ namespace editor::gui::edit_forms
             if (packpath->lower->find("/.runtime/") != -1)
                 return Action::SKIP;  // 跳过缓存文件
 
+            if (packpath->lower->find("/.export/") != -1)
+                return Action::SKIP;  // 跳过导出目录，尽管这个目录正常情况下本身也会被删掉
+
             if (packpath->lower->find("/.temporary/") != -1)
                 return Action::SKIP;  // 跳过临时文件
             
@@ -127,7 +133,6 @@ namespace editor::gui::edit_forms
                         return [(subpath, (packpath, action))];
                     }
                     ->  mapping;
-
                 
                 // 0. 重新编译所有C++项目，只编译到输出目录中
                 // P.S. 这个序号真牛逼，人家都是1 2 3，这里是1 2 0 哈哈哈

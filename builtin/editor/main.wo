@@ -361,6 +361,7 @@ func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: di
 /.temporary/*
 /imgui.ini
 /*.dmp
+/*.jecache4
 /project.jeproj4.lock
 "@);
                             do fsys::writeall(p.m_path / ".gitattributes", 

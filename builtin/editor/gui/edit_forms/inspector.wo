@@ -149,17 +149,17 @@ namespace editor::gui::edit_forms
                         value(cur_e)?
                         { 
                             let eeid = jeapi::debug::get_entity_editor_id(cur_e);
+                            let current_entity_chunk_info = cur_e->chunkinfo;
 
                             do BeginChildSize("basic_info", 0., 120.);
                             Text("实体名");
                             SameLine();
-                            do InputText("##entity_name", cur_e->editor::name())->> func(new_name)
+                            do InputText(F"##entity_name##{current_entity_chunk_info}", cur_e->editor::name())->> func(new_name)
                                 {
                                     if (!context->get_project->is_debugging)
                                         cur_e->editor::set_name(new_name);
                                 };
 
-                            let current_entity_chunk_info = cur_e->chunkinfo;
                             Text(current_entity_chunk_info);                    
 
                             let (chunk_size, entity_size, entity_count) = je::editor::get_entity_arch_information(cur_e);
