@@ -2331,10 +2331,10 @@ namespace je
     }
 
     extern("libjoyecs", "wojeapi_deltatime")
-    public func real_deltatime()=> real;
+    public func deltatime()=> real;
 
     extern("libjoyecs", "wojeapi_smooth_deltatime")
-    public func deltatime()=> real;
+    public func smooth_deltatime()=> real;
 
     extern("libjoyecs", "wojeapi_startup_coroutine")
     public func start_coroutine<FT, ArgTs>(f: FT, args: ArgTs)=> void
