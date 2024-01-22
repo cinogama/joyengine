@@ -354,15 +354,18 @@ func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: di
                             do fsys::copy(fsys::normalize(F"{std::exepath()}/builtin/shader"), fsys::normalize(F"{p.m_path}/resource/shader"));
                             do fsys::copy(fsys::normalize(F"{std::exepath()}/builtin/font"), fsys::normalize(F"{p.m_path}/resource/font"));
                             do fsys::writeall(p.m_path / ".gitignore", 
-@"# JoyEngine ECS
+@"# JoyEngine ECS git ignore config.
 
 /.export/*
 /.runtime/*
 /.temporary/*
 /imgui.ini
 /*.dmp
-/*.jecache4
 /project.jeproj4.lock
+
+# Ignore cache files.
+*.jecache4
+
 "@);
                             do fsys::writeall(p.m_path / ".gitattributes", 
 @"# JoyEngine ECS
