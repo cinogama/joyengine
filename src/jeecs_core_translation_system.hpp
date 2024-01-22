@@ -107,12 +107,12 @@ namespace jeecs
         {
             m_anchor_list.clear();
 
-            select_from(get_world())
-                .exec(&TranslationUpdatingSystem::UpdateAnchorTransPair)
-                .exec(&TranslationUpdatingSystem::LocalToWorldUpdate)
-                .exec(&TranslationUpdatingSystem::LocalToParentUpdate)
-                .exec(&TranslationUpdatingSystem::LocalToWorldTrans)
-                .exec(&TranslationUpdatingSystem::LocalToParentTrans);
+            auto& selector = select_begin();
+            selector.exec(&TranslationUpdatingSystem::UpdateAnchorTransPair);
+            selector.exec(&TranslationUpdatingSystem::LocalToWorldUpdate);
+            selector.exec(&TranslationUpdatingSystem::LocalToParentUpdate);
+            selector.exec(&TranslationUpdatingSystem::LocalToWorldTrans);
+            selector.exec(&TranslationUpdatingSystem::LocalToParentTrans);
         }
     };
 }

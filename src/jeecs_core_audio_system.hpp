@@ -20,9 +20,9 @@ namespace jeecs
 
         void CommitUpdate()
         {
-            select_from(get_world());
-            
-            select().exec([this](Audio::Listener& listener, Transform::Translation& trans) 
+            auto& selector = select_begin();
+
+            selector.exec([this](Audio::Listener& listener, Transform::Translation& trans)
                 {
                     audio::listener::set_position(trans.world_position);
                     audio::listener::set_direction(trans.world_rotation);
@@ -32,7 +32,8 @@ namespace jeecs
                     listener.last_position = trans.world_position;
                     audio::listener::set_velocity(velocity);
                 });
-            select().exec([this](Audio::Source& source, Transform::Translation& trans)
+
+            selector.exec([this](Audio::Source& source, Transform::Translation& trans)
                 {
                     source.source->set_position(trans.world_position);
                     source.source->set_pitch(source.pitch);
@@ -42,7 +43,8 @@ namespace jeecs
                     source.last_position = trans.world_position;
                     source.source->set_velocity(velocity);
                 });
-            select().exec([this](Audio::Source& source, Audio::Playing& playing)
+
+            selector.exec([this](Audio::Source& source, Audio::Playing& playing)
                 {
                     if (!playing.buffer.has_resource())
                     {

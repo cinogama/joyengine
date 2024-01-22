@@ -27,8 +27,6 @@ namespace jeecs
         std::recursive_mutex _coroutine_list_mx;
         std::list<wo_vm> _coroutine_list;
         
-        double deltatime = 0.;
-
         void dispatch_coroutine_vm(wo_vm vmm)
         {
             std::lock_guard sg1(_coroutine_list_mx);

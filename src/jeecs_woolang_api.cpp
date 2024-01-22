@@ -1951,60 +1951,55 @@ WO_API wo_api wojeapi_typeinfo_get_unregister_count(wo_vm vm, wo_value args, siz
     return wo_ret_int(vm, (wo_integer_t)jedbg_get_unregister_type_count());
 }
 
-std::mutex global_pined_value_list_mx;
-std::unordered_map<std::string, wo_pin_value> global_pined_value_list;
+std::recursive_mutex _jewo_singleton_list_mx;
+std::unordered_map<std::string, wo_pin_value> _jewo_singleton_list;
 
-bool jewo_set_global_pin_value(const char* name, wo_value value)
+wo_pin_value _jewo_create_singleton(wo_vm vm, const char* token, wo_value func)
 {
-    std::lock_guard g1(global_pined_value_list_mx);
-    if (global_pined_value_list.find(name) == global_pined_value_list.end())
+    std::lock_guard g1(_jewo_singleton_list_mx);
+
+    auto fnd = _jewo_singleton_list.find(token);
+    if (fnd != _jewo_singleton_list.end())
+        return fnd->second;
+    else
     {
-        global_pined_value_list[name] = wo_create_pin_value(value);
-        return true;
-    }
-    return false;
+        wo_value ret = wo_invoke_value(vm, func, 0);
+        if (ret != nullptr)
+        {
+            wo_pin_value pinval = wo_create_pin_value(ret);
+            _jewo_singleton_list[token] = pinval;
+            return pinval;
+        }
+        return nullptr;
+    }        
 }
-bool jewo_get_global_pin_value(const char* name, wo_pin_value* out_value)
+void _jewo_clear_singletons()
 {
-    std::lock_guard g1(global_pined_value_list_mx);
-    auto fnd = global_pined_value_list.find(name);
-
-    if (fnd == global_pined_value_list.end())
-        return false;
-
-    *out_value = fnd->second;
-
-    return true;
-}
-void jewo_clear_global_pin_value()
-{
-    std::lock_guard g1(global_pined_value_list_mx);
-    for (auto&[_, p] : global_pined_value_list)
+    std::lock_guard g1(_jewo_singleton_list_mx);
+    for (auto&[_, p] : _jewo_singleton_list)
     {
         wo_close_pin_value(p);
     }
-    global_pined_value_list.clear();
+    _jewo_singleton_list.clear();
 }
 
-WO_API wo_api wojeapi_set_global_value(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_create_singleton(wo_vm vm, wo_value args, size_t argc)
 {
-    return wo_ret_bool(vm, jewo_set_global_pin_value(wo_string(args + 0), args + 1));
-}
-WO_API wo_api wojeapi_get_global_value(wo_vm vm, wo_value args, size_t argc)
-{
-    wo_pin_value out_value;
-    if (WO_TRUE == jewo_get_global_pin_value(wo_string(args + 0), &out_value))
+    wo_pin_value pinvalue = _jewo_create_singleton(vm, wo_string(args + 0), args + 1);
+    if (pinvalue != nullptr)
     {
-        wo_value result = wo_push_empty(vm);
-        wo_read_pin_value(result, out_value);
+        wo_value val = wo_push_empty(vm);
+        wo_read_pin_value(val, pinvalue);
 
-        return wo_ret_option_val(vm, result);
+        return wo_ret_val(vm, val);
     }
-    return wo_ret_option_none(vm);
+    return wo_ret_panic(vm, "Failed to create singleton: '%s': %s.", 
+        wo_string(args + 0), 
+        wo_get_runtime_error(vm));
 }
-WO_API wo_api wojeapi_clear_global_value(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_clear_singletons(wo_vm vm, wo_value args, size_t argc)
 {
-    jewo_clear_global_pin_value();
+    _jewo_clear_singletons();
     return wo_ret_void(vm);
 }
 
@@ -2015,6 +2010,11 @@ import je;
 
 namespace je
 {
+    namespace unsafe
+    {
+        extern("libjoyecs", "wojeapi_create_singleton")
+        public func singleton<T>(token: string, f: ()=>T)=> T;
+    }
     namespace typeinfo
     {
         extern("libjoyecs", "wojeapi_typeinfo_get_unregister_count")
@@ -2187,8 +2187,8 @@ namespace je
     }
     namespace editor
     {
-        extern("libjoyecs", "wojeapi_clear_global_value")
-        public func clear_shared_value()=> void;
+        extern("libjoyecs", "wojeapi_clear_singletons")
+        public func clear_singletons()=> void;
 
         extern("libjoyecs", "wojeapi_editor_register_panic_hook")
         public func register_panic_hook(f: (string, int, string, int, string, string)=> void)=> void;
@@ -2329,12 +2329,6 @@ namespace je
         extern("libjoyecs", "wojeapi_towoo_unregister_component")
         public func unregister_component(t: typeinfo)=> void;
     }
-
-    extern("libjoyecs", "wojeapi_set_global_value")
-    public func init_shared_value(name: string, val: dynamic)=> bool;
-
-    extern("libjoyecs", "wojeapi_get_global_value")
-    public func read_shared_value(name: string)=> option<dynamic>;
 
     extern("libjoyecs", "wojeapi_deltatime")
     public func real_deltatime()=> real;

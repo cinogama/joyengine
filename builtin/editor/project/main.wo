@@ -126,7 +126,9 @@ namespace editor
             if (self->is_debugging)
                 return result::err("已经在调试中，不可重复调试");
 
-            je::editor::clear_shared_value();
+            // 调试开始之前再清除单例
+            je::editor::clear_singletons();
+
             try! dumpped = self->dump_and_close_all_world();
 
             let context = DebugContext {

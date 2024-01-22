@@ -48,7 +48,7 @@ void jetowoo_finish();
 void je_log_finish();
 void jegl_shader_generator_shutdown();
 
-void jewo_clear_global_pin_value();
+void _jewo_clear_singletons();
 
 wo_fail_handler _je_global_old_panic_handler = nullptr;
 wo_vm _je_global_panic_hooker = nullptr;
@@ -374,7 +374,7 @@ void je_finish()
         _je_global_old_panic_handler = nullptr;
     }
 
-    jewo_clear_global_pin_value();
+    _jewo_clear_singletons();
 
     wo_finish([](void*)
         {

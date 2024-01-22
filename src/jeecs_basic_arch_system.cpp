@@ -1824,7 +1824,8 @@ namespace jeecs_impl
             DEBUG_ARCH_LOG("Ready to create ecs_universe: %p.", this);
 
             // Append default jobs for updating systems.
-            je_ecs_universe_register_for_worlds_job(this, default_job_for_execute_sys_update_for_worlds, nullptr, nullptr);
+            je_ecs_universe_register_for_worlds_job(this, 
+                default_job_for_execute_sys_update_for_worlds, nullptr, nullptr);
 
             _m_universe_update_thread_stop_flag.test_and_set();
             _m_universe_update_thread = std::move(std::thread(

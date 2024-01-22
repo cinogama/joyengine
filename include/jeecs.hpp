@@ -9,7 +9,7 @@
 #include "wo.h"
 
 #define JE_VERSION_WRAP(A, B, C) #A "." #B "." #C
-#define JE_CORE_VERSION JE_VERSION_WRAP(4, 4, 5)
+#define JE_CORE_VERSION JE_VERSION_WRAP(4, 4, 6)
 
 #include <cstdint>
 #include <cstring>
@@ -5349,7 +5349,7 @@ namespace jeecs
 #endif
         }
 
-        selector& at(game_world w)
+        inline void select_begin(game_world w)
         {
             if (m_first_time_to_work)
             {
@@ -5364,38 +5364,34 @@ namespace jeecs
 
             m_curstep = 0;
             m_current_world = w;
-            return *this;
         }
 
         template<typename FT>
-        selector& exec(FT&& _exec)
+        inline void exec(FT&& _exec)
         {
             _update(_exec);
-            return *this;
         }
 
         template<typename ... Ts>
-        inline selector& except() noexcept
+        inline void except() noexcept
         {
             if (m_first_time_to_work)
             {
                 auto& depend = m_dependence_caches[m_curstep];
                 _apply_except<Ts...>(depend);
             }
-            return *this;
         }
         template<typename ... Ts>
-        inline selector& contain() noexcept
+        inline void contain() noexcept
         {
             if (m_first_time_to_work)
             {
                 auto& depend = m_dependence_caches[m_curstep];
                 _apply_contain<Ts...>(depend);
             }
-            return *this;
         }
         template<typename ... Ts>
-        inline selector& anyof() noexcept
+        inline void anyof() noexcept
         {
             if (m_first_time_to_work)
             {
@@ -5403,7 +5399,6 @@ namespace jeecs
                 _apply_anyof<Ts...>(depend, m_any_id);
                 ++m_any_id;
             }
-            return *this;
         }
     };
 
@@ -5494,19 +5489,19 @@ namespace jeecs
         {
         }
 
-        inline double real_deltatimed() const
+        inline double deltatimed() const
         {
             return _m_game_world.get_universe().get_real_deltatimed();
         }
-        inline float real_deltatime()const
+        inline float deltatime()const
         {
             return _m_game_world.get_universe().get_real_deltatime();
         }
-        inline double deltatimed() const
+        inline double smooth_deltatimed() const
         {
             return _m_game_world.get_universe().get_smooth_deltatimed();
         }
-        inline float deltatime()const
+        inline float smooth_deltatime()const
         {
             return _m_game_world.get_universe().get_smooth_deltatime();
         }
@@ -5527,13 +5522,9 @@ namespace jeecs
         }
 
         // Select from default selector
-        // ATTENTION: Not thread safe!
-        inline selector& select_from(game_world w) noexcept
+        inline selector& select_begin() noexcept
         {
-            return _m_default_selector.at(w);
-        }
-        inline selector& select() noexcept
-        {
+            _m_default_selector.select_begin(get_world());
             return _m_default_selector;
         }
 

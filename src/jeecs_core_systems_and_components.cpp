@@ -17,7 +17,7 @@ WO_API wo_api wojeapi_deltatime(wo_vm vm, wo_value args, size_t argc)
         return wo_ret_real(vm, 0.);
     }
 
-    return wo_ret_real(vm, jeecs::ScriptRuntimeSystem::system_instance->real_deltatimed());
+    return wo_ret_real(vm, jeecs::ScriptRuntimeSystem::system_instance->deltatime());
 }
 
 WO_API wo_api wojeapi_smooth_deltatime(wo_vm vm, wo_value args, size_t argc)

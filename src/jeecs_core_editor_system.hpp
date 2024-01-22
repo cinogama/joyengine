@@ -750,71 +750,76 @@ public let frag =
             }
             _inputs._wheel_count_record = (int)input::wheel(0).y;
 
-            select_from(get_world())
-                // 获取被选中的实体
-                .exec([this](game_entity e)
+            auto& selector = select_begin();
+
+            // 获取被选中的实体
+            selector.exec([this](game_entity e)
+                {
+                    if (e.get_euid() == jedbg_get_editing_entity_uid())
+                        _inputs.selected_entity = std::optional(e);
+                }
+            );
+
+            // Move walker(root)
+            selector.contain<Editor::EditorWalker>();
+            selector.except<Camera::Projection>();
+            selector.exec(&DefaultEditorSystem::MoveWalker);
+
+            // Move walker(camera)
+            selector.contain<Editor::EditorWalker>();
+            selector.exec(&DefaultEditorSystem::CameraWalker);
+
+            // Select entity
+            selector.except<Editor::Invisable>();
+            selector.anyof<Renderer::Shape, Renderer::Shaders, Renderer::Textures>();
+            selector.exec(&DefaultEditorSystem::SelectEntity);
+
+            // Create & create mover!
+            selector.exec(&DefaultEditorSystem::UpdateAndCreateMover);
+            selector.exec([this](
+                Editor::EntitySelectBox&,
+                Transform::Translation& trans,
+                Transform::LocalScale& localScale,
+                Transform::LocalRotation& localRotation)
+                {
+                    if (const game_entity* current = _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr)
                     {
-                        if (e.get_euid() == jedbg_get_editing_entity_uid())
-                            _inputs.selected_entity = std::optional(e);
+                        float distance =
+                            _camera_ortho_porjection == nullptr
+                            ? 0.25f * (_camera_pos - trans.world_position).length()
+                            : 1.0f / _camera_ortho_porjection->scale;
+
+                        localRotation.rot = math::quat();
+                        auto* etrans = _inputs.selected_entity.value().get_component<Transform::Translation>();
+                        if (etrans != nullptr)
+                        {
+                            localScale.scale = etrans->local_scale;
+                            if (_coord != coord_mode::local && _mode != Editor::EntityMover::mover_mode::scale)
+                                localRotation.rot = etrans->world_rotation;
+                        }
+
+                        if (auto* eshape = _inputs.selected_entity.value().get_component<Renderer::Shape>())
+                            localScale.scale = localScale.scale * (
+                                eshape->vertex.has_resource() == false
+                                ? jeecs::math::vec3(1.0f, 1.0f, 0.0f)
+                                : jeecs::math::vec3(
+                                    eshape->vertex.get_resource()->resouce()->m_raw_vertex_data->m_size_x,
+                                    eshape->vertex.get_resource()->resouce()->m_raw_vertex_data->m_size_y,
+                                    eshape->vertex.get_resource()->resouce()->m_raw_vertex_data->m_size_z
+                                ));
+
+                        localScale.scale = 1.05f * localScale.scale;
                     }
-                )
-                // Move walker(root)
-                .contain<Editor::EditorWalker>()
-                .except<Camera::Projection>()
-                .exec(&DefaultEditorSystem::MoveWalker)
-                // Move walker(camera)
-                .contain<Editor::EditorWalker>()
-                .exec(&DefaultEditorSystem::CameraWalker)
-                // Select entity
-                .except<Editor::Invisable>()
-                .anyof<Renderer::Shape, Renderer::Shaders, Renderer::Textures>()
-                .exec(&DefaultEditorSystem::SelectEntity)
-                // Create & create mover!
-                .exec(&DefaultEditorSystem::UpdateAndCreateMover)
-                .exec([this](
-                    Editor::EntitySelectBox&, 
-                    Transform::Translation& trans, 
-                    Transform::LocalScale& localScale, 
-                    Transform::LocalRotation& localRotation)
+                    else
                     {
-                        if (const game_entity* current = _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr)
-                        {
-                            float distance =
-                                _camera_ortho_porjection == nullptr
-                                ? 0.25f * (_camera_pos - trans.world_position).length()
-                                : 1.0f / _camera_ortho_porjection->scale;
-
-                            localRotation.rot = math::quat();
-                            auto* etrans = _inputs.selected_entity.value().get_component<Transform::Translation>();
-                            if (etrans != nullptr)
-                            {
-                                localScale.scale = etrans->local_scale;
-                                if (_coord != coord_mode::local && _mode != Editor::EntityMover::mover_mode::scale)
-                                    localRotation.rot = etrans->world_rotation;
-                            }
-
-                            if (auto* eshape = _inputs.selected_entity.value().get_component<Renderer::Shape>())
-                                localScale.scale = localScale.scale * (
-                                    eshape->vertex.has_resource() == false
-                                    ? jeecs::math::vec3(1.0f, 1.0f, 0.0f)
-                                    : jeecs::math::vec3(
-                                        eshape->vertex.get_resource()->resouce()->m_raw_vertex_data->m_size_x,
-                                        eshape->vertex.get_resource()->resouce()->m_raw_vertex_data->m_size_y,
-                                        eshape->vertex.get_resource()->resouce()->m_raw_vertex_data->m_size_z
-                                    ));
-
-                            localScale.scale = 1.05f * localScale.scale;
-                        }
-                        else
-                        {
-                            // Hide the mover
-                            localScale.scale = math::vec3(0, 0, 0);
-                        }
+                        // Hide the mover
+                        localScale.scale = math::vec3(0, 0, 0);
                     }
-                )
-                // Mover mgr          
-                .exec(&DefaultEditorSystem::MoveEntity)
-                ;
+                }
+            );
+
+            // Mover mgr          
+            selector.exec(&DefaultEditorSystem::MoveEntity);
 
             if (!_editor_enabled)
                 return;
