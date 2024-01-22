@@ -535,7 +535,7 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                                 context->get_project(), new_world_name, fsys::normalize(F"{current_work_path}/{new_world_name}.jeworld"),
                                 func (w)
                                 {
-                                    if (context->get_project()->serialize_world(w)
+                                    if (context->get_project()->serialize_world(w, true)
                                             ->> \wdat = write_file_if_not_exist(
                                                 fsys::normalize(F"{current_work_path}/{new_world_name}.jeworld"), 
                                                 wdat as dict<string, dynamic>: string)

@@ -169,7 +169,7 @@ namespace editor
                         ->> \ew = ew == pw.m_world_instance;
                         ->  valor(false) as bool: dynamic)] 
                     | [] 
-                    where dat = self->serialize_world(pw.m_world_instance)
+                    where dat = self->serialize_world(pw.m_world_instance, true)
                     ;
                 ;
             
@@ -880,7 +880,7 @@ namespace editor
         {
             return jeapi::serialize::entity(e, false);
         }
-        public func serialize_world(self: Project, w: je::world)
+        public func serialize_world(self: Project, w: je::world, contain_debug_camera: bool)
         {
             return self->get_project_world(w)
                 =>> \pw = jeapi::serialize::world(w, true)->okay
@@ -901,39 +901,42 @@ namespace editor
                                     \l, r = (l as string) < (r as string);
                                 ): dynamic);
 
-                            let debug_camera_root_trans = gui::edit_forms::get_debug_camera_root(w)
-                                =>> \e = e->towoo::get_component :<Transform::Translation>;
-                                ;
-                            let debug_camera = gui::edit_forms::get_debug_camera(w);
-                            let debug_camera_rot = debug_camera
-                                =>> \e = e->towoo::get_component :<Transform::LocalRotation>;
-                                ->> \r = r.rot->get;
-                                ;
-
-                            match (debug_camera_root_trans)
+                            if (contain_debug_camera)
                             {
-                            value(trans)?
+                                let debug_camera_root_trans = gui::edit_forms::get_debug_camera_root(w)
+                                    =>> \e = e->towoo::get_component :<Transform::Translation>;
+                                    ;
+                                let debug_camera = gui::edit_forms::get_debug_camera(w);
+                                let debug_camera_rot = debug_camera
+                                    =>> \e = e->towoo::get_component :<Transform::LocalRotation>;
+                                    ->> \r = r.rot->get;
+                                    ;
+
+                                match (debug_camera_root_trans)
                                 {
-                                    let pos = trans->get_global_pos;
-                                    let rot = trans->get_global_rot;
+                                value(trans)?
+                                    {
+                                        let pos = trans->get_global_pos;
+                                        let rot = trans->get_global_rot;
 
-                                    let crot = debug_camera_rot->valor(quat::ident);
+                                        let crot = debug_camera_rot->valor(quat::ident);
 
-                                    let debug_camera_info = {
-                                        ["root_position"] = [pos[0], pos[1], pos[2]]: dynamic,
-                                        ["root_rotation"] = [rot[0], rot[1], rot[2], rot[3]]: dynamic,
-                                        ["camera_rotation"] = [crot[0], crot[1], crot[2], crot[3]]: dynamic,
-                                        ["camera_in_2d_mode"] = debug_camera
-                                            =>> \e = e->towoo::get_component :<Camera::OrthoProjection>;
-                                            ->  has: dynamic,
-                                        ["camera_in_2d_light"] = debug_camera
-                                            =>> \e = e->towoo::get_component :<Light2D::CameraPostPass>;
-                                            ->  has: dynamic,
-                                    };
+                                        let debug_camera_info = {
+                                            ["root_position"] = [pos[0], pos[1], pos[2]]: dynamic,
+                                            ["root_rotation"] = [rot[0], rot[1], rot[2], rot[3]]: dynamic,
+                                            ["camera_rotation"] = [crot[0], crot[1], crot[2], crot[3]]: dynamic,
+                                            ["camera_in_2d_mode"] = debug_camera
+                                                =>> \e = e->towoo::get_component :<Camera::OrthoProjection>;
+                                                ->  has: dynamic,
+                                            ["camera_in_2d_light"] = debug_camera
+                                                =>> \e = e->towoo::get_component :<Light2D::CameraPostPass>;
+                                                ->  has: dynamic,
+                                        };
 
-                                    mdat->set("debug_camera", debug_camera_info: dynamic);
+                                        mdat->set("debug_camera", debug_camera_info: dynamic);
+                                    }
+                                none?;
                                 }
-                            none?;
                             }
                             return mdat->unsafe::cast :<typeof(dat)>;
                         }
@@ -1026,7 +1029,7 @@ namespace editor
         }
         public func save_world(self: Project, w: je::world)
         {
-            return self->serialize_world(w)
+            return self->serialize_world(w, false)
                 ->> \dat = fsys::writeall(self.m_path / dat["path"]: string, dat as dict<string, dynamic>: string);
                 ->  valor(false);
         }
