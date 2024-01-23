@@ -43,10 +43,11 @@ namespace jeapi::welcome
                     Separator();
 
                     Text("第三方组件及开源许可");
-                    TextDisabled("* 所有第三方组件的原始开源协议(或授权信息)可在 licenses 目录中找到");
+                    TextDisabled("* 所有第三方组件的原始开源协议(或授权信息)可在 licenses 目录中找到，此处仅包含引");
+                    TextDisabled("  擎'直接'引用的第三方组件的授权信息。");
                     TextDisabled("* 部分第三方组件经过修改，以下链接均指向组件的原始版本，若需获取实际使用的版本：");
                     TextDisabled("  可以在 https://git.cinogama.net/cinogamaproject 找到实际使用的第三方组件源码");
-                    do BeginChildSize("##copyrights", 700., 500.);
+                    do BeginChildSize("##copyrights", 800., 300.);
 
                     Text("OpenAL Soft https://openal-soft.org");
                     TextDisabled("Copyright (C) kcat.");

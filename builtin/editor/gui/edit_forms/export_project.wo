@@ -386,6 +386,14 @@ namespace editor::gui::edit_forms
                             // 2. 结束，保存镜像
                             fimg->finish();
 
+                            config.m_pack_output_log->add(F"正在复制引擎使用的第三方许可证");
+                            match (fsys::copy(fsys::parent(fsys::normalize(std::args()[0])) / "licenses", export_path/"licenses"))
+                            {
+                            err(errnumber)?
+                                config.m_pack_output_log->add(F"无法复制引擎使用的第三方许可证，错误码：{errnumber}");
+                            ok(_)?;
+                            }
+
                             config.m_pack_output_log->add("打包完成");
 
                             config.m_finished = true;
