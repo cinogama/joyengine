@@ -1012,8 +1012,8 @@ public func vert(v: vin)
 }
 public func frag(vf: v2f)
 {
-    let linear_clamp = sampler2d::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
-    let Main = uniform_texture:<texture2d>("Main", linear_clamp, 0);
+    let nearest_clamp = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
+    let Main = uniform_texture:<texture2d>("Main", nearest_clamp, 0);
     let final_shadow = alphatest(float4::create(je_color->xyz, texture(Main, vf.uv)->w));
 
     return fout{
