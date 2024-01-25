@@ -183,15 +183,22 @@ namespace jeecs::graphic::api::gl3
     jegl_graphic_api::update_action gl_pre_update(jegl_context::userdata_t ctx)
     {
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
-        context->swap();
-
-        auto update_result = context->update();
-        if (update_result & basic_interface::update_result::CLOSING)
+        switch (context->update())
         {
+        case basic_interface::update_result::CLOSE:
             if (jegui_shutdown_callback())
                 return jegl_graphic_api::update_action::STOP;
+            /*fallthrough*/
+        case basic_interface::update_result::PAUSE:
+            return jegl_graphic_api::update_action::SKIP;
+        case basic_interface::update_result::RESIZE:
+            /*fallthrough*/
+        case basic_interface::update_result::NORMAL:
+            context->swap_for_opengl();
+            return jegl_graphic_api::update_action::CONTINUE;
+        default:
+            abort();
         }
-        return jegl_graphic_api::update_action::CONTINUE;
     }
 
     jegl_graphic_api::update_action gl_commit_update(jegl_context::userdata_t)

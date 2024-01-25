@@ -116,7 +116,7 @@ namespace jeecs::graphic
             else
                 eglSwapInterval(m_context.m_display, 0);
         }
-        virtual void swap() override
+        virtual void swap_for_opengl() override
         {
             eglSwapBuffers(m_context.m_display, m_context.m_surface);
         }
@@ -128,17 +128,25 @@ namespace jeecs::graphic
             EGLint height;
             eglQuerySurface(m_context.m_display, m_context.m_surface, EGL_HEIGHT, &height);
 
-            update_result result = update_result::NORMAL;
+            bool _window_size_resized = false;
 
             if (m_interface_width != (size_t)width || m_interface_height != (size_t)height)
-                result = (update_result)(result | update_result::RESIZED);
+            {
+                m_interface_width = (size_t)width;
+                m_interface_height = (size_t)height;
 
-            m_interface_width = (size_t)width;
-            m_interface_height = (size_t)height;
+                je_io_update_windowsize((int)width, (int)height);
 
-            je_io_update_windowsize((int)width, (int)height);
+                _window_size_resized = true;
+            }
 
-            return result;
+            if (m_interface_width == 0 || m_interface_height == 0)
+                return update_result::PAUSE;
+
+            if (_window_size_resized)
+                return update_result::RESIZE;
+
+            return update_result::CLOSE;
         }
         virtual void shutdown(bool reboot) override
         {

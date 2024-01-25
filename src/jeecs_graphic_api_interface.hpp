@@ -20,12 +20,13 @@ namespace jeecs::graphic
         enum update_result : uint8_t
         {
             NORMAL = 0,
-            RESIZED = 1 << 0,
-            CLOSING = 1 << 1,
+            PAUSE,
+            RESIZE,
+            CLOSE,
         };
 
         virtual void create_interface(jegl_context* thread, const jegl_interface_config* config) = 0;
-        virtual void swap() = 0;
+        virtual void swap_for_opengl() = 0;
         virtual update_result update() = 0;
         virtual void shutdown(bool reboot) = 0;
 

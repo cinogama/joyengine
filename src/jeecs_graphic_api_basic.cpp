@@ -401,6 +401,10 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
             break;
         case jegl_graphic_api::update_action::SKIP:
             // Skip current frame.
+            if (thread->m_config.m_fps == 0)
+                // If vsync is available, wait for 1./120. sec here to decrease CPU usage.
+                je_clock_sleep_for(1./120.);
+            
             break;
         }
 

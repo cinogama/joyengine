@@ -3036,50 +3036,22 @@ VK_API_PLATFORM_API_LIST
 
             ++_vk_command_commit_round;
         }
-        bool update()
+        void update()
         {
             // 开始录制！
             _vk_last_command_buffer_semaphore = _vk_command_buffer_allocator->allocate_semaphore();
             _vk_wait_for_last_command_buffer_stage = VkPipelineStageFlagBits::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
-            for (;;)
+            if (VkResult::VK_SUCCESS != vkAcquireNextImageKHR(
+                _vk_logic_device,
+                _vk_swapchain,
+                UINT64_MAX,
+                _vk_last_command_buffer_semaphore,
+                VK_NULL_HANDLE,
+                &_vk_presenting_swapchain_image_index))
             {
-                if (_vk_jegl_interface->m_interface_width != 0 &&
-                    _vk_jegl_interface->m_interface_height != 0)
-                {
-                    auto state = vkAcquireNextImageKHR(
-                        _vk_logic_device,
-                        _vk_swapchain,
-                        UINT64_MAX,
-                        _vk_last_command_buffer_semaphore,
-                        VK_NULL_HANDLE,
-                        &_vk_presenting_swapchain_image_index);
-
-                    if (state == VkResult::VK_ERROR_OUT_OF_DATE_KHR || state == VkResult::VK_SUBOPTIMAL_KHR)
-                    {
-                        jegui_shutdown_vk130(true);
-                        recreate_swap_chain_for_current_surface(
-                            _vk_jegl_interface->m_interface_width,
-                            _vk_jegl_interface->m_interface_height
-                        );
-                        imgui_init();
-                    }
-                    else if (state != VkResult::VK_SUCCESS)
-                    {
-                        jeecs::debug::logfatal("Failed to acquire swap chain image.");
-                    }
-                    else
-                        break;
-                }
-                else
-                {
-                    _vk_presenting_swapchain_image_index = typing::INVALID_UINT32;
-                    break;
-                }
+                jeecs::debug::logfatal("Failed to acquire swap chain image.");
             }
-
-            if (_vk_presenting_swapchain_image_index == typing::INVALID_UINT32)
-                return false;
 
             _vk_current_swapchain_framebuffer =
                 _vk_swapchain_framebuffer[_vk_presenting_swapchain_image_index];
@@ -3088,13 +3060,9 @@ VK_API_PLATFORM_API_LIST
             assert(_vk_current_command_buffer == nullptr);
 
             cmd_begin_frame_buffer(_vk_current_swapchain_framebuffer, 0, 0, 0, 0);
-            return true;
         }
-        bool late_update()
+        void late_update()
         {
-            if (_vk_presenting_swapchain_image_index == typing::INVALID_UINT32)
-                return false;
-
             assert(_vk_current_swapchain_framebuffer ==
                 _vk_swapchain_framebuffer[_vk_presenting_swapchain_image_index]);
 
@@ -3104,7 +3072,6 @@ VK_API_PLATFORM_API_LIST
             jegui_update_vk130(_vk_current_command_buffer);
 
             finish_frame_buffer();
-            return true;
         }
         /////////////////////////////////////////////////////
         void cmd_begin_frame_buffer(jevk11_framebuffer* framebuf, size_t x, size_t y, size_t w, size_t h)
@@ -3336,10 +3303,10 @@ VK_API_PLATFORM_API_LIST
                 [](auto* res)
                 {
                 },
-                _vk_jegl_interface->interface_handle(),
-                &init_info,
-                _vk_swapchain_framebuffer.front()->m_rendpass,
-                cmdbuf);
+                    _vk_jegl_interface->interface_handle(),
+                    &init_info,
+                    _vk_swapchain_framebuffer.front()->m_rendpass,
+                    cmdbuf);
 
             end_temp_command_buffer_record(cmdbuf);
         }
@@ -3492,18 +3459,27 @@ VK_API_PLATFORM_API_LIST
 
         context->pre_update();
 
-        jegl_graphic_api::update_action result = jegl_graphic_api::update_action::CONTINUE;
-        if (!context->update())
-            result = jegl_graphic_api::update_action::SKIP;
-
-        auto update_result = context->_vk_jegl_interface->update();
-        if (update_result & basic_interface::update_result::CLOSING)
+        switch (context->_vk_jegl_interface->update())
         {
+        case basic_interface::update_result::CLOSE:
             if (jegui_shutdown_callback())
                 return jegl_graphic_api::update_action::STOP;
+            /*fallthrough*/
+        case basic_interface::update_result::PAUSE:
+            return jegl_graphic_api::update_action::SKIP;
+        case basic_interface::update_result::RESIZE:
+            jegui_shutdown_vk130(true);
+            context->recreate_swap_chain_for_current_surface(
+                context->_vk_jegl_interface->m_interface_width,
+                context->_vk_jegl_interface->m_interface_height);
+            context->imgui_init();
+            /*fallthrough*/
+        case basic_interface::update_result::NORMAL:
+            context->update();
+            return jegl_graphic_api::update_action::CONTINUE;
+        default:
+            abort();
         }
-
-        return result;
     }
     jegl_graphic_api::update_action commit_update(jegl_context::userdata_t ctx)
     {

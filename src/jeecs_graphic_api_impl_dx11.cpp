@@ -368,10 +368,10 @@ namespace jeecs::graphic::api::dx11
                         sampler.m_sampler_id, 1, sampler.m_sampler.GetAddressOf());
                 }
             },
-            context->m_interface->interface_handle(),
-            context->m_dx_device.Get(),
-            context->m_dx_context.Get(),
-            reboot);
+                context->m_interface->interface_handle(),
+                context->m_dx_device.Get(),
+                context->m_dx_context.Get(),
+                reboot);
 
         // Fullscreen?
         if (context->m_lock_resolution_for_fullscreen)
@@ -421,28 +421,25 @@ namespace jeecs::graphic::api::dx11
         jegl_dx11_context* context =
             std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
 
-        JERCHECK(context->m_dx_swapchain->Present(
-            context->FPS == 0 ? 1 : 0, 0));
-
-        MSG msg = { 0 };
-        while (PeekMessage(&msg, 0, 0, 0, PM_REMOVE))
+        switch (context->m_interface->update())
         {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-        }
-
-        auto update_result = context->m_interface->update();
-        if (update_result & basic_interface::update_result::RESIZED)
+        case basic_interface::update_result::CLOSE:
+            if (jegui_shutdown_callback())
+                return jegl_graphic_api::update_action::STOP;
+            /*fallthrough*/
+        case basic_interface::update_result::PAUSE:
+            return jegl_graphic_api::update_action::SKIP;
+        case basic_interface::update_result::RESIZE:
             dx11_callback_windows_size_changed(context,
                 context->m_interface->m_interface_width,
                 context->m_interface->m_interface_height);
-
-        if (update_result & basic_interface::update_result::CLOSING)
-        {
-            if (jegui_shutdown_callback())
-                return jegl_graphic_api::update_action::STOP;
+            /*fallthrough*/
+        case basic_interface::update_result::NORMAL:
+            JERCHECK(context->m_dx_swapchain->Present(context->FPS == 0 ? 1 : 0, 0));
+            return jegl_graphic_api::update_action::CONTINUE;
+        default:
+            abort();
         }
-        return jegl_graphic_api::update_action::CONTINUE;
     }
 
     jegl_graphic_api::update_action dx11_commit_update(jegl_context::userdata_t)
@@ -980,7 +977,7 @@ namespace jeecs::graphic::api::dx11
                 resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_m = shader_blob->get_built_in_location("JOYENGINE_TRANS_M");
                 resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_mv = shader_blob->get_built_in_location("JOYENGINE_TRANS_MV");
                 resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_mvp = shader_blob->get_built_in_location("JOYENGINE_TRANS_MVP");
-                
+
                 resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_tiling = shader_blob->get_built_in_location("JOYENGINE_TEXTURE_TILING");
                 resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_offset = shader_blob->get_built_in_location("JOYENGINE_TEXTURE_OFFSET");
 
@@ -1054,13 +1051,13 @@ namespace jeecs::graphic::api::dx11
             switch (resource->m_raw_texture_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
             {
             case jegl_texture::format::MONO:
-                texture_describe.Format = float16 
+                texture_describe.Format = float16
                     ? DXGI_FORMAT_R16_FLOAT
                     : DXGI_FORMAT_R8_UNORM;
                 break;
             case jegl_texture::format::RGBA:
-                texture_describe.Format = float16 
-                    ? DXGI_FORMAT_R16G16B16A16_FLOAT 
+                texture_describe.Format = float16
+                    ? DXGI_FORMAT_R16G16B16A16_FLOAT
                     : DXGI_FORMAT_R8G8B8A8_UNORM;
                 break;
             }

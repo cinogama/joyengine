@@ -241,7 +241,7 @@ namespace jeecs::graphic
             else
                 glfwSwapInterval(0);
         }
-        virtual void swap() override
+        virtual void swap_for_opengl() override
         {
             glfwSwapBuffers(_m_windows);
         }
@@ -261,20 +261,22 @@ namespace jeecs::graphic
 
             glfwPollEvents();
 
-            update_result result = update_result::NORMAL;
-
             if (glfwWindowShouldClose(_m_windows) == GLFW_TRUE)
             {
                 glfwSetWindowShouldClose(_m_windows, GLFW_FALSE);
-                result = (update_result)(result | update_result::CLOSING);
+                return update_result::CLOSE;
             }
+
+            if (m_interface_width == 0 || m_interface_height == 0)
+                return update_result::PAUSE;
 
             if (_m_window_resized)
             {
-                result = (update_result)(result | update_result::RESIZED);
                 _m_window_resized = false;
+                return update_result::RESIZE;
             }
-            return result;
+
+            return update_result::NORMAL;
         }
         virtual void shutdown(bool reboot) override
         {
