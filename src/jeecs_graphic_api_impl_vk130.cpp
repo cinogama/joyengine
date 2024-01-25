@@ -3006,38 +3006,36 @@ VK_API_PLATFORM_API_LIST
             _vk_current_target_framebuffer = nullptr;
             _vk_current_command_buffer = nullptr;
         }
-        void pre_update()
-        {
-            if (_vk_presenting_swapchain_image_index == typing::INVALID_UINT32)
-                return;
-
-            vkQueueWaitIdle(_vk_logic_device_present_queue);
-
-            assert(_vk_current_swapchain_framebuffer ==
-                _vk_swapchain_framebuffer[_vk_presenting_swapchain_image_index]);
-
-            VkPresentInfoKHR present_info = {};
-            present_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-            present_info.pNext = nullptr;
-            present_info.waitSemaphoreCount = 1;
-            present_info.pWaitSemaphores = &_vk_last_command_buffer_semaphore;
-
-            VkSwapchainKHR swapchains[] = { _vk_swapchain };
-            present_info.swapchainCount = 1;
-            present_info.pSwapchains = swapchains;
-            present_info.pImageIndices = &_vk_presenting_swapchain_image_index;
-            present_info.pResults = nullptr;
-
-            vkQueuePresentKHR(_vk_logic_device_present_queue, &present_info);
-
-            _vk_dear_imgui_descriptor_set_allocator->flush_descriptor_set_allocator();
-            _vk_descriptor_set_allocator->flush_descriptor_set_allocator();
-            _vk_command_buffer_allocator->flush_command_buffer_allocator();
-
-            ++_vk_command_commit_round;
-        }
         void update()
         {
+            if (_vk_presenting_swapchain_image_index != typing::INVALID_UINT32)
+            {
+                vkQueueWaitIdle(_vk_logic_device_present_queue);
+
+                assert(_vk_current_swapchain_framebuffer ==
+                    _vk_swapchain_framebuffer[_vk_presenting_swapchain_image_index]);
+
+                VkPresentInfoKHR present_info = {};
+                present_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+                present_info.pNext = nullptr;
+                present_info.waitSemaphoreCount = 1;
+                present_info.pWaitSemaphores = &_vk_last_command_buffer_semaphore;
+
+                VkSwapchainKHR swapchains[] = { _vk_swapchain };
+                present_info.swapchainCount = 1;
+                present_info.pSwapchains = swapchains;
+                present_info.pImageIndices = &_vk_presenting_swapchain_image_index;
+                present_info.pResults = nullptr;
+
+                vkQueuePresentKHR(_vk_logic_device_present_queue, &present_info);
+
+                _vk_dear_imgui_descriptor_set_allocator->flush_descriptor_set_allocator();
+                _vk_descriptor_set_allocator->flush_descriptor_set_allocator();
+                _vk_command_buffer_allocator->flush_command_buffer_allocator();
+
+                ++_vk_command_commit_round;
+            }
+
             // 开始录制！
             _vk_last_command_buffer_semaphore = _vk_command_buffer_allocator->allocate_semaphore();
             _vk_wait_for_last_command_buffer_stage = VkPipelineStageFlagBits::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -3456,8 +3454,6 @@ VK_API_PLATFORM_API_LIST
     jegl_graphic_api::update_action pre_update(jegl_context::userdata_t ctx)
     {
         jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
-
-        context->pre_update();
 
         switch (context->_vk_jegl_interface->update())
         {

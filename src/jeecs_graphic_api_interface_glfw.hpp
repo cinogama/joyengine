@@ -247,6 +247,8 @@ namespace jeecs::graphic
         }
         virtual update_result update() override
         {
+            glfwPollEvents();
+
             int mouse_lock_x, mouse_lock_y;
             if (je_io_get_lock_mouse(&mouse_lock_x, &mouse_lock_y))
                 glfwSetCursorPos(_m_windows, mouse_lock_x, mouse_lock_y);
@@ -258,8 +260,6 @@ namespace jeecs::graphic
             const char* title;
             if (je_io_fetch_update_windowtitle(&title))
                 glfwSetWindowTitle(_m_windows, title);
-
-            glfwPollEvents();
 
             if (glfwWindowShouldClose(_m_windows) == GLFW_TRUE)
             {
