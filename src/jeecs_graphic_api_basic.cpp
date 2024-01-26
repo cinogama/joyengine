@@ -228,18 +228,19 @@ struct _je_graphic_shared_context
     // NOTE: Resource blob 受限于机制，本体是缓存在图形上下文中的，此处用于记录blob
     // 的unload-count-version，用于通知图形线程何时应当释放blob资源。
     std::shared_mutex shared_blobs_smx;
-    std::unordered_map<std::string, size_t> shared_blob_unload_counters;
+
+    std::unordered_map<std::string, size_t> shared_unload_counters;
 
     size_t _get_shared_blob_unload_counter(const std::string& path)
     {
-        auto fnd = shared_blob_unload_counters.find(path);
-        if (fnd == shared_blob_unload_counters.end())
+        auto fnd = shared_unload_counters.find(path);
+        if (fnd == shared_unload_counters.end())
             return 0;
         return fnd->second;
     }
-    void _unload_shared_blob(const std::string& path)
+    void _unload_share(const std::string& path)
     {
-        ++shared_blob_unload_counters[path];
+        ++shared_unload_counters[path];
     }
 
     bool mark_shared_resources_outdated(const char* path);
@@ -313,7 +314,7 @@ bool _je_graphic_shared_context::mark_shared_resources_outdated(const char* path
     std::shared_lock sg1(_jegl_alive_glthread_list_mx);
     std::lock_guard g1(shared_blobs_smx);
 
-    _unload_shared_blob(path);
+    _unload_share(path);
 
     bool marked = false;
     for (jegl_context* ctx : _jegl_alive_glthread_list)
