@@ -42,12 +42,6 @@ WO_API wo_api wojeapi_read_file_all(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_option_none(vm);
 }
 
-WO_API wo_api wojeapi_set_able_shared_glresource(wo_vm vm, wo_value args, size_t argc)
-{
-    jegl_set_able_shared_resources(wo_bool(args + 0));
-    return wo_ret_void(vm);
-}
-
 WO_API wo_api wojeapi_mark_shared_glresource_outdated(wo_vm vm, wo_value args, size_t argc)
 {
     return wo_ret_bool(vm, jegl_mark_shared_resources_outdated(wo_string(args + 0)));
@@ -2210,9 +2204,6 @@ namespace je
 
         extern("libjoyecs", "wojeapi_editor_register_panic_hook")
         public func register_panic_hook(f: (string, int, string, int, string, string)=> void)=> void;
-
-        extern("libjoyecs", "wojeapi_set_able_shared_glresource")
-        public func set_able_shared_glresource(able: bool)=> void;
 
         extern("libjoyecs", "wojeapi_mark_shared_glresource_outdated")
         public func mark_shared_glresource_outdated(respath: string)=> bool;
