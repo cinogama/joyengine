@@ -195,15 +195,13 @@ thread_local jegl_context* _current_graphic_thread = nullptr;
 
 struct shared_resource_instance
 {
-    jegl_resource* m_resource;
-    bool m_tobe_replace;
+    jegl_resource* const m_resource;
 
     JECS_DISABLE_MOVE_AND_COPY(shared_resource_instance);
-    shared_resource_instance()
-        : m_resource(nullptr)
-        , m_tobe_replace(false)
+    shared_resource_instance(jegl_resource* res)
+        : m_resource(res)
     {
-
+        assert(m_resource != nullptr);
     }
     ~shared_resource_instance()
     {
@@ -217,6 +215,8 @@ struct _je_graphic_shared_context
     bool enable_shared_resource_list = false;
     std::unordered_map<std::string, std::unique_ptr<shared_resource_instance>> shared_resource_list;
 
+    // NOTE: Resource blob 受限于机制，本体是缓存在图形上下文中的，此处用于记录blob
+    // 的unload-count-version，用于通知图形线程何时应当释放blob资源。
     std::shared_mutex shared_blobs_smx;
     std::unordered_map<std::string, size_t> shared_blob_unload_counters;
 
@@ -246,16 +246,16 @@ struct _je_graphic_shared_context
         if (enable_shared_resource_list)
         {
             auto fnd = shared_resource_list.find(path);
-            if (fnd != shared_resource_list.end()
-                && fnd->second->m_tobe_replace == false)
+            if (fnd != shared_resource_list.end())
             {
-                fnd->second->m_tobe_replace = true;
+                fnd->second.reset();
+                assert(fnd->second.get() == nullptr);
+
                 return true;
             }
         }
         return false;
     }
-
     void set_able_shared_resources(bool able)
     {
         std::lock_guard g1(shared_resource_list_smx);
@@ -270,18 +270,12 @@ struct _je_graphic_shared_context
     {
         assert(resource != nullptr);
         if (resource->m_raw_ref_count == nullptr)
-        {
-            static_assert(sizeof(uint32_t) == sizeof(std::atomic_uint32_t));
-            static_assert(std::atomic_uint32_t::is_always_lock_free);
-
             resource->m_raw_ref_count = reinterpret_cast<void*>(new std::atomic_uint32_t(1));
-            assert(std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_raw_ref_count))->load() == 1);
-        }
+
         std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_raw_ref_count))->fetch_add(1);
 
         return resource;
     }
-
     jegl_resource* try_update_shared_resource(jegl_resource* resource, jegl_resource::type aimtype)
     {
         assert(resource != nullptr && resource->m_path != nullptr);
@@ -293,17 +287,15 @@ struct _je_graphic_shared_context
 
             auto fnd = shared_resource_list.find(resource->m_path);
             if (fnd != shared_resource_list.end()
-                && fnd->second->m_tobe_replace == false
+                && fnd->second.get() != nullptr
                 && fnd->second->m_resource->m_type == aimtype)
             {
                 jegl_close_resource(resource);
                 return _share_resource(fnd->second->m_resource);
             }
 
-            // Create new fxxking one!
-            auto shared_info = std::make_unique<shared_resource_instance>();
-            shared_info->m_resource = resource;
-            shared_resource_list[resource->m_path] = std::move(shared_info);
+            // Create a new one!
+            shared_resource_list[resource->m_path] = std::make_unique<shared_resource_instance>(resource);
             return _share_resource(resource);
 
         } while (0);
@@ -322,7 +314,7 @@ struct _je_graphic_shared_context
                 return nullptr;
 
             auto fnd = shared_resource_list.find(path);
-            if (fnd != shared_resource_list.end() && fnd->second->m_tobe_replace == false)
+            if (fnd != shared_resource_list.end() && fnd->second.get() != nullptr)
             {
                 return _share_resource(fnd->second->m_resource);
             }
@@ -332,6 +324,9 @@ struct _je_graphic_shared_context
         return nullptr;
     }
 };
+
+// NOTE: 注意，一个图形资源只能被用于一个图形上下文，因此缓存机制只能用于单个图形上下文的程序（例如游戏）
+// 如果需要多个视口（多个图形上下文），请不要开启图形缓存机制。
 _je_graphic_shared_context _je_graphic_shared_context_instance;
 
 void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_shader);
@@ -403,8 +398,8 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
             // Skip current frame.
             if (thread->m_config.m_fps == 0)
                 // If vsync is available, wait for 1./120. sec here to decrease CPU usage.
-                je_clock_sleep_for(1./120.);
-            
+                je_clock_sleep_for(1. / 120.);
+
             break;
         }
 
@@ -446,8 +441,12 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
                 thread->m_apis->close_resource(thread->m_userdata, deleting_resource->m_destroy_resource);
                 thread->_m_thread_notifier->_m_created_resources.erase(deleting_resource->m_destroy_resource);
             }
-            delete std::launder(reinterpret_cast<std::atomic_uint32_t*>(
+            auto* binding_counter = std::launder(reinterpret_cast<std::atomic_uint32_t*>(
                 deleting_resource->m_destroy_resource->m_binding_count));
+
+            assert(binding_counter->load() == 0);
+
+            delete binding_counter;
             delete deleting_resource->m_destroy_resource;
             delete deleting_resource;
         }
@@ -820,7 +819,7 @@ void _jegl_free_resource_instance(jegl_resource* resource)
                 del_res->m_destroy_resource);
 
         auto* binding_count = std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_binding_count));
-        if (--*binding_count == jeecs::typing::INVALID_UINT32)
+        if (-- * binding_count == jeecs::typing::INVALID_UINT32)
         {
             delete binding_count;
             delete del_res->m_destroy_resource;
@@ -950,11 +949,11 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
     shader->m_type = jegl_resource::SHADER;
     shader->m_raw_shader_data = _shader;
 
-    uint64_t 
-        vertex_glsl_src_len, 
-        fragment_glsl_src_len, 
-        vertex_hlsl_src_len, 
-        fragment_hlsl_src_len, 
+    uint64_t
+        vertex_glsl_src_len,
+        fragment_glsl_src_len,
+        vertex_hlsl_src_len,
+        fragment_hlsl_src_len,
         vertex_spirv_src_len,
         fragment_spirv_src_len;
 
