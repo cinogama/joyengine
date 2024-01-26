@@ -1217,7 +1217,16 @@ WO_API wo_api wojeapi_native_value_je_parse(wo_vm vm, wo_value args, size_t argc
 ///////////////////////////////////////////////////////////////////////
 WO_API wo_api wojeapi_texture_open(wo_vm vm, wo_value args, size_t argc)
 {
-    auto loaded_texture = jeecs::graphic::texture::load(wo_string(args + 0));
+    jegl_context* gcontext = nullptr;
+
+    wo_value universe_ptr = wo_push_empty(vm);
+    if (wo_option_get(universe_ptr, args + 0))
+    {
+        gcontext = jegl_uhost_get_context(
+            jegl_uhost_get_or_create_for_universe(
+                wo_pointer(universe_ptr), nullptr));
+    }
+    auto loaded_texture = jeecs::graphic::texture::load(gcontext, wo_string(args + 1));
 
     if (loaded_texture != nullptr)
         return wo_ret_option_gchandle(vm,
@@ -1418,7 +1427,16 @@ WO_API wo_api wojeapi_font_string_texture(wo_vm vm, wo_value args, size_t argc)
 /////////////////////////////////////////////////////////////
 WO_API wo_api wojeapi_shader_open(wo_vm vm, wo_value args, size_t argc)
 {
-    auto loaded_shader = jeecs::graphic::shader::load(wo_string(args + 0));
+    jegl_context* gcontext = nullptr;
+
+    wo_value universe_ptr = wo_push_empty(vm);
+    if (wo_option_get(universe_ptr, args + 0))
+    {
+        gcontext = jegl_uhost_get_context(
+            jegl_uhost_get_or_create_for_universe(
+                wo_pointer(universe_ptr), nullptr));
+    }
+    auto loaded_shader = jeecs::graphic::shader::load(gcontext, wo_string(args + 1));
 
     if (loaded_shader != nullptr)
     {
@@ -2558,7 +2576,7 @@ namespace je
         public using texture = gchandle
         {
             extern("libjoyecs", "wojeapi_texture_open", slow)
-            public func load(path: string)=> option<texture>;
+            public func load(univ: option<universe>, path: string)=> option<texture>;
 
             extern("libjoyecs", "wojeapi_texture_create", slow)
             public func create(width: int, height: int)=> texture;
@@ -2613,7 +2631,7 @@ R"(
         public using shader = gchandle
         {
             extern("libjoyecs", "wojeapi_shader_open", slow)
-            public func load(path: string)=> option<shader>;
+            public func load(univ: option<universe>, path: string)=> option<shader>;
             
             extern("libjoyecs", "wojeapi_shader_create", slow)
             public func create(vpath: string, src: string)=> option<shader>;

@@ -1291,19 +1291,19 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src, bool i
 
 }
 
-jegl_resource* jegl_try_update_shared_resource(jegl_resource* resource, jegl_resource::type aimtype)
+jegl_resource* jegl_try_update_shared_resource(jegl_context* context, jegl_resource* resource, jegl_resource::type aimtype)
 {
     return _je_graphic_shared_context_instance.try_update_shared_resource(resource, aimtype);
 }
 
-jegl_resource* jegl_try_load_shared_resource(const char* path)
+jegl_resource* jegl_try_load_shared_resource(jegl_context* context, const char* path)
 {
     return _je_graphic_shared_context_instance.try_load_shared_resource(path);
 }
 
-jegl_resource* jegl_load_shader(const char* path)
+jegl_resource* jegl_load_shader(jegl_context* context, const char* path)
 {
-    auto* shared_shader = jegl_try_load_shared_resource(path);
+    auto* shared_shader = jegl_try_load_shared_resource(context, path);
     if (shared_shader != nullptr && shared_shader->m_type == jegl_resource::type::SHADER)
         return shared_shader;
 
@@ -1314,7 +1314,7 @@ jegl_resource* jegl_load_shader(const char* path)
         assert(shader_resource != nullptr && shader_resource->m_raw_shader_data != nullptr);
 
         if (shader_resource->m_raw_shader_data->m_enable_to_shared)
-            return jegl_try_update_shared_resource(shader_resource, jegl_resource::type::SHADER);
+            return jegl_try_update_shared_resource(context, shader_resource, jegl_resource::type::SHADER);
         return shader_resource;
     }
     if (jeecs_file* texfile = jeecs_file_open(path))
@@ -1332,7 +1332,7 @@ jegl_resource* jegl_load_shader(const char* path)
         {
             assert(shader_resource != nullptr && shader_resource->m_raw_shader_data != nullptr);
             if (shader_resource->m_raw_shader_data->m_enable_to_shared)
-                return jegl_try_update_shared_resource(shader_resource, jegl_resource::type::SHADER);
+                return jegl_try_update_shared_resource(context, shader_resource, jegl_resource::type::SHADER);
             return shader_resource;
         }
         return nullptr;
@@ -1342,9 +1342,9 @@ jegl_resource* jegl_load_shader(const char* path)
     return nullptr;
 }
 
-jegl_resource* jegl_load_texture(const char* path)
+jegl_resource* jegl_load_texture(jegl_context* context, const char* path)
 {
-    auto* shared_texture = jegl_try_load_shared_resource(path);
+    auto* shared_texture = jegl_try_load_shared_resource(context, path);
     if (shared_texture != nullptr && shared_texture->m_type == jegl_resource::type::TEXTURE)
         return shared_texture;
 
@@ -1381,16 +1381,16 @@ jegl_resource* jegl_load_texture(const char* path)
         texture->m_raw_texture_data->m_format = jegl_texture::RGBA;
         texture->m_raw_texture_data->m_modified = false;
 
-        return jegl_try_update_shared_resource(texture, jegl_resource::type::TEXTURE);
+        return jegl_try_update_shared_resource(context, texture, jegl_resource::type::TEXTURE);
     }
 
     jeecs::debug::loginfo("Cannot load texture: Failed to open file: '%s'", path);
     return nullptr;
 }
 
-jegl_resource* jegl_load_vertex(const char* path)
+jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
 {
-    auto* shared_vertex = jegl_try_load_shared_resource(path);
+    auto* shared_vertex = jegl_try_load_shared_resource(context, path);
     if (shared_vertex != nullptr && shared_vertex->m_type == jegl_resource::type::VERTEX)
         return shared_vertex;
 
@@ -1459,7 +1459,7 @@ jegl_resource* jegl_load_vertex(const char* path)
     if (vertex != nullptr)
     {
         vertex->m_path = jeecs::basic::make_new_string(path);
-        return jegl_try_update_shared_resource(vertex, jegl_resource::type::VERTEX);
+        return jegl_try_update_shared_resource(context, vertex, jegl_resource::type::VERTEX);
     }
     return nullptr;
 }

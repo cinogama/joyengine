@@ -26,7 +26,7 @@ namespace editor::gui::edit_forms
     {
         if (enable_2dlight)
         {
-            match (je::graphic::shader::load("@/resource/shader/CameraDefer2DPass.shader"))
+            match (je::graphic::shader::load(e->get_world->get_universe->option::value, "@/resource/shader/CameraDefer2DPass.shader"))
             {
             value(shader)? 
                 {
@@ -357,7 +357,7 @@ namespace editor::gui::edit_forms
                                     }
                                     if (editor::gui::IMAGE_FILE_EXTERN_NAMES->find(fsys::extension(filepath)->lower) != -1)
                                     {
-                                        match (je::graphic::texture::load(path))
+                                        match (je::graphic::texture::load(option::none, path))
                                         {
                                         value(tex)?
                                             {
@@ -402,7 +402,7 @@ namespace editor::gui::edit_forms
                                                                     {
                                                                     value(e)?
                                                                         {
-                                                                            let default_shader = je::graphic::shader::load("@/resource/shader/Unlit.shader")->val;
+                                                                            let default_shader = je::graphic::shader::load(e->get_world->get_universe->option::value, "@/resource/shader/Unlit.shader")->val;
                                                                             e->set_shaders([default_shader]);
                                                                             e->bind_texture(0, tex);
 

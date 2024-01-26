@@ -30,7 +30,7 @@ namespace jeapi::welcome
     {
         launch(func()
         {
-            static let cinogama_logo = je::graphic::texture::load(F"!/builtin/icon/cinoicon_light.png")->val;
+            static let cinogama_logo = je::graphic::texture::load(option::none, F"!/builtin/icon/cinoicon_light.png")->val;
 
             let mut open = true;
             match (BeginAttrOpen(F"关于##{JobID()}", 

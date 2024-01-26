@@ -49,7 +49,7 @@ namespace editor::gui::edit_forms
             if (fsys::extension(originpath)->lower == ".shader")
                 return Action::ACTION(func(pconfig, _){
                     pconfig.m_pack_output_log->add(F"正在编译着色器：{packpath}");
-                    match (je::graphic::shader::load(originpath->tostring))
+                    match (je::graphic::shader::load(option::none, originpath->tostring))
                     {
                     value(_)?
                         return [(originpath->tostring + ".jecache4", packpath + ".jecache4")];

@@ -202,9 +202,9 @@ namespace jeecs::graphic
 
             // Try load icon from @/icon.png or !/builtin/icon/icon.png.
             // Do nothing if both not exist.
-            jeecs::basic::resource<jeecs::graphic::texture> icon = jeecs::graphic::texture::load("@/icon.png");
+            jeecs::basic::resource<jeecs::graphic::texture> icon = jeecs::graphic::texture::load(nullptr, "@/icon.png");
             if (icon == nullptr)
-                icon = jeecs::graphic::texture::load("!/builtin/icon/icon.png");
+                icon = jeecs::graphic::texture::load(nullptr, "!/builtin/icon/icon.png");
 
             if (icon != nullptr)
             {

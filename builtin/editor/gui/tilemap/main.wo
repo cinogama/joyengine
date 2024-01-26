@@ -353,7 +353,7 @@ namespace editor::gui::tilemap
                 }
             }
             if (tileimage->save(imgpath->tostring))
-                return graphic::texture::load(context->get_project->make_path_normalize(imgpath));
+                return graphic::texture::load(option::none, context->get_project->make_path_normalize(imgpath));
 
             return option::none;
         }
@@ -376,8 +376,8 @@ namespace editor::gui::tilemap
 
             let imgpath = tilemap_path / F"{crc64}-{ix}d{xcount}-{iy}d{ycount}.png";
 
-            try! tiletexture = context->get_project->make_path_normalize(imgpath)
-                ->  graphic::texture::load
+            try! tiletexture = 
+                graphic::texture::load(option::none, context->get_project->make_path_normalize(imgpath))
                 ->  orbind(\=_create_clip_texture(context, imgpath, maintex, ix, iy, xcount, ycount);)
                 ->> \t = result::ok(t): result<graphic::texture, string>;
                 ->  valor(result::err("无法加载或创建Tile纹理"))
@@ -409,7 +409,7 @@ namespace editor::gui::tilemap
                     let wayname = way->get_way_name;
                     let saving_path = fsys::parent(texpath) / F"{purefilename}_{wayname}.png";
 
-                    match (graphic::texture::load(context->get_project->make_path_normalize(saving_path)))
+                    match (graphic::texture::load(option::none, context->get_project->make_path_normalize(saving_path)))
                     {
                     value(tex)?
                         {
@@ -425,7 +425,7 @@ namespace editor::gui::tilemap
                     way->get_sampling_texture(tileimage, self.maintex, self.location..., maintex_w / tile_w, maintex_h / tile_h);
                     if (tileimage->save(saving_path->tostring))
                     {
-                        match (graphic::texture::load(context->get_project->make_path_normalize(saving_path)))
+                        match (graphic::texture::load(option::none, context->get_project->make_path_normalize(saving_path)))
                         {
                         value(tex)?
                             {
@@ -563,7 +563,7 @@ namespace editor::gui::tilemap
             let uid = data["uid"] as string;
             let tiles = data["tiles"] as array<dynamic>->>\e = e as dict<dynamic, dynamic>->>\k, v = (k as string, v);;;
 
-            let texture = graphic::texture::load(texture_path);
+            let texture = graphic::texture::load(option::none, texture_path);
             if (texture->has == false)
                 return result::err("无法加载纹理");
 
@@ -790,7 +790,7 @@ namespace editor::gui::tilemap
                             match (jeapi::gui::widget::File("使用的Tileset纹理", 
                                 create_context.m_texture=>>\t=t->path;->valor(""),
                                 \=do nil;)
-                                =>> \newpath = create_context.m_texture := graphic::texture::load(newpath);
+                                =>> \newpath = create_context.m_texture := graphic::texture::load(option::none, newpath);
                             )
                             {
                             value(tex)?

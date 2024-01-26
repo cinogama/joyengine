@@ -484,7 +484,7 @@ namespace jeapi
                         for (let _, shader_path_dat_pair : shaders: array<dynamic>)
                         {
                             let spath = shader_path_dat_pair: array<dynamic>[0] as string;
-                            let s = graphic::shader::load(spath);
+                            let s = graphic::shader::load(w->get_universe->option::value, spath);
                             shads->add((s, spath, shader_path_dat_pair: array<dynamic>[1] as dict<dynamic, dynamic>));
                         }
                         return shads->toarray;
@@ -558,7 +558,7 @@ namespace jeapi
                 ->> func(textures)
                     {
                         for (let passid, path : textures: dict<dynamic, dynamic>)
-                            do graphic::texture::load(path as string)
+                            do graphic::texture::load(w->get_universe->option::value, path as string)
                                 ->> \tex = entity->bind_texture(passid as int, tex);
                                 ;
                     };
