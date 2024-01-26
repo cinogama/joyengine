@@ -248,7 +248,6 @@ namespace editor::gui::edit_forms
                                 import builtin::api::serialize::main;
                                 import builtin::editor::gui::form::panic;
 
-                                je::editor::set_able_shared_glresource(true);
                                 je::editor::register_panic_hook(jeapi::gui::form::panic);
 
                                 let LOADED_WORLDS_MAPPING = {}mut: map<string, je::world>;

@@ -2322,19 +2322,6 @@ je_font_get_char [基本接口]
 JE_API jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long chcode);
 
 /*
-jegl_set_able_shared_resources [基本接口]
-设置是否启用资源缓存机制
-    * 若启用，则加载相同路径的纹理和共享的着色器时，将不会创建新的实例，而总是获取同一份
-    * 若需要同时使用多个图形线程（上下文），请关闭共享以避免资源读取问题。
-    * 引擎默认关闭此机制，用于保证行为的正确性，但编辑器会默认打开此机制以节省资源
-    * 若在资源缓存启用时需要更新指定资源（即强制重新加载），请使用
-        jegl_mark_shared_resources_outdated
-请参见：
-    jegl_mark_shared_resources_outdated
-*/
-JE_API void jegl_set_able_shared_resources(bool able);
-
-/*
 jegl_mark_shared_resources_outdated [基本接口]
 将指定路径对应的共享资源缓存标记为过时的，若成功标记，返回true
     * 标记成功：指的是之前此资源存在，并非过时的，在此次操作之后被标记
@@ -2470,8 +2457,7 @@ JE_API bool jegl_using_resource(jegl_resource* resource);
 /*
 jegl_close_resource [基本接口]
 关闭指定的图形资源，图形资源的原始数据信息会被立即回收，对应图形库的实际资源会在
-图形线程中延迟销毁
-    * 若存在多个图形线程，因为相关实现的原因，可能出现部分图形资源无法正确释放而泄漏
+对应的图形线程中延迟销毁
 */
 JE_API void jegl_close_resource(jegl_resource* resource);
 
