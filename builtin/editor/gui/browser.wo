@@ -142,36 +142,36 @@ namespace editor::gui
 
     // 用于储存文件拓展名和图标的对应关系
     let FILE_TYPE_ICONS = {
-        [".png"] = je::graphic::texture::load(F"!/builtin/icon/TextureFile.png")->val,
-        [".jpg"] = je::graphic::texture::load(F"!/builtin/icon/TextureFile.png")->val,
-        [".bmp"] = je::graphic::texture::load(F"!/builtin/icon/TextureFile.png")->val,
-        [".psd"] = je::graphic::texture::load(F"!/builtin/icon/TextureFile.png")->val,
-        [".ttf"] = je::graphic::texture::load(F"!/builtin/icon/Font.png")->val,
+        [".png"] = je::graphic::texture::load(option::none, F"!/builtin/icon/TextureFile.png")->val,
+        [".jpg"] = je::graphic::texture::load(option::none, F"!/builtin/icon/TextureFile.png")->val,
+        [".bmp"] = je::graphic::texture::load(option::none, F"!/builtin/icon/TextureFile.png")->val,
+        [".psd"] = je::graphic::texture::load(option::none, F"!/builtin/icon/TextureFile.png")->val,
+        [".ttf"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Font.png")->val,
 
-        [".wav"] = je::graphic::texture::load(F"!/builtin/icon/Music.png")->val,
+        [".wav"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Music.png")->val,
 
-        [".shader"] = je::graphic::texture::load(F"!/builtin/icon/ShaderFile.png")->val,
-        [".jemodule4"] = je::graphic::texture::load(F"!/builtin/icon/CppProgram.png")->val,
+        [".shader"] = je::graphic::texture::load(option::none, F"!/builtin/icon/ShaderFile.png")->val,
+        [".jemodule4"] = je::graphic::texture::load(option::none, F"!/builtin/icon/CppProgram.png")->val,
 
-        [".jeworld"] = je::graphic::texture::load(F"!/builtin/icon/World.png")->val,
-        [".jeentity"] = je::graphic::texture::load(F"!/builtin/icon/Entity.png")->val,
+        [".jeworld"] = je::graphic::texture::load(option::none, F"!/builtin/icon/World.png")->val,
+        [".jeentity"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Entity.png")->val,
 
-        [".jeanim4"] = je::graphic::texture::load(F"!/builtin/icon/AnimationFile.png")->val,
+        [".jeanim4"] = je::graphic::texture::load(option::none, F"!/builtin/icon/AnimationFile.png")->val,
         
-        [".wo"] = je::graphic::texture::load(F"!/builtin/icon/Plugins.png")->val,
-        [".jetilemap4"] = je::graphic::texture::load(F"!/builtin/icon/Tilemap.png")->val,
-        [".jepartical"] = je::graphic::texture::load(F"!/builtin/icon/Partical.png")->val,
+        [".wo"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Plugins.png")->val,
+        [".jetilemap4"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Tilemap.png")->val,
+        [".jepartical"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Partical.png")->val,
 
-        [".jecache4"] = je::graphic::texture::load(F"!/builtin/icon/Joy.png")->val,
+        [".jecache4"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Joy.png")->val,
     };
 
     // 根据文件拓展名返回文件的类型
     private func get_file_icon_by_extern_name(_path: PathInfo)
     {
         static let default_path_icon 
-            = je::graphic::texture::load(F"!/builtin/icon/FilePath.png")->val;
+            = je::graphic::texture::load(option::none, F"!/builtin/icon/FilePath.png")->val;
         static let default_file_icon 
-            = je::graphic::texture::load(F"!/builtin/icon/File.png")->val;
+            = je::graphic::texture::load(option::none, F"!/builtin/icon/File.png")->val;
 
         let icon = FILE_TYPE_ICONS->get(_path.externname);
 
@@ -1106,7 +1106,7 @@ namespace $$MODULE_NAME$$
             }
             if (MenuItem("预览并编辑"))
             {
-                match (je::graphic::texture::load(context->get_project->make_path_normalize(path.path)))
+                match (je::graphic::texture::load(option::none, context->get_project->make_path_normalize(path.path)))
                 {
                 value(tex)?
                     drawpannel::drawimg(context, tex);

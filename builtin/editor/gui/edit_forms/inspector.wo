@@ -65,7 +65,7 @@ namespace editor::gui::edit_forms
         {
         value(shader_path)?
             {
-                match (je::graphic::shader::load(shader_path))
+                match (je::graphic::shader::load(entity->get_world->get_universe->option::value, shader_path))
                 {
                 value(shader)?
                     shader_operation = shader_option::AddShader(shader);
@@ -113,7 +113,7 @@ namespace editor::gui::edit_forms
                                 
                         do jeapi::gui::widget::File(name, texture_path, \=do nil;)
                             ->> \path = context->get_project->make_path_normalize(fsys::normalize(path));
-                            ->> \path =  je::graphic::texture::load(path)
+                            ->> \path =  je::graphic::texture::load(option::none, path)
                                 ->> \tex = entity->bind_texture(id, tex);
                                 ->  or(\= path != "" 
                                         ? jeapi::gui::form::errmsg("加载纹理失败", F"无法加载文件{path}作为纹理")
@@ -407,7 +407,7 @@ namespace editor::gui::edit_forms
                                                     if (MenuItem(npath))
                                                     {
                                                         // NOTE: 哈哈哈 第三个加载来咯
-                                                        match (je::graphic::shader::load(npath))
+                                                        match (je::graphic::shader::load(cur_e->get_world->get_universe->option::value, npath))
                                                         {
                                                         value(shader)?
                                                         {
@@ -430,7 +430,7 @@ namespace editor::gui::edit_forms
                                                 // TODO: 为啥会有两个地方加载shader，这个地方的代码写得跟鬼一样
                                                 //      检查代码实现，上面也有一个加载shader，两边代码一模一样，
                                                 //      搞什么鬼
-                                                match (je::graphic::shader::load(shader_path))
+                                                match (je::graphic::shader::load(cur_e->get_world->get_universe->option::value, shader_path))
                                                 {
                                                 value(shader)?
                                                 {

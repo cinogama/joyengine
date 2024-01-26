@@ -236,7 +236,7 @@ jeecs::graphic_uhost* jegl_uhost_get_or_create_for_universe(
 {
     return jeecs::graphic_uhost::get_default_graphic_pipeline_instance(universe, config);
 }
-jegl_context* jegl_uhost_get_gl_thread(jeecs::graphic_uhost* host)
+jegl_context* jegl_uhost_get_context(jeecs::graphic_uhost* host)
 {
     return host->glthread;
 }

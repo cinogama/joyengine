@@ -9,7 +9,7 @@
 #include "wo.h"
 
 #define JE_VERSION_WRAP(A, B, C) #A "." #B "." #C
-#define JE_CORE_VERSION JE_VERSION_WRAP(4, 4, 7)
+#define JE_CORE_VERSION JE_VERSION_WRAP(4, 4, 8)
 
 #include <cstdint>
 #include <cstring>
@@ -2227,7 +2227,9 @@ jegl_load_texture [基本接口]
     jeecs_file_open
     jegl_close_resource
 */
-JE_API jegl_resource* jegl_load_texture(const char* path);
+JE_API jegl_resource* jegl_load_texture(
+    jegl_context*   context, 
+    const char*     path);
 
 /*
 jegl_create_texture [基本接口]
@@ -2238,7 +2240,10 @@ jegl_create_texture [基本接口]
 请参见：
     jegl_close_resource
 */
-JE_API jegl_resource* jegl_create_texture(size_t width, size_t height, jegl_texture::format format);
+JE_API jegl_resource* jegl_create_texture(
+    size_t                  width, 
+    size_t                  height, 
+    jegl_texture::format    format);
 
 /*
 jegl_load_vertex [基本接口]
@@ -2249,7 +2254,9 @@ jegl_load_vertex [基本接口]
     jeecs_file_open
     jegl_close_resource
 */
-JE_API jegl_resource* jegl_load_vertex(const char* path);
+JE_API jegl_resource* jegl_load_vertex(
+    jegl_context*   context, 
+    const char*     path);
 
 /*
 jegl_create_vertex [基本接口]
@@ -2259,11 +2266,11 @@ jegl_create_vertex [基本接口]
     jegl_close_resource
 */
 JE_API jegl_resource* jegl_create_vertex(
-    jegl_vertex::type    type,
-    const float* datas,
-    const size_t* format,
-    size_t                      data_length,
-    size_t                      format_length);
+    jegl_vertex::type   type,
+    const float*        datas,
+    const size_t*       format,
+    size_t              data_length,
+    size_t              format_length);
 
 /*
 jegl_create_framebuf [基本接口]
@@ -2273,10 +2280,10 @@ jegl_create_framebuf [基本接口]
     jegl_close_resource
 */
 JE_API jegl_resource* jegl_create_framebuf(
-    size_t                          width,
-    size_t                          height,
+    size_t                      width,
+    size_t                      height,
     const jegl_texture::format* attachment_formats,
-    size_t                          attachment_count);
+    size_t                      attachment_count);
 
 typedef struct je_stb_font_data je_font;
 typedef void (*je_font_char_updater_t)(jegl_texture::pixel_data_t*, size_t, size_t);
@@ -2293,7 +2300,7 @@ char_texture_updater 用于指示文字纹理创建后所需的预处理方法�
     je_font_free
 */
 JE_API je_font* je_font_load(
-    const char* font_path,
+    const char*             font_path,
     float                   scalex,
     float                   scaley,
     size_t                  board_blank_size_x,
@@ -2345,13 +2352,18 @@ jegl_load_shader_source [基本接口]
 请参见：
     jegl_load_shader
 */
-JE_API jegl_resource* jegl_load_shader_source(const char* path, const char* src, bool is_virtual_file);
+JE_API jegl_resource* jegl_load_shader_source(
+    const char*     path,
+    const char*     src,
+    bool            is_virtual_file);
 
 /*
 jegl_load_shader [基本接口]
 从源码文件加载一个着色器实例，会创建或使用缓存文件以加速着色器的加载
 */
-JE_API jegl_resource* jegl_load_shader(const char* path);
+JE_API jegl_resource* jegl_load_shader(
+    jegl_context*   context, 
+    const char*     path);
 
 /*
 jegl_create_uniformbuf [基本接口]
@@ -2361,18 +2373,18 @@ jegl_create_uniformbuf [基本接口]
     jegl_close_resource
 */
 JE_API jegl_resource* jegl_create_uniformbuf(
-    size_t binding_place,
-    size_t length);
+    size_t          binding_place,
+    size_t          length);
 
 /*
 jegl_update_uniformbuf [基本接口]
 更新一个一致变量缓冲区中，指定位置起，若干长度的数据
 */
 JE_API void jegl_update_uniformbuf(
-    jegl_resource* uniformbuf,
-    const void* buf,
-    size_t update_offset,
-    size_t update_length);
+    jegl_resource*  uniformbuf,
+    const void*     buf,
+    size_t          update_offset,
+    size_t          update_length);
 
 /*
 jegl_graphic_api_entry [类型]
@@ -2820,10 +2832,10 @@ JE_API jeecs::graphic_uhost* jegl_uhost_get_or_create_for_universe(
     void* universe, const jegl_interface_config* config);
 
 /*
-jegl_uhost_get_gl_thread [基本接口]
+jegl_uhost_get_context [基本接口]
 从指定的可编程图形上下文接口获取图形线程的正式描述符
 */
-JE_API jegl_context* jegl_uhost_get_gl_thread(jeecs::graphic_uhost* host);
+JE_API jegl_context* jegl_uhost_get_context(jeecs::graphic_uhost* host);
 
 /*
 jegl_uhost_alloc_branch [基本接口]
@@ -6636,9 +6648,9 @@ namespace jeecs
             {
             }
         public:
-            static basic::resource<texture> load(const std::string& str)
+            static basic::resource<texture> load(jegl_context* context, const std::string& str)
             {
-                jegl_resource* res = jegl_load_texture(str.c_str());
+                jegl_resource* res = jegl_load_texture(context, str.c_str());
                 if (res != nullptr)
                     return new texture(res);
                 return nullptr;
@@ -6763,9 +6775,9 @@ namespace jeecs
                     return new shader(res);
                 return nullptr;
             }
-            static basic::resource<shader> load(const std::string& src_path)
+            static basic::resource<shader> load(jegl_context* context, const std::string& src_path)
             {
-                jegl_resource* res = jegl_load_shader(src_path.c_str());
+                jegl_resource* res = jegl_load_shader(context, src_path.c_str());
                 if (res != nullptr)
                     return new shader(res);
                 return nullptr;
@@ -6891,9 +6903,9 @@ namespace jeecs
             {
             }
         public:
-            static basic::resource<vertex> load(const std::string& str)
+            static basic::resource<vertex> load(jegl_context* context, const std::string& str)
             {
-                auto* res = jegl_load_vertex(str.c_str());
+                auto* res = jegl_load_vertex(context, str.c_str());
                 if (res != nullptr)
                     return new vertex(res);
                 return nullptr;
@@ -7961,12 +7973,7 @@ namespace jeecs
 
         struct Shape
         {
-            basic::fileresource<graphic::vertex> vertex;
-
-            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
-            {
-                typing::register_member(guard, &Shape::vertex, "vertex");
-            }
+            basic::resource<graphic::vertex> vertex;
         };
 
         struct Shaders
@@ -9055,9 +9062,9 @@ namespace jeecs
             intersect_result intersect_entity(const Transform::Translation& translation, const Renderer::Shape* entity_shape, float insRange = 0.0f) const
             {
                 vec3 entity_box_sz;
-                if (entity_shape && entity_shape->vertex.has_resource())
+                if (entity_shape && entity_shape->vertex != nullptr)
                 {
-                    auto* vertex_dat = entity_shape->vertex.get_resource()->resouce()->m_raw_vertex_data;
+                    auto* vertex_dat = entity_shape->vertex->resouce()->m_raw_vertex_data;
                     entity_box_sz = { vertex_dat->m_size_x, vertex_dat->m_size_y ,vertex_dat->m_size_z };
                 }
                 else
