@@ -761,7 +761,8 @@ namespace editor
                     if (last_edit_world == world)
                         return result::ok(do nil); // 新老世界相同，跳过更新
 
-                    last_edit_world->remove_system(self->get_config_editor_system);
+                    if (last_edit_world->editor::is_valid)
+                        last_edit_world->remove_system(self->get_config_editor_system);
                 }
                 none?;
                 }

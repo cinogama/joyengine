@@ -9,12 +9,20 @@ std::list<std::pair<int, std::string>> log_buffer;
 
 WO_API wo_api wojeapi_startup_thread(wo_vm vm, wo_value args, size_t argc)
 {
+    wo_value arguments = args + 1;
+    auto argument_count = wo_lengthof(arguments);
+
     wo_vm co_vmm = wo_borrow_vm(vm);
     wo_value cofunc = wo_push_val(co_vmm, args + 0);
 
+    for (auto i = argument_count; i > 0; --i)
+    {
+        wo_struct_get(wo_push_empty(co_vmm), arguments, (uint16_t)(i - 1));
+    }
+
     std::thread t([=]
         {
-            wo_invoke_value(co_vmm, cofunc, 0);
+            wo_invoke_value(co_vmm, cofunc, argument_count);
             wo_release_vm(co_vmm);
         });
     t.detach();
@@ -480,20 +488,25 @@ WO_API wo_api wojeapi_get_all_entities_from_world(wo_vm vm, wo_value args, size_
 {
     wo_value out_arr = wo_push_arr(vm, 0);
 
-    auto entities = jedbg_get_all_entities_in_world(wo_pointer(args + 0));
-    auto entity_iter = entities;
+    void* world_instance = wo_pointer(args + 0);
 
-    wo_value elem = wo_push_empty(vm);
-
-    while (*entity_iter)
+    if (je_ecs_world_is_valid(world_instance))
     {
-        wo_set_gchandle(elem, vm, *(entity_iter++), nullptr,
-            [](void* entity_ptr) {
-                jedbg_free_entity((jeecs::game_entity*)entity_ptr);
-            });
-        wo_arr_add(out_arr, elem);
+        auto entities = jedbg_get_all_entities_in_world(world_instance);
+        auto entity_iter = entities;
+
+        wo_value elem = wo_push_empty(vm);
+
+        while (*entity_iter)
+        {
+            wo_set_gchandle(elem, vm, *(entity_iter++), nullptr,
+                [](void* entity_ptr) {
+                    jedbg_free_entity((jeecs::game_entity*)entity_ptr);
+                });
+            wo_arr_add(out_arr, elem);
+        }
+        je_mem_free(entities);
     }
-    je_mem_free(entities);
 
     return wo_ret_val(vm, out_arr);
 }
@@ -521,7 +534,10 @@ WO_API wo_api wojeapi_set_editing_entity_uid(wo_vm vm, wo_value args, size_t arg
         jedbg_set_editing_entity_uid(0);
     return wo_ret_void(vm);
 }
-
+WO_API wo_api wojeapi_world_is_valid(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_bool(vm, je_ecs_world_is_valid(wo_pointer(args + 0)));
+}
 WO_API wo_api wojeapi_get_editing_entity_uid(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::typing::euid_t uid = jedbg_get_editing_entity_uid();
@@ -2058,7 +2074,14 @@ namespace je
             }
         }
     }
-
+    namespace world
+    {
+        namespace editor
+        {
+            extern("libjoyecs", "wojeapi_world_is_valid")
+            public func is_valid(self: world)=> bool;
+        }
+    }
     namespace entity
     {
         namespace editor
@@ -2362,7 +2385,8 @@ namespace je
     namespace unsafe
     {
         extern("libjoyecs", "wojeapi_startup_thread")
-        public func start_thread(f: ()=> void)=> void;
+        public func start_thread<FT, ArgTs>(f: FT, args: ArgTs)=> void
+            where f(args...) is void;
 
         public func singleton<T>(token: string, f: ()=>T)=> ()=>T
         {
