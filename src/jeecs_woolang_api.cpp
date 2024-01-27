@@ -2364,7 +2364,7 @@ namespace je
         extern("libjoyecs", "wojeapi_startup_thread")
         public func start_thread(f: ()=> void)=> void;
 
-        public func singleton<T>(token: string, f: ()=>T)=> T
+        public func singleton<T>(token: string, f: ()=>T)=> ()=>T
         {
             extern("libjoyecs", "wojeapi_create_singleton")
             func _singleton<T>(token: string, f: ()=>T)=> T;
