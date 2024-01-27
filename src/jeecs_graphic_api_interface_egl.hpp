@@ -146,7 +146,7 @@ namespace jeecs::graphic
             if (_window_size_resized)
                 return update_result::RESIZE;
 
-            return update_result::CLOSE;
+            return update_result::NORMAL ;
         }
         virtual void shutdown(bool reboot) override
         {
