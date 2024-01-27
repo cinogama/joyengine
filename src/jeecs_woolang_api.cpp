@@ -15,7 +15,7 @@ WO_API wo_api wojeapi_startup_thread(wo_vm vm, wo_value args, size_t argc)
     std::thread t([=]
         {
             wo_invoke_value(co_vmm, cofunc, 0);
-            wo_release_vm(vm);
+            wo_release_vm(co_vmm);
         });
     t.detach();
 

@@ -15,6 +15,39 @@ namespace jeapi::loader
                     ;
                 ;
         }
+
+        using step_loader = struct{
+            world: je::world,
+            data: dict<string, dynamic>,
+        }
+        {
+            public func create(u: je::universe, wpath: string)
+            {
+                return je::file::readall(wpath)
+                    =>> \dat = dat->dict::deserialize;
+                    ->> \dat = dat
+                        ->> \k, v = (k: string, v);
+                        ;
+                    ->> \dat = step_loader{
+                            world = je::world::create(u),
+                            data = dat,
+                        }
+                        ;
+                    ;
+            }
+            public func instance_entity(self: step_loader)
+            {
+                jeapi::deserialize::world_entitys(self.world, self.data, false);
+            }
+            public func instance_system(self: step_loader)
+            {
+                jeapi::deserialize::world_systems(self.world, self.data, false);
+            }
+            public func get_world(self: step_loader)
+            {
+                return self.world;
+            }
+        }
     }
 
     using prefab = struct{
