@@ -2037,11 +2037,6 @@ import je;
 
 namespace je
 {
-    namespace unsafe
-    {
-        extern("libjoyecs", "wojeapi_create_singleton")
-        public func singleton<T>(token: string, f: ()=>T)=> T;
-    }
     namespace typeinfo
     {
         extern("libjoyecs", "wojeapi_typeinfo_get_unregister_count")
@@ -2363,6 +2358,15 @@ namespace je
     extern("libjoyecs", "wojeapi_startup_coroutine")
     public func start_coroutine<FT, ArgTs>(f: FT, args: ArgTs)=> void
         where f(args...) is void;
+
+    namespace unsafe
+    {
+        extern("libjoyecs", "wojeapi_startup_thread")
+        public func start_thread(f: ()=> void)=> void;
+
+        extern("libjoyecs", "wojeapi_create_singleton")
+        public func singleton<T>(token: string, f: ()=>T)=> T;
+    }
 
     extern("libjoyecs", "wojeapi_generate_uid")
         public func uid()=> string;
