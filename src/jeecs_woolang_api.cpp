@@ -7,6 +7,21 @@
 std::atomic_flag log_buffer_mx = {};
 std::list<std::pair<int, std::string>> log_buffer;
 
+WO_API wo_api wojeapi_startup_thread(wo_vm vm, wo_value args, size_t argc)
+{
+    wo_vm co_vmm = wo_borrow_vm(vm);
+    wo_value cofunc = wo_push_val(co_vmm, args + 0);
+
+    std::thread t([=]
+        {
+            wo_invoke_value(co_vmm, cofunc, 0);
+            wo_release_vm(vm);
+        });
+    t.detach();
+
+    return wo_ret_void(vm);
+}
+
 WO_API wo_api wojeapi_generate_uid(wo_vm vm, wo_value args, size_t argc)
 {
     return wo_ret_string(vm, jeecs::typing::uid_t::generate().to_string().c_str());
