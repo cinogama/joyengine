@@ -49,7 +49,7 @@ let Albedo          = uniform_texture:<texture2d>("Albedo", NearestSampler, 0);
 public func frag(vf: v2f)
 {
     return fout{
-        albedo = alphatest(texture(Albedo, vf.uv)),
+        albedo = alphatest(je_color * texture(Albedo, vf.uv)),
         self_luminescence = float4::zero,
         vspace_position = float4::create(vf.vpos, 1.),
         vspace_normalize = float4::create(vf.vnorm, 1.),

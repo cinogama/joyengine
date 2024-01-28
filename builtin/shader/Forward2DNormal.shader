@@ -73,7 +73,7 @@ let Normalize       = uniform_texture:<texture2d>("Normalize", NearestSampler, 1
 public func frag(vf: v2f)
 {
     return fout{
-        albedo = alphatest(texture(Albedo, vf.uv)),
+        albedo = je_color * alphatest(texture(Albedo, vf.uv)),
         self_luminescence = float4::zero,
         vspace_position = float4::create(vf.vpos, 1.),
         vspace_normalize = float4::create(transed_normal_tangent_map(Normalize, vf), 1.),

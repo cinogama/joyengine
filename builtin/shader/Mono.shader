@@ -2,7 +2,7 @@
 
 import je::shader;
 
-SHARED  (false);
+SHARED  (true);
 ZTEST   (LESS);
 ZWRITE  (ENABLE);
 BLEND   (ONE, ZERO);
@@ -27,11 +27,9 @@ public func vert(v: vin)
     };
 }
 
-let color   = uniform("Color", float4::one);
-
 public func frag(_: v2f)
 {
     return fout{
-        color = color,
+        color = je_color,
     };
 }

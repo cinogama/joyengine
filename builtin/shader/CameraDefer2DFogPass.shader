@@ -10,17 +10,17 @@ BLEND   (ONE, ZERO);
 CULL    (BACK);
 
 VAO_STRUCT! vin {
-    vertex: float3,
-    uv : float2,
+    vertex  : float3,
+    uv      : float2,
 };
 
 using v2f = struct {
-    pos: float4,
-    uv : float2,
+    pos     : float4,
+    uv      : float2,
 };
 
 using fout = struct {
-    color: float4
+    color   : float4
 };
 
 public func vert(v: vin)
@@ -65,6 +65,6 @@ public func frag(vf: v2f)
     let fog_factor = pow(clamp(fog_raw_factor, 0., 1.), fog_attenuation);
 
     return fout{
-        color = float4::create(lerp(hdr_ambient_with_gamma, fog_color, fog_factor), 1.)
+        color = je_color * float4::create(lerp(hdr_ambient_with_gamma, fog_color, fog_factor), 1.)
     };
 }

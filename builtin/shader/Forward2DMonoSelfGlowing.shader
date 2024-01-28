@@ -41,14 +41,13 @@ public func vert(v: vin)
     };
 }
 
-let color           = uniform("Color", float4::one);
 let self_glowing    = uniform("SelfGlowing", float::one);
 
 public func frag(vf: v2f)
 {
     return fout{
-        albedo = color,
-        self_luminescence = float4::create(color->xyz * self_glowing, 1.),
+        albedo = je_color,
+        self_luminescence = float4::create(je_color->xyz * self_glowing, 1.),
         vspace_position = float4::create(vf.vpos, 1.),
         vspace_normalize = float4::create(vf.vnorm, 1.),
     };

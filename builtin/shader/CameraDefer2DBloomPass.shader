@@ -10,17 +10,17 @@ BLEND   (ONE, ZERO);
 CULL    (BACK);
 
 VAO_STRUCT! vin {
-    vertex: float3,
-    uv : float2,
+    vertex  : float3,
+    uv      : float2,
 };
 
 using v2f = struct {
-    pos: float4,
-    uv : float2,
+    pos     : float4,
+    uv      : float2,
 };
 
 using fout = struct {
-    color: float4
+    color   : float4
 };
 
 public func vert(v: vin)
@@ -99,6 +99,6 @@ public func frag(vf: v2f)
     let hdr_ambient_with_gamma = pow(hdr_color_rgb, float3::new(1. / 2.2, 1. / 2.2, 1. / 2.2));
 
     return fout{
-        color = float4::create(hdr_ambient_with_gamma, 1.)
+        color = je_color * float4::create(hdr_ambient_with_gamma, 1.)
     };
 }

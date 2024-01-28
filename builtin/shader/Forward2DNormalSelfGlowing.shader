@@ -2,11 +2,11 @@
 
 import je::shader;
 
-SHARED(true);
-ZTEST(LESS);
-ZWRITE(ENABLE);
-BLEND(ONE, ZERO);
-CULL(NONE);
+SHARED  (true);
+ZTEST   (LESS);
+ZWRITE  (ENABLE);
+BLEND   (ONE, ZERO);
+CULL    (NONE);
 
 VAO_STRUCT! vin {
     vertex  : float3,
@@ -74,9 +74,9 @@ let self_glowing    = uniform("SelfGlowing", float::one);
 
 public func frag(vf: v2f)
 {
-    let albedo_color = alphatest(texture(Albedo, vf.uv));
+    let albedo_color = je_color * texture(Albedo, vf.uv);
     return fout{
-        albedo = albedo_color,
+        albedo = alphatest(albedo_color),
         self_luminescence = float4::create(albedo_color->xyz * self_glowing, 1.),
         vspace_position = float4::create(vf.vpos, 1.),
         vspace_normalize = float4::create(transed_normal_tangent_map(Normalize, vf), 1.),

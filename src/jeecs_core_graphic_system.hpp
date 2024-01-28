@@ -685,6 +685,9 @@ public let frag =
                                 rendentity.color->color.y,
                                 rendentity.color->color.z,
                                 rendentity.color->color.w);
+                        else
+                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
+                                1.0f, 1.0f, 1.0f, 1.0f);
                     }
 
                 }
@@ -935,6 +938,9 @@ public let frag =
                                 rendentity.color->color.y,
                                 rendentity.color->color.z,
                                 rendentity.color->color.w);
+                        else
+                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
+                                1.0f, 1.0f, 1.0f, 1.0f);
                     }
 
                 }
@@ -1334,6 +1340,7 @@ public func frag(_: v2f)
             const Textures* textures;
             const FrustumCulling* frustumCulling;
             const Camera::Clear* clear;
+            const Renderer::Color* color;
 
             bool operator < (const l2dcamera_arch& another) const noexcept
             {
@@ -1410,7 +1417,8 @@ public func frag(_: v2f)
                 Shaders* shaders,
                 Textures* textures,
                 FrustumCulling* frustumCulling,
-                Camera::Clear* clear)
+                Camera::Clear* clear,
+                Renderer::Color* color)
                 {
                     auto* branch = this->allocate_branch(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
                     m_2dcamera_list.emplace_back(
@@ -1425,7 +1433,8 @@ public func frag(_: v2f)
                             shaders,
                             textures,
                             frustumCulling,
-                            clear
+                            clear,
+                            color
                         }
                     );
 
@@ -2046,6 +2055,9 @@ public func frag(_: v2f)
                                 rendentity.color->color.y,
                                 rendentity.color->color.z,
                                 rendentity.color->color.w);
+                        else
+                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
+                                1.0f, 1.0f, 1.0f, 1.0f);
                     }
 
                 }
@@ -2266,6 +2278,16 @@ public func frag(_: v2f)
 
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, tiling, float2, _using_tiling->x, _using_tiling->y);
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, offset, float2, _using_offset->x, _using_offset->y);
+
+                        if (current_camera.color != nullptr)
+                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
+                                current_camera.color->color.x,
+                                current_camera.color->color.y,
+                                current_camera.color->color.z,
+                                current_camera.color->color.w);
+                        else
+                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
+                                1.0f, 1.0f, 1.0f, 1.0f);
                     }
                 } // Finish for Light2d effect.
             }

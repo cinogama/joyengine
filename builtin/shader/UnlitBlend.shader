@@ -36,6 +36,6 @@ let Main            = uniform_texture:<texture2d>("Main", NearestSampler, 0);
 public func frag(vf: v2f)
 {
     return fout{
-        color = alphatest(texture(Main, vf.uv)),
+        color = alphatest(je_color * texture(Main, vf.uv)),
     };
 }

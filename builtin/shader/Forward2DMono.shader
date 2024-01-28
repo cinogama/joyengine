@@ -2,7 +2,7 @@
 
 import je::shader;
 
-SHARED  (false);
+SHARED  (true);
 ZTEST   (LESS);
 ZWRITE  (ENABLE);
 BLEND   (ONE, ZERO);
@@ -41,12 +41,10 @@ public func vert(v: vin)
     };
 }
 
-let color   = uniform("Color", float4::one);
-
 public func frag(vf: v2f)
 {
     return fout{
-        albedo = color,
+        albedo = je_color,
         self_luminescence = float4::zero,
         vspace_position = float4::create(vf.vpos, 1.),
         vspace_normalize = float4::create(vf.vnorm, 1.),
