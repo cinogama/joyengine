@@ -104,6 +104,8 @@ namespace editor
 
             assert (self.m_worlds->empty);
 
+            je::editor::abort_threads();
+
             // 关闭所有世界~~
             do self->get_env->get_universe->get_all_worlds
                 ->> \w = w->close();

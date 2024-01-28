@@ -1259,7 +1259,7 @@ public func step<T, U>(a: T, b: U)=> float
 
 public func uvtrans(uv: float2, tiling: float2, offset: float2)
 {
-    return uv * tiling + offset;
+    return (uv + offset) * tiling;
 }
 
 let _uvframebuf = custom_method:<float2>("JEBUILTIN_Uvframebuffer",

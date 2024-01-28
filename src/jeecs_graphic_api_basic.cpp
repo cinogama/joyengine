@@ -322,8 +322,11 @@ bool _je_graphic_shared_context::mark_shared_resources_outdated(const char* path
         auto fnd = ctx->_m_thread_notifier->_m_cached_resources.find(path);
         if (fnd != ctx->_m_thread_notifier->_m_cached_resources.end())
         {
-            jegl_close_resource(fnd->second.m_resource);
-            fnd->second.m_resource = nullptr;
+            if (fnd->second.m_resource != nullptr)
+            {
+                jegl_close_resource(fnd->second.m_resource);
+                fnd->second.m_resource = nullptr;
+            }
 
             marked = true;
         }

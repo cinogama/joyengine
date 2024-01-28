@@ -12,8 +12,8 @@
 #   define DEBUG_ARCH_LOG(...) ((void)0)
 #   define DEBUG_ARCH_LOG_WARN(...) ((void)0)
 #else
-#   define DEBUG_ARCH_LOG(...) jeecs::debug::loginfo( __VA_ARGS__ );
-#   define DEBUG_ARCH_LOG_WARN(...) jeecs::debug::logwarn( __VA_ARGS__ );
+#   define DEBUG_ARCH_LOG(...) jeecs::debug::loginfo( __VA_ARGS__ )
+#   define DEBUG_ARCH_LOG_WARN(...) jeecs::debug::logwarn( __VA_ARGS__ )
 #endif
 
 #if defined(__cpp_lib_execution) && defined(NDEBUG)
@@ -624,33 +624,33 @@ namespace jeecs_impl
             }
 
             static auto contain = [](const types_set& a, const types_set& b)
-            {
-                for (auto type_id : b)
-                    if (a.find(type_id) == a.end())
-                        return false;
-                return true;
-            };
+                {
+                    for (auto type_id : b)
+                        if (a.find(type_id) == a.end())
+                            return false;
+                    return true;
+                };
             static auto contain_any = [](const types_set& a, const types_set& b)
-            {
-                for (auto type_id : b)
-                    if (a.find(type_id) != a.end())
-                        return true;
-                return b.empty();
-            };
+                {
+                    for (auto type_id : b)
+                        if (a.find(type_id) != a.end())
+                            return true;
+                    return b.empty();
+                };
             static auto contain_all_any = [](const types_set& a, const std::map<size_t/* Group id */, types_set>& b)
-            {
-                for (auto& [_, type_id_set] : b)
-                    if (contain_any(a, type_id_set) == false)
-                        return false;
-                return true;
-            };
+                {
+                    for (auto& [_, type_id_set] : b)
+                        if (contain_any(a, type_id_set) == false)
+                            return false;
+                    return true;
+                };
             static auto except = [](const types_set& a, const types_set& b)
-            {
-                for (auto type_id : b)
-                    if (a.find(type_id) != a.end())
-                        return false;
-                return true;
-            };
+                {
+                    for (auto type_id : b)
+                        if (a.find(type_id) != a.end())
+                            return false;
+                    return true;
+                };
 
             dependence->m_archs.clear();
             do
@@ -796,7 +796,8 @@ namespace jeecs_impl
             };
 
             jeecs::basic::atomic_list<typed_system> m_adding_or_removing_systems;
-            bool m_destroy_world;
+            bool                                    m_destroy_world;
+            bool                                    m_enable_for_world_jobs;
 
             _world_command_buffer() = default;
         };
@@ -846,6 +847,7 @@ namespace jeecs_impl
 
             auto* wbuf = new _world_command_buffer{};
             wbuf->m_destroy_world = false;
+            wbuf->m_enable_for_world_jobs = true;
             return _m_world_command_buffer[w] = wbuf;
         }
 
@@ -900,8 +902,20 @@ namespace jeecs_impl
         {
             std::shared_lock sl(_m_command_executer_guard_mx);
 
-            DEBUG_ARCH_LOG("World: %p The destroy world operation has been committed to the command buffer.", w);
+            DEBUG_ARCH_LOG("World: %p the destroy world operation has been committed to the command buffer.", w);
             _find_or_create_buffer_for(w)->m_destroy_world = true;
+        }
+
+        void set_able_world_jobs(ecs_world* w, bool enable)
+        {
+            std::shared_lock sl(_m_command_executer_guard_mx);
+
+            if (enable)
+                DEBUG_ARCH_LOG("World: %p trying to enable universe world jobs.", w);
+            else
+                DEBUG_ARCH_LOG("World: %p trying to disable universe world jobs.", w);
+
+            _find_or_create_buffer_for(w)->m_enable_for_world_jobs = enable;
         }
 
         void add_system_instance(ecs_world* w, const jeecs::typing::type_info* type, jeecs::game_system* sys_instance)
@@ -947,8 +961,10 @@ namespace jeecs_impl
 
         std::string _m_name;
 
-        std::atomic_bool _m_destroying_flag = false;
-        std::atomic_size_t _m_archmgr_updated_version = 100;
+        bool _m_world_job_enabled;
+
+        std::atomic_bool _m_destroying_flag;
+        std::atomic_size_t _m_archmgr_updated_version;
 
         system_container_t m_systems;
     private:
@@ -960,6 +976,9 @@ namespace jeecs_impl
             :_m_universe(universe)
             , _m_name("anonymous")
             , _m_arch_manager(this)
+            , _m_world_job_enabled(true)
+            , _m_destroying_flag(false)
+            , _m_archmgr_updated_version(100)
         {
             std::lock_guard g1(_m_alive_worlds_mx);
             _m_alive_worlds.insert(this);
@@ -988,14 +1007,17 @@ namespace jeecs_impl
             type->destruct(sys);
             je_mem_free(sys);
         }
-
+        void execute_world_job(ecs_job* job)noexcept
+        {
+            assert(job->m_job_type == ecs_job::job_type::FOR_WORLDS);
+            if (_m_world_job_enabled)
+                job->m_for_worlds_job(this, job->m_custom_data);
+        }
         void append_system_instance(const jeecs::typing::type_info* type, jeecs::game_system* sys) noexcept
         {
             auto fnd = m_systems.find(type);
             if (fnd == m_systems.end())
-            {
                 m_systems[type] = sys;
-            }
             else
             {
 #ifndef NDEBUG
@@ -1135,6 +1157,10 @@ namespace jeecs_impl
         {
             get_command_buffer().remove_system_instance(this, type);
         }
+        void request_to_set_able(bool enable)noexcept
+        {
+            get_command_buffer().set_able_world_jobs(this, enable);
+        }
 
         inline command_buffer& get_command_buffer() noexcept
         {
@@ -1146,9 +1172,13 @@ namespace jeecs_impl
             return _m_destroying_flag;
         }
 
-        inline void ready_to_destroy() noexcept
+        inline void _ready_to_destroy() noexcept
         {
             _m_destroying_flag = true;
+        }
+        inline void _set_able_world_jobs(bool enable) noexcept
+        {
+            _m_world_job_enabled = enable;
         }
 
         inline ecs_universe* get_universe() const noexcept
@@ -1314,7 +1344,7 @@ namespace jeecs_impl
                                 // New & old arch is same, rebuilt in place.
                                 for (auto [typeinfo, instance] : modifying_component_type_and_instances)
                                 {
-                                    if(instance == nullptr)
+                                    if (instance == nullptr)
                                         // NOTE: 照理来说，如果instance == nullptr，说明正在移除实体中的组件，
                                         //      此时如果new_arch_type_my_null == current_arch_type，那么说明
                                         //      本次移除实际上是失败的（即实际上实体没有这个组件），那么直接
@@ -1402,7 +1432,10 @@ namespace jeecs_impl
                 ecs_world* world = _buf_in_world.first;
 
                 if (_buf_in_world.second->m_destroy_world)
-                    world->ready_to_destroy();
+                    world->_ready_to_destroy();
+
+                // Apply universe world job enable/disable.
+                world->_set_able_world_jobs(_buf_in_world.second->m_enable_for_world_jobs);
 
                 std::unordered_map<const jeecs::typing::type_info*, jeecs::game_system*> modifying_system_type_and_instances;
 
@@ -1766,7 +1799,7 @@ namespace jeecs_impl
                     if (shared_job->m_job_type == ecs_job::job_type::FOR_WORLDS)
                         ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
                             [this, shared_job](ecs_world* world) {
-                                shared_job->m_for_worlds_job(world, shared_job->m_custom_data);
+                                world->execute_world_job(shared_job);
                             });
                     else
                         shared_job->m_call_once_job(shared_job->m_custom_data);
@@ -1779,7 +1812,7 @@ namespace jeecs_impl
                     if (shared_job->m_job_type == ecs_job::job_type::FOR_WORLDS)
                         ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
                             [this, shared_job](ecs_world* world) {
-                                shared_job->m_for_worlds_job(world, shared_job->m_custom_data);
+                                world->execute_world_job(shared_job);
                             });
                     else
                         shared_job->m_call_once_job(shared_job->m_custom_data);
@@ -1809,7 +1842,7 @@ namespace jeecs_impl
                     if (shared_job->m_job_type == ecs_job::job_type::FOR_WORLDS)
                         ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
                             [this, shared_job](ecs_world* world) {
-                                shared_job->m_for_worlds_job(world, shared_job->m_custom_data);
+                                world->execute_world_job(shared_job);
                             });
                     else
                         shared_job->m_call_once_job(shared_job->m_custom_data);
@@ -1824,7 +1857,7 @@ namespace jeecs_impl
             DEBUG_ARCH_LOG("Ready to create ecs_universe: %p.", this);
 
             // Append default jobs for updating systems.
-            je_ecs_universe_register_for_worlds_job(this, 
+            je_ecs_universe_register_for_worlds_job(this,
                 default_job_for_execute_sys_update_for_worlds, nullptr, nullptr);
 
             _m_universe_update_thread_stop_flag.test_and_set();
@@ -2213,6 +2246,11 @@ void je_ecs_world_remove_system_instance(void* world, const jeecs::typing::type_
     std::launder(reinterpret_cast<jeecs_impl::ecs_world*>(world))->request_to_remove_system(type);
 }
 
+void je_ecs_world_set_able_jobs(void* world, bool enable)
+{
+    std::launder(reinterpret_cast<jeecs_impl::ecs_world*>(world))->request_to_set_able(enable);
+}
+
 void je_ecs_world_create_entity_with_components(
     void* world,
     jeecs::game_entity* out_entity,
@@ -2556,6 +2594,8 @@ double je_ecs_universe_get_time_scale(void* universe)
 {
     return std::launder(reinterpret_cast<jeecs_impl::ecs_universe*>(universe))->get_time_scale();
 }
+
+///////////////////////
 
 void je_ecs_finish()
 {

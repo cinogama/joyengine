@@ -4,8 +4,11 @@
 
 #include <list>
 
-std::atomic_flag log_buffer_mx = {};
-std::list<std::pair<int, std::string>> log_buffer;
+std::atomic_flag _jewo_log_buffer_mx = {};
+std::list<std::pair<int, std::string>> _jewo_log_buffer;
+
+std::mutex _jewo_all_alive_vm_threads_mx;
+std::unordered_set<wo_vm> _jewo_all_alive_vm_threads;
 
 WO_API wo_api wojeapi_startup_thread(wo_vm vm, wo_value args, size_t argc)
 {
@@ -20,12 +23,39 @@ WO_API wo_api wojeapi_startup_thread(wo_vm vm, wo_value args, size_t argc)
         wo_struct_get(wo_push_empty(co_vmm), arguments, (uint16_t)(i - 1));
     }
 
+    std::lock_guard g1(_jewo_all_alive_vm_threads_mx);
+    _jewo_all_alive_vm_threads.insert(co_vmm);
+
     std::thread t([=]
         {
             wo_invoke_value(co_vmm, cofunc, argument_count);
+
+            std::lock_guard g2(_jewo_all_alive_vm_threads_mx);
+            _jewo_all_alive_vm_threads.erase(co_vmm);
+
             wo_release_vm(co_vmm);
         });
     t.detach();
+
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_abort_all_thread(wo_vm vm, wo_value args, size_t argc)
+{
+    for (;;)
+    {
+        if (true)
+        {
+            std::lock_guard g1(_jewo_all_alive_vm_threads_mx);
+            for (auto* thread_vm : _jewo_all_alive_vm_threads)
+                wo_abort_vm(thread_vm);
+
+            if (_jewo_all_alive_vm_threads.empty())
+                break;
+        }
+
+        je_clock_sleep_for(0.1);
+    }
 
     return wo_ret_void(vm);
 }
@@ -138,10 +168,11 @@ WO_API wo_api wojeapi_crc64_string(wo_vm vm, wo_value args, size_t argc)
 WO_API wo_api wojeapi_register_log_callback(wo_vm vm, wo_value args, size_t argc)
 {
     std::function<void(int, const char*)>* callbacks =
-        new std::function<void(int, const char*)>([&](int level, const char* msg) {
-        while (log_buffer_mx.test_and_set());
-        log_buffer.push_back({ level, msg });
-        log_buffer_mx.clear();
+        new std::function<void(int, const char*)>([&](int level, const char* msg)
+            {
+                while (_jewo_log_buffer_mx.test_and_set());
+                _jewo_log_buffer.push_back({ level, msg });
+                _jewo_log_buffer_mx.clear();
             });
 
     return wo_ret_handle(vm,
@@ -164,10 +195,10 @@ WO_API wo_api wojeapi_get_all_logs(wo_vm vm, wo_value args, size_t argc)
     wo_value result = wo_push_arr(vm, 0);
     std::list<std::pair<int, std::string>> logs;
 
-    while (log_buffer_mx.test_and_set());
-    logs.swap(log_buffer);
-    assert(log_buffer.empty());
-    log_buffer_mx.clear();
+    while (_jewo_log_buffer_mx.test_and_set());
+    logs.swap(_jewo_log_buffer);
+    assert(_jewo_log_buffer.empty());
+    _jewo_log_buffer_mx.clear();
 
     wo_value elem = wo_push_empty(vm);
     wo_value val = wo_push_empty(vm);
@@ -368,6 +399,12 @@ WO_API wo_api wojeapi_get_all_worlds_in_universe(wo_vm vm, wo_value args, size_t
 WO_API wo_api wojeapi_close_world(wo_vm vm, wo_value args, size_t argc)
 {
     jeecs::game_world(wo_pointer(args + 0)).close();
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_set_able_jobs_world(wo_vm vm, wo_value args, size_t argc)
+{
+    jeecs::game_world(wo_pointer(args + 0)).enable_jobs(wo_bool(args + 1));
     return wo_ret_void(vm);
 }
 
@@ -2014,12 +2051,12 @@ wo_pin_value _jewo_create_singleton(wo_vm vm, const char* token, wo_value func)
             return pinval;
         }
         return nullptr;
-    }        
+    }
 }
 void _jewo_clear_singletons()
 {
     std::lock_guard g1(_jewo_singleton_list_mx);
-    for (auto&[_, p] : _jewo_singleton_list)
+    for (auto& [_, p] : _jewo_singleton_list)
     {
         wo_close_pin_value(p);
     }
@@ -2036,8 +2073,8 @@ WO_API wo_api wojeapi_create_singleton(wo_vm vm, wo_value args, size_t argc)
 
         return wo_ret_val(vm, val);
     }
-    return wo_ret_panic(vm, "Failed to create singleton: '%s': %s.", 
-        wo_string(args + 0), 
+    return wo_ret_panic(vm, "Failed to create singleton: '%s': %s.",
+        wo_string(args + 0),
         wo_get_runtime_error(vm));
 }
 WO_API wo_api wojeapi_clear_singletons(wo_vm vm, wo_value args, size_t argc)
@@ -2234,6 +2271,9 @@ namespace je
     {
         extern("libjoyecs", "wojeapi_clear_singletons")
         public func clear_singletons()=> void;
+
+        extern("libjoyecs", "wojeapi_abort_all_thread")
+        public func abort_threads()=> void;
 
         extern("libjoyecs", "wojeapi_editor_register_panic_hook")
         public func register_panic_hook(f: (string, int, string, int, string, string)=> void)=> void;
@@ -2791,10 +2831,13 @@ R"(
     namespace world
     {
         extern("libjoyecs", "wojeapi_create_world_in_universe")
-        public func create(self: universe)=> world;
+        public func create(u: universe)=> world;
 
         extern("libjoyecs", "wojeapi_close_world")
         public func close(self: world) => void;
+
+        extern("libjoyecs", "wojeapi_set_able_jobs_world")
+        public func enable_jobs(self: world, able: bool)=> void;
 
         extern("libjoyecs", "wojeapi_add_system_to_world", slow)
         public func add_system(self: world, systype: typeinfo)=> bool;

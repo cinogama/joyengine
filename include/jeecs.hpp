@@ -1190,6 +1190,16 @@ je_ecs_world_of_entity [基本接口]
 JE_API void* je_ecs_world_of_entity(const jeecs::game_entity* entity);
 
 /*
+je_ecs_world_set_able_jobs [基本接口]
+设置世界是否启用执行注册到Universe的世界任务
+    * 无论是否执行世界任务，世界本身的实体/组件管理机制仍会正常运行
+    * 默认世界创建时会启用世界任务
+    * 通常此设置被游戏项目在加载多个场景时，用于控制逻辑开始的时间点
+    * 设置不会立即生效，世界在逻辑帧开始时起效
+*/
+JE_API void je_ecs_world_set_able_jobs(void* world, bool enable);
+
+/*
 je_ecs_entity_uid [基本接口]
 获取实体的跟踪ID
 若实体索引是`无效值`或已失效，则返回无效值0
@@ -4932,6 +4942,11 @@ namespace jeecs
         bool is_valid() const noexcept
         {
             return je_ecs_world_is_valid(handle());
+        }
+
+        void enable_jobs(bool able) const noexcept
+        {
+            je_ecs_world_set_able_jobs(handle(), able);
         }
 
         inline game_universe get_universe() const noexcept;
