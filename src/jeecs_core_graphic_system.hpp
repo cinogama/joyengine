@@ -474,7 +474,7 @@ public let frag =
             );
 
             selector.anyof<UserInterface::Absolute, UserInterface::Relatively>();
-            selector.except<Light2D::Color>();
+            selector.except<Light2D::Point, Light2D::Parallel>();
             selector.exec(
                 [this, &parent_origin_list](
                     Shaders& shads,
@@ -741,7 +741,7 @@ public let frag =
                     );
                 });
 
-            selector.except<Light2D::Color, UserInterface::Origin>();
+            selector.except<Light2D::Point, Light2D::Parallel, UserInterface::Origin>();
             selector.exec([this](
                 Translation& trans,
                 Shaders& shads,
@@ -1353,10 +1353,11 @@ public func frag(_: v2f)
         struct light2d_arch
         {
             const Translation* translation;
-            const Light2D::Color* color;
-            const Light2D::Shadow* shadow;
+            const Light2D::Point* point;
             const Light2D::Parallel* parallel;
-
+            const Light2D::Gain* gain;
+            const Light2D::Shadow* shadow;
+            const Renderer::Color* color;
             const Shape* shape;
             const Shaders* shaders;
             const Textures* textures;
@@ -1485,7 +1486,7 @@ public func frag(_: v2f)
                     }
                 });
 
-            selector.except<Light2D::Color, UserInterface::Origin>();
+            selector.except<Light2D::Point, Light2D::Parallel, UserInterface::Origin>();
             selector.exec([this](Translation& trans, Shaders& shads, Textures* texs, Shape& shape, Rendqueue* rendqueue, Renderer::Color* color)
                 {
                     // RendOb will be input to a chain and used for swap
@@ -1495,18 +1496,21 @@ public func frag(_: v2f)
                         });
                 });
 
+            selector.anyof<Light2D::Point, Light2D::Parallel>();
             selector.exec([this](Translation& trans,
-                Light2D::Color& color,
-                Light2D::Shadow* shadow,
+                Light2D::Point* point,
                 Light2D::Parallel* parallel,
+                Light2D::Gain* gain,
+                Light2D::Shadow* shadow,
+                Renderer::Color* color,
                 Shape& shape,
                 Shaders& shads,
                 Textures* texs)
                 {
                     m_2dlight_list.emplace_back(
                         light2d_arch{
-                            &trans, &color, shadow, parallel,
-                            &shape, &shads, texs,
+                            &trans, point, parallel, gain, shadow,
+                            color, &shape, &shads, texs,
                         }
                     );
                     if (shadow != nullptr)
@@ -1522,7 +1526,7 @@ public func frag(_: v2f)
                                 shadow->resolution_width, shadow->resolution_height,
                                 {
                                     jegl_texture::format::RGBA,
-                                    // Only store shadow value to R, FBO in opengl not support rend to MONO
+                                    // Only store shadow value to R-pass
                                 }
                             );
                         }
@@ -2140,7 +2144,8 @@ public func frag(_: v2f)
                             * _using_tiling = &default_tiling,
                             * _using_offset = &default_offset;
                         jegl_rchain_bind_texture(light2d_light_effect_rend_chain, texture_group, 0, m_default_resources.default_texture->resouce());
-                        if (light2d.textures)
+
+                        if (light2d.textures != nullptr)
                         {
                             _using_tiling = &light2d.textures->tiling;
                             _using_offset = &light2d.textures->offset;
@@ -2148,9 +2153,6 @@ public func frag(_: v2f)
                             for (auto& texture : light2d.textures->textures)
                                 jegl_rchain_bind_texture(light2d_light_effect_rend_chain, texture_group, texture.m_pass_id, texture.m_texture->resouce());
                         }
-
-                        for (auto& texture : light2d.textures->textures)
-                            jegl_rchain_bind_texture(light2d_light_effect_rend_chain, texture_group, texture.m_pass_id, texture.m_texture->resouce());
 
                         for (auto& shader_pass : drawing_shaders)
                         {
@@ -2170,15 +2172,23 @@ public func frag(_: v2f)
                                 light2d.translation->local_scale.y,
                                 light2d.translation->local_scale.z);
 
-                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, tiling, float2, _using_tiling->x, _using_tiling->y);
-                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, offset, float2, _using_offset->x, _using_offset->y);
+                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, tiling, float2, 
+                                _using_tiling->x, _using_tiling->y);
+                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, offset, float2, 
+                                _using_offset->x, _using_offset->y);
 
                             // 传入Light2D所需的颜色、衰减信息
+                            math::vec4 light_color = light2d.color == nullptr ?
+                                math::vec4(1.0f, 1.0f, 1.0f, 1.0f) : light2d.color->color;
+
+                            if (light2d.gain != nullptr)
+                                light_color.w *= light2d.gain->gain;
+
                             JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
-                                light2d.color->color.x,
-                                light2d.color->color.y,
-                                light2d.color->color.z,
-                                light2d.color->color.w * light2d.color->gain);
+                                light_color.x,
+                                light_color.y,
+                                light_color.z,
+                                light_color.w);
 
                             if (light2d.shadow != nullptr)
                                 JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, light2d_resolution, float2,
@@ -2189,7 +2199,9 @@ public func frag(_: v2f)
                                     (float)1.f,
                                     (float)1.f);
 
-                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, light2d_decay, float, light2d.color->decay);
+                            if (light2d.point != nullptr)
+                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, light2d_decay, float,
+                                    light2d.point->decay);
                         }
                     }
 

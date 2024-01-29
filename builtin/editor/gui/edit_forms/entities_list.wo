@@ -238,7 +238,9 @@ namespace editor::gui::edit_forms
                     "Renderer::Shape",
                     "Renderer::Shaders",
                     "Renderer::Textures",
-                    "Light2D::Color",
+                    "Renderer::Color",
+                    "Light2D::Point",
+                    "Light2D::Gain",
                     "Light2D::Shadow",
                 ])->>func(e)
                     {
@@ -261,9 +263,10 @@ namespace editor::gui::edit_forms
                     "Renderer::Shape",
                     "Renderer::Shaders",
                     "Renderer::Textures",
-                    "Light2D::Color",
-                    "Light2D::Shadow",
+                    "Renderer::Color",
                     "Light2D::Parallel",
+                    "Light2D::Gain",
+                    "Light2D::Shadow",
                 ])->>func(e)
                     {
                         // 设置默认的光照着色器

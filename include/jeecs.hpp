@@ -9,7 +9,7 @@
 #include "wo.h"
 
 #define JE_VERSION_WRAP(A, B, C) #A "." #B "." #C
-#define JE_CORE_VERSION JE_VERSION_WRAP(4, 4, 9)
+#define JE_CORE_VERSION JE_VERSION_WRAP(4, 4, 10)
 
 #include <cstdint>
 #include <cstring>
@@ -8040,7 +8040,7 @@ namespace jeecs
 
         struct Color
         {
-            math::vec4 color;
+            math::vec4 color = math::vec4(1.0f, 1.0f, 1.0f, 1.0f);
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
@@ -8286,19 +8286,22 @@ namespace jeecs
     }
     namespace Light2D
     {
-        struct Color
+        struct Gain
         {
-            math::vec4 color = math::vec4(1, 1, 1, 1);
             float gain = 1.0f;
-            float decay = 2.0f;
-            float range = 1.0f;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(guard, &Color::color, "color");
-                typing::register_member(guard, &Color::gain, "gain");
-                typing::register_member(guard, &Color::decay, "decay");
-                typing::register_member(guard, &Color::range, "range");
+                typing::register_member(guard, &Gain::gain, "gain");
+            }
+        };
+        struct Point
+        {
+            float decay = 2.0f;
+
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &Point::decay, "decay");
             }
         };
         struct Parallel
@@ -8602,13 +8605,15 @@ namespace jeecs
                                             case frame_data::data_value::type::QUAT4:
                                                 jeecs_file_read(&value.m_value.q4, sizeof(value.m_value.q4), 1, file_handle); break;
                                             default:
-                                                jeecs::debug::logerr("Unknown value type(%d) for component frame data.", (int)value.m_type);
+                                                jeecs::debug::logerr("Unknown value type(%d) for component frame data when reading animation '%s' frame %zu in '%s'.", 
+                                                    (int)value.m_type, frame_name.c_str(), (size_t)j, str.c_str());
                                                 break;
                                             }
 
                                             auto* component_type = jeecs::typing::type_info::of(component_name.c_str());
                                             if (component_type == nullptr)
-                                                jeecs::debug::logerr("Failed to found component type named '%s'.", component_name.c_str());
+                                                jeecs::debug::logerr("Failed to found component type named '%s' when reading animation '%s' frame %zu in '%s'.", 
+                                                    component_name.c_str(), frame_name.c_str(), (size_t)j, str.c_str());
                                             else
                                             {
                                                 frame_data::component_data cdata;
@@ -8620,7 +8625,8 @@ namespace jeecs
                                                 cdata.m_entity_cache = {};
 
                                                 if (cdata.m_member_info == nullptr)
-                                                    jeecs::debug::logerr("Component '%s' donot have member named '%s'.", component_name.c_str(), member_name.c_str());
+                                                    jeecs::debug::logerr("Component '%s' donot have member named '%s' when reading animation '%s' frame %zu in '%s'.",
+                                                        component_name.c_str(), member_name.c_str(), frame_name.c_str(), (size_t)j, str.c_str());
                                                 else
                                                     frame_dat.m_component_data.push_back(cdata);
                                             }
@@ -8652,7 +8658,8 @@ namespace jeecs
                                             case frame_data::data_value::type::VEC4:
                                                 jeecs_file_read(&value.m_value.v4, sizeof(value.m_value.v4), 1, file_handle); break;
                                             default:
-                                                jeecs::debug::logerr("Unknown value type(%d) for uniform frame data.", (int)value.m_type);
+                                                jeecs::debug::logerr("Unknown value type(%d) for uniform frame data when reading animation '%s' frame %zu in '%s'.", 
+                                                    (int)value.m_type, str.c_str());
                                                 break;
                                             }
 
@@ -9168,7 +9175,8 @@ namespace jeecs
             type_info::register_type<Camera::RendToFramebuffer>(guard, "Camera::RendToFramebuffer");
             type_info::register_type<Camera::Clear>(guard, "Camera::Clear");
 
-            type_info::register_type<Light2D::Color>(guard, "Light2D::Color");
+            type_info::register_type<Light2D::Gain>(guard, "Light2D::Gain");
+            type_info::register_type<Light2D::Point>(guard, "Light2D::Point");
             type_info::register_type<Light2D::Parallel>(guard, "Light2D::Parallel");
             type_info::register_type<Light2D::Shadow>(guard, "Light2D::Shadow");
             type_info::register_type<Light2D::CameraPostPass>(guard, "Light2D::CameraPostPass");
