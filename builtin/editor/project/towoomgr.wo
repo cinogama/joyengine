@@ -30,7 +30,7 @@ namespace editor
                 return name;
             return name->subto(0, idx);
         }
-        public func fetch_file(self: ToWooContext, type: string)
+        func fetch_file(self: ToWooContext, type: string)
         {
             let fetched_scripts = {}mut: map<path_t, int>;
             for (let _, p : allsubpath(self.m_project_path)->unwarpor([]))
@@ -47,7 +47,7 @@ namespace editor
             }
             return fetched_scripts;
         }
-        public func update_system(self: ToWooContext, new_scripts: map<path_t, (int, je::typeinfo)>, fullupdate: bool)
+        func update_system(self: ToWooContext, new_scripts: map<path_t, (int, je::typeinfo)>, fullupdate: bool)
         {
             let fetched_scripts = self->fetch_file(".jesystem.wo");
             for (let p, (c, t) : self.m_loaded_towoo)
@@ -71,14 +71,14 @@ namespace editor
             }
             return fetched_scripts;
         }
-        public func update_component(self: ToWooContext, new_scripts: map<path_t, (int, je::typeinfo)>)
+        func update_component(self: ToWooContext, new_scripts: map<path_t, (int, je::typeinfo)>, fullupdate: bool)
         {
             let fetched_scripts = self->fetch_file(".jecomponent.wo");
             for (let p, (c, t) : self.m_loaded_towoo)
             {
                 if (filename(p)->lower->endwith(".jecomponent.wo"))
                 {
-                    if (fetched_scripts->contain(p) == false || fetched_scripts[p] != c)
+                    if (fullupdate || fetched_scripts->contain(p) == false || fetched_scripts[p] != c)
                     {
                         assert(!self.m_removing_component->contain(pure_component_or_system_name(purename(p))));
 
@@ -95,12 +95,12 @@ namespace editor
             }
             return fetched_scripts;
         }
-        public func update(self: ToWooContext)
+        public func update(self: ToWooContext, force: bool)
         {
             let new_scripts = {}mut: map<path_t, (int, je::typeinfo)>;
 
-            let fetched_components = self->update_component(new_scripts);
-            let fetched_system = self->update_system(new_scripts, !fetched_components->empty);
+            let fetched_components = self->update_component(new_scripts, force);
+            let fetched_system = self->update_system(new_scripts, force);
 
             self.m_bad_towoo_script->clear;
 

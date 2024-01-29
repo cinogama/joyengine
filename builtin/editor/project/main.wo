@@ -544,7 +544,7 @@ namespace editor
                     {
                         je::gui::launch(func()
                             {
-                                self.m_towoo_context->update();
+                                self.m_towoo_context->update(false);
                                 self->restore_all_world(dat);
                                 return false;
                             }, ());
@@ -594,7 +594,7 @@ namespace editor
                 ->> \mr = jeapi::gui::form::errmsg("加载失败", F"无法加载 '{mr[0]}'：{mr[1]}"); 
                 ;
             
-            self.m_towoo_context->update();
+            self.m_towoo_context->update(false);
 
             match (fsys::readall(self.m_path / ".runtime" / "world.list")=>> \dat = dat->dict::deserialize;)
             {

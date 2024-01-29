@@ -193,6 +193,11 @@ namespace editor::gui::edit_forms
   
                         if (BeginMenu(menu_name))
                         {
+                            if (MenuItem("强制重新载入"))
+                                proj->get_towoo_context->update(true);
+
+                            Separator();
+
                             if (!bad_scripts->empty)
                             {
                                 do MenuItemEnabled("编译错误", false);
