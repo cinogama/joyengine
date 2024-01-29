@@ -142,7 +142,7 @@ namespace editor::gui::drawpannel
         {
             do self.edited_textures->remove(oldtex);
             let history = new! HistoryManager(newtex);
-            self.edited_textures->set(newtex, (passid, new! HistoryManager(newtex)));
+            self.edited_textures->set(newtex, (passid, history));
             history->mark_as_edited();
         }
     }
@@ -174,7 +174,7 @@ namespace editor::gui::drawpannel
     func edittexture(
         context: EditorContext, 
         entity: option<jeapi::debug::Eeid>, 
-        images: array<(int, mut graphic::texture)>, 
+        images: array<(int, mut graphic::texture, mut option<string>)>, 
         draw_context: DrawContextT)
     {
         let mut open = true;
@@ -185,7 +185,7 @@ namespace editor::gui::drawpannel
             {
                 if (BeginTabBar("##draw_textures"))
                 {
-                    for (let index, (passid, texture) : images)
+                    for (let index, (passid, texture, path) : images)
                     {
                         let history_mgr = draw_context.edited_textures[texture][1];
 
@@ -197,20 +197,34 @@ namespace editor::gui::drawpannel
                                 history_mgr->redo();
                         }
 
-                        let texture_path = texture->path->valor("<内置>");
+                        let texture_path = path->valor("<内置>");
                         if (BeginTabItem(F"通道{passid}: {texture_path}"))
                         {
                             if (BeginMenuBar())
                             {
                                 if (BeginMenu("文件"))
                                 {
+                                    if (MenuItem("重置当前通道路径"))
+                                    {
+                                        jeapi::gui::form::ask("是否确认", "文件的路径将被重置，保存时将自动保存到其他目录。\n操作不可撤销，是否继续？",
+                                            func(ok)
+                                            {
+                                                if (ok)
+                                                {
+                                                    draw_context->update_edit_textures_history(passid, texture, texture);
+                                                    images[index][2] = option::none;
+                                                }
+                                            });
+                                    }
                                     if (MenuItem("画布尺寸"))
                                     {
                                         // 更新画布尺寸之后，创建新的纹理对象覆盖到数组里
                                         let image_old_sz = texture->size;
                                         let image_new_sz = (mut image_old_sz[0], mut image_old_sz[1]);
+
+                                        let open = new! mutable(true);
+
                                         launch(func(){
-                                            let mut open = true;
                                             match (BeginAttrOpen("创建绘制对象", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
                                             {
                                             value(show)?
@@ -232,24 +246,36 @@ namespace editor::gui::drawpannel
                                                     };
                                                     if (Button("应用"))
                                                     {
-                                                        open = false;
-                                                        let new_texture = new! je::graphic::texture(image_new_sz...);
-                                                        for (let mut ix = 0; ix < std::min(image_new_sz[0], image_old_sz[0]); ix += 1)
-                                                            for (let mut iy = 0; iy < std::min(image_new_sz[1], image_old_sz[1]); iy += 1)
-                                                                new_texture->pix((ix, iy))->set_color(texture->pix((ix, iy))->get_color());
+                                                        jeapi::gui::form::ask("是否确认", "将覆盖当前通道纹理，操作不可撤销，是否继续？",
+                                                            func(ok)
+                                                            {
+                                                                if (ok)
+                                                                {
+                                                                    open->set(false);
+                                                                    
+                                                                    let new_texture = new! je::graphic::texture(image_new_sz...);
+                                                                    for (let mut ix = 0; ix < std::min(image_new_sz[0], image_old_sz[0]); ix += 1)
+                                                                        for (let mut iy = 0; iy < std::min(image_new_sz[1], image_old_sz[1]); iy += 1)
+                                                                            new_texture->pix((ix, iy))->set_color(texture->pix((ix, iy))->get_color());
 
-                                                        images[index][1] = new_texture;
-                                                        do texture->path->>\path = new_texture->bind_path(path);;
+                                                                    images[index][1] = new_texture;
+                                                                    do texture->path->>\path = new_texture->bind_path(path);;
 
-                                                        draw_context->update_edit_textures_history(passid, texture, new_texture);
+                                                                    draw_context->update_edit_textures_history(passid, texture, new_texture);
+                                                                }
+                                                            });                           
                                                     }
+                                                    SameLine();
+
+                                                    if (Button("取消"))
+                                                        open->set(false);
                                                 }
                                             none?
-                                                open = false;
+                                                open->set(false);
                                             }
                                             
                                             End();
-                                            return open;
+                                            return open->get;
                                         }, ());
                                     }
                                     EndMenu();
@@ -269,13 +295,20 @@ namespace editor::gui::drawpannel
                                     Separator();
                                     if (BeginMenu("从……复制"))
                                     {
-                                        for (let _, (opassid, otexture) : images)
+                                        for (let _, (opassid, otexture, path) : images)
                                         {
-                                            if (MenuItemEnabled(F"通道{opassid}：{otexture->path->valor("<内置>")}", passid != opassid))
+                                            if (MenuItemEnabled(F"通道{opassid}：{path->valor("<内置>")}", passid != opassid))
                                             {
-                                                let new_tex = create_and_copy_texture(otexture);
-                                                images[index][1] = new_tex;
-                                                draw_context->update_edit_textures_history(passid, texture, new_tex);
+                                                jeapi::gui::form::ask("是否确认", "将覆盖当前通道纹理，操作不可撤销，是否继续？",
+                                                    func(ok)
+                                                    {
+                                                        if (ok)
+                                                        {
+                                                            let new_tex = create_and_copy_texture(otexture);
+                                                            images[index][1] = new_tex;
+                                                            draw_context->update_edit_textures_history(passid, texture, new_tex);
+                                                        }
+                                                    });
                                             }
                                         }
                                         EndMenu();
@@ -326,7 +359,10 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                                             new! ScriptEditor(context, DEFAULT_SCRIPT_SRC, "图像效果", false)
                                                 ->set_callback(func(vmm)
                                                 {
-                                                    return vmm->invoke("main", [texture: dynamic]);
+                                                    let result = vmm->invoke("main", [texture: dynamic]);
+                                                    history_mgr->save_step();
+
+                                                    return result;
                                                 });
                                         }
                                         EndMenu();
@@ -497,14 +533,14 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
             let saving_image_action = []mut: vec<()=> void>;
 
             // 遍历所有被编辑过的图片，直接保存！
-            for (let _, (passid, edited_texture) : images)
+            for (let _, (passid, edited_texture, path) : images)
             {
                 if (!draw_context.edited_textures[edited_texture][1]->edited)
                     continue;
                 
                 // 生成文件名，如果已经有了就有，没有就死！
                 let projpath = context->get_project().m_path;
-                let saving_path = edited_texture->path
+                let saving_path = path
                     ->> \p = fsys::normalize(p);
                     ->  or(func()
                         {
@@ -544,7 +580,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
             if (! saving_image_action->empty)
             {
                 draw_context.openform = true;
-                jeapi::gui::form::ask("是否保存", F"是否保存绘制的图片",
+                jeapi::gui::form::ask("是否保存", "是否保存绘制的图片",
                 func(ok)
                 {
                     draw_context.openform = false;
@@ -586,7 +622,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
         launch(edittexture, (
             context,
             option::none,
-            [(0, mut t)],
+            [(0, mut t, mut t->path)],
             DrawContextT{
                 scale = mut 10.,
                 offset_x = mut 0.,
@@ -665,8 +701,8 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
         };
 
         let id_tex_list = used_texture_id_pass 
-            ->> \id = (id, mut textures->get(id)
-                -> or(\= create_and_copy_0pass_texture();))
+            ->> \id = (id, mut tex, mut tex->path)
+                where tex = textures->get(id)-> or(\= create_and_copy_0pass_texture();)
                 ;
             ;
         launch(edittexture, (
