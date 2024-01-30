@@ -56,8 +56,6 @@ namespace editor
                 {
                     if (fullupdate || fetched_scripts->contain(p) == false || fetched_scripts[p] != c)
                     {
-                        assert(!self.m_removing_system->contain(pure_component_or_system_name(purename(p))));
-
                         if (fetched_scripts->contain(p) == false)
                             self.m_removing_system->set(pure_component_or_system_name(purename(p)), do nil);
                     }
@@ -80,8 +78,6 @@ namespace editor
                 {
                     if (fullupdate || fetched_scripts->contain(p) == false || fetched_scripts[p] != c)
                     {
-                        assert(!self.m_removing_component->contain(pure_component_or_system_name(purename(p))));
-
                         if (fetched_scripts->contain(p) == false)
                             self.m_removing_component->set(pure_component_or_system_name(purename(p)), do nil);
                     }
