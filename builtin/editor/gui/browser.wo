@@ -174,8 +174,8 @@ namespace editor::gui
         static let default_file_icon 
             = je::graphic::texture::load(option::none, F"!/builtin/icon/File.png")->val;
 
-        let mut icon = FILE_TYPE_ICONS->get(_path.externname->lower);
-        if (IMAGE_FILE_EXTERN_NAMES->find(_path.externname->lower) != -1)
+        let mut icon = FILE_TYPE_ICONS->get(_path.externname);
+        if (IMAGE_FILE_EXTERN_NAMES->find(_path.externname) != -1)
         {
             if (!cached_image_file_mip_map->contain(_path.path))
             {
@@ -281,7 +281,7 @@ namespace editor::gui
                     ->map(\current_subpath = PathInfo{
                         path = current_subpath, 
                         name = fsys::filename(current_subpath),
-                        externname = fsys::extension(current_subpath),
+                        externname = fsys::extension(current_subpath)->lower,
                         type = new! mutable(fsys::isdir(current_subpath)?
                                 PathType::dir(option::none) | PathType::file),
                     };);
@@ -344,7 +344,7 @@ namespace editor::gui
             };
 
             return registed_open_method
-                ->  get(self.externname->lower)
+                ->  get(self.externname)
                 ->  valor(
                     func (p, _)
                     {
@@ -379,6 +379,7 @@ namespace editor::gui
         Click,
         DoubleClick,
         RightClick,
+        Hovered,
     }
 
     func write_file_if_not_exist(path: fsys::path_t, content: string)
@@ -1191,6 +1192,7 @@ namespace $$MODULE_NAME$$
             PushIDStr(path.path->tostring);
                 let clicked = ImageButtonSize(get_file_icon_by_extern_name(path, context), 32., 32.);
             PopID();
+            let hovered = IsItemHovered();
             let right_click = IsItemClicked(ImGuiMouseButton::ImGuiMouseButton_Right);
             context_menu(option::value(path), context);
             if (BeginDragDropSource())
@@ -1219,6 +1221,9 @@ namespace $$MODULE_NAME$$
         else if (right_click)
             return Action::RightClick;
         
+        if (hovered)
+            return Action::Hovered;
+
         return Action::Nothing;
     }
 
@@ -1263,7 +1268,7 @@ namespace $$MODULE_NAME$$
                     ->> \subpath = PathInfo{ 
                             path = subpath,
                             name = fsys::filename(subpath),
-                            externname = fsys::extension(subpath),
+                            externname = fsys::extension(subpath)->lower,
                             type = new! mutable(fsys::isdir(subpath)
                                 ? PathType::dir(option::none) 
                                 | PathType::file),
@@ -1276,18 +1281,35 @@ namespace $$MODULE_NAME$$
             context_menu(option::none, context);
             do now_item_in_path
                 -> forall(\item = !item->should_hide;)
-                ->> \item = 
-                    action == Action::Click 
-                    ? (nil: void)
-                    | action == Action::DoubleClick ? 
-                        (item
-                            ->indir(\_ = set_current_work_path(item.path);)
-                            ->infile(\ = do item->get_open_method()(item, context)
-                                        ->> \err = jeapi::gui::form::errmsg("失败", F"打开文件失败:\n{err}");
-                                    ;)
-                        ): void
-                    | (nil: void) // get void
-                    where action = FileIcon(item, context);
+                ->> func(item)
+                    {
+                        let action = FileIcon(item, context);
+
+                        if (action == Action::Click)
+                        {
+                        }
+                        else if (action == Action::DoubleClick)
+                        {
+                            do item->indir(\_ = set_current_work_path(item.path);)
+                                ->infile(\ = do item->get_open_method()(item, context)
+                                            ->> \err = jeapi::gui::form::errmsg("失败", F"打开文件失败:\n{err}");
+                                        ;);
+                                
+                        }
+                        else if (action == Action::Hovered)
+                        {
+                            BeginTooltip();
+                            Text(fsys::filename(item.path));
+                            if (IMAGE_FILE_EXTERN_NAMES->find(item.externname) != -1)
+                            {
+                                let tex = get_file_icon_by_extern_name(item, context);
+                                let (w, h) = tex->size;
+                                let whratio = w: real / h: real;
+                                ImageSize(tex, 64. * whratio, 64.);
+                            }
+                            EndTooltip();
+                        }
+                    }
                 ; 
         EndChild();
         if (BeginDragDropTarget())
@@ -1369,7 +1391,7 @@ namespace $$MODULE_NAME$$
         static let _root = PathInfo {
                 path = root_path,
                 name = fsys::filename(root_path),
-                externname = fsys::extension(root_path),
+                externname = fsys::extension(root_path)->lower,
                 type = new! mutable(PathType::dir(option::none)),
             };
 

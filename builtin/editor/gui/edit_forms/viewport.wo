@@ -362,7 +362,7 @@ namespace editor::gui::edit_forms
                                     }
                                     if (editor::gui::IMAGE_FILE_EXTERN_NAMES->find(fsys::extension(filepath)->lower) != -1)
                                     {
-                                        match (je::graphic::texture::load(option::none, path))
+                                        match (je::graphic::texture::load(context->get_project->get_env->get_universe->option::value, path))
                                         {
                                         value(tex)?
                                             {
