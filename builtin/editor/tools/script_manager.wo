@@ -58,10 +58,13 @@ namespace editor::tools
         ok(subpaths)?
             {
                 for (let _, path : subpaths)
-                    if (fsys::filename(path)->lower->endwith(".je.wo"))
+                {
+                    let filename = fsys::filename(path);
+                    if (filename->lower->endwith(".je.wo"))
                     {
-                        new_path_results->set(fsys::purename(path), path);
+                        new_path_results->set(filename->subto(0, filename->len - 6), path);
                     }
+                }
             }
         }
 
