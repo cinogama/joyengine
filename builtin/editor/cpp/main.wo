@@ -832,7 +832,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
             }, ());
 
             context.compile_thread = 
-                option::value(new! thread(func ()
+                option::value(thread::create(func ()
                 {
                     match (self->compile(config, option::value(context)))
                     {

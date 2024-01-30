@@ -30,7 +30,7 @@ namespace editor
     using DebugContext = struct {
         // 想了半天，还是把调试状态摆在这里维护
         m_project: Project,
-        m_dumped_editing_worlds: array<dict<string, dynamic>>,
+        m_dumped_editing_worlds: array<(dict<string, dynamic>, fsys::path_t)>,
     };
 
     using Project = struct{
@@ -65,10 +65,10 @@ namespace editor
         {
             return self.m_debug_context->has;
         }
-        public func create_dump(self: Project, dumpped: array<dict<string, dynamic>>)
+        public func create_dump(self: Project, dumpped: array<(dict<string, dynamic>, fsys::path_t)>)
         {
             do fsys::mkdir(self.m_path / ".runtime");
-            if (! dumpped->serialize
+            if (! dumpped->>\kv = [kv[0]: dynamic, kv[1]->tostring: dynamic];->serialize
                 ->> \dat = fsys::writeall(self.m_path / ".runtime" / "debugcontext.dump", dat);
                 ->  valor(false))
             {
@@ -87,7 +87,13 @@ namespace editor
                         if (opt)
                         {
                             self->close_all_world();
-                            self->restore_all_world(dat->>\wdat = wdat as dict<dynamic, dynamic>->>\k, v = (k as string, v);;);
+                            self->restore_all_world(dat
+                                ->>\wdat = (
+                                    wdat_pair[0] as dict<dynamic, dynamic>->>\k, v = (k as string, v);, 
+                                    fsys::normalize(wdat_pair[1]: string)
+                                    )
+                                    where wdat_pair = wdat as array<dynamic>;
+                            );
                         }
                     });
             none?;
@@ -141,7 +147,7 @@ namespace editor
             self->create_dump(dumpped);
 
             // OK 接下来在当前世界上创建游戏世界，至于在哪个世界渲染……emm
-            for (let _, wdat : context.m_dumped_editing_worlds)
+            for (let _, (wdat, _) : context.m_dumped_editing_worlds)
             {
                 let wdat_map = wdat->tomap();
                 let syss = wdat_map->getor("runtime_systems", []: dynamic) as array<dynamic>->connect(
@@ -167,9 +173,10 @@ namespace editor
         {
             let dump_dats = self.m_worlds->toarray
                 =>> \pw = dat->has 
-                    ? [dat->val->apply("is_editing", self->get_editing_world
+                    ? [(dat->val->apply("is_editing", self->get_editing_world
                         ->> \ew = ew == pw.m_world_instance;
-                        ->  valor(false) as bool: dynamic)] 
+                        ->  valor(false) as bool: dynamic), 
+                        pw.m_world_path)] 
                     | [] 
                     where dat = self->serialize_world(pw.m_world_instance, true)
                     ;
@@ -191,9 +198,9 @@ namespace editor
             do self->close_all_world();
             return result::ok(dats);
         }
-        public func restore_all_world(self: Project, dats: array<dict<string, dynamic>>)
+        public func restore_all_world(self: Project, dats: array<(dict<string, dynamic>, fsys::path_t)>)
         {
-            do dats->>\dat = self->deserialize_world(dat);;
+            do dats->>\dat = self->deserialize_world(dat...);;
         }
         func _create_default_configs(env: Environment)
         {
@@ -943,19 +950,18 @@ namespace editor
                             }
                             return mdat->unsafe::cast :<typeof(dat)>;
                         }
-                    ->> \dat = dat->apply("path", pw.m_world_path->tostring->sub(self.m_path->tostring->len): dynamic);
                     ->> \dat = dat->apply("runtime_systems", pw.m_runtime_systems->>\t=t->name; as array<string>: dynamic);
                     ->> \dat = dat->apply("remark", pw.m_remark_note as string: dynamic);
                     ;
                 ;
         }
-        public func deserialize_world(self: Project, dat: dict<string, dynamic>)
+        public func deserialize_world(self: Project, dat: dict<string, dynamic>, file_path: fsys::path_t)
         {
             let w = self->append_world_to_list(
                 ProjectWorld 
                 {
                     m_world_instance = self.m_env->load_world(dat),
-                    m_world_path = self.m_path / dat["path"] as string,
+                    m_world_path = file_path,
                     m_runtime_systems = 
                         mut dat->getor("runtime_systems", []: dynamic) as array<dynamic>
                             =>> \elem = systype->has ? [systype->val] | []
@@ -1032,8 +1038,10 @@ namespace editor
         }
         public func save_world(self: Project, w: je::world)
         {
-            return self->serialize_world(w, false)
-                ->> \dat = fsys::writeall(self.m_path / dat["path"]: string, dat as dict<string, dynamic>: string);
+            return self->get_project_world(w)
+                =>> \pw = self->serialize_world(pw.m_world_instance, false)
+                    ->> \dat = fsys::writeall(pw.m_world_path, dat as dict<string, dynamic>: string);
+                    ;
                 ->  valor(false);
         }
         public func load_world(self: Project, file_path: fsys::path_t)
@@ -1047,7 +1055,7 @@ namespace editor
                             ->> \k, v = (k as string, v);
                             ;
                         ;
-                    ->> \dat = self->deserialize_world(dat);)
+                    ->> \dat = self->deserialize_world(dat, file_path);)
                 {
                 value(w)?
                     return result::ok(w);

@@ -27,7 +27,7 @@ namespace editor::gui
         using History = struct{
             m_abs: string,
             m_script: string,
-            m_data: array<dict<string, dynamic>>,
+            m_data: array<(dict<string, dynamic>, fsys::path_t)>,
         }
         {
             func create(proj: Project, script: string)
