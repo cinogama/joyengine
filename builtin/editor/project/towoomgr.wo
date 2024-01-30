@@ -42,8 +42,6 @@ namespace editor
                     {
                     value(crc64_code)?
                     {
-                        fetched_scripts->set(p, crc64_code);
-
                         let purename = pure_component_or_system_name(purename(p));
                         if (_repeat_checker->contain(purename))
                         {
@@ -53,7 +51,10 @@ namespace editor
                             jeapi::gui::form::errmsg("同名ToWoo提示", warn_msg);
                         }
                         else
-                            _repeat_checker->set(purename, p); 
+                        {
+                            _repeat_checker->set(purename, p);
+                            fetched_scripts->set(p, crc64_code);
+                        }
                     }
                     none?;
                     }
