@@ -33,6 +33,7 @@ namespace editor
         func fetch_file(self: ToWooContext, type: string)
         {
             let fetched_scripts = {}mut: map<path_t, int>;
+            let _repeat_checker = {}mut: map<string, path_t>;
             for (let _, p : allsubpath(self.m_project_path)->unwarpor([]))
             {
                 if (isfile(p) && filename(p)->lower->endwith(type))
@@ -40,7 +41,18 @@ namespace editor
                     match (editor::crc64file(p->tostring))
                     {
                     value(crc64_code)?
+                    {
                         fetched_scripts->set(p, crc64_code);
+
+                        let purename = pure_component_or_system_name(purename(p));
+                        if (_repeat_checker->contain(purename))
+                        {
+                            je::logwarn(F"发现同名的ToWoo：`{p}` 和 `{_repeat_checker[purename]}`.");
+                            jeapi::gui::form::errmsg(F"发现同名的ToWoo：`{p}` 和 `{_repeat_checker[purename]}`.");
+                        }
+                        else
+                            _repeat_checker->set(purename, p); 
+                    }
                     none?;
                     }
                 }
