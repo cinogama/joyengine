@@ -542,22 +542,6 @@ jeecs_file* jeecs_file_open(const char* path)
 
     if (path_str[0] == '@')
     {
-        // 1. Local file, trying to find file from file-image.
-        if (_je_runtime_file_image != nullptr)
-        {
-            auto* img_file = fimg_open_file(_je_runtime_file_image, path);
-            if (img_file != nullptr)
-            {
-                jeecs_file* jefhandle = new jeecs_file();
-                jefhandle->m_native_file_handle = nullptr;
-                jefhandle->m_image_file_handle = img_file;
-                jefhandle->m_file_length = img_file->f_size;
-
-                return jefhandle;
-            }
-        }
-
-        // 2. Not found, try find from local runtime path.
         path_str = jeecs_file_get_runtime_path() + path_str.substr(1);
     }
     if (path_str[0] == '!')
@@ -575,6 +559,19 @@ jeecs_file* jeecs_file_open(const char* path)
         jefhandle->m_file_length = flength;
 
         return jefhandle;
+    }
+    else if (path[0] == '@' && _je_runtime_file_image != nullptr)
+    {
+        auto* img_file = fimg_open_file(_je_runtime_file_image, path);
+        if (img_file != nullptr)
+        {
+            jeecs_file* jefhandle = new jeecs_file();
+            jefhandle->m_native_file_handle = nullptr;
+            jefhandle->m_image_file_handle = img_file;
+            jefhandle->m_file_length = img_file->f_size;
+
+            return jefhandle;
+        }
     }
     return nullptr;
 }

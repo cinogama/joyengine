@@ -146,6 +146,7 @@ namespace editor::gui
         [".jpg"] = je::graphic::texture::load(option::none, F"!/builtin/icon/TextureFile.png")->val,
         [".bmp"] = je::graphic::texture::load(option::none, F"!/builtin/icon/TextureFile.png")->val,
         [".psd"] = je::graphic::texture::load(option::none, F"!/builtin/icon/TextureFile.png")->val,
+
         [".ttf"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Font.png")->val,
 
         [".wav"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Music.png")->val,
@@ -166,14 +167,29 @@ namespace editor::gui
     };
 
     // 根据文件拓展名返回文件的类型
-    private func get_file_icon_by_extern_name(_path: PathInfo)
+    private func get_file_icon_by_extern_name(_path: PathInfo, context: EditorContext)
     {
         static let default_path_icon 
             = je::graphic::texture::load(option::none, F"!/builtin/icon/FilePath.png")->val;
         static let default_file_icon 
             = je::graphic::texture::load(option::none, F"!/builtin/icon/File.png")->val;
 
-        let icon = FILE_TYPE_ICONS->get(_path.externname);
+        let mut icon = FILE_TYPE_ICONS->get(_path.externname->lower);
+        if (IMAGE_FILE_EXTERN_NAMES->find(_path.externname->lower) != -1)
+        {
+            if (!cached_image_file_mip_map->contain(_path.path))
+            {
+                let proj = context->get_project;
+                let wrapped_path = proj->make_path_normalize(_path.path);
+                cached_image_file_mip_map->set(_path.path, 
+                    je::graphic::texture::load(option::value(proj->get_env->get_universe), wrapped_path));
+            }
+            match (cached_image_file_mip_map[_path.path])
+            {
+            value(tex)? icon = value(tex);
+            none?;
+            }
+        }
 
         match (icon)
         {
@@ -520,10 +536,10 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                     jeapi::gui::form::input("新建编辑器工具脚本", F"在{current_work_path}新建编辑器工具脚本", "NewScript",
                         \filename: string = fsys::exist(file_path)
                             ? jeapi::gui::form::errmsg("创建编辑器工具脚本失败", "同名文件已经存在")
-                            | write_file_if_not_exist(file_path, F"// {filename}.jewo\n{default_empty_script}") 
+                            | write_file_if_not_exist(file_path, F"// {filename}.je.wo\n{default_empty_script}") 
                                 ? force_update()
                                 | jeapi::gui::form::errmsg("创建编辑器工具脚本失败", "无法创建文件，可能是文件名非法或磁盘已满")
-                        where file_path = fsys::normalize(current_work_path) / (filename + ".jewo"););
+                        where file_path = fsys::normalize(current_work_path) / (filename + ".je.wo"););
                 }
                 Separator();
                 if (MenuItem("世界"))
@@ -1106,7 +1122,9 @@ namespace $$MODULE_NAME$$
             }
             if (MenuItem("预览并编辑"))
             {
-                match (je::graphic::texture::load(option::none, context->get_project->make_path_normalize(path.path)))
+                match (je::graphic::texture::load(
+                    option::value(context->get_project->get_env->get_universe), 
+                    context->get_project->make_path_normalize(path.path)))
                 {
                 value(tex)?
                     drawpannel::drawimg(context, tex);
@@ -1171,7 +1189,7 @@ namespace $$MODULE_NAME$$
     {
         BeginGroup();
             PushIDStr(path.path->tostring);
-                let clicked = ImageButtonSize(get_file_icon_by_extern_name(path), 32., 32.);
+                let clicked = ImageButtonSize(get_file_icon_by_extern_name(path, context), 32., 32.);
             PopID();
             let right_click = IsItemClicked(ImGuiMouseButton::ImGuiMouseButton_Right);
             context_menu(option::value(path), context);
@@ -1206,11 +1224,14 @@ namespace $$MODULE_NAME$$
 
     static let mut force_update_file_group_flag = false;
     static let mut force_update_dir_tree_flag = false;
+    static let cached_image_file_mip_map = {}mut: map<fsys::path_t, option<je::graphic::texture>>;
+
     // 刷新显示的目录信息等...
     public func force_update()
     {
         force_update_dir_tree_flag = true;
         force_update_file_group_flag = true;
+        cached_image_file_mip_map->clear;
     }
 
     // 右边的文件详情等信息

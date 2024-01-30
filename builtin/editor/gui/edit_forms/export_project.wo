@@ -27,9 +27,6 @@ namespace editor::gui::edit_forms
         {
             if (fsys::extension(originpath)->lower == ".jeproj4")
                 return Action::SKIP;  // 跳过项目文件
-
-            if (fsys::extension(originpath)->lower == ".jewo")
-                return Action::SKIP;  // 跳过工具脚本
                 
             if (fsys::extension(originpath)->lower == ".dmp")
                 return Action::SKIP;  // 跳过崩溃转储文件
@@ -62,6 +59,10 @@ namespace editor::gui::edit_forms
                 });
             
             if (fsys::extension(originpath)->lower == ".wo")
+            {
+                if (fsys::filename(originpath)->lower->endwith(".je.wo"))
+                    return Action::SKIP;  // 跳过工具脚本
+
                 return Action::ACTION(func(pconfig, fimg){
                     pconfig.m_pack_output_log->add(F"正在编译脚本：{packpath}");
                     match (vm::load(originpath->tostring))
@@ -83,6 +84,7 @@ namespace editor::gui::edit_forms
                     }
                     
                 });
+            }
 
             if (packpath->lower->find(".jemodule4/") != -1)
                 return Action::SKIP;  // 跳过C++工程文件

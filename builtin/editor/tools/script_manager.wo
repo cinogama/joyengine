@@ -58,7 +58,7 @@ namespace editor::tools
         ok(subpaths)?
             {
                 for (let _, path : subpaths)
-                    if (fsys::extension(path)->lower == ".jewo")
+                    if (fsys::filename(path)->lower->endwith(".je.wo"))
                     {
                         new_path_results->set(fsys::purename(path), path);
                     }
