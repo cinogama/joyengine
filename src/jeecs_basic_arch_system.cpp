@@ -162,6 +162,7 @@ namespace jeecs_impl
                     if (_m_free_count.compare_exchange_weak(free_entity_count, free_entity_count - 1))
                     {
                         // OK There is a usable place for entity
+                        // TODO: 这里的分配过程应当做成类似内存分配空闲链表的查找，而不是遍历
                         for (size_t id = 0; id < _m_entity_count; id++)
                         {
                             if (!_m_entity_slot_states[id].test_and_set())
