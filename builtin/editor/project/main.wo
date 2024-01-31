@@ -534,6 +534,23 @@ namespace editor
             }
             return false;
         }
+        public func update_towoo(self: Project, force: bool)
+        {
+            match (self->dump_and_close_all_world())
+            {
+            ok(dat)?
+                {
+                    je::gui::launch(func()
+                        {
+                            self.m_towoo_context->update(force);
+                            self->restore_all_world(dat);
+                            return false;
+                        }, ());
+                }
+            err(msg)?
+                jeapi::gui::form::errmsg("失败", F"更新ToWoo失败: {msg}");
+            }
+        }
         public func try_update_towoo(self: Project, fast: bool)
         {
             // 无法愉快处理在调试状态下的情况，简单忽略之
@@ -545,20 +562,7 @@ namespace editor
                 ? self.m_towoo_context->fast_check_for_update 
                 | self.m_towoo_context->check_for_update)
             {
-                match (self->dump_and_close_all_world())
-                {
-                ok(dat)?
-                    {
-                        je::gui::launch(func()
-                            {
-                                self.m_towoo_context->update(false);
-                                self->restore_all_world(dat);
-                                return false;
-                            }, ());
-                    }
-                err(msg)?
-                    jeapi::gui::form::errmsg("失败", F"更新towoo系统失败: {msg}");
-                }
+                self->update_towoo(false);
             }
         }
 

@@ -2168,13 +2168,8 @@ namespace je
                     ->  mapping;
             }
 
-            public func get_components_types(self: entity)=> array<typeinfo>
-            {
-                extern("libjoyecs", "wojeapi_get_all_components_types_from_entity")
-                public func _get_components_types_from_entity(entity: entity)=> array<typeinfo>;
-
-                return _get_components_types_from_entity(self);
-            }
+            extern("libjoyecs", "wojeapi_get_all_components_types_from_entity")
+            public func get_components_types(self: entity)=> array<typeinfo>;
 
             extern("libjoyecs", "wojeapi_is_top_entity")
             public func is_top(self: entity)=> bool;

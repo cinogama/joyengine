@@ -194,7 +194,7 @@ namespace editor::gui::edit_forms
                         if (BeginMenu(menu_name))
                         {
                             if (MenuItem("强制重新载入"))
-                                proj->get_towoo_context->update(true);
+                                proj->update_towoo(true);
 
                             Separator();
 

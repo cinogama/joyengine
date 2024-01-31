@@ -140,6 +140,9 @@ namespace jeecs_impl
                     tinfo->m_id = _m_type_holder_list.size();
                 }
                 _m_type_name_id_mapping[_name] = tinfo->m_id;
+#ifndef NDEBUG
+                jeecs::debug::loginfo("Type info: %p('%s') is registered.", tinfo, tinfo->m_typename);
+#endif
             }
             return _record_typeinfo(tinfo->m_id, tinfo);
         }
@@ -247,6 +250,9 @@ namespace jeecs_impl
                 assert(id != 0 && id <= _m_type_holder_list.size());
                 if (auto*& current_type_info = _m_type_holder_list[id - 1])
                 {
+#ifndef NDEBUG
+                    jeecs::debug::loginfo("Type info: %p('%s') is unregistered.", tinfo, tinfo->m_typename);
+#endif
                     // 1. Free current type info from list;
                     auto& registered_typeinfo = _m_registered_typeinfo[current_type_info];
                     auto fnd = std::find(
