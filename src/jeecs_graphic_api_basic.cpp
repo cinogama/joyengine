@@ -195,12 +195,12 @@ struct jegl_context_notifier
         jegl_resource* m_resource;
     };
 
-    // NOTE: _m_cached_resources 不需要上锁，因为对此的操作都将在一个更大的全
+    // NOTE: _m_cached_resources 不需要单独上锁，因为对此的操作都将在一个更大的全
     //      局锁(参见_je_graphic_shared_context_instance)的保护下
     std::unordered_map<std::string, cached_resource> _m_cached_resources;
 
     // NOTE: _m_cached_resource_blobs 不需要上锁，因为对此的操作都被局限在图形
-    //      线程内部，不会发生并发访问
+    //      线程内部，不会发生并发访问。
     std::unordered_map<std::string, cached_resource_blob> _m_cached_resource_blobs;
 
     jeecs::basic::atomic_list<_jegl_destroy_resouce> _m_closing_resources;
@@ -245,7 +245,7 @@ struct _je_graphic_shared_context
         ++shared_unload_counts[path];
     }
 
-    bool _obsolete_shared_resource_cache_nolock(const char* path);
+    bool _obsolete_shared_resource_cache_nolock(const char* path, bool free_blob);
     bool mark_shared_resources_outdated(const char* path);
 
     static jegl_resource* _share_resource(jegl_resource* resource)
@@ -320,9 +320,10 @@ void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader);
 std::vector<jegl_context*>   _jegl_alive_glthread_list;
 std::shared_mutex           _jegl_alive_glthread_list_mx;
 
-bool _je_graphic_shared_context::_obsolete_shared_resource_cache_nolock(const char* path)
+bool _je_graphic_shared_context::_obsolete_shared_resource_cache_nolock(const char* path, bool free_blob)
 {
-    _unload_share(path);
+    if (free_blob)
+        _unload_share(path);
 
     bool marked = false;
     for (jegl_context* ctx : _jegl_alive_glthread_list)
@@ -342,7 +343,7 @@ bool _je_graphic_shared_context::mark_shared_resources_outdated(const char* path
     std::shared_lock sg1(_jegl_alive_glthread_list_mx);
     std::lock_guard g1(share_smx);
 
-    return _obsolete_shared_resource_cache_nolock(path);
+    return _obsolete_shared_resource_cache_nolock(path, true);
 }
 void _je_graphic_shared_context::shrink_shared_resource_cache(size_t target_resource_count)
 {
@@ -373,7 +374,7 @@ void _je_graphic_shared_context::shrink_shared_resource_cache(size_t target_reso
         const auto& obs_res = obs_queue.top();
 
         shared_resource_used_counts.erase(obs_res.m_path);
-        _obsolete_shared_resource_cache_nolock(obs_res.m_path.c_str());
+        _obsolete_shared_resource_cache_nolock(obs_res.m_path.c_str(), false);
 
         obs_queue.pop();
     }
@@ -744,7 +745,7 @@ bool jegl_mark_shared_resources_outdated(const char* path)
 bool jegl_using_resource(jegl_resource* resource)
 {
     bool need_init_resouce = false;
-    // This function is not thread safe.
+
     if (!_current_graphic_thread)
     {
         jeecs::debug::logerr("Graphic resource only usable in graphic thread.");
@@ -774,15 +775,19 @@ bool jegl_using_resource(jegl_resource* resource)
 
     if (need_init_resouce)
     {
-        std::shared_lock sg1(_je_graphic_shared_context_instance.share_smx);
         jegl_resource_blob resource_blob = nullptr;
 
         size_t resource_blob_version = 0;
         if (resource->m_path != nullptr)
         {
-            resource_blob_version =
-                _je_graphic_shared_context_instance._get_shared_blob_unload_counter(
-                    resource->m_path);
+            do
+            {
+                std::shared_lock sg1(_je_graphic_shared_context_instance.share_smx);
+
+                resource_blob_version =
+                    _je_graphic_shared_context_instance._get_shared_blob_unload_counter(
+                        resource->m_path);
+            } while (0);
 
             auto fnd = _current_graphic_thread->_m_thread_notifier
                 ->_m_cached_resource_blobs.find(resource->m_path);
