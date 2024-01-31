@@ -1277,6 +1277,16 @@ WO_API wo_api wojeapi_native_value_je_parse(wo_vm vm, wo_value args, size_t argc
 }
 
 ///////////////////////////////////////////////////////////////////////
+WO_API wo_api wojeapi_graphic_shrink_cache(wo_vm vm, wo_value args, size_t argc)
+{
+    jegl_context* gcontext = jegl_uhost_get_context(
+        jegl_uhost_get_or_create_for_universe(
+            wo_pointer(args + 0), nullptr));
+
+    jegl_shrink_shared_resource_cache(gcontext, (size_t)wo_int(args + 1));
+    return wo_ret_void(vm);
+}
+
 WO_API wo_api wojeapi_texture_open(wo_vm vm, wo_value args, size_t argc)
 {
     jegl_context* gcontext = nullptr;
@@ -2267,7 +2277,7 @@ namespace je
         extern("libjoyecs", "wojeapi_clear_singletons")
         public func clear_singletons()=> void;
 
-        extern("libjoyecs", "wojeapi_abort_all_thread")
+        extern("libjoyecs", "wojeapi_abort_all_thread", slow)
         public func abort_threads()=> void;
 
         extern("libjoyecs", "wojeapi_editor_register_panic_hook")
@@ -2647,6 +2657,9 @@ namespace je
     }
     namespace graphic
     {
+        extern("libjoyecs", "wojeapi_graphic_shrink_cache", slow)
+        public func shrink_cache(u: universe, target_count: int)=> void;
+
         public using texture = gchandle
         {
             extern("libjoyecs", "wojeapi_texture_open", slow)
