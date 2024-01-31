@@ -162,6 +162,7 @@ namespace Assimp
 #include <list>
 #include <future>
 #include <stack>
+#include <queue>
 
 struct _jegl_destroy_resouce
 {
@@ -229,20 +230,22 @@ struct _je_graphic_shared_context
     // 的unload-count-version，用于通知图形线程何时应当释放blob资源。
     std::shared_mutex shared_blobs_smx;
 
-    std::unordered_map<std::string, size_t> shared_unload_counters;
+    std::unordered_map<std::string, size_t> shared_unload_counts;
+    std::unordered_map<std::string, size_t> shared_resource_used_counts;
 
     size_t _get_shared_blob_unload_counter(const std::string& path)
     {
-        auto fnd = shared_unload_counters.find(path);
-        if (fnd == shared_unload_counters.end())
+        auto fnd = shared_unload_counts.find(path);
+        if (fnd == shared_unload_counts.end())
             return 0;
         return fnd->second;
     }
     void _unload_share(const std::string& path)
     {
-        ++shared_unload_counters[path];
+        ++shared_unload_counts[path];
     }
 
+    bool _obsolete_shared_resource_cache_nolock(const char* path);
     bool mark_shared_resources_outdated(const char* path);
 
     static jegl_resource* _share_resource(jegl_resource* resource)
@@ -292,12 +295,14 @@ struct _je_graphic_shared_context
             if (fnd != context->_m_thread_notifier->_m_cached_resources.end() &&
                 fnd->second.m_resource != nullptr)
             {
+                shared_resource_used_counts[path]++;
                 return _share_resource(fnd->second.m_resource);
             }
         }
 
         return nullptr;
     }
+    void shrink_shared_resource_cache(size_t target_resource_count);
 };
 _je_graphic_shared_context _je_graphic_shared_context_instance;
 
@@ -309,11 +314,8 @@ void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader);
 std::vector<jegl_context*>   _jegl_alive_glthread_list;
 std::shared_mutex           _jegl_alive_glthread_list_mx;
 
-bool _je_graphic_shared_context::mark_shared_resources_outdated(const char* path)
+bool _je_graphic_shared_context::_obsolete_shared_resource_cache_nolock(const char* path)
 {
-    std::shared_lock sg1(_jegl_alive_glthread_list_mx);
-    std::lock_guard g1(shared_blobs_smx);
-
     _unload_share(path);
 
     bool marked = false;
@@ -332,6 +334,42 @@ bool _je_graphic_shared_context::mark_shared_resources_outdated(const char* path
         }
     }
     return marked;
+}
+bool _je_graphic_shared_context::mark_shared_resources_outdated(const char* path)
+{
+    std::shared_lock sg1(_jegl_alive_glthread_list_mx);
+    std::lock_guard g1(shared_blobs_smx);
+
+    return _obsolete_shared_resource_cache_nolock(path);
+}
+void _je_graphic_shared_context::shrink_shared_resource_cache(size_t target_resource_count)
+{
+    std::shared_lock sg1(_jegl_alive_glthread_list_mx);
+    std::lock_guard g1(shared_blobs_smx);
+
+    struct obsolete_resource
+    {
+        std::string m_path;
+        size_t m_loadcount;
+        bool operator < (const obsolete_resource& another)const noexcept
+        {
+            return m_loadcount < another.m_loadcount;
+        }
+    };
+
+    std::priority_queue<obsolete_resource, std::vector<obsolete_resource>> obs_queue;
+    for (auto& [path, loadcount] : shared_resource_used_counts)
+        obs_queue.push(obsolete_resource{path, loadcount });
+
+    while (obs_queue.size() > target_resource_count)
+    {
+        const auto& obs_res = obs_queue.top();
+
+        shared_resource_used_counts.erase(obs_res.m_path);
+        _obsolete_shared_resource_cache_nolock(obs_res.m_path.c_str());
+
+        obs_queue.pop();
+    }
 }
 
 jeecs_sync_callback_func_t _jegl_sync_callback_func = nullptr;
@@ -1291,6 +1329,11 @@ jegl_resource* jegl_try_update_shared_resource(jegl_context* context, jegl_resou
 jegl_resource* jegl_try_load_shared_resource(jegl_context* context, const char* path)
 {
     return _je_graphic_shared_context_instance.try_load_shared_resource(context, path);
+}
+
+void jegl_shrink_shared_resource_cache(jegl_context* context, size_t shrink_target_count)
+{
+    _je_graphic_shared_context_instance.shrink_shared_resource_cache(shrink_target_count);
 }
 
 jegl_resource* jegl_load_shader(jegl_context* context, const char* path)

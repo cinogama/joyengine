@@ -2342,6 +2342,15 @@ jegl_mark_shared_resources_outdated [基本接口]
 JE_API bool jegl_mark_shared_resources_outdated(const char* path);
 
 /*
+jegl_shrink_shared_resource_cache [基本接口]
+缩减共享资源缓存，将缓存中的资源数量缩减到指定的数量
+    * 缩减的资源将会被标记为过时并释放，下次加载此资源时将重新加载。
+    * 若缓存中的资源数量小于指定的数量，则不会进行任何操作。
+*/
+JE_API void jegl_shrink_shared_resource_cache(
+    jegl_context* context, size_t shrink_target_count);
+
+/*
 jegl_load_shader_source [基本接口]
 从源码加载一个着色器实例，可创建或使用缓存文件以加速着色器的加载
     * 实际上jegl_load_shader会读取文件内容之后，调用此函数进行实际上的着色器加载
