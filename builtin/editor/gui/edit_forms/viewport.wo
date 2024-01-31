@@ -193,7 +193,7 @@ namespace editor::gui::edit_forms
   
                         if (BeginMenu(menu_name))
                         {
-                            if (MenuItem("强制重新载入"))
+                            if (MenuItem("重新载入所有脚本"))
                                 proj->update_towoo(true);
 
                             Separator();
@@ -203,7 +203,7 @@ namespace editor::gui::edit_forms
                                 do MenuItemEnabled("编译错误", false);
                                 for (let _, p : bad_scripts)
                                 {
-                                    if (MenuItem(fsys::purename(p)))
+                                    if (MenuItem(ToWooContext::pure_component_or_system_name(fsys::purename(p))))
                                         jeapi::gui::widget::invoke_click_file_callback(proj->make_path_normalize(p));
                                 }
 
@@ -232,7 +232,7 @@ namespace editor::gui::edit_forms
                             for (let p, _: towoo_context.m_loaded_towoo)
                             {
                                 if (fsys::filename(p)->lower->endwith(".jecomponent.wo"))
-                                    if (MenuItem(fsys::purename(p)))
+                                    if (MenuItem(ToWooContext::pure_component_or_system_name(fsys::purename(p))))
                                         jeapi::gui::widget::invoke_click_file_callback(proj->make_path_normalize(p));
                             }
                             Separator();
@@ -240,7 +240,7 @@ namespace editor::gui::edit_forms
                             for (let p, _: towoo_context.m_loaded_towoo)
                             {
                                 if (fsys::filename(p)->lower->endwith(".jesystem.wo"))
-                                    if (MenuItem(fsys::purename(p)))
+                                    if (MenuItem(ToWooContext::pure_component_or_system_name(fsys::purename(p))))
                                         jeapi::gui::widget::invoke_click_file_callback(proj->make_path_normalize(p));
                             }
                             EndMenu();
