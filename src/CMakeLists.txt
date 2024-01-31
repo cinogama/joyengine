@@ -170,7 +170,8 @@ target_link_libraries(joyecs
     box2d 
     OpenAL 
     assimp 
-    glslang 
+    glslang
     SPIRV 
     glslang-default-resource-limits 
-    spirv-cross-c)
+    # spirv-cross-c
+    )
