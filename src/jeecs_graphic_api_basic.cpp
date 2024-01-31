@@ -662,10 +662,11 @@ void jegl_terminate_graphic_thread(jegl_context* thread)
         else
         {
             _jegl_alive_glthread_list.erase(fnd);
-            _je_graphic_shared_context_instance._free_resource_in_gcontext(thread);
         }
 
     } while (0);
+
+    _je_graphic_shared_context_instance._free_resource_in_gcontext(thread);
 
     assert(thread->_m_thread_notifier->m_graphic_terminate_flag.test_and_set());
     thread->_m_thread_notifier->m_graphic_terminate_flag.clear();

@@ -109,17 +109,19 @@ namespace jeecs_impl
 
             byte_t                  _m_chunk_buffer[CHUNK_SIZE];
 
-            const types_set* _m_types;
-            const archtypes_map* _m_arch_typeinfo_mapping;
+            const types_set*        _m_types;
+            const archtypes_map*    _m_arch_typeinfo_mapping;
             const size_t            _m_entity_count;
             const size_t            _m_entity_size;
 
-            std::atomic_flag* _m_entity_slot_states;
-            jeecs::game_entity::meta* _m_entities_meta;
-            arch_type* _m_arch_type;
-            std::atomic_size_t          _m_free_count;
+            std::atomic_flag*       _m_entity_slot_states;
+            jeecs::game_entity::meta*
+                                    _m_entities_meta;
+            arch_type*              _m_arch_type;
+            std::atomic_size_t      _m_free_count;
+
         public:
-            arch_chunk* last; // for atomic_list;
+            arch_chunk*             last; // for atomic_list;
         public:
             arch_chunk(arch_type* _arch_type)
                 : _m_entity_count(_arch_type->_m_entity_count_per_chunk)
@@ -163,7 +165,7 @@ namespace jeecs_impl
                     {
                         // OK There is a usable place for entity
                         // TODO: 这里的分配过程应当做成类似内存分配空闲链表的查找，而不是遍历
-                        for (size_t id = 0; id < _m_entity_count; id++)
+                        for (size_t id = 0; id < _m_entity_count; ++id)
                         {
                             if (!_m_entity_slot_states[id].test_and_set())
                             {

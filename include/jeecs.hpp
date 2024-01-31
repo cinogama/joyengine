@@ -419,8 +419,8 @@ namespace jeecs
 
         struct meta
         {
-            size_t m_euid;
-            jeecs::typing::version_t m_version;
+            size_t                          m_euid;
+            jeecs::typing::version_t        m_version;
             jeecs::game_entity::entity_stat m_stat;
         };
 
