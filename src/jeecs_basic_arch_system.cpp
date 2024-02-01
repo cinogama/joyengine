@@ -75,6 +75,68 @@ namespace jeecs_impl
         return false;
     }
 
+    template<typename T>
+    class mcmp_lockfree_fixed_loop_queue
+    {
+        JECS_DISABLE_MOVE_AND_COPY(mcmp_lockfree_fixed_loop_queue);
+
+        T* const        _m_queue_buffer;
+        const size_t    _m_queue_size;
+
+        std::atomic_size_t _m_head;
+
+        std::atomic_size_t _m_tail_for_write;
+        std::atomic_size_t _m_tail_for_reading;
+
+    public:
+        mcmp_lockfree_fixed_loop_queue(size_t queue_size)
+            : _m_queue_buffer(new T[queue_size + 1])
+            , _m_queue_size(queue_size + 1)
+            , _m_head(0)
+            , _m_tail_for_write(0)
+            , _m_tail_for_reading(0)
+        {
+            assert(queue_size != 0);
+        }
+        ~mcmp_lockfree_fixed_loop_queue()
+        {
+            delete[] _m_queue_buffer;
+        }
+
+        void push(const T& elem)
+        {
+            size_t write_target_place = _m_tail_for_write.load();
+
+            while (!_m_tail_for_write.compare_exchange_strong(
+                write_target_place, (write_target_place + 1) % _m_queue_size))
+                ;
+
+            assert(write_target_place + 1 != _m_head.load());
+
+            _m_queue_buffer[write_target_place] = elem;
+
+            // 数据就绪，将_m_tail_for_write同步到_m_tail_for_reading
+            while (!_m_tail_for_reading.compare_exchange_strong(
+                write_target_place, (write_target_place + 1) % _m_queue_size))
+                ;
+        }
+
+        bool pop(T* out_value)
+        {
+            size_t read_place = _m_head.load();
+            do
+            {
+                if (read_place == _m_tail_for_reading.load())
+                    return false;
+            } while (!_m_head.compare_exchange_strong(
+                read_place, (read_place + 1) % _m_queue_size));
+
+            // OK 获取独占位置，读取！
+            *out_value = _m_queue_buffer[read_place];
+            return true;
+        }
+    };
+
     class arch_type
     {
         JECS_DISABLE_MOVE_AND_COPY(arch_type);
@@ -109,39 +171,48 @@ namespace jeecs_impl
 
             byte_t                  _m_chunk_buffer[CHUNK_SIZE];
 
-            const types_set*        _m_types;
-            const archtypes_map*    _m_arch_typeinfo_mapping;
+            const types_set* _m_types;
+            const archtypes_map* _m_arch_typeinfo_mapping;
             const size_t            _m_entity_count;
             const size_t            _m_entity_size;
 
-            std::atomic_flag*       _m_entity_slot_states;
             jeecs::game_entity::meta*
-                                    _m_entities_meta;
-            arch_type*              _m_arch_type;
-            std::atomic_size_t      _m_free_count;
+                _m_entities_meta;
+            arch_type* _m_arch_type;
+            mcmp_lockfree_fixed_loop_queue<jeecs::typing::entity_id_in_chunk_t>
+                _m_free_slots;
+#ifndef NDEBUG
+            std::atomic_size_t       _m_debug_free_count;
+#endif
 
         public:
-            arch_chunk*             last; // for atomic_list;
+            arch_chunk* last; // for atomic_list;
         public:
             arch_chunk(arch_type* _arch_type)
                 : _m_entity_count(_arch_type->_m_entity_count_per_chunk)
                 , _m_entity_size(_arch_type->_m_entity_size)
-                , _m_free_count(_arch_type->_m_entity_count_per_chunk)
+                , _m_free_slots(_arch_type->_m_entity_count_per_chunk)
                 , _m_arch_typeinfo_mapping(&_arch_type->_m_arch_typeinfo_mapping)
                 , _m_types(&_arch_type->_m_types_set)
                 , _m_arch_type(_arch_type)
+#ifndef NDEBUG
+                , _m_debug_free_count(_arch_type->_m_entity_count_per_chunk)
+#endif
             {
                 assert(jeoffsetof(jeecs_impl::arch_type::arch_chunk, _m_chunk_buffer) == 0);
 
                 _m_entities_meta = new jeecs::game_entity::meta[_m_entity_count]{};
-                _m_entity_slot_states = new std::atomic_flag[_m_entity_count]{};
+
+                for (size_t i = 0; i < _m_entity_count; ++i)
+                    _m_free_slots.push((jeecs::typing::entity_id_in_chunk_t)i);
             }
             ~arch_chunk()
             {
                 // All entity in chunk should be free.
-                assert(_m_free_count == _m_entity_count);
+#ifndef NDEBUG
+                assert(_m_debug_free_count == _m_entity_count);
+#endif
                 delete[] _m_entities_meta;
-                delete[] _m_entity_slot_states;
             }
         public:
             // ATTENTION: move_component_to WILL INVOKE DESTRUCT FUNCTION OF from_component
@@ -158,28 +229,18 @@ namespace jeecs_impl
 
             bool alloc_entity_id(size_t euid, jeecs::typing::entity_id_in_chunk_t* out_id, jeecs::typing::version_t* out_version)
             {
-                size_t free_entity_count = _m_free_count;
-                while (free_entity_count)
+                if (_m_free_slots.pop(out_id))
                 {
-                    if (_m_free_count.compare_exchange_weak(free_entity_count, free_entity_count - 1))
-                    {
-                        // OK There is a usable place for entity
-                        // TODO: 这里的分配过程应当做成类似内存分配空闲链表的查找，而不是遍历
-                        for (size_t id = 0; id < _m_entity_count; ++id)
-                        {
-                            if (!_m_entity_slot_states[id].test_and_set())
-                            {
-                                assert(euid != 0);
+#ifndef NDEBUG
+                    if (0 == _m_debug_free_count--)
+                        jeecs::debug::logfatal("Entity free count broken!");
+#endif
+                    auto* meta = &_m_entities_meta[*out_id];
+                    
+                    *out_version = ++meta->m_version;
+                    meta->m_euid = euid;
 
-                                *out_id = id;
-                                *out_version = ++(_m_entities_meta[id].m_version);
-                                _m_entities_meta[id].m_euid = euid;
-                                return true;
-                            }
-                        }
-                        assert(false); // entity count is ok, but there is no free place. that should not happend.
-                    }
-                    free_entity_count = _m_free_count; // Fail to compare, update the count and retry.
+                    return true;
                 }
                 return false;
             }
@@ -228,9 +289,19 @@ namespace jeecs_impl
             }
             inline void close_all_entity(ecs_world* by_world)
             {
+                std::unordered_set<jeecs::typing::entity_id_in_chunk_t> free_entity_ids;
+                for (;;)
+                {
+                    jeecs::typing::entity_id_in_chunk_t freeid;
+                    if (!_m_free_slots.pop(&freeid))
+                        break;
+
+                    free_entity_ids.insert(freeid);
+                }
+
                 for (jeecs::typing::entity_id_in_chunk_t eidx = 0; eidx < _m_entity_count; eidx++)
                 {
-                    if (_m_entity_slot_states[eidx].test_and_set())
+                    if (free_entity_ids.find(eidx) == free_entity_ids.end())
                     {
                         jeecs::game_entity gentity;
                         gentity._m_id = eidx;
@@ -239,6 +310,8 @@ namespace jeecs_impl
 
                         je_ecs_world_destroy_entity(by_world, &gentity);
                     }
+                    else
+                        _m_free_slots.push(eidx);
                 }
             }
             inline size_t get_entity_count_in_chunk() const noexcept
@@ -260,11 +333,15 @@ namespace jeecs_impl
 
             void command_close_entity(jeecs::typing::entity_id_in_chunk_t eid) noexcept
             {
-                _m_entities_meta[eid].m_stat = jeecs::game_entity::entity_stat::UNAVAILABLE;
-                ++_m_entities_meta[eid].m_version;
-                _m_entity_slot_states[eid].clear();
+                auto* meta = &_m_entities_meta[eid];
+                meta->m_stat = jeecs::game_entity::entity_stat::UNAVAILABLE;
+                ++meta->m_version;
+               
+                _m_free_slots.push(eid);
 
-                ++_m_free_count;
+#ifndef NDEBUG
+                ++_m_debug_free_count;
+#endif
                 ++_m_arch_type->_m_free_count;
             }
         };
@@ -627,33 +704,33 @@ namespace jeecs_impl
             }
 
             static auto contain = [](const types_set& a, const types_set& b)
-                {
-                    for (auto type_id : b)
-                        if (a.find(type_id) == a.end())
-                            return false;
-                    return true;
-                };
+            {
+                for (auto type_id : b)
+                    if (a.find(type_id) == a.end())
+                        return false;
+                return true;
+            };
             static auto contain_any = [](const types_set& a, const types_set& b)
-                {
-                    for (auto type_id : b)
-                        if (a.find(type_id) != a.end())
-                            return true;
-                    return b.empty();
-                };
+            {
+                for (auto type_id : b)
+                    if (a.find(type_id) != a.end())
+                        return true;
+                return b.empty();
+            };
             static auto contain_all_any = [](const types_set& a, const std::map<size_t/* Group id */, types_set>& b)
-                {
-                    for (auto& [_, type_id_set] : b)
-                        if (contain_any(a, type_id_set) == false)
-                            return false;
-                    return true;
-                };
+            {
+                for (auto& [_, type_id_set] : b)
+                    if (contain_any(a, type_id_set) == false)
+                        return false;
+                return true;
+            };
             static auto except = [](const types_set& a, const types_set& b)
-                {
-                    for (auto type_id : b)
-                        if (a.find(type_id) != a.end())
-                            return false;
-                    return true;
-                };
+            {
+                for (auto type_id : b)
+                    if (a.find(type_id) != a.end())
+                        return false;
+                return true;
+            };
 
             dependence->m_archs.clear();
             do
