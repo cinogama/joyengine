@@ -402,9 +402,9 @@ WO_API wo_api wojeapi_close_world(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
-WO_API wo_api wojeapi_set_able_jobs_world(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_set_able_world(wo_vm vm, wo_value args, size_t argc)
 {
-    jeecs::game_world(wo_pointer(args + 0)).enable_jobs(wo_bool(args + 1));
+    jeecs::game_world(wo_pointer(args + 0)).set_able(wo_bool(args + 1));
     return wo_ret_void(vm);
 }
 
@@ -2844,8 +2844,8 @@ R"(
         extern("libjoyecs", "wojeapi_close_world")
         public func close(self: world) => void;
 
-        extern("libjoyecs", "wojeapi_set_able_jobs_world")
-        public func enable_jobs(self: world, able: bool)=> void;
+        extern("libjoyecs", "wojeapi_set_able_world")
+        public func set_able(self: world, able: bool)=> void;
 
         extern("libjoyecs", "wojeapi_add_system_to_world", slow)
         public func add_system(self: world, systype: typeinfo)=> bool;

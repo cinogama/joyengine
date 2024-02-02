@@ -154,7 +154,8 @@ namespace editor
                     wdat_map->getor("systems", []: dynamic) as array<dynamic>
                 );
                 wdat_map->set("systems", syss: dynamic);
-                do jeapi::deserialize::world(self->get_env->get_universe, wdat_map->unsafe::cast:< typeof(wdat)>, true);
+                jeapi::deserialize::world(self->get_env->get_universe, wdat_map->unsafe::cast:< typeof(wdat)>, true)
+                    -> set_able(true);
             }
             self.m_debug_context = option::value(context);
 

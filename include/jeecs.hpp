@@ -1007,6 +1007,10 @@ JE_API void* je_ecs_world_in_universe(void* world);
 /*
 je_ecs_world_create [基本接口]
 在指定的宇宙中创建一个世界
+    * 世界在创建之后，默认为非激活状态，请在初始化操作完成后调用
+        je_ecs_world_set_able 将世界激活
+请参见：
+    je_ecs_world_set_able
 */
 JE_API void* je_ecs_world_create(void* in_universe);
 
@@ -1190,23 +1194,12 @@ je_ecs_world_of_entity [基本接口]
 JE_API void* je_ecs_world_of_entity(const jeecs::game_entity* entity);
 
 /*
-je_ecs_world_set_able_jobs [基本接口]
-设置世界是否启用执行注册到Universe的世界任务
-    * 无论是否执行世界任务，世界本身的实体/组件管理机制仍会正常运行
-    * 默认世界创建时会启用世界任务
-    * 通常此设置被游戏项目在加载多个场景时，用于控制逻辑开始的时间点
-    * 设置不会立即生效，世界在逻辑帧开始时起效
+je_ecs_world_set_able [基本接口]
+设置世界是否被激活
+    * 若世界未激活，则实体组件系统更新将被暂停，世界任务亦将被跳过，仅响应
+        世界销毁请求和激活世界请求
 */
-JE_API void je_ecs_world_set_able_jobs(void* world, bool enable);
-
-/*
-je_ecs_world_set_able_defragmentation [基本接口]
-设置世界是否启用自动碎片整理，由于ArchSystem的内存特性，在一个世界内创建大量同类实体
-后销毁可能产生大量的内存空闲和碎片，造成内存浪费和额外的运行时开销
-    * 默认世界创建时会禁用自动碎片整理，需要手动开启
-    * 一般建议在世界加载完成之后开启，开启碎片整理之后，不允许在独立的线程中
-*/
-JE_API void je_ecs_world_set_able_defragmentation(void* world, bool enable)
+JE_API void je_ecs_world_set_able(void* world, bool enable);
 
 /*
 je_ecs_entity_uid [基本接口]
@@ -4958,9 +4951,9 @@ namespace jeecs
             return je_ecs_world_is_valid(handle());
         }
 
-        void enable_jobs(bool able) const noexcept
+        void set_able(bool able) const noexcept
         {
-            je_ecs_world_set_able_jobs(handle(), able);
+            je_ecs_world_set_able(handle(), able);
         }
 
         inline game_universe get_universe() const noexcept;

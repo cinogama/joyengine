@@ -869,8 +869,7 @@ namespace jeecs_impl
             bool                                    m_destroy_world;
 
             // Update configs ?
-            std::optional<bool>                     m_enable_for_world_jobs;
-            std::optional<bool>                     m_enable_defragmentation;
+            std::optional<bool>                     m_update_enabled;
 
             _world_command_buffer() = default;
         };
@@ -878,76 +877,80 @@ namespace jeecs_impl
         std::shared_mutex _m_command_buffer_mx;
         // 此处必须使用std::map，因为unordered容器一旦重哈希，_entity_command_buffer可能发生移动
         // 导致失效。
-        std::map<arch_type::entity, _entity_command_buffer*> _m_entity_command_buffer;
-        std::map<ecs_world*, _world_command_buffer*> _m_world_command_buffer;
+        std::map<arch_type::entity, _entity_command_buffer*> 
+                                _m_entity_command_buffers;
+        ecs_world*              _m_world;
+        _world_command_buffer*  _m_world_command_buffer;
 
-        _entity_command_buffer* _find_or_create_buffer_for(const arch_type::entity& e)
+        _entity_command_buffer* _find_or_create_buffer_for_entity(const arch_type::entity& e)
         {
             do
             {
                 std::shared_lock sg1(_m_command_buffer_mx);
-                auto fnd = _m_entity_command_buffer.find(e);
-                if (fnd != _m_entity_command_buffer.end())
+                auto fnd = _m_entity_command_buffers.find(e);
+                if (fnd != _m_entity_command_buffers.end())
                     return fnd->second;
 
             } while (0);
 
             std::lock_guard g1(_m_command_buffer_mx);
-            auto fnd = _m_entity_command_buffer.find(e);
-            if (fnd != _m_entity_command_buffer.end())
+            auto fnd = _m_entity_command_buffers.find(e);
+            if (fnd != _m_entity_command_buffers.end())
                 return fnd->second;
 
             auto* ebuf = new _entity_command_buffer{};
             ebuf->m_entity_removed_flag = false;
             ebuf->m_entity_active_stat = jeecs::game_entity::entity_stat::UNAVAILABLE;
-            return _m_entity_command_buffer[e] = ebuf;
+            return _m_entity_command_buffers[e] = ebuf;
         }
-        _world_command_buffer* _find_or_create_buffer_for(ecs_world* w)
+        _world_command_buffer* _find_or_create_buffer_for_world()
         {
             do
             {
                 std::shared_lock sg1(_m_command_buffer_mx);
-                auto fnd = _m_world_command_buffer.find(w);
-                if (fnd != _m_world_command_buffer.end())
-                    return fnd->second;
+                if (_m_world_command_buffer != nullptr)
+                    return _m_world_command_buffer;
 
             } while (0);
 
             std::lock_guard g1(_m_command_buffer_mx);
-            auto fnd = _m_world_command_buffer.find(w);
-            if (fnd != _m_world_command_buffer.end())
-                return fnd->second;
+            if (_m_world_command_buffer != nullptr)
+                return _m_world_command_buffer;
 
             auto* wbuf = new _world_command_buffer{};
-            wbuf->m_destroy_world = false;
-            
-            wbuf->m_enable_for_world_jobs = std::nullopt;
-            wbuf->m_enable_defragmentation = std::nullopt;
 
-            return _m_world_command_buffer[w] = wbuf;
+            wbuf->m_destroy_world = false;
+            wbuf->m_update_enabled = std::nullopt;
+
+            return _m_world_command_buffer = wbuf;
         }
 
         std::shared_mutex _m_command_executer_guard_mx;
 
     public:
-        command_buffer() = default;
+        command_buffer(ecs_world* world)
+            : _m_world(world)
+            , _m_world_command_buffer(nullptr)
+        {
+
+        }
         ~command_buffer()
         {
-            assert(_m_entity_command_buffer.empty() && _m_world_command_buffer.empty());
+            assert(_m_entity_command_buffers.empty() && _m_world_command_buffer == nullptr);
         }
 
         void init_new_entity(const arch_type::entity& e, jeecs::game_entity::entity_stat stat)
         {
             std::shared_lock sl(_m_command_executer_guard_mx);
             assert(stat != jeecs::game_entity::entity_stat::UNAVAILABLE);
-            _find_or_create_buffer_for(e)->m_entity_active_stat = stat;
+            _find_or_create_buffer_for_entity(e)->m_entity_active_stat = stat;
         }
 
         void remove_entity(const arch_type::entity& e)
         {
             std::shared_lock sl(_m_command_executer_guard_mx);
 
-            _find_or_create_buffer_for(e)->m_entity_removed_flag = true;
+            _find_or_create_buffer_for_entity(e)->m_entity_removed_flag = true;
         }
 
         void* append_component(const arch_type::entity& e, const jeecs::typing::type_info* component_type)
@@ -958,76 +961,66 @@ namespace jeecs_impl
             void* created_component = je_mem_alloc(component_type->m_size);
             component_type->construct(created_component);
 
-            _find_or_create_buffer_for(e)->m_adding_or_removing_components.add_one(
+            _find_or_create_buffer_for_entity(e)->m_adding_or_removing_components.add_one(
                 new _entity_command_buffer::typed_component(component_type, created_component)
             );
 
             return created_component;
         }
-
         void remove_component(const arch_type::entity& e, const jeecs::typing::type_info* component_type)
         {
             std::shared_lock sl(_m_command_executer_guard_mx);
 
-            _find_or_create_buffer_for(e)->m_adding_or_removing_components.add_one(
+            _find_or_create_buffer_for_entity(e)->m_adding_or_removing_components.add_one(
                 new _entity_command_buffer::typed_component(component_type, nullptr)
             );
         }
-
-        void close_world(ecs_world* w)
+        void close_world()
         {
             std::shared_lock sl(_m_command_executer_guard_mx);
 
-            DEBUG_ARCH_LOG("World: %p the destroy world operation has been committed to the command buffer.", w);
-            _find_or_create_buffer_for(w)->m_destroy_world = true;
+            DEBUG_ARCH_LOG("World: %p the destroy world operation has been committed to the command buffer.",
+                _m_world);
+
+            _find_or_create_buffer_for_world()->m_destroy_world = true;
         }
 
-        void set_able_world_jobs(ecs_world* w, bool enable)
+        void set_able_world(bool enable)
         {
             std::shared_lock sl(_m_command_executer_guard_mx);
 
             if (enable)
-                DEBUG_ARCH_LOG("World: %p trying to enable universe world jobs.", w);
+                DEBUG_ARCH_LOG("World: %p trying to enable world.", 
+                    _m_world);
             else
-                DEBUG_ARCH_LOG("World: %p trying to disable universe world jobs.", w);
+                DEBUG_ARCH_LOG("World: %p trying to disable world.",
+                    _m_world);
 
-            _find_or_create_buffer_for(w)->m_enable_for_world_jobs = std::make_optional(enable);
+            _find_or_create_buffer_for_world()->m_update_enabled = std::make_optional(enable);
         }
 
-        void set_able_world_defragmentation(ecs_world* w, bool enable)
+        void add_system_instance(const jeecs::typing::type_info* type, jeecs::game_system* sys_instance)
         {
             std::shared_lock sl(_m_command_executer_guard_mx);
 
-            if (enable)
-                DEBUG_ARCH_LOG("World: %p trying to enable defragmentation.", w);
-            else
-                DEBUG_ARCH_LOG("World: %p trying to disable defragmentation.", w);
-
-            _find_or_create_buffer_for(w)->m_enable_defragmentation = std::make_optional(enable);
-        }
-
-        void add_system_instance(ecs_world* w, const jeecs::typing::type_info* type, jeecs::game_system* sys_instance)
-        {
-            std::shared_lock sl(_m_command_executer_guard_mx);
-
-            DEBUG_ARCH_LOG("World: %p want to add system(%p) named '%s', operation has been committed to the command buffer.",
-                w, sys_instance, type->m_typename);
+            DEBUG_ARCH_LOG("World: %p want to add system(%p) named '%s', operation has been committed.",
+                _m_world, sys_instance, type->m_typename);
 
             assert(sys_instance);
 
-            _find_or_create_buffer_for(w)->m_adding_or_removing_systems.add_one(
+            _find_or_create_buffer_for_world()->m_adding_or_removing_systems.add_one(
                 new _world_command_buffer::typed_system(type, sys_instance)
             );
         }
 
-        void remove_system_instance(ecs_world* w, const jeecs::typing::type_info* type)
+        void remove_system_instance(const jeecs::typing::type_info* type)
         {
             std::shared_lock sl(_m_command_executer_guard_mx);
 
-            DEBUG_ARCH_LOG("World: %p want to remove system named '%s', operation has been committed to the command buffer.",
-                w, type->m_typename);
+            DEBUG_ARCH_LOG("World: %p want to remove system named '%s', operation has been committed.",
+                _m_world, type->m_typename);
 
-            _find_or_create_buffer_for(w)->m_adding_or_removing_systems.add_one(
+            _find_or_create_buffer_for_world()->m_adding_or_removing_systems.add_one(
                 new _world_command_buffer::typed_system(type, nullptr)
             );
         }
@@ -1049,8 +1042,7 @@ namespace jeecs_impl
 
         std::string _m_name;
 
-        bool _m_world_job_enabled;
-        bool _m_world_defragmentation_enabled;
+        bool _m_world_enabled;
 
         std::atomic_bool _m_destroying_flag;
         std::atomic_size_t _m_archmgr_updated_version;
@@ -1062,11 +1054,11 @@ namespace jeecs_impl
 
     public:
         ecs_world(ecs_universe* universe)
-            :_m_universe(universe)
-            , _m_name("anonymous")
+            : _m_universe(universe)
+            , _m_command_buffer(this)
+            , _m_name("<anonymous>")
             , _m_arch_manager(this)
-            , _m_world_job_enabled(true)
-            , _m_world_defragmentation_enabled(false)
+            , _m_world_enabled(false)
             , _m_destroying_flag(false)
             , _m_archmgr_updated_version(100)
         {
@@ -1100,7 +1092,7 @@ namespace jeecs_impl
         void execute_world_job(ecs_job* job)noexcept
         {
             assert(job->m_job_type == ecs_job::job_type::FOR_WORLDS);
-            if (_m_world_job_enabled)
+            if (_m_world_enabled)
                 job->m_for_worlds_job(this, job->m_custom_data);
         }
         void append_system_instance(const jeecs::typing::type_info* type, jeecs::game_system* sys) noexcept
@@ -1189,7 +1181,7 @@ namespace jeecs_impl
                 // Find all entity to close.
                 _m_arch_manager.close_all_entity(this);
 
-                // After this round, we should do a round of command buffer update, then close this world.     
+                // After this round, we should do a round of command buffer update, then close this world.
                 _m_command_buffer.update();
             }
 
@@ -1240,20 +1232,16 @@ namespace jeecs_impl
 
             jeecs::game_system* sys = (jeecs::game_system*)je_mem_alloc(type->m_size);
             type->construct(sys, this);
-            get_command_buffer().add_system_instance(this, type, sys);
+            get_command_buffer().add_system_instance(type, sys);
             return sys;
         }
         inline void request_to_remove_system(const jeecs::typing::type_info* type)
         {
-            get_command_buffer().remove_system_instance(this, type);
+            get_command_buffer().remove_system_instance(type);
         }
-        inline void request_to_set_able_jobs(bool enable)noexcept
+        inline void request_to_set_able(bool enable)noexcept
         {
-            get_command_buffer().set_able_world_jobs(this, enable);
-        }
-        inline void request_to_set_able_defragmentation(bool enable)noexcept
-        {
-            get_command_buffer().set_able_world_defragmentation(this, enable);
+            get_command_buffer().set_able_world(enable);
         }
 
         inline command_buffer& get_command_buffer() noexcept
@@ -1265,21 +1253,18 @@ namespace jeecs_impl
         {
             return _m_destroying_flag;
         }
-
+        inline bool is_enabled()const noexcept
+        {
+            return _m_world_enabled;
+        }
         inline void _ready_to_destroy() noexcept
         {
             _m_destroying_flag = true;
         }
-
-        inline void _set_able_world_jobs(bool enable) noexcept
+        inline void _set_able_world(bool enable) noexcept
         {
-            _m_world_job_enabled = enable;
+            _m_world_enabled = enable;
         }
-        inline void _set_able_world_defragmentation(bool enable) noexcept
-        {
-            _m_world_defragmentation_enabled = enable;
-        }
-
         inline ecs_universe* get_universe() const noexcept
         {
             return _m_universe;
@@ -1300,7 +1285,7 @@ namespace jeecs_impl
 #ifdef __cpp_lib_execution
             std::execution::par_unseq,
 #endif
-            _m_entity_command_buffer.begin(), _m_entity_command_buffer.end(),
+            _m_entity_command_buffers.begin(), _m_entity_command_buffers.end(),
             [](std::pair<const arch_type::entity, _entity_command_buffer*>& _buf_in_entity)
             {
                 //  If entity not valid, skip component append&remove&active, but need 
@@ -1515,36 +1500,27 @@ namespace jeecs_impl
             });
 
         // Finish! clear buffer.
-        _m_entity_command_buffer.clear();
+        _m_entity_command_buffers.clear();
 
         /////////////////////////////////////////////////////////////////////////////////////
 
-        std::for_each(
-#ifdef __cpp_lib_execution
-            std::execution::par_unseq,
-#endif
-            _m_world_command_buffer.begin(), _m_world_command_buffer.end(),
-            [this](std::pair<ecs_world* const, _world_command_buffer*>& _buf_in_world)
+        if (_m_world_command_buffer != nullptr)
+        {
+            if (_m_world_command_buffer->m_destroy_world)
+                _m_world->_ready_to_destroy();
+
+            // Apply universe world is enabled/disabled.
+            if (_m_world_command_buffer->m_update_enabled.has_value())
             {
-                //  If entity not valid, skip component append&remove&active, but need 
-                // free temp components.
-                ecs_world* world = _buf_in_world.first;
+                _m_world->_set_able_world(_m_world_command_buffer->m_update_enabled.value());
+                _m_world_command_buffer->m_update_enabled = std::nullopt;
+            }
 
-                if (_buf_in_world.second->m_destroy_world)
-                    world->_ready_to_destroy();
-
-                // Apply universe world job enable/disable.
-                if (_buf_in_world.second->m_enable_for_world_jobs.has_value())
-                    world->_set_able_world_jobs(_buf_in_world.second->m_enable_for_world_jobs.value());
-
-                // Apply universe world defragmentation enable/disable.
-                if (_buf_in_world.second->m_enable_defragmentation.has_value())
-                    world->_set_able_world_defragmentation(_buf_in_world.second->m_enable_defragmentation.value());
-
-
+            if (_m_world->is_enabled() || _m_world->is_destroying())
+            {
                 std::unordered_map<const jeecs::typing::type_info*, jeecs::game_system*> modifying_system_type_and_instances;
 
-                auto* append_or_remove_system = _buf_in_world.second->m_adding_or_removing_systems.pick_all();
+                auto* append_or_remove_system = _m_world_command_buffer->m_adding_or_removing_systems.pick_all();
                 while (append_or_remove_system)
                 {
                     auto* cur_append_or_remove_system = append_or_remove_system;
@@ -1568,17 +1544,15 @@ namespace jeecs_impl
                 for (auto [typeinfo, instance] : modifying_system_type_and_instances)
                 {
                     if (instance == nullptr)
-                        world->remove_system_instance(typeinfo);
+                        _m_world->remove_system_instance(typeinfo);
                     else
-                        world->append_system_instance(typeinfo, instance);
+                        _m_world->append_system_instance(typeinfo, instance);
                 }
 
-                delete _buf_in_world.second;
-
-            });
-
-        // Finish! clear buffer.
-        _m_world_command_buffer.clear();
+                delete _m_world_command_buffer;
+                _m_world_command_buffer = nullptr;
+            }
+        }
     }
 
     // ecs_universe
@@ -2329,7 +2303,7 @@ void* je_ecs_world_create(void* in_universe)
 
 void je_ecs_world_destroy(void* world)
 {
-    std::launder(reinterpret_cast<jeecs_impl::ecs_world*>(world))->get_command_buffer().close_world(std::launder(reinterpret_cast<jeecs_impl::ecs_world*>(world)));
+    std::launder(reinterpret_cast<jeecs_impl::ecs_world*>(world))->get_command_buffer().close_world();
 }
 
 jeecs::game_system* je_ecs_world_add_system_instance(void* world, const jeecs::typing::type_info* type)
@@ -2351,13 +2325,9 @@ void je_ecs_world_remove_system_instance(void* world, const jeecs::typing::type_
     std::launder(reinterpret_cast<jeecs_impl::ecs_world*>(world))->request_to_remove_system(type);
 }
 
-void je_ecs_world_set_able_jobs(void* world, bool enable)
+void je_ecs_world_set_able(void* world, bool enable)
 {
-    std::launder(reinterpret_cast<jeecs_impl::ecs_world*>(world))->request_to_set_able_jobs(enable);
-}
-void je_ecs_world_set_able_defragmentation(void* world, bool enable)
-{
-    std::launder(reinterpret_cast<jeecs_impl::ecs_world*>(world))->request_to_set_able_defragmentation(enable);
+    std::launder(reinterpret_cast<jeecs_impl::ecs_world*>(world))->request_to_set_able(enable);
 }
 
 void je_ecs_world_create_entity_with_components(

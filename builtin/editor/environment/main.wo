@@ -28,11 +28,16 @@ namespace editor
         }
         public func create_world(self: Environment)
         {
-            return self.m_universe->je::world::create;
+            let w = self.m_universe->je::world::create;
+            w->set_able(true);
+            return w;
         }
         public func load_world(self: Environment, dat: dict<string, dynamic>)
         {
-            return self.m_universe->jeapi::deserialize::world(dat, true);
+            let w = self.m_universe->jeapi::deserialize::world(dat, true);
+            w->set_able(true);
+
+            return w;
         }
         public func get_universe(self: Environment)
         {

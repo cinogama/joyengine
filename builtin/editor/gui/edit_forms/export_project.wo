@@ -294,6 +294,10 @@ namespace editor::gui::edit_forms
                                 // 在此处加载世界实例
                                 $LOAD_WORLD_INSTANCE$
 
+                                // 在此激活所有世界
+                                for (let _, world : LOADED_WORLDS_MAPPING)
+                                    world->set_able(true);
+
                                 // 在此调用运行时脚本（如果有）
                                 $IMPORT_RUNTIME_SCRIPT_MAY_NOT_EXIST$
 

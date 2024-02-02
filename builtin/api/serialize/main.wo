@@ -632,7 +632,7 @@ namespace jeapi
 
             world_entitys(w, dat, in_editor);
             world_systems(w, dat, in_editor);
-            
+
             return w;
         }
     }

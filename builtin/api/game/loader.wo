@@ -9,9 +9,10 @@ namespace jeapi::loader
         {
             return je::file::readall(wpath)
                 =>> \dat = dat->dict::deserialize;
-                ->> \dat = jeapi::deserialize::world(u, dat
-                    ->> \k, v = (k: string, v);,
-                    false)
+                ->> \dat = jeapi::deserialize::world(
+                        u, 
+                        dat->> \k, v = (k: string, v);,
+                        false)
                     ;
                 ;
         }
@@ -43,8 +44,9 @@ namespace jeapi::loader
             {
                 jeapi::deserialize::world_systems(self.world, self.data, false);
             }
-            public func get_world(self: step_loader)
+            public func finish(self: step_loader)
             {
+                self.world->set_able(true);
                 return self.world;
             }
         }
