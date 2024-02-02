@@ -13,14 +13,14 @@ namespace editor::gui::edit_forms
         m_pack_dll_into_image: bool,        // 将C++模块打包进镜像文件中？如果为true，则在运行时释放出动态库，否则原样复制
         m_image_size: int,
         m_start_up_worlds: array<string>,
-        m_rule: (fsys::path_t, string)=> Action,
+        m_rule: (bool, fsys::path_t, string)=> Action,
         m_resolution: (int, int),
 
         m_pack_output_log: vec<string>,
         m_finished: mut bool,
     };
 
-    func _default_rule(originpath: fsys::path_t, packpath: string)=> Action
+    func _default_rule(saving_woolang_pdi: bool, originpath: fsys::path_t, packpath: string)=> Action
     {
         // 如果是文件，才考虑打包
         if (fsys::isfile(originpath))
@@ -70,7 +70,7 @@ namespace editor::gui::edit_forms
                     ok(vminstance)?
                         {
                             assert(
-                                vminstance->save_binary(false)...
+                                vminstance->save_binary(saving_woolang_pdi)...
                                     -> \bindata, binlen = fimg->pack_buffer(bindata->ptr, binlen, packpath);
                             );
                             return [];
@@ -106,7 +106,7 @@ namespace editor::gui::edit_forms
 
         return Action::SKIP;
     }
-    func _export_logic(proj: Project, config: pack_config)
+    func _export_logic(saving_woolang_pdi: bool, proj: Project, config: pack_config)
     {
         config.m_pack_output_log->add("开始打包……");
 
@@ -130,7 +130,7 @@ namespace editor::gui::edit_forms
                     =>> func(paths)
                     {
                         let (subpath, packpath) = paths;
-                        let action = config.m_rule(subpath, packpath);
+                        let action = config.m_rule(saving_woolang_pdi, subpath, packpath);
 
                         return [(subpath, (packpath, action))];
                     }
@@ -384,7 +384,7 @@ namespace editor::gui::edit_forms
                                 ->replace("$APPLY_TITLE$", F"je::editor::set_window_title({proj.m_name->enstring});");
 
                             let (start_up_script_binary, start_up_script_binary_sz) = 
-                                new! vm("@/builtin/main.wo", final_boot_script)->unwarp->save_binary(false);
+                                new! vm("@/builtin/main.wo", final_boot_script)->unwarp->save_binary(saving_woolang_pdi);
 
                             assert(fimg->pack_buffer(start_up_script_binary->ptr, start_up_script_binary_sz, "@/builtin/main.wo"));
 
@@ -422,6 +422,7 @@ namespace editor::gui::edit_forms
         let reso_option_index = new! mutable(1);
         let reso_config = new! mutable((1366, 768));
         let pack_config_instance = new! mutable(option::none: option<pack_config>);
+        let saving_debug_info = new! mutable(false);
 
         context->launch_editor_form(func(step: mutable<int>){
             let mut open = true;
@@ -535,6 +536,29 @@ namespace editor::gui::edit_forms
                 }
                 if (current_step_count == 4)
                 {
+                    TextDisabled("第四步 关于调试符号");
+                    Separator();
+
+                    do BeginChildSize("SUBFORM.", 500., 300.);
+
+                    Text("请设置是否需要为Woolang脚本保留调试信息");
+                    Text("* 保存调试信息需要额外的存储空间");
+                    
+                    Separator();
+
+                    do CheckBox("编译Woolang脚本时保存调试信息", saving_debug_info->get)
+                        ->> \opt = saving_debug_info->set(opt);
+                        ;
+                  
+                    EndChild();
+                    
+                    if (ButtonSize("下一步", (cur_width, 0.)))
+                        step->set(current_step_count + 1);
+                    if (ButtonSize("上一步", (cur_width, 0.)))
+                        step->set(current_step_count - 1);
+                }
+                if (current_step_count == 5)
+                {
                     TextDisabled("导出操作确认");
                     Separator();
 
@@ -561,14 +585,14 @@ namespace editor::gui::edit_forms
                             m_pack_output_log = []mut,
                             m_finished = mut false,
                         };
-                        do _export_logic(context->get_project, conf)->unwarp;
+                        do _export_logic(saving_debug_info->get, context->get_project, conf)->unwarp;
                         pack_config_instance->set(option::value(conf));
                         step->set(current_step_count + 1);
                     }
                     if (ButtonSize("上一步", (cur_width, 0.)))
                         step->set(current_step_count - 1);
                 }
-                if (current_step_count == 5)
+                if (current_step_count == 6)
                 {
                     TextDisabled("正在导出……");
                     Separator();

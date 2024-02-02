@@ -237,6 +237,7 @@ namespace jeecs_impl
 #endif
                     auto* meta = &_m_entities_meta[*out_id];
                     
+                    assert(meta->m_stat == jeecs::game_entity::entity_stat::UNAVAILABLE);
                     *out_version = ++meta->m_version;
                     meta->m_euid = euid;
 
@@ -322,22 +323,44 @@ namespace jeecs_impl
             {
                 return _m_entity_size;
             }
+
+            inline std::unordered_set<jeecs::typing::entity_id_in_chunk_t> 
+                _take_all_empty_for_defragmentation() noexcept
+            {
+                // 为了碎片整理，我们需要将所有的空位都取出来
+                std::unordered_set<jeecs::typing::entity_id_in_chunk_t> empty_entity_ids;
+                for (;;)
+                {
+                    jeecs::typing::entity_id_in_chunk_t freeid;
+                    if (!_m_free_slots.pop(&freeid))
+                        break;
+        
+                    assert(empty_entity_ids.find(freeid) == empty_entity_ids.end());
+                    empty_entity_ids.insert(freeid);
+                }
+                return empty_entity_ids;
+            }
         private:
             // Following function only invoke by command_buffer
             friend class command_buffer;
+            friend class arch_type;
 
             void command_active_entity(jeecs::typing::entity_id_in_chunk_t eid, jeecs::game_entity::entity_stat stat) noexcept
             {
                 _m_entities_meta[eid].m_stat = stat;
             }
-
+            void command_add_free_slot(jeecs::typing::entity_id_in_chunk_t eid) noexcept
+            {
+                _m_free_slots.push(eid);
+            }
             void command_close_entity(jeecs::typing::entity_id_in_chunk_t eid) noexcept
             {
                 auto* meta = &_m_entities_meta[eid];
+
                 meta->m_stat = jeecs::game_entity::entity_stat::UNAVAILABLE;
                 ++meta->m_version;
                
-                _m_free_slots.push(eid);
+                command_add_free_slot(eid);
 
 #ifndef NDEBUG
                 ++_m_debug_free_count;
@@ -347,9 +370,12 @@ namespace jeecs_impl
         };
 
     private:
-        std::atomic_size_t _m_free_count;
-        std::atomic_size_t _m_chunk_count;
-        jeecs::basic::atomic_list<arch_chunk> _m_chunks;
+        std::atomic_size_t                      _m_free_count;
+        std::atomic_size_t                      _m_total_count;
+        jeecs::basic::atomic_list<arch_chunk>   _m_chunks;
+
+        // 这个锁用于防止碎片整理的时候，有其他线程在操作chunk链表
+        std::shared_mutex                       _m_chunk_list_defragmentation_mx;
 
     public:
         struct entity
@@ -485,15 +511,156 @@ namespace jeecs_impl
             }
         }
 
-        arch_chunk* _create_new_chunk() noexcept
+        // 开始进行chunk的碎片整理工作
+        void command_defragmentation() noexcept
         {
-            arch_chunk* new_chunk = new arch_chunk(this);
-            _m_chunks.add_one(new_chunk);
-            _m_free_count += _m_entity_count_per_chunk;
-            return new_chunk;
+            // NOTE: 我讨厌多线程，不过我们仍然很有机会
+            std::lock_guard g1(_m_chunk_list_defragmentation_mx);
+
+            auto now_free_count = _m_free_count.load();
+            if (now_free_count <= 2 * get_entity_count_per_chunk() || 2 * now_free_count < _m_total_count)
+                // 如果空闲的实体数量未达到两个chunk的数量，或者空闲的实体数量小于总实体数量的一半
+                // 那么我们就不进行碎片整理
+                return;
+
+            // 1. 为碎片整理准备一个新的临时chunk队列，实际上就是清空整个chunk链表
+            auto* alive_chunks = _m_chunks.pick_all();
+
+            // 2. 转存chunks，然后从尾到头开始整理碎片
+            std::vector<arch_chunk*> chunks;
+            while (alive_chunks)
+            {
+                chunks.push_back(alive_chunks);
+                alive_chunks = alive_chunks->last;
+            }
+
+            if (!chunks.empty())
+            {
+                size_t target_chunk_idx = 0, pick_chunk_idx = chunks.size() - 1;
+                while (pick_chunk_idx > target_chunk_idx)
+                {
+                    auto* target_chunk = chunks[target_chunk_idx];
+                    auto* pick_chunk = chunks[pick_chunk_idx];
+
+                    auto* pick_chunk_metas = pick_chunk->get_entity_meta();
+
+                    // 拿出并占据待转移位置的空闲区域
+                    auto free_places = pick_chunk->_take_all_empty_for_defragmentation();
+
+                    // 此标记当填充过程中发现没有足够的空闲位置时，会被设置为true
+                    bool gap_filling_completed = false;
+
+                    size_t stubborn_count = get_entity_count_per_chunk();
+                    for (jeecs::typing::entity_id_in_chunk_t i = 0; i < get_entity_count_per_chunk(); ++i)
+                    {
+                        auto* moving_entity_meta = &pick_chunk_metas[i];
+
+                        // 如果当前位置并不空闲，且实体状态一切OK，则开始转移
+                        if (free_places.find(i) == free_places.end())
+                        {
+                            if (moving_entity_meta->m_stat == jeecs::game_entity::entity_stat::UNAVAILABLE)
+                            {
+                                // 当前区块被占用，但尚未完成提交，状态仍然是UNAVAILABLE；这种实体无法搬运，
+                                // 因为提交请求会强关联到这个位置，擅自移动会导致激活失败，此处直接跳过，不做处理
+                                // NOTE: 不过如果区块中有这种实体，这个区块就没法释放了（哭）
+                            }
+                            else
+                            {
+                                // OK, 继续搬运，这搬运组件多是一件美事啊
+                                bool alloc_new_entity_success = true;
+                                jeecs::typing::entity_id_in_chunk_t new_entity_id;
+                                jeecs::typing::version_t new_entity_version;
+
+                                // 从target_chunk中找到一个空闲位置，如果target_chunk满了，就移动到下一个target，直到
+                                // 完成分配，或者target_chunk == pick_chunk(自己搬到自己身上没有意义~)
+                                while (!target_chunk->alloc_entity_id(moving_entity_meta->m_euid, &new_entity_id, &new_entity_version))
+                                {
+                                    // 如果target_chunk满了，就移动到下一个target
+                                    if (pick_chunk_idx <= target_chunk_idx + 1)
+                                    {
+                                        // 哦吼，满啦！
+                                        alloc_new_entity_success = false;
+                                        break;
+                                    }
+                                    else
+                                        target_chunk = chunks[++target_chunk_idx];
+                                }
+
+                                if (alloc_new_entity_success)
+                                {
+                                    // OK, 开始搬运
+                                    for (auto& arch_typeinfo : _m_arch_typeinfo_mapping)
+                                    {
+                                        void* moving_component_addr = pick_chunk->get_component_addr(i,
+                                            arch_typeinfo.second.m_typeinfo->m_chunk_size,
+                                            arch_typeinfo.second.m_begin_offset_in_chunk);
+                                        void* new_component_addr = target_chunk->get_component_addr(new_entity_id,
+                                            arch_typeinfo.second.m_typeinfo->m_chunk_size,
+                                            arch_typeinfo.second.m_begin_offset_in_chunk);
+
+                                        arch_typeinfo.second.m_typeinfo->move(new_component_addr, moving_component_addr);
+                                        arch_typeinfo.second.m_typeinfo->destruct(moving_component_addr);
+                                    }
+
+                                    // 直接在这里激活新的实体
+                                    assert(moving_entity_meta->m_stat != jeecs::game_entity::entity_stat::UNAVAILABLE);
+                                    target_chunk->command_active_entity(new_entity_id, moving_entity_meta->m_stat);
+
+                                    // 搬运完成，由于我们已经上了锁，这里可以直接通过常规流程关掉实体
+                                    // NOTE: 事到如今说这个也没用，但是还是补充一下：在原本的设计中，不上锁的情况下，此处不能
+                                    //      释放实体，因为可能会被其他线程“抢占位置”，这样释放chunk的时候就寄了；不过这里锁了。
+                                    pick_chunk->command_close_entity(i);
+
+                                    --stubborn_count;
+                                }
+                                else
+                                {
+                                    // 满了，没法搬了，摆烂吧
+                                    gap_filling_completed = true;
+                                    break;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // 此处的实体完全空闲，啥也不用做
+                            --stubborn_count;
+                        }
+                    }
+
+                    // OK, 无论因为什么原因，到了这里，我们都需要还原pick_chunk的空闲位置
+                    for (auto freeid : free_places)
+                        pick_chunk->command_add_free_slot(freeid);
+
+                    // 如果pick_chunk中的实体都是空闲的，那么我们就可以直接释放这个chunk了
+                    if (stubborn_count == 0)
+                    {
+                        _m_free_count -= _m_entity_count_per_chunk;
+                        _m_total_count -= _m_entity_count_per_chunk;
+
+                        delete pick_chunk;
+                        chunks[pick_chunk_idx] = nullptr;
+                    }
+
+                    // 代码执行到这里，说明要么a) pick_chunk中的实体都被搬走了，要么b)已经没有空隙了
+                    // 无论哪种情况，我们都需要将pick_chunk_idx向前移动
+
+                    assert(pick_chunk_idx != 0); // 不可能是0，因为如果是0，一开始就进不来
+                    --pick_chunk_idx;
+                }
+            }
+
+            // OK, 碎片整理完毕，将新的chunk队列重新挂载回去
+            for (auto* chunk : chunks)
+            {
+                if (chunk != nullptr)
+                    _m_chunks.add_one(chunk);
+            }
         }
+
         void alloc_entity(size_t euid, arch_chunk** out_chunk, jeecs::typing::entity_id_in_chunk_t* out_eid, jeecs::typing::version_t* out_eversion) noexcept
         {
+            std::shared_lock sg1(_m_chunk_list_defragmentation_mx);
             while (true)
             {
                 size_t free_entity_count = _m_free_count;
@@ -512,11 +679,17 @@ namespace jeecs_impl
                             }
                             peek_chunk = peek_chunk->last;
                         }
-                        // entity count is ok, but there is no free place. that should not happend.
-                        assert(false);
+                        // 有空位，但是没有找到空位（我在说什么？），这是不可能的！
+                        abort();
                     }
                 }
-                _create_new_chunk();
+                
+                // OK, 没有空位了，我们需要创建新的chunk
+                arch_chunk* new_chunk = new arch_chunk(this);
+                _m_chunks.add_one(new_chunk);
+
+                _m_free_count += _m_entity_count_per_chunk;
+                _m_total_count += _m_entity_count_per_chunk;
             }
         }
         entity instance_entity(const entity* prefab) noexcept
@@ -672,7 +845,6 @@ namespace jeecs_impl
         {
             return !_m_arch_modified.test_and_set();
         }
-
         inline void update_dependence_archinfo(jeecs::dependence* dependence) const noexcept
         {
             types_set contain_set, except_set /*, maynot_set*/;
@@ -738,7 +910,6 @@ namespace jeecs_impl
                 }
             } while (0);
         }
-
         inline void close_all_entity(ecs_world* by_world)
         {
             std::shared_lock sg1(_m_arch_types_mapping_mx);
@@ -747,7 +918,6 @@ namespace jeecs_impl
                 archtype->close_all_entity(by_world);
             }
         }
-
         inline std::vector<arch_type*> _get_all_arch_types() const noexcept
         {
             // THIS FUNCTION ONLY FOR EDITOR
@@ -758,10 +928,18 @@ namespace jeecs_impl
 
             return arch_list;
         }
-
         inline ecs_world* get_world() const noexcept
         {
             return _m_world;
+        }
+
+    private:
+        friend class command_buffer;
+        inline void command_defragmentation() noexcept
+        {
+            std::shared_lock sg1(_m_arch_types_mapping_mx);
+            for (auto& [types, archtype] : _m_arch_types_mapping)
+                archtype->command_defragmentation();
         }
     };
 
@@ -1501,6 +1679,9 @@ namespace jeecs_impl
 
         // Finish! clear buffer.
         _m_entity_command_buffers.clear();
+
+        // 在此处整理ArchType的内存碎片：
+        _m_world->_get_arch_mgr().command_defragmentation();
 
         /////////////////////////////////////////////////////////////////////////////////////
 
