@@ -16,8 +16,8 @@ struct je_stb_font_data
     size_t          m_board_size_y;
     je_font_char_updater_t m_updater;
 
-    // NOTE: Multi-thread unsfe!
-    std::map<unsigned long, jeecs::graphic::character> character_set;
+    std::mutex                                         m_character_set_mx;
+    std::map<unsigned long, jeecs::graphic::character> m_character_set;
 };
 
 je_font* je_font_load(
@@ -74,10 +74,12 @@ jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long chcode)
 {
     assert(font != nullptr);
 
-    if (auto fnd = font->character_set.find(chcode); fnd != font->character_set.end())
+    std::lock_guard g1(font->m_character_set_mx);
+
+    if (auto fnd = font->m_character_set.find(chcode); fnd != font->m_character_set.end())
         return &fnd->second;
 
-    jeecs::graphic::character& ch = font->character_set[chcode];
+    jeecs::graphic::character& ch = font->m_character_set[chcode];
 
     ch.m_char = (wchar_t)chcode;
 

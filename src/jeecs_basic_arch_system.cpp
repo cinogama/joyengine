@@ -151,13 +151,13 @@ namespace jeecs_impl
         using types_list = std::vector<const jeecs::typing::type_info*>;
         using archtypes_map = std::unordered_map<jeecs::typing::typeid_t, arch_type_info>;
     private:
-        const types_list      _m_arch_typeinfo;
-        const types_set       _m_types_set;
-        const archtypes_map   _m_arch_typeinfo_mapping;
-        const size_t    _m_entity_size;
-        const size_t    _m_entity_count_per_chunk;
+        const types_list    _m_arch_typeinfo;
+        const types_set     _m_types_set;
+        const archtypes_map _m_arch_typeinfo_mapping;
+        const size_t        _m_entity_size;
+        const size_t        _m_entity_count_per_chunk;
 
-        arch_manager* _m_arch_manager;
+        arch_manager*       _m_arch_manager;
 
     public:
         class arch_chunk
@@ -347,16 +347,16 @@ namespace jeecs_impl
         };
 
     private:
-
         std::atomic_size_t _m_free_count;
+        std::atomic_size_t _m_chunk_count;
         jeecs::basic::atomic_list<arch_chunk> _m_chunks;
 
     public:
         struct entity
         {
-            arch_chunk* _m_in_chunk;
-            jeecs::typing::entity_id_in_chunk_t   _m_id;
-            jeecs::typing::version_t              _m_version;
+            arch_chunk*                         _m_in_chunk;
+            jeecs::typing::entity_id_in_chunk_t _m_id;
+            jeecs::typing::version_t            _m_version;
 
             // Do not invoke this function if possiable, you should get component by arch_type & system.
             template<typename CT = void>
@@ -473,7 +473,6 @@ namespace jeecs_impl
                 mem_offset += typeinfo->m_chunk_size * _m_entity_count_per_chunk;
             }
         }
-
         ~arch_type()
         {
             arch_chunk* chunk = _m_chunks.pick_all();
@@ -486,15 +485,14 @@ namespace jeecs_impl
             }
         }
 
-        arch_chunk* _create_new_chunk()
+        arch_chunk* _create_new_chunk() noexcept
         {
             arch_chunk* new_chunk = new arch_chunk(this);
             _m_chunks.add_one(new_chunk);
             _m_free_count += _m_entity_count_per_chunk;
             return new_chunk;
         }
-
-        void alloc_entity(size_t euid, arch_chunk** out_chunk, jeecs::typing::entity_id_in_chunk_t* out_eid, jeecs::typing::version_t* out_eversion)
+        void alloc_entity(size_t euid, arch_chunk** out_chunk, jeecs::typing::entity_id_in_chunk_t* out_eid, jeecs::typing::version_t* out_eversion) noexcept
         {
             while (true)
             {
@@ -521,8 +519,7 @@ namespace jeecs_impl
                 _create_new_chunk();
             }
         }
-
-        entity instance_entity(const entity* prefab)
+        entity instance_entity(const entity* prefab) noexcept
         {
             arch_chunk* chunk;
             jeecs::typing::entity_id_in_chunk_t entity_id;
@@ -544,30 +541,25 @@ namespace jeecs_impl
 
             return entity{ chunk ,entity_id, entity_version };
         }
-
-        arch_manager* get_arch_mgr()const noexcept
+        inline arch_manager* get_arch_mgr()const noexcept
         {
             return _m_arch_manager;
         }
-
-        arch_chunk* get_head_chunk() const noexcept
+        inline arch_chunk* get_head_chunk() const noexcept
         {
             return _m_chunks.peek();
         }
-
-        size_t get_entity_count_per_chunk() const noexcept
+        inline size_t get_entity_count_per_chunk() const noexcept
         {
             return _m_entity_count_per_chunk;
         }
-
-        const arch_type_info* get_arch_type_info_by_type_id(jeecs::typing::typeid_t tid) const
+        inline const arch_type_info* get_arch_type_info_by_type_id(jeecs::typing::typeid_t tid) const
         {
             auto fnd = _m_arch_typeinfo_mapping.find(tid);
             if (fnd != _m_arch_typeinfo_mapping.end())
                 return &fnd->second;
             return nullptr;
         }
-
         inline void close_all_entity(ecs_world* by_world)
         {
             auto* chunk = get_head_chunk();
@@ -578,12 +570,10 @@ namespace jeecs_impl
                 chunk = chunk->last;
             }
         }
-
         inline const types_set& get_types()const noexcept
         {
             return _m_types_set;
         }
-
         inline const types_list& get_type_infos()const noexcept
         {
             return _m_arch_typeinfo;
@@ -591,7 +581,7 @@ namespace jeecs_impl
         static void free_chunk_info(jeecs::dependence::arch_chunks_info* archinfo) noexcept
         {
             delete[] archinfo->m_component_sizes;
-            delete[]archinfo->m_component_offsets;
+            delete[] archinfo->m_component_offsets;
 
             delete archinfo;
         }
@@ -877,7 +867,10 @@ namespace jeecs_impl
 
             jeecs::basic::atomic_list<typed_system> m_adding_or_removing_systems;
             bool                                    m_destroy_world;
-            bool                                    m_enable_for_world_jobs;
+
+            // Update configs ?
+            std::optional<bool>                     m_enable_for_world_jobs;
+            std::optional<bool>                     m_enable_defragmentation;
 
             _world_command_buffer() = default;
         };
@@ -927,7 +920,10 @@ namespace jeecs_impl
 
             auto* wbuf = new _world_command_buffer{};
             wbuf->m_destroy_world = false;
-            wbuf->m_enable_for_world_jobs = true;
+            
+            wbuf->m_enable_for_world_jobs = std::nullopt;
+            wbuf->m_enable_defragmentation = std::nullopt;
+
             return _m_world_command_buffer[w] = wbuf;
         }
 
@@ -995,7 +991,19 @@ namespace jeecs_impl
             else
                 DEBUG_ARCH_LOG("World: %p trying to disable universe world jobs.", w);
 
-            _find_or_create_buffer_for(w)->m_enable_for_world_jobs = enable;
+            _find_or_create_buffer_for(w)->m_enable_for_world_jobs = std::make_optional(enable);
+        }
+
+        void set_able_world_defragmentation(ecs_world* w, bool enable)
+        {
+            std::shared_lock sl(_m_command_executer_guard_mx);
+
+            if (enable)
+                DEBUG_ARCH_LOG("World: %p trying to enable defragmentation.", w);
+            else
+                DEBUG_ARCH_LOG("World: %p trying to disable defragmentation.", w);
+
+            _find_or_create_buffer_for(w)->m_enable_defragmentation = std::make_optional(enable);
         }
 
         void add_system_instance(ecs_world* w, const jeecs::typing::type_info* type, jeecs::game_system* sys_instance)
@@ -1042,6 +1050,7 @@ namespace jeecs_impl
         std::string _m_name;
 
         bool _m_world_job_enabled;
+        bool _m_world_defragmentation_enabled;
 
         std::atomic_bool _m_destroying_flag;
         std::atomic_size_t _m_archmgr_updated_version;
@@ -1057,6 +1066,7 @@ namespace jeecs_impl
             , _m_name("anonymous")
             , _m_arch_manager(this)
             , _m_world_job_enabled(true)
+            , _m_world_defragmentation_enabled(false)
             , _m_destroying_flag(false)
             , _m_archmgr_updated_version(100)
         {
@@ -1237,9 +1247,13 @@ namespace jeecs_impl
         {
             get_command_buffer().remove_system_instance(this, type);
         }
-        void request_to_set_able(bool enable)noexcept
+        inline void request_to_set_able_jobs(bool enable)noexcept
         {
             get_command_buffer().set_able_world_jobs(this, enable);
+        }
+        inline void request_to_set_able_defragmentation(bool enable)noexcept
+        {
+            get_command_buffer().set_able_world_defragmentation(this, enable);
         }
 
         inline command_buffer& get_command_buffer() noexcept
@@ -1256,9 +1270,14 @@ namespace jeecs_impl
         {
             _m_destroying_flag = true;
         }
+
         inline void _set_able_world_jobs(bool enable) noexcept
         {
             _m_world_job_enabled = enable;
+        }
+        inline void _set_able_world_defragmentation(bool enable) noexcept
+        {
+            _m_world_defragmentation_enabled = enable;
         }
 
         inline ecs_universe* get_universe() const noexcept
@@ -1515,7 +1534,13 @@ namespace jeecs_impl
                     world->_ready_to_destroy();
 
                 // Apply universe world job enable/disable.
-                world->_set_able_world_jobs(_buf_in_world.second->m_enable_for_world_jobs);
+                if (_buf_in_world.second->m_enable_for_world_jobs.has_value())
+                    world->_set_able_world_jobs(_buf_in_world.second->m_enable_for_world_jobs.value());
+
+                // Apply universe world defragmentation enable/disable.
+                if (_buf_in_world.second->m_enable_defragmentation.has_value())
+                    world->_set_able_world_defragmentation(_buf_in_world.second->m_enable_defragmentation.value());
+
 
                 std::unordered_map<const jeecs::typing::type_info*, jeecs::game_system*> modifying_system_type_and_instances;
 
@@ -2328,7 +2353,11 @@ void je_ecs_world_remove_system_instance(void* world, const jeecs::typing::type_
 
 void je_ecs_world_set_able_jobs(void* world, bool enable)
 {
-    std::launder(reinterpret_cast<jeecs_impl::ecs_world*>(world))->request_to_set_able(enable);
+    std::launder(reinterpret_cast<jeecs_impl::ecs_world*>(world))->request_to_set_able_jobs(enable);
+}
+void je_ecs_world_set_able_defragmentation(void* world, bool enable)
+{
+    std::launder(reinterpret_cast<jeecs_impl::ecs_world*>(world))->request_to_set_able_defragmentation(enable);
 }
 
 void je_ecs_world_create_entity_with_components(

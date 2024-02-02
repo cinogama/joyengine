@@ -1200,6 +1200,15 @@ je_ecs_world_set_able_jobs [基本接口]
 JE_API void je_ecs_world_set_able_jobs(void* world, bool enable);
 
 /*
+je_ecs_world_set_able_defragmentation [基本接口]
+设置世界是否启用自动碎片整理，由于ArchSystem的内存特性，在一个世界内创建大量同类实体
+后销毁可能产生大量的内存空闲和碎片，造成内存浪费和额外的运行时开销
+    * 默认世界创建时会禁用自动碎片整理，需要手动开启
+    * 一般建议在世界加载完成之后开启，开启碎片整理之后，不允许在独立的线程中
+*/
+JE_API void je_ecs_world_set_able_defragmentation(void* world, bool enable)
+
+/*
 je_ecs_entity_uid [基本接口]
 获取实体的跟踪ID
 若实体索引是`无效值`或已失效，则返回无效值0
@@ -3910,7 +3919,7 @@ namespace jeecs
 
             void add_one(NodeT* node) noexcept
             {
-                NodeT* last_last_node = last_node;// .exchange(node);
+                NodeT* last_last_node = last_node.load();// .exchange(node);
                 do
                 {
                     node->last = last_last_node;
@@ -4881,16 +4890,12 @@ namespace jeecs
             return (SystemT*)add_system(typing::type_info::of<SystemT>(typeid(SystemT).name()));
         }
 
-        // ATTENTION: 
-        // This function is not thread safe, only useable for in-engine-runtime, do not use it in other thread.
         inline jeecs::game_system* get_system(const jeecs::typing::type_info* type)
         {
             assert(type->m_type_class == je_typing_class::JE_SYSTEM);
             return je_ecs_world_get_system_instance(handle(), type);
         }
 
-        // ATTENTION: 
-        // This function is not thread safe, only useable for in-engine-runtime, do not use it in other thread.
         template<typename SystemT>
         inline SystemT* get_system()
         {
