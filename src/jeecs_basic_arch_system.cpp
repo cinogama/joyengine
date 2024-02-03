@@ -514,14 +514,14 @@ namespace jeecs_impl
         // 开始进行chunk的碎片整理工作
         void command_defragmentation() noexcept
         {
-            // NOTE: 我讨厌多线程，不过我们仍然很有机会
-            std::lock_guard g1(_m_chunk_list_defragmentation_mx);
-
             auto now_free_count = _m_free_count.load();
             if (now_free_count <= 2 * get_entity_count_per_chunk() || 2 * now_free_count < _m_total_count)
                 // 如果空闲的实体数量未达到两个chunk的数量，或者空闲的实体数量小于总实体数量的一半
                 // 那么我们就不进行碎片整理
                 return;
+
+            // NOTE: 我讨厌多线程，不过我们仍然很有机会
+            std::lock_guard g1(_m_chunk_list_defragmentation_mx);
 
             // 1. 为碎片整理准备一个新的临时chunk队列，实际上就是清空整个chunk链表
             auto* alive_chunks = _m_chunks.pick_all();
