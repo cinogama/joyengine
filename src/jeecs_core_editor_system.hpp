@@ -827,9 +827,9 @@ public let frag =
             if (nullptr == _grab_axis_translation)
             {
                 auto _set_editing_entity = [](const jeecs::game_entity& e)
-                {
-                    jedbg_set_editing_entity_uid(e.get_euid());
-                };
+                    {
+                        jedbg_set_editing_entity_uid(e.get_euid());
+                    };
 
                 if (!selected_list.empty())
                 {
@@ -1050,62 +1050,71 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args, size_t ar
             uniform_var = uniform_var->m_next;
         }
         return bad_shader;
-    };
+        };
     auto copy_shader_generator = [gcontext](
         jeecs::basic::resource<jeecs::graphic::shader>* newshader, auto oldshader)
-    {
-        assert(newshader != nullptr && (*newshader)->resouce()->m_path != nullptr);
-
-        jeecs::basic::resource<jeecs::graphic::shader> new_shader_instance = *newshader;
-        *newshader = jeecs::graphic::shader::load(gcontext, new_shader_instance->resouce()->m_path);
-
-        if constexpr (std::is_same<decltype(oldshader), jeecs::basic::resource<jeecs::graphic::shader>>::value)
         {
-            auto* uniform_var = oldshader->resouce()->m_raw_shader_data->m_custom_uniforms;
-            while (uniform_var != nullptr)
+            assert(newshader != nullptr && (*newshader)->resouce()->m_path != nullptr);
+
+            jeecs::basic::resource<jeecs::graphic::shader> new_shader_instance = *newshader;
+            *newshader = jeecs::graphic::shader::load(gcontext, new_shader_instance->resouce()->m_path);
+
+            const char builtin_uniform_varname[] = "JOYENGINE_";
+
+            if constexpr (std::is_same<decltype(oldshader), jeecs::basic::resource<jeecs::graphic::shader>>::value)
             {
-                switch (uniform_var->m_uniform_type)
+                auto* uniform_var = oldshader->resouce()->m_raw_shader_data->m_custom_uniforms;
+                while (uniform_var != nullptr)
                 {
-                case jegl_shader::uniform_type::INT:
-                    new_shader_instance->set_uniform(uniform_var->m_name, uniform_var->n); break;
-                case jegl_shader::uniform_type::FLOAT:
-                    new_shader_instance->set_uniform(uniform_var->m_name, uniform_var->x); break;
-                case jegl_shader::uniform_type::FLOAT2:
-                    new_shader_instance->set_uniform(uniform_var->m_name, jeecs::math::vec2(uniform_var->x, uniform_var->y)); break;
-                case jegl_shader::uniform_type::FLOAT3:
-                    new_shader_instance->set_uniform(uniform_var->m_name, jeecs::math::vec3(uniform_var->x, uniform_var->y, uniform_var->z)); break;
-                case jegl_shader::uniform_type::FLOAT4:
-                    new_shader_instance->set_uniform(uniform_var->m_name, jeecs::math::vec4(uniform_var->x, uniform_var->y, uniform_var->z, uniform_var->w)); break;
-                default:
-                    break;
-                }
-                uniform_var = uniform_var->m_next;
-            }
-        }
-        else
-        {
-            for (auto& [name, var] : oldshader.m_vars)
-            {
-                switch (var.m_uniform_type)
-                {
-                case jegl_shader::uniform_type::INT:
-                    new_shader_instance->set_uniform(name, var.n); break;
-                case jegl_shader::uniform_type::FLOAT:
-                    new_shader_instance->set_uniform(name, var.x); break;
-                case jegl_shader::uniform_type::FLOAT2:
-                    new_shader_instance->set_uniform(name, jeecs::math::vec2(var.x, var.y)); break;
-                case jegl_shader::uniform_type::FLOAT3:
-                    new_shader_instance->set_uniform(name, jeecs::math::vec3(var.x, var.y, var.z)); break;
-                case jegl_shader::uniform_type::FLOAT4:
-                    new_shader_instance->set_uniform(name, jeecs::math::vec4(var.x, var.y, var.z, var.w)); break;
-                default:
-                    jeecs::debug::logerr("Unsupported type when restore shader(%s)'s uniform named: '%s', skip.", new_shader_instance->resouce()->m_path, name.c_str()); break;
-                    break;
+                    if (strncmp(uniform_var->m_name, builtin_uniform_varname, sizeof(builtin_uniform_varname) - 1) != 0)
+                    {
+                        switch (uniform_var->m_uniform_type)
+                        {
+                        case jegl_shader::uniform_type::INT:
+                            new_shader_instance->set_uniform(uniform_var->m_name, uniform_var->n); break;
+                        case jegl_shader::uniform_type::FLOAT:
+                            new_shader_instance->set_uniform(uniform_var->m_name, uniform_var->x); break;
+                        case jegl_shader::uniform_type::FLOAT2:
+                            new_shader_instance->set_uniform(uniform_var->m_name, jeecs::math::vec2(uniform_var->x, uniform_var->y)); break;
+                        case jegl_shader::uniform_type::FLOAT3:
+                            new_shader_instance->set_uniform(uniform_var->m_name, jeecs::math::vec3(uniform_var->x, uniform_var->y, uniform_var->z)); break;
+                        case jegl_shader::uniform_type::FLOAT4:
+                            new_shader_instance->set_uniform(uniform_var->m_name, jeecs::math::vec4(uniform_var->x, uniform_var->y, uniform_var->z, uniform_var->w)); break;
+                        default:
+                            // Just skip it.
+                            break;
+                        }
+                    }
+                    uniform_var = uniform_var->m_next;
                 }
             }
-        }
-        return new_shader_instance;
-    };
+            else
+            {
+                for (auto& [name, var] : oldshader.m_vars)
+                {
+                    if (strncmp(name.c_str(), builtin_uniform_varname, sizeof(builtin_uniform_varname) - 1) != 0)
+                    {
+                        switch (var.m_uniform_type)
+                        {
+                        case jegl_shader::uniform_type::INT:
+                            new_shader_instance->set_uniform(name, var.n); break;
+                        case jegl_shader::uniform_type::FLOAT:
+                            new_shader_instance->set_uniform(name, var.x); break;
+                        case jegl_shader::uniform_type::FLOAT2:
+                            new_shader_instance->set_uniform(name, jeecs::math::vec2(var.x, var.y)); break;
+                        case jegl_shader::uniform_type::FLOAT3:
+                            new_shader_instance->set_uniform(name, jeecs::math::vec3(var.x, var.y, var.z)); break;
+                        case jegl_shader::uniform_type::FLOAT4:
+                            new_shader_instance->set_uniform(name, jeecs::math::vec4(var.x, var.y, var.z, var.w)); break;
+                        default:
+                            // Just skip it.
+                            break;
+                        }
+                    }
+                }
+            }
+            return new_shader_instance;
+        };
 
     if (shaders != nullptr)
     {
@@ -1147,7 +1156,7 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args, size_t ar
             return wo_ret_bool(vm, true);
 
         // 1. Load shader for checking bad shaders
-        jeecs::basic::resource<jeecs::graphic::shader> new_shader = 
+        jeecs::basic::resource<jeecs::graphic::shader> new_shader =
             jeecs::graphic::shader::load(gcontext, new_shader_path);
 
         if (new_shader == nullptr)
