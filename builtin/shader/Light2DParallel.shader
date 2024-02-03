@@ -3,7 +3,7 @@
 import je::shader;
 import je::shader::light2d;
 
-SHARED  (true);
+SHARED  (false);
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
 BLEND   (ONE, ONE);
