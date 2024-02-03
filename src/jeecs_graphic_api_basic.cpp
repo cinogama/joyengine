@@ -666,8 +666,6 @@ void jegl_terminate_graphic_thread(jegl_context* thread)
 
     } while (0);
 
-    _je_graphic_shared_context_instance._free_resource_in_gcontext(thread);
-
     assert(thread->_m_thread_notifier->m_graphic_terminate_flag.test_and_set());
     thread->_m_thread_notifier->m_graphic_terminate_flag.clear();
 
@@ -680,6 +678,8 @@ void jegl_terminate_graphic_thread(jegl_context* thread)
 
     auto* promise = std::launder(reinterpret_cast<std::promise<void>*>(thread->_m_promise));
     promise->get_future().get();
+
+    _je_graphic_shared_context_instance._free_resource_in_gcontext(thread);
 
     auto* closing_resource = thread->_m_thread_notifier->_m_closing_resources.pick_all();
     while (closing_resource)
