@@ -187,7 +187,14 @@ namespace jeecs
                                             const auto* typeinfo = work.m_used_components[argidx - 1];
 
                                             wo_value component_st = wo_push_empty(m_job_vm);
-                                            if (work.m_dependence.m_requirements[argidx - 1].m_require == jeecs::requirement::type::MAYNOT)
+                                            switch (work.m_dependence.m_requirements[argidx - 1].m_require)
+                                            {
+                                            case jeecs::requirement::type::CONTAIN:
+                                            {
+                                                create_component_struct(component_st, m_job_vm, component, typeinfo);
+                                                break;
+                                            }
+                                            case jeecs::requirement::type::MAYNOT:
                                             {
                                                 if (component == nullptr)
                                                 {
@@ -200,10 +207,12 @@ namespace jeecs
                                                     create_component_struct(tmp_elem, m_job_vm, component, typeinfo);
                                                     wo_set_option_val(component_st, m_job_vm, tmp_elem);
                                                 }
+                                                break;
                                             }
-                                            else
-                                            {
-                                                create_component_struct(component_st, m_job_vm, component, typeinfo);
+                                            case jeecs::requirement::type::ANYOF:
+                                            case jeecs::requirement::type::EXCEPT:
+                                            default:
+                                                break;
                                             }
                                         }
 
@@ -521,44 +530,11 @@ const jeecs::typing::type_info* je_towoo_register_system(
     const char* system_name,
     const char* script_path)
 {
-    je_towoo_unregister_system(je_typing_get_info_by_name(system_name));
-
-    auto* towoo_system_tinfo = je_typing_register(
-        system_name,
-        jeecs::basic::hash_compile_time(system_name),
-        sizeof(jeecs::towoo::ToWooBaseSystem),
-        alignof(jeecs::towoo::ToWooBaseSystem),
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::constructor,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::destructor,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::copier,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::mover,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::to_string,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::parse,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::state_update,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::pre_update,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::update,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::script_update,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::late_update,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::apply_update,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::commit_update,
-        je_typing_class::JE_SYSTEM);
-
-    assert(jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems.find(towoo_system_tinfo) ==
-        jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems.end());
-
     wo_vm vm = wo_create_vm();
     auto systinfo = std::make_unique<jeecs::towoo::ToWooBaseSystem::towoo_system_info>(vm);
     systinfo->m_create_function = 0;
     systinfo->m_close_function = 0;
     auto* sysinfo_ptr = systinfo.get();
-
-    do
-    {
-        std::lock_guard ug1(jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems_mx);
-
-        jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems[towoo_system_tinfo]
-            = std::move(systinfo);
-    } while (0);
 
     sysinfo_ptr->m_is_good = false;
 
@@ -607,6 +583,40 @@ const jeecs::typing::type_info* je_towoo_register_system(
                 {
                     sysinfo_ptr->m_create_function = create_function;
                     sysinfo_ptr->m_close_function = close_function;
+
+                    je_towoo_unregister_system(je_typing_get_info_by_name(system_name));
+
+                    auto* towoo_system_tinfo = je_typing_register(
+                        system_name,
+                        jeecs::basic::hash_compile_time(system_name),
+                        sizeof(jeecs::towoo::ToWooBaseSystem),
+                        alignof(jeecs::towoo::ToWooBaseSystem),
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::constructor,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::destructor,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::copier,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::mover,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::to_string,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::parse,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::state_update,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::pre_update,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::update,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::script_update,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::late_update,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::apply_update,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::commit_update,
+                        je_typing_class::JE_SYSTEM);
+
+                    assert(jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems.find(towoo_system_tinfo) ==
+                        jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems.end());
+
+                    do
+                    {
+                        std::lock_guard ug1(jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems_mx);
+
+                        jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems[towoo_system_tinfo]
+                            = std::move(systinfo);
+                    } while (0);
+
 
                     wo_push_pointer(vm, (void*)towoo_system_tinfo);
                     if (nullptr == wo_invoke_rsfunc(vm, initfunc, 1))
@@ -959,7 +969,7 @@ namespace je::towoo::system
         public func anyof(self: ToWooSystemFuncJob, ts: array<je::typeinfo>)
         {
             for (let _, t: ts)
-                self.m_requirement->add((require_type::EXCEPT, self.m_require_group, t));
+                self.m_requirement->add((require_type::ANYOF, self.m_require_group, t));
             self.m_require_group += 1;
             self.m_argument_count += 1;
             return self;

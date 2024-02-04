@@ -4,6 +4,32 @@
 
 #include <list>
 
+WO_API wo_api wojeapi_create_rmutex(wo_vm vm, wo_value args, size_t argc)
+{
+    return wo_ret_gchandle(vm, new std::recursive_mutex, nullptr,
+        [](void* p)
+        {
+            delete std::launder(reinterpret_cast<std::recursive_mutex*>(p));
+        });
+}
+WO_API wo_api wojeapi_lock_rmutex(wo_vm vm, wo_value args, size_t argc)
+{
+    std::recursive_mutex* m = std::launder(reinterpret_cast<std::recursive_mutex*>(wo_pointer(args + 0)));
+    m->lock();
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_trylock_rmutex(wo_vm vm, wo_value args, size_t argc)
+{
+    std::recursive_mutex* m = std::launder(reinterpret_cast<std::recursive_mutex*>(wo_pointer(args + 0)));
+    return wo_ret_bool(vm, m->try_lock());
+}
+WO_API wo_api wojeapi_unlock_rmutex(wo_vm vm, wo_value args, size_t argc)
+{
+    std::recursive_mutex* m = std::launder(reinterpret_cast<std::recursive_mutex*>(wo_pointer(args + 0)));
+    m->unlock();
+    return wo_ret_void(vm);
+}
+
 std::atomic_flag _jewo_log_buffer_mx = {};
 std::list<std::pair<int, std::string>> _jewo_log_buffer;
 
@@ -2440,6 +2466,21 @@ namespace je
 
             return \=_singleton(token, f);;
         }
+    }
+
+    using rmutex = gchandle
+    {
+        extern("libjoyecs", "wojeapi_create_rmutex")
+        public func create()=> rmutex;
+    
+        extern("libjoyecs", "wojeapi_lock_rmutex", slow)
+        public func lock(self: rmutex)=> void;
+
+        extern("libjoyecs", "wojeapi_trylock_rmutex")
+        public func trylock(self: rmutex)=> bool;
+
+        extern("libjoyecs", "wojeapi_unlock_rmutex")
+        public func unlock(self: rmutex)=> void;
     }
 
     extern("libjoyecs", "wojeapi_generate_uid")
