@@ -211,6 +211,7 @@ void fimg_close_img(fimg_img* img)
 }
 size_t fimg_save_buffer_to_img_impl(fimg_creating_context* ctx, const void* buffer, size_t buffer_len)
 {
+    unsigned char* write_byte_buffer = (unsigned char*)buffer;
     size_t real_read_sz = 0;
     size_t remain_buf_len = buffer_len;
     do
@@ -218,10 +219,11 @@ size_t fimg_save_buffer_to_img_impl(fimg_creating_context* ctx, const void* buff
         size_t buffer_free_size = (size_t)(ctx->image->fimg_head.MAX_FILE_SINGLE_IMG_SIZE - ctx->writing_offset);
         real_read_sz = std::min(buffer_free_size, remain_buf_len);
 
-        memcpy(ctx->writing_buffer + ctx->writing_offset, buffer, real_read_sz);
+        memcpy(ctx->writing_buffer + ctx->writing_offset, write_byte_buffer, real_read_sz);
 
         remain_buf_len -= real_read_sz;
         ctx->writing_offset += real_read_sz;
+        write_byte_buffer += real_read_sz;
 
         if (ctx->writing_offset >= (size_t)ctx->image->fimg_head.MAX_FILE_SINGLE_IMG_SIZE)
         {
