@@ -963,7 +963,6 @@ namespace je::towoo::system
         {
             self.m_requirement->add((require_type::EXCEPT, self.m_require_group, je::towoo::tid:<CompT>()));
             self.m_require_group += 1;
-            self.m_argument_count += 1;
             return self;
         }
         public func anyof(self: ToWooSystemFuncJob, ts: array<je::typeinfo>)
@@ -971,7 +970,6 @@ namespace je::towoo::system
             for (let _, t: ts)
                 self.m_requirement->add((require_type::ANYOF, self.m_require_group, t));
             self.m_require_group += 1;
-            self.m_argument_count += 1;
             return self;
         }
     }
@@ -1003,7 +1001,7 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
         fn: dynamic, 
         job_queue: job_type,
         req: array<(require_type, int, je::typeinfo)>,
-        comp_count: int,
+        argument_count: int,
         is_single_work: bool)=> void;
 
     for (let _, workinfo : regitered_works)
