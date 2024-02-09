@@ -461,7 +461,7 @@ namespace editor::gui::animation2d
                             FrameComponentData{
                                 m_component_name = "Renderer::Textures",
                                 m_member_name = "offset",
-                                m_value = mut DataValue::VEC2((i: real / x: real, j: real / y: real)),
+                                m_value = mut DataValue::VEC2((i: real, j: real)),
                                 m_offset_mode = mut false,
                             },
                             FrameComponentData{
