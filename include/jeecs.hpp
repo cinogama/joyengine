@@ -9,7 +9,7 @@
 #include "wo.h"
 
 #define JE_VERSION_WRAP(A, B, C) #A "." #B "." #C
-#define JE_CORE_VERSION JE_VERSION_WRAP(4, 4, 13)
+#define JE_CORE_VERSION JE_VERSION_WRAP(4, 4, 12)
 
 #include <cstdint>
 #include <cstring>
@@ -868,7 +868,10 @@ je_ecs_universe_register_exit_callback [基本接口]
 请参见
     je_ecs_universe_create
 */
-JE_API void je_ecs_universe_register_exit_callback(void* universe, void(*callback)(void*), void* arg);
+JE_API void je_ecs_universe_register_exit_callback(
+    void* universe, 
+    void(*callback)(void*), 
+    void* arg);
 
 typedef void(*je_job_for_worlds_t)(void* /*world*/, void* /*custom_data*/);
 typedef void(*je_job_call_once_t)(void* /*custom_data*/);
@@ -877,73 +880,109 @@ typedef void(*je_job_call_once_t)(void* /*custom_data*/);
 je_ecs_universe_register_pre_for_worlds_job [基本接口]
 向指定宇宙中注册优先遍历世界任务（Pre job for worlds）
 */
-JE_API void je_ecs_universe_register_pre_for_worlds_job(void* universe, je_job_for_worlds_t job, void* data, void(*freefunc)(void*));
+JE_API void je_ecs_universe_register_pre_for_worlds_job(
+    void* universe, 
+    je_job_for_worlds_t job, 
+    void* data, 
+    void(*freefunc)(void*));
 
 /*
 je_ecs_universe_register_pre_for_worlds_job [基本接口]
 向指定宇宙中注册优先单独任务（Pre job for once）
 */
-JE_API void je_ecs_universe_register_pre_call_once_job(void* universe, je_job_call_once_t job, void* data, void(*freefunc)(void*));
+JE_API void je_ecs_universe_register_pre_call_once_job(
+    void* universe, 
+    je_job_call_once_t job, 
+    void* data,
+    void(*freefunc)(void*));
 
 /*
 je_ecs_universe_register_for_worlds_job [基本接口]
 向指定宇宙中注册普通遍历世界任务（Job for worlds）
 */
-JE_API void je_ecs_universe_register_for_worlds_job(void* universe, je_job_for_worlds_t job, void* data, void(*freefunc)(void*));
+JE_API void je_ecs_universe_register_for_worlds_job(
+    void* universe, 
+    je_job_for_worlds_t job, 
+    void* data, 
+    void(*freefunc)(void*));
 
 /*
 je_ecs_universe_register_call_once_job [基本接口]
 向指定宇宙中注册普通单独任务（Job for once）
 */
-JE_API void je_ecs_universe_register_call_once_job(void* universe, je_job_call_once_t job, void* data, void(*freefunc)(void*));
+JE_API void je_ecs_universe_register_call_once_job(
+    void* universe, 
+    je_job_call_once_t job,
+    void* data, 
+    void(*freefunc)(void*));
 
 /*
 je_ecs_universe_register_after_for_worlds_job [基本接口]
 向指定宇宙中注册延后遍历世界任务（Defer job for worlds）
 */
-JE_API void je_ecs_universe_register_after_for_worlds_job(void* universe, je_job_for_worlds_t job, void* data, void(*freefunc)(void*));
+JE_API void je_ecs_universe_register_after_for_worlds_job(
+    void* universe,
+    je_job_for_worlds_t job,
+    void* data,
+    void(*freefunc)(void*));
 
 /*
 je_ecs_universe_register_after_call_once_job [基本接口]
 向指定宇宙中注册延后单独任务（Defer job for once）
 */
-JE_API void je_ecs_universe_register_after_call_once_job(void* universe, je_job_call_once_t job, void* data, void(*freefunc)(void*));
+JE_API void je_ecs_universe_register_after_call_once_job(
+    void* universe, 
+    je_job_call_once_t job,
+    void* data, 
+    void(*freefunc)(void*));
 
 /*
 je_ecs_universe_unregister_pre_for_worlds_job [基本接口]
 从指定宇宙中取消优先遍历世界任务（Pre job for worlds）
 */
-JE_API void je_ecs_universe_unregister_pre_for_worlds_job(void* universe, je_job_for_worlds_t job);
+JE_API void je_ecs_universe_unregister_pre_for_worlds_job(
+    void* universe,
+    je_job_for_worlds_t job);
 
 /*
 je_ecs_universe_unregister_pre_call_once_job [基本接口]
 从指定宇宙中取消优先单独任务（Pre job for once）
 */
-JE_API void je_ecs_universe_unregister_pre_call_once_job(void* universe, je_job_call_once_t job);
+JE_API void je_ecs_universe_unregister_pre_call_once_job(
+    void* universe, 
+    je_job_call_once_t job);
 
 /*
 je_ecs_universe_unregister_for_worlds_job [基本接口]
 从指定宇宙中取消普通遍历世界任务（Job for worlds）
 */
-JE_API void je_ecs_universe_unregister_for_worlds_job(void* universe, je_job_for_worlds_t job);
+JE_API void je_ecs_universe_unregister_for_worlds_job(
+    void* universe, 
+    je_job_for_worlds_t job);
 
 /*
 je_ecs_universe_unregister_call_once_job [基本接口]
 从指定宇宙中取消普通单独任务（Job for once）
 */
-JE_API void je_ecs_universe_unregister_call_once_job(void* universe, je_job_call_once_t job);
+JE_API void je_ecs_universe_unregister_call_once_job(
+    void* universe,
+    je_job_call_once_t job);
 
 /*
 je_ecs_universe_unregister_after_for_worlds_job [基本接口]
 从指定宇宙中取消延后遍历世界任务（After job for worlds）
 */
-JE_API void je_ecs_universe_unregister_after_for_worlds_job(void* universe, je_job_for_worlds_t job);
+JE_API void je_ecs_universe_unregister_after_for_worlds_job(
+    void* universe, 
+    je_job_for_worlds_t job);
 
 /*
 je_ecs_universe_unregister_after_call_once_job [基本接口]
 从指定宇宙中取消延后单独任务（After job for once）
 */
-JE_API void je_ecs_universe_unregister_after_call_once_job(void* universe, je_job_call_once_t job);
+JE_API void je_ecs_universe_unregister_after_call_once_job(
+    void* universe,
+    je_job_call_once_t job);
 
 /*
 je_ecs_universe_get_frame_deltatime [基本接口]
@@ -951,13 +990,16 @@ je_ecs_universe_get_frame_deltatime [基本接口]
 请参见：
     je_ecs_universe_set_deltatime
 */
-JE_API double je_ecs_universe_get_frame_deltatime(void* universe);
+JE_API double je_ecs_universe_get_frame_deltatime(
+    void* universe);
 
 /*
 je_ecs_universe_set_frame_deltatime [基本接口]
 设置当前宇宙的帧更新间隔时间
 */
-JE_API void je_ecs_universe_set_frame_deltatime(void* universe, double delta);
+JE_API void je_ecs_universe_set_frame_deltatime(
+    void* universe, 
+    double delta);
 
 /*
 je_ecs_universe_get_real_deltatime [基本接口]
@@ -1049,7 +1091,9 @@ je_ecs_world_update_dependences_archinfo [基本接口]
 从当前世界更新类型依赖信息（即 ArchType 缓存）
 此函数一般用于selector更新自身某步 dependence 的 ArchType 缓存
 */
-JE_API void je_ecs_world_update_dependences_archinfo(void* world, jeecs::dependence* dependence);
+JE_API void je_ecs_world_update_dependences_archinfo(
+    void* world, 
+    jeecs::dependence* dependence);
 
 /*
 je_ecs_clear_dependence_archinfos [基本接口]
@@ -1067,14 +1111,18 @@ je_ecs_world_add_system_instance [基本接口]
 
     * 若向一个正在销毁中的世界添加系统实例，返回 nullptr
 */
-JE_API jeecs::game_system* je_ecs_world_add_system_instance(void* world, const jeecs::typing::type_info* type);
+JE_API jeecs::game_system* je_ecs_world_add_system_instance(
+    void* world, 
+    const jeecs::typing::type_info* type);
 
 /*
 je_ecs_world_get_system_instance [基本接口]
 从指定世界中获取一个指定类型的系统实例，返回此实例的指针
 若世界中不存在此类型的系统，返回nullptr
 */
-JE_API jeecs::game_system* je_ecs_world_get_system_instance(void* world, const jeecs::typing::type_info* type);
+JE_API jeecs::game_system* je_ecs_world_get_system_instance(
+    void* world,
+    const jeecs::typing::type_info* type);
 
 /*
 je_ecs_world_remove_system_instance [基本接口]
@@ -1083,7 +1131,9 @@ je_ecs_world_remove_system_instance [基本接口]
     1. 若此前世界中不存在同类型的系统，则移除
     2. 若此前世界中已经存在同类型系统，则无事发生
 */
-JE_API void je_ecs_world_remove_system_instance(void* world, const jeecs::typing::type_info* type);
+JE_API void je_ecs_world_remove_system_instance(
+    void* world, 
+    const jeecs::typing::type_info* type);
 
 /*
 je_ecs_world_create_entity_with_components [基本接口]
@@ -1191,7 +1241,8 @@ je_ecs_world_of_entity [基本接口]
 请参见：
     jeecs::game_entity::game_world
 */
-JE_API void* je_ecs_world_of_entity(const jeecs::game_entity* entity);
+JE_API void* je_ecs_world_of_entity(
+    const jeecs::game_entity* entity);
 
 /*
 je_ecs_world_set_able [基本接口]
@@ -1209,7 +1260,8 @@ je_ecs_entity_uid [基本接口]
     jeecs::typing::euid_t
     jeecs::game_entity::get_euid
 */
-JE_API jeecs::typing::euid_t je_ecs_entity_uid(const jeecs::game_entity* entity);
+JE_API jeecs::typing::euid_t je_ecs_entity_uid(
+    const jeecs::game_entity* entity);
 
 // ATTENTION: These 2 functions have no thread-safe-promise.
 /*
@@ -1220,7 +1272,8 @@ je_ecs_get_name_of_entity [基本接口]
 返回 Editor::Name 组件中的字符串地址，这意味着如果实体发生更新、重命名
 或者其他操作，取出的字符串可能失效
 */
-JE_API const char* je_ecs_get_name_of_entity(const jeecs::game_entity* entity);
+JE_API const char* je_ecs_get_name_of_entity(
+    const jeecs::game_entity* entity);
 
 /*
 je_ecs_set_name_of_entity [基本接口]
@@ -1233,7 +1286,9 @@ je_ecs_set_name_of_entity [基本接口]
 或者其他操作，取出的字符串可能失效
 若实体不包含 Editor::Name，则创建后再进行设置
 */
-JE_API const char* je_ecs_set_name_of_entity(const jeecs::game_entity* entity, const char* name);
+JE_API const char* je_ecs_set_name_of_entity(
+    const jeecs::game_entity* entity,
+    const char* name);
 /////////////////////////// Time&Sleep /////////////////////////////////
 
 /*
@@ -1300,7 +1355,8 @@ jeecs_entry_register_core_systems [基本接口]
 请参见：
     jeecs::entry::module_entry
 */
-JE_API void jeecs_entry_register_core_systems(jeecs::typing::type_unregister_guard* guard);
+JE_API void jeecs_entry_register_core_systems(
+    jeecs::typing::type_unregister_guard* guard);
 
 /////////////////////////// FILE /////////////////////////////////
 
@@ -1464,27 +1520,37 @@ jeecs_file_image_begin [基本接口]
 准备开始创建文件镜像，镜像文件将被保存到 storing_path 指定的目录下
 镜像会进行分卷操作，max_image_size是单个镜像文件的大小
 */
-JE_API fimg_creating_context* jeecs_file_image_begin(const char* storing_path, size_t max_image_size);
+JE_API fimg_creating_context* jeecs_file_image_begin(
+    const char* storing_path,
+    size_t max_image_size);
 
 /*
 jeecs_file_image_pack_file [基本接口]
 向指定镜像中写入由 filepath 指定的一个文件，此文件在镜像中的路径被
 指定为packingpath
 */
-JE_API bool jeecs_file_image_pack_file(fimg_creating_context* context, const char* filepath, const char* packingpath);
+JE_API bool jeecs_file_image_pack_file(
+    fimg_creating_context* context, 
+    const char* filepath, 
+    const char* packingpath);
 
 /*
 jeecs_file_image_pack_file [基本接口]
 向指定镜像中写入一个缓冲区指定的内容作为文件，此文件在镜像中的路径被
 指定为packingpath
 */
-JE_API bool jeecs_file_image_pack_buffer(fimg_creating_context* context, const void* buffer, size_t len, const char* packingpath);
+JE_API bool jeecs_file_image_pack_buffer(
+    fimg_creating_context* context, 
+    const void* buffer, 
+    size_t len, 
+    const char* packingpath);
 
 /*
 jeecs_file_image_finish [基本接口]
 结束镜像创建，将最后剩余数据写入镜像并创建镜像索引文件
 */
-JE_API void jeecs_file_image_finish(fimg_creating_context* context);
+JE_API void jeecs_file_image_finish(
+    fimg_creating_context* context);
 
 // If ignore_crc64 == true, cache will always work even if origin file changed.
 
@@ -1501,7 +1567,10 @@ jeecs_load_cache_file [基本接口]
     jeecs_file_read
     jeecs_file_close
 */
-JE_API jeecs_file* jeecs_load_cache_file(const char* filepath, uint32_t format_version, wo_integer_t virtual_crc64);
+JE_API jeecs_file* jeecs_load_cache_file(
+    const char* filepath, 
+    uint32_t format_version,
+    wo_integer_t virtual_crc64);
 
 // If usecrc64 != 0, cache file will use it instead of reading from origin file.
 
@@ -1517,13 +1586,20 @@ jeecs_create_cache_file [基本接口]
     jeecs_close_cache_file
     jeecs_write_cache_file
 */
-JE_API void* jeecs_create_cache_file(const char* filepath, uint32_t format_version, wo_integer_t usecrc64);
+JE_API void* jeecs_create_cache_file(
+    const char* filepath, 
+    uint32_t format_version, 
+    wo_integer_t usecrc64);
 
 /*
 jeecs_write_cache_file [基本接口]
 向已创建的缓存文件中写入若干个指定大小的元素，返回成功写入的元素数量
 */
-JE_API size_t jeecs_write_cache_file(const void* write_buffer, size_t elem_size, size_t count, void* file);
+JE_API size_t jeecs_write_cache_file(
+    const void* write_buffer, 
+    size_t elem_size, 
+    size_t count, 
+    void* file);
 
 /*
 jeecs_close_cache_file [基本接口]
@@ -2113,7 +2189,9 @@ jegl_register_sync_graphic_callback [基本接口]
 请参见：
     je_init
 */
-JE_API void jegl_register_sync_thread_callback(jeecs_sync_callback_func_t callback, void* arg);
+JE_API void jegl_register_sync_thread_callback(
+    jeecs_sync_callback_func_t callback,
+    void* arg);
 
 enum jegl_sync_state
 {
@@ -2137,7 +2215,9 @@ jegl_sync_init [基本接口]
     jegl_sync_update
     jegl_sync_shutdown
 */
-JE_API void             jegl_sync_init(jegl_context* thread, bool isreboot);
+JE_API void             jegl_sync_init(
+    jegl_context* thread, 
+    bool isreboot);
 
 /*
 jegl_sync_update [基本接口]
@@ -2702,7 +2782,11 @@ jegl_rchain_draw [基本接口]
 将指定的顶点，使用指定的着色器和纹理将绘制操作作用到绘制链上
     * 若绘制的物体不需要使用纹理，可以使用不绑定纹理的纹理组或传入 SIZE_MAX
 */
-JE_API jegl_rendchain_rend_action* jegl_rchain_draw(jegl_rendchain* chain, jegl_resource* shader, jegl_resource* vertex, size_t texture_group);
+JE_API jegl_rendchain_rend_action* jegl_rchain_draw(
+    jegl_rendchain* chain, 
+    jegl_resource* shader, 
+    jegl_resource* vertex, 
+    size_t texture_group);
 
 /*
 jegl_rchain_set_uniform_int [基本接口]
@@ -2710,7 +2794,10 @@ jegl_rchain_set_uniform_int [基本接口]
 请参见：
     jegl_rendchain_rend_action
 */
-JE_API void jegl_rchain_set_uniform_int(jegl_rendchain_rend_action* act, uint32_t binding_place, int val);
+JE_API void jegl_rchain_set_uniform_int(
+    jegl_rendchain_rend_action* act, 
+    uint32_t binding_place, 
+    int val);
 
 /*
 jegl_rchain_set_uniform_float [基本接口]
@@ -2718,7 +2805,10 @@ jegl_rchain_set_uniform_float [基本接口]
 请参见：
     jegl_rendchain_rend_action
 */
-JE_API void jegl_rchain_set_uniform_float(jegl_rendchain_rend_action* act, uint32_t binding_place, float val);
+JE_API void jegl_rchain_set_uniform_float(
+    jegl_rendchain_rend_action* act,
+    uint32_t binding_place,
+    float val);
 
 /*
 jegl_rchain_set_uniform_float2 [基本接口]
@@ -2726,7 +2816,11 @@ jegl_rchain_set_uniform_float2 [基本接口]
 请参见：
     jegl_rendchain_rend_action
 */
-JE_API void jegl_rchain_set_uniform_float2(jegl_rendchain_rend_action* act, uint32_t binding_place, float x, float y);
+JE_API void jegl_rchain_set_uniform_float2(
+    jegl_rendchain_rend_action* act,
+    uint32_t binding_place, 
+    float x,
+    float y);
 
 /*
 jegl_rchain_set_uniform_float3 [基本接口]
@@ -2734,7 +2828,12 @@ jegl_rchain_set_uniform_float3 [基本接口]
 请参见：
     jegl_rendchain_rend_action
 */
-JE_API void jegl_rchain_set_uniform_float3(jegl_rendchain_rend_action* act, uint32_t binding_place, float x, float y, float z);
+JE_API void jegl_rchain_set_uniform_float3(
+    jegl_rendchain_rend_action* act,
+    uint32_t binding_place,
+    float x,
+    float y,
+    float z);
 
 /*
 jegl_rchain_set_uniform_float4 [基本接口]
@@ -2742,7 +2841,13 @@ jegl_rchain_set_uniform_float4 [基本接口]
 请参见：
     jegl_rendchain_rend_action
 */
-JE_API void jegl_rchain_set_uniform_float4(jegl_rendchain_rend_action* act, uint32_t binding_place, float x, float y, float z, float w);
+JE_API void jegl_rchain_set_uniform_float4(
+    jegl_rendchain_rend_action* act, 
+    uint32_t binding_place,
+    float x,
+    float y,
+    float z, 
+    float w);
 
 /*
 jegl_rchain_set_uniform_float4x4 [基本接口]
@@ -2750,7 +2855,10 @@ jegl_rchain_set_uniform_float4x4 [基本接口]
 请参见：
     jegl_rendchain_rend_action
 */
-JE_API void jegl_rchain_set_uniform_float4x4(jegl_rendchain_rend_action* act, uint32_t binding_place, const float(*mat)[4]);
+JE_API void jegl_rchain_set_uniform_float4x4(
+    jegl_rendchain_rend_action* act, 
+    uint32_t binding_place, 
+    const float(*mat)[4]);
 
 
 /*
@@ -2759,7 +2867,10 @@ jegl_rchain_set_builtin_uniform_int [基本接口]
 请参见：
     jegl_rendchain_rend_action
 */
-JE_API void jegl_rchain_set_builtin_uniform_int(jegl_rendchain_rend_action* act, uint32_t* binding_place, int val);
+JE_API void jegl_rchain_set_builtin_uniform_int(
+    jegl_rendchain_rend_action* act, 
+    uint32_t* binding_place, 
+    int val);
 
 /*
 jegl_rchain_set_builtin_uniform_float [基本接口]
@@ -2767,7 +2878,10 @@ jegl_rchain_set_builtin_uniform_float [基本接口]
 请参见：
     jegl_rendchain_rend_action
 */
-JE_API void jegl_rchain_set_builtin_uniform_float(jegl_rendchain_rend_action* act, uint32_t* binding_place, float val);
+JE_API void jegl_rchain_set_builtin_uniform_float(
+    jegl_rendchain_rend_action* act, 
+    uint32_t* binding_place,
+    float val);
 
 /*
 jegl_rchain_set_builtin_uniform_float2 [基本接口]
@@ -2775,7 +2889,11 @@ jegl_rchain_set_builtin_uniform_float2 [基本接口]
 请参见：
     jegl_rendchain_rend_action
 */
-JE_API void jegl_rchain_set_builtin_uniform_float2(jegl_rendchain_rend_action* act, uint32_t* binding_place, float x, float y);
+JE_API void jegl_rchain_set_builtin_uniform_float2(
+    jegl_rendchain_rend_action* act, 
+    uint32_t* binding_place, 
+    float x,
+    float y);
 
 /*
 jegl_rchain_set_builtin_uniform_float3 [基本接口]
@@ -2783,7 +2901,12 @@ jegl_rchain_set_builtin_uniform_float3 [基本接口]
 请参见：
     jegl_rendchain_rend_action
 */
-JE_API void jegl_rchain_set_builtin_uniform_float3(jegl_rendchain_rend_action* act, uint32_t* binding_place, float x, float y, float z);
+JE_API void jegl_rchain_set_builtin_uniform_float3(
+    jegl_rendchain_rend_action* act, 
+    uint32_t* binding_place, 
+    float x, 
+    float y, 
+    float z);
 
 /*
 jegl_rchain_set_builtin_uniform_float4 [基本接口]
@@ -2791,7 +2914,13 @@ jegl_rchain_set_builtin_uniform_float4 [基本接口]
 请参见：
     jegl_rendchain_rend_action
 */
-JE_API void jegl_rchain_set_builtin_uniform_float4(jegl_rendchain_rend_action* act, uint32_t* binding_place, float x, float y, float z, float w);
+JE_API void jegl_rchain_set_builtin_uniform_float4(
+    jegl_rendchain_rend_action* act,
+    uint32_t* binding_place, 
+    float x,
+    float y, 
+    float z,
+    float w);
 
 /*
 jegl_rchain_set_builtin_uniform_float4x4 [基本接口]
@@ -2799,7 +2928,10 @@ jegl_rchain_set_builtin_uniform_float4x4 [基本接口]
 请参见：
     jegl_rendchain_rend_action
 */
-JE_API void jegl_rchain_set_builtin_uniform_float4x4(jegl_rendchain_rend_action* act, uint32_t* binding_place, const float(*mat)[4]);
+JE_API void jegl_rchain_set_builtin_uniform_float4x4(
+    jegl_rendchain_rend_action* act, 
+    uint32_t* binding_place,
+    const float(*mat)[4]);
 
 /*
 jegl_rchain_bind_texture [基本接口]
@@ -2807,7 +2939,11 @@ jegl_rchain_bind_texture [基本接口]
 请参见：
     jegl_rchain_allocate_texture_group
 */
-JE_API void jegl_rchain_bind_texture(jegl_rendchain* chain, size_t texture_group, size_t binding_pass, jegl_resource* texture);
+JE_API void jegl_rchain_bind_texture(
+    jegl_rendchain* chain,
+    size_t texture_group, 
+    size_t binding_pass, 
+    jegl_resource* texture);
 
 /*
 jegl_rchain_bind_pre_texture_group [基本接口]
@@ -2817,14 +2953,18 @@ jegl_rchain_bind_pre_texture_group [基本接口]
     jegl_rchain_allocate_texture_group
     jegl_rchain_bind_texture
 */
-JE_API void jegl_rchain_bind_pre_texture_group(jegl_rendchain* chain, size_t texture_group);
+JE_API void jegl_rchain_bind_pre_texture_group(
+    jegl_rendchain* chain, 
+    size_t texture_group);
 
 /*
 jegl_rchain_commit [基本接口]
 将指定的绘制链在图形线程中进行提交
     * 此函数只允许在图形线程内调用
 */
-JE_API void jegl_rchain_commit(jegl_rendchain* chain, jegl_context* glthread);
+JE_API void jegl_rchain_commit(
+    jegl_rendchain* chain, 
+    jegl_context* glthread);
 
 /*
 jegl_uhost_get_or_create_for_universe [基本接口]
@@ -2836,31 +2976,38 @@ jegl_uhost_get_or_create_for_universe [基本接口]
     jegl_reboot_graphic_thread
 */
 JE_API jeecs::graphic_uhost* jegl_uhost_get_or_create_for_universe(
-    void* universe, const jegl_interface_config* config);
+    void* universe, 
+    const jegl_interface_config* config);
 
 /*
 jegl_uhost_get_context [基本接口]
 从指定的可编程图形上下文接口获取图形线程的正式描述符
 */
-JE_API jegl_context* jegl_uhost_get_context(jeecs::graphic_uhost* host);
+JE_API jegl_context* jegl_uhost_get_context(
+    jeecs::graphic_uhost* host);
 
 /*
 jegl_uhost_alloc_branch [基本接口]
 从指定的可编程图形上下文接口申请一个绘制组
 */
-JE_API jeecs::rendchain_branch* jegl_uhost_alloc_branch(jeecs::graphic_uhost* host);
+JE_API jeecs::rendchain_branch* jegl_uhost_alloc_branch(
+    jeecs::graphic_uhost* host);
 
 /*
 jegl_uhost_free_branch [基本接口]
 从指定的可编程图形上下文接口释放一个绘制组
 */
-JE_API void jegl_uhost_free_branch(jeecs::graphic_uhost* host, jeecs::rendchain_branch* free_branch);
+JE_API void jegl_uhost_free_branch(
+    jeecs::graphic_uhost* host, 
+    jeecs::rendchain_branch* free_branch);
 
 /*
 jegl_branch_new_frame [基本接口]
 在绘制开始之前，指示绘制组开始新的一帧，并指定优先级
 */
-JE_API void jegl_branch_new_frame(jeecs::rendchain_branch* branch, int priority);
+JE_API void jegl_branch_new_frame(
+    jeecs::rendchain_branch* branch, 
+    int priority);
 
 /*
 jegl_branch_new_chain [基本接口]
@@ -2868,7 +3015,13 @@ jegl_branch_new_chain [基本接口]
 请参见：
     jegl_rendchain
 */
-JE_API jegl_rendchain* jegl_branch_new_chain(jeecs::rendchain_branch* branch, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h);
+JE_API jegl_rendchain* jegl_branch_new_chain(
+    jeecs::rendchain_branch* branch, 
+    jegl_resource* framebuffer, 
+    size_t x,
+    size_t y,
+    size_t w, 
+    size_t h);
 
 /*
 jegui_set_font [基本接口]
@@ -2994,29 +3147,24 @@ JE_API bool je_io_get_lock_mouse(int* out_x, int* out_y);
 /*
 je_io_set_windowsize [基本接口]
 请求对窗口大小进行调整
-    * 此操作将在图形线程生效
 */
 JE_API void je_io_set_windowsize(int x, int y);
 
 /*
 je_io_fetch_update_windowsize [基本接口]
 获取当前窗口大小是否应该调整及调整的大小
-    * 此操作会导致请求操作被拦截
 */
 JE_API bool je_io_fetch_update_windowsize(int* out_x, int* out_y);
 
 /*
 je_io_set_windowtitle [基本接口]
 请求对窗口标题进行调整
-    * 此操作将在图形线程生效
 */
 JE_API void je_io_set_windowtitle(const char* title);
 
 /*
-je_io_set_windowtitle [基本接口]
+je_io_fetch_update_windowtitle [基本接口]
 获取当前是否需要对窗口标题进行调整及调整之后的内容
-    * 此操作会导致请求操作被拦截
-    * TODO: Not thread safe.
 */
 JE_API bool je_io_fetch_update_windowtitle(const char** out_title);
 
