@@ -116,7 +116,7 @@ void _jedbg_hook_woolang_panic(
     }
 }
 
-WO_API wo_api wojeapi_editor_register_panic_hook(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_editor_register_panic_hook(wo_vm vm, wo_value args)
 {
     if (_je_global_panic_hooker != nullptr)
         // ATTENTION: Unsafe for multi thread.

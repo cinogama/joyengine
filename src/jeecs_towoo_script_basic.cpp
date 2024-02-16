@@ -309,7 +309,7 @@ namespace jeecs
         };
     }
 }
-WO_API wo_api wojeapi_towoo_add_component(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_add_component(wo_vm vm, wo_value args)
 {
     auto e = std::launder(reinterpret_cast<jeecs::game_entity*>(wo_pointer(args + 0)));
     auto ty = std::launder(reinterpret_cast<const jeecs::typing::type_info*>(wo_pointer(args + 1)));
@@ -323,7 +323,7 @@ WO_API wo_api wojeapi_towoo_add_component(wo_vm vm, wo_value args, size_t argc)
     }
     return wo_ret_option_none(vm);
 }
-WO_API wo_api wojeapi_towoo_get_component(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_get_component(wo_vm vm, wo_value args)
 {
     auto e = std::launder(reinterpret_cast<jeecs::game_entity*>(wo_pointer(args + 0)));
     auto ty = std::launder(reinterpret_cast<const jeecs::typing::type_info*>(wo_pointer(args + 1)));
@@ -337,7 +337,7 @@ WO_API wo_api wojeapi_towoo_get_component(wo_vm vm, wo_value args, size_t argc)
     }
     return wo_ret_option_none(vm);
 }
-WO_API wo_api wojeapi_towoo_remove_component(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_remove_component(wo_vm vm, wo_value args)
 {
     auto e = std::launder(reinterpret_cast<jeecs::game_entity*>(wo_pointer(args + 0)));
     auto ty = std::launder(reinterpret_cast<const jeecs::typing::type_info*>(wo_pointer(args + 1)));
@@ -345,7 +345,7 @@ WO_API wo_api wojeapi_towoo_remove_component(wo_vm vm, wo_value args, size_t arg
     je_ecs_world_entity_remove_component(e, ty);
     return wo_ret_void(vm);
 }
-WO_API wo_api wojeapi_towoo_member_get(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_member_get(wo_vm vm, wo_value args)
 {
     auto ty = std::launder(reinterpret_cast<const jeecs::typing::type_info*>(wo_pointer(args + 0)));
 
@@ -356,7 +356,7 @@ WO_API wo_api wojeapi_towoo_member_get(wo_vm vm, wo_value args, size_t argc)
 
     return wo_ret_val(vm, val);
 }
-WO_API wo_api wojeapi_towoo_member_set(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_member_set(wo_vm vm, wo_value args)
 {
     auto ty = std::launder(reinterpret_cast<const jeecs::typing::type_info*>(wo_pointer(args + 0)));
 
@@ -655,7 +655,7 @@ enum _jetowoo_job_type
     UPDATE,
     LATE_UPDATE,
 };
-WO_API wo_api wojeapi_towoo_register_system_job(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_register_system_job(wo_vm vm, wo_value args)
 {
     // wojeapi_towoo_register_system_job(tinfo: je::typeinfo, function, requirements: array<(type, gid, typeinfo)>, arg_comp_count: int)
     std::lock_guard g1(jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems_mx);
@@ -727,7 +727,7 @@ WO_API wo_api wojeapi_towoo_register_system_job(wo_vm vm, wo_value args, size_t 
 
     return wo_ret_void(vm);
 }
-WO_API wo_api wojeapi_towoo_update_component_data(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_update_component_data(wo_vm vm, wo_value args)
 {
     // wojeapi_towoo_register_component(name, [(name, typeinfo)])
     std::string component_name = wo_string(args + 0);
@@ -1363,14 +1363,14 @@ T* wo_option_component(wo_value val)
     return nullptr;
 }
 
-WO_API wo_api wojeapi_towoo_ray_create(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_ray_create(wo_vm vm, wo_value args)
 {
     return wo_ret_gchandle(vm,
         new jeecs::math::ray(wo_vec3(args + 0), wo_vec3(args + 1)),
         nullptr,
         [](void* p) {delete(jeecs::math::ray*)p; });
 }
-WO_API wo_api wojeapi_towoo_ray_from_camera(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_ray_from_camera(wo_vm vm, wo_value args)
 {
     return wo_ret_gchandle(vm,
         new jeecs::math::ray(
@@ -1382,7 +1382,7 @@ WO_API wo_api wojeapi_towoo_ray_from_camera(wo_vm vm, wo_value args, size_t argc
         nullptr,
         [](void* p) {delete(jeecs::math::ray*)p; });
 }
-WO_API wo_api wojeapi_towoo_ray_intersect_entity(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_ray_intersect_entity(wo_vm vm, wo_value args)
 {
     auto* ray = (jeecs::math::ray*)wo_pointer(args + 0);
     auto result = ray->intersect_entity(
@@ -1395,49 +1395,49 @@ WO_API wo_api wojeapi_towoo_ray_intersect_entity(wo_vm vm, wo_value args, size_t
     }
     return wo_ret_option_none(vm);
 }
-WO_API wo_api wojeapi_towoo_ray_origin(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_ray_origin(wo_vm vm, wo_value args)
 {
     auto* ray = (jeecs::math::ray*)wo_pointer(args + 0);
     return wo_ret_val(vm, wo_push_vec3(vm, ray->orgin));
 }
-WO_API wo_api wojeapi_towoo_ray_direction(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_ray_direction(wo_vm vm, wo_value args)
 {
     auto* ray = (jeecs::math::ray*)wo_pointer(args + 0);
     return wo_ret_val(vm, wo_push_vec3(vm, ray->direction));
 }
-WO_API wo_api wojeapi_towoo_math_sqrt(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_math_sqrt(wo_vm vm, wo_value args)
 {
     return wo_ret_real(vm, sqrt(wo_real(args + 0)));
 }
-WO_API wo_api wojeapi_towoo_math_sin(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_math_sin(wo_vm vm, wo_value args)
 {
     return wo_ret_real(vm, sin(wo_real(args + 0)));
 }
-WO_API wo_api wojeapi_towoo_math_cos(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_math_cos(wo_vm vm, wo_value args)
 {
     return wo_ret_real(vm, cos(wo_real(args + 0)));
 }
-WO_API wo_api wojeapi_towoo_math_tan(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_math_tan(wo_vm vm, wo_value args)
 {
     return wo_ret_real(vm, tan(wo_real(args + 0)));
 }
-WO_API wo_api wojeapi_towoo_math_asin(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_math_asin(wo_vm vm, wo_value args)
 {
     return wo_ret_real(vm, asin(wo_real(args + 0)));
 }
-WO_API wo_api wojeapi_towoo_math_acos(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_math_acos(wo_vm vm, wo_value args)
 {
     return wo_ret_real(vm, acos(wo_real(args + 0)));
 }
-WO_API wo_api wojeapi_towoo_math_atan(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_math_atan(wo_vm vm, wo_value args)
 {
     return wo_ret_real(vm, atan(wo_real(args + 0)));
 }
-WO_API wo_api wojeapi_towoo_math_atan2(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_math_atan2(wo_vm vm, wo_value args)
 {
     return wo_ret_real(vm, atan2(wo_real(args + 0), wo_real(args + 1)));
 }
-WO_API wo_api wojeapi_towoo_math_quat_slerp(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_math_quat_slerp(wo_vm vm, wo_value args)
 {
     wo_value q = wo_push_quat(vm,
         jeecs::math::quat::slerp(
@@ -1448,7 +1448,7 @@ WO_API wo_api wojeapi_towoo_math_quat_slerp(wo_vm vm, wo_value args, size_t argc
     return wo_ret_val(vm, q);
 }
 
-WO_API wo_api wojeapi_towoo_physics2d_collisionresult_all(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_physics2d_collisionresult_all(wo_vm vm, wo_value args)
 {
     wo_value c = wo_push_empty(vm);
     wo_struct_get(c, args + 0, 0);
@@ -1474,7 +1474,7 @@ WO_API wo_api wojeapi_towoo_physics2d_collisionresult_all(wo_vm vm, wo_value arg
     return wo_ret_val(vm, c);
 }
 
-WO_API wo_api wojeapi_towoo_physics2d_collisionresult_check(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_physics2d_collisionresult_check(wo_vm vm, wo_value args)
 {
     wo_value c = wo_push_empty(vm);
     wo_struct_get(c, args + 0, 0);
@@ -1495,7 +1495,7 @@ WO_API wo_api wojeapi_towoo_physics2d_collisionresult_check(wo_vm vm, wo_value a
     return wo_ret_option_none(vm);
 }
 
-WO_API wo_api wojeapi_towoo_renderer_textures_bind_texture(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_renderer_textures_bind_texture(wo_vm vm, wo_value args)
 {
     wo_value c = wo_push_empty(vm);
     wo_struct_get(c, args + 0, 0);
@@ -1507,7 +1507,7 @@ WO_API wo_api wojeapi_towoo_renderer_textures_bind_texture(wo_vm vm, wo_value ar
     return wo_ret_void(vm);
 }
 
-WO_API wo_api wojeapi_towoo_renderer_textures_get_texture(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_renderer_textures_get_texture(wo_vm vm, wo_value args)
 {
     wo_value c = wo_push_empty(vm);
     wo_struct_get(c, args + 0, 0);
@@ -1529,7 +1529,7 @@ WO_API wo_api wojeapi_towoo_renderer_textures_get_texture(wo_vm vm, wo_value arg
     return wo_ret_option_none(vm);
 }
 
-WO_API wo_api wojeapi_towoo_renderer_shaders_set_uniform(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_renderer_shaders_set_uniform(wo_vm vm, wo_value args)
 {
     wo_value c = wo_push_empty(vm);
     wo_struct_get(c, args + 0, 0);
@@ -1596,7 +1596,7 @@ WO_API wo_api wojeapi_towoo_renderer_shaders_set_uniform(wo_vm vm, wo_value args
     return wo_ret_void(vm);
 }
 
-WO_API wo_api wojeapi_towoo_renderer_shaders_set_shaders(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_renderer_shaders_set_shaders(wo_vm vm, wo_value args)
 {
     wo_value c = wo_push_empty(vm);
     wo_struct_get(c, args + 0, 0);
@@ -1616,7 +1616,7 @@ WO_API wo_api wojeapi_towoo_renderer_shaders_set_shaders(wo_vm vm, wo_value args
     return wo_ret_void(vm);
 }
 
-WO_API wo_api wojeapi_towoo_renderer_shaders_get_shaders(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_renderer_shaders_get_shaders(wo_vm vm, wo_value args)
 {
     wo_value c = wo_push_empty(vm);
     wo_struct_get(c, args + 0, 0);
@@ -1640,7 +1640,7 @@ WO_API wo_api wojeapi_towoo_renderer_shaders_get_shaders(wo_vm vm, wo_value args
     return wo_ret_val(vm, c);
 }
 
-WO_API wo_api wojeapi_towoo_transform_translation_global_pos(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_transform_translation_global_pos(wo_vm vm, wo_value args)
 {
     wo_value c = wo_push_empty(vm);
     wo_struct_get(c, args + 0, 0);
@@ -1648,7 +1648,7 @@ WO_API wo_api wojeapi_towoo_transform_translation_global_pos(wo_vm vm, wo_value 
 
     return wo_ret_val(vm, wo_push_vec3(vm, trans->world_position));
 }
-WO_API wo_api wojeapi_towoo_transform_translation_global_rot(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_transform_translation_global_rot(wo_vm vm, wo_value args)
 {
     wo_value c = wo_push_empty(vm);
     wo_struct_get(c, args + 0, 0);
@@ -1657,7 +1657,7 @@ WO_API wo_api wojeapi_towoo_transform_translation_global_rot(wo_vm vm, wo_value 
     return wo_ret_val(vm, wo_push_quat(vm, trans->world_rotation));
 }
 
-WO_API wo_api wojeapi_towoo_animation2D_frameanimation_active_animation(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_animation2D_frameanimation_active_animation(wo_vm vm, wo_value args)
 {
     wo_value c = wo_push_empty(vm);
     wo_struct_get(c, args + 0, 0);
@@ -1669,7 +1669,7 @@ WO_API wo_api wojeapi_towoo_animation2D_frameanimation_active_animation(wo_vm vm
     return wo_ret_void(vm);
 }
 
-WO_API wo_api wojeapi_towoo_audio_playing_set_buffer(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_audio_playing_set_buffer(wo_vm vm, wo_value args)
 {
     wo_value c = wo_push_empty(vm);
     wo_struct_get(c, args + 0, 0);
@@ -1681,7 +1681,7 @@ WO_API wo_api wojeapi_towoo_audio_playing_set_buffer(wo_vm vm, wo_value args, si
     return wo_ret_void(vm);
 }
 
-WO_API wo_api wojeapi_towoo_audio_source_get_source(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_audio_source_get_source(wo_vm vm, wo_value args)
 {
     wo_value c = wo_push_empty(vm);
     wo_struct_get(c, args + 0, 0);
@@ -1693,7 +1693,7 @@ WO_API wo_api wojeapi_towoo_audio_source_get_source(wo_vm vm, wo_value args, siz
         [](void* p) {delete (jeecs::basic::resource<jeecs::audio::source>*)p; });
 }
 
-WO_API wo_api wojeapi_towoo_userinterface_origin_layout(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_userinterface_origin_layout(wo_vm vm, wo_value args)
 {
     wo_value c = wo_push_empty(vm);
     wo_struct_get(c, args + 0, 0);
@@ -1709,7 +1709,7 @@ WO_API wo_api wojeapi_towoo_userinterface_origin_layout(wo_vm vm, wo_value args,
     return wo_ret_val(vm, result);
 }
 
-WO_API wo_api wojeapi_towoo_transform_localrotation_get_parent_global_rot(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_transform_localrotation_get_parent_global_rot(wo_vm vm, wo_value args)
 {
     wo_value c = wo_push_empty(vm);
     wo_struct_get(c, args + 0, 0);
@@ -1722,7 +1722,7 @@ WO_API wo_api wojeapi_towoo_transform_localrotation_get_parent_global_rot(wo_vm 
         wo_push_quat(vm, lrot->get_parent_global_rotation(*translation)));
 }
 
-WO_API wo_api wojeapi_towoo_transform_localrotation_set_global_rot(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_transform_localrotation_set_global_rot(wo_vm vm, wo_value args)
 {
     wo_value c = wo_push_empty(vm);
     wo_struct_get(c, args + 0, 0);
@@ -1738,7 +1738,7 @@ WO_API wo_api wojeapi_towoo_transform_localrotation_set_global_rot(wo_vm vm, wo_
     return wo_ret_void(vm);
 }
 
-WO_API wo_api wojeapi_towoo_transform_localposition_get_parent_global_pos(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_transform_localposition_get_parent_global_pos(wo_vm vm, wo_value args)
 {
     wo_value c = wo_push_empty(vm);
     wo_struct_get(c, args + 0, 0);
@@ -1752,7 +1752,7 @@ WO_API wo_api wojeapi_towoo_transform_localposition_get_parent_global_pos(wo_vm 
     return wo_ret_val(vm, 
         wo_push_vec3(vm, lpos->get_parent_global_position(*translation, lrot)));
 }
-WO_API wo_api wojeapi_towoo_transform_localposition_set_global_pos(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_towoo_transform_localposition_set_global_pos(wo_vm vm, wo_value args)
 {
     wo_value c = wo_push_empty(vm);
     wo_struct_get(c, args + 0, 0);

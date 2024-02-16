@@ -56,20 +56,20 @@ void _free_shader_value(void* shader_value)
     delete_shader_value(shader_val);
 }
 
-WO_API wo_api jeecs_shader_float_create(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api jeecs_shader_float_create(wo_vm vm, wo_value args)
 {
     return wo_ret_gchandle(vm,
         new jegl_shader_value(
             (float)wo_real(args + 0)), nullptr, _free_shader_value);
 }
-WO_API wo_api jeecs_shader_float2_create(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api jeecs_shader_float2_create(wo_vm vm, wo_value args)
 {
     return wo_ret_gchandle(vm,
         new jegl_shader_value(
             (float)wo_real(args + 0),
             (float)wo_real(args + 1)), nullptr, _free_shader_value);
 }
-WO_API wo_api jeecs_shader_float3_create(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api jeecs_shader_float3_create(wo_vm vm, wo_value args)
 {
     return wo_ret_gchandle(vm,
         new jegl_shader_value(
@@ -77,7 +77,7 @@ WO_API wo_api jeecs_shader_float3_create(wo_vm vm, wo_value args, size_t argc)
             (float)wo_real(args + 1),
             (float)wo_real(args + 2)), nullptr, _free_shader_value);
 }
-WO_API wo_api jeecs_shader_float4_create(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api jeecs_shader_float4_create(wo_vm vm, wo_value args)
 {
     return wo_ret_gchandle(vm,
         new jegl_shader_value(
@@ -86,7 +86,7 @@ WO_API wo_api jeecs_shader_float4_create(wo_vm vm, wo_value args, size_t argc)
             (float)wo_real(args + 2),
             (float)wo_real(args + 3)), nullptr, _free_shader_value);
 }
-WO_API wo_api jeecs_shader_float3x3_create(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api jeecs_shader_float3x3_create(wo_vm vm, wo_value args)
 {
     float data[9] = {};
     for (size_t i = 0; i < 9; i++)
@@ -95,7 +95,7 @@ WO_API wo_api jeecs_shader_float3x3_create(wo_vm vm, wo_value args, size_t argc)
         new jegl_shader_value(data, jegl_shader_value::FLOAT3x3),
         nullptr, _free_shader_value);
 }
-WO_API wo_api jeecs_shader_float4x4_create(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api jeecs_shader_float4x4_create(wo_vm vm, wo_value args)
 {
     float data[16] = {};
     for (size_t i = 0; i < 16; i++)
@@ -104,7 +104,7 @@ WO_API wo_api jeecs_shader_float4x4_create(wo_vm vm, wo_value args, size_t argc)
         new jegl_shader_value(data, jegl_shader_value::FLOAT4x4),
         nullptr, _free_shader_value);
 }
-WO_API wo_api jeecs_shader_texture2d_set_channel(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api jeecs_shader_texture2d_set_channel(wo_vm vm, wo_value args)
 {
     jegl_shader_value* texture2d_val = (jegl_shader_value*)wo_pointer(args + 0);
     assert(texture2d_val->get_type() == jegl_shader_value::type::TEXTURE2D
@@ -114,7 +114,7 @@ WO_API wo_api jeecs_shader_texture2d_set_channel(wo_vm vm, wo_value args, size_t
     texture2d_val->m_uniform_texture_channel = (int)wo_int(args + 1);
     return wo_ret_val(vm, args + 0);
 }
-WO_API wo_api jeecs_shader_create_rot_mat4x4(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api jeecs_shader_create_rot_mat4x4(wo_vm vm, wo_value args)
 {
     float data[16] = {};
     jeecs::math::quat q((float)wo_real(args + 0), (float)wo_real(args + 1), (float)wo_real(args + 2));
@@ -215,7 +215,7 @@ calc_func_t* get_const_reduce_func(const char* op, jegl_shader_value::type* argt
     auto* cur_node = fnd->second;
     return _get_reduce_func(cur_node, argts, argc, 0);
 }
-WO_API wo_api jeecs_shader_create_uniform_variable(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api jeecs_shader_create_uniform_variable(wo_vm vm, wo_value args)
 {
     return wo_ret_gchandle(vm,
         new jegl_shader_value(
@@ -226,7 +226,7 @@ WO_API wo_api jeecs_shader_create_uniform_variable(wo_vm vm, wo_value args, size
         , nullptr, _free_shader_value);
 }
 
-WO_API wo_api jeecs_shader_create_uniform_variable_with_init_value(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api jeecs_shader_create_uniform_variable_with_init_value(wo_vm vm, wo_value args)
 {
     jegl_shader_value::type type = (jegl_shader_value::type)wo_int(args + 0);
     jegl_shader_value* init_value = (jegl_shader_value*)wo_pointer(args + 2);
@@ -239,7 +239,7 @@ WO_API wo_api jeecs_shader_create_uniform_variable_with_init_value(wo_vm vm, wo_
         new jegl_shader_value(type, wo_string(args + 1), init_value, false)
         , nullptr, _free_shader_value);
 }
-WO_API wo_api jeecs_shader_create_sampler2d(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api jeecs_shader_create_sampler2d(wo_vm vm, wo_value args)
 {
     auto* sampler = new shader_sampler;
     sampler->m_min = (jegl_shader::fliter_mode)wo_int(args + 0);
@@ -250,7 +250,7 @@ WO_API wo_api jeecs_shader_create_sampler2d(wo_vm vm, wo_value args, size_t argc
     sampler->m_sampler_id = (uint32_t)wo_int(args + 5);
     return wo_ret_gchandle(vm, sampler, nullptr, [](void* p) {delete(shader_sampler*)p; });
 }
-WO_API wo_api jeecs_shader_sampler2d_bind_texture(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api jeecs_shader_sampler2d_bind_texture(wo_vm vm, wo_value args)
 {
     shader_sampler* sampler = (shader_sampler*)wo_pointer(args + 0);
     jegl_shader_value* value = (jegl_shader_value*)wo_pointer(args + 1);
@@ -261,8 +261,10 @@ WO_API wo_api jeecs_shader_sampler2d_bind_texture(wo_vm vm, wo_value args, size_
     sampler->m_binded_texture_passid.push_back((uint32_t)value->m_uniform_texture_channel);
     return wo_ret_void(vm);
 }
-WO_API wo_api jeecs_shader_apply_operation(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api jeecs_shader_apply_operation(wo_vm vm, wo_value args)
 {
+    size_t argc = (size_t)wo_vaarg_count(vm);
+
     bool result_is_const = true;
     std::vector<jegl_shader_value*> tmp_svalue;
     struct AutoRelease
@@ -373,7 +375,7 @@ struct vertex_in_data_storage
     }
 };
 
-WO_API wo_api jeecs_shader_create_vertex_in(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api jeecs_shader_create_vertex_in(wo_vm vm, wo_value args)
 {
     // This function is used for debug
     return wo_ret_gchandle(vm, new vertex_in_data_storage, nullptr, [](void* ptr) {
@@ -381,7 +383,7 @@ WO_API wo_api jeecs_shader_create_vertex_in(wo_vm vm, wo_value args, size_t argc
         });
 }
 
-WO_API wo_api jeecs_shader_get_vertex_in(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api jeecs_shader_get_vertex_in(wo_vm vm, wo_value args)
 {
     vertex_in_data_storage* storage = (vertex_in_data_storage*)wo_pointer(args + 0);
     jegl_shader_value::type type = (jegl_shader_value::type)wo_int(args + 1);
@@ -394,7 +396,7 @@ WO_API wo_api jeecs_shader_get_vertex_in(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_pointer(vm, result);
 }
 
-WO_API wo_api jeecs_shader_set_vertex_out(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api jeecs_shader_set_vertex_out(wo_vm vm, wo_value args)
 {
     jegl_shader_value* vertex_out_pos = (jegl_shader_value*)wo_pointer(args + 0);
     if (vertex_out_pos->get_type() != jegl_shader_value::FLOAT4)
@@ -403,7 +405,7 @@ WO_API wo_api jeecs_shader_set_vertex_out(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
-WO_API wo_api jeecs_shader_create_struct_define(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api jeecs_shader_create_struct_define(wo_vm vm, wo_value args)
 {
     shader_struct_define* block = new shader_struct_define;
     block->binding_place = jeecs::typing::INVALID_UINT32;
@@ -411,14 +413,14 @@ WO_API wo_api jeecs_shader_create_struct_define(wo_vm vm, wo_value args, size_t 
     return wo_ret_pointer(vm, block);
 }
 
-WO_API wo_api jeecs_shader_bind_struct_as_uniform_buffer(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api jeecs_shader_bind_struct_as_uniform_buffer(wo_vm vm, wo_value args)
 {
     shader_struct_define* block = (shader_struct_define*)wo_pointer(args + 0);
     block->binding_place = (uint32_t)wo_int(args + 1);
     return wo_ret_void(vm);
 }
 
-WO_API wo_api jeecs_shader_append_struct_member(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api jeecs_shader_append_struct_member(wo_vm vm, wo_value args)
 {
     shader_struct_define* block = (shader_struct_define*)wo_pointer(args + 0);
 
@@ -441,7 +443,7 @@ WO_API wo_api jeecs_shader_append_struct_member(wo_vm vm, wo_value args, size_t 
     return wo_ret_void(vm);
 }
 
-WO_API wo_api jeecs_shader_create_shader_value_out(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api jeecs_shader_create_shader_value_out(wo_vm vm, wo_value args)
 {
     wo_value voutstruct = args + 1;
 
@@ -477,7 +479,7 @@ WO_API wo_api jeecs_shader_create_shader_value_out(wo_vm vm, wo_value args, size
     }
     return wo_ret_pointer(vm, values);
 }
-WO_API wo_api jeecs_shader_create_fragment_in(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api jeecs_shader_create_fragment_in(wo_vm vm, wo_value args)
 {
     shader_value_outs* values = (shader_value_outs*)wo_pointer(args + 0);
 
@@ -496,7 +498,7 @@ WO_API wo_api jeecs_shader_create_fragment_in(wo_vm vm, wo_value args, size_t ar
     return wo_ret_val(vm, out_struct);
 }
 
-WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args)
 {
     wo_value elem = wo_push_empty(vm);
     wo_value val = wo_push_empty(vm);

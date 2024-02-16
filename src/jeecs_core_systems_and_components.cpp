@@ -9,7 +9,7 @@
 #include "jeecs_core_script_system.hpp"
 #include "jeecs_core_audio_system.hpp"
 
-WO_API wo_api wojeapi_deltatime(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_deltatime(wo_vm vm, wo_value args)
 {
     if (jeecs::ScriptRuntimeSystem::system_instance == nullptr)
     {
@@ -20,7 +20,7 @@ WO_API wo_api wojeapi_deltatime(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_real(vm, jeecs::ScriptRuntimeSystem::system_instance->deltatime());
 }
 
-WO_API wo_api wojeapi_smooth_deltatime(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_smooth_deltatime(wo_vm vm, wo_value args)
 {
     if (jeecs::ScriptRuntimeSystem::system_instance == nullptr)
     {
@@ -31,7 +31,7 @@ WO_API wo_api wojeapi_smooth_deltatime(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_real(vm, jeecs::ScriptRuntimeSystem::system_instance->deltatimed());
 }
 
-WO_API wo_api wojeapi_startup_coroutine(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_startup_coroutine(wo_vm vm, wo_value args)
 {
     if (jeecs::ScriptRuntimeSystem::system_instance == nullptr)
     {
@@ -77,7 +77,7 @@ const char* je_ecs_set_name_of_entity(const jeecs::game_entity* entity, const ch
     return "";
 }
 
-WO_API wo_api wojeapi_entity_get_prefab_path(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_entity_get_prefab_path(wo_vm vm, wo_value args)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
     if (auto* prefab = entity->get_component<jeecs::Editor::Prefab>())
@@ -85,7 +85,7 @@ WO_API wo_api wojeapi_entity_get_prefab_path(wo_vm vm, wo_value args, size_t arg
     return wo_ret_option_none(vm);
 }
 
-WO_API wo_api wojeapi_entity_set_prefab_path(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_entity_set_prefab_path(wo_vm vm, wo_value args)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
     if (auto* prefab = entity->get_component<jeecs::Editor::Prefab>())

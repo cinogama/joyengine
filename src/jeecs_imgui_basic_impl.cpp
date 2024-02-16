@@ -103,7 +103,7 @@ namespace je::gui
 
     extern("libjoyecs", "je_gui_begin")
     public func Begin(title:string)=> bool;
-    extern("libjoyecs", "je_gui_begin")
+    extern("libjoyecs", "je_gui_begin_attr")
     public func BeginAttr(title:string, attribute:WindowsAttribute)=> bool;
     extern("libjoyecs", "je_gui_begin_open")
     public func BeginAttrOpen(title:string, attribute:WindowsAttribute)=> option<bool>;
@@ -117,9 +117,9 @@ namespace je::gui
 
     extern("libjoyecs", "je_gui_begin_child")
     public func BeginChild(title:string)=> bool;
-    extern("libjoyecs", "je_gui_begin_child")
+    extern("libjoyecs", "je_gui_begin_child_attr")
     public func BeginChildAttr(title:string, attr: WindowsAttribute)=> bool;
-    extern("libjoyecs", "je_gui_begin_child")
+    extern("libjoyecs", "je_gui_begin_child_size")
     public func BeginChildSize(title:string, sizex: real, sizey: real)=> bool;
 
     extern("libjoyecs", "je_gui_is_window_focused")
@@ -141,7 +141,7 @@ namespace je::gui
 
     extern("libjoyecs", "je_gui_button")
     public func Button(msg:string)=> bool;
-    extern("libjoyecs", "je_gui_button")
+    extern("libjoyecs", "je_gui_button_size")
     public func ButtonSize(msg:string, size: ImVec2)=> bool;
 
     extern("libjoyecs", "je_gui_invisible_button")
@@ -152,11 +152,11 @@ namespace je::gui
 
     extern("libjoyecs", "je_gui_menu_item")
     public func MenuItem(text:string)=> bool;
-    extern("libjoyecs", "je_gui_menu_item")
+    extern("libjoyecs", "je_gui_menu_item_shortcut")
     public func MenuItemShortcut(text:string, shortcut:string)=> bool;
-    extern("libjoyecs", "je_gui_menu_item")
+    extern("libjoyecs", "je_gui_menu_item_enabled")
     public func MenuItemEnabled(text:string, enable:bool)=> bool;
-    extern("libjoyecs", "je_gui_menu_item")
+    extern("libjoyecs", "je_gui_menu_item_shortcut_enabled")
     public func MenuItemShortcutEnabled(text:string, shortcut:string, enable:bool)=> bool;
     extern("libjoyecs", "je_gui_menu_item_selected")
     public func MenuItemShortcutSelectedEnabled(text:string, shortcut:string, selected:bool, enable:bool)=> option<bool /*selected*/>;
@@ -181,14 +181,14 @@ R"(
 
     extern("libjoyecs", "je_gui_begin_menu")
     public func BeginMenu(text:string)=> bool;
-    extern("libjoyecs", "je_gui_begin_menu")
+    extern("libjoyecs", "je_gui_begin_menu_enabled")
     public func BeginMenuEnabled(text:string, enable:bool)=> bool;
 
     extern("libjoyecs", "je_gui_listbox")
     public func ListBox(label:string, items:array<string>)=> option<int>;
-    extern("libjoyecs", "je_gui_listbox")
+    extern("libjoyecs", "je_gui_listbox_select")
     public func ListBoxSelect(label:string, items:array<string>, select_item:int)=> option<int>;
-    extern("libjoyecs", "je_gui_listbox")
+    extern("libjoyecs", "je_gui_listbox_select_height")
     public func ListBoxSelectHeight(label:string, items:array<string>, select_item:int, height_count:int)=> option<int>;
     extern("libjoyecs", "je_gui_listbox_withsize")
     public func ListBoxSelectSize(label:string, items:array<string>, select_item:int, width:real, height:real)=> option<int>;
@@ -197,7 +197,7 @@ R"(
     public func BeginListBox(label:string, width:real, height:real)=>bool;
     extern("libjoyecs", "je_gui_begin_selectable")
     public func Selectable(label:string)=>bool;
-    extern("libjoyecs", "je_gui_begin_selectable")
+    extern("libjoyecs", "je_gui_begin_selectable_selected")
     public func SelectableSelected(label:string, selected:bool)=>bool;
     extern("libjoyecs", "je_gui_end_listbox")
     public func EndListBox()=> void;
@@ -239,12 +239,12 @@ R"(
     extern("libjoyecs", "je_gui_set_tooltip")
     public func SetTooltip(msg: string)=> bool;
 
-    extern("libjoyecs", "je_gui_beginpopup_contextitem")
+    extern("libjoyecs", "je_gui_beginpopup_contextitem_label")
     public func BeginPopupContextItemLabel(label:string)=>bool;
     extern("libjoyecs", "je_gui_beginpopup_contextitem")
     public func BeginPopupContextItem()=>bool;
 
-    extern("libjoyecs", "je_gui_beginpopup_contextwindow")
+    extern("libjoyecs", "je_gui_beginpopup_contextwindow_label")
     public func BeginPopupContextWindowLabel(label:string)=>bool;
     extern("libjoyecs", "je_gui_beginpopup_contextwindow")
     public func BeginPopupContextWindow()=>bool;
@@ -310,11 +310,11 @@ R"(
 
     extern("libjoyecs", "je_gui_openpopup_on_item_click")
     public func OpenPopupOnItemClick()=>void;
-    extern("libjoyecs", "je_gui_openpopup_on_item_click")
+    extern("libjoyecs", "je_gui_openpopup_on_item_click_attr")
     public func OpenPopupOnItemClickAttr(flag:PopupAttribute)=>void;
-    extern("libjoyecs", "je_gui_openpopup_on_item_click")
+    extern("libjoyecs", "je_gui_openpopup_on_item_click_label")
     public func OpenPopupOnItemClickLabel(label:string)=>void;
-    extern("libjoyecs", "je_gui_openpopup_on_item_click")
+    extern("libjoyecs", "je_gui_openpopup_on_item_click_label_attr")
     public func OpenPopupOnItemClickLabelAttr(label:string, flag:PopupAttribute)=>void;
 
     extern("libjoyecs", "je_gui_openpopup")
@@ -355,8 +355,7 @@ R"(
 
     extern("libjoyecs", "je_gui_input_float_box")
     public func InputFloat(label: string, value: real)=> option<real>;
-
-    extern("libjoyecs", "je_gui_input_float_box")
+    extern("libjoyecs", "je_gui_input_float_format_box")
     public func InputFloatFormat(label: string, value: real, format: string)=> option<real>;
 
     extern("libjoyecs", "je_gui_input_int_box")
@@ -373,22 +372,22 @@ R"(
 
     extern("libjoyecs", "je_gui_input_float2_box")
     public func InputFloat2(label: string, x: real, y: real)=> option<(real, real)>;
-    extern("libjoyecs", "je_gui_input_float2_box")
+    extern("libjoyecs", "je_gui_input_float2_format_box")
     public func InputFloat2Format(label: string, x: real, y: real, format: string)=> option<(real, real)>;
 
     extern("libjoyecs", "je_gui_input_float3_box")
     public func InputFloat3(label: string, x: real, y: real, z: real)=> option<(real, real, real)>;
-    extern("libjoyecs", "je_gui_input_float3_box")
+    extern("libjoyecs", "je_gui_input_float3_format_box")
     public func InputFloat3Format(label: string, x: real, y: real, z: real, format: string)=> option<(real, real, real)>;
 
     extern("libjoyecs", "je_gui_input_float4_box")
     public func InputFloat4(label: string, x: real, y: real, z: real, w: real)=> option<(real, real, real, real)>;
-    extern("libjoyecs", "je_gui_input_float4_box")
+    extern("libjoyecs", "je_gui_input_float4_format_box")
     public func InputFloat4Format(label: string, x: real, y: real, z: real, w: real, format: string)=> option<(real, real, real, real)>;
 
     extern("libjoyecs", "je_gui_input_text_multiline")
     public func InputTextMultiline(label:string, buffer: string)=> option<string>;
-    extern("libjoyecs", "je_gui_input_text_multiline")
+    extern("libjoyecs", "je_gui_input_text_multiline_size")
     public func InputTextMultilineSize(label:string, buffer: string, width:real, height:real)=> option<string>;
 
     extern("libjoyecs", "je_gui_combo")
@@ -402,9 +401,9 @@ R"(
 
     extern("libjoyecs", "je_gui_image")
     public func Image(tex: je::graphic::texture)=> void;
-    extern("libjoyecs", "je_gui_image")
+    extern("libjoyecs", "je_gui_image_scale")
     public func ImageScale(tex: je::graphic::texture, scale: real)=> void;
-    extern("libjoyecs", "je_gui_image")
+    extern("libjoyecs", "je_gui_image_size")
     public func ImageSize(tex: je::graphic::texture, width: real, height: real)=> void;
 
 )"
@@ -521,9 +520,9 @@ R"(
 
     extern("libjoyecs", "je_gui_imagebutton")
     public func ImageButton(tex: je::graphic::texture)=> bool;
-    extern("libjoyecs", "je_gui_imagebutton")
+    extern("libjoyecs", "je_gui_imagebutton_scale")
     public func ImageButtonScale(tex: je::graphic::texture, scale: real)=> bool;
-    extern("libjoyecs", "je_gui_imagebutton")
+    extern("libjoyecs", "je_gui_imagebutton_size")
     public func ImageButtonSize(tex: je::graphic::texture, width: real, height: real)=> bool;
 
     extern("libjoyecs", "je_gui_content_region_avail")
@@ -557,7 +556,7 @@ R"(
 
     extern("libjoyecs", "je_gui_begin_drag_drop_source")
     public func BeginDragDropSource()=> bool;
-    extern("libjoyecs", "je_gui_begin_drag_drop_source")
+    extern("libjoyecs", "je_gui_begin_drag_drop_source_attr")
     public func BeginDragDropSourceAttr(attrib: DragAttribute)=> bool;
     extern("libjoyecs", "je_gui_set_drag_drop_payload")
     public func SetDragDropPayload(type: string, data: string)=> bool;
@@ -765,45 +764,48 @@ thread_local jeecs::basic::resource<jeecs::graphic::shader> _jegl_rend_texture_s
 thread_local void* (*_jegl_get_native_texture)(jegl_resource*);
 thread_local void (*_jegl_bind_shader_sampler_state)(jegl_resource*);
 
-WO_API wo_api je_gui_begin_tool_tip(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_begin_tool_tip(wo_vm vm, wo_value args)
 {
     ImGui::BeginTooltip();
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_end_tool_tip(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_end_tool_tip(wo_vm vm, wo_value args)
 {
     ImGui::EndTooltip();
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_begin_drag_drop_source(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_begin_drag_drop_source(wo_vm vm, wo_value args)
 {
     bool result;
-    if (argc == 0)
-        result = ImGui::BeginDragDropSource(ImGuiDragDropFlags_None);
-    else
-        result = ImGui::BeginDragDropSource((ImGuiDragDropFlags)wo_int(args + 0));
+    result = ImGui::BeginDragDropSource(ImGuiDragDropFlags_None);
     return wo_ret_bool(vm, result);
 }
-WO_API wo_api je_gui_set_drag_drop_payload(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_begin_drag_drop_source_attr(wo_vm vm, wo_value args)
+{
+    bool result;
+    result = ImGui::BeginDragDropSource((ImGuiDragDropFlags)wo_int(args + 0));
+    return wo_ret_bool(vm, result);
+}
+WO_API wo_api je_gui_set_drag_drop_payload(wo_vm vm, wo_value args)
 {
     wo_string_t buf = wo_string(args + 1);
 
     bool result = ImGui::SetDragDropPayload(wo_string(args + 0), buf, strlen(buf) + 1);
     return wo_ret_bool(vm, result);
 }
-WO_API wo_api je_gui_end_drag_drop_source(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_end_drag_drop_source(wo_vm vm, wo_value args)
 {
     ImGui::EndDragDropSource();
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_begin_drag_drop_target(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_begin_drag_drop_target(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm, ImGui::BeginDragDropTarget());
 }
-WO_API wo_api je_gui_accept_drag_drop_payload(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_accept_drag_drop_payload(wo_vm vm, wo_value args)
 {
     if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(wo_string(args + 0)))
     {
@@ -811,24 +813,24 @@ WO_API wo_api je_gui_accept_drag_drop_payload(wo_vm vm, wo_value args, size_t ar
     }
     return wo_ret_option_none(vm);
 }
-WO_API wo_api je_gui_end_accept_drop_source(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_end_accept_drop_source(wo_vm vm, wo_value args)
 {
     ImGui::EndDragDropTarget();
     return wo_ret_void(vm);
 }
-WO_API wo_api je_gui_set_next_item_open(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_set_next_item_open(wo_vm vm, wo_value args)
 {
     ImGui::SetNextItemOpen(wo_bool(args + 0));
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_set_clip_board_text(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_set_clip_board_text(wo_vm vm, wo_value args)
 {
     ImGui::SetClipboardText(wo_string(args));
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_get_clip_board_text(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_get_clip_board_text(wo_vm vm, wo_value args)
 {
     const char* t = ImGui::GetClipboardText();
     return wo_ret_string(vm, t == nullptr ? "" : t);
@@ -871,36 +873,36 @@ wo_value push_float4_to_struct(wo_vm vm, float x, float y, float z, float w)
     return ret;
 }
 
-WO_API wo_api je_gui_get_window_pos(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_get_window_pos(wo_vm vm, wo_value args)
 {
     auto&& wpos = ImGui::GetWindowPos();
     return wo_ret_val(vm, push_float2_to_struct(vm, wpos.x, wpos.y));
 }
 
-WO_API wo_api je_gui_get_mouse_pos(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_get_mouse_pos(wo_vm vm, wo_value args)
 {
     auto&& mpos = ImGui::GetMousePos();
     return wo_ret_val(vm, push_float2_to_struct(vm, mpos.x, mpos.y));
 }
 
-WO_API wo_api je_gui_get_mouse_delta_pos(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_get_mouse_delta_pos(wo_vm vm, wo_value args)
 {
     auto&& mdpos = ImGui::GetIO().MouseDelta;
     return wo_ret_val(vm, push_float2_to_struct(vm, mdpos.x, mdpos.y));
 }
 
-WO_API wo_api je_gui_get_cursor_pos(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_get_cursor_pos(wo_vm vm, wo_value args)
 {
     auto&& cpos = ImGui::GetCursorPos();
     return wo_ret_val(vm, push_float2_to_struct(vm, cpos.x, cpos.y));
 }
-WO_API wo_api je_gui_get_item_rect_size(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_get_item_rect_size(wo_vm vm, wo_value args)
 {
     auto&& isize = ImGui::GetItemRectSize();
     return wo_ret_val(vm, push_float2_to_struct(vm, isize.x, isize.y));
 }
 
-WO_API wo_api je_gui_get_item_rect(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_get_item_rect(wo_vm vm, wo_value args)
 {
     auto&& isizemin = ImGui::GetItemRectMin();
     auto&& isizemax = ImGui::GetItemRectMax();
@@ -913,58 +915,61 @@ WO_API wo_api je_gui_get_item_rect(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_val(vm, ret);
 }
 
-WO_API wo_api je_gui_push_id_str(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_push_id_str(wo_vm vm, wo_value args)
 {
     ImGui::PushID(wo_string(args + 0));
     return wo_ret_void(vm);
 }
-WO_API wo_api je_gui_push_id(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_push_id(wo_vm vm, wo_value args)
 {
     ImGui::PushID((int)wo_int(args + 0));
     return wo_ret_void(vm);
 }
-WO_API wo_api je_gui_pop_id(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_pop_id(wo_vm vm, wo_value args)
 {
     ImGui::PopID();
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_get_id(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_get_id(wo_vm vm, wo_value args)
 {
     return wo_ret_int(vm, (wo_integer_t)ImGui::GetID(wo_string(args + 0)));
 }
 
-WO_API wo_api je_gui_beginpopup_contextitem(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_beginpopup_contextitem(wo_vm vm, wo_value args)
 {
-    if (argc)
-        return wo_ret_bool(vm, ImGui::BeginPopupContextItem(wo_string(args + 0)));
     return wo_ret_bool(vm, ImGui::BeginPopupContextItem());
 }
-WO_API wo_api je_gui_beginpopup_contextwindow(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_beginpopup_contextitem_label(wo_vm vm, wo_value args)
 {
-    if (argc)
-        return wo_ret_bool(vm, ImGui::BeginPopupContextWindow(wo_string(args + 0)));
+    return wo_ret_bool(vm, ImGui::BeginPopupContextItem(wo_string(args + 0)));
+}
+WO_API wo_api je_gui_beginpopup_contextwindow(wo_vm vm, wo_value args)
+{
     return wo_ret_bool(vm, ImGui::BeginPopupContextWindow());
 }
-
-WO_API wo_api je_gui_begintabbar(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_beginpopup_contextwindow_label(wo_vm vm, wo_value args)
+{
+    return wo_ret_bool(vm, ImGui::BeginPopupContextWindow(wo_string(args + 0)));
+}
+WO_API wo_api je_gui_begintabbar(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm, ImGui::BeginTabBar(wo_string(args + 0), (ImGuiTabBarFlags)wo_int(args + 1)));
 }
 
-WO_API wo_api je_gui_endtabbar(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_endtabbar(wo_vm vm, wo_value args)
 {
     ImGui::EndTabBar();
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_begintabitem(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_begintabitem(wo_vm vm, wo_value args)
 {
     bool display = ImGui::BeginTabItem(wo_string(args + 0), nullptr, (ImGuiTabBarFlags)wo_int(args + 1));
     return wo_ret_bool(vm, display);
 }
 
-WO_API wo_api je_gui_begintabitem_open(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_begintabitem_open(wo_vm vm, wo_value args)
 {
     bool open = true;
     bool display = ImGui::BeginTabItem(wo_string(args + 0), &open, (ImGuiTabBarFlags)wo_int(args + 1));
@@ -1002,7 +1007,7 @@ ImVec4 val2vec4(wo_value v)
     return ImVec4(x, y, z, w);
 }
 
-WO_API wo_api je_gui_push_clip_rect(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_push_clip_rect(wo_vm vm, wo_value args)
 {
     wo_value from = args + 0;
     wo_value to = args + 1;
@@ -1014,7 +1019,7 @@ WO_API wo_api je_gui_push_clip_rect(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_pop_clip_rect(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_pop_clip_rect(wo_vm vm, wo_value args)
 {
     ImGui::PopClipRect();
 
@@ -1036,43 +1041,43 @@ ImU32 val2color32(wo_value v)
     return IM_COL32(x, y, z, w);
 }
 
-WO_API wo_api je_gui_push_style_color(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_push_style_color(wo_vm vm, wo_value args)
 {
     ImGui::PushStyleColor((ImGuiCol)wo_int(args + 0), val2color32(args + 1));
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_pop_style_color(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_pop_style_color(wo_vm vm, wo_value args)
 {
     ImGui::PopStyleColor();
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_get_window_draw_list(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_get_window_draw_list(wo_vm vm, wo_value args)
 {
     return wo_ret_pointer(vm, ImGui::GetWindowDrawList());
 }
 
-WO_API wo_api je_gui_draw_list_add_rect(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_draw_list_add_rect(wo_vm vm, wo_value args)
 {
     ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
     list->AddRect(val2vec2(args + 1), val2vec2(args + 2), val2color32(args + 3), 0.f, 0, wo_float(args + 4));
     return wo_ret_void(vm);
 }
-WO_API wo_api je_gui_draw_list_add_rect_filled(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_draw_list_add_rect_filled(wo_vm vm, wo_value args)
 {
     ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
     list->AddRectFilled(val2vec2(args + 1), val2vec2(args + 2), val2color32(args + 3));
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_draw_list_add_triangle(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_draw_list_add_triangle(wo_vm vm, wo_value args)
 {
     ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
     list->AddTriangle(val2vec2(args + 1), val2vec2(args + 2), val2vec2(args + 3), val2color32(args + 4), wo_float(args + 5));
     return wo_ret_void(vm);
 }
-WO_API wo_api je_gui_draw_list_add_triangle_filled(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_draw_list_add_triangle_filled(wo_vm vm, wo_value args)
 {
     ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
     list->AddTriangleFilled(val2vec2(args + 1), val2vec2(args + 2), val2vec2(args + 3), val2color32(args + 4));
@@ -1080,14 +1085,14 @@ WO_API wo_api je_gui_draw_list_add_triangle_filled(wo_vm vm, wo_value args, size
 }
 
 
-WO_API wo_api je_gui_draw_list_add_text(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_draw_list_add_text(wo_vm vm, wo_value args)
 {
     ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
     list->AddText(val2vec2(args + 1), val2color32(args + 2), wo_string(args + 3));
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_draw_list_add_image(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_draw_list_add_image(wo_vm vm, wo_value args)
 {
     ImDrawList* dlist = (ImDrawList*)wo_pointer(args + 0);
 
@@ -1108,160 +1113,205 @@ WO_API wo_api je_gui_draw_list_add_image(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_draw_list_add_line(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_draw_list_add_line(wo_vm vm, wo_value args)
 {
     ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
     list->AddLine(val2vec2(args + 1), val2vec2(args + 2), val2color32(args + 3), wo_float(args + 4));
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_draw_list_add_circle(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_draw_list_add_circle(wo_vm vm, wo_value args)
 {
     ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
     list->AddCircle(val2vec2(args + 1), wo_float(args + 2), val2color32(args + 3), 0, wo_float(args + 4));
     return wo_ret_void(vm);
 }
-WO_API wo_api je_gui_draw_list_add_filled_circle(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_draw_list_add_filled_circle(wo_vm vm, wo_value args)
 {
     ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
     list->AddCircleFilled(val2vec2(args + 1), wo_float(args + 2), val2color32(args + 3));
     return wo_ret_void(vm);
 }
-WO_API wo_api je_gui_draw_list_add_bezier_quad(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_draw_list_add_bezier_quad(wo_vm vm, wo_value args)
 {
     ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
     list->AddBezierQuadratic(val2vec2(args + 1), val2vec2(args + 2), val2vec2(args + 3), val2color32(args + 4), wo_float(args + 5));
     return wo_ret_void(vm);
 }
-WO_API wo_api je_gui_draw_list_add_bezier_cubic(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_draw_list_add_bezier_cubic(wo_vm vm, wo_value args)
 {
     ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
     list->AddBezierCubic(val2vec2(args + 1), val2vec2(args + 2), val2vec2(args + 3), val2vec2(args + 4), val2color32(args + 5), wo_float(args + 6));
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_endtabitem(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_endtabitem(wo_vm vm, wo_value args)
 {
     ImGui::EndTabItem();
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_beginpopup(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_beginpopup(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm, ImGui::BeginPopup(wo_string(args + 0)));
 }
 
-WO_API wo_api je_gui_openpopup_on_item_click(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_openpopup_on_item_click(wo_vm vm, wo_value args)
 {
-    if (argc == 0)
-        ImGui::OpenPopupOnItemClick();
-    else if (argc == 1)
-    {
-        if (wo_valuetype(args + 0) == WO_STRING_TYPE)
-            ImGui::OpenPopupOnItemClick(wo_string(args + 0));
-        else
-            ImGui::OpenPopupOnItemClick(nullptr, (ImGuiPopupFlags)wo_int(args + 0));
-    }
-    else
-        ImGui::OpenPopupOnItemClick(wo_string(args + 0), (ImGuiPopupFlags)wo_int(args + 1));
+    ImGui::OpenPopupOnItemClick();
+    return wo_ret_void(vm);
+}
+WO_API wo_api je_gui_openpopup_on_item_click_label(wo_vm vm, wo_value args)
+{
+    ImGui::OpenPopupOnItemClick(wo_string(args + 0));
+    return wo_ret_void(vm);
+}
+WO_API wo_api je_gui_openpopup_on_item_click_attr(wo_vm vm, wo_value args)
+{
+    ImGui::OpenPopupOnItemClick(nullptr, (ImGuiPopupFlags)wo_int(args + 0));
+    return wo_ret_void(vm);
+}
+WO_API wo_api je_gui_openpopup_on_item_click_label_attr(wo_vm vm, wo_value args)
+{
+    ImGui::OpenPopupOnItemClick(wo_string(args + 0), (ImGuiPopupFlags)wo_int(args + 1));        
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_openpopup(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_openpopup(wo_vm vm, wo_value args)
 {
     ImGui::OpenPopup(wo_string(args + 0));
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_endpopup(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_endpopup(wo_vm vm, wo_value args)
 {
     ImGui::EndPopup();
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_begin_listbox(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_begin_listbox(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm, ImGui::BeginListBox(wo_string(args + 0), ImVec2(wo_float(args + 1), wo_float(args + 2))));
 }
-WO_API wo_api je_gui_begin_selectable(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_begin_selectable(wo_vm vm, wo_value args)
 {
-    if (argc == 2)
-        return wo_ret_bool(vm, ImGui::Selectable(wo_string(args + 0), wo_bool(args + 1)));
     return wo_ret_bool(vm, ImGui::Selectable(wo_string(args + 0)));
 }
-WO_API wo_api je_gui_end_listbox(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_begin_selectable_selected(wo_vm vm, wo_value args)
+{
+    return wo_ret_bool(vm, ImGui::Selectable(wo_string(args + 0), wo_bool(args + 1)));
+}
+WO_API wo_api je_gui_end_listbox(wo_vm vm, wo_value args)
 {
     ImGui::EndListBox();
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_sameline(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_sameline(wo_vm vm, wo_value args)
 {
     ImGui::SameLine();
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_begingroup(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_begingroup(wo_vm vm, wo_value args)
 {
     ImGui::BeginGroup();
     return wo_ret_void(vm);
 }
-WO_API wo_api je_gui_endgroup(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_endgroup(wo_vm vm, wo_value args)
 {
     ImGui::EndGroup();
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_is_itemclicked(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_is_itemclicked(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm, ImGui::IsItemClicked((ImGuiMouseButton)wo_int(args + 0)));
 }
 
-WO_API wo_api je_gui_is_itemtoggledopen(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_is_itemtoggledopen(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm, ImGui::IsItemToggledOpen());
 }
 
-WO_API wo_api je_gui_is_itemhovered(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_is_itemhovered(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm, ImGui::IsItemHovered());
 }
 
-WO_API wo_api je_gui_is_item_active(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_is_item_active(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm, ImGui::IsItemActive());
 }
 
-WO_API wo_api je_gui_is_mouse_dragging(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_is_mouse_dragging(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm, ImGui::IsMouseDragging((ImGuiMouseButton)wo_int(args + 0)));
 }
 
-WO_API wo_api je_gui_set_tooltip(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_set_tooltip(wo_vm vm, wo_value args)
 {
     ImGui::SetTooltip("%s", wo_string(args + 0));
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_treenodeex(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_treenodeex(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm, ImGui::TreeNodeEx(wo_string(args + 0), (ImGuiTreeNodeFlags)wo_int(args + 1)));
 }
 
-WO_API wo_api je_gui_treenode(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_treenode(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm, ImGui::TreeNode(wo_string(args + 0)));
 }
-WO_API wo_api je_gui_treepop(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_treepop(wo_vm vm, wo_value args)
 {
     ImGui::TreePop();
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_listbox(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_listbox(wo_vm vm, wo_value args)
 {
-    int selected_item = argc >= 3 ? (int)wo_int(args + 2) : -1;
-    int max_height_item = argc == 4 ? (int)wo_int(args + 3) : -1;
+    int selected_item = -1;
+    int max_height_item = -1;
+
+    std::vector<const char*> items((size_t)wo_lengthof(args + 1));
+    wo_value elem = wo_push_empty(vm);
+    for (size_t i = 0; i < items.size(); i++)
+    {
+        wo_arr_get(elem, args + 1, i);
+        items[i] = wo_string(elem);
+    }
+
+    bool val_changed = ImGui::ListBox(wo_string(args + 0), &selected_item, items.data(), (int)items.size(), max_height_item);
+
+    if (val_changed)
+        return wo_ret_option_int(vm, selected_item);
+    return wo_ret_option_none(vm);
+}
+WO_API wo_api je_gui_listbox_select(wo_vm vm, wo_value args)
+{
+    int selected_item = (int)wo_int(args + 2);
+    int max_height_item = -1;
+
+    std::vector<const char*> items((size_t)wo_lengthof(args + 1));
+    wo_value elem = wo_push_empty(vm);
+    for (size_t i = 0; i < items.size(); i++)
+    {
+        wo_arr_get(elem, args + 1, i);
+        items[i] = wo_string(elem);
+    }
+
+    bool val_changed = ImGui::ListBox(wo_string(args + 0), &selected_item, items.data(), (int)items.size(), max_height_item);
+
+    if (val_changed)
+        return wo_ret_option_int(vm, selected_item);
+    return wo_ret_option_none(vm);
+}
+WO_API wo_api je_gui_listbox_select_height(wo_vm vm, wo_value args)
+{
+    int selected_item =  (int)wo_int(args + 2);
+    int max_height_item = (int)wo_int(args + 3);
 
     std::vector<const char*> items((size_t)wo_lengthof(args + 1));
     wo_value elem = wo_push_empty(vm);
@@ -1278,7 +1328,7 @@ WO_API wo_api je_gui_listbox(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_option_none(vm);
 }
 
-WO_API wo_api je_gui_listbox_withsize(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_listbox_withsize(wo_vm vm, wo_value args)
 {
     //func ListBox(label:string, items:array<string>, ref select_item:int, width:real, height:real)=> int;
     int origin_selected_index = (int)wo_int(args + 2);
@@ -1311,22 +1361,22 @@ WO_API wo_api je_gui_listbox_withsize(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_option_none(vm);
 }
 
-WO_API wo_api je_gui_job_vm_handle(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_job_vm_handle(wo_vm vm, wo_value args)
 {
     return wo_ret_pointer(vm, vm);
 }
 
-WO_API wo_api je_gui_begin(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_begin(wo_vm vm, wo_value args)
 {
-    bool showing = false;
-    if (argc == 2)
-        showing = ImGui::Begin(wo_string(args), 0, (ImGuiWindowFlags)wo_int(args + 1));
-    else
-        showing = ImGui::Begin(wo_string(args));
-
+    bool showing = ImGui::Begin(wo_string(args));
     return wo_ret_bool(vm, showing);
 }
-WO_API wo_api je_gui_begin_open(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_begin_attr(wo_vm vm, wo_value args)
+{
+    bool showing = ImGui::Begin(wo_string(args), 0, (ImGuiWindowFlags)wo_int(args + 1));
+    return wo_ret_bool(vm, showing);
+}
+WO_API wo_api je_gui_begin_open(wo_vm vm, wo_value args)
 {
     bool windows_flag = true;
     bool showing = ImGui::Begin(wo_string(args), &windows_flag, (ImGuiWindowFlags)wo_int(args + 1));
@@ -1336,100 +1386,98 @@ WO_API wo_api je_gui_begin_open(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_option_none(vm);
 }
 
-WO_API wo_api je_gui_is_window_focused(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_is_window_focused(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm, ImGui::IsWindowFocused());
 }
 
-WO_API wo_api je_gui_end(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_end(wo_vm vm, wo_value args)
 {
     ImGui::End();
     return wo_ret_void(vm);
 }
-WO_API wo_api je_gui_begin_child(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_begin_child(wo_vm vm, wo_value args)
 {
-    if (argc == 3)
-    {
-        return wo_ret_bool(vm, ImGui::BeginChild(wo_string(args + 0),
-            ImVec2(wo_float(args + 1), wo_float(args + 2)), true));
-    }
-    else if (argc == 2)
-    {
-        return wo_ret_bool(vm, ImGui::BeginChild(wo_string(args + 0),
-            ImVec2(0.f, 0.f), true, (ImGuiWindowFlags)wo_int(args + 1)));
-    }
     return wo_ret_bool(vm, ImGui::BeginChild(wo_string(args + 0), ImVec2(0.f, 0.f), true));
 }
-WO_API wo_api je_gui_end_child(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_begin_child_attr(wo_vm vm, wo_value args)
+{
+    return wo_ret_bool(vm, ImGui::BeginChild(wo_string(args + 0),
+        ImVec2(0.f, 0.f), true, (ImGuiWindowFlags)wo_int(args + 1)));
+}
+WO_API wo_api je_gui_begin_child_size(wo_vm vm, wo_value args)
+{
+    return wo_ret_bool(vm, ImGui::BeginChild(wo_string(args + 0),
+        ImVec2(wo_float(args + 1), wo_float(args + 2)), true));
+}
+
+WO_API wo_api je_gui_end_child(wo_vm vm, wo_value args)
 {
     ImGui::EndChild();
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_progress_bar(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_progress_bar(wo_vm vm, wo_value args)
 {
     ImGui::ProgressBar(wo_float(args + 0));
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_progress_bar_size(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_progress_bar_size(wo_vm vm, wo_value args)
 {
     ImGui::ProgressBar(wo_float(args + 0), val2vec2(args + 1));
     return wo_ret_void(vm);
 }
 
 
-WO_API wo_api je_gui_text(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_text(wo_vm vm, wo_value args)
 {
     ImGui::Text("%s", wo_string(args));
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_text_disabled(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_text_disabled(wo_vm vm, wo_value args)
 {
     ImGui::TextDisabled("%s", wo_string(args));
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_button(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_button(wo_vm vm, wo_value args)
 {
-    if (argc == 2)
-        return wo_ret_bool(vm, ImGui::Button(wo_string(args + 0), val2vec2(args + 1)));
     return wo_ret_bool(vm, ImGui::Button(wo_string(args + 0)));
 }
 
-WO_API wo_api je_gui_invisible_button(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_button_size(wo_vm vm, wo_value args)
+{
+    return wo_ret_bool(vm, ImGui::Button(wo_string(args + 0), val2vec2(args + 1)));
+}
+
+WO_API wo_api je_gui_invisible_button(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm, ImGui::InvisibleButton(wo_string(args + 0), val2vec2(args + 1)));
 }
 
-WO_API wo_api je_gui_begin_main_menu_bar(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_begin_main_menu_bar(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm, ImGui::BeginMainMenuBar());
 }
-WO_API wo_api je_gui_menu_item(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_menu_item(wo_vm vm, wo_value args)
 {
-    if (argc == 2)
-    {
-        if (wo_valuetype(args + 1) == WO_STRING_TYPE)
-            return wo_ret_bool(vm, ImGui::MenuItem(wo_string(args + 0), wo_string(args + 1)));
-        else
-            return wo_ret_bool(vm, ImGui::MenuItem(wo_string(args + 0), 0, false, wo_bool(args + 1)));
-    }
-    if (argc == 3)
-        return wo_ret_bool(vm, ImGui::MenuItem(wo_string(args + 0), wo_string(args + 1), false, wo_bool(args + 2)));
-    if (argc == 4)
-    {
-        bool selected = wo_bool(args + 2);
-        bool clicked = ImGui::MenuItem(wo_string(args + 0), wo_string(args + 1), &selected, wo_bool(args + 3));
-        wo_set_bool(args + 2, selected);
-
-        return wo_ret_bool(vm, clicked);
-    }
     return wo_ret_bool(vm, ImGui::MenuItem(wo_string(args + 0)));
 }
-
-WO_API wo_api je_gui_menu_item_selected(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_menu_item_shortcut(wo_vm vm, wo_value args)
+{
+    return wo_ret_bool(vm, ImGui::MenuItem(wo_string(args + 0), wo_string(args + 1)));
+}
+WO_API wo_api je_gui_menu_item_enabled(wo_vm vm, wo_value args)
+{
+    return wo_ret_bool(vm, ImGui::MenuItem(wo_string(args + 0), 0, false, wo_bool(args + 1)));
+}
+WO_API wo_api je_gui_menu_item_shortcut_enabled(wo_vm vm, wo_value args)
+{
+    return wo_ret_bool(vm, ImGui::MenuItem(wo_string(args + 0), wo_string(args + 1), false, wo_bool(args + 2)));
+}
+WO_API wo_api je_gui_menu_item_selected(wo_vm vm, wo_value args)
 {
     bool selected = wo_bool(args + 2);
     bool clicked = ImGui::MenuItem(wo_string(args + 0), wo_string(args + 1), &selected, wo_bool(args + 3));
@@ -1440,38 +1488,40 @@ WO_API wo_api je_gui_menu_item_selected(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_option_none(vm);
 }
 
-WO_API wo_api je_gui_end_main_menu_bar(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_end_main_menu_bar(wo_vm vm, wo_value args)
 {
     ImGui::EndMainMenuBar();
     return wo_ret_void(vm);
 }
-WO_API wo_api je_gui_begin_menu_bar(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_begin_menu_bar(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm, ImGui::BeginMenuBar());
 }
-WO_API wo_api je_gui_end_menu_bar(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_end_menu_bar(wo_vm vm, wo_value args)
 {
     ImGui::EndMenuBar();
     return wo_ret_void(vm);
 }
-WO_API wo_api je_gui_begin_menu(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_begin_menu(wo_vm vm, wo_value args)
 {
-    if (argc == 2)
-        return wo_ret_bool(vm, ImGui::BeginMenu(wo_string(args + 0), wo_bool(args + 1)));
     return wo_ret_bool(vm, ImGui::BeginMenu(wo_string(args + 0)));
 }
-WO_API wo_api je_gui_end_menu(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_begin_menu_enabled(wo_vm vm, wo_value args)
+{
+    return wo_ret_bool(vm, ImGui::BeginMenu(wo_string(args + 0), wo_bool(args + 1)));
+}
+WO_API wo_api je_gui_end_menu(wo_vm vm, wo_value args)
 {
     ImGui::EndMenu();
     return wo_ret_void(vm);
 }
-WO_API wo_api je_gui_separator(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_separator(wo_vm vm, wo_value args)
 {
     ImGui::Separator();
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_image(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_image(wo_vm vm, wo_value args)
 {
     jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
 
@@ -1488,31 +1538,72 @@ WO_API wo_api je_gui_image(wo_vm vm, wo_value args, size_t argc)
 
     auto* dlist = ImGui::GetWindowDrawList();
     dlist->AddCallback([](auto, auto) {_jegl_bind_shader_sampler_state(_jegl_rend_texture_shader->resouce()); }, nullptr);
-    if (argc == 1)
-        ImGui::Image((ImTextureID)_jegl_get_native_texture((*texture)->resouce()),
-            ImVec2(
-                (float)((*texture)->resouce())->m_raw_texture_data->m_width,
-                (float)((*texture)->resouce())->m_raw_texture_data->m_height
-            ), uvmin, uvmax);
-    else if (argc == 2)
-        ImGui::Image((ImTextureID)_jegl_get_native_texture((*texture)->resouce()),
-            ImVec2(
-                ((*texture)->resouce())->m_raw_texture_data->m_width * wo_float(args + 1),
-                ((*texture)->resouce())->m_raw_texture_data->m_height * wo_float(args + 1)
-            ), uvmin, uvmax);
-    else if (argc == 3)
-        ImGui::Image((ImTextureID)_jegl_get_native_texture((*texture)->resouce()),
-            ImVec2(
-                wo_float(args + 1),
-                wo_float(args + 2)
-            ), uvmin, uvmax);
+    ImGui::Image((ImTextureID)_jegl_get_native_texture((*texture)->resouce()),
+        ImVec2(
+            (float)((*texture)->resouce())->m_raw_texture_data->m_width,
+            (float)((*texture)->resouce())->m_raw_texture_data->m_height
+        ), uvmin, uvmax);
+
+    dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
+
+    return wo_ret_void(vm);
+}
+WO_API wo_api je_gui_image_scale(wo_vm vm, wo_value args)
+{
+    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
+
+    jegl_using_resource((*texture)->resouce());
+
+    ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
+    if (_jegui_need_flip_frambuf
+        && (*texture)->resouce()->m_raw_texture_data != nullptr
+        && 0 != ((*texture)->resouce()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
+    {
+        uvmin = ImVec2(0.0f, 0.0f);
+        uvmax = ImVec2(1.0f, 1.0f);
+    }
+
+    auto* dlist = ImGui::GetWindowDrawList();
+    dlist->AddCallback([](auto, auto) {_jegl_bind_shader_sampler_state(_jegl_rend_texture_shader->resouce()); }, nullptr);
+    ImGui::Image((ImTextureID)_jegl_get_native_texture((*texture)->resouce()),
+        ImVec2(
+            ((*texture)->resouce())->m_raw_texture_data->m_width * wo_float(args + 1),
+            ((*texture)->resouce())->m_raw_texture_data->m_height * wo_float(args + 1)
+        ), uvmin, uvmax);
+
+    dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
+
+    return wo_ret_void(vm);
+}
+WO_API wo_api je_gui_image_size(wo_vm vm, wo_value args)
+{
+    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
+
+    jegl_using_resource((*texture)->resouce());
+
+    ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
+    if (_jegui_need_flip_frambuf
+        && (*texture)->resouce()->m_raw_texture_data != nullptr
+        && 0 != ((*texture)->resouce()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
+    {
+        uvmin = ImVec2(0.0f, 0.0f);
+        uvmax = ImVec2(1.0f, 1.0f);
+    }
+
+    auto* dlist = ImGui::GetWindowDrawList();
+    dlist->AddCallback([](auto, auto) {_jegl_bind_shader_sampler_state(_jegl_rend_texture_shader->resouce()); }, nullptr);
+    ImGui::Image((ImTextureID)_jegl_get_native_texture((*texture)->resouce()),
+        ImVec2(
+            wo_float(args + 1),
+            wo_float(args + 2)
+        ), uvmin, uvmax);
 
     dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
 
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args)
 {
     jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
 
@@ -1531,59 +1622,104 @@ WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args, size_t argc)
 
     auto* dlist = ImGui::GetWindowDrawList();
     dlist->AddCallback([](auto, auto) {_jegl_bind_shader_sampler_state(_jegl_rend_texture_shader->resouce()); }, nullptr);
-    if (argc == 1)
-        result = ImGui::ImageButton((ImTextureID)_jegl_get_native_texture((*texture)->resouce()),
-            ImVec2(
-                (float)((*texture)->resouce())->m_raw_texture_data->m_width,
-                (float)((*texture)->resouce())->m_raw_texture_data->m_height
-            ), uvmin, uvmax);
-    else if (argc == 2)
-        result = ImGui::ImageButton((ImTextureID)_jegl_get_native_texture((*texture)->resouce()),
-            ImVec2(
-                ((*texture)->resouce())->m_raw_texture_data->m_width * wo_float(args + 1),
-                ((*texture)->resouce())->m_raw_texture_data->m_height * wo_float(args + 1)
-            ), uvmin, uvmax);
-    else if (argc == 3)
-        result = ImGui::ImageButton((ImTextureID)_jegl_get_native_texture((*texture)->resouce()),
-            ImVec2(
-                wo_float(args + 1),
-                wo_float(args + 2)
-            ), uvmin, uvmax);
+    result = ImGui::ImageButton((ImTextureID)_jegl_get_native_texture((*texture)->resouce()),
+        ImVec2(
+            (float)((*texture)->resouce())->m_raw_texture_data->m_width,
+            (float)((*texture)->resouce())->m_raw_texture_data->m_height
+        ), uvmin, uvmax);
+
+    dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
+
+    return wo_ret_bool(vm, result);
+}
+WO_API wo_api je_gui_imagebutton_scale(wo_vm vm, wo_value args)
+{
+    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
+
+    jegl_using_resource((*texture)->resouce());
+
+    ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
+    if (_jegui_need_flip_frambuf
+        && (*texture)->resouce()->m_raw_texture_data != nullptr
+        && 0 != ((*texture)->resouce()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
+    {
+        uvmin = ImVec2(0.0f, 0.0f);
+        uvmax = ImVec2(1.0f, 1.0f);
+    }
+
+    bool result = false;
+
+    auto* dlist = ImGui::GetWindowDrawList();
+    dlist->AddCallback([](auto, auto) {_jegl_bind_shader_sampler_state(_jegl_rend_texture_shader->resouce()); }, nullptr);
+    result = ImGui::ImageButton((ImTextureID)_jegl_get_native_texture((*texture)->resouce()),
+        ImVec2(
+            ((*texture)->resouce())->m_raw_texture_data->m_width * wo_float(args + 1),
+            ((*texture)->resouce())->m_raw_texture_data->m_height * wo_float(args + 1)
+        ), uvmin, uvmax);
+
+    dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
+
+    return wo_ret_bool(vm, result);
+}
+WO_API wo_api je_gui_imagebutton_size(wo_vm vm, wo_value args)
+{
+    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
+
+    jegl_using_resource((*texture)->resouce());
+
+    ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
+    if (_jegui_need_flip_frambuf
+        && (*texture)->resouce()->m_raw_texture_data != nullptr
+        && 0 != ((*texture)->resouce()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
+    {
+        uvmin = ImVec2(0.0f, 0.0f);
+        uvmax = ImVec2(1.0f, 1.0f);
+    }
+
+    bool result = false;
+
+    auto* dlist = ImGui::GetWindowDrawList();
+    dlist->AddCallback([](auto, auto) {_jegl_bind_shader_sampler_state(_jegl_rend_texture_shader->resouce()); }, nullptr);
+    result = ImGui::ImageButton((ImTextureID)_jegl_get_native_texture((*texture)->resouce()),
+        ImVec2(
+            wo_float(args + 1),
+            wo_float(args + 2)
+        ), uvmin, uvmax);
 
     dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
 
     return wo_ret_bool(vm, result);
 }
 
-WO_API wo_api je_gui_content_region_avail(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_content_region_avail(wo_vm vm, wo_value args)
 {
     auto&& sz = ImGui::GetContentRegionAvail();
     return wo_ret_val(vm, push_float2_to_struct(vm, sz.x, sz.y));
 }
 
-WO_API wo_api je_gui_set_next_window_size_constraints(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_set_next_window_size_constraints(wo_vm vm, wo_value args)
 {
     ImGui::SetNextWindowSizeConstraints(val2vec2(args + 0), val2vec2(args + 1));
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_set_next_window_size(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_set_next_window_size(wo_vm vm, wo_value args)
 {
     ImGui::SetNextWindowSize(val2vec2(args + 0));
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_set_next_window_pos(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_set_next_window_pos(wo_vm vm, wo_value args)
 {
     ImGui::SetNextWindowPos(val2vec2(args + 0));
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_colorbutton(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_colorbutton(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm, ImGui::ColorButton(wo_string(args + 0), val2vec4(args + 1)));
 }
-WO_API wo_api je_gui_colorpicker4(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_colorpicker4(wo_vm vm, wo_value args)
 {
 
     float rgba[4] = {};
@@ -1614,7 +1750,7 @@ WO_API wo_api je_gui_colorpicker4(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_option_none(vm);
 }
 
-WO_API wo_api je_gui_input_text_box(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_input_text_box(wo_vm vm, wo_value args)
 {
     std::string buf = wo_string(args + 1);
     if (ImGui::InputText(wo_string(args + 0), &buf))
@@ -1624,7 +1760,7 @@ WO_API wo_api je_gui_input_text_box(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_option_none(vm);
 }
 
-WO_API wo_api je_gui_checkbox(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_checkbox(wo_vm vm, wo_value args)
 {
     bool checked = wo_bool(args + 1);
     if (ImGui::Checkbox(wo_string(args + 0), &checked))
@@ -1632,7 +1768,7 @@ WO_API wo_api je_gui_checkbox(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_option_none(vm);
 }
 
-WO_API wo_api je_gui_input_int_box(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_input_int_box(wo_vm vm, wo_value args)
 {
     wo_string_t label = wo_string(args + 0);
     int value = (int)wo_int(args + 1);
@@ -1644,7 +1780,7 @@ WO_API wo_api je_gui_input_int_box(wo_vm vm, wo_value args, size_t argc)
         return wo_ret_option_int(vm, value);
     return wo_ret_option_none(vm);
 }
-WO_API wo_api je_gui_input_int2_box(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_input_int2_box(wo_vm vm, wo_value args)
 {
     wo_string_t label = wo_string(args + 0);
     int values[] = { (int)wo_int(args + 1), (int)wo_int(args + 2) };
@@ -1664,7 +1800,7 @@ WO_API wo_api je_gui_input_int2_box(wo_vm vm, wo_value args, size_t argc)
     }
     return wo_ret_option_none(vm);
 }
-WO_API wo_api je_gui_input_int3_box(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_input_int3_box(wo_vm vm, wo_value args)
 {
     wo_string_t label = wo_string(args + 0);
     int values[] = { (int)wo_int(args + 1), (int)wo_int(args + 2), (int)wo_int(args + 3) };
@@ -1686,7 +1822,7 @@ WO_API wo_api je_gui_input_int3_box(wo_vm vm, wo_value args, size_t argc)
     }
     return wo_ret_option_none(vm);
 }
-WO_API wo_api je_gui_input_int4_box(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_input_int4_box(wo_vm vm, wo_value args)
 {
     wo_string_t label = wo_string(args + 0);
     int values[] = { (int)wo_int(args + 1), (int)wo_int(args + 2), (int)wo_int(args + 3), (int)wo_int(args + 4) };
@@ -1711,7 +1847,7 @@ WO_API wo_api je_gui_input_int4_box(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_option_none(vm);
 }
 
-WO_API wo_api je_gui_drag_float(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_drag_float(wo_vm vm, wo_value args)
 {
     wo_string_t label = wo_string(args + 0);
     float value = wo_float(args + 1);
@@ -1723,37 +1859,25 @@ WO_API wo_api je_gui_drag_float(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_option_none(vm);
 }
 
-WO_API wo_api je_gui_input_float_box(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_input_float_box(wo_vm vm, wo_value args)
 {
     wo_string_t label = wo_string(args + 0);
     float value = wo_float(args + 1);
     bool update = false;
 
-    if (argc == 2)
-        update = ImGui::InputFloat(label, &value);
-    else if (argc == 3)
-    {
-        wo_string_t format = wo_string(args + 2);
-        update = ImGui::InputFloat(label, &value, 0.f, 0.f, format);
-    }
+    update = ImGui::InputFloat(label, &value);
 
     if (update)
         return wo_ret_option_float(vm, value);
     return wo_ret_option_none(vm);
 }
-WO_API wo_api je_gui_input_float2_box(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_input_float2_box(wo_vm vm, wo_value args)
 {
     wo_string_t label = wo_string(args + 0);
     float values[] = { wo_float(args + 1), wo_float(args + 2) };
     bool update = false;
 
-    if (argc == 3)
-        update = ImGui::InputFloat2(label, values);
-    else if (argc == 4)
-    {
-        wo_string_t format = wo_string(args + 3);
-        update = ImGui::InputFloat2(label, values, format);
-    }
+    update = ImGui::InputFloat2(label, values);
 
     if (update)
     {
@@ -1761,19 +1885,13 @@ WO_API wo_api je_gui_input_float2_box(wo_vm vm, wo_value args, size_t argc)
     }
     return wo_ret_option_none(vm);
 }
-WO_API wo_api je_gui_input_float3_box(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_input_float3_box(wo_vm vm, wo_value args)
 {
     wo_string_t label = wo_string(args + 0);
     float values[] = { wo_float(args + 1), wo_float(args + 2), wo_float(args + 3) };
     bool update = false;
 
-    if (argc == 4)
-        update = ImGui::InputFloat3(label, values);
-    else if (argc == 5)
-    {
-        wo_string_t format = wo_string(args + 4);
-        update = ImGui::InputFloat3(label, values, format);
-    }
+    update = ImGui::InputFloat3(label, values);
 
     if (update)
     {
@@ -1781,19 +1899,14 @@ WO_API wo_api je_gui_input_float3_box(wo_vm vm, wo_value args, size_t argc)
     }
     return wo_ret_option_none(vm);
 }
-WO_API wo_api je_gui_input_float4_box(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_input_float4_box(wo_vm vm, wo_value args)
 {
     wo_string_t label = wo_string(args + 0);
     float values[] = { wo_float(args + 1), wo_float(args + 2), wo_float(args + 3), wo_float(args + 4) };
     bool update = false;
 
-    if (argc == 5)
-        update = ImGui::InputFloat4(label, values);
-    else if (argc == 6)
-    {
-        wo_string_t format = wo_string(args + 5);
-        update = ImGui::InputFloat4(label, values, format);
-    }
+    update = ImGui::InputFloat4(label, values);
+
     if (update)
     {
         return wo_ret_option_val(vm, push_float4_to_struct(vm, values[0], values[1], values[2], values[3]));
@@ -1801,24 +1914,91 @@ WO_API wo_api je_gui_input_float4_box(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_option_none(vm);
 }
 
-WO_API wo_api je_gui_input_text_multiline(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_input_float_format_box(wo_vm vm, wo_value args)
+{
+    wo_string_t label = wo_string(args + 0);
+    float value = wo_float(args + 1);
+    bool update = false;
+
+    wo_string_t format = wo_string(args + 2);
+    update = ImGui::InputFloat(label, &value, 0.f, 0.f, format);
+
+    if (update)
+        return wo_ret_option_float(vm, value);
+    return wo_ret_option_none(vm);
+}
+WO_API wo_api je_gui_input_float2_format_box(wo_vm vm, wo_value args)
+{
+    wo_string_t label = wo_string(args + 0);
+    float values[] = { wo_float(args + 1), wo_float(args + 2) };
+    bool update = false;
+
+    wo_string_t format = wo_string(args + 3);
+    update = ImGui::InputFloat2(label, values, format);
+
+    if (update)
+    {
+        return wo_ret_option_val(vm, push_float2_to_struct(vm, values[0], values[1]));
+    }
+    return wo_ret_option_none(vm);
+}
+WO_API wo_api je_gui_input_float3_format_box(wo_vm vm, wo_value args)
+{
+    wo_string_t label = wo_string(args + 0);
+    float values[] = { wo_float(args + 1), wo_float(args + 2), wo_float(args + 3) };
+    bool update = false;
+
+    wo_string_t format = wo_string(args + 4);
+    update = ImGui::InputFloat3(label, values, format);
+
+    if (update)
+    {
+        return wo_ret_option_val(vm, push_float3_to_struct(vm, values[0], values[1], values[2]));
+    }
+    return wo_ret_option_none(vm);
+}
+WO_API wo_api je_gui_input_float4_format_box(wo_vm vm, wo_value args)
+{
+    wo_string_t label = wo_string(args + 0);
+    float values[] = { wo_float(args + 1), wo_float(args + 2), wo_float(args + 3), wo_float(args + 4) };
+    bool update = false;
+
+    wo_string_t format = wo_string(args + 5);
+    update = ImGui::InputFloat4(label, values, format);
+
+    if (update)
+    {
+        return wo_ret_option_val(vm, push_float4_to_struct(vm, values[0], values[1], values[2], values[3]));
+    }
+    return wo_ret_option_none(vm);
+}
+
+WO_API wo_api je_gui_input_text_multiline(wo_vm vm, wo_value args)
 {
     std::string buf = wo_string(args + 1);
     bool updated = false;
-    if (argc == 4)
-    {
-        updated = ImGui::InputTextMultiline(wo_string(args + 0), &buf,
-            ImVec2(wo_float(args + 2), wo_float(args + 3)));
-    }
-    else
-        updated = ImGui::InputTextMultiline(wo_string(args + 0), &buf);
+
+    updated = ImGui::InputTextMultiline(wo_string(args + 0), &buf);
 
     if (updated)
         return wo_ret_option_string(vm, buf.c_str());
     return wo_ret_option_none(vm);
 }
 
-WO_API wo_api je_gui_combo(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_input_text_multiline_size(wo_vm vm, wo_value args)
+{
+    std::string buf = wo_string(args + 1);
+    bool updated = false;
+
+    updated = ImGui::InputTextMultiline(wo_string(args + 0), &buf,
+        ImVec2(wo_float(args + 2), wo_float(args + 3)));
+
+    if (updated)
+        return wo_ret_option_string(vm, buf.c_str());
+    return wo_ret_option_none(vm);
+}
+
+WO_API wo_api je_gui_combo(wo_vm vm, wo_value args)
 {
     std::vector<const char*> combo_items;
     wo_value elem = wo_push_empty(vm);
@@ -1835,7 +2015,7 @@ WO_API wo_api je_gui_combo(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_option_none(vm);
 }
 
-WO_API wo_api je_gui_launch(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_launch(wo_vm vm, wo_value args)
 {
     wo_value jobfunc = args + 1;
     wo_value argpacks = args + 2;
@@ -1854,13 +2034,13 @@ WO_API wo_api je_gui_launch(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_stop_all_work(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_stop_all_work(wo_vm vm, wo_value args)
 {
     _jegui_stop_work_flag = true;
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_get_input_state(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_get_input_state(wo_vm vm, wo_value args)
 {
     jeecs::input::keycode kcode = (jeecs::input::keycode)wo_int(args + 0);
 
@@ -1888,7 +2068,7 @@ WO_API wo_api je_gui_get_input_state(wo_vm vm, wo_value args, size_t argc)
 wo_vm exit_callback_handler_vm = nullptr;
 wo_value exit_callback_function = nullptr;
 
-WO_API wo_api je_gui_register_exit_callback(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_register_exit_callback(wo_vm vm, wo_value args)
 {
     if (exit_callback_handler_vm != nullptr)
         return wo_ret_panic(vm, "Callback has been registered.");
@@ -1900,7 +2080,7 @@ WO_API wo_api je_gui_register_exit_callback(wo_vm vm, wo_value args, size_t argc
 
     return wo_ret_void(vm);
 }
-WO_API wo_api je_gui_unregister_exit_callback(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_unregister_exit_callback(wo_vm vm, wo_value args)
 {
     if (exit_callback_handler_vm == nullptr)
         return wo_ret_panic(vm, "Callback not found.");
@@ -1921,8 +2101,10 @@ void jegui_set_font(const char* path, size_t size)
     specify_font_size = size;
 }
 
-WO_API wo_api je_gui_set_font(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_set_font(wo_vm vm, wo_value args)
 {
+    size_t argc = (size_t)wo_vaarg_count(vm);
+
     if (argc == 1)
         jegui_set_font(nullptr, (size_t)wo_int(args + 0));
     else
@@ -1931,7 +2113,7 @@ WO_API wo_api je_gui_set_font(wo_vm vm, wo_value args, size_t argc)
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_style_get_config_color(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_style_get_config_color(wo_vm vm, wo_value args)
 {
     ImGuiStyle* style = &ImGui::GetStyle();
     auto color = style->Colors[wo_int(args + 0)];
@@ -1939,7 +2121,7 @@ WO_API wo_api je_gui_style_get_config_color(wo_vm vm, wo_value args, size_t argc
     return wo_ret_val(vm, push_float4_to_struct(vm, color.x, color.y, color.z, color.w));
 }
 
-WO_API wo_api je_gui_style_set_config_color(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_style_set_config_color(wo_vm vm, wo_value args)
 {
     ImGuiStyle* style = &ImGui::GetStyle();
     auto& color = style->Colors[wo_int(args + 0)];
@@ -1956,49 +2138,49 @@ WO_API wo_api je_gui_style_set_config_color(wo_vm vm, wo_value args, size_t argc
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_style_set_config_color_dark(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_style_set_config_color_dark(wo_vm vm, wo_value args)
 {
     ImGui::StyleColorsDark();
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_style_set_config_color_classic(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_style_set_config_color_classic(wo_vm vm, wo_value args)
 {
     ImGui::StyleColorsClassic();
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_style_set_config_color_light(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_style_set_config_color_light(wo_vm vm, wo_value args)
 {
     ImGui::StyleColorsLight();
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_dock_space(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_dock_space(wo_vm vm, wo_value args)
 {
     ImGui::DockSpace((ImGuiID)wo_int(args + 0), val2vec2(args + 1), (ImGuiDockNodeFlags)wo_int(args + 2));
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_dock_space_over_viewport(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_dock_space_over_viewport(wo_vm vm, wo_value args)
 {
     ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_push_style_real(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_push_style_real(wo_vm vm, wo_value args)
 {
     ImGui::PushStyleVar((ImGuiStyleVar)wo_int(args + 0), wo_float(args + 1));
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_push_style_vec2(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_push_style_vec2(wo_vm vm, wo_value args)
 {
     ImGui::PushStyleVar((ImGuiStyleVar)wo_int(args + 0), val2vec2(args + 1));
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_pop_style_var(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api je_gui_pop_style_var(wo_vm vm, wo_value args)
 {
     ImGui::PopStyleVar();
     return wo_ret_void(vm);

@@ -866,7 +866,7 @@ public let frag =
         }
     };
 }
-WO_API wo_api wojeapi_store_bad_shader_name(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_store_bad_shader_name(wo_vm vm, wo_value args)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
     wo_string_t shader_path = wo_string(args + 1);
@@ -878,7 +878,7 @@ WO_API wo_api wojeapi_store_bad_shader_name(wo_vm vm, wo_value args, size_t argc
     return wo_ret_pointer(vm, &badShadersUniform->stored_uniforms.emplace_back(jeecs::Editor::BadShadersUniform::bad_shader_data(shader_path)));
 }
 
-WO_API wo_api wojeapi_store_bad_shader_uniforms_int(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_store_bad_shader_uniforms_int(wo_vm vm, wo_value args)
 {
     auto* bad_shader = &((jeecs::Editor::BadShadersUniform::ok_or_bad_shader*)wo_pointer(args + 0))->get_bad();
     auto& bad_uniform_var = bad_shader->m_vars[wo_string(args + 1)];
@@ -888,7 +888,7 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_int(wo_vm vm, wo_value args, siz
 
     return wo_ret_void(vm);
 }
-WO_API wo_api wojeapi_store_bad_shader_uniforms_float(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_store_bad_shader_uniforms_float(wo_vm vm, wo_value args)
 {
     auto* bad_shader = &((jeecs::Editor::BadShadersUniform::ok_or_bad_shader*)wo_pointer(args + 0))->get_bad();
     auto& bad_uniform_var = bad_shader->m_vars[wo_string(args + 1)];
@@ -898,7 +898,7 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_float(wo_vm vm, wo_value args, s
 
     return wo_ret_void(vm);
 }
-WO_API wo_api wojeapi_store_bad_shader_uniforms_float2(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_store_bad_shader_uniforms_float2(wo_vm vm, wo_value args)
 {
     auto* bad_shader = &((jeecs::Editor::BadShadersUniform::ok_or_bad_shader*)wo_pointer(args + 0))->get_bad();
     auto& bad_uniform_var = bad_shader->m_vars[wo_string(args + 1)];
@@ -909,7 +909,7 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_float2(wo_vm vm, wo_value args, 
 
     return wo_ret_void(vm);
 }
-WO_API wo_api wojeapi_store_bad_shader_uniforms_float3(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_store_bad_shader_uniforms_float3(wo_vm vm, wo_value args)
 {
     auto* bad_shader = &((jeecs::Editor::BadShadersUniform::ok_or_bad_shader*)wo_pointer(args + 0))->get_bad();
     auto& bad_uniform_var = bad_shader->m_vars[wo_string(args + 1)];
@@ -921,7 +921,7 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_float3(wo_vm vm, wo_value args, 
 
     return wo_ret_void(vm);
 }
-WO_API wo_api wojeapi_store_bad_shader_uniforms_float4(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_store_bad_shader_uniforms_float4(wo_vm vm, wo_value args)
 {
     auto* bad_shader = &((jeecs::Editor::BadShadersUniform::ok_or_bad_shader*)wo_pointer(args + 0))->get_bad();
     auto& bad_uniform_var = bad_shader->m_vars[wo_string(args + 1)];
@@ -974,7 +974,7 @@ bool _update_bad_shader_to_new_shader(jeecs::Renderer::Shaders* shaders, jeecs::
 }
 
 
-WO_API wo_api wojeapi_remove_bad_shader_name(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_remove_bad_shader_name(wo_vm vm, wo_value args)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
     wo_string_t shader_path = wo_string(args + 1);
@@ -999,7 +999,7 @@ WO_API wo_api wojeapi_remove_bad_shader_name(wo_vm vm, wo_value args, size_t arg
     return wo_ret_void(vm);
 }
 
-WO_API wo_api wojeapi_reload_texture_of_entity(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_reload_texture_of_entity(wo_vm vm, wo_value args)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
 
@@ -1027,7 +1027,7 @@ WO_API wo_api wojeapi_reload_texture_of_entity(wo_vm vm, wo_value args, size_t a
     }
     return wo_ret_bool(vm, true);
 }
-WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
 
@@ -1232,7 +1232,7 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args, size_t ar
     }
     return wo_ret_bool(vm, true);
 }
-WO_API wo_api wojeapi_get_bad_shader_list_of_entity(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_get_bad_shader_list_of_entity(wo_vm vm, wo_value args)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
     jeecs::Editor::BadShadersUniform* bad_uniform = entity->get_component<jeecs::Editor::BadShadersUniform>();
@@ -1251,12 +1251,12 @@ WO_API wo_api wojeapi_get_bad_shader_list_of_entity(wo_vm vm, wo_value args, siz
     }
     return wo_ret_val(vm, result);
 }
-WO_API wo_api wojeapi_setable_editor_system(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_setable_editor_system(wo_vm vm, wo_value args)
 {
     jeecs::DefaultEditorSystem::_editor_enabled = wo_bool(args + 0);
     return wo_ret_void(vm);
 }
-WO_API wo_api wojeapi_update_editor_mouse_pos(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_update_editor_mouse_pos(wo_vm vm, wo_value args)
 {
     jeecs::DefaultEditorSystem::_inputs.uniform_mouse_pos =
         jeecs::math::vec2{ wo_float(args + 0), wo_float(args + 1) };
@@ -1266,7 +1266,7 @@ WO_API wo_api wojeapi_update_editor_mouse_pos(wo_vm vm, wo_value args, size_t ar
 
     return wo_ret_void(vm);
 }
-WO_API wo_api wojeapi_get_editing_mover_mode(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_get_editing_mover_mode(wo_vm vm, wo_value args)
 {
     jeecs::game_world world(wo_pointer(args + 0));
     jeecs::DefaultEditorSystem* sys = world.get_system<jeecs::DefaultEditorSystem>();
@@ -1274,7 +1274,7 @@ WO_API wo_api wojeapi_get_editing_mover_mode(wo_vm vm, wo_value args, size_t arg
         return wo_ret_int(vm, (wo_integer_t)jeecs::Editor::EntityMover::mover_mode::nospecify);
     return wo_ret_int(vm, (wo_integer_t)sys->_mode);
 }
-WO_API wo_api wojeapi_set_editing_mover_mode(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_set_editing_mover_mode(wo_vm vm, wo_value args)
 {
     jeecs::game_world world(wo_pointer(args + 0));
     jeecs::DefaultEditorSystem* sys = world.get_system<jeecs::DefaultEditorSystem>();
@@ -1283,7 +1283,7 @@ WO_API wo_api wojeapi_set_editing_mover_mode(wo_vm vm, wo_value args, size_t arg
 
     return wo_ret_void(vm);
 }
-WO_API wo_api wojeapi_get_editing_coord_mode(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_get_editing_coord_mode(wo_vm vm, wo_value args)
 {
     jeecs::game_world world(wo_pointer(args + 0));
     jeecs::DefaultEditorSystem* sys = world.get_system<jeecs::DefaultEditorSystem>();
@@ -1291,7 +1291,7 @@ WO_API wo_api wojeapi_get_editing_coord_mode(wo_vm vm, wo_value args, size_t arg
         return wo_ret_int(vm, (wo_integer_t)jeecs::DefaultEditorSystem::coord_mode::global);
     return wo_ret_int(vm, (wo_integer_t)sys->_coord);
 }
-WO_API wo_api wojeapi_set_editing_coord_mode(wo_vm vm, wo_value args, size_t argc)
+WO_API wo_api wojeapi_set_editing_coord_mode(wo_vm vm, wo_value args)
 {
     jeecs::game_world world(wo_pointer(args + 0));
     jeecs::DefaultEditorSystem* sys = world.get_system<jeecs::DefaultEditorSystem>();
