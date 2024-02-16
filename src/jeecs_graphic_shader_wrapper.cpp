@@ -826,7 +826,7 @@ namespace vertex_out
 {   
     func create<VertexOutT>(vout : VertexOutT)=> vertex_out
     {
-        extern("libjoyecs", "jeecs_shader_create_shader_value_out")
+        extern("libjoyecs", "jeecs_shader_create_shader_value_out", repeat)
         func _create_shader_out<VertexOutT>(is_vertex: bool, out_val: VertexOutT)=> vertex_out;
 
         return _create_shader_out(true, vout);
@@ -850,7 +850,7 @@ namespace fragment_out
 {
     public func create<FragementOutT>(fout : FragementOutT)=> fragment_out
     {
-        extern("libjoyecs", "jeecs_shader_create_shader_value_out")
+        extern("libjoyecs", "jeecs_shader_create_shader_value_out", repeat)
         func _create_shader_out<FragementOutT>(is_vertex: bool, out_val: FragementOutT)=> fragment_out;
 
         return _create_shader_out(false, fout);
