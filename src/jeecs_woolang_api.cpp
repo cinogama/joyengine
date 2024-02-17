@@ -2510,7 +2510,7 @@ namespace je
 
     namespace file
     {
-        extern("libjoyecs", "wojeapi_read_file_all")
+        extern("libjoyecs", "wojeapi_read_file_all", slow)
         public func readall(path: string)=> option<string>;
     }
 
