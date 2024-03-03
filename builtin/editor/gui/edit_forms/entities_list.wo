@@ -118,7 +118,8 @@ namespace editor::gui::edit_forms
                     "Renderer::Shape",
                     "Renderer::Shaders",
                     "Renderer::Textures",
-                    "Light2D::Block",
+                    "Light2D::BlockShadow",
+                    "Light2D::SelfShadow",
                 ]);
             }
             Separator();
@@ -241,7 +242,7 @@ namespace editor::gui::edit_forms
                     "Renderer::Color",
                     "Light2D::Point",
                     "Light2D::Gain",
-                    "Light2D::Shadow",
+                    "Light2D::ShadowBuffer",
                 ])->>func(e)
                     {
                         // 设置默认的光照着色器
@@ -266,7 +267,7 @@ namespace editor::gui::edit_forms
                     "Renderer::Color",
                     "Light2D::Parallel",
                     "Light2D::Gain",
-                    "Light2D::Shadow",
+                    "Light2D::ShadowBuffer",
                 ])->>func(e)
                     {
                         // 设置默认的光照着色器

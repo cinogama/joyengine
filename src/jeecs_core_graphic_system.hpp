@@ -960,18 +960,23 @@ public let frag =
             jeecs::basic::resource<jeecs::graphic::texture> _no_shadow;
             jeecs::basic::resource<jeecs::graphic::vertex> _screen_vertex;
 
+            jeecs::basic::resource<jeecs::graphic::vertex> _sprite_shadow_vertex;
+
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_point_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_parallel_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_point_reverse_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_parallel_reverse_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_shape_point_pass;
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_shape_parallel_pass;
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sprite_point_pass;
+            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sprite_parallel_pass;
 
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_pass;
 
             DeferLight2DResource()
             {
                 using namespace jeecs::graphic;
+
                 _no_shadow = texture::create(1, 1, jegl_texture::format::RGBA);
                 _no_shadow->pix(0, 0).set(math::vec4(0.f, 0.f, 0.f, 0.f));
 
@@ -983,6 +988,15 @@ public let frag =
                         1.f, -1.f, 0.f,     1.f, 0.f,
                     },
                     { 3, 2 });
+
+                _sprite_shadow_vertex = vertex::create(jegl_vertex::TRIANGLESTRIP,
+                    {
+                        -0.5f, -0.5f, 0.0f,     0.0f, 1.0f,  1.0f,
+                        -0.5f, -0.5f, 0.0f,     0.0f, 0.0f,  0.0f,
+                        0.5f, -0.5f, 0.0f,      1.0f, 1.0f,  1.0f,
+                        0.5f, -0.5f, 0.0f,      1.0f, 0.0f,  0.0f,
+                    },
+                    { 3, 2, 1 });
 
                 // 用于消除阴影对象本身的阴影
                 _defer_light2d_shadow_sub_pass
@@ -1028,7 +1042,7 @@ public func frag(vf: v2f)
 }
 )") };
 
-                // 用于产生点光源的形状阴影（光在物体前）
+                // 用于产生点光源的形状阴影
                 _defer_light2d_shadow_shape_point_pass
                     = { shader::create("!/builtin/defer_light2d_shadow_point_shape.shader", R"(
 import je::shader;
@@ -1081,7 +1095,7 @@ public func frag(vf: v2f)
 }
 )") };
 
-                // 用于产生平行光源的形状阴影（光在物体前）
+                // 用于产生平行光源的形状阴影
                 _defer_light2d_shadow_shape_parallel_pass
                     = { shader::create("!/builtin/defer_light2d_shadow_parallel_shape.shader", R"(
 import je::shader;
@@ -1134,7 +1148,115 @@ public func frag(vf: v2f)
 }
 )") };
 
-                // 用于产生点光源的范围阴影（光在物体后）
+                // 用于产生点光源的精灵阴影
+                _defer_light2d_shadow_sprite_point_pass
+                    = { shader::create("!/builtin/defer_light2d_shadow_point_sprite.shader", R"(
+import je::shader;
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (SRC_ALPHA, ZERO);
+// MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
+CULL    (NONE);
+
+VAO_STRUCT! vin 
+{
+    vertex: float3,
+    uv: float2,
+    factor: float,
+};
+
+using v2f = struct{
+    pos: float4,
+    uv: float2,
+};
+
+using fout = struct{
+    shadow_factor: float4,
+};
+
+public func vert(v: vin)
+{
+    let light2d_vpos = je_v * float4::create(je_color->xyz, 1.);
+    let shadow_scale_factor = je_color->w;
+
+    let vpos = je_mv * float4::create(v.vertex, 1.);
+    let shadow_vpos = normalize((vpos->xyz / vpos->w) - (light2d_vpos->xyz / light2d_vpos->w)) * shadow_scale_factor;
+    
+    return v2f{
+        pos = je_p * float4::create((vpos->xyz / vpos->w) + shadow_vpos * v.factor, 1.),
+        uv = uvtrans(v.uv, je_tiling, je_offset),
+    };
+}
+public func frag(vf: v2f)
+{
+    let linear_clamp = sampler2d::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
+    let Main = uniform_texture:<texture2d>("Main", linear_clamp, 0);
+    let final_shadow = alphatest(
+        float4::create(
+            je_local_scale,     // NOTE: je_local_scale->x is shadow factor here.
+            texture(Main, vf.uv)->w));
+
+    return fout{
+        shadow_factor = float4::create(float3::one, final_shadow->x)
+    };
+}
+)") };
+
+                // 用于产生平行光源的精灵阴影
+                _defer_light2d_shadow_sprite_parallel_pass
+                    = { shader::create("!/builtin/defer_light2d_shadow_parallel_sprite.shader", R"(
+import je::shader;
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (SRC_ALPHA, ZERO);
+// MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
+CULL    (NONE);
+
+VAO_STRUCT! vin 
+{
+    vertex: float3,
+    uv: float2,
+    factor: float,
+};
+
+using v2f = struct{
+    pos: float4,
+    uv: float2,
+};
+
+using fout = struct{
+    shadow_factor: float4,
+};
+
+public func vert(v: vin)
+{
+    let light2d_vdir = (je_v * float4::create(je_color->xyz, 1.))->xyz - movement(je_v);
+    let shadow_scale_factor = je_color->w;
+
+    let vpos = je_mv * float4::create(v.vertex, 1.);
+    let shadow_vpos = normalize(light2d_vdir) * shadow_scale_factor;
+    
+    return v2f{
+        pos = je_p * float4::create((vpos->xyz / vpos->w) + shadow_vpos * v.factor, 1.),
+        uv = uvtrans(v.uv, je_tiling, je_offset),
+    };
+}
+public func frag(vf: v2f)
+{
+    let linear_clamp = sampler2d::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
+    let Main = uniform_texture:<texture2d>("Main", linear_clamp, 0);
+    let final_shadow = alphatest(
+        float4::create(
+            je_local_scale,     // NOTE: je_local_scale->x is shadow factor here.
+            texture(Main, vf.uv)->w));
+
+    return fout{
+        shadow_factor = float4::create(float3::one, final_shadow->x)
+    };
+}
+)") };
+
+                // 用于产生点光源的范围阴影
                 _defer_light2d_shadow_point_pass
                     = { shader::create("!/builtin/defer_light2d_shadow_point.shader", R"(
 import je::shader;
@@ -1177,7 +1299,7 @@ public func frag(_: v2f)
 }
 )") };
 
-                // 用于产生平行光源的范围阴影（光在物体后）
+                // 用于产生平行光源的范围阴影
                 _defer_light2d_shadow_parallel_pass
                     = { shader::create("!/builtin/defer_light2d_shadow_parallel.shader", R"(
 import je::shader;
@@ -1353,10 +1475,11 @@ public func frag(_: v2f)
         struct light2d_arch
         {
             const Translation* translation;
+            const Light2D::TopDown* topdown;
             const Light2D::Point* point;
             const Light2D::Parallel* parallel;
             const Light2D::Gain* gain;
-            const Light2D::Shadow* shadow;
+            const Light2D::ShadowBuffer* shadowbuffer;
             const Renderer::Color* color;
             const Shape* shape;
             const Shaders* shaders;
@@ -1366,14 +1489,20 @@ public func frag(_: v2f)
         struct block2d_arch
         {
             const Translation* translation;
-            const Light2D::Block* block;
+
+            const Light2D::BlockShadow* blockshadow;
+            const Light2D::SpriteShadow* spriteshadow;
+            const Light2D::SelfShadow* selfshadow;
+
             const Textures* textures;
             const Shape* shape;
         };
 
         std::vector<l2dcamera_arch> m_2dcamera_list;
         std::vector<light2d_arch> m_2dlight_list;
-        std::vector<block2d_arch> m_2dblock_list;
+
+        std::vector<block2d_arch> m_2dblock_z_list;
+        std::vector<block2d_arch> m_2dblock_y_list;
 
         struct default_uniform_buffer_data_t
         {
@@ -1397,7 +1526,7 @@ public func frag(_: v2f)
             WINDOWS_HEIGHT = (size_t)WINDOWS_SIZE.y;
 
             m_2dlight_list.clear();
-            m_2dblock_list.clear();
+            m_2dblock_z_list.clear();
             m_2dcamera_list.clear();
             m_renderer_list.clear();
 
@@ -1498,10 +1627,11 @@ public func frag(_: v2f)
 
             selector.anyof<Light2D::Point, Light2D::Parallel>();
             selector.exec([this](Translation& trans,
+                Light2D::TopDown* topdown,
                 Light2D::Point* point,
                 Light2D::Parallel* parallel,
                 Light2D::Gain* gain,
-                Light2D::Shadow* shadow,
+                Light2D::ShadowBuffer* shadowbuffer,
                 Renderer::Color* color,
                 Shape& shape,
                 Shaders& shads,
@@ -1509,21 +1639,21 @@ public func frag(_: v2f)
                 {
                     m_2dlight_list.emplace_back(
                         light2d_arch{
-                            &trans, point, parallel, gain, shadow,
+                            &trans, topdown, point, parallel, gain, shadowbuffer,
                             color, &shape, &shads, texs,
                         }
                     );
-                    if (shadow != nullptr)
+                    if (shadowbuffer != nullptr)
                     {
                         bool generate_new_framebuffer =
-                            shadow->shadow_buffer == nullptr
-                            || shadow->shadow_buffer->width() != shadow->resolution_width
-                            || shadow->shadow_buffer->height() != shadow->resolution_height;
+                            shadowbuffer->buffer == nullptr
+                            || shadowbuffer->buffer->width() != shadowbuffer->resolution_width
+                            || shadowbuffer->buffer->height() != shadowbuffer->resolution_height;
 
-                        if (generate_new_framebuffer && shadow->resolution_width > 0 && shadow->resolution_height > 0)
+                        if (generate_new_framebuffer && shadowbuffer->resolution_width > 0 && shadowbuffer->resolution_height > 0)
                         {
-                            shadow->shadow_buffer = graphic::framebuffer::create(
-                                shadow->resolution_width, shadow->resolution_height,
+                            shadowbuffer->buffer = graphic::framebuffer::create(
+                                shadowbuffer->resolution_width, shadowbuffer->resolution_height,
                                 {
                                     jegl_texture::format::RGBA,
                                     // Only store shadow value to R-pass
@@ -1533,40 +1663,68 @@ public func frag(_: v2f)
                     }
                 });
 
-            selector.exec([this](Translation& trans, Light2D::Block& block, Textures* texture, Shape* shape)
+            selector.anyof<
+                Light2D::BlockShadow,
+                Light2D::SpriteShadow,
+                Light2D::SelfShadow>();
+
+            selector.exec([this](Translation& trans,
+                Light2D::BlockShadow* blockshadow,
+                Light2D::SpriteShadow* spriteshadow,
+                Light2D::SelfShadow* selfshadow,
+                Textures* texture,
+                Shape* shape)
                 {
-                    if (block.mesh.m_block_mesh == nullptr)
+                    if (blockshadow != nullptr)
                     {
-                        std::vector<float> _vertex_buffer;
-                        if (!block.mesh.m_block_points.empty())
+                        if (blockshadow->mesh.m_block_mesh == nullptr)
                         {
-                            for (auto& point : block.mesh.m_block_points)
+                            std::vector<float> _vertex_buffer;
+                            if (!blockshadow->mesh.m_block_points.empty())
                             {
-                                _vertex_buffer.insert(_vertex_buffer.end(),
-                                    {
-                                        point.x, point.y, 0.f, 0.f,
-                                        point.x, point.y, 0.f, 1.f,
-                                    });
+                                for (auto& point : blockshadow->mesh.m_block_points)
+                                {
+                                    _vertex_buffer.insert(_vertex_buffer.end(),
+                                        {
+                                            point.x, point.y, 0.f, 0.f,
+                                            point.x, point.y, 0.f, 1.f,
+                                        });
+                                }
+                                blockshadow->mesh.m_block_mesh = jeecs::graphic::vertex::create(
+                                    jegl_vertex::type::TRIANGLESTRIP,
+                                    _vertex_buffer, { 3,1 });
                             }
-                            block.mesh.m_block_mesh = jeecs::graphic::vertex::create(
-                                jegl_vertex::type::TRIANGLESTRIP,
-                                _vertex_buffer, { 3,1 });
+                            else
+                                blockshadow->mesh.m_block_mesh = nullptr;
                         }
-                        else
-                            block.mesh.m_block_mesh = nullptr;
                     }
 
-                    m_2dblock_list.push_back(
+                    m_2dblock_z_list.push_back(
                         block2d_arch{
-                                &trans, &block, texture, shape
+                                &trans,
+                                blockshadow,
+                                spriteshadow,
+                                selfshadow,
+                                texture,
+                                shape
                         }
                     );
                 });
 
-            std::sort(m_2dblock_list.begin(), m_2dblock_list.end(),
-                [](const block2d_arch& a, const block2d_arch& b) {
+            std::sort(m_2dblock_z_list.begin(), m_2dblock_z_list.end(),
+                [](const block2d_arch& a, const block2d_arch& b)
+                {
                     return a.translation->world_position.z > b.translation->world_position.z;
                 });
+            
+            m_2dblock_y_list = m_2dblock_z_list;
+
+            std::sort(m_2dblock_y_list.begin(), m_2dblock_y_list.end(),
+                [](const block2d_arch& a, const block2d_arch& b)
+                {
+                    return a.translation->world_position.y < b.translation->world_position.y;
+                });
+
             std::sort(m_2dcamera_list.begin(), m_2dcamera_list.end());
             std::sort(m_renderer_list.begin(), m_renderer_list.end());
 
@@ -1661,9 +1819,9 @@ public func frag(_: v2f)
 
                         _2dlight_after_culling.push_back(&lightarch);
 
-                        if (lightarch.shadow != nullptr)
+                        if (lightarch.shadowbuffer != nullptr)
                         {
-                            auto light2d_shadow_aim_buffer = lightarch.shadow->shadow_buffer.get();
+                            auto light2d_shadow_aim_buffer = lightarch.shadowbuffer->buffer.get();
                             jegl_rendchain* light2d_shadow_rend_chain = jegl_branch_new_chain(
                                 current_camera.branchPipeline,
                                 light2d_shadow_aim_buffer->resouce(), 0, 0,
@@ -1688,19 +1846,26 @@ public func frag(_: v2f)
                                 lightarch.parallel != nullptr ?
                                 m_defer_light2d_host._defer_light2d_shadow_shape_parallel_pass :
                                 m_defer_light2d_host._defer_light2d_shadow_shape_point_pass;
+                            const auto& sprite_shadow_pass =
+                                lightarch.parallel != nullptr ?
+                                m_defer_light2d_host._defer_light2d_shadow_sprite_parallel_pass :
+                                m_defer_light2d_host._defer_light2d_shadow_sprite_point_pass;
 
                             const auto& sub_shadow_pass = m_defer_light2d_host._defer_light2d_shadow_sub_pass;
-                            const size_t block_entity_count = m_2dblock_list.size();
+                            const size_t block_entity_count = m_2dblock_y_list.size();
 
                             std::list<block2d_arch*> block_in_current_layer;
 
-                            auto block2d_iter = m_2dblock_list.begin();
-                            auto block2d_end = m_2dblock_list.end();
+                            auto block2d_iter = lightarch.topdown == nullptr ? m_2dblock_z_list.begin() : m_2dblock_y_list.begin();
+                            auto block2d_end = lightarch.topdown == nullptr ? m_2dblock_z_list.end() : m_2dblock_y_list.end();
 
                             for (; block2d_iter != block2d_end; ++block2d_iter)
                             {
                                 auto& blockarch = *block2d_iter;
-                                int64_t current_layer = (int64_t)(blockarch.translation->world_position.z * 100.f);
+
+                                int64_t current_layer = lightarch.topdown == nullptr 
+                                    ? (int64_t)(blockarch.translation->world_position.z * 100.f)
+                                    : (int64_t)(blockarch.translation->world_position.y * 100.f);
 
                                 const float block_range = 0.5f *
                                     get_entity_size(*blockarch.translation, *blockarch.shape).length();
@@ -1709,96 +1874,25 @@ public func frag(_: v2f)
                                     blockarch.translation->world_position -
                                     lightarch.translation->world_position
                                     ).length();
+
                                 if (lightarch.parallel != nullptr || l2b_distance <= block_range + light_range)
                                 {
                                     block_in_current_layer.push_back(&blockarch);
-                                    if (blockarch.block->shadow > 0.f)
+
+                                    bool block_is_behind_light = false;
+
+                                    if (blockarch.blockshadow != nullptr && blockarch.blockshadow->factor > 0.f)
                                     {
-                                        if (lightarch.shadow->shape_offset > 0.f
-                                            && current_layer > lightarch.translation->world_position.z * 100.f)
+                                        if (blockarch.blockshadow->mesh.m_block_mesh != nullptr)
                                         {
-                                            // 物体比光源更靠近摄像机，且形状阴影工作被允许
-                                            auto texture_group = jegl_rchain_allocate_texture_group(light2d_shadow_rend_chain);
-                                            if (blockarch.textures != nullptr)
-                                            {
-                                                jeecs::graphic::texture* main_texture = blockarch.textures->get_texture(0).get();
-                                                if (main_texture != nullptr)
-                                                    jegl_rchain_bind_texture(light2d_shadow_rend_chain, texture_group, 0, main_texture->resouce());
-                                                else
-                                                    jegl_rchain_bind_texture(light2d_shadow_rend_chain, texture_group, 0, m_default_resources.default_texture->resouce());
-                                            }
-
-                                            jeecs::graphic::vertex* using_shape =
-                                                (blockarch.shape == nullptr || blockarch.shape->vertex == nullptr)
-                                                ? m_default_resources.default_shape_quad.get()
-                                                : blockarch.shape->vertex.get();
-
-                                            auto* rchain_draw_action = jegl_rchain_draw(
-                                                light2d_shadow_rend_chain,
-                                                shape_shadow_pass->resouce(),
-                                                using_shape->resouce(),
-                                                texture_group);
-                                            auto* builtin_uniform = shape_shadow_pass->m_builtin;
-
-                                            float MAT4_MODEL[4][4];
-                                            float MAT4_LOCAL_SCALE[4][4] = {
-                                                {blockarch.translation->local_scale.x,0.0f,0.0f,0.0f},
-                                                {0.0f,blockarch.translation->local_scale.y,0.0f,0.0f},
-                                                {0.0f,0.0f,blockarch.translation->local_scale.z,0.0f},
-                                                {0.0f,0.0f,0.0f,1.0f} };
-                                            math::mat4xmat4(MAT4_MODEL, blockarch.translation->object2world, MAT4_LOCAL_SCALE);
-                                            math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
-                                            math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
-
-                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, MAT4_MODEL);
-                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, MAT4_MV);
-                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mvp, float4x4, MAT4_MVP);
-
-                                            // 通过 local_scale.x 传递阴影权重，.y .z 通道预留
-                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform,
-                                                local_scale, float3,
-                                                blockarch.block->shadow,
-                                                0.f,
-                                                0.f);
-
-                                            if (blockarch.textures != nullptr)
-                                            {
-                                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, tiling, float2,
-                                                    blockarch.textures->tiling.x, blockarch.textures->tiling.y);
-                                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, offset, float2,
-                                                    blockarch.textures->offset.x, blockarch.textures->offset.y);
-                                            }
-
-                                            // 通过 je_color 变量传递着色器的位置或方向
-                                            if (lightarch.parallel != nullptr)
-                                            {
-                                                jeecs::math::vec3 rotated_light_dir =
-                                                    lightarch.translation->world_rotation * jeecs::math::vec3(0.f, -1.f, 0.f);
-
-                                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
-                                                    rotated_light_dir.x,
-                                                    rotated_light_dir.y,
-                                                    rotated_light_dir.z,
-                                                    lightarch.shadow->shape_offset);
-                                            }
-                                            else
-                                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
-                                                    lightarch.translation->world_position.x,
-                                                    lightarch.translation->world_position.y,
-                                                    lightarch.translation->world_position.z,
-                                                    lightarch.shadow->shape_offset);
-                                        }
-                                        else if (blockarch.block->mesh.m_block_mesh != nullptr)
-                                        {
-                                            // 物体比光源更远离摄像机，或者形状阴影被禁用
-                                            auto& using_shadow_pass_shader = blockarch.block->reverse
+                                            auto& using_shadow_pass_shader = blockarch.blockshadow->reverse
                                                 ? reverse_normal_shadow_pass
                                                 : normal_shadow_pass;
 
                                             auto* rchain_draw_action = jegl_rchain_draw(
                                                 light2d_shadow_rend_chain,
                                                 using_shadow_pass_shader->resouce(),
-                                                blockarch.block->mesh.m_block_mesh->resouce(),
+                                                blockarch.blockshadow->mesh.m_block_mesh->resouce(),
                                                 SIZE_MAX);
                                             auto* builtin_uniform = using_shadow_pass_shader->m_builtin;
 
@@ -1818,7 +1912,7 @@ public func frag(_: v2f)
 
                                             // 通过 local_scale.x 传递阴影权重，.y .z 通道预留
                                             JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, local_scale, float3,
-                                                blockarch.block->shadow,
+                                                blockarch.blockshadow->factor,
                                                 0.f,
                                                 0.f);
 
@@ -1840,12 +1934,100 @@ public func frag(_: v2f)
                                                     1.f);
                                         }
                                     }
+                                    if (blockarch.spriteshadow != nullptr && blockarch.spriteshadow->factor > 0.f)
+                                    {
+                                        auto texture_group = jegl_rchain_allocate_texture_group(light2d_shadow_rend_chain);
+                                        if (blockarch.textures != nullptr)
+                                        {
+                                            jeecs::graphic::texture* main_texture = blockarch.textures->get_texture(0).get();
+                                            if (main_texture != nullptr)
+                                                jegl_rchain_bind_texture(light2d_shadow_rend_chain, texture_group, 0, main_texture->resouce());
+                                            else
+                                                jegl_rchain_bind_texture(light2d_shadow_rend_chain, texture_group, 0, m_default_resources.default_texture->resouce());
+                                        }
+
+                                        jeecs::graphic::vertex* using_shape =
+                                            blockarch.spriteshadow->projection_mode
+                                            ?
+                                            (
+                                                (blockarch.shape == nullptr || blockarch.shape->vertex == nullptr)
+                                                ? m_default_resources.default_shape_quad.get()
+                                                : blockarch.shape->vertex.get()
+                                                )
+                                            :
+                                            m_defer_light2d_host._sprite_shadow_vertex.get()
+                                            ;
+
+                                        const auto& used_pass = blockarch.spriteshadow->projection_mode
+                                            ? shape_shadow_pass
+                                            : sprite_shadow_pass;
+
+                                        auto* rchain_draw_action = jegl_rchain_draw(
+                                            light2d_shadow_rend_chain,
+                                            used_pass->resouce(),
+                                            using_shape->resouce(),
+                                            texture_group);
+
+                                        auto* builtin_uniform = used_pass->m_builtin;
+
+                                        float MAT4_MODEL[4][4];
+                                        float MAT4_LOCAL_SCALE[4][4] = {
+                                            {blockarch.translation->local_scale.x,0.0f,0.0f,0.0f},
+                                            {0.0f,blockarch.translation->local_scale.y,0.0f,0.0f},
+                                            {0.0f,0.0f,blockarch.translation->local_scale.z,0.0f},
+                                            {0.0f,0.0f,0.0f,1.0f}
+                                        };
+
+                                        math::mat4xmat4(MAT4_MODEL, blockarch.translation->object2world, MAT4_LOCAL_SCALE);
+                                        math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
+                                        math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
+
+                                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, MAT4_MODEL);
+                                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, MAT4_MV);
+                                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mvp, float4x4, MAT4_MVP);
+
+                                        // 通过 local_scale.x 传递阴影权重，.y .z 通道预留
+                                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform,
+                                            local_scale, float3,
+                                            blockarch.spriteshadow->factor,
+                                            0.f,
+                                            0.f);
+
+                                        if (blockarch.textures != nullptr)
+                                        {
+                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, tiling, float2,
+                                                blockarch.textures->tiling.x, blockarch.textures->tiling.y);
+                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, offset, float2,
+                                                blockarch.textures->offset.x, blockarch.textures->offset.y);
+                                        }
+
+                                        // 通过 je_color 变量传递着色器的位置或方向
+                                        if (lightarch.parallel != nullptr)
+                                        {
+                                            jeecs::math::vec3 rotated_light_dir =
+                                                lightarch.translation->world_rotation * jeecs::math::vec3(0.f, -1.f, 0.f);
+
+                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
+                                                rotated_light_dir.x,
+                                                rotated_light_dir.y,
+                                                rotated_light_dir.z,
+                                                blockarch.spriteshadow->distance);
+                                        }
+                                        else
+                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
+                                                lightarch.translation->world_position.x,
+                                                lightarch.translation->world_position.y,
+                                                lightarch.translation->world_position.z,
+                                                blockarch.spriteshadow->distance);
+                                    }
                                 }
 
                                 // 如果下一个阴影将会在不同层级，或者当前阴影是最后一个阴影，则更新阴影覆盖
                                 auto next_block2d_iter = block2d_iter + 1;
                                 if (next_block2d_iter == block2d_end
-                                    || current_layer != (int64_t)(next_block2d_iter->translation->world_position.z * 100.f))
+                                    || current_layer != (int64_t)((lightarch.topdown == nullptr 
+                                        ? next_block2d_iter->translation->world_position.z 
+                                        : next_block2d_iter->translation->world_position.y) * 100.f))
                                 {
                                     for (auto* block_in_layer : block_in_current_layer)
                                     {
@@ -1866,7 +2048,7 @@ public func frag(_: v2f)
                                             : block_in_layer->shape->vertex.get();
 
                                         // 如果物体被指定为不需要cover，那么就不绘制
-                                        if (block_in_layer->block->nocover == false)
+                                        if (block_in_layer->selfshadow != nullptr)
                                         {
                                             auto* rchain_draw_action = jegl_rchain_draw(
                                                 light2d_shadow_rend_chain,
@@ -1895,14 +2077,18 @@ public func frag(_: v2f)
                                                 0.f,
                                                 0.f);*/
 
-                                            if (block_in_layer->translation->world_position.z < lightarch.translation->world_position.z)
-                                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
-                                                    block_in_layer->block->shadow,
-                                                    block_in_layer->block->shadow,
-                                                    block_in_layer->block->shadow,
-                                                    block_in_layer->block->shadow);
-                                            else
+                                            if (block_in_layer->selfshadow->auto_uncover &&
+                                                (lightarch.topdown == nullptr 
+                                                    ? block_in_layer->translation->world_position.z >= lightarch.translation->world_position.z
+                                                    : block_in_layer->translation->world_position.y >= lightarch.translation->world_position.y))
                                                 JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4, 0.f, 0.f, 0.f, 0.f);
+                                            else
+                                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
+                                                    block_in_layer->selfshadow->factor,
+                                                    block_in_layer->selfshadow->factor,
+                                                    block_in_layer->selfshadow->factor,
+                                                    block_in_layer->selfshadow->factor);
+
 
                                             if (block_in_layer->textures != nullptr)
                                             {
@@ -1913,7 +2099,6 @@ public func frag(_: v2f)
                                     }
                                     block_in_current_layer.clear();
                                 }
-
                             }
                         }
                     }
@@ -2115,8 +2300,8 @@ public func frag(_: v2f)
 
                         jegl_rchain_bind_texture(light2d_light_effect_rend_chain, texture_group,
                             JE_LIGHT2D_DEFER_0 + 4,
-                            light2d.shadow != nullptr
-                            ? light2d.shadow->shadow_buffer->get_attachment(0)->resouce()
+                            light2d.shadowbuffer != nullptr
+                            ? light2d.shadowbuffer->buffer->get_attachment(0)->resouce()
                             : m_defer_light2d_host._no_shadow->resouce());
 
                         // 开始渲染光照！
@@ -2172,9 +2357,9 @@ public func frag(_: v2f)
                                 light2d.translation->local_scale.y,
                                 light2d.translation->local_scale.z);
 
-                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, tiling, float2, 
+                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, tiling, float2,
                                 _using_tiling->x, _using_tiling->y);
-                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, offset, float2, 
+                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, offset, float2,
                                 _using_offset->x, _using_offset->y);
 
                             // 传入Light2D所需的颜色、衰减信息
@@ -2190,10 +2375,10 @@ public func frag(_: v2f)
                                 light_color.z,
                                 light_color.w);
 
-                            if (light2d.shadow != nullptr)
+                            if (light2d.shadowbuffer != nullptr)
                                 JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, light2d_resolution, float2,
-                                    (float)light2d.shadow->resolution_width,
-                                    (float)light2d.shadow->resolution_height);
+                                    (float)light2d.shadowbuffer->resolution_width,
+                                    (float)light2d.shadowbuffer->resolution_height);
                             else
                                 JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, light2d_resolution, float2,
                                     (float)1.f,
@@ -2345,149 +2530,149 @@ public func frag(_: v2f)
 
                                     auto update_and_apply_component_frame_data =
                                         [](const game_entity& e, jeecs::Animation2D::FrameAnimation::animation_data_set_list::frame_data& frame)
-                                    {
-                                        for (auto& cdata : frame.m_component_data)
                                         {
-                                            if (cdata.m_entity_cache == e)
-                                                continue;
-
-                                            cdata.m_entity_cache = e;
-
-                                            assert(cdata.m_component_type != nullptr && cdata.m_member_info != nullptr);
-
-                                            auto* component_addr = je_ecs_world_entity_get_component(&e, cdata.m_component_type);
-                                            if (component_addr == nullptr)
-                                                // 没有这个组件，忽略之
-                                                continue;
-
-                                            auto* member_addr = (void*)(cdata.m_member_info->m_member_offset + (intptr_t)component_addr);
-
-                                            // 在这里做好缓存和检查，不要每次都重新获取组件地址和检查类型
-                                            cdata.m_member_addr_cache = member_addr;
-
-                                            switch (cdata.m_member_value.m_type)
+                                            for (auto& cdata : frame.m_component_data)
                                             {
-                                            case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::INT:
-                                                if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<int>())
-                                                {
-                                                    jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'int', but member is '%s'.",
-                                                        cdata.m_component_type->m_typename,
-                                                        cdata.m_member_info->m_member_name,
-                                                        cdata.m_member_info->m_member_type->m_typename);
-                                                    cdata.m_member_addr_cache = nullptr;
-                                                }
-                                                break;
-                                            case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::FLOAT:
-                                                if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<float>())
-                                                {
-                                                    jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'float', but member is '%s'.",
-                                                        cdata.m_component_type->m_typename,
-                                                        cdata.m_member_info->m_member_name,
-                                                        cdata.m_member_info->m_member_type->m_typename);
-                                                    cdata.m_member_addr_cache = nullptr;
-                                                }
-                                                break;
-                                            case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC2:
-                                                if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec2>())
-                                                {
-                                                    jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'vec2', but member is '%s'.",
-                                                        cdata.m_component_type->m_typename,
-                                                        cdata.m_member_info->m_member_name,
-                                                        cdata.m_member_info->m_member_type->m_typename);
-                                                    cdata.m_member_addr_cache = nullptr;
-                                                }
-                                                break;
-                                            case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC3:
-                                                if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec3>())
-                                                {
-                                                    jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'vec3', but member is '%s'.",
-                                                        cdata.m_component_type->m_typename,
-                                                        cdata.m_member_info->m_member_name,
-                                                        cdata.m_member_info->m_member_type->m_typename);
-                                                    cdata.m_member_addr_cache = nullptr;
-                                                }
-                                                break;
-                                            case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC4:
-                                                if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec4>())
-                                                {
-                                                    jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'vec4', but member is '%s'.",
-                                                        cdata.m_component_type->m_typename,
-                                                        cdata.m_member_info->m_member_name,
-                                                        cdata.m_member_info->m_member_type->m_typename);
-                                                    cdata.m_member_addr_cache = nullptr;
-                                                }
-                                                break;
-                                            case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::QUAT4:
-                                                if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::quat>())
-                                                {
-                                                    jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'quat', but member is '%s'.",
-                                                        cdata.m_component_type->m_typename,
-                                                        cdata.m_member_info->m_member_name,
-                                                        cdata.m_member_info->m_member_type->m_typename);
-                                                    cdata.m_member_addr_cache = nullptr;
-                                                }
-                                                break;
-                                            default:
-                                                jeecs::debug::logerr("Bad animation data type(%d) when trying set data of component '%s''s member '%s', please check.",
-                                                    (int)cdata.m_member_value.m_type,
-                                                    cdata.m_component_type->m_typename,
-                                                    cdata.m_member_info->m_member_name);
-                                                cdata.m_member_addr_cache = nullptr;
-                                                break;
-                                            }
-                                        }
-                                        for (auto& cdata : frame.m_component_data)
-                                        {
-                                            if (cdata.m_member_addr_cache == nullptr)
-                                                continue; // Invalid! skip this component.
+                                                if (cdata.m_entity_cache == e)
+                                                    continue;
 
-                                            switch (cdata.m_member_value.m_type)
-                                            {
-                                            case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::INT:
-                                                if (cdata.m_offset_mode)
-                                                    *(int*)cdata.m_member_addr_cache += cdata.m_member_value.m_value.i32;
-                                                else
-                                                    *(int*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.i32;
-                                                break;
-                                            case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::FLOAT:
-                                                if (cdata.m_offset_mode)
-                                                    *(float*)cdata.m_member_addr_cache += cdata.m_member_value.m_value.f32;
-                                                else
-                                                    *(float*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.f32;
-                                                break;
-                                            case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC2:
-                                                if (cdata.m_offset_mode)
-                                                    *(math::vec2*)cdata.m_member_addr_cache += cdata.m_member_value.m_value.v2;
-                                                else
-                                                    *(math::vec2*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.v2;
-                                                break;
-                                            case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC3:
-                                                if (cdata.m_offset_mode)
-                                                    *(math::vec3*)cdata.m_member_addr_cache += cdata.m_member_value.m_value.v3;
-                                                else
-                                                    *(math::vec3*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.v3;
-                                                break;
-                                            case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC4:
-                                                if (cdata.m_offset_mode)
-                                                    *(math::vec4*)cdata.m_member_addr_cache += cdata.m_member_value.m_value.v4;
-                                                else
-                                                    *(math::vec4*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.v4;
-                                                break;
-                                            case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::QUAT4:
-                                                if (cdata.m_offset_mode)
-                                                    *(math::quat*)cdata.m_member_addr_cache = *(math::quat*)cdata.m_member_addr_cache * cdata.m_member_value.m_value.q4;
-                                                else
-                                                    *(math::quat*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.q4;
-                                                break;
-                                            default:
-                                                jeecs::debug::logerr("Bad animation data type(%d) when trying set data of component '%s''s member '%s', please check.",
-                                                    (int)cdata.m_member_value.m_type,
-                                                    cdata.m_component_type->m_typename,
-                                                    cdata.m_member_info->m_member_name);
-                                                break;
+                                                cdata.m_entity_cache = e;
+
+                                                assert(cdata.m_component_type != nullptr && cdata.m_member_info != nullptr);
+
+                                                auto* component_addr = je_ecs_world_entity_get_component(&e, cdata.m_component_type);
+                                                if (component_addr == nullptr)
+                                                    // 没有这个组件，忽略之
+                                                    continue;
+
+                                                auto* member_addr = (void*)(cdata.m_member_info->m_member_offset + (intptr_t)component_addr);
+
+                                                // 在这里做好缓存和检查，不要每次都重新获取组件地址和检查类型
+                                                cdata.m_member_addr_cache = member_addr;
+
+                                                switch (cdata.m_member_value.m_type)
+                                                {
+                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::INT:
+                                                    if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<int>())
+                                                    {
+                                                        jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'int', but member is '%s'.",
+                                                            cdata.m_component_type->m_typename,
+                                                            cdata.m_member_info->m_member_name,
+                                                            cdata.m_member_info->m_member_type->m_typename);
+                                                        cdata.m_member_addr_cache = nullptr;
+                                                    }
+                                                    break;
+                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::FLOAT:
+                                                    if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<float>())
+                                                    {
+                                                        jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'float', but member is '%s'.",
+                                                            cdata.m_component_type->m_typename,
+                                                            cdata.m_member_info->m_member_name,
+                                                            cdata.m_member_info->m_member_type->m_typename);
+                                                        cdata.m_member_addr_cache = nullptr;
+                                                    }
+                                                    break;
+                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC2:
+                                                    if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec2>())
+                                                    {
+                                                        jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'vec2', but member is '%s'.",
+                                                            cdata.m_component_type->m_typename,
+                                                            cdata.m_member_info->m_member_name,
+                                                            cdata.m_member_info->m_member_type->m_typename);
+                                                        cdata.m_member_addr_cache = nullptr;
+                                                    }
+                                                    break;
+                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC3:
+                                                    if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec3>())
+                                                    {
+                                                        jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'vec3', but member is '%s'.",
+                                                            cdata.m_component_type->m_typename,
+                                                            cdata.m_member_info->m_member_name,
+                                                            cdata.m_member_info->m_member_type->m_typename);
+                                                        cdata.m_member_addr_cache = nullptr;
+                                                    }
+                                                    break;
+                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC4:
+                                                    if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec4>())
+                                                    {
+                                                        jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'vec4', but member is '%s'.",
+                                                            cdata.m_component_type->m_typename,
+                                                            cdata.m_member_info->m_member_name,
+                                                            cdata.m_member_info->m_member_type->m_typename);
+                                                        cdata.m_member_addr_cache = nullptr;
+                                                    }
+                                                    break;
+                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::QUAT4:
+                                                    if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::quat>())
+                                                    {
+                                                        jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'quat', but member is '%s'.",
+                                                            cdata.m_component_type->m_typename,
+                                                            cdata.m_member_info->m_member_name,
+                                                            cdata.m_member_info->m_member_type->m_typename);
+                                                        cdata.m_member_addr_cache = nullptr;
+                                                    }
+                                                    break;
+                                                default:
+                                                    jeecs::debug::logerr("Bad animation data type(%d) when trying set data of component '%s''s member '%s', please check.",
+                                                        (int)cdata.m_member_value.m_type,
+                                                        cdata.m_component_type->m_typename,
+                                                        cdata.m_member_info->m_member_name);
+                                                    cdata.m_member_addr_cache = nullptr;
+                                                    break;
+                                                }
                                             }
-                                        }
-                                    };
+                                            for (auto& cdata : frame.m_component_data)
+                                            {
+                                                if (cdata.m_member_addr_cache == nullptr)
+                                                    continue; // Invalid! skip this component.
+
+                                                switch (cdata.m_member_value.m_type)
+                                                {
+                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::INT:
+                                                    if (cdata.m_offset_mode)
+                                                        *(int*)cdata.m_member_addr_cache += cdata.m_member_value.m_value.i32;
+                                                    else
+                                                        *(int*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.i32;
+                                                    break;
+                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::FLOAT:
+                                                    if (cdata.m_offset_mode)
+                                                        *(float*)cdata.m_member_addr_cache += cdata.m_member_value.m_value.f32;
+                                                    else
+                                                        *(float*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.f32;
+                                                    break;
+                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC2:
+                                                    if (cdata.m_offset_mode)
+                                                        *(math::vec2*)cdata.m_member_addr_cache += cdata.m_member_value.m_value.v2;
+                                                    else
+                                                        *(math::vec2*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.v2;
+                                                    break;
+                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC3:
+                                                    if (cdata.m_offset_mode)
+                                                        *(math::vec3*)cdata.m_member_addr_cache += cdata.m_member_value.m_value.v3;
+                                                    else
+                                                        *(math::vec3*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.v3;
+                                                    break;
+                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC4:
+                                                    if (cdata.m_offset_mode)
+                                                        *(math::vec4*)cdata.m_member_addr_cache += cdata.m_member_value.m_value.v4;
+                                                    else
+                                                        *(math::vec4*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.v4;
+                                                    break;
+                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::QUAT4:
+                                                    if (cdata.m_offset_mode)
+                                                        *(math::quat*)cdata.m_member_addr_cache = *(math::quat*)cdata.m_member_addr_cache * cdata.m_member_value.m_value.q4;
+                                                    else
+                                                        *(math::quat*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.q4;
+                                                    break;
+                                                default:
+                                                    jeecs::debug::logerr("Bad animation data type(%d) when trying set data of component '%s''s member '%s', please check.",
+                                                        (int)cdata.m_member_value.m_type,
+                                                        cdata.m_component_type->m_typename,
+                                                        cdata.m_member_info->m_member_name);
+                                                    break;
+                                                }
+                                            }
+                                        };
 
                                     if (animation.m_current_frame_index == SIZE_MAX || animation.m_last_speed != frame_animation.speed)
                                     {

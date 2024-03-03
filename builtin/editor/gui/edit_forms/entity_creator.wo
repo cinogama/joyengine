@@ -307,9 +307,17 @@ namespace editor::gui::edit_forms
                     context->add_components("Renderer::Textures");
                 }
 
-                if (MenuItem("2D阴影"))
+                if (MenuItem("2D阴影（平行）"))
                 {
-                    context->add_components("Light2D::Block");
+                    context->add_components("Light2D::BlockShadow");
+                }
+                if (MenuItem("2D阴影（精灵图）"))
+                {
+                    context->add_components("Light2D::SpriteShadow");
+                }
+                if (MenuItem("2D阴影（自身）"))
+                {
+                    context->add_components("Light2D::SelfShadow");
                 }
 
                 if (MenuItem("摄像机（透视）"))
@@ -336,10 +344,17 @@ namespace editor::gui::edit_forms
                     context->add_components("Renderer::Shaders");
                 }
 
-                if (MenuItem("2D光源"))
+                if (MenuItem("2D光源（点）"))
                 {
-                    context->add_components("Light2D::Color");
-                    context->add_components("Light2D::Shadow");
+                    context->add_components("Light2D::Point");
+                    context->add_components("Light2D::Gain");
+                    context->add_components("Light2D::ShadowBuffer");
+                }
+                if (MenuItem("2D光源（平行）"))
+                {
+                    context->add_components("Light2D::Parallel");
+                    context->add_components("Light2D::Gain");
+                    context->add_components("Light2D::ShadowBuffer");
                 }
 
                 if (MenuItem("2D物理（静态）"))

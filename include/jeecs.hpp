@@ -9,7 +9,7 @@
 #include "wo.h"
 
 #define JE_VERSION_WRAP(A, B, C) #A "." #B "." #C
-#define JE_CORE_VERSION JE_VERSION_WRAP(4, 4, 13)
+#define JE_CORE_VERSION JE_VERSION_WRAP(4, 5, 0)
 
 #include <cstdint>
 #include <cstring>
@@ -8441,6 +8441,10 @@ namespace jeecs
     }
     namespace Light2D
     {
+        struct TopDown
+        {
+
+        };
         struct Gain
         {
             float gain = 1.0f;
@@ -8463,27 +8467,24 @@ namespace jeecs
         {
 
         };
-        struct Shadow
+        struct ShadowBuffer
         {
             size_t resolution_width = 1024;
             size_t resolution_height = 768;
-            float shape_offset = 0.f;
 
-            basic::resource<graphic::framebuffer> shadow_buffer = nullptr;
+            basic::resource<graphic::framebuffer> buffer = nullptr;
 
-            Shadow() = default;
-            Shadow(const Shadow& another)
+            ShadowBuffer() = default;
+            ShadowBuffer(const ShadowBuffer& another)
                 : resolution_width(another.resolution_width)
                 , resolution_height(another.resolution_width)
-                , shape_offset(another.shape_offset)
             {}
-            Shadow(Shadow&&) = default;
+            ShadowBuffer(ShadowBuffer&&) = default;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(guard, &Shadow::resolution_width, "resolution_width");
-                typing::register_member(guard, &Shadow::resolution_height, "resolution_height");
-                typing::register_member(guard, &Shadow::shape_offset, "shape_offset");
+                typing::register_member(guard, &ShadowBuffer::resolution_width, "resolution_width");
+                typing::register_member(guard, &ShadowBuffer::resolution_height, "resolution_height");
             }
         };
         struct CameraPostPass
@@ -8502,7 +8503,7 @@ namespace jeecs
                 typing::register_member(guard, &CameraPostPass::ratio, "ratio");
             }
         };
-        struct Block
+        struct BlockShadow
         {
             struct block_mesh
             {
@@ -8551,18 +8552,40 @@ namespace jeecs
             };
 
             block_mesh mesh;
-
-            float shadow = 1.0f;
-
-            bool nocover = false;
+            float factor = 1.0f;
             bool reverse = false;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(guard, &Block::mesh, "mesh");
-                typing::register_member(guard, &Block::shadow, "shadow");
-                typing::register_member(guard, &Block::nocover, "nocover");
-                typing::register_member(guard, &Block::reverse, "reverse");
+                typing::register_member(guard, &BlockShadow::mesh, "mesh");
+                typing::register_member(guard, &BlockShadow::factor, "factor");
+                typing::register_member(guard, &BlockShadow::reverse, "reverse");
+            }
+        };
+        struct SpriteShadow
+        {
+            float factor = 1.0f;
+            float distance = 1.0f;
+
+            bool projection_mode = true;
+
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &SpriteShadow::factor, "factor");
+                typing::register_member(guard, &SpriteShadow::distance, "distance");
+                typing::register_member(guard, &SpriteShadow::projection_mode, "projection_mode");
+            }
+
+        };
+        struct SelfShadow
+        {
+            float factor = 1.0f;
+            bool auto_uncover = true;
+
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &SelfShadow::factor, "factor");
+                typing::register_member(guard, &SelfShadow::auto_uncover, "auto_uncover");
             }
         };
     }
@@ -9330,12 +9353,15 @@ namespace jeecs
             type_info::register_type<Camera::RendToFramebuffer>(guard, "Camera::RendToFramebuffer");
             type_info::register_type<Camera::Clear>(guard, "Camera::Clear");
 
+            type_info::register_type<Light2D::TopDown>(guard, "Light2D::TopDown");
             type_info::register_type<Light2D::Gain>(guard, "Light2D::Gain");
             type_info::register_type<Light2D::Point>(guard, "Light2D::Point");
             type_info::register_type<Light2D::Parallel>(guard, "Light2D::Parallel");
-            type_info::register_type<Light2D::Shadow>(guard, "Light2D::Shadow");
+            type_info::register_type<Light2D::ShadowBuffer>(guard, "Light2D::ShadowBuffer");
             type_info::register_type<Light2D::CameraPostPass>(guard, "Light2D::CameraPostPass");
-            type_info::register_type<Light2D::Block>(guard, "Light2D::Block");
+            type_info::register_type<Light2D::BlockShadow>(guard, "Light2D::BlockShadow");
+            type_info::register_type<Light2D::SpriteShadow>(guard, "Light2D::SpriteShadow");
+            type_info::register_type<Light2D::SelfShadow>(guard, "Light2D::SelfShadow");
 
             type_info::register_type<Physics2D::World>(guard, "Physics2D::World");
             type_info::register_type<Physics2D::Rigidbody>(guard, "Physics2D::Rigidbody");

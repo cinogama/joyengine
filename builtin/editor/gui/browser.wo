@@ -1305,6 +1305,8 @@ namespace $$MODULE_NAME$$
                                 let tex = get_file_icon_by_extern_name(item, context);
                                 let (w, h) = tex->size;
                                 let whratio = w: real / h: real;
+                                
+                                TextDisabled(F"{w}x{h}");
                                 ImageSize(tex, 64. * whratio, 64.);
                             }
                             EndTooltip();
