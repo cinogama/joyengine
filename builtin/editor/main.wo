@@ -41,8 +41,12 @@ using Path = struct {
     {
         // TODO: 这里只考虑Windows的A-Z盘符，什么AA AB AC，就算windows未来支持也给爷滚
         let arr = ["/"]mut;
-        for (let mut ch = "A"->getch(0); ch <= "Z"->getch(0); ch += 1: char)
-            arr->add([ch]->str + ":/");
+
+        if (std::platform_os == std::os::WIN32)
+        {
+            for (let mut ch = "A"->getch(0); ch <= "Z"->getch(0); ch += 1: char)
+                arr->add([ch]->str + ":/");
+        }
 
         return arr
             ->  unsafe::cast:<array<string>>

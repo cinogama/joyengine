@@ -1180,7 +1180,10 @@ public func vert(v: vin)
     let shadow_scale_factor = je_color->w;
 
     let vpos = je_mv * float4::create(v.vertex, 1.);
-    let shadow_vpos = normalize((vpos->xyz / vpos->w) - (light2d_vpos->xyz / light2d_vpos->w)) * shadow_scale_factor;
+    let centerpos = je_mv * float4::create(0., 0., 0., 1.);
+    let shadow_vpos = normalize(
+        (centerpos->xyz / centerpos->w) - (light2d_vpos->xyz / light2d_vpos->w)
+    ) * shadow_scale_factor;
     
     return v2f{
         pos = je_p * float4::create((vpos->xyz / vpos->w) + shadow_vpos * v.factor, 1.),
