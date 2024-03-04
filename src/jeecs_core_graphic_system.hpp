@@ -1725,7 +1725,7 @@ public func frag(_: v2f)
             std::sort(m_2dblock_y_list.begin(), m_2dblock_y_list.end(),
                 [](const block2d_arch& a, const block2d_arch& b)
                 {
-                    return a.translation->world_position.y < b.translation->world_position.y;
+                    return a.translation->world_position.y > b.translation->world_position.y;
                 });
 
             std::sort(m_2dcamera_list.begin(), m_2dcamera_list.end());
