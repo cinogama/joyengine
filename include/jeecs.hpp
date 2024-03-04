@@ -8567,13 +8567,10 @@ namespace jeecs
             float factor = 1.0f;
             float distance = 1.0f;
 
-            bool projection_mode = true;
-
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &SpriteShadow::factor, "factor");
                 typing::register_member(guard, &SpriteShadow::distance, "distance");
-                typing::register_member(guard, &SpriteShadow::projection_mode, "projection_mode");
             }
 
         };

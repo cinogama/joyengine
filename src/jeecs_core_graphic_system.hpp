@@ -1946,8 +1946,7 @@ public func frag(_: v2f)
                                                 jegl_rchain_bind_texture(light2d_shadow_rend_chain, texture_group, 0, m_default_resources.default_texture->resouce());
                                         }
 
-                                        jeecs::graphic::vertex* using_shape =
-                                            blockarch.spriteshadow->projection_mode
+                                        jeecs::graphic::vertex* using_shape = lightarch.topdown == nullptr
                                             ?
                                             (
                                                 (blockarch.shape == nullptr || blockarch.shape->vertex == nullptr)
@@ -1958,7 +1957,7 @@ public func frag(_: v2f)
                                             m_defer_light2d_host._sprite_shadow_vertex.get()
                                             ;
 
-                                        const auto& used_pass = blockarch.spriteshadow->projection_mode
+                                        const auto& used_pass = lightarch.topdown == nullptr
                                             ? shape_shadow_pass
                                             : sprite_shadow_pass;
 
