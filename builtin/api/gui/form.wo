@@ -84,7 +84,7 @@ namespace jeapi::gui
             self.callback_close = callback;
         }
 
-        private func set_apply_attribute(self: form, attribute: WindowsAttribute, apply: bool)
+        public func set_apply_attribute(self: form, attribute: WindowsAttribute, apply: bool)
         {
             if (apply)
                 self._attribute = self._attribute: int->std::bitor(attribute: int): WindowsAttribute;
