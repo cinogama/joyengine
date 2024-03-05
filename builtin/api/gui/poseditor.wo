@@ -1,0 +1,141 @@
+import je;
+import je::gui;
+
+using je;
+using je::gui;
+
+namespace jeapi::gui::widget
+{
+    public func poseditor(
+        tag: string,
+        size: real, 
+        poses: array<(real, real)>,
+        adsorption_accuracy: real
+    )
+        => option<array<(real, real)>>
+    {
+        let drawlist = GetWindowDrawList();
+        do InvisibleButton("##draw_shape", (size, size));
+        let (p0, p1) = GetItemRect();
+
+        let position_ratio = size / 2.; // * scale?
+        let centerx = p0.0 + size / 2., centery = p0.1 + size / 2.;
+
+        PushClipRect(p0, p1);
+
+        drawlist->AddRectFilled(p0, p1, (75, 75, 75, 255));
+
+        // 绘制横纵坐标轴
+        drawlist->AddLine((centerx, p0.1), (centerx, p1.1), (0, 0, 0, 255), 1.);
+        drawlist->AddLine((p0.0, centery), (p1.0, centery), (0, 0, 0, 255), 1.);
+
+        // 绘制边框
+        drawlist->AddRect(
+            (-0.5 * position_ratio + centerx, -0.5 * position_ratio + centery), 
+            (0.5 * position_ratio + centerx, 0.5 * position_ratio + centery), 
+            (255, 0, 0, 255),
+            1.);
+
+        // 因为鼠标只有一个，此处直接把上下文放在静态生命周期变量上
+        static let mut moving_point_context = option::none: option<struct{
+            moving_job_tag: string,
+            moving_point_index: int,
+        }>;
+
+        let mouse_down = IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Left);
+        if (! mouse_down)
+            moving_point_context = option::none;
+
+        // 绘制坐标点
+        let mut has_hovered_point = false;
+        let new_position = []mut: vec<(real, real)>;
+        let mut updated = false;
+
+        for (let index, (x, y) : poses)
+        {
+            // 画线!
+            if (index > 0)
+            {
+                let (x0, y0) = poses[index - 1]; 
+                let (x1, y1) = (x, y);
+                drawlist->AddLine(
+                    (x0 * position_ratio + centerx, y0 * position_ratio + centery),
+                    (x1 * position_ratio + centerx, y1 * position_ratio + centery),
+                    (0, 255, 255, 255),
+                    1.);
+            }
+        }
+
+        for (let index, (x, y) : poses)
+        {
+            let pos = (x * position_ratio + centerx, y * position_ratio + centery);
+            
+            // 如果鼠标悬在上面，则显示红色
+            let hovered = has_hovered_point == false && 
+                IsMouseHoveringRect((pos.0 - 3., pos.1 - 3.), (pos.0 + 3., pos.1 + 3.));
+            
+            if (hovered)
+            {
+                has_hovered_point = true;
+                // 显示实际坐标
+                BeginTooltip();
+                Text(F"x: {x}, y: {y}");
+                EndTooltip();
+            }
+
+            let color_depth = (255. * (index + 1): real / poses->len: real): int;
+            let color = hovered
+                ? (255, 0, 0, 255)
+                | (color_depth, color_depth, color_depth, 255);
+
+            drawlist->AddCircleFilled(pos, 3., color);
+
+            match (moving_point_context)
+            {
+            value(context)?
+                {
+                    if (context.moving_job_tag == tag && context.moving_point_index == index)
+                    {
+                        // 正在移动这个点
+                        updated = true;
+
+                        // 考虑adsorption_accuracy的情况下移动
+                        let adsorption_accuracy_align = func(v: real)
+                        {
+                            return (v / adsorption_accuracy + 0.5): int: real * adsorption_accuracy;
+                        };
+
+                        let new_pos = (GetMousePos().0 - centerx, GetMousePos().1 - centery);
+                        new_position->add(
+                            (
+                                adsorption_accuracy_align(new_pos.0 / position_ratio), 
+                                adsorption_accuracy_align(new_pos.1 / position_ratio)
+                            ));
+                    }
+                    else
+                    {
+                        new_position->add((x, y));
+                    }
+                }
+            none?
+                if (mouse_down && hovered)
+                {
+                    // 开始移动这个点
+                    moving_point_context = option::value(struct{
+                        moving_job_tag = tag,
+                        moving_point_index = index,
+                    });
+
+                    new_position->add((x, y));
+                }
+            }
+        }
+
+        PopClipRect();
+
+        return updated 
+            ? option::value(new_position as vec<(real, real)>
+                ->unsafe::cast:<array<(real, real)>>) 
+            | option::none;
+    }
+}

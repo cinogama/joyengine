@@ -8,6 +8,8 @@ import pkg::try;
 import pkg::worst;
 import config;
 
+import builtin::api::gui::poseditor;
+
 import builtin::editor::environment::main;
 import builtin::editor::gui::form::msg;
 import builtin::editor::gui::form::ask;
@@ -381,30 +383,40 @@ namespace editor
 
                 update_str += ";";
 
-                for (let index, (layer, factor) : datas->forall(\d = d[0]!="size";))
+                func _str2vec2(str: string)
                 {
-                    Text(F"{layer}:");      
-                    SameLine();
+                    let x = mutable::create(0.), y = mutable::create(0.);
+                    do str->take_token("(")
+                        =>> \s = s->take_real();
+                        =>> func(snr){x->set(snr[1]); return snr[0]->take_token(",");}
+                        =>> \s = s->take_real();
+                        =>> func(snr){y->set(snr[1]); return snr[0]->take_token(")");}
+                        ;
+                    return (x->get, y->get);
+                }
 
-                    func _str2vec2(str: string)
+                let mut points = datas
+                    ->  forall(\d = d[0]!="size";)
+                    ->> \d = _str2vec2(d.1);
+                    ;
+
+                match (jeapi::gui::widget::poseditor(
+                    tag,
+                    std::min(GetContentRegionAvail().0, 200.),
+                    points,
+                    0.05
+                    ))
+                {
+                value(a)? { points = a; need_update = true; }
+                none?;
+                }
+
+                if (need_update)
+                {
+                    for (let layer, (x, y) : points)
                     {
-                        let x = mutable::create(0.), y = mutable::create(0.);
-                        do str->take_token("(")
-                            =>> \s = s->take_real();
-                            =>> func(snr){x->set(snr[1]); return snr[0]->take_token(",");}
-                            =>> \s = s->take_real();
-                            =>> func(snr){y->set(snr[1]); return snr[0]->take_token(")");}
-                            ;
-                        return (x->get, y->get);
+                        update_str += F"{layer}:({x},{y});";
                     }
-
-                    let (posx, posy) = _str2vec2(factor);
-                    let (new_posx, new_posy) = InputFloat2(F"##factor{index}_{tag}", posx, posy)->valor((posx, posy));
-
-                    if (new_posx != posx || new_posy != posy)
-                        need_update = true;
-
-                    update_str += F"{layer}:({new_posx},{new_posy});";
                 }
                     
                 if (need_update)

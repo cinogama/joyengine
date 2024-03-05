@@ -441,6 +441,8 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                             frames[econtext.m_frame_index],
                             (255, 255, 255, 255));
 
+                    PopClipRect();
+                    
                     EndChild();
                 EndChild();
                 EndGroup();

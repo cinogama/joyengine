@@ -229,12 +229,16 @@ R"(
     public func IsItemToggledOpen()=> bool;
     extern("libjoyecs", "je_gui_is_itemhovered")
     public func IsItemHovered()=> bool;
+    extern("libjoyecs", "je_gui_is_mousehoveringrect")
+    public func IsMouseHoveringRect(p0: (real, real), p1: (real, real))=> bool;
 
     extern("libjoyecs", "je_gui_is_item_active")
     public func IsItemActive()=> bool;
 
     extern("libjoyecs", "je_gui_is_mouse_dragging")
     public func IsMouseDragging(attr: ImGuiMouseButton)=> bool;
+    extern("libjoyecs", "je_gui_is_mouse_down")
+    public func IsMouseDown(attr: ImGuiMouseButton)=> bool;
 
     extern("libjoyecs", "je_gui_set_tooltip")
     public func SetTooltip(msg: string)=> bool;
@@ -1239,6 +1243,12 @@ WO_API wo_api je_gui_is_itemhovered(wo_vm vm, wo_value args)
     return wo_ret_bool(vm, ImGui::IsItemHovered());
 }
 
+WO_API wo_api je_gui_is_mousehoveringrect(wo_vm vm, wo_value args)
+{
+    return wo_ret_bool(vm, ImGui::IsMouseHoveringRect(
+        val2vec2(args + 0), val2vec2(args + 1)));
+}
+
 WO_API wo_api je_gui_is_item_active(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm, ImGui::IsItemActive());
@@ -1247,6 +1257,10 @@ WO_API wo_api je_gui_is_item_active(wo_vm vm, wo_value args)
 WO_API wo_api je_gui_is_mouse_dragging(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm, ImGui::IsMouseDragging((ImGuiMouseButton)wo_int(args + 0)));
+}
+WO_API wo_api je_gui_is_mouse_down(wo_vm vm, wo_value args)
+{
+    return wo_ret_bool(vm, ImGui::IsMouseDown((ImGuiMouseButton)wo_int(args + 0)));
 }
 
 WO_API wo_api je_gui_set_tooltip(wo_vm vm, wo_value args)
