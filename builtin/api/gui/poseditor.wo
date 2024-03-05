@@ -59,8 +59,8 @@ namespace jeapi::gui::widget
                 let (x0, y0) = poses[index - 1]; 
                 let (x1, y1) = (x, y);
                 drawlist->AddLine(
-                    (x0 * position_ratio + centerx, y0 * position_ratio + centery),
-                    (x1 * position_ratio + centerx, y1 * position_ratio + centery),
+                    (x0 * position_ratio + centerx, centery - y0 * position_ratio),
+                    (x1 * position_ratio + centerx, centery - y1 * position_ratio),
                     (0, 255, 255, 255),
                     1.);
             }
@@ -68,7 +68,7 @@ namespace jeapi::gui::widget
 
         for (let index, (x, y) : poses)
         {
-            let pos = (x * position_ratio + centerx, y * position_ratio + centery);
+            let pos = (x * position_ratio + centerx, centery - y * position_ratio);
             
             // 如果鼠标悬在上面，则显示红色
             let hovered = has_hovered_point == false && 
@@ -83,7 +83,7 @@ namespace jeapi::gui::widget
                 EndTooltip();
             }
 
-            let color_depth = (255. * (index + 1): real / poses->len: real): int;
+            let color_depth = (255. * (1.0 - (index + 1): real / poses->len: real)): int;
             let color = hovered
                 ? (255, 0, 0, 255)
                 | (color_depth, color_depth, color_depth, 255);
@@ -105,7 +105,7 @@ namespace jeapi::gui::widget
                             return (v / adsorption_accuracy + 0.5): int: real * adsorption_accuracy;
                         };
 
-                        let new_pos = (GetMousePos().0 - centerx, GetMousePos().1 - centery);
+                        let new_pos = (GetMousePos().0 - centerx, centery - GetMousePos().1);
                         new_position->add(
                             (
                                 adsorption_accuracy_align(new_pos.0 / position_ratio), 
