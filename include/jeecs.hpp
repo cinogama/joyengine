@@ -8334,17 +8334,23 @@ namespace jeecs
             float       record_restitution = 0.f;
 
             size_t      layerid = 0;
+            math::vec2  position_offset = { 0.f, 0.f };
+            float       rotation_offset = 0.f;
 
             Rigidbody() = default;
             Rigidbody(Rigidbody&&) = default;
             Rigidbody(const Rigidbody& other)
-                :layerid(other.layerid)
+                : layerid(other.layerid)
+                , position_offset(other.position_offset)
+                , rotation_offset(other.rotation_offset)
             {
                 // Do nothing
             }
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &Rigidbody::layerid, "layerid");
+                typing::register_member(guard, &Rigidbody::position_offset, "position_offset");
+                typing::register_member(guard, &Rigidbody::rotation_offset, "rotation_offset");
             }
         };
         struct Mass

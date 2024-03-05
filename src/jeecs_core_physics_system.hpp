@@ -262,8 +262,8 @@ namespace jeecs
                     if (rigidbody.rigidbody_just_created == true)
                     {
                         b2BodyDef default_rigidbody_config;
-                        default_rigidbody_config.position = { translation.world_position.x, translation.world_position.y };
-                        default_rigidbody_config.angle = localrotation.rot.euler_angle().z / math::RAD2DEG;
+                        default_rigidbody_config.position = { translation.world_position.x + rigidbody.position_offset.x, translation.world_position.y + rigidbody.position_offset.y };
+                        default_rigidbody_config.angle = (localrotation.rot.euler_angle().z + rigidbody.rotation_offset) / math::RAD2DEG;
                         rigidbody.native_rigidbody = physics_world_instance.CreateBody(&default_rigidbody_config);
                     }
 
@@ -410,11 +410,11 @@ namespace jeecs
                             }
                         }
 
-                        if (check_if_need_update_vec2(rigidbody_instance->GetPosition(), math::vec2(translation.world_position.x, translation.world_position.y))
-                            || check_if_need_update_float(rigidbody_instance->GetAngle() * math::RAD2DEG, translation.world_rotation.euler_angle().z))
+                        if (check_if_need_update_vec2(rigidbody_instance->GetPosition(), math::vec2(translation.world_position.x + rigidbody.position_offset.x, translation.world_position.y + rigidbody.position_offset.y))
+                            || check_if_need_update_float(rigidbody_instance->GetAngle() * math::RAD2DEG, translation.world_rotation.euler_angle().z + rigidbody.rotation_offset))
                         {
-                            rigidbody_instance->SetTransform(b2Vec2(translation.world_position.x, translation.world_position.y),
-                                translation.world_rotation.euler_angle().z / math::RAD2DEG);
+                            rigidbody_instance->SetTransform(b2Vec2(translation.world_position.x + rigidbody.position_offset.x, translation.world_position.y + rigidbody.position_offset.y),
+                                (translation.world_rotation.euler_angle().z + rigidbody.rotation_offset) / math::RAD2DEG);
                             rigidbody_instance->SetAwake(true);
                         }
 
@@ -536,8 +536,8 @@ namespace jeecs
                                 };
                                 localposition.set_global_position(
                                     math::vec3(
-                                        kinematics->lock_movement_x ? translation.world_position.x : new_position.x,
-                                        kinematics->lock_movement_y ? translation.world_position.y : new_position.y,
+                                        kinematics->lock_movement_x ? translation.world_position.x : new_position.x - rigidbody.position_offset.x,
+                                        kinematics->lock_movement_y ? translation.world_position.y : new_position.y - rigidbody.position_offset.y,
                                         translation.world_position.z),
                                     translation, &localrotation);
 
@@ -545,7 +545,7 @@ namespace jeecs
 
                                 auto&& world_angle = translation.world_rotation.euler_angle();
                                 world_angle.z = rigidbody_instance->GetAngle() * math::RAD2DEG;
-                                localrotation.set_global_rotation(math::quat::euler(world_angle), translation);
+                                localrotation.set_global_rotation(math::quat::euler(world_angle - rigidbody.rotation_offset), translation);
                             }
                         }
                 }
