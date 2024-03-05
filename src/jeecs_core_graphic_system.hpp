@@ -374,9 +374,9 @@ public let frag =
                 light_shape->resouce()->m_raw_vertex_data;
             if (raw_vertex_data != nullptr)
             {
-                size.x *= raw_vertex_data->m_size_x;
-                size.y *= raw_vertex_data->m_size_y;
-                size.z *= raw_vertex_data->m_size_z;
+                size.x *= std::max(abs(raw_vertex_data->m_x_max), abs(raw_vertex_data->m_x_min));
+                size.y *= std::max(abs(raw_vertex_data->m_y_max), abs(raw_vertex_data->m_y_min));
+                size.z *= std::max(abs(raw_vertex_data->m_z_max), abs(raw_vertex_data->m_z_min));
             }
 
             return size;

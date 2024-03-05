@@ -116,7 +116,7 @@ WO_API wo_api wojeapi_read_file_all(wo_vm vm, wo_value args)
 
         jeecs_file_close(file);
 
-        return wo_ret_option_buffer(vm, readed_buf.data(), readed_buf.size());
+        return wo_ret_option_raw_string(vm, readed_buf.data(), readed_buf.size());
     }
     return wo_ret_option_none(vm);
 }

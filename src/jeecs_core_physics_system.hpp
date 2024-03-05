@@ -296,17 +296,8 @@ namespace jeecs
                         auto* old_rigidbody_fixture = rigidbody_instance->GetFixtureList();
                         // 开始创建碰撞体
 
-                        // 获取实体的网格大小，如果没有，那么默认就是 1，1
-                        // TODO: 考虑网格本身改变的情况，不过目前应该没人会去动网格
-                        auto&& rendshape_mesh_size =
-                            rendshape && rendshape->vertex != nullptr
-                            ? math::vec2(
-                                rendshape->vertex->resouce()->m_raw_vertex_data->m_size_x,
-                                rendshape->vertex->resouce()->m_raw_vertex_data->m_size_y)
-                            : math::vec2(1.f, 1.f);
-
-                        auto entity_scaled_size = rendshape_mesh_size
-                            * math::vec2(translation.local_scale.x, translation.local_scale.y);
+                        // NOTE: 此处不再考虑实体的网格大小，开发者应当自行调整
+                        auto entity_scaled_size = math::vec2(translation.local_scale.x, translation.local_scale.y);
 
                         bool force_update_fixture = false;
                         if (entity_scaled_size != rigidbody.record_body_scale)
@@ -544,8 +535,8 @@ namespace jeecs
                                 kinematics->angular_velocity = rigidbody_instance->GetAngularVelocity();
 
                                 auto&& world_angle = translation.world_rotation.euler_angle();
-                                world_angle.z = rigidbody_instance->GetAngle() * math::RAD2DEG;
-                                localrotation.set_global_rotation(math::quat::euler(world_angle - rigidbody.rotation_offset), translation);
+                                world_angle.z = rigidbody_instance->GetAngle() * math::RAD2DEG - rigidbody.rotation_offset;
+                                localrotation.set_global_rotation(math::quat::euler(world_angle), translation);
                             }
                         }
                 }

@@ -1728,7 +1728,11 @@ struct jegl_vertex
         TRIANGLES,
         TRIANGLESTRIP,
     };
-    float m_size_x, m_size_y, m_size_z;
+    float 
+        m_x_min, m_x_max, 
+        m_y_min, m_y_max, 
+        m_z_min, m_z_max;
+
     float* m_vertex_datas;
     size_t* m_vertex_formats;
     size_t m_format_count;
@@ -9250,26 +9254,31 @@ namespace jeecs
             }
             intersect_result intersect_entity(const Transform::Translation& translation, const Renderer::Shape* entity_shape, float insRange = 0.0f) const
             {
-                vec3 entity_box_sz;
+                vec3 entity_box_sz_max, entity_box_sz_min;
                 if (entity_shape && entity_shape->vertex != nullptr)
                 {
                     auto* vertex_dat = entity_shape->vertex->resouce()->m_raw_vertex_data;
-                    entity_box_sz = { vertex_dat->m_size_x, vertex_dat->m_size_y ,vertex_dat->m_size_z };
+                    entity_box_sz_max = vec3(vertex_dat->m_x_max, vertex_dat->m_y_max, vertex_dat->m_z_max);
+                    entity_box_sz_min = vec3(vertex_dat->m_x_min, vertex_dat->m_y_min, vertex_dat->m_z_min);
                 }
                 else
-                    entity_box_sz = vec3(1, 1, 0); // default shape size
+                {
+                    // default shape size
+                    entity_box_sz_max = vec3(0.5f, 0.5f, 0.f); 
+                    entity_box_sz_min = vec3(-0.5f, -0.5f, 0.f);
+                }
 
                 vec3 finalBoxPos[8];
                 intersect_result minResult = false;
                 minResult.distance = INFINITY;
 
                 //pos
-                finalBoxPos[0].x = finalBoxPos[2].x = finalBoxPos[4].x = finalBoxPos[6].x =
-                    -(finalBoxPos[1].x = finalBoxPos[3].x = finalBoxPos[5].x = finalBoxPos[7].x = entity_box_sz.x / 2.0f);
-                finalBoxPos[2].y = finalBoxPos[3].y = finalBoxPos[6].y = finalBoxPos[7].y =
-                    -(finalBoxPos[0].y = finalBoxPos[1].y = finalBoxPos[4].y = finalBoxPos[5].y = entity_box_sz.y / 2.0f);
-                finalBoxPos[0].z = finalBoxPos[1].z = finalBoxPos[2].z = finalBoxPos[3].z =
-                    -(finalBoxPos[4].z = finalBoxPos[5].z = finalBoxPos[6].z = finalBoxPos[7].z = entity_box_sz.z / 2.0f);
+                finalBoxPos[1].x = finalBoxPos[3].x = finalBoxPos[5].x = finalBoxPos[7].x = entity_box_sz_max.x;
+                finalBoxPos[0].x = finalBoxPos[2].x = finalBoxPos[4].x = finalBoxPos[6].x = entity_box_sz_min.x;
+                finalBoxPos[0].y = finalBoxPos[1].y = finalBoxPos[4].y = finalBoxPos[5].y = entity_box_sz_max.y;
+                finalBoxPos[2].y = finalBoxPos[3].y = finalBoxPos[6].y = finalBoxPos[7].y = entity_box_sz_min.y;
+                finalBoxPos[4].z = finalBoxPos[5].z = finalBoxPos[6].z = finalBoxPos[7].z = entity_box_sz_max.z;
+                finalBoxPos[0].z = finalBoxPos[1].z = finalBoxPos[2].z = finalBoxPos[3].z = entity_box_sz_min.z;
 
                 //rot and transform
                 for (int i = 0; i < 8; i++)

@@ -194,23 +194,43 @@ namespace jeecs
             circ_y = _create_circle_vertex({ 0.f, 1.f, 0.f });
             circ_z = _create_circle_vertex({ 0.f, 0.f, 1.f });
 
-            circ_x->resouce()->m_raw_vertex_data->m_size_y += 0.2f;
-            circ_x->resouce()->m_raw_vertex_data->m_size_z += 0.2f;
-            circ_y->resouce()->m_raw_vertex_data->m_size_x += 0.2f;
-            circ_y->resouce()->m_raw_vertex_data->m_size_z += 0.2f;
-            circ_z->resouce()->m_raw_vertex_data->m_size_x += 0.2f;
-            circ_z->resouce()->m_raw_vertex_data->m_size_y += 0.2f;
+            circ_x->resouce()->m_raw_vertex_data->m_y_min += -0.2f;
+            circ_x->resouce()->m_raw_vertex_data->m_y_max += 0.2f;
+            circ_x->resouce()->m_raw_vertex_data->m_z_min += -0.2f;
+            circ_x->resouce()->m_raw_vertex_data->m_z_max += 0.2f;
 
-            circ_x->resouce()->m_raw_vertex_data->m_size_x =
-                circ_y->resouce()->m_raw_vertex_data->m_size_y =
-                circ_z->resouce()->m_raw_vertex_data->m_size_z =
-                axis_x->resouce()->m_raw_vertex_data->m_size_y
-                = axis_x->resouce()->m_raw_vertex_data->m_size_z
-                = axis_y->resouce()->m_raw_vertex_data->m_size_x
-                = axis_y->resouce()->m_raw_vertex_data->m_size_z
-                = axis_z->resouce()->m_raw_vertex_data->m_size_x
-                = axis_z->resouce()->m_raw_vertex_data->m_size_y
+            circ_y->resouce()->m_raw_vertex_data->m_x_min += -0.2f;
+            circ_y->resouce()->m_raw_vertex_data->m_x_max += 0.2f;
+            circ_y->resouce()->m_raw_vertex_data->m_z_min += -0.2f;
+            circ_y->resouce()->m_raw_vertex_data->m_z_max += 0.2f;
+
+            circ_z->resouce()->m_raw_vertex_data->m_x_min += -0.2f;
+            circ_z->resouce()->m_raw_vertex_data->m_x_max += 0.2f;
+            circ_z->resouce()->m_raw_vertex_data->m_y_min += -0.2f;
+            circ_z->resouce()->m_raw_vertex_data->m_y_max += 0.2f;
+
+            circ_x->resouce()->m_raw_vertex_data->m_x_min
+                = circ_y->resouce()->m_raw_vertex_data->m_y_min
+                = circ_z->resouce()->m_raw_vertex_data->m_z_min
+                = axis_x->resouce()->m_raw_vertex_data->m_y_min
+                = axis_x->resouce()->m_raw_vertex_data->m_z_min
+                = axis_y->resouce()->m_raw_vertex_data->m_x_min
+                = axis_y->resouce()->m_raw_vertex_data->m_z_min
+                = axis_z->resouce()->m_raw_vertex_data->m_x_min
+                = axis_z->resouce()->m_raw_vertex_data->m_y_min
+                = -0.2f;
+
+            circ_x->resouce()->m_raw_vertex_data->m_x_max
+                = circ_y->resouce()->m_raw_vertex_data->m_y_max
+                = circ_z->resouce()->m_raw_vertex_data->m_z_max
+                = axis_x->resouce()->m_raw_vertex_data->m_y_max
+                = axis_x->resouce()->m_raw_vertex_data->m_z_max
+                = axis_y->resouce()->m_raw_vertex_data->m_x_max
+                = axis_y->resouce()->m_raw_vertex_data->m_z_max
+                = axis_z->resouce()->m_raw_vertex_data->m_x_max
+                = axis_z->resouce()->m_raw_vertex_data->m_y_max
                 = 0.2f;
+
         }
 
         struct SelectedResult
@@ -803,9 +823,9 @@ public let frag =
                                 eshape->vertex == nullptr
                                 ? jeecs::math::vec3(1.0f, 1.0f, 0.0f)
                                 : jeecs::math::vec3(
-                                    eshape->vertex->resouce()->m_raw_vertex_data->m_size_x,
-                                    eshape->vertex->resouce()->m_raw_vertex_data->m_size_y,
-                                    eshape->vertex->resouce()->m_raw_vertex_data->m_size_z
+                                    eshape->vertex->resouce()->m_raw_vertex_data->m_x_max - eshape->vertex->resouce()->m_raw_vertex_data->m_x_min,
+                                    eshape->vertex->resouce()->m_raw_vertex_data->m_y_max - eshape->vertex->resouce()->m_raw_vertex_data->m_y_min,
+                                    eshape->vertex->resouce()->m_raw_vertex_data->m_z_max - eshape->vertex->resouce()->m_raw_vertex_data->m_z_min
                                 ));
 
                         localScale.scale = 1.05f * localScale.scale;
