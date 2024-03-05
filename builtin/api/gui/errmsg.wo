@@ -3,6 +3,8 @@ import woo::std;
 import je;
 import je::gui;
 
+import builtin::api::gui::form;
+
 using std;
 using je;
 using je::gui;
@@ -25,32 +27,18 @@ namespace jeapi::gui
         boom_icon->pix((3, 3))->set_color(black_color);
         boom_icon->pix((3, 1))->set_color(black_color);        
 
-        launch(func()
-        {
-            let mut open = true;
-            match (BeginAttrOpen(F"{title}##{JobID()}", 
-                WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
+        form::create(F"{title}##{JobID()}", 
+            func(f)
             {
-            value(show)?
-                if (show)
-                {
-                    ImageSize(boom_icon, 32., 32.);
+                ImageSize(boom_icon, 32., 32.);
 
-                    SameLine();
+                SameLine();
 
-                    Text(text);
+                Text(text);
 
-                    if (Button("确认"))
-                        open = false;
-                }
-            none?
-                open = false;
+                if (Button("确认"))
+                    f->close();
             }
-
-            End();
-
-            return open;
-
-        }, ());
+        )->show;
     }
 }

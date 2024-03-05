@@ -226,21 +226,26 @@ import je::editor;
 using std;
 using je::editor;
 
-let root_dir = fsys::normalize(std::exepath());
-let files = fsys::allsubpath(root_dir/"builtin/api")
-    ->  unwarpor([])
-    ->  connect(fsys::allsubpath(root_dir/"builtin/editor")
-            ->unwarpor([]));
+func main()
+{
+    let root_dir = fsys::normalize(std::exepath());
+    let files = fsys::allsubpath(root_dir/"builtin/api")
+        ->  unwarpor([])
+        ->  connect(fsys::allsubpath(root_dir/"builtin/editor")
+                ->unwarpor([]));
 
-let mut crc64_result = "wooscript_crc64_";
+    let mut crc64_result = "wooscript_crc64_";
 
-for (let _, p : files)
-{   
-    let path = p->tostring;
-    crc64_result += F"{crc64file(path)->valor(0)}:{crc64str(path)};";
+    for (let _, p : files)
+    {   
+        let path = p->tostring;
+        crc64_result += F"{crc64file(path)->valor(0)}:{crc64str(path)};";
+    }
+
+    return crc64str(crc64_result);
 }
 
-return crc64str(crc64_result);
+return main();
 )";
 
     wo_vm vmm = wo_create_vm();

@@ -1,0 +1,108 @@
+import je;
+import je::gui;
+
+using je;
+using je::gui;
+
+namespace jeapi::gui
+{
+    using form = struct{
+        show: mut bool,
+        name: string,
+
+        body: (form)=>void,
+
+        callback_close: mut ()=>bool,
+
+        _closeable: mut bool,
+        _attribute: mut WindowsAttribute,
+    }
+    {
+        public func create(title: string, body: (form)=>void)
+        {
+            return form{
+                show = mut false,
+                name = title,
+                
+                body = body,
+
+                callback_close = mut \ = true;,
+
+                _closeable = mut true,
+                _attribute = mut 
+                    WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
+                    + WindowsAttribute::ImGuiWindowFlags_NoDocking
+                    + WindowsAttribute::ImGuiWindowFlags_NoCollapse,
+            };
+        }
+        public func show(self: form)
+        {
+            if (!self.show)
+            {
+                self.show = true;
+                launch(func(){    
+                    let begin = self._closeable 
+                        ? BeginAttrOpen 
+                        | \s: string, a: je::gui::WindowsAttribute = option::value(BeginAttr(s, a));
+                        ;
+
+                    match (begin(self.name, self._attribute))
+                    {
+                    value(show)?
+                        if (show)
+                            self.body(self);
+                    none?
+                        self->close();
+                    }
+
+                    End();
+
+                    return self.show;
+                }, ());
+            }
+        }
+        public func close(self: form)
+        {
+            self.show = !self.callback_close();
+        }
+        public func force_close(self: form)
+        {
+            self.show = false;
+        }
+
+        public func set_closeable(self: form, closeable: bool)
+        {
+            self._closeable = closeable;
+        }
+        public func set_attribute(self: form, attribute: WindowsAttribute)
+        {
+            self._attribute = attribute;
+        }
+
+        public func set_callback_close(self: form, callback: ()=>bool)
+        {
+            self.callback_close = callback;
+        }
+
+        private func set_apply_attribute(self: form, attribute: WindowsAttribute, apply: bool)
+        {
+            if (apply)
+                self._attribute = self._attribute: int->std::bitor(attribute: int): WindowsAttribute;
+            else
+                self._attribute = self._attribute: int->std::bitand(attribute: int->std::bitnot): WindowsAttribute;
+        }
+
+        public func set_docking(self: form, dockable: bool)
+        {
+            self->set_apply_attribute(WindowsAttribute::ImGuiWindowFlags_NoDocking, !dockable);
+        }
+        public func set_autoresize(self: form, autoresize: bool)
+        {
+            self->set_apply_attribute(WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize, autoresize);
+        }
+        public func set_collapse(self: form, collapse: bool)
+        {
+            self->set_apply_attribute(WindowsAttribute::ImGuiWindowFlags_NoCollapse, !collapse);
+        }
+    }
+}
