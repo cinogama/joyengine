@@ -14,42 +14,30 @@ namespace jeapi::gui::form
         defaultval: string, 
         okevent: (string)=> void)
     {
-        launch(func(inputval: mutable<string>)
-        {
-            let mut open = true;
-            match (BeginAttrOpen(F"{title}##{JobID()}", 
-                WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
-                + WindowsAttribute::ImGuiWindowFlags_NoDocking
-                + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
+        let inputval = mutable::create(defaultval);
+
+        form::create(F"{title}##{JobID()}", 
+            func(f)
             {
-            value(show)?
-                if (show)
+                Text(text);
+                do InputText("##", inputval->get)
+                    ->> \val = inputval->set(val);
+                    ;
+                SameLine();
+                if (Button("还原"))
+                    inputval->set(defaultval);
+
+                if (Button("确定") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ENTER)))
                 {
-                    Text(text);
-                    do InputText("##", inputval->get)
-                        ->> \val = inputval->set(val);
-                        ;
-                    SameLine();
-                    if (Button("还原"))
-                        inputval->set(defaultval);
-
-                    if (Button("确定") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ENTER)))
-                    {
-                        okevent(inputval->get);
-                        open = false;
-                    }
-                    SameLine();
-                    if (Button("取消") || (IsWindowFocused() && inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::BACKSPACE])))
-                        open = false;
+                    okevent(inputval->get);
+                    f->close();
                 }
-            none?
-                open = false;
-            }
-
-            End();
-            return open;
-
-        }, (mutable::create(defaultval),));
+                SameLine();
+                if (Button("取消") || (IsWindowFocused() && inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::BACKSPACE])))
+                    f->close();
+            })
+            -> show
+            ;
     }
     public func multiinput(
         title: string, 
@@ -57,40 +45,29 @@ namespace jeapi::gui::form
         defaultval: string, 
         okevent: (string)=> void)
     {
-        launch(func(inputval: mutable<string>)
-        {
-            let mut open = true;
-            match (BeginAttrOpen(F"{title}##{JobID()}", 
-                WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
+        let inputval = mutable::create(defaultval);
+
+        form::create(F"{title}##{JobID()}", 
+            func(f)
             {
-            value(show)?
-                if (show)
+                Text(text);
+                do InputTextMultilineSize("##", inputval->get, 400., 200.)
+                    ->> \val = inputval->set(val);
+                    ;
+                SameLine();
+                if (Button("还原"))
+                    inputval->set(defaultval);
+
+                if (Button("确定") || (IsWindowFocused() && inputmgr::keyspush([je::keycode::L_SHIFT, je::keycode::ENTER])))
                 {
-                    Text(text);
-                    do InputTextMultilineSize("##", inputval->get, 400., 200.)
-                        ->> \val = inputval->set(val);
-                        ;
-                    SameLine();
-                    if (Button("还原"))
-                        inputval->set(defaultval);
-
-                    if (Button("确定") || (IsWindowFocused() && inputmgr::keyspush([je::keycode::L_SHIFT, je::keycode::ENTER])))
-                    {
-                        okevent(inputval->get);
-                        open = false;
-                    }
-                    SameLine();
-                    if (Button("取消") || (IsWindowFocused() && inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::BACKSPACE])))
-                        open = false;
+                    okevent(inputval->get);
+                    f->close();
                 }
-            none?
-                open = false;
-            }
-
-            End();
-
-            return open;
-
-        }, (mutable::create(defaultval),));
+                SameLine();
+                if (Button("取消") || (IsWindowFocused() && inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::BACKSPACE])))
+                    f->close();
+            })
+            -> show
+            ;
     }
 }

@@ -13,40 +13,26 @@ namespace jeapi::gui::form
         text: string, 
         okevent: (bool)=> void)
     {
-        launch(func()
-        {
-            let mut open = true;
-            match (BeginAttrOpen(F"{title}##{JobID()}", 
-                WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
-                + WindowsAttribute::ImGuiWindowFlags_NoDocking
-                + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
+        form::create(F"{title}##{JobID()}", 
+            func(f)
             {
-            value(show)?
-                if (show)
+                Text(text);
+                if (Button("是") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ENTER)))
                 {
-                    Text(text);
-                    if (Button("是") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ENTER)))
-                    {
-                        okevent(true);
-                        open = false;
-                    }
-                    SameLine();
-                    if (Button("否") || (IsWindowFocused() && inputmgr::keyspush([je::keycode::ESC])))
-                    {
-                        okevent(false);
-                        open = false;
-                    }
-                    SameLine();
-                    if (Button("取消") || (IsWindowFocused() && inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::BACKSPACE])))
-                        open = false;
+                    okevent(true);
+                    f->close();
                 }
-            none?
-                open = false;
-            }
-            End();
-
-            return open;
-
-        }, ());
+                SameLine();
+                if (Button("否") || (IsWindowFocused() && inputmgr::keyspush([je::keycode::ESC])))
+                {
+                    okevent(false);
+                    f->close();
+                }
+                SameLine();
+                if (Button("取消") || (IsWindowFocused() && inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::BACKSPACE])))
+                    f->close();
+            })
+            -> show
+            ;
     }
 }

@@ -31,13 +31,8 @@ namespace jeapi::gui::form
         // boom_icon->pix((6, 0))->set_color(nothing_color);
         // boom_icon->pix((6, 6))->set_color(nothing_color);
 
-        launch(func()
-        {
-            let mut open = true;
-            if (BeginAttr(F"Woolang 致命错误##{JobID()}", 
-                WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
-                + WindowsAttribute::ImGuiWindowFlags_NoDocking
-                + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
+        let f = form::create(F"Woolang 致命错误##{JobID()}", 
+            func(f)
             {
                 BeginGroup();
                 ImageScale(boom_icon, 7.);
@@ -73,13 +68,10 @@ namespace jeapi::gui::form
                 do InputTextMultilineSize("##trace", trace, w, 160.);
                 
                 if (Button("确认"))
-                    open = false;
-            }
-
-            End();
-
-            return open;
-
-        }, ());
+                    f->close();
+            });
+        
+        f->set_closeable(false);
+        f->show();
     }
 }

@@ -16,30 +16,15 @@ namespace jeapi::gui::form
         title: string, 
         text: string)
     {
-        launch(func()
-        {
-            let mut open = true;
-            match (BeginAttrOpen(F"{title}##{JobID()}", 
-                WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
-                + WindowsAttribute::ImGuiWindowFlags_NoDocking
-                + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
+        form::create(F"{title}##{JobID()}", 
+            func(f)
             {
-            value(show)?
-                if (show)
-                {
-                    Text(text);
-                    if (Button("确认") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ENTER)))
-                        open = false;
-                }
-            none?
-                open = false;
-            }
-
-            End();
-
-            return open;
-
-        }, ());
+                Text(text);
+                if (Button("确认") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ENTER)))
+                    f->close();
+            })
+            -> show
+            ;
     }
 
     public let errmsg = jeapi::gui::errmsg;
