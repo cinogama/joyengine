@@ -8464,6 +8464,78 @@ namespace jeecs
                 typing::register_member(guard, &Gain::gain, "gain");
             }
         };
+        struct Range
+        {
+            struct light_strength_steps
+            {
+                struct step_data
+                {
+                    basic::vector<math::vec3> m_positions;
+                    float m_strength;
+                };
+                basic::vector<step_data> m_steps;
+
+                std::string to_string()const
+                {
+                    std::string result = "#je_light2d_range#";
+                    result += "size:" + std::to_string(m_steps.size()) + ";";
+                    for (size_t id = 0; id < m_steps.size(); ++id)
+                    {
+                        result += "strength:" + std::to_string(m_steps[id].m_strength) + ";";
+                        result += "positions:" + std::to_string(m_steps[id].m_positions.size()) + ";";
+                        for (size_t i = 0; i < m_steps[id].m_positions.size(); ++i)
+                        {
+                            result += std::to_string(id) + ":" + m_steps[id].m_positions[i].to_string() + ";";
+                        }
+                    }
+                    return result;
+                }
+
+                void parse(const char* databuf)
+                {
+                    size_t readed_length = 0;
+                    size_t size = 0;
+                    if (sscanf(databuf, "#je_light2d_range#size:%zu;%zn", &size, &readed_length) == 1)
+                    {
+                        databuf += readed_length;
+                        m_steps.clear();
+                        for (size_t i = 0; i < size; ++i)
+                        {
+                            step_data data;
+                            size_t idx = 0;
+                            if (sscanf(databuf, "%zu:%f;%zn", &idx, &data.m_strength, &readed_length) == 2)
+                            {
+                                databuf += readed_length;
+                                size_t size = 0;
+                                if (sscanf(databuf, "%zu:%zu;%zn", &idx, &size, &readed_length) == 2)
+                                {
+                                    databuf += readed_length;
+                                    data.m_positions.clear();
+                                    for (size_t i = 0; i < size; ++i)
+                                    {
+                                        math::vec3 pos;
+                                        if (sscanf(databuf, "%zu:(%f,%f,%f);%zn", &idx, &pos.x, &pos.y, &pos.z, &readed_length) == 4)
+                                        {
+                                            databuf += readed_length;
+                                            data.m_positions.push_back(pos);
+                                        }
+                                        else
+                                            data.m_positions.push_back(math::vec3(0.f, 0.f, 0.f));
+                                    }
+                                }
+                            }
+                            m_steps.push_back(data);
+                        }
+                    }
+                }
+            };
+            light_strength_steps steps;
+
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &Range::steps, "steps");
+            }
+        };
         struct Point
         {
             float decay = 2.0f;
@@ -9368,6 +9440,7 @@ namespace jeecs
             type_info::register_type<Light2D::TopDown>(guard, "Light2D::TopDown");
             type_info::register_type<Light2D::Gain>(guard, "Light2D::Gain");
             type_info::register_type<Light2D::Point>(guard, "Light2D::Point");
+            type_info::register_type<Light2D::Range>(guard, "Light2D::Range");
             type_info::register_type<Light2D::Parallel>(guard, "Light2D::Parallel");
             type_info::register_type<Light2D::ShadowBuffer>(guard, "Light2D::ShadowBuffer");
             type_info::register_type<Light2D::CameraPostPass>(guard, "Light2D::CameraPostPass");

@@ -402,12 +402,13 @@ namespace editor
 
                 match (jeapi::gui::widget::poseditor(
                     tag,
-                    std::min(GetContentRegionAvail().0, 200.),
-                    points,
-                    0.05
+                    std::min(GetContentRegionAvail().0, 400.),
+                    [points],
+                    0.05,
+                    \a, i = a[i];
                     ))
                 {
-                value(a)? { points = a; need_update = true; }
+                value(a)? { points = a[0]; need_update = true; }
                 none?;
                 }
 
