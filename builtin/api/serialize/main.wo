@@ -5,6 +5,7 @@ import je;
 import je::editor;
 
 import builtin::api::gui::errmsg;
+import builtin::api::serialize::typemgr;
 
 using je;
 

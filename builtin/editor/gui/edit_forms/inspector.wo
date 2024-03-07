@@ -274,8 +274,6 @@ namespace editor::gui::edit_forms
                                             }
                                             if (MenuItem(F"重置"))
                                             {
-                                                
-
                                                 jeapi::gui::form::ask(
                                                     "确认？", 
                                                     F"即将重置组件{ctype->name}，是否确认？", 
