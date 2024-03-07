@@ -3590,12 +3590,12 @@ namespace jeecs
     {
 #define JE_DECL_SFINAE_CHECKER_HELPLER(name, memberexpr) \
         template<typename T, typename VoidT = void>\
-        struct sfinae_##name## : std::false_type\
+        struct sfinae_##name : std::false_type\
         {\
             static_assert(std::is_void<VoidT>::value);\
         };\
         template<typename T>\
-        struct sfinae_##name##<T, std::void_t<decltype(memberexpr)>> : std::true_type\
+        struct sfinae_##name<T, std::void_t<decltype(memberexpr)>> : std::true_type\
         {\
         };
 
