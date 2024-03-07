@@ -32,14 +32,14 @@ using je::gui;
 let mut action_after_guide_form_closed = \ = result::ok(do nil); as ()=>result<void, string>;
 
 using Path = struct {
-    name: string,       // ½öÓÃÓÚÏÔÊ¾
+    name: string,       // ä»…ç”¨äºæ˜¾ç¤º
     path: fsys::path_t,
     childs: mut option<array<Path>>,
 }
 {
     func _get_available_root_paths()
     {
-        // TODO: ÕâÀïÖ»¿¼ÂÇWindowsµÄA-ZÅÌ·û£¬Ê²Ã´AA AB AC£¬¾ÍËãwindowsÎ´À´Ö§³ÖÒ²¸øÒ¯¹ö
+        // TODO: è¿™é‡Œåªè€ƒè™‘Windowsçš„A-Zç›˜ç¬¦ï¼Œä»€ä¹ˆAA AB ACï¼Œå°±ç®—windowsæœªæ¥æ”¯æŒä¹Ÿç»™çˆ·æ»š
         let arr = ["/"]mut;
 
         if (std::platform_os == std::os::WIN32)
@@ -130,25 +130,25 @@ using Path = struct {
 func open_path_to_do_sth(action_after_choice: (option<fsys::path_t>)=>void)
 {
     let mut open = true;
-    match (BeginAttrOpen("¼ÓÔØ»òĞÂ½¨ÏîÄ¿", 
+    match (BeginAttrOpen("åŠ è½½æˆ–æ–°å»ºé¡¹ç›®", 
         WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
     {
     value(show)?
         if (show)
         {
             let (cur_width, _) = GetContentRegionAvail();
-            Text("ÇëÑ¡ÔñÏîÄ¿ÎÄ¼şËùÔÚµÄÄ¿Â¼£º");
+            Text("è¯·é€‰æ‹©é¡¹ç›®æ–‡ä»¶æ‰€åœ¨çš„ç›®å½•ï¼š");
 
             do BeginChildSize("SelectPathToCreateProject", 0., 300.);
             let select_path_to_create = Path::show_all();
             EndChild();
 
-            if (ButtonSize("È·ÈÏ", (cur_width, 0.) ))
+            if (ButtonSize("ç¡®è®¤", (cur_width, 0.) ))
             {
                 open = false;
                 action_after_choice(select_path_to_create);
             }
-            if (ButtonSize("È¡Ïû", (cur_width, 0.) ))
+            if (ButtonSize("å–æ¶ˆ", (cur_width, 0.) ))
                 open = false;
         }
     none?
@@ -207,7 +207,7 @@ func my_ask_for_get_yes_no_cancel_result(
     launch(func()
     {
         let mut open = true;
-        match (BeginAttrOpen(F"ÍË³ö£¿##{JobID()}", 
+        match (BeginAttrOpen(F"é€€å‡ºï¼Ÿ##{JobID()}", 
             WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
         {
         value(show)?
@@ -215,11 +215,11 @@ func my_ask_for_get_yes_no_cancel_result(
             {
                 if (p->is_debugging)
                 {
-                    TextDisabled("ÕıÔÚ±à¼­Ä£Ê½ÖĞ£¬ÇëÏÈÍË³ö±à¼­×´Ì¬");
+                    TextDisabled("æ­£åœ¨ç¼–è¾‘æ¨¡å¼ä¸­ï¼Œè¯·å…ˆé€€å‡ºç¼–è¾‘çŠ¶æ€");
                 }
                 else
                 {
-                    Text("¼´½«ÍË³ö±à¼­Æ÷£¬ÊÇ·ñ±£´æµ±Ç°ÏîÄ¿£¿");
+                    Text("å³å°†é€€å‡ºç¼–è¾‘å™¨ï¼Œæ˜¯å¦ä¿å­˜å½“å‰é¡¹ç›®ï¼Ÿ");
                     let missing_comps = p->get_towoo_context->get_removing_components;
                     let missing_syss = p->get_towoo_context->get_removing_systems;
                     if (!missing_comps->empty || !missing_syss->empty)
@@ -227,13 +227,13 @@ func my_ask_for_get_yes_no_cancel_result(
                         Separator();
 
                         PushStyleColor(ImGuiCol::ImGuiCol_Text, (200, 125, 40, 255));
-                        Text("¾¯¸æ£¡");
+                        Text("è­¦å‘Šï¼");
                         PopStyleColor();
-                        Text("ÒÔÏÂ×é¼şºÍÏµÍ³´¦ÓÚ¶ªÊ§×´Ì¬£º");
+                        Text("ä»¥ä¸‹ç»„ä»¶å’Œç³»ç»Ÿå¤„äºä¸¢å¤±çŠ¶æ€ï¼š");
 
                         if (!missing_comps->empty)
                         {
-                            Text("×é¼ş£º");
+                            Text("ç»„ä»¶ï¼š");
                             PushStyleColor(ImGuiCol::ImGuiCol_Text, (20, 125, 175, 255));
                             for (let _, c: missing_comps)
                                 Text(c);
@@ -241,29 +241,29 @@ func my_ask_for_get_yes_no_cancel_result(
                         }
                         if (!missing_syss->empty)
                         {
-                            Text("ÏµÍ³£º");
+                            Text("ç³»ç»Ÿï¼š");
                             PushStyleColor(ImGuiCol::ImGuiCol_Text, (175, 125, 20, 255));
                             for (let _, s: missing_syss)
                                 Text(s);
                             PopStyleColor();
                         }
-                        Text("ÏÂ´ÎÔØÈë½«¶ªÊ§ÒÔÉÏ×é¼ş»òÏµÍ³");
+                        Text("ä¸‹æ¬¡è½½å…¥å°†ä¸¢å¤±ä»¥ä¸Šç»„ä»¶æˆ–ç³»ç»Ÿ");
                         Separator();
                     }
 
-                    if (Button("ÊÇ") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ENTER)))
+                    if (Button("æ˜¯") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ENTER)))
                     {
                         okevent(1);
                         open = false;
                     }
                     SameLine();
-                    if (Button("·ñ") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ESC)))
+                    if (Button("å¦") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ESC)))
                     {
                         okevent(0);
                         open = false;
                     }
                     SameLine();
-                    if (Button("È¡Ïû") || (IsWindowFocused() && inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::BACKSPACE])))
+                    if (Button("å–æ¶ˆ") || (IsWindowFocused() && inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::BACKSPACE])))
                     {
                         okevent(-1);
                         open = false;
@@ -299,8 +299,8 @@ public func ask_for_saving_proj_when_exit(p: editor::Project)
                 {
                     if (!p->save_project())
                     {
-                        // ·¢ÉúÁËÒ»Ğ©ÊÂÇé£¬Ã»ÓĞ±£´æ³É¹¦£¬µ¯¿ò²¢ÇÒ²»ÍË³ö
-                        jeapi::gui::form::errmsg("Ê§°Ü", "ÏîÄ¿±£´æÎ´ÄÜÍê³É");
+                        // å‘ç”Ÿäº†ä¸€äº›äº‹æƒ…ï¼Œæ²¡æœ‰ä¿å­˜æˆåŠŸï¼Œå¼¹æ¡†å¹¶ä¸”ä¸é€€å‡º
+                        jeapi::gui::form::errmsg("å¤±è´¥", "é¡¹ç›®ä¿å­˜æœªèƒ½å®Œæˆ");
                         return;
                     }
                 }
@@ -315,25 +315,25 @@ public func ask_for_saving_proj_when_exit(p: editor::Project)
 
 func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict<dynamic, dynamic>, f: mutable<bool>)
 {
-    // È·±£Ä¿Â¼´æÔÚ
+    // ç¡®ä¿ç›®å½•å­˜åœ¨
     if (! fsys::exist(path))
-        return jeapi::gui::form::errmsg("Ê§°Ü", F"´´½¨ÏîÄ¿Ê§°Ü£¬²»´æÔÚµÄÄ¿Â¼{path}");
+        return jeapi::gui::form::errmsg("å¤±è´¥", F"åˆ›å»ºé¡¹ç›®å¤±è´¥ï¼Œä¸å­˜åœ¨çš„ç›®å½•{path}");
 
-    jeapi::gui::form::input("ĞÂÏîÄ¿ÃüÃû", F"½«ÔÚ{path}´´½¨ĞÂÏîÄ¿", "NewProject", 
+    jeapi::gui::form::input("æ–°é¡¹ç›®å‘½å", F"å°†åœ¨{path}åˆ›å»ºæ–°é¡¹ç›®", "NewProject", 
         func(projname)
         {
-            // ÔÙ´ÎÈ·±£ÎÄ¼ş´æÔÚ
+            // å†æ¬¡ç¡®ä¿æ–‡ä»¶å­˜åœ¨
             if (! fsys::exist(path))
-                return do jeapi::gui::form::errmsg("Ê§°Ü", F"´´½¨ÏîÄ¿Ê§°Ü£¬²»´æÔÚµÄÄ¿Â¼{path}");
+                return do jeapi::gui::form::errmsg("å¤±è´¥", F"åˆ›å»ºé¡¹ç›®å¤±è´¥ï¼Œä¸å­˜åœ¨çš„ç›®å½•{path}");
 
             let project_path = path / projname;
             match (fsys::mkdir(project_path))
             {
             err(errno)?
-                return do jeapi::gui::form::errmsg("Ê§°Ü", F"´´½¨ÏîÄ¿Ê§°Ü£¬ÎŞ·¨´´½¨Ä¿Â¼{project_path} ({errno})");
+                return do jeapi::gui::form::errmsg("å¤±è´¥", F"åˆ›å»ºé¡¹ç›®å¤±è´¥ï¼Œæ— æ³•åˆ›å»ºç›®å½•{project_path} ({errno})");
             ok(regular_path)?
                 {
-                    // OK, ¹Ø±Õµ±Ç°universe£¬¹Ø±Õ±à¼­Æ÷µ¼º½´°¿Ú£¬´´½¨ÏîÄ¿²¢±£´æµ½
+                    // OK, å…³é—­å½“å‰universeï¼Œå…³é—­ç¼–è¾‘å™¨å¯¼èˆªçª—å£ï¼Œåˆ›å»ºé¡¹ç›®å¹¶ä¿å­˜åˆ°
                     u->close();
                     f->set(false);
                     
@@ -346,13 +346,13 @@ func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: di
                             apply_editor_data_when_start_up_project(editordat);
                             assert(p->save_project());
 
-                            // ÔÚ´Ë´¦´´½¨×ÊÔ´Ä¿Â¼£¬°üº¬Ò»Ğ©»ù±¾µÄ×ÊÔ´ºÍÎ´À´×Ô¶¯´´½¨µÄ×ÊÔ´
+                            // åœ¨æ­¤å¤„åˆ›å»ºèµ„æºç›®å½•ï¼ŒåŒ…å«ä¸€äº›åŸºæœ¬çš„èµ„æºå’Œæœªæ¥è‡ªåŠ¨åˆ›å»ºçš„èµ„æº
                             do fsys::mkdir(p.m_path/"resource");
                             do fsys::mkdir(p.m_path/"resource"/"texture");
                             do fsys::writeall(p.m_path/"resource"/"texture"/"readme.md", 
-@"# Texture Ä¿Â¼
+@"# Texture ç›®å½•
 ---
-´ËÄ¿Â¼ÓÃÓÚ±£´æÒıÇæ×Ô¶¯Éú³ÉµÄÍ¼Ïñ×ÊÔ´
+æ­¤ç›®å½•ç”¨äºä¿å­˜å¼•æ“è‡ªåŠ¨ç”Ÿæˆçš„å›¾åƒèµ„æº
 "@);
                             do fsys::copy(fsys::normalize(F"{std::exepath()}/builtin/shader"), fsys::normalize(F"{p.m_path}/resource/shader"));
                             do fsys::copy(fsys::normalize(F"{std::exepath()}/builtin/font"), fsys::normalize(F"{p.m_path}/resource/font"));
@@ -396,15 +396,15 @@ func open_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict
 {
     let proj_path = path/"project.jeproj4";
 
-    // È·±£Ä¿Â¼´æÔÚ
+    // ç¡®ä¿ç›®å½•å­˜åœ¨
     if (! fsys::exist(proj_path))
-        return jeapi::gui::form::errmsg("Ê§°Ü", F"¼ÓÔØÏîÄ¿Ê§°Ü£¬ÕÒ²»µ½ÏîÄ¿ÎÄ¼ş{proj_path}");
+        return jeapi::gui::form::errmsg("å¤±è´¥", F"åŠ è½½é¡¹ç›®å¤±è´¥ï¼Œæ‰¾ä¸åˆ°é¡¹ç›®æ–‡ä»¶{proj_path}");
     
     match (fsys::readall(proj_path)=>> \d = dict::deserialize(d)->> \d = d->> \k,v = (k as string, v);;;)
     {
     value(dat)?
         {
-            // OK, ¹Ø±Õµ±Ç°universe£¬¹Ø±Õ±à¼­Æ÷µ¼º½´°¿Ú£¬´ò¿ªÏîÄ¿
+            // OK, å…³é—­å½“å‰universeï¼Œå…³é—­ç¼–è¾‘å™¨å¯¼èˆªçª—å£ï¼Œæ‰“å¼€é¡¹ç›®
             u->close();
             f->set(false);
 
@@ -427,7 +427,7 @@ func open_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict
             ;
         }
     none?
-        return do jeapi::gui::form::errmsg("Ê§°Ü", F"´ò¿ªÏîÄ¿Ê§°Ü£¬ÕÒ²»µ½»òÎŞĞ§µÄÏîÄ¿ÎÄ¼ş");
+        return do jeapi::gui::form::errmsg("å¤±è´¥", F"æ‰“å¼€é¡¹ç›®å¤±è´¥ï¼Œæ‰¾ä¸åˆ°æˆ–æ— æ•ˆçš„é¡¹ç›®æ–‡ä»¶");
     }
 
 }
@@ -462,40 +462,40 @@ for (;;)
             launch(func(){
                 let open = new! mutable(true);
 
-                if (BeginAttr("JoyEngineECS ÏîÄ¿µ¼º½", 
+                if (BeginAttr("JoyEngineECS é¡¹ç›®å¯¼èˆª", 
                     WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
                     + WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus
                     + WindowsAttribute::ImGuiWindowFlags_NoDocking
                     + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
                 {
-                    Text("»¶Ó­Ê¹ÓÃJoyEngine£¬ÇëÑ¡ÔñÒ»ÏîÒÔ¿ªÊ¼");
+                    Text("æ¬¢è¿ä½¿ç”¨JoyEngineï¼Œè¯·é€‰æ‹©ä¸€é¡¹ä»¥å¼€å§‹");
 
                     Separator();
 
-                    if (jeapi::gui::widget::IconButton(create_project_icon, "´´½¨ĞÂÏîÄ¿", (64., 64.), option::none))
+                    if (jeapi::gui::widget::IconButton(create_project_icon, "åˆ›å»ºæ–°é¡¹ç›®", (64., 64.), option::none))
                     {
                         launch(open_path_to_do_sth, (\p: option<fsys::path_t> = do p->> \path = create_project_at(path, u, editor_configs, open);;,));
                     }
-                    if (jeapi::gui::widget::IconButton(load_project_icon, "¼ÓÔØÒ»¸öÏîÄ¿", (64., 64.), option::none))
+                    if (jeapi::gui::widget::IconButton(load_project_icon, "åŠ è½½ä¸€ä¸ªé¡¹ç›®", (64., 64.), option::none))
                     {
                         launch(open_path_to_do_sth, (\p: option<fsys::path_t> = do p->> \path = open_project_at(path, u, editor_configs, open);;,));
                     }
 
-                    TextDisabled("ÀúÊ·ÏîÄ¿");
+                    TextDisabled("å†å²é¡¹ç›®");
                     do BeginChildSize("##history", 0., 100.);
 
                     for (let index, dat : historys)
                     {
                         let context_menu_func = func()
                         {
-                            if (MenuItem("¼ÓÔØ´ËÏîÄ¿"))
+                            if (MenuItem("åŠ è½½æ­¤é¡¹ç›®"))
                                 open_project_at(fsys::normalize(dat[1]), u, editor_configs, open);
-                            if (MenuItem("´ò¿ªÏîÄ¿ËùÔÚÂ·¾¶"))
+                            if (MenuItem("æ‰“å¼€é¡¹ç›®æ‰€åœ¨è·¯å¾„"))
                                 do std::shell(F"explorer \"{fsys::normalize(dat[1])->tostring->replace("/", "\\")}\"");
                             Separator();
-                            if (MenuItem("´ÓÀúÊ·¼ÇÂ¼ÖĞÒÆ³ı"))
+                            if (MenuItem("ä»å†å²è®°å½•ä¸­ç§»é™¤"))
                             {
-                                jeapi::gui::form::ask("È·ÈÏÒÆ³ı£¿", F"È·ÈÏÒª½«ÏîÄ¿{dat[0]} ({dat[1]})\n´ÓÀúÊ·¼ÇÂ¼ÖĞÒÆ³ıÂğ£¿",
+                                jeapi::gui::form::ask("ç¡®è®¤ç§»é™¤ï¼Ÿ", F"ç¡®è®¤è¦å°†é¡¹ç›®{dat[0]} ({dat[1]})\nä»å†å²è®°å½•ä¸­ç§»é™¤å—ï¼Ÿ",
                                     func(check)
                                     {
                                         if (check)
@@ -522,7 +522,7 @@ for (;;)
 
                     EndChild();
 
-                    if (jeapi::gui::widget::IconButton(exit_editor_icon, "ÍË³ö±à¼­Æ÷", (64., 64.), option::none))
+                    if (jeapi::gui::widget::IconButton(exit_editor_icon, "é€€å‡ºç¼–è¾‘å™¨", (64., 64.), option::none))
                     {
                         u->close();
                         open->set(false);
@@ -539,16 +539,16 @@ for (;;)
         else
         {
             launch(func(specify_vs_version: mutable<option<int>>){
-                if (BeginAttr("JoyEngineECS ÏîÄ¿µ¼º½", 
+                if (BeginAttr("JoyEngineECS é¡¹ç›®å¯¼èˆª", 
                     WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
                     + WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus
                     + WindowsAttribute::ImGuiWindowFlags_NoDocking
                     + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
                 {
-                    Text("Æô¶¯ÒıÇæÊ±·¢ÏÖÏîÄ¿ËùĞèÊ¹ÓÃµÄ¹¹½¨¹¤¾ßÎ´×¼±¸¾ÍĞ÷");
-                    Text("* ÏîÄ¿ÖĞµÄC++Ä£¿éĞèÒªÊ¹ÓÃ¹¹½¨¹¤¾ß½øĞĞ±àÒë");
+                    Text("å¯åŠ¨å¼•æ“æ—¶å‘ç°é¡¹ç›®æ‰€éœ€ä½¿ç”¨çš„æ„å»ºå·¥å…·æœªå‡†å¤‡å°±ç»ª");
+                    Text("* é¡¹ç›®ä¸­çš„C++æ¨¡å—éœ€è¦ä½¿ç”¨æ„å»ºå·¥å…·è¿›è¡Œç¼–è¯‘");
                     Separator();
-                    Text("ÇëÈ·ÈÏÒÔÏÂÊÂÏîÒÑ¾­Íê³É£¬È»ºóÖØÆô±à¼­Æ÷");
+                    Text("è¯·ç¡®è®¤ä»¥ä¸‹äº‹é¡¹å·²ç»å®Œæˆï¼Œç„¶åé‡å¯ç¼–è¾‘å™¨");
 
                     let shine_text = func(text: string)
                     {
@@ -557,17 +557,17 @@ for (;;)
                         else
                             TextDisabled(text);
                     };
-                    shine_text("ÇëÌØ±ğ¹Ø×¢¡®×¢Òâ¡¯²¿·ÖµÄÄÚÈİ");
+                    shine_text("è¯·ç‰¹åˆ«å…³æ³¨â€˜æ³¨æ„â€™éƒ¨åˆ†çš„å†…å®¹");
 
                     do BeginChildSize("##history", 600., 300.);
-                    Text("1. ÇëÈ·ÈÏÒÑ¾­°²×° Visual Studio µÄ2017¡¢2019»ò2022°æ±¾ÆäÖĞÖ®Ò»");
-                    Text("2. ÇëÕÒµ½ Visual Studio Ğ¯´øµÄ MSBuild.exe µÄËùÔÚÂ·¾¶");
-                    TextDisabled("  * ÒÔ°²×°ÔÚCÅÌµÄÎªÀı£¬MSBuild.exeËùÔÚÂ·¾¶¿ÉÄÜÎª:");
+                    Text("1. è¯·ç¡®è®¤å·²ç»å®‰è£… Visual Studio çš„2017ã€2019æˆ–2022ç‰ˆæœ¬å…¶ä¸­ä¹‹ä¸€");
+                    Text("2. è¯·æ‰¾åˆ° Visual Studio æºå¸¦çš„ MSBuild.exe çš„æ‰€åœ¨è·¯å¾„");
+                    TextDisabled("  * ä»¥å®‰è£…åœ¨Cç›˜çš„ä¸ºä¾‹ï¼ŒMSBuild.exeæ‰€åœ¨è·¯å¾„å¯èƒ½ä¸º:");
                     TextDisabled("    "); SameLine();
-                    do InputText("(½ö¹©²Î¿¼)", @"C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional\MSBuild\Current\Bin"@);
-                    Text("3. ÇëÉèÖÃ»·¾³±äÁ¿ `MSBUILD` Ö¸Ïò´ËÂ·¾¶");
-                    Text("4. ÇëÈ·±£ÒÔÉÏÂ·¾¶°üº¬ 2017¡¢2019»ò2022 ×ÖÑù");
-                    Text("  * ÈôÃ»ÓĞ°üº¬£¬ÇëÔÚ´ËÖ¸¶¨Visual StudioµÄ°æ±¾£º");
+                    do InputText("(ä»…ä¾›å‚è€ƒ)", @"C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional\MSBuild\Current\Bin"@);
+                    Text("3. è¯·è®¾ç½®ç¯å¢ƒå˜é‡ `MSBUILD` æŒ‡å‘æ­¤è·¯å¾„");
+                    Text("4. è¯·ç¡®ä¿ä»¥ä¸Šè·¯å¾„åŒ…å« 2017ã€2019æˆ–2022 å­—æ ·");
+                    Text("  * è‹¥æ²¡æœ‰åŒ…å«ï¼Œè¯·åœ¨æ­¤æŒ‡å®šVisual Studioçš„ç‰ˆæœ¬ï¼š");
 
                     if (specify_vs_version->get->>\val = val != 2017 && val != 2019 && val != 2022;-> valor(false))
                         specify_vs_version->set(option::none);
@@ -591,23 +591,23 @@ for (;;)
                     };
 
                     let now_specify_version = specify_vs_version->get->valor(0);
-                    do CheckBox("Î´Ö¸¶¨£¨Ä¬ÈÏ£©", now_specify_version == 0)->>func(_){_set_specify_vs_version(option::none);};
-                    do CheckBox("Ç¿ÖÆÖ¸¶¨Îª 2017", now_specify_version == 2017)->> func(_){_set_specify_vs_version(option::value(2017));};
-                    do CheckBox("Ç¿ÖÆÖ¸¶¨Îª 2019", now_specify_version == 2019)->> func(_){_set_specify_vs_version(option::value(2019));};
-                    do CheckBox("Ç¿ÖÆÖ¸¶¨Îª 2022", now_specify_version == 2022)->> func(_){_set_specify_vs_version(option::value(2022));};
+                    do CheckBox("æœªæŒ‡å®šï¼ˆé»˜è®¤ï¼‰", now_specify_version == 0)->>func(_){_set_specify_vs_version(option::none);};
+                    do CheckBox("å¼ºåˆ¶æŒ‡å®šä¸º 2017", now_specify_version == 2017)->> func(_){_set_specify_vs_version(option::value(2017));};
+                    do CheckBox("å¼ºåˆ¶æŒ‡å®šä¸º 2019", now_specify_version == 2019)->> func(_){_set_specify_vs_version(option::value(2019));};
+                    do CheckBox("å¼ºåˆ¶æŒ‡å®šä¸º 2022", now_specify_version == 2022)->> func(_){_set_specify_vs_version(option::value(2022));};
                     
                     Separator();
 
-                    Text("5. ÇëÈ·ÈÏÒÑ¾­°²×°CMake 3.16»òÒÔÉÏ°æ±¾");
-                    Text("6. ÇëÕÒµ½CMakeµÄ cmake.exe ËùÔÚÂ·¾¶");
-                    TextDisabled("  * ÒÔ°²×°ÔÚCÅÌµÄÎªÀı£¬cmake.exeËùÔÚÂ·¾¶¿ÉÄÜÎª:");
+                    Text("5. è¯·ç¡®è®¤å·²ç»å®‰è£…CMake 3.16æˆ–ä»¥ä¸Šç‰ˆæœ¬");
+                    Text("6. è¯·æ‰¾åˆ°CMakeçš„ cmake.exe æ‰€åœ¨è·¯å¾„");
+                    TextDisabled("  * ä»¥å®‰è£…åœ¨Cç›˜çš„ä¸ºä¾‹ï¼Œcmake.exeæ‰€åœ¨è·¯å¾„å¯èƒ½ä¸º:");
                     TextDisabled("    "); SameLine();
-                    do InputText("(½ö¹©²Î¿¼)", @"C:\Program Files\cmake-3.16.3-rc3-windows-x86_64\bin"@);
-                    Text("7. ÇëÉèÖÃ»·¾³±äÁ¿ `CMAKE` Ö¸Ïò´ËÂ·¾¶");
+                    do InputText("(ä»…ä¾›å‚è€ƒ)", @"C:\Program Files\cmake-3.16.3-rc3-windows-x86_64\bin"@);
+                    Text("7. è¯·è®¾ç½®ç¯å¢ƒå˜é‡ `CMAKE` æŒ‡å‘æ­¤è·¯å¾„");
 
                     Separator();
-                    Text("×¢Òâ£º");
-                    Text("* ÇëÈ·±£ÉÏÊöËùÓĞÂ·¾¶ÖĞ²»°üº¬¶à×Ö½Ú×Ö·û£¨°üÀ¨µ«²»ÏŞÓÚÖĞÎÄ¡¢È«½Ç·ûºÅµÈ£©");
+                    Text("æ³¨æ„ï¼š");
+                    Text("* è¯·ç¡®ä¿ä¸Šè¿°æ‰€æœ‰è·¯å¾„ä¸­ä¸åŒ…å«å¤šå­—èŠ‚å­—ç¬¦ï¼ˆåŒ…æ‹¬ä½†ä¸é™äºä¸­æ–‡ã€å…¨è§’ç¬¦å·ç­‰ï¼‰");
                     EndChild();
                     
                     Separator();
@@ -620,7 +620,7 @@ for (;;)
         }
 
         u->wait();
-        // Õâ¸öÓĞµã²Ùµ°£¬µ½Ê±ºò¿´Ò»ÏÂÔõÃ´´¦Àí
+        // è¿™ä¸ªæœ‰ç‚¹æ“è›‹ï¼Œåˆ°æ—¶å€™çœ‹ä¸€ä¸‹æ€ä¹ˆå¤„ç†
         do u->get_universe->close();
     }
 
@@ -629,8 +629,8 @@ for (;;)
     ok(_)? break;
     err(msg)? 
         {
-            je::logerr(F"ÎŞ·¨´ò¿ªÖ¸¶¨ÏîÄ¿£º{msg}");
-            jeapi::gui::form::msg("´ò¿ªÏîÄ¿Ê§°Ü", F"ÎŞ·¨´ò¿ªÖ¸¶¨ÏîÄ¿£º{msg}");
+            je::logerr(F"æ— æ³•æ‰“å¼€æŒ‡å®šé¡¹ç›®ï¼š{msg}");
+            jeapi::gui::form::msg("æ‰“å¼€é¡¹ç›®å¤±è´¥", F"æ— æ³•æ‰“å¼€æŒ‡å®šé¡¹ç›®ï¼š{msg}");
         }
     }
 }

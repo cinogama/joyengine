@@ -3839,6 +3839,10 @@ namespace jeecs
             {
                 return _elems_ptr_begin;
             }
+            ElemT& at(size_t index)const noexcept
+            {
+                return _elems_ptr_begin[index];
+            }
             ElemT& operator[](size_t index)const noexcept
             {
                 return _elems_ptr_begin[index];
@@ -6010,18 +6014,34 @@ namespace jeecs
 
             }*/
 
-            inline std::string to_string()const
+            static const char* JEScriptTypeName()
             {
-                std::string result;
-                std::stringstream ss;
-                ss << "(" << x << "," << y << ")";
-                ss >> result;
-
-                return result;
+                return "vec2";
             }
-            inline void parse(const std::string& str)
+            static const char* JEScriptTypeDeclare()
             {
-                sscanf(str.c_str(), "(%f,%f)", &x, &y);
+                return "using vec2 = (real, real);";
+            }
+            void JEParseFromScriptType(wo_vm vm, wo_value v)
+            {
+                wo_value elem = wo_push_empty(vm);
+
+                wo_struct_get(elem, v, 0);
+                x = wo_float(elem);
+
+                wo_struct_get(elem, v, 1);
+                y = wo_float(elem);
+            }
+            void JEParseToScriptType(wo_vm vm, wo_value v) const
+            {
+                wo_set_struct(v, vm, 2);
+                wo_value elem = wo_push_empty(vm);
+
+                wo_set_float(elem, x);
+                wo_struct_set(v, 0, elem);
+
+                wo_set_float(elem, y);
+                wo_struct_set(v, 1, elem);
             }
         };
         inline static constexpr vec2 operator * (float _f, const vec2& _v2) noexcept
@@ -6135,18 +6155,34 @@ namespace jeecs
                 return x != _v2.x || y != _v2.y;
             }
 
-            inline std::string to_string()const
+            static const char* JEScriptTypeName()
             {
-                std::string result;
-                std::stringstream ss;
-                ss << "(" << x << "," << y << ")";
-                ss >> result;
-
-                return result;
+                return "ivec2";
             }
-            inline void parse(const std::string& str)
+            static const char* JEScriptTypeDeclare()
             {
-                sscanf(str.c_str(), "(%d,%d)", &x, &y);
+                return "using ivec2 = (int, int);";
+            }
+            void JEParseFromScriptType(wo_vm vm, wo_value v)
+            {
+                wo_value elem = wo_push_empty(vm);
+
+                wo_struct_get(elem, v, 0);
+                x = (int)wo_int(elem);
+
+                wo_struct_get(elem, v, 1);
+                y = (int)wo_int(elem);
+            }
+            void JEParseToScriptType(wo_vm vm, wo_value v) const
+            {
+                wo_set_struct(v, vm, 2);
+                wo_value elem = wo_push_empty(vm);
+
+                wo_set_int(elem, (wo_integer_t)x);
+                wo_struct_set(v, 0, elem);
+
+                wo_set_int(elem, (wo_integer_t)y);
+                wo_struct_set(v, 1, elem);
             }
         };
 
@@ -6280,18 +6316,40 @@ namespace jeecs
                     x * _v3.y - y * _v3.x);
             }
 
-            inline std::string to_string()const
+            static const char* JEScriptTypeName()
             {
-                std::string result;
-                std::stringstream ss;
-                ss << "(" << x << "," << y << "," << z << ")";
-                ss >> result;
-
-                return result;
+                return "vec3";
             }
-            inline void parse(const std::string& str)
+            static const char* JEScriptTypeDeclare()
             {
-                sscanf(str.c_str(), "(%f,%f,%f)", &x, &y, &z);
+                return "using vec3 = (real, real, real);";
+            }
+            void JEParseFromScriptType(wo_vm vm, wo_value v)
+            {
+                wo_value elem = wo_push_empty(vm);
+
+                wo_struct_get(elem, v, 0);
+                x = wo_float(elem);
+
+                wo_struct_get(elem, v, 1);
+                y = wo_float(elem);
+
+                wo_struct_get(elem, v, 2);
+                z = wo_float(elem);
+            }
+            void JEParseToScriptType(wo_vm vm, wo_value v) const
+            {
+                wo_set_struct(v, vm, 3);
+                wo_value elem = wo_push_empty(vm);
+
+                wo_set_float(elem, x);
+                wo_struct_set(v, 0, elem);
+
+                wo_set_float(elem, y);
+                wo_struct_set(v, 1, elem);
+
+                wo_set_float(elem, z);
+                wo_struct_set(v, 2, elem);
             }
         };
         inline static constexpr vec3 operator * (float _f, const vec3& _v3) noexcept
@@ -6431,18 +6489,46 @@ namespace jeecs
             /*inline constexpr vec4 cross(const vec4& _v4) const noexcept
             {
             }*/
-            inline std::string to_string()const
+            static const char* JEScriptTypeName()
             {
-                std::string result;
-                std::stringstream ss;
-                ss << "(" << x << "," << y << "," << z << "," << w << ")";
-                ss >> result;
-
-                return result;
+                return "vec4";
             }
-            inline void parse(const std::string& str)
+            static const char* JEScriptTypeDeclare()
             {
-                sscanf(str.c_str(), "(%f,%f,%f,%f)", &x, &y, &z, &w);
+                return "using vec4 = (real, real, real, real);";
+            }
+            void JEParseFromScriptType(wo_vm vm, wo_value v)
+            {
+                wo_value elem = wo_push_empty(vm);
+
+                wo_struct_get(elem, v, 0);
+                x = wo_float(elem);
+
+                wo_struct_get(elem, v, 1);
+                y = wo_float(elem);
+
+                wo_struct_get(elem, v, 2);
+                z = wo_float(elem);
+
+                wo_struct_get(elem, v, 3);
+                w = wo_float(elem);
+            }
+            void JEParseToScriptType(wo_vm vm, wo_value v) const
+            {
+                wo_set_struct(v, vm, 4);
+                wo_value elem = wo_push_empty(vm);
+
+                wo_set_float(elem, x);
+                wo_struct_set(v, 0, elem);
+
+                wo_set_float(elem, y);
+                wo_struct_set(v, 1, elem);
+
+                wo_set_float(elem, z);
+                wo_struct_set(v, 2, elem);
+
+                wo_set_float(elem, w);
+                wo_struct_set(v, 3, elem);
             }
         };
         inline static constexpr vec4 operator * (float _f, const vec4& _v4) noexcept
@@ -6708,18 +6794,46 @@ namespace jeecs
                     + (w * w - u.dot(u)) * _v3
                     + 2.0f * w * u.cross(_v3);
             }
-            inline std::string to_string()const
+            static const char* JEScriptTypeName()
             {
-                std::string result;
-                std::stringstream ss;
-                ss << "(" << x << "," << y << "," << z << "," << w << ")";
-                ss >> result;
-
-                return result;
+                return "quat";
             }
-            inline void parse(const std::string& str)
+            static const char* JEScriptTypeDeclare()
             {
-                sscanf(str.c_str(), "(%f,%f,%f,%f)", &x, &y, &z, &w);
+                return "using quat = (real, real, real, real);";
+            }
+            void JEParseFromScriptType(wo_vm vm, wo_value v)
+            {
+                wo_value elem = wo_push_empty(vm);
+
+                wo_struct_get(elem, v, 0);
+                x = wo_float(elem);
+
+                wo_struct_get(elem, v, 1);
+                y = wo_float(elem);
+
+                wo_struct_get(elem, v, 2);
+                z = wo_float(elem);
+
+                wo_struct_get(elem, v, 3);
+                w = wo_float(elem);
+            }
+            void JEParseToScriptType(wo_vm vm, wo_value v) const
+            {
+                wo_set_struct(v, vm, 4);
+                wo_value elem = wo_push_empty(vm);
+
+                wo_set_float(elem, x);
+                wo_struct_set(v, 0, elem);
+
+                wo_set_float(elem, y);
+                wo_struct_set(v, 1, elem);
+
+                wo_set_float(elem, z);
+                wo_struct_set(v, 2, elem);
+
+                wo_set_float(elem, w);
+                wo_struct_set(v, 3, elem);
             }
         };
 
@@ -6975,8 +7089,8 @@ namespace jeecs
                     {
                         if (jegl_shad_uniforms->m_uniform_type !=
                             jegl_shader::uniform_type::FLOAT2)
-                            debug::logerr("Trying set uniform('%s' = %s) to shader(%p), but current uniform type is not 'FLOAT2'."
-                                , name.c_str(), val.to_string().c_str(), this);
+                            debug::logerr("Trying set uniform('%s' = (%f, %f)) to shader(%p), but current uniform type is not 'FLOAT2'."
+                                , name.c_str(), val.x, val.y, this);
                         else
                         {
                             jegl_shad_uniforms->x = val.x;
@@ -6997,8 +7111,8 @@ namespace jeecs
                     {
                         if (jegl_shad_uniforms->m_uniform_type !=
                             jegl_shader::uniform_type::FLOAT3)
-                            debug::logerr("Trying set uniform('%s' = %s) to shader(%p), but current uniform type is not 'FLOAT3'."
-                                , name.c_str(), val.to_string().c_str(), this);
+                            debug::logerr("Trying set uniform('%s' = (%f, %f, %f)) to shader(%p), but current uniform type is not 'FLOAT3'."
+                                , name.c_str(), val.x, val.y, val.z, this);
                         else
                         {
                             jegl_shad_uniforms->x = val.x;
@@ -7020,8 +7134,8 @@ namespace jeecs
                     {
                         if (jegl_shad_uniforms->m_uniform_type !=
                             jegl_shader::uniform_type::FLOAT4)
-                            debug::logerr("Trying set uniform('%s' = %s) to shader(%p), but current uniform type is not 'FLOAT4'."
-                                , name.c_str(), val.to_string().c_str(), this);
+                            debug::logerr("Trying set uniform('%s' = (%f, %f, %f, %f)) to shader(%p), but current uniform type is not 'FLOAT4'."
+                                , name.c_str(), val.x, val.y, val.z, val.w, this);
                         else
                         {
                             jegl_shad_uniforms->x = val.x;
@@ -7420,7 +7534,7 @@ namespace jeecs
                                     else if (item_name == "offset")
                                     {
                                         math::vec2 offset;
-                                        offset.parse(value);
+                                        sscanf(value.c_str(), "(%f,%f)", &offset.x, &offset.y);
                                         TEXT_OFFSET += offset;
                                     }
 
@@ -7535,7 +7649,7 @@ namespace jeecs
                                     else if (item_name == "offset")
                                     {
                                         math::vec2 offset;
-                                        offset.parse(value);
+                                        sscanf(value.c_str(), "(%f,%f)", &offset.x, &offset.y);
                                         TEXT_OFFSET = TEXT_OFFSET + offset;
                                     }
                                     break;
@@ -8455,60 +8569,6 @@ namespace jeecs
                     float m_strength;
                 };
                 basic::vector<step_data> m_steps;
-
-                std::string to_string()const
-                {
-                    std::string result = "#je_light2d_range#";
-                    result += "size:" + std::to_string(m_steps.size()) + ";";
-                    for (size_t id = 0; id < m_steps.size(); ++id)
-                    {
-                        result += "strength:" + std::to_string(m_steps[id].m_strength) + ";";
-                        result += "positions:" + std::to_string(m_steps[id].m_positions.size()) + ";";
-                        for (size_t i = 0; i < m_steps[id].m_positions.size(); ++i)
-                        {
-                            result += std::to_string(id) + ":" + m_steps[id].m_positions[i].to_string() + ";";
-                        }
-                    }
-                    return result;
-                }
-
-                void parse(const char* databuf)
-                {
-                    size_t readed_length = 0;
-                    size_t size = 0;
-                    if (sscanf(databuf, "#je_light2d_range#size:%zu;%zn", &size, &readed_length) == 1)
-                    {
-                        databuf += readed_length;
-                        m_steps.clear();
-                        for (size_t i = 0; i < size; ++i)
-                        {
-                            step_data data;
-                            size_t idx = 0;
-                            if (sscanf(databuf, "%zu:%f;%zn", &idx, &data.m_strength, &readed_length) == 2)
-                            {
-                                databuf += readed_length;
-                                size_t size = 0;
-                                if (sscanf(databuf, "%zu:%zu;%zn", &idx, &size, &readed_length) == 2)
-                                {
-                                    databuf += readed_length;
-                                    data.m_positions.clear();
-                                    for (size_t i = 0; i < size; ++i)
-                                    {
-                                        math::vec3 pos;
-                                        if (sscanf(databuf, "%zu:(%f,%f,%f);%zn", &idx, &pos.x, &pos.y, &pos.z, &readed_length) == 4)
-                                        {
-                                            databuf += readed_length;
-                                            data.m_positions.push_back(pos);
-                                        }
-                                        else
-                                            data.m_positions.push_back(math::vec3(0.f, 0.f, 0.f));
-                                    }
-                                }
-                            }
-                            m_steps.push_back(data);
-                        }
-                    }
-                }
             };
             light_strength_steps steps;
 
@@ -8579,37 +8639,47 @@ namespace jeecs
                 };
                 basic::resource<graphic::vertex> m_block_mesh = nullptr;
 
-                std::string to_string()const
+                static const char* JEScriptTypeName()
                 {
-                    std::string result = "#je_light2d_block_shape#";
-                    result += "size:" + std::to_string(m_block_points.size()) + ";";
-                    for (size_t id = 0; id < m_block_points.size(); ++id)
-                    {
-                        result += std::to_string(id) + ":" + m_block_points[id].to_string() + ";";
-                    }
-                    return result;
+                    return "Light2D::BlockShadow::block_mesh";
                 }
-                void parse(const char* databuf)
+                static const char* JEScriptTypeDeclare()
                 {
-                    size_t readed_length = 0;
-                    size_t size = 0;
-                    if (sscanf(databuf, "#je_light2d_block_shape#size:%zu;%zn", &size, &readed_length) == 1)
+                    return 
+R"(namespace Light2D::BlockShadow
+{
+    using block_mesh = array<vec2>;
+})";
+                }
+                void JEParseFromScriptType(wo_vm vm, wo_value v)
+                {
+                    m_block_mesh = nullptr;
+
+                    wo_value pos = wo_push_empty(vm);
+                    size_t point_count = (size_t)wo_lengthof(v);
+
+                    m_block_points.clear();
+
+                    for (size_t i = 0; i < point_count; ++i)
                     {
-                        databuf += readed_length;
-                        m_block_points.clear();
-                        m_block_mesh = nullptr;
-                        for (size_t i = 0; i < size; ++i)
-                        {
-                            size_t idx = 0;
-                            math::vec2 pos;
-                            if (sscanf(databuf, "%zu:(%f,%f);%zn", &idx, &pos.x, &pos.y, &readed_length) == 3)
-                            {
-                                databuf += readed_length;
-                                m_block_points.push_back(pos);
-                            }
-                            else
-                                m_block_points.push_back(math::vec2(0.f, 0.f));
-                        }
+                        wo_arr_get(pos, v, (wo_integer_t)i);
+
+                        math::vec2 position;
+                        position.JEParseFromScriptType(vm, pos);
+
+                        m_block_points.push_back(position);
+                    }
+                }
+                void JEParseToScriptType(wo_vm vm, wo_value v) const
+                {
+                    wo_value pos = wo_push_empty(vm);
+
+                    wo_set_arr(v, vm, (wo_integer_t)m_block_points.size());
+
+                    for (size_t i = 0; i < m_block_points.size(); ++i)
+                    {
+                        m_block_points.at(i).JEParseToScriptType(vm, pos);
+                        wo_arr_set(v, (wo_integer_t)i, pos);
                     }
                 }
             };
@@ -8919,7 +8989,7 @@ namespace jeecs
                         }
                     }
                 };
-                std::vector<animation_data_set> m_animations;
+                basic::vector<animation_data_set> m_animations;
 
                 void active_action(size_t id, const char* act_name, bool loop)
                 {
@@ -8931,72 +9001,70 @@ namespace jeecs
                     }
                 }
 
-                std::string to_string()const
+                static const char* JEScriptTypeName()
                 {
-                    std::string result = "#je_animation_list#";
-                    result += std::to_string(m_animations.size()) + ";";
-                    for (size_t id = 0; id < m_animations.size(); ++id)
-                    {
-                        auto& animation = m_animations[id];
-                        result +=
-                            std::string(animation.m_path.c_str())
-                            + "|"
-                            + animation.m_current_action.c_str()
-                            + "|"
-                            + (animation.m_loop ? "true" : "false")
-                            + ";";
-                    }
-
-                    return result;
+                    return "Animation2D::FrameAnimation::animation_data_set_list";
                 }
-                void parse(const char* databuf)
+                static const char* JEScriptTypeDeclare()
                 {
-                    size_t readed_length = 0;
-                    size_t size = 0;
-                    if (sscanf(databuf, "#je_animation_list#%zu;%zn", &size, &readed_length) == 1)
+                    return
+                        R"(namespace Animation2D::FrameAnimation
+{
+    public using animation_state = struct{
+        m_path: string,
+        m_animation: string,
+        m_loop: bool,
+    };
+    using animation_data_set_list = array<animation_state>;
+})";
+                }
+                void JEParseFromScriptType(wo_vm vm, wo_value v)
+                {
+                    m_animations.clear();
+
+                    wo_value animation = wo_push_empty(vm);
+                    wo_value tmp = wo_push_empty(vm);
+                    size_t animation_count = (size_t)wo_lengthof(v);
+
+                    for (size_t i = 0; i < animation_count; ++i)
                     {
-                        databuf += readed_length;
-                        m_animations.clear();
-                        for (size_t i = 0; i < size; ++i)
-                        {
-                            char animation_path[256] = {};
-                            char action_name[256] = {};
-                            char is_loop[8] = {};
+                        m_animations.push_back(animation_data_set{});
+                        auto& animation_inst = m_animations.back();
 
-                            auto& animation = m_animations.emplace_back(animation_data_set{});
+                        wo_arr_get(animation, v, (wo_integer_t)i);
 
-                            size_t widx = 0;
-                            while (*databuf != 0 && widx <= 255)
-                            {
-                                char rdch = *(databuf++);
-                                if (rdch == '|')
-                                    break;
+                        wo_struct_get(tmp, animation, 0);
+                        animation_inst.load_animation(wo_string(tmp));
 
-                                animation_path[widx++] = rdch;
-                            }
-                            widx = 0;
-                            while (*databuf != 0 && widx <= 255)
-                            {
-                                char rdch = *(databuf++);
-                                if (rdch == '|')
-                                    break;
+                        wo_struct_get(tmp, animation, 1);
+                        animation_inst.set_action(wo_string(tmp));
 
-                                action_name[widx++] = rdch;
-                            }
-                            widx = 0;
-                            while (*databuf != 0 && widx <= 7)
-                            {
-                                char rdch = *(databuf++);
-                                if (rdch == ';')
-                                    break;
+                        wo_struct_get(tmp, animation, 1);
+                        animation_inst.set_loop(wo_bool(tmp));
+                    }
+                }
+                void JEParseToScriptType(wo_vm vm, wo_value v) const
+                {
+                    wo_value animation = wo_push_empty(vm);
+                    wo_value tmp = wo_push_empty(vm);
 
-                                is_loop[widx++] = rdch;
-                            }
+                    wo_set_arr(v, vm, (wo_integer_t)m_animations.size());
 
-                            animation.load_animation(animation_path);
-                            animation.set_action(action_name);
-                            animation.m_loop = (strcmp(is_loop, "true") == 0);
-                        }
+                    for (size_t i = 0; i < m_animations.size(); ++i)
+                    {
+                        auto animation_inst = m_animations.at(i);
+                        wo_set_struct(animation, vm, 3);
+
+                        wo_set_string(tmp, vm, animation_inst.m_path.c_str());
+                        wo_struct_set(animation, 0, tmp);
+
+                        wo_set_string(tmp, vm, animation_inst.get_action().c_str());
+                        wo_struct_set(animation, 1, tmp);
+
+                        wo_set_bool(tmp, animation_inst.m_loop);
+                        wo_struct_set(animation, 2, tmp);
+
+                        wo_arr_set(v, (wo_integer_t)i, animation);
                     }
                 }
             };
@@ -9446,6 +9514,8 @@ namespace jeecs
             type_info::register_type<Audio::Playing>(guard, "Audio::Playing");
 
             // 1. register basic types
+            type_info::register_type<math::ivec2>(guard, nullptr);
+
             typing::register_script_parser<bool>(
                 guard,
                 [](const bool* v, wo_vm, wo_value value) {
@@ -9503,146 +9573,6 @@ namespace jeecs
                 [](jeecs::basic::string* v, wo_vm, wo_value value) {
                     *v = wo_string(value);
                 }, "string", "");
-
-            typing::register_script_parser<jeecs::math::ivec2>(
-                guard,
-                [](const jeecs::math::ivec2* v, wo_vm vm, wo_value value) {
-                    wo_set_struct(value, vm, 2);
-                    wo_value elem = wo_push_empty(vm);
-
-                    wo_set_int(elem, (wo_integer_t)v->x);
-                    wo_struct_set(value, 0, elem);
-
-                    wo_set_int(elem, (wo_integer_t)v->y);
-                    wo_struct_set(value, 1, elem);
-                },
-                [](jeecs::math::ivec2* v, wo_vm vm, wo_value value) {
-                    wo_value elem = wo_push_empty(vm);
-
-                    wo_struct_get(elem, value, 0);
-                    v->x = (int)wo_int(elem);
-
-                    wo_struct_get(elem, value, 1);
-                    v->y = (int)wo_int(elem);
-                }, "ivec2", "public using ivec2 = (int, int);");
-
-            typing::register_script_parser<jeecs::math::vec2>(
-                guard,
-                [](const jeecs::math::vec2* v, wo_vm vm, wo_value value) {
-                    wo_set_struct(value, vm, 2);
-                    wo_value elem = wo_push_empty(vm);
-
-                    wo_set_float(elem, v->x);
-                    wo_struct_set(value, 0, elem);
-
-                    wo_set_float(elem, v->y);
-                    wo_struct_set(value, 1, elem);
-                },
-                [](jeecs::math::vec2* v, wo_vm vm, wo_value value) {
-                    wo_value elem = wo_push_empty(vm);
-
-                    wo_struct_get(elem, value, 0);
-                    v->x = wo_float(elem);
-
-                    wo_struct_get(elem, value, 1);
-                    v->y = wo_float(elem);
-                }, "vec2", "public using vec2 = (real, real);");
-
-            typing::register_script_parser<jeecs::math::vec3>(
-                guard,
-                [](const jeecs::math::vec3* v, wo_vm vm, wo_value value) {
-                    wo_set_struct(value, vm, 3);
-                    wo_value elem = wo_push_empty(vm);
-
-                    wo_set_float(elem, v->x);
-                    wo_struct_set(value, 0, elem);
-
-                    wo_set_float(elem, v->y);
-                    wo_struct_set(value, 1, elem);
-
-                    wo_set_float(elem, v->z);
-                    wo_struct_set(value, 2, elem);
-                },
-                [](jeecs::math::vec3* v, wo_vm vm, wo_value value) {
-                    wo_value elem = wo_push_empty(vm);
-
-                    wo_struct_get(elem, value, 0);
-                    v->x = wo_float(elem);
-
-                    wo_struct_get(elem, value, 1);
-                    v->y = wo_float(elem);
-
-                    wo_struct_get(elem, value, 2);
-                    v->z = wo_float(elem);
-                }, "vec3", "public using vec3 = (real, real, real);");
-
-            typing::register_script_parser<jeecs::math::vec4>(
-                guard,
-                [](const jeecs::math::vec4* v, wo_vm vm, wo_value value) {
-                    wo_set_struct(value, vm, 4);
-                    wo_value elem = wo_push_empty(vm);
-
-                    wo_set_float(elem, v->x);
-                    wo_struct_set(value, 0, elem);
-
-                    wo_set_float(elem, v->y);
-                    wo_struct_set(value, 1, elem);
-
-                    wo_set_float(elem, v->z);
-                    wo_struct_set(value, 2, elem);
-
-                    wo_set_float(elem, v->w);
-                    wo_struct_set(value, 3, elem);
-                },
-                [](jeecs::math::vec4* v, wo_vm vm, wo_value value) {
-                    wo_value elem = wo_push_empty(vm);
-
-                    wo_struct_get(elem, value, 0);
-                    v->x = wo_float(elem);
-
-                    wo_struct_get(elem, value, 1);
-                    v->y = wo_float(elem);
-
-                    wo_struct_get(elem, value, 2);
-                    v->z = wo_float(elem);
-
-                    wo_struct_get(elem, value, 3);
-                    v->w = wo_float(elem);
-                }, "vec4", "public using vec4 = (real, real, real, real);");
-
-            typing::register_script_parser<jeecs::math::quat>(
-                guard,
-                [](const jeecs::math::quat* v, wo_vm vm, wo_value value) {
-                    wo_set_struct(value, vm, 4);
-                    wo_value elem = wo_push_empty(vm);
-
-                    wo_set_float(elem, v->x);
-                    wo_struct_set(value, 0, elem);
-
-                    wo_set_float(elem, v->y);
-                    wo_struct_set(value, 1, elem);
-
-                    wo_set_float(elem, v->z);
-                    wo_struct_set(value, 2, elem);
-
-                    wo_set_float(elem, v->w);
-                    wo_struct_set(value, 3, elem);
-                },
-                [](jeecs::math::quat* v, wo_vm vm, wo_value value) {
-                    wo_value elem = wo_push_empty(vm);
-
-                    wo_struct_get(elem, value, 0);
-                    v->x = wo_float(elem);
-
-                    wo_struct_get(elem, value, 1);
-                    v->y = wo_float(elem);
-
-                    wo_struct_get(elem, value, 2);
-                    v->z = wo_float(elem);
-
-                    wo_struct_get(elem, value, 3);
-                    v->w = wo_float(elem);
-                }, "quat", "public using quat = (real, real, real, real);");
 
             // 1. register core&graphic systems.
             jeecs_entry_register_core_systems(guard);
