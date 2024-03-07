@@ -88,7 +88,12 @@ WO_API wo_api wojeapi_abort_all_thread(wo_vm vm, wo_value args)
 
 WO_API wo_api wojeapi_generate_uid(wo_vm vm, wo_value args)
 {
-    return wo_ret_string(vm, jeecs::typing::uid_t::generate().to_string().c_str());
+    wo_value result = wo_push_empty(vm);
+    jeecs::typing::uid_t::generate().JEParseToScriptType(vm, result);
+
+    assert(wo_valuetype(result) == WO_STRING_TYPE);
+
+    return wo_ret_val(vm, result);
 }
 
 WO_API wo_api wojeapi_build_version(wo_vm vm, wo_value args)
@@ -622,8 +627,15 @@ WO_API wo_api wojeapi_get_entity_uid(wo_vm vm, wo_value args)
 WO_API wo_api wojeapi_get_entity_anchor_uuid(wo_vm vm, wo_value args)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+
     if (auto* anc = entity->get_component<jeecs::Transform::Anchor>())
-        return wo_ret_option_string(vm, anc->uid.to_string().c_str());
+    {
+        wo_value result = wo_push_empty(vm);
+        anc->uid.JEParseToScriptType(vm, result);
+
+        assert(wo_valuetype(result) == WO_STRING_TYPE);
+        return wo_ret_option_val(vm, result);
+    }
 
     return wo_ret_option_none(vm);
 }
@@ -631,7 +643,13 @@ WO_API wo_api wojeapi_get_parent_anchor_uid(wo_vm vm, wo_value args)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
     if (auto* l2p = entity->get_component<jeecs::Transform::LocalToParent>())
-        return wo_ret_option_string(vm, l2p->parent_uid.to_string().c_str());
+    {
+        wo_value result = wo_push_empty(vm);
+        l2p->parent_uid.JEParseToScriptType(vm, result);
+
+        assert(wo_valuetype(result) == WO_STRING_TYPE);
+        return wo_ret_option_val(vm, result);
+    }
 
     return wo_ret_option_none(vm);
 }
@@ -667,7 +685,6 @@ WO_API wo_api wojeapi_set_parent(wo_vm vm, wo_value args)
 WO_API wo_api wojeapi_set_parent_with_uid(wo_vm vm, wo_value args)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-    const char* parent_uid = wo_string(args + 1);
 
     bool force = wo_bool(args + 2);
 
@@ -683,7 +700,7 @@ WO_API wo_api wojeapi_set_parent_with_uid(wo_vm vm, wo_value args)
         if (entity->get_component<jeecs::Transform::LocalToWorld>())
             entity->remove_component<jeecs::Transform::LocalToWorld>();
 
-        l2p->parent_uid.parse(parent_uid);
+        l2p->parent_uid.JEParseFromScriptType(vm, args + 1);
         return wo_ret_bool(vm, true);
     }
 
@@ -799,21 +816,24 @@ WO_API wo_api wojeapi_component_get_all_members(wo_vm vm, wo_value args)
     wo_value result = wo_push_arr(vm, 0);
 
     wo_value elem2 = wo_push_empty(vm);
-    auto* member_type = component_type->m_member_types;
-    while (member_type)
+    if (component_type->m_member_types != nullptr)
     {
-        wo_set_struct(elem, vm, 3);
+        auto* member_type = component_type->m_member_types->m_members;
+        while (member_type)
+        {
+            wo_set_struct(elem, vm, 3);
 
-        wo_set_string(elem2, vm, member_type->m_member_name);
-        wo_struct_set(elem, 0, elem2);
-        wo_set_pointer(elem2, (void*)member_type->m_member_type);
-        wo_struct_set(elem, 1, elem2);
-        wo_set_handle(elem2, (wo_handle_t)(member_type->m_member_offset + (intptr_t)component_addr));
-        wo_struct_set(elem, 2, elem2);
+            wo_set_string(elem2, vm, member_type->m_member_name);
+            wo_struct_set(elem, 0, elem2);
+            wo_set_pointer(elem2, (void*)member_type->m_member_type);
+            wo_struct_set(elem, 1, elem2);
+            wo_set_handle(elem2, (wo_handle_t)(member_type->m_member_offset + (intptr_t)component_addr));
+            wo_struct_set(elem, 2, elem2);
 
-        wo_arr_add(result, elem);
+            wo_arr_add(result, elem);
 
-        member_type = member_type->m_next_member;
+            member_type = member_type->m_next_member;
+        }
     }
     return wo_ret_val(vm, result);
 }
@@ -1046,19 +1066,22 @@ WO_API wo_api wojeapi_type_members(wo_vm vm, wo_value args)
     wo_value elem = wo_push_empty(vm);
     wo_value elem2 = wo_push_empty(vm);
 
-    auto* member_iter = type->m_member_types;
-    while (member_iter != nullptr)
+    if (type->m_member_types != nullptr)
     {
-        wo_set_struct(elem, vm, 2);
+        auto* member_iter = type->m_member_types->m_members;
+        while (member_iter != nullptr)
+        {
+            wo_set_struct(elem, vm, 2);
 
-        wo_set_string(elem2, vm, member_iter->m_member_name);
-        wo_struct_set(elem, 0, elem2);
-        wo_set_pointer(elem2, (void*)member_iter->m_member_type);
-        wo_struct_set(elem, 1, elem2);
+            wo_set_string(elem2, vm, member_iter->m_member_name);
+            wo_struct_set(elem, 0, elem2);
+            wo_set_pointer(elem2, (void*)member_iter->m_member_type);
+            wo_struct_set(elem, 1, elem2);
 
-        wo_arr_add(result, elem);
+            wo_arr_add(result, elem);
 
-        member_iter = member_iter->m_next_member;
+            member_iter = member_iter->m_next_member;
+        }
     }
 
     return wo_ret_val(vm, result);
@@ -1288,25 +1311,6 @@ WO_API wo_api wojeapi_native_value_set_rot_euler3(wo_vm vm, wo_value args)
     euler_v3.z = wo_float(args + 3);
 
     value->set_euler_angle(euler_v3);
-
-    return wo_ret_void(vm);
-}
-
-WO_API wo_api wojeapi_native_value_je_to_string(wo_vm vm, wo_value args)
-{
-    void* native_val = wo_pointer(args + 0);
-    const jeecs::typing::type_info* value_type = (const jeecs::typing::type_info*)wo_pointer(args + 1);
-
-    return wo_ret_string(vm, jeecs::basic::make_cpp_string(value_type->m_to_string(native_val)).c_str());
-}
-
-WO_API wo_api wojeapi_native_value_je_parse(wo_vm vm, wo_value args)
-{
-    void* native_val = wo_pointer(args + 0);
-    const jeecs::typing::type_info* value_type = (const jeecs::typing::type_info*)wo_pointer(args + 1);
-    wo_string_t str = wo_string(args + 2);
-
-    value_type->m_parse(native_val, str);
 
     return wo_ret_void(vm);
 }
@@ -2433,6 +2437,10 @@ namespace je
 const char* jeecs_woolang_api_path = "je.wo";
 const char* jeecs_woolang_api_src = R"(
 import woo::std;
+
+import je::towoo::types;
+import je::towoo::components;
+
 namespace je
 {
     namespace towoo
@@ -3021,13 +3029,6 @@ R"(
 
         extern("libjoyecs", "wojeapi_native_value_je_string")
         public func string(self: native_value)=> string;
-
-        extern("libjoyecs", "wojeapi_native_value_je_to_string")
-        public func to_string(self: native_value, types: typeinfo)=> string; 
-
-        extern("libjoyecs", "wojeapi_native_value_je_parse")
-        public func parse(self: native_value, types: typeinfo, str: string)=> void; 
-
         
         extern("libjoyecs", "wojeapi_native_value_set_bool")
         public func set_bool(self: native_value, value: bool)=> void;
