@@ -4519,21 +4519,11 @@ namespace jeecs
             {
                 return _m_path;
             }
-            std::string to_string()const
-            {
-                return "#je_file#" + get_path();
-            }
-            void parse(const char* databuf)
+            void clear()
             {
                 _m_resource = nullptr;
-                const size_t head_length = strlen("#je_file#");
-                if (strncmp(databuf, "#je_file#", head_length) == 0)
-                {
-                    databuf += head_length;
-                    load(databuf);
-                }
+                _m_path = "";
             }
-
         };
 
         template<>
@@ -4555,20 +4545,11 @@ namespace jeecs
             {
                 return _m_has_resource;
             }
-            std::string to_string()const
+            void clear()
             {
-                return "#je_file#" + get_path();
+                _m_has_resource = false;
+                _m_path = "";
             }
-            void parse(const char* databuf)
-            {
-                const size_t head_length = strlen("#je_file#");
-                if (strncmp(databuf, "#je_file#", head_length) == 0)
-                {
-                    databuf += head_length;
-                    load(databuf);
-                }
-            }
-
         };
     }
 
@@ -4921,43 +4902,6 @@ namespace jeecs
         }
     }
 
-    namespace basic
-    {
-        class type
-        {
-            const typing::type_info* m_type_info = nullptr;
-        public:
-            void set_type(const typing::type_info* _type)
-            {
-                m_type_info = _type;
-            }
-            const typing::type_info* get_type() const
-            {
-                return m_type_info;
-            }
-            std::string to_string()const
-            {
-                std::string result = "#je_type_info#";
-
-                if (m_type_info != nullptr)
-                    result += m_type_info->m_typename;
-
-                return result;
-            }
-            void parse(const char* databuf)
-            {
-                size_t readed_length;
-
-                m_type_info = nullptr;
-                if (sscanf(databuf, "#je_type_info#%zn", &readed_length) == 0)
-                {
-                    databuf += readed_length;
-                    m_type_info = je_typing_get_info_by_name(databuf);
-                }
-            }
-        };
-    }
-
     class game_universe;
 
     class game_world
@@ -5123,7 +5067,8 @@ namespace jeecs
             : m_require(_require)
             , m_require_group_id(group_id)
             , m_type(_type)
-        { }
+        {
+        }
     };
 
     struct dependence
@@ -9515,6 +9460,42 @@ R"(namespace Light2D::BlockShadow
 
             // 1. register basic types
             type_info::register_type<math::ivec2>(guard, nullptr);
+
+            typing::register_script_parser<basic::fileresource<void>>(
+                guard,
+                [](const basic::fileresource<void>* v, wo_vm vm, wo_value value) {
+                    if (v->has_resource())
+                        wo_set_option_string(value, vm, v->get_path().c_str());
+                    else
+                        wo_set_option_none(value, vm);
+                },
+                [](basic::fileresource<void>* v, wo_vm vm, wo_value value) {
+                    wo_value result = wo_push_empty(vm);
+
+                    if (wo_option_get(result, value))
+                        v->load(wo_string(result));
+                    else
+                        v->clear();
+
+                }, "fileresource_void", "using fileresource_void = option<string>;");
+
+            typing::register_script_parser<basic::fileresource<audio::buffer>>(
+                guard,
+                [](const basic::fileresource<audio::buffer>* v, wo_vm vm, wo_value value) {
+                    if (v->has_resource())
+                        wo_set_option_string(value, vm, v->get_path().c_str());
+                    else
+                        wo_set_option_none(value, vm);
+                },
+                [](basic::fileresource<audio::buffer>* v, wo_vm vm, wo_value value) {
+                    wo_value result = wo_push_empty(vm);
+
+                    if (wo_option_get(result, value))
+                        v->load(wo_string(result));
+                    else
+                        v->clear();
+
+                }, "fileresource_audio_buffer", "using fileresource_audio_buffer = option<string>;");
 
             typing::register_script_parser<bool>(
                 guard,
