@@ -8,8 +8,6 @@ import pkg::try;
 import pkg::worst;
 import config;
 
-import builtin::api::gui::poseditor;
-
 import builtin::editor::environment::main;
 import builtin::editor::gui::form::msg;
 import builtin::editor::gui::form::ask;
@@ -203,7 +201,20 @@ namespace editor
         }
         public func restore_all_world(self: Project, dats: array<(dict<string, dynamic>, fsys::path_t)>)
         {
+            jeapi::typemgr::update_without_new_script();
+
             do dats->>\dat = self->deserialize_world(dat...);;
+
+            match (jeapi::typemgr::update("@/editor.wo"))
+            {
+            ok(_)?;
+            err(msg)?
+                {
+                    let errmsg = F"更新类型管理器失败：{msg}";
+                    jeapi::gui::form::errmsg("错误", errmsg);
+                    je::logerr(errmsg);
+                }
+            }
         }
         func _create_default_configs(env: Environment)
         {
@@ -347,161 +358,7 @@ namespace editor
             none? je::logerr("未找到项目的文件锁，可能是未能创建或打开文件，请检查权限");
             }
         }
-        public func register_editor_widget(self: Project)
-        {
-            do self;
 
-            jeapi::gui::register_custom_editor("je_light2d_block_shape", func(tag: string, dat: string)
-            {
-                using je::gui;
-
-                let mut need_update = false;
-                let datas = dat->split(";")
-                    =>> \dat = arr->len == 2 ? [(arr[0], arr[1])] | []
-                        where arr = dat->split(":");
-                    ;
-
-                let length = datas
-                    ->  forall(\data = data[0] == "size";)
-                    ->  reduce(\l, _ = l;)
-                    ->> \data = data[1]: int;
-                    ->  valor(datas->len)
-                    ;
-
-                let mut update_str = "size:";
-
-                match (InputInt(F"size##{tag}", length))
-                {
-                value(newsize)?
-                {
-                    need_update = true;
-                    update_str += (newsize < 0 ? 0 | newsize): string;
-                }
-                none?
-                    update_str += length: string;
-                }
-
-                update_str += ";";
-
-                func _str2vec2(str: string)
-                {
-                    let x = mutable::create(0.), y = mutable::create(0.);
-                    do str->take_token("(")
-                        =>> \s = s->take_real();
-                        =>> func(snr){x->set(snr[1]); return snr[0]->take_token(",");}
-                        =>> \s = s->take_real();
-                        =>> func(snr){y->set(snr[1]); return snr[0]->take_token(")");}
-                        ;
-                    return (x->get, y->get);
-                }
-
-                let mut points = datas
-                    ->  forall(\d = d[0]!="size";)
-                    ->> \d = _str2vec2(d.1);
-                    ;
-
-                match (jeapi::gui::widget::poseditor(
-                    tag,
-                    std::min(GetContentRegionAvail().0, 400.),
-                    [points],
-                    0.05,
-                    \a, i = a[i];
-                    ))
-                {
-                value(a)? { points = a[0]; need_update = true; }
-                none?;
-                }
-
-                if (need_update)
-                {
-                    for (let layer, (x, y) : points)
-                    {
-                        update_str += F"{layer}:({x},{y});";
-                    }
-                }
-                    
-                if (need_update)
-                    return option::value(update_str);
-                return option::none;
-            });
-
-            jeapi::gui::register_custom_editor("je_file", func(tag: string, dat: string)
-            {
-                using je::gui;
-                return jeapi::gui::widget::File(F"文件##{tag}", dat == "" ? "<无>" | dat, \=do nil;);
-            });
-
-            jeapi::gui::register_custom_editor("je_animation_list", func(tag: string, dat: string)
-            {
-                using je::gui;
-
-                let mut need_update = false;
-                let size_datas = dat->split(";");
-                let size = size_datas->get(0)->valor("0"): int;
-                let datas = (size_datas->empty ? [] | size_datas->sub(1))
-                    ->> \data = data->split("|");
-                    ;
-
-                let mut update_str = "";
-
-                match (InputInt("size##{tag}", size))
-                {
-                value(newsize)?
-                {
-                    need_update = true;
-                    update_str += (newsize < 0 ? 0 | newsize): string;
-                }
-                none?
-                    update_str += size: string;
-                }
-
-                update_str += ";";
-
-                for (let i, dat : datas)
-                {
-                    Separator();
-
-                    if (dat->len != 3) continue;
-
-                    match (jeapi::gui::widget::File(F"动画##{i}_{tag}", dat[0], \=do nil;))
-                    {
-                    value(path)?
-                        {
-                            need_update = true;
-                            update_str += path + "|";
-                        }
-                    none?
-                        update_str += dat[0] + "|";
-                    }
-
-                    match (InputText(F"动作##{i}_{tag}", dat[1]))
-                    {
-                    value(act)?
-                        {
-                            need_update = true;
-                            update_str += act + "|";
-                        }
-                    none?
-                        update_str += dat[1] + "|";
-                    }
-
-                    match (CheckBox(F"循环##{i}_{tag}", dat[2] == "true"))
-                    {
-                    value(loop)?
-                        {
-                            need_update = true;
-                            update_str += (loop ? "true;" | "false;");
-                        }
-                    none?
-                        update_str += dat[2] + ";";
-                    }
-                }
-
-                if (need_update)
-                    return option::value(update_str);
-                return option::none;
-            });
-        }
         public func create(name: string, path: fsys::path_t)
         {
             let env = new! Environment();
@@ -526,8 +383,6 @@ namespace editor
                 proj->close();
                 return result::err("锁定项目失败，请检查相同项目是否已经重复打开");
             }
-
-            proj->register_editor_widget();
 
             tools::update_tool_scripts(proj);
             gui::drawpannel::update_and_get_scripts(proj);
@@ -596,6 +451,7 @@ namespace editor
         {
             return self.m_towoo_context;
         }
+
         public func load(path: fsys::path_t, dat: dict<string, dynamic>)
         {
             try! self = create(dat["name"] as string, path);
@@ -621,19 +477,29 @@ namespace editor
             
             self.m_towoo_context->update(false);
 
+            match (jeapi::typemgr::update("@/editor.wo"))
+            {
+            ok(_)?;
+            err(msg)?
+                {
+                    self->close();
+                    return err(msg);
+                }
+            }
+
             match (fsys::readall(self.m_path / ".runtime" / "world.list")=>> \dat = dat->dict::deserialize;)
             {
             value(dat)?
-                    for (let wpath, isediting : dat)
+                for (let wpath, isediting : dat)
+                {
+                    match (self->load_world(self.m_path / wpath as string))
                     {
-                        match (self->load_world(self.m_path / wpath as string))
-                        {
-                        ok(w)?
-                            if (isediting as bool) do self->reset_editing_world(w);
-                        err(info)?
-                            jeapi::gui::form::errmsg("失败", F"无法加载世界 '{wpath as string}': {info}");
-                        }
+                    ok(w)?
+                        if (isediting as bool) do self->reset_editing_world(w);
+                    err(info)?
+                        jeapi::gui::form::errmsg("失败", F"无法加载世界 '{wpath as string}': {info}");
                     }
+                }
             none?;
             }
 

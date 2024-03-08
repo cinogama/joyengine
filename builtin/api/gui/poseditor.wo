@@ -11,14 +11,14 @@ namespace jeapi::gui::widget
         size: real, 
         poses_group: array<array<(real, real)>>,
         adsorption_accuracy: real,
-        line_liner: (array<array<(real, real)>>, int)=> array<(real, real)> 
+        line_liner: (array<array<(real, real)>>, int)=> array<((real, real), (real, real))> 
     )
         => option<array<array<(real, real)>>>
     {
         static let mut scale = 1.0;
 
         let drawlist = GetWindowDrawList();
-        do InvisibleButton("##draw_shape", (size, size));
+        do InvisibleButton("##draw_shape##{tag}", (size, size));
         let (p0, p1) = GetItemRect();
 
         let position_ratio = size / 2. * scale;
@@ -54,21 +54,18 @@ namespace jeapi::gui::widget
         let new_position_groups = []mut: vec<array<(real, real)>>;
         let mut updated = false;
 
-        for (let group_index, poses: poses_group)
+        for (let group_index, _: poses_group)
         {
-            for (let index, (x, y) : line_liner(poses_group, group_index))
+            for (let _, (p0, p1) : line_liner(poses_group, group_index))
             {
                 // 画线!
-                if (index > 0)
-                {
-                    let (x0, y0) = poses[index - 1]; 
-                    let (x1, y1) = (x, y);
-                    drawlist->AddLine(
-                        (x0 * position_ratio + centerx, centery - y0 * position_ratio),
-                        (x1 * position_ratio + centerx, centery - y1 * position_ratio),
-                        (127, (255. * (1.0 - group_index: real / poses_group->len: real)): int, 127, 255),
-                        1.);
-                }
+                let (x0, y0) = p0; 
+                let (x1, y1) = p1;
+                drawlist->AddLine(
+                    (x0 * position_ratio + centerx, centery - y0 * position_ratio),
+                    (x1 * position_ratio + centerx, centery - y1 * position_ratio),
+                    (127, (255. * (1.0 - group_index: real / poses_group->len: real)): int, 127, 255),
+                    1.);
             }
         }
 
@@ -148,7 +145,7 @@ namespace jeapi::gui::widget
 
         PopClipRect();
 
-        match (DragFloat("视图缩放##view_scale", scale, 0.05, 0.1, 2.))
+        match (DragFloat("视图缩放##view_scale##{tag}", scale, 0.05, 0.1, 2.))
         {
         value(v)? scale = v;
         none?;

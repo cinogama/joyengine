@@ -1,0 +1,466 @@
+// editor.wo
+// (C)Cinogama. 2024. All rights reserved.
+// 这个脚本用于向编辑器提供各类型的编辑拓展
+// 此脚本如果存在错误，项目将无法被编辑器载入
+
+import je;
+import je::gui;
+import je::towoo;
+
+import builtin::api::gui::file;
+import builtin::api::gui::poseditor;
+
+using je::gui;
+
+namespace bool
+{
+    using parser = void
+    {
+        public extern func saving(val: bool)=> string
+        {
+            return val: string;
+        }
+        public extern func restoring(dat: string)=> bool
+        {
+            return dat: bool;
+        }
+        public extern func edit(val: bool, tag: string, echunkinfo: string)=> option<bool>
+        {
+            return CheckBox(F"##{tag}##{echunkinfo}", val);
+        }
+    }
+}
+namespace uint8
+{
+    using parser = void
+    {
+        public extern func saving(val: uint8)=> string
+        {
+            return val: string;
+        }
+        public extern func restoring(dat: string)=> uint8
+        {
+            return dat: uint8;
+        }
+        public extern func edit(val: uint8, tag: string, echunkinfo: string)=> option<uint8>
+        {
+            return InputInt(F"##{tag}##{echunkinfo}", val);
+        }
+    }
+}
+namespace uint16
+{
+    using parser = void
+    {
+        public extern func saving(val: uint16)=> string
+        {
+            return val: string;
+        }
+        public extern func restoring(dat: string)=> uint16
+        {
+            return dat: uint16;
+        }
+        public extern func edit(val: uint16, tag: string, echunkinfo: string)=> option<uint16>
+        {
+            return InputInt(F"##{tag}##{echunkinfo}", val);
+        }
+    }
+}
+namespace uint32
+{
+    using parser = void
+    {
+        public extern func saving(val: uint32)=> string
+        {
+            return val: string;
+        }
+        public extern func restoring(dat: string)=> uint32
+        {
+            return dat: uint32;
+        }
+        public extern func edit(val: uint32, tag: string, echunkinfo: string)=> option<uint32>
+        {
+            return InputInt(F"##{tag}##{echunkinfo}", val);
+        }
+    }
+}
+namespace uint64
+{
+    using parser = void
+    {
+        public extern func saving(val: uint64)=> string
+        {
+            return val: string;
+        }
+        public extern func restoring(dat: string)=> uint64
+        {
+            return dat: uint64;
+        }
+        public extern func edit(val: uint64, tag: string, echunkinfo: string)=> option<uint64>
+        {
+            return InputInt(F"##{tag}##{echunkinfo}", val);
+        }
+    }
+}
+namespace int8
+{
+    using parser = void
+    {
+        public extern func saving(val: int8)=> string
+        {
+            return val: string;
+        }
+        public extern func restoring(dat: string)=> int8
+        {
+            return dat: int8;
+        }
+        public extern func edit(val: int8, tag: string, echunkinfo: string)=> option<int8>
+        {
+            return InputInt(F"##{tag}##{echunkinfo}", val);
+        }
+    }
+}
+namespace int16
+{
+    using parser = void
+    {
+        public extern func saving(val: int16)=> string
+        {
+            return val: string;
+        }
+        public extern func restoring(dat: string)=> int16
+        {
+            return dat: int16;
+        }
+        public extern func edit(val: int16, tag: string, echunkinfo: string)=> option<int16>
+        {
+            return InputInt(F"##{tag}##{echunkinfo}", val);
+        }
+    }
+}
+namespace int32
+{
+    using parser = void
+    {
+        public extern func saving(val: int32)=> string
+        {
+            return val: string;
+        }
+        public extern func restoring(dat: string)=> int32
+        {
+            return dat: int32;
+        }
+        public extern func edit(val: int32, tag: string, echunkinfo: string)=> option<int32>
+        {
+            return InputInt(F"##{tag}##{echunkinfo}", val);
+        }
+    }
+}
+namespace int64
+{
+    using parser = void
+    {
+        public extern func saving(val: int64)=> string
+        {
+            return val: string;
+        }
+        public extern func restoring(dat: string)=> int64
+        {
+            return dat: int64;
+        }
+        public extern func edit(val: int64, tag: string, echunkinfo: string)=> option<int64>
+        {
+            return InputInt(F"##{tag}##{echunkinfo}", val);
+        }
+    }
+}
+namespace float
+{
+    using parser = void
+    {
+        public extern func saving(val: float)=> string
+        {
+            return val: string;
+        }
+        public extern func restoring(dat: string)=> float
+        {
+            return dat: float;
+        }
+        public extern func edit(val: float, tag: string, echunkinfo: string)=> option<float>
+        {
+            return InputFloat(F"##{tag}##{echunkinfo}", val);
+        }
+    }
+}
+namespace real
+{
+    using parser = void
+    {
+        public extern func saving(val: real)=> string
+        {
+            return val: string;
+        }
+        public extern func restoring(dat: string)=> real
+        {
+            return dat: real;
+        }
+        public extern func edit(val: real, tag: string, echunkinfo: string)=> option<real>
+        {
+            return InputFloat(F"##{tag}##{echunkinfo}", val);
+        }
+    }
+}
+namespace ivec2
+{
+    using parser = void
+    {
+        public extern func saving(val: ivec2)=> string
+        {
+            return [val.0, val.1]->serialize->valor("[0,0]");
+        }
+        public extern func restoring(dat: string)=> ivec2
+        {
+            let data = dat->array::deserialize->valor([0: dynamic, 0: dynamic])->> \x = x: int;;
+            return (data->getor(0, 0), data->getor(1, 0)): ivec2;
+        }
+        public extern func edit(val: ivec2, tag: string, echunkinfo: string)=> option<ivec2>
+        {
+            return InputInt2(F"##{tag}##{echunkinfo}", val.0, val.1)->>\v = v: ivec2;;
+        }
+    }
+}
+namespace vec2
+{
+    using parser = void
+    {
+        public extern func saving(val: vec2)=> string
+        {
+            return [val.0, val.1]->serialize->valor("[0,0]");
+        }
+        public extern func restoring(dat: string)=> vec2
+        {
+            let data = dat->array::deserialize->valor([0: dynamic, 0: dynamic])->> \x = x: real;;
+            return (data->getor(0, 0.), data->getor(1, 0.)): vec2;
+        }
+        public extern func edit(val: vec2, tag: string, echunkinfo: string)=> option<vec2>
+        {
+            return InputFloat2(F"##{tag}##{echunkinfo}", val.0, val.1)->>\v = v: vec2;;
+        }
+    }
+}
+namespace vec3
+{
+    using parser = void
+    {
+        public extern func saving(val: vec3)=> string
+        {
+            return [val.0, val.1, val.2]->serialize->valor("[0,0,0]");
+        }
+        public extern func restoring(dat: string)=> vec3
+        {
+            let data = dat->array::deserialize->valor([0: dynamic, 0: dynamic, 0: dynamic])->> \x = x: real;;
+            return (data->getor(0, 0.), data->getor(1, 0.), data->getor(2, 0.)): vec3;
+        }
+        public extern func edit(val: vec3, tag: string, echunkinfo: string)=> option<vec3>
+        {
+            return InputFloat3(F"##{tag}##{echunkinfo}", val.0, val.1, val.2)->>\v = v: vec3;;
+        }
+    }
+}
+namespace vec4
+{
+    using parser = void
+    {
+        public extern func saving(val: vec4)=> string
+        {
+            return [val.0, val.1, val.2, val.3]->serialize->valor("[0,0,0,0]");
+        }
+        public extern func restoring(dat: string)=> vec4
+        {
+            let data = dat->array::deserialize->valor([0: dynamic, 0: dynamic, 0: dynamic, 0: dynamic])->> \x = x: real;;
+            return (data->getor(0, 0.), data->getor(1, 0.), data->getor(2, 0.), data->getor(3, 0.)): vec4;
+        }
+        public extern func edit(val: vec4, tag: string, echunkinfo: string)=> option<vec4>
+        {
+            return InputFloat4(F"##{tag}##{echunkinfo}", val.0, val.1, val.2, val.3)->>\v = v: vec4;;
+        }
+    }
+}
+namespace quat
+{
+    using parser = void
+    {
+        public extern func saving(val: quat)=> string
+        {
+            return [val.0, val.1, val.2, val.3]->serialize->valor("[0,0,0,0]");
+        }
+        public extern func restoring(dat: string)=> quat
+        {
+            let data = dat->array::deserialize->valor([0: dynamic, 0: dynamic, 0: dynamic, 0: dynamic])->> \x = x: real;;
+            return (data->getor(0, 0.), data->getor(1, 0.), data->getor(2, 0.), data->getor(3, 0.)): quat;
+        }
+        public extern func edit(val: quat, tag: string, echunkinfo: string)=> option<quat>
+        {
+            let angle = val->euler_angle;
+            return InputFloat3(F"##{tag}##{echunkinfo}", angle.0, angle.1, angle.2)->>\v = quat::euler(v...);;
+        }
+    }
+}
+namespace fileresource_void
+{
+    using parser = void
+    {
+        public extern func saving(val: fileresource_void)=> string
+        {
+            return val: option<string>->valor("");
+        }
+        public extern func restoring(dat: string)=> fileresource_void
+        {
+            if (dat == "")
+                return option::none: fileresource_void;
+            else
+                return option::value(dat): fileresource_void;
+        }
+        public extern func edit(val: fileresource_void, tag: string, echunkinfo: string)=> option<fileresource_void>
+        {
+            match (jeapi::gui::widget::File(F"文件：##{tag}##{echunkinfo}", val: option<string>->valor(""), \=do nil;))
+            {
+            value(p)?
+                if (p == "")
+                    return option::value(option::none: fileresource_void);
+                else
+                    return option::value(option::value(p): fileresource_void);
+            none?
+                return option::none;
+            }
+        }
+    }
+}
+namespace fileresource_audio_buffer
+{
+    using parser = void
+    {
+        public extern func saving(val: fileresource_audio_buffer)=> string
+        {
+            return val: option<string>->valor("");
+        }
+        public extern func restoring(dat: string)=> fileresource_audio_buffer
+        {
+            if (dat == "")
+                return option::none: fileresource_audio_buffer;
+            else
+                return option::value(dat): fileresource_audio_buffer;
+        }
+        public extern func edit(val: fileresource_audio_buffer, tag: string, echunkinfo: string)=> option<fileresource_audio_buffer>
+        {
+            match (jeapi::gui::widget::File(F"音频文件：##{tag}##{echunkinfo}", val: option<string>->valor(""), \=do nil;))
+            {
+            value(p)?
+                if (p == "")
+                    return option::value(option::none: fileresource_audio_buffer);
+                else
+                    return option::value(option::value(p): fileresource_audio_buffer);
+            none?
+                return option::none;
+            }
+        }
+    }
+}
+namespace uuid
+{
+    using parser = void
+    {
+        public extern func saving(val: uuid)=> string
+        {
+            return val: string;
+        }
+        public extern func restoring(dat: string)=> uuid
+        {
+            return dat: uuid;
+        }
+        public extern func edit(val: uuid, tag: string, echunkinfo: string)=> option<uuid>
+        {
+            return InputText(F"##{tag}##{echunkinfo}", val: string)->> \dat = dat: uuid;;
+        }
+    }
+}
+namespace string
+{
+    using parser = void
+    {
+        public extern func saving(val: string)=> string
+        {
+            return val: string;
+        }
+        public extern func restoring(dat: string)=> string
+        {
+            return dat: string;
+        }
+        public extern func edit(val: string, tag: string, echunkinfo: string)=> option<string>
+        {
+            return InputText(F"##{tag}##{echunkinfo}", val: string);
+        }
+    }
+}
+namespace Light2D::BlockShadow::block_mesh
+{
+    using parser = void
+    {
+        public extern func saving(val: Light2D::BlockShadow::block_mesh)=> string
+        {
+            return val: array<vec2>
+                ->> \v2 = [v2.0, v2.1];
+                -> serialize->valor("[]")
+                ;
+        }
+        public extern func restoring(dat: string)=> Light2D::BlockShadow::block_mesh
+        {
+            return dat->array::deserialize->valor([])
+                ->> \v2 = v2 is array<dynamic> 
+                    ? v2: array<dynamic>->> \v = v: real;
+                    | [0., 0.]
+                    ;
+                ->> \v2 = (v2->getor(0, 0.), v2->getor(1, 0.));
+                : block_mesh;
+        }
+        public extern func edit(mut val: Light2D::BlockShadow::block_mesh, tag: string, echunkinfo: string)=> option<Light2D::BlockShadow::block_mesh>
+        {
+            let mut size_changed = false;
+            match (InputInt(F"size##{tag}", val: array<vec2>->len))
+            {
+            value(newsize)?
+                {
+                    val = val: array<vec2>->resize(newsize, (0., 0.): vec2): Light2D::BlockShadow::block_mesh;
+                    size_changed = true;
+                }
+            none?;
+            }
+
+            match (jeapi::gui::widget::poseditor(
+                F"##{tag}##{echunkinfo}", 
+                std::min(GetContentRegionAvail().0, 400.),
+                [val: array<vec2>->>\p = p: (real, real);],
+                0.05,
+                func(a, i)
+                {
+                    let r = []mut: vec<((real, real), (real, real))>;
+                    for (let idx, p : a[i])
+                    {
+                        if (idx > 0)
+                            r->add((a[i][idx - 1], p));
+                    }
+                    return r->toarray;
+                },
+            ))
+            {
+            value(posgroups)?
+                return value(posgroups[0] as array<(real, real)>->>\p = p: vec2;: Light2D::BlockShadow::block_mesh);
+            none?
+                if (size_changed)
+                    return value(val);
+                else
+                    return none;
+            }
+        }
+    }
+}

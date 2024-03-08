@@ -9,88 +9,88 @@ using je::gui;
 
 namespace jeapi::gui
 {
-    public alias TypedEditorMethod = (string/*token*/, je::native_value)=>bool;
+    // public alias TypedEditorMethod = (string/*token*/, je::native_value)=>bool;
 
-    let _registed_editor_methods = {}mut: map<je::typeinfo, TypedEditorMethod>;
-    let _custom_component_member_editor = {}mut: map<string, (string, string)=>option<string>>;
+    // let _registed_editor_methods = {}mut: map<je::typeinfo, TypedEditorMethod>;
+    // let _custom_component_member_editor = {}mut: map<string, (string, string)=>option<string>>;
 
-    public func register_custom_editor(typeflag: string, method: (string, string)=>option<string>)
-    {
-        if (_custom_component_member_editor->contain(typeflag))
-            je::logwarn(F"重复注册的标签：{typeflag}");
+    // public func register_custom_editor(typeflag: string, method: (string, string)=>option<string>)
+    // {
+    //     if (_custom_component_member_editor->contain(typeflag))
+    //         je::logwarn(F"重复注册的标签：{typeflag}");
 
-        _custom_component_member_editor->set(typeflag, method);
-    }
+    //     _custom_component_member_editor->set(typeflag, method);
+    // }
     
-    public func register_editor_for_native_value(type: je::typeinfo, method: TypedEditorMethod)
-    {
-        if (_registed_editor_methods->contain(type))
-            std::panic(F"不允许重复添加{type->name}的编辑方法");
+    // public func register_editor_for_native_value(type: je::typeinfo, method: TypedEditorMethod)
+    // {
+    //     if (_registed_editor_methods->contain(type))
+    //         std::panic(F"不允许重复添加{type->name}的编辑方法");
             
-        _registed_editor_methods->set(type, method);
-    }
-    public func edit_cur_native_value(tag: string, echunkinfo: string, type: je::typeinfo, native_value: je::native_value)
-    {
-        let mut result = false;
-        do InvisibleButton(F"##{tag}_{echunkinfo}_$PADDING", (2., 1.));
-        SameLine();
-        BeginGroup();
-        match (_registed_editor_methods->get(type))
-        {
-        value(method)?
-            result = method(tag + F"@{echunkinfo}", native_value);
-        none?
-            {
-                // 没有注册的特殊控件，使用底层自带的to_string方法处理
-                let member_data = native_value->to_string(type);
-                if (member_data->beginwith("#"))
-                {
-                    // 这个member需要特殊处理
-                    Text(tag);
+    //     _registed_editor_methods->set(type, method);
+    // }
+    // public func edit_cur_native_value(tag: string, echunkinfo: string, type: je::typeinfo, native_value: je::native_value)
+    // {
+    //     let mut result = false;
+    //     do InvisibleButton(F"##{tag}_{echunkinfo}_$PADDING", (2., 1.));
+    //     SameLine();
+    //     BeginGroup();
+    //     match (_registed_editor_methods->get(type))
+    //     {
+    //     value(method)?
+    //         result = method(tag + F"@{echunkinfo}", native_value);
+    //     none?
+    //         {
+    //             // 没有注册的特殊控件，使用底层自带的to_string方法处理
+    //             let member_data = native_value->to_string(type);
+    //             if (member_data->beginwith("#"))
+    //             {
+    //                 // 这个member需要特殊处理
+    //                 Text(tag);
 
-                    let spec_method = member_data->subto(1, member_data->findfrom("#", 1) - 1);
-                    match (_custom_component_member_editor->get(spec_method))
-                    {
-                    none?
-                        TextDisabled(F"未找到编辑{spec_method}的自定义编辑器");
-                    value(method)?
-                        do method(tag+ F"@{echunkinfo}", member_data->sub(spec_method->len + 2))
-                            ->> \update_str = native_value->parse(type, F"#{spec_method}#" + update_str);
-                            ;
-                    }
-                }
-                else
-                    do InputText(tag + F"##@{echunkinfo}", member_data) 
-                        ->> \data_str = native_value->parse(type, data_str);;
-            }
-        }
-        EndGroup();
+    //                 let spec_method = member_data->subto(1, member_data->findfrom("#", 1) - 1);
+    //                 match (_custom_component_member_editor->get(spec_method))
+    //                 {
+    //                 none?
+    //                     TextDisabled(F"未找到编辑{spec_method}的自定义编辑器");
+    //                 value(method)?
+    //                     do method(tag+ F"@{echunkinfo}", member_data->sub(spec_method->len + 2))
+    //                         ->> \update_str = native_value->parse(type, F"#{spec_method}#" + update_str);
+    //                         ;
+    //                 }
+    //             }
+    //             else
+    //                 do InputText(tag + F"##@{echunkinfo}", member_data) 
+    //                     ->> \data_str = native_value->parse(type, data_str);;
+    //         }
+    //     }
+    //     EndGroup();
 
-        return result;
-    }
+    //     return result;
+    // }
 
-    register_editor_for_native_value(je::typeinfo::int, func(tag, nvalue){
-        return InputInt(F"##{tag}", nvalue->int)->>\iv = nvalue->set_int(iv);->has;
-    });
-    register_editor_for_native_value(je::typeinfo::int2, func(tag, nvalue){
-        return InputInt2(F"##{tag}", nvalue->int2...)->>\iv2 = nvalue->set_int2(iv2...);->has;
-    });
-    register_editor_for_native_value(je::typeinfo::float, func(tag, nvalue){
-        return InputFloat(F"##{tag}", nvalue->float)->>\fv = nvalue->set_float(fv);->has;
-    });
-    register_editor_for_native_value(je::typeinfo::float2, func(tag, nvalue){
-        return InputFloat2(F"##{tag}", nvalue->float2...)->>\fv2 = nvalue->set_float2(fv2...);->has;
-    });
-    register_editor_for_native_value(je::typeinfo::float3, func(tag, nvalue){
-        return InputFloat3(F"##{tag}", nvalue->float3...)->>\fv3 = nvalue->set_float3(fv3...);->has;
-    });
-    register_editor_for_native_value(je::typeinfo::float4, func(tag, nvalue){
-        return InputFloat4(F"##{tag}", nvalue->float4...)->>\fv4 = nvalue->set_float4(fv4...);->has;
-    });
-    register_editor_for_native_value(je::typeinfo::quat, func(tag, nvalue){
-        return InputFloat3(F"##{tag}", nvalue->euler3...)->>\fv3 = nvalue->set_euler3(fv3...);->has;
-    });
-    register_editor_for_native_value(je::typeinfo::bool, func(tag, nvalue){
-        return CheckBox(F"##{tag}", nvalue->bool)->>\bv = nvalue->set_bool(bv);->has;
-    });
+    // register_editor_for_native_value(je::typeinfo::int, func(tag, nvalue){
+    //     return InputInt(F"##{tag}", nvalue->int)->>\iv = nvalue->set_int(iv);->has;
+    // });
+    // register_editor_for_native_value(je::typeinfo::int2, func(tag, nvalue){
+    //     return InputInt2(F"##{tag}", nvalue->int2...)->>\iv2 = nvalue->set_int2(iv2...);->has;
+    // });
+    // register_editor_for_native_value(je::typeinfo::float, func(tag, nvalue){
+    //     return InputFloat(F"##{tag}", nvalue->float)->>\fv = nvalue->set_float(fv);->has;
+    // });
+    // register_editor_for_native_value(je::typeinfo::float2, func(tag, nvalue){
+    //     return InputFloat2(F"##{tag}", nvalue->float2...)->>\fv2 = nvalue->set_float2(fv2...);->has;
+    // });
+    // register_editor_for_native_value(je::typeinfo::float3, func(tag, nvalue){
+    //     return InputFloat3(F"##{tag}", nvalue->float3...)->>\fv3 = nvalue->set_float3(fv3...);->has;
+    // });
+    // register_editor_for_native_value(je::typeinfo::float4, func(tag, nvalue){
+    //     return InputFloat4(F"##{tag}", nvalue->float4...)->>\fv4 = nvalue->set_float4(fv4...);->has;
+    // });
+    // register_editor_for_native_value(je::typeinfo::quat, func(tag, nvalue){
+    //     return InputFloat3(F"##{tag}", nvalue->euler3...)->>\fv3 = nvalue->set_euler3(fv3...);->has;
+    // });
+    // register_editor_for_native_value(je::typeinfo::bool, func(tag, nvalue){
+    //     return CheckBox(F"##{tag}", nvalue->bool)->>\bv = nvalue->set_bool(bv);->has;
+    // });
 }

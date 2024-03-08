@@ -80,7 +80,7 @@ namespace jeecs_impl
             tinfo->m_script_parsers = nullptr;
             tinfo->m_system_updaters = nullptr;
 
-            tinfo->m_last = nullptr;
+            tinfo->m_next = nullptr;
 
             assert(tinfo->m_size != 0 && tinfo->m_chunk_size != 0);
 
@@ -92,10 +92,11 @@ namespace jeecs_impl
                 tinfo->m_id = fnd->second;
 
                 // Replace the last type info, and link the new type info.
-                auto** last_type_info = &_m_type_records.at(tinfo->m_id - 1);
-                tinfo->m_last = *last_type_info;
-
-                *last_type_info = tinfo;
+                auto* last_type_info = _m_type_records.at(tinfo->m_id - 1);
+                while (last_type_info->m_next != nullptr)
+                    last_type_info = const_cast<jeecs::typing::type_info*>(last_type_info->m_next);
+                
+                last_type_info->m_next = tinfo;
             }
             else
             {
@@ -224,20 +225,23 @@ namespace jeecs_impl
             std::lock_guard g1(_m_factory_mx);
             
             assert(tinfo->m_id != jeecs::typing::INVALID_TYPE_ID && tinfo->m_id <= _m_type_records.size());
-            auto type_list = _m_type_records.at(tinfo->m_id - 1);
+            auto* type_list = _m_type_records.at(tinfo->m_id - 1);
 
             bool need_update_type = type_list == tinfo;
-            bool need_clear_hashed_and_named_type = type_list == tinfo && tinfo->m_last == nullptr;
+            bool need_clear_hashed_and_named_type = type_list == tinfo && tinfo->m_next == nullptr;
             
             if (need_update_type)
-                _m_type_records.at(tinfo->m_id - 1) = tinfo->m_last;
+            {
+                _m_type_records.at(tinfo->m_id - 1) = 
+                    const_cast<jeecs::typing::type_info*>(tinfo->m_next);
+            }
             else
             {
-                while (type_list->m_last != tinfo)
-                    type_list = type_list->m_last;
+                while (type_list->m_next != tinfo)
+                    type_list = const_cast<jeecs::typing::type_info*>(type_list->m_next);
 
                 assert(type_list != nullptr);
-                type_list->m_last = tinfo->m_last;
+                type_list->m_next = tinfo->m_next;
             }
 
             if (need_clear_hashed_and_named_type)

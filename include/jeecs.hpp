@@ -232,7 +232,7 @@ namespace jeecs
             }
             static const char* JEScriptTypeDeclare()
             {
-                return "using uuid = string;";
+                return "public using uuid = string;";
             }
             void JEParseFromScriptType(wo_vm vm, wo_value v)
             {
@@ -4728,7 +4728,7 @@ namespace jeecs
             const typeinfo_script_parser* m_script_parsers;
             const typeinfo_system_updater* m_system_updaters;
 
-            type_info* m_last;
+            const type_info* m_next;
 
         public:
             template<typename T>
@@ -4827,8 +4827,8 @@ namespace jeecs
             {
                 if (m_member_types == nullptr)
                 {
-                    if (m_last != nullptr)
-                        return m_last->find_member_by_name(name);
+                    if (m_next != nullptr)
+                        return m_next->find_member_by_name(name);
                 }
                 else
                 {
@@ -4846,8 +4846,8 @@ namespace jeecs
             }
             inline const typeinfo_script_parser* get_script_parser() const
             {
-                if (m_script_parsers == nullptr && m_last != nullptr)
-                    return m_last->get_script_parser();
+                if (m_script_parsers == nullptr && m_next != nullptr)
+                    return m_next->get_script_parser();
 
                 return m_script_parsers;
             }
@@ -5965,7 +5965,7 @@ namespace jeecs
             }
             static const char* JEScriptTypeDeclare()
             {
-                return "using vec2 = (real, real);";
+                return "public using vec2 = (real, real);";
             }
             void JEParseFromScriptType(wo_vm vm, wo_value v)
             {
@@ -6106,7 +6106,7 @@ namespace jeecs
             }
             static const char* JEScriptTypeDeclare()
             {
-                return "using ivec2 = (int, int);";
+                return "public using ivec2 = (int, int);";
             }
             void JEParseFromScriptType(wo_vm vm, wo_value v)
             {
@@ -6267,7 +6267,7 @@ namespace jeecs
             }
             static const char* JEScriptTypeDeclare()
             {
-                return "using vec3 = (real, real, real);";
+                return "public using vec3 = (real, real, real);";
             }
             void JEParseFromScriptType(wo_vm vm, wo_value v)
             {
@@ -6440,7 +6440,7 @@ namespace jeecs
             }
             static const char* JEScriptTypeDeclare()
             {
-                return "using vec4 = (real, real, real, real);";
+                return "public using vec4 = (real, real, real, real);";
             }
             void JEParseFromScriptType(wo_vm vm, wo_value v)
             {
@@ -6745,7 +6745,7 @@ namespace jeecs
             }
             static const char* JEScriptTypeDeclare()
             {
-                return "using quat = (real, real, real, real);";
+                return "public using quat = (real, real, real, real);";
             }
             void JEParseFromScriptType(wo_vm vm, wo_value v)
             {
@@ -8593,7 +8593,7 @@ namespace jeecs
                     return 
 R"(namespace Light2D::BlockShadow
 {
-    using block_mesh = array<vec2>;
+    public using block_mesh = array<vec2>;
 })";
                 }
                 void JEParseFromScriptType(wo_vm vm, wo_value v)
@@ -8960,7 +8960,7 @@ R"(namespace Light2D::BlockShadow
         m_animation: string,
         m_loop: bool,
     };
-    using animation_data_set_list = array<animation_state>;
+    public using animation_data_set_list = array<animation_state>;
 })";
                 }
                 void JEParseFromScriptType(wo_vm vm, wo_value v)
@@ -9477,7 +9477,7 @@ R"(namespace Light2D::BlockShadow
                     else
                         v->clear();
 
-                }, "fileresource_void", "using fileresource_void = option<string>;");
+                }, "fileresource_void", "public using fileresource_void = option<string>;");
 
             typing::register_script_parser<basic::fileresource<audio::buffer>>(
                 guard,
@@ -9495,7 +9495,7 @@ R"(namespace Light2D::BlockShadow
                     else
                         v->clear();
 
-                }, "fileresource_audio_buffer", "using fileresource_audio_buffer = option<string>;");
+                }, "fileresource_audio_buffer", "public using fileresource_audio_buffer = option<string>;");
 
             typing::register_script_parser<bool>(
                 guard,
