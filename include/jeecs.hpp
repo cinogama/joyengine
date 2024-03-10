@@ -5976,6 +5976,8 @@ namespace jeecs
 
                 wo_struct_get(elem, v, 1);
                 y = wo_float(elem);
+
+                wo_pop_stack(vm);
             }
             void JEParseToScriptType(wo_vm vm, wo_value v) const
             {
@@ -5987,6 +5989,9 @@ namespace jeecs
 
                 wo_set_float(elem, y);
                 wo_struct_set(v, 1, elem);
+
+                wo_pop_stack(vm);
+
             }
         };
         inline static constexpr vec2 operator * (float _f, const vec2& _v2) noexcept
@@ -6117,6 +6122,8 @@ namespace jeecs
 
                 wo_struct_get(elem, v, 1);
                 y = (int)wo_int(elem);
+
+                wo_pop_stack(vm);
             }
             void JEParseToScriptType(wo_vm vm, wo_value v) const
             {
@@ -6128,6 +6135,8 @@ namespace jeecs
 
                 wo_set_int(elem, (wo_integer_t)y);
                 wo_struct_set(v, 1, elem);
+
+                wo_pop_stack(vm);
             }
         };
 
@@ -6281,6 +6290,8 @@ namespace jeecs
 
                 wo_struct_get(elem, v, 2);
                 z = wo_float(elem);
+
+                wo_pop_stack(vm);
             }
             void JEParseToScriptType(wo_vm vm, wo_value v) const
             {
@@ -6295,6 +6306,8 @@ namespace jeecs
 
                 wo_set_float(elem, z);
                 wo_struct_set(v, 2, elem);
+
+                wo_pop_stack(vm);
             }
         };
         inline static constexpr vec3 operator * (float _f, const vec3& _v3) noexcept
@@ -6457,6 +6470,8 @@ namespace jeecs
 
                 wo_struct_get(elem, v, 3);
                 w = wo_float(elem);
+
+                wo_pop_stack(vm);
             }
             void JEParseToScriptType(wo_vm vm, wo_value v) const
             {
@@ -6474,6 +6489,8 @@ namespace jeecs
 
                 wo_set_float(elem, w);
                 wo_struct_set(v, 3, elem);
+
+                wo_pop_stack(vm);
             }
         };
         inline static constexpr vec4 operator * (float _f, const vec4& _v4) noexcept
@@ -6762,6 +6779,8 @@ namespace jeecs
 
                 wo_struct_get(elem, v, 3);
                 w = wo_float(elem);
+
+                wo_pop_stack(vm);
             }
             void JEParseToScriptType(wo_vm vm, wo_value v) const
             {
@@ -6779,6 +6798,8 @@ namespace jeecs
 
                 wo_set_float(elem, w);
                 wo_struct_set(v, 3, elem);
+
+                wo_pop_stack(vm);
             }
         };
 
@@ -8506,20 +8527,91 @@ namespace jeecs
         };
         struct Range
         {
-            struct light_strength_steps
+            struct light_shape
             {
-                struct step_data
+                struct points_data
                 {
                     basic::vector<math::vec3> m_positions;
                     float m_strength;
+
+                    points_data(float strance, const std::vector<math::vec3>& points)
+                    {
+                        m_strength = strance;
+                        for (auto& p : points)
+                            m_positions.push_back(p);
+                    }
                 };
-                basic::vector<step_data> m_steps;
+                basic::vector<points_data> m_steps;
+                basic::resource<graphic::vertex> m_light_mesh = nullptr;
+
+                static const char* JEScriptTypeName()
+                {
+                    return "Light2D::Range::light_shape";
+                }
+                static const char* JEScriptTypeDeclare()
+                {
+                    return
+                        R"(namespace Light2D::Range
+{
+    public using points_data = struct{
+        m_strength: float,
+        m_positions: array<vec3>,
+    };
+    public using light_shape = array<points_data>;
+})";
+                }
+                void JEParseFromScriptType(wo_vm vm, wo_value v)
+                {
+                    m_light_mesh = nullptr;
+
+                    wo_value pos = wo_push_empty(vm);
+                    wo_value val = wo_push_empty(vm);
+
+                    size_t point_count = (size_t)wo_lengthof(v);
+
+                    m_steps.clear();
+
+                    for (size_t i = 0; i < point_count; ++i)
+                    {
+                        wo_arr_get(pos, v, (wo_integer_t)i);;
+
+                        wo_struct_get(val, pos, 0);
+                        float strance = wo_float(val);
+
+                        wo_struct_get(val, pos, 1);
+
+                        size_t point_count = (size_t)wo_lengthof(val);
+                        std::vector<math::vec3> points_data;
+
+                        for (size_t i = 0; i < point_count; ++i)
+                        {
+                            wo_arr_get(pos, val, (wo_integer_t)i);
+
+                            math::vec3 position;
+                            position.JEParseFromScriptType(vm, pos);
+
+                            points_data.push_back(position);
+                        }
+
+                        m_steps.push_back(light_shape::points_data(strance, points_data));
+                    }
+
+                    wo_pop_stack(vm);
+                    wo_pop_stack(vm);
+                }
+                void JEParseToScriptType(wo_vm vm, wo_value v) const
+                {
+                    wo_value st = wo_push_struct();
+
+                    wo_pop_stack(vm);
+                    wo_pop_stack(vm);
+                }
             };
-            light_strength_steps steps;
+            light_shape shape;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(guard, &Range::steps, "steps");
+                typing::register_member(guard, &Range::shape, "shape");
             }
         };
         struct Point
@@ -8590,8 +8682,8 @@ namespace jeecs
                 }
                 static const char* JEScriptTypeDeclare()
                 {
-                    return 
-R"(namespace Light2D::BlockShadow
+                    return
+                        R"(namespace Light2D::BlockShadow
 {
     public using block_mesh = array<vec2>;
 })";
@@ -8614,6 +8706,7 @@ R"(namespace Light2D::BlockShadow
 
                         m_block_points.push_back(position);
                     }
+                    wo_pop_stack(vm);
                 }
                 void JEParseToScriptType(wo_vm vm, wo_value v) const
                 {
@@ -8626,6 +8719,7 @@ R"(namespace Light2D::BlockShadow
                         m_block_points.at(i).JEParseToScriptType(vm, pos);
                         wo_arr_set(v, (wo_integer_t)i, pos);
                     }
+                    wo_pop_stack(vm);
                 }
             };
 
@@ -8984,9 +9078,12 @@ R"(namespace Light2D::BlockShadow
                         wo_struct_get(tmp, animation, 1);
                         animation_inst.set_action(wo_string(tmp));
 
-                        wo_struct_get(tmp, animation, 1);
+                        wo_struct_get(tmp, animation, 2);
                         animation_inst.set_loop(wo_bool(tmp));
                     }
+
+                    wo_pop_stack(vm);
+                    wo_pop_stack(vm);
                 }
                 void JEParseToScriptType(wo_vm vm, wo_value v) const
                 {
@@ -9011,6 +9108,9 @@ R"(namespace Light2D::BlockShadow
 
                         wo_arr_set(v, (wo_integer_t)i, animation);
                     }
+
+                    wo_pop_stack(vm);
+                    wo_pop_stack(vm);
                 }
             };
 
@@ -9477,6 +9577,8 @@ R"(namespace Light2D::BlockShadow
                     else
                         v->clear();
 
+                    wo_pop_stack(vm);
+
                 }, "fileresource_void", "public using fileresource_void = option<string>;");
 
             typing::register_script_parser<basic::fileresource<audio::buffer>>(
@@ -9494,6 +9596,8 @@ R"(namespace Light2D::BlockShadow
                         v->load(wo_string(result));
                     else
                         v->clear();
+
+                    wo_pop_stack(vm);
 
                 }, "fileresource_audio_buffer", "public using fileresource_audio_buffer = option<string>;");
 

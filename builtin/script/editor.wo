@@ -464,3 +464,109 @@ namespace Light2D::BlockShadow::block_mesh
         }
     }
 }
+namespace Animation2D::FrameAnimation::animation_data_set_list
+{
+    using parser = void
+    {
+        public extern func saving(val: Animation2D::FrameAnimation::animation_data_set_list)=> string
+        {
+            return val: array<animation_state>
+                ->> \state = [state.m_path: dynamic, state.m_animation: dynamic, state.m_loop: dynamic];
+                ->  serialize
+                ->  valor("[]");
+        }
+        public extern func restoring(dat: string)=> Animation2D::FrameAnimation::animation_data_set_list
+        {
+            return dat->array::deserialize->valor([])
+                =>> \state = state is array<dynamic>
+                    ? [
+                        animation_state
+                        {
+                            m_path = state: array<dynamic>[0]: string, 
+                            m_animation = state: array<dynamic>[1]: string, 
+                            m_loop = state: array<dynamic>[2]: bool
+                        }
+                    ]
+                    | []
+                    ;
+                : animation_data_set_list;
+                ;
+        }
+        public extern func edit(mut val: Animation2D::FrameAnimation::animation_data_set_list, tag: string, echunkinfo: string)=> option<Animation2D::FrameAnimation::animation_data_set_list>
+        {
+            let mut need_update = false;
+            
+            match (InputInt(F"size##{tag}", val: array<animation_state>->len))
+            {
+            value(newsize)?
+                {
+                    val = val: array<animation_state>
+                        ->resize(newsize, 
+                            animation_state
+                            {
+                                m_path = "",
+                                m_animation = "", 
+                                m_loop = false,
+                            }): Animation2D::FrameAnimation::animation_data_set_list;
+                    need_update = true;
+                }
+            none?;
+            }
+
+            let mut newval = []mut: vec<animation_state>;
+
+            for (let idx, state : val: array<animation_state>)
+            {
+                let mut path = state.m_path;
+                let mut animation = state.m_animation;
+                let mut loop = state.m_loop;
+
+                match (jeapi::gui::widget::File(F"动画{idx}：##{tag}##{echunkinfo}", path, \=do nil;))
+                {
+                value(newpath)?
+                    {
+                        path = newpath;
+                        need_update = true;
+                    }
+                none?;
+                }
+                SameLine();
+                
+                match (CheckBox(F"循环##{tag}##{echunkinfo}", loop))
+                {
+                value(newloop)?
+                    {
+                        loop = newloop;
+                        need_update = true;
+                    }
+                none?;
+                }
+                SameLine();
+
+                match (InputText(F"动作##{tag}##{echunkinfo}", animation))
+                {
+                value(newanimation)?
+                    {
+                        animation = newanimation;
+                        need_update = true;
+                    }
+                none?;
+                }
+
+                newval->add(
+                    animation_state
+                    {
+                        m_path = path,
+                        m_animation = animation,
+                        m_loop = loop,
+                    }
+                );
+            }
+
+            if (need_update)
+                return option::value(newval->toarray: Animation2D::FrameAnimation::animation_data_set_list);
+            else
+                return option::none;
+        }
+    }
+}
