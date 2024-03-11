@@ -1670,6 +1670,64 @@ public func frag(_: v2f)
                             );
                         }
                     }
+                    if (range != nullptr)
+                    {
+                        if (range->shape.m_light_mesh == nullptr
+                            && range->shape.m_point_count != 0
+                            && !range->shape.m_positions.empty())
+                        {
+                            std::vector<float> vertex_datas;
+                            auto append_point =
+                                [&vertex_datas, &range](const math::vec2& p, size_t layerid)
+                                {
+                                    vertex_datas.push_back(p.x);
+                                    vertex_datas.push_back(p.y);
+                                    vertex_datas.push_back(0.f);
+                                    vertex_datas.push_back(range->shape.m_strength[layerid]);
+                                };
+
+                            size_t layer_count = range->shape.m_strength.size();
+                            size_t last_point_index = 0;
+                            for (size_t ilayer = 0; ilayer < layer_count; ++ilayer)
+                            {
+                                // 如果是第一层，那么特殊处理，
+                                if (ilayer == 0)
+                                {
+                                    for (size_t ipoint = 0; ipoint < range->shape.m_point_count; ++ipoint)
+                                    {
+                                        math::vec2* pos;
+                                        if (ipoint == 0)
+                                            last_point_index = 0;
+                                        else if (ipoint % 2 == 1)
+                                            last_point_index = 1 + ipoint / 2;
+                                        else
+                                            last_point_index = range->shape.m_point_count - ipoint / 2;
+
+                                        append_point(range->shape.m_positions.at(last_point_index), 0);
+
+                                    }
+                                }
+                                else
+                                {
+                                    for (size_t tipoint = 0; tipoint < range->shape.m_point_count; ++tipoint)
+                                    {
+                                        size_t real_ipoint = (last_point_index + tipoint) % range->shape.m_point_count;
+                                        size_t real_next_last_layer_ipoint = (last_point_index + tipoint + 1) % range->shape.m_point_count;
+
+                                        append_point(range->shape.m_positions[real_ipoint + ilayer * range->shape.m_point_count], ilayer);
+                                        append_point(range->shape.m_positions[real_next_last_layer_ipoint + (ilayer - 1) * range->shape.m_point_count], ilayer - 1);
+                                    }
+
+                                    // 最后链接到本层的第一个顺位点
+                                    append_point(range->shape.m_positions[last_point_index + ilayer * range->shape.m_point_count], ilayer);
+                                }
+                            }
+
+                            range->shape.m_light_mesh = jeecs::graphic::vertex::create(
+                                jegl_vertex::type::TRIANGLESTRIP,
+                                vertex_datas, { 3, 1 });
+                        }
+                    }
                 });
 
             selector.anyof<
@@ -1718,75 +1776,6 @@ public func frag(_: v2f)
                                 shape
                         }
                     );
-                });
-
-            selector.exec([this](Light2D::Range& range)
-                {
-                    if (range.shape.m_light_mesh == nullptr
-                        && range.shape.m_point_count != 0
-                        && !range.shape.m_positions.empty())
-                    {
-                        std::vector<float> vertex_datas;
-                        auto append_point =
-                            [&vertex_datas, &range](const math::vec2& p, size_t layerid)
-                            {
-                                vertex_datas.push_back(p.x);
-                                vertex_datas.push_back(p.y);
-                                vertex_datas.push_back(0.f);
-                                vertex_datas.push_back(range.shape.m_strength[layerid]);
-                            };
-
-                        size_t layer_count = range.shape.m_strength.size();
-                        for (size_t ilayer = 0; ilayer < layer_count; ++ilayer)
-                        {
-                            // 如果是第一层，那么特殊处理，
-                            if (ilayer == 0)
-                            {
-                                for (size_t ipoint = 0; ipoint < range.shape.m_point_count; ++ipoint)
-                                {
-                                    math::vec2* pos;
-                                    if (ipoint == 0)
-                                        pos = &range.shape.m_positions[0];
-                                    else if (ipoint % 2 == 1)
-                                        pos = &range.shape.m_positions[1 + ipoint / 2];
-                                    else
-                                        pos = &range.shape.m_positions[range.shape.m_point_count - ipoint / 2];
-
-                                    append_point(*pos, 0);
-                                }
-                            }
-                            else
-                            {
-                                for (size_t tipoint = 0; tipoint < range.shape.m_point_count; ++tipoint)
-                                {
-                                    size_t real_ipoint;
-                                    size_t real_next_last_layer_ipoint;
-
-                                    if (ilayer % 2 == 0)
-                                    {
-                                        real_ipoint = range.shape.m_point_count - 1 - tipoint;
-                                        real_next_last_layer_ipoint = range.shape.m_point_count - 1 - ((tipoint + 1) % range.shape.m_point_count);
-                                    }
-                                    else
-                                    {
-                                        real_ipoint = tipoint;
-                                        real_next_last_layer_ipoint = (tipoint + 1) % range.shape.m_point_count;
-                                    }
-
-                                    append_point(range.shape.m_positions[real_ipoint + ilayer * range.shape.m_point_count], ilayer);
-                                    append_point(range.shape.m_positions[real_next_last_layer_ipoint + (ilayer - 1) * range.shape.m_point_count], ilayer - 1);
-                                }
-
-                                // 最后链接到本层的第一个顺位点
-                                size_t real_first_ipoint = ilayer % 2 == 0 ? 0 : range.shape.m_point_count - 1;
-                                append_point(range.shape.m_positions[real_first_ipoint + ilayer * range.shape.m_point_count], ilayer);
-                            }
-                        }
-
-                        range.shape.m_light_mesh = jeecs::graphic::vertex::create(
-                            jegl_vertex::type::TRIANGLESTRIP,
-                            vertex_datas, { 3, 1 });
-                    }
                 });
 
             std::sort(m_2dblock_z_list.begin(), m_2dblock_z_list.end(),

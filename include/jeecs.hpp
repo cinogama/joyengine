@@ -8629,10 +8629,13 @@ R"(namespace Light2D::Range
                     wo_pop_stack(vm);
                 }
             };
+            
+            float decay = 2.0f;
             light_shape shape;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
+                typing::register_member(guard, &Range::decay, "decay");
                 typing::register_member(guard, &Range::shape, "shape");
             }
         };
