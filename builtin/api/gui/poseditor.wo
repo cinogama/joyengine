@@ -42,6 +42,7 @@ namespace jeapi::gui::widget
         // 因为鼠标只有一个，此处直接把上下文放在静态生命周期变量上
         static let mut moving_point_context = option::none: option<struct{
             moving_job_tag: string,
+            moving_group_index: int,
             moving_point_index: int,
         }>;
 
@@ -102,7 +103,9 @@ namespace jeapi::gui::widget
                 {
                 value(context)?
                     {
-                        if (context.moving_job_tag == tag && context.moving_point_index == index)
+                        if (context.moving_job_tag == tag 
+                            && context.moving_group_index == group_index
+                            && context.moving_point_index == index)
                         {
                             // 正在移动这个点
                             updated = true;
@@ -131,6 +134,7 @@ namespace jeapi::gui::widget
                         // 开始移动这个点
                         moving_point_context = option::value(struct{
                             moving_job_tag = tag,
+                            moving_group_index = group_index,
                             moving_point_index = index,
                         });
 

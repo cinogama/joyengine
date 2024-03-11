@@ -8586,7 +8586,7 @@ R"(namespace Light2D::Range
                         {
                             math::vec2 pos = {};
 
-                            if (wo_arr_try_get(val, positions, iposition + ilayer * iposition))
+                            if (wo_arr_try_get(val, positions, iposition + ilayer * position_count))
                                 pos.JEParseFromScriptType(vm, val);
 
                             m_positions.push_back(pos);

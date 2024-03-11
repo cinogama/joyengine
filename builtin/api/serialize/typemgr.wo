@@ -52,6 +52,8 @@ namespace jeapi
             {
             ok(parser)?
                 {
+                    shutdown();
+
                     _update_registered_parser(parser);
                     _parser = option::value(parser);
                     

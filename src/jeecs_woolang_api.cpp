@@ -2330,13 +2330,13 @@ namespace je
 
             using parser_impl = gchandle
             {
-                extern("libjoyecs", "wojeapi_dynamic_parser_impl_saving")
+                extern("libjoyecs", "wojeapi_dynamic_parser_impl_saving", slow)
                 public func saving(self: parser_impl, val: native_value)=> string;
 
-                extern("libjoyecs", "wojeapi_dynamic_parser_impl_restoring")
+                extern("libjoyecs", "wojeapi_dynamic_parser_impl_restoring", slow)
                 public func restoring(self: parser_impl, val: native_value, dat: string)=> void;
 
-                extern("libjoyecs", "wojeapi_dynamic_parser_impl_edit")
+                extern("libjoyecs", "wojeapi_dynamic_parser_impl_edit", slow)
                 public func edit(self: parser_impl, val: native_value, tag1: string, tag2: string)=> void;
 
                 public func close(self: parser_impl)

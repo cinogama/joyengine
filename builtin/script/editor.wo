@@ -457,7 +457,7 @@ namespace Light2D::Range::light_shape
                 let v = vec::create(count * layer_count, mut (0., 0.): vec2);
                 for (let mut ilayer = 0; ilayer < layer_count; ilayer += 1)
                 {
-                    for (let mut ipoint = 0; ipoint < point_count; ipoint += 1)
+                    for (let mut ipoint = 0; ipoint < std::min(count, point_count); ipoint += 1)
                     {
                         v[ilayer * count + ipoint] = point_data[ilayer * point_count + ipoint];
                     }
@@ -470,18 +470,26 @@ namespace Light2D::Range::light_shape
             none?;
             }
 
+            let layered_positions = []mut: vec<array<vec2>>;
+            for (let mut offset = 0; offset < layer_count; offset += 1)
+                layered_positions->add(
+                    point_data->subto(offset * point_count, point_count));
+
+
             match (jeapi::gui::widget::poseditor(
                 F"##{tag}##{echunkinfo}", 
                 std::min(GetContentRegionAvail().0, 400.),
-                [point_data->>\p = p: (real, real);],
-                0.01,
+                layered_positions as vec<array<vec2>>->unsafe::cast:<array<array<(real, real)>>>,
+                0.025,
                 func(a, i)
                 {
                     let r = []mut: vec<((real, real), (real, real))>;
                     for (let idx, p : a[i])
                     {
-                        if (idx > 0)
-                            r->add((a[i][idx - 1], p));
+                        r->add((a[i][idx - 1], p));
+
+                        if (i > 0)
+                            r->add((a[i - 1][idx], p));
                     }
                     return r->toarray;
                 },
@@ -489,7 +497,11 @@ namespace Light2D::Range::light_shape
             {
             value(posgroups)?
             {
-                point_data = posgroups[0]->>\e = e: vec2;;
+                point_data = posgroups
+                    ->  reduce(\l, r = l->connect(r);)
+                    ->  valor([])
+                    ->> \e = e: vec2;
+                    ;
                 need_update = true;
             }
             none?
