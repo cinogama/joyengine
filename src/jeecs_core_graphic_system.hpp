@@ -2459,6 +2459,9 @@ public func frag(_: v2f)
                             if (light2d.point != nullptr)
                                 JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, light2d_decay, float,
                                     light2d.point->decay);
+                            else if (light2d.range != nullptr)
+                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, light2d_decay, float,
+                                    light2d.range->decay);
                         }
                     }
 

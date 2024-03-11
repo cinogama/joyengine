@@ -8630,7 +8630,7 @@ R"(namespace Light2D::Range
                 }
             };
             
-            float decay = 2.0f;
+            float decay = 1.0f;
             light_shape shape;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
@@ -8641,7 +8641,7 @@ R"(namespace Light2D::Range
         };
         struct Point
         {
-            float decay = 2.0f;
+            float decay = 1.0f;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
