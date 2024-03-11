@@ -360,12 +360,12 @@ public let frag =
             }
         }
 
-        math::vec3 get_entity_size(const Transform::Translation& trans, const Renderer::Shape& shape)
+        math::vec3 get_entity_size(const Transform::Translation& trans, const basic::resource<graphic::vertex>& mesh)
         {
             math::vec3 size = trans.local_scale;
 
-            const auto& light_shape = shape.vertex != nullptr
-                ? shape.vertex
+            const auto& light_shape = mesh != nullptr
+                ? mesh
                 : m_default_resources.default_shape_quad;
 
             assert(light_shape->resouce() != nullptr);
@@ -380,6 +380,10 @@ public let frag =
             }
 
             return size;
+        }
+        math::vec3 get_entity_size(const Transform::Translation& trans, const Renderer::Shape& shape)
+        {
+            return get_entity_size(trans, shape.vertex);
         }
     };
 
@@ -474,7 +478,7 @@ public let frag =
             );
 
             selector.anyof<UserInterface::Absolute, UserInterface::Relatively>();
-            selector.except<Light2D::Point, Light2D::Parallel>();
+            selector.except<Light2D::Point, Light2D::Parallel, Light2D::Range>();
             selector.exec(
                 [this, &parent_origin_list](
                     Shaders& shads,
@@ -1481,6 +1485,7 @@ public func frag(_: v2f)
             const Light2D::TopDown* topdown;
             const Light2D::Point* point;
             const Light2D::Parallel* parallel;
+            const Light2D::Range* range;
             const Light2D::Gain* gain;
             const Light2D::ShadowBuffer* shadowbuffer;
             const Renderer::Color* color;
@@ -1618,7 +1623,7 @@ public func frag(_: v2f)
                     }
                 });
 
-            selector.except<Light2D::Point, Light2D::Parallel, UserInterface::Origin>();
+            selector.except<Light2D::Point, Light2D::Parallel, Light2D::Range, UserInterface::Origin>();
             selector.exec([this](Translation& trans, Shaders& shads, Textures* texs, Shape& shape, Rendqueue* rendqueue, Renderer::Color* color)
                 {
                     // RendOb will be input to a chain and used for swap
@@ -1628,11 +1633,12 @@ public func frag(_: v2f)
                         });
                 });
 
-            selector.anyof<Light2D::Point, Light2D::Parallel>();
+            selector.anyof<Light2D::Point, Light2D::Parallel, Light2D::Range>();
             selector.exec([this](Translation& trans,
                 Light2D::TopDown* topdown,
                 Light2D::Point* point,
                 Light2D::Parallel* parallel,
+                Light2D::Range* range,
                 Light2D::Gain* gain,
                 Light2D::ShadowBuffer* shadowbuffer,
                 Renderer::Color* color,
@@ -1642,7 +1648,7 @@ public func frag(_: v2f)
                 {
                     m_2dlight_list.emplace_back(
                         light2d_arch{
-                            &trans, topdown, point, parallel, gain, shadowbuffer,
+                            &trans, topdown, point, parallel, range, gain, shadowbuffer,
                             color, &shape, &shads, texs,
                         }
                     );
@@ -1716,8 +1722,8 @@ public func frag(_: v2f)
 
             selector.exec([this](Light2D::Range& range)
                 {
-                    if (range.shape.m_light_mesh == nullptr 
-                        && range.shape.m_point_count != 0 
+                    if (range.shape.m_light_mesh == nullptr
+                        && range.shape.m_point_count != 0
                         && !range.shape.m_positions.empty())
                     {
                         std::vector<float> vertex_datas;
@@ -1753,16 +1759,26 @@ public func frag(_: v2f)
                             {
                                 for (size_t tipoint = 0; tipoint < range.shape.m_point_count; ++tipoint)
                                 {
-                                    size_t real_ipoint = ilayer % 2 == 0
-                                        ? range.shape.m_point_count - tipoint - 1
-                                        : tipoint;
+                                    size_t real_ipoint;
+                                    size_t real_next_last_layer_ipoint;
 
-                                    append_point(range.shape.m_positions[real_ipoint + (ilayer - 1) * range.shape.m_point_count], ilayer - 1);
+                                    if (ilayer % 2 == 0)
+                                    {
+                                        real_ipoint = range.shape.m_point_count - 1 - tipoint;
+                                        real_next_last_layer_ipoint = range.shape.m_point_count - 1 - ((tipoint + 1) % range.shape.m_point_count);
+                                    }
+                                    else
+                                    {
+                                        real_ipoint = tipoint;
+                                        real_next_last_layer_ipoint = (tipoint + 1) % range.shape.m_point_count;
+                                    }
+
                                     append_point(range.shape.m_positions[real_ipoint + ilayer * range.shape.m_point_count], ilayer);
+                                    append_point(range.shape.m_positions[real_next_last_layer_ipoint + (ilayer - 1) * range.shape.m_point_count], ilayer - 1);
                                 }
-                                
+
                                 // 最后链接到本层的第一个顺位点
-                                size_t real_first_ipoint = ilayer % 2 == 0 ? range.shape.m_point_count - 1 : 0;
+                                size_t real_first_ipoint = ilayer % 2 == 0 ? 0 : range.shape.m_point_count - 1;
                                 append_point(range.shape.m_positions[real_first_ipoint + ilayer * range.shape.m_point_count], ilayer);
                             }
                         }
@@ -1869,7 +1885,9 @@ public func frag(_: v2f)
                     for (auto& lightarch : m_2dlight_list)
                     {
                         const float light_range = 0.5f *
-                            get_entity_size(*lightarch.translation, *lightarch.shape).length();
+                            (lightarch.range == nullptr
+                                ? get_entity_size(*lightarch.translation, *lightarch.shape).length()
+                                : get_entity_size(*lightarch.translation, lightarch.range->shape.m_light_mesh).length());
 
                         if (current_camera.frustumCulling != nullptr && lightarch.parallel == nullptr)
                         {
@@ -2376,9 +2394,13 @@ public func frag(_: v2f)
                         math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
                         math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
+                        const auto& drawing_mesh = light2d.range != nullptr
+                            ? light2d.range->shape.m_light_mesh
+                            : light2d.shape->vertex;
+
                         auto& drawing_shape =
-                            light2d.shape->vertex != nullptr
-                            ? light2d.shape->vertex
+                            drawing_mesh != nullptr
+                            ? drawing_mesh
                             : m_default_resources.default_shape_quad;
                         auto& drawing_shaders =
                             light2d.shaders->shaders.empty() == false
