@@ -1714,12 +1714,71 @@ public func frag(_: v2f)
                     );
                 });
 
+            selector.exec([this](Light2D::Range& range)
+                {
+                    if (range.shape.m_light_mesh == nullptr 
+                        && range.shape.m_point_count != 0 
+                        && !range.shape.m_positions.empty())
+                    {
+                        std::vector<float> vertex_datas;
+                        auto append_point =
+                            [&vertex_datas, &range](const math::vec2& p, size_t layerid)
+                            {
+                                vertex_datas.push_back(p.x);
+                                vertex_datas.push_back(p.y);
+                                vertex_datas.push_back(0.f);
+                                vertex_datas.push_back(range.shape.m_strength[layerid]);
+                            };
+
+                        size_t layer_count = range.shape.m_strength.size();
+                        for (size_t ilayer = 0; ilayer < layer_count; ++ilayer)
+                        {
+                            // 如果是第一层，那么特殊处理，
+                            if (ilayer == 0)
+                            {
+                                for (size_t ipoint = 0; ipoint < range.shape.m_point_count; ++ipoint)
+                                {
+                                    math::vec2* pos;
+                                    if (ipoint == 0)
+                                        pos = &range.shape.m_positions[0];
+                                    else if (ipoint % 2 == 1)
+                                        pos = &range.shape.m_positions[1 + ipoint / 2];
+                                    else
+                                        pos = &range.shape.m_positions[range.shape.m_point_count - ipoint / 2];
+
+                                    append_point(*pos, 0);
+                                }
+                            }
+                            else
+                            {
+                                for (size_t tipoint = 0; tipoint < range.shape.m_point_count; ++tipoint)
+                                {
+                                    size_t real_ipoint = ilayer % 2 == 0
+                                        ? range.shape.m_point_count - tipoint - 1
+                                        : tipoint;
+
+                                    append_point(range.shape.m_positions[real_ipoint + (ilayer - 1) * range.shape.m_point_count], ilayer - 1);
+                                    append_point(range.shape.m_positions[real_ipoint + ilayer * range.shape.m_point_count], ilayer);
+                                }
+                                
+                                // 最后链接到本层的第一个顺位点
+                                size_t real_first_ipoint = ilayer % 2 == 0 ? range.shape.m_point_count - 1 : 0;
+                                append_point(range.shape.m_positions[real_first_ipoint + ilayer * range.shape.m_point_count], ilayer);
+                            }
+                        }
+
+                        range.shape.m_light_mesh = jeecs::graphic::vertex::create(
+                            jegl_vertex::type::TRIANGLESTRIP,
+                            vertex_datas, { 3, 1 });
+                    }
+                });
+
             std::sort(m_2dblock_z_list.begin(), m_2dblock_z_list.end(),
                 [](const block2d_arch& a, const block2d_arch& b)
                 {
                     return a.translation->world_position.z > b.translation->world_position.z;
                 });
-            
+
             m_2dblock_y_list = m_2dblock_z_list;
 
             std::sort(m_2dblock_y_list.begin(), m_2dblock_y_list.end(),
@@ -1866,7 +1925,7 @@ public func frag(_: v2f)
                             {
                                 auto& blockarch = *block2d_iter;
 
-                                int64_t current_layer = lightarch.topdown == nullptr 
+                                int64_t current_layer = lightarch.topdown == nullptr
                                     ? (int64_t)(blockarch.translation->world_position.z * 100.f)
                                     : (int64_t)(blockarch.translation->world_position.y * 100.f);
 
@@ -2027,8 +2086,8 @@ public func frag(_: v2f)
                                 // 如果下一个阴影将会在不同层级，或者当前阴影是最后一个阴影，则更新阴影覆盖
                                 auto next_block2d_iter = block2d_iter + 1;
                                 if (next_block2d_iter == block2d_end
-                                    || current_layer != (int64_t)((lightarch.topdown == nullptr 
-                                        ? next_block2d_iter->translation->world_position.z 
+                                    || current_layer != (int64_t)((lightarch.topdown == nullptr
+                                        ? next_block2d_iter->translation->world_position.z
                                         : next_block2d_iter->translation->world_position.y) * 100.f))
                                 {
                                     for (auto* block_in_layer : block_in_current_layer)
@@ -2080,7 +2139,7 @@ public func frag(_: v2f)
                                                 0.f);*/
 
                                             if (block_in_layer->selfshadow->auto_uncover &&
-                                                (lightarch.topdown == nullptr 
+                                                (lightarch.topdown == nullptr
                                                     ? block_in_layer->translation->world_position.z >= lightarch.translation->world_position.z
                                                     : block_in_layer->translation->world_position.y >= lightarch.translation->world_position.y))
                                                 JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4, 0.f, 0.f, 0.f, 0.f);

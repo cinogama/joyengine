@@ -435,7 +435,7 @@ namespace Light2D::Range::light_shape
             let mut strength_data = val.m_strength;
             let mut point_data = val.m_positions;
 
-            match (InputInt("layer##{tag}##{echunkinfo}", strength_data->len)->>\n = n < 0 ? 0 | n;)
+            match (InputInt(F"层数##{tag}##{echunkinfo}", strength_data->len)->>\n = n < 0 ? 0 | n;)
             {
             value(count)?
             {
@@ -450,7 +450,7 @@ namespace Light2D::Range::light_shape
             let layer_count = strength_data->len;
             let mut point_count = val.m_point_count;
 
-            match (InputInt("point##{tag}##{echunkinfo}", point_count)->>\n = n < 0 ? 0 | n;)
+            match (InputInt(F"顶点##{tag}##{echunkinfo}", point_count)->>\n = n < 0 ? 0 | n;)
             {
             value(count)?
             {
@@ -475,9 +475,10 @@ namespace Light2D::Range::light_shape
                 layered_positions->add(
                     point_data->subto(offset * point_count, point_count));
 
-
+            Text("形状网格");
+            TextDisabled("* 请保持最内层为凸多边形");
             match (jeapi::gui::widget::poseditor(
-                F"##{tag}##{echunkinfo}", 
+                F"##shape##{tag}##{echunkinfo}", 
                 std::min(GetContentRegionAvail().0, 400.),
                 layered_positions as vec<array<vec2>>->unsafe::cast:<array<array<(real, real)>>>,
                 0.025,
@@ -508,12 +509,29 @@ namespace Light2D::Range::light_shape
                 ;
             }
 
+            let new_strength_data = []mut: vec<real>;
+            for (let i, st : strength_data)
+            {
+                Text(F"强度 {i}");
+                SameLine();
+                match (DragFloat(F"##strength_{i}##{tag}##{echunkinfo}", st, 0.01, 0., 1.))
+                {
+                value(newst)?
+                {
+                    new_strength_data->add(newst);
+                    need_update = true;
+                }
+                none?
+                    new_strength_data->add(st);
+                }
+            }
+
             if (need_update)
                 return option::value(
                     Light2D::Range::light_shape
                     {
                         m_point_count = point_count,
-                        m_strength = strength_data,
+                        m_strength = new_strength_data->unsafe::cast:<array<real>>,
                         m_positions = point_data,
                     }
                 );

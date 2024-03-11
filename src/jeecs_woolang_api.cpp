@@ -2188,15 +2188,17 @@ WO_API wo_api wojeapi_dynamic_parser_create(wo_vm vm, wo_value args)
     if (file == nullptr)
         return wo_ret_err_string_fmt(vm, "Failed to open '%s'.", path);
 
-    char* content = (char*)malloc(file->m_file_length + 1);
-    jeecs_file_read(content, sizeof(char), file->m_file_length, file);
+    size_t filelen = file->m_file_length;
 
-    content[file->m_file_length] = 0;
+    char* content = (char*)malloc(filelen + 1);
+    jeecs_file_read(content, sizeof(char), filelen, file);
+
+    content[filelen] = 0;
 
     jeecs_file_close(file);
 
     wo_vm newvm = wo_create_vm();
-    if (wo_load_binary(newvm, path, content, file->m_file_length) == WO_FALSE)
+    if (wo_load_binary(newvm, path, content, filelen) == WO_FALSE)
     {
         free(content);
 

@@ -8527,14 +8527,14 @@ namespace jeecs
         };
         struct Range
         {
-            class light_shape
+            struct light_shape
             {
                 size_t                      m_point_count;
                 basic::vector<float>        m_strength;
                 basic::vector<math::vec2>   m_positions;
                 jeecs::basic::resource<jeecs::graphic::vertex> 
                                             m_light_mesh;
-            public:
+
                 light_shape()
                     : m_point_count(0)
                 {
