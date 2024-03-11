@@ -8527,22 +8527,18 @@ namespace jeecs
         };
         struct Range
         {
-            struct light_shape
+            class light_shape
             {
-                struct points_data
+                size_t                      m_point_count;
+                basic::vector<float>        m_strength;
+                basic::vector<math::vec2>   m_positions;
+                jeecs::basic::resource<jeecs::graphic::vertex> 
+                                            m_light_mesh;
+            public:
+                light_shape()
+                    : m_point_count(0)
                 {
-                    basic::vector<math::vec3> m_positions;
-                    float m_strength;
-
-                    points_data(float strance, const std::vector<math::vec3>& points)
-                    {
-                        m_strength = strance;
-                        for (auto& p : points)
-                            m_positions.push_back(p);
-                    }
-                };
-                basic::vector<points_data> m_steps;
-                basic::resource<graphic::vertex> m_light_mesh = nullptr;
+                }
 
                 static const char* JEScriptTypeName()
                 {
@@ -8551,57 +8547,83 @@ namespace jeecs
                 static const char* JEScriptTypeDeclare()
                 {
                     return
-                        R"(namespace Light2D::Range
+R"(namespace Light2D::Range
 {
-    public using points_data = struct{
-        m_strength: float,
-        m_positions: array<vec3>,
+    public using light_shape = struct{
+        m_point_count: int,
+        m_strength: array<float>,
+        m_positions: array<vec2>,
     };
-    public using light_shape = array<points_data>;
 })";
                 }
                 void JEParseFromScriptType(wo_vm vm, wo_value v)
                 {
+                    wo_value val = wo_push_empty(vm);
+                    wo_value strengths = wo_push_empty(vm);
+                    wo_value positions = wo_push_empty(vm);
+
+                    wo_struct_get(val, v, 0);
+                    wo_struct_get(strengths, v, 1);
+                    wo_struct_get(positions, v, 2);
+                    size_t position_count = (size_t)wo_int(val);
+                    size_t layer_count = (size_t)wo_lengthof(strengths);
+
+                    m_point_count = position_count;
+                    m_positions.clear();
+                    m_strength.clear();
+
                     m_light_mesh = nullptr;
 
-                    wo_value pos = wo_push_empty(vm);
-                    wo_value val = wo_push_empty(vm);
-
-                    size_t point_count = (size_t)wo_lengthof(v);
-
-                    m_steps.clear();
-
-                    for (size_t i = 0; i < point_count; ++i)
+                    for (size_t ilayer = 0; ilayer < layer_count; ++ilayer)
                     {
-                        wo_arr_get(pos, v, (wo_integer_t)i);;
+                        float strength = 0.0f;
+                        if (wo_arr_try_get(val, strengths, ilayer))
+                            strength = (float)wo_float(val);
 
-                        wo_struct_get(val, pos, 0);
-                        float strance = wo_float(val);
+                        m_strength.push_back(strength);
 
-                        wo_struct_get(val, pos, 1);
-
-                        size_t point_count = (size_t)wo_lengthof(val);
-                        std::vector<math::vec3> points_data;
-
-                        for (size_t i = 0; i < point_count; ++i)
+                        for (size_t iposition = 0; iposition < position_count; ++iposition)
                         {
-                            wo_arr_get(pos, val, (wo_integer_t)i);
+                            math::vec2 pos = {};
 
-                            math::vec3 position;
-                            position.JEParseFromScriptType(vm, pos);
+                            if (wo_arr_try_get(val, positions, iposition + ilayer * iposition))
+                                pos.JEParseFromScriptType(vm, val);
 
-                            points_data.push_back(position);
+                            m_positions.push_back(pos);
                         }
-
-                        m_steps.push_back(light_shape::points_data(strance, points_data));
                     }
 
+                    wo_pop_stack(vm);
                     wo_pop_stack(vm);
                     wo_pop_stack(vm);
                 }
                 void JEParseToScriptType(wo_vm vm, wo_value v) const
                 {
-                    wo_value st = wo_push_struct();
+                    wo_value val = wo_push_empty(vm);
+                    wo_value arr = wo_push_empty(vm);
+
+                    wo_set_struct(v, vm, 3);
+
+                    wo_set_int(val, (wo_integer_t)m_point_count);
+                    wo_struct_set(v, 0, val);
+
+                    size_t layer_count = m_strength.size();
+
+                    wo_set_arr(arr, vm, (wo_integer_t)layer_count);
+                    for (size_t i = 0; i < layer_count; ++i)
+                    {
+                        wo_set_float(val, m_strength.at(i));
+                        wo_arr_set(arr, (wo_integer_t)i, val);
+                    }
+                    wo_struct_set(v, 1, arr);
+
+                    wo_set_arr(arr, vm, (wo_integer_t)m_positions.size());
+                    for (size_t i = 0; i < m_positions.size(); ++i)
+                    {
+                        m_positions.at(i).JEParseToScriptType(vm, val);
+                        wo_arr_set(arr, (wo_integer_t)i, val);
+                    }
+                    wo_struct_set(v, 2, arr);
 
                     wo_pop_stack(vm);
                     wo_pop_stack(vm);
@@ -8762,7 +8784,7 @@ namespace jeecs
     {
         struct FrameAnimation
         {
-            struct animation_data_set_list
+            struct animation_list
             {
                 struct frame_data
                 {
@@ -9042,7 +9064,7 @@ namespace jeecs
 
                 static const char* JEScriptTypeName()
                 {
-                    return "Animation2D::FrameAnimation::animation_data_set_list";
+                    return "Animation2D::FrameAnimation::animation_list";
                 }
                 static const char* JEScriptTypeDeclare()
                 {
@@ -9054,7 +9076,7 @@ namespace jeecs
         m_animation: string,
         m_loop: bool,
     };
-    public using animation_data_set_list = array<animation_state>;
+    public using animation_list = array<animation_state>;
 })";
                 }
                 void JEParseFromScriptType(wo_vm vm, wo_value v)
@@ -9114,7 +9136,7 @@ namespace jeecs
                 }
             };
 
-            animation_data_set_list animations;
+            animation_list animations;
             float jitter = 0.0f;
             float speed = 1.0f;
 

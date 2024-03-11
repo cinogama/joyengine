@@ -7,6 +7,8 @@ import je;
 import je::gui;
 import je::towoo;
 
+import pkg::worst;
+
 import builtin::api::gui::file;
 import builtin::api::gui::poseditor;
 
@@ -402,6 +404,113 @@ namespace string
         }
     }
 }
+namespace Light2D::Range::light_shape
+{
+    using parser = void
+    {
+        public extern func saving(val: Light2D::Range::light_shape)=> string
+        {
+            let dat = {
+                ["m_point_count"] = val.m_point_count: dynamic,
+                ["m_strength"] = val.m_strength: dynamic,
+                ["m_positions"] = val.m_positions->>\v2 = v2->parser::saving;: dynamic,
+            };
+            
+            return dat->serialize->val;
+        }
+        public extern func restoring(dat: string)=> Light2D::Range::light_shape
+        {
+            let data = dat->dict::deserialize->valor({});
+            return Light2D::Range::light_shape
+            {
+                m_point_count = data->getor("m_point_count": dynamic, 0: dynamic)->valor(0),
+                m_strength = data->getor("m_strength": dynamic, []: dynamic)->valor([]: array<dynamic>)->> \e = e->valor(0.0);,
+                m_positions = data->getor("m_positions": dynamic, []: dynamic)->valor([]: array<dynamic>)->> \v2 = vec2::parser::restoring(v2: string);,
+            };
+        }
+        public extern func edit(val: Light2D::Range::light_shape, tag: string, echunkinfo: string)=> option<Light2D::Range::light_shape>
+        {
+            let mut need_update = false;
+
+            let mut strength_data = val.m_strength;
+            let mut point_data = val.m_positions;
+
+            match (InputInt("layer##{tag}##{echunkinfo}", strength_data->len)->>\n = n < 0 ? 0 | n;)
+            {
+            value(count)?
+            {
+                strength_data = strength_data->resize(count, 0.0: real);
+                point_data = point_data->resize(count * val.m_point_count, (0., 0.): vec2);
+
+                need_update = true;
+            }
+            none?;
+            }
+
+            let layer_count = strength_data->len;
+            let mut point_count = val.m_point_count;
+
+            match (InputInt("point##{tag}##{echunkinfo}", point_count)->>\n = n < 0 ? 0 | n;)
+            {
+            value(count)?
+            {
+                let v = vec::create(count * layer_count, mut (0., 0.): vec2);
+                for (let mut ilayer = 0; ilayer < layer_count; ilayer += 1)
+                {
+                    for (let mut ipoint = 0; ipoint < point_count; ipoint += 1)
+                    {
+                        v[ilayer * count + ipoint] = point_data[ilayer * point_count + ipoint];
+                    }
+                }
+                point_count = count;
+                point_data = v->unsafe::cast:<array<vec2>>;
+
+                need_update = true;
+            }
+            none?;
+            }
+
+            match (jeapi::gui::widget::poseditor(
+                F"##{tag}##{echunkinfo}", 
+                std::min(GetContentRegionAvail().0, 400.),
+                [point_data->>\p = p: (real, real);],
+                0.01,
+                func(a, i)
+                {
+                    let r = []mut: vec<((real, real), (real, real))>;
+                    for (let idx, p : a[i])
+                    {
+                        if (idx > 0)
+                            r->add((a[i][idx - 1], p));
+                    }
+                    return r->toarray;
+                },
+            ))
+            {
+            value(posgroups)?
+            {
+                point_data = posgroups[0]->>\e = e: vec2;;
+                need_update = true;
+            }
+            none?
+                ;
+            }
+
+            if (need_update)
+                return option::value(
+                    Light2D::Range::light_shape
+                    {
+                        m_point_count = point_count,
+                        m_strength = strength_data,
+                        m_positions = point_data,
+                    }
+                );
+
+            return option::none;
+        }
+    }
+
+}
 namespace Light2D::BlockShadow::block_mesh
 {
     using parser = void
@@ -409,24 +518,20 @@ namespace Light2D::BlockShadow::block_mesh
         public extern func saving(val: Light2D::BlockShadow::block_mesh)=> string
         {
             return val: array<vec2>
-                ->> \v2 = [v2.0, v2.1];
-                -> serialize->valor("[]")
+                ->> \v2 = v2->parser::saving;
+                -> serialize->val
                 ;
         }
         public extern func restoring(dat: string)=> Light2D::BlockShadow::block_mesh
         {
             return dat->array::deserialize->valor([])
-                ->> \v2 = v2 is array<dynamic> 
-                    ? v2: array<dynamic>->> \v = v: real;
-                    | [0., 0.]
-                    ;
-                ->> \v2 = (v2->getor(0, 0.), v2->getor(1, 0.));
+                ->> \v2 = vec2::parser::restoring(v2: string);
                 : block_mesh;
         }
         public extern func edit(mut val: Light2D::BlockShadow::block_mesh, tag: string, echunkinfo: string)=> option<Light2D::BlockShadow::block_mesh>
         {
             let mut size_changed = false;
-            match (InputInt(F"size##{tag}", val: array<vec2>->len))
+            match (InputInt(F"size##{tag}", val: array<vec2>->len)->>\n = n < 0 ? 0 | n;)
             {
             value(newsize)?
                 {
@@ -464,39 +569,37 @@ namespace Light2D::BlockShadow::block_mesh
         }
     }
 }
-namespace Animation2D::FrameAnimation::animation_data_set_list
+namespace Animation2D::FrameAnimation::animation_list
 {
     using parser = void
     {
-        public extern func saving(val: Animation2D::FrameAnimation::animation_data_set_list)=> string
+        public extern func saving(val: Animation2D::FrameAnimation::animation_list)=> string
         {
             return val: array<animation_state>
                 ->> \state = [state.m_path: dynamic, state.m_animation: dynamic, state.m_loop: dynamic];
                 ->  serialize
-                ->  valor("[]");
+                ->  val;
         }
-        public extern func restoring(dat: string)=> Animation2D::FrameAnimation::animation_data_set_list
+        public extern func restoring(dat: string)=> Animation2D::FrameAnimation::animation_list
         {
             return dat->array::deserialize->valor([])
-                =>> \state = state is array<dynamic>
-                    ? [
+                ->> \state = 
                         animation_state
                         {
-                            m_path = state: array<dynamic>[0]: string, 
-                            m_animation = state: array<dynamic>[1]: string, 
-                            m_loop = state: array<dynamic>[2]: bool
+                            m_path = state_dat->getor(0, "": dynamic)->valor(""), 
+                            m_animation = state_dat->getor(0, "": dynamic)->valor(""), 
+                            m_loop = state_dat->getor(0, false: dynamic)->valor(false), 
                         }
-                    ]
-                    | []
+                        where state_dat = state->valor([]: array<dynamic>)
                     ;
-                : animation_data_set_list;
+                : animation_list;
                 ;
         }
-        public extern func edit(mut val: Animation2D::FrameAnimation::animation_data_set_list, tag: string, echunkinfo: string)=> option<Animation2D::FrameAnimation::animation_data_set_list>
+        public extern func edit(mut val: Animation2D::FrameAnimation::animation_list, tag: string, echunkinfo: string)=> option<Animation2D::FrameAnimation::animation_list>
         {
             let mut need_update = false;
             
-            match (InputInt(F"size##{tag}", val: array<animation_state>->len))
+            match (InputInt(F"size##{tag}", val: array<animation_state>->len)->>\n = n < 0 ? 0 | n;)
             {
             value(newsize)?
                 {
@@ -507,7 +610,7 @@ namespace Animation2D::FrameAnimation::animation_data_set_list
                                 m_path = "",
                                 m_animation = "", 
                                 m_loop = false,
-                            }): Animation2D::FrameAnimation::animation_data_set_list;
+                            }): Animation2D::FrameAnimation::animation_list;
                     need_update = true;
                 }
             none?;
@@ -564,7 +667,7 @@ namespace Animation2D::FrameAnimation::animation_data_set_list
             }
 
             if (need_update)
-                return option::value(newval->toarray: Animation2D::FrameAnimation::animation_data_set_list);
+                return option::value(newval->toarray: Animation2D::FrameAnimation::animation_list);
             else
                 return option::none;
         }

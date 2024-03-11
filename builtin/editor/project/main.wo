@@ -595,6 +595,7 @@ namespace editor
             self->unlock_this_project();
 
             gui::drawpannel::close_all_scripts();
+            jeapi::typemgr::shutdown();
         }
         public func free_modules_after_close(self: Project)
         {

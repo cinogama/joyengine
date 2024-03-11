@@ -16,11 +16,11 @@ import je;
 import je::editor;
 
 import builtin::api::gui::iconbutton;
+import builtin::api::gui::panic;
 
 import builtin::editor::welcome::main;
 import builtin::editor::gui::form::msg;
 import builtin::editor::gui::form::input;
-import builtin::editor::gui::form::panic;
 import builtin::editor::environment::main;
 import builtin::editor::project::main;
 import builtin::editor::gui::main;

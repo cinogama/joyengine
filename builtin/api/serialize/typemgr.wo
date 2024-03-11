@@ -13,6 +13,18 @@ namespace jeapi
         let mut _parser = option::none: option<je::unsafe::dynamic_parser>;
         let mut _registered_parser = {}: dict<je::typeinfo, je::unsafe::dynamic_parser::parser_impl>;
 
+        public func shutdown()
+        {
+            for (let _, parser : _registered_parser)
+            {
+                do parser->close();
+            }
+            do _parser->>\p = p->close();;
+
+            _parser = option::none;
+            _registered_parser = {};
+        }
+
         func _update_registered_parser(parser: je::unsafe::dynamic_parser)
         {
             let result = {}mut: map<je::typeinfo, je::unsafe::dynamic_parser::parser_impl>;

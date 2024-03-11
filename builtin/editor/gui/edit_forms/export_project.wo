@@ -246,9 +246,11 @@ namespace editor::gui::edit_forms
                                 import je;
                                 import je::gui;
                                 import je::editor;
+                                
                                 import woo::std;
+                                
+                                import builtin::api::gui::panic;
                                 import builtin::api::serialize::main;
-                                import builtin::editor::gui::form::panic;
 
                                 je::editor::register_panic_hook(jeapi::gui::form::panic);
 
@@ -306,6 +308,9 @@ namespace editor::gui::edit_forms
 
                                 RUNTIME_UNIVERSE->wait();
 
+                                // 关闭类型管理器
+                                jeapi::typemgr::shutdown(); 
+
                                 for (let _, tinfo: LOADED_TOWOO_SYSTEM_TYPES)
                                     je::towoo::unregister_system(tinfo);
 
@@ -313,8 +318,7 @@ namespace editor::gui::edit_forms
                                     je::towoo::unregister_component(tinfo);
 
                                 for (let _, libhandle : LOADED_MODULE_HANDLES)
-                                    je::delay_unload_module(libhandle);
-                                
+                                    je::delay_unload_module(libhandle);                               
                             "@;
 
                             // 1.5.1 生成加载动态库相关代码

@@ -2338,10 +2338,20 @@ namespace je
 
                 extern("libjoyecs", "wojeapi_dynamic_parser_impl_edit")
                 public func edit(self: parser_impl, val: native_value, tag1: string, tag2: string)=> void;
+
+                public func close(self: parser_impl)
+                {
+                    return self: gchandle->close;
+                }
             }
 
             extern("libjoyecs", "wojeapi_dynamic_parser_impl_create", slow)
             public func get_parser_impl(self: dynamic_parser, type: typeinfo)=> option<parser_impl>;
+
+            public func close(self: dynamic_parser)
+            {
+                return self: gchandle->close;
+            }
         }
     }
     
