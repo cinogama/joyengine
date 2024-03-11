@@ -2371,49 +2371,49 @@ namespace jeecs_impl
             active_systems.begin(), active_systems.end(),
             [cur_world](ecs_world::system_container_t::value_type& val)
             {
-                val.first->state_update(val.second);
+                val.first->m_system_updaters->m_state_update(val.second);
             }
         );
         ParallelForeach(
             active_systems.begin(), active_systems.end(),
             [cur_world](ecs_world::system_container_t::value_type& val)
             {
-                val.first->pre_update(val.second);
+                val.first->m_system_updaters->m_pre_update(val.second);
             }
         );
         ParallelForeach(
             active_systems.begin(), active_systems.end(),
             [cur_world](ecs_world::system_container_t::value_type& val)
             {
-                val.first->update(val.second);
+                val.first->m_system_updaters->m_update(val.second);
             }
         );
         ParallelForeach(
             active_systems.begin(), active_systems.end(),
             [cur_world](ecs_world::system_container_t::value_type& val)
             {
-                val.first->script_update(val.second);
+                val.first->m_system_updaters->m_script_update(val.second);
             }
         );
         ParallelForeach(
             active_systems.begin(), active_systems.end(),
             [cur_world](ecs_world::system_container_t::value_type& val)
             {
-                val.first->late_update(val.second);
+                val.first->m_system_updaters->m_late_update(val.second);
             }
         );
         ParallelForeach(
             active_systems.begin(), active_systems.end(),
             [cur_world](ecs_world::system_container_t::value_type& val)
             {
-                val.first->apply_update(val.second);
+                val.first->m_system_updaters->m_apply_update(val.second);
             }
         );
         ParallelForeach(
             active_systems.begin(), active_systems.end(),
             [cur_world](ecs_world::system_container_t::value_type& val)
             {
-                val.first->commit_update(val.second);
+                val.first->m_system_updaters->m_commit_update(val.second);
             }
         );
     }

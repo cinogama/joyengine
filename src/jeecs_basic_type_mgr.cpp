@@ -16,200 +16,138 @@
 
 namespace jeecs_impl
 {
-    class type_info_holder
+    class global_factory_holder
     {
-        JECS_DISABLE_MOVE_AND_COPY(type_info_holder);
-        mutable std::shared_mutex  _m_type_holder_mx;
+        JECS_DISABLE_MOVE_AND_COPY(global_factory_holder);
 
-        std::vector<jeecs::typing::type_info*>  _m_type_holder_list;
-        std::unordered_map<jeecs::typing::type_info*, std::vector<jeecs::typing::type_info*>>
-            _m_registered_typeinfo;
-        std::unordered_map<std::string, jeecs::typing::typeid_t>  _m_type_name_id_mapping;
-        std::unordered_map<jeecs::typing::typehash_t, jeecs::typing::type_info*>  _m_type_hash_mapping;
+        using sequence_type_records = std::vector<jeecs::typing::type_info*>;
+        using named_type_records = std::unordered_map<std::string, jeecs::typing::typeid_t>;
+        using hash_type_records = std::unordered_map<jeecs::typing::typehash_t, jeecs::typing::typeid_t>;
 
-        size_t m_type_unregistered_count = 0;
+        mutable std::shared_mutex _m_factory_mx;
 
-        type_info_holder() = default;
+        sequence_type_records _m_type_records;
+        named_type_records _m_named_type_records;
+        hash_type_records _m_hash_type_records;
+
+        size_t m_type_unregistered_count;
+
+        global_factory_holder()
+            :m_type_unregistered_count(0)
+        {
+        }
+
     public:
-        ~type_info_holder()
+        ~global_factory_holder()
         {
 #ifndef NDEBUG
-            jeecs::debug::loginfo("Type manager shutdown.");
+            jeecs::debug::loginfo("Factory manager shutdown.");
 #endif
         }
 
-        inline static type_info_holder* holder() noexcept
+        static global_factory_holder* holder() noexcept
         {
-            static type_info_holder holder;
+            static global_factory_holder holder;
             return &holder;
         }
 
-        inline jeecs::typing::type_info* _record_typeinfo(jeecs::typing::typeid_t id, jeecs::typing::type_info* tinfo)
-        {
-            assert(id != 0);
-            auto* type_info = _m_type_holder_list[id - 1];
-            auto& registered_typeinfo_list = _m_registered_typeinfo[type_info];
-
-            assert(type_info != nullptr &&
-                std::find(
-                    registered_typeinfo_list.begin(),
-                    registered_typeinfo_list.end(), tinfo) == registered_typeinfo_list.end());
-
-            auto fnd = _m_type_hash_mapping.find(tinfo->m_hash);
-            if (fnd == _m_type_hash_mapping.end())
-                _m_type_hash_mapping[tinfo->m_hash] = type_info;
-            else
-            {
-                if (fnd->second != type_info)
-                    jeecs::debug::logwarn("Type '%s' hash conflict with '%s', please check!", 
-                        type_info->m_typename, fnd->second->m_typename);
-            }
-
-            registered_typeinfo_list.push_back(tinfo);
-            return tinfo;
-        }
-    public:
-        jeecs::typing::type_info* register_type(
-            const char* _name,
-            jeecs::typing::typehash_t _hash,
-            size_t                    _size,
-            size_t                    _align,
+        jeecs::typing::type_info* declear_type(
+            const char* _typename,
+            jeecs::typing::typehash_t       _hash,
+            size_t                          _size,
+            size_t                          _align,
+            je_typing_class                 _typecls,
             jeecs::typing::construct_func_t _constructor,
             jeecs::typing::destruct_func_t  _destructor,
-            jeecs::typing::copy_func_t      _copier,
-            jeecs::typing::move_func_t      _mover,
-            jeecs::typing::to_string_func_t _to_string,
-            jeecs::typing::parse_func_t     _parse,
-            jeecs::typing::update_func_t    _state_update,
-            jeecs::typing::update_func_t    _pre_update,
-            jeecs::typing::update_func_t    _update,
-            jeecs::typing::update_func_t    _script_update,
-            jeecs::typing::update_func_t    _late_update,
-            jeecs::typing::update_func_t    _apply_update,
-            jeecs::typing::update_func_t    _commit_update,
-            je_typing_class                 _typecls) noexcept
+            jeecs::typing::copy_construct_func_t _copy_constructor,
+            jeecs::typing::move_construct_func_t _move_constructor) noexcept
         {
-            // 0. Create type_info instance
             jeecs::typing::type_info* tinfo = new jeecs::typing::type_info();
-            tinfo->m_typename = jeecs::basic::make_new_string(_name);
+            tinfo->m_typename = jeecs::basic::make_new_string(_typename);
             tinfo->m_size = _size;
-
             tinfo->m_align = _align;
-            tinfo->m_chunk_size = jeecs::basic::allign_size(_size, tinfo->m_align);
+            tinfo->m_chunk_size = jeecs::basic::allign_size(_size, _align);
+            tinfo->m_hash = _hash;
+
+            tinfo->m_type_class = _typecls;
+
+            tinfo->m_constructor = _constructor;
+            tinfo->m_destructor = _destructor;
+            tinfo->m_copier = _copy_constructor;
+            tinfo->m_mover = _move_constructor;
+
+            tinfo->m_member_types = nullptr;
+            tinfo->m_script_parsers = nullptr;
+            tinfo->m_system_updaters = nullptr;
+
+            tinfo->m_next = nullptr;
 
             assert(tinfo->m_size != 0 && tinfo->m_chunk_size != 0);
 
-            tinfo->m_hash = _hash;
-            tinfo->m_constructor = _constructor;
-            tinfo->m_destructor = _destructor;
-            tinfo->m_copier = _copier;
-            tinfo->m_mover = _mover;
-            tinfo->m_to_string = _to_string;
-            tinfo->m_parse = _parse;
-            tinfo->m_type_class = _typecls;
-            tinfo->m_state_update = _state_update;
-            tinfo->m_pre_update = _pre_update;
-            tinfo->m_update = _update;
-            tinfo->m_script_update = _script_update;
-            tinfo->m_late_update = _late_update;
-            tinfo->m_apply_update = _apply_update;
-            tinfo->m_commit_update = _commit_update;
-            tinfo->m_member_count = 0;
-            tinfo->m_member_types = nullptr;
-            tinfo->m_script_parser_info = nullptr;
+            std::lock_guard g1(_m_factory_mx);
 
-            std::lock_guard g1(_m_type_holder_mx);
-
-            // 1. Find typeid with name
-            if (auto fnd_with_name = _m_type_name_id_mapping.find(_name); fnd_with_name != _m_type_name_id_mapping.end())
+            auto fnd = _m_named_type_records.find(tinfo->m_typename);
+            if (fnd != _m_named_type_records.end())
             {
-                tinfo->m_id = fnd_with_name->second;
+                tinfo->m_id = fnd->second;
+
+                // Replace the last type info, and link the new type info.
+                auto* last_type_info = _m_type_records.at(tinfo->m_id - 1);
+                while (last_type_info->m_next != nullptr)
+                    last_type_info = const_cast<jeecs::typing::type_info*>(last_type_info->m_next);
+                
+                last_type_info->m_next = tinfo;
             }
             else
             {
-                // 2. No such type, append.
-                auto holder_fnd = std::find(_m_type_holder_list.begin(), _m_type_holder_list.end(), nullptr);
-                if (holder_fnd != _m_type_holder_list.end())
+                // Not registered, trying to find a empty slot or append at the end.
+                auto holder_fnd = std::find(_m_type_records.begin(), _m_type_records.end(), nullptr);
+                if (holder_fnd != _m_type_records.end())
                 {
                     *holder_fnd = tinfo;
-                    tinfo->m_id = 1 + (jeecs::typing::typeid_t)(holder_fnd - _m_type_holder_list.begin());
+                    tinfo->m_id = 1 + (jeecs::typing::typeid_t)(holder_fnd - _m_type_records.begin());
                 }
                 else
                 {
-                    _m_type_holder_list.push_back(tinfo);
-                    tinfo->m_id = _m_type_holder_list.size();
+                    _m_type_records.push_back(tinfo);
+                    tinfo->m_id = _m_type_records.size();
                 }
-                _m_type_name_id_mapping[_name] = tinfo->m_id;
-#ifndef NDEBUG
-                jeecs::debug::loginfo("Type info: %p('%s') is registered.", tinfo, tinfo->m_typename);
-#endif
+
+                if (_m_named_type_records.insert(std::make_pair(tinfo->m_typename, tinfo->m_id)).second == false)
+                    // Failed to instert, should not happen.
+                    jeecs::debug::logfatal("Type '%s' is already registered?, please check!", tinfo->m_typename);
+
+                if (_m_hash_type_records.insert(std::make_pair(tinfo->m_hash, tinfo->m_id)).second == false)
+                    jeecs::debug::logerr("Type '%s' hash conflict with '%s', please check!",
+                        tinfo->m_typename, _m_type_records[_m_hash_type_records[tinfo->m_hash] - 1]->m_typename);
             }
-            return _record_typeinfo(tinfo->m_id, tinfo);
+
+            return tinfo;
         }
 
-        jeecs::typing::type_info* get_info_by_id(jeecs::typing::typeid_t id) noexcept
-        {
-            if (id && id != jeecs::typing::INVALID_TYPE_ID)
-            {
-                std::shared_lock sg1(_m_type_holder_mx);
-                if (id <= _m_type_holder_list.size())
-                    return _m_type_holder_list[id - 1];
-            }
-            return nullptr;
-        }
-        jeecs::typing::type_info* get_info_by_hash(jeecs::typing::typehash_t hash) noexcept
-        {
-            std::shared_lock sg1(_m_type_holder_mx);
-            auto fnd = _m_type_hash_mapping.find(hash);
-            if (fnd != _m_type_hash_mapping.end())
-                return fnd->second;
-            return nullptr;
-        }
-        jeecs::typing::type_info* get_info_by_name(const char* name) noexcept
-        {
-            if (name)
-            {
-                std::shared_lock sg1(_m_type_holder_mx);
-                auto fnd = _m_type_name_id_mapping.find(name);
-                if (fnd != _m_type_name_id_mapping.end())
-                    return _m_type_holder_list[fnd->second - 1];
-
-                // Not found? find it from woolang name?
-                for (auto* typeinfo : _m_type_holder_list)
-                {
-                    if (typeinfo->m_script_parser_info != nullptr &&
-                        strcmp(typeinfo->m_script_parser_info->m_woolang_typename, name) == 0)
-                        return typeinfo;
-                }
-            }
-            return nullptr;
-        }
-        std::vector<jeecs::typing::type_info*> get_all_registed_types() noexcept
-        {
-            std::shared_lock sg1(_m_type_holder_mx);
-            std::vector<jeecs::typing::type_info*> types;
-
-            for (auto* t : _m_type_holder_list)
-            {
-                if (t != nullptr)
-                    types.push_back(t);
-            }
-            return _m_type_holder_list;
-        }
-        size_t get_unregistered_count() const noexcept
-        {
-            std::shared_lock sg1(_m_type_holder_mx);
-            return m_type_unregistered_count;
-        }
-
-        // ATTENTION: This function do not promise for thread safe for adding new member.
-        void register_member(
-            const jeecs::typing::type_info* _classtype,
+        void declear_member(
+            jeecs::typing::type_info* _classtype,
             const jeecs::typing::type_info* _membertype,
             const char* _member_name,
             ptrdiff_t _member_offset) noexcept
         {
-            jeecs::typing::member_info* meminfo = new jeecs::typing::member_info();
+            if (_classtype->m_member_types == nullptr)
+            {
+                auto members = new jeecs::typing::typeinfo_member();
+                members->m_member_count = 0;
+                members->m_members = nullptr;
+
+                _classtype->m_member_types = members;
+            }
+            else
+            {
+                assert(_classtype->m_member_types->m_member_count != 0);
+                assert(_classtype->m_member_types->m_members != nullptr);
+            }
+            auto* class_member_info = const_cast<jeecs::typing::typeinfo_member*>(_classtype->m_member_types);
+
+            jeecs::typing::typeinfo_member::member_info* meminfo = 
+                new jeecs::typing::typeinfo_member::member_info();
 
             meminfo->m_class_type = _classtype;
             meminfo->m_member_type = _membertype;
@@ -217,184 +155,234 @@ namespace jeecs_impl
             meminfo->m_member_offset = _member_offset;
             meminfo->m_next_member = nullptr;
 
-            auto** m_new_member_ptr = const_cast<jeecs::typing::member_info**>(&_classtype->m_member_types);
+            auto** m_new_member_ptr = &class_member_info->m_members;
             while (*m_new_member_ptr)
                 m_new_member_ptr = &((*m_new_member_ptr)->m_next_member);
 
             *m_new_member_ptr = meminfo;
 
-            ++*const_cast<size_t* volatile>(&_classtype->m_member_count);
+            ++class_member_info->m_member_count;
         }
-        void unregister_member_info(jeecs::typing::type_info* classtype) noexcept
+
+        void declear_script_parser(
+            jeecs::typing::type_info* _typeinfo,
+            jeecs::typing::parse_c2w_func_t _c2w,
+            jeecs::typing::parse_w2c_func_t _w2c,
+            const char* _woolang_typename,
+            const char* _woolang_typedecl) noexcept
         {
-            auto* meminfo = classtype->m_member_types;
-            while (meminfo)
+            if (_typeinfo->m_script_parsers != nullptr)
+                jeecs::debug::logwarn("Type '%s' has already registered script parser, skip.", _typeinfo->m_typename);
+            else
             {
-                auto* curmem = const_cast<jeecs::typing::member_info*>(meminfo);
-                meminfo = meminfo->m_next_member;
+                jeecs::typing::typeinfo_script_parser* parser = new jeecs::typing::typeinfo_script_parser();
+                parser->m_script_parse_c2w = _c2w;
+                parser->m_script_parse_w2c = _w2c;
+                parser->m_woolang_typename = jeecs::basic::make_new_string(_woolang_typename);
+                parser->m_woolang_typedecl = jeecs::basic::make_new_string(_woolang_typedecl);
 
-                je_mem_free((void*)curmem->m_member_name);
-
-                delete curmem;
+                _typeinfo->m_script_parsers = parser;
             }
         }
-        void unregister_type(const jeecs::typing::type_info* tinfo) noexcept
+
+        void declear_system_updater(
+            jeecs::typing::type_info* _typeinfo,
+            jeecs::typing::update_func_t _state_update,
+            jeecs::typing::update_func_t _pre_update,
+            jeecs::typing::update_func_t _update,
+            jeecs::typing::update_func_t _script_update,
+            jeecs::typing::update_func_t _late_update,
+            jeecs::typing::update_func_t _apply_update,
+            jeecs::typing::update_func_t _commit_update)
         {
-            std::lock_guard g1(_m_type_holder_mx);
-            ++m_type_unregistered_count;
-            assert(tinfo != nullptr);
-            if (tinfo->m_id && tinfo->m_id != jeecs::typing::INVALID_TYPE_ID)
+            if (_typeinfo->m_system_updaters != nullptr)
+                jeecs::debug::logwarn("Type '%s' has already registered system updater, skip.", _typeinfo->m_typename);
+            else
             {
-                auto id = tinfo->m_id;
+                assert(_state_update != nullptr);
+                assert(_pre_update != nullptr);
+                assert(_update != nullptr);
+                assert(_script_update != nullptr);
+                assert(_late_update != nullptr);
+                assert(_apply_update != nullptr);
+                assert(_commit_update != nullptr);
 
-                assert(id != 0 && id <= _m_type_holder_list.size());
-                if (auto*& current_type_info = _m_type_holder_list[id - 1])
+                jeecs::typing::typeinfo_system_updater* updater = new jeecs::typing::typeinfo_system_updater();
+                updater->m_state_update = _state_update;
+                updater->m_pre_update = _pre_update;
+                updater->m_update = _update;
+                updater->m_script_update = _script_update;
+                updater->m_late_update = _late_update;
+                updater->m_apply_update = _apply_update;
+                updater->m_commit_update = _commit_update;
+
+                _typeinfo->m_system_updaters = updater;
+            }
+        }
+
+        void undeclear_type(jeecs::typing::type_info* tinfo)
+        {
+            std::lock_guard g1(_m_factory_mx);
+            
+            assert(tinfo->m_id != jeecs::typing::INVALID_TYPE_ID && tinfo->m_id <= _m_type_records.size());
+            auto* type_list = _m_type_records.at(tinfo->m_id - 1);
+
+            bool need_update_type = type_list == tinfo;
+            bool need_clear_hashed_and_named_type = type_list == tinfo && tinfo->m_next == nullptr;
+            
+            if (need_update_type)
+            {
+                _m_type_records.at(tinfo->m_id - 1) = 
+                    const_cast<jeecs::typing::type_info*>(tinfo->m_next);
+            }
+            else
+            {
+                while (type_list->m_next != tinfo)
+                    type_list = const_cast<jeecs::typing::type_info*>(type_list->m_next);
+
+                assert(type_list != nullptr);
+                type_list->m_next = tinfo->m_next;
+            }
+
+            if (need_clear_hashed_and_named_type)
+            {
+                _m_named_type_records.erase(tinfo->m_typename);
+                _m_hash_type_records.erase(tinfo->m_hash);
+            }
+
+            if (tinfo->m_member_types != nullptr)
+            {
+                auto* meminfo = tinfo->m_member_types->m_members;
+                while (meminfo != nullptr)
                 {
-#ifndef NDEBUG
-                    jeecs::debug::loginfo("Type info: %p('%s') is unregistered.", tinfo, tinfo->m_typename);
-#endif
-                    // 1. Free current type info from list;
-                    auto& registered_typeinfo = _m_registered_typeinfo[current_type_info];
-                    auto fnd = std::find(
-                        registered_typeinfo.begin(),
-                        registered_typeinfo.end(),
-                        const_cast<jeecs::typing::type_info*>(tinfo));
+                    auto* current_member = meminfo;
+                    meminfo = meminfo->m_next_member;
 
-                    if (fnd == registered_typeinfo.end())
-                        jeecs::debug::logerr("Type info: '%p' is invalid, please check.", tinfo);
-                    else
-                    {
-                        bool need_update_current_type_info = fnd == registered_typeinfo.begin();
+                    je_mem_free((void*)current_member->m_member_name);
 
-                        auto typename_to_free = (*fnd)->m_typename;
+                    delete current_member;
+                }
+                delete tinfo->m_member_types;
+            }
+            if (tinfo->m_system_updaters != nullptr)
+            {
+                delete tinfo->m_system_updaters;
+            }
+            if (tinfo->m_script_parsers != nullptr)
+            {
+                je_mem_free((void*)tinfo->m_script_parsers->m_woolang_typename);
+                je_mem_free((void*)tinfo->m_script_parsers->m_woolang_typedecl);
+                delete tinfo->m_script_parsers;
+            }
 
-                        unregister_member_info(*fnd);
-                        unregister_script_parser(*fnd);
+            delete tinfo;
+        }
 
-                        if (*fnd != current_type_info)
-                            // First registed type info, will reuse.
-                            delete (*fnd);
+        jeecs::typing::type_info* get_info_by_id(jeecs::typing::typeid_t id) noexcept
+        {
+            if (id && id != jeecs::typing::INVALID_TYPE_ID)
+            {
+                std::shared_lock sg1(_m_factory_mx);
+                if (id <= _m_type_records.size())
+                    return _m_type_records[id - 1];
+            }
+            return nullptr;
+        }
+        jeecs::typing::type_info* get_info_by_hash(jeecs::typing::typehash_t hash) noexcept
+        {
+            std::shared_lock sg1(_m_factory_mx);
+            auto fnd = _m_hash_type_records.find(hash);
+            if (fnd != _m_hash_type_records.end())
+                return _m_type_records[fnd->second - 1];
+            return nullptr;
+        }
+        jeecs::typing::type_info* get_info_by_name(const char* name) noexcept
+        {
+            if (name)
+            {
+                std::shared_lock sg1(_m_factory_mx);
+                auto fnd = _m_named_type_records.find(name);
+                if (fnd != _m_named_type_records.end())
+                    return _m_type_records[fnd->second - 1];
 
-                        registered_typeinfo.erase(fnd);
-
-                        if (registered_typeinfo.empty())
-                        {
-                            // All type info has been freed, close current type info.
-                            _m_type_name_id_mapping.erase(typename_to_free);
-                            _m_registered_typeinfo.erase(current_type_info);
-                            _m_type_hash_mapping.erase(current_type_info->m_hash);
-
-                            // current_type_info->m_typename has been freed.
-                            delete current_type_info;
-
-                            // Free slot
-                            current_type_info = nullptr;
-                        }
-                        else if (need_update_current_type_info)
-                        {
-                            // Update current type info.
-                            *current_type_info = *registered_typeinfo.front();
-                        }
-
-                        je_mem_free((void*)typename_to_free);
-                    }
-                    return;
+                // Not found? find it from woolang name?
+                for (auto* typeinfo : _m_type_records)
+                {
+                    if (typeinfo->m_script_parsers != nullptr &&
+                        strcmp(typeinfo->m_script_parsers->m_woolang_typename, name) == 0)
+                        return typeinfo;
                 }
             }
-            jeecs::debug::logerr("Type info: '%p' is invalid, please check.", tinfo);
+            return nullptr;
         }
-        void unregister_script_parser(jeecs::typing::type_info* classtype) noexcept
+        std::vector<jeecs::typing::type_info*> get_all_registed_types() noexcept
         {
-            if (classtype->m_script_parser_info != nullptr)
-            {
-                je_mem_free((void*)classtype->m_script_parser_info->m_woolang_typename);
-                je_mem_free((void*)classtype->m_script_parser_info->m_woolang_typedecl);
-                delete classtype->m_script_parser_info;
-            }
-        }
-        void register_script_parser(
-            const jeecs::typing::type_info* tinfo,
-            jeecs::typing::parse_c2w_func_t c2w,
-            jeecs::typing::parse_w2c_func_t w2c,
-            const char* woolang_typename,
-            const char* woolang_typedecl)
-        {
-            auto* sinfo = new jeecs::typing::script_parser_info;
-            sinfo->m_script_parse_c2w = c2w;
-            sinfo->m_script_parse_w2c = w2c;
-            sinfo->m_woolang_typename = jeecs::basic::make_new_string(woolang_typename);
-            sinfo->m_woolang_typedecl = jeecs::basic::make_new_string(woolang_typedecl);
+            std::shared_lock sg1(_m_factory_mx);
+            std::vector<jeecs::typing::type_info*> types;
 
-            const_cast<jeecs::typing::script_parser_info* volatile&>(tinfo->m_script_parser_info) = sinfo;
+            for (auto* t : _m_type_records)
+            {
+                if (t != nullptr)
+                    types.push_back(t);
+            }
+            return _m_type_records;
+        }
+        size_t get_unregistered_count() const noexcept
+        {
+            std::shared_lock sg1(_m_factory_mx);
+            return m_type_unregistered_count;
         }
     };
 }
 
 const jeecs::typing::type_info* je_typing_register(
-    const char* _name,
-    jeecs::typing::typehash_t _hash,
-    size_t                    _size,
-    size_t                    _align,
-    jeecs::typing::construct_func_t _constructor,
-    jeecs::typing::destruct_func_t  _destructor,
-    jeecs::typing::copy_func_t      _copier,
-    jeecs::typing::move_func_t      _mover,
-    jeecs::typing::to_string_func_t _to_string,
-    jeecs::typing::parse_func_t     _parse,
-    jeecs::typing::update_func_t    _state_update,
-    jeecs::typing::update_func_t    _pre_update,
-    jeecs::typing::update_func_t    _update,
-    jeecs::typing::update_func_t    _script_update,
-    jeecs::typing::update_func_t    _late_update,
-    jeecs::typing::update_func_t    _apply_update,
-    jeecs::typing::update_func_t    _commit_update,
-    je_typing_class                 _typecls)
+    const char*                 _name,
+    jeecs::typing::typehash_t   _hash,
+    size_t                      _size,
+    size_t                      _align,
+    je_typing_class             _typecls,
+    jeecs::typing::construct_func_t         _constructor,
+    jeecs::typing::destruct_func_t          _destructor,
+    jeecs::typing::copy_construct_func_t    _copy_constructor,
+    jeecs::typing::move_construct_func_t    _move_constructor)
 {
     return
-        jeecs_impl::type_info_holder::holder()->register_type(
+        jeecs_impl::global_factory_holder::holder()->declear_type(
             _name,
             _hash,
             _size,
             _align,
+            _typecls,
             _constructor,
             _destructor,
-            _copier,
-            _mover,
-            _to_string,
-            _parse,
-            _state_update,
-            _pre_update,
-            _update,
-            _script_update,
-            _late_update,
-            _apply_update,
-            _commit_update,
-            _typecls);
+            _copy_constructor,
+            _move_constructor);
 }
 
 const jeecs::typing::type_info* je_typing_get_info_by_id(
     jeecs::typing::typeid_t _id)
 {
-    return jeecs_impl::type_info_holder::holder()
+    return jeecs_impl::global_factory_holder::holder()
         ->get_info_by_id(_id);
 }
 
 const jeecs::typing::type_info* je_typing_get_info_by_hash(
     jeecs::typing::typehash_t _hash)
 {
-    return jeecs_impl::type_info_holder::holder()
+    return jeecs_impl::global_factory_holder::holder()
         ->get_info_by_hash(_hash);
 }
 
 const jeecs::typing::type_info* je_typing_get_info_by_name(
     const char* type_name)
 {
-    return jeecs_impl::type_info_holder::holder()->get_info_by_name(type_name);
+    return jeecs_impl::global_factory_holder::holder()->get_info_by_name(type_name);
 }
 
 void je_typing_unregister(const jeecs::typing::type_info* tinfo)
 {
-    jeecs_impl::type_info_holder::holder()->unregister_type(tinfo);
+    jeecs_impl::global_factory_holder::holder()->undeclear_type(
+        const_cast<jeecs::typing::type_info*>(tinfo));
 }
 
 void je_register_member(
@@ -403,8 +391,12 @@ void je_register_member(
     const char* _member_name,
     ptrdiff_t                       _member_offset)
 {
-    jeecs_impl::type_info_holder::holder()
-        ->register_member(_classtype, _membertype, _member_name, _member_offset);
+    jeecs_impl::global_factory_holder::holder()
+        ->declear_member(
+            const_cast<jeecs::typing::type_info*>(_classtype),
+            _membertype,
+            _member_name,
+            _member_offset);
 }
 
 void je_register_script_parser(
@@ -414,13 +406,35 @@ void je_register_script_parser(
     const char* woolang_typename,
     const char* woolang_typedecl)
 {
-    jeecs_impl::type_info_holder::holder()
-        ->register_script_parser(
-            _type,
+    jeecs_impl::global_factory_holder::holder()
+        ->declear_script_parser(
+            const_cast<jeecs::typing::type_info*>(_type),
             c2w,
             w2c,
             woolang_typename,
             woolang_typedecl);
+}
+
+void je_register_system_updater(
+    const jeecs::typing::type_info* _type,
+    jeecs::typing::update_func_t _state_update,
+    jeecs::typing::update_func_t _pre_update,
+    jeecs::typing::update_func_t _update,
+    jeecs::typing::update_func_t _script_update,
+    jeecs::typing::update_func_t _late_update,
+    jeecs::typing::update_func_t _apply_update,
+    jeecs::typing::update_func_t _commit_update)
+{
+    jeecs_impl::global_factory_holder::holder()
+        ->declear_system_updater(
+            const_cast<jeecs::typing::type_info*>(_type),
+            _state_update,
+            _pre_update,
+            _update,
+            _script_update,
+            _late_update,
+            _apply_update,
+            _commit_update);
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -428,7 +442,7 @@ void je_register_script_parser(
 // NOTE: need free the return result by 'je_mem_free'
 const jeecs::typing::type_info** jedbg_get_all_registed_types(void)
 {
-    auto&& types = jeecs_impl::type_info_holder::holder()->get_all_registed_types();
+    auto&& types = jeecs_impl::global_factory_holder::holder()->get_all_registed_types();
     auto result = (const jeecs::typing::type_info**)je_mem_alloc(sizeof(const jeecs::typing::type_info*) * (types.size() + 1));
     result[types.size()] = nullptr;
 
@@ -439,7 +453,7 @@ const jeecs::typing::type_info** jedbg_get_all_registed_types(void)
 
 size_t jedbg_get_unregister_type_count(void)
 {
-    return jeecs_impl::type_info_holder::holder()->get_unregistered_count();
+    return jeecs_impl::global_factory_holder::holder()->get_unregistered_count();
 }
 
 #define JE_DECL_ATOMIC_OPERATOR_API(TYPE)\

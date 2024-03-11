@@ -1,0 +1,94 @@
+import woo::std;
+import je;
+import je::gui;
+import je::editor;
+
+using je::gui;
+
+namespace jeapi
+{
+    // 类型管理器将负责类型/编辑器的编译时/运行时混合状态管理
+    namespace typemgr
+    {
+        let mut _parser = option::none: option<je::unsafe::dynamic_parser>;
+        let mut _registered_parser = {}: dict<je::typeinfo, je::unsafe::dynamic_parser::parser_impl>;
+
+        public func shutdown()
+        {
+            for (let _, parser : _registered_parser)
+            {
+                do parser->close();
+            }
+            do _parser->>\p = p->close();;
+
+            _parser = option::none;
+            _registered_parser = {};
+        }
+
+        func _update_registered_parser(parser: je::unsafe::dynamic_parser)
+        {
+            let result = {}mut: map<je::typeinfo, je::unsafe::dynamic_parser::parser_impl>;
+
+            for (let _, t : je::typeinfo::get_all_registed_types())
+            {
+                match (parser->get_parser_impl(t))
+                {
+                value(parser_impl)?
+                    result->set(t, parser_impl);
+                none?;
+                }
+            }
+
+            _registered_parser = result as map<je::typeinfo, je::unsafe::dynamic_parser::parser_impl>
+                -> unsafe::cast:<dict<je::typeinfo, je::unsafe::dynamic_parser::parser_impl>>();
+        }
+        public func update_without_new_script()
+        {
+            do _parser->>\p = _update_registered_parser(p);;
+        }
+        public func update(edit_script: string)
+        {
+            match (je::unsafe::dynamic_parser::create(edit_script))
+            {
+            ok(parser)?
+                {
+                    shutdown();
+
+                    _update_registered_parser(parser);
+                    _parser = option::value(parser);
+                    
+                    return ok(_registered_parser);
+                }
+            err(msg)?
+                {
+                    // 即便失败，也需要更新类型
+                    update_without_new_script();
+                    return err(msg);
+                }
+            }
+        }
+
+        public func saving(type: je::typeinfo, val: je::native_value)=> option<string>
+        {
+            return _registered_parser->get(type)->>\parser = parser->saving(val);;
+        }
+        public func restoring(type: je::typeinfo, val: je::native_value, dat: string)
+        {
+            match (_registered_parser->get(type)->>\parser = parser->restoring(val, dat);)
+            {
+            value(_)?;
+            none?
+                je::logerr(F"Failed to restore value with type: '{type->name}', parser not found.");
+            }
+        }
+        public func edit(type: je::typeinfo, val: je::native_value, tag: string, echunkinfo: string)
+        {
+            match (_registered_parser->get(type)->>\parser = parser->edit(val, tag, echunkinfo);)
+            {
+            value(_)?;
+            none?
+                TextDisabled(F"未找到编辑{type->name}的编辑器");
+            }
+        }
+    }
+}

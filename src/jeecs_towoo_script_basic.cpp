@@ -124,27 +124,36 @@ namespace jeecs
             static void create_component_struct(wo_value writeval, wo_vm vm, void* component, const typing::type_info* ctype)
             {
                 assert(component != nullptr);
-                wo_set_struct(writeval, vm, ctype->m_member_count + 1);
 
-                _wo_value tmp;
-                wo_set_pointer(&tmp, component);
-                wo_struct_set(writeval, 0, &tmp);
+                wo_value tmp = wo_push_empty(vm);
 
-                uint16_t member_idx = 0;
-                auto* member_tinfo = ctype->m_member_types;
-                while (member_tinfo != nullptr)
+                if (ctype->m_member_types != nullptr)
                 {
-                    // Set member;
-                    wo_set_pointer(&tmp,
-                        reinterpret_cast<void*>(
-                            reinterpret_cast<intptr_t>(component)
-                            + member_tinfo->m_member_offset));
+                    wo_set_struct(writeval, vm, ctype->m_member_types->m_member_count + 1);
 
-                    wo_struct_set(writeval, member_idx + 1, &tmp);
+                    uint16_t member_idx = 0;
+                    auto* member_tinfo = ctype->m_member_types->m_members;
+                    while (member_tinfo != nullptr)
+                    {
+                        // Set member;
+                        wo_set_pointer(tmp,
+                            reinterpret_cast<void*>(
+                                reinterpret_cast<intptr_t>(component)
+                                + member_tinfo->m_member_offset));
 
-                    ++member_idx;
-                    member_tinfo = member_tinfo->m_next_member;
+                        wo_struct_set(writeval, member_idx + 1, tmp);
+
+                        ++member_idx;
+                        member_tinfo = member_tinfo->m_next_member;
+                    }
                 }
+                else
+                {
+                    wo_set_struct(writeval, vm, 1);
+                }
+
+                wo_set_pointer(tmp, component);
+                wo_struct_set(writeval, 0, tmp);
             }
 
             void update_step_work(std::vector<towoo_step_work>& works)
@@ -260,50 +269,62 @@ namespace jeecs
             ToWooBaseComponent(void* arg, const jeecs::typing::type_info* ty)
                 : m_type(ty)
             {
-                auto* member = m_type->m_member_types;
-                while (member != nullptr)
+                if (m_type->m_member_types != nullptr)
                 {
-                    auto* this_member = (void*)((intptr_t)this + member->m_member_offset);
-                    member->m_member_type->construct(this_member, arg);
-                    member = member->m_next_member;
+                    auto* member = m_type->m_member_types->m_members;
+                    while (member != nullptr)
+                    {
+                        auto* this_member = (void*)((intptr_t)this + member->m_member_offset);
+                        member->m_member_type->construct(this_member, arg);
+                        member = member->m_next_member;
+                    }
                 }
             }
             ~ToWooBaseComponent()
             {
-                auto* member = m_type->m_member_types;
-                while (member != nullptr)
+                if (m_type->m_member_types != nullptr)
                 {
-                    auto* this_member = (void*)((intptr_t)this + member->m_member_offset);
-                    member->m_member_type->destruct(this_member);
-                    member = member->m_next_member;
+                    auto* member = m_type->m_member_types->m_members;
+                    while (member != nullptr)
+                    {
+                        auto* this_member = (void*)((intptr_t)this + member->m_member_offset);
+                        member->m_member_type->destruct(this_member);
+                        member = member->m_next_member;
+                    }
                 }
             }
             ToWooBaseComponent(const ToWooBaseComponent& another)
                 :m_type(another.m_type)
             {
-                auto* member = m_type->m_member_types;
-                while (member != nullptr)
+                if (m_type->m_member_types != nullptr)
                 {
-                    auto* this_member = (void*)((intptr_t)this + member->m_member_offset);
-                    auto* other_member = (void*)((intptr_t)&another + member->m_member_offset);
+                    auto* member = m_type->m_member_types->m_members;
+                    while (member != nullptr)
+                    {
+                        auto* this_member = (void*)((intptr_t)this + member->m_member_offset);
+                        auto* other_member = (void*)((intptr_t)&another + member->m_member_offset);
 
-                    member->m_member_type->copy(this_member, other_member);
+                        member->m_member_type->copy(this_member, other_member);
 
-                    member = member->m_next_member;
+                        member = member->m_next_member;
+                    }
                 }
             }
             ToWooBaseComponent(ToWooBaseComponent&& another)
                 :m_type(another.m_type)
             {
-                auto* member = m_type->m_member_types;
-                while (member != nullptr)
+                if (m_type->m_member_types != nullptr)
                 {
-                    auto* this_member = (void*)((intptr_t)this + member->m_member_offset);
-                    auto* other_member = (void*)((intptr_t)&another + member->m_member_offset);
+                    auto* member = m_type->m_member_types->m_members;
+                    while (member != nullptr)
+                    {
+                        auto* this_member = (void*)((intptr_t)this + member->m_member_offset);
+                        auto* other_member = (void*)((intptr_t)&another + member->m_member_offset);
 
-                    member->m_member_type->move(this_member, other_member);
+                        member->m_member_type->move(this_member, other_member);
 
-                    member = member->m_next_member;
+                        member = member->m_next_member;
+                    }
                 }
             }
         };
@@ -351,8 +372,8 @@ WO_API wo_api wojeapi_towoo_member_get(wo_vm vm, wo_value args)
 
     wo_value val = wo_push_empty(vm);
 
-    assert(ty->m_script_parser_info != nullptr);
-    ty->m_script_parser_info->m_script_parse_c2w(vm, val, wo_pointer(args + 1));
+    assert(ty->get_script_parser() != nullptr);
+    ty->get_script_parser()->m_script_parse_c2w(wo_pointer(args + 1), vm, val);
 
     return wo_ret_val(vm, val);
 }
@@ -360,8 +381,8 @@ WO_API wo_api wojeapi_towoo_member_set(wo_vm vm, wo_value args)
 {
     auto ty = std::launder(reinterpret_cast<const jeecs::typing::type_info*>(wo_pointer(args + 0)));
 
-    assert(ty->m_script_parser_info != nullptr);
-    ty->m_script_parser_info->m_script_parse_w2c(vm, args + 2, wo_pointer(args + 1));
+    assert(ty->get_script_parser() != nullptr);
+    ty->get_script_parser()->m_script_parse_w2c(wo_pointer(args + 1), vm, args + 2);
 
     return wo_ret_void(vm);
 }
@@ -373,27 +394,22 @@ void je_towoo_update_api()
         R"(// (C)Cinogama project.
 namespace je::towoo
 {
-    public func tid<T>()
+    using member<T, TInfo> = handle
     {
-        return T::id;
-    }
-
-    using member<T, IdT> = handle
-    {
-        public func get<T, IdT>(self: member<T, IdT>)=> T
+        public func get<T, TInfo>(self: member<T, TInfo>)=> T
         {
             extern("libjoyecs", "wojeapi_towoo_member_get")
-            func member_get_impl<T, IdT>(type: je::typeinfo, self: member<T, IdT>)=> T;
+            func member_get_impl<T, TInfo>(type: je::typeinfo, self: member<T, TInfo>)=> T;
         
-            return member_get_impl(tid:<IdT>(), self);
+            return member_get_impl(TInfo::typeinfo, self);
         }
     
-        public func set<T, IdT>(self: member<T, IdT>, val: T)=> void
+        public func set<T, TInfo>(self: member<T, TInfo>, val: T)=> void
         {
             extern("libjoyecs", "wojeapi_towoo_member_set")
-            func member_set_impl<T, IdT>(type: je::typeinfo, self: member<T, IdT>, val: T)=> void;
+            func member_set_impl<T, TInfo>(type: je::typeinfo, self: member<T, TInfo>, val: T)=> void;
 
-            member_set_impl(tid:<IdT>(), self, val);
+            member_set_impl(TInfo::typeinfo, self, val);
         }
     }
 }
@@ -416,7 +432,7 @@ namespace je::towoo
             continue;
 
         // 1. Declear type parsers
-        auto* script_parser_info = typeinfo->m_script_parser_info;
+        auto* script_parser_info = typeinfo->get_script_parser();
 
         if (script_parser_info == nullptr
             || false == generated_types.insert(script_parser_info->m_woolang_typename).second)
@@ -426,9 +442,10 @@ namespace je::towoo
             std::string("// Declear of '")
             + script_parser_info->m_woolang_typename + "'\n"
             + script_parser_info->m_woolang_typedecl + "\n"
-            "using " + script_parser_info->m_woolang_typename + "_tid = void\n{\n"
-            + "    public let id = je::typeinfo::load(\"" + script_parser_info->m_woolang_typename + "\")->val;\n"
-            "}\n\n";
+            "namespace " + script_parser_info->m_woolang_typename + "\n{\n"
+            + "    using type = void\n    {\n"
+            + "        public let typeinfo = je::typeinfo::load(\"" + script_parser_info->m_woolang_typename + "\")->val;\n"
+            "    }\n}\n\n";
     }
 
     std::string woolang_component_type_decl =
@@ -468,25 +485,29 @@ import je::towoo::types;
 
             woolang_component_type_decl += "using " + tname + " = struct{\n    __addr: handle,\n";
 
-            auto* registed_member = typeinfo->m_member_types;
-            while (registed_member != nullptr)
+            if (typeinfo->m_member_types != nullptr)
             {
-                if (registed_member->m_member_type->m_script_parser_info != nullptr)
+                auto* registed_member = typeinfo->m_member_types->m_members;
+                while (registed_member != nullptr)
                 {
-                    // 对于有脚本对接类型的组件成员，在这里挂上！
-                    woolang_component_type_decl +=
-                        std::string("    ") + registed_member->m_member_name + ": je::towoo::member<"
-                        + registed_member->m_member_type->m_script_parser_info->m_woolang_typename
-                        + ", "
-                        + registed_member->m_member_type->m_script_parser_info->m_woolang_typename
-                        + "_tid>,\n";
+                    auto* parser = registed_member->m_member_type->get_script_parser();
+                    if (parser != nullptr)
+                    {
+                        // 对于有脚本对接类型的组件成员，在这里挂上！
+                        woolang_component_type_decl +=
+                            std::string("    ") + registed_member->m_member_name + ": je::towoo::member<"
+                            + parser->m_woolang_typename
+                            + ", " 
+                            + parser->m_woolang_typename + "::type"
+                            + ">,\n";
+                    }
+                    registed_member = registed_member->m_next_member;
                 }
-                registed_member = registed_member->m_next_member;
             }
             woolang_component_type_decl += "}\n{\n";
 
-            // Generate ComponentT::id
-            woolang_component_type_decl += "    public let id = je::typeinfo::load(\"";
+            // Generate ComponentT::typeinfo
+            woolang_component_type_decl += "    public let typeinfo = je::typeinfo::load(\"";
             woolang_component_type_decl += typeinfo->m_typename;
             woolang_component_type_decl += "\")->val;\n";
 
@@ -591,20 +612,20 @@ const jeecs::typing::type_info* je_towoo_register_system(
                         jeecs::basic::hash_compile_time(system_name),
                         sizeof(jeecs::towoo::ToWooBaseSystem),
                         alignof(jeecs::towoo::ToWooBaseSystem),
+                        je_typing_class::JE_SYSTEM,
                         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::constructor,
                         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::destructor,
                         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::copier,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::mover,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::to_string,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::parse,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::mover);
+
+                    je_register_system_updater(towoo_system_tinfo,
                         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::state_update,
                         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::pre_update,
                         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::update,
                         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::script_update,
                         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::late_update,
                         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::apply_update,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::commit_update,
-                        je_typing_class::JE_SYSTEM);
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::commit_update);
 
                     assert(jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems.find(towoo_system_tinfo) ==
                         jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems.end());
@@ -671,7 +692,7 @@ WO_API wo_api wojeapi_towoo_register_system_job(wo_vm vm, wo_value args)
     auto& works = registered_system_fnd->second;
 
     jeecs::towoo::ToWooBaseSystem::towoo_step_work stepwork;
-    
+
     assert(wo_valuetype(args + 1) != WO_CLOSURE_TYPE);
     wo_set_val(&stepwork.m_function, args + 1);
 
@@ -778,20 +799,11 @@ WO_API wo_api wojeapi_towoo_update_component_data(wo_vm vm, wo_value args)
         jeecs::basic::hash_compile_time(("_towoo_component_" + component_name).c_str()),
         component_size,
         component_allign,
+        je_typing_class::JE_COMPONENT,
         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::constructor,
         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::destructor,
         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::copier,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::mover,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::to_string,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::parse,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::state_update,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::pre_update,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::update,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::script_update,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::late_update,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::apply_update,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::commit_update,
-        je_typing_class::JE_COMPONENT);
+        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::mover);
 
     for (auto& memberinfo : member_defs)
     {
@@ -818,7 +830,7 @@ namespace je::towoo::component
     let registered_member_infoms = {}mut: map<string, typeinfo>;
     public func register_member<T>(name: string)
     {
-       registered_member_infoms->set(name, tid:<T>());
+       registered_member_infoms->set(name, T::typeinfo);
     }
 }
 
@@ -875,7 +887,7 @@ extern func _init_towoo_component(name: string)
     let mut result = ";";
     for (let _, (name, type) : decls)
     {
-        result += F"je::towoo::component::register_member:<{type}_tid>({name->enstring});";
+        result += F"je::towoo::component::register_member:<{type}::typeinfo>({name->enstring});";
     }
     return result;
 }
@@ -946,7 +958,7 @@ namespace je::towoo::system
         }
         public func contain<CompT>(self: ToWooSystemFuncJob, is_arg: bool)
         {
-            self.m_requirement->add((require_type::CONTAIN, self.m_require_group, je::towoo::tid:<CompT>()));
+            self.m_requirement->add((require_type::CONTAIN, self.m_require_group, CompT::typeinfo));
             self.m_require_group += 1;
             if (is_arg)
                 self.m_argument_count += 1;
@@ -954,14 +966,14 @@ namespace je::towoo::system
         }
         public func maynot<CompT>(self: ToWooSystemFuncJob)
         {
-            self.m_requirement->add((require_type::MAYNOT, self.m_require_group, je::towoo::tid:<CompT>()));
+            self.m_requirement->add((require_type::MAYNOT, self.m_require_group, CompT::typeinfo));
             self.m_require_group += 1;
             self.m_argument_count += 1;
             return self;
         }
         public func except<CompT>(self: ToWooSystemFuncJob)
         {
-            self.m_requirement->add((require_type::EXCEPT, self.m_require_group, je::towoo::tid:<CompT>()));
+            self.m_requirement->add((require_type::EXCEPT, self.m_require_group, CompT::typeinfo));
             self.m_require_group += 1;
             return self;
         }
@@ -1201,7 +1213,7 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
     {
         result += F"->anyof([";
         for (let _, t : req)
-            result += F"je::towoo::tid:<{t}>(),";
+            result += F"{t}::typeinfo,";
         result += "]\x29";
     }
     result += F";\nfunc {job_func_name}(context: typeof(create(std::declval:<je::world>())), e: je::entity";
@@ -1453,11 +1465,11 @@ WO_API wo_api wojeapi_towoo_physics2d_collisionresult_all(wo_vm vm, wo_value arg
     wo_value c = wo_push_empty(vm);
     wo_struct_get(c, args + 0, 0);
     auto* collisionResult = (jeecs::Physics2D::CollisionResult*)wo_pointer(c);
-   
+
     wo_set_map(c, vm);
     auto key = wo_push_empty(vm);
     auto val = wo_push_empty(vm);
-    for (auto&[rigidbody, result] : collisionResult->results)
+    for (auto& [rigidbody, result] : collisionResult->results)
     {
         jeecs::towoo::ToWooBaseSystem::create_component_struct(
             key, vm, rigidbody, jeecs::typing::type_info::of<jeecs::Physics2D::Rigidbody>());
@@ -1749,7 +1761,7 @@ WO_API wo_api wojeapi_towoo_transform_localposition_get_parent_global_pos(wo_vm 
 
     auto* lrot = wo_option_component<jeecs::Transform::LocalRotation>(args + 2);
 
-    return wo_ret_val(vm, 
+    return wo_ret_val(vm,
         wo_push_vec3(vm, lpos->get_parent_global_position(*translation, lrot)));
 }
 WO_API wo_api wojeapi_towoo_transform_localposition_set_global_pos(wo_vm vm, wo_value args)
@@ -1784,19 +1796,19 @@ namespace je::entity::towoo
         private func _remove_component<T>(self: entity, tid: je::typeinfo)=> void;
 
     public func add_component<T>(self: entity)=> option<T>
-        where typeof(std::declval:<T>())::id is je::typeinfo;
+        where T::typeinfo is je::typeinfo;
     {
-        return _add_component:<T>(self, T::id);
+        return _add_component:<T>(self, T::typeinfo);
     }
     public func get_component<T>(self: entity)=> option<T>
-        where typeof(std::declval:<T>())::id is je::typeinfo;
+        where T::typeinfo is je::typeinfo;
     {
-        return _get_component:<T>(self, T::id);
+        return _get_component:<T>(self, T::typeinfo);
     }
     public func remove_component<T>(self: entity)=> void
-        where typeof(std::declval:<T>())::id is je::typeinfo;
+        where T::typeinfo is je::typeinfo;
     {
-        _remove_component:<T>(self, T::id);
+        _remove_component:<T>(self, T::typeinfo);
     }
 }
 

@@ -2,9 +2,9 @@
 // 用于显示和编辑选选中实体的组件
 
 import je::gui;
+import builtin::api::gui::file;
 import builtin::editor::gui::form::input;
 import builtin::editor::gui::form::ask;
-import builtin::editor::gui::widget::file;
 import builtin::editor::gui::type_edit_widget_mgr;
 import builtin::editor::gui::context_menu;
 
@@ -274,8 +274,6 @@ namespace editor::gui::edit_forms
                                             }
                                             if (MenuItem(F"重置"))
                                             {
-                                                
-
                                                 jeapi::gui::form::ask(
                                                     "确认？", 
                                                     F"即将重置组件{ctype->name}，是否确认？", 
@@ -302,9 +300,8 @@ namespace editor::gui::edit_forms
                                             BeginGroup();
 
                                             TextDisabled(mname);
-                                            
-                                            // TODO: 检查字段更新然后干点啥事儿？
-                                            do jeapi::gui::edit_cur_native_value(mname, current_entity_chunk_info, mtype, mvalue);
+     
+                                            jeapi::typemgr::edit(mtype, mvalue, mname, current_entity_chunk_info);
 
                                             EndGroup();
                                         }

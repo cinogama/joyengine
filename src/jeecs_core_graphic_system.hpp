@@ -2531,7 +2531,7 @@ public func frag(_: v2f)
                                     bool finish_animation = false;
 
                                     auto update_and_apply_component_frame_data =
-                                        [](const game_entity& e, jeecs::Animation2D::FrameAnimation::animation_data_set_list::frame_data& frame)
+                                        [](const game_entity& e, jeecs::Animation2D::FrameAnimation::animation_list::frame_data& frame)
                                         {
                                             for (auto& cdata : frame.m_component_data)
                                             {
@@ -2554,7 +2554,7 @@ public func frag(_: v2f)
 
                                                 switch (cdata.m_member_value.m_type)
                                                 {
-                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::INT:
+                                                case Animation2D::FrameAnimation::animation_list::frame_data::data_value::type::INT:
                                                     if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<int>())
                                                     {
                                                         jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'int', but member is '%s'.",
@@ -2564,7 +2564,7 @@ public func frag(_: v2f)
                                                         cdata.m_member_addr_cache = nullptr;
                                                     }
                                                     break;
-                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::FLOAT:
+                                                case Animation2D::FrameAnimation::animation_list::frame_data::data_value::type::FLOAT:
                                                     if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<float>())
                                                     {
                                                         jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'float', but member is '%s'.",
@@ -2574,7 +2574,7 @@ public func frag(_: v2f)
                                                         cdata.m_member_addr_cache = nullptr;
                                                     }
                                                     break;
-                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC2:
+                                                case Animation2D::FrameAnimation::animation_list::frame_data::data_value::type::VEC2:
                                                     if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec2>())
                                                     {
                                                         jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'vec2', but member is '%s'.",
@@ -2584,7 +2584,7 @@ public func frag(_: v2f)
                                                         cdata.m_member_addr_cache = nullptr;
                                                     }
                                                     break;
-                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC3:
+                                                case Animation2D::FrameAnimation::animation_list::frame_data::data_value::type::VEC3:
                                                     if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec3>())
                                                     {
                                                         jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'vec3', but member is '%s'.",
@@ -2594,7 +2594,7 @@ public func frag(_: v2f)
                                                         cdata.m_member_addr_cache = nullptr;
                                                     }
                                                     break;
-                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC4:
+                                                case Animation2D::FrameAnimation::animation_list::frame_data::data_value::type::VEC4:
                                                     if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec4>())
                                                     {
                                                         jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'vec4', but member is '%s'.",
@@ -2604,7 +2604,7 @@ public func frag(_: v2f)
                                                         cdata.m_member_addr_cache = nullptr;
                                                     }
                                                     break;
-                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::QUAT4:
+                                                case Animation2D::FrameAnimation::animation_list::frame_data::data_value::type::QUAT4:
                                                     if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::quat>())
                                                     {
                                                         jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'quat', but member is '%s'.",
@@ -2630,37 +2630,37 @@ public func frag(_: v2f)
 
                                                 switch (cdata.m_member_value.m_type)
                                                 {
-                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::INT:
+                                                case Animation2D::FrameAnimation::animation_list::frame_data::data_value::type::INT:
                                                     if (cdata.m_offset_mode)
                                                         *(int*)cdata.m_member_addr_cache += cdata.m_member_value.m_value.i32;
                                                     else
                                                         *(int*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.i32;
                                                     break;
-                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::FLOAT:
+                                                case Animation2D::FrameAnimation::animation_list::frame_data::data_value::type::FLOAT:
                                                     if (cdata.m_offset_mode)
                                                         *(float*)cdata.m_member_addr_cache += cdata.m_member_value.m_value.f32;
                                                     else
                                                         *(float*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.f32;
                                                     break;
-                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC2:
+                                                case Animation2D::FrameAnimation::animation_list::frame_data::data_value::type::VEC2:
                                                     if (cdata.m_offset_mode)
                                                         *(math::vec2*)cdata.m_member_addr_cache += cdata.m_member_value.m_value.v2;
                                                     else
                                                         *(math::vec2*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.v2;
                                                     break;
-                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC3:
+                                                case Animation2D::FrameAnimation::animation_list::frame_data::data_value::type::VEC3:
                                                     if (cdata.m_offset_mode)
                                                         *(math::vec3*)cdata.m_member_addr_cache += cdata.m_member_value.m_value.v3;
                                                     else
                                                         *(math::vec3*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.v3;
                                                     break;
-                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC4:
+                                                case Animation2D::FrameAnimation::animation_list::frame_data::data_value::type::VEC4:
                                                     if (cdata.m_offset_mode)
                                                         *(math::vec4*)cdata.m_member_addr_cache += cdata.m_member_value.m_value.v4;
                                                     else
                                                         *(math::vec4*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.v4;
                                                     break;
-                                                case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::QUAT4:
+                                                case Animation2D::FrameAnimation::animation_list::frame_data::data_value::type::QUAT4:
                                                     if (cdata.m_offset_mode)
                                                         *(math::quat*)cdata.m_member_addr_cache = *(math::quat*)cdata.m_member_addr_cache * cdata.m_member_value.m_value.q4;
                                                     else
@@ -2728,19 +2728,19 @@ public func frag(_: v2f)
                                         {
                                             switch (udata.m_uniform_value.m_type)
                                             {
-                                            case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::INT:
+                                            case Animation2D::FrameAnimation::animation_list::frame_data::data_value::type::INT:
                                                 shaders->set_uniform(udata.m_uniform_name.c_str(), udata.m_uniform_value.m_value.i32);
                                                 break;
-                                            case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::FLOAT:
+                                            case Animation2D::FrameAnimation::animation_list::frame_data::data_value::type::FLOAT:
                                                 shaders->set_uniform(udata.m_uniform_name.c_str(), udata.m_uniform_value.m_value.f32);
                                                 break;
-                                            case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC2:
+                                            case Animation2D::FrameAnimation::animation_list::frame_data::data_value::type::VEC2:
                                                 shaders->set_uniform(udata.m_uniform_name.c_str(), udata.m_uniform_value.m_value.v2);
                                                 break;
-                                            case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC3:
+                                            case Animation2D::FrameAnimation::animation_list::frame_data::data_value::type::VEC3:
                                                 shaders->set_uniform(udata.m_uniform_name.c_str(), udata.m_uniform_value.m_value.v3);
                                                 break;
-                                            case Animation2D::FrameAnimation::animation_data_set_list::frame_data::data_value::type::VEC4:
+                                            case Animation2D::FrameAnimation::animation_list::frame_data::data_value::type::VEC4:
                                                 shaders->set_uniform(udata.m_uniform_name.c_str(), udata.m_uniform_value.m_value.v4);
                                                 break;
                                             default:

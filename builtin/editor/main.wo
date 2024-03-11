@@ -15,11 +15,12 @@ import pkg::makenew;
 import je;
 import je::editor;
 
+import builtin::api::gui::iconbutton;
+import builtin::api::gui::panic;
+
 import builtin::editor::welcome::main;
-import builtin::editor::gui::widget::icon_button;
 import builtin::editor::gui::form::msg;
 import builtin::editor::gui::form::input;
-import builtin::editor::gui::form::panic;
 import builtin::editor::environment::main;
 import builtin::editor::project::main;
 import builtin::editor::gui::main;
@@ -341,7 +342,7 @@ func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: di
 
                     action_after_guide_form_closed = 
                         func(){
-                            try! p = new! editor::Project(projname, regular_path);
+                            try! p = editor::Project::create(projname, regular_path);
                             
                             apply_editor_data_when_start_up_project(editordat);
                             assert(p->save_project());
@@ -356,6 +357,7 @@ func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: di
 "@);
                             do fsys::copy(fsys::normalize(F"{std::exepath()}/builtin/shader"), fsys::normalize(F"{p.m_path}/resource/shader"));
                             do fsys::copy(fsys::normalize(F"{std::exepath()}/builtin/font"), fsys::normalize(F"{p.m_path}/resource/font"));
+                            do fsys::copy(fsys::normalize(F"{std::exepath()}/builtin/script/editor.wo"), fsys::normalize(F"{p.m_path}"));
                             do fsys::writeall(p.m_path / ".gitignore", 
 @"# JoyEngine ECS git ignore config.
 
@@ -379,6 +381,16 @@ config.jeinf text eol=lf
 *.jeentity text eol=lf
 *.jecache4 !diff
 "@);
+                            match (jeapi::typemgr::update("@/editor.wo"))
+                            {
+                            ok(_)?;
+                            err(msg)?
+                                {
+                                    p->close();
+                                    return err(msg);
+                                }
+                            }
+
                             je::gui::register_exit_callback(\=ask_for_saving_proj_when_exit(p););
                             editor::gui::edit_project(p);
                             save_editor_data_after_exit(editordat, p.m_name, p.m_path);
@@ -432,7 +444,7 @@ func open_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict
 
 }
 
-je::editor::register_panic_hook(jeapi::gui::form::panic);
+// je::editor::register_panic_hook(jeapi::gui::form::panic);
 
 for (;;)
 {

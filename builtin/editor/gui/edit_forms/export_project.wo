@@ -246,9 +246,11 @@ namespace editor::gui::edit_forms
                                 import je;
                                 import je::gui;
                                 import je::editor;
+                                
                                 import woo::std;
+                                
+                                import builtin::api::gui::panic;
                                 import builtin::api::serialize::main;
-                                import builtin::editor::gui::form::panic;
 
                                 je::editor::register_panic_hook(jeapi::gui::form::panic);
 
@@ -279,6 +281,9 @@ namespace editor::gui::edit_forms
                                 // 在此处加载ToWoo系统
                                 $LOAD_TOWOO_SCRIPTS$
 
+                                // 在此加载类型加载器
+                                $LOAD_TYPE_LOADER$
+
                                 // 在此设置分辨率
                                 $APPLY_RESOLUTION$
 
@@ -303,6 +308,9 @@ namespace editor::gui::edit_forms
 
                                 RUNTIME_UNIVERSE->wait();
 
+                                // 关闭类型管理器
+                                jeapi::typemgr::shutdown(); 
+
                                 for (let _, tinfo: LOADED_TOWOO_SYSTEM_TYPES)
                                     je::towoo::unregister_system(tinfo);
 
@@ -310,8 +318,7 @@ namespace editor::gui::edit_forms
                                     je::towoo::unregister_component(tinfo);
 
                                 for (let _, libhandle : LOADED_MODULE_HANDLES)
-                                    je::delay_unload_module(libhandle);
-                                
+                                    je::delay_unload_module(libhandle);                               
                             "@;
 
                             // 1.5.1 生成加载动态库相关代码
@@ -380,6 +387,7 @@ namespace editor::gui::edit_forms
                                 ->replace("$APPLY_PROJECT_CONFIG$", proj_config)
                                 ->replace("$LOAD_WORLD_INSTANCE$", load_world_instance)
                                 ->replace("$IMPORT_RUNTIME_SCRIPT_MAY_NOT_EXIST$", load_entry_script)
+                                ->replace("$LOAD_TYPE_LOADER$", "match (jeapi::typemgr::update(\"@/editor.wo\")){ok(_)?;err(msg)?je::logerr(msg);}")
                                 ->replace("$APPLY_RESOLUTION$", F"je::editor::set_window_size({config.m_resolution[0]}, {config.m_resolution[1]});")
                                 ->replace("$APPLY_TITLE$", F"je::editor::set_window_title({proj.m_name->enstring});");
 
