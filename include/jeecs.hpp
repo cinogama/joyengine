@@ -5954,10 +5954,16 @@ namespace jeecs
             {
                 return x * _v2.x + y * _v2.y;
             }
-            /*inline constexpr vec2 cross(const vec2& _v2) const noexcept
+            
+            inline float max() const noexcept
             {
+                return std::max(x, y);
+            }
 
-            }*/
+            inline float min() const noexcept
+            {
+                return std::min(x, y);
+            }
 
             static const char* JEScriptTypeName()
             {
@@ -6113,6 +6119,17 @@ namespace jeecs
             {
                 return "public using ivec2 = (int, int);";
             }
+
+            inline float max() const noexcept
+            {
+                return std::max(x, y);
+            }
+
+            inline float min() const noexcept
+            {
+                return std::min(x, y);
+            }
+
             void JEParseFromScriptType(wo_vm vm, wo_value v)
             {
                 wo_value elem = wo_push_empty(vm);
@@ -6251,6 +6268,17 @@ namespace jeecs
             {
                 return std::sqrt(x * x + y * y + z * z);
             }
+
+            inline float min() const noexcept
+            {
+                return std::min(std::min(x, y), z);
+            }
+
+            inline float max() const noexcept
+            {
+                return std::max(std::max(x, y), z);
+            }
+
             inline vec3 unit() const noexcept
             {
                 float vlength = length();
@@ -6444,9 +6472,17 @@ namespace jeecs
             {
                 return x * _v4.x + y * _v4.y + z * _v4.z + w * _v4.w;
             }
-            /*inline constexpr vec4 cross(const vec4& _v4) const noexcept
+           
+            inline float max() const noexcept
             {
-            }*/
+                return std::max(std::max(std::max(x, y), z), w);
+            }
+
+            inline float min() const noexcept
+            {
+                return std::min(std::min(std::min(x, y), z), w);
+            }
+
             static const char* JEScriptTypeName()
             {
                 return "vec4";

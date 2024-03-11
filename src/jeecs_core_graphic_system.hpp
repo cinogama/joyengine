@@ -374,9 +374,9 @@ public let frag =
                 light_shape->resouce()->m_raw_vertex_data;
             if (raw_vertex_data != nullptr)
             {
-                size.x *= std::max(abs(raw_vertex_data->m_x_max), abs(raw_vertex_data->m_x_min));
-                size.y *= std::max(abs(raw_vertex_data->m_y_max), abs(raw_vertex_data->m_y_min));
-                size.z *= std::max(abs(raw_vertex_data->m_z_max), abs(raw_vertex_data->m_z_min));
+                size.x *= 2.0f * std::max(abs(raw_vertex_data->m_x_max), abs(raw_vertex_data->m_x_min));
+                size.y *= 2.0f * std::max(abs(raw_vertex_data->m_y_max), abs(raw_vertex_data->m_y_min));
+                size.z *= 2.0f * std::max(abs(raw_vertex_data->m_z_max), abs(raw_vertex_data->m_z_min));
             }
 
             return size;
@@ -1709,13 +1709,29 @@ public func frag(_: v2f)
                                 }
                                 else
                                 {
+                                    // 如果是点的数量是偶数，那么接下来的层的点需要反向旋转
                                     for (size_t tipoint = 0; tipoint < range->shape.m_point_count; ++tipoint)
                                     {
-                                        size_t real_ipoint = (last_point_index + tipoint) % range->shape.m_point_count;
-                                        size_t real_next_last_layer_ipoint = (last_point_index + tipoint + 1) % range->shape.m_point_count;
+                                        size_t real_ipoint;
+                                        size_t real_next_last_layer_ipoint;
+                                        if (range->shape.m_point_count % 2 == 0)
+                                        {
+                                            // 反向旋转
+                                            real_ipoint = (last_point_index + range->shape.m_point_count - tipoint) % range->shape.m_point_count;
+                                            real_next_last_layer_ipoint = (last_point_index + range->shape.m_point_count - tipoint - 1) % range->shape.m_point_count;
+                                        }
+                                        else
+                                        {
+                                            // 正向旋转
+                                            real_ipoint = (last_point_index + tipoint) % range->shape.m_point_count;
+                                            real_next_last_layer_ipoint = (last_point_index + tipoint + 1) % range->shape.m_point_count;
+                                        }
 
                                         append_point(range->shape.m_positions[real_ipoint + ilayer * range->shape.m_point_count], ilayer);
-                                        append_point(range->shape.m_positions[real_next_last_layer_ipoint + (ilayer - 1) * range->shape.m_point_count], ilayer - 1);
+
+                                        // 如果不是最后一个点，那么链接到下一个顺位点
+                                        if (tipoint + 1 != range->shape.m_point_count)
+                                            append_point(range->shape.m_positions[real_next_last_layer_ipoint + (ilayer - 1) * range->shape.m_point_count], ilayer - 1);
                                     }
 
                                     // 最后链接到本层的第一个顺位点
@@ -1940,8 +1956,8 @@ public func frag(_: v2f)
                                     get_entity_size(*blockarch.translation, *blockarch.shape).length();
 
                                 const auto l2b_distance = (
-                                    blockarch.translation->world_position -
-                                    lightarch.translation->world_position
+                                    math::vec2(blockarch.translation->world_position) -
+                                    math::vec2(lightarch.translation->world_position)
                                     ).length();
 
                                 if (lightarch.parallel != nullptr || l2b_distance <= block_range + light_range)
