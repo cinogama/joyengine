@@ -616,6 +616,7 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                         ("后向2D自发光系数法线", "Forward2DNormalSelfGlowing"),
                         ("后向2D氛围光", "Forward2DAura"),
                         ("2D点光源（光源）", "Light2DPoint"),
+                        ("2D范围光源（光源）", "Light2DRange"),
                         ("2D平行光源（光源）", "Light2DParallel"),
                         ("2D光照后处理（摄像机）", "CameraDefer2DPass"),
                         ("2D光照外发光后处理（摄像机）", "CameraDefer2DBloomPass"),
