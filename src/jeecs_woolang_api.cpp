@@ -3,6 +3,7 @@
 #include "jeecs.hpp"
 
 #include <list>
+#include <optional>
 
 WO_API wo_api wojeapi_create_rmutex(wo_vm vm, wo_value args)
 {
@@ -2161,17 +2162,8 @@ WO_API wo_api wojeapi_clear_singletons(wo_vm vm, wo_value args)
     return wo_ret_void(vm);
 }
 
-struct dynamic_parser_t
-{
-    wo_vm m_vm;
-
-    std::mutex m_mx;
-};
-
 struct dynamic_parser_impl_t
 {
-    dynamic_parser_t* m_parser;
-
     wo_integer_t m_saving;
     wo_integer_t m_restoring;
     wo_integer_t m_edit;
@@ -2180,13 +2172,73 @@ struct dynamic_parser_impl_t
         m_script_parser;
 };
 
-WO_API wo_api wojeapi_dynamic_parser_create(wo_vm vm, wo_value args)
+std::mutex  _je_dynamic_parser_mx;
+wo_vm       _je_dynamic_parser_vm = nullptr;
+std::unordered_map<const jeecs::typing::type_info*, std::unique_ptr<dynamic_parser_impl_t>>
+_je_dynamic_parser_impls;
+
+void _je_dynamic_parser_clear()
 {
-    wo_string_t path = wo_string(args + 0);
+    if (_je_dynamic_parser_vm != nullptr)
+    {
+        _je_dynamic_parser_impls.clear();
+
+        wo_close_vm(_je_dynamic_parser_vm);
+        _je_dynamic_parser_vm = nullptr;
+    }
+
+    assert(_je_dynamic_parser_impls.empty());
+}
+void _je_dynamic_parser_update_types()
+{
+    if (_je_dynamic_parser_vm != nullptr)
+    {
+        _je_dynamic_parser_impls.clear();
+
+        auto** types = jedbg_get_all_registed_types();
+
+        auto** cur_type = types;
+        while (*cur_type)
+        {
+            auto* script_parser = (*cur_type)->get_script_parser();
+            if (script_parser != nullptr)
+            {
+                std::string script_woolang_typename = script_parser->m_woolang_typename;
+
+                wo_integer_t saving_func = wo_extern_symb(_je_dynamic_parser_vm, (script_woolang_typename + "::parser::saving").c_str());
+                wo_integer_t restoring_func = wo_extern_symb(_je_dynamic_parser_vm, (script_woolang_typename + "::parser::restoring").c_str());
+                wo_integer_t edit_func = wo_extern_symb(_je_dynamic_parser_vm, (script_woolang_typename + "::parser::edit").c_str());
+
+                if (saving_func != 0 || restoring_func != 0 || edit_func != 0)
+                {
+                    _je_dynamic_parser_impls.insert(std::make_pair(*cur_type, std::make_unique<dynamic_parser_impl_t>(
+                        dynamic_parser_impl_t
+                        {
+                            saving_func,
+                            restoring_func,
+                            edit_func,
+                            script_parser
+                        })));
+                }
+            }
+
+            ++cur_type;
+        }
+
+        je_mem_free(types);
+    }
+    else
+    {
+        assert(_je_dynamic_parser_impls.empty());
+    }
+}
+std::optional<std::string> _je_dynamic_parser_update_all(const char* path)
+{
+    using namespace std;
 
     auto* file = jeecs_file_open(path);
     if (file == nullptr)
-        return wo_ret_err_string_fmt(vm, "Failed to open '%s'.", path);
+        return std::make_optional("Failed to open '"s + path + "'.");
 
     size_t filelen = file->m_file_length;
 
@@ -2202,10 +2254,10 @@ WO_API wo_api wojeapi_dynamic_parser_create(wo_vm vm, wo_value args)
     {
         free(content);
 
-        wo_api state = wo_ret_err_string(vm, wo_get_compile_error(newvm, wo_inform_style::WO_DEFAULT));
+        std::string result = wo_get_compile_error(newvm, wo_inform_style::WO_DEFAULT);
         wo_close_vm(newvm);
-        
-        return state;
+
+        return std::make_optional(result);
     }
 
     wo_jit(newvm);
@@ -2213,101 +2265,128 @@ WO_API wo_api wojeapi_dynamic_parser_create(wo_vm vm, wo_value args)
 
     free(content);
 
-    return wo_ret_ok_gchandle(vm, new dynamic_parser_t{ newvm }, nullptr,
-        [](void* ptr)
-        {
-            dynamic_parser_t* p = std::launder(reinterpret_cast<dynamic_parser_t*>(ptr));
-            wo_close_vm(p->m_vm);
-            delete p;
-        });
+    _je_dynamic_parser_clear();
+    _je_dynamic_parser_vm = newvm;
+    _je_dynamic_parser_update_types();
+
+    return std::nullopt;
 }
 
-WO_API wo_api wojeapi_dynamic_parser_impl_create(wo_vm vm, wo_value args)
+////////////////////////////////////////////////////////////////
+
+WO_API wo_api wojeapi_dynamic_parser_update_script(wo_vm vm, wo_value args)
 {
-    dynamic_parser_t* parser = (dynamic_parser_t*)wo_pointer(args + 0);
-    const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)wo_pointer(args + 1);
+    std::lock_guard g1(_je_dynamic_parser_mx);
 
-    auto* script_parser = type->get_script_parser();
-    if (script_parser != nullptr)
+    if (auto result = _je_dynamic_parser_update_all(wo_string(args + 0)))
+        return wo_ret_err_string(vm, result.value().c_str());
+    return wo_ret_ok_void(vm);
+}
+
+WO_API wo_api wojeapi_dynamic_parser_update_type(wo_vm vm, wo_value args)
+{
+    std::lock_guard g1(_je_dynamic_parser_mx);
+
+    _je_dynamic_parser_update_types();
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_dynamic_parser_clear(wo_vm vm, wo_value args)
+{
+    std::lock_guard g1(_je_dynamic_parser_mx);
+
+    _je_dynamic_parser_clear();
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_dynamic_parser_saving(wo_vm vm, wo_value args)
+{
+    std::lock_guard g1(_je_dynamic_parser_mx);
+
+    auto* type = (const jeecs::typing::type_info*)wo_pointer(args + 0);
+    auto fnd = _je_dynamic_parser_impls.find(type);
+
+    if (fnd != _je_dynamic_parser_impls.end())
     {
-        std::string script_woolang_typename = script_parser->m_woolang_typename;
+        assert(_je_dynamic_parser_vm != nullptr);
 
-        wo_integer_t saving_func = wo_extern_symb(parser->m_vm, (script_woolang_typename + "::parser::saving").c_str());
-        wo_integer_t restoring_func = wo_extern_symb(parser->m_vm, (script_woolang_typename + "::parser::restoring").c_str());
-        wo_integer_t edit_func = wo_extern_symb(parser->m_vm, (script_woolang_typename + "::parser::edit").c_str());
+        auto* val = wo_pointer(args + 1);
+        auto& parser = fnd->second;
 
-        if (saving_func != 0 || restoring_func != 0 || edit_func != 0)
-        {
-            return wo_ret_option_gchandle(vm,
-                new dynamic_parser_impl_t
-                {
-                    parser,
-                    saving_func,
-                    restoring_func,
-                    edit_func,
-                    script_parser
-                },
-                args + 0,
-                [](void* ptr)
-                {
-                    delete std::launder(reinterpret_cast<dynamic_parser_impl_t*>(ptr));
-                });
-        }
+        assert(parser->m_saving != 0);
+
+        wo_value value = wo_push_empty(vm);
+        parser->m_script_parser->m_script_parse_c2w(val, vm, value);
+
+        wo_push_val(_je_dynamic_parser_vm, value);
+        wo_value result = wo_invoke_rsfunc(_je_dynamic_parser_vm, parser->m_saving, 1);
+        if (result != nullptr)
+            return wo_ret_option_val(vm, result);
     }
     return wo_ret_option_none(vm);
 }
 
-WO_API wo_api wojeapi_dynamic_parser_impl_saving(wo_vm vm, wo_value args)
+WO_API wo_api wojeapi_dynamic_parser_restoring(wo_vm vm, wo_value args)
 {
-    dynamic_parser_impl_t* parser_impl = (dynamic_parser_impl_t*)wo_pointer(args + 0);
+    std::lock_guard g1(_je_dynamic_parser_mx);
 
-    std::lock_guard g1(parser_impl->m_parser->m_mx);
+    auto* type = (const jeecs::typing::type_info*)wo_pointer(args + 0);
+    auto fnd = _je_dynamic_parser_impls.find(type);
 
-    wo_value val = wo_push_empty(vm);
-    parser_impl->m_script_parser->m_script_parse_c2w(wo_pointer(args + 1), vm, val);
+    if (fnd != _je_dynamic_parser_impls.end())
+    {
+        assert(_je_dynamic_parser_vm != nullptr);
 
-    wo_push_val(parser_impl->m_parser->m_vm, val);
-    wo_value result = wo_invoke_rsfunc(parser_impl->m_parser->m_vm, parser_impl->m_saving, 1);
-    if (result == nullptr)
-        return wo_ret_panic(vm, "%s::parser::saving failed!", parser_impl->m_script_parser->m_woolang_typename);
+        void* val = wo_pointer(args + 1);
+        auto& parser = fnd->second;
 
-    return wo_ret_string(vm, wo_string(result));
+        assert(parser->m_restoring != 0);
+
+        wo_push_val(_je_dynamic_parser_vm, args + 2);
+        wo_value result = wo_invoke_rsfunc(_je_dynamic_parser_vm, parser->m_restoring, 1);
+        if (result != nullptr)
+        {
+            parser->m_script_parser->m_script_parse_w2c(val, vm, result);
+            return wo_ret_bool(vm, WO_TRUE);
+        }
+    }
+    return wo_ret_bool(vm, WO_FALSE);
+
 }
-WO_API wo_api wojeapi_dynamic_parser_impl_restoring(wo_vm vm, wo_value args)
+
+WO_API wo_api wojeapi_dynamic_parser_edit(wo_vm vm, wo_value args)
 {
-    dynamic_parser_impl_t* parser_impl = (dynamic_parser_impl_t*)wo_pointer(args + 0);
+    std::lock_guard g1(_je_dynamic_parser_mx);
 
-    std::lock_guard g1(parser_impl->m_parser->m_mx);
+    auto* type = (const jeecs::typing::type_info*)wo_pointer(args + 0);
+    auto fnd = _je_dynamic_parser_impls.find(type);
 
-    wo_push_val(parser_impl->m_parser->m_vm, args + 2);
-    wo_value result = wo_invoke_rsfunc(parser_impl->m_parser->m_vm, parser_impl->m_restoring, 1);
-    if (result == nullptr)
-        return wo_ret_panic(vm, "%s::parser::restoring failed!", parser_impl->m_script_parser->m_woolang_typename);
+    if (fnd != _je_dynamic_parser_impls.end())
+    {
+        assert(_je_dynamic_parser_vm != nullptr);
 
-    parser_impl->m_script_parser->m_script_parse_w2c(wo_pointer(args + 1), vm, result);
+        auto* val = wo_pointer(args + 1);
+        auto* tag = wo_string(args + 2);
+        
+        auto& parser = fnd->second;
 
-    return wo_ret_void(vm);
-}
-WO_API wo_api wojeapi_dynamic_parser_impl_edit(wo_vm vm, wo_value args)
-{
-    dynamic_parser_impl_t* parser_impl = (dynamic_parser_impl_t*)wo_pointer(args + 0);
+        assert(parser->m_edit != 0);
 
-    std::lock_guard g1(parser_impl->m_parser->m_mx);
+        wo_value value = wo_push_empty(vm);
+        parser->m_script_parser->m_script_parse_c2w(val, vm, value);
 
-    wo_value val = wo_push_empty(vm);
-    parser_impl->m_script_parser->m_script_parse_c2w(wo_pointer(args + 1), vm, val);
+        wo_push_string(_je_dynamic_parser_vm, tag);
+        wo_push_val(_je_dynamic_parser_vm, value);
+        wo_value result = wo_invoke_rsfunc(_je_dynamic_parser_vm, parser->m_edit, 2);
+        if (result != nullptr)
+        {
+            if (wo_option_get(value, result))
+                parser->m_script_parser->m_script_parse_w2c(val, vm, value);
 
-    wo_push_val(parser_impl->m_parser->m_vm, args + 3);
-    wo_push_val(parser_impl->m_parser->m_vm, args + 2);
-    wo_push_val(parser_impl->m_parser->m_vm, val);
-    wo_value result = wo_invoke_rsfunc(parser_impl->m_parser->m_vm, parser_impl->m_edit, 3);
-    if (result == nullptr)
-        return wo_ret_panic(vm, "%s::parser::edit failed!", parser_impl->m_script_parser->m_woolang_typename);
-
-    if (wo_option_get(val, result))
-        parser_impl->m_script_parser->m_script_parse_w2c(wo_pointer(args + 1), vm, val);
-
-    return wo_ret_void(vm);
+            return wo_ret_bool(vm, WO_TRUE);
+        }
+    }
+    return wo_ret_bool(vm, WO_FALSE);
 }
 
 const char* jeecs_woolang_editor_api_path = "je/editor.wo";
@@ -2322,41 +2401,7 @@ namespace je
         extern("libjoyecs", "wojeapi_typeinfo_get_unregister_count")
         public func get_unregister_count()=> int;
     }
-    
-    namespace unsafe
-    {
-        using dynamic_parser = gchandle
-        {
-            extern("libjoyecs", "wojeapi_dynamic_parser_create", slow)
-            public func create(path: string)=> result<dynamic_parser, string>;
-
-            using parser_impl = gchandle
-            {
-                extern("libjoyecs", "wojeapi_dynamic_parser_impl_saving", slow)
-                public func saving(self: parser_impl, val: native_value)=> string;
-
-                extern("libjoyecs", "wojeapi_dynamic_parser_impl_restoring", slow)
-                public func restoring(self: parser_impl, val: native_value, dat: string)=> void;
-
-                extern("libjoyecs", "wojeapi_dynamic_parser_impl_edit", slow)
-                public func edit(self: parser_impl, val: native_value, tag1: string, tag2: string)=> void;
-
-                public func close(self: parser_impl)
-                {
-                    return self: gchandle->close;
-                }
-            }
-
-            extern("libjoyecs", "wojeapi_dynamic_parser_impl_create", slow)
-            public func get_parser_impl(self: dynamic_parser, type: typeinfo)=> option<parser_impl>;
-
-            public func close(self: dynamic_parser)
-            {
-                return self: gchandle->close;
-            }
-        }
-    }
-    
+        
     namespace graphic
     {
         namespace texture
@@ -2672,6 +2717,30 @@ namespace je
 
         extern("libjoyecs", "wojeapi_towoo_unregister_component")
         public func unregister_component(t: typeinfo)=> void;
+    }
+
+    namespace dynamic_parser
+    {
+        namespace unsafe
+        {
+            extern("libjoyecs", "wojeapi_dynamic_parser_update_script", slow)
+            public func update_all(path: string)=> result<void, string>;
+
+            extern("libjoyecs", "wojeapi_dynamic_parser_update_type", slow)
+            public func update_type()=> void;
+
+            extern("libjoyecs", "wojeapi_dynamic_parser_clear", slow)
+            public func clear()=> void;
+
+            extern("libjoyecs", "wojeapi_dynamic_parser_saving", slow)
+            public func saving(type: typeinfo, val: native_value)=> option<string>;
+
+            extern("libjoyecs", "wojeapi_dynamic_parser_restoring", slow)
+            public func restoring(type: je::typeinfo, val: je::native_value, dat: string)=> bool;
+
+            extern("libjoyecs", "wojeapi_dynamic_parser_edit", slow)
+            public func edit(type: je::typeinfo, val: je::native_value, tag: string)=> bool;
+        }
     }
 
     extern("libjoyecs", "wojeapi_deltatime")

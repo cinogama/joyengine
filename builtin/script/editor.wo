@@ -26,9 +26,9 @@ namespace bool
         {
             return dat: bool;
         }
-        public extern func edit(val: bool, tag: string, echunkinfo: string)=> option<bool>
+        public extern func edit(val: bool, tag: string)=> option<bool>
         {
-            return CheckBox(F"##{tag}##{echunkinfo}", val);
+            return CheckBox(F"##{tag}", val);
         }
     }
 }
@@ -44,9 +44,9 @@ namespace uint8
         {
             return dat: uint8;
         }
-        public extern func edit(val: uint8, tag: string, echunkinfo: string)=> option<uint8>
+        public extern func edit(val: uint8, tag: string)=> option<uint8>
         {
-            return InputInt(F"##{tag}##{echunkinfo}", val);
+            return InputInt(F"##{tag}", val);
         }
     }
 }
@@ -62,9 +62,9 @@ namespace uint16
         {
             return dat: uint16;
         }
-        public extern func edit(val: uint16, tag: string, echunkinfo: string)=> option<uint16>
+        public extern func edit(val: uint16, tag: string)=> option<uint16>
         {
-            return InputInt(F"##{tag}##{echunkinfo}", val);
+            return InputInt(F"##{tag}", val);
         }
     }
 }
@@ -80,9 +80,9 @@ namespace uint32
         {
             return dat: uint32;
         }
-        public extern func edit(val: uint32, tag: string, echunkinfo: string)=> option<uint32>
+        public extern func edit(val: uint32, tag: string)=> option<uint32>
         {
-            return InputInt(F"##{tag}##{echunkinfo}", val);
+            return InputInt(F"##{tag}", val);
         }
     }
 }
@@ -98,9 +98,9 @@ namespace uint64
         {
             return dat: uint64;
         }
-        public extern func edit(val: uint64, tag: string, echunkinfo: string)=> option<uint64>
+        public extern func edit(val: uint64, tag: string)=> option<uint64>
         {
-            return InputInt(F"##{tag}##{echunkinfo}", val);
+            return InputInt(F"##{tag}", val);
         }
     }
 }
@@ -116,9 +116,9 @@ namespace int8
         {
             return dat: int8;
         }
-        public extern func edit(val: int8, tag: string, echunkinfo: string)=> option<int8>
+        public extern func edit(val: int8, tag: string)=> option<int8>
         {
-            return InputInt(F"##{tag}##{echunkinfo}", val);
+            return InputInt(F"##{tag}", val);
         }
     }
 }
@@ -134,9 +134,9 @@ namespace int16
         {
             return dat: int16;
         }
-        public extern func edit(val: int16, tag: string, echunkinfo: string)=> option<int16>
+        public extern func edit(val: int16, tag: string)=> option<int16>
         {
-            return InputInt(F"##{tag}##{echunkinfo}", val);
+            return InputInt(F"##{tag}", val);
         }
     }
 }
@@ -152,9 +152,9 @@ namespace int32
         {
             return dat: int32;
         }
-        public extern func edit(val: int32, tag: string, echunkinfo: string)=> option<int32>
+        public extern func edit(val: int32, tag: string)=> option<int32>
         {
-            return InputInt(F"##{tag}##{echunkinfo}", val);
+            return InputInt(F"##{tag}", val);
         }
     }
 }
@@ -170,9 +170,9 @@ namespace int64
         {
             return dat: int64;
         }
-        public extern func edit(val: int64, tag: string, echunkinfo: string)=> option<int64>
+        public extern func edit(val: int64, tag: string)=> option<int64>
         {
-            return InputInt(F"##{tag}##{echunkinfo}", val);
+            return InputInt(F"##{tag}", val);
         }
     }
 }
@@ -188,9 +188,9 @@ namespace float
         {
             return dat: float;
         }
-        public extern func edit(val: float, tag: string, echunkinfo: string)=> option<float>
+        public extern func edit(val: float, tag: string)=> option<float>
         {
-            return InputFloat(F"##{tag}##{echunkinfo}", val);
+            return InputFloat(F"##{tag}", val);
         }
     }
 }
@@ -206,9 +206,9 @@ namespace real
         {
             return dat: real;
         }
-        public extern func edit(val: real, tag: string, echunkinfo: string)=> option<real>
+        public extern func edit(val: real, tag: string)=> option<real>
         {
-            return InputFloat(F"##{tag}##{echunkinfo}", val);
+            return InputFloat(F"##{tag}", val);
         }
     }
 }
@@ -225,9 +225,9 @@ namespace ivec2
             let data = dat->array::deserialize->valor([0: dynamic, 0: dynamic])->> \x = x: int;;
             return (data->getor(0, 0), data->getor(1, 0)): ivec2;
         }
-        public extern func edit(val: ivec2, tag: string, echunkinfo: string)=> option<ivec2>
+        public extern func edit(val: ivec2, tag: string)=> option<ivec2>
         {
-            return InputInt2(F"##{tag}##{echunkinfo}", val.0, val.1)->>\v = v: ivec2;;
+            return InputInt2(F"##{tag}", val.0, val.1)->>\v = v: ivec2;;
         }
     }
 }
@@ -244,9 +244,9 @@ namespace vec2
             let data = dat->array::deserialize->valor([0: dynamic, 0: dynamic])->> \x = x: real;;
             return (data->getor(0, 0.), data->getor(1, 0.)): vec2;
         }
-        public extern func edit(val: vec2, tag: string, echunkinfo: string)=> option<vec2>
+        public extern func edit(val: vec2, tag: string)=> option<vec2>
         {
-            return InputFloat2(F"##{tag}##{echunkinfo}", val.0, val.1)->>\v = v: vec2;;
+            return InputFloat2(F"##{tag}", val.0, val.1)->>\v = v: vec2;;
         }
     }
 }
@@ -263,9 +263,9 @@ namespace vec3
             let data = dat->array::deserialize->valor([0: dynamic, 0: dynamic, 0: dynamic])->> \x = x: real;;
             return (data->getor(0, 0.), data->getor(1, 0.), data->getor(2, 0.)): vec3;
         }
-        public extern func edit(val: vec3, tag: string, echunkinfo: string)=> option<vec3>
+        public extern func edit(val: vec3, tag: string)=> option<vec3>
         {
-            return InputFloat3(F"##{tag}##{echunkinfo}", val.0, val.1, val.2)->>\v = v: vec3;;
+            return InputFloat3(F"##{tag}", val.0, val.1, val.2)->>\v = v: vec3;;
         }
     }
 }
@@ -282,9 +282,9 @@ namespace vec4
             let data = dat->array::deserialize->valor([0: dynamic, 0: dynamic, 0: dynamic, 0: dynamic])->> \x = x: real;;
             return (data->getor(0, 0.), data->getor(1, 0.), data->getor(2, 0.), data->getor(3, 0.)): vec4;
         }
-        public extern func edit(val: vec4, tag: string, echunkinfo: string)=> option<vec4>
+        public extern func edit(val: vec4, tag: string)=> option<vec4>
         {
-            return InputFloat4(F"##{tag}##{echunkinfo}", val.0, val.1, val.2, val.3)->>\v = v: vec4;;
+            return InputFloat4(F"##{tag}", val.0, val.1, val.2, val.3)->>\v = v: vec4;;
         }
     }
 }
@@ -301,10 +301,10 @@ namespace quat
             let data = dat->array::deserialize->valor([0: dynamic, 0: dynamic, 0: dynamic, 0: dynamic])->> \x = x: real;;
             return (data->getor(0, 0.), data->getor(1, 0.), data->getor(2, 0.), data->getor(3, 0.)): quat;
         }
-        public extern func edit(val: quat, tag: string, echunkinfo: string)=> option<quat>
+        public extern func edit(val: quat, tag: string)=> option<quat>
         {
             let angle = val->euler_angle;
-            return InputFloat3(F"##{tag}##{echunkinfo}", angle.0, angle.1, angle.2)->>\v = quat::euler(v...);;
+            return InputFloat3(F"##{tag}", angle.0, angle.1, angle.2)->>\v = quat::euler(v...);;
         }
     }
 }
@@ -323,9 +323,9 @@ namespace fileresource_void
             else
                 return option::value(dat): fileresource_void;
         }
-        public extern func edit(val: fileresource_void, tag: string, echunkinfo: string)=> option<fileresource_void>
+        public extern func edit(val: fileresource_void, tag: string)=> option<fileresource_void>
         {
-            match (jeapi::gui::widget::File(F"文件：##{tag}##{echunkinfo}", val: option<string>->valor(""), \=do nil;))
+            match (jeapi::gui::widget::File(F"文件：##{tag}", val: option<string>->valor(""), \=do nil;))
             {
             value(p)?
                 if (p == "")
@@ -353,9 +353,9 @@ namespace fileresource_audio_buffer
             else
                 return option::value(dat): fileresource_audio_buffer;
         }
-        public extern func edit(val: fileresource_audio_buffer, tag: string, echunkinfo: string)=> option<fileresource_audio_buffer>
+        public extern func edit(val: fileresource_audio_buffer, tag: string)=> option<fileresource_audio_buffer>
         {
-            match (jeapi::gui::widget::File(F"音频文件：##{tag}##{echunkinfo}", val: option<string>->valor(""), \=do nil;))
+            match (jeapi::gui::widget::File(F"音频文件：##{tag}", val: option<string>->valor(""), \=do nil;))
             {
             value(p)?
                 if (p == "")
@@ -380,9 +380,9 @@ namespace uuid
         {
             return dat: uuid;
         }
-        public extern func edit(val: uuid, tag: string, echunkinfo: string)=> option<uuid>
+        public extern func edit(val: uuid, tag: string)=> option<uuid>
         {
-            return InputText(F"##{tag}##{echunkinfo}", val: string)->> \dat = dat: uuid;;
+            return InputText(F"##{tag}", val: string)->> \dat = dat: uuid;;
         }
     }
 }
@@ -398,9 +398,9 @@ namespace string
         {
             return dat: string;
         }
-        public extern func edit(val: string, tag: string, echunkinfo: string)=> option<string>
+        public extern func edit(val: string, tag: string)=> option<string>
         {
-            return InputText(F"##{tag}##{echunkinfo}", val: string);
+            return InputText(F"##{tag}", val: string);
         }
     }
 }
@@ -428,14 +428,14 @@ namespace Light2D::Range::light_shape
                 m_positions = data->getor("m_positions": dynamic, []: dynamic)->valor([]: array<dynamic>)->> \v2 = vec2::parser::restoring(v2: string);,
             };
         }
-        public extern func edit(val: Light2D::Range::light_shape, tag: string, echunkinfo: string)=> option<Light2D::Range::light_shape>
+        public extern func edit(val: Light2D::Range::light_shape, tag: string)=> option<Light2D::Range::light_shape>
         {
             let mut need_update = false;
 
             let mut strength_data = val.m_strength;
             let mut point_data = val.m_positions;
 
-            match (InputInt(F"层数##{tag}##{echunkinfo}", strength_data->len)->>\n = n < 0 ? 0 | n;)
+            match (InputInt(F"层数##{tag}", strength_data->len)->>\n = n < 0 ? 0 | n;)
             {
             value(count)?
             {
@@ -450,7 +450,7 @@ namespace Light2D::Range::light_shape
             let layer_count = strength_data->len;
             let mut point_count = val.m_point_count;
 
-            match (InputInt(F"顶点##{tag}##{echunkinfo}", point_count)->>\n = n < 0 ? 0 | n;)
+            match (InputInt(F"顶点##{tag}", point_count)->>\n = n < 0 ? 0 | n;)
             {
             value(count)?
             {
@@ -478,7 +478,7 @@ namespace Light2D::Range::light_shape
             Text("形状网格");
             TextDisabled("* 请保持最内层为凸多边形");
             match (jeapi::gui::widget::poseditor(
-                F"##shape##{tag}##{echunkinfo}", 
+                F"##shape##{tag}", 
                 std::min(GetContentRegionAvail().0, 400.),
                 layered_positions as vec<array<vec2>>->unsafe::cast:<array<array<(real, real)>>>,
                 0.01,
@@ -514,7 +514,7 @@ namespace Light2D::Range::light_shape
             {
                 Text(F"强度 {i}");
                 SameLine();
-                match (DragFloat(F"##strength_{i}##{tag}##{echunkinfo}", st, 0.01, 0., 1.))
+                match (DragFloat(F"##strength_{i}##{tag}", st, 0.01, 0., 1.))
                 {
                 value(newst)?
                 {
@@ -558,7 +558,7 @@ namespace Light2D::BlockShadow::block_mesh
                 ->> \v2 = vec2::parser::restoring(v2: string);
                 : block_mesh;
         }
-        public extern func edit(mut val: Light2D::BlockShadow::block_mesh, tag: string, echunkinfo: string)=> option<Light2D::BlockShadow::block_mesh>
+        public extern func edit(mut val: Light2D::BlockShadow::block_mesh, tag: string)=> option<Light2D::BlockShadow::block_mesh>
         {
             let mut size_changed = false;
             match (InputInt(F"size##{tag}", val: array<vec2>->len)->>\n = n < 0 ? 0 | n;)
@@ -572,7 +572,7 @@ namespace Light2D::BlockShadow::block_mesh
             }
 
             match (jeapi::gui::widget::poseditor(
-                F"##block_mesh##{tag}##{echunkinfo}", 
+                F"##block_mesh##{tag}", 
                 std::min(GetContentRegionAvail().0, 400.),
                 [val: array<vec2>->>\p = p: (real, real);],
                 0.01,
@@ -617,15 +617,15 @@ namespace Animation2D::FrameAnimation::animation_list
                         animation_state
                         {
                             m_path = state_dat->getor(0, "": dynamic)->valor(""), 
-                            m_animation = state_dat->getor(0, "": dynamic)->valor(""), 
-                            m_loop = state_dat->getor(0, false: dynamic)->valor(false), 
+                            m_animation = state_dat->getor(1, "": dynamic)->valor(""), 
+                            m_loop = state_dat->getor(2, false: dynamic)->valor(false), 
                         }
                         where state_dat = state->valor([]: array<dynamic>)
                     ;
                 : animation_list;
                 ;
         }
-        public extern func edit(mut val: Animation2D::FrameAnimation::animation_list, tag: string, echunkinfo: string)=> option<Animation2D::FrameAnimation::animation_list>
+        public extern func edit(mut val: Animation2D::FrameAnimation::animation_list, tag: string)=> option<Animation2D::FrameAnimation::animation_list>
         {
             let mut need_update = false;
             
@@ -654,7 +654,7 @@ namespace Animation2D::FrameAnimation::animation_list
                 let mut animation = state.m_animation;
                 let mut loop = state.m_loop;
 
-                match (jeapi::gui::widget::File(F"动画{idx}：##{tag}##{echunkinfo}", path, \=do nil;))
+                match (jeapi::gui::widget::File(F"动画{idx}：##{tag}", path, \=do nil;))
                 {
                 value(newpath)?
                     {
@@ -665,7 +665,7 @@ namespace Animation2D::FrameAnimation::animation_list
                 }
                 SameLine();
                 
-                match (CheckBox(F"循环##{tag}##{echunkinfo}", loop))
+                match (CheckBox(F"循环##{tag}", loop))
                 {
                 value(newloop)?
                     {
@@ -676,7 +676,7 @@ namespace Animation2D::FrameAnimation::animation_list
                 }
                 SameLine();
 
-                match (InputText(F"动作##{tag}##{echunkinfo}", animation))
+                match (InputText(F"动作##{tag}", animation))
                 {
                 value(newanimation)?
                     {

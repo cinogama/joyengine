@@ -301,7 +301,11 @@ namespace editor::gui::edit_forms
 
                                             TextDisabled(mname);
      
-                                            jeapi::typemgr::edit(mtype, mvalue, mname, current_entity_chunk_info);
+                                            if (!je::dynamic_parser::unsafe::edit(
+                                                mtype, mvalue, mname + "##" + current_entity_chunk_info))
+                                            {
+                                                TextDisabled(F"没有找到适配 {mtype->name} 的编辑器");
+                                            }
 
                                             EndGroup();
                                         }

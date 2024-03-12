@@ -381,7 +381,7 @@ config.jeinf text eol=lf
 *.jeentity text eol=lf
 *.jecache4 !diff
 "@);
-                            match (jeapi::typemgr::update("@/editor.wo"))
+                            match (je::dynamic_parser::unsafe::update_all("@/editor.wo"))
                             {
                             ok(_)?;
                             err(msg)?
@@ -444,7 +444,7 @@ func open_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict
 
 }
 
-// je::editor::register_panic_hook(jeapi::gui::form::panic);
+je::editor::register_panic_hook(jeapi::gui::form::panic);
 
 for (;;)
 {

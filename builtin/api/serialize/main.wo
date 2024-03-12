@@ -5,7 +5,6 @@ import je;
 import je::editor;
 
 import builtin::api::gui::errmsg;
-import builtin::api::serialize::typemgr;
 
 using je;
 
@@ -309,7 +308,7 @@ namespace jeapi
                     ->> \tc = (t->name, collect_members)
                         where 
                             collect_members = c->get_members()
-                                ->> \name_type_addr_pair = (name, typemgr::saving(type, addr)->valor("<?>"))
+                                ->> \name_type_addr_pair = (name, dynamic_parser::unsafe::saving(type, addr)->valor("<?>"))
                                     where (name, type, addr) = name_type_addr_pair
                                     ;
                                 ->  mapping,
@@ -520,7 +519,7 @@ namespace jeapi
                 ->> \cdata = compmaynotfound
                         ->> \comp = comp->get_members
                             ->> \name_type_addr_pair = dat->get(mname)
-                                ->> \mdat = typemgr::restoring(mtype, mvalue, mdat as string);
+                                ->> \mdat = dynamic_parser::unsafe::restoring(mtype, mvalue, mdat as string);
                                 where (mname, mtype, mvalue) = name_type_addr_pair
                                 ;
                             ;

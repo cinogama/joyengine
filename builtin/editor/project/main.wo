@@ -201,11 +201,11 @@ namespace editor
         }
         public func restore_all_world(self: Project, dats: array<(dict<string, dynamic>, fsys::path_t)>)
         {
-            jeapi::typemgr::update_without_new_script();
+            je::dynamic_parser::unsafe::update_type();
 
             do dats->>\dat = self->deserialize_world(dat...);;
 
-            match (jeapi::typemgr::update("@/editor.wo"))
+            match (je::dynamic_parser::unsafe::update_all("@/editor.wo"))
             {
             ok(_)?;
             err(msg)?
@@ -477,7 +477,7 @@ namespace editor
             
             self.m_towoo_context->update(false);
 
-            match (jeapi::typemgr::update("@/editor.wo"))
+            match (je::dynamic_parser::unsafe::update_all("@/editor.wo"))
             {
             ok(_)?;
             err(msg)?
@@ -595,7 +595,7 @@ namespace editor
             self->unlock_this_project();
 
             gui::drawpannel::close_all_scripts();
-            jeapi::typemgr::shutdown();
+            je::dynamic_parser::unsafe::clear();
         }
         public func free_modules_after_close(self: Project)
         {

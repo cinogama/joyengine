@@ -125,7 +125,8 @@ namespace jeecs
             {
                 assert(component != nullptr);
 
-                wo_value tmp = wo_push_empty(vm);
+                _wo_value tmp;  // 此处不能 wo_push_empty(vm); 或者需要pop，否则栈不平
+                                // 另外此处不需要 wo_push_empty 因为我们不会往里面放GC对象
 
                 if (ctype->m_member_types != nullptr)
                 {
@@ -136,12 +137,12 @@ namespace jeecs
                     while (member_tinfo != nullptr)
                     {
                         // Set member;
-                        wo_set_pointer(tmp,
+                        wo_set_pointer(&tmp,
                             reinterpret_cast<void*>(
                                 reinterpret_cast<intptr_t>(component)
                                 + member_tinfo->m_member_offset));
 
-                        wo_struct_set(writeval, member_idx + 1, tmp);
+                        wo_struct_set(writeval, member_idx + 1, &tmp);
 
                         ++member_idx;
                         member_tinfo = member_tinfo->m_next_member;
@@ -152,8 +153,8 @@ namespace jeecs
                     wo_set_struct(writeval, vm, 1);
                 }
 
-                wo_set_pointer(tmp, component);
-                wo_struct_set(writeval, 0, tmp);
+                wo_set_pointer(&tmp, component);
+                wo_struct_set(writeval, 0, &tmp);
             }
 
             void update_step_work(std::vector<towoo_step_work>& works)
@@ -497,7 +498,7 @@ import je::towoo::types;
                         woolang_component_type_decl +=
                             std::string("    ") + registed_member->m_member_name + ": je::towoo::member<"
                             + parser->m_woolang_typename
-                            + ", " 
+                            + ", "
                             + parser->m_woolang_typename + "::type"
                             + ">,\n";
                     }
