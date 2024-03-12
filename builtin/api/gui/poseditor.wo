@@ -16,13 +16,17 @@ namespace jeapi::gui::widget
         => option<array<array<(real, real)>>>
     {
         static let mut scale = 1.0;
+        static let mut offset_x = 0.0, mut offset_y = 0.0;
 
         let drawlist = GetWindowDrawList();
         do InvisibleButton("##draw_shape##{tag}", (size, size));
+
+        let is_hovered_on_zone = IsItemHovered();
+
         let (p0, p1) = GetItemRect();
 
         let position_ratio = size / 2. * scale;
-        let centerx = p0.0 + size / 2., centery = p0.1 + size / 2.;
+        let centerx = p0.0 + size / 2. + offset_x, centery = p0.1 + size / 2. + offset_y;
 
         PushClipRect(p0, p1);
 
@@ -147,9 +151,20 @@ namespace jeapi::gui::widget
                 ->unsafe::cast:<array<(real, real)>>);
         }
 
+        if (is_hovered_on_zone && has_hovered_point == false)
+        {
+            // 如果没有悬停在任何点上，并且鼠标按下，则认为是在拖动整个视图
+            if (mouse_down)
+            {
+                let (x, y) = GetMouseDeltaPos();
+                offset_x += x;
+                offset_y += y;
+            }
+        }
+
         PopClipRect();
 
-        match (DragFloat("视图缩放##view_scale##{tag}", scale, 0.05, 0.1, 2.))
+        match (DragFloat("视图缩放##view_scale##{tag}", scale, 0.05, 0.1, 10.))
         {
         value(v)? scale = v;
         none?;
