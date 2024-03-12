@@ -481,7 +481,7 @@ namespace Light2D::Range::light_shape
                 F"##shape##{tag}##{echunkinfo}", 
                 std::min(GetContentRegionAvail().0, 400.),
                 layered_positions as vec<array<vec2>>->unsafe::cast:<array<array<(real, real)>>>,
-                0.025,
+                0.01,
                 func(a, i)
                 {
                     let r = []mut: vec<((real, real), (real, real))>;
@@ -572,10 +572,10 @@ namespace Light2D::BlockShadow::block_mesh
             }
 
             match (jeapi::gui::widget::poseditor(
-                F"##{tag}##{echunkinfo}", 
+                F"##block_mesh##{tag}##{echunkinfo}", 
                 std::min(GetContentRegionAvail().0, 400.),
                 [val: array<vec2>->>\p = p: (real, real);],
-                0.05,
+                0.01,
                 func(a, i)
                 {
                     let r = []mut: vec<((real, real), (real, real))>;

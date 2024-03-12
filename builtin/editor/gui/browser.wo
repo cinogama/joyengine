@@ -615,11 +615,12 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                         ("后向2D自发光系数单色", "Forward2DMonoSelfGlowing"), 
                         ("后向2D自发光系数法线", "Forward2DNormalSelfGlowing"),
                         ("后向2D氛围光", "Forward2DAura"),
-                        ("2D点光源（光源）", "Light2DPoint"),
-                        ("2D范围光源（光源）", "Light2DRange"),
-                        ("2D平行光源（光源）", "Light2DParallel"),
+                        ("2D点光（光源）", "Light2DPoint"),
+                        ("2D范围光（光源）", "Light2DRange"),
+                        ("2D平行光（光源）", "Light2DParallel"),
                         ("2D光照后处理（摄像机）", "CameraDefer2DPass"),
                         ("2D光照外发光后处理（摄像机）", "CameraDefer2DBloomPass"),
+                        ("2D光照雾效果后处理（摄像机）", "CameraDefer2DFogPass"),
                     ];
 
                     let create_shader_at = func(shader_name: string, shader_src: string)
