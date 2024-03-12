@@ -828,9 +828,9 @@ namespace je::towoo::component
     public func update_component_declare(name: string, members: array<(string, typeinfo)>)=> typeinfo;
 
     let registered_member_infoms = {}mut: map<string, typeinfo>;
-    public func register_member<T>(name: string)
+    public func register_member<TInfo>(name: string)
     {
-       registered_member_infoms->set(name, T::typeinfo);
+       registered_member_infoms->set(name, TInfo::typeinfo);
     }
 }
 
@@ -887,7 +887,7 @@ extern func _init_towoo_component(name: string)
     let mut result = ";";
     for (let _, (name, type) : decls)
     {
-        result += F"je::towoo::component::register_member:<{type}::typeinfo>({name->enstring});";
+        result += F"je::towoo::component::register_member:<{type}::type>({name->enstring});";
     }
     return result;
 }
