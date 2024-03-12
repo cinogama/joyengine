@@ -350,6 +350,12 @@ namespace editor::gui::edit_forms
                     context->add_components("Light2D::Gain");
                     context->add_components("Light2D::ShadowBuffer");
                 }
+                if (MenuItem("2D光源（范围）"))
+                {
+                    context->add_components("Light2D::Range");
+                    context->add_components("Light2D::Gain");
+                    context->add_components("Light2D::ShadowBuffer");
+                }
                 if (MenuItem("2D光源（平行）"))
                 {
                     context->add_components("Light2D::Parallel");

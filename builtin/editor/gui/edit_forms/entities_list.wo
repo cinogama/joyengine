@@ -253,6 +253,31 @@ namespace editor::gui::edit_forms
                             ;
                     };
             }
+            if (MenuItem("2D光源（范围）"))
+            {
+                do fast_create_entity(context, w, "2D范围光源", [
+                    "Transform::LocalPosition",
+                    "Transform::LocalRotation",
+                    "Transform::LocalScale",
+                    "Transform::LocalToWorld",
+                    "Transform::Translation",
+                    "Renderer::Shape",
+                    "Renderer::Shaders",
+                    "Renderer::Textures",
+                    "Renderer::Color",
+                    "Light2D::Range",
+                    "Light2D::Gain",
+                    "Light2D::ShadowBuffer",
+                ])->>func(e)
+                    {
+                        // 设置默认的光照着色器
+                        let default_shader_path = "@/resource/shader/Light2DRange.shader";
+                        do je::graphic::shader::load(e->get_world->get_universe->option::value, default_shader_path)
+                            ->> \s = e->set_shaders([s]);
+                            ->  or(\ = jeapi::gui::form::errmsg("加载默认着色器失败", F"无法加载'{default_shader_path}'作为默认着色器，跳过");)
+                            ;
+                    };
+            }
             if (MenuItem("2D光源（平行）"))
             {
                 do fast_create_entity(context, w, "2D平行光源", [

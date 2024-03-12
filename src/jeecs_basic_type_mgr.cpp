@@ -172,7 +172,11 @@ namespace jeecs_impl
             const char* _woolang_typedecl) noexcept
         {
             if (_typeinfo->m_script_parsers != nullptr)
+            {
+#ifndef NDEBUG
                 jeecs::debug::logwarn("Type '%s' has already registered script parser, skip.", _typeinfo->m_typename);
+#endif
+            }
             else
             {
                 jeecs::typing::typeinfo_script_parser* parser = new jeecs::typing::typeinfo_script_parser();
@@ -196,7 +200,11 @@ namespace jeecs_impl
             jeecs::typing::update_func_t _commit_update)
         {
             if (_typeinfo->m_system_updaters != nullptr)
+            {
+#ifndef NDEBUG
                 jeecs::debug::logwarn("Type '%s' has already registered system updater, skip.", _typeinfo->m_typename);
+#endif
+            }
             else
             {
                 assert(_state_update != nullptr);
