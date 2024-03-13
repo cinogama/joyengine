@@ -43,6 +43,9 @@ namespace editor::gui::edit_forms
             if (fsys::extension(originpath)->lower == ".dmp")
                 return Action::SKIP;  // 跳过崩溃转储文件
 
+            if (fsys::extension(originpath)->lower == ".jecache4")
+                return Action::SKIP;  // 跳过构造缓存文件
+
             if (fsys::extension(originpath)->lower == ".shader")
                 return Action::ACTION(func(pconfig, _){
                     pconfig.m_pack_output_log->add(F"正在编译着色器：{packpath}");

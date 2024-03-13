@@ -304,14 +304,19 @@ bool fimg_storing_buffer_to_img(fimg_creating_context* ctx, const void* buffer, 
 
     if (filesz != (size_t)-1)
     {
-        ++ctx->image->fimg_head.file_count;
-
-        ctx->image->file_map[aimpath] =
+        if (ctx->image->file_map.insert(std::make_pair(
+            aimpath,
+            fimg_img_index
+            {
+                this_file_img_index,
+                this_file_diff_count,
+                filesz
+            }
+        )).second)
         {
-            this_file_img_index,
-            this_file_diff_count,
-            filesz
-        };
+            ++ctx->image->fimg_head.file_count;
+        }
+        assert(ctx->image->file_map.size() == ctx->image->fimg_head.file_count);
         return true;
     }
     return false;
@@ -327,14 +332,19 @@ bool fimg_storing_file_to_img(fimg_creating_context* ctx, const char* filepath, 
 
     if (filesz != (size_t)-1)
     {
-        ++ctx->image->fimg_head.file_count;
-
-        ctx->image->file_map[aimpath] =
+        if (ctx->image->file_map.insert(
+            std::make_pair(aimpath,
+                fimg_img_index
+                {
+                    this_file_img_index,
+                    this_file_diff_count,
+                    filesz
+                })).second)
         {
-            this_file_img_index,
-            this_file_diff_count,
-            filesz
-        };
+            ++ctx->image->fimg_head.file_count;
+        }
+
+        assert(ctx->image->file_map.size() == ctx->image->fimg_head.file_count);
         return true;
     }
     return false;
