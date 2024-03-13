@@ -16,7 +16,7 @@ namespace jeapi::gui::form
         title: string, 
         text: string)
     {
-        form::create(F"{title}##{JobID()}", 
+        form::create(F"{title}", 
             func(f)
             {
                 Text(text);

@@ -46,7 +46,7 @@ namespace jeapi::gui
                         | \s: string, a: je::gui::WindowsAttribute = option::value(BeginAttr(s, a));
                         ;
 
-                    match (begin(self.name, self._attribute))
+                    match (begin(F"{self.name}##{JobID()}", self._attribute))
                     {
                     value(show)?
                         if (show)

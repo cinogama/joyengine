@@ -16,7 +16,7 @@ namespace jeapi::gui::form
     {
         let inputval = mutable::create(defaultval);
 
-        form::create(F"{title}##{JobID()}", 
+        form::create(F"{title}", 
             func(f)
             {
                 Text(text);
@@ -47,7 +47,7 @@ namespace jeapi::gui::form
     {
         let inputval = mutable::create(defaultval);
 
-        form::create(F"{title}##{JobID()}", 
+        form::create(F"{title}", 
             func(f)
             {
                 Text(text);

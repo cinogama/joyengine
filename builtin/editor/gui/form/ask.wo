@@ -13,7 +13,7 @@ namespace jeapi::gui::form
         text: string, 
         okevent: (bool)=> void)
     {
-        form::create(F"{title}##{JobID()}", 
+        form::create(F"{title}", 
             func(f)
             {
                 Text(text);

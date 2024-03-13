@@ -31,7 +31,7 @@ namespace jeapi::gui::form
         // boom_icon->pix((6, 0))->set_color(nothing_color);
         // boom_icon->pix((6, 6))->set_color(nothing_color);
 
-        let f = form::create(F"Woolang 致命错误##{JobID()}", 
+        let f = form::create(F"Woolang 致命错误", 
             func(f)
             {
                 BeginGroup();
