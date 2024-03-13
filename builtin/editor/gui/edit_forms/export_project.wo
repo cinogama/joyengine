@@ -61,6 +61,7 @@ namespace editor::gui::edit_forms
                     }
                 });
             
+            
             if (fsys::extension(originpath)->lower == ".wo")
             {
                 if (fsys::filename(originpath)->lower->endwith(".je.wo"))
@@ -103,6 +104,9 @@ namespace editor::gui::edit_forms
             
             if (packpath->lower->find("/.git/") != -1)
                 return Action::SKIP;  // 跳过git文件
+
+            if (fsys::extension(originpath)->lower == ".dll")
+                return Action::ORIGIN; // 原样复制到打包路径
 
             return Action::PACK;
         }
