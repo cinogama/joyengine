@@ -2696,9 +2696,6 @@ const char* jeecs_woolang_api_path = "je.wo";
 const char* jeecs_woolang_api_src = R"(
 import woo::std;
 
-import je::towoo::types;
-import je::towoo::components;
-
 namespace je
 {
     namespace towoo
@@ -2717,29 +2714,29 @@ namespace je
 
         extern("libjoyecs", "wojeapi_towoo_unregister_component")
         public func unregister_component(t: typeinfo)=> void;
-    }
 
-    namespace dynamic_parser
-    {
         namespace unsafe
         {
-            extern("libjoyecs", "wojeapi_dynamic_parser_update_script", slow)
-            public func update_all(path: string)=> result<void, string>;
+            namespace dynamic_parser
+            {
+                extern("libjoyecs", "wojeapi_dynamic_parser_update_script", slow)
+                public func update_all(path: string)=> result<void, string>;
 
-            extern("libjoyecs", "wojeapi_dynamic_parser_update_type", slow)
-            public func update_type()=> void;
+                extern("libjoyecs", "wojeapi_dynamic_parser_update_type", slow)
+                public func update_type()=> void;
 
-            extern("libjoyecs", "wojeapi_dynamic_parser_clear", slow)
-            public func clear()=> void;
+                extern("libjoyecs", "wojeapi_dynamic_parser_clear", slow)
+                public func clear()=> void;
 
-            extern("libjoyecs", "wojeapi_dynamic_parser_saving", slow)
-            public func saving(type: typeinfo, val: native_value)=> option<string>;
+                extern("libjoyecs", "wojeapi_dynamic_parser_saving", slow)
+                public func saving(type: typeinfo, val: native_value)=> option<string>;
 
-            extern("libjoyecs", "wojeapi_dynamic_parser_restoring", slow)
-            public func restoring(type: je::typeinfo, val: je::native_value, dat: string)=> bool;
+                extern("libjoyecs", "wojeapi_dynamic_parser_restoring", slow)
+                public func restoring(type: je::typeinfo, val: je::native_value, dat: string)=> bool;
 
-            extern("libjoyecs", "wojeapi_dynamic_parser_edit", slow)
-            public func edit(type: je::typeinfo, val: je::native_value, tag: string)=> bool;
+                extern("libjoyecs", "wojeapi_dynamic_parser_edit", slow)
+                public func edit(type: je::typeinfo, val: je::native_value, tag: string)=> bool;
+            }
         }
     }
 

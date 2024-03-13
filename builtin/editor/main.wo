@@ -5,7 +5,6 @@ import pkg::crashhandler;
 if (std::platform_os == std::os::WIN32)
     crashhandler::init();
 
-
 import woo::debug;
 
 import pkg::fsys;
@@ -381,7 +380,7 @@ config.jeinf text eol=lf
 *.jeentity text eol=lf
 *.jecache4 !diff
 "@);
-                            match (je::dynamic_parser::unsafe::update_all("@/editor.wo"))
+                            match (je::towoo::unsafe::dynamic_parser::update_all("@/editor.wo"))
                             {
                             ok(_)?;
                             err(msg)?
