@@ -1406,14 +1406,10 @@ namespace editor::gui::tilemap
         };
         func generate_chunked_big_texture(self: TileEditContext, tile_reso: int, chunksize: int)
         {
-            if (chunksize <= 0)
-                return result::err("chunksize必须大于0");
+            assert (chunksize > 0);
 
-            // 将区块按照原始坐标，对齐 chunksize x chunksize 切割分块得到一组纹理
-            let ((min_x, max_x), (min_y, max_y)) = self->get_map_range;
-        
             let chunks = {}mut: map<int, map<int, map<int, image>>>;
-            let GET_CHUNK_POS = func (x: int, y, int)
+            let GET_CHUNK_POS = func (x: int, y: int)
             {
                 return (x / chunksize - (x < 0 ? 1 | 0), y / chunksize - (y < 0 ? 1 | 0));
             };
@@ -1481,15 +1477,16 @@ namespace editor::gui::tilemap
            let result = []mut: vec<ChunkDatas>;
            for (let x, ychunks: chunks)
            {
-                for (let y, lchunks: ychunks)
+                for (let y, imgs: ychunks)
                 {
-                     for (let layer, imgs: lchunks)
-                     {
-                          result->push(new! ChunkDatas(m_chunk_pos = (x, y), m_image = imgs));
-                     }
+                    result->add(ChunkDatas
+                        {
+                            m_chunk_pos = (x, y),
+                            m_image = imgs->todict,
+                        });
                 }
            }
-           return result;
+           return result->toarray();
         }
     }
 
@@ -1498,6 +1495,8 @@ namespace editor::gui::tilemap
     {
         let export_image = struct{
             m_tile_pcount = mut 16,
+            m_export_full_image = mut false,
+            m_export_chunk_image = mut false,
         };
         launch(func(){
             let mut open = true;
