@@ -329,6 +329,7 @@ namespace editor::gui::tilemap
         */
         auto_wrap: mut option<map<WrapingTileWay, graphic::texture>>,
         walkable: mut bool,
+        non_periodic_expansion: mut bool,
     }
     {
         func _create_clip_texture(
@@ -389,6 +390,7 @@ namespace editor::gui::tilemap
                 uid = uid,
                 auto_wrap = mut option::none,
                 walkable = mut false,
+                non_periodic_expansion = mut false,
             });
         }
         func get_texture(self: Tile, context: EditorContext, way: WrapingTileWay)
@@ -448,6 +450,7 @@ namespace editor::gui::tilemap
             return {
                 ["auto_wrap"] = self.auto_wrap->has as bool: dynamic,
                 ["walkable"] = self.walkable as bool: dynamic,
+                ["non_periodic_expansion"] = self.non_periodic_expansion as bool: dynamic,
             };
         }
     }
@@ -518,6 +521,8 @@ namespace editor::gui::tilemap
                                 newtile->set_auto_warping(true);
                             if (tile.walkable)
                                 newtile.walkable = true;
+                            if (tile.non_periodic_expansion)
+                                newtile.non_periodic_expansion = true;
                         }
                     none?;
                     }
@@ -574,8 +579,9 @@ namespace editor::gui::tilemap
                 {
                     let tiledata = tiles[ix * size[1] + iy];
                     let tile = tileset->gettile(ix, iy)->val;
-                    tile->set_auto_warping(tiledata["auto_wrap"] as bool);
-                    tile.walkable = tiledata["walkable"] as bool;
+                    tile->set_auto_warping(tiledata->getor("auto_wrap", false: dynamic)->valor(false));
+                    tile.walkable = tiledata->getor("walkable", false: dynamic)->valor(false);
+                    tile.non_periodic_expansion = tiledata->getor("non_periodic_expansion", false: dynamic)->valor(false);
                 }
             }
 
@@ -1001,6 +1007,16 @@ namespace editor::gui::tilemap
                             none?;
                             }
 
+                            match (CheckBox("非周期性展开", self->get_selected_tile->>\t = t.non_periodic_expansion;->valor(false)))
+                            {
+                            value(opt)?
+                                {
+                                    tset.modifed = true; // 自动铺开属性发生变化，标记为修改
+                                    do self->get_selected_tile->>\t = t.non_periodic_expansion = opt;;
+                                }
+                            none?;
+                            }
+
                             do InvisibleButton("##tileset", (rangew, rangeh));
                             let ismouse_hovered = IsItemHovered();
                             let (p0, p1) = GetItemRect();
@@ -1202,9 +1218,22 @@ namespace editor::gui::tilemap
             EndChild();
         }
 
-        func generate_big_texture(self: TileEditContext, tile_reso: int)
+        func walk_through(self: TileEditContext, callback: (int, int, int, Tile)=> void)
         {
-            // 顾名思义，不是生成一片片的实体，而是把整个地图打一个大包儿，直接拉出来变成一张贴图
+            for (let layer, tiles : self.m_layerd_tiles)
+            {
+                for (let x, ytiles :  tiles)
+                {
+                    for (let y, tile :  ytiles)
+                    {
+                        callback(layer, x, y, tile);
+                    }
+                }
+            }
+        }
+
+        func get_map_range(self: TileEditContext)
+        {
             let xys = self.m_layerd_tiles
                 ->  unmapping
                 =>> \layer_tiles = layer_tiles[1]->unmapping
@@ -1213,7 +1242,7 @@ namespace editor::gui::tilemap
                         ;
                     ;
                 ;
-            
+
             let xs = xys->>\xy = xy[0];, ys = xys->>\xy = xy[1];;
 
             let max_x = xs->reduce(\l, r = max(l, r);)->valor(0);
@@ -1221,58 +1250,113 @@ namespace editor::gui::tilemap
             let max_y = ys->reduce(\l, r = max(l, r);)->valor(0);
             let min_y = ys->reduce(\l, r = min(l, r);)->valor(0);
 
+            return ((min_x, max_x), (min_y, max_y));
+        }
+
+        func generate_big_texture(self: TileEditContext, tile_reso: int)
+        {
+            // 顾名思义，不是生成一片片的实体，而是把整个地图打一个大包儿，直接拉出来变成一张贴图
+            let ((min_x, max_x), (min_y, max_y)) = self->get_map_range;
+
             // OK, 获取到Tile的范围，创建一个Image准备开始绘制
             let width = max_x - min_x + 1;
             let height = max_y - min_y + 1;
 
             let result_image = new! image(width * tile_reso, height * tile_reso);
 
-            for (let layer, tiles : self.m_layerd_tiles)
-            {
-                for (let x, ytiles :  tiles)
+            self->walk_through(
+                func(layer, x, y, tile)
                 {
-                    for (let y, tile :  ytiles)
-                    {
-                        let tile_texture = tile->get_texture(self.m_context, self->get_tile_way(layer, x, y));
-                        let (tile_texture_w, tile_texture_h) = tile_texture->size;
+                    let tile_texture = tile->get_texture(self.m_context, self->get_tile_way(layer, x, y));
+                    let (tile_texture_w, tile_texture_h) = tile_texture->size;
 
-                        let NEAREST_SAMPLER = 
-                            \ux: real, uy: real = tile_texture->pix((px, py))->get_color
-                                where px = math::round(ux * tile_texture_w: real)
-                                    , py = math::round(uy * tile_texture_h: real)
-                            ;
+                    let NEAREST_SAMPLER = 
+                        \ux: real, uy: real = tile_texture->pix((px, py))->get_color
+                            where px = math::round(ux * tile_texture_w: real)
+                                , py = math::round(uy * tile_texture_h: real)
                         ;
+                    ;
 
-                        // 注意这里的tile坐标x y，在计算对应到结果图上的时候，y轴需要做一次翻转
-                        let tx = x - min_x;
-                        let ty = max_y - y;
-                        for (let mut ix = 0; ix < tile_reso; ix += 1)
-                            for (let mut iy = 0; iy < tile_reso; iy += 1)
-                            {
-                                let result_img_pos = (tx * tile_reso + ix, ty * tile_reso + iy);
+                    // 注意这里的tile坐标x y，在计算对应到结果图上的时候，y轴需要做一次翻转
+                    let tx = x - min_x;
+                    let ty = max_y - y;
+                    for (let mut ix = 0; ix < tile_reso; ix += 1)
+                        for (let mut iy = 0; iy < tile_reso; iy += 1)
+                        {
+                            let result_img_pos = (tx * tile_reso + ix, ty * tile_reso + iy);
 
-                                let (r, g, b, a) = 
-                                    result_image->getpix(result_img_pos);
+                            let (r, g, b, a) = 
+                                result_image->getpix(result_img_pos);
 
-                                let (dr, dg, db, da) = NEAREST_SAMPLER(
-                                    ix: real / tile_reso: real, iy: real / tile_reso: real);
+                            let (dr, dg, db, da) = NEAREST_SAMPLER(
+                                ix: real / tile_reso: real, iy: real / tile_reso: real);
 
-                                result_image->setpix(result_img_pos, (
-                                    math::lerp(r, dr, da), 
-                                    math::lerp(g, dg, da), 
-                                    math::lerp(b, db, da),
-                                    std::max(a, da)));
-                            }
-                    }
-                }
-            }
+                            result_image->setpix(result_img_pos, (
+                                math::lerp(r, dr, da), 
+                                math::lerp(g, dg, da), 
+                                math::lerp(b, db, da),
+                                math::lerp(a, da, da)));
+                        }
 
-            return result::ok(result_image);
+                });
+            return result_image;
+        }
+
+        func generate_layerd_big_texture(self: TileEditContext, tile_reso: int)
+        {
+            // 与generate_big_texture类似，不过会将地图按照分层，生成一组纹理
+            let ((min_x, max_x), (min_y, max_y)) = self->get_map_range;
+
+            // OK, 获取到Tile的范围
+            let width = max_x - min_x + 1;
+            let height = max_y - min_y + 1;
+
+            let result_images = {}mut: map<int, image>;
+            let get_target_image = func(layer: int)
+                {
+                    if (result_images->contain(layer))
+                        return result_images[layer];
+
+                    let img = new! image(width * tile_reso, height * tile_reso);
+                    result_images->set(layer, img);
+                    return img;
+                };
+            
+            self->walk_through(
+                func(layer, x, y, tile)
+                {
+                    let result_image = get_target_image(layer);
+
+                    let tile_texture = tile->get_texture(self.m_context, self->get_tile_way(layer, x, y));
+                    let (tile_texture_w, tile_texture_h) = tile_texture->size;
+
+                    let NEAREST_SAMPLER = 
+                        \ux: real, uy: real = tile_texture->pix((px, py))->get_color
+                            where px = math::round(ux * tile_texture_w: real)
+                                , py = math::round(uy * tile_texture_h: real)
+                        ;
+                    ;
+
+                    // 注意这里的tile坐标x y，在计算对应到结果图上的时候，y轴需要做一次翻转
+                    let tx = x - min_x;
+                    let ty = max_y - y;
+                    for (let mut ix = 0; ix < tile_reso; ix += 1)
+                        for (let mut iy = 0; iy < tile_reso; iy += 1)
+                        {
+                            let result_img_pos = (tx * tile_reso + ix, ty * tile_reso + iy);
+
+                            result_image->setpix(result_img_pos, NEAREST_SAMPLER(
+                                ix: real / tile_reso: real, iy: real / tile_reso: real));
+                        }
+
+                });
+
+            return result_images->unsafe::cast:<dict<int, image>>;
         }
     }
 
     // 创建纹理时的对话框，用于询问关于纹理创建时的具体信息
-    func create_image_dialog(context: TileEditContext, target_path: fsys::path_t)
+    func create_image_dialog(context: TileEditContext, target_path: fsys::path_t, name: string)
     {
         let export_image = struct{
             m_tile_pcount = mut 16,
@@ -1295,15 +1379,14 @@ namespace editor::gui::tilemap
                     if (Button("创建"))
                     {
                         open = false;
-                        match (context->generate_big_texture(export_image.m_tile_pcount))
+
+                        if (!context->generate_big_texture(export_image.m_tile_pcount)->save((target_path / F"{name}.png")->tostring))
+                            jeapi::gui::form::errmsg("错误", F"无法保存纹理到{target_path->tostring}");
+
+                        for (let layer, img: context->generate_layerd_big_texture(export_image.m_tile_pcount))
                         {
-                        ok(image)?
-                            {
-                                if (!image->save(target_path->tostring))
-                                    jeapi::gui::form::errmsg("错误", F"无法保存纹理到{target_path->tostring}");
-                            }
-                        err(msg)?
-                            jeapi::gui::form::errmsg("错误", msg);
+                            if (!img->save((target_path / F"{name}_layer{layer}.png")->tostring))
+                                jeapi::gui::form::errmsg("错误", F"无法保存纹理到{target_path->tostring}");
                         }
                     }
                     SameLine();
@@ -1344,7 +1427,7 @@ namespace editor::gui::tilemap
 
                             if (MenuItem("导出"))
                                 create_image_dialog(editctx, 
-                                    fsys::parent(tilemap_file) / F"{fsys::purename(tilemap_file)}.png");
+                                    fsys::parent(tilemap_file), fsys::purename(tilemap_file));
 
                             EndMenu();
                         }
