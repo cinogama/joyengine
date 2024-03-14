@@ -1399,6 +1399,98 @@ namespace editor::gui::tilemap
 
             return result_images->unsafe::cast:<dict<int, image>>;
         }
+
+        using ChunkDatas = struct{
+            m_chunk_pos : (int, int),
+            m_image     : dict<int, image>,
+        };
+        func generate_chunked_big_texture(self: TileEditContext, tile_reso: int, chunksize: int)
+        {
+            if (chunksize <= 0)
+                return result::err("chunksize必须大于0");
+
+            // 将区块按照原始坐标，对齐 chunksize x chunksize 切割分块得到一组纹理
+            let ((min_x, max_x), (min_y, max_y)) = self->get_map_range;
+        
+            let chunks = {}mut: map<int, map<int, map<int, image>>>;
+            let GET_CHUNK_POS = func (x: int, y, int)
+            {
+                return (x / chunksize - (x < 0 ? 1 | 0), y / chunksize - (y < 0 ? 1 | 0));
+            };
+            let GET_CHUNK_IMAGES = func(cx: int, cy: int, layer: int)
+            {
+                if (!chunks->contain(cx))
+                    chunks->set(cx, {}mut);
+                if (!chunks[cx]->contain(cy))
+                    chunks[cx]->set(cy, {}mut);
+
+                if (!chunks[cx][cy]->contain(layer))
+                    chunks[cx][cy]->set(layer, new! image(chunksize * tile_reso, chunksize * tile_reso));
+
+                return chunks[cx][cy][layer];
+            };
+
+            self->walk_through(
+                func(layer, x, y, tile)
+                {
+                    let (chunk_pos_x, chunk_pos_y) = GET_CHUNK_POS(x, y);
+                    let chunk_images = GET_CHUNK_IMAGES(chunk_pos_x, chunk_pos_y, layer);
+
+                    let tile_way = self->get_tile_way(layer, x, y);
+                    let tile_texture = tile->get_texture(self.m_context, tile_way);
+                    let (tile_texture_w, tile_texture_h) = tile_texture->size;
+
+                    let RANDOMABLE_WAYS_0 = WrapingTileWay::NOTHING;
+                    let RANDOMABLE_WAYS_1 = WrapingTileWay::UP + WrapingTileWay::DOWN + WrapingTileWay::LEFT + WrapingTileWay::RIGHT;
+                    let RANDOMABLE_WAYS_2 = RANDOMABLE_WAYS_1 + WrapingTileWay::LEFTUP + WrapingTileWay::RIGHTUP + WrapingTileWay::LEFTDOWN + WrapingTileWay::RIGHTDOWN;
+                    let RANDOM_METHOD = tile.non_periodic_expansion && (tile.auto_wrap->has == false ||
+                        tile_way == RANDOMABLE_WAYS_0 || tile_way == RANDOMABLE_WAYS_1 || tile_way == RANDOMABLE_WAYS_2)
+                        ? fake_random(layer, x, y)
+                        | 0;
+
+                    let RANDOM_ROTATION = func(x: real, y: real){
+                        static let functions = [
+                            \x: real, y: real = (x, y);,
+                            \x: real, y: real = (1.0-y, x);,
+                            \x: real, y: real = (1.0-x, 1.0 - y);,
+                            \x: real, y: real = (1.0-x, y);,
+                        ];
+                        return functions[RANDOM_METHOD](x, y);
+                    };
+                    let NEAREST_SAMPLER = 
+                        \ux: real, uy: real = tile_texture->pix((px, py))->get_color
+                            where px = math::round(nx * tile_texture_w: real)
+                                , py = math::round(ny * tile_texture_h: real)
+                                , (nx, ny) = RANDOM_ROTATION(ux, uy)
+                        ;
+                    ;
+
+                    // 注意这里的tile坐标x y，在计算对应到结果图上的时候，y轴需要做一次翻转
+                    let tx = x - chunk_pos_x * chunksize;
+                    let ty = chunksize - 1 - (y - chunk_pos_y * chunksize);
+                    for (let mut ix = 0; ix < tile_reso; ix += 1)
+                        for (let mut iy = 0; iy < tile_reso; iy += 1)
+                        {
+                            let result_img_pos = (tx * tile_reso + ix, ty * tile_reso + iy);
+
+                            chunk_images->setpix(result_img_pos, NEAREST_SAMPLER(
+                                ix: real / tile_reso: real, iy: real / tile_reso: real));
+                        }
+                });
+
+           let result = []mut: vec<ChunkDatas>;
+           for (let x, ychunks: chunks)
+           {
+                for (let y, lchunks: ychunks)
+                {
+                     for (let layer, imgs: lchunks)
+                     {
+                          result->push(new! ChunkDatas(m_chunk_pos = (x, y), m_image = imgs));
+                     }
+                }
+           }
+           return result;
+        }
     }
 
     // 创建纹理时的对话框，用于询问关于纹理创建时的具体信息
