@@ -612,6 +612,12 @@ R"(
     extern("libjoyecs", "je_gui_end_tool_tip")
     public func EndTooltip()=> void;
 
+    extern("libjoyecs", "je_gui_begin_disabled")
+    public func BeginDisabled(able: bool) => void;
+
+    extern("libjoyecs", "je_gui_end_disabled")
+    public func EndDisabled() => void;
+
     extern("libjoyecs", "je_gui_style_get_config_color")
     public func GetStyleColor(item: ImGuiCol)=> (real, real, real, real);    
 
@@ -777,6 +783,18 @@ WO_API wo_api je_gui_begin_tool_tip(wo_vm vm, wo_value args)
 WO_API wo_api je_gui_end_tool_tip(wo_vm vm, wo_value args)
 {
     ImGui::EndTooltip();
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_begin_disabled(wo_vm vm, wo_value args)
+{
+    ImGui::BeginDisabled(wo_bool(args + 0));
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_end_disabled(wo_vm vm, wo_value args)
+{
+    ImGui::EndDisabled();
     return wo_ret_void(vm);
 }
 

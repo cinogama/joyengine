@@ -87,8 +87,8 @@ namespace editor::gui::tilemap
                 {
                     if (bitand(self: int, LEFTUP: int) != 0)
                     {
-                        lux += tile_w / 2;
-                        luy -= tile_h + tile_h / 2;
+                        lux += tile_w;
+                        luy -= tile_h * 2;
                     }
                     else
                     {
@@ -97,14 +97,14 @@ namespace editor::gui::tilemap
                 }
                 else
                 {
-                    luy -= tile_h + tile_h / 2;
+                    luy -= tile_h + tile_h;
                 }
             }
             else
             {
                 if (bitand(self: int, LEFT: int) != 0)
                 {
-                    lux += tile_w / 2;
+                    lux += tile_w;
                     luy -= tile_h;
                 }
                 else
@@ -140,8 +140,8 @@ namespace editor::gui::tilemap
                 {
                     if (bitand(self: int, LEFTDOWN: int) != 0)
                     {
-                        lux += tile_w / 2;
-                        luy -= tile_h * 2;
+                        lux += tile_w;
+                        luy -= tile_h + tile_h / 2;
                     }
                     else
                     {
@@ -151,14 +151,14 @@ namespace editor::gui::tilemap
                 }
                 else
                 {
-                    luy -= tile_h * 2;
+                    luy -= tile_h + tile_h / 2;
                 }
             }
             else
             {
                 if (bitand(self: int, LEFT: int) != 0)
                 {
-                    lux += tile_w / 2;
+                    lux += tile_w;
                     luy -= tile_h * 2 + tile_h / 2;
                 }
                 else
@@ -194,8 +194,8 @@ namespace editor::gui::tilemap
                 {
                     if (bitand(self: int, RIGHTUP: int) != 0)
                     {
-                        lux += tile_w;
-                        luy -= tile_h + tile_h / 2;
+                        lux += tile_w / 2;
+                        luy -= tile_h * 2;
                     }
                     else
                     {
@@ -205,14 +205,14 @@ namespace editor::gui::tilemap
                 else
                 {
                     lux += tile_w + tile_w / 2;
-                    luy -= tile_h + tile_h / 2;
+                    luy -= tile_h + tile_h;
                 }
             }
             else
             {
                 if (bitand(self: int, RIGHT: int) != 0)
                 {
-                    lux += tile_w;
+                    lux += tile_w / 2;
                     luy -= tile_h;
                 }
                 else
@@ -249,8 +249,8 @@ namespace editor::gui::tilemap
                 {
                     if (bitand(self: int, RIGHTDOWN: int) != 0)
                     {
-                        lux += tile_w;
-                        luy -= tile_h * 2;
+                        lux += tile_w / 2;
+                        luy -= tile_h + tile_h / 2;
                     }
                     else
                     {
@@ -261,14 +261,14 @@ namespace editor::gui::tilemap
                 else
                 {
                     lux += tile_w + tile_w / 2;
-                    luy -= tile_h * 2;
+                    luy -= tile_h + tile_h / 2;
                 }
             }
             else
             {
                 if (bitand(self: int, RIGHT: int) != 0)
                 {
-                    lux += tile_w;
+                    lux += tile_w / 2;
                     luy -= tile_h * 2 + tile_h / 2;
                 }
                 else
@@ -917,7 +917,7 @@ namespace editor::gui::tilemap
         }
         func show_tile_sets(self: TileEditContext)
         {
-            if (BeginChildSize("##tilemapsets", 250., 0.))
+            if (BeginChildSize("##tilemapsets", 500., 0.))
             {
                 do InputInt("绘制层级", self.m_drawing_layer)->>\n = self.m_drawing_layer = n;;
                 do CheckBox("着重绘制当前层", self.m_focus_on_drawing_layer)->>\o = self.m_focus_on_drawing_layer = o;;
@@ -1291,15 +1291,18 @@ namespace editor::gui::tilemap
                     let RANDOM_ROTATION = func(x: real, y: real){
                         static let functions = [
                             \x: real, y: real = (x, y);,
-                            \x: real, y: real = (1.0-y, x);,
-                            \x: real, y: real = (1.0-x, 1.0 - y);,
-                            \x: real, y: real = (1.0-x, y);,
+                            \x: real, y: real = (1.0-y-1.0/tile_reso: real, x);,
+                            \x: real, y: real = (1.0-x-1.0/tile_reso: real, 1.0 - y-1.0/tile_reso: real);,
+                            \x: real, y: real = (1.0-x-1.0/tile_reso: real, y);,
                         ];
                         return functions[RANDOM_METHOD](x, y);
                     };
                     let NEAREST_SAMPLER = 
-                        \ux: real, uy: real = tile_texture->pix((px, py))->get_color
-                            where px = math::round(nx * tile_texture_w: real)
+                        \ux: real, uy: real = tile_texture->pix((ipx, ipy))->get_color
+                            where ipx = clamp(px, 0, tile_texture_w - 1)
+                                , ipy = clamp(py, 0, tile_texture_h - 1)
+                                , clamp = \v: int, min: int, max: int = v < min ? min | v > max ? max | v;
+                                , px = math::round(nx * tile_texture_w: real)
                                 , py = math::round(ny * tile_texture_h: real)
                                 , (nx, ny) = RANDOM_ROTATION(ux, uy)
                         ;
@@ -1369,15 +1372,18 @@ namespace editor::gui::tilemap
                     let RANDOM_ROTATION = func(x: real, y: real){
                         static let functions = [
                             \x: real, y: real = (x, y);,
-                            \x: real, y: real = (1.0-y, x);,
-                            \x: real, y: real = (1.0-x, 1.0 - y);,
-                            \x: real, y: real = (1.0-x, y);,
+                            \x: real, y: real = (1.0-y-1.0/tile_reso: real, x);,
+                            \x: real, y: real = (1.0-x-1.0/tile_reso: real, 1.0 - y-1.0/tile_reso: real);,
+                            \x: real, y: real = (1.0-x-1.0/tile_reso: real, y);,
                         ];
                         return functions[RANDOM_METHOD](x, y);
                     };
                     let NEAREST_SAMPLER = 
-                        \ux: real, uy: real = tile_texture->pix((px, py))->get_color
-                            where px = math::round(nx * tile_texture_w: real)
+                        \ux: real, uy: real = tile_texture->pix((ipx, ipy))->get_color
+                            where ipx = clamp(px, 0, tile_texture_w - 1)
+                                , ipy = clamp(py, 0, tile_texture_h - 1)
+                                , clamp = \v: int, min: int, max: int = v < min ? min | v > max ? max | v;
+                                , px = math::round(nx * tile_texture_w: real)
                                 , py = math::round(ny * tile_texture_h: real)
                                 , (nx, ny) = RANDOM_ROTATION(ux, uy)
                         ;
@@ -1402,35 +1408,55 @@ namespace editor::gui::tilemap
 
         using ChunkDatas = struct{
             m_chunk_pos : (int, int),
-            m_image     : dict<int, image>,
+            m_images    : dict<int, image>,
+            m_chunk_size: int,
+            m_walkable  : array<bool>,
         };
         func generate_chunked_big_texture(self: TileEditContext, tile_reso: int, chunksize: int)
         {
             assert (chunksize > 0);
 
-            let chunks = {}mut: map<int, map<int, map<int, image>>>;
+            using Chunk = struct{
+                m_images: map<int, image>,
+                m_walkable: array<mut bool>,
+            };
+
+            let chunks = {}mut: map<int, map<int, Chunk>>;
             let GET_CHUNK_POS = func (x: int, y: int)
             {
                 return (x / chunksize - (x < 0 ? 1 | 0), y / chunksize - (y < 0 ? 1 | 0));
             };
-            let GET_CHUNK_IMAGES = func(cx: int, cy: int, layer: int)
+            let GET_CHUNK = func(cx: int, cy: int)
             {
                 if (!chunks->contain(cx))
                     chunks->set(cx, {}mut);
                 if (!chunks[cx]->contain(cy))
-                    chunks[cx]->set(cy, {}mut);
+                    chunks[cx]->set(cy, 
+                        Chunk
+                        {
+                            m_walkable = new! array(chunksize * chunksize, mut true),
+                            m_images = {}mut, // new! image(chunksize * tile_reso, chunksize * tile_reso),
+                        });
+                
+                return chunks[cx][cy];
+            };
+            let GET_CHUNK_IMAGE = func(chunk: Chunk, layer: int)
+            {
+                if (!chunk.m_images->contain(layer))
+                    chunk.m_images->set(layer, new! image(chunksize * tile_reso, chunksize * tile_reso));
 
-                if (!chunks[cx][cy]->contain(layer))
-                    chunks[cx][cy]->set(layer, new! image(chunksize * tile_reso, chunksize * tile_reso));
-
-                return chunks[cx][cy][layer];
+                return chunk.m_images[layer];
             };
 
             self->walk_through(
                 func(layer, x, y, tile)
                 {
                     let (chunk_pos_x, chunk_pos_y) = GET_CHUNK_POS(x, y);
-                    let chunk_images = GET_CHUNK_IMAGES(chunk_pos_x, chunk_pos_y, layer);
+                    let chunk = GET_CHUNK(chunk_pos_x, chunk_pos_y);
+                    let chunk_image = GET_CHUNK_IMAGE(chunk, layer);
+
+                    if (tile.walkable == false)
+                        chunk.m_walkable[chunk_pos_x + chunk_pos_y * chunksize] = false;
 
                     let tile_way = self->get_tile_way(layer, x, y);
                     let tile_texture = tile->get_texture(self.m_context, tile_way);
@@ -1447,15 +1473,18 @@ namespace editor::gui::tilemap
                     let RANDOM_ROTATION = func(x: real, y: real){
                         static let functions = [
                             \x: real, y: real = (x, y);,
-                            \x: real, y: real = (1.0-y, x);,
-                            \x: real, y: real = (1.0-x, 1.0 - y);,
-                            \x: real, y: real = (1.0-x, y);,
+                            \x: real, y: real = (1.0-y-1.0/tile_reso: real, x);,
+                            \x: real, y: real = (1.0-x-1.0/tile_reso: real, 1.0 - y-1.0/tile_reso: real);,
+                            \x: real, y: real = (1.0-x-1.0/tile_reso: real, y);,
                         ];
                         return functions[RANDOM_METHOD](x, y);
                     };
                     let NEAREST_SAMPLER = 
-                        \ux: real, uy: real = tile_texture->pix((px, py))->get_color
-                            where px = math::round(nx * tile_texture_w: real)
+                        \ux: real, uy: real = tile_texture->pix((ipx, ipy))->get_color
+                            where ipx = clamp(px, 0, tile_texture_w - 1)
+                                , ipy = clamp(py, 0, tile_texture_h - 1)
+                                , clamp = \v: int, min: int, max: int = v < min ? min | v > max ? max | v;
+                                , px = math::round(nx * tile_texture_w: real)
                                 , py = math::round(ny * tile_texture_h: real)
                                 , (nx, ny) = RANDOM_ROTATION(ux, uy)
                         ;
@@ -1469,7 +1498,7 @@ namespace editor::gui::tilemap
                         {
                             let result_img_pos = (tx * tile_reso + ix, ty * tile_reso + iy);
 
-                            chunk_images->setpix(result_img_pos, NEAREST_SAMPLER(
+                            chunk_image->setpix(result_img_pos, NEAREST_SAMPLER(
                                 ix: real / tile_reso: real, iy: real / tile_reso: real));
                         }
                 });
@@ -1477,16 +1506,18 @@ namespace editor::gui::tilemap
            let result = []mut: vec<ChunkDatas>;
            for (let x, ychunks: chunks)
            {
-                for (let y, imgs: ychunks)
+                for (let y, chunk: ychunks)
                 {
                     result->add(ChunkDatas
                         {
                             m_chunk_pos = (x, y),
-                            m_image = imgs->todict,
+                            m_images = chunk.m_images->todict,
+                            m_chunk_size = chunksize,
+                            m_walkable = chunk.m_walkable->>\e = immut e;,
                         });
                 }
            }
-           return result->toarray();
+           return result->unsafe::asarray();
         }
     }
 
@@ -1496,6 +1527,7 @@ namespace editor::gui::tilemap
         let export_image = struct{
             m_tile_pcount = mut 16,
             m_export_full_image = mut false,
+            m_export_layer_image = mut false,
             m_export_chunk_image = mut false,
         };
         launch(func(){
@@ -1513,19 +1545,51 @@ namespace editor::gui::tilemap
                             ;
                         ;
 
+                    do CheckBox("导出完整纹理", export_image.m_export_full_image)
+                        ->> \newv = export_image.m_export_full_image = newv;
+                        ;
+                    do CheckBox("导出分层纹理", export_image.m_export_layer_image)
+                        ->> \newv = export_image.m_export_layer_image = newv;
+                        ;
+                    do CheckBox("导出分块纹理", export_image.m_export_chunk_image)
+                        ->> \newv = export_image.m_export_chunk_image = newv;
+                        ;
+
+                    BeginDisabled(false == (export_image.m_export_full_image ||
+                        export_image.m_export_layer_image ||
+                        export_image.m_export_chunk_image));
+
                     if (Button("创建"))
                     {
                         open = false;
 
-                        if (!context->generate_big_texture(export_image.m_tile_pcount)->save((target_path / F"{name}.png")->tostring))
-                            jeapi::gui::form::errmsg("错误", F"无法保存纹理到{target_path->tostring}");
-
-                        for (let layer, img: context->generate_layerd_big_texture(export_image.m_tile_pcount))
+                        if (export_image.m_export_full_image)
                         {
-                            if (!img->save((target_path / F"{name}_layer{layer}.png")->tostring))
+                            if (!context->generate_big_texture(export_image.m_tile_pcount)->save((target_path / F"{name}.png")->tostring))
                                 jeapi::gui::form::errmsg("错误", F"无法保存纹理到{target_path->tostring}");
                         }
+                        if (export_image.m_export_layer_image)
+                        {
+                            for (let layer, img: context->generate_layerd_big_texture(export_image.m_tile_pcount))
+                            {
+                                if (!img->save((target_path / F"{name}_layer{layer}.png")->tostring))
+                                    jeapi::gui::form::errmsg("错误", F"无法保存纹理到{target_path->tostring}");
+                            }
+                        }
+                        if (export_image.m_export_chunk_image)
+                        {
+                            for (let _, chunk: context->generate_chunked_big_texture(export_image.m_tile_pcount, 16))
+                            {
+                                for (let layer, img: chunk.m_images)
+                                {
+                                    if (!img->save((target_path / F"{name}_chunk_{layer}_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}.png")->tostring))
+                                        jeapi::gui::form::errmsg("错误", F"无法保存纹理到{target_path->tostring}");
+                                }
+                            }
+                        }
                     }
+
+                    EndDisabled();
                     SameLine();
                     
                     if (Button("取消"))

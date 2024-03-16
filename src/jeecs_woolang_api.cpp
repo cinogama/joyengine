@@ -2728,13 +2728,13 @@ namespace je
                 extern("libjoyecs", "wojeapi_dynamic_parser_clear", slow)
                 public func clear()=> void;
 
-                extern("libjoyecs", "wojeapi_dynamic_parser_saving", slow)
+                extern("libjoyecs", "wojeapi_dynamic_parser_saving")
                 public func saving(type: typeinfo, val: native_value)=> option<string>;
 
-                extern("libjoyecs", "wojeapi_dynamic_parser_restoring", slow)
+                extern("libjoyecs", "wojeapi_dynamic_parser_restoring")
                 public func restoring(type: je::typeinfo, val: je::native_value, dat: string)=> bool;
 
-                extern("libjoyecs", "wojeapi_dynamic_parser_edit", slow)
+                extern("libjoyecs", "wojeapi_dynamic_parser_edit")
                 public func edit(type: je::typeinfo, val: je::native_value, tag: string)=> bool;
             }
         }
