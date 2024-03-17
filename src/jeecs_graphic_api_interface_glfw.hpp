@@ -193,7 +193,6 @@ namespace jeecs::graphic
             auto err_code = glfwGetError(&reason);
             if (err_code != GLFW_NO_ERROR)
             {
-                auto x = (const char*)glGetString(GL_VERSION);
                 jeecs::debug::logfatal("Opengl3 glfw reports an error(%d): %s.",
                     err_code, reason);
                 je_clock_sleep_for(1.);

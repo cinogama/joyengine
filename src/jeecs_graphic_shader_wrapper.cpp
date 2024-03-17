@@ -857,17 +857,17 @@ namespace fragment_out
     }
 }
 
-using function = struct{
+using shader_function = struct{
     m_name: string,
     m_function_in: dynamic, // ArgumentTs
     m_result_out: fragment_out,
 }
 {
-    let _generate_functions = []mut: vec<function>;
+    let _generate_functions = []mut: vec<shader_function>;
     public func register<ArgumentTs, ResultT>(name: string, vin: ArgumentTs, result: ResultT)
     {
         _generate_functions->add(
-            function{
+            shader_function{
                 m_name = "je_shader_uf_" + name, 
                 m_function_in = vin: dynamic, 
                 m_result_out = fragment_out::create((result,))
@@ -1218,7 +1218,7 @@ namespace shader
         struct_or_uniform_block_decl_list: array<struct_define>,
         sampler_defines: array<sampler2d>,
         custom_methods: array<(string, (string, string))>,
-        function_declear: array<function>)=> shader_wrapper;
+        function_declear: array<shader_function>)=> shader_wrapper;
 
     private extern func generate()
     {
@@ -1243,7 +1243,7 @@ namespace shader
             struct_uniform_blocks_decls->toarray,
             sampler2d::created_sampler2ds->toarray,
             registered_custom_methods->unmapping,
-            function::_generate_functions->toarray);
+            shader_function::_generate_functions->toarray);
     }
 }
 
@@ -1925,7 +1925,7 @@ using uniform_block = struct_define
     }
     result += ");";
 
-    result += F"let {func_name}_uf_fimpl = function::register(\"{func_name}\", {func_name}_uf_args, {func_name}_uf_impl({func_name}_uf_args...));";
+    result += F"let {func_name}_uf_fimpl = shader_function::register(\"{func_name}\", {func_name}_uf_args, {func_name}_uf_impl({func_name}_uf_args...));";
 
     result += desc + F"func {func_name}(";
     for (let idx, (arg_name, arg_type): args)

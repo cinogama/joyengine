@@ -1577,15 +1577,55 @@ namespace editor::gui::tilemap
                             }
                         }
                         if (export_image.m_export_chunk_image)
-                        {
+                        {   
+                            // 需要额外保留区块数据
+                            using SavedChunkInformation = struct{
+                                m_position: (int, int),
+                                m_walkable: array<bool>,
+                                m_image_layers: array<int>,
+                            };
+                            let saved_chunks = []mut: vec<SavedChunkInformation>;
                             for (let _, chunk: context->generate_chunked_big_texture(export_image.m_tile_pcount, 16))
                             {
+                                saved_chunks->add(SavedChunkInformation
+                                    {
+                                        m_position = chunk.m_chunk_pos,
+                                        m_walkable = chunk.m_walkable,
+                                        m_image_layers = chunk.m_images->keys,
+                                    });
+
                                 for (let layer, img: chunk.m_images)
                                 {
                                     if (!img->save((target_path / F"{name}_chunk_{layer}_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}.png")->tostring))
                                         jeapi::gui::form::errmsg("错误", F"无法保存纹理到{target_path->tostring}");
                                 }
                             }
+
+                            // 保存区块信息
+                            let chunks_pos_info = {}mut: map<int, map<int, string>>;
+                            for (let _, chunk: saved_chunks)
+                            {
+                                if (!chunks_pos_info->contain(chunk.m_position.0))
+                                    chunks_pos_info->set(chunk.m_position.0, {}mut);
+
+                                chunks_pos_info[chunk.m_position.0]->set(chunk.m_position.1, F"{name}_chunk_{chunk.m_position.0}_{chunk.m_position.1}.jetilechunk");
+
+                                match (dict::serialize({
+                                        ["layers"] = chunk.m_image_layers
+                                            ->> \layerid = (layerid, F"{name}_chunk_{chunk.m_position.0}_{chunk.m_position.1}_{layerid}.png");
+                                            ->  mapping
+                                            : dynamic,
+                                        ["walkable"] = chunk.m_walkable
+                                            : dynamic,
+                                    })->> \dat = fsys::writeall(target_path / F"{name}_chunk_{chunk.m_position.0}_{chunk.m_position.1}.jetilechunk", dat);)
+                                {
+                                value(_)?;
+                                none? jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_path->tostring}");                                    
+                                }
+                            }
+
+                            if (fsys::writeall(target_path / F"{name}.jetilechunklist", chunks_pos_info->serialize->val) == false)
+                                jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_path->tostring}");
                         }
                     }
 
