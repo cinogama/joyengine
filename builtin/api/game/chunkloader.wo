@@ -16,7 +16,7 @@ namespace jeapi::loader
             __m_entity: mut option<je::entity>,
         }
         {
-            public func create(loader: chunkloader, x: int, y: instance_entity)
+            public func create(wpath: string, x: int, y: int)
             {
                 let chunk_
             }
