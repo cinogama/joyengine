@@ -1,0 +1,64 @@
+import je;
+import builtin::api::serialize::main;
+
+namespace jeapi::loader
+{
+    using chunkloader = struct{
+        __m_mx: je::rmutex,
+        __m_path: string,
+        __m_loaded_chunks: dict<int, dict<int, __chunk>>,
+
+    }
+    {
+        using __chunk = struct{
+            __m_mx: je::rmutex,
+            __m_path: string,
+            __m_entity: mut option<je::entity>,
+        }
+        {
+            public func create(loader: chunkloader, x: int, y: instance_entity)
+            {
+                let chunk_
+            }
+        }
+
+        public func create(wpath: string)
+        {
+            match (je::file::readall(wpath))
+            {
+            value(dat)?
+            {
+                let ppath = ppath->subto(0, ppath->rfind("/") + 1);
+                dict::deserialize(dat)
+                    ->> \k, v = (
+                            k: int, 
+                            v is dict<dynamic, dynamic> 
+                                ? v: dict<dynamic, dynamic>->>\k, v = (k: int, v: string); 
+                                | {})
+                        ;
+            }
+            none?
+                return result::err(F"创建区块加载器失败：无法打开 {wpath}")
+            }
+
+            return chunkloader{
+                __m_mx = je::rmutex::create(),
+                __m_path = wpath,
+                __m_loaded_chunks = {}mut,
+            };
+        }
+        public func load(self: chunkloader, x: int, y: int)
+        {
+            self.__m_mx.lock();
+            {
+                if (!self.__m_loaded_chunks.contain(x))
+                    self.__m_loaded_chunks->set(x, {}mut);
+                
+                let xchunks = self.__m_loaded_chunks[x];
+                if (!xchunks.contain(y))
+                    self.__m_loaded_chunks[x]->set(y, __chunk{__m_mx = je::rmutex::create()});
+            }
+            self.__m_mx.unlock();
+        }
+    }
+}

@@ -1412,7 +1412,7 @@ namespace editor::gui::tilemap
             m_chunk_size: int,
             m_walkable  : array<bool>,
         };
-        func generate_chunked_big_texture(self: TileEditContext, tile_reso: int, chunksize: int)
+        func generate_chunked_texture(self: TileEditContext, tile_reso: int, chunksize: int)
         {
             assert (chunksize > 0);
 
@@ -1554,6 +1554,8 @@ namespace editor::gui::tilemap
                     do CheckBox("导出分块纹理", export_image.m_export_chunk_image)
                         ->> \newv = export_image.m_export_chunk_image = newv;
                         ;
+                    if (export_image.m_export_chunk_image)
+                        TextDisabled("* 警告：将导出到对应chunks目录下，此目录中的所有文件将会被删除");
 
                     BeginDisabled(false == (export_image.m_export_full_image ||
                         export_image.m_export_layer_image ||
@@ -1578,6 +1580,19 @@ namespace editor::gui::tilemap
                         }
                         if (export_image.m_export_chunk_image)
                         {   
+                            let target_chunk_path = target_path / F"{name}_chunks";
+                            
+                            do fsys::mkdir(target_chunk_path);
+                            for (let _, p: fsys::subpath(target_chunk_path)->unwarpor([]))
+                            {
+                                match (fsys::remove(p))
+                                {
+                                ok(_)?;
+                                err(errno)?
+                                    jeapi::gui::form::errmsg("错误", F"无法删除{p->tostring}: {errno}");
+                                }
+                            }
+
                             // 需要额外保留区块数据
                             using SavedChunkInformation = struct{
                                 m_position: (int, int),
@@ -1585,7 +1600,7 @@ namespace editor::gui::tilemap
                                 m_image_layers: array<int>,
                             };
                             let saved_chunks = []mut: vec<SavedChunkInformation>;
-                            for (let _, chunk: context->generate_chunked_big_texture(export_image.m_tile_pcount, 16))
+                            for (let _, chunk: context->generate_chunked_texture(export_image.m_tile_pcount, 16))
                             {
                                 saved_chunks->add(SavedChunkInformation
                                     {
@@ -1596,8 +1611,8 @@ namespace editor::gui::tilemap
 
                                 for (let layer, img: chunk.m_images)
                                 {
-                                    if (!img->save((target_path / F"{name}_chunk_{layer}_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}.png")->tostring))
-                                        jeapi::gui::form::errmsg("错误", F"无法保存纹理到{target_path->tostring}");
+                                    if (!img->save((target_chunk_path / F"chunk_{layer}_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}.png")->tostring))
+                                        jeapi::gui::form::errmsg("错误", F"无法保存纹理到{target_chunk_path->tostring}");
                                 }
                             }
 
@@ -1608,23 +1623,23 @@ namespace editor::gui::tilemap
                                 if (!chunks_pos_info->contain(chunk.m_position.0))
                                     chunks_pos_info->set(chunk.m_position.0, {}mut);
 
-                                chunks_pos_info[chunk.m_position.0]->set(chunk.m_position.1, F"{name}_chunk_{chunk.m_position.0}_{chunk.m_position.1}.jetilechunk");
+                                chunks_pos_info[chunk.m_position.0]->set(chunk.m_position.1, F"chunk_{chunk.m_position.0}_{chunk.m_position.1}.json");
 
                                 match (dict::serialize({
                                         ["layers"] = chunk.m_image_layers
-                                            ->> \layerid = (layerid, F"{name}_chunk_{chunk.m_position.0}_{chunk.m_position.1}_{layerid}.png");
+                                            ->> \layerid = (layerid, F"chunk_{chunk.m_position.0}_{chunk.m_position.1}_{layerid}.png");
                                             ->  mapping
                                             : dynamic,
                                         ["walkable"] = chunk.m_walkable
                                             : dynamic,
-                                    })->> \dat = fsys::writeall(target_path / F"{name}_chunk_{chunk.m_position.0}_{chunk.m_position.1}.jetilechunk", dat);)
+                                    })->> \dat = fsys::writeall(target_chunk_path / F"chunk_{chunk.m_position.0}_{chunk.m_position.1}.json", dat);)
                                 {
                                 value(_)?;
-                                none? jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_path->tostring}");                                    
+                                none? jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_chunk_path->tostring}");                                    
                                 }
                             }
 
-                            if (fsys::writeall(target_path / F"{name}.jetilechunklist", chunks_pos_info->serialize->val) == false)
+                            if (fsys::writeall(target_chunk_path / F"chunklist.json", chunks_pos_info->serialize->val) == false)
                                 jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_path->tostring}");
                         }
                     }

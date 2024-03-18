@@ -1,0 +1,43 @@
+import je;
+import builtin::api::serialize::main;
+
+namespace jeapi::loader
+{
+    using worldloader = struct{
+        __m_world: je::world,
+        __m_data: dict<string, dynamic>,
+    }
+    {
+        public func create(u: je::universe, wpath: string)
+        {
+            return je::file::readall(wpath)
+                =>> \dat = dat->dict::deserialize;
+                ->> \dat = dat
+                    ->> \k, v = (k: string, v);
+                    ;
+                ->> \dat = worldloader{
+                        __m_world = je::world::create(u),
+                        __m_data = dat,
+                    }
+                    ;
+                ;
+        }
+        public func instance_entity(self: worldloader)
+        {
+            jeapi::deserialize::world_entitys(self.__m_world, self.__m_data, false);
+        }
+        public func instance_system(self: worldloader)
+        {
+            jeapi::deserialize::world_systems(self.__m_world, self.__m_data, false);
+        }
+        public func get_world(self: worldloader)
+        {
+            return self.__m_world;
+        }
+        public func finish(self: worldloader)
+        {
+            self.__m_world->set_able(true);
+            return self.__m_world;
+        }
+    }
+}

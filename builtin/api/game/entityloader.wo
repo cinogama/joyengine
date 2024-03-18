@@ -1,0 +1,35 @@
+import je;
+import builtin::api::serialize::main;
+
+namespace jeapi::loader
+{
+    using entityloader = struct{
+        __m_world: je::world,
+        __m_prefab: je::entity,
+    }
+    {
+        public func create(w: je::world, wpath: string)
+        {
+            return je::file::readall(wpath)
+                =>> \dat = dat->dict::deserialize;
+                =>> \dat = jeapi::deserialize::prefab(w, dat
+                    ->> \k, v = (k: string, v);,
+                    false)
+                    ;
+                ->> \e = entityloader
+                    {
+                        __m_world,
+                        __m_prefab = e
+                    };
+                ;
+        }
+        public func instance(self: entityloader)
+        {
+            return self.__m_world->instance(self.__m_prefab);
+        }
+        public func close(self: entityloader)
+        {
+            self.__m_prefab->close();
+        }
+    }
+}
