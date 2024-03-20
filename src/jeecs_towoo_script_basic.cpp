@@ -484,7 +484,7 @@ import je::towoo::types;
             if (tnamespace)
                 woolang_component_type_decl += "namespace " + tnamespace.value() + "{\n";
 
-            woolang_component_type_decl += "using " + tname + " = struct{\n    __addr: handle,\n";
+            woolang_component_type_decl += "using " + tname + " = struct{\n    public __addr: handle,\n";
 
             if (typeinfo->m_member_types != nullptr)
             {
@@ -496,7 +496,7 @@ import je::towoo::types;
                     {
                         // 对于有脚本对接类型的组件成员，在这里挂上！
                         woolang_component_type_decl +=
-                            std::string("    ") + registed_member->m_member_name + ": je::towoo::member<"
+                            std::string("    public ") + registed_member->m_member_name + ": je::towoo::member<"
                             + parser->m_woolang_typename
                             + ", "
                             + parser->m_woolang_typename + "::type"

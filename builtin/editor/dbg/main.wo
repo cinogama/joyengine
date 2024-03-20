@@ -38,9 +38,9 @@ namespace jeapi::debug
     }
 
     public using EntityChilds = struct{
-        e: je::entity, 
-        uid: Eeid,
-        childs: array<EntityChilds>
+        public e: je::entity, 
+        public uid: Eeid,
+        public childs: array<EntityChilds>
     };
 
     public func get_entity_editor_id(entity: je::entity)=> Eeid

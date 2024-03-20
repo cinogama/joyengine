@@ -104,5 +104,10 @@ namespace jeapi::gui
         {
             self->set_apply_attribute(WindowsAttribute::ImGuiWindowFlags_NoCollapse, !collapse);
         }
+
+        public func is_closed(self: form)
+        {
+            return !self.show;
+        }
     }
 }

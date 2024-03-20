@@ -46,6 +46,14 @@ namespace editor
         m_towoo_context: ToWooContext,
     }
     {
+        public func get_name(self: Project)
+        {
+            return self.m_name;
+        }
+        public func get_path(self: Project)
+        {
+            return self.m_path;
+        }
         public func make_path_normalize(self: Project, path: fsys::path_t)
         {
             let npath = path->tostring;
@@ -437,7 +445,7 @@ namespace editor
 
         public func get_all_towoo_scripts_name_and_path(self: Project)
         {
-            return self.m_towoo_context.m_loaded_towoo
+            return self.m_towoo_context->get_loaded_towoo
                 ->  unmapping
                 ->> \v = (
                         ToWooContext::pure_component_or_system_name(fsys::purename(v[0])),

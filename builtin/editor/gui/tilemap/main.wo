@@ -372,7 +372,7 @@ namespace editor::gui::tilemap
             ix: int, iy: int, 
             xcount: int, ycount: int)
         {
-            let tilemap_path = context->get_project.m_path / ".temporary" / "tilemap" / "texture";
+            let tilemap_path = context->get_project->get_path / ".temporary" / "tilemap" / "texture";
             do fsys::mkdir(tilemap_path);
 
             let imgpath = tilemap_path / F"{crc64}-{ix}d{xcount}-{iy}d{ycount}.png";
@@ -629,7 +629,7 @@ namespace editor::gui::tilemap
         // 保存TileEditContext的所有m_tile_sets序列化结果到项目的"resource/tilemap"目录下
         func save_tile_sets(self: TileEditContext)
         {
-            let tilemap_path = self.m_context->get_project.m_path / "resource" / "tilemap";
+            let tilemap_path = self.m_context->get_project->get_path / "resource" / "tilemap";
             do fsys::mkdir(tilemap_path);
 
             for (let _, tileset: self.m_tile_sets)
@@ -652,7 +652,7 @@ namespace editor::gui::tilemap
         // 遍历项目的"resource/tilemap"目录下的所有文件，加载并创建TileMapSet实例，获得一个TileMapSet实例数组
         func load_tile_sets(self: TileEditContext)
         {
-            let tilemap_path = self.m_context->get_project.m_path / "resource" / "tilemap";
+            let tilemap_path = self.m_context->get_project->get_path / "resource" / "tilemap";
             do fsys::mkdir(tilemap_path);
 
             for (let _, file: fsys::allsubpath(tilemap_path)->unwarpor([]))
@@ -966,7 +966,7 @@ namespace editor::gui::tilemap
                                                 }
                                             }
                                             do self.m_tile_sets->remove(index);
-                                            do fsys::remove(self.m_context->get_project.m_path / "resource" / "tilemap" / F"{tset.uid}.jetileset4");
+                                            do fsys::remove(self.m_context->get_project->get_path / "resource" / "tilemap" / F"{tset.uid}.jetileset4");
                                         }
                                     });
                             }

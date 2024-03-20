@@ -41,11 +41,11 @@ namespace editor
     };
 
     public using CxxProject = struct {
-        name: string, // 模块的名称
-        path: fsys::path_t, // 模块所在路径，仅此而已
+        public name: string, // 模块的名称
+        public path: fsys::path_t, // 模块所在路径，仅此而已
+        public project: Project,
         configs: dict<string, CxxProjectBuildConfig>, // 可用的生成配置
         module_instance: mut option<handle>,
-        project: Project,
     }
     {
         // Cmake所在路径，项目会使用此路径指示的cmake

@@ -347,17 +347,17 @@ func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: di
                             assert(p->save_project());
 
                             // 在此处创建资源目录，包含一些基本的资源和未来自动创建的资源
-                            do fsys::mkdir(p.m_path/"resource");
-                            do fsys::mkdir(p.m_path/"resource"/"texture");
-                            do fsys::writeall(p.m_path/"resource"/"texture"/"readme.md", 
+                            do fsys::mkdir(p->get_path/"resource");
+                            do fsys::mkdir(p->get_path/"resource"/"texture");
+                            do fsys::writeall(p->get_path/"resource"/"texture"/"readme.md", 
 @"# Texture 目录
 ---
 此目录用于保存引擎自动生成的图像资源
 "@);
-                            do fsys::copy(fsys::normalize(F"{std::exepath()}/builtin/shader"), fsys::normalize(F"{p.m_path}/resource/shader"));
-                            do fsys::copy(fsys::normalize(F"{std::exepath()}/builtin/font"), fsys::normalize(F"{p.m_path}/resource/font"));
-                            do fsys::copy(fsys::normalize(F"{std::exepath()}/builtin/script/editor.wo"), fsys::normalize(F"{p.m_path}"));
-                            do fsys::writeall(p.m_path / ".gitignore", 
+                            do fsys::copy(fsys::normalize(F"{std::exepath()}/builtin/shader"), fsys::normalize(F"{p->get_path}/resource/shader"));
+                            do fsys::copy(fsys::normalize(F"{std::exepath()}/builtin/font"), fsys::normalize(F"{p->get_path}/resource/font"));
+                            do fsys::copy(fsys::normalize(F"{std::exepath()}/builtin/script/editor.wo"), fsys::normalize(F"{p->get_path}"));
+                            do fsys::writeall(p->get_path / ".gitignore", 
 @"# JoyEngine ECS git ignore config.
 
 /.export/*
@@ -371,7 +371,7 @@ func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: di
 *.jecache4
 
 "@);
-                            do fsys::writeall(p.m_path / ".gitattributes", 
+                            do fsys::writeall(p->get_path / ".gitattributes", 
 @"# JoyEngine ECS
 
 project.jeproj4 text eol=lf
@@ -392,7 +392,7 @@ config.jeinf text eol=lf
 
                             je::gui::register_exit_callback(\=ask_for_saving_proj_when_exit(p););
                             editor::gui::edit_project(p);
-                            save_editor_data_after_exit(editordat, p.m_name, p.m_path);
+                            save_editor_data_after_exit(editordat, p->get_name, p->get_path);
                             je::gui::unregister_exit_callback();
 
                             return result::ok(do nil);
@@ -430,7 +430,7 @@ func open_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict
 
                     je::gui::register_exit_callback(\=ask_for_saving_proj_when_exit(p););
                     editor::gui::edit_project(p);
-                    save_editor_data_after_exit(editordat, p.m_name, p.m_path);
+                    save_editor_data_after_exit(editordat, p->get_name, p->get_path);
                     je::gui::unregister_exit_callback();
 
                     return result::ok(do nil);

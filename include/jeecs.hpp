@@ -8586,9 +8586,9 @@ namespace jeecs
 R"(namespace Light2D::Range
 {
     public using light_shape = struct{
-        m_point_count: int,
-        m_strength: array<float>,
-        m_positions: array<vec2>,
+        public m_point_count: int,
+        public m_strength: array<float>,
+        public m_positions: array<vec2>,
     };
 })";
                 }
@@ -9111,9 +9111,9 @@ R"(namespace Light2D::Range
                         R"(namespace Animation2D::FrameAnimation
 {
     public using animation_state = struct{
-        m_path: string,
-        m_animation: string,
-        m_loop: bool,
+        public m_path: string,
+        public m_animation: string,
+        public m_loop: bool,
     };
     public using animation_list = array<animation_state>;
 })";

@@ -48,7 +48,7 @@ namespace editor::tools
     {
         let new_path_results = {}mut: map<string, fsys::path_t>;
 
-        match (fsys::allsubpath(project.m_path)
+        match (fsys::allsubpath(project->get_path)
             =>> \p = fsys::allsubpath(fsys::normalize(std::exepath()))
                 ->> \ep = p->connect(ep);
                 ;)

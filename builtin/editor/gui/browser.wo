@@ -14,7 +14,7 @@ namespace editor::gui
 
     func create_font_image(proj: Project, default_name: string, location: string)
     {
-        let fonts = fsys::allsubpath(proj.m_path/"resource"/"font")
+        let fonts = fsys::allsubpath(proj->get_path/"resource"/"font")
             -> or(\_=[];)
             -> forall(\path = fsys::isfile(path) && fsys::extension(path)->lower == ".ttf";)
             ->> \path = proj->make_path_normalize(path);
@@ -1387,7 +1387,7 @@ namespace $$MODULE_NAME$$
     func path_tree(context: EditorContext)
     {
         let root_path = 
-            context->get_project.m_path;
+            context->get_project->get_path;
 
         if (current_work_path == "")
             current_work_path = root_path->tostring();

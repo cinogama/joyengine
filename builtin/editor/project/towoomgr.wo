@@ -23,6 +23,10 @@ namespace editor
         m_removing_system: map<string, void>,
     }
     {
+        public func get_loaded_towoo(self: ToWooContext)
+        {
+            return self.m_loaded_towoo;
+        }
         public func pure_component_or_system_name(name: string)
         {
             let idx = name->find(".");

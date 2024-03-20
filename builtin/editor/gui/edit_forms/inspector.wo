@@ -382,7 +382,7 @@ namespace editor::gui::edit_forms
                                         if (BeginPopupContextItem())
                                         {
                                             static let mut shaders_in_project = 
-                                                fsys::allsubpath(context->get_project.m_path)
+                                                fsys::allsubpath(context->get_project->get_path)
                                                     ->> \paths = paths->forall(\p = fsys::extension(p)->lower == ".shader";);
                                                     ->  or(\_ = [];)
                                                 ;
@@ -390,7 +390,7 @@ namespace editor::gui::edit_forms
                                             if (MenuItem("重新获取Shader"))
                                             {
                                                 shaders_in_project = 
-                                                    fsys::allsubpath(context->get_project.m_path)
+                                                    fsys::allsubpath(context->get_project->get_path)
                                                         ->> \paths = paths->forall(\p = fsys::extension(p)->lower == ".shader";);
                                                         ->  or(\_ = [];)
                                                     ;

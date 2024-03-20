@@ -117,7 +117,7 @@ namespace editor::gui::edit_forms
     {
         config.m_pack_output_log->add("开始打包……");
 
-        let normalized_path = proj.m_path;
+        let normalized_path = proj->get_path;
  
         // 1. 删掉 .export 目录下的内容
         config.m_pack_output_log->add("正在删除 .export 目录");
@@ -225,14 +225,14 @@ namespace editor::gui::edit_forms
 
                             // 1.4 将引擎本体移动至打包目录
                             config.m_pack_output_log->add(F"正在复制引擎运行时");
-                            do fsys::copy(fsys::normalize(std::args()[0]), export_path/F"{proj.m_name}.exe")->unwarp;
+                            do fsys::copy(fsys::normalize(std::args()[0]), export_path/F"{proj->get_name}.exe")->unwarp;
 
                             if (fsys::isfile(fsys::workpath() / "icon.ico"))
                             {
                                 do new! process(F"{std::exepath()}/builtin/rcedit-x64.exe", 
                                     [
                                         F"{std::exepath()}/builtin/rcedit-x64.exe",
-                                        (export_path / F"{proj.m_name}.exe")->tostring, 
+                                        (export_path / F"{proj->get_name}.exe")->tostring, 
                                         "--set-icon", 
                                         (fsys::workpath() / "icon.ico")->tostring,
                                     ])
@@ -396,7 +396,7 @@ namespace editor::gui::edit_forms
                                 ->replace("$IMPORT_RUNTIME_SCRIPT_MAY_NOT_EXIST$", load_entry_script)
                                 ->replace("$LOAD_TYPE_LOADER$", "match (je::towoo::unsafe::dynamic_parser::update_all(\"@/editor.wo\")){ok(_)?;err(msg)?je::logerr(msg);}")
                                 ->replace("$APPLY_RESOLUTION$", F"je::editor::set_window_size({config.m_resolution[0]}, {config.m_resolution[1]});")
-                                ->replace("$APPLY_TITLE$", F"je::editor::set_window_title({proj.m_name->enstring});");
+                                ->replace("$APPLY_TITLE$", F"je::editor::set_window_title({proj->get_name->enstring});");
 
                             let (start_up_script_binary, start_up_script_binary_sz) = 
                                 new! vm("@/builtin/main.wo", final_boot_script)->unwarp->save_binary(saving_woolang_pdi);
@@ -427,7 +427,7 @@ namespace editor::gui::edit_forms
     }
     public func show_export_project(context: EditorContext)
     {
-        let all_project_files = fsys::allsubpath(context->get_project.m_path)->unwarp;
+        let all_project_files = fsys::allsubpath(context->get_project->get_path)->unwarp;
         let selecting_all_worlds_file = all_project_files
             ->  forall(\p = fsys::extension(p)->lower == ".jeworld";)
             ->> \p = (context->get_project->make_path_normalize(p), mut false);

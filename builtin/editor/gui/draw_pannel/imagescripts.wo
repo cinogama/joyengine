@@ -76,7 +76,7 @@ extern func name()
 
         for (let _, path : fsys::allsubpath(fsys::normalize(std::exepath()))
                 -> or(\_=[];)
-                -> connect(fsys::allsubpath(proj.m_path)
+                -> connect(fsys::allsubpath(proj->get_path)
                     -> or(\_=[];))
             )
         {
