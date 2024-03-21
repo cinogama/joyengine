@@ -16,6 +16,8 @@ import builtin::editor::tools::script_manager;
 import builtin::editor::gui::draw_pannel::main;
 import builtin::editor::project::towoomgr;
 
+import je::towoo;
+
 namespace editor
 {
     let DEFAULT_EDITOR_SYSTEM_NAME = "Editor::DefaultEditorSystem";
@@ -602,7 +604,6 @@ namespace editor
             self.m_env->close;          
             self->unlock_this_project();
 
-            gui::drawpannel::close_all_scripts();
             je::towoo::unsafe::dynamic_parser::clear();
         }
         public func free_modules_after_close(self: Project)

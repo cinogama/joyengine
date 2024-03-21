@@ -1,5 +1,8 @@
 // 这里用于管理图像效果处理脚本
 import pkg::vm;
+import pkg::fsys;
+import pkg::worst;
+import pkg::try;
 
 namespace editor::gui::drawpannel
 {
@@ -8,8 +11,6 @@ namespace editor::gui::drawpannel
 // (C)Cinogama project.
 
 import je;
-
-public let mut NAME = "";
 
 public func tex(t: je::graphic::texture, x: int, y: int)
 {
@@ -42,14 +43,9 @@ extern func main(target_texture: je::graphic::texture)
         target_texture->pix((x, y))->set_color(result_pixels[i]);
     }
 }
-
-extern func name()
-{
-    return NAME;
-}
 "@, false);
 
-    let mut image_effect_scripts = {}: dict<string, vm>;
+    let mut image_effect_scripts = {}: dict<string, fsys::path_t>;
 
     public func get_all_scripts_name()
     {
@@ -57,22 +53,30 @@ extern func name()
     }
     public func apply_script(name: string, t: je::graphic::texture)
     {
-        return image_effect_scripts->get(name)
-            =>> \v = v->invoke("main", [t: dynamic]);
-            ->  has;
-    }
-    public func close_all_scripts()
-    {
-        for (let _, vminstance : image_effect_scripts)
+        match (image_effect_scripts->get(name))
         {
-            do vminstance->close();
+        value(p)?
+        {
+            try! vmm =  vm::load(p->tostring);
+            do vmm->jit;
+
+            if (!vmm->run->has)
+                return result::err(F"脚本 {name} 执行失败");
+
+            if (!vmm->invoke("main", [t: dynamic])->has)
+                return result::err(F"脚本 {name} 执行失败");
+
+            do vmm->close();
+
+            return result::ok(do nil);
+        }
+        none?
+            return result::err(F"未找到名为 {name} 的图像处理脚本");
         }
     }
     public func update_and_get_scripts(proj: Project)
     {
-        close_all_scripts();
-
-        let r = {}mut: map<string, vm>;
+        let r = {}mut: map<string, fsys::path_t>;
 
         for (let _, path : fsys::allsubpath(fsys::normalize(std::exepath()))
                 -> or(\_=[];)
@@ -80,23 +84,25 @@ extern func name()
                     -> or(\_=[];))
             )
         {
-            if (fsys::extension(path)->lower != ".imagewo")
+            if (!path->tostring->lower->endwith(".image.wo"))
                 continue;
 
-            match (vm::load(path->tostring))
-            {
-            ok(vmm)?
-                {
-                    do vmm->jit;
-                    assert(vmm->run->has);
-                    let name = vmm->invoke("name", [])->val as string;
-                    r->set(name == ""? fsys::purename(path) | name, vmm);
-                }
-            err(msg)?
-                je::logerr(F"加载脚本 {path} 失败：{msg}");
-            }
+            r->set(fsys::purename(path), path);
+
+            // match (vm::load(path->tostring))
+            // {
+            // ok(vmm)?
+            //     {
+            //         do vmm->jit;
+            //         assert(vmm->run->has);
+            //         let name = vmm->invoke("name", [])->val as string;
+            //         r->set(name == ""? fsys::purename(path) | name, vmm);
+            //     }
+            // err(msg)?
+            //     je::logerr(F"加载脚本 {path} 失败：{msg}");
+            // }
         }
 
-        image_effect_scripts = r->unsafe::cast:< dict<string, vm> >;
+        image_effect_scripts = r->unsafe::asdict;
     }
 }

@@ -1,8 +1,6 @@
 import je::editor::graphic;
 import pkg::math;
 
-NAME = "法线反转（x方向）";
-
 public func entry(_: je::graphic::texture)
 {
     return true;

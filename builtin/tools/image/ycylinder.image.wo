@@ -1,8 +1,6 @@
 import je::editor::graphic;
 import pkg::math;
 
-NAME = "（纵向）圆柱高度图";
-
 let mut texture_width = 0;
 let mut texture_height = 0;
 

@@ -1,8 +1,6 @@
 import je::editor::graphic;
 import pkg::math;
 
-NAME = "法线锐化";
-
 public func entry(_: je::graphic::texture)
 {
     return true;
@@ -21,8 +19,13 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
 
     let nx = (onx - 0.5) * 2.;
     let ny = (ony - 0.5) * 2.;
-    let mut nz = onz - 0.5;
+    let mut nz = (onz - 0.5) * 2.;
     
+    if (nz >= 0.)
+        nz += 1.;
+    else
+        nz -= 1.;
+
     let len = math::sqrt(nx * nx + ny * ny + nz * nz);
     if (len != 0.)
     {

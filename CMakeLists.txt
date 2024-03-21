@@ -81,7 +81,7 @@ else()
 endif()
 
 if (JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD)
-    add_custom_target(INSTALL_PKG COMMAND baozi install WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+    add_custom_target(INSTALL_PKG COMMAND baozi install --nonative WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 else()
     add_custom_target(INSTALL_PKG COMMAND echo "JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD is disabled.")
 endif()

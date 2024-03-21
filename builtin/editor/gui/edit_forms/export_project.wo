@@ -66,6 +66,8 @@ namespace editor::gui::edit_forms
             {
                 if (fsys::filename(originpath)->lower->endwith(".je.wo"))
                     return Action::SKIP;  // 跳过工具脚本
+                if (fsys::filename(originpath)->lower->endwith(".image.wo"))
+                    return Action::SKIP;  // 跳过图像处理脚本
 
                 return Action::ACTION(func(pconfig, fimg){
                     pconfig.m_pack_output_log->add(F"正在编译脚本：{packpath}");

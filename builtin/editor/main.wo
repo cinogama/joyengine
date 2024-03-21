@@ -23,7 +23,6 @@ import builtin::editor::gui::form::input;
 import builtin::editor::environment::main;
 import builtin::editor::project::main;
 import builtin::editor::gui::main;
-import builtin::editor::components;
 
 jeapi::welcome::display_copyright_msg();
 
@@ -645,5 +644,3 @@ for (;;)
         }
     }
 }
-
-editor::components::unregister();
