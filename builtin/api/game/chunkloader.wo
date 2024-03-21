@@ -1,64 +1,151 @@
 import je;
+import pkg::worst;
 import builtin::api::serialize::main;
+
+using je;
 
 namespace jeapi::loader
 {
     using chunkloader = struct{
-        __m_mx: je::rmutex,
-        __m_path: string,
-        __m_loaded_chunks: dict<int, dict<int, __chunk>>,
-
+        m_mx: je::rmutex,
+        m_loaded_chunks: dict<int, dict<int, chunk>>,
     }
     {
-        using __chunk = struct{
-            __m_mx: je::rmutex,
-            __m_path: string,
-            __m_entity: mut option<je::entity>,
+        using chunk = struct{
+            m_path: string,
+            m_chunk_pos: (int, int),
+
+            m_world: je::world,
+
+            // 此处的实体列表仅用于区块卸载时销毁实体
+            m_entities: mut option<array<je::entity>>,
         }
         {
-            public func create(wpath: string, x: int, y: int)
+            public func create(w: je::world, x: int, y: int, path: string)
             {
-                let chunk_
+                return chunk{
+                    m_path = path,
+                    m_chunk_pos = (x, y),
+
+                    m_world = w,
+                    m_entities = mut option::none,
+                };
+            }
+            public func unload(self: chunk)
+            {
+                match (self.m_entities)
+                {
+                value(es)?
+                    for (let _, e : es)
+                        e->close();
+                none?;
+                }
+                self.m_entities = option::none;
+            }
+            public func load(self: chunk, reload: bool, callback: (je::world, int, int, int, graphic::texture)=> je::entity)
+            {
+                if (reload)
+                    self->unload();
+                
+                if (self.m_entities->has)
+                    return;
+
+                match (file::readall(self.m_path)
+                    =>> \dat = dat->dict::deserialize;
+                    ->> \m = m->> \k, v = (k->valor(""), v);;)
+                {
+                value(dat)?
+                {
+                    let layers = dat->get("layers")
+                        -> valor({}: dynamic)
+                        -> valor({}: dict<dynamic, dynamic>)
+                        =>> \k, v = k is int ? {[k->valor(0)] = v->valor("")} | {};
+                        ;
+                    
+                    let entity_lists = []mut: vec<je::entity>;
+
+                    for (let layer, path : layers)
+                    {
+                        let path = graphic::texture::load(
+                            option::value(self.m_world->get_universe), path);
+
+                        match (path)
+                        {
+                        value(tex)?
+                            entity_lists->add(callback(
+                                self.m_world, self.m_chunk_pos.0, self.m_chunk_pos.1, layer, tex));
+                        none?
+                            je::logerr(F"无法加载区块纹理: {path} 请检查!");
+                        }
+                    }
+                    self.m_entities = option::value(entity_lists->unsafe::asarray);
+                }
+                none?;
+                }
             }
         }
 
-        public func create(wpath: string)
+        public func create(w: je::world, path: string)
         {
-            match (je::file::readall(wpath))
+            let parent_path = path->subto(0, path->rfind("/") + 1);
+            match (file::readall(path)=>>\dat = dat->dict::deserialize;)
             {
             value(dat)?
             {
-                let ppath = ppath->subto(0, ppath->rfind("/") + 1);
-                dict::deserialize(dat)
-                    ->> \k, v = (
-                            k: int, 
-                            v is dict<dynamic, dynamic> 
-                                ? v: dict<dynamic, dynamic>->>\k, v = (k: int, v: string); 
-                                | {})
-                        ;
+                let chunk_list = {}mut: map<int, dict<int, chunk>>;
+                for (let x, v : dat)
+                {
+                    if (x is int == false || v is dict<dynamic, dynamic> == false)
+                        // 损坏的区块文件
+                        return result::err(F"损坏的区块文件: {path}");
+                    
+                    let chunk_line = {}mut: map<int, chunk>;
+                    for (let y, cpath : v as dict<dynamic, dynamic>)
+                    {
+                        if (y is int == false || cpath is string == false)
+                            // 损坏的区块文件
+                            return result::err(F"损坏的区块文件: {path}");
+                        
+                        chunk_line->set(
+                            y as int,
+                            chunk::create(
+                                w, x as int, y as int, parent_path + cpath as string));                    
+                    }
+                    chunk_list->set(x as int, chunk_line->unsafe::asdict);
+                }
+                return result::ok(chunkloader{
+                        m_mx = je::rmutex::create(),
+                        m_loaded_chunks = chunk_list->unsafe::asdict,
+                    });
             }
             none?
-                return result::err(F"创建区块加载器失败：无法打开 {wpath}")
+                return result::err(F"无法打开区块文件: {path}");
             }
-
-            return chunkloader{
-                __m_mx = je::rmutex::create(),
-                __m_path = wpath,
-                __m_loaded_chunks = {}mut,
-            };
         }
-        public func load(self: chunkloader, x: int, y: int)
+        func lock_do<T>(self: chunkloader, job: ()=> T)
         {
-            self.__m_mx.lock();
+            self.m_mx->lock();
+            let ret = job();
+            self.m_mx->unlock();
+            return ret;
+        }
+        public func load(self: chunkloader, reaload: bool, x: int, y: int, callback: (je::world, int, int, int, graphic::texture)=> je::entity)
+        {
+            self->lock_do(func()
             {
-                if (!self.__m_loaded_chunks.contain(x))
-                    self.__m_loaded_chunks->set(x, {}mut);
-                
-                let xchunks = self.__m_loaded_chunks[x];
-                if (!xchunks.contain(y))
-                    self.__m_loaded_chunks[x]->set(y, __chunk{__m_mx = je::rmutex::create()});
-            }
-            self.__m_mx.unlock();
+                match (self.m_loaded_chunks->get(x)=>>\cs = cs->get(y);)
+                {
+                value(c)?
+                    c->load(reaload, callback);
+                none?;
+                }
+            });
+        }
+        public func close(self: chunkloader)
+        {
+            for (let _, cs : self.m_loaded_chunks)
+                for (let _, c : cs)
+                    c->unload;
         }
     }
 }

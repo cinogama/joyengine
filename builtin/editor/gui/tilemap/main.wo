@@ -1528,7 +1528,7 @@ namespace editor::gui::tilemap
             m_tile_pcount = mut 16,
             m_export_full_image = mut false,
             m_export_layer_image = mut false,
-            m_export_chunk_image = mut false,
+            m_export_chunk_image = mut option::none: option<int>,
         };
         launch(func(){
             let mut open = true;
@@ -1551,15 +1551,28 @@ namespace editor::gui::tilemap
                     do CheckBox("导出分层纹理", export_image.m_export_layer_image)
                         ->> \newv = export_image.m_export_layer_image = newv;
                         ;
-                    do CheckBox("导出分块纹理", export_image.m_export_chunk_image)
-                        ->> \newv = export_image.m_export_chunk_image = newv;
+                    do CheckBox("导出分块纹理", export_image.m_export_chunk_image->has)
+                        ->> \newv = export_image.m_export_chunk_image = 
+                                newv ? option::value(16) | option::none
+                            ;
                         ;
-                    if (export_image.m_export_chunk_image)
+                    match (export_image.m_export_chunk_image)
+                    {
+                    value(val)?
+                    {
+                        do InputInt("区块大小", val)
+                            ->> \val = export_image.m_export_chunk_image = option::value(v)
+                                where v = val <= 0 ? 1 | val
+                                ;
+                            ;
                         TextDisabled("* 警告：将导出到对应chunks目录下，此目录中的所有文件将会被删除");
+                    }
+                    none?;
+                    }
 
                     BeginDisabled(false == (export_image.m_export_full_image ||
                         export_image.m_export_layer_image ||
-                        export_image.m_export_chunk_image));
+                        export_image.m_export_chunk_image->has));
 
                     if (Button("创建"))
                     {
@@ -1578,8 +1591,10 @@ namespace editor::gui::tilemap
                                     jeapi::gui::form::errmsg("错误", F"无法保存纹理到{target_path->tostring}");
                             }
                         }
-                        if (export_image.m_export_chunk_image)
+                        match (export_image.m_export_chunk_image)
                         {   
+                        value(chunksz)?
+                        {
                             let target_chunk_path = target_path / F"{name}_chunks";
                             
                             do fsys::mkdir(target_chunk_path);
@@ -1600,7 +1615,7 @@ namespace editor::gui::tilemap
                                 m_image_layers: array<int>,
                             };
                             let saved_chunks = []mut: vec<SavedChunkInformation>;
-                            for (let _, chunk: context->generate_chunked_texture(export_image.m_tile_pcount, 16))
+                            for (let _, chunk: context->generate_chunked_texture(export_image.m_tile_pcount, chunksz))
                             {
                                 saved_chunks->add(SavedChunkInformation
                                     {
@@ -1641,6 +1656,8 @@ namespace editor::gui::tilemap
 
                             if (fsys::writeall(target_chunk_path / F"chunklist.json", chunks_pos_info->serialize->val) == false)
                                 jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_path->tostring}");
+                        }
+                        none?;
                         }
                     }
 
