@@ -380,6 +380,9 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
             none? 
                 return self.module_instance := option::none;
             }
+
+            // 动态库更新完毕，立即重新加载编辑器脚本/ToWoo以更新类型信息
+            self.project->update_towoo(true);
         }
         func get_current_runtime_id(runtime_dll_path: fsys::path_t)
         {
@@ -657,11 +660,10 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
                         err(reason)?
                             return err(reason);
                         ok(reloaded_created_module)?
-                            {
-                                created_module = reloaded_created_module;
-                                created_module->update_library_of_platform(config);
-                            }
-                            
+                        {
+                            created_module = reloaded_created_module;
+                            created_module->update_library_of_platform(config);
+                        }
                         }
                     }
                     else

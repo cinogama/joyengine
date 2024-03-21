@@ -3,8 +3,6 @@
 
 import je::gui;
 
-import je::towoo;
-
 import pkg::math;
 import builtin::editor::gui::form::input;
 import builtin::editor::gui::form::ask;
