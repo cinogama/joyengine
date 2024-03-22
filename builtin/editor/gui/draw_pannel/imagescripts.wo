@@ -51,7 +51,7 @@ extern func main(target_texture: je::graphic::texture)
     {
         return image_effect_scripts->unmapping->>\name_vm = name_vm[0];;
     }
-    public func apply_script(name: string, t: je::graphic::texture)
+    public func apply_script(name: string, ts: array<je::graphic::texture>)
     {
         match (image_effect_scripts->get(name))
         {
@@ -63,9 +63,12 @@ extern func main(target_texture: je::graphic::texture)
             if (!vmm->run->has)
                 return result::err(F"脚本 {name} 执行失败");
 
-            if (!vmm->invoke("main", [t: dynamic])->has)
-                return result::err(F"脚本 {name} 执行失败");
-
+            for (let _, t : ts)
+            {
+                if (!vmm->invoke("main", [t: dynamic])->has)
+                    return result::err(F"脚本 {name} 执行失败");
+            }
+            
             do vmm->close();
 
             return result::ok(do nil);

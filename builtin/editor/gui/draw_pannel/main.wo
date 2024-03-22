@@ -324,7 +324,7 @@ namespace editor::gui::drawpannel
                                         {
                                             if (MenuItem(name))
                                             {
-                                                match (apply_script(name, texture))
+                                                match (apply_script(name, [texture]))
                                                 {
                                                 err(msg)?
                                                     jeapi::gui::form::errmsg("失败", F"图像处理过程报告了一个错误: {msg}");
