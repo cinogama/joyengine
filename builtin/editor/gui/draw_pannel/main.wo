@@ -345,8 +345,6 @@ namespace editor::gui::drawpannel
 @"// 图像处理脚本
 import je::editor::graphic;
 
-NAME = "自定义图像脚本";
-
 public func entry(_: je::graphic::texture)
 {
     return true;
