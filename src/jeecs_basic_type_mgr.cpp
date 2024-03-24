@@ -129,6 +129,8 @@ namespace jeecs_impl
             jeecs::typing::type_info* _classtype,
             const jeecs::typing::type_info* _membertype,
             const char* _member_name,
+            const char* _woovalue_type_may_null,
+            wo_value    _woovalue_init_may_null,
             ptrdiff_t _member_offset) noexcept
         {
             if (_classtype->m_member_types == nullptr)
@@ -152,8 +154,18 @@ namespace jeecs_impl
             meminfo->m_class_type = _classtype;
             meminfo->m_member_type = _membertype;
             meminfo->m_member_name = jeecs::basic::make_new_string(_member_name);
+            meminfo->m_woovalue_type_may_null = nullptr;
+            meminfo->m_woovalue_init_may_null = nullptr;
             meminfo->m_member_offset = _member_offset;
             meminfo->m_next_member = nullptr;
+
+            if (_woovalue_type_may_null != nullptr 
+                && _woovalue_init_may_null != nullptr)
+            {
+                meminfo->m_woovalue_type_may_null = jeecs::basic::make_new_string(_woovalue_type_may_null);
+                meminfo->m_woovalue_init_may_null = wo_create_pin_value();
+                wo_pin_value_set(meminfo->m_woovalue_init_may_null, _woovalue_init_may_null);
+            }
 
             auto** m_new_member_ptr = &class_member_info->m_members;
             while (*m_new_member_ptr)
@@ -267,6 +279,12 @@ namespace jeecs_impl
                     meminfo = meminfo->m_next_member;
 
                     je_mem_free((void*)current_member->m_member_name);
+
+                    if (current_member->m_member_name != nullptr)
+                        je_mem_free((void*)current_member->m_woovalue_type_may_null);
+
+                    if (current_member->m_woovalue_init_may_null != nullptr)
+                        wo_close_pin_value(current_member->m_woovalue_init_may_null);
 
                     delete current_member;
                 }
@@ -396,7 +414,9 @@ void je_typing_unregister(const jeecs::typing::type_info* tinfo)
 void je_register_member(
     const jeecs::typing::type_info* _classtype,
     const jeecs::typing::type_info* _membertype,
-    const char* _member_name,
+    const char*                     _member_name,
+    const char*                     _woovalue_type_may_null,
+    wo_value                        _woovalue_init_may_null,
     ptrdiff_t                       _member_offset)
 {
     jeecs_impl::global_factory_holder::holder()
@@ -404,6 +424,8 @@ void je_register_member(
             const_cast<jeecs::typing::type_info*>(_classtype),
             _membertype,
             _member_name,
+            _woovalue_type_may_null,
+            _woovalue_init_may_null,
             _member_offset);
 }
 

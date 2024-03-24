@@ -46,6 +46,8 @@ namespace editor
         m_debug_context: mut option<DebugContext>,
         m_proj_file_lock: mut option<process::flock>,
         m_towoo_context: ToWooContext,
+
+        m_world_has_been_dumped: mut bool,
     }
     {
         public func get_name(self: Project)
@@ -205,14 +207,21 @@ namespace editor
         }
         public func dump_and_close_all_world(self: Project)
         {
+            if (self.m_world_has_been_dumped)
+                return result::err("当前世界的上下文状态已经被转储，不应当重复进行此操作");
+
+            self.m_world_has_been_dumped = true;
+
             try! dats = self->dump_all_world();
             do self->close_all_world();
             return result::ok(dats);
         }
         public func restore_all_world(self: Project, dats: array<(dict<string, dynamic>, fsys::path_t)>)
         {
-            je::towoo::unsafe::dynamic_parser::update_type();
+            // 正在恢复所有世界，为了确保不弄串，此处要确保阻止 dump_and_close_all_world
+            self.m_world_has_been_dumped = true;
 
+            je::towoo::unsafe::dynamic_parser::update_type();
             do dats->>\dat = self->deserialize_world(dat...);;
 
             match (je::towoo::unsafe::dynamic_parser::update_all("@/editor.wo"))
@@ -225,6 +234,9 @@ namespace editor
                     je::logerr(errmsg);
                 }
             }
+            
+            // 等待一帧，直到所有实体被确切地创建完毕
+            je::gui::launch(func(){self.m_world_has_been_dumped = false; return false;}, ());
         }
         func _create_default_configs(env: Environment)
         {
@@ -386,6 +398,8 @@ namespace editor
                 m_editing_world = mut option::none,
                 m_proj_file_lock = mut option::none,
                 m_towoo_context = new! ToWooContext(path),
+
+                m_world_has_been_dumped = mut false,
             };
 
             if (proj->try_lock_this_project() == false)
@@ -601,10 +615,14 @@ namespace editor
         public func close(self: Project)
         {  
             // 关闭env, 稍后释放模块
-            self.m_env->close;          
+            self.m_env->close;
             self->unlock_this_project();
 
             je::towoo::unsafe::dynamic_parser::clear();
+        }
+        public func get_towoo_context_for_exit(self: Project)
+        {
+            return self.m_towoo_context;
         }
         public func free_modules_after_close(self: Project)
         {

@@ -126,7 +126,7 @@ namespace jeecs
                 assert(component != nullptr);
 
                 _wo_value tmp;  // 此处不能 wo_push_empty(vm); 或者需要pop，否则栈不平
-                                // 另外此处不需要 wo_push_empty 因为我们不会往里面放GC对象
+                // 另外此处不需要 wo_push_empty 因为我们不会往里面放GC对象
 
                 if (ctype->m_member_types != nullptr)
                 {
@@ -277,6 +277,16 @@ namespace jeecs
                     {
                         auto* this_member = (void*)((intptr_t)this + member->m_member_offset);
                         member->m_member_type->construct(this_member, arg);
+
+                        if (member->m_woovalue_init_may_null != nullptr)
+                        {
+                            auto* val = std::launder(reinterpret_cast<script::woovalue*>(this_member));
+                            
+                            _wo_value tmp;
+                            wo_pin_value_get(&tmp, member->m_woovalue_init_may_null);
+                            wo_pin_value_set_dup(val->m_pin_value, &tmp);
+                        }
+
                         member = member->m_next_member;
                     }
                 }
@@ -495,9 +505,14 @@ import je::towoo::types;
                     if (parser != nullptr)
                     {
                         // 对于有脚本对接类型的组件成员，在这里挂上！
+                        const char* real_type_name =
+                            registed_member->m_woovalue_type_may_null == nullptr
+                            ? parser->m_woolang_typename
+                            : registed_member->m_woovalue_type_may_null;
+
                         woolang_component_type_decl +=
                             std::string("    public ") + registed_member->m_member_name + ": je::towoo::member<"
-                            + parser->m_woolang_typename
+                            + real_type_name
                             + ", "
                             + parser->m_woolang_typename + "::type"
                             + ">,\n";
@@ -751,7 +766,7 @@ WO_API wo_api wojeapi_towoo_register_system_job(wo_vm vm, wo_value args)
 }
 WO_API wo_api wojeapi_towoo_update_component_data(wo_vm vm, wo_value args)
 {
-    // wojeapi_towoo_register_component(name, [(name, typeinfo)])
+    // wojeapi_towoo_register_component(name, [(name, typeinfo, option<typename>)])
     std::string component_name = wo_string(args + 0);
 
     auto* ty = je_typing_get_info_by_name(component_name.c_str());
@@ -769,15 +784,22 @@ WO_API wo_api wojeapi_towoo_update_component_data(wo_vm vm, wo_value args)
     size_t component_size = sizeof(jeecs::towoo::ToWooBaseComponent);
     size_t component_allign = alignof(jeecs::towoo::ToWooBaseComponent);
 
+    struct _wooval_type
+    {
+        std::string m_wooval_type;
+        wo_value    m_wooval_val;
+    };
     struct _member_info
     {
         std::string m_name;
+        std::optional<_wooval_type> m_wooval_type;
         const jeecs::typing::type_info* m_type;
         size_t m_offset;
     };
     std::vector<_member_info> member_defs;
     wo_value member_def = wo_push_empty(vm);
     wo_value member_info = wo_push_empty(vm);
+    wo_value wooval_init = wo_push_empty(vm);
     for (wo_integer_t i = 0; i < member_count; ++i)
     {
         wo_arr_get(member_def, members, i);
@@ -788,8 +810,23 @@ WO_API wo_api wojeapi_towoo_update_component_data(wo_vm vm, wo_value args)
         auto* member_typeinfo = (const jeecs::typing::type_info*)
             wo_pointer(member_info);
 
+        std::optional<_wooval_type> member_wooval_type = std::nullopt;
+        wo_struct_get(member_info, member_def, 2);
+        if (wo_option_get(member_info, member_info))
+        {
+            wo_struct_get(wooval_init, member_info, 1);
+            wo_struct_get(member_info, member_info, 0);
+            member_wooval_type = std::make_optional(
+                _wooval_type
+                {
+                    wo_string(member_info),
+                    wooval_init
+                });
+        }
+
         component_size = jeecs::basic::allign_size(component_size, member_typeinfo->m_align);
-        member_defs.push_back(_member_info{ member_name, member_typeinfo, component_size });
+        member_defs.push_back(_member_info{
+            member_name, member_wooval_type, member_typeinfo, component_size });
 
         component_size += member_typeinfo->m_chunk_size;
         component_allign = std::max(component_allign, member_typeinfo->m_chunk_size);
@@ -808,10 +845,15 @@ WO_API wo_api wojeapi_towoo_update_component_data(wo_vm vm, wo_value args)
 
     for (auto& memberinfo : member_defs)
     {
+        _wooval_type* wooval = memberinfo.m_wooval_type.has_value()
+            ? &memberinfo.m_wooval_type.value()
+            : nullptr;
         je_register_member(
             towoo_component_tinfo,
             memberinfo.m_type,
             memberinfo.m_name.c_str(),
+            wooval != nullptr ? wooval->m_wooval_type.c_str() : "",
+            wooval != nullptr ? wooval->m_wooval_val : nullptr,
             memberinfo.m_offset);
     }
 
@@ -826,12 +868,13 @@ import je::towoo::types;
 namespace je::towoo::component
 {
     extern("libjoyecs", "wojeapi_towoo_update_component_data")
-    public func update_component_declare(name: string, members: array<(string, typeinfo)>)=> typeinfo;
+    func update_component_declare(
+        name: string, members: vec<(string, typeinfo, option<(string, dynamic)>)>)=> typeinfo;
 
-    let registered_member_infoms = {}mut: map<string, typeinfo>;
-    public func register_member<TInfo>(name: string)
+    let registered_member_infoms = []mut: vec<(string, typeinfo, option<(string, dynamic)>)>;
+    public func register_member<TInfo>(name: string, typename_and_init_val: option<(string, dynamic)>)
     {
-       registered_member_infoms->set(name, TInfo::typeinfo);
+       registered_member_infoms->add((name, TInfo::typeinfo, typename_and_init_val));
     }
 }
 
@@ -839,9 +882,7 @@ extern func _init_towoo_component(name: string)
 {
     return je::towoo::component::update_component_declare(
         name,
-        je::towoo::component::registered_member_infoms
-            ->unmapping,
-    );
+        je::towoo::component::registered_member_infoms);
 }
 
 #macro component
@@ -859,7 +900,7 @@ extern func _init_towoo_component(name: string)
         return "";
     }
 
-    let decls = []mut: vec<(string, string)>;
+    let decls = []mut: vec<(string, string, option<string>)>;
     for (;;)
     {
         let name = lexer->next;
@@ -876,19 +917,66 @@ extern func _init_towoo_component(name: string)
             return "";
         }
         let mut type = "";
+        let mut is_woolang_val = false;
+
+        if (lexer->peek == "woolang")
+        {
+            do lexer->next;
+            is_woolang_val = true;
+        }
+
+        let mut depth = 0;        
+
         for (;;)
         {
             let ty = lexer->peek;
-            if (ty == "," || ty == "}" || ty == "")
+
+            if (ty == "<" || ty == "(" || ty == "[" || ty == "{")
+                depth += 1;
+            else if (ty == ">" || ty == "\x29" || ty == "]" || ty == "}")
+                depth -= 1;
+
+            if (depth <= 0 && (ty == "," || ty == "}" || ty == "=" || ty == ""))
                 break;
             type += lexer->next;
         }
-        decls->add((name, type));
+
+        let mut woolang_val_init = "";
+        if (is_woolang_val)
+        {
+            if (lexer->next != "=")
+            {
+                lexer->error("Unexpected token, here should be '='.");
+                return "";
+            }
+            
+            for (;;)
+            {
+                let ty = lexer->peek;
+
+                if (ty == "<" || ty == "(" || ty == "[" || ty == "{")
+                    depth += 1;
+                else if (ty == ">" || ty == "\x29" || ty == "]" || ty == "}")
+                    depth -= 1;
+
+                if (depth <= 0 && (ty == "," || ty == "}" || ty == "=" || ty == ""))
+                    break;
+                woolang_val_init += lexer->next;
+            }
+        }
+
+        decls->add((name, type, is_woolang_val ? option::value(woolang_val_init) | option::none));
     }
     let mut result = ";";
-    for (let _, (name, type) : decls)
+    for (let _, (name, type, wooval) : decls)
     {
-        result += F"je::towoo::component::register_member:<{type}::type>({name->enstring});";
+        match (wooval)
+        {
+        value(val_init_expr)?
+            result += F"je::towoo::component::register_member:<dynamic::type>({name->enstring}, option::value(({type->enstring}, {val_init_expr} as {type}: dynamic)));";
+        none?
+            result += F"je::towoo::component::register_member:<{type}::type>({name->enstring}, option::none);";
+        }
     }
     return result;
 }

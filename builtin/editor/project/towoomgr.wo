@@ -213,6 +213,16 @@ namespace editor
             };
             return self;
         }
+        public func close(self: ToWooContext)
+        {
+            for (let p, (_, tinfo) : self.m_loaded_towoo)
+            {
+                if (filename(p)->lower->endwith(".jecomponent.wo"))
+                    towoo::unregister_component(tinfo);
+                else if (filename(p)->lower->endwith(".jesystem.wo"))
+                    towoo::unregister_system(tinfo);
+            }
+        }
         public func get_bad_scripts(self: ToWooContext)
         {
             return self.m_bad_towoo_script->toarray;

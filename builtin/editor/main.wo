@@ -28,7 +28,7 @@ jeapi::welcome::display_copyright_msg();
 
 using je::gui;
 
-let mut action_after_guide_form_closed = \ = result::ok(do nil); as ()=>result<void, string>;
+let mut action_after_guide_form_closed = \ = result::ok(\=do nil;); as ()=>result<()=>void, string>;
 
 using Path = struct {
     name: string,       // 仅用于显示
@@ -394,7 +394,7 @@ config.jeinf text eol=lf
                             save_editor_data_after_exit(editordat, p->get_name, p->get_path);
                             je::gui::unregister_exit_callback();
 
-                            return result::ok(do nil);
+                            return result::ok(\=p->get_towoo_context_for_exit->close;);
                         }
                     ;
                 }
@@ -432,7 +432,7 @@ func open_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict
                     save_editor_data_after_exit(editordat, p->get_name, p->get_path);
                     je::gui::unregister_exit_callback();
 
-                    return result::ok(do nil);
+                    return result::ok(\=p->get_towoo_context_for_exit->close;);
                 }
             ;
         }
@@ -450,7 +450,7 @@ for (;;)
     let load_project_icon = je::graphic::texture::load(option::none, F"!/builtin/icon/Load.png")->val;
     let exit_editor_icon = je::graphic::texture::load(option::none, F"!/builtin/icon/Exit.png")->val;
     
-    action_after_guide_form_closed = \ = result::ok(do nil);;
+    action_after_guide_form_closed = \ = result::ok(\=do nil;);;
 
     let u = new! editor::Environment();
     {
@@ -636,7 +636,11 @@ for (;;)
 
     match (action_after_guide_form_closed())
     {
-    ok(_)? break;
+    ok(act)?
+    {
+        act();;
+        break;
+    }
     err(msg)? 
         {
             je::logerr(F"无法打开指定项目：{msg}");

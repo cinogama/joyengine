@@ -97,6 +97,8 @@ WO_API wo_api wojeapi_entity_set_prefab_path(wo_vm vm, wo_value args)
 
 void jeecs_entry_register_core_systems(jeecs::typing::type_unregister_guard* guard)
 {
+    jeecs::typing::type_info::register_type<jeecs::script::woovalue>(guard, nullptr);
+
     jeecs::typing::type_info::register_type<jeecs::Editor::Name>(guard, "Editor::Name");
     jeecs::typing::type_info::register_type<jeecs::Editor::Prefab>(guard, "Editor::Prefab");
     jeecs::typing::type_info::register_type<jeecs::Editor::EditorWalker>(guard, "Editor::EditorWalker");

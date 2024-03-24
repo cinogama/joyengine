@@ -2125,7 +2125,8 @@ wo_pin_value _jewo_create_singleton(wo_vm vm, const char* token, wo_value func)
         wo_value ret = wo_invoke_value(vm, func, 0);
         if (ret != nullptr)
         {
-            wo_pin_value pinval = wo_create_pin_value(ret);
+            wo_pin_value pinval = wo_create_pin_value();
+            wo_pin_value_set(pinval, ret);
             _jewo_singleton_list[token] = pinval;
             return pinval;
         }
@@ -2148,7 +2149,7 @@ WO_API wo_api wojeapi_create_singleton(wo_vm vm, wo_value args)
     if (pinvalue != nullptr)
     {
         wo_value val = wo_push_empty(vm);
-        wo_read_pin_value(val, pinvalue);
+        wo_pin_value_get(val, pinvalue);
 
         return wo_ret_val(vm, val);
     }

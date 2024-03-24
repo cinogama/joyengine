@@ -773,7 +773,9 @@ je_register_member [基本接口]
 JE_API void je_register_member(
     const jeecs::typing::type_info* _classtype,
     const jeecs::typing::type_info* _membertype,
-    const char* _member_name,
+    const char*                     _member_name,
+    const char*                     _woovalue_type_may_null,
+    wo_value                        _woovalue_init_may_null,
     ptrdiff_t                       _member_offset);
 
 /*
@@ -4570,11 +4572,15 @@ namespace jeecs
         {
             struct member_info
             {
-                const type_info* m_class_type;
+                const type_info*    m_class_type;
 
-                const char* m_member_name;
-                const type_info* m_member_type;
-                ptrdiff_t m_member_offset;
+                const char*         m_member_name;
+                
+                const char*         m_woovalue_type_may_null;
+                wo_pin_value        m_woovalue_init_may_null;
+
+                const type_info*    m_member_type;
+                ptrdiff_t           m_member_offset;
 
                 member_info* m_next_member;
             };
@@ -4864,10 +4870,11 @@ namespace jeecs
             assert(membt->m_type_class == je_typing_class::JE_BASIC_TYPE);
 
             je_register_member(
-                guard->get_local_type_info(
-                    type_info::id<ClassT>()),
+                guard->get_local_type_info(type_info::id<ClassT>()),
                 membt,
                 membname,
+                nullptr,
+                nullptr,
                 member_offset);
         }
 
