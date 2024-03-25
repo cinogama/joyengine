@@ -18,9 +18,14 @@ namespace jeapi::loader
             m_world: je::world,
 
             // 此处的实体列表仅用于区块卸载时销毁实体
-            m_entities: mut option<array<je::entity>>,
+            m_cache: mut option<walkable_and_entities>,
         }
         {
+            using walkable_and_entities = struct{
+                m_entities: array<je::entity>,
+                m_walkable: array<bool>,
+            };
+
             public func create(w: je::world, x: int, y: int, path: string)
             {
                 return chunk{
@@ -28,26 +33,28 @@ namespace jeapi::loader
                     m_chunk_pos = (x, y),
 
                     m_world = w,
-                    m_entities = mut option::none,
+                    m_cache = mut option::none,
                 };
             }
             public func unload(self: chunk)
             {
-                match (self.m_entities)
+                match (self.m_cache)
                 {
                 value(es)?
-                    for (let _, e : es)
+                {
+                    for (let _, e : es.m_entities)
                         e->close();
+                }
                 none?;
                 }
-                self.m_entities = option::none;
+                self.m_cache = option::none;
             }
-            public func load(self: chunk, reload: bool, callback: (je::world, int, int, int, graphic::texture)=> je::entity)
+            public func load(self: chunk, reload: bool, callback: (je::world, int, int, int, graphic::texture)=> option<je::entity>)
             {
                 if (reload)
                     self->unload();
                 
-                if (self.m_entities->has)
+                if (self.m_cache->has)
                     return;
 
                 match (file::readall(self.m_path)
@@ -56,10 +63,14 @@ namespace jeapi::loader
                 {
                 value(dat)?
                 {
-                    let layers = dat->get("layers")
-                        -> valor({}: dynamic)
+                    let layers = dat->getor("layers", {}: dynamic)
                         -> valor({}: dict<dynamic, dynamic>)
                         =>> \k, v = k is int ? {[k->valor(0)] = v->valor("")} | {};
+                        ;
+                    
+                    let walkable = dat->getor("walkable", []: dynamic)
+                        -> valor([]: array<dynamic>)
+                        ->> \v = v->valor(false);
                         ;
                     
                     let entity_lists = []mut: vec<je::entity>;
@@ -72,16 +83,24 @@ namespace jeapi::loader
                         match (path)
                         {
                         value(tex)?
-                            entity_lists->add(callback(
-                                self.m_world, self.m_chunk_pos.0, self.m_chunk_pos.1, layer, tex));
+                            do callback(self.m_world, self.m_chunk_pos.0, self.m_chunk_pos.1, layer, tex)
+                                ->> \e = entity_lists->add(e);
+                                ;
                         none?
                             je::logerr(F"无法加载区块纹理: {path} 请检查!");
                         }
                     }
-                    self.m_entities = option::value(entity_lists->unsafe::asarray);
+                    self.m_cache = option::value(walkable_and_entities{
+                        m_entities = entity_lists->unsafe::asarray,
+                        m_walkable = walkable,
+                        });
                 }
                 none?;
                 }
+            }
+            public func get_walkable(self: chunk)
+            {
+                return self.m_cache=>> \c = c.m_walkable;;
             }
         }
 
@@ -129,7 +148,7 @@ namespace jeapi::loader
             self.m_mx->unlock();
             return ret;
         }
-        public func load(self: chunkloader, reaload: bool, x: int, y: int, callback: (je::world, int, int, int, graphic::texture)=> je::entity)
+        public func load(self: chunkloader, reaload: bool, x: int, y: int, callback: (je::world, int, int, int, graphic::texture)=> option<je::entity>)
         {
             self->lock_do(func()
             {
@@ -146,6 +165,13 @@ namespace jeapi::loader
             for (let _, cs : self.m_loaded_chunks)
                 for (let _, c : cs)
                     c->unload;
+        }
+        public func get_chunk(self: chunkloader, x: int, y: int)
+        {
+            return self->lock_do(func()
+            {
+                return self.m_loaded_chunks->get(x)->get(y);
+            });
         }
     }
 }
