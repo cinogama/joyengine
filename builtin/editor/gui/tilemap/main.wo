@@ -705,11 +705,6 @@ namespace editor::gui::tilemap
             return {
                 ["tilesets"] = self.m_tile_sets->>\t = t.uid;->toarray as array<string>: dynamic,
                 ["tiles"] = tilelists as vec<array<int>>: dynamic,
-                ["unwalkable"] = unwalkable_mapping->unmapping
-                    =>> \x_ys = ys->unmapping
-                        ->> \y_void = [x, y]
-                            where (y, _) = y_void;
-                        where (x, ys) = x_ys; as array<array<int>>: dynamic,
             };
         }
 
@@ -718,7 +713,6 @@ namespace editor::gui::tilemap
         {
             let tileset_id_mapping = mapdata->getor("tilesets", []: dynamic) as array<dynamic>->>\e = e as string;;
             let tiles = mapdata->getor("tiles", []: dynamic) as array<dynamic>->>\e = e as array<dynamic>->>\e = e as int;;;
-            let unwalkable = mapdata->getor("unwalkable", []: dynamic) as array<dynamic>->>\e = e as array<dynamic>->>\e = e as int;;;
 
             let existed_tileset_uid = self.m_tile_sets->>\tileset = (tileset.uid, tileset);->mapping;
             let tileset_mapping = {}mut: map<int, TileMapSet>;
@@ -745,17 +739,6 @@ namespace editor::gui::tilemap
                     }
                 none?
                     ; // 已经报过错了，这里就简单忽略
-                }
-            }
-
-            for (let _, tile : unwalkable)
-            {
-                let (x, y) = (tile[0], tile[1]);
-                match (self.m_layerd_tiles->getorset(0, {}mut)->getorset(x, {}mut)->get(y))
-                {
-                value(tile)?
-                    tile.walkable = false;
-                none?;
                 }
             }
         }
@@ -816,9 +799,7 @@ namespace editor::gui::tilemap
                             match (create_context.m_texture)
                             {
                             value(tex)?
-                                {
                                     ImageScale(tex, std::min(200. / tex->size[0]: real, 300. / tex->size[1]: real));
-                                } 
                             none? Text("暂无预览");
                             }
                             
@@ -995,7 +976,7 @@ namespace editor::gui::tilemap
                                 }
                             none?;
                             }
-                            
+                                                        
                             match (CheckBox("可行走", self->get_selected_tile->>\t = t.walkable;->valor(false)))
                             {
                             value(opt)?
@@ -1408,17 +1389,20 @@ namespace editor::gui::tilemap
 
         using ChunkDatas = struct{
             m_chunk_pos : (int, int),
-            m_images    : dict<int, image>,
+            m_layers    : dict<int, (image, array<bool>)>,
             m_chunk_size: int,
-            m_walkable  : array<bool>,
         };
         func generate_chunked_texture(self: TileEditContext, tile_reso: int, chunksize: int)
         {
             assert (chunksize > 0);
 
-            using Chunk = struct{
-                m_images: map<int, image>,
+            alias Layer = struct{
+                m_image: image,
                 m_walkable: array<mut bool>,
+            };
+
+            using Chunk = struct{
+                m_layers: map<int, Layer>,
             };
 
             let chunks = {}mut: map<int, map<int, Chunk>>;
@@ -1434,18 +1418,20 @@ namespace editor::gui::tilemap
                     chunks[cx]->set(cy, 
                         Chunk
                         {
-                            m_walkable = new! array(chunksize * chunksize, mut false),
-                            m_images = {}mut, // new! image(chunksize * tile_reso, chunksize * tile_reso),
+                            m_layers = {}mut,
                         });
                 
                 return chunks[cx][cy];
             };
-            let GET_CHUNK_IMAGE = func(chunk: Chunk, layer: int)
+            let GET_CHUNK_LAYER = func(chunk: Chunk, layer: int)
             {
-                if (!chunk.m_images->contain(layer))
-                    chunk.m_images->set(layer, new! image(chunksize * tile_reso, chunksize * tile_reso));
+                if (!chunk.m_layers->contain(layer))
+                    chunk.m_layers->set(layer, Layer{
+                        m_image = new! image(chunksize * tile_reso, chunksize * tile_reso),
+                        m_walkable = array::create(chunksize * chunksize, mut false),
+                    });
 
-                return chunk.m_images[layer];
+                return chunk.m_layers[layer];
             };
 
             self->walk_through(
@@ -1453,9 +1439,7 @@ namespace editor::gui::tilemap
                 {
                     let (chunk_pos_x, chunk_pos_y) = GET_CHUNK_POS(x, y);
                     let chunk = GET_CHUNK(chunk_pos_x, chunk_pos_y);
-                    let chunk_image = GET_CHUNK_IMAGE(chunk, layer);
-
-                    chunk.m_walkable[chunk_pos_x + chunk_pos_y * chunksize] = tile.walkable;
+                    let chunk_layer = GET_CHUNK_LAYER(chunk, layer);
 
                     let tile_way = self->get_tile_way(layer, x, y);
                     let tile_texture = tile->get_texture(self.m_context, tile_way);
@@ -1492,12 +1476,15 @@ namespace editor::gui::tilemap
                     // 注意这里的tile坐标x y，在计算对应到结果图上的时候，y轴需要做一次翻转
                     let tx = x - chunk_pos_x * chunksize;
                     let ty = chunksize - 1 - (y - chunk_pos_y * chunksize);
+
+                    chunk_layer.m_walkable[tx + ty * chunksize] = tile.walkable;
+
                     for (let mut ix = 0; ix < tile_reso; ix += 1)
                         for (let mut iy = 0; iy < tile_reso; iy += 1)
                         {
                             let result_img_pos = (tx * tile_reso + ix, ty * tile_reso + iy);
 
-                            chunk_image->setpix(result_img_pos, NEAREST_SAMPLER(
+                            chunk_layer.m_image->setpix(result_img_pos, NEAREST_SAMPLER(
                                 ix: real / tile_reso: real, iy: real / tile_reso: real));
                         }
                 });
@@ -1510,9 +1497,8 @@ namespace editor::gui::tilemap
                     result->add(ChunkDatas
                         {
                             m_chunk_pos = (x, y),
-                            m_images = chunk.m_images->todict,
+                            m_layers = chunk.m_layers->todict->>\k, v = (k, (v.m_image, v.m_walkable->>\e = immut e;));,
                             m_chunk_size = chunksize,
-                            m_walkable = chunk.m_walkable->>\e = immut e;,
                         });
                 }
            }
@@ -1610,7 +1596,6 @@ namespace editor::gui::tilemap
                             // 需要额外保留区块数据
                             using SavedChunkInformation = struct{
                                 m_position: (int, int),
-                                m_walkable: array<bool>,
                                 m_image_layers: array<int>,
                             };
                             let saved_chunks = []mut: vec<SavedChunkInformation>;
@@ -1619,14 +1604,26 @@ namespace editor::gui::tilemap
                                 saved_chunks->add(SavedChunkInformation
                                     {
                                         m_position = chunk.m_chunk_pos,
-                                        m_walkable = chunk.m_walkable,
-                                        m_image_layers = chunk.m_images->keys,
+                                        m_image_layers = chunk.m_layers->keys,
                                     });
 
-                                for (let layer, img: chunk.m_images)
+                                for (let layer, (img, walkable): chunk.m_layers)
                                 {
                                     if (!img->save((target_chunk_path / F"chunk_{layer}_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}.png")->tostring))
                                         jeapi::gui::form::errmsg("错误", F"无法保存纹理到{target_chunk_path->tostring}");
+                                    
+                                    let chunk_info = {
+                                        ["walkable"] = walkable: dynamic,
+                                        ["texture"] = F"chunk_{layer}_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}.png": dynamic,
+                                        ["size"] = chunksz: dynamic,
+                                    };
+                                    if (!chunk_info->serialize
+                                            ->> \dat = fsys::writeall(target_chunk_path / F"chunk_{layer}_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}.json", dat);
+                                            -> valor(false))
+                                    {
+                                        jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_chunk_path->tostring}");
+                                    }
+
                                 }
                             }
 
@@ -1641,12 +1638,10 @@ namespace editor::gui::tilemap
 
                                 match (dict::serialize({
                                         ["layers"] = chunk.m_image_layers
-                                            ->> \layerid = (layerid, F"chunk_{chunk.m_position.0}_{chunk.m_position.1}_{layerid}.png");
+                                            ->> \layerid = (layerid, F"chunk_{chunk.m_position.0}_{chunk.m_position.1}_{layerid}.json");
                                             ->  mapping
-                                            : dynamic,
-                                        ["walkable"] = chunk.m_walkable
-                                            : dynamic,
-                                    })->> \dat = fsys::writeall(target_chunk_path / F"chunk_{chunk.m_position.0}_{chunk.m_position.1}.json", dat);)
+                                        })
+                                        ->> \dat = fsys::writeall(target_chunk_path / F"chunk_{chunk.m_position.0}_{chunk.m_position.1}.json", dat);)
                                 {
                                 value(_)?;
                                 none? jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_chunk_path->tostring}");                                    

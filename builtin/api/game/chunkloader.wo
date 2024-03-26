@@ -8,99 +8,115 @@ namespace jeapi::loader
 {
     using chunkloader = struct{
         m_mx: je::rmutex,
+
         m_loaded_chunks: dict<int, dict<int, chunk>>,
+        m_world: je::world,
     }
     {
+        func _get_located_path(path: string)
+        {
+            return path->subto(0, path->rfind("/") + 1);
+        }
+
         using chunk = struct{
-            m_path: string,
-            m_chunk_pos: (int, int),
-
-            m_world: je::world,
-
-            // 此处的实体列表仅用于区块卸载时销毁实体
-            m_cache: mut option<walkable_and_entities>,
+            m_cached_layers: dict<int, layer>,
         }
         {
-            using walkable_and_entities = struct{
-                m_entities: array<je::entity>,
+            union load_state
+            {
+                wait(string),
+                loaded(je::entity),
+                failed,
+            }
+
+            using layer = struct{
+                m_size: int,
+                m_state: mut load_state,
                 m_walkable: array<bool>,
-            };
-
-            public func create(w: je::world, x: int, y: int, path: string)
-            {
-                return chunk{
-                    m_path = path,
-                    m_chunk_pos = (x, y),
-
-                    m_world = w,
-                    m_cache = mut option::none,
-                };
             }
-            public func unload(self: chunk)
             {
-                match (self.m_cache)
+                public func create(chunk_layer_path: string)
                 {
-                value(es)?
-                {
-                    for (let _, e : es.m_entities)
-                        e->close();
-                }
-                none?;
-                }
-                self.m_cache = option::none;
-            }
-            public func load(self: chunk, reload: bool, callback: (je::world, int, int, int, graphic::texture)=> option<je::entity>)
-            {
-                if (reload)
-                    self->unload();
-                
-                if (self.m_cache->has)
-                    return;
+                    match (file::readall(chunk_layer_path)
+                        =>> \dat = dat->dict::deserialize;)
+                    {
+                    value(dat)?
+                    {
+                        try! sz = dat->get("size": dynamic)=>> \v = v->trycast:<int>;;
+                        try! tex = dat->get("texture": dynamic)=>> \v = v->trycast:<string>;;
+                        try! wkable = dat->get("walkable": dynamic)
+                            =>> \v = v->trycast:<array<dynamic>>;
+                            ->> \v = v
+                                ->> \e = e->valor(false);
+                                ;
+                            ;
 
-                match (file::readall(self.m_path)
+                        let parent_path = _get_located_path(chunk_layer_path);
+
+                        return value(layer{
+                            m_size = sz,
+                            m_state = need_load(parent_path + tex),
+                            m_walkable = wkable,
+                        });
+                    }
+                    none? return none;
+                    }
+
+                    return layer{
+                        m_size = texture,
+                        m_state = load_state::wait(tex),
+                        m_walkable = wkable,
+                    };
+                }
+                public func close(self: layer)
+                {
+                    match (self.m_state)
+                    {
+                    loaded(e)? e->close();
+                    _?;
+                    }
+                }
+            }
+
+            public func create(chunk_path: string)
+            {
+                match (file::readall(chunk_path)
                     =>> \dat = dat->dict::deserialize;
-                    ->> \m = m->> \k, v = (k->valor(""), v);;)
+                    =>> \dat = dat->get("layers": dynamic);
+                    =>> \dat = dat->trycast:<dict<dynamic, dynamic>>;)
                 {
                 value(dat)?
                 {
-                    let layers = dat->getor("layers", {}: dynamic)
-                        -> valor({}: dict<dynamic, dynamic>)
-                        =>> \k, v = k is int ? {[k->valor(0)] = v->valor("")} | {};
-                        ;
-                    
-                    let walkable = dat->getor("walkable", []: dynamic)
-                        -> valor([]: array<dynamic>)
-                        ->> \v = v->valor(false);
-                        ;
-                    
-                    let entity_lists = []mut: vec<je::entity>;
+                    let parent_path = _get_located_path(chunk_path);
+                    let result = {}mut: map<int, layer>;
 
-                    for (let layer, path : layers)
-                    {
-                        let path = graphic::texture::load(
-                            option::value(self.m_world->get_universe), path);
-
-                        match (path)
+                    return try::exec(
+                        func()
                         {
-                        value(tex)?
-                            do callback(self.m_world, self.m_chunk_pos.0, self.m_chunk_pos.1, layer, tex)
-                                ->> \e = entity_lists->add(e);
-                                ;
-                        none?
-                            je::logerr(F"无法加载区块纹理: {path} 请检查!");
-                        }
-                    }
-                    self.m_cache = option::value(walkable_and_entities{
-                        m_entities = entity_lists->unsafe::asarray,
-                        m_walkable = walkable,
+                            for (let layer_id, layer_path : dat)
+                            {
+                                try! id = layer_id->trycast:<int>;
+                                try! path = layer_path->trycast:<string>;
+
+                                result->set(id, layer::create(parent_path + path));
+                            }
+
+                            return option::value(
+                                chunk{
+                                    m_cached_layers = result->unsafe::asdict,
+                                });
+                        })->
+                        catch (func(_)
+                        {
+                            // 如果区块加载失败，此处要把已经加载进来的关掉
+                            for (let _, l : result)
+                                l->close();
                         });
+                    
                 }
-                none?;
+                none?
+                    return none;
                 }
-            }
-            public func get_walkable(self: chunk)
-            {
-                return self.m_cache=>> \c = c.m_walkable;;
             }
         }
 
