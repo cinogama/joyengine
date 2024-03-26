@@ -1434,7 +1434,7 @@ namespace editor::gui::tilemap
                     chunks[cx]->set(cy, 
                         Chunk
                         {
-                            m_walkable = new! array(chunksize * chunksize, mut true),
+                            m_walkable = new! array(chunksize * chunksize, mut false),
                             m_images = {}mut, // new! image(chunksize * tile_reso, chunksize * tile_reso),
                         });
                 
@@ -1455,8 +1455,7 @@ namespace editor::gui::tilemap
                     let chunk = GET_CHUNK(chunk_pos_x, chunk_pos_y);
                     let chunk_image = GET_CHUNK_IMAGE(chunk, layer);
 
-                    if (tile.walkable == false)
-                        chunk.m_walkable[chunk_pos_x + chunk_pos_y * chunksize] = false;
+                    chunk.m_walkable[chunk_pos_x + chunk_pos_y * chunksize] = tile.walkable;
 
                     let tile_way = self->get_tile_way(layer, x, y);
                     let tile_texture = tile->get_texture(self.m_context, tile_way);
