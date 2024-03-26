@@ -1609,16 +1609,16 @@ namespace editor::gui::tilemap
 
                                 for (let layer, (img, walkable): chunk.m_layers)
                                 {
-                                    if (!img->save((target_chunk_path / F"chunk_{layer}_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}.png")->tostring))
+                                    if (!img->save((target_chunk_path / F"chunk_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}_{layer}.png")->tostring))
                                         jeapi::gui::form::errmsg("错误", F"无法保存纹理到{target_chunk_path->tostring}");
                                     
                                     let chunk_info = {
                                         ["walkable"] = walkable: dynamic,
-                                        ["texture"] = F"chunk_{layer}_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}.png": dynamic,
+                                        ["texture"] = F"chunk_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}_{layer}.png": dynamic,
                                         ["size"] = chunksz: dynamic,
                                     };
                                     if (!chunk_info->serialize
-                                            ->> \dat = fsys::writeall(target_chunk_path / F"chunk_{layer}_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}.json", dat);
+                                            ->> \dat = fsys::writeall(target_chunk_path / F"chunk_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}_{layer}.json", dat);
                                             -> valor(false))
                                     {
                                         jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_chunk_path->tostring}");
