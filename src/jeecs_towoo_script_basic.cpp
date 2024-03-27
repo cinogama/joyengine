@@ -281,7 +281,7 @@ namespace jeecs
                         if (member->m_woovalue_init_may_null != nullptr)
                         {
                             auto* val = std::launder(reinterpret_cast<script::woovalue*>(this_member));
-                            
+
                             _wo_value tmp;
                             wo_pin_value_get(&tmp, member->m_woovalue_init_may_null);
                             wo_pin_value_set_dup(val->m_pin_value, &tmp);
@@ -522,10 +522,12 @@ import je::towoo::types;
             }
             woolang_component_type_decl += "}\n{\n";
 
-            // Generate ComponentT::typeinfo
-            woolang_component_type_decl += "    public let typeinfo = je::typeinfo::load(\"";
-            woolang_component_type_decl += typeinfo->m_typename;
-            woolang_component_type_decl += "\")->val;\n";
+            // Generate ComponentT::type::typeinfo
+            woolang_component_type_decl += std::string(
+                "    using type = void\n"
+                "    {\n"
+                "        public let typeinfo = je::typeinfo::load(\"") + typeinfo->m_typename + "\")->val;\n"
+                "    }\n";
 
             woolang_component_type_decl += "}\n";
 
@@ -1047,7 +1049,7 @@ namespace je::towoo::system
         }
         public func contain<CompT>(self: ToWooSystemFuncJob, is_arg: bool)
         {
-            self.m_requirement->add((require_type::CONTAIN, self.m_require_group, CompT::typeinfo));
+            self.m_requirement->add((require_type::CONTAIN, self.m_require_group, CompT::type::typeinfo));
             self.m_require_group += 1;
             if (is_arg)
                 self.m_argument_count += 1;
@@ -1055,14 +1057,14 @@ namespace je::towoo::system
         }
         public func maynot<CompT>(self: ToWooSystemFuncJob)
         {
-            self.m_requirement->add((require_type::MAYNOT, self.m_require_group, CompT::typeinfo));
+            self.m_requirement->add((require_type::MAYNOT, self.m_require_group, CompT::type::typeinfo));
             self.m_require_group += 1;
             self.m_argument_count += 1;
             return self;
         }
         public func except<CompT>(self: ToWooSystemFuncJob)
         {
-            self.m_requirement->add((require_type::EXCEPT, self.m_require_group, CompT::typeinfo));
+            self.m_requirement->add((require_type::EXCEPT, self.m_require_group, CompT::type::typeinfo));
             self.m_require_group += 1;
             return self;
         }
@@ -1302,7 +1304,7 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
     {
         result += F"->anyof([";
         for (let _, t : req)
-            result += F"{t}::typeinfo,";
+            result += F"{t}::type::typeinfo,";
         result += "]\x29";
     }
     result += F";\nfunc {job_func_name}(context: typeof(create(std::declval:<je::world>())), e: je::entity";
@@ -1885,19 +1887,19 @@ namespace je::entity::towoo
         private func _remove_component<T>(self: entity, tid: je::typeinfo)=> void;
 
     public func add_component<T>(self: entity)=> option<T>
-        where T::typeinfo is je::typeinfo;
+        where T::type::typeinfo is je::typeinfo;
     {
-        return _add_component:<T>(self, T::typeinfo);
+        return _add_component:<T>(self, T::type::typeinfo);
     }
     public func get_component<T>(self: entity)=> option<T>
-        where T::typeinfo is je::typeinfo;
+        where T::type::typeinfo is je::typeinfo;
     {
-        return _get_component:<T>(self, T::typeinfo);
+        return _get_component:<T>(self, T::type::typeinfo);
     }
     public func remove_component<T>(self: entity)=> void
-        where T::typeinfo is je::typeinfo;
+        where T::type::typeinfo is je::typeinfo;
     {
-        _remove_component:<T>(self, T::typeinfo);
+        _remove_component:<T>(self, T::type::typeinfo);
     }
 }
 

@@ -11,9 +11,7 @@ namespace jeapi::loader
 {
     using chunkloader = struct{
         m_mx: je::rmutex,
-
         m_chunks: dict<int, dict<int, chunk>>,
-        m_world: je::world,
     }
     {
         func _get_located_path(path: string)
@@ -23,7 +21,6 @@ namespace jeapi::loader
 
         using chunk = struct{
             m_cached_layers: dict<int, layer>,
-            m_world: je::world,
         }
         {
             union load_state
@@ -34,15 +31,16 @@ namespace jeapi::loader
             }
 
             using layer = struct{
+                m_layer: int,
                 m_size: int,
+                m_walkable: array<bool>,
                 m_path: string,
                 m_state: mut load_state,
-                m_walkable: array<bool>,
             }
             {
-                alias InstanceEntityCallbackT = (graphic::texture, array<bool>)=> option<entity>;
+                alias InstanceEntityCallbackT = (layer)=> option<entity>;
 
-                func create(chunk_layer_path: string)
+                func create(chunk_layer_path: string, layer: int)
                 {
                     match (file::readall(chunk_layer_path)
                         =>> \dat = dat->dict::deserialize;)
@@ -61,6 +59,7 @@ namespace jeapi::loader
                         let parent_path = _get_located_path(chunk_layer_path);
 
                         return value(layer{
+                            m_layer = layer,
                             m_size = sz,
                             m_path = parent_path + tex,
                             m_state = mut load_state::wait,
@@ -75,13 +74,13 @@ namespace jeapi::loader
                     self->unload;
                 }
                 
-                func instance(self: layer, u: option<universe>, callback: InstanceEntityCallbackT)
+                func instance(self: layer, callback: InstanceEntityCallbackT)
                 {
                     match (self.m_state)
                     {
                     wait?
                     {
-                        match (graphic::texture::load(u, self.m_path)=>> \t = callback(t, self.m_walkable);)
+                        match (callback(self))
                         {
                         value(e)?
                             self.m_state = load_state::loaded(e);
@@ -104,9 +103,26 @@ namespace jeapi::loader
                     _?;
                     }
                 }
+
+                public func get_layer_id(self: layer)
+                {
+                    return self.m_layer;
+                }
+                public func get_size(self: layer)
+                {
+                    return self.m_size;
+                }
+                public func get_walkable(self: layer, x: int, y: int)
+                {
+                    return self.m_walkable->get(x + y * self.m_size);
+                }
+                public func get_path(self: layer)
+                {
+                    return self.m_path;
+                }
             }
 
-            func create(w: je::world, chunk_path: string)
+            func create(chunk_path: string)
             {
                 match (file::readall(chunk_path)
                     =>> \dat = dat->dict::deserialize;
@@ -126,7 +142,7 @@ namespace jeapi::loader
                                 try! id = layer_id->trycast:<int>;
                                 try! path = layer_path->trycast:<string>;
 
-                                try! layer = layer::create(parent_path + path);
+                                try! layer = layer::create(parent_path + path, id);
 
                                 result->set(id, layer);
 
@@ -140,7 +156,6 @@ namespace jeapi::loader
                     return option::value(
                         chunk{
                             m_cached_layers = result->unsafe::asdict,
-                            m_world = w,
                         });
                     
                 }
@@ -154,21 +169,19 @@ namespace jeapi::loader
                     l->close();
             }
 
-            public func instance(self: chunk, callback: layer::InstanceEntityCallbackT)
+            func instance(self: chunk, callback: layer::InstanceEntityCallbackT)
             {
-                let u = option::value(self.m_world->get_universe());
-
                 for (let _, l : self.m_cached_layers)
-                    l->instance(u, callback);
+                    l->instance(callback);
             }
-            public func unload(self: chunk)
+            func unload(self: chunk)
             {
                 for (let _, l : self.m_cached_layers)
                     l->unload();
             }
         }
 
-        public func create(w: je::world, path: string)
+        public func create(path: string)
         {
             let parent_path = path->subto(0, path->rfind("/") + 1);
             match (file::readall(path)=>>\dat = dat->dict::deserialize;)
@@ -195,7 +208,7 @@ namespace jeapi::loader
                                         {
                                             try! y = dy->trycast:<int>;
                                             try! path = cpath->trycast:<string>;
-                                            try! newchunk = chunk::create(w, parent_path + path);
+                                            try! newchunk = chunk::create(parent_path + path);
 
                                             chunk_line->set(y, newchunk);
 
@@ -213,7 +226,6 @@ namespace jeapi::loader
                                 chunkloader{
                                     m_mx = rmutex::create(),
                                     m_chunks = result->unsafe::asdict,
-                                    m_world = w,
                                 });
 
                         })-> 
@@ -246,6 +258,24 @@ namespace jeapi::loader
             return self->lock_do(func()
             {
                 return self.m_chunks->get(x)=>> \ys = ys->get(y);;
+            });
+        }
+        public func get_chunks(self: chunkloader)
+        {
+            return self.m_chunks;
+        }
+        public func load_chunk(self: chunkloader, chunk: chunk, callback: chunk::layer::InstanceEntityCallbackT)
+        {
+            return self->lock_do(func()
+            {
+                chunk->instance(callback);
+            });
+        }
+        public func unload_chunk(self: chunkloader, chunk: chunk)
+        {
+            return self->lock_do(func()
+            {
+                chunk->unload();
             });
         }
     }
