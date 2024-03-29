@@ -1413,7 +1413,7 @@ VK_API_PLATFORM_API_LIST
                     jeecs::debug::logwarn("Use the first suitable device: '%s' enumerated by Vulkan, consider to "
                         "choose the most appropriate device, todo.", prop.deviceName);
 
-                    return std::make_optional(result);
+                    return std::optional(result);
                 }
             }
             return std::nullopt;

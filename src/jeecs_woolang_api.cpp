@@ -2239,7 +2239,7 @@ std::optional<std::string> _je_dynamic_parser_update_all(const char* path)
 
     auto* file = jeecs_file_open(path);
     if (file == nullptr)
-        return std::make_optional("Failed to open '"s + path + "'.");
+        return std::optional("Failed to open '"s + path + "'.");
 
     size_t filelen = file->m_file_length;
 
@@ -2258,7 +2258,7 @@ std::optional<std::string> _je_dynamic_parser_update_all(const char* path)
         std::string result = wo_get_compile_error(newvm, wo_inform_style::WO_DEFAULT);
         wo_close_vm(newvm);
 
-        return std::make_optional(result);
+        return std::optional(result);
     }
 
     wo_jit(newvm);

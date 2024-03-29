@@ -486,7 +486,7 @@ import je::towoo::types;
             std::optional<std::string> tnamespace = std::nullopt;
             if (index < tname.size() - 1 && index >= 1)
             {
-                tnamespace = std::make_optional(tname.substr(0, index - 1));
+                tnamespace = std::optional(tname.substr(0, index - 1));
                 tname = tname.substr(index + 1);
             }
 
@@ -818,7 +818,7 @@ WO_API wo_api wojeapi_towoo_update_component_data(wo_vm vm, wo_value args)
         {
             wo_struct_get(wooval_init, member_info, 1);
             wo_struct_get(member_info, member_info, 0);
-            member_wooval_type = std::make_optional(
+            member_wooval_type = std::optional(
                 _wooval_type
                 {
                     wo_string(member_info),

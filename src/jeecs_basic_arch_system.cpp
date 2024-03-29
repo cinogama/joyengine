@@ -1174,7 +1174,7 @@ namespace jeecs_impl
                 DEBUG_ARCH_LOG("World: %p trying to disable world.",
                     _m_world);
 
-            _find_or_create_buffer_for_world()->m_update_enabled = std::make_optional(enable);
+            _find_or_create_buffer_for_world()->m_update_enabled = std::optional(enable);
         }
 
         void add_system_instance(const jeecs::typing::type_info* type, jeecs::game_system* sys_instance)
