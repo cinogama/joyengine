@@ -9,7 +9,7 @@
 #include "wo.h"
 
 #define JE_VERSION_WRAP(A, B, C) #A "." #B "." #C
-#define JE_CORE_VERSION JE_VERSION_WRAP(4, 6, 2)
+#define JE_CORE_VERSION JE_VERSION_WRAP(4, 6, 3)
 
 #include <cstdint>
 #include <cstring>

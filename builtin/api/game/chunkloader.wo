@@ -136,21 +136,20 @@ namespace jeapi::loader
 
                     for (let layer_id, layer_path : dat)
                     {
-                        do try::exec(
-                            func()
-                            {
-                                try! id = layer_id->trycast:<int>;
-                                try! path = layer_path->trycast:<string>;
+                        do try!
+                        {
+                            try! id = layer_id->trycast:<int>;
+                            try! path = layer_path->trycast:<string>;
 
-                                try! layer = layer::create(parent_path + path, id);
+                            try! layer = layer::create(parent_path + path, id);
 
-                                result->set(id, layer);
+                            result->set(id, layer);
 
-                                return option::value(do nil);
-                            })->
-                        catch(func(_)
-                            {
-                            });
+                            return option::value(do nil);
+                        }
+                        catch!
+                        {
+                        };
                     }
 
                     return option::value(
@@ -190,51 +189,48 @@ namespace jeapi::loader
             {
                 let result = {}mut: map<int, dict<int, chunk>>;
 
-                return 
-                    try::exec(
-                        func()
+                return try!
+                    {
+                        for (let dx, dv : dat)
                         {
-                            for (let dx, dv : dat)
+                            try! x = dx->trycast:<int>;
+                            try! v = dv->trycast:<dict<dynamic, dynamic>>;
+
+                            let chunk_line = {}mut: map<int, chunk>;
+
+                            for (let dy, cpath : v)
                             {
-                                try! x = dx->trycast:<int>;
-                                try! v = dv->trycast:<dict<dynamic, dynamic>>;
-
-                                let chunk_line = {}mut: map<int, chunk>;
-
-                                for (let dy, cpath : v)
+                                do try!
                                 {
-                                    do try::exec(
-                                        func()
-                                        {
-                                            try! y = dy->trycast:<int>;
-                                            try! path = cpath->trycast:<string>;
-                                            try! newchunk = chunk::create(parent_path + path);
+                                    try! y = dy->trycast:<int>;
+                                    try! path = cpath->trycast:<string>;
+                                    try! newchunk = chunk::create(parent_path + path);
 
-                                            chunk_line->set(y, newchunk);
+                                    chunk_line->set(y, newchunk);
 
-                                            return option::value(do nil);
-                                        })
-                                    -> catch(func(_)
-                                        {
-                                        });
+                                    return option::value(do nil);
                                 }
-
-                                result->set(x, chunk_line->unsafe::asdict);
+                                catch!
+                                {
+                                };
                             }
 
-                            return option::value(
-                                chunkloader{
-                                    m_mx = rmutex::create(),
-                                    m_chunks = result->unsafe::asdict,
-                                });
+                            result->set(x, chunk_line->unsafe::asdict);
+                        }
 
-                        })-> 
-                    catch(func(_)
-                        {
-                            for (let _, cs : result)
-                                for (let _, c : cs)
-                                    c->close();
-                        });
+                        return option::value(
+                            chunkloader{
+                                m_mx = rmutex::create(),
+                                m_chunks = result->unsafe::asdict,
+                            });
+
+                    }
+                    catch!
+                    {
+                        for (let _, cs : result)
+                            for (let _, c : cs)
+                                c->close();
+                    };
             }
             none?
                 return option::none;
