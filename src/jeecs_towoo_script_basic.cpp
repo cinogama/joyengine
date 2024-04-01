@@ -14,6 +14,17 @@ TooWooo~
 toWoo JoyEngine generated wrap code for woolang.
 */
 
+wo_integer_t _je_wo_extern_symb_rsfunc(wo_vm vm, wo_string_t name)
+{
+    wo_integer_t result;
+    [[maybe_unused]] wo_handle_t initfunc_jit_func;
+
+    if (wo_extern_symb(vm, name, &result, &initfunc_jit_func))
+        return result;
+
+    return 0;
+}
+
 namespace jeecs
 {
     namespace towoo
@@ -33,8 +44,10 @@ namespace jeecs
 
                 wo_vm m_base_vm;
                 bool m_is_good;
+                
                 wo_integer_t m_create_function;
                 wo_integer_t m_close_function;
+
                 std::vector<towoo_step_work> m_preworks;
                 std::vector<towoo_step_work> m_works;
                 std::vector<towoo_step_work> m_lateworks;
@@ -591,9 +604,9 @@ const jeecs::typing::type_info* je_towoo_register_system(
         if (result)
         {
             // Invoke "_init_towoo_system", if failed... boom!
-            wo_integer_t create_function = wo_extern_symb(vm, "create");
-            wo_integer_t close_function = wo_extern_symb(vm, "close");
-            wo_integer_t initfunc = wo_extern_symb(vm, "_init_towoo_system");
+            wo_integer_t create_function = _je_wo_extern_symb_rsfunc(vm, "create");
+            wo_integer_t close_function = _je_wo_extern_symb_rsfunc(vm, "close");
+            wo_integer_t initfunc = _je_wo_extern_symb_rsfunc(vm, "_init_towoo_system");
             if (initfunc == 0)
             {
                 jeecs::debug::logerr("Failed to register: '%s' cannot find '_init_towoo_system' in '%s', "

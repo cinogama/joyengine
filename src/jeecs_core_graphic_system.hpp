@@ -1499,6 +1499,7 @@ public func frag(_: v2f)
             const Translation* translation;
 
             const Light2D::BlockShadow* blockshadow;
+            const Light2D::ShapeShadow* shapeshadow;
             const Light2D::SpriteShadow* spriteshadow;
             const Light2D::SelfShadow* selfshadow;
 
@@ -1748,11 +1749,13 @@ public func frag(_: v2f)
 
             selector.anyof<
                 Light2D::BlockShadow,
+                Light2D::ShapeShadow,
                 Light2D::SpriteShadow,
                 Light2D::SelfShadow>();
 
             selector.exec([this](Translation& trans,
                 Light2D::BlockShadow* blockshadow,
+                Light2D::ShapeShadow* shapeshadow,
                 Light2D::SpriteShadow* spriteshadow,
                 Light2D::SelfShadow* selfshadow,
                 Textures* texture,
@@ -1786,6 +1789,7 @@ public func frag(_: v2f)
                         block2d_arch{
                                 &trans,
                                 blockshadow,
+                                shapeshadow,
                                 spriteshadow,
                                 selfshadow,
                                 texture,
@@ -2019,6 +2023,82 @@ public func frag(_: v2f)
                                                     1.f);
                                         }
                                     }
+                                    if (blockarch.shapeshadow != nullptr && blockarch.shapeshadow->factor > 0.f)
+                                    {
+                                        auto texture_group = jegl_rchain_allocate_texture_group(light2d_shadow_rend_chain);
+                                        if (blockarch.textures != nullptr)
+                                        {
+                                            jeecs::graphic::texture* main_texture = blockarch.textures->get_texture(0).get();
+                                            if (main_texture != nullptr)
+                                                jegl_rchain_bind_texture(light2d_shadow_rend_chain, texture_group, 0, main_texture->resouce());
+                                            else
+                                                jegl_rchain_bind_texture(light2d_shadow_rend_chain, texture_group, 0, m_default_resources.default_texture->resouce());
+                                        }
+
+                                        jeecs::graphic::vertex* using_shape = 
+                                            (blockarch.shape == nullptr || blockarch.shape->vertex == nullptr)
+                                            ? m_default_resources.default_shape_quad.get()
+                                            : blockarch.shape->vertex.get()
+                                            ;
+
+                                        auto* rchain_draw_action = jegl_rchain_draw(
+                                            light2d_shadow_rend_chain,
+                                            shape_shadow_pass->resouce(),
+                                            using_shape->resouce(),
+                                            texture_group);
+
+                                        auto* builtin_uniform = shape_shadow_pass->m_builtin;
+
+                                        float MAT4_MODEL[4][4];
+                                        float MAT4_LOCAL_SCALE[4][4] = {
+                                            {blockarch.translation->local_scale.x,0.0f,0.0f,0.0f},
+                                            {0.0f,blockarch.translation->local_scale.y,0.0f,0.0f},
+                                            {0.0f,0.0f,blockarch.translation->local_scale.z,0.0f},
+                                            {0.0f,0.0f,0.0f,1.0f}
+                                        };
+
+                                        math::mat4xmat4(MAT4_MODEL, blockarch.translation->object2world, MAT4_LOCAL_SCALE);
+                                        math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
+                                        math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
+
+                                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, MAT4_MODEL);
+                                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, MAT4_MV);
+                                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mvp, float4x4, MAT4_MVP);
+
+                                        // 通过 local_scale.x 传递阴影权重，.y .z 通道预留
+                                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform,
+                                            local_scale, float3,
+                                            blockarch.shapeshadow->factor,
+                                            0.f,
+                                            0.f);
+
+                                        if (blockarch.textures != nullptr)
+                                        {
+                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, tiling, float2,
+                                                blockarch.textures->tiling.x, blockarch.textures->tiling.y);
+                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, offset, float2,
+                                                blockarch.textures->offset.x, blockarch.textures->offset.y);
+                                        }
+
+                                        // 通过 je_color 变量传递着色器的位置或方向
+                                        if (lightarch.parallel != nullptr)
+                                        {
+                                            jeecs::math::vec3 rotated_light_dir =
+                                                lightarch.translation->world_rotation * jeecs::math::vec3(0.f, -1.f, 0.f);
+
+                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
+                                                rotated_light_dir.x,
+                                                rotated_light_dir.y,
+                                                rotated_light_dir.z,
+                                                blockarch.shapeshadow->distance);
+                                        }
+                                        else
+                                            JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, color, float4,
+                                                lightarch.translation->world_position.x,
+                                                lightarch.translation->world_position.y,
+                                                lightarch.translation->world_position.z,
+                                                blockarch.shapeshadow->distance);
+                                    }
                                     if (blockarch.spriteshadow != nullptr && blockarch.spriteshadow->factor > 0.f)
                                     {
                                         auto texture_group = jegl_rchain_allocate_texture_group(light2d_shadow_rend_chain);
@@ -2031,28 +2111,15 @@ public func frag(_: v2f)
                                                 jegl_rchain_bind_texture(light2d_shadow_rend_chain, texture_group, 0, m_default_resources.default_texture->resouce());
                                         }
 
-                                        jeecs::graphic::vertex* using_shape = lightarch.topdown == nullptr
-                                            ?
-                                            (
-                                                (blockarch.shape == nullptr || blockarch.shape->vertex == nullptr)
-                                                ? m_default_resources.default_shape_quad.get()
-                                                : blockarch.shape->vertex.get()
-                                                )
-                                            :
-                                            m_defer_light2d_host._sprite_shadow_vertex.get()
-                                            ;
-
-                                        const auto& used_pass = lightarch.topdown == nullptr
-                                            ? shape_shadow_pass
-                                            : sprite_shadow_pass;
+                                        jeecs::graphic::vertex* using_shape = m_defer_light2d_host._sprite_shadow_vertex.get();
 
                                         auto* rchain_draw_action = jegl_rchain_draw(
                                             light2d_shadow_rend_chain,
-                                            used_pass->resouce(),
+                                            sprite_shadow_pass->resouce(),
                                             using_shape->resouce(),
                                             texture_group);
 
-                                        auto* builtin_uniform = used_pass->m_builtin;
+                                        auto* builtin_uniform = sprite_shadow_pass->m_builtin;
 
                                         float MAT4_MODEL[4][4];
                                         float MAT4_LOCAL_SCALE[4][4] = {

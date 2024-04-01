@@ -5,6 +5,8 @@
 #include <list>
 #include <optional>
 
+wo_integer_t _je_wo_extern_symb_rsfunc(wo_vm vm, wo_string_t name);
+
 WO_API wo_api wojeapi_create_rmutex(wo_vm vm, wo_value args)
 {
     return wo_ret_gchandle(vm, new std::recursive_mutex, nullptr,
@@ -732,7 +734,7 @@ WO_API wo_api wojeapi_get_entity_chunk_info(wo_vm vm, wo_value args)
 WO_API wo_api wojeapi_find_entity_with_chunk_info(wo_vm vm, wo_value args)
 {
     jeecs::game_entity* entity = new jeecs::game_entity();
-    sscanf(wo_string(args + 0), "[%p:%zuv%zu]", &entity->_m_in_chunk, &entity->_m_id, &entity->_m_version);
+    ((void)sscanf(wo_string(args + 0), "[%p:%zuv%zu]", &entity->_m_in_chunk, &entity->_m_id, &entity->_m_version));
 
     return wo_ret_gchandle(vm, entity,
         nullptr, [](void* ptr) {delete (jeecs::game_entity*)ptr; });
@@ -2038,7 +2040,7 @@ WO_API wo_api wojeapi_towoo_update_component(wo_vm vm, wo_value args)
         if (result)
         {
             // Invoke "_init_towoo_component", if failed... boom!
-            wo_integer_t initfunc = wo_extern_symb(cvm, "_init_towoo_component");
+            wo_integer_t initfunc = _je_wo_extern_symb_rsfunc(cvm, "_init_towoo_component");
             if (initfunc == 0)
             {
                 jeecs::debug::logerr("Failed to register: '%s' cannot find '_init_towoo_component' in '%s', "
@@ -2206,9 +2208,9 @@ void _je_dynamic_parser_update_types()
             {
                 std::string script_woolang_typename = script_parser->m_woolang_typename;
 
-                wo_integer_t saving_func = wo_extern_symb(_je_dynamic_parser_vm, (script_woolang_typename + "::parser::saving").c_str());
-                wo_integer_t restoring_func = wo_extern_symb(_je_dynamic_parser_vm, (script_woolang_typename + "::parser::restoring").c_str());
-                wo_integer_t edit_func = wo_extern_symb(_je_dynamic_parser_vm, (script_woolang_typename + "::parser::edit").c_str());
+                wo_integer_t saving_func = _je_wo_extern_symb_rsfunc(_je_dynamic_parser_vm, (script_woolang_typename + "::parser::saving").c_str());
+                wo_integer_t restoring_func = _je_wo_extern_symb_rsfunc(_je_dynamic_parser_vm, (script_woolang_typename + "::parser::restoring").c_str());
+                wo_integer_t edit_func = _je_wo_extern_symb_rsfunc(_je_dynamic_parser_vm, (script_woolang_typename + "::parser::edit").c_str());
 
                 if (saving_func != 0 || restoring_func != 0 || edit_func != 0)
                 {

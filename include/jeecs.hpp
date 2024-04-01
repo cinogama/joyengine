@@ -9,7 +9,7 @@
 #include "wo.h"
 
 #define JE_VERSION_WRAP(A, B, C) #A "." #B "." #C
-#define JE_CORE_VERSION JE_VERSION_WRAP(4, 6, 3)
+#define JE_CORE_VERSION JE_VERSION_WRAP(4, 6, 4)
 
 #include <cstdint>
 #include <cstring>
@@ -237,7 +237,7 @@ namespace jeecs
             void JEParseFromScriptType(wo_vm vm, wo_value v)
             {
                 unsigned long long aa, bb;
-                sscanf(wo_string(v), "%llX-%llX", &aa, &bb);
+                ((void)sscanf(wo_string(v), "%llX-%llX", &aa, &bb));
                 a = (uint64_t)aa;
                 b = (uint64_t)bb;
             }
@@ -3707,28 +3707,28 @@ namespace jeecs
             vector()noexcept
             {
             }
-            ~vector()
+            ~vector() noexcept
             {
                 clear();
                 je_mem_free(_elems_ptr_begin);
             }
 
-            vector(const vector& another_list)
+            vector(const vector& another_list) noexcept
             {
                 _reserve(another_list.size());
                 _elems_ptr_end += _copy(_elems_ptr_begin, another_list.begin(), another_list.end());
             }
-            vector(const std::initializer_list<ElemT>& another_list)
+            vector(const std::initializer_list<ElemT>& another_list) noexcept
             {
                 for (auto& elem : another_list)
                     push_back(elem);
             }
-            vector(ElemT* ptr, size_t length)
+            vector(ElemT* ptr, size_t length) noexcept
             {
                 _elems_ptr_begin = ptr;
                 _elems_ptr_end = _elems_buffer_end = _elems_ptr_begin + length;
             }
-            vector(vector&& another_list)
+            vector(vector&& another_list) noexcept
             {
                 _elems_ptr_begin = another_list._elems_ptr_begin;
                 _elems_ptr_end = another_list._elems_ptr_end;
@@ -3739,14 +3739,14 @@ namespace jeecs
                     another_list._elems_buffer_end = nullptr;
             }
 
-            inline vector& operator = (const vector& another_list)
+            inline vector& operator = (const vector& another_list)noexcept
             {
                 _reserve(another_list.size());
                 _elems_ptr_end += _copy(_elems_ptr_begin, another_list.begin(), another_list.end());
 
                 return *this;
             }
-            inline vector& operator = (vector&& another_list)
+            inline vector& operator = (vector&& another_list)noexcept
             {
                 clear();
                 je_mem_free(_elems_ptr_begin);
@@ -3787,13 +3787,13 @@ namespace jeecs
                 _erase(_elems_ptr_begin, _elems_ptr_end);
                 _elems_ptr_end = _elems_ptr_begin;
             }
-            inline void push_front(const ElemT& _e)
+            inline void push_front(const ElemT& _e)noexcept
             {
                 _assure(size() + 1);
                 _r_move(_elems_ptr_begin + 1, _elems_ptr_begin, _elems_ptr_end++);
                 new (_elems_ptr_begin) ElemT(_e);
             }
-            inline void push_back(const ElemT& _e)
+            inline void push_back(const ElemT& _e)noexcept
             {
                 _assure(size() + 1);
                 new (_elems_ptr_end++) ElemT(_e);
@@ -3821,17 +3821,17 @@ namespace jeecs
             {
                 return *(_elems_ptr_end - 1);
             }
-            inline void erase(size_t index)
+            inline void erase(size_t index)noexcept
             {
                 _elems_ptr_begin[index].~ElemT();
                 _move(_elems_ptr_begin + index, _elems_ptr_begin + index + 1, _elems_ptr_end--);
             }
-            inline void erase(ElemT* index)
+            inline void erase(ElemT* index)noexcept
             {
                 index->~ElemT();
                 _move(index, index + 1, _elems_ptr_end--);
             }
-            inline void erase_data(const ElemT& data)
+            inline void erase_data(const ElemT& data)noexcept
             {
                 auto fnd_place = std::find(begin(), end(), data);
                 if (fnd_place != end())
@@ -7543,7 +7543,7 @@ namespace jeecs
                                     else if (item_name == "offset")
                                     {
                                         math::vec2 offset;
-                                        sscanf(value.c_str(), "(%f,%f)", &offset.x, &offset.y);
+                                        ((void)sscanf(value.c_str(), "(%f,%f)", &offset.x, &offset.y));
                                         TEXT_OFFSET += offset;
                                     }
 
@@ -7658,7 +7658,7 @@ namespace jeecs
                                     else if (item_name == "offset")
                                     {
                                         math::vec2 offset;
-                                        sscanf(value.c_str(), "(%f,%f)", &offset.x, &offset.y);
+                                        ((void)sscanf(value.c_str(), "(%f,%f)", &offset.x, &offset.y));
                                         TEXT_OFFSET = TEXT_OFFSET + offset;
                                     }
                                     break;
@@ -8802,6 +8802,17 @@ R"(namespace Light2D::Range
                 typing::register_member(guard, &BlockShadow::reverse, "reverse");
             }
         };
+        struct ShapeShadow
+        {
+            float factor = 1.0f;
+            float distance = 1.0f;
+
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &ShapeShadow::factor, "factor");
+                typing::register_member(guard, &ShapeShadow::distance, "distance");
+            }
+        };
         struct SpriteShadow
         {
             float factor = 1.0f;
@@ -8857,24 +8868,24 @@ R"(namespace Light2D::Range
                         type    m_type = type::INT;
                         value   m_value = { 0 };
 
-                        data_value() = default;
-                        data_value(const data_value& val)
+                        data_value() noexcept = default;
+                        data_value(const data_value& val)noexcept
                         {
                             m_type = val.m_type;
                             memcpy(&m_value, &val.m_value, sizeof(value));
                         }
-                        data_value(data_value&& val)
+                        data_value(data_value&& val)noexcept
                         {
                             m_type = val.m_type;
                             memcpy(&m_value, &val.m_value, sizeof(value));
                         }
-                        data_value& operator = (const data_value& val)
+                        data_value& operator = (const data_value& val)noexcept
                         {
                             m_type = val.m_type;
                             memcpy(&m_value, &val.m_value, sizeof(value));
                             return *this;
                         }
-                        data_value& operator = (data_value&& val)
+                        data_value& operator = (data_value&& val)noexcept
                         {
                             m_type = val.m_type;
                             memcpy(&m_value, &val.m_value, sizeof(value));
@@ -9206,15 +9217,15 @@ R"(namespace Light2D::Range
 
             math::vec3 last_position = {};
 
-            Source() = default;
-            Source(const Source& another)
+            Source()noexcept = default;
+            Source(const Source& another) noexcept
                 : pitch(another.pitch)
                 , volume(another.volume)
                 , last_position(another.last_position)
             {
                 assert(source != nullptr && source != another.source);
             }
-            Source(Source&& another)
+            Source(Source&& another) noexcept
                 : source(std::move(another.source))
                 , pitch(another.pitch)
                 , volume(another.volume)
@@ -9608,6 +9619,7 @@ R"(namespace Light2D::Range
             type_info::register_type<Light2D::ShadowBuffer>(guard, "Light2D::ShadowBuffer");
             type_info::register_type<Light2D::CameraPostPass>(guard, "Light2D::CameraPostPass");
             type_info::register_type<Light2D::BlockShadow>(guard, "Light2D::BlockShadow");
+            type_info::register_type<Light2D::ShapeShadow>(guard, "Light2D::ShapeShadow");
             type_info::register_type<Light2D::SpriteShadow>(guard, "Light2D::SpriteShadow");
             type_info::register_type<Light2D::SelfShadow>(guard, "Light2D::SelfShadow");
 
