@@ -23,7 +23,7 @@ namespace jeapi::gui::style
 
     public func restore_config(conf: dict<ImGuiCol, array<real>>)
     {
-        for (let item, col : conf)
+        for (let (item, col) : conf)
         {
             SetStyleColor(item, (col[0], col[1], col[2], col[3]));
         }

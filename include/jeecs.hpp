@@ -9210,20 +9210,28 @@ R"(namespace Light2D::Range
     {
         struct Source
         {
-            basic::resource<audio::source> source = audio::source::create();
+            basic::resource<audio::source> source;
 
-            float pitch = 1.0f;
-            float volume = 1.0f;
+            float pitch;
+            float volume;
 
-            math::vec3 last_position = {};
+            math::vec3 last_position;
 
-            Source()noexcept = default;
+            Source()noexcept
+                : source(audio::source::create())
+                , pitch(1.0f)
+                , volume(1.0f)
+
+            {
+            }
             Source(const Source& another) noexcept
-                : pitch(another.pitch)
-                , volume(another.volume)
-                , last_position(another.last_position)
+                : Source()
             {
                 assert(source != nullptr && source != another.source);
+
+                pitch = another.pitch;
+                volume = another.volume;
+                last_position = another.last_position;
             }
             Source(Source&& another) noexcept
                 : source(std::move(another.source))

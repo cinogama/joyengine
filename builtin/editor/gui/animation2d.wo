@@ -1,5 +1,6 @@
 import pkg::buffer;
 import pkg::try;
+import pkg::iterator;
 
 namespace editor::gui::animation2d
 {
@@ -319,7 +320,7 @@ namespace editor::gui::animation2d
 
             result = result->appendi64(self.m_animations->len);
 
-            for (let action_name, action_data : self.m_animations)
+            for (let (action_name, action_data) : self.m_animations)
             {
                 // 2. 保存当前动作的帧数量和名称
                 result = result
@@ -327,13 +328,13 @@ namespace editor::gui::animation2d
                     ->appendi64(action_name->bytelen)
                     + action_name as string : buffer;
 
-                for (let _, frame: action_data.m_frames)
+                for (let frame: action_data.m_frames)
                 {
                     // 3. 保存一帧的持续时间，以及组件数据和一致变量数据
                     result = result->appendf32(frame.m_time);
 
                     result = result->appendi64(frame.m_component_dats->len);
-                    for (let _, cdata : frame.m_component_dats)
+                    for (let cdata : frame.m_component_dats)
                     {
                         result = result->appendi64(cdata.m_component_name->bytelen)
                             + cdata.m_component_name as string: buffer;
@@ -385,7 +386,7 @@ namespace editor::gui::animation2d
                     }
 
                     result = result->appendi64(frame.m_uniform_dats->len);
-                    for (let _, udata : frame.m_uniform_dats)
+                    for (let udata : frame.m_uniform_dats)
                     {
                         result = result->appendi64(udata.m_uniform_name->bytelen)
                             + udata.m_uniform_name as string: buffer;
@@ -524,7 +525,7 @@ namespace editor::gui::animation2d
                 Text("动画");
                 if (BeginListBox("##action_list", 200., 600.))
                 {
-                    for (let action_name, action_data : animation_context.m_animations)
+                    for (let (action_name, action_data) : animation_context.m_animations)
                     {
                         if (SelectableSelected(action_name, 
                             animation_context.m_selected_action_name == action_name))
@@ -633,7 +634,7 @@ namespace editor::gui::animation2d
                     {
                     value(animation)?
                         {
-                            for (let i, frame_data : animation.m_frames)
+                            for (let (i, frame_data) : animation.m_frames->iter |> iterator::enumerate)
                             {
                                 if (SelectableSelected(i: string, animation_context.m_selected_frame == i))
                                     animation_context.m_selected_frame = i;
@@ -823,7 +824,7 @@ namespace editor::gui::animation2d
 
                                                                 }
                                                                 else if (for_all_frame->get)
-                                                                    for (let _, per_frame_data : animation.m_frames)
+                                                                    for (let per_frame_data : animation.m_frames)
                                                                         per_frame_data.m_component_dats->add(FrameComponentData{
                                                                             m_component_name = all_components[selecting_id->get]->name(),
                                                                             m_member_name = member_name,
@@ -980,7 +981,7 @@ namespace editor::gui::animation2d
                                                             });
                                                         }
                                                         else if (for_all_frame->get)
-                                                            for (let _, per_frame_data : animation.m_frames)
+                                                            for (let per_frame_data : animation.m_frames)
                                                                 per_frame_data.m_uniform_dats->add(FrameUniformData{
                                                                     m_uniform_name = uniform_name->get,
                                                                     m_value = mut uniform_types[uniform_type_selected->get()][1],
@@ -1075,7 +1076,7 @@ namespace editor::gui::animation2d
                             match (selected_frame)
                             {
                             value(f)?
-                                for (let cindex, cdata: f.m_component_dats)
+                                for (let (cindex, cdata): f.m_component_dats->iter |> iterator::enumerate)
                                 {
                                     if (SelectableSelected(cdata->tostring(), 
                                         animation_context.m_selected_c_or_u_data->is_selected_component_idx(cindex)))
@@ -1089,7 +1090,7 @@ namespace editor::gui::animation2d
                                             {
                                                 if (ok)
                                                 {
-                                                    for (let _, fm : selected_animation->val.m_frames)
+                                                    for (let fm : selected_animation->val.m_frames)
                                                         fm.m_component_dats->swap(
                                                             fm.m_component_dats->forall(
                                                                 \dcdata = dcdata.m_component_name != cdata.m_component_name
@@ -1118,7 +1119,7 @@ namespace editor::gui::animation2d
                             match (selected_frame)
                             {
                             value(f)?
-                                for (let uindex, udata: f.m_uniform_dats)
+                                for (let (uindex, udata): f.m_uniform_dats->iter |> iterator::enumerate)
                                 {
                                     if (SelectableSelected(udata->tostring(), 
                                         animation_context.m_selected_c_or_u_data->is_selected_uniform_idx(uindex)))
@@ -1131,7 +1132,7 @@ namespace editor::gui::animation2d
                                             func(ok)
                                             {
                                                 if (ok)
-                                                    for (let _, fm : selected_animation->val.m_frames)
+                                                    for (let fm : selected_animation->val.m_frames)
                                                         fm.m_uniform_dats->swap(
                                                             fm.m_uniform_dats->forall(
                                                                 \dudata = dudata.m_uniform_name != udata.m_uniform_name

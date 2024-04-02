@@ -57,7 +57,7 @@ namespace editor::tools
             jeapi::gui::form::errmsg("失败", F"获取项目中的工具脚本失败({errno})");
         ok(subpaths)?
             {
-                for (let _, path : subpaths)
+                for (let path : subpaths)
                 {
                     let filename = fsys::filename(path);
                     if (filename->lower->endwith(".je.wo"))

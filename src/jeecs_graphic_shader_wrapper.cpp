@@ -1633,7 +1633,7 @@ public func CULL(cull: CullConfig)
     //  OK We have current vao struct info, built struct out
     let mut out_struct_decl = F"public using {vao_struct_name} = struct {"{"}\n";
 
-    for(let _, (vao_member_name, vao_shader_type) : struct_infos)
+    for(let (vao_member_name, vao_shader_type) : struct_infos)
         out_struct_decl += F"{vao_member_name} : {vao_shader_type}, \n";
 
     out_struct_decl += "};\n";
@@ -1648,7 +1648,7 @@ public func CULL(cull: CullConfig)
 
     let mut vinid = 0;
 
-    for(let _, (vao_member_name, vao_shader_type) : struct_infos)
+    for(let (vao_member_name, vao_shader_type) : struct_infos)
     {
         out_struct_decl += F"{vao_member_name} = vertex_data_in->in:<{vao_shader_type}>({vinid}), \n";
         vinid += 1;
@@ -1746,14 +1746,14 @@ using struct_define = handle
 
     //  OK We have current struct info, built struct out
     let mut out_struct_decl = F"public let {graphic_struct_name} = struct_define::create(\"{graphic_struct_name}\");";
-    for(let _, (vao_member_name, (vao_shader_type, is_struct_type)) : struct_infos)
+    for(let (vao_member_name, (vao_shader_type, is_struct_type)) : struct_infos)
         if (is_struct_type)
             out_struct_decl += F"{graphic_struct_name}->append_struct_member(\"{vao_member_name}\", {vao_shader_type});\n";
         else
             out_struct_decl += F"{graphic_struct_name}->append_member:<{vao_shader_type}>(\"{vao_member_name}\");\n";
 
     out_struct_decl += F"public using {graphic_struct_name}_t = structure\n\{\n";
-    for(let _, (vao_member_name, (vao_shader_type, is_struct_type)) : struct_infos)
+    for(let (vao_member_name, (vao_shader_type, is_struct_type)) : struct_infos)
     {
         out_struct_decl += F"    public func {vao_member_name}(self: {graphic_struct_name}_t)\n\{\n        ";
         
@@ -1848,7 +1848,7 @@ using uniform_block = struct_define
 
     //  OK We have current struct info, built struct out
     let mut out_struct_decl = F"public let {graphic_struct_name} = uniform_block::create(\"{graphic_struct_name}\", {bind_place});";
-    for(let _, (vao_member_name, (vao_shader_type, is_struct_type)) : struct_infos)
+    for(let (vao_member_name, (vao_shader_type, is_struct_type)) : struct_infos)
         if (is_struct_type)
             out_struct_decl += F"public let {vao_member_name} = {graphic_struct_name}->append_struct_uniform(\"{vao_member_name->upper}\", {vao_shader_type}): gchandle: {vao_shader_type}_t;\n";
         else
@@ -1916,41 +1916,33 @@ using uniform_block = struct_define
             do lexer->next;
     }
 
-    let mut result = F"let {func_name}_uf_vin = vertex_in::create();";
-    result += F"let {func_name}_uf_args = (";
+    let mut vin_decls = "", 
+        mut arg_name_decls = "",
+        mut arg_name_list = "",
+        mut argidx = 0;
 
-    for (let idx, (_, arg_type): args)
+    for (let (arg_name, arg_type): args)
     {
-        result += F"{func_name}_uf_vin->in:<{arg_type}>({idx}), ";
-    }
-    result += ");";
+        vin_decls += F"{func_name}_uf_vin->in:<{arg_type}>({argidx}), ";
+        
+        if (argidx != 0)
+        {
+            arg_name_decls += ", ";
+            arg_name_list += ", ";
+        }
+        arg_name_decls += F"{arg_name}: {arg_type}";
+        arg_name_list += arg_name;
 
-    result += F"let {func_name}_uf_fimpl = shader_function::register(\"{func_name}\", {func_name}_uf_args, {func_name}_uf_impl({func_name}_uf_args...));";
+        argidx += 1;
+    }
 
-    result += desc + F"func {func_name}(";
-    for (let idx, (arg_name, arg_type): args)
-    {
-        if (idx != 0)
-            result += ", ";
-        result += F"{arg_name}: {arg_type}";
-    }
-    result += F")\{ return {func_name}_uf_fimpl(";
-    for (let idx, (arg_name, _): args)
-    {
-        if (idx != 0)
-            result += ", ";
-        result += arg_name;
-    }
-    result += ");}";
-
-    result += F"func {func_name}_uf_impl(";
-    for (let idx, (arg_name, arg_type): args)
-    {
-        if (idx != 0)
-            result += ", ";
-        result += F"{arg_name}: {arg_type}";
-    }
-    result += ")\n";
+    let mut result = F"let {func_name}_uf_vin = vertex_in::create();"
+        + F"let {func_name}_uf_args = ({vin_decls});"
+        + F"let {func_name}_uf_fimpl = "
+        + F"shader_function::register(\"{func_name}\", {func_name}_uf_args, {func_name}_uf_impl({func_name}_uf_args...));"
+        + F"{desc} func {func_name}({arg_name_decls})\{ return {func_name}_uf_fimpl({arg_name_list});}"
+        + F"func {func_name}_uf_impl({arg_name_decls})\n"
+        ;
 
     return result;
 }

@@ -54,17 +54,17 @@ namespace editor::gui
         };
         public func show_all_editor_form(self: EditorContext)
         {
-            for (let _, c : self.m_editor_form_controlor)
+            for (let (_, c) : self.m_editor_form_controlor)
                 c.m_open->set(true);
         }
         public func hide_all_editor_form(self: EditorContext)
         {
-            for (let _, c : self.m_editor_form_controlor)
+            for (let (_, c) : self.m_editor_form_controlor)
                 c.m_open->set(false);
         }
         func begin_debug_and_hide_all_editor_form(self: EditorContext)
         {
-            for (let _, c : self.m_editor_form_controlor)
+            for (let (_, c) : self.m_editor_form_controlor)
             {
                 match (c.m_old_state)
                 {
@@ -79,7 +79,7 @@ namespace editor::gui
         }
         func end_debug_and_restore_all_editor_form(self: EditorContext)
         {
-            for (let _, c : self.m_editor_form_controlor)
+            for (let (_, c) : self.m_editor_form_controlor)
             {
                 match (c.m_old_state)
                 {

@@ -38,7 +38,7 @@ namespace editor::gui::edit_forms
             let all_systems = []mut: typeof(context.not_append_types);
             context.not_append_types->swap(all_systems);
         
-            for (let _, sys : all_systems)
+            for (let sys : all_systems)
                 // 不显示所有编辑器/图形系统
                 if (!sys->name()->beginwith("Editor::"))
                     if (sys->name()->beginwith("Translation::"))
@@ -77,20 +77,20 @@ namespace editor::gui::edit_forms
             let all_systems = []mut: typeof(context.not_append_types);
             context.not_append_types->swap(all_systems);
         
-            for (let _, sys : all_systems)
+            for (let sys : all_systems)
                 // 不显示所有编辑器/图形系统
                 if (!sys->name()->beginwith("Editor::"))
                     context.not_append_types->add(sys);
     
             // 处理一下已经创建/添加的系统
-            for (let _, actived_sys : world->get_all_systems())
+            for (let actived_sys : world->get_all_systems())
                 if (!actived_sys->name()->beginwith("Editor::"))
                     context->active(actived_sys->name());
     
             match(proj->get_worlds_runtime_systems(world))
             {
             value(runtime_systems)?
-                for (let _, actived_sys : runtime_systems)
+                for (let actived_sys : runtime_systems)
                     context->append(actived_sys->name());
             none?
                 ;
@@ -173,7 +173,7 @@ namespace editor::gui::edit_forms
         using je::gui;
         do BeginChildSize("active_system", width, height);
             Text("环境系统（编辑/运行时生效）");
-            for(let _, component_type : context.has_active_types)
+            for(let component_type : context.has_active_types)
                 show_system(component_type->name());
         EndChild();
 
@@ -196,7 +196,7 @@ namespace editor::gui::edit_forms
         using je::gui;
         do BeginChildSize("append_system", width, height);
             Text("运行时系统（运行时生效）");
-            for(let _, component_type : context.has_append_types)
+            for(let component_type : context.has_append_types)
                 show_system(component_type->name());
         EndChild();
 
@@ -219,7 +219,7 @@ namespace editor::gui::edit_forms
         using je::gui;
         do BeginChildSize("usable_system", width, 0.);
             Text("可用系统");
-            for(let _, component_type : context.not_append_types)
+            for(let component_type : context.not_append_types)
                 show_system(component_type->name());
         EndChild();
 
@@ -285,7 +285,7 @@ namespace editor::gui::edit_forms
 
                             created_world->set_name(world_context.name);
 
-                            for (let _, active_sys : world_context.has_active_types)
+                            for (let active_sys : world_context.has_active_types)
                                 do created_world->add_system(active_sys);
 
                             if (! world_context.current_project->set_worlds_runtime_systems(

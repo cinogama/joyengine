@@ -8,6 +8,7 @@ import je::editor;
 import pkg::try;
 import pkg::fsys;
 import pkg::image;
+import pkg::iterator;
 
 using std;
 using je;
@@ -509,9 +510,9 @@ namespace editor::gui::tilemap
             self.texture = tilemaptex;
             
             try! newtiles = _clip_tiles(context, self.uid, tilemaptex, xcount, ycount);
-            for (let ix, ytiles : self.tiles)
+            for (let (ix, ytiles) : self.tiles->iter |> iterator::enumerate)
             {
-                for (let iy, tile : ytiles)
+                for (let (iy, tile) : ytiles->iter |> iterator::enumerate)
                 {
                     match (newtiles->get(ix)=>>\ys = ys->get(iy);)
                     {
@@ -632,7 +633,7 @@ namespace editor::gui::tilemap
             let tilemap_path = self.m_context->get_project->get_path / "resource" / "tilemap";
             do fsys::mkdir(tilemap_path);
 
-            for (let _, tileset: self.m_tile_sets)
+            for (let tileset: self.m_tile_sets)
             {
                 if (tileset.modifed == false)
                     continue;  // 如果没有修改，就不保存了
@@ -655,7 +656,7 @@ namespace editor::gui::tilemap
             let tilemap_path = self.m_context->get_project->get_path / "resource" / "tilemap";
             do fsys::mkdir(tilemap_path);
 
-            for (let _, file: fsys::allsubpath(tilemap_path)->unwarpor([]))
+            for (let file: fsys::allsubpath(tilemap_path)->unwarpor([]))
             {
                 if (fsys::extension(file)->lower == ".jetileset4")
                 {
@@ -682,18 +683,18 @@ namespace editor::gui::tilemap
         {
             // 获取m_tile_sets的uid
             let tileset_id_mapping = {}mut: map<string, int>;
-            for (let index, tileset: self.m_tile_sets)
+            for (let (index, tileset): self.m_tile_sets->iter |> iterator::enumerate)
             {
                 tileset_id_mapping->set(tileset.uid, index);
             }
             
             let tilelists = []mut: vec<array<int>>;
             let unwalkable_mapping = {}mut: map<int, map<int, void>>;
-            for (let layer, tiles: self.m_layerd_tiles)
+            for (let (layer, tiles): self.m_layerd_tiles)
             {
-                for (let x, ytiles: tiles)
+                for (let (x, ytiles): tiles)
                 {
-                    for (let y, tile: ytiles)
+                    for (let (y, tile): ytiles)
                     {
                         tilelists->add([layer, x, y, tileset_id_mapping[tile.uid], tile.location[0], tile.location[1]]);
                         if (!tile.walkable)
@@ -716,7 +717,7 @@ namespace editor::gui::tilemap
 
             let existed_tileset_uid = self.m_tile_sets->>\tileset = (tileset.uid, tileset);->mapping;
             let tileset_mapping = {}mut: map<int, TileMapSet>;
-            for (let index, tileset_id: tileset_id_mapping)
+            for (let (index, tileset_id): tileset_id_mapping->iter |> iterator::enumerate)
             {
                 match (existed_tileset_uid->get(tileset_id))
                 {
@@ -727,7 +728,7 @@ namespace editor::gui::tilemap
                 }
             }
 
-            for (let _, tile : tiles)
+            for (let tile : tiles)
             {
                 let (layer, x, y, tid, tx, ty) = (tile[0], tile[1], tile[2], tile[3], tile[4], tile[5]);
                 match (tileset_mapping->get(tid))
@@ -835,11 +836,11 @@ namespace editor::gui::tilemap
                                                         open = false;
                                                         t.modifed = true;
 
-                                                        for (let layer, tiles: self.m_layerd_tiles)
+                                                        for (let (layer, tiles): self.m_layerd_tiles)
                                                         {
-                                                            for (let x, ytiles: tiles)
+                                                            for (let (x, ytiles): tiles)
                                                             {
-                                                                for (let y, tile: ytiles)
+                                                                for (let (y, tile): ytiles)
                                                                 {
                                                                     if (tile.uid == t.uid)
                                                                     {
@@ -905,7 +906,7 @@ namespace editor::gui::tilemap
 
                 if (BeginTabBar("TileMap 集合"))
                 {
-                    for (let index, tset: self.m_tile_sets)
+                    for (let (index, tset): self.m_tile_sets->iter |> iterator::enumerate)
                     {
                         let show_this_tab = BeginTabItem(F"{tset.name}##{index}");
 
@@ -935,11 +936,11 @@ namespace editor::gui::tilemap
                                         if (opt)
                                         {
                                             // 清除所有使用此图集的Tile
-                                            for (let layer, tiles: self.m_layerd_tiles)
+                                            for (let (layer, tiles): self.m_layerd_tiles)
                                             {
-                                                for (let x, ytiles: tiles)
+                                                for (let (x, ytiles): tiles)
                                                 {
-                                                    for (let y, tile: ytiles)
+                                                    for (let (y, tile): ytiles)
                                                     {
                                                         if (tile.uid == tset.uid)
                                                             do self.m_layerd_tiles[layer][x]->remove(y);
@@ -1118,11 +1119,11 @@ namespace editor::gui::tilemap
                 let scaled_tile_size = self.m_scale * BASE_TILE_SIZE;
                 let (oldoffsetx, oldoffsety) = self.m_offset;
 
-                for (let layer, tiles : self.m_layerd_tiles)
+                for (let (layer, tiles) : self.m_layerd_tiles)
                 {
-                    for (let x, ytiles: tiles)
+                    for (let (x, ytiles): tiles)
                     {
-                        for (let y, tile : ytiles)
+                        for (let (y, tile) : ytiles)
                         {
                             // 将瓦片画出来~
                             let mut tilealpha = 255;
@@ -1200,11 +1201,11 @@ namespace editor::gui::tilemap
 
         func walk_through(self: TileEditContext, callback: (int, int, int, Tile)=> void)
         {
-            for (let layer, tiles : self.m_layerd_tiles)
+            for (let (layer, tiles) : self.m_layerd_tiles)
             {
-                for (let x, ytiles :  tiles)
+                for (let (x, ytiles) :  tiles)
                 {
-                    for (let y, tile :  ytiles)
+                    for (let (y, tile) :  ytiles)
                     {
                         callback(layer, x, y, tile);
                     }
@@ -1490,9 +1491,9 @@ namespace editor::gui::tilemap
                 });
 
            let result = []mut: vec<ChunkDatas>;
-           for (let x, ychunks: chunks)
+           for (let (x, ychunks): chunks)
            {
-                for (let y, chunk: ychunks)
+                for (let (y, chunk): ychunks)
                 {
                     result->add(ChunkDatas
                         {
@@ -1570,7 +1571,7 @@ namespace editor::gui::tilemap
                         }
                         if (export_image.m_export_layer_image)
                         {
-                            for (let layer, img: context->generate_layerd_big_texture(export_image.m_tile_pcount))
+                            for (let (layer, img): context->generate_layerd_big_texture(export_image.m_tile_pcount))
                             {
                                 if (!img->save((target_path / F"{name}_layer{layer}.png")->tostring))
                                     jeapi::gui::form::errmsg("错误", F"无法保存纹理到{target_path->tostring}");
@@ -1583,7 +1584,7 @@ namespace editor::gui::tilemap
                             let target_chunk_path = target_path / F"{name}_chunks";
                             
                             do fsys::mkdir(target_chunk_path);
-                            for (let _, p: fsys::subpath(target_chunk_path)->unwarpor([]))
+                            for (let p: fsys::subpath(target_chunk_path)->unwarpor([]))
                             {
                                 match (fsys::remove(p))
                                 {
@@ -1599,7 +1600,7 @@ namespace editor::gui::tilemap
                                 m_image_layers: array<int>,
                             };
                             let saved_chunks = []mut: vec<SavedChunkInformation>;
-                            for (let _, chunk: context->generate_chunked_texture(export_image.m_tile_pcount, chunksz))
+                            for (let chunk: context->generate_chunked_texture(export_image.m_tile_pcount, chunksz))
                             {
                                 saved_chunks->add(SavedChunkInformation
                                     {
@@ -1607,7 +1608,7 @@ namespace editor::gui::tilemap
                                         m_image_layers = chunk.m_layers->keys,
                                     });
 
-                                for (let layer, (img, walkable): chunk.m_layers)
+                                for (let (layer, (img, walkable)): chunk.m_layers)
                                 {
                                     if (!img->save((target_chunk_path / F"chunk_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}_{layer}.png")->tostring))
                                         jeapi::gui::form::errmsg("错误", F"无法保存纹理到{target_chunk_path->tostring}");
@@ -1629,7 +1630,7 @@ namespace editor::gui::tilemap
 
                             // 保存区块信息
                             let chunks_pos_info = {}mut: map<int, map<int, string>>;
-                            for (let _, chunk: saved_chunks)
+                            for (let chunk: saved_chunks)
                             {
                                 if (!chunks_pos_info->contain(chunk.m_position.0))
                                     chunks_pos_info->set(chunk.m_position.0, {}mut);

@@ -170,7 +170,7 @@ func _launch(frame_place: int, partical_count: int)
             let col = color(fid, user_data) as (real, real, real, real);
 
             // Apply!
-            for (let _, pos : poses)
+            for (let pos : poses)
                 draw(fid, pos, col);
         }
     }
@@ -205,7 +205,7 @@ extern public func _start_baking(context: ParticalContext, econtext: _EditorCont
     }
 
     // Make sure ok, force update all texture.
-    for (let _, t : baking_cache)
+    for (let t : baking_cache)
         t->pix((0, 0))->set_color(t->pix((0, 0))->get_color());
 }
 "@;

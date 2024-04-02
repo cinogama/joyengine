@@ -4,6 +4,8 @@ import woo::std;
 import je;
 import je::gui;
 
+import pkg::iterator;
+
 using std;
 using je;
 using je::gui;
@@ -120,7 +122,7 @@ namespace editor::gui
             // 在此展示历史记录，可用于预览和撤回
             if (BeginListBox("##history", 200., h))
             {
-                for (let index, history : self.m_history)
+                for (let (index, history) : self.m_history->iter |> iterator::enumerate)
                 {
                     let clicked = SelectableSelected(F"{history.m_abs->replace("\n", "")}...##{index}", 
                         self.m_history_index == index);

@@ -38,7 +38,7 @@ namespace editor
         {
             let fetched_scripts = {}mut: map<path_t, int>;
             let _repeat_checker = {}mut: map<string, path_t>;
-            for (let _, p : allsubpath(self.m_project_path)->unwarpor([]))
+            for (let p : allsubpath(self.m_project_path)->unwarpor([]))
             {
                 if (isfile(p) && filename(p)->lower->endwith(type))
                 {
@@ -69,7 +69,7 @@ namespace editor
         func update_system(self: ToWooContext, new_scripts: map<path_t, (int, je::typeinfo)>, fullupdate: bool)
         {
             let fetched_scripts = self->fetch_file(".jesystem.wo");
-            for (let p, (c, t) : self.m_loaded_towoo)
+            for (let (p, (c, t)) : self.m_loaded_towoo)
             {
                 if (filename(p)->lower->endwith(".jesystem.wo"))
                 {
@@ -91,7 +91,7 @@ namespace editor
         func update_component(self: ToWooContext, new_scripts: map<path_t, (int, je::typeinfo)>, fullupdate: bool)
         {
             let fetched_scripts = self->fetch_file(".jecomponent.wo");
-            for (let p, (c, t) : self.m_loaded_towoo)
+            for (let (p, (c, t)) : self.m_loaded_towoo)
             {
                 if (filename(p)->lower->endwith(".jecomponent.wo"))
                 {
@@ -119,7 +119,7 @@ namespace editor
 
             self.m_bad_towoo_script->clear;
 
-            for (let p, c : fetched_components)
+            for (let (p, c) : fetched_components)
             {
                 // TODO: 文件系统特性(大小写问题)，考虑更正确的姿势
                 assert(filename(p)->lower->endwith(".jecomponent.wo"));
@@ -137,7 +137,7 @@ namespace editor
                 }
             }
             towoo::update_api();
-            for (let p, c : fetched_system)
+            for (let (p, c) : fetched_system)
             {
                 // TODO: 文件系统特性(大小写问题)，考虑更正确的姿势
                 assert(filename(p)->lower->endwith(".jesystem.wo"));
@@ -159,7 +159,7 @@ namespace editor
         }
         public func fast_check_for_update(self: ToWooContext)
         {
-            for (let p, (c, _) : self.m_loaded_towoo)
+            for (let (p, (c, _)) : self.m_loaded_towoo)
             {
                 if (isfile(p))
                 {
@@ -177,7 +177,7 @@ namespace editor
         public func check_for_update(self: ToWooContext)
         {
             let fetched_scripts = {}mut: map<path_t, int>;
-            for (let _, p : allsubpath(self.m_project_path)->unwarpor([]))
+            for (let p : allsubpath(self.m_project_path)->unwarpor([]))
             {
                 if (isfile(p) && (
                     filename(p)->lower->endwith(".jesystem.wo")
@@ -193,7 +193,7 @@ namespace editor
             }
             if (fetched_scripts->len == self.m_loaded_towoo->len)
             {
-                for (let p, (c, _) : self.m_loaded_towoo)
+                for (let (p, (c, _)) : self.m_loaded_towoo)
                 {
                     if (fetched_scripts->contain(p) == false || fetched_scripts[p] != c)
                         return true;
@@ -215,7 +215,7 @@ namespace editor
         }
         public func close(self: ToWooContext)
         {
-            for (let p, (_, tinfo) : self.m_loaded_towoo)
+            for (let (p, (_, tinfo)) : self.m_loaded_towoo)
             {
                 if (filename(p)->lower->endwith(".jecomponent.wo"))
                     towoo::unregister_component(tinfo);

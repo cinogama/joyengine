@@ -4,6 +4,8 @@
 import je;
 import je::editor;
 
+import pkg::iterator;
+
 import builtin::api::gui::errmsg;
 
 using je;
@@ -33,16 +35,16 @@ namespace jeapi
                             ->> \k, v = (k as string, v as string);
                         ;
                     ;
-                for (let c, ms : components)
+                for (let (c, ms) : components)
                 {
                     let members = base_components->getorset(c, {}mut);
-                    for (let m, v : ms)
+                    for (let (m, v) : ms)
                         members->set(m, v);
                 }
             }
             if (b->contain("removed_components"))
             {
-                for (let _, c: b["removed_components"] as array<dynamic>)
+                for (let c: b["removed_components"] as array<dynamic>)
                     do base_components->remove(c: string);
             }
             d->set("components", base_components: dynamic);
@@ -107,7 +109,7 @@ namespace jeapi
                 if (am->len != bm->len)
                     return false;
 
-                for (let m, val: am)
+                for (let (m, val): am)
                 {
                     if (bm->contain(m) == false)
                         return false;
@@ -150,12 +152,12 @@ namespace jeapi
             value(prefab_component_dat)?
                 {
                     let removed_component = []mut: vec<string>;
-                    for (let c, ms : prefab_component_dat)
+                    for (let (c, ms) : prefab_component_dat)
                     {
                         if (components->contain(c))
                         {
                             let result_ms = components[c];
-                            for (let m, v : ms)
+                            for (let (m, v) : ms)
                             {
                                 if (result_ms->get(m)->>\vv = vv == v;->valor(false))
                                     assert(result_ms->remove(m));
@@ -182,7 +184,7 @@ namespace jeapi
                     let mut remove_shaders = true;
                     if (prefab_shader_dat->len == shaders->len)
                     {
-                        for (let idx, pshad : prefab_shader_dat)
+                        for (let (idx, pshad) : prefab_shader_dat->iter |> iterator::enumerate)
                         {
                             if (!_is_same_shader(shaders[idx], pshad))
                             {
@@ -206,7 +208,7 @@ namespace jeapi
                     let mut remove_textures = true;
                     if (prefab_texture_dat->len == textures->len)
                     {
-                        for (let idx, ptex : prefab_texture_dat)
+                        for (let (idx, ptex) : prefab_texture_dat)
                         {
                             if (textures->contain(idx) == false || textures[idx] != ptex)
                             {
@@ -271,7 +273,7 @@ namespace jeapi
                     where shad_uniforms_dats = func()
                         {
                             let result = {}mut: map<string, array<dynamic>>;
-                            for(let name, uniform_val : shad->get_uniforms())
+                            for(let (name, uniform_val) : shad->get_uniforms())
                             {
                                 if (name->beginwith("JOYENGINE_"))
                                     continue; // 引擎的内置shader-uniform变量，跳过
@@ -481,7 +483,7 @@ namespace jeapi
                 ->> func(shaders: dynamic)
                     {
                         let shads = []mut: vec<(option<graphic::shader>, string, dict<dynamic, dynamic>)>;
-                        for (let _, shader_path_dat_pair : shaders: array<dynamic>)
+                        for (let shader_path_dat_pair : shaders: array<dynamic>)
                         {
                             let spath = shader_path_dat_pair: array<dynamic>[0] as string;
                             let s = graphic::shader::load(w->get_universe->option::value, spath);
@@ -533,9 +535,9 @@ namespace jeapi
             {
             ok(dats)?
                 {
-                    for (let _, (shad, uniform_vars) : dats)
+                    for (let (shad, uniform_vars) : dats)
                     {
-                        for (let uname, uval: uniform_vars)
+                        for (let (uname, uval): uniform_vars)
                             restore_shader_of_entity(shad, uname as string, uval as array<dynamic>);
                     }
                     entity->set_shaders(dats->>\shad_and_uvars = shad_and_uvars[0];);
@@ -543,11 +545,11 @@ namespace jeapi
             err(dats)?
                 if (in_editor)
                 {
-                    for (let _, (path, uniform_vars) : dats)
+                    for (let (path, uniform_vars) : dats)
                     {
                         let badshad = entity->editor::store_name_for_bad_shader_update(path);
 
-                        for (let uname, uval: uniform_vars)
+                        for (let (uname, uval): uniform_vars)
                             restore_shader_of_entity(badshad, uname as string, uval as array<dynamic>);
                     }
                 }
@@ -557,7 +559,7 @@ namespace jeapi
             do entity_dat->get("textures")
                 ->> func(textures)
                     {
-                        for (let passid, path : textures: dict<dynamic, dynamic>)
+                        for (let (passid, path) : textures: dict<dynamic, dynamic>)
                             do graphic::texture::load(w->get_universe->option::value, path as string)
                                 ->> \tex = entity->bind_texture(passid as int, tex);
                                 ;

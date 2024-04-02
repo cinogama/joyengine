@@ -983,7 +983,7 @@ extern func _init_towoo_component(name: string)
         decls->add((name, type, is_woolang_val ? option::value(woolang_val_init) | option::none));
     }
     let mut result = ";";
-    for (let _, (name, type, wooval) : decls)
+    for (let (name, type, wooval) : decls)
     {
         match (wooval)
         {
@@ -1083,7 +1083,7 @@ namespace je::towoo::system
         }
         public func anyof(self: ToWooSystemFuncJob, ts: array<je::typeinfo>)
         {
-            for (let _, t: ts)
+            for (let t: ts)
                 self.m_requirement->add((require_type::ANYOF, self.m_require_group, t));
             self.m_require_group += 1;
             return self;
@@ -1120,7 +1120,7 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
         argument_count: int,
         is_single_work: bool)=> void;
 
-    for (let _, workinfo : regitered_works)
+    for (let workinfo : regitered_works)
     {
         _register_towoo_system_job(
             registering_system_type,
@@ -1281,12 +1281,12 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
             break;
         else if (require == "contain")
         {
-            for (let _, t : read_type_list())
+            for (let t : read_type_list())
                 requirements.contain->add(t);
         }
         else if (require == "except")
         {
-            for (let _, t : read_type_list())
+            for (let t : read_type_list())
                 requirements.except->add(t);
         }
         else if (require == "anyof")
@@ -1302,26 +1302,26 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
 
     // OK Generate!
     let mut result = F"do je::towoo::system::register_job_function({job_func_name}\x29";
-    for (let _, (_, type, maynot) : arguments)
+    for (let (_, type, maynot) : arguments)
     {
         if (maynot)
             result += F"->maynot:<{type}>(\x29";
         else
             result += F"->contain:<{type}>(true\x29";
     }
-    for (let _, type : requirements.contain)
+    for (let type : requirements.contain)
         result += F"->contain:<{type}>(false\x29";
-    for (let _, type : requirements.except)
+    for (let type : requirements.except)
         result += F"->except:<{type}>(\x29";
-    for (let _, req : requirements.anyof)
+    for (let req : requirements.anyof)
     {
         result += F"->anyof([";
-        for (let _, t : req)
+        for (let t : req)
             result += F"{t}::type::typeinfo,";
         result += "]\x29";
     }
     result += F";\nfunc {job_func_name}(context: typeof(create(std::declval:<je::world>())), e: je::entity";
-    for (let _, (argname, type, maynot) : arguments)
+    for (let (argname, type, maynot) : arguments)
     {
         if (maynot)
             result += F", {argname}: option<{type}>";

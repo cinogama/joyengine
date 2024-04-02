@@ -1,6 +1,8 @@
 import je;
 import je::gui;
 
+import pkg::iterator;
+
 using je;
 using je::gui;
 
@@ -59,9 +61,9 @@ namespace jeapi::gui::widget
         let new_position_groups = []mut: vec<array<(real, real)>>;
         let mut updated = false;
 
-        for (let group_index, _: poses_group)
+        for (let mut group_index = 0; group_index < poses_group->len; group_index += 1)
         {
-            for (let _, (p0, p1) : line_liner(poses_group, group_index))
+            for (let (p0, p1) : line_liner(poses_group, group_index))
             {
                 // 画线!
                 let (x0, y0) = p0; 
@@ -74,12 +76,12 @@ namespace jeapi::gui::widget
             }
         }
 
-        for (let group_index, poses: poses_group)
+        for (let (group_index, poses): poses_group->iter |> iterator::enumerate)
         {
             let new_position = []mut: vec<(real, real)>;
             let group_color_depth_ratio = 1.0 - group_index: real / poses_group->len: real;
 
-            for (let index, (x, y) : poses)
+            for (let (index, (x, y)) : poses->iter |> iterator::enumerate)
             {
                 let pos = (x * position_ratio + centerx, centery - y * position_ratio);
                 

@@ -165,7 +165,7 @@ namespace editor
             // 2. 开始复制库文件, 顺便确认支持的平台
             let platform_support = {}mut : map<platform_t, bool>;
 
-            for (let platform, files : ENGINE_CORE_LIBRARYS_PATHS)
+            for (let (platform, files) : ENGINE_CORE_LIBRARYS_PATHS)
             {
                 do files->get_all_files
                     ->> \name = copy(
@@ -201,7 +201,7 @@ namespace editor
 
             if (!failed_generating->empty)
             {
-                for (let _, r : failed_generating ->> \r = r[1]->error->val;)
+                for (let r : failed_generating ->> \r = r[1]->error->val;)
                     je::logerr(r);
 
                 return result::err(F"创建模块的CMake文件时失败：\n{
@@ -219,7 +219,7 @@ namespace editor
                 ["conf"] = enabled_generating: dynamic,
             }->serialize->val));
             
-            for (let _, config : generating_results ->> \c = c[1]->okay->val;)
+            for (let config : generating_results ->> \c = c[1]->okay->val;)
             {
                 // 3.1 把生成出来的CMake保存起来
                 let aim_cmake_dir = cxx_proj_path/"builder"/config.config;
@@ -357,7 +357,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
         {
             using fsys;
 
-            for (let _, p : subpath(dir)->okay->val)
+            for (let p : subpath(dir)->okay->val)
             {
                 if (isdir(p))
                 {
@@ -525,7 +525,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
                     value((subpaths, srclist))?
                         {
                             let mut varified_file = 0;
-                            for (let _, path : subpaths) 
+                            for (let path : subpaths) 
                             {
                                 if (fsys::isfile(path))
                                 {
@@ -557,7 +557,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
         func generate_varify_info(self: CxxProject)
         {
             let source_code_versions = {}mut: map<string, int>;
-            for (let _, path : fsys::allsubpath(self.path)->unwarpor([])) 
+            for (let path : fsys::allsubpath(self.path)->unwarpor([])) 
             {
                 if (fsys::isfile(path))
                 {

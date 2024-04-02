@@ -63,7 +63,7 @@ extern func main(target_texture: je::graphic::texture)
             if (!vmm->run->has)
                 return result::err(F"脚本 {name} 执行失败");
 
-            for (let _, t : ts)
+            for (let t : ts)
             {
                 if (!vmm->invoke("main", [t: dynamic])->has)
                     return result::err(F"脚本 {name} 执行失败");
@@ -81,7 +81,7 @@ extern func main(target_texture: je::graphic::texture)
     {
         let r = {}mut: map<string, fsys::path_t>;
 
-        for (let _, path : fsys::allsubpath(fsys::normalize(std::exepath()))
+        for (let path : fsys::allsubpath(fsys::normalize(std::exepath()))
                 -> or(\_=[];)
                 -> connect(fsys::allsubpath(proj->get_path)
                     -> or(\_=[];))

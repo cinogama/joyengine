@@ -632,7 +632,7 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                             force_update();
                     };
 
-                    for (let _, (shader_display_name, shader_path_name) : editor_origin_shaders)
+                    for (let (shader_display_name, shader_path_name) : editor_origin_shaders)
                         if (MenuItem(shader_display_name))
                             jeapi::gui::form::input("创建着色器", F"将在{current_work_path}创建{shader_display_name}：",
                                 shader_path_name,
@@ -1426,7 +1426,7 @@ namespace $$MODULE_NAME$$
 
                 if (show_child)
                 {
-                    for (let _, subpath : path->childs(false))
+                    for (let subpath : path->childs(false))
                         _show_paths(subpath);
 
                     TreePop();
@@ -1465,7 +1465,7 @@ namespace $$MODULE_NAME$$
         }
         func update(self: LogHook, context: EditorContext)
         {
-            for (let _, e : context->get_logs)
+            for (let e : context->get_logs)
             {
                 self.m_logs->add(e);
                 self.m_display_setting[e[0]][3] += 1;
@@ -1474,7 +1474,7 @@ namespace $$MODULE_NAME$$
         func clear(self: LogHook)
         {
             self.m_logs->clear;
-            for (let _, e: self.m_display_setting)
+            for (let (_, e): self.m_display_setting)
             {
                 e[3] = 0;
             }
@@ -1488,7 +1488,7 @@ namespace $$MODULE_NAME$$
                     if (Button("清除"))
                         self->clear;
 
-                    for (let _, setting: self.m_display_setting)
+                    for (let (_, setting): self.m_display_setting)
                     {
                         do CheckBox(setting[0], setting[1])->>\c=setting[1] = c;;
                     }

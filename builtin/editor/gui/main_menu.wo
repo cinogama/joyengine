@@ -95,7 +95,7 @@ namespace editor::gui
                             
                             Separator();
                             
-                            for (let item, (name, desc) : config_name_describe)
+                            for (let (item, (name, desc)) : config_name_describe)
                             {
                                 let col = GetStyleColor(item);
                                 Text(name); SameLine();
@@ -210,7 +210,7 @@ namespace editor::gui
                                 value(show)?
                                     if (show)
                                     {
-                                        for (let _, iconfig : context->get_project->get_configs)
+                                        for (let (_, iconfig) : context->get_project->get_configs)
                                         {
                                             do iconfig->edit();
                                             Separator();
@@ -236,7 +236,7 @@ namespace editor::gui
                         if (scripts->empty())
                             do MenuItemEnabled("空", false);
                         else
-                            for (let _, script_name : scripts)
+                            for (let script_name : scripts)
                                 if (MenuItem(script_name))
                                 {
                                     match (tools::run_tool_script(context, script_name, context->get_project))

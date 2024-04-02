@@ -1,23 +1,24 @@
 import woo::std;
-import build::pkg::fsys;
-import build::pkg::try;
+
+import pkg::fsys;
+import pkg::try;
+import pkg::iterator;
 
 using fsys;
+using iterator;
 
-let third_party_located_path = workpath() / "3rd";
-let build_path = workpath() / "build";
+let workpath = fsys::workpath();
+let third_party_located_path = workpath / "3rd";
+let build_path = workpath / "build";
 
 func copy_all_licenses()
 {
-    try! third_party_path = subpath(third_party_located_path)
-        ->> \paths = paths
-            ->  forall(\path = isdir(path);)
-            ;
-        ;
-    for (let _, _3rd_path : third_party_path)
+    try! third_party_paths = subpath(third_party_located_path);
+
+    for (let _3rd_path : third_party_paths->iter |> forall(\path = isdir(path);))
     {
         try! subpath_of_3rd = allsubpath(_3rd_path);
-        for (let _, p : subpath_of_3rd)
+        for (let p : subpath_of_3rd)
         {
             if (isfile(p) && (
                 filename(p)->lower->find("license") != -1
@@ -28,6 +29,8 @@ func copy_all_licenses()
                 let target_path = build_path / "licenses" / relpath;
                 do mkdir(parent(target_path));
                 do copy(p, target_path);
+
+                std::println("copy license file: ", p->tostring());
             }
         }
     }
@@ -50,7 +53,13 @@ func copy_opengles_emu_env_libs()
     do copy(gles_env_path / "openglessl", build_path / "openglessl");
 }
 
+func copy_pkgs()
+{
+    do mkdir(build_path / "pkg");
+    do copy(workpath / "pkg", build_path / "pkg");
+}
+
+copy_pkgs();
+copy_opengles_emu_env_libs();
 if (copy_all_licenses()->iserr)
     return -1;
-
-copy_opengles_emu_env_libs();

@@ -87,7 +87,7 @@ namespace editor::gui::edit_forms
         }
         if (show_uniforms)
         {
-            for(let name, uniform_val : shader->get_uniforms())
+            for(let (name, uniform_val) : shader->get_uniforms())
             {
                 if (name->beginwith("JOYENGINE_"))
                     continue; // 引擎的内置shader-uniform变量，跳过显示
@@ -234,7 +234,7 @@ namespace editor::gui::edit_forms
                             do BeginChildSize("component_editor", 0., 2. * _1_3_height);
 
                             let grouped_components = {}mut: map<string, vec<(je::typeinfo, je::component)>>;
-                            for (let ctype, component: cur_e->editor::get_components)
+                            for (let (ctype, component): cur_e->editor::get_components)
                             {
                                 let names = ctype->name->split("::");
                                 let groupname = names->len >= 2 ? names[0] | "<无>";
@@ -243,7 +243,7 @@ namespace editor::gui::edit_forms
                                         ->add((ctype, component));
                             }
 
-                            for (let groupname, components: grouped_components)
+                            for (let (groupname, components): grouped_components)
                             {
                                 if (!get_is_albe_to_display_debug_entity() && groupname == "Editor")
                                     // 事编辑器组件，跳过显示，不然就露馅了
@@ -252,7 +252,7 @@ namespace editor::gui::edit_forms
                                 TextDisabled(groupname);
 
                                 BeginGroup();
-                                for (let _, (ctype, component) : components->>\tc = (tc[0]->name, tc);->mapping)
+                                for (let (ctype, component) : components)
                                 {
                                     // 嘿，我知道这个长长的东西很诡异，但是这个的功能只是把类型名的开头去掉，剩下的部分中间用"::"连接拼起来
                                     if (TreeNodeEx(ctype->name->split("::")->sub(1)->reduce(\l, r= l + "::" + r;)->or(\=ctype->name;),
@@ -293,7 +293,7 @@ namespace editor::gui::edit_forms
                                             }
                                         });
 
-                                        for (let _, (mname, mtype, mvalue): component->get_members)
+                                        for (let (mname, mtype, mvalue): component->get_members)
                                         {
                                             do InvisibleButton(F"##{mname}$PADDING", (2., 1.));
                                             SameLine();
@@ -333,7 +333,7 @@ namespace editor::gui::edit_forms
                                         let bad_shader_paths = cur_e->editor::get_bad_shader_paths();
                                         TextDisabled(F"有{bad_shader_paths->len}个着色器存在问题:");
 
-                                        for (let _, path: bad_shader_paths)
+                                        for (let path: bad_shader_paths)
                                         {
                                             do Button(path);
                                             jeapi::gui::context_menu(func(){
@@ -359,7 +359,7 @@ namespace editor::gui::edit_forms
                                         let mut shaders = cur_e->get_shaders();
 
                                         let mut index = 0, mut shaders_has_updated = false;
-                                        for (let _, shader : shaders->dup())
+                                        for (let shader : shaders->dup())
                                         {
                                             match (show_shader(context, cur_e, shader, index))
                                             {
@@ -402,7 +402,7 @@ namespace editor::gui::edit_forms
                                                 do MenuItemEnabled("无", false);
                                             else
                                             {
-                                                for (let _, path : shaders_in_project)
+                                                for (let path : shaders_in_project)
                                                 {
                                                     let npath = context->get_project->make_path_normalize(path);
                                                     if (MenuItem(npath))

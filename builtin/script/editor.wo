@@ -8,6 +8,7 @@ import je::gui;
 import je::towoo;
 
 import pkg::worst;
+import pkg::iterator;
 
 import builtin::api::gui::file;
 import builtin::api::gui::poseditor;
@@ -485,7 +486,7 @@ namespace Light2D::Range::light_shape
                 func(a, i)
                 {
                     let r = []mut: vec<((real, real), (real, real))>;
-                    for (let idx, p : a[i])
+                    for (let (idx, p) : a[i]->iter |> iterator::enumerate)
                     {
                         r->add((a[i][idx - 1], p));
 
@@ -510,7 +511,7 @@ namespace Light2D::Range::light_shape
             }
 
             let new_strength_data = []mut: vec<real>;
-            for (let i, st : strength_data)
+            for (let (i, st) : strength_data->iter |> iterator::enumerate)
             {
                 Text(F"强度 {i}");
                 SameLine();
@@ -579,7 +580,7 @@ namespace Light2D::BlockShadow::block_mesh
                 func(a, i)
                 {
                     let r = []mut: vec<((real, real), (real, real))>;
-                    for (let idx, p : a[i])
+                    for (let (idx, p) : a[i]->iter |> iterator::enumerate)
                     {
                         if (idx > 0)
                             r->add((a[i][idx - 1], p));
@@ -648,7 +649,7 @@ namespace Animation2D::FrameAnimation::animation_list
 
             let mut newval = []mut: vec<animation_state>;
 
-            for (let idx, state : val: array<animation_state>)
+            for (let (idx, state) : val: array<animation_state>->iter |> iterator::enumerate)
             {
                 let mut path = state.m_path;
                 let mut animation = state.m_animation;

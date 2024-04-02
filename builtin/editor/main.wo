@@ -10,6 +10,7 @@ import woo::debug;
 import pkg::fsys;
 import pkg::interface;
 import pkg::makenew;
+import pkg::iterator;
 
 import je;
 import je::editor;
@@ -101,7 +102,7 @@ using Path = struct {
 
         if (show_child)
         {
-            for (let _, child_path : path->childs(false))
+            for (let child_path : path->childs(false))
                 match(child_path->show())
                 {
                 value(result)?
@@ -234,7 +235,7 @@ func my_ask_for_get_yes_no_cancel_result(
                         {
                             Text("组件：");
                             PushStyleColor(ImGuiCol::ImGuiCol_Text, (20, 125, 175, 255));
-                            for (let _, c: missing_comps)
+                            for (let c: missing_comps)
                                 Text(c);
                             PopStyleColor();
                         }
@@ -242,7 +243,7 @@ func my_ask_for_get_yes_no_cancel_result(
                         {
                             Text("系统：");
                             PushStyleColor(ImGuiCol::ImGuiCol_Text, (175, 125, 20, 255));
-                            for (let _, s: missing_syss)
+                            for (let s: missing_syss)
                                 Text(s);
                             PopStyleColor();
                         }
@@ -494,7 +495,7 @@ for (;;)
                     TextDisabled("历史项目");
                     do BeginChildSize("##history", 0., 100.);
 
-                    for (let index, dat : historys)
+                    for (let (index, dat) : historys->iter |> iterator::enumerate)
                     {
                         let context_menu_func = func()
                         {

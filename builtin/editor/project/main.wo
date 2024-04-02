@@ -159,7 +159,7 @@ namespace editor
             self->create_dump(dumpped);
 
             // OK 接下来在当前世界上创建游戏世界，至于在哪个世界渲染……emm
-            for (let _, (wdat, _) : context.m_dumped_editing_worlds)
+            for (let (wdat, _) : context.m_dumped_editing_worlds)
             {
                 let wdat_map = wdat->tomap();
                 let syss = wdat_map->getor("runtime_systems", []: dynamic) as array<dynamic>->connect(
@@ -481,7 +481,7 @@ namespace editor
             try! self = create(dat["name"] as string, path);
 
             // 先加载配置！这非常重要！
-            for (let name, val : dat["configs"] as dict<dynamic, dynamic>->> \k, v = (k as string, v as string);)
+            for (let (name, val) : dat["configs"] as dict<dynamic, dynamic>->> \k, v = (k as string, v as string);)
             {
                 if (! self.m_configs->get(name)->> \config = config->parse(val);->valor(false))
                     je::logerr(F"选项 {name} = {val} 未在项目中找到或设置失败");
@@ -514,7 +514,7 @@ namespace editor
             match (fsys::readall(self.m_path / ".runtime" / "world.list")=>> \dat = dat->dict::deserialize;)
             {
             value(dat)?
-                for (let wpath, isediting : dat)
+                for (let (wpath, isediting) : dat)
                 {
                     match (self->load_world(self.m_path / wpath as string))
                     {
@@ -626,7 +626,7 @@ namespace editor
         }
         public func free_modules_after_close(self: Project)
         {
-            for (let _, m : self.m_modules)
+            for (let (_, m) : self.m_modules)
                 m->close;
         }
         public func wait(self: Project)

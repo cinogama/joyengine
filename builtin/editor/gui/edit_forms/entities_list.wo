@@ -19,7 +19,7 @@ namespace editor::gui::edit_forms
 {
     func _is_ancestor(cur: jeapi::debug::EntityChilds, checking: jeapi::debug::EntityChilds)
     {
-        for (let _, child: cur.childs)
+        for (let child: cur.childs)
         {
             if (child.uid == checking.uid)
                 return true;
@@ -419,7 +419,7 @@ namespace editor::gui::edit_forms
                             {
                                 e.uid->justdo(\e = e->close(););
                                 if (close_all)
-                                    for (let _, ce : e.childs)
+                                    for (let ce : e.childs)
                                         close_entity_impl(ce, close_all);
                             }
                             match (edata)

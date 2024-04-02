@@ -3,6 +3,7 @@ import je::gui;
 
 import pkg::image;
 import pkg::fsys;
+import pkg::iterator;
 
 import tools;
 import imagescripts;
@@ -185,7 +186,7 @@ namespace editor::gui::drawpannel
             {
                 if (BeginTabBar("##draw_textures"))
                 {
-                    for (let index, (passid, texture, path) : images)
+                    for (let (index, (passid, texture, path)) : images->iter |> iterator::enumerate)
                     {
                         let history_mgr = draw_context.edited_textures[texture][1];
 
@@ -295,7 +296,7 @@ namespace editor::gui::drawpannel
                                     Separator();
                                     if (BeginMenu("从……复制"))
                                     {
-                                        for (let _, (opassid, otexture, path) : images)
+                                        for (let (opassid, otexture, path) : images)
                                         {
                                             if (MenuItemEnabled(F"通道{opassid}：{path->valor("<内置>")}", passid != opassid))
                                             {
@@ -320,7 +321,7 @@ namespace editor::gui::drawpannel
                                         if (scripts->empty)
                                             do MenuItemEnabled("<无>", false);
 
-                                        for (let _, name: scripts)
+                                        for (let name: scripts)
                                         {
                                             if (MenuItem(name))
                                             {
@@ -398,7 +399,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                             }
 
                             Text(F"当前工具: \n {draw_context.drawtoolname}");
-                            for (let _, (name, tool_create_method) : all_draw_tools)
+                            for (let (name, tool_create_method) : all_draw_tools)
                             {
                                 if (ButtonSize(name, (100., 0.)))
                                 {
@@ -534,7 +535,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
             let saving_image_action = []mut: vec<()=> void>;
 
             // 遍历所有被编辑过的图片，直接保存！
-            for (let _, (passid, edited_texture, path) : images)
+            for (let (passid, edited_texture, path) : images)
             {
                 if (!draw_context.edited_textures[edited_texture][1]->edited)
                     continue;
@@ -588,14 +589,14 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                     if (!ok)
                     {
                         // 不保存，但是因为共享纹理机制，需要把纹理reset回原始状态
-                        for (let _, (_, history) : draw_context.edited_textures)
+                        for (let (_, (_, history)) : draw_context.edited_textures)
                         {
                             history->reset();
                         }
                         return;
                     }
                         
-                    for (let _, act : saving_image_action)
+                    for (let act : saving_image_action)
                         act();
                 });
             }

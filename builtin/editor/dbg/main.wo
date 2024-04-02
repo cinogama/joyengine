@@ -79,7 +79,7 @@ namespace jeapi::debug
                     ;
             };
 
-        for (let _, jobs : current_request)
+        for (let (_, jobs) : current_request)
         {
             do jobs->> \job = job(option::none);;
             // gui::form::errmsg("失败", F"操作无法完成，不存在的实体：\n{euid}");;
@@ -96,7 +96,7 @@ namespace jeapi::debug
         let anchored_entity = {}mut: map<string, EntityChilds>;
         let pending_entity = []mut: vec<EntityChilds>;
 
-        for (let _, e: all_entities)
+        for (let e: all_entities)
         {
             let ech = EntityChilds{
                 e = e, 
@@ -135,7 +135,7 @@ namespace jeapi::debug
         }
 
         // OK 所有实体过了一遍了，处理待定集的实体
-        for (let _, pending_ech : pending_entity)
+        for (let pending_ech : pending_entity)
         {
             match (anchored_entity->get(pending_ech.e->editor::get_parent_anchor_uid->val))
             {
@@ -162,7 +162,7 @@ namespace jeapi::debug
     {
         func find_entity(es: array<EntityChilds>, eid: Eeid)=> option<EntityChilds>
         {
-            for (let _, e : es)
+            for (let e : es)
             {                
                 if (e.uid == eid)
                     return option::value(e);

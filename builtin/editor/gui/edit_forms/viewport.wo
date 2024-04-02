@@ -201,7 +201,7 @@ namespace editor::gui::edit_forms
                             if (!bad_scripts->empty)
                             {
                                 do MenuItemEnabled("编译错误", false);
-                                for (let _, p : bad_scripts)
+                                for (let p : bad_scripts)
                                 {
                                     if (MenuItem(ToWooContext::pure_component_or_system_name(fsys::purename(p))))
                                         jeapi::gui::widget::invoke_click_file_callback(proj->make_path_normalize(p));
@@ -212,7 +212,7 @@ namespace editor::gui::edit_forms
                             if (!removing_comps->empty)
                             {
                                 do MenuItemEnabled("丢失组件", false);
-                                for (let _, p : removing_comps)
+                                for (let p : removing_comps)
                                 {
                                     do MenuItem(p);
                                 }
@@ -221,7 +221,7 @@ namespace editor::gui::edit_forms
                             if (!removing_syss->empty)
                             {
                                 do MenuItemEnabled("丢失系统", false);
-                                for (let _, p : removing_syss)
+                                for (let p : removing_syss)
                                 {
                                     do MenuItem(p);
                                 }
@@ -229,7 +229,7 @@ namespace editor::gui::edit_forms
                             }
 
                             do MenuItemEnabled("组件", false);
-                            for (let p, _: towoo_context->get_loaded_towoo)
+                            for (let (p, _): towoo_context->get_loaded_towoo)
                             {
                                 if (fsys::filename(p)->lower->endwith(".jecomponent.wo"))
                                     if (MenuItem(ToWooContext::pure_component_or_system_name(fsys::purename(p))))
@@ -237,7 +237,7 @@ namespace editor::gui::edit_forms
                             }
                             Separator();
                             do MenuItemEnabled("系统", false);
-                            for (let p, _: towoo_context->get_loaded_towoo)
+                            for (let (p, _): towoo_context->get_loaded_towoo)
                             {
                                 if (fsys::filename(p)->lower->endwith(".jesystem.wo"))
                                     if (MenuItem(ToWooContext::pure_component_or_system_name(fsys::purename(p))))

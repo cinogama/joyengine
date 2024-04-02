@@ -134,7 +134,7 @@ namespace jeapi::loader
                     let parent_path = _get_located_path(chunk_path);
                     let result = {}mut: map<int, layer>;
 
-                    for (let layer_id, layer_path : dat)
+                    for (let (layer_id, layer_path) : dat)
                     {
                         do try!
                         {
@@ -164,18 +164,18 @@ namespace jeapi::loader
             }
             func close(self: chunk)
             {
-                for (let _, l : self.m_cached_layers)
+                for (let (_, l) : self.m_cached_layers)
                     l->close();
             }
 
             func instance(self: chunk, callback: layer::InstanceEntityCallbackT)
             {
-                for (let _, l : self.m_cached_layers)
+                for (let (_, l) : self.m_cached_layers)
                     l->instance(callback);
             }
             func unload(self: chunk)
             {
-                for (let _, l : self.m_cached_layers)
+                for (let (_, l) : self.m_cached_layers)
                     l->unload();
             }
         }
@@ -191,14 +191,14 @@ namespace jeapi::loader
 
                 return try!
                     {
-                        for (let dx, dv : dat)
+                        for (let (dx, dv) : dat)
                         {
                             try! x = dx->trycast:<int>;
                             try! v = dv->trycast:<dict<dynamic, dynamic>>;
 
                             let chunk_line = {}mut: map<int, chunk>;
 
-                            for (let dy, cpath : v)
+                            for (let (dy, cpath) : v)
                             {
                                 do try!
                                 {
@@ -227,8 +227,8 @@ namespace jeapi::loader
                     }
                     catch!
                     {
-                        for (let _, cs : result)
-                            for (let _, c : cs)
+                        for (let (_, cs) : result)
+                            for (let (_, c) : cs)
                                 c->close();
                     };
             }
@@ -245,8 +245,8 @@ namespace jeapi::loader
         }
         public func close(self: chunkloader)
         {
-            for (let _, cs : self.m_chunks)
-                for (let _, c : cs)
+            for (let (_, cs) : self.m_chunks)
+                for (let (_, c) : cs)
                     c->close;
         }
         public func get_chunk(self: chunkloader, x: int, y: int)

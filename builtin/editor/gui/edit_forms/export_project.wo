@@ -147,7 +147,7 @@ namespace editor::gui::edit_forms
                 
                 // 0. 重新编译所有C++项目，只编译到输出目录中
                 // P.S. 这个序号真牛逼，人家都是1 2 3，这里是1 2 0 哈哈哈
-                do new! thread(func()
+                do thread::create(func()
                     {
                         config.m_pack_output_log->add("正在编译模块");
                         let compile_results = proj->get_all_modules->>\k, v = (k, (v, v->compile(je::platform(), option::none)));;
@@ -155,7 +155,7 @@ namespace editor::gui::edit_forms
                         if (error_compiling->empty == false)
                         {
                             // 有编译失败，跳过！
-                            for (let name, _ : error_compiling)
+                            for (let (name, _ ): error_compiling)
                             {
                                 config.m_pack_output_log->add(F"模块 {name} 编译失败");
                             }
@@ -190,7 +190,7 @@ namespace editor::gui::edit_forms
                             do fsys::mkdir(export_path/"builtin");
                             do fsys::writeall(export_path/"builtin"/".keepme", "");
 
-                            for (let _, (_, (opath, ppath)) : dll_module_path)
+                            for (let (_, (opath, ppath)) : dll_module_path)
                             {
                                 config.m_pack_output_log->add(F"复制 {ppath}");
 
@@ -198,7 +198,7 @@ namespace editor::gui::edit_forms
                                 do copy_origin(opath, ppath)->unwarp;
                             }
 
-                            for (let opath, (ppath, method) : all_need_pack_files)
+                            for (let (opath, (ppath, method)) : all_need_pack_files)
                             {
                                 match (method)
                                 {
@@ -214,7 +214,7 @@ namespace editor::gui::edit_forms
                                     }
                                 ACTION(action)?
                                     {
-                                        for (let _, (aopath, appath): action(config, fimg))
+                                        for (let (aopath, appath): action(config, fimg))
                                         {
                                             config.m_pack_output_log->add(F"打包 {appath}");
                                             assert(fimg->pack(aopath, appath));
@@ -309,7 +309,7 @@ namespace editor::gui::edit_forms
                                 $LOAD_WORLD_INSTANCE$
 
                                 // 在此激活所有世界
-                                for (let _, world : LOADED_WORLDS_MAPPING)
+                                for (let world : LOADED_WORLDS_MAPPING)
                                     world->set_able(true);
 
                                 // 在此调用运行时脚本（如果有）
@@ -320,20 +320,20 @@ namespace editor::gui::edit_forms
                                 // 关闭类型管理器
                                 je::towoo::unsafe::dynamic_parser::clear(); 
 
-                                for (let _, tinfo: LOADED_TOWOO_SYSTEM_TYPES)
+                                for (let tinfo: LOADED_TOWOO_SYSTEM_TYPES)
                                     je::towoo::unregister_system(tinfo);
 
-                                for (let _, tinfo: LOADED_TOWOO_COMPONENT_TYPES)
+                                for (let tinfo: LOADED_TOWOO_COMPONENT_TYPES)
                                     je::towoo::unregister_component(tinfo);
 
-                                for (let _, libhandle : LOADED_MODULE_HANDLES)
+                                for (let libhandle : LOADED_MODULE_HANDLES)
                                     je::delay_unload_module(libhandle);                               
                             "@;
 
                             // 1.5.1 生成加载动态库相关代码
                             config.m_pack_output_log->add(F"正在生成装载动态库的脚本");
                             let mut dylib_loader = "";
-                            for (let _, (minstance, (_, ppath)) : dll_module_path)
+                            for (let (minstance, (_, ppath)) : dll_module_path)
                             {
                                 // TODO: 根据情况，从镜像文件中释出相关文件
                                 assert(ppath[0] == '@');
@@ -373,7 +373,7 @@ namespace editor::gui::edit_forms
                             // 1.5.3 应用项目设置
                             config.m_pack_output_log->add(F"正在生成应用项目设置的脚本");
                             let mut proj_config = "";
-                            for (let _, pconfig : proj->get_configs)
+                            for (let (_, pconfig) : proj->get_configs)
                             {
                                 proj_config += pconfig->apply + "\n";
                             }
@@ -381,7 +381,7 @@ namespace editor::gui::edit_forms
                             // 1.5.4 加载和序列化世界
                             config.m_pack_output_log->add(F"正在生成加载世界的脚本");
                             let mut load_world_instance = "";
-                            for (let _, startup_world_path : config.m_start_up_worlds)
+                            for (let startup_world_path : config.m_start_up_worlds)
                             {
                                 load_world_instance += F"LOAD_WORLD({startup_world_path->enstring});\n";
                             }

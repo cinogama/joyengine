@@ -42,7 +42,7 @@ func multi_sampling_for_bias_glowing_level1(tex: texture2d, uv : float2, bias: f
 {
     let mut result = float3::zero;
     let reso_inv = float2::one / je_light2d_resolutin;
-    for (let _, (x, y, weight) : bias_weight)
+    for (let (x, y, weight) : bias_weight)
     {
         result = result + texture(tex, uv + reso_inv * float2::create(x, y) * bias)->xyz * weight;
     }
@@ -54,7 +54,7 @@ func multi_sampling_for_bias_glowing_level2(tex: texture2d, uv: float2, bias: fl
 {
     let mut result = float3::zero;
     let reso_inv = float2::one / je_light2d_resolutin;
-    for (let _, (x, y, weight) : bias_weight)
+    for (let (x, y, weight) : bias_weight)
     {
         result = result + multi_sampling_for_bias_glowing_level1(
             tex, uv + reso_inv * float2::create(x, y) * bias, bias) * weight;

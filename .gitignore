@@ -358,3 +358,4 @@ _deps
 /build/builtin/*
 !/build/builtin/cmake
 !/build/
+/pkg/*

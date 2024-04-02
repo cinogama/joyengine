@@ -30,7 +30,7 @@ namespace editor::gui::edit_forms
                     {
                         let editing_world = context->get_project->get_editing_world;
                         let is_debugging = context->get_project->is_debugging;
-                        for (let _, world : context->get_project->get_env->get_universe->get_all_worlds)
+                        for (let world : context->get_project->get_env->get_universe->get_all_worlds)
                         {
                             let current_world_is_editing = editing_world->>\w = w == world;->valor(false);
                             let is_selected = SelectableSelected(F"{world->name}##{world as je::world: handle}", 
