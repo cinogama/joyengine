@@ -309,7 +309,7 @@ namespace editor::gui::edit_forms
                                 $LOAD_WORLD_INSTANCE$
 
                                 // 在此激活所有世界
-                                for (let world : LOADED_WORLDS_MAPPING)
+                                for (let (_, world) : LOADED_WORLDS_MAPPING)
                                     world->set_able(true);
 
                                 // 在此调用运行时脚本（如果有）

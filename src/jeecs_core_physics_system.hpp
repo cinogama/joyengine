@@ -673,7 +673,7 @@ namespace je::physics2d::config
     }
 
     let mut result = F"let {group_name} = je::physics2d::config::CollideGroupInfo::create();";
-    for (let _, (typename, mode) : types)
+    for (let (typename, mode) : types)
     {
         result += F"{group_name}->add_filter_components({typename}::id, je::physics2d::config::CollideGroupInfo::Requirement::{mode});";
     }
@@ -730,15 +730,20 @@ namespace je::physics2d::config
     }
 
     let mut result = "";
-    for (let _, group_list : groups)
+    for (let group_list : groups)
     {
-        for (let i, group_a : group_list)
+        let mut i = 0;
+        for (let group_a : group_list)
         {
-            for (let j, group_b : group_list)
+            let mut j = 0;
+            for (let group_b : group_list)
             {
-                if (i == j) continue;
+                j += 1;
+                if (i == j - 1) continue;
                 result += F"{group_a}->collide_each_other({group_b});";
+                
             }
+            i += 1;
         }
     }
     return result + "return je::physics2d::config::CollideGroupInfo::groups;";

@@ -236,7 +236,7 @@ func main()
 
     let mut crc64_result = "wooscript_crc64_";
 
-    for (let _, p : files)
+    for (let p : files)
     {   
         let path = p->tostring;
         crc64_result += F"{crc64file(path)->valor(0)}:{crc64str(path)};";

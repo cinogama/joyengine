@@ -15,7 +15,7 @@ func copy_all_licenses()
 {
     try! third_party_paths = subpath(third_party_located_path);
 
-    for (let _3rd_path : third_party_paths->iter |> forall(\path = isdir(path);))
+    for (let _3rd_path : third_party_paths->iter |> filter(\path = isdir(path);))
     {
         try! subpath_of_3rd = allsubpath(_3rd_path);
         for (let p : subpath_of_3rd)
