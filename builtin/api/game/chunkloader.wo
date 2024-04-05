@@ -146,9 +146,6 @@ namespace jeapi::loader
                             result->set(id, layer);
 
                             return option::value(do nil);
-                        }
-                        catch!
-                        {
                         };
                     }
 
@@ -209,9 +206,6 @@ namespace jeapi::loader
                                     chunk_line->set(y, newchunk);
 
                                     return option::value(do nil);
-                                }
-                                catch!
-                                {
                                 };
                             }
 

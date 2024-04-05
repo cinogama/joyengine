@@ -1429,7 +1429,7 @@ namespace editor::gui::tilemap
                 if (!chunk.m_layers->contain(layer))
                     chunk.m_layers->set(layer, Layer{
                         m_image = new! image(chunksize * tile_reso, chunksize * tile_reso),
-                        m_walkable = array::create(chunksize * chunksize, mut false),
+                        m_walkable = array::create(chunksize * chunksize, mut (layer != 0)),
                     });
 
                 return chunk.m_layers[layer];
