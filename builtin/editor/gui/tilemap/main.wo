@@ -1493,11 +1493,11 @@ namespace editor::gui::tilemap
            let result = []mut: vec<ChunkDatas>;
            for (let (x, ychunks): chunks)
            {
-                for (let (y, chunk): ychunks)
+                for (let (negy, chunk): ychunks)
                 {
                     result->add(ChunkDatas
                         {
-                            m_chunk_pos = (x, y),
+                            m_chunk_pos = (x, -negy),
                             m_layers = chunk.m_layers->todict->>\k, v = (k, (v.m_image, v.m_walkable->>\e = immut e;));,
                             m_chunk_size = chunksize,
                         });
