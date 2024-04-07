@@ -427,6 +427,10 @@ namespace editor
             }
             return false;
         }
+        public func update_towoo_after_dump_and_close(self: Project, force: bool)
+        {
+            self.m_towoo_context->update(force);
+        }
         public func update_towoo(self: Project, force: bool)
         {
             match (self->dump_and_close_all_world())
@@ -435,7 +439,7 @@ namespace editor
                 {
                     je::gui::launch(func()
                         {
-                            self.m_towoo_context->update(force);
+                            self->update_towoo_after_dump_and_close(force);
                             self->restore_all_world(dat);
                             return false;
                         }, ());

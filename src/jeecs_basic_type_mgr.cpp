@@ -125,6 +125,40 @@ namespace jeecs_impl
             return tinfo;
         }
 
+        void reset_type(
+            const jeecs::typing::type_info* _type,
+            size_t                          _size,
+            size_t                          _align,
+            jeecs::typing::construct_func_t _constructor,
+            jeecs::typing::destruct_func_t  _destructor,
+            jeecs::typing::copy_construct_func_t _copy_constructor,
+            jeecs::typing::move_construct_func_t _move_constructor) noexcept
+        {
+            jeecs::typing::type_info* tinfo = const_cast<jeecs::typing::type_info*>(_type);
+    
+            tinfo->m_size = _size;
+            tinfo->m_align = _align;
+            tinfo->m_chunk_size = jeecs::basic::allign_size(_size, _align);
+
+            tinfo->m_constructor = _constructor;
+            tinfo->m_destructor = _destructor;
+            tinfo->m_copier = _copy_constructor;
+            tinfo->m_mover = _move_constructor;
+
+            if (tinfo->m_member_types != nullptr)
+                _free_member_infors(tinfo->m_member_types);
+
+            if (tinfo->m_system_updaters != nullptr)
+                _free_system_updater(tinfo->m_system_updaters);
+
+            if (tinfo->m_script_parsers != nullptr)
+                _free_script_parser(tinfo->m_script_parsers);
+
+            tinfo->m_member_types = nullptr;
+            tinfo->m_script_parsers = nullptr;
+            tinfo->m_system_updaters = nullptr;
+        }
+
         void declear_member(
             jeecs::typing::type_info* _classtype,
             const jeecs::typing::type_info* _membertype,
@@ -240,6 +274,37 @@ namespace jeecs_impl
             }
         }
 
+        static void _free_member_infors(const jeecs::typing::typeinfo_member* member) noexcept
+        {
+            auto* meminfo = member->m_members;
+            while (meminfo != nullptr)
+            {
+                auto* current_member = meminfo;
+                meminfo = meminfo->m_next_member;
+
+                je_mem_free((void*)current_member->m_member_name);
+
+                if (current_member->m_member_name != nullptr)
+                    je_mem_free((void*)current_member->m_woovalue_type_may_null);
+
+                if (current_member->m_woovalue_init_may_null != nullptr)
+                    wo_close_pin_value(current_member->m_woovalue_init_may_null);
+
+                delete current_member;
+            }
+            delete member;
+        }
+        static void _free_system_updater(const jeecs::typing::typeinfo_system_updater* updater) noexcept
+        {
+            delete updater;
+        }
+        static void _free_script_parser(const jeecs::typing::typeinfo_script_parser* parser) noexcept
+        {
+            je_mem_free((void*)parser->m_woolang_typename);
+            je_mem_free((void*)parser->m_woolang_typedecl);
+            delete parser;
+        }
+
         void undeclear_type(jeecs::typing::type_info* tinfo)
         {
             std::lock_guard g1(_m_factory_mx);
@@ -271,35 +336,13 @@ namespace jeecs_impl
             }
 
             if (tinfo->m_member_types != nullptr)
-            {
-                auto* meminfo = tinfo->m_member_types->m_members;
-                while (meminfo != nullptr)
-                {
-                    auto* current_member = meminfo;
-                    meminfo = meminfo->m_next_member;
-
-                    je_mem_free((void*)current_member->m_member_name);
-
-                    if (current_member->m_member_name != nullptr)
-                        je_mem_free((void*)current_member->m_woovalue_type_may_null);
-
-                    if (current_member->m_woovalue_init_may_null != nullptr)
-                        wo_close_pin_value(current_member->m_woovalue_init_may_null);
-
-                    delete current_member;
-                }
-                delete tinfo->m_member_types;
-            }
+                _free_member_infors(tinfo->m_member_types);
+  
             if (tinfo->m_system_updaters != nullptr)
-            {
-                delete tinfo->m_system_updaters;
-            }
+                _free_system_updater(tinfo->m_system_updaters);
+
             if (tinfo->m_script_parsers != nullptr)
-            {
-                je_mem_free((void*)tinfo->m_script_parsers->m_woolang_typename);
-                je_mem_free((void*)tinfo->m_script_parsers->m_woolang_typedecl);
-                delete tinfo->m_script_parsers;
-            }
+                _free_script_parser(tinfo->m_script_parsers);
 
             delete tinfo;
         }
@@ -379,6 +422,26 @@ const jeecs::typing::type_info* je_typing_register(
             _size,
             _align,
             _typecls,
+            _constructor,
+            _destructor,
+            _copy_constructor,
+            _move_constructor);
+}
+
+void je_typing_reset(
+    const jeecs::typing::type_info* _tinfo,
+    size_t                                  _size,
+    size_t                                  _align,
+    jeecs::typing::construct_func_t         _constructor,
+    jeecs::typing::destruct_func_t          _destructor,
+    jeecs::typing::copy_construct_func_t    _copy_constructor,
+    jeecs::typing::move_construct_func_t    _move_constructor)
+{
+    return
+        jeecs_impl::global_factory_holder::holder()->reset_type(
+            _tinfo,
+            _size,
+            _align,
             _constructor,
             _destructor,
             _copy_constructor,

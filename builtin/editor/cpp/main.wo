@@ -866,6 +866,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
                                         // 加载模块！
                                         assert(self->load_library_of_platform(config)->has);
 
+                                        self.project->update_towoo_after_dump_and_close(true);
                                         self.project->restore_all_world(dump_worlds);
                                     }
                                 err(reason)?

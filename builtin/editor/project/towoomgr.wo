@@ -115,9 +115,7 @@ namespace editor
             let new_scripts = {}mut: map<path_t, (int, je::typeinfo)>;
 
             let fetched_components = self->update_component(new_scripts, force);
-
-            // 如果有组件更新，那么无法保证系统以来的typeinfo是否需要更新，这种情况下直接强制重载所有系统
-            let fetched_system = self->update_system(new_scripts, force || !fetched_components->empty);
+            let fetched_system = self->update_system(new_scripts, force);
 
             self.m_bad_towoo_script->clear;
 

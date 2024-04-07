@@ -44,7 +44,7 @@ namespace jeecs
 
                 wo_vm m_base_vm;
                 bool m_is_good;
-                
+
                 wo_integer_t m_create_function;
                 wo_integer_t m_close_function;
 
@@ -784,13 +784,11 @@ WO_API wo_api wojeapi_towoo_update_component_data(wo_vm vm, wo_value args)
     // wojeapi_towoo_register_component(name, [(name, typeinfo, option<typename>)])
     std::string component_name = wo_string(args + 0);
 
-    auto* ty = je_typing_get_info_by_name(component_name.c_str());
-    if (ty != nullptr)
+    auto* towoo_component_tinfo = je_typing_get_info_by_name(component_name.c_str());
+    if (towoo_component_tinfo != nullptr)
     {
-        if (ty->m_hash == jeecs::basic::hash_compile_time(("_towoo_component_" + component_name).c_str()))
-            je_typing_unregister(ty);
-        else
-            return wo_ret_halt(vm, "Invalid towoo component name, cannot same as native-components.");
+        if (towoo_component_tinfo->m_hash != jeecs::basic::hash_compile_time(("_towoo_component_" + component_name).c_str()))
+            return wo_ret_panic(vm, "Invalid towoo component name, cannot same as native-components.");
     }
 
     wo_value members = args + 1;
@@ -847,16 +845,28 @@ WO_API wo_api wojeapi_towoo_update_component_data(wo_vm vm, wo_value args)
         component_allign = std::max(component_allign, member_typeinfo->m_chunk_size);
     }
 
-    auto* towoo_component_tinfo = je_typing_register(
-        component_name.c_str(),
-        jeecs::basic::hash_compile_time(("_towoo_component_" + component_name).c_str()),
-        component_size,
-        component_allign,
-        je_typing_class::JE_COMPONENT,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::constructor,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::destructor,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::copier,
-        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::mover);
+    if (towoo_component_tinfo == nullptr)
+        towoo_component_tinfo = je_typing_register(
+            component_name.c_str(),
+            jeecs::basic::hash_compile_time(("_towoo_component_" + component_name).c_str()),
+            component_size,
+            component_allign,
+            je_typing_class::JE_COMPONENT,
+            jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::constructor,
+            jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::destructor,
+            jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::copier,
+            jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::mover);
+    else
+        // 此处仅更新类型的大小和对齐，并释放成员信息以供重新注册
+        je_typing_reset(
+            towoo_component_tinfo,
+            component_size,
+            component_allign,
+            jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::constructor,
+            jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::destructor,
+            jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::copier,
+            jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::mover);
+
 
     for (auto& memberinfo : member_defs)
     {
