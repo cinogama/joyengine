@@ -642,7 +642,7 @@ namespace editor::gui::tilemap
                 match (tileset->serialize)
                 {
                 ok(data)?
-                    if (!fsys::writeall(tileset_path, data->serialize->val))
+                    if (!fsys::writeall(tileset_path, data: string))
                         jeapi::gui::form::errmsg("错误", F"无法保存TileSet到{tileset_path->tostring}: 无法写入文件");
                 err(msg)?
                     jeapi::gui::form::errmsg("错误", F"无法保存TileSet到{tileset_path->tostring}: {msg}");
@@ -705,7 +705,7 @@ namespace editor::gui::tilemap
 
             return {
                 ["tilesets"] = self.m_tile_sets->>\t = t.uid;->toarray as array<string>: dynamic,
-                ["tiles"] = tilelists as vec<array<int>>: dynamic,
+                ["tiles"] = tilelists->> \v = v->serialize->val;: dynamic,
             };
         }
 
@@ -713,7 +713,7 @@ namespace editor::gui::tilemap
         func load_tiles(self: TileEditContext, mapdata: dict<string, dynamic>)
         {
             let tileset_id_mapping = mapdata->getor("tilesets", []: dynamic) as array<dynamic>->>\e = e as string;;
-            let tiles = mapdata->getor("tiles", []: dynamic) as array<dynamic>->>\e = e as array<dynamic>->>\e = e as int;;;
+            let tiles = mapdata->getor("tiles", []: dynamic) as array<dynamic>->>\e = array::deserialize(e as string)->val->>\e = e as int;;;
 
             let existed_tileset_uid = self.m_tile_sets->>\tileset = (tileset.uid, tileset);->mapping;
             let tileset_mapping = {}mut: map<int, TileMapSet>;
@@ -1618,9 +1618,7 @@ namespace editor::gui::tilemap
                                         ["texture"] = F"chunk_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}_{layer}.png": dynamic,
                                         ["size"] = chunksz: dynamic,
                                     };
-                                    if (!chunk_info->serialize
-                                            ->> \dat = fsys::writeall(target_chunk_path / F"chunk_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}_{layer}.json", dat);
-                                            -> valor(false))
+                                    if (!fsys::writeall(target_chunk_path / F"chunk_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}_{layer}.json", chunk_info: string))
                                     {
                                         jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_chunk_path->tostring}");
                                     }
@@ -1637,19 +1635,18 @@ namespace editor::gui::tilemap
 
                                 chunks_pos_info[chunk.m_position.0]->set(chunk.m_position.1, F"chunk_{chunk.m_position.0}_{chunk.m_position.1}.json");
 
-                                match (dict::serialize({
+                                if (!
+                                    {
                                         ["layers"] = chunk.m_image_layers
                                             ->> \layerid = (layerid, F"chunk_{chunk.m_position.0}_{chunk.m_position.1}_{layerid}.json");
                                             ->  mapping
-                                        })
-                                        ->> \dat = fsys::writeall(target_chunk_path / F"chunk_{chunk.m_position.0}_{chunk.m_position.1}.json", dat);)
+                                    }: string -> \dat = fsys::writeall(target_chunk_path / F"chunk_{chunk.m_position.0}_{chunk.m_position.1}.json", dat);)
                                 {
-                                value(_)?;
-                                none? jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_chunk_path->tostring}");                                    
+                                    jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_chunk_path->tostring}");                                    
                                 }
                             }
 
-                            if (fsys::writeall(target_chunk_path / F"chunklist.json", chunks_pos_info->serialize->val) == false)
+                            if (fsys::writeall(target_chunk_path / F"chunklist.json", chunks_pos_info: string) == false)
                                 jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_path->tostring}");
                         }
                         none?;
@@ -1727,7 +1724,7 @@ namespace editor::gui::tilemap
                         formopen->set(false);
                         if (opt)
                         {
-                            if (!fsys::writeall(tilemap_file, editctx->dump_tiles->serialize->val))
+                            if (!fsys::writeall(tilemap_file, editctx->dump_tiles: string))
                             {
                                 jeapi::gui::form::errmsg("错误", F"无法保存TileMap到{tilemap_file->tostring}: 无法写入文件");
                                 formopen->set(true);
