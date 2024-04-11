@@ -18,7 +18,7 @@ namespace jeapi::loader
                     ;
                 ->> \e = entityloader
                     {
-                        __m_world,
+                        __m_world = w,
                         __m_prefab = e
                     };
                 ;
