@@ -249,14 +249,13 @@ namespace editor
             // 等待一帧，直到所有实体被确切地创建完毕
             je::gui::launch(func(){self.m_world_has_been_dumped = false; return false;}, ());
         }
-        func _create_default_configs(env: Environment)
+        func _create_default_configs(self: Project, env: Environment)
         {
             using je;
             using je::gui;
 
-            return {
-                /* 引擎的默认编辑器系统 */
-                ["JE_PROJECT_EDITOR_SYSTEM"] = new! IConfig(new! Config(
+            self.m_configs->set("JE_PROJECT_EDITOR_SYSTEM", 
+                new! IConfig(new! Config(
                     typeinfo::load(DEFAULT_EDITOR_SYSTEM_NAME)->val,
                     func(origin_editor_system)
                     {
@@ -276,9 +275,9 @@ namespace editor
                     \val = val->name;,
                     \str = typeinfo::load(str);,
                     \_ = "// Editor-system is not needed when export.";,
-                )),
-                /* 项目的描述信息 */
-                ["JE_PROJECT_DESCRIBE"] = new! IConfig(new! Config(
+                )));
+            self.m_configs->set("JE_PROJECT_DESCRIBE",
+                new! IConfig(new! Config(
                     "新项目，你可以在这里编辑项目的描述文本",
                     func(origin_text)
                     {
@@ -289,8 +288,9 @@ namespace editor
                     \val = val;,
                     \str = option::value(str);,
                     \_ = "// Describe is not needed when export.";,
-                )),
-                ["JE_ENGINE_TIME_SLEEP_SUPPRESSION"] = new! IConfig(new! Config(
+                )));
+            self.m_configs->set("JE_ENGINE_TIME_SLEEP_SUPPRESSION",
+                new! IConfig(new! Config(
                     do nil,
                     func(_)
                     {
@@ -309,8 +309,9 @@ namespace editor
                     \_ = F"je::editor::set_sleep_suppression({supp});"
                         where supp = je::editor::get_sleep_suppression()
                     ;,
-                )),
-                ["JE_GUI_FONT"] = new! IConfig(new! Config(
+                )));
+            self.m_configs->set("JE_GUI_FONT",
+                new! IConfig(new! Config(
                     ("@/resource/font/HarmonyOS_Sans_SC_Regular.ttf", 18),
                     func(config)
                     {
@@ -336,8 +337,9 @@ namespace editor
                     \dat = F"je::gui::set_font(option::value({font->enstring}), {size});"
                         where (font, size) = dat
                     ;,
-                )),
-                ["JE_ENGINE_TIME_MAX_DELTATIME"] = new! IConfig(new! Config(
+                )));
+            self.m_configs->set("JE_ENGINE_TIME_MAX_DELTATIME",
+                new! IConfig(new! Config(
                     do nil,
                     func(_)
                     {
@@ -357,8 +359,45 @@ namespace editor
                     \_ = F"RUNTIME_UNIVERSE->set_max_deltatime({supp});"
                         where supp = env->get_universe->get_max_deltatime()
                     ;,
-                )),
-            }mut;
+                )));
+            self.m_configs->set("JE_EDITOR_GENERATE_VFILE_FOR_WOOLY",
+                new! IConfig(new! Config(
+                    false,
+                    func(config)
+                    {
+                        Text("为Wooly提供支持");
+                        let result = CheckBox("##export_vfile_for_wooly", config);
+                        TextDisabled("* Wooly是用于Woolang的VSCode插件");
+
+                        return result;
+                    },
+                    func(oldval, newval){
+                        if (newval && !oldval)
+                        {
+                            do fsys::mkdir(self.m_path / ".vscode");
+                            let vsc_config_path = self.m_path / ".vscode" / "settings.json";
+
+                            let dat = fsys::readall(vsc_config_path)=>>\dat = dat->map::deserialize;->valor({}mut);
+
+                            dat->set("wooly.enable": dynamic, true: dynamic);
+                            dat->set("wooly.scanroots": dynamic, [
+                                    fsys::normalize(std::exepath())->tostring,
+                                    self.m_path->tostring,
+                                    self->get_vfile_export_path->tostring,
+                                ]: dynamic);
+
+                            if (!fsys::writeall(vsc_config_path, dat->serialize->val))
+                            {
+                                jeapi::gui::form::errmsg("错误", "无法写入VSCode配置文件");
+                                return false;
+                            }                            
+                        }
+                        return true;
+                    },
+                    \config = config: string;,
+                    \config = option::value(config: bool);,
+                    \_="// Supporting for wooly is unnecessary for exported project.";,                    
+                )));
         }
         func try_lock_this_project(self: Project)
         {
@@ -402,7 +441,7 @@ namespace editor
                 m_name = name,
                 m_path = path,
                 m_env = env,
-                m_configs = _create_default_configs(env),
+                m_configs = {}mut,
                 m_worlds = []mut,
                 m_modules = {}mut,
                 m_debug_context = mut option::none,
@@ -413,6 +452,8 @@ namespace editor
                 m_world_has_been_dumped = mut false,
                 m_enable_update_towoo = mut true,
             };
+
+            proj->_create_default_configs(env);
 
             if (proj->try_lock_this_project() == false)
             {
@@ -442,6 +483,7 @@ namespace editor
         public func update_towoo_after_dump_and_close(self: Project, force: bool)
         {
             self.m_towoo_context->update(force);
+            self->update_vfile_for_wooly();
         }
         public func update_towoo(self: Project, force: bool)
         {
@@ -515,7 +557,7 @@ namespace editor
                 ->> \mr = jeapi::gui::form::errmsg("加载失败", F"无法加载 '{mr[0]}'：{mr[1]}"); 
                 ;
             
-            self.m_towoo_context->update(false);
+            self->update_towoo_after_dump_and_close(false);
 
             match (je::towoo::unsafe::dynamic_parser::update_all("@/editor.wo"))
             {
@@ -730,6 +772,33 @@ namespace editor
                 ->  valor(DEFAULT_EDITOR_SYSTEM_NAME)
                 ->  je::typeinfo::load
                 ->  val;
+        }
+        public func get_vfile_export_path(self: Project)
+        {
+            return self.m_path / ".temporary" / "jeediror" / "virtual";
+        }
+        public func update_vfile_for_wooly(self: Project)
+        {
+            do try!
+            {
+                try! conf = self->get_config("JE_EDITOR_GENERATE_VFILE_FOR_WOOLY");
+                if (conf->tostring: bool)
+                {
+                    let loc = self->get_vfile_export_path();
+                    for (let (name, content) : je::woolang::get_all_internal_scripts())
+                    {
+                        if (name->find(":") != -1 || name->find("@") != -1 || name->find("!") != -1)
+                            continue;
+
+                        let path = loc / name;
+                        do fsys::mkdir(fsys::parent(path));
+
+                        if (! fsys::writeall(path, content))
+                            jeapi::gui::form::errmsg("错误", F"无法写入虚拟文件 '{path->tostring}'");
+                    }
+                }
+                expected_value!;
+            };
         }
 
         public func get_all_worlds(self: Project)

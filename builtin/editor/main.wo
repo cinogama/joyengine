@@ -360,16 +360,17 @@ func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: di
                             do fsys::writeall(p->get_path / ".gitignore", 
 @"# JoyEngine ECS git ignore config.
 
+/.vscode/*
 /.export/*
 /.runtime/*
 /.temporary/*
 /imgui.ini
 /*.dmp
 /project.jeproj4.lock
+/pkg/*
 
 # Ignore cache files.
 *.jecache4
-
 "@);
                             do fsys::writeall(p->get_path / ".gitattributes", 
 @"# JoyEngine ECS
@@ -378,7 +379,6 @@ project.jeproj4 text eol=lf
 config.jeinf text eol=lf
 *.jeworld text eol=lf
 *.jeentity text eol=lf
-*.jecache4 !diff
 "@);
                             match (je::towoo::unsafe::dynamic_parser::update_all("@/editor.wo"))
                             {

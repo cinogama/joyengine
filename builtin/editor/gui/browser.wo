@@ -10,6 +10,14 @@ using je::gui;
 
 namespace editor::gui
 {
+    func _wrap_path(path: string)
+    {
+        // 根据不同平台，如果路径包含空白分割字符或需要在shell里转义的字符什么的，这里包一下
+        if (path->find(" ") != -1 || path->find("\t") != -1)
+            return F"\"{path}\"";
+        return path;
+    }
+
     public let mut editor_need_hiding_file = true;
 
     func create_font_image(proj: Project, default_name: string, location: string)
@@ -329,7 +337,6 @@ namespace editor::gui
                 [".jetilemap4"] = 
                     func (p: PathInfo, context: EditorContext)
                     {
-                        
                         match (fsys::readall(p.path)=>>\dat = dat->dict::deserialize->>\dat = dat->>\k, v = (k as string, v);;;)
                         {
                         value(tilemap_data)?
@@ -341,6 +348,13 @@ namespace editor::gui
                             return option::value(F"无法打开和编辑瓦片地图文件：{p.path}");
                         }
                     },
+                [".wo"] = 
+                    func (p: PathInfo, context: EditorContext)
+                    {
+                        do std::shell(F"code {_wrap_path(context->get_project->get_path->tostring())} {_wrap_path(p.path->tostring)}");
+                        return option::none;
+                    },
+
             };
 
             return registed_open_method
@@ -869,14 +883,6 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                         ;)
                     ->valor([])
                     ->tovec;
-
-                func _wrap_path(path: string)
-                {
-                    // 根据不同平台，如果路径包含空白分割字符或需要在shell里转义的字符什么的，这里包一下
-                    if (path->find(" ") != -1 || path->find("\t") != -1)
-                        return F"\"{path}\"";
-                    return path;
-                }
 
                 let display_usable_component = func(s: string)
                 {

@@ -2112,6 +2112,29 @@ WO_API wo_api wojeapi_typeinfo_get_unregister_count(wo_vm vm, wo_value args)
     return wo_ret_int(vm, (wo_integer_t)jedbg_get_unregister_type_count());
 }
 
+WO_API wo_api  wojeapi_get_all_internal_scripts(wo_vm vm, wo_value args)
+{
+    wo_value result = wo_push_map(vm);
+    wo_value key = wo_push_empty(vm);
+    wo_value val = wo_push_empty(vm);
+
+    auto* iter = wo_open_virtual_file_iter();
+    while (wo_string_t vpath = wo_next_virtual_file_iter(iter))
+    {
+        if (auto* vfhandle = wo_open_virtual_file(vpath))
+        {
+            size_t len;
+            auto* dat = wo_virtual_file_data(vfhandle, &len);
+
+            wo_set_string(key, vm, vpath);
+            wo_set_buffer(val, vm, dat, len);            
+            wo_map_set(result, key, val);
+        }
+    }
+    wo_close_virtual_file_iter(iter);
+    return wo_ret_val(vm, result);
+}
+
 std::recursive_mutex _jewo_singleton_list_mx;
 std::unordered_map<std::string, wo_pin_value> _jewo_singleton_list;
 
@@ -2399,6 +2422,11 @@ import je;
 
 namespace je
 {
+    namespace woolang
+    {
+        extern("libjoyecs", "wojeapi_get_all_internal_scripts")
+        public func get_all_internal_scripts()=> dict<string, string>;
+    }
     namespace typeinfo
     {
         extern("libjoyecs", "wojeapi_typeinfo_get_unregister_count")
