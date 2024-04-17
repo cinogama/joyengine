@@ -84,7 +84,6 @@ namespace jeecs_impl
         const size_t    _m_queue_size;
 
         std::atomic_size_t _m_head;
-
         std::atomic_size_t _m_tail_for_write;
         std::atomic_size_t _m_tail_for_reading;
 
@@ -106,32 +105,34 @@ namespace jeecs_impl
         void push(const T& elem)
         {
             size_t write_target_place = _m_tail_for_write.load();
+            size_t next_write_place = (write_target_place + 1) % _m_queue_size;
 
-            while (!_m_tail_for_write.compare_exchange_strong(
-                write_target_place, (write_target_place + 1) % _m_queue_size))
-                ;
+            while (!_m_tail_for_write.compare_exchange_weak(write_target_place, next_write_place))
+            {
+                next_write_place = (write_target_place + 1) % _m_queue_size;
+            }
 
-            assert(write_target_place + 1 != _m_head.load());
+            assert(next_write_place != _m_head.load());
 
             _m_queue_buffer[write_target_place] = elem;
 
-            // 数据就绪，将_m_tail_for_write同步到_m_tail_for_reading
-            while (!_m_tail_for_reading.compare_exchange_strong(
-                write_target_place, (write_target_place + 1) % _m_queue_size))
-                ;
+            while (!_m_tail_for_reading.compare_exchange_weak(write_target_place, next_write_place))
+            {
+                next_write_place = (write_target_place + 1) % _m_queue_size;
+            }
         }
 
         bool pop(T* out_value)
         {
             size_t read_place = _m_head.load();
+            size_t next_read_place = (read_place + 1) % _m_queue_size;
+
             do
             {
                 if (read_place == _m_tail_for_reading.load())
                     return false;
-            } while (!_m_head.compare_exchange_strong(
-                read_place, (read_place + 1) % _m_queue_size));
+            } while (!_m_head.compare_exchange_weak(read_place, next_read_place));
 
-            // OK 获取独占位置，读取！
             *out_value = _m_queue_buffer[read_place];
             return true;
         }
