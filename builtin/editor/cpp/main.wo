@@ -834,7 +834,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
             }, ());
 
             context.compile_thread = 
-                option::value(thread::create(func ()
+                option::value(new! thread(func ()
                 {
                     match (self->compile(config, option::value(context)))
                     {
@@ -895,7 +895,6 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${joyengine_lib} ${woolang_lib})
                         return result::err("不支持的配置");
                     }
 
-                    using fsys;
                     using fsys;
 
                     do context->>\context = context.display_msg = "正在检查工具链";;

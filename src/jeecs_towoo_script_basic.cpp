@@ -1580,7 +1580,7 @@ WO_API wo_api wojeapi_towoo_physics2d_collisionresult_all(wo_vm vm, wo_value arg
     wo_struct_get(c, args + 0, 0);
     auto* collisionResult = (jeecs::Physics2D::CollisionResult*)wo_pointer(c);
 
-    wo_set_map(c, vm);
+    wo_set_map(c, vm, collisionResult->results.size());
     auto key = wo_push_empty(vm);
     auto val = wo_push_empty(vm);
     for (auto& [rigidbody, result] : collisionResult->results)

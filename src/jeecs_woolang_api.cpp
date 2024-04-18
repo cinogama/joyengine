@@ -1609,7 +1609,7 @@ WO_API wo_api wojeapi_shader_create(wo_vm vm, wo_value args)
 WO_API wo_api wojeapi_textures_of_entity(wo_vm vm, wo_value args)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-    wo_value out_map = wo_push_map(vm);
+    wo_value out_map = wo_push_map(vm, 0);
 
     if (jeecs::Renderer::Textures* textures = entity->get_component<jeecs::Renderer::Textures>())
     {
@@ -1708,7 +1708,7 @@ WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args)
                 )=> map<string, uniform_variable>;
     */
     auto* shader = (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(args + 0);
-    wo_value out_map = wo_push_map(vm);
+    wo_value out_map = wo_push_map(vm, 0);
 
     auto* uniforms = (*shader)->resouce()->m_raw_shader_data->m_custom_uniforms;
     wo_value key = wo_push_empty(vm);
@@ -2114,7 +2114,7 @@ WO_API wo_api wojeapi_typeinfo_get_unregister_count(wo_vm vm, wo_value args)
 
 WO_API wo_api  wojeapi_get_all_internal_scripts(wo_vm vm, wo_value args)
 {
-    wo_value result = wo_push_map(vm);
+    wo_value result = wo_push_map(vm, 0);
     wo_value key = wo_push_empty(vm);
     wo_value val = wo_push_empty(vm);
 

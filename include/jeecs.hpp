@@ -3890,17 +3890,14 @@ namespace jeecs
                 }
                 return fnd->v;
             }
-
             void clear()noexcept
             {
                 dats.clear();
             }
-
             pair* find(const KeyT& k) const noexcept
             {
                 return std::find_if(dats.begin(), dats.end(), [&k](pair& p) {return p.k == k; });
             }
-
             bool erase(const KeyT& k)
             {
                 auto* fnd = find(k);
@@ -3911,15 +3908,17 @@ namespace jeecs
                 }
                 return false;
             }
-
             inline auto begin() const noexcept->pair*
             {
                 return dats.begin();
             }
-
             inline auto end() const noexcept->pair*
             {
                 return dats.end();
+            }
+            inline size_t size() const
+            {
+                return dats.size();
             }
         };
 
@@ -8908,9 +8907,9 @@ R"(namespace Light2D::Range
                     };
                     struct component_data
                     {
-                        const jeecs::typing::type_info* m_component_type;
+                        const jeecs::typing::type_info*     m_component_type;
                         const jeecs::typing::typeinfo_member::member_info*
-                            m_member_info;
+                                                            m_member_info;
                         data_value                          m_member_value;
                         bool                                m_offset_mode;
 
