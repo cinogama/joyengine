@@ -2289,18 +2289,18 @@ namespace Transform
     namespace LocalPosition
     {
         extern("libjoyecs", "wojeapi_towoo_transform_localposition_get_parent_global_pos")
-            public func get_parent_global_position(self: LocalPosition, trans: Translation, rot: option<LocalRotation>)=> vec3;
+            public func get_parent_global_pos(self: LocalPosition, trans: Translation, rot: option<LocalRotation>)=> vec3;
 
         extern("libjoyecs", "wojeapi_towoo_transform_localposition_set_global_pos")
-            public func set_global_position(self: LocalPosition, pos: vec3, trans: Translation, rot: option<LocalRotation>)=> void;
+            public func set_global_pos(self: LocalPosition, pos: vec3, trans: Translation, rot: option<LocalRotation>)=> void;
     }
     namespace LocalRotation
     {
         extern("libjoyecs", "wojeapi_towoo_transform_localrotation_get_parent_global_rot")
-            public func get_parent_global_rotation(self: LocalRotation, trans: Translation)=> quat;
+            public func get_parent_global_rot(self: LocalRotation, trans: Translation)=> quat;
 
         extern("libjoyecs", "wojeapi_towoo_transform_localrotation_set_global_rot")
-            public func set_global_rotation(self: LocalRotation, rot: quat, trans: Translation)=> void;
+            public func set_global_rot(self: LocalRotation, rot: quat, trans: Translation)=> void;
     }
 }
 namespace UserInterface

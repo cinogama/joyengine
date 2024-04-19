@@ -25,7 +25,7 @@ namespace editor
     {
         public func get_loaded_towoo(self: ToWooContext)
         {
-            return self.m_loaded_towoo;
+            return self.m_loaded_towoo->unmapping->std::sort(\l, r = l.0 < r.0;);
         }
         public func pure_component_or_system_name(name: string)
         {
@@ -225,15 +225,15 @@ namespace editor
         }
         public func get_bad_scripts(self: ToWooContext)
         {
-            return self.m_bad_towoo_script->toarray;
+            return self.m_bad_towoo_script->toarray->std::sort(\l, r = l < r;);
         }
         public func get_removing_components(self: ToWooContext)
         {
-            return self.m_removing_component->unmapping->>\kv=kv[0];;
+            return self.m_removing_component->unmapping->>\kv=kv[0];->std::sort(\l, r = l < r;);
         }
         public func get_removing_systems(self: ToWooContext)
         {
-            return self.m_removing_system->unmapping->>\kv=kv[0];;
+            return self.m_removing_system->unmapping->>\kv=kv[0];->std::sort(\l, r = l < r;);
         }
     }
 }

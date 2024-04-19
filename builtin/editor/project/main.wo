@@ -520,7 +520,6 @@ namespace editor
         public func get_all_towoo_scripts_name_and_path(self: Project)
         {
             return self.m_towoo_context->get_loaded_towoo
-                ->  unmapping
                 ->> \v = (
                         ToWooContext::pure_component_or_system_name(fsys::purename(v[0])),
                         (v[0], self->make_path_normalize(v[0]))
@@ -1003,14 +1002,14 @@ namespace editor
                         let camera_local_rotation = camera->towoo::get_component :<Transform::LocalRotation>->val;
 
                         let rpos = cameradat->getor("root_position", [0., 0., 0.]: dynamic) as array<dynamic>->>\e = e as real;;
-                        do root_local_position->set_global_position(
+                        do root_local_position->set_global_pos(
                             (rpos[0], rpos[1], rpos[2]): vec3, 
                             root_translation, 
                             option::value(root_local_rotation)
                         );
 
                         let rrot = cameradat->getor("root_rotation", [0., 0., 0., 1.]: dynamic) as array<dynamic>->>\e = e as real;;
-                        do root_local_rotation->set_global_rotation(
+                        do root_local_rotation->set_global_rot(
                             (rrot[0], rrot[1], rrot[2], rrot[3]): quat, 
                             root_translation
                         );

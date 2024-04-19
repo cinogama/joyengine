@@ -87,7 +87,7 @@ namespace editor::gui::edit_forms
         }
         if (show_uniforms)
         {
-            for(let (name, uniform_val) : shader->get_uniforms())
+            for(let (name, uniform_val) : shader->get_uniforms()->unmapping->std::sort(\l, r = l.0 < r.0;))
             {
                 if (name->beginwith("JOYENGINE_"))
                     continue; // 引擎的内置shader-uniform变量，跳过显示
@@ -243,7 +243,7 @@ namespace editor::gui::edit_forms
                                         ->add((ctype, component));
                             }
 
-                            for (let (groupname, components): grouped_components)
+                            for (let (groupname, components): grouped_components->unmapping->std::sort(\l, r = l.0 < r.0;))
                             {
                                 if (!get_is_albe_to_display_debug_entity() && groupname == "Editor")
                                     // 事编辑器组件，跳过显示，不然就露馅了
