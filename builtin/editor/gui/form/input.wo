@@ -14,7 +14,7 @@ namespace jeapi::gui::form
         defaultval: string, 
         okevent: (string)=> void)
     {
-        let inputval = mutable::create(defaultval);
+        let inputval = std::mutable::create(defaultval);
 
         form::create(F"{title}", 
             func(f)
@@ -45,7 +45,7 @@ namespace jeapi::gui::form
         defaultval: string, 
         okevent: (string)=> void)
     {
-        let inputval = mutable::create(defaultval);
+        let inputval = std::mutable::create(defaultval);
 
         form::create(F"{title}", 
             func(f)

@@ -36,6 +36,8 @@ namespace editor
     };
 
     using Project = struct{
+        m_logger: handle,
+
         m_name: string,             // 项目的名称，不能更改
         m_path: fsys::path_t,    // 项目所在的目录
         m_env: Environment,         // 项目环境
@@ -438,6 +440,8 @@ namespace editor
             assert(fsys::setworkpath(path));
 
             let proj = Project{
+                m_logger = je::editor::hooklog(),
+
                 m_name = name,
                 m_path = path,
                 m_env = env,
@@ -676,6 +680,9 @@ namespace editor
             self->unlock_this_project();
 
             je::towoo::unsafe::dynamic_parser::clear();
+
+            // 关闭log回调
+            je::editor::unhooklog(self.m_logger);
         }
         public func get_towoo_context_for_exit(self: Project)
         {

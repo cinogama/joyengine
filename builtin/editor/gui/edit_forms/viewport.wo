@@ -46,7 +46,7 @@ namespace editor::gui::edit_forms
     }
 
 
-    public func show_viewport(context: EditorContext, open: mutable<bool>)
+    public func show_viewport(context: EditorContext, open: std::mutable<bool>)
     {
         if (open->get)
         {

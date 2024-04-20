@@ -32,7 +32,6 @@ namespace editor::gui
     }
 
     using EditorContext = struct {
-        m_logger: handle,
         m_stopped: mut bool,
         m_project: Project,
 
@@ -49,7 +48,7 @@ namespace editor::gui
     }
     {
         using EditorFormControlor = struct {
-            m_open: mutable<bool>,
+            m_open: std::mutable<bool>,
             m_old_state: mut option<bool>, // 仅用于开始调试时保存，结束调试时还原
         };
         public func show_all_editor_form(self: EditorContext)
@@ -125,7 +124,7 @@ namespace editor::gui
                 return result::err(F"{name}已经注册");
 
             self.m_editor_form_controlor->set(name, EditorFormControlor{
-                m_open = new! mutable(true),
+                m_open = new! std::mutable(true),
                 m_old_state = mut option::none,
             });
             return result::ok(self.m_editor_form_controlor[name].m_open);
@@ -221,7 +220,6 @@ namespace editor::gui
 
         // 创建基础运行环境
         let context = EditorContext{
-            m_logger = je::editor::hooklog(),
             m_stopped = mut false,
             m_project = proj,
             m_editing_entity_euid = mut option::none,
@@ -242,6 +240,5 @@ namespace editor::gui
         
         // 项目退出了，将编辑器上下文置为 stop, 用于指示窗口应当关闭
         context.m_stopped = true;
-        je::editor::unhooklog(context.m_logger);
     }
 }

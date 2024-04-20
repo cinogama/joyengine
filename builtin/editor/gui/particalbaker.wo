@@ -268,7 +268,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
     func _particalbaker_editor(
         partical_context: ParticalContext, 
         econtext: _EditorContext,
-        openform: mutable<bool>)
+        openform: std::mutable<bool>)
     {
         let mut open = true;
 
@@ -494,6 +494,6 @@ public func color(_/*frame*/: int, context: PerparticleContext)
 
                 m_first_show = mut true,
             },
-            new! mutable(true)));
+            new! std::mutable(true)));
     }
 }

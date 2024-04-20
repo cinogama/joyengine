@@ -77,7 +77,7 @@ namespace editor::gui
     func style_editor(context: EditorContext)
     {
         let origin_style = dump_current_style_color();
-        let formopen = new! mutable(true);
+        let formopen = new! std::mutable(true);
         launch(func()
             {
                 SetNextWindowSizeConstraints((700., 550.), (700., 550.));

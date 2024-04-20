@@ -223,7 +223,7 @@ namespace editor::gui::drawpannel
                                         let image_old_sz = texture->size;
                                         let image_new_sz = (mut image_old_sz[0], mut image_old_sz[1]);
 
-                                        let open = new! mutable(true);
+                                        let open = new! std::mutable(true);
 
                                         launch(func(){
                                             match (BeginAttrOpen("创建绘制对象", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))

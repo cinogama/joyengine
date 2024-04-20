@@ -130,7 +130,7 @@ namespace editor::gui::edit_forms
         return shader_operation;
     }
 
-    public func show_inspector(context: EditorContext, open: mutable<bool>)
+    public func show_inspector(context: EditorContext, open: std::mutable<bool>)
     {
         context->dosth_at_editing_entity(func(current_entity_may_none){
             if (open->get)

@@ -39,7 +39,7 @@ using Path = struct {
 {
     func _get_available_root_paths()
     {
-        // TODO: 这里只考虑Windows的A-Z盘符，什么AA AB AC，就算windows未来支持也给爷滚
+        // NOTE: 这里只考虑Windows的A-Z盘符，什么AA AB AC，就算windows未来支持也给爷滚
         let arr = ["/"]mut;
 
         if (std::platform_os == std::os::WIN32)
@@ -313,7 +313,7 @@ public func ask_for_saving_proj_when_exit(p: editor::Project)
     return false;
 }
 
-func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict<dynamic, dynamic>, f: mutable<bool>)
+func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict<dynamic, dynamic>, f: std::mutable<bool>)
 {
     // 确保目录存在
     if (! fsys::exist(path))
@@ -403,7 +403,7 @@ config.jeinf text eol=lf
         });
 }
 
-func open_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict<dynamic, dynamic>, f: mutable<bool>)
+func open_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict<dynamic, dynamic>, f: std::mutable<bool>)
 {
     let proj_path = path/"project.jeproj4";
 
@@ -471,7 +471,7 @@ for (;;)
             editor::CxxProject::is_builder_ready())
         {
             launch(func(){
-                let open = new! mutable(true);
+                let open = new! std::mutable(true);
 
                 if (BeginAttr("JoyEngineECS 项目导航", 
                     WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
@@ -549,7 +549,7 @@ for (;;)
         }
         else
         {
-            launch(func(specify_vs_version: mutable<option<int>>){
+            launch(func(specify_vs_version: std::mutable<option<int>>){
                 if (BeginAttr("JoyEngineECS 项目导航", 
                     WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
                     + WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus
@@ -627,7 +627,7 @@ for (;;)
                 End();
 
                 return true;
-            }, (new! mutable(option::none),));
+            }, (new! std::mutable(option::none),));
         }
 
         u->wait();

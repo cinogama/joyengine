@@ -435,13 +435,13 @@ namespace editor::gui::edit_forms
             ->> \p = (context->get_project->make_path_normalize(p), mut false);
             ;
             
-        let pack_image_file_size = new! mutable(128);
-        let reso_option_index = new! mutable(1);
-        let reso_config = new! mutable((1366, 768));
-        let pack_config_instance = new! mutable(option::none: option<pack_config>);
-        let saving_debug_info = new! mutable(false);
+        let pack_image_file_size = new! std::mutable(128);
+        let reso_option_index = new! std::mutable(1);
+        let reso_config = new! std::mutable((1366, 768));
+        let pack_config_instance = new! std::mutable(option::none: option<pack_config>);
+        let saving_debug_info = new! std::mutable(false);
 
-        context->launch_editor_form(func(step: mutable<int>){
+        context->launch_editor_form(func(step: std::mutable<int>){
             let mut open = true;
             if (BeginAttr("项目导出向导", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
             {                
@@ -638,6 +638,6 @@ namespace editor::gui::edit_forms
             }
             End();
             return open;
-        }, (new! mutable(0),));
+        }, (new! std::mutable(0),));
     }
 }

@@ -225,7 +225,7 @@ namespace editor::gui
         path        : fsys::path_t,   // 当前目录/文件的目录
         name        : string,
         externname  : string,
-        type        : mutable<PathType>, // 类型，如果是目录，则还包含目录内的子项    
+        type        : std::mutable<PathType>, // 类型，如果是目录，则还包含目录内的子项    
     }
     {
         func should_hide(self: PathInfo)
@@ -290,7 +290,7 @@ namespace editor::gui
                         path = current_subpath, 
                         name = fsys::filename(current_subpath),
                         externname = fsys::extension(current_subpath)->lower,
-                        type = new! mutable(fsys::isdir(current_subpath)?
+                        type = new! std::mutable(fsys::isdir(current_subpath)?
                                 PathType::dir(option::none) | PathType::file),
                     };);
 
@@ -1277,7 +1277,7 @@ namespace $$MODULE_NAME$$
                             path = subpath,
                             name = fsys::filename(subpath),
                             externname = fsys::extension(subpath)->lower,
-                            type = new! mutable(fsys::isdir(subpath)
+                            type = new! std::mutable(fsys::isdir(subpath)
                                 ? PathType::dir(option::none) 
                                 | PathType::file),
                         };
@@ -1402,7 +1402,7 @@ namespace $$MODULE_NAME$$
                 path = root_path,
                 name = fsys::filename(root_path),
                 externname = fsys::extension(root_path)->lower,
-                type = new! mutable(PathType::dir(option::none)),
+                type = new! std::mutable(PathType::dir(option::none)),
             };
 
         if (force_update_dir_tree_flag)
@@ -1536,7 +1536,7 @@ namespace $$MODULE_NAME$$
                 -> valor("");
         }
     }
-    public func show_logger(context: EditorContext, open: mutable<bool>)
+    public func show_logger(context: EditorContext, open: std::mutable<bool>)
     {
         if (open->get)
         {
@@ -1564,7 +1564,7 @@ namespace $$MODULE_NAME$$
             End();  
         }
     }
-    public func show_browser(context: EditorContext, open: mutable<bool>)
+    public func show_browser(context: EditorContext, open: std::mutable<bool>)
     {
         if (open->get)
         {

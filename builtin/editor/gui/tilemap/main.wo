@@ -1674,7 +1674,7 @@ namespace editor::gui::tilemap
 
     public func main(context: EditorContext, tilemap_file: fsys::path_t, mapdata: dict<string, dynamic>)
     {
-        let formopen = new! mutable(true);
+        let formopen = new! std::mutable(true);
         let editctx = new! TileEditContext(context, mapdata);
         launch(func(){
             let mut open = true;
