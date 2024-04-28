@@ -117,7 +117,7 @@ void jegl_rchain_bind_uniform_buffer(jegl_rendchain* chain, jegl_resource* unifo
     assert(uniformbuffer->m_type == jegl_resource::type::UNIFORMBUF);
     chain->m_binding_uniform_buffer.push_back(uniformbuffer);
 }
-void jegl_rchain_clear_color_buffer(jegl_rendchain* chain, float *color)
+void jegl_rchain_clear_color_buffer(jegl_rendchain* chain, const float *color)
 {
     chain->m_clear_target_frame_color_buffer = true;
     if (color == nullptr)

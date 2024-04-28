@@ -2807,7 +2807,7 @@ JE_API void jegl_rchain_bind_uniform_buffer(jegl_rendchain* chain, jegl_resource
 jegl_rchain_clear_color_buffer [基本接口]
 指示此链绘制开始时需要清除目标缓冲区的颜色缓存
 */
-JE_API void jegl_rchain_clear_color_buffer(jegl_rendchain* chain, float* color);
+JE_API void jegl_rchain_clear_color_buffer(jegl_rendchain* chain, const float* color);
 
 /*
 jegl_rchain_clear_depth_buffer [基本接口]
@@ -3018,12 +3018,15 @@ JE_API void jegl_rchain_commit(
 
 /*
 jegl_uhost_get_or_create_for_universe [基本接口]
-获取或创建指定Universe的可编程图形上下文接口,
+获取或创建指定Universe的可编程图形上下文接口 uhost
     * config 被用于指示图形配置，若首次创建图形接口则使用此设置，
     若图形接口已经创建，则调用jegl_reboot_graphic_thread以应用图形配置
     * 若需要使用默认配置或不改变图形设置，请传入 nullptr
+    * 创建出的 uhost 将通过 je_ecs_universe_register_exit_callback 接口注册 
+    Universe 的退出回调，以便在 Universe 退出时释放 uhost 实例
 请参见：
     jegl_reboot_graphic_thread
+    je_ecs_universe_register_exit_callback
 */
 JE_API jeecs::graphic_uhost* jegl_uhost_get_or_create_for_universe(
     void* universe,
@@ -3039,6 +3042,9 @@ JE_API jegl_context* jegl_uhost_get_context(
 /*
 jegl_uhost_alloc_branch [基本接口]
 从指定的可编程图形上下文接口申请一个绘制组
+    * 所有申请出的绘制组都需要在对应 uhost 关闭之前，通过 jegl_uhost_free_branch 释放
+请参见：
+    jegl_uhost_free_branch
 */
 JE_API jeecs::rendchain_branch* jegl_uhost_alloc_branch(
     jeecs::graphic_uhost* host);
