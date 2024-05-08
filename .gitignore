@@ -359,3 +359,4 @@ _deps
 !/build/builtin/cmake
 !/build/
 /pkg/*
+/3rd/pkg/*
