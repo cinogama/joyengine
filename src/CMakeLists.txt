@@ -2,8 +2,6 @@
 #
 cmake_minimum_required (VERSION 3.7)
 
-include_directories("../include")
-include_directories("../3rd/woolang/include")
 include_directories("../3rd/stb")
 include_directories("../3rd/imgui")
 include_directories("../3rd/imgui/backends")

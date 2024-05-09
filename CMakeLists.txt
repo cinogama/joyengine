@@ -85,22 +85,18 @@ if (JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD)
     string (TOUPPER ${WO_CMAKE_BUILD_TYPE} WO_CMAKE_BUILD_TYPE_UPPER_CASE)
 
     if (${WO_CMAKE_BUILD_TYPE_UPPER_CASE} STREQUAL "DEBUG")
-        add_custom_target(INSTALL_PKG COMMAND baozi install -nonative -profile debug WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        execute_process(COMMAND baozi install -nonative -profile debug WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
     else()
-        add_custom_target(INSTALL_PKG COMMAND baozi install -nonative WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        execute_process(COMMAND baozi install -nonative WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
     endif()
 else()
-    add_custom_target(INSTALL_PKG COMMAND echo "JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD is disabled.")
+    message(STATUS "JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD is disabled.")
 endif()
 
 if (JE4_EXECUTE_BUILD_SCRIPT)
-    add_custom_target(EXECUTE_BUILD_SCRIPT COMMAND
-        woodriver ./script/build.wo WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-    add_dependencies(EXECUTE_BUILD_SCRIPT INSTALL_PKG)
-    add_dependencies(EXECUTE_BUILD_SCRIPT woodriver)
+    execute_process(COMMAND woodriver ./script/build.wo WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 else()
-    add_custom_target(EXECUTE_BUILD_SCRIPT COMMAND 
-        echo "JE4_EXECUTE_BUILD_SCRIPT is disabled.")
+    message(STATUS "JE4_EXECUTE_BUILD_SCRIPT is disabled.")
 endif()
 
 if (JE4_COPYING_BUILTIN_FILES)
@@ -131,11 +127,15 @@ endif()
 
 set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic joyengine core" FORCE)
 
+include_directories("include")
+include_directories("3rd/woolang/include")
+
 # Scan /3rd/pkg/* to build the pkg and then static link them into joyecs.
 
-set(BAOZI_BUILD_BY_MGR OFF CACHE BOOL "Donot apply something for baozi, we will compile it ourself." FORCE)
-set(BAOZI_WOOLIB_NAME "asda" CACHE STRING "Static link, don't need link woolang library." FORCE)
-set(BAOZI_BUILD_SHARED OFF CACHE BOOL "Build static link library." FORCE)
+set(BAOZI_BUILD_BY_MGR          OFF     CACHE BOOL "Donot apply something for baozi, we will compile it ourself." FORCE)
+set(BAOZI_WOOLIB_NAME           ""      CACHE STRING "Static link, don't need link woolang library." FORCE)
+set(BAOZI_BUILD_SHARED          OFF     CACHE BOOL "Build static link library." FORCE)
+set(BAOZI_CMAKE_FORMAT_VERSION "1.0.2"  CACHE STRING "Used baozi cmake-doc version" FORCE)
 
 macro(JE4_GET_SUB_DIR_LIST result curdir)
   file(GLOB children RELATIVE ${curdir} ${curdir}/*)
@@ -155,7 +155,7 @@ foreach(pkg_name ${JE4_STATIC_LINKING_PKG_DIR_LIST})
     set(pkg_fullpath "${CMAKE_SOURCE_DIR}/3rd/pkg/${pkg_name}")
 
     if (EXISTS "${pkg_fullpath}/CMakeLists.txt")
-        message(STATUS "ready to build & link: ${pkg_name}")
+        message(STATUS "Woolang package named: ${pkg_name} found!")
         add_subdirectory("${pkg_fullpath}")
 
         if (TARGET ${pkg_name})
@@ -165,13 +165,9 @@ foreach(pkg_name ${JE4_STATIC_LINKING_PKG_DIR_LIST})
         endif()
     endif()
 endforeach()
-
 ########################################################################
 
 add_subdirectory("src")
-
-include_directories("include")
-include_directories("3rd/woolang/include")
 
 file(GLOB_RECURSE jedriver_src driver/*.cpp)
 add_executable(jedriver ${jedriver_src} "include/jeecs.hpp")
@@ -191,8 +187,6 @@ if (JE4_COPYING_BUILTIN_FILES)
     add_dependencies(COPY_WOOLANG_FILES COPY_ENGINE_FILES)
     add_dependencies(COPY_RCEDIT64_FILES COPY_WOOLANG_FILES)
     add_dependencies(COPY_RCEDIT32_FILES COPY_RCEDIT64_FILES)
-    add_dependencies(INSTALL_PKG COPY_RCEDIT32_FILES)
 endif()
-add_dependencies(jedriver INSTALL_PKG)
-add_dependencies(jedriver EXECUTE_BUILD_SCRIPT)
+add_dependencies(jedriver COPY_RCEDIT32_FILES)
 target_link_libraries(jedriver joyecs)
