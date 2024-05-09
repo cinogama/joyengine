@@ -15,9 +15,11 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build")
 set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
+##############################################################################
+
 option(JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD  "Install pkgs by baozi when building."  ON)
 option(JE4_COPYING_BUILTIN_FILES            "Copy builtin files to build."          ON)
-option(JE4_EXECUTE_BUILD_SCRIPT             "Copy liscences & gles-sdk for win32."  ON)
+option(JE4_STATIC_LINK_WOOLANG_PKGS         "Static link packages into engine core." ON)
 
 option(JE4_ENABLE_DX11_GAPI         "Enable DX11 Graphic api"           OFF)
 option(JE4_ENABLE_OPENGL330_GAPI    "Enable OpenGL 3.3 Graphic API"     OFF)
@@ -25,6 +27,7 @@ option(JE4_ENABLE_OPENGLES300_GAPI  "Enable OpenGLES 3.0 Graphic API"   OFF)
 option(JE4_ENABLE_VULKAN130_GAPI    "Enable Vulkan 1.3 Graphic API"     OFF)
 option(JE4_ENABLE_METAL_GAPI        "Enable Metal Graphic API"          OFF)
 
+##############################################################################
 
 # Cannot use gles & gl at same time because of ImGUI cannot use two lib at same time.
 if (JE4_ENABLE_OPENGL330_GAPI AND JE4_ENABLE_OPENGLES300_GAPI)
@@ -65,6 +68,8 @@ if (JE4_ENABLE_DX11_GAPI
     endif()
 endif()
 
+##############################################################################
+
 if(MSVC) 
     ## Fuck the MSVC, you did a great job that if we disable the exception, 
     ## the compiler boomed! FUCK!
@@ -93,11 +98,19 @@ else()
     message(STATUS "JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD is disabled.")
 endif()
 
-if (JE4_EXECUTE_BUILD_SCRIPT)
-    execute_process(COMMAND woodriver ./script/build.wo WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-else()
-    message(STATUS "JE4_EXECUTE_BUILD_SCRIPT is disabled.")
+set (JE4_BUILD_SCRIPT_CMDS "")
+
+if (JE4_STATIC_LINK_WOOLANG_PKGS)
+     list(APPEND JE4_BUILD_SCRIPT_CMDS "-static-link-pkgs")
 endif()
+if (JE4_ENABLE_OPENGLES300_GAPI AND WIN32)
+    list(APPEND JE4_BUILD_SCRIPT_CMDS "-gles-win32")
+endif()
+
+# Execute build work script.
+execute_process(
+    COMMAND woodriver ./script/build.wo ${JE4_BUILD_SCRIPT_CMDS} 
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 if (JE4_COPYING_BUILTIN_FILES)
     if(${CMAKE_HOST_SYSTEM_NAME} MATCHES "Windows")
@@ -125,47 +138,55 @@ if (JE4_COPYING_BUILTIN_FILES)
     endif()
 endif()
 
+##############################################################################
+
 set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic joyengine core" FORCE)
 
 include_directories("include")
 include_directories("3rd/woolang/include")
 
 # Scan /3rd/pkg/* to build the pkg and then static link them into joyecs.
+if (JE4_STATIC_LINK_WOOLANG_PKGS)
+    add_definitions(-DJE4_STATIC_LINK_WOOLANG_PKGS=1)
 
-set(BAOZI_BUILD_BY_MGR          OFF     CACHE BOOL "Donot apply something for baozi, we will compile it ourself." FORCE)
-set(BAOZI_WOOLIB_NAME           ""      CACHE STRING "Static link, don't need link woolang library." FORCE)
-set(BAOZI_BUILD_SHARED          OFF     CACHE BOOL "Build static link library." FORCE)
-set(BAOZI_CMAKE_FORMAT_VERSION "1.0.2"  CACHE STRING "Used baozi cmake-doc version" FORCE)
+    set(BAOZI_BUILD_BY_MGR          OFF     CACHE BOOL "Donot apply something for baozi, we will compile it ourself." FORCE)
+    set(BAOZI_WOOLIB_NAME           ""      CACHE STRING "Static link, don't need link woolang library." FORCE)
+    set(BAOZI_BUILD_SHARED          OFF     CACHE BOOL "Build static link library." FORCE)
+    set(BAOZI_CMAKE_FORMAT_VERSION "1.0.2"  CACHE STRING "Used baozi cmake-doc version" FORCE)
 
-macro(JE4_GET_SUB_DIR_LIST result curdir)
-  file(GLOB children RELATIVE ${curdir} ${curdir}/*)
-  set(dirlist "")
-  foreach(child ${children})
-    if(IS_DIRECTORY ${curdir}/${child})
-        set(dirlist ${dirlist} ${child})
-    endif()
-  endforeach()
-  set (${result} ${dirlist})
-endmacro()
-
-JE4_GET_SUB_DIR_LIST(JE4_STATIC_LINKING_PKG_DIR_LIST ${CMAKE_SOURCE_DIR}/3rd/pkg)
-set(JE4_STATIC_LINKED_PKG_LIST "")
-
-foreach(pkg_name ${JE4_STATIC_LINKING_PKG_DIR_LIST})
-    set(pkg_fullpath "${CMAKE_SOURCE_DIR}/3rd/pkg/${pkg_name}")
-
-    if (EXISTS "${pkg_fullpath}/CMakeLists.txt")
-        message(STATUS "Woolang package named: ${pkg_name} found!")
-        add_subdirectory("${pkg_fullpath}")
-
-        if (TARGET ${pkg_name})
-            list(APPEND JE4_STATIC_LINKED_PKG_LIST ${pkg_name})
-        else()
-            message(FATAL_ERROR "Target '${pkg_name}' not exist.")
+    macro(JE4_GET_SUB_DIR_LIST result curdir)
+      file(GLOB children RELATIVE ${curdir} ${curdir}/*)
+      set(dirlist "")
+      foreach(child ${children})
+        if(IS_DIRECTORY ${curdir}/${child})
+            set(dirlist ${dirlist} ${child})
         endif()
-    endif()
-endforeach()
-########################################################################
+      endforeach()
+      set (${result} ${dirlist})
+    endmacro()
+
+    JE4_GET_SUB_DIR_LIST(JE4_STATIC_LINKING_PKG_DIR_LIST ${CMAKE_SOURCE_DIR}/3rd/pkg)
+    set(JE4_STATIC_LINKED_PKG_LIST "")
+
+    foreach(pkg_name ${JE4_STATIC_LINKING_PKG_DIR_LIST})
+        set(pkg_fullpath "${CMAKE_SOURCE_DIR}/3rd/pkg/${pkg_name}")
+
+        if (EXISTS "${pkg_fullpath}/CMakeLists.txt")
+            message(STATUS "Woolang package named: ${pkg_name} found!")
+            add_subdirectory("${pkg_fullpath}")
+
+            if (TARGET ${pkg_name})
+                list(APPEND JE4_STATIC_LINKED_PKG_LIST ${pkg_name})
+            else()
+                message(FATAL_ERROR "Target '${pkg_name}' not exist.")
+            endif()
+        endif()
+    endforeach()
+
+else()
+    add_definitions(-DJE4_STATIC_LINK_WOOLANG_PKGS=0)
+endif()
+##############################################################################
 
 add_subdirectory("src")
 

@@ -14,31 +14,38 @@ let build_path = workpath / "build";
 
 func copy_all_licenses()
 {
-    try! third_party_paths = subpath(third_party_located_path);
-
-    for (let _3rd_path : third_party_paths->iter |> filter(\path = isdir(path);))
+    return try!
     {
-        try! subpath_of_3rd = allsubpath(_3rd_path);
-        for (let p : subpath_of_3rd)
+        try! third_party_paths = subpath(third_party_located_path);
+
+        for (let _3rd_path : third_party_paths->iter |> filter(\path = isdir(path);))
         {
-            if (isfile(p) && (
-                filename(p)->lower->find("license") != -1
-                || filename(p)->lower->find("copying") != -1))
+            try! subpath_of_3rd = allsubpath(_3rd_path);
+            for (let p : subpath_of_3rd)
             {
-                let relpath = p->tostring()->sub(third_party_located_path->tostring->len);
+                if (isfile(p) && (
+                    filename(p)->lower->find("license") != -1
+                    || filename(p)->lower->find("copying") != -1))
+                {
+                    let relpath = p->tostring()->sub(third_party_located_path->tostring->len);
 
-                let target_path = build_path / "licenses" / relpath;
-                do mkdir(parent(target_path));
-                do copy(p, target_path);
+                    let target_path = build_path / "licenses" / relpath;
+                    do mkdir(parent(target_path));
+                    do copy(p, target_path);
 
-                std::println("copy license file: ", p->tostring());
+                    std::println("copy license file: ", p->tostring());
+                }
             }
         }
+        expected_ok!;
     }
-    return result::ok(do nil);
+    catch! errono
+    {
+        return F"Failed to copy all licenses: {errono}.";
+    };
 }
 
-func copy_opengles_emu_env_libs()
+func copy_opengles_emu_env_libs()=> result<void, string>
 {
     let gles_env_path = third_party_located_path / "opengles_env_w64";
     let lib_filenames = [
@@ -52,15 +59,35 @@ func copy_opengles_emu_env_libs()
         ;
     do mkdir(build_path / "openglessl");
     do copy(gles_env_path / "openglessl", build_path / "openglessl");
+
+    expected_ok!;
 }
 
-func copy_pkgs()
+func copy_pkgs(copy_src_only: bool)=> result<void, string>
 {
-    do mkdir(build_path / "pkg");
-    do copy(workpath / "pkg", build_path / "pkg");
+    let source_path = workpath / "pkg";
+    let target_path = build_path / "pkg";
+    do mkdir(target_path);
+
+    for (let path : recursive_walk(workpath / "pkg") |> iterator::iter_result)
+    {
+        if (isfile(path))
+        {
+            try! relative_path = relative(path, source_path)
+                -> orbind(\eno = result::err(F"Failed to get relative path: {eno}."););
+
+            do mkdir(parent(target_path / relative_path));
+
+            if (copy_src_only && extension(path)->lower != ".wo")
+                continue;
+
+            do copy(path, target_path / relative_path);
+        }
+    }
+    expected_ok!;
 }
 
-func generate_je_api_decls()
+func generate_je_api_decls()=> result<void, string>
 {
     let fs = []mut: vec<string>;
 
@@ -112,10 +139,12 @@ void je_api_finish()
 }
 "@;
 
-    do writeall(workpath / "src" / "jeecs_woolang_extern_library.cpp", result);
+    if (!writeall(workpath / "src" / "jeecs_woolang_extern_library.cpp", result))
+        throw! F"Failed to update jeecs_woolang_extern_library.cpp.";
+    expected_ok!;
 }
 
-func generate_je_3rd_pkg_decls()
+func generate_je_3rd_pkg_decls()=> result<void, string>
 {
     let fs = {}mut: map<string, vec<string>>;
     let r = regex::create(@"extern\(\s*\"(.*?)\"\s*,\s*\"(.*?)\""@);
@@ -139,6 +168,7 @@ func generate_je_3rd_pkg_decls()
 #define JE_ENABLE_DEBUG_API
 #include "jeecs.hpp"
 
+#if JE4_STATIC_LINK_WOOLANG_PKGS
 "@;
 
     for (let (_, funcname) : fs)
@@ -148,11 +178,14 @@ func generate_je_3rd_pkg_decls()
     }
 
     result += @"
+#endif
 
 std::vector<void*> _je_3rd_pkg_lib_handle;
 void je_3rd_pkg_init()
 {
     assert(_je_3rd_pkg_lib_handle.empty()); 
+
+#if JE4_STATIC_LINK_WOOLANG_PKGS
 "@;
 
     for (let (libname, funcname) : fs)
@@ -166,7 +199,9 @@ void je_3rd_pkg_init()
                 + F"        wo_register_lib(\"{libname}\", {libname}_fs));\n\n";
     }
     
-    result += @"}
+    result += @"
+#endif    
+}
 
 void je_3rd_pkg_finish()
 {
@@ -179,12 +214,46 @@ void je_3rd_pkg_finish()
 }
 "@;
 
-    do writeall(workpath / "src" / "jeecs_3rd_pkg_extern_library.cpp", result);
+    if (!writeall(workpath / "src" / "jeecs_3rd_pkg_extern_library.cpp", result))
+        throw! F"Failed to update jeecs_3rd_pkg_extern_library.cpp.";
+    expected_ok!;
 }
 
-copy_pkgs();
-copy_opengles_emu_env_libs();
-generate_je_api_decls();
-generate_je_3rd_pkg_decls();
-if (copy_all_licenses()->iserr)
-    return -1;
+func main()
+{
+    let mut copy_gles_emu = false;
+    let mut copy_pkg_src_only = false;
+
+    for (let cmd : std::args())
+    {
+        if (cmd == "-static-link-pkgs")
+            copy_pkg_src_only = true;
+        else if (cmd == "-gles-win32")
+            copy_gles_emu = true;
+    }
+
+    try! _ = copy_pkgs(copy_pkg_src_only);
+    if (copy_gles_emu)
+    {
+        try! _ = copy_opengles_emu_env_libs();
+    }
+    try! _ = generate_je_api_decls();
+    try! _ = generate_je_3rd_pkg_decls();
+    try! _ = copy_all_licenses();
+
+    expected_ok!;
+}
+
+match (main())
+{
+ok(_)?
+    {
+        std::println("Done.");
+        return 0;
+    }
+err(_)?
+    {
+        std::println("Failed.");
+        return -1;
+    }
+}

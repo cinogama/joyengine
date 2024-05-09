@@ -4,6 +4,7 @@
 #define JE_ENABLE_DEBUG_API
 #include "jeecs.hpp"
 
+#if JE4_STATIC_LINK_WOOLANG_PKGS
 WO_API wo_api buffer_sub_buffer(wo_vm vm, wo_value args);
 WO_API wo_api buffer_subto_buffer(wo_vm vm, wo_value args);
 WO_API wo_api buffer_peeki8_buffer(wo_vm vm, wo_value args);
@@ -203,11 +204,14 @@ WO_API wo_api vmbin_address(wo_vm vm, wo_value args);
 WO_API wo_api vm_save_binary(wo_vm vm, wo_value args);
 WO_API wo_api vm_create_virtual_script(wo_vm vm, wo_value args);
 
+#endif
 
 std::vector<void*> _je_3rd_pkg_lib_handle;
 void je_3rd_pkg_init()
 {
     assert(_je_3rd_pkg_lib_handle.empty()); 
+
+#if JE4_STATIC_LINK_WOOLANG_PKGS
     wo_extern_lib_func_t libbuffer_fs[] = {
         wo_extern_lib_func_t{"buffer_sub_buffer", (void*)&buffer_sub_buffer},
         wo_extern_lib_func_t{"buffer_subto_buffer", (void*)&buffer_subto_buffer},
@@ -466,6 +470,8 @@ void je_3rd_pkg_init()
     _je_3rd_pkg_lib_handle.push_back(
         wo_register_lib("libvm", libvm_fs));
 
+
+#endif    
 }
 
 void je_3rd_pkg_finish()

@@ -41,7 +41,7 @@ void jeal_init();
 void je_log_init();
 void jegl_shader_generator_init();
 void je_api_init();
-void je_3rd_pkg_init()
+void je_3rd_pkg_init();
 
 void je_ecs_finish();
 void jeal_finish();
@@ -50,7 +50,7 @@ void jetowoo_finish();
 void je_log_finish();
 void jegl_shader_generator_shutdown();
 void je_api_finish();
-void je_3rd_pkg_finish()
+void je_3rd_pkg_finish();
 
 void _jewo_clear_singletons();
 
