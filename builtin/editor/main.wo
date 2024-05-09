@@ -2,8 +2,7 @@ import woo::std;
 
 import pkg::crashhandler;
 
-if (std::platform_os == std::os::WIN32)
-    crashhandler::init();
+crashhandler::init();
 
 import woo::debug;
 
