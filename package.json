@@ -54,6 +54,12 @@
             "src" : "3rd/pkg",
             "version" : "1.0.0"
         },
+        "regex" : {
+            "path" : "pkg",
+            "remote" : "https://git.cinogama.net/cinogamaproject/woolangpackages",
+			"src" : "3rd/pkg",
+            "version" : "1.0.0"
+        },
         "thread" : {
             "path" : "pkg",
             "remote" : "https://git.cinogama.net/cinogamaproject/woolangpackages",

@@ -305,11 +305,11 @@ VK_API_PLATFORM_API_LIST
             vklibrary_instance_proxy()
             {
 #ifdef JE_OS_WINDOWS
-                _instance = wo_load_lib("je/graphiclib/vulkan-1", "vulkan-1.dll", false);
+                _instance = wo_load_lib("je/graphiclib/vulkan-1", "vulkan-1.dll", nullptr, false);
 #else
-                _instance = wo_load_lib("je/graphiclib/vulkan", "libvulkan.so.1", false);
+                _instance = wo_load_lib("je/graphiclib/vulkan", "libvulkan.so.1", nullptr, false);
                 if (_instance == nullptr)
-                    _instance = wo_load_lib("je/graphiclib/vulkan", "libvulkan.so", false);
+                    _instance = wo_load_lib("je/graphiclib/vulkan", "libvulkan.so", nullptr, false);
 #endif
                 if (_instance == nullptr)
                 {

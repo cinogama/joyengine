@@ -166,6 +166,7 @@ if (NOT WIN32)
 endif()
 target_link_libraries(joyecs ${jeecs_system_libs})
 target_link_libraries(joyecs ${jeecs_graphic_libs})
+target_link_libraries(joyecs ${JE4_STATIC_LINKED_PKG_LIST})
 target_link_libraries(joyecs 
     woolang
     box2d 

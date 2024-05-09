@@ -130,6 +130,44 @@ if (JE4_COPYING_BUILTIN_FILES)
 endif()
 
 set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic joyengine core" FORCE)
+
+# Scan /3rd/pkg/* to build the pkg and then static link them into joyecs.
+
+set(BAOZI_BUILD_BY_MGR OFF CACHE BOOL "Donot apply something for baozi, we will compile it ourself." FORCE)
+set(BAOZI_WOOLIB_NAME "asda" CACHE STRING "Static link, don't need link woolang library." FORCE)
+set(BAOZI_BUILD_SHARED OFF CACHE BOOL "Build static link library." FORCE)
+
+macro(JE4_GET_SUB_DIR_LIST result curdir)
+  file(GLOB children RELATIVE ${curdir} ${curdir}/*)
+  set(dirlist "")
+  foreach(child ${children})
+    if(IS_DIRECTORY ${curdir}/${child})
+        set(dirlist ${dirlist} ${child})
+    endif()
+  endforeach()
+  set (${result} ${dirlist})
+endmacro()
+
+JE4_GET_SUB_DIR_LIST(JE4_STATIC_LINKING_PKG_DIR_LIST ${CMAKE_SOURCE_DIR}/3rd/pkg)
+set(JE4_STATIC_LINKED_PKG_LIST "")
+
+foreach(pkg_name ${JE4_STATIC_LINKING_PKG_DIR_LIST})
+    set(pkg_fullpath "${CMAKE_SOURCE_DIR}/3rd/pkg/${pkg_name}")
+
+    if (EXISTS "${pkg_fullpath}/CMakeLists.txt")
+        message(STATUS "ready to build & link: ${pkg_name}")
+        add_subdirectory("${pkg_fullpath}")
+
+        if (TARGET ${pkg_name})
+            list(APPEND JE4_STATIC_LINKED_PKG_LIST ${pkg_name})
+        else()
+            message(FATAL_ERROR "Target '${pkg_name}' not exist.")
+        endif()
+    endif()
+endforeach()
+
+########################################################################
+
 add_subdirectory("src")
 
 include_directories("include")
