@@ -19,7 +19,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
 option(JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD  "Install pkgs by baozi when building."  ON)
 option(JE4_COPYING_BUILTIN_FILES            "Copy builtin files to build."          ON)
-option(JE4_STATIC_LINK_WOOLANG_PKGS         "Static link packages into engine core." ON)
+option(JE4_STATIC_LINK_WOOLANG_PKGS         "Static link packages into engine core." OFF)
 
 option(JE4_ENABLE_DX11_GAPI         "Enable DX11 Graphic api"           OFF)
 option(JE4_ENABLE_OPENGL330_GAPI    "Enable OpenGL 3.3 Graphic API"     OFF)
@@ -165,11 +165,12 @@ if (JE4_STATIC_LINK_WOOLANG_PKGS)
       set (${result} ${dirlist})
     endmacro()
 
-    JE4_GET_SUB_DIR_LIST(JE4_STATIC_LINKING_PKG_DIR_LIST ${CMAKE_SOURCE_DIR}/3rd/pkg)
+    JE4_GET_SUB_DIR_LIST(JE4_STATIC_LINKING_PKG_DIR_LIST ${CMAKE_CURRENT_SOURCE_DIR}/3rd/pkg)
     set(JE4_STATIC_LINKED_PKG_LIST "")
 
+    # Get and add subdirectories.
     foreach(pkg_name ${JE4_STATIC_LINKING_PKG_DIR_LIST})
-        set(pkg_fullpath "${CMAKE_SOURCE_DIR}/3rd/pkg/${pkg_name}")
+        set(pkg_fullpath "${CMAKE_CURRENT_SOURCE_DIR}/3rd/pkg/${pkg_name}")
 
         if (EXISTS "${pkg_fullpath}/CMakeLists.txt")
             message(STATUS "Woolang package named: ${pkg_name} found!")
