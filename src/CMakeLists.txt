@@ -29,6 +29,8 @@ else()
     list(APPEND jeecs_system_libs dl)
 endif()
 
+add_library(joyengine_core_configs INTERFACE)
+
 set(imgui_srcs    
     "../3rd/imgui/imconfig.h"
     "../3rd/imgui/imgui.cpp"
@@ -44,7 +46,7 @@ set(imgui_srcs
 # OpenGL 3.3 & OpenGLES 3.2
 if (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES300_GAPI)
     if (JE4_ENABLE_OPENGL330_GAPI)
-        add_definitions(-DJE_ENABLE_GL330_GAPI)
+        target_compile_definitions(joyengine_core_configs INTERFACE -DJE_ENABLE_GL330_GAPI)
 
         include_directories("../3rd/glew/include")
         if (WIN32)
@@ -56,8 +58,8 @@ if (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES300_GAPI)
         list(APPEND jeecs_graphic_libs glew_s)
         
     else()
-        add_definitions(-DJE_ENABLE_GLES300_GAPI)
-        add_definitions(-DIMGUI_IMPL_OPENGL_ES3)
+        target_compile_definitions(joyengine_core_configs INTERFACE -DJE_ENABLE_GLES300_GAPI)
+        target_compile_definitions(joyengine_core_configs INTERFACE -DIMGUI_IMPL_OPENGL_ES3)
 
         if (WIN32)
             include_directories("../3rd/opengles_env_w64/include")
@@ -82,7 +84,7 @@ endif()
 
 # DX11
 if (JE4_ENABLE_DX11_GAPI AND WIN32)
-    add_definitions(-DJE_ENABLE_DX11_GAPI)
+    target_compile_definitions(joyengine_core_configs INTERFACE -DJE_ENABLE_DX11_GAPI)
 
     list(APPEND jeecs_graphic_libs d3d11)
     list(APPEND jeecs_graphic_libs dxgi)
@@ -98,7 +100,7 @@ endif()
 
 # Vulkan 1.1
 if (JE4_ENABLE_VULKAN130_GAPI)
-    add_definitions(-DJE_ENABLE_VK130_GAPI)
+    target_compile_definitions(joyengine_core_configs INTERFACE -DJE_ENABLE_VK130_GAPI)
 
     list(APPEND imgui_srcs
         "../3rd/imgui/backends/imgui_impl_vulkan.cpp"
@@ -107,7 +109,7 @@ endif()
 
 # Metal
 if (JE4_ENABLE_METAL_GAPI AND APPLE)
-    add_definitions(-DJE_ENABLE_METAL_GAPI)
+    target_compile_definitions(joyengine_core_configs INTERFACE -DJE_ENABLE_METAL_GAPI)
 endif()
 
 # OpenGL3.3 / OpenGLES3.0 / Vulkan needed:
@@ -136,16 +138,16 @@ endif()
 
 # Build engine shared/static library
 if (${BUILD_SHARED_LIBS})
-    add_definitions(-DWO_SHARED_LIB)
+    target_compile_definitions(joyengine_core_configs INTERFACE -DWO_SHARED_LIB)
     add_library(joyecs SHARED ${joyecs_srcs_cpp} ${joyecs_srcs_hpp} ${imgui_srcs} "../include/jeecs.hpp")
     if(UNIX)
-        add_compile_options(-Wall -rdynamic)
-endif()
+        target_compile_options(joyecs PRIVATE -Wall -rdynamic)
+    endif()
 else()
-    add_definitions(-DWO_STATIC_LIB)
+    target_compile_definitions(joyengine_core_configs INTERFACE -DWO_STATIC_LIB)
     add_library(joyecs STATIC ${joyecs_srcs_cpp} ${joyecs_srcs_hpp} ${imgui_srcs} "../include/jeecs.hpp")
 endif()
-target_compile_features(joyecs PUBLIC cxx_std_17)
+
 set_target_properties(joyecs PROPERTIES OUTPUT_NAME libjoyecs)
 set_target_properties(joyecs PROPERTIES PREFIX "")
 
@@ -162,16 +164,18 @@ endif()
 if (NOT WIN32)
     target_compile_options (box2d PRIVATE -fPIC)
 endif()
-target_link_libraries(joyecs ${jeecs_system_libs})
-target_link_libraries(joyecs ${jeecs_graphic_libs})
-target_link_libraries(joyecs ${JE4_STATIC_LINKED_PKG_LIST})
+
 target_link_libraries(joyecs 
-    woolang
-    box2d 
-    OpenAL 
-    assimp 
-    glslang
-    SPIRV 
-    glslang-default-resource-limits 
-    # spirv-cross-c
-    )
+    PRIVATE joyengine_configs
+    PRIVATE joyengine_core_configs
+    PRIVATE ${jeecs_system_libs}
+    PRIVATE ${jeecs_graphic_libs}
+    PRIVATE ${JE4_STATIC_LINKED_PKG_LIST}
+    PRIVATE woolang
+    PRIVATE box2d 
+    PRIVATE OpenAL 
+    PRIVATE assimp 
+    PRIVATE glslang
+    PRIVATE SPIRV 
+    # PRIVATE spirv-cross-c
+    PRIVATE glslang-default-resource-limits)

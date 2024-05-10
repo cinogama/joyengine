@@ -5,8 +5,7 @@ cmake_minimum_required (VERSION 3.16)
 project ("JoyECS")
 
 if(MSVC) 
-    add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/source-charset:utf-8>")
-    add_compile_options("$<$<C_COMPILER_ID:MSVC>:/source-charset:utf-8>")
+    add_compile_options("/source-charset:utf-8")
 endif()
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build")
@@ -122,6 +121,14 @@ if (JE4_COPYING_BUILTIN_FILES)
     endif()
 endif()
 
+add_library(joyengine_configs INTERFACE)
+target_compile_features(joyengine_configs INTERFACE cxx_std_17)
+if(MSVC) 
+    target_compile_options(joyengine_configs INTERFACE "/source-charset:utf-8")
+else()
+    target_compile_options(joyengine_configs INTERFACE -fno-exceptions)
+endif()
+
 ##############################################################################
 
 set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic joyengine core" FORCE)
@@ -131,7 +138,7 @@ include_directories("3rd/woolang/include")
 
 # Scan /3rd/pkg/* to build the pkg and then static link them into joyecs.
 if (JE4_STATIC_LINK_WOOLANG_PKGS)
-    add_definitions(-DJE4_STATIC_LINK_WOOLANG_PKGS=1)
+    target_compile_definitions(joyengine_configs INTERFACE -DJE4_STATIC_LINK_WOOLANG_PKGS=1)
 
     set(BAOZI_BUILD_BY_MGR          OFF     CACHE BOOL "Donot apply something for baozi, we will compile it ourself." FORCE)
     set(BAOZI_WOOLIB_NAME           ""      CACHE STRING "Static link, don't need link woolang library." FORCE)
@@ -169,7 +176,7 @@ if (JE4_STATIC_LINK_WOOLANG_PKGS)
     endforeach()
 
 else()
-    add_definitions(-DJE4_STATIC_LINK_WOOLANG_PKGS=0)
+    target_compile_definitions(joyengine_configs INTERFACE -DJE4_STATIC_LINK_WOOLANG_PKGS=0)
 endif()
 ##############################################################################
 
@@ -177,21 +184,6 @@ add_subdirectory("src")
 
 file(GLOB_RECURSE jedriver_src driver/*.cpp)
 add_executable(jedriver ${jedriver_src} "include/jeecs.hpp")
-target_compile_features(jedriver PUBLIC cxx_std_17)
-if(MSVC) 
-    ## Fuck the MSVC, you did a great job that if we disable the exception, 
-    ## the compiler boomed! FUCK!
-    
-    # add_definitions(-D_HAS_EXCEPTIONS=0)
-    # if(CMAKE_CXX_FLAGS MATCHES "/EHsc ")
-    #     string(REPLACE "/EHsc" "/EHs-c-" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-    # endif()
-    # if(CMAKE_CXX_FLAGS MATCHES "/EHsc$")
-    #     string(REPLACE "/EHsc" "/EHs-c-" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-    # endif()
-else()
-    target_compile_options(jedriver PUBLIC -fno-exceptions)
-endif()
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
     set_target_properties(jedriver PROPERTIES RELEASE_POSTFIX "")
@@ -214,4 +206,7 @@ if (JE4_COPYING_BUILTIN_FILES)
         COPY_RCEDIT64_FILES
         COPY_RCEDIT32_FILES)
 endif()
-target_link_libraries(jedriver joyecs)
+target_link_libraries(jedriver 
+    PRIVATE joyengine_configs
+    PRIVATE joyecs
+    PRIVATE woolang)
