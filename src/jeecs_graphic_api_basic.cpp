@@ -155,7 +155,7 @@ namespace Assimp
     };
 }
 
-#if !JE4_STATIC_LINK_WOOLANG_PKGS
+#if !JE4_STB_IMAGE_STATIC_IMPLED
 #   define STB_IMAGE_IMPLEMENTATION
 #endif
 #include <stb_image.h>

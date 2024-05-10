@@ -1,48 +1,48 @@
 [submodule "3rd/glew"]
-	path = 3rd/glew
-	url = https://git.cinogama.net/cinogamaproject/joyengineecs/glew-2.2.0.git
-	branch = master
+    path = 3rd/glew
+    url = https://git.cinogama.net/cinogamaproject/joyengineecs/glew-2.2.0.git
+    branch = master
 [submodule "3rd/glfw"]
-	path = 3rd/glfw
-	url = https://git.cinogama.net/cinogamaproject/joyengineecs/glfw.git
-	branch = 3.3-stable
+    path = 3rd/glfw
+    url = https://git.cinogama.net/cinogamaproject/joyengineecs/glfw.git
+    branch = 3.3-stable
 [submodule "3rd/stb"]
-	path = 3rd/stb
-	url = https://git.cinogama.net/cinogamaproject/joyengineecs/stb.git
-	branch = master
+    path = 3rd/stb
+    url = https://git.cinogama.net/cinogamaproject/joyengineecs/stb.git
+    branch = master
 [submodule "3rd/imgui"]
-	path = 3rd/imgui
-	url = https://git.cinogama.net/cinogamaproject/joyengineecs/imgui
-	branch = docking
+    path = 3rd/imgui
+    url = https://git.cinogama.net/cinogamaproject/joyengineecs/imgui
+    branch = docking
 [submodule "3rd/woolang"]
-	path = 3rd/woolang
-	url = https://git.cinogama.net/cinogamaproject/woolang.git
-	branch = release
+    path = 3rd/woolang
+    url = https://git.cinogama.net/cinogamaproject/woolang.git
+    branch = release
 [submodule "3rd/box2d"]
-	path = 3rd/box2d
-	url = https://git.cinogama.net/cinogamaproject/joyengineecs/box2d.git
-	branch = master_v2_4_1
+    path = 3rd/box2d
+    url = https://git.cinogama.net/cinogamaproject/joyengineecs/box2d.git
+    branch = master_v2_4_1
 [submodule "3rd/openal-soft"]
-	path = 3rd/openal-soft
-	url = https://git.cinogama.net/cinogamaproject/joyengineecs/openal-soft.git
-	branch = v1.23.1
+    path = 3rd/openal-soft
+    url = https://git.cinogama.net/cinogamaproject/joyengineecs/openal-soft.git
+    branch = v1.23.1
 [submodule "3rd/opengles_env_w64"]
-	path = 3rd/opengles_env_w64
-	url = https://git.cinogama.net/cinogamaproject/joyengineecs/opengles_emulator_win64.git
-	branch = master
+    path = 3rd/opengles_env_w64
+    url = https://git.cinogama.net/cinogamaproject/joyengineecs/opengles_emulator_win64.git
+    branch = master
 [submodule "3rd/assimp"]
-	path = 3rd/assimp
-	url = https://git.cinogama.net/cinogamaproject/joyengineecs/assimp.git
-	branch = master_v5.3.1
+    path = 3rd/assimp
+    url = https://git.cinogama.net/cinogamaproject/joyengineecs/assimp.git
+    branch = master_v5.3.1
 [submodule "3rd/vulkan"]
-	path = 3rd/vulkan
-	url = https://git.cinogama.net/cinogamaproject/joyengineecs/Vulkan-Headers.git
-	branch = main
+    path = 3rd/vulkan
+    url = https://git.cinogama.net/cinogamaproject/joyengineecs/Vulkan-Headers.git
+    branch = main
 [submodule "3rd/glslang"]
-	path = 3rd/glslang
-	url = https://git.cinogama.net/cinogamaproject/joyengineecs/glslang.git
-	branch = main
+    path = 3rd/glslang
+    url = https://git.cinogama.net/cinogamaproject/joyengineecs/glslang.git
+    branch = main
 [submodule "3rd/spirv-cross"]
-	path = 3rd/spirv-cross
-	url = https://git.cinogama.net/cinogamaproject/joyengineecs/SPIRV-Cross.git
-	branch = main
+    path = 3rd/spirv-cross
+    url = https://git.cinogama.net/cinogamaproject/joyengineecs/SPIRV-Cross.git
+    branch = main

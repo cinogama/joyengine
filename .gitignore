@@ -19,7 +19,7 @@
 [Rr]elease/
 [Rr]eleases/
 x64/
-# x86/ 			# ASMJIT has path named 'x86'
+# x86/             # ASMJIT has path named 'x86'
 [Aa][Rr][Mm]/
 [Aa][Rr][Mm]64/
 bld/
