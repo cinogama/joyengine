@@ -113,7 +113,8 @@ build_win64_dx11_opengl_vk:
       -DJE4_ENABLE_OPENGLES300_GAPI=OFF
       -DJE4_ENABLE_VULKAN130_GAPI=ON
       -DJE4_ENABLE_METAL_GAPI=OFF
-    - MSBuild jedriver.vcxproj -p:Configuration=RelWithDebInfo -m
+      -DCMAKE_BUILD_TYPE=RelWithDebInfo
+    - cmake --build . --config=RelWithDebInfo -j 4
     - cd ..
     - cd build
     - copy RelWithDebInfo\*
@@ -153,7 +154,8 @@ build_win64_dx11_opengles_vk:
       -DJE4_ENABLE_OPENGLES300_GAPI=ON
       -DJE4_ENABLE_VULKAN130_GAPI=ON
       -DJE4_ENABLE_METAL_GAPI=OFF
-    - MSBuild jedriver.vcxproj -p:Configuration=RelWithDebInfo -m
+      -DCMAKE_BUILD_TYPE=RelWithDebInfo
+    - cmake --build . --config=RelWithDebInfo -j 4
   tags:
     - winserver22
 
