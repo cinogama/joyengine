@@ -17,7 +17,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
 option(JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD  "Install pkgs by baozi when building."  ON)
 option(JE4_COPYING_BUILTIN_FILES            "Copy builtin files to build."          ON)
-option(JE4_STATIC_LINK_WOOLANG_PKGS         "Static link packages into engine core." OFF)
+option(JE4_STATIC_LINK_WOOLANG_PKGS         "Static link packages into engine core." ON)
 
 option(JE4_ENABLE_DX11_GAPI         "Enable DX11 Graphic api"           OFF)
 option(JE4_ENABLE_OPENGL330_GAPI    "Enable OpenGL 3.3 Graphic API"     OFF)
@@ -197,14 +197,10 @@ endif()
 
 if (JE4_COPYING_BUILTIN_FILES)
     add_dependencies(COPY_ENGINE_FILES COPY_BUILTIN_FILES)
-    add_dependencies(COPY_WOOLANG_FILES COPY_BUILTIN_FILES)
-    add_dependencies(COPY_RCEDIT64_FILES COPY_BUILTIN_FILES)
-    add_dependencies(COPY_RCEDIT32_FILES COPY_BUILTIN_FILES)
-    add_dependencies(jedriver 
-        COPY_ENGINE_FILES
-        COPY_WOOLANG_FILES
-        COPY_RCEDIT64_FILES
-        COPY_RCEDIT32_FILES)
+    add_dependencies(COPY_WOOLANG_FILES COPY_ENGINE_FILES)
+    add_dependencies(COPY_RCEDIT64_FILES COPY_WOOLANG_FILES)
+    add_dependencies(COPY_RCEDIT32_FILES COPY_RCEDIT64_FILES)
+    add_dependencies(jedriver COPY_RCEDIT32_FILES)
 endif()
 target_link_libraries(jedriver 
     PRIVATE joyengine_configs
