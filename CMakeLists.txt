@@ -205,9 +205,11 @@ else()
 endif()
 
 if (JE4_COPYING_BUILTIN_FILES)
-    add_dependencies(COPY_ENGINE_FILES COPY_BUILTIN_FILES)
-    add_dependencies(COPY_WOOLANG_FILES COPY_ENGINE_FILES)
-    add_dependencies(COPY_RCEDIT64_FILES COPY_WOOLANG_FILES)
-    add_dependencies(COPY_RCEDIT32_FILES COPY_RCEDIT64_FILES)
+    add_dependencies(jedriver 
+        COPY_BUILTIN_FILES
+        COPY_ENGINE_FILES
+        COPY_WOOLANG_FILES
+        COPY_RCEDIT64_FILES
+        COPY_RCEDIT32_FILES)
 endif()
 target_link_libraries(jedriver joyecs)
