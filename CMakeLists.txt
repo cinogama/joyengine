@@ -3,7 +3,6 @@
 cmake_minimum_required (VERSION 3.16)
 
 project ("JoyECS")
-set(CMAKE_CXX_STANDARD 17)
 
 if(MSVC) 
     add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/source-charset:utf-8>")
@@ -69,21 +68,6 @@ if (JE4_ENABLE_DX11_GAPI
 endif()
 
 ##############################################################################
-
-if(MSVC) 
-    ## Fuck the MSVC, you did a great job that if we disable the exception, 
-    ## the compiler boomed! FUCK!
-    
-    # add_definitions(-D_HAS_EXCEPTIONS=0)
-    # if(CMAKE_CXX_FLAGS MATCHES "/EHsc ")
-    #     string(REPLACE "/EHsc" "/EHs-c-" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-    # endif()
-    # if(CMAKE_CXX_FLAGS MATCHES "/EHsc$")
-    #     string(REPLACE "/EHsc" "/EHs-c-" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-    # endif()
-else()
-    add_compile_options(-fno-exceptions)
-endif()
 
 if (JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD)
     set (WO_CMAKE_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
@@ -193,20 +177,38 @@ add_subdirectory("src")
 
 file(GLOB_RECURSE jedriver_src driver/*.cpp)
 add_executable(jedriver ${jedriver_src} "include/jeecs.hpp")
+target_compile_features(jedriver PUBLIC cxx_std_17)
+if(MSVC) 
+    ## Fuck the MSVC, you did a great job that if we disable the exception, 
+    ## the compiler boomed! FUCK!
+    
+    # add_definitions(-D_HAS_EXCEPTIONS=0)
+    # if(CMAKE_CXX_FLAGS MATCHES "/EHsc ")
+    #     string(REPLACE "/EHsc" "/EHs-c-" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    # endif()
+    # if(CMAKE_CXX_FLAGS MATCHES "/EHsc$")
+    #     string(REPLACE "/EHsc" "/EHs-c-" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    # endif()
+else()
+    target_compile_options(jedriver PUBLIC -fno-exceptions)
+endif()
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-	set_target_properties(jedriver PROPERTIES RELEASE_POSTFIX "")
-	set_target_properties(jedriver PROPERTIES DEBUG_POSTFIX "_debug")
+    set_target_properties(jedriver PROPERTIES RELEASE_POSTFIX "")
+    set_target_properties(jedriver PROPERTIES DEBUG_POSTFIX "_debug")
 elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
-	set_target_properties(jedriver PROPERTIES RELEASE_POSTFIX "32")
-	set_target_properties(jedriver PROPERTIES DEBUG_POSTFIX "32_debug")
+    set_target_properties(jedriver PROPERTIES RELEASE_POSTFIX "32")
+    set_target_properties(jedriver PROPERTIES DEBUG_POSTFIX "32_debug")
 else()
-	message(FATAL_ERROR "Unknown platform")
+    message(FATAL_ERROR "Unknown platform")
 endif()
 
 if (JE4_COPYING_BUILTIN_FILES)
+    add_dependencies(COPY_ENGINE_FILES COPY_BUILTIN_FILES)
+    add_dependencies(COPY_WOOLANG_FILES COPY_BUILTIN_FILES)
+    add_dependencies(COPY_RCEDIT64_FILES COPY_BUILTIN_FILES)
+    add_dependencies(COPY_RCEDIT32_FILES COPY_BUILTIN_FILES)
     add_dependencies(jedriver 
-        COPY_BUILTIN_FILES
         COPY_ENGINE_FILES
         COPY_WOOLANG_FILES
         COPY_RCEDIT64_FILES

@@ -145,7 +145,7 @@ else()
     add_definitions(-DWO_STATIC_LIB)
     add_library(joyecs STATIC ${joyecs_srcs_cpp} ${joyecs_srcs_hpp} ${imgui_srcs} "../include/jeecs.hpp")
 endif()
-
+target_compile_features(joyecs PUBLIC cxx_std_17)
 set_target_properties(joyecs PROPERTIES OUTPUT_NAME libjoyecs)
 set_target_properties(joyecs PROPERTIES PREFIX "")
 
