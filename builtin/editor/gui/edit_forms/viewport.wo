@@ -68,6 +68,9 @@ namespace editor::gui::edit_forms
                 if (show)
                 {
                     let debug_world = proj->get_editing_world;
+                    let debug_camera_root = debug_world
+                        =>> \w = get_debug_camera_root(w);
+                        ;
                     let debug_camera_entity = debug_world
                         =>> \w = get_debug_camera(w);
                         ;
@@ -174,6 +177,25 @@ namespace editor::gui::edit_forms
                                 coord_mode = je::editor::coord_mode::global;
                             if (MenuItemShortcutSelectedEnabled("局部坐标系", "Tab + L", coord_mode == je::editor::coord_mode::local, debug_camera_entity->has)->has)
                                 coord_mode = je::editor::coord_mode::local;
+                            Separator();
+                            if (MenuItem("重置视口摄像机"))
+                            {
+                                mover_mode = je::editor::mover_mode::selection;
+                                coord_mode = je::editor::coord_mode::global;
+
+                                func reset_entity_trans(e)
+                                {
+                                    let lp = e->towoo::get_component:<Transform::LocalPosition>;
+                                    let lr = e->towoo::get_component:<Transform::LocalRotation>;
+
+                                    do lp->> \lp = lp.pos->set <| (0., 0., 0.): vec3;;
+                                    do lr->> \lr = lr.rot->set <| quat::ident;;
+                                }
+
+                                do debug_camera_entity->> \e = reset_entity_trans(e);;
+                                do debug_camera_root->> \e = reset_entity_trans(e);;
+
+                            }
                             EndMenu();
                         }
 

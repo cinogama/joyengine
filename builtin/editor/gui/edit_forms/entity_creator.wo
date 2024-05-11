@@ -200,7 +200,7 @@ namespace editor::gui::edit_forms
             ;
 
         let mut clicked_component = option::none: option<string>;
-        for (let (pscope, pnameinfos): scoped_type)
+        for (let (pscope, pnameinfos): scoped_type->unmapping->std::sort(\a, b = a.0 < b.0;))
         {
             TextDisabled(pscope == "" ? "<无>" | pscope);
 

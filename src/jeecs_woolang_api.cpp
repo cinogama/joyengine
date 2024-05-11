@@ -55,7 +55,7 @@ WO_API wo_api wojeapi_startup_thread(wo_vm vm, wo_value args)
     std::lock_guard g1(_jewo_all_alive_vm_threads_mx);
     _jewo_all_alive_vm_threads.insert(co_vmm);
 
-    std::thread t([=]
+    return wo_ret_gchandle(vm, new std::thread([=]
         {
             wo_invoke_value(co_vmm, cofunc, argument_count);
 
@@ -63,9 +63,23 @@ WO_API wo_api wojeapi_startup_thread(wo_vm vm, wo_value args)
             _jewo_all_alive_vm_threads.erase(co_vmm);
 
             wo_release_vm(co_vmm);
-        });
-    t.detach();
+        }),
+        nullptr,
+        [](void* ptr)
+        {
+            std::thread* t = std::launder(reinterpret_cast<std::thread*>(ptr));
 
+            if (t->joinable())
+                t->detach();
+            delete t;
+        });
+}
+
+WO_API wo_api wojeapi_wait_thread(wo_vm vm, wo_value args)
+{
+    std::thread* t = std::launder(reinterpret_cast<std::thread*>(wo_pointer(args + 0)));
+    if (t->joinable())
+        t->join();
     return wo_ret_void(vm);
 }
 
@@ -2603,12 +2617,6 @@ namespace je
     }
     namespace editor
     {
-        extern("libjoyecs", "wojeapi_clear_singletons")
-        public func clear_singletons()=> void;
-
-        extern("libjoyecs", "wojeapi_abort_all_thread", slow)
-        public func abort_threads()=> void;
-
         extern("libjoyecs", "wojeapi_editor_register_panic_hook")
         public func register_panic_hook(f: (string, int, string, int, string, string)=> void)=> void;
 
@@ -2781,19 +2789,49 @@ namespace je
     public func start_coroutine<FT, ArgTs>(f: FT, args: ArgTs)=> void
         where f(args...) is void;
 
-    namespace unsafe
+    using singleton<T> = struct{
+        m_reader    : ()=> T,
+        m_guard     : rmutex
+    }
     {
-        extern("libjoyecs", "wojeapi_startup_thread")
-        public func start_thread<FT, ArgTs>(f: FT, args: ArgTs)=> void
-            where f(args...) is void;
-
-        public func singleton<T>(token: string, f: ()=>T)=> ()=>T
+        public func create<T>(token: string, f: ()=>T)=> singleton<T>
         {
             extern("libjoyecs", "wojeapi_create_singleton")
-            func _singleton<T>(token: string, f: ()=>T)=> T;
+                func _singleton<T>(token: string, f: ()=>T)=> T;
 
-            return \=_singleton(token, f);;
+            return singleton{ 
+                m_reader = \=_singleton(token, f);,
+                m_guard = rmutex::create()
+            };
         }
+        public func apply<T, R>(self: singleton<T>, f: (T)=> R)=> R
+        {
+            self.m_guard->lock();
+            let r = self.m_reader();
+            self.m_guard->unlock();
+            return f(r);
+        }
+
+        namespace unsafe
+        {
+            extern("libjoyecs", "wojeapi_clear_singletons")
+            public func clear_all()=> void;
+        }
+    }
+    
+    using thread = gchandle
+    {
+        namespace unsafe
+        {
+            extern("libjoyecs", "wojeapi_startup_thread")
+            public func create<FT, ArgTs>(f: FT, args: ArgTs)=> thread
+                where f(args...) is void;
+
+            extern("libjoyecs", "wojeapi_abort_all_thread", slow)
+            public func abort_all()=> void;
+        }
+        extern("libjoyecs", "wojeapi_wait_thread", slow)
+        public func wait(self: thread)=> void;
     }
 
     using rmutex = gchandle
@@ -2809,7 +2847,7 @@ namespace je
 
         extern("libjoyecs", "wojeapi_unlock_rmutex")
         public func unlock(self: rmutex)=> void;
-    }
+    }    
 
     extern("libjoyecs", "wojeapi_generate_uid")
         public func uid()=> string;

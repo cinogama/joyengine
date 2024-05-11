@@ -253,8 +253,6 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_float3(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_store_bad_shader_uniforms_float4(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_set_editing_entity_uid(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_reset_editing_entity_uid(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_clear_singletons(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_abort_all_thread(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_editor_register_panic_hook(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_mark_shared_glresource_outdated(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_init_graphic_pipeline(wo_vm vm, wo_value args);
@@ -298,8 +296,11 @@ WO_API wo_api wojeapi_dynamic_parser_edit(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_deltatime(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_smooth_deltatime(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_startup_coroutine(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_startup_thread(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_create_singleton(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_clear_singletons(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_startup_thread(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_abort_all_thread(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_wait_thread(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_create_rmutex(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_lock_rmutex(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_trylock_rmutex(wo_vm vm, wo_value args);
@@ -685,8 +686,6 @@ void je_api_init()
         wo_extern_lib_func_t{"wojeapi_store_bad_shader_uniforms_float4", (void*)&wojeapi_store_bad_shader_uniforms_float4},
         wo_extern_lib_func_t{"wojeapi_set_editing_entity_uid", (void*)&wojeapi_set_editing_entity_uid},
         wo_extern_lib_func_t{"wojeapi_reset_editing_entity_uid", (void*)&wojeapi_reset_editing_entity_uid},
-        wo_extern_lib_func_t{"wojeapi_clear_singletons", (void*)&wojeapi_clear_singletons},
-        wo_extern_lib_func_t{"wojeapi_abort_all_thread", (void*)&wojeapi_abort_all_thread},
         wo_extern_lib_func_t{"wojeapi_editor_register_panic_hook", (void*)&wojeapi_editor_register_panic_hook},
         wo_extern_lib_func_t{"wojeapi_mark_shared_glresource_outdated", (void*)&wojeapi_mark_shared_glresource_outdated},
         wo_extern_lib_func_t{"wojeapi_init_graphic_pipeline", (void*)&wojeapi_init_graphic_pipeline},
@@ -730,8 +729,11 @@ void je_api_init()
         wo_extern_lib_func_t{"wojeapi_deltatime", (void*)&wojeapi_deltatime},
         wo_extern_lib_func_t{"wojeapi_smooth_deltatime", (void*)&wojeapi_smooth_deltatime},
         wo_extern_lib_func_t{"wojeapi_startup_coroutine", (void*)&wojeapi_startup_coroutine},
-        wo_extern_lib_func_t{"wojeapi_startup_thread", (void*)&wojeapi_startup_thread},
         wo_extern_lib_func_t{"wojeapi_create_singleton", (void*)&wojeapi_create_singleton},
+        wo_extern_lib_func_t{"wojeapi_clear_singletons", (void*)&wojeapi_clear_singletons},
+        wo_extern_lib_func_t{"wojeapi_startup_thread", (void*)&wojeapi_startup_thread},
+        wo_extern_lib_func_t{"wojeapi_abort_all_thread", (void*)&wojeapi_abort_all_thread},
+        wo_extern_lib_func_t{"wojeapi_wait_thread", (void*)&wojeapi_wait_thread},
         wo_extern_lib_func_t{"wojeapi_create_rmutex", (void*)&wojeapi_create_rmutex},
         wo_extern_lib_func_t{"wojeapi_lock_rmutex", (void*)&wojeapi_lock_rmutex},
         wo_extern_lib_func_t{"wojeapi_trylock_rmutex", (void*)&wojeapi_trylock_rmutex},

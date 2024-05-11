@@ -125,7 +125,7 @@ namespace editor
 
             assert (self.m_worlds->empty);
 
-            je::editor::abort_threads();
+            je::thread::unsafe::abort_all();
 
             // 关闭所有世界~~
             do self->get_env->get_universe->get_all_worlds
@@ -160,7 +160,7 @@ namespace editor
                 return result::err("已经在调试中，不可重复调试");
 
             // 调试开始之前再清除单例
-            je::editor::clear_singletons();
+            je::singleton::unsafe::clear_all();
 
             try! dumpped = self->dump_and_close_all_world();
 
@@ -822,30 +822,30 @@ namespace editor
             // 创建默认世界之后，自动顺便创建调试使用的摄像机
             let camera_walker = world.m_world_instance->add_entity([
                 // Transform 族组件
-                je::typeinfo::load("Transform::LocalPosition")->val,
-                je::typeinfo::load("Transform::LocalRotation")->val,
-                je::typeinfo::load("Transform::LocalToWorld")->val,
-                je::typeinfo::load("Transform::Translation")->val,
-                je::typeinfo::load("Transform::Anchor")->val,
+                Transform::LocalPosition::type::typeinfo,
+                Transform::LocalRotation::type::typeinfo,
+                Transform::LocalToWorld::type::typeinfo,
+                Transform::Translation::type::typeinfo,
+                Transform::Anchor::type::typeinfo,
                 // Editor 族组件
-                je::typeinfo::load("Editor::Invisable")->val,
-                je::typeinfo::load("Editor::EditorWalker")->val,
+                Editor::Invisable::type::typeinfo,
+                Editor::EditorWalker::type::typeinfo,
             ]);
             // 摄像机，同时负责x轴旋转
             let editor_camera = world.m_world_instance->add_entity([
                 // Transform 族组件
-                je::typeinfo::load("Transform::LocalRotation")->val,
-                je::typeinfo::load("Transform::LocalToParent")->val,
-                je::typeinfo::load("Transform::Translation")->val,
+                Transform::LocalRotation::type::typeinfo,
+                Transform::LocalToParent::type::typeinfo,
+                Transform::Translation::type::typeinfo,
                 // Editor 族组件
-                je::typeinfo::load("Editor::Invisable")->val,
-                je::typeinfo::load("Editor::EditorWalker")->val,
+                Editor::Invisable::type::typeinfo,
+                Editor::EditorWalker::type::typeinfo,
                 // Camera 族组件
-                je::typeinfo::load("Camera::PerspectiveProjection")->val,
-                je::typeinfo::load("Camera::Projection")->val,
-                je::typeinfo::load("Camera::FrustumCulling")->val,
-                je::typeinfo::load("Camera::RendToFramebuffer")->val,
-                je::typeinfo::load("Camera::Clear")->val,
+                Camera::PerspectiveProjection::type::typeinfo,
+                Camera::Projection::type::typeinfo,
+                Camera::FrustumCulling::type::typeinfo,
+                Camera::RendToFramebuffer::type::typeinfo,
+                Camera::Clear::type::typeinfo,
             ]);
             editor_camera->je::editor::apply_camera_framebuf_setting(320, 240);
             do editor_camera->editor::set_parent(camera_walker, true);
@@ -853,15 +853,15 @@ namespace editor
             // 移动器，这里只创建根实体，具体的轴由编辑器系统生成
             do world.m_world_instance->add_entity([
                 // Transform 族组件
-                je::typeinfo::load("Transform::LocalPosition")->val,
-                je::typeinfo::load("Transform::LocalRotation")->val,
-                je::typeinfo::load("Transform::LocalScale")->val,
-                je::typeinfo::load("Transform::Anchor")->val,
-                je::typeinfo::load("Transform::Translation")->val,
-                je::typeinfo::load("Transform::LocalToWorld")->val,
+                Transform::LocalPosition::type::typeinfo,
+                Transform::LocalRotation::type::typeinfo,
+                Transform::LocalScale::type::typeinfo,
+                Transform::Anchor::type::typeinfo,
+                Transform::Translation::type::typeinfo,
+                Transform::LocalToWorld::type::typeinfo,
                 // Editor 族组件
-                je::typeinfo::load("Editor::Invisable")->val,
-                je::typeinfo::load("Editor::EntityMoverRoot")->val,
+                Editor::Invisable::type::typeinfo,
+                Editor::EntityMoverRoot::type::typeinfo,
             ]);
 
             return world.m_world_instance;
@@ -893,6 +893,80 @@ namespace editor
         {
             return jeapi::serialize::entity(e, false);
         }
+        public func get_debug_camera_info(_: Project, w: je::world)
+        {
+            let debug_camera_root_trans = gui::edit_forms::get_debug_camera_root(w)
+                =>> \e = e->towoo::get_component :<Transform::Translation>;
+                ;
+            let debug_camera = gui::edit_forms::get_debug_camera(w);
+            let debug_camera_rot = debug_camera
+                =>> \e = e->towoo::get_component :<Transform::LocalRotation>;
+                ->> \r = r.rot->get;
+                ;
+
+            match (debug_camera_root_trans)
+            {
+            value(trans)?
+                {
+                    let pos = trans->get_global_pos;
+                    let rot = trans->get_global_rot;
+
+                    let crot = debug_camera_rot->valor(quat::ident);
+
+                    let debug_camera_info = {
+                        ["root_position"] = [pos[0], pos[1], pos[2]]: dynamic,
+                        ["root_rotation"] = [rot[0], rot[1], rot[2], rot[3]]: dynamic,
+                        ["camera_rotation"] = [crot[0], crot[1], crot[2], crot[3]]: dynamic,
+                        ["camera_in_2d_mode"] = debug_camera
+                            =>> \e = e->towoo::get_component :<Camera::OrthoProjection>;
+                            ->  has: dynamic,
+                        ["camera_in_2d_light"] = debug_camera
+                            =>> \e = e->towoo::get_component :<Light2D::CameraPostPass>;
+                            ->  has: dynamic,
+                    };
+                    return option::value(debug_camera_info);
+                }
+            none? return none;
+            }
+        }
+        public func set_debug_camera_info(_: Project, w: je::world, cameradat: dict<string, dynamic>)
+        {
+            try! camera_root = gui::edit_forms::get_debug_camera_root(w);
+            try! camera = gui::edit_forms::get_debug_camera(w);
+
+            let root_translation = camera_root->towoo::get_component :<Transform::Translation>->val;
+            let root_local_position = camera_root->towoo::get_component :<Transform::LocalPosition>->val;
+            let root_local_rotation = camera_root->towoo::get_component :<Transform::LocalRotation>->val;
+
+            let camera_local_rotation = camera->towoo::get_component :<Transform::LocalRotation>->val;
+
+            let rpos = cameradat->getor("root_position", [0., 0., 0.]: dynamic) as array<dynamic>->>\e = e as real;;
+            do root_local_position->set_global_pos(
+                (rpos[0], rpos[1], rpos[2]): vec3, 
+                root_translation, 
+                option::value(root_local_rotation)
+            );
+
+            let rrot = cameradat->getor("root_rotation", [0., 0., 0., 1.]: dynamic) as array<dynamic>->>\e = e as real;;
+            do root_local_rotation->set_global_rot(
+                (rrot[0], rrot[1], rrot[2], rrot[3]): quat, 
+                root_translation
+            );
+
+            let crot = cameradat->getor("camera_rotation", [0., 0., 0., 1.]: dynamic) as array<dynamic>->>\e = e as real;;
+            camera_local_rotation.rot->set((crot[0], crot[1], crot[2], crot[3]): quat);
+
+            if (cameradat->getor("camera_in_2d_mode", false: dynamic) as bool)
+            {
+                gui::edit_forms::update_camera_2d3d_mode(camera, true);
+            }
+            if (cameradat->getor("camera_in_2d_light", false: dynamic) as bool)
+            {
+                gui::edit_forms::update_camera_2dlight_mode(camera, true);
+            }
+
+            expected_value!;
+        }
         public func serialize_world(self: Project, w: je::world, contain_debug_camera: bool)
         {
             return self->get_project_world(w)
@@ -916,40 +990,9 @@ namespace editor
 
                             if (contain_debug_camera)
                             {
-                                let debug_camera_root_trans = gui::edit_forms::get_debug_camera_root(w)
-                                    =>> \e = e->towoo::get_component :<Transform::Translation>;
+                                do self->get_debug_camera_info(w)
+                                    ->> \debug_camera_info = mdat->set("debug_camera", debug_camera_info: dynamic);
                                     ;
-                                let debug_camera = gui::edit_forms::get_debug_camera(w);
-                                let debug_camera_rot = debug_camera
-                                    =>> \e = e->towoo::get_component :<Transform::LocalRotation>;
-                                    ->> \r = r.rot->get;
-                                    ;
-
-                                match (debug_camera_root_trans)
-                                {
-                                value(trans)?
-                                    {
-                                        let pos = trans->get_global_pos;
-                                        let rot = trans->get_global_rot;
-
-                                        let crot = debug_camera_rot->valor(quat::ident);
-
-                                        let debug_camera_info = {
-                                            ["root_position"] = [pos[0], pos[1], pos[2]]: dynamic,
-                                            ["root_rotation"] = [rot[0], rot[1], rot[2], rot[3]]: dynamic,
-                                            ["camera_rotation"] = [crot[0], crot[1], crot[2], crot[3]]: dynamic,
-                                            ["camera_in_2d_mode"] = debug_camera
-                                                =>> \e = e->towoo::get_component :<Camera::OrthoProjection>;
-                                                ->  has: dynamic,
-                                            ["camera_in_2d_light"] = debug_camera
-                                                =>> \e = e->towoo::get_component :<Light2D::CameraPostPass>;
-                                                ->  has: dynamic,
-                                        };
-
-                                        mdat->set("debug_camera", debug_camera_info: dynamic);
-                                    }
-                                none?;
-                                }
                             }
                             return mdat->unsafe::cast :<typeof(dat)>;
                         }
@@ -981,70 +1024,59 @@ namespace editor
                 je::gui::launch(
                     func()
                     {
-                        // NOTE: 世界刚创建出来，第一帧无法获取到摄像机，需要等待若干帧
-                        let mut camera_root_may_none = option::none: option<je::entity>;
-                        let mut camera_may_none = option::none: option<je::entity>;
-                        for (;;)
-                        {
-                            camera_root_may_none = gui::edit_forms::get_debug_camera_root(w);
-                            camera_may_none = gui::edit_forms::get_debug_camera(w);
-
-                            if (camera_root_may_none->has && camera_may_none->has)
-                                break;
-
-                            std::yield();
-                        }
-
                         let cameradat = dat as dict<dynamic, dynamic>
                             ->> \k, v = (k as string, v);
                             ;
-                        
-                        let camera_root = camera_root_may_none->val;
-                        let camera = camera_may_none->val;
 
-                        let root_translation = camera_root->towoo::get_component :<Transform::Translation>->val;
-                        let root_local_position = camera_root->towoo::get_component :<Transform::LocalPosition>->val;
-                        let root_local_rotation = camera_root->towoo::get_component :<Transform::LocalRotation>->val;
-
-                        let camera_local_rotation = camera->towoo::get_component :<Transform::LocalRotation>->val;
-
-                        let rpos = cameradat->getor("root_position", [0., 0., 0.]: dynamic) as array<dynamic>->>\e = e as real;;
-                        do root_local_position->set_global_pos(
-                            (rpos[0], rpos[1], rpos[2]): vec3, 
-                            root_translation, 
-                            option::value(root_local_rotation)
-                        );
-
-                        let rrot = cameradat->getor("root_rotation", [0., 0., 0., 1.]: dynamic) as array<dynamic>->>\e = e as real;;
-                        do root_local_rotation->set_global_rot(
-                            (rrot[0], rrot[1], rrot[2], rrot[3]): quat, 
-                            root_translation
-                        );
-
-                        let crot = cameradat->getor("camera_rotation", [0., 0., 0., 1.]: dynamic) as array<dynamic>->>\e = e as real;;
-                        camera_local_rotation.rot->set((crot[0], crot[1], crot[2], crot[3]): quat);
-
-                        if (cameradat->getor("camera_in_2d_mode", false: dynamic) as bool)
+                        for (;;)
                         {
-                            gui::edit_forms::update_camera_2d3d_mode(camera, true);
-                        }
-                        if (cameradat->getor("camera_in_2d_light", false: dynamic) as bool)
-                        {
-                            gui::edit_forms::update_camera_2dlight_mode(camera, true);
-                        }
+                            std::yield();
 
+                            // NOTE: 世界刚创建出来，第一帧无法获取到摄像机，需要等待若干帧
+                            if (self->set_debug_camera_info(w, cameradat)->has)
+                                break;
+                        }
                         return false;
                     }, ());
             none?;
             }
             return w;
         }
+
+        public func try_load_all_camera_debug_info_map(self: Project)
+        {
+            let debug_camera_map_path = self.m_path / ".runtime" / "world_debug_camera.list";
+            try! data = fsys::readall(debug_camera_map_path)=>> \dat = dat->dict::deserialize;;
+
+            expected_value! data
+                ->> \k, v = (k->valor(""), v->valor({}: dict<dynamic, dynamic>)->>\k, v = (k->valor(""), v););
+                ;
+        }
+        public func try_fetch_camera_debug_info_map(self: Project, p: fsys::path_t)
+        {
+            return self->try_load_all_camera_debug_info_map()=>> \m = m->get(self->make_path_normalize(p));;
+        }
+        public func try_update_camera_debug_info_map(self: Project, p: fsys::path_t, dat: dict<string, dynamic>)
+        {
+            let debug_camera_map_path = self.m_path / ".runtime" / "world_debug_camera.list";
+            let old_dat = self->try_load_all_camera_debug_info_map()->valor({})->tomap;
+
+            old_dat->set(self->make_path_normalize(p), dat);
+            return fsys::writeall(debug_camera_map_path, old_dat->serialize->val);
+        }
         public func save_world(self: Project, w: je::world)
         {
             return self->get_project_world(w)
-                =>> \pw = self->serialize_world(pw.m_world_instance, false)
-                    ->> \dat = fsys::writeall(pw.m_world_path, dat as dict<string, dynamic>: string);
+                =>> func(pw)
+                { 
+                    do self->get_debug_camera_info(w)
+                        ->> \info = self->try_update_camera_debug_info_map(pw.m_world_path, info);
+                        ;
+
+                    return self->serialize_world(pw.m_world_instance, false)
+                        ->> \dat = fsys::writeall(pw.m_world_path, dat as dict<string, dynamic>: string);
                     ;
+                }
                 ->  valor(false);
         }
         public func load_world(self: Project, file_path: fsys::path_t)
@@ -1056,6 +1088,11 @@ namespace editor
                     =>> \dat = dict::deserialize(dat)
                         ->> \d = d
                             ->> \k, v = (k as string, v);
+                            ;
+                        ->> \d = d->apply(
+                                "debug_camera", 
+                                self->try_fetch_camera_debug_info_map(file_path)->valor({}): dynamic
+                            )
                             ;
                         ;
                     ->> \dat = self->deserialize_world(dat, file_path);)
