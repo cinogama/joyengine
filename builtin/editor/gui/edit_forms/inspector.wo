@@ -249,70 +249,83 @@ namespace editor::gui::edit_forms
                                     // 事编辑器组件，跳过显示，不然就露馅了
                                     continue;
                                 
-                                TextDisabled(groupname);
+                                let tree_attrib = TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
+                                    + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
+                                    + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
 
-                                BeginGroup();
-                                for (let (ctype, component) : components)
+                                PushStyleColor(ImGuiCol::ImGuiCol_Text, (50, 150, 100, 255));
+                                let show_group = TreeNodeEx(groupname, tree_attrib);
+                                PopStyleColor();
+
+                                if (show_group)
                                 {
-                                    // 嘿，我知道这个长长的东西很诡异，但是这个的功能只是把类型名的开头去掉，剩下的部分中间用"::"连接拼起来
-                                    if (TreeNodeEx(ctype->name->split("::")->sub(1)->reduce(\l, r= l + "::" + r;)->or(\=ctype->name;),
-                                        TreeNodeAttribute::ImGuiTreeNodeFlags_Leaf 
-                                        + TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen))
+                                    BeginGroup();
+
+                                    for (let (ctype, component) : components)
                                     {
-                                        jeapi::gui::context_menu(func(){
-                                            if (MenuItem(F"移除"))
-                                            {
-                                                let ename = cur_e->editor::name;
-
-                                                jeapi::gui::form::ask(
-                                                    "确认？", 
-                                                    F"即将从实体{ename}中移除组件{ctype->name}，是否确认？", 
-                                                    func(asure){
-                                                        if (asure)
-                                                            eeid->justdo(\e=e->remove_component(ctype););
-                                                    });
-                                            }
-                                            if (MenuItem(F"重置"))
-                                            {
-                                                jeapi::gui::form::ask(
-                                                    "确认？", 
-                                                    F"即将重置组件{ctype->name}，是否确认？", 
-                                                    func(asure){
-                                                        eeid->justdo(func(e){
-                                                            if (asure)
-                                                            {
-                                                                // 非常简单，要求移除，然后重新添加组件
-                                                                // NOTE: 顺便说明一下，JoyEngine的ArchSystem对于一次性
-                                                                //       给定所有组件，然后创建实体。理论上性能开销小于
-                                                                //       逐个追加组件。
-                                                                e->remove_component(ctype);
-                                                                do e->add_component(ctype);
-                                                            }
-                                                        });
-                                                    });
-                                            }
-                                        });
-
-                                        for (let (mname, mtype, mvalue): component->get_members)
+                                        // 嘿，我知道这个长长的东西很诡异，但是这个的功能只是把类型名的开头去掉，剩下的部分中间用"::"连接拼起来
+                                        if (TreeNodeEx(ctype->name->split("::")->sub(1)->reduce(\l, r= l + "::" + r;)->or(\=ctype->name;),
+                                            tree_attrib + TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen))
                                         {
-                                            do InvisibleButton(F"##{mname}$PADDING", (2., 1.));
-                                            SameLine();
-                                            BeginGroup();
+                                            jeapi::gui::context_menu(func(){
+                                                if (MenuItem(F"移除"))
+                                                {
+                                                    let ename = cur_e->editor::name;
 
-                                            TextDisabled(mname);
-     
-                                            if (!je::towoo::unsafe::dynamic_parser::edit(
-                                                mtype, mvalue, mname + "##" + current_entity_chunk_info))
+                                                    jeapi::gui::form::ask(
+                                                        "确认？", 
+                                                        F"即将从实体{ename}中移除组件{ctype->name}，是否确认？", 
+                                                        func(asure){
+                                                            if (asure)
+                                                                eeid->justdo(\e=e->remove_component(ctype););
+                                                        });
+                                                }
+                                                if (MenuItem(F"重置"))
+                                                {
+                                                    jeapi::gui::form::ask(
+                                                        "确认？", 
+                                                        F"即将重置组件{ctype->name}，是否确认？", 
+                                                        func(asure){
+                                                            eeid->justdo(func(e){
+                                                                if (asure)
+                                                                {
+                                                                    // 非常简单，要求移除，然后重新添加组件
+                                                                    // NOTE: 顺便说明一下，JoyEngine的ArchSystem对于一次性
+                                                                    //       给定所有组件，然后创建实体。理论上性能开销小于
+                                                                    //       逐个追加组件。
+                                                                    e->remove_component(ctype);
+                                                                    do e->add_component(ctype);
+                                                                }
+                                                            });
+                                                        });
+                                                }
+                                            });
+
+                                            Separator();
+                                            for (let (mname, mtype, mvalue): component->get_members)
                                             {
-                                                TextDisabled(F"没有找到适配 {mtype->name} 的编辑器");
-                                            }
+                                                do InvisibleButton(F"##{mname}$PADDING", (2., 1.));
+                                                SameLine();
+                                                BeginGroup();
 
-                                            EndGroup();
+                                                TextDisabled(mname);
+        
+                                                if (!je::towoo::unsafe::dynamic_parser::edit(
+                                                    mtype, mvalue, mname + "##" + current_entity_chunk_info))
+                                                {
+                                                    TextDisabled(F"没有找到适配 {mtype->name} 的编辑器");
+                                                }
+
+                                                EndGroup();
+                                            }
+                                            Separator();
+                                            TreePop();
                                         }
-                                        TreePop();
                                     }
+                                    
+                                    EndGroup();
+                                    TreePop();
                                 }
-                                EndGroup();
                             }
 
                             EndChild();

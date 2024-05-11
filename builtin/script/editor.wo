@@ -655,46 +655,53 @@ namespace Animation2D::FrameAnimation::animation_list
                 let mut animation = state.m_animation;
                 let mut loop = state.m_loop;
 
-                match (jeapi::gui::widget::File(F"动画{idx}：##{tag}", path, \=do nil;))
+                if (TreeNodeEx(F"动画 {idx}", 
+                                TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
+                                + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
+                                + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
+                                + TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen))
                 {
-                value(newpath)?
+                    match (CheckBox(F"循环##{tag}", loop))
                     {
-                        path = newpath;
-                        need_update = true;
+                    value(newloop)?
+                        {
+                            loop = newloop;
+                            need_update = true;
+                        }
+                    none?;
                     }
-                none?;
-                }
-                SameLine();
-                
-                match (CheckBox(F"循环##{tag}", loop))
-                {
-                value(newloop)?
-                    {
-                        loop = newloop;
-                        need_update = true;
-                    }
-                none?;
-                }
-                SameLine();
+                    SameLine();
 
-                match (InputText(F"动作##{tag}", animation))
-                {
-                value(newanimation)?
+                    match (jeapi::gui::widget::File(F"路径##{tag}", path, \=do nil;))
                     {
-                        animation = newanimation;
-                        need_update = true;
+                    value(newpath)?
+                        {
+                            path = newpath;
+                            need_update = true;
+                        }
+                    none?;
                     }
-                none?;
-                }
 
-                newval->add(
-                    animation_state
+                    match (InputText(F"动作##{tag}", animation))
                     {
-                        m_path = path,
-                        m_animation = animation,
-                        m_loop = loop,
+                    value(newanimation)?
+                        {
+                            animation = newanimation;
+                            need_update = true;
+                        }
+                    none?;
                     }
-                );
+
+                    newval->add(
+                        animation_state
+                        {
+                            m_path = path,
+                            m_animation = animation,
+                            m_loop = loop,
+                        }
+                    );
+                    TreePop();
+                }
             }
 
             if (need_update)
