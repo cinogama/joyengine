@@ -17,6 +17,8 @@ set(JE4_ENABLE_OPENGLES300_GAPI ON CACHE BOOL "Enable OpenGLES 3.0 on Android" F
 set(JE4_ENABLE_VULKAN130_GAPI OFF CACHE BOOL "Disable Vulkan1.3 on Android" FORCE)
 set(JE4_ENABLE_METAL_GAPI OFF CACHE BOOL "Disable Metal on Android" FORCE)
 
+set(WO_SUPPORT_ASMJIT OFF CACHE BOOL "Disable JIT on Android" FORCE)
+
 # Searches for a package provided by the game activity dependency
 find_package(game-activity REQUIRED CONFIG)
 
@@ -27,11 +29,15 @@ add_subdirectory(${JE4ANDROID_PATH} joyengineecs.out)
 include_directories("${JE4ANDROID_PATH}/include")
 include_directories("${JE4ANDROID_PATH}/3rd/woolang/include")
 
-target_link_libraries(joyecs game-activity::game-activity)
+target_link_libraries(joyecs PUBLIC game-activity::game-activity)
 target_link_libraries(joyecs
         # EGL and other dependent libraries required for drawing
         # and interacting with Android system
-        EGL GLESv3 jnigraphics android log)
+        PUBLIC EGL
+        PUBLIC GLESv3
+        PUBLIC jnigraphics
+        PUBLIC android
+        PUBLIC log)
 
 # Creates your game shared library. The name must be the same as the
 # one used for loading in your Kotlin/Java or AndroidManifest.txt files.
@@ -40,4 +46,5 @@ add_library(joyengineecs4a SHARED main.cpp)
 # Configure libraries CMake uses to link your target library.
 target_link_libraries(joyengineecs4a
         # JoyEngine core
-        joyecs)
+        PUBLIC joyecs
+        PRIVATE woolang)

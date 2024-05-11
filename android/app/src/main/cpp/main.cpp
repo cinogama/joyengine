@@ -308,6 +308,16 @@ int _je_android_file_close(jeecs_raw_file file)
     return ret;
 }
 
+std::string jni_cstring(JNIEnv* env, jstring str)
+{
+    jboolean is_copy = false;
+    return env->GetStringUTFChars(str, &is_copy);
+}
+jstring jni_jstring(JNIEnv* env, const char* str)
+{
+    return env->NewStringUTF(str);
+}
+
 extern "C" {
     /*!
      * Handles commands sent to this Android application
@@ -353,16 +363,6 @@ extern "C" {
         auto sourceClass = motionEvent->source & AINPUT_SOURCE_CLASS_MASK;
         return (sourceClass == AINPUT_SOURCE_CLASS_POINTER ||
             sourceClass == AINPUT_SOURCE_CLASS_JOYSTICK);
-    }
-
-    std::string jni_cstring(JNIEnv* env, jstring str)
-    {
-        jboolean is_copy = false;
-        return env->GetStringUTFChars(str, &is_copy);
-    }
-    jstring jni_jstring(JNIEnv* env, const char* str)
-    {
-        return env->NewStringUTF(str);
     }
 
     extern "C" JNIEXPORT void JNICALL
