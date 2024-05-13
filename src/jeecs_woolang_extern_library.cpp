@@ -4,431 +4,425 @@
 #define JE_ENABLE_DEBUG_API
 #include "jeecs.hpp"
 
-WO_API wo_api jeecs_shader_create_sampler2d(wo_vm vm, wo_value args);
-WO_API wo_api jeecs_shader_sampler2d_bind_texture(wo_vm vm, wo_value args);
-WO_API wo_api jeecs_shader_apply_operation(wo_vm vm, wo_value args);
-WO_API wo_api jeecs_shader_create_uniform_variable(wo_vm vm, wo_value args);
-WO_API wo_api jeecs_shader_create_uniform_variable_with_init_value(wo_vm vm, wo_value args);
-WO_API wo_api jeecs_shader_texture2d_set_channel(wo_vm vm, wo_value args);
-WO_API wo_api jeecs_shader_create_rot_mat4x4(wo_vm vm, wo_value args);
-WO_API wo_api jeecs_shader_create_vertex_in(wo_vm vm, wo_value args);
-WO_API wo_api jeecs_shader_get_vertex_in(wo_vm vm, wo_value args);
-WO_API wo_api jeecs_shader_create_shader_value_out(wo_vm vm, wo_value args);
-WO_API wo_api jeecs_shader_create_fragment_in(wo_vm vm, wo_value args);
-WO_API wo_api jeecs_shader_create_shader_value_out(wo_vm vm, wo_value args);
-WO_API wo_api jeecs_shader_float_create(wo_vm vm, wo_value args);
-WO_API wo_api jeecs_shader_float2_create(wo_vm vm, wo_value args);
-WO_API wo_api jeecs_shader_float3_create(wo_vm vm, wo_value args);
-WO_API wo_api jeecs_shader_float4_create(wo_vm vm, wo_value args);
-WO_API wo_api jeecs_shader_float4x4_create(wo_vm vm, wo_value args);
-WO_API wo_api jeecs_shader_float3x3_create(wo_vm vm, wo_value args);
-WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args);
-WO_API wo_api jeecs_shader_append_struct_member(wo_vm vm, wo_value args);
-WO_API wo_api jeecs_shader_create_struct_define(wo_vm vm, wo_value args);
-WO_API wo_api jeecs_shader_bind_struct_as_uniform_buffer(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_job_vm_handle(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_set_clip_board_text(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_get_clip_board_text(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_get_window_pos(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_get_mouse_pos(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_get_mouse_delta_pos(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_get_cursor_pos(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_get_item_rect_size(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_get_item_rect(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_accept_drag_drop_payload(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_begin(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_begin_attr(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_begin_open(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_end(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_begin_child(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_begin_child_attr(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_begin_child_size(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_is_window_focused(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_end_child(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_progress_bar(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_progress_bar_size(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_text(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_text_disabled(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_button(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_button_size(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_invisible_button(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_begin_main_menu_bar(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_menu_item(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_menu_item_shortcut(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_menu_item_enabled(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_menu_item_shortcut_enabled(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_menu_item_selected(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_end_main_menu_bar(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_begin_menu_bar(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_end_menu_bar(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_begin_menu(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_begin_menu_enabled(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_listbox(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_listbox_select(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_listbox_select_height(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_listbox_withsize(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_begin_disabled(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_begin_drag_drop_source(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_begin_drag_drop_source_attr(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_begin_drag_drop_target(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_begin_listbox(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_begin_main_menu_bar(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_begin_menu(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_begin_menu_bar(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_begin_menu_enabled(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_begin_open(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_begin_selectable(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_begin_selectable_selected(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_end_listbox(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_sameline(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_begin_tool_tip(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_begingroup(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_endgroup(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_treenode(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_treenodeex(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_treepop(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_is_itemclicked(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_is_itemtoggledopen(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_is_itemhovered(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_is_mousehoveringrect(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_is_item_active(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_is_mouse_dragging(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_is_mouse_down(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_set_tooltip(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_beginpopup_contextitem_label(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_beginpopup(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_beginpopup_contextitem(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_beginpopup_contextwindow_label(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_beginpopup_contextitem_label(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_beginpopup_contextwindow(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_beginpopup_contextwindow_label(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_begintabbar(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_endtabbar(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_begintabitem(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_begintabitem_open(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_endtabitem(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_openpopup_on_item_click(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_openpopup_on_item_click_attr(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_openpopup_on_item_click_label(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_openpopup_on_item_click_label_attr(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_openpopup(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_beginpopup(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_endpopup(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_push_id(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_push_id_str(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_pop_id(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_get_id(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_button(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_button_size(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_checkbox(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_colorpicker4(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_colorbutton(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_input_text_box(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_colorpicker4(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_combo(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_content_region_avail(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_dock_space(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_dock_space_over_viewport(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_drag_float(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_input_float_box(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_input_float_format_box(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_input_int_box(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_input_int2_box(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_input_int3_box(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_input_int4_box(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_draw_list_add_bezier_cubic(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_draw_list_add_bezier_quad(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_draw_list_add_circle(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_draw_list_add_filled_circle(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_draw_list_add_image(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_draw_list_add_line(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_draw_list_add_rect(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_draw_list_add_rect_filled(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_draw_list_add_text(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_draw_list_add_triangle(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_draw_list_add_triangle_filled(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_end(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_end_accept_drop_source(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_end_child(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_end_disabled(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_end_drag_drop_source(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_end_listbox(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_end_main_menu_bar(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_end_menu(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_end_menu_bar(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_end_tool_tip(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_endgroup(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_endpopup(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_endtabbar(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_endtabitem(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_get_clip_board_text(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_get_cursor_pos(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_get_id(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_get_input_state(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_get_item_rect(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_get_item_rect_size(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_get_mouse_delta_pos(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_get_mouse_pos(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_get_window_draw_list(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_get_window_pos(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_image(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_image_scale(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_image_size(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_imagebutton_scale(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_imagebutton_size(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_input_float2_box(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_input_float2_format_box(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_input_float3_box(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_input_float3_format_box(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_input_float4_box(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_input_float4_format_box(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_input_float_box(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_input_float_format_box(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_input_int2_box(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_input_int3_box(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_input_int4_box(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_input_int_box(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_input_text_box(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_input_text_multiline(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_input_text_multiline_size(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_combo(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_end_menu(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_separator(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_image(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_image_scale(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_image_size(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_push_clip_rect(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_invisible_button(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_is_item_active(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_is_itemclicked(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_is_itemhovered(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_is_itemtoggledopen(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_is_mouse_down(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_is_mouse_dragging(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_is_mousehoveringrect(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_is_window_focused(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_job_vm_handle(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_launch(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_listbox(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_listbox_select(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_listbox_select_height(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_listbox_withsize(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_menu_item(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_menu_item_enabled(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_menu_item_selected(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_menu_item_shortcut(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_menu_item_shortcut_enabled(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_openpopup(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_openpopup_on_item_click(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_openpopup_on_item_click_attr(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_openpopup_on_item_click_label(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_openpopup_on_item_click_label_attr(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_pop_clip_rect(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_push_style_color(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_pop_id(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_pop_style_color(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_draw_list_add_text(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_draw_list_add_image(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_draw_list_add_line(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_draw_list_add_rect(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_draw_list_add_rect_filled(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_draw_list_add_triangle(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_draw_list_add_triangle_filled(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_draw_list_add_circle(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_draw_list_add_filled_circle(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_draw_list_add_bezier_quad(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_draw_list_add_bezier_cubic(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_get_window_draw_list(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_imagebutton_scale(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_imagebutton_size(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_content_region_avail(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_set_next_window_size_constraints(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_set_next_window_size(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_set_next_window_pos(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_begin_drag_drop_source(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_begin_drag_drop_source_attr(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_set_drag_drop_payload(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_end_drag_drop_source(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_begin_drag_drop_target(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_accept_drag_drop_payload(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_end_accept_drop_source(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_set_next_item_open(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_begin_tool_tip(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_end_tool_tip(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_begin_disabled(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_end_disabled(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_style_get_config_color(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_style_set_config_color(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_style_set_config_color_dark(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_style_set_config_color_classic(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_style_set_config_color_light(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_dock_space(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_dock_space_over_viewport(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_pop_style_var(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_progress_bar(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_progress_bar_size(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_push_clip_rect(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_push_id(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_push_id_str(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_push_style_color(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_push_style_real(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_push_style_vec2(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_pop_style_var(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_launch(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_stop_all_work(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_get_input_state(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_register_exit_callback(wo_vm vm, wo_value args);
-WO_API wo_api je_gui_unregister_exit_callback(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_sameline(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_separator(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_set_clip_board_text(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_set_drag_drop_payload(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_set_font(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_member_get(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_member_set(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_update_component_data(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_register_system_job(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_add_component(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_get_component(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_remove_component(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_math_sqrt(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_math_sin(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_math_cos(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_math_tan(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_math_asin(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_math_acos(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_math_atan(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_math_atan2(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_math_quat_slerp(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_ray_create(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_ray_from_camera(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_ray_intersect_entity(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_ray_origin(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_ray_direction(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_transform_translation_global_pos(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_transform_translation_global_rot(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_transform_localposition_get_parent_global_pos(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_transform_localposition_set_global_pos(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_transform_localrotation_get_parent_global_rot(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_transform_localrotation_set_global_rot(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_userinterface_origin_layout(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_renderer_textures_bind_texture(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_renderer_textures_get_texture(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_renderer_shaders_set_uniform(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_renderer_shaders_set_shaders(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_renderer_shaders_get_shaders(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_physics2d_collisionresult_all(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_physics2d_collisionresult_check(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_animation2D_frameanimation_active_animation(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_audio_source_get_source(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_audio_playing_set_buffer(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_add_system_to_world(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_remove_system_from_world(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_all_systems_from_world(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_all_internal_scripts(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_typeinfo_get_unregister_count(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_texture_take_snapshot(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_texture_restore_snapshot(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_world_is_valid(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_editing_entity_uid(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_entity_uid(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_set_parent(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_entity_anchor_uuid(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_set_parent_with_uid(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_parent_anchor_uid(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_entity_name(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_set_entity_name(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_find_entity_with_chunk_info(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_entity_get_prefab_path(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_entity_set_prefab_path(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_all_components_types_from_entity(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_is_top_entity(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_is_child_of_entity(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_reload_texture_of_entity(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_bad_shader_list_of_entity(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_store_bad_shader_name(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_remove_bad_shader_name(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_store_bad_shader_uniforms_int(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_store_bad_shader_uniforms_float(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_store_bad_shader_uniforms_float2(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_store_bad_shader_uniforms_float3(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_store_bad_shader_uniforms_float4(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_set_editing_entity_uid(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_reset_editing_entity_uid(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_editor_register_panic_hook(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_mark_shared_glresource_outdated(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_init_graphic_pipeline(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_set_runtime_path(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_input_update_window_size(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_input_update_window_title(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_create_fimg_packer(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_pack_file_to_fimg_packer(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_pack_buffer_to_fimg_packer(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_finish_fimg_packer(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_sleep_suppression(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_set_sleep_suppression(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_build_version(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_build_commit(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_woolang_version(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_crc64_file(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_crc64_string(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_register_log_callback(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_unregister_log_callback(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_all_logs(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_update_editor_mouse_pos(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_setable_editor_system(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_apply_camera_framebuf_setting(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_framebuf_texture(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_entity_arch_information(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_editing_mover_mode(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_set_editing_mover_mode(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_editing_coord_mode(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_set_editing_coord_mode(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_update_api(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_register_system(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_unregister_system(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_update_component(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_unregister_component(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_dynamic_parser_update_script(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_dynamic_parser_update_type(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_dynamic_parser_clear(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_dynamic_parser_saving(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_dynamic_parser_restoring(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_dynamic_parser_edit(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_deltatime(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_smooth_deltatime(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_startup_coroutine(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_create_singleton(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_clear_singletons(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_startup_thread(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_set_next_item_open(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_set_next_window_pos(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_set_next_window_size(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_set_next_window_size_constraints(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_set_tooltip(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_stop_all_work(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_style_get_config_color(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_style_set_config_color(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_style_set_config_color_classic(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_style_set_config_color_dark(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_style_set_config_color_light(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_text(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_text_disabled(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_treenode(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_treenodeex(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_treepop(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_unregister_exit_callback(wo_vm vm, wo_value args);
+WO_API wo_api jeecs_shader_append_struct_member(wo_vm vm, wo_value args);
+WO_API wo_api jeecs_shader_apply_operation(wo_vm vm, wo_value args);
+WO_API wo_api jeecs_shader_bind_struct_as_uniform_buffer(wo_vm vm, wo_value args);
+WO_API wo_api jeecs_shader_create_fragment_in(wo_vm vm, wo_value args);
+WO_API wo_api jeecs_shader_create_rot_mat4x4(wo_vm vm, wo_value args);
+WO_API wo_api jeecs_shader_create_sampler2d(wo_vm vm, wo_value args);
+WO_API wo_api jeecs_shader_create_shader_value_out(wo_vm vm, wo_value args);
+WO_API wo_api jeecs_shader_create_struct_define(wo_vm vm, wo_value args);
+WO_API wo_api jeecs_shader_create_uniform_variable(wo_vm vm, wo_value args);
+WO_API wo_api jeecs_shader_create_uniform_variable_with_init_value(wo_vm vm, wo_value args);
+WO_API wo_api jeecs_shader_create_vertex_in(wo_vm vm, wo_value args);
+WO_API wo_api jeecs_shader_float2_create(wo_vm vm, wo_value args);
+WO_API wo_api jeecs_shader_float3_create(wo_vm vm, wo_value args);
+WO_API wo_api jeecs_shader_float3x3_create(wo_vm vm, wo_value args);
+WO_API wo_api jeecs_shader_float4_create(wo_vm vm, wo_value args);
+WO_API wo_api jeecs_shader_float4x4_create(wo_vm vm, wo_value args);
+WO_API wo_api jeecs_shader_float_create(wo_vm vm, wo_value args);
+WO_API wo_api jeecs_shader_get_vertex_in(wo_vm vm, wo_value args);
+WO_API wo_api jeecs_shader_sampler2d_bind_texture(wo_vm vm, wo_value args);
+WO_API wo_api jeecs_shader_texture2d_set_channel(wo_vm vm, wo_value args);
+WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_abort_all_thread(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_wait_thread(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_create_rmutex(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_lock_rmutex(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_trylock_rmutex(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_unlock_rmutex(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_generate_uid(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_current_platform_config(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_load_module(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_delay_unload_module(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_unload_module(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_read_file_all(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_log(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_loginfo(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_logerr(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_logwarn(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_logfatal(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_wheel_count(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_input_keydown(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_input_mousedown(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_input_window_size(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_input_mouse_pos(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_input_mouse_view_pos(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_type_is_component(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_type_is_system(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_all_registed_types(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_type_of(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_type_of(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_type_id(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_type_name(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_script_type_name(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_type_basic_type(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_type_members(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_audio_buffer_load(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_audio_buffer_byte_size(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_audio_buffer_byte_rate(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_audio_source_create(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_audio_source_get_state(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_audio_source_set_playing_buffer(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_audio_source_play(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_audio_source_pause(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_audio_source_stop(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_audio_source_get_playing_offset(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_audio_source_set_playing_offset(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_audio_source_set_pitch(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_audio_source_set_volume(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_audio_source_set_position(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_audio_source_set_velocity(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_audio_source_set_loop(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_audio_listener_set_volume(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_audio_listener_set_position(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_audio_listener_set_direction(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_audio_listener_set_velocity(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_graphic_shrink_cache(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_texture_open(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_texture_create(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_texture_bind_path(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_texture_path(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_texture_get_size(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_texture_get_pixel(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_texture_set_pixel_color(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_texture_pixel_color(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_font_open(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_font_load_char(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_font_string_texture(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_shader_open(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_shader_create(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_shader_path(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_set_uniforms_int(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_set_uniforms_float(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_set_uniforms_float2(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_set_uniforms_float3(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_set_uniforms_float4(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_create_universe(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_stop_universe(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_wait_universe(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_universe_get_frame_deltatime(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_universe_set_frame_deltatime(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_universe_get_max_deltatime(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_universe_set_max_deltatime(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_universe_get_timescale(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_universe_set_timescale(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_all_worlds_in_universe(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_create_world_in_universe(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_close_world(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_set_able_world(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_add_system_to_world(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_add_component_from_entity(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_add_entity_to_world_with_components(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_add_entity_to_world_with_prefab(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_add_prefab_to_world_with_components(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_remove_system_from_world(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_universe_from_world(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_system_from_world(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_world_name(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_set_world_name(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_all_entities_from_world(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_all_systems_from_world(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_close_entity(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_world_from_entity(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_component_from_entity(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_add_component_from_entity(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_remove_component_from_entity(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_entity_chunk_info(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_shaders_of_entity(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_set_shaders_of_entity(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_textures_of_entity(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_add_system_to_world(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_apply_camera_framebuf_setting(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_buffer_byte_rate(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_buffer_byte_size(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_buffer_load(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_listener_set_direction(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_listener_set_position(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_listener_set_velocity(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_listener_set_volume(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_source_create(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_source_get_playing_offset(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_source_get_state(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_source_pause(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_source_play(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_source_set_loop(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_source_set_pitch(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_source_set_playing_buffer(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_source_set_playing_offset(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_source_set_position(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_source_set_velocity(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_source_set_volume(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_source_stop(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_bind_texture_for_entity(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_build_commit(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_build_version(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_clear_singletons(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_close_entity(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_close_world(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_component_get_all_members(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_crc64_file(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_crc64_string(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_create_fimg_packer(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_create_rmutex(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_create_singleton(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_create_universe(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_create_world_in_universe(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_current_platform_config(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_delay_unload_module(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_deltatime(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_dynamic_parser_clear(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_dynamic_parser_edit(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_dynamic_parser_restoring(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_dynamic_parser_saving(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_dynamic_parser_update_script(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_dynamic_parser_update_type(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_editor_register_panic_hook(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_entity_get_prefab_path(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_entity_set_prefab_path(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_find_entity_with_chunk_info(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_finish_fimg_packer(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_font_load_char(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_font_open(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_font_string_texture(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_generate_uid(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_all_components_types_from_entity(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_all_entities_from_world(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_all_internal_scripts(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_all_logs(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_all_registed_types(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_all_systems_from_world(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_all_worlds_in_universe(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_bad_shader_list_of_entity(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_component_from_entity(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_components_member(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_editing_coord_mode(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_editing_entity_uid(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_editing_mover_mode(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_entity_anchor_uuid(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_entity_arch_information(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_entity_chunk_info(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_entity_name(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_entity_uid(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_framebuf_texture(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_parent_anchor_uid(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_sleep_suppression(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_system_from_world(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_universe_from_world(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_world_from_entity(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_world_name(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_graphic_shrink_cache(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_init_graphic_pipeline(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_input_keydown(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_input_mouse_pos(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_input_mouse_view_pos(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_input_mousedown(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_input_update_window_size(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_input_update_window_title(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_input_window_size(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_is_child_of_entity(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_is_top_entity(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_load_module(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_lock_rmutex(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_log(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_logerr(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_logfatal(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_loginfo(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_logwarn(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_mark_shared_glresource_outdated(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_native_value_bool(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_native_value_int(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_native_value_int2(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_native_value_float(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_native_value_float2(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_native_value_float3(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_native_value_float4(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_native_value_rot_euler3(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_native_value_int(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_native_value_int2(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_native_value_je_string(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_native_value_rot_euler3(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_native_value_set_bool(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_native_value_set_int(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_native_value_set_int2(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_native_value_set_float(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_native_value_set_float2(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_native_value_set_float3(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_native_value_set_float4(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_native_value_set_rot_euler3(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_native_value_set_int(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_native_value_set_int2(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_native_value_set_je_string(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_native_value_set_rot_euler3(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_native_value_unsafe_get(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_native_value_unsafe_set(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_get_components_member(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_component_get_all_members(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_pack_buffer_to_fimg_packer(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_pack_file_to_fimg_packer(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_read_file_all(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_register_log_callback(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_reload_texture_of_entity(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_remove_bad_shader_name(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_remove_component_from_entity(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_remove_system_from_world(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_reset_editing_entity_uid(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_script_type_name(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_set_able_world(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_set_editing_coord_mode(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_set_editing_entity_uid(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_set_editing_mover_mode(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_set_entity_name(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_set_parent(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_set_parent_with_uid(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_set_runtime_path(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_set_shaders_of_entity(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_set_sleep_suppression(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_set_uniforms_float(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_set_uniforms_float2(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_set_uniforms_float3(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_set_uniforms_float4(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_set_uniforms_int(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_set_world_name(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_setable_editor_system(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_shader_create(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_shader_open(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_shader_path(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_shaders_of_entity(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_smooth_deltatime(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_startup_coroutine(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_startup_thread(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_stop_universe(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_store_bad_shader_name(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_store_bad_shader_uniforms_float(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_store_bad_shader_uniforms_float2(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_store_bad_shader_uniforms_float3(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_store_bad_shader_uniforms_float4(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_store_bad_shader_uniforms_int(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_texture_bind_path(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_texture_create(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_texture_get_pixel(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_texture_get_size(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_texture_open(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_texture_path(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_texture_pixel_color(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_texture_restore_snapshot(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_texture_set_pixel_color(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_texture_take_snapshot(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_textures_of_entity(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_add_component(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_animation2D_frameanimation_active_animation(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_audio_playing_set_buffer(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_audio_source_get_source(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_get_component(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_math_acos(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_math_asin(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_math_atan(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_math_atan2(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_math_cos(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_math_quat_slerp(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_math_sin(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_math_sqrt(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_math_tan(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_member_get(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_member_set(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_physics2d_collisionresult_all(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_physics2d_collisionresult_check(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_ray_create(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_ray_direction(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_ray_from_camera(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_ray_intersect_entity(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_ray_origin(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_register_system(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_register_system_job(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_remove_component(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_renderer_shaders_get_shaders(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_renderer_shaders_set_shaders(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_renderer_shaders_set_uniform(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_renderer_textures_bind_texture(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_renderer_textures_get_texture(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_transform_localposition_get_parent_global_pos(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_transform_localposition_set_global_pos(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_transform_localrotation_get_parent_global_rot(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_transform_localrotation_set_global_rot(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_transform_translation_global_pos(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_transform_translation_global_rot(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_unregister_component(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_unregister_system(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_update_api(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_update_component(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_update_component_data(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_userinterface_origin_layout(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_trylock_rmutex(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_type_basic_type(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_type_id(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_type_is_component(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_type_is_system(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_type_members(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_type_name(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_type_of(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_typeinfo_get_unregister_count(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_universe_get_frame_deltatime(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_universe_get_max_deltatime(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_universe_get_timescale(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_universe_set_frame_deltatime(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_universe_set_max_deltatime(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_universe_set_timescale(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_unload_module(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_unlock_rmutex(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_unregister_log_callback(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_update_editor_mouse_pos(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_wait_thread(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_wait_universe(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_wheel_count(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_woolang_version(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_world_is_valid(wo_vm vm, wo_value args);
 
 void* _je_api_lib_handle = nullptr;
 
@@ -437,431 +431,425 @@ void je_api_init()
     assert(_je_api_lib_handle == nullptr);
 
     wo_extern_lib_func_t je_fs[] = {
-        wo_extern_lib_func_t{"jeecs_shader_create_sampler2d", (void*)&jeecs_shader_create_sampler2d},
-        wo_extern_lib_func_t{"jeecs_shader_sampler2d_bind_texture", (void*)&jeecs_shader_sampler2d_bind_texture},
-        wo_extern_lib_func_t{"jeecs_shader_apply_operation", (void*)&jeecs_shader_apply_operation},
-        wo_extern_lib_func_t{"jeecs_shader_create_uniform_variable", (void*)&jeecs_shader_create_uniform_variable},
-        wo_extern_lib_func_t{"jeecs_shader_create_uniform_variable_with_init_value", (void*)&jeecs_shader_create_uniform_variable_with_init_value},
-        wo_extern_lib_func_t{"jeecs_shader_texture2d_set_channel", (void*)&jeecs_shader_texture2d_set_channel},
-        wo_extern_lib_func_t{"jeecs_shader_create_rot_mat4x4", (void*)&jeecs_shader_create_rot_mat4x4},
-        wo_extern_lib_func_t{"jeecs_shader_create_vertex_in", (void*)&jeecs_shader_create_vertex_in},
-        wo_extern_lib_func_t{"jeecs_shader_get_vertex_in", (void*)&jeecs_shader_get_vertex_in},
-        wo_extern_lib_func_t{"jeecs_shader_create_shader_value_out", (void*)&jeecs_shader_create_shader_value_out},
-        wo_extern_lib_func_t{"jeecs_shader_create_fragment_in", (void*)&jeecs_shader_create_fragment_in},
-        wo_extern_lib_func_t{"jeecs_shader_create_shader_value_out", (void*)&jeecs_shader_create_shader_value_out},
-        wo_extern_lib_func_t{"jeecs_shader_float_create", (void*)&jeecs_shader_float_create},
-        wo_extern_lib_func_t{"jeecs_shader_float2_create", (void*)&jeecs_shader_float2_create},
-        wo_extern_lib_func_t{"jeecs_shader_float3_create", (void*)&jeecs_shader_float3_create},
-        wo_extern_lib_func_t{"jeecs_shader_float4_create", (void*)&jeecs_shader_float4_create},
-        wo_extern_lib_func_t{"jeecs_shader_float4x4_create", (void*)&jeecs_shader_float4x4_create},
-        wo_extern_lib_func_t{"jeecs_shader_float3x3_create", (void*)&jeecs_shader_float3x3_create},
-        wo_extern_lib_func_t{"jeecs_shader_wrap_result_pack", (void*)&jeecs_shader_wrap_result_pack},
-        wo_extern_lib_func_t{"jeecs_shader_append_struct_member", (void*)&jeecs_shader_append_struct_member},
-        wo_extern_lib_func_t{"jeecs_shader_create_struct_define", (void*)&jeecs_shader_create_struct_define},
-        wo_extern_lib_func_t{"jeecs_shader_bind_struct_as_uniform_buffer", (void*)&jeecs_shader_bind_struct_as_uniform_buffer},
-        wo_extern_lib_func_t{"je_gui_job_vm_handle", (void*)&je_gui_job_vm_handle},
-        wo_extern_lib_func_t{"je_gui_set_clip_board_text", (void*)&je_gui_set_clip_board_text},
-        wo_extern_lib_func_t{"je_gui_get_clip_board_text", (void*)&je_gui_get_clip_board_text},
-        wo_extern_lib_func_t{"je_gui_get_window_pos", (void*)&je_gui_get_window_pos},
-        wo_extern_lib_func_t{"je_gui_get_mouse_pos", (void*)&je_gui_get_mouse_pos},
-        wo_extern_lib_func_t{"je_gui_get_mouse_delta_pos", (void*)&je_gui_get_mouse_delta_pos},
-        wo_extern_lib_func_t{"je_gui_get_cursor_pos", (void*)&je_gui_get_cursor_pos},
-        wo_extern_lib_func_t{"je_gui_get_item_rect_size", (void*)&je_gui_get_item_rect_size},
-        wo_extern_lib_func_t{"je_gui_get_item_rect", (void*)&je_gui_get_item_rect},
+        wo_extern_lib_func_t{"je_gui_accept_drag_drop_payload", (void*)&je_gui_accept_drag_drop_payload},
         wo_extern_lib_func_t{"je_gui_begin", (void*)&je_gui_begin},
         wo_extern_lib_func_t{"je_gui_begin_attr", (void*)&je_gui_begin_attr},
-        wo_extern_lib_func_t{"je_gui_begin_open", (void*)&je_gui_begin_open},
-        wo_extern_lib_func_t{"je_gui_end", (void*)&je_gui_end},
         wo_extern_lib_func_t{"je_gui_begin_child", (void*)&je_gui_begin_child},
         wo_extern_lib_func_t{"je_gui_begin_child_attr", (void*)&je_gui_begin_child_attr},
         wo_extern_lib_func_t{"je_gui_begin_child_size", (void*)&je_gui_begin_child_size},
-        wo_extern_lib_func_t{"je_gui_is_window_focused", (void*)&je_gui_is_window_focused},
-        wo_extern_lib_func_t{"je_gui_end_child", (void*)&je_gui_end_child},
-        wo_extern_lib_func_t{"je_gui_progress_bar", (void*)&je_gui_progress_bar},
-        wo_extern_lib_func_t{"je_gui_progress_bar_size", (void*)&je_gui_progress_bar_size},
-        wo_extern_lib_func_t{"je_gui_text", (void*)&je_gui_text},
-        wo_extern_lib_func_t{"je_gui_text_disabled", (void*)&je_gui_text_disabled},
-        wo_extern_lib_func_t{"je_gui_button", (void*)&je_gui_button},
-        wo_extern_lib_func_t{"je_gui_button_size", (void*)&je_gui_button_size},
-        wo_extern_lib_func_t{"je_gui_invisible_button", (void*)&je_gui_invisible_button},
-        wo_extern_lib_func_t{"je_gui_begin_main_menu_bar", (void*)&je_gui_begin_main_menu_bar},
-        wo_extern_lib_func_t{"je_gui_menu_item", (void*)&je_gui_menu_item},
-        wo_extern_lib_func_t{"je_gui_menu_item_shortcut", (void*)&je_gui_menu_item_shortcut},
-        wo_extern_lib_func_t{"je_gui_menu_item_enabled", (void*)&je_gui_menu_item_enabled},
-        wo_extern_lib_func_t{"je_gui_menu_item_shortcut_enabled", (void*)&je_gui_menu_item_shortcut_enabled},
-        wo_extern_lib_func_t{"je_gui_menu_item_selected", (void*)&je_gui_menu_item_selected},
-        wo_extern_lib_func_t{"je_gui_end_main_menu_bar", (void*)&je_gui_end_main_menu_bar},
-        wo_extern_lib_func_t{"je_gui_begin_menu_bar", (void*)&je_gui_begin_menu_bar},
-        wo_extern_lib_func_t{"je_gui_end_menu_bar", (void*)&je_gui_end_menu_bar},
-        wo_extern_lib_func_t{"je_gui_begin_menu", (void*)&je_gui_begin_menu},
-        wo_extern_lib_func_t{"je_gui_begin_menu_enabled", (void*)&je_gui_begin_menu_enabled},
-        wo_extern_lib_func_t{"je_gui_listbox", (void*)&je_gui_listbox},
-        wo_extern_lib_func_t{"je_gui_listbox_select", (void*)&je_gui_listbox_select},
-        wo_extern_lib_func_t{"je_gui_listbox_select_height", (void*)&je_gui_listbox_select_height},
-        wo_extern_lib_func_t{"je_gui_listbox_withsize", (void*)&je_gui_listbox_withsize},
+        wo_extern_lib_func_t{"je_gui_begin_disabled", (void*)&je_gui_begin_disabled},
+        wo_extern_lib_func_t{"je_gui_begin_drag_drop_source", (void*)&je_gui_begin_drag_drop_source},
+        wo_extern_lib_func_t{"je_gui_begin_drag_drop_source_attr", (void*)&je_gui_begin_drag_drop_source_attr},
+        wo_extern_lib_func_t{"je_gui_begin_drag_drop_target", (void*)&je_gui_begin_drag_drop_target},
         wo_extern_lib_func_t{"je_gui_begin_listbox", (void*)&je_gui_begin_listbox},
+        wo_extern_lib_func_t{"je_gui_begin_main_menu_bar", (void*)&je_gui_begin_main_menu_bar},
+        wo_extern_lib_func_t{"je_gui_begin_menu", (void*)&je_gui_begin_menu},
+        wo_extern_lib_func_t{"je_gui_begin_menu_bar", (void*)&je_gui_begin_menu_bar},
+        wo_extern_lib_func_t{"je_gui_begin_menu_enabled", (void*)&je_gui_begin_menu_enabled},
+        wo_extern_lib_func_t{"je_gui_begin_open", (void*)&je_gui_begin_open},
         wo_extern_lib_func_t{"je_gui_begin_selectable", (void*)&je_gui_begin_selectable},
         wo_extern_lib_func_t{"je_gui_begin_selectable_selected", (void*)&je_gui_begin_selectable_selected},
-        wo_extern_lib_func_t{"je_gui_end_listbox", (void*)&je_gui_end_listbox},
-        wo_extern_lib_func_t{"je_gui_sameline", (void*)&je_gui_sameline},
+        wo_extern_lib_func_t{"je_gui_begin_tool_tip", (void*)&je_gui_begin_tool_tip},
         wo_extern_lib_func_t{"je_gui_begingroup", (void*)&je_gui_begingroup},
-        wo_extern_lib_func_t{"je_gui_endgroup", (void*)&je_gui_endgroup},
-        wo_extern_lib_func_t{"je_gui_treenode", (void*)&je_gui_treenode},
-        wo_extern_lib_func_t{"je_gui_treenodeex", (void*)&je_gui_treenodeex},
-        wo_extern_lib_func_t{"je_gui_treepop", (void*)&je_gui_treepop},
-        wo_extern_lib_func_t{"je_gui_is_itemclicked", (void*)&je_gui_is_itemclicked},
-        wo_extern_lib_func_t{"je_gui_is_itemtoggledopen", (void*)&je_gui_is_itemtoggledopen},
-        wo_extern_lib_func_t{"je_gui_is_itemhovered", (void*)&je_gui_is_itemhovered},
-        wo_extern_lib_func_t{"je_gui_is_mousehoveringrect", (void*)&je_gui_is_mousehoveringrect},
-        wo_extern_lib_func_t{"je_gui_is_item_active", (void*)&je_gui_is_item_active},
-        wo_extern_lib_func_t{"je_gui_is_mouse_dragging", (void*)&je_gui_is_mouse_dragging},
-        wo_extern_lib_func_t{"je_gui_is_mouse_down", (void*)&je_gui_is_mouse_down},
-        wo_extern_lib_func_t{"je_gui_set_tooltip", (void*)&je_gui_set_tooltip},
-        wo_extern_lib_func_t{"je_gui_beginpopup_contextitem_label", (void*)&je_gui_beginpopup_contextitem_label},
+        wo_extern_lib_func_t{"je_gui_beginpopup", (void*)&je_gui_beginpopup},
         wo_extern_lib_func_t{"je_gui_beginpopup_contextitem", (void*)&je_gui_beginpopup_contextitem},
-        wo_extern_lib_func_t{"je_gui_beginpopup_contextwindow_label", (void*)&je_gui_beginpopup_contextwindow_label},
+        wo_extern_lib_func_t{"je_gui_beginpopup_contextitem_label", (void*)&je_gui_beginpopup_contextitem_label},
         wo_extern_lib_func_t{"je_gui_beginpopup_contextwindow", (void*)&je_gui_beginpopup_contextwindow},
+        wo_extern_lib_func_t{"je_gui_beginpopup_contextwindow_label", (void*)&je_gui_beginpopup_contextwindow_label},
         wo_extern_lib_func_t{"je_gui_begintabbar", (void*)&je_gui_begintabbar},
-        wo_extern_lib_func_t{"je_gui_endtabbar", (void*)&je_gui_endtabbar},
         wo_extern_lib_func_t{"je_gui_begintabitem", (void*)&je_gui_begintabitem},
         wo_extern_lib_func_t{"je_gui_begintabitem_open", (void*)&je_gui_begintabitem_open},
-        wo_extern_lib_func_t{"je_gui_endtabitem", (void*)&je_gui_endtabitem},
-        wo_extern_lib_func_t{"je_gui_openpopup_on_item_click", (void*)&je_gui_openpopup_on_item_click},
-        wo_extern_lib_func_t{"je_gui_openpopup_on_item_click_attr", (void*)&je_gui_openpopup_on_item_click_attr},
-        wo_extern_lib_func_t{"je_gui_openpopup_on_item_click_label", (void*)&je_gui_openpopup_on_item_click_label},
-        wo_extern_lib_func_t{"je_gui_openpopup_on_item_click_label_attr", (void*)&je_gui_openpopup_on_item_click_label_attr},
-        wo_extern_lib_func_t{"je_gui_openpopup", (void*)&je_gui_openpopup},
-        wo_extern_lib_func_t{"je_gui_beginpopup", (void*)&je_gui_beginpopup},
-        wo_extern_lib_func_t{"je_gui_endpopup", (void*)&je_gui_endpopup},
-        wo_extern_lib_func_t{"je_gui_push_id", (void*)&je_gui_push_id},
-        wo_extern_lib_func_t{"je_gui_push_id_str", (void*)&je_gui_push_id_str},
-        wo_extern_lib_func_t{"je_gui_pop_id", (void*)&je_gui_pop_id},
-        wo_extern_lib_func_t{"je_gui_get_id", (void*)&je_gui_get_id},
+        wo_extern_lib_func_t{"je_gui_button", (void*)&je_gui_button},
+        wo_extern_lib_func_t{"je_gui_button_size", (void*)&je_gui_button_size},
         wo_extern_lib_func_t{"je_gui_checkbox", (void*)&je_gui_checkbox},
-        wo_extern_lib_func_t{"je_gui_colorpicker4", (void*)&je_gui_colorpicker4},
         wo_extern_lib_func_t{"je_gui_colorbutton", (void*)&je_gui_colorbutton},
-        wo_extern_lib_func_t{"je_gui_input_text_box", (void*)&je_gui_input_text_box},
+        wo_extern_lib_func_t{"je_gui_colorpicker4", (void*)&je_gui_colorpicker4},
+        wo_extern_lib_func_t{"je_gui_combo", (void*)&je_gui_combo},
+        wo_extern_lib_func_t{"je_gui_content_region_avail", (void*)&je_gui_content_region_avail},
+        wo_extern_lib_func_t{"je_gui_dock_space", (void*)&je_gui_dock_space},
+        wo_extern_lib_func_t{"je_gui_dock_space_over_viewport", (void*)&je_gui_dock_space_over_viewport},
         wo_extern_lib_func_t{"je_gui_drag_float", (void*)&je_gui_drag_float},
-        wo_extern_lib_func_t{"je_gui_input_float_box", (void*)&je_gui_input_float_box},
-        wo_extern_lib_func_t{"je_gui_input_float_format_box", (void*)&je_gui_input_float_format_box},
-        wo_extern_lib_func_t{"je_gui_input_int_box", (void*)&je_gui_input_int_box},
-        wo_extern_lib_func_t{"je_gui_input_int2_box", (void*)&je_gui_input_int2_box},
-        wo_extern_lib_func_t{"je_gui_input_int3_box", (void*)&je_gui_input_int3_box},
-        wo_extern_lib_func_t{"je_gui_input_int4_box", (void*)&je_gui_input_int4_box},
+        wo_extern_lib_func_t{"je_gui_draw_list_add_bezier_cubic", (void*)&je_gui_draw_list_add_bezier_cubic},
+        wo_extern_lib_func_t{"je_gui_draw_list_add_bezier_quad", (void*)&je_gui_draw_list_add_bezier_quad},
+        wo_extern_lib_func_t{"je_gui_draw_list_add_circle", (void*)&je_gui_draw_list_add_circle},
+        wo_extern_lib_func_t{"je_gui_draw_list_add_filled_circle", (void*)&je_gui_draw_list_add_filled_circle},
+        wo_extern_lib_func_t{"je_gui_draw_list_add_image", (void*)&je_gui_draw_list_add_image},
+        wo_extern_lib_func_t{"je_gui_draw_list_add_line", (void*)&je_gui_draw_list_add_line},
+        wo_extern_lib_func_t{"je_gui_draw_list_add_rect", (void*)&je_gui_draw_list_add_rect},
+        wo_extern_lib_func_t{"je_gui_draw_list_add_rect_filled", (void*)&je_gui_draw_list_add_rect_filled},
+        wo_extern_lib_func_t{"je_gui_draw_list_add_text", (void*)&je_gui_draw_list_add_text},
+        wo_extern_lib_func_t{"je_gui_draw_list_add_triangle", (void*)&je_gui_draw_list_add_triangle},
+        wo_extern_lib_func_t{"je_gui_draw_list_add_triangle_filled", (void*)&je_gui_draw_list_add_triangle_filled},
+        wo_extern_lib_func_t{"je_gui_end", (void*)&je_gui_end},
+        wo_extern_lib_func_t{"je_gui_end_accept_drop_source", (void*)&je_gui_end_accept_drop_source},
+        wo_extern_lib_func_t{"je_gui_end_child", (void*)&je_gui_end_child},
+        wo_extern_lib_func_t{"je_gui_end_disabled", (void*)&je_gui_end_disabled},
+        wo_extern_lib_func_t{"je_gui_end_drag_drop_source", (void*)&je_gui_end_drag_drop_source},
+        wo_extern_lib_func_t{"je_gui_end_listbox", (void*)&je_gui_end_listbox},
+        wo_extern_lib_func_t{"je_gui_end_main_menu_bar", (void*)&je_gui_end_main_menu_bar},
+        wo_extern_lib_func_t{"je_gui_end_menu", (void*)&je_gui_end_menu},
+        wo_extern_lib_func_t{"je_gui_end_menu_bar", (void*)&je_gui_end_menu_bar},
+        wo_extern_lib_func_t{"je_gui_end_tool_tip", (void*)&je_gui_end_tool_tip},
+        wo_extern_lib_func_t{"je_gui_endgroup", (void*)&je_gui_endgroup},
+        wo_extern_lib_func_t{"je_gui_endpopup", (void*)&je_gui_endpopup},
+        wo_extern_lib_func_t{"je_gui_endtabbar", (void*)&je_gui_endtabbar},
+        wo_extern_lib_func_t{"je_gui_endtabitem", (void*)&je_gui_endtabitem},
+        wo_extern_lib_func_t{"je_gui_get_clip_board_text", (void*)&je_gui_get_clip_board_text},
+        wo_extern_lib_func_t{"je_gui_get_cursor_pos", (void*)&je_gui_get_cursor_pos},
+        wo_extern_lib_func_t{"je_gui_get_id", (void*)&je_gui_get_id},
+        wo_extern_lib_func_t{"je_gui_get_input_state", (void*)&je_gui_get_input_state},
+        wo_extern_lib_func_t{"je_gui_get_item_rect", (void*)&je_gui_get_item_rect},
+        wo_extern_lib_func_t{"je_gui_get_item_rect_size", (void*)&je_gui_get_item_rect_size},
+        wo_extern_lib_func_t{"je_gui_get_mouse_delta_pos", (void*)&je_gui_get_mouse_delta_pos},
+        wo_extern_lib_func_t{"je_gui_get_mouse_pos", (void*)&je_gui_get_mouse_pos},
+        wo_extern_lib_func_t{"je_gui_get_window_draw_list", (void*)&je_gui_get_window_draw_list},
+        wo_extern_lib_func_t{"je_gui_get_window_pos", (void*)&je_gui_get_window_pos},
+        wo_extern_lib_func_t{"je_gui_image", (void*)&je_gui_image},
+        wo_extern_lib_func_t{"je_gui_image_scale", (void*)&je_gui_image_scale},
+        wo_extern_lib_func_t{"je_gui_image_size", (void*)&je_gui_image_size},
+        wo_extern_lib_func_t{"je_gui_imagebutton", (void*)&je_gui_imagebutton},
+        wo_extern_lib_func_t{"je_gui_imagebutton_scale", (void*)&je_gui_imagebutton_scale},
+        wo_extern_lib_func_t{"je_gui_imagebutton_size", (void*)&je_gui_imagebutton_size},
         wo_extern_lib_func_t{"je_gui_input_float2_box", (void*)&je_gui_input_float2_box},
         wo_extern_lib_func_t{"je_gui_input_float2_format_box", (void*)&je_gui_input_float2_format_box},
         wo_extern_lib_func_t{"je_gui_input_float3_box", (void*)&je_gui_input_float3_box},
         wo_extern_lib_func_t{"je_gui_input_float3_format_box", (void*)&je_gui_input_float3_format_box},
         wo_extern_lib_func_t{"je_gui_input_float4_box", (void*)&je_gui_input_float4_box},
         wo_extern_lib_func_t{"je_gui_input_float4_format_box", (void*)&je_gui_input_float4_format_box},
+        wo_extern_lib_func_t{"je_gui_input_float_box", (void*)&je_gui_input_float_box},
+        wo_extern_lib_func_t{"je_gui_input_float_format_box", (void*)&je_gui_input_float_format_box},
+        wo_extern_lib_func_t{"je_gui_input_int2_box", (void*)&je_gui_input_int2_box},
+        wo_extern_lib_func_t{"je_gui_input_int3_box", (void*)&je_gui_input_int3_box},
+        wo_extern_lib_func_t{"je_gui_input_int4_box", (void*)&je_gui_input_int4_box},
+        wo_extern_lib_func_t{"je_gui_input_int_box", (void*)&je_gui_input_int_box},
+        wo_extern_lib_func_t{"je_gui_input_text_box", (void*)&je_gui_input_text_box},
         wo_extern_lib_func_t{"je_gui_input_text_multiline", (void*)&je_gui_input_text_multiline},
         wo_extern_lib_func_t{"je_gui_input_text_multiline_size", (void*)&je_gui_input_text_multiline_size},
-        wo_extern_lib_func_t{"je_gui_combo", (void*)&je_gui_combo},
-        wo_extern_lib_func_t{"je_gui_end_menu", (void*)&je_gui_end_menu},
-        wo_extern_lib_func_t{"je_gui_separator", (void*)&je_gui_separator},
-        wo_extern_lib_func_t{"je_gui_image", (void*)&je_gui_image},
-        wo_extern_lib_func_t{"je_gui_image_scale", (void*)&je_gui_image_scale},
-        wo_extern_lib_func_t{"je_gui_image_size", (void*)&je_gui_image_size},
-        wo_extern_lib_func_t{"je_gui_push_clip_rect", (void*)&je_gui_push_clip_rect},
+        wo_extern_lib_func_t{"je_gui_invisible_button", (void*)&je_gui_invisible_button},
+        wo_extern_lib_func_t{"je_gui_is_item_active", (void*)&je_gui_is_item_active},
+        wo_extern_lib_func_t{"je_gui_is_itemclicked", (void*)&je_gui_is_itemclicked},
+        wo_extern_lib_func_t{"je_gui_is_itemhovered", (void*)&je_gui_is_itemhovered},
+        wo_extern_lib_func_t{"je_gui_is_itemtoggledopen", (void*)&je_gui_is_itemtoggledopen},
+        wo_extern_lib_func_t{"je_gui_is_mouse_down", (void*)&je_gui_is_mouse_down},
+        wo_extern_lib_func_t{"je_gui_is_mouse_dragging", (void*)&je_gui_is_mouse_dragging},
+        wo_extern_lib_func_t{"je_gui_is_mousehoveringrect", (void*)&je_gui_is_mousehoveringrect},
+        wo_extern_lib_func_t{"je_gui_is_window_focused", (void*)&je_gui_is_window_focused},
+        wo_extern_lib_func_t{"je_gui_job_vm_handle", (void*)&je_gui_job_vm_handle},
+        wo_extern_lib_func_t{"je_gui_launch", (void*)&je_gui_launch},
+        wo_extern_lib_func_t{"je_gui_listbox", (void*)&je_gui_listbox},
+        wo_extern_lib_func_t{"je_gui_listbox_select", (void*)&je_gui_listbox_select},
+        wo_extern_lib_func_t{"je_gui_listbox_select_height", (void*)&je_gui_listbox_select_height},
+        wo_extern_lib_func_t{"je_gui_listbox_withsize", (void*)&je_gui_listbox_withsize},
+        wo_extern_lib_func_t{"je_gui_menu_item", (void*)&je_gui_menu_item},
+        wo_extern_lib_func_t{"je_gui_menu_item_enabled", (void*)&je_gui_menu_item_enabled},
+        wo_extern_lib_func_t{"je_gui_menu_item_selected", (void*)&je_gui_menu_item_selected},
+        wo_extern_lib_func_t{"je_gui_menu_item_shortcut", (void*)&je_gui_menu_item_shortcut},
+        wo_extern_lib_func_t{"je_gui_menu_item_shortcut_enabled", (void*)&je_gui_menu_item_shortcut_enabled},
+        wo_extern_lib_func_t{"je_gui_openpopup", (void*)&je_gui_openpopup},
+        wo_extern_lib_func_t{"je_gui_openpopup_on_item_click", (void*)&je_gui_openpopup_on_item_click},
+        wo_extern_lib_func_t{"je_gui_openpopup_on_item_click_attr", (void*)&je_gui_openpopup_on_item_click_attr},
+        wo_extern_lib_func_t{"je_gui_openpopup_on_item_click_label", (void*)&je_gui_openpopup_on_item_click_label},
+        wo_extern_lib_func_t{"je_gui_openpopup_on_item_click_label_attr", (void*)&je_gui_openpopup_on_item_click_label_attr},
         wo_extern_lib_func_t{"je_gui_pop_clip_rect", (void*)&je_gui_pop_clip_rect},
-        wo_extern_lib_func_t{"je_gui_push_style_color", (void*)&je_gui_push_style_color},
+        wo_extern_lib_func_t{"je_gui_pop_id", (void*)&je_gui_pop_id},
         wo_extern_lib_func_t{"je_gui_pop_style_color", (void*)&je_gui_pop_style_color},
-        wo_extern_lib_func_t{"je_gui_draw_list_add_text", (void*)&je_gui_draw_list_add_text},
-        wo_extern_lib_func_t{"je_gui_draw_list_add_image", (void*)&je_gui_draw_list_add_image},
-        wo_extern_lib_func_t{"je_gui_draw_list_add_line", (void*)&je_gui_draw_list_add_line},
-        wo_extern_lib_func_t{"je_gui_draw_list_add_rect", (void*)&je_gui_draw_list_add_rect},
-        wo_extern_lib_func_t{"je_gui_draw_list_add_rect_filled", (void*)&je_gui_draw_list_add_rect_filled},
-        wo_extern_lib_func_t{"je_gui_draw_list_add_triangle", (void*)&je_gui_draw_list_add_triangle},
-        wo_extern_lib_func_t{"je_gui_draw_list_add_triangle_filled", (void*)&je_gui_draw_list_add_triangle_filled},
-        wo_extern_lib_func_t{"je_gui_draw_list_add_circle", (void*)&je_gui_draw_list_add_circle},
-        wo_extern_lib_func_t{"je_gui_draw_list_add_filled_circle", (void*)&je_gui_draw_list_add_filled_circle},
-        wo_extern_lib_func_t{"je_gui_draw_list_add_bezier_quad", (void*)&je_gui_draw_list_add_bezier_quad},
-        wo_extern_lib_func_t{"je_gui_draw_list_add_bezier_cubic", (void*)&je_gui_draw_list_add_bezier_cubic},
-        wo_extern_lib_func_t{"je_gui_get_window_draw_list", (void*)&je_gui_get_window_draw_list},
-        wo_extern_lib_func_t{"je_gui_imagebutton", (void*)&je_gui_imagebutton},
-        wo_extern_lib_func_t{"je_gui_imagebutton_scale", (void*)&je_gui_imagebutton_scale},
-        wo_extern_lib_func_t{"je_gui_imagebutton_size", (void*)&je_gui_imagebutton_size},
-        wo_extern_lib_func_t{"je_gui_content_region_avail", (void*)&je_gui_content_region_avail},
-        wo_extern_lib_func_t{"je_gui_set_next_window_size_constraints", (void*)&je_gui_set_next_window_size_constraints},
-        wo_extern_lib_func_t{"je_gui_set_next_window_size", (void*)&je_gui_set_next_window_size},
-        wo_extern_lib_func_t{"je_gui_set_next_window_pos", (void*)&je_gui_set_next_window_pos},
-        wo_extern_lib_func_t{"je_gui_begin_drag_drop_source", (void*)&je_gui_begin_drag_drop_source},
-        wo_extern_lib_func_t{"je_gui_begin_drag_drop_source_attr", (void*)&je_gui_begin_drag_drop_source_attr},
-        wo_extern_lib_func_t{"je_gui_set_drag_drop_payload", (void*)&je_gui_set_drag_drop_payload},
-        wo_extern_lib_func_t{"je_gui_end_drag_drop_source", (void*)&je_gui_end_drag_drop_source},
-        wo_extern_lib_func_t{"je_gui_begin_drag_drop_target", (void*)&je_gui_begin_drag_drop_target},
-        wo_extern_lib_func_t{"je_gui_accept_drag_drop_payload", (void*)&je_gui_accept_drag_drop_payload},
-        wo_extern_lib_func_t{"je_gui_end_accept_drop_source", (void*)&je_gui_end_accept_drop_source},
-        wo_extern_lib_func_t{"je_gui_set_next_item_open", (void*)&je_gui_set_next_item_open},
-        wo_extern_lib_func_t{"je_gui_begin_tool_tip", (void*)&je_gui_begin_tool_tip},
-        wo_extern_lib_func_t{"je_gui_end_tool_tip", (void*)&je_gui_end_tool_tip},
-        wo_extern_lib_func_t{"je_gui_begin_disabled", (void*)&je_gui_begin_disabled},
-        wo_extern_lib_func_t{"je_gui_end_disabled", (void*)&je_gui_end_disabled},
-        wo_extern_lib_func_t{"je_gui_style_get_config_color", (void*)&je_gui_style_get_config_color},
-        wo_extern_lib_func_t{"je_gui_style_set_config_color", (void*)&je_gui_style_set_config_color},
-        wo_extern_lib_func_t{"je_gui_style_set_config_color_dark", (void*)&je_gui_style_set_config_color_dark},
-        wo_extern_lib_func_t{"je_gui_style_set_config_color_classic", (void*)&je_gui_style_set_config_color_classic},
-        wo_extern_lib_func_t{"je_gui_style_set_config_color_light", (void*)&je_gui_style_set_config_color_light},
-        wo_extern_lib_func_t{"je_gui_dock_space", (void*)&je_gui_dock_space},
-        wo_extern_lib_func_t{"je_gui_dock_space_over_viewport", (void*)&je_gui_dock_space_over_viewport},
+        wo_extern_lib_func_t{"je_gui_pop_style_var", (void*)&je_gui_pop_style_var},
+        wo_extern_lib_func_t{"je_gui_progress_bar", (void*)&je_gui_progress_bar},
+        wo_extern_lib_func_t{"je_gui_progress_bar_size", (void*)&je_gui_progress_bar_size},
+        wo_extern_lib_func_t{"je_gui_push_clip_rect", (void*)&je_gui_push_clip_rect},
+        wo_extern_lib_func_t{"je_gui_push_id", (void*)&je_gui_push_id},
+        wo_extern_lib_func_t{"je_gui_push_id_str", (void*)&je_gui_push_id_str},
+        wo_extern_lib_func_t{"je_gui_push_style_color", (void*)&je_gui_push_style_color},
         wo_extern_lib_func_t{"je_gui_push_style_real", (void*)&je_gui_push_style_real},
         wo_extern_lib_func_t{"je_gui_push_style_vec2", (void*)&je_gui_push_style_vec2},
-        wo_extern_lib_func_t{"je_gui_pop_style_var", (void*)&je_gui_pop_style_var},
-        wo_extern_lib_func_t{"je_gui_launch", (void*)&je_gui_launch},
-        wo_extern_lib_func_t{"je_gui_stop_all_work", (void*)&je_gui_stop_all_work},
-        wo_extern_lib_func_t{"je_gui_get_input_state", (void*)&je_gui_get_input_state},
         wo_extern_lib_func_t{"je_gui_register_exit_callback", (void*)&je_gui_register_exit_callback},
-        wo_extern_lib_func_t{"je_gui_unregister_exit_callback", (void*)&je_gui_unregister_exit_callback},
+        wo_extern_lib_func_t{"je_gui_sameline", (void*)&je_gui_sameline},
+        wo_extern_lib_func_t{"je_gui_separator", (void*)&je_gui_separator},
+        wo_extern_lib_func_t{"je_gui_set_clip_board_text", (void*)&je_gui_set_clip_board_text},
+        wo_extern_lib_func_t{"je_gui_set_drag_drop_payload", (void*)&je_gui_set_drag_drop_payload},
         wo_extern_lib_func_t{"je_gui_set_font", (void*)&je_gui_set_font},
-        wo_extern_lib_func_t{"wojeapi_towoo_member_get", (void*)&wojeapi_towoo_member_get},
-        wo_extern_lib_func_t{"wojeapi_towoo_member_set", (void*)&wojeapi_towoo_member_set},
-        wo_extern_lib_func_t{"wojeapi_towoo_update_component_data", (void*)&wojeapi_towoo_update_component_data},
-        wo_extern_lib_func_t{"wojeapi_towoo_register_system_job", (void*)&wojeapi_towoo_register_system_job},
-        wo_extern_lib_func_t{"wojeapi_towoo_add_component", (void*)&wojeapi_towoo_add_component},
-        wo_extern_lib_func_t{"wojeapi_towoo_get_component", (void*)&wojeapi_towoo_get_component},
-        wo_extern_lib_func_t{"wojeapi_towoo_remove_component", (void*)&wojeapi_towoo_remove_component},
-        wo_extern_lib_func_t{"wojeapi_towoo_math_sqrt", (void*)&wojeapi_towoo_math_sqrt},
-        wo_extern_lib_func_t{"wojeapi_towoo_math_sin", (void*)&wojeapi_towoo_math_sin},
-        wo_extern_lib_func_t{"wojeapi_towoo_math_cos", (void*)&wojeapi_towoo_math_cos},
-        wo_extern_lib_func_t{"wojeapi_towoo_math_tan", (void*)&wojeapi_towoo_math_tan},
-        wo_extern_lib_func_t{"wojeapi_towoo_math_asin", (void*)&wojeapi_towoo_math_asin},
-        wo_extern_lib_func_t{"wojeapi_towoo_math_acos", (void*)&wojeapi_towoo_math_acos},
-        wo_extern_lib_func_t{"wojeapi_towoo_math_atan", (void*)&wojeapi_towoo_math_atan},
-        wo_extern_lib_func_t{"wojeapi_towoo_math_atan2", (void*)&wojeapi_towoo_math_atan2},
-        wo_extern_lib_func_t{"wojeapi_towoo_math_quat_slerp", (void*)&wojeapi_towoo_math_quat_slerp},
-        wo_extern_lib_func_t{"wojeapi_towoo_ray_create", (void*)&wojeapi_towoo_ray_create},
-        wo_extern_lib_func_t{"wojeapi_towoo_ray_from_camera", (void*)&wojeapi_towoo_ray_from_camera},
-        wo_extern_lib_func_t{"wojeapi_towoo_ray_intersect_entity", (void*)&wojeapi_towoo_ray_intersect_entity},
-        wo_extern_lib_func_t{"wojeapi_towoo_ray_origin", (void*)&wojeapi_towoo_ray_origin},
-        wo_extern_lib_func_t{"wojeapi_towoo_ray_direction", (void*)&wojeapi_towoo_ray_direction},
-        wo_extern_lib_func_t{"wojeapi_towoo_transform_translation_global_pos", (void*)&wojeapi_towoo_transform_translation_global_pos},
-        wo_extern_lib_func_t{"wojeapi_towoo_transform_translation_global_rot", (void*)&wojeapi_towoo_transform_translation_global_rot},
-        wo_extern_lib_func_t{"wojeapi_towoo_transform_localposition_get_parent_global_pos", (void*)&wojeapi_towoo_transform_localposition_get_parent_global_pos},
-        wo_extern_lib_func_t{"wojeapi_towoo_transform_localposition_set_global_pos", (void*)&wojeapi_towoo_transform_localposition_set_global_pos},
-        wo_extern_lib_func_t{"wojeapi_towoo_transform_localrotation_get_parent_global_rot", (void*)&wojeapi_towoo_transform_localrotation_get_parent_global_rot},
-        wo_extern_lib_func_t{"wojeapi_towoo_transform_localrotation_set_global_rot", (void*)&wojeapi_towoo_transform_localrotation_set_global_rot},
-        wo_extern_lib_func_t{"wojeapi_towoo_userinterface_origin_layout", (void*)&wojeapi_towoo_userinterface_origin_layout},
-        wo_extern_lib_func_t{"wojeapi_towoo_renderer_textures_bind_texture", (void*)&wojeapi_towoo_renderer_textures_bind_texture},
-        wo_extern_lib_func_t{"wojeapi_towoo_renderer_textures_get_texture", (void*)&wojeapi_towoo_renderer_textures_get_texture},
-        wo_extern_lib_func_t{"wojeapi_towoo_renderer_shaders_set_uniform", (void*)&wojeapi_towoo_renderer_shaders_set_uniform},
-        wo_extern_lib_func_t{"wojeapi_towoo_renderer_shaders_set_shaders", (void*)&wojeapi_towoo_renderer_shaders_set_shaders},
-        wo_extern_lib_func_t{"wojeapi_towoo_renderer_shaders_get_shaders", (void*)&wojeapi_towoo_renderer_shaders_get_shaders},
-        wo_extern_lib_func_t{"wojeapi_towoo_physics2d_collisionresult_all", (void*)&wojeapi_towoo_physics2d_collisionresult_all},
-        wo_extern_lib_func_t{"wojeapi_towoo_physics2d_collisionresult_check", (void*)&wojeapi_towoo_physics2d_collisionresult_check},
-        wo_extern_lib_func_t{"wojeapi_towoo_animation2D_frameanimation_active_animation", (void*)&wojeapi_towoo_animation2D_frameanimation_active_animation},
-        wo_extern_lib_func_t{"wojeapi_towoo_audio_source_get_source", (void*)&wojeapi_towoo_audio_source_get_source},
-        wo_extern_lib_func_t{"wojeapi_towoo_audio_playing_set_buffer", (void*)&wojeapi_towoo_audio_playing_set_buffer},
-        wo_extern_lib_func_t{"wojeapi_add_system_to_world", (void*)&wojeapi_add_system_to_world},
-        wo_extern_lib_func_t{"wojeapi_remove_system_from_world", (void*)&wojeapi_remove_system_from_world},
-        wo_extern_lib_func_t{"wojeapi_get_all_systems_from_world", (void*)&wojeapi_get_all_systems_from_world},
-        wo_extern_lib_func_t{"wojeapi_get_uniforms_from_shader", (void*)&wojeapi_get_uniforms_from_shader},
-        wo_extern_lib_func_t{"wojeapi_get_all_internal_scripts", (void*)&wojeapi_get_all_internal_scripts},
-        wo_extern_lib_func_t{"wojeapi_typeinfo_get_unregister_count", (void*)&wojeapi_typeinfo_get_unregister_count},
-        wo_extern_lib_func_t{"wojeapi_texture_take_snapshot", (void*)&wojeapi_texture_take_snapshot},
-        wo_extern_lib_func_t{"wojeapi_texture_restore_snapshot", (void*)&wojeapi_texture_restore_snapshot},
-        wo_extern_lib_func_t{"wojeapi_world_is_valid", (void*)&wojeapi_world_is_valid},
-        wo_extern_lib_func_t{"wojeapi_get_editing_entity_uid", (void*)&wojeapi_get_editing_entity_uid},
-        wo_extern_lib_func_t{"wojeapi_get_entity_uid", (void*)&wojeapi_get_entity_uid},
-        wo_extern_lib_func_t{"wojeapi_set_parent", (void*)&wojeapi_set_parent},
-        wo_extern_lib_func_t{"wojeapi_get_entity_anchor_uuid", (void*)&wojeapi_get_entity_anchor_uuid},
-        wo_extern_lib_func_t{"wojeapi_set_parent_with_uid", (void*)&wojeapi_set_parent_with_uid},
-        wo_extern_lib_func_t{"wojeapi_get_parent_anchor_uid", (void*)&wojeapi_get_parent_anchor_uid},
-        wo_extern_lib_func_t{"wojeapi_get_entity_name", (void*)&wojeapi_get_entity_name},
-        wo_extern_lib_func_t{"wojeapi_set_entity_name", (void*)&wojeapi_set_entity_name},
-        wo_extern_lib_func_t{"wojeapi_find_entity_with_chunk_info", (void*)&wojeapi_find_entity_with_chunk_info},
-        wo_extern_lib_func_t{"wojeapi_entity_get_prefab_path", (void*)&wojeapi_entity_get_prefab_path},
-        wo_extern_lib_func_t{"wojeapi_entity_set_prefab_path", (void*)&wojeapi_entity_set_prefab_path},
-        wo_extern_lib_func_t{"wojeapi_get_all_components_types_from_entity", (void*)&wojeapi_get_all_components_types_from_entity},
-        wo_extern_lib_func_t{"wojeapi_is_top_entity", (void*)&wojeapi_is_top_entity},
-        wo_extern_lib_func_t{"wojeapi_is_child_of_entity", (void*)&wojeapi_is_child_of_entity},
-        wo_extern_lib_func_t{"wojeapi_reload_shader_of_entity", (void*)&wojeapi_reload_shader_of_entity},
-        wo_extern_lib_func_t{"wojeapi_reload_texture_of_entity", (void*)&wojeapi_reload_texture_of_entity},
-        wo_extern_lib_func_t{"wojeapi_get_bad_shader_list_of_entity", (void*)&wojeapi_get_bad_shader_list_of_entity},
-        wo_extern_lib_func_t{"wojeapi_store_bad_shader_name", (void*)&wojeapi_store_bad_shader_name},
-        wo_extern_lib_func_t{"wojeapi_remove_bad_shader_name", (void*)&wojeapi_remove_bad_shader_name},
-        wo_extern_lib_func_t{"wojeapi_store_bad_shader_uniforms_int", (void*)&wojeapi_store_bad_shader_uniforms_int},
-        wo_extern_lib_func_t{"wojeapi_store_bad_shader_uniforms_float", (void*)&wojeapi_store_bad_shader_uniforms_float},
-        wo_extern_lib_func_t{"wojeapi_store_bad_shader_uniforms_float2", (void*)&wojeapi_store_bad_shader_uniforms_float2},
-        wo_extern_lib_func_t{"wojeapi_store_bad_shader_uniforms_float3", (void*)&wojeapi_store_bad_shader_uniforms_float3},
-        wo_extern_lib_func_t{"wojeapi_store_bad_shader_uniforms_float4", (void*)&wojeapi_store_bad_shader_uniforms_float4},
-        wo_extern_lib_func_t{"wojeapi_set_editing_entity_uid", (void*)&wojeapi_set_editing_entity_uid},
-        wo_extern_lib_func_t{"wojeapi_reset_editing_entity_uid", (void*)&wojeapi_reset_editing_entity_uid},
-        wo_extern_lib_func_t{"wojeapi_editor_register_panic_hook", (void*)&wojeapi_editor_register_panic_hook},
-        wo_extern_lib_func_t{"wojeapi_mark_shared_glresource_outdated", (void*)&wojeapi_mark_shared_glresource_outdated},
-        wo_extern_lib_func_t{"wojeapi_init_graphic_pipeline", (void*)&wojeapi_init_graphic_pipeline},
-        wo_extern_lib_func_t{"wojeapi_set_runtime_path", (void*)&wojeapi_set_runtime_path},
-        wo_extern_lib_func_t{"wojeapi_input_update_window_size", (void*)&wojeapi_input_update_window_size},
-        wo_extern_lib_func_t{"wojeapi_input_update_window_title", (void*)&wojeapi_input_update_window_title},
-        wo_extern_lib_func_t{"wojeapi_create_fimg_packer", (void*)&wojeapi_create_fimg_packer},
-        wo_extern_lib_func_t{"wojeapi_pack_file_to_fimg_packer", (void*)&wojeapi_pack_file_to_fimg_packer},
-        wo_extern_lib_func_t{"wojeapi_pack_buffer_to_fimg_packer", (void*)&wojeapi_pack_buffer_to_fimg_packer},
-        wo_extern_lib_func_t{"wojeapi_finish_fimg_packer", (void*)&wojeapi_finish_fimg_packer},
-        wo_extern_lib_func_t{"wojeapi_get_sleep_suppression", (void*)&wojeapi_get_sleep_suppression},
-        wo_extern_lib_func_t{"wojeapi_set_sleep_suppression", (void*)&wojeapi_set_sleep_suppression},
-        wo_extern_lib_func_t{"wojeapi_build_version", (void*)&wojeapi_build_version},
-        wo_extern_lib_func_t{"wojeapi_build_commit", (void*)&wojeapi_build_commit},
-        wo_extern_lib_func_t{"wojeapi_woolang_version", (void*)&wojeapi_woolang_version},
-        wo_extern_lib_func_t{"wojeapi_crc64_file", (void*)&wojeapi_crc64_file},
-        wo_extern_lib_func_t{"wojeapi_crc64_string", (void*)&wojeapi_crc64_string},
-        wo_extern_lib_func_t{"wojeapi_register_log_callback", (void*)&wojeapi_register_log_callback},
-        wo_extern_lib_func_t{"wojeapi_unregister_log_callback", (void*)&wojeapi_unregister_log_callback},
-        wo_extern_lib_func_t{"wojeapi_get_all_logs", (void*)&wojeapi_get_all_logs},
-        wo_extern_lib_func_t{"wojeapi_update_editor_mouse_pos", (void*)&wojeapi_update_editor_mouse_pos},
-        wo_extern_lib_func_t{"wojeapi_setable_editor_system", (void*)&wojeapi_setable_editor_system},
-        wo_extern_lib_func_t{"wojeapi_apply_camera_framebuf_setting", (void*)&wojeapi_apply_camera_framebuf_setting},
-        wo_extern_lib_func_t{"wojeapi_get_framebuf_texture", (void*)&wojeapi_get_framebuf_texture},
-        wo_extern_lib_func_t{"wojeapi_get_entity_arch_information", (void*)&wojeapi_get_entity_arch_information},
-        wo_extern_lib_func_t{"wojeapi_get_editing_mover_mode", (void*)&wojeapi_get_editing_mover_mode},
-        wo_extern_lib_func_t{"wojeapi_set_editing_mover_mode", (void*)&wojeapi_set_editing_mover_mode},
-        wo_extern_lib_func_t{"wojeapi_get_editing_coord_mode", (void*)&wojeapi_get_editing_coord_mode},
-        wo_extern_lib_func_t{"wojeapi_set_editing_coord_mode", (void*)&wojeapi_set_editing_coord_mode},
-        wo_extern_lib_func_t{"wojeapi_towoo_update_api", (void*)&wojeapi_towoo_update_api},
-        wo_extern_lib_func_t{"wojeapi_towoo_register_system", (void*)&wojeapi_towoo_register_system},
-        wo_extern_lib_func_t{"wojeapi_towoo_unregister_system", (void*)&wojeapi_towoo_unregister_system},
-        wo_extern_lib_func_t{"wojeapi_towoo_update_component", (void*)&wojeapi_towoo_update_component},
-        wo_extern_lib_func_t{"wojeapi_towoo_unregister_component", (void*)&wojeapi_towoo_unregister_component},
-        wo_extern_lib_func_t{"wojeapi_dynamic_parser_update_script", (void*)&wojeapi_dynamic_parser_update_script},
-        wo_extern_lib_func_t{"wojeapi_dynamic_parser_update_type", (void*)&wojeapi_dynamic_parser_update_type},
-        wo_extern_lib_func_t{"wojeapi_dynamic_parser_clear", (void*)&wojeapi_dynamic_parser_clear},
-        wo_extern_lib_func_t{"wojeapi_dynamic_parser_saving", (void*)&wojeapi_dynamic_parser_saving},
-        wo_extern_lib_func_t{"wojeapi_dynamic_parser_restoring", (void*)&wojeapi_dynamic_parser_restoring},
-        wo_extern_lib_func_t{"wojeapi_dynamic_parser_edit", (void*)&wojeapi_dynamic_parser_edit},
-        wo_extern_lib_func_t{"wojeapi_deltatime", (void*)&wojeapi_deltatime},
-        wo_extern_lib_func_t{"wojeapi_smooth_deltatime", (void*)&wojeapi_smooth_deltatime},
-        wo_extern_lib_func_t{"wojeapi_startup_coroutine", (void*)&wojeapi_startup_coroutine},
-        wo_extern_lib_func_t{"wojeapi_create_singleton", (void*)&wojeapi_create_singleton},
-        wo_extern_lib_func_t{"wojeapi_clear_singletons", (void*)&wojeapi_clear_singletons},
-        wo_extern_lib_func_t{"wojeapi_startup_thread", (void*)&wojeapi_startup_thread},
+        wo_extern_lib_func_t{"je_gui_set_next_item_open", (void*)&je_gui_set_next_item_open},
+        wo_extern_lib_func_t{"je_gui_set_next_window_pos", (void*)&je_gui_set_next_window_pos},
+        wo_extern_lib_func_t{"je_gui_set_next_window_size", (void*)&je_gui_set_next_window_size},
+        wo_extern_lib_func_t{"je_gui_set_next_window_size_constraints", (void*)&je_gui_set_next_window_size_constraints},
+        wo_extern_lib_func_t{"je_gui_set_tooltip", (void*)&je_gui_set_tooltip},
+        wo_extern_lib_func_t{"je_gui_stop_all_work", (void*)&je_gui_stop_all_work},
+        wo_extern_lib_func_t{"je_gui_style_get_config_color", (void*)&je_gui_style_get_config_color},
+        wo_extern_lib_func_t{"je_gui_style_set_config_color", (void*)&je_gui_style_set_config_color},
+        wo_extern_lib_func_t{"je_gui_style_set_config_color_classic", (void*)&je_gui_style_set_config_color_classic},
+        wo_extern_lib_func_t{"je_gui_style_set_config_color_dark", (void*)&je_gui_style_set_config_color_dark},
+        wo_extern_lib_func_t{"je_gui_style_set_config_color_light", (void*)&je_gui_style_set_config_color_light},
+        wo_extern_lib_func_t{"je_gui_text", (void*)&je_gui_text},
+        wo_extern_lib_func_t{"je_gui_text_disabled", (void*)&je_gui_text_disabled},
+        wo_extern_lib_func_t{"je_gui_treenode", (void*)&je_gui_treenode},
+        wo_extern_lib_func_t{"je_gui_treenodeex", (void*)&je_gui_treenodeex},
+        wo_extern_lib_func_t{"je_gui_treepop", (void*)&je_gui_treepop},
+        wo_extern_lib_func_t{"je_gui_unregister_exit_callback", (void*)&je_gui_unregister_exit_callback},
+        wo_extern_lib_func_t{"jeecs_shader_append_struct_member", (void*)&jeecs_shader_append_struct_member},
+        wo_extern_lib_func_t{"jeecs_shader_apply_operation", (void*)&jeecs_shader_apply_operation},
+        wo_extern_lib_func_t{"jeecs_shader_bind_struct_as_uniform_buffer", (void*)&jeecs_shader_bind_struct_as_uniform_buffer},
+        wo_extern_lib_func_t{"jeecs_shader_create_fragment_in", (void*)&jeecs_shader_create_fragment_in},
+        wo_extern_lib_func_t{"jeecs_shader_create_rot_mat4x4", (void*)&jeecs_shader_create_rot_mat4x4},
+        wo_extern_lib_func_t{"jeecs_shader_create_sampler2d", (void*)&jeecs_shader_create_sampler2d},
+        wo_extern_lib_func_t{"jeecs_shader_create_shader_value_out", (void*)&jeecs_shader_create_shader_value_out},
+        wo_extern_lib_func_t{"jeecs_shader_create_struct_define", (void*)&jeecs_shader_create_struct_define},
+        wo_extern_lib_func_t{"jeecs_shader_create_uniform_variable", (void*)&jeecs_shader_create_uniform_variable},
+        wo_extern_lib_func_t{"jeecs_shader_create_uniform_variable_with_init_value", (void*)&jeecs_shader_create_uniform_variable_with_init_value},
+        wo_extern_lib_func_t{"jeecs_shader_create_vertex_in", (void*)&jeecs_shader_create_vertex_in},
+        wo_extern_lib_func_t{"jeecs_shader_float2_create", (void*)&jeecs_shader_float2_create},
+        wo_extern_lib_func_t{"jeecs_shader_float3_create", (void*)&jeecs_shader_float3_create},
+        wo_extern_lib_func_t{"jeecs_shader_float3x3_create", (void*)&jeecs_shader_float3x3_create},
+        wo_extern_lib_func_t{"jeecs_shader_float4_create", (void*)&jeecs_shader_float4_create},
+        wo_extern_lib_func_t{"jeecs_shader_float4x4_create", (void*)&jeecs_shader_float4x4_create},
+        wo_extern_lib_func_t{"jeecs_shader_float_create", (void*)&jeecs_shader_float_create},
+        wo_extern_lib_func_t{"jeecs_shader_get_vertex_in", (void*)&jeecs_shader_get_vertex_in},
+        wo_extern_lib_func_t{"jeecs_shader_sampler2d_bind_texture", (void*)&jeecs_shader_sampler2d_bind_texture},
+        wo_extern_lib_func_t{"jeecs_shader_texture2d_set_channel", (void*)&jeecs_shader_texture2d_set_channel},
+        wo_extern_lib_func_t{"jeecs_shader_wrap_result_pack", (void*)&jeecs_shader_wrap_result_pack},
         wo_extern_lib_func_t{"wojeapi_abort_all_thread", (void*)&wojeapi_abort_all_thread},
-        wo_extern_lib_func_t{"wojeapi_wait_thread", (void*)&wojeapi_wait_thread},
-        wo_extern_lib_func_t{"wojeapi_create_rmutex", (void*)&wojeapi_create_rmutex},
-        wo_extern_lib_func_t{"wojeapi_lock_rmutex", (void*)&wojeapi_lock_rmutex},
-        wo_extern_lib_func_t{"wojeapi_trylock_rmutex", (void*)&wojeapi_trylock_rmutex},
-        wo_extern_lib_func_t{"wojeapi_unlock_rmutex", (void*)&wojeapi_unlock_rmutex},
-        wo_extern_lib_func_t{"wojeapi_generate_uid", (void*)&wojeapi_generate_uid},
-        wo_extern_lib_func_t{"wojeapi_current_platform_config", (void*)&wojeapi_current_platform_config},
-        wo_extern_lib_func_t{"wojeapi_load_module", (void*)&wojeapi_load_module},
-        wo_extern_lib_func_t{"wojeapi_delay_unload_module", (void*)&wojeapi_delay_unload_module},
-        wo_extern_lib_func_t{"wojeapi_unload_module", (void*)&wojeapi_unload_module},
-        wo_extern_lib_func_t{"wojeapi_read_file_all", (void*)&wojeapi_read_file_all},
-        wo_extern_lib_func_t{"wojeapi_log", (void*)&wojeapi_log},
-        wo_extern_lib_func_t{"wojeapi_loginfo", (void*)&wojeapi_loginfo},
-        wo_extern_lib_func_t{"wojeapi_logerr", (void*)&wojeapi_logerr},
-        wo_extern_lib_func_t{"wojeapi_logwarn", (void*)&wojeapi_logwarn},
-        wo_extern_lib_func_t{"wojeapi_logfatal", (void*)&wojeapi_logfatal},
-        wo_extern_lib_func_t{"wojeapi_wheel_count", (void*)&wojeapi_wheel_count},
-        wo_extern_lib_func_t{"wojeapi_input_keydown", (void*)&wojeapi_input_keydown},
-        wo_extern_lib_func_t{"wojeapi_input_mousedown", (void*)&wojeapi_input_mousedown},
-        wo_extern_lib_func_t{"wojeapi_input_window_size", (void*)&wojeapi_input_window_size},
-        wo_extern_lib_func_t{"wojeapi_input_mouse_pos", (void*)&wojeapi_input_mouse_pos},
-        wo_extern_lib_func_t{"wojeapi_input_mouse_view_pos", (void*)&wojeapi_input_mouse_view_pos},
-        wo_extern_lib_func_t{"wojeapi_type_is_component", (void*)&wojeapi_type_is_component},
-        wo_extern_lib_func_t{"wojeapi_type_is_system", (void*)&wojeapi_type_is_system},
-        wo_extern_lib_func_t{"wojeapi_get_all_registed_types", (void*)&wojeapi_get_all_registed_types},
-        wo_extern_lib_func_t{"wojeapi_type_of", (void*)&wojeapi_type_of},
-        wo_extern_lib_func_t{"wojeapi_type_of", (void*)&wojeapi_type_of},
-        wo_extern_lib_func_t{"wojeapi_type_id", (void*)&wojeapi_type_id},
-        wo_extern_lib_func_t{"wojeapi_type_name", (void*)&wojeapi_type_name},
-        wo_extern_lib_func_t{"wojeapi_script_type_name", (void*)&wojeapi_script_type_name},
-        wo_extern_lib_func_t{"wojeapi_type_basic_type", (void*)&wojeapi_type_basic_type},
-        wo_extern_lib_func_t{"wojeapi_type_members", (void*)&wojeapi_type_members},
-        wo_extern_lib_func_t{"wojeapi_audio_buffer_load", (void*)&wojeapi_audio_buffer_load},
-        wo_extern_lib_func_t{"wojeapi_audio_buffer_byte_size", (void*)&wojeapi_audio_buffer_byte_size},
-        wo_extern_lib_func_t{"wojeapi_audio_buffer_byte_rate", (void*)&wojeapi_audio_buffer_byte_rate},
-        wo_extern_lib_func_t{"wojeapi_audio_source_create", (void*)&wojeapi_audio_source_create},
-        wo_extern_lib_func_t{"wojeapi_audio_source_get_state", (void*)&wojeapi_audio_source_get_state},
-        wo_extern_lib_func_t{"wojeapi_audio_source_set_playing_buffer", (void*)&wojeapi_audio_source_set_playing_buffer},
-        wo_extern_lib_func_t{"wojeapi_audio_source_play", (void*)&wojeapi_audio_source_play},
-        wo_extern_lib_func_t{"wojeapi_audio_source_pause", (void*)&wojeapi_audio_source_pause},
-        wo_extern_lib_func_t{"wojeapi_audio_source_stop", (void*)&wojeapi_audio_source_stop},
-        wo_extern_lib_func_t{"wojeapi_audio_source_get_playing_offset", (void*)&wojeapi_audio_source_get_playing_offset},
-        wo_extern_lib_func_t{"wojeapi_audio_source_set_playing_offset", (void*)&wojeapi_audio_source_set_playing_offset},
-        wo_extern_lib_func_t{"wojeapi_audio_source_set_pitch", (void*)&wojeapi_audio_source_set_pitch},
-        wo_extern_lib_func_t{"wojeapi_audio_source_set_volume", (void*)&wojeapi_audio_source_set_volume},
-        wo_extern_lib_func_t{"wojeapi_audio_source_set_position", (void*)&wojeapi_audio_source_set_position},
-        wo_extern_lib_func_t{"wojeapi_audio_source_set_velocity", (void*)&wojeapi_audio_source_set_velocity},
-        wo_extern_lib_func_t{"wojeapi_audio_source_set_loop", (void*)&wojeapi_audio_source_set_loop},
-        wo_extern_lib_func_t{"wojeapi_audio_listener_set_volume", (void*)&wojeapi_audio_listener_set_volume},
-        wo_extern_lib_func_t{"wojeapi_audio_listener_set_position", (void*)&wojeapi_audio_listener_set_position},
-        wo_extern_lib_func_t{"wojeapi_audio_listener_set_direction", (void*)&wojeapi_audio_listener_set_direction},
-        wo_extern_lib_func_t{"wojeapi_audio_listener_set_velocity", (void*)&wojeapi_audio_listener_set_velocity},
-        wo_extern_lib_func_t{"wojeapi_graphic_shrink_cache", (void*)&wojeapi_graphic_shrink_cache},
-        wo_extern_lib_func_t{"wojeapi_texture_open", (void*)&wojeapi_texture_open},
-        wo_extern_lib_func_t{"wojeapi_texture_create", (void*)&wojeapi_texture_create},
-        wo_extern_lib_func_t{"wojeapi_texture_bind_path", (void*)&wojeapi_texture_bind_path},
-        wo_extern_lib_func_t{"wojeapi_texture_path", (void*)&wojeapi_texture_path},
-        wo_extern_lib_func_t{"wojeapi_texture_get_size", (void*)&wojeapi_texture_get_size},
-        wo_extern_lib_func_t{"wojeapi_texture_get_pixel", (void*)&wojeapi_texture_get_pixel},
-        wo_extern_lib_func_t{"wojeapi_texture_set_pixel_color", (void*)&wojeapi_texture_set_pixel_color},
-        wo_extern_lib_func_t{"wojeapi_texture_pixel_color", (void*)&wojeapi_texture_pixel_color},
-        wo_extern_lib_func_t{"wojeapi_font_open", (void*)&wojeapi_font_open},
-        wo_extern_lib_func_t{"wojeapi_font_load_char", (void*)&wojeapi_font_load_char},
-        wo_extern_lib_func_t{"wojeapi_font_string_texture", (void*)&wojeapi_font_string_texture},
-        wo_extern_lib_func_t{"wojeapi_shader_open", (void*)&wojeapi_shader_open},
-        wo_extern_lib_func_t{"wojeapi_shader_create", (void*)&wojeapi_shader_create},
-        wo_extern_lib_func_t{"wojeapi_shader_path", (void*)&wojeapi_shader_path},
-        wo_extern_lib_func_t{"wojeapi_get_uniforms_from_shader", (void*)&wojeapi_get_uniforms_from_shader},
-        wo_extern_lib_func_t{"wojeapi_set_uniforms_int", (void*)&wojeapi_set_uniforms_int},
-        wo_extern_lib_func_t{"wojeapi_set_uniforms_float", (void*)&wojeapi_set_uniforms_float},
-        wo_extern_lib_func_t{"wojeapi_set_uniforms_float2", (void*)&wojeapi_set_uniforms_float2},
-        wo_extern_lib_func_t{"wojeapi_set_uniforms_float3", (void*)&wojeapi_set_uniforms_float3},
-        wo_extern_lib_func_t{"wojeapi_set_uniforms_float4", (void*)&wojeapi_set_uniforms_float4},
-        wo_extern_lib_func_t{"wojeapi_create_universe", (void*)&wojeapi_create_universe},
-        wo_extern_lib_func_t{"wojeapi_stop_universe", (void*)&wojeapi_stop_universe},
-        wo_extern_lib_func_t{"wojeapi_wait_universe", (void*)&wojeapi_wait_universe},
-        wo_extern_lib_func_t{"wojeapi_universe_get_frame_deltatime", (void*)&wojeapi_universe_get_frame_deltatime},
-        wo_extern_lib_func_t{"wojeapi_universe_set_frame_deltatime", (void*)&wojeapi_universe_set_frame_deltatime},
-        wo_extern_lib_func_t{"wojeapi_universe_get_max_deltatime", (void*)&wojeapi_universe_get_max_deltatime},
-        wo_extern_lib_func_t{"wojeapi_universe_set_max_deltatime", (void*)&wojeapi_universe_set_max_deltatime},
-        wo_extern_lib_func_t{"wojeapi_universe_get_timescale", (void*)&wojeapi_universe_get_timescale},
-        wo_extern_lib_func_t{"wojeapi_universe_set_timescale", (void*)&wojeapi_universe_set_timescale},
-        wo_extern_lib_func_t{"wojeapi_get_all_worlds_in_universe", (void*)&wojeapi_get_all_worlds_in_universe},
-        wo_extern_lib_func_t{"wojeapi_create_world_in_universe", (void*)&wojeapi_create_world_in_universe},
-        wo_extern_lib_func_t{"wojeapi_close_world", (void*)&wojeapi_close_world},
-        wo_extern_lib_func_t{"wojeapi_set_able_world", (void*)&wojeapi_set_able_world},
-        wo_extern_lib_func_t{"wojeapi_add_system_to_world", (void*)&wojeapi_add_system_to_world},
+        wo_extern_lib_func_t{"wojeapi_add_component_from_entity", (void*)&wojeapi_add_component_from_entity},
         wo_extern_lib_func_t{"wojeapi_add_entity_to_world_with_components", (void*)&wojeapi_add_entity_to_world_with_components},
         wo_extern_lib_func_t{"wojeapi_add_entity_to_world_with_prefab", (void*)&wojeapi_add_entity_to_world_with_prefab},
         wo_extern_lib_func_t{"wojeapi_add_prefab_to_world_with_components", (void*)&wojeapi_add_prefab_to_world_with_components},
-        wo_extern_lib_func_t{"wojeapi_remove_system_from_world", (void*)&wojeapi_remove_system_from_world},
-        wo_extern_lib_func_t{"wojeapi_get_universe_from_world", (void*)&wojeapi_get_universe_from_world},
-        wo_extern_lib_func_t{"wojeapi_get_system_from_world", (void*)&wojeapi_get_system_from_world},
-        wo_extern_lib_func_t{"wojeapi_get_world_name", (void*)&wojeapi_get_world_name},
-        wo_extern_lib_func_t{"wojeapi_set_world_name", (void*)&wojeapi_set_world_name},
-        wo_extern_lib_func_t{"wojeapi_get_all_entities_from_world", (void*)&wojeapi_get_all_entities_from_world},
-        wo_extern_lib_func_t{"wojeapi_get_all_systems_from_world", (void*)&wojeapi_get_all_systems_from_world},
-        wo_extern_lib_func_t{"wojeapi_close_entity", (void*)&wojeapi_close_entity},
-        wo_extern_lib_func_t{"wojeapi_get_world_from_entity", (void*)&wojeapi_get_world_from_entity},
-        wo_extern_lib_func_t{"wojeapi_get_component_from_entity", (void*)&wojeapi_get_component_from_entity},
-        wo_extern_lib_func_t{"wojeapi_add_component_from_entity", (void*)&wojeapi_add_component_from_entity},
-        wo_extern_lib_func_t{"wojeapi_remove_component_from_entity", (void*)&wojeapi_remove_component_from_entity},
-        wo_extern_lib_func_t{"wojeapi_get_entity_chunk_info", (void*)&wojeapi_get_entity_chunk_info},
-        wo_extern_lib_func_t{"wojeapi_shaders_of_entity", (void*)&wojeapi_shaders_of_entity},
-        wo_extern_lib_func_t{"wojeapi_set_shaders_of_entity", (void*)&wojeapi_set_shaders_of_entity},
-        wo_extern_lib_func_t{"wojeapi_textures_of_entity", (void*)&wojeapi_textures_of_entity},
+        wo_extern_lib_func_t{"wojeapi_add_system_to_world", (void*)&wojeapi_add_system_to_world},
+        wo_extern_lib_func_t{"wojeapi_apply_camera_framebuf_setting", (void*)&wojeapi_apply_camera_framebuf_setting},
+        wo_extern_lib_func_t{"wojeapi_audio_buffer_byte_rate", (void*)&wojeapi_audio_buffer_byte_rate},
+        wo_extern_lib_func_t{"wojeapi_audio_buffer_byte_size", (void*)&wojeapi_audio_buffer_byte_size},
+        wo_extern_lib_func_t{"wojeapi_audio_buffer_load", (void*)&wojeapi_audio_buffer_load},
+        wo_extern_lib_func_t{"wojeapi_audio_listener_set_direction", (void*)&wojeapi_audio_listener_set_direction},
+        wo_extern_lib_func_t{"wojeapi_audio_listener_set_position", (void*)&wojeapi_audio_listener_set_position},
+        wo_extern_lib_func_t{"wojeapi_audio_listener_set_velocity", (void*)&wojeapi_audio_listener_set_velocity},
+        wo_extern_lib_func_t{"wojeapi_audio_listener_set_volume", (void*)&wojeapi_audio_listener_set_volume},
+        wo_extern_lib_func_t{"wojeapi_audio_source_create", (void*)&wojeapi_audio_source_create},
+        wo_extern_lib_func_t{"wojeapi_audio_source_get_playing_offset", (void*)&wojeapi_audio_source_get_playing_offset},
+        wo_extern_lib_func_t{"wojeapi_audio_source_get_state", (void*)&wojeapi_audio_source_get_state},
+        wo_extern_lib_func_t{"wojeapi_audio_source_pause", (void*)&wojeapi_audio_source_pause},
+        wo_extern_lib_func_t{"wojeapi_audio_source_play", (void*)&wojeapi_audio_source_play},
+        wo_extern_lib_func_t{"wojeapi_audio_source_set_loop", (void*)&wojeapi_audio_source_set_loop},
+        wo_extern_lib_func_t{"wojeapi_audio_source_set_pitch", (void*)&wojeapi_audio_source_set_pitch},
+        wo_extern_lib_func_t{"wojeapi_audio_source_set_playing_buffer", (void*)&wojeapi_audio_source_set_playing_buffer},
+        wo_extern_lib_func_t{"wojeapi_audio_source_set_playing_offset", (void*)&wojeapi_audio_source_set_playing_offset},
+        wo_extern_lib_func_t{"wojeapi_audio_source_set_position", (void*)&wojeapi_audio_source_set_position},
+        wo_extern_lib_func_t{"wojeapi_audio_source_set_velocity", (void*)&wojeapi_audio_source_set_velocity},
+        wo_extern_lib_func_t{"wojeapi_audio_source_set_volume", (void*)&wojeapi_audio_source_set_volume},
+        wo_extern_lib_func_t{"wojeapi_audio_source_stop", (void*)&wojeapi_audio_source_stop},
         wo_extern_lib_func_t{"wojeapi_bind_texture_for_entity", (void*)&wojeapi_bind_texture_for_entity},
+        wo_extern_lib_func_t{"wojeapi_build_commit", (void*)&wojeapi_build_commit},
+        wo_extern_lib_func_t{"wojeapi_build_version", (void*)&wojeapi_build_version},
+        wo_extern_lib_func_t{"wojeapi_clear_singletons", (void*)&wojeapi_clear_singletons},
+        wo_extern_lib_func_t{"wojeapi_close_entity", (void*)&wojeapi_close_entity},
+        wo_extern_lib_func_t{"wojeapi_close_world", (void*)&wojeapi_close_world},
+        wo_extern_lib_func_t{"wojeapi_component_get_all_members", (void*)&wojeapi_component_get_all_members},
+        wo_extern_lib_func_t{"wojeapi_crc64_file", (void*)&wojeapi_crc64_file},
+        wo_extern_lib_func_t{"wojeapi_crc64_string", (void*)&wojeapi_crc64_string},
+        wo_extern_lib_func_t{"wojeapi_create_fimg_packer", (void*)&wojeapi_create_fimg_packer},
+        wo_extern_lib_func_t{"wojeapi_create_rmutex", (void*)&wojeapi_create_rmutex},
+        wo_extern_lib_func_t{"wojeapi_create_singleton", (void*)&wojeapi_create_singleton},
+        wo_extern_lib_func_t{"wojeapi_create_universe", (void*)&wojeapi_create_universe},
+        wo_extern_lib_func_t{"wojeapi_create_world_in_universe", (void*)&wojeapi_create_world_in_universe},
+        wo_extern_lib_func_t{"wojeapi_current_platform_config", (void*)&wojeapi_current_platform_config},
+        wo_extern_lib_func_t{"wojeapi_delay_unload_module", (void*)&wojeapi_delay_unload_module},
+        wo_extern_lib_func_t{"wojeapi_deltatime", (void*)&wojeapi_deltatime},
+        wo_extern_lib_func_t{"wojeapi_dynamic_parser_clear", (void*)&wojeapi_dynamic_parser_clear},
+        wo_extern_lib_func_t{"wojeapi_dynamic_parser_edit", (void*)&wojeapi_dynamic_parser_edit},
+        wo_extern_lib_func_t{"wojeapi_dynamic_parser_restoring", (void*)&wojeapi_dynamic_parser_restoring},
+        wo_extern_lib_func_t{"wojeapi_dynamic_parser_saving", (void*)&wojeapi_dynamic_parser_saving},
+        wo_extern_lib_func_t{"wojeapi_dynamic_parser_update_script", (void*)&wojeapi_dynamic_parser_update_script},
+        wo_extern_lib_func_t{"wojeapi_dynamic_parser_update_type", (void*)&wojeapi_dynamic_parser_update_type},
+        wo_extern_lib_func_t{"wojeapi_editor_register_panic_hook", (void*)&wojeapi_editor_register_panic_hook},
+        wo_extern_lib_func_t{"wojeapi_entity_get_prefab_path", (void*)&wojeapi_entity_get_prefab_path},
+        wo_extern_lib_func_t{"wojeapi_entity_set_prefab_path", (void*)&wojeapi_entity_set_prefab_path},
+        wo_extern_lib_func_t{"wojeapi_find_entity_with_chunk_info", (void*)&wojeapi_find_entity_with_chunk_info},
+        wo_extern_lib_func_t{"wojeapi_finish_fimg_packer", (void*)&wojeapi_finish_fimg_packer},
+        wo_extern_lib_func_t{"wojeapi_font_load_char", (void*)&wojeapi_font_load_char},
+        wo_extern_lib_func_t{"wojeapi_font_open", (void*)&wojeapi_font_open},
+        wo_extern_lib_func_t{"wojeapi_font_string_texture", (void*)&wojeapi_font_string_texture},
+        wo_extern_lib_func_t{"wojeapi_generate_uid", (void*)&wojeapi_generate_uid},
+        wo_extern_lib_func_t{"wojeapi_get_all_components_types_from_entity", (void*)&wojeapi_get_all_components_types_from_entity},
+        wo_extern_lib_func_t{"wojeapi_get_all_entities_from_world", (void*)&wojeapi_get_all_entities_from_world},
+        wo_extern_lib_func_t{"wojeapi_get_all_internal_scripts", (void*)&wojeapi_get_all_internal_scripts},
+        wo_extern_lib_func_t{"wojeapi_get_all_logs", (void*)&wojeapi_get_all_logs},
+        wo_extern_lib_func_t{"wojeapi_get_all_registed_types", (void*)&wojeapi_get_all_registed_types},
+        wo_extern_lib_func_t{"wojeapi_get_all_systems_from_world", (void*)&wojeapi_get_all_systems_from_world},
+        wo_extern_lib_func_t{"wojeapi_get_all_worlds_in_universe", (void*)&wojeapi_get_all_worlds_in_universe},
+        wo_extern_lib_func_t{"wojeapi_get_bad_shader_list_of_entity", (void*)&wojeapi_get_bad_shader_list_of_entity},
+        wo_extern_lib_func_t{"wojeapi_get_component_from_entity", (void*)&wojeapi_get_component_from_entity},
+        wo_extern_lib_func_t{"wojeapi_get_components_member", (void*)&wojeapi_get_components_member},
+        wo_extern_lib_func_t{"wojeapi_get_editing_coord_mode", (void*)&wojeapi_get_editing_coord_mode},
+        wo_extern_lib_func_t{"wojeapi_get_editing_entity_uid", (void*)&wojeapi_get_editing_entity_uid},
+        wo_extern_lib_func_t{"wojeapi_get_editing_mover_mode", (void*)&wojeapi_get_editing_mover_mode},
+        wo_extern_lib_func_t{"wojeapi_get_entity_anchor_uuid", (void*)&wojeapi_get_entity_anchor_uuid},
+        wo_extern_lib_func_t{"wojeapi_get_entity_arch_information", (void*)&wojeapi_get_entity_arch_information},
+        wo_extern_lib_func_t{"wojeapi_get_entity_chunk_info", (void*)&wojeapi_get_entity_chunk_info},
+        wo_extern_lib_func_t{"wojeapi_get_entity_name", (void*)&wojeapi_get_entity_name},
+        wo_extern_lib_func_t{"wojeapi_get_entity_uid", (void*)&wojeapi_get_entity_uid},
+        wo_extern_lib_func_t{"wojeapi_get_framebuf_texture", (void*)&wojeapi_get_framebuf_texture},
+        wo_extern_lib_func_t{"wojeapi_get_parent_anchor_uid", (void*)&wojeapi_get_parent_anchor_uid},
+        wo_extern_lib_func_t{"wojeapi_get_sleep_suppression", (void*)&wojeapi_get_sleep_suppression},
+        wo_extern_lib_func_t{"wojeapi_get_system_from_world", (void*)&wojeapi_get_system_from_world},
+        wo_extern_lib_func_t{"wojeapi_get_uniforms_from_shader", (void*)&wojeapi_get_uniforms_from_shader},
+        wo_extern_lib_func_t{"wojeapi_get_universe_from_world", (void*)&wojeapi_get_universe_from_world},
+        wo_extern_lib_func_t{"wojeapi_get_world_from_entity", (void*)&wojeapi_get_world_from_entity},
+        wo_extern_lib_func_t{"wojeapi_get_world_name", (void*)&wojeapi_get_world_name},
+        wo_extern_lib_func_t{"wojeapi_graphic_shrink_cache", (void*)&wojeapi_graphic_shrink_cache},
+        wo_extern_lib_func_t{"wojeapi_init_graphic_pipeline", (void*)&wojeapi_init_graphic_pipeline},
+        wo_extern_lib_func_t{"wojeapi_input_keydown", (void*)&wojeapi_input_keydown},
+        wo_extern_lib_func_t{"wojeapi_input_mouse_pos", (void*)&wojeapi_input_mouse_pos},
+        wo_extern_lib_func_t{"wojeapi_input_mouse_view_pos", (void*)&wojeapi_input_mouse_view_pos},
+        wo_extern_lib_func_t{"wojeapi_input_mousedown", (void*)&wojeapi_input_mousedown},
+        wo_extern_lib_func_t{"wojeapi_input_update_window_size", (void*)&wojeapi_input_update_window_size},
+        wo_extern_lib_func_t{"wojeapi_input_update_window_title", (void*)&wojeapi_input_update_window_title},
+        wo_extern_lib_func_t{"wojeapi_input_window_size", (void*)&wojeapi_input_window_size},
+        wo_extern_lib_func_t{"wojeapi_is_child_of_entity", (void*)&wojeapi_is_child_of_entity},
+        wo_extern_lib_func_t{"wojeapi_is_top_entity", (void*)&wojeapi_is_top_entity},
+        wo_extern_lib_func_t{"wojeapi_load_module", (void*)&wojeapi_load_module},
+        wo_extern_lib_func_t{"wojeapi_lock_rmutex", (void*)&wojeapi_lock_rmutex},
+        wo_extern_lib_func_t{"wojeapi_log", (void*)&wojeapi_log},
+        wo_extern_lib_func_t{"wojeapi_logerr", (void*)&wojeapi_logerr},
+        wo_extern_lib_func_t{"wojeapi_logfatal", (void*)&wojeapi_logfatal},
+        wo_extern_lib_func_t{"wojeapi_loginfo", (void*)&wojeapi_loginfo},
+        wo_extern_lib_func_t{"wojeapi_logwarn", (void*)&wojeapi_logwarn},
+        wo_extern_lib_func_t{"wojeapi_mark_shared_glresource_outdated", (void*)&wojeapi_mark_shared_glresource_outdated},
         wo_extern_lib_func_t{"wojeapi_native_value_bool", (void*)&wojeapi_native_value_bool},
-        wo_extern_lib_func_t{"wojeapi_native_value_int", (void*)&wojeapi_native_value_int},
-        wo_extern_lib_func_t{"wojeapi_native_value_int2", (void*)&wojeapi_native_value_int2},
         wo_extern_lib_func_t{"wojeapi_native_value_float", (void*)&wojeapi_native_value_float},
         wo_extern_lib_func_t{"wojeapi_native_value_float2", (void*)&wojeapi_native_value_float2},
         wo_extern_lib_func_t{"wojeapi_native_value_float3", (void*)&wojeapi_native_value_float3},
         wo_extern_lib_func_t{"wojeapi_native_value_float4", (void*)&wojeapi_native_value_float4},
-        wo_extern_lib_func_t{"wojeapi_native_value_rot_euler3", (void*)&wojeapi_native_value_rot_euler3},
+        wo_extern_lib_func_t{"wojeapi_native_value_int", (void*)&wojeapi_native_value_int},
+        wo_extern_lib_func_t{"wojeapi_native_value_int2", (void*)&wojeapi_native_value_int2},
         wo_extern_lib_func_t{"wojeapi_native_value_je_string", (void*)&wojeapi_native_value_je_string},
+        wo_extern_lib_func_t{"wojeapi_native_value_rot_euler3", (void*)&wojeapi_native_value_rot_euler3},
         wo_extern_lib_func_t{"wojeapi_native_value_set_bool", (void*)&wojeapi_native_value_set_bool},
-        wo_extern_lib_func_t{"wojeapi_native_value_set_int", (void*)&wojeapi_native_value_set_int},
-        wo_extern_lib_func_t{"wojeapi_native_value_set_int2", (void*)&wojeapi_native_value_set_int2},
         wo_extern_lib_func_t{"wojeapi_native_value_set_float", (void*)&wojeapi_native_value_set_float},
         wo_extern_lib_func_t{"wojeapi_native_value_set_float2", (void*)&wojeapi_native_value_set_float2},
         wo_extern_lib_func_t{"wojeapi_native_value_set_float3", (void*)&wojeapi_native_value_set_float3},
         wo_extern_lib_func_t{"wojeapi_native_value_set_float4", (void*)&wojeapi_native_value_set_float4},
-        wo_extern_lib_func_t{"wojeapi_native_value_set_rot_euler3", (void*)&wojeapi_native_value_set_rot_euler3},
+        wo_extern_lib_func_t{"wojeapi_native_value_set_int", (void*)&wojeapi_native_value_set_int},
+        wo_extern_lib_func_t{"wojeapi_native_value_set_int2", (void*)&wojeapi_native_value_set_int2},
         wo_extern_lib_func_t{"wojeapi_native_value_set_je_string", (void*)&wojeapi_native_value_set_je_string},
+        wo_extern_lib_func_t{"wojeapi_native_value_set_rot_euler3", (void*)&wojeapi_native_value_set_rot_euler3},
         wo_extern_lib_func_t{"wojeapi_native_value_unsafe_get", (void*)&wojeapi_native_value_unsafe_get},
         wo_extern_lib_func_t{"wojeapi_native_value_unsafe_set", (void*)&wojeapi_native_value_unsafe_set},
-        wo_extern_lib_func_t{"wojeapi_get_components_member", (void*)&wojeapi_get_components_member},
-        wo_extern_lib_func_t{"wojeapi_component_get_all_members", (void*)&wojeapi_component_get_all_members},
+        wo_extern_lib_func_t{"wojeapi_pack_buffer_to_fimg_packer", (void*)&wojeapi_pack_buffer_to_fimg_packer},
+        wo_extern_lib_func_t{"wojeapi_pack_file_to_fimg_packer", (void*)&wojeapi_pack_file_to_fimg_packer},
+        wo_extern_lib_func_t{"wojeapi_read_file_all", (void*)&wojeapi_read_file_all},
+        wo_extern_lib_func_t{"wojeapi_register_log_callback", (void*)&wojeapi_register_log_callback},
+        wo_extern_lib_func_t{"wojeapi_reload_shader_of_entity", (void*)&wojeapi_reload_shader_of_entity},
+        wo_extern_lib_func_t{"wojeapi_reload_texture_of_entity", (void*)&wojeapi_reload_texture_of_entity},
+        wo_extern_lib_func_t{"wojeapi_remove_bad_shader_name", (void*)&wojeapi_remove_bad_shader_name},
+        wo_extern_lib_func_t{"wojeapi_remove_component_from_entity", (void*)&wojeapi_remove_component_from_entity},
+        wo_extern_lib_func_t{"wojeapi_remove_system_from_world", (void*)&wojeapi_remove_system_from_world},
+        wo_extern_lib_func_t{"wojeapi_reset_editing_entity_uid", (void*)&wojeapi_reset_editing_entity_uid},
+        wo_extern_lib_func_t{"wojeapi_script_type_name", (void*)&wojeapi_script_type_name},
+        wo_extern_lib_func_t{"wojeapi_set_able_world", (void*)&wojeapi_set_able_world},
+        wo_extern_lib_func_t{"wojeapi_set_editing_coord_mode", (void*)&wojeapi_set_editing_coord_mode},
+        wo_extern_lib_func_t{"wojeapi_set_editing_entity_uid", (void*)&wojeapi_set_editing_entity_uid},
+        wo_extern_lib_func_t{"wojeapi_set_editing_mover_mode", (void*)&wojeapi_set_editing_mover_mode},
+        wo_extern_lib_func_t{"wojeapi_set_entity_name", (void*)&wojeapi_set_entity_name},
+        wo_extern_lib_func_t{"wojeapi_set_parent", (void*)&wojeapi_set_parent},
+        wo_extern_lib_func_t{"wojeapi_set_parent_with_uid", (void*)&wojeapi_set_parent_with_uid},
+        wo_extern_lib_func_t{"wojeapi_set_runtime_path", (void*)&wojeapi_set_runtime_path},
+        wo_extern_lib_func_t{"wojeapi_set_shaders_of_entity", (void*)&wojeapi_set_shaders_of_entity},
+        wo_extern_lib_func_t{"wojeapi_set_sleep_suppression", (void*)&wojeapi_set_sleep_suppression},
+        wo_extern_lib_func_t{"wojeapi_set_uniforms_float", (void*)&wojeapi_set_uniforms_float},
+        wo_extern_lib_func_t{"wojeapi_set_uniforms_float2", (void*)&wojeapi_set_uniforms_float2},
+        wo_extern_lib_func_t{"wojeapi_set_uniforms_float3", (void*)&wojeapi_set_uniforms_float3},
+        wo_extern_lib_func_t{"wojeapi_set_uniforms_float4", (void*)&wojeapi_set_uniforms_float4},
+        wo_extern_lib_func_t{"wojeapi_set_uniforms_int", (void*)&wojeapi_set_uniforms_int},
+        wo_extern_lib_func_t{"wojeapi_set_world_name", (void*)&wojeapi_set_world_name},
+        wo_extern_lib_func_t{"wojeapi_setable_editor_system", (void*)&wojeapi_setable_editor_system},
+        wo_extern_lib_func_t{"wojeapi_shader_create", (void*)&wojeapi_shader_create},
+        wo_extern_lib_func_t{"wojeapi_shader_open", (void*)&wojeapi_shader_open},
+        wo_extern_lib_func_t{"wojeapi_shader_path", (void*)&wojeapi_shader_path},
+        wo_extern_lib_func_t{"wojeapi_shaders_of_entity", (void*)&wojeapi_shaders_of_entity},
+        wo_extern_lib_func_t{"wojeapi_smooth_deltatime", (void*)&wojeapi_smooth_deltatime},
+        wo_extern_lib_func_t{"wojeapi_startup_coroutine", (void*)&wojeapi_startup_coroutine},
+        wo_extern_lib_func_t{"wojeapi_startup_thread", (void*)&wojeapi_startup_thread},
+        wo_extern_lib_func_t{"wojeapi_stop_universe", (void*)&wojeapi_stop_universe},
+        wo_extern_lib_func_t{"wojeapi_store_bad_shader_name", (void*)&wojeapi_store_bad_shader_name},
+        wo_extern_lib_func_t{"wojeapi_store_bad_shader_uniforms_float", (void*)&wojeapi_store_bad_shader_uniforms_float},
+        wo_extern_lib_func_t{"wojeapi_store_bad_shader_uniforms_float2", (void*)&wojeapi_store_bad_shader_uniforms_float2},
+        wo_extern_lib_func_t{"wojeapi_store_bad_shader_uniforms_float3", (void*)&wojeapi_store_bad_shader_uniforms_float3},
+        wo_extern_lib_func_t{"wojeapi_store_bad_shader_uniforms_float4", (void*)&wojeapi_store_bad_shader_uniforms_float4},
+        wo_extern_lib_func_t{"wojeapi_store_bad_shader_uniforms_int", (void*)&wojeapi_store_bad_shader_uniforms_int},
+        wo_extern_lib_func_t{"wojeapi_texture_bind_path", (void*)&wojeapi_texture_bind_path},
+        wo_extern_lib_func_t{"wojeapi_texture_create", (void*)&wojeapi_texture_create},
+        wo_extern_lib_func_t{"wojeapi_texture_get_pixel", (void*)&wojeapi_texture_get_pixel},
+        wo_extern_lib_func_t{"wojeapi_texture_get_size", (void*)&wojeapi_texture_get_size},
+        wo_extern_lib_func_t{"wojeapi_texture_open", (void*)&wojeapi_texture_open},
+        wo_extern_lib_func_t{"wojeapi_texture_path", (void*)&wojeapi_texture_path},
+        wo_extern_lib_func_t{"wojeapi_texture_pixel_color", (void*)&wojeapi_texture_pixel_color},
+        wo_extern_lib_func_t{"wojeapi_texture_restore_snapshot", (void*)&wojeapi_texture_restore_snapshot},
+        wo_extern_lib_func_t{"wojeapi_texture_set_pixel_color", (void*)&wojeapi_texture_set_pixel_color},
+        wo_extern_lib_func_t{"wojeapi_texture_take_snapshot", (void*)&wojeapi_texture_take_snapshot},
+        wo_extern_lib_func_t{"wojeapi_textures_of_entity", (void*)&wojeapi_textures_of_entity},
+        wo_extern_lib_func_t{"wojeapi_towoo_add_component", (void*)&wojeapi_towoo_add_component},
+        wo_extern_lib_func_t{"wojeapi_towoo_animation2D_frameanimation_active_animation", (void*)&wojeapi_towoo_animation2D_frameanimation_active_animation},
+        wo_extern_lib_func_t{"wojeapi_towoo_audio_playing_set_buffer", (void*)&wojeapi_towoo_audio_playing_set_buffer},
+        wo_extern_lib_func_t{"wojeapi_towoo_audio_source_get_source", (void*)&wojeapi_towoo_audio_source_get_source},
+        wo_extern_lib_func_t{"wojeapi_towoo_get_component", (void*)&wojeapi_towoo_get_component},
+        wo_extern_lib_func_t{"wojeapi_towoo_math_acos", (void*)&wojeapi_towoo_math_acos},
+        wo_extern_lib_func_t{"wojeapi_towoo_math_asin", (void*)&wojeapi_towoo_math_asin},
+        wo_extern_lib_func_t{"wojeapi_towoo_math_atan", (void*)&wojeapi_towoo_math_atan},
+        wo_extern_lib_func_t{"wojeapi_towoo_math_atan2", (void*)&wojeapi_towoo_math_atan2},
+        wo_extern_lib_func_t{"wojeapi_towoo_math_cos", (void*)&wojeapi_towoo_math_cos},
+        wo_extern_lib_func_t{"wojeapi_towoo_math_quat_slerp", (void*)&wojeapi_towoo_math_quat_slerp},
+        wo_extern_lib_func_t{"wojeapi_towoo_math_sin", (void*)&wojeapi_towoo_math_sin},
+        wo_extern_lib_func_t{"wojeapi_towoo_math_sqrt", (void*)&wojeapi_towoo_math_sqrt},
+        wo_extern_lib_func_t{"wojeapi_towoo_math_tan", (void*)&wojeapi_towoo_math_tan},
+        wo_extern_lib_func_t{"wojeapi_towoo_member_get", (void*)&wojeapi_towoo_member_get},
+        wo_extern_lib_func_t{"wojeapi_towoo_member_set", (void*)&wojeapi_towoo_member_set},
+        wo_extern_lib_func_t{"wojeapi_towoo_physics2d_collisionresult_all", (void*)&wojeapi_towoo_physics2d_collisionresult_all},
+        wo_extern_lib_func_t{"wojeapi_towoo_physics2d_collisionresult_check", (void*)&wojeapi_towoo_physics2d_collisionresult_check},
+        wo_extern_lib_func_t{"wojeapi_towoo_ray_create", (void*)&wojeapi_towoo_ray_create},
+        wo_extern_lib_func_t{"wojeapi_towoo_ray_direction", (void*)&wojeapi_towoo_ray_direction},
+        wo_extern_lib_func_t{"wojeapi_towoo_ray_from_camera", (void*)&wojeapi_towoo_ray_from_camera},
+        wo_extern_lib_func_t{"wojeapi_towoo_ray_intersect_entity", (void*)&wojeapi_towoo_ray_intersect_entity},
+        wo_extern_lib_func_t{"wojeapi_towoo_ray_origin", (void*)&wojeapi_towoo_ray_origin},
+        wo_extern_lib_func_t{"wojeapi_towoo_register_system", (void*)&wojeapi_towoo_register_system},
+        wo_extern_lib_func_t{"wojeapi_towoo_register_system_job", (void*)&wojeapi_towoo_register_system_job},
+        wo_extern_lib_func_t{"wojeapi_towoo_remove_component", (void*)&wojeapi_towoo_remove_component},
+        wo_extern_lib_func_t{"wojeapi_towoo_renderer_shaders_get_shaders", (void*)&wojeapi_towoo_renderer_shaders_get_shaders},
+        wo_extern_lib_func_t{"wojeapi_towoo_renderer_shaders_set_shaders", (void*)&wojeapi_towoo_renderer_shaders_set_shaders},
+        wo_extern_lib_func_t{"wojeapi_towoo_renderer_shaders_set_uniform", (void*)&wojeapi_towoo_renderer_shaders_set_uniform},
+        wo_extern_lib_func_t{"wojeapi_towoo_renderer_textures_bind_texture", (void*)&wojeapi_towoo_renderer_textures_bind_texture},
+        wo_extern_lib_func_t{"wojeapi_towoo_renderer_textures_get_texture", (void*)&wojeapi_towoo_renderer_textures_get_texture},
+        wo_extern_lib_func_t{"wojeapi_towoo_transform_localposition_get_parent_global_pos", (void*)&wojeapi_towoo_transform_localposition_get_parent_global_pos},
+        wo_extern_lib_func_t{"wojeapi_towoo_transform_localposition_set_global_pos", (void*)&wojeapi_towoo_transform_localposition_set_global_pos},
+        wo_extern_lib_func_t{"wojeapi_towoo_transform_localrotation_get_parent_global_rot", (void*)&wojeapi_towoo_transform_localrotation_get_parent_global_rot},
+        wo_extern_lib_func_t{"wojeapi_towoo_transform_localrotation_set_global_rot", (void*)&wojeapi_towoo_transform_localrotation_set_global_rot},
+        wo_extern_lib_func_t{"wojeapi_towoo_transform_translation_global_pos", (void*)&wojeapi_towoo_transform_translation_global_pos},
+        wo_extern_lib_func_t{"wojeapi_towoo_transform_translation_global_rot", (void*)&wojeapi_towoo_transform_translation_global_rot},
+        wo_extern_lib_func_t{"wojeapi_towoo_unregister_component", (void*)&wojeapi_towoo_unregister_component},
+        wo_extern_lib_func_t{"wojeapi_towoo_unregister_system", (void*)&wojeapi_towoo_unregister_system},
+        wo_extern_lib_func_t{"wojeapi_towoo_update_api", (void*)&wojeapi_towoo_update_api},
+        wo_extern_lib_func_t{"wojeapi_towoo_update_component", (void*)&wojeapi_towoo_update_component},
+        wo_extern_lib_func_t{"wojeapi_towoo_update_component_data", (void*)&wojeapi_towoo_update_component_data},
+        wo_extern_lib_func_t{"wojeapi_towoo_userinterface_origin_layout", (void*)&wojeapi_towoo_userinterface_origin_layout},
+        wo_extern_lib_func_t{"wojeapi_trylock_rmutex", (void*)&wojeapi_trylock_rmutex},
+        wo_extern_lib_func_t{"wojeapi_type_basic_type", (void*)&wojeapi_type_basic_type},
+        wo_extern_lib_func_t{"wojeapi_type_id", (void*)&wojeapi_type_id},
+        wo_extern_lib_func_t{"wojeapi_type_is_component", (void*)&wojeapi_type_is_component},
+        wo_extern_lib_func_t{"wojeapi_type_is_system", (void*)&wojeapi_type_is_system},
+        wo_extern_lib_func_t{"wojeapi_type_members", (void*)&wojeapi_type_members},
+        wo_extern_lib_func_t{"wojeapi_type_name", (void*)&wojeapi_type_name},
+        wo_extern_lib_func_t{"wojeapi_type_of", (void*)&wojeapi_type_of},
+        wo_extern_lib_func_t{"wojeapi_typeinfo_get_unregister_count", (void*)&wojeapi_typeinfo_get_unregister_count},
+        wo_extern_lib_func_t{"wojeapi_universe_get_frame_deltatime", (void*)&wojeapi_universe_get_frame_deltatime},
+        wo_extern_lib_func_t{"wojeapi_universe_get_max_deltatime", (void*)&wojeapi_universe_get_max_deltatime},
+        wo_extern_lib_func_t{"wojeapi_universe_get_timescale", (void*)&wojeapi_universe_get_timescale},
+        wo_extern_lib_func_t{"wojeapi_universe_set_frame_deltatime", (void*)&wojeapi_universe_set_frame_deltatime},
+        wo_extern_lib_func_t{"wojeapi_universe_set_max_deltatime", (void*)&wojeapi_universe_set_max_deltatime},
+        wo_extern_lib_func_t{"wojeapi_universe_set_timescale", (void*)&wojeapi_universe_set_timescale},
+        wo_extern_lib_func_t{"wojeapi_unload_module", (void*)&wojeapi_unload_module},
+        wo_extern_lib_func_t{"wojeapi_unlock_rmutex", (void*)&wojeapi_unlock_rmutex},
+        wo_extern_lib_func_t{"wojeapi_unregister_log_callback", (void*)&wojeapi_unregister_log_callback},
+        wo_extern_lib_func_t{"wojeapi_update_editor_mouse_pos", (void*)&wojeapi_update_editor_mouse_pos},
+        wo_extern_lib_func_t{"wojeapi_wait_thread", (void*)&wojeapi_wait_thread},
+        wo_extern_lib_func_t{"wojeapi_wait_universe", (void*)&wojeapi_wait_universe},
+        wo_extern_lib_func_t{"wojeapi_wheel_count", (void*)&wojeapi_wheel_count},
+        wo_extern_lib_func_t{"wojeapi_woolang_version", (void*)&wojeapi_woolang_version},
+        wo_extern_lib_func_t{"wojeapi_world_is_valid", (void*)&wojeapi_world_is_valid},
       WO_EXTERN_LIB_FUNC_END,
     };
     _je_api_lib_handle = wo_register_lib("libjoyecs", je_fs);
