@@ -103,6 +103,7 @@ func scan_extern_function_in_path(i)
         if (!result->contain(libname))
             result[libname] = {}mut;
 
+        std::println(F"Found {libname}::{funcname}");
         result[libname][funcname] = do nil;
     }
     return result->>\k, v = (k, v->unmapping->>\kv = kv.0;->std::sort(\l, r = l < r;));;

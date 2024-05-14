@@ -46,3 +46,7 @@
     path = 3rd/spirv-cross
     url = https://git.cinogama.net/cinogamaproject/joyengineecs/SPIRV-Cross.git
     branch = main
+[submodule "3rd/imgui-node-editor"]
+	path = 3rd/imgui-node-editor
+	url = https://git.cinogama.net/cinogamaproject/joyengineecs/imgui-node-editor.git
+	branch = master

@@ -1,5 +1,78 @@
 import woo::std;
+import je;
+import je::editor;
+import je::gui;
 
+using je::gui;
+
+let u = je::universe::create();
+je::editor::init_graphic_pipeline(u);
+
+let node_editor_ctx = node_editor::CreateContext();
+
+let links = {}mut: map<node_editor::LinkId, (node_editor::PinId, node_editor::PinId)>;
+
+launch(func()
+    {
+        do Begin("Form");
+            node_editor::Begin("Node Editor", node_editor_ctx);
+
+            node_editor::BeginNode(1: node_editor::NodeId);
+            Text("Node 1");
+            node_editor::BeginInputPin(1: node_editor::PinId);
+            Text("Pin 1");
+            node_editor::EndPin();
+            node_editor::BeginOutputPin(2: node_editor::PinId);
+            Text("Pin 2");
+            node_editor::EndPin();
+            node_editor::EndNode();
+
+            node_editor::BeginNode(3: node_editor::NodeId);
+            Text("Node 2");
+            node_editor::BeginInputPin(4: node_editor::PinId);
+            Text("Pin 3");
+            node_editor::EndPin();
+            node_editor::BeginOutputPin(5: node_editor::PinId);
+            Text("Pin 4");
+            node_editor::EndPin();
+            node_editor::EndNode();
+
+            for (let (lid, (aid, bid)) : links)
+            {
+                node_editor::Link(lid, aid, bid, (255, 255, 255, 255), 2.0);
+            }
+
+            if (node_editor::BeginCreate((255, 0, 0, 255), 2.))
+            {
+                match (node_editor::QueryNewLink())
+                {
+                value((a, b))?
+                    {
+                        if (node_editor::AcceptNewItem())
+                        {
+                            let linkid = (links->len + 1): node_editor::LinkId;
+                            links->set(linkid, (a, b));
+                            node_editor::Link(linkid, a, b, (255, 255, 255, 255), 2.0);
+                        }
+                    }
+                none?;
+                }
+            }
+            node_editor::EndCreate();
+
+            node_editor::End();
+        End();
+        // using je::gui::node_editor;
+
+        return true;
+
+    }, ());
+
+u->wait();
+do u->close();
+
+/*
+import woo::std;
 import pkg::crashhandler;
 
 crashhandler::init();
@@ -648,3 +721,4 @@ for (;;)
         }
     }
 }
+*/

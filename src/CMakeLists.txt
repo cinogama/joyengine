@@ -13,9 +13,25 @@ include_directories("../3rd/vulkan/include")
 include_directories("../3rd/glslang/glslang/Include")
 include_directories("../3rd/glslang/glslang/Public")
 include_directories("../3rd/spirv-cross")
+include_directories("../3rd/imgui-node-editor")
 
 file(GLOB_RECURSE joyecs_srcs_cpp *.cpp)
 file(GLOB_RECURSE joyecs_srcs_hpp *.hpp)
+
+set(imgui_node_editor_srcs 
+    "../3rd/imgui-node-editor/crude_json.cpp"
+    "../3rd/imgui-node-editor/crude_json.h"
+    "../3rd/imgui-node-editor/imgui_bezier_math.h"
+    "../3rd/imgui-node-editor/imgui_bezier_math.inl"
+    "../3rd/imgui-node-editor/imgui_canvas.cpp"
+    "../3rd/imgui-node-editor/imgui_canvas.h"
+    "../3rd/imgui-node-editor/imgui_extra_math.h"
+    "../3rd/imgui-node-editor/imgui_extra_math.inl"
+    "../3rd/imgui-node-editor/imgui_node_editor.cpp"
+    "../3rd/imgui-node-editor/imgui_node_editor.h"
+    "../3rd/imgui-node-editor/imgui_node_editor_api.cpp"
+    "../3rd/imgui-node-editor/imgui_node_editor_internal.h"
+    "../3rd/imgui-node-editor/imgui_node_editor_internal.inl")
 
 set(jeecs_system_libs "")
 set(jeecs_graphic_libs "")
@@ -136,16 +152,23 @@ if (JE4_ENABLE_OPENGL330_GAPI OR
     endif()
 endif()
 
+set (jeecs_core_sources 
+    ${joyecs_srcs_cpp}
+    ${joyecs_srcs_hpp} 
+    ${imgui_srcs} 
+    ${imgui_node_editor_srcs}
+    "../include/jeecs.hpp")
+
 # Build engine shared/static library
 if (${BUILD_SHARED_LIBS})
     target_compile_definitions(joyengine_core_configs INTERFACE -DWO_SHARED_LIB)
-    add_library(joyecs SHARED ${joyecs_srcs_cpp} ${joyecs_srcs_hpp} ${imgui_srcs} "../include/jeecs.hpp")
+    add_library(joyecs SHARED ${jeecs_core_sources})
     if(UNIX)
         target_compile_options(joyecs PRIVATE -Wall -rdynamic)
     endif()
 else()
     target_compile_definitions(joyengine_core_configs INTERFACE -DWO_STATIC_LIB)
-    add_library(joyecs STATIC ${joyecs_srcs_cpp} ${joyecs_srcs_hpp} ${imgui_srcs} "../include/jeecs.hpp")
+    add_library(joyecs STATIC ${jeecs_core_sources})
 endif()
 
 set_target_properties(joyecs PROPERTIES OUTPUT_NAME libjoyecs)

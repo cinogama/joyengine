@@ -3,10 +3,12 @@
 #include <string>
 #include <unordered_set>
 #include <optional>
+#include <list>
 
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <imgui_stdlib.h>
+#include <imgui_node_editor.h>
 
 const char* gui_api_path = "je/gui.wo";
 const char* gui_api_src = { R"(
@@ -696,7 +698,85 @@ R"(
 
     extern("libjoyecs", "je_gui_pop_style_var")
     public func PopStyleVar()=> void;
-    
+
+    namespace node_editor
+    {
+        using EditorContext = gchandle
+        {
+            public func close(self: EditorContext)
+            {
+                return self: gchandle->close;
+            }
+        }
+
+        public using NodeId = int;
+        public using PinId = int;
+        public using LinkId = int;
+
+        extern("libjoyecs", "je_gui_node_editor_context_create")
+        public func CreateContext()=> EditorContext;
+
+        extern("libjoyecs", "je_gui_node_editor_begin")
+        public func Begin(label: string, ctx: EditorContext)=> void;    
+
+        extern("libjoyecs", "je_gui_node_editor_end")
+        public func End()=> void;
+
+        extern("libjoyecs", "je_gui_node_editor_begin_node")
+        public func BeginNode(id: NodeId)=> void;
+
+        extern("libjoyecs", "je_gui_node_editor_end_node")  
+        public func EndNode()=> void;
+
+        extern("libjoyecs", "je_gui_node_editor_begin_input_pin")
+        public func BeginInputPin(id: PinId)=> void;
+
+        extern("libjoyecs", "je_gui_node_editor_begin_output_pin")
+        public func BeginOutputPin(id: PinId)=> void;
+
+        extern("libjoyecs", "je_gui_node_editor_end_pin")
+        public func EndPin()=> void;
+
+        extern("libjoyecs", "je_gui_node_editor_link")
+        public func Link(linkid: LinkId, output_pinid: PinId, input_pinid: PinId, color: Color32RGBA, board: real)=> void;
+
+        extern("libjoyecs", "je_gui_node_editor_begin_create")
+        public func BeginCreate(color: Color32RGBA, board: real)=> bool;
+
+        extern("libjoyecs", "je_gui_node_editor_end_create")
+        public func EndCreate()=> void;
+
+        extern("libjoyecs", "je_gui_node_editor_accept_new_item")
+        public func AcceptNewItem()=> bool;
+
+        extern("libjoyecs", "je_gui_node_editor_reject_new_item")
+        public func RejectNewItem()=> void;
+
+        extern("libjoyecs", "je_gui_node_editor_accept_new_item_color")
+        public func AcceptNewItemColor(color: Color32RGBA, board: real)=> bool;
+
+        extern("libjoyecs", "je_gui_node_editor_reject_new_item_color")
+        public func RejectNewItemColor(color: Color32RGBA, board: real)=> void;
+
+        extern("libjoyecs", "je_gui_node_editor_accept_deleted_item")
+        public func AcceptDeletedItem()=> bool;
+
+        extern("libjoyecs", "je_gui_node_editor_reject_deleted_item")
+        public func RejectDeletedItem()=> void;
+
+        extern("libjoyecs", "je_gui_node_editor_query_new_link")
+        public func QueryNewLink()=> option<(PinId, PinId)>;
+
+        extern("libjoyecs", "je_gui_node_editor_query_new_node")
+        public func QueryNewNode()=> option<PinId>;
+
+        extern("libjoyecs", "je_gui_node_editor_query_deleted_node")
+        public func QueryDeletedNode()=> option<NodeId>;
+
+        extern("libjoyecs", "je_gui_node_editor_query_deleted_link")
+        public func QueryDeletedLink()=> option<LinkId>;
+    }
+
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     extern("libjoyecs", "je_gui_launch")
@@ -766,13 +846,31 @@ struct gui_wo_job_coroutine
 jeecs::basic::atomic_list<gui_wo_job_coroutine> _wo_job_list;
 jeecs::basic::atomic_list<gui_wo_job_coroutine> _wo_new_job_list;
 
-thread_local bool _jegui_stop_work_flag = false;
-thread_local bool _jegui_need_flip_frambuf = false;
+struct _jegui_thread_local_context
+{
+    bool _jegui_stop_work_flag = false;
+    bool _jegui_need_flip_frambuf = false;
 
-thread_local jeecs::basic::resource<jeecs::graphic::shader> _jegl_rend_texture_shader;
+    jeecs::basic::resource<jeecs::graphic::shader>
+        _jegl_rend_texture_shader = nullptr;
 
-thread_local void* (*_jegl_get_native_texture)(jegl_resource*);
-thread_local void (*_jegl_bind_shader_sampler_state)(jegl_resource*);
+    void* (*_jegl_get_native_texture)(jegl_resource*) = nullptr;
+    void (*_jegl_bind_shader_sampler_state)(jegl_resource*) = nullptr;
+};
+thread_local _jegui_thread_local_context _je_gui_tls_ctx;
+
+
+wo_vm exit_callback_handler_vm = nullptr;
+wo_value exit_callback_function = nullptr;
+
+std::optional<std::string> specify_font_path = std::nullopt;
+size_t specify_font_size = 18;
+
+void jegui_set_font(const char* path, size_t size)
+{
+    specify_font_path = path ? std::optional(path) : std::nullopt;
+    specify_font_size = size;
+}
 
 WO_API wo_api je_gui_begin_tool_tip(wo_vm vm, wo_value args)
 {
@@ -1063,6 +1161,25 @@ ImU32 val2color32(wo_value v)
     return IM_COL32(x, y, z, w);
 }
 
+ImVec4 val2colorf4(wo_value v)
+{
+    _wo_value tmp;
+    wo_struct_get(&tmp, v, 0);
+    float x = (float)wo_int(&tmp);
+    wo_struct_get(&tmp, v, 1);
+    float y = (float)wo_int(&tmp);
+    wo_struct_get(&tmp, v, 2);
+    float z = (float)wo_int(&tmp);
+    wo_struct_get(&tmp, v, 3);
+    float w = (float)wo_int(&tmp);
+
+    return ImVec4(
+        x / 255.0f,
+        y / 255.0f,
+        z / 255.0f,
+        w / 255.0f);
+}
+
 WO_API wo_api je_gui_push_style_color(wo_vm vm, wo_value args)
 {
     ImGui::PushStyleColor((ImGuiCol)wo_int(args + 0), val2color32(args + 1));
@@ -1122,15 +1239,15 @@ WO_API wo_api je_gui_draw_list_add_image(wo_vm vm, wo_value args)
     jegl_using_resource((*texture)->resouce());
 
     ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
-    if (_jegui_need_flip_frambuf
+    if (_je_gui_tls_ctx._jegui_need_flip_frambuf
         && (*texture)->resouce()->m_raw_texture_data != nullptr
         && 0 != ((*texture)->resouce()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
     {
         uvmin = ImVec2(0.0f, 0.0f);
         uvmax = ImVec2(1.0f, 1.0f);
     }
-    dlist->AddCallback([](auto, auto) {_jegl_bind_shader_sampler_state(_jegl_rend_texture_shader->resouce()); }, nullptr);
-    dlist->AddImage((ImTextureID)_jegl_get_native_texture((*texture)->resouce()), val2vec2(args + 1), val2vec2(args + 2), uvmin, uvmax, val2color32(args + 4));
+    dlist->AddCallback([](auto, auto) {_je_gui_tls_ctx._jegl_bind_shader_sampler_state(_je_gui_tls_ctx._jegl_rend_texture_shader->resouce()); }, nullptr);
+    dlist->AddImage((ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture((*texture)->resouce()), val2vec2(args + 1), val2vec2(args + 2), uvmin, uvmax, val2color32(args + 4));
     dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
     return wo_ret_void(vm);
 }
@@ -1195,7 +1312,7 @@ WO_API wo_api je_gui_openpopup_on_item_click_attr(wo_vm vm, wo_value args)
 }
 WO_API wo_api je_gui_openpopup_on_item_click_label_attr(wo_vm vm, wo_value args)
 {
-    ImGui::OpenPopupOnItemClick(wo_string(args + 0), (ImGuiPopupFlags)wo_int(args + 1));        
+    ImGui::OpenPopupOnItemClick(wo_string(args + 0), (ImGuiPopupFlags)wo_int(args + 1));
     return wo_ret_void(vm);
 }
 
@@ -1342,7 +1459,7 @@ WO_API wo_api je_gui_listbox_select(wo_vm vm, wo_value args)
 }
 WO_API wo_api je_gui_listbox_select_height(wo_vm vm, wo_value args)
 {
-    int selected_item =  (int)wo_int(args + 2);
+    int selected_item = (int)wo_int(args + 2);
     int max_height_item = (int)wo_int(args + 3);
 
     std::vector<const char*> items((size_t)wo_lengthof(args + 1));
@@ -1560,7 +1677,7 @@ WO_API wo_api je_gui_image(wo_vm vm, wo_value args)
     jegl_using_resource((*texture)->resouce());
 
     ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
-    if (_jegui_need_flip_frambuf
+    if (_je_gui_tls_ctx._jegui_need_flip_frambuf
         && (*texture)->resouce()->m_raw_texture_data != nullptr
         && 0 != ((*texture)->resouce()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
     {
@@ -1569,8 +1686,8 @@ WO_API wo_api je_gui_image(wo_vm vm, wo_value args)
     }
 
     auto* dlist = ImGui::GetWindowDrawList();
-    dlist->AddCallback([](auto, auto) {_jegl_bind_shader_sampler_state(_jegl_rend_texture_shader->resouce()); }, nullptr);
-    ImGui::Image((ImTextureID)_jegl_get_native_texture((*texture)->resouce()),
+    dlist->AddCallback([](auto, auto) {_je_gui_tls_ctx._jegl_bind_shader_sampler_state(_je_gui_tls_ctx._jegl_rend_texture_shader->resouce()); }, nullptr);
+    ImGui::Image((ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture((*texture)->resouce()),
         ImVec2(
             (float)((*texture)->resouce())->m_raw_texture_data->m_width,
             (float)((*texture)->resouce())->m_raw_texture_data->m_height
@@ -1587,7 +1704,7 @@ WO_API wo_api je_gui_image_scale(wo_vm vm, wo_value args)
     jegl_using_resource((*texture)->resouce());
 
     ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
-    if (_jegui_need_flip_frambuf
+    if (_je_gui_tls_ctx._jegui_need_flip_frambuf
         && (*texture)->resouce()->m_raw_texture_data != nullptr
         && 0 != ((*texture)->resouce()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
     {
@@ -1596,8 +1713,8 @@ WO_API wo_api je_gui_image_scale(wo_vm vm, wo_value args)
     }
 
     auto* dlist = ImGui::GetWindowDrawList();
-    dlist->AddCallback([](auto, auto) {_jegl_bind_shader_sampler_state(_jegl_rend_texture_shader->resouce()); }, nullptr);
-    ImGui::Image((ImTextureID)_jegl_get_native_texture((*texture)->resouce()),
+    dlist->AddCallback([](auto, auto) {_je_gui_tls_ctx._jegl_bind_shader_sampler_state(_je_gui_tls_ctx._jegl_rend_texture_shader->resouce()); }, nullptr);
+    ImGui::Image((ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture((*texture)->resouce()),
         ImVec2(
             ((*texture)->resouce())->m_raw_texture_data->m_width * wo_float(args + 1),
             ((*texture)->resouce())->m_raw_texture_data->m_height * wo_float(args + 1)
@@ -1614,7 +1731,7 @@ WO_API wo_api je_gui_image_size(wo_vm vm, wo_value args)
     jegl_using_resource((*texture)->resouce());
 
     ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
-    if (_jegui_need_flip_frambuf
+    if (_je_gui_tls_ctx._jegui_need_flip_frambuf
         && (*texture)->resouce()->m_raw_texture_data != nullptr
         && 0 != ((*texture)->resouce()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
     {
@@ -1623,8 +1740,8 @@ WO_API wo_api je_gui_image_size(wo_vm vm, wo_value args)
     }
 
     auto* dlist = ImGui::GetWindowDrawList();
-    dlist->AddCallback([](auto, auto) {_jegl_bind_shader_sampler_state(_jegl_rend_texture_shader->resouce()); }, nullptr);
-    ImGui::Image((ImTextureID)_jegl_get_native_texture((*texture)->resouce()),
+    dlist->AddCallback([](auto, auto) {_je_gui_tls_ctx._jegl_bind_shader_sampler_state(_je_gui_tls_ctx._jegl_rend_texture_shader->resouce()); }, nullptr);
+    ImGui::Image((ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture((*texture)->resouce()),
         ImVec2(
             wo_float(args + 1),
             wo_float(args + 2)
@@ -1642,7 +1759,7 @@ WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args)
     jegl_using_resource((*texture)->resouce());
 
     ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
-    if (_jegui_need_flip_frambuf
+    if (_je_gui_tls_ctx._jegui_need_flip_frambuf
         && (*texture)->resouce()->m_raw_texture_data != nullptr
         && 0 != ((*texture)->resouce()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
     {
@@ -1653,8 +1770,8 @@ WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args)
     bool result = false;
 
     auto* dlist = ImGui::GetWindowDrawList();
-    dlist->AddCallback([](auto, auto) {_jegl_bind_shader_sampler_state(_jegl_rend_texture_shader->resouce()); }, nullptr);
-    result = ImGui::ImageButton((ImTextureID)_jegl_get_native_texture((*texture)->resouce()),
+    dlist->AddCallback([](auto, auto) {_je_gui_tls_ctx._jegl_bind_shader_sampler_state(_je_gui_tls_ctx._jegl_rend_texture_shader->resouce()); }, nullptr);
+    result = ImGui::ImageButton((ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture((*texture)->resouce()),
         ImVec2(
             (float)((*texture)->resouce())->m_raw_texture_data->m_width,
             (float)((*texture)->resouce())->m_raw_texture_data->m_height
@@ -1671,7 +1788,7 @@ WO_API wo_api je_gui_imagebutton_scale(wo_vm vm, wo_value args)
     jegl_using_resource((*texture)->resouce());
 
     ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
-    if (_jegui_need_flip_frambuf
+    if (_je_gui_tls_ctx._jegui_need_flip_frambuf
         && (*texture)->resouce()->m_raw_texture_data != nullptr
         && 0 != ((*texture)->resouce()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
     {
@@ -1682,8 +1799,8 @@ WO_API wo_api je_gui_imagebutton_scale(wo_vm vm, wo_value args)
     bool result = false;
 
     auto* dlist = ImGui::GetWindowDrawList();
-    dlist->AddCallback([](auto, auto) {_jegl_bind_shader_sampler_state(_jegl_rend_texture_shader->resouce()); }, nullptr);
-    result = ImGui::ImageButton((ImTextureID)_jegl_get_native_texture((*texture)->resouce()),
+    dlist->AddCallback([](auto, auto) {_je_gui_tls_ctx._jegl_bind_shader_sampler_state(_je_gui_tls_ctx._jegl_rend_texture_shader->resouce()); }, nullptr);
+    result = ImGui::ImageButton((ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture((*texture)->resouce()),
         ImVec2(
             ((*texture)->resouce())->m_raw_texture_data->m_width * wo_float(args + 1),
             ((*texture)->resouce())->m_raw_texture_data->m_height * wo_float(args + 1)
@@ -1700,7 +1817,7 @@ WO_API wo_api je_gui_imagebutton_size(wo_vm vm, wo_value args)
     jegl_using_resource((*texture)->resouce());
 
     ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
-    if (_jegui_need_flip_frambuf
+    if (_je_gui_tls_ctx._jegui_need_flip_frambuf
         && (*texture)->resouce()->m_raw_texture_data != nullptr
         && 0 != ((*texture)->resouce()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
     {
@@ -1711,8 +1828,8 @@ WO_API wo_api je_gui_imagebutton_size(wo_vm vm, wo_value args)
     bool result = false;
 
     auto* dlist = ImGui::GetWindowDrawList();
-    dlist->AddCallback([](auto, auto) {_jegl_bind_shader_sampler_state(_jegl_rend_texture_shader->resouce()); }, nullptr);
-    result = ImGui::ImageButton((ImTextureID)_jegl_get_native_texture((*texture)->resouce()),
+    dlist->AddCallback([](auto, auto) {_je_gui_tls_ctx._jegl_bind_shader_sampler_state(_je_gui_tls_ctx._jegl_rend_texture_shader->resouce()); }, nullptr);
+    result = ImGui::ImageButton((ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture((*texture)->resouce()),
         ImVec2(
             wo_float(args + 1),
             wo_float(args + 2)
@@ -1753,7 +1870,6 @@ WO_API wo_api je_gui_colorbutton(wo_vm vm, wo_value args)
 }
 WO_API wo_api je_gui_colorpicker4(wo_vm vm, wo_value args)
 {
-
     float rgba[4] = {};
 
     wo_value elem = wo_push_empty(vm);
@@ -2068,7 +2184,7 @@ WO_API wo_api je_gui_launch(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_stop_all_work(wo_vm vm, wo_value args)
 {
-    _jegui_stop_work_flag = true;
+    _je_gui_tls_ctx._jegui_stop_work_flag = true;
     return wo_ret_void(vm);
 }
 
@@ -2097,9 +2213,6 @@ WO_API wo_api je_gui_get_input_state(wo_vm vm, wo_value args)
     return wo_ret_val(vm, v);
 }
 
-wo_vm exit_callback_handler_vm = nullptr;
-wo_value exit_callback_function = nullptr;
-
 WO_API wo_api je_gui_register_exit_callback(wo_vm vm, wo_value args)
 {
     if (exit_callback_handler_vm != nullptr)
@@ -2122,15 +2235,6 @@ WO_API wo_api je_gui_unregister_exit_callback(wo_vm vm, wo_value args)
     exit_callback_function = nullptr;
 
     return wo_ret_void(vm);
-}
-
-std::optional<std::string> specify_font_path = std::nullopt;
-size_t specify_font_size = 18;
-
-void jegui_set_font(const char* path, size_t size)
-{
-    specify_font_path = path ? std::optional(path) : std::nullopt;
-    specify_font_size = size;
 }
 
 WO_API wo_api je_gui_set_font(wo_vm vm, wo_value args)
@@ -2218,19 +2322,207 @@ WO_API wo_api je_gui_pop_style_var(wo_vm vm, wo_value args)
     return wo_ret_void(vm);
 }
 
+WO_API wo_api je_gui_node_editor_context_create(wo_vm vm, wo_value args)
+{
+    ax::NodeEditor::EditorContext* ctx = ax::NodeEditor::CreateEditor();
+    return wo_ret_gchandle(vm, ctx, nullptr,
+        [](void* p)
+        {
+            ax::NodeEditor::DestroyEditor(
+                std::launder(reinterpret_cast<ax::NodeEditor::EditorContext*>(p)));
+        });
+}
+
+WO_API wo_api je_gui_node_editor_begin(wo_vm vm, wo_value args)
+{
+    ax::NodeEditor::EditorContext* ctx =
+        std::launder(reinterpret_cast<ax::NodeEditor::EditorContext*>(wo_pointer(args + 1)));
+
+    ax::NodeEditor::SetCurrentEditor(ctx);
+    ax::NodeEditor::Begin(wo_string(args + 0));
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_node_editor_end(wo_vm vm, wo_value args)
+{
+    ax::NodeEditor::End();
+    ax::NodeEditor::SetCurrentEditor(nullptr);
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_node_editor_begin_node(wo_vm vm, wo_value args)
+{
+    ax::NodeEditor::BeginNode((ax::NodeEditor::NodeId)wo_int(args + 0));
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_node_editor_end_node(wo_vm vm, wo_value args)
+{
+    ax::NodeEditor::EndNode();
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_node_editor_begin_input_pin(wo_vm vm, wo_value args)
+{
+    ax::NodeEditor::BeginPin((ax::NodeEditor::PinId)wo_int(args + 0), ax::NodeEditor::PinKind::Input);
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_node_editor_begin_output_pin(wo_vm vm, wo_value args)
+{
+    ax::NodeEditor::BeginPin((ax::NodeEditor::PinId)wo_int(args + 0), ax::NodeEditor::PinKind::Output);
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_node_editor_end_pin(wo_vm vm, wo_value args)
+{
+    ax::NodeEditor::EndPin();
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_node_editor_link(wo_vm vm, wo_value args)
+{
+    ax::NodeEditor::Link(
+        wo_int(args + 0),
+        wo_int(args + 1),
+        wo_int(args + 2),
+        val2colorf4(args + 3),
+        wo_float(args + 4));
+
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_node_editor_begin_create(wo_vm vm, wo_value args)
+{
+    return wo_ret_bool(
+        vm,
+        ax::NodeEditor::BeginCreate(
+            val2colorf4(args + 0),
+            wo_float(args + 1)));
+}
+
+WO_API wo_api je_gui_node_editor_end_create(wo_vm vm, wo_value args)
+{
+    ax::NodeEditor::EndCreate();
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_node_editor_begin_delete(wo_vm vm, wo_value args)
+{
+    return wo_ret_bool(vm, ax::NodeEditor::BeginDelete());
+}
+
+WO_API wo_api je_gui_node_editor_end_delete(wo_vm vm, wo_value args)
+{
+    ax::NodeEditor::EndDelete();
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_node_editor_accept_new_item(wo_vm vm, wo_value args)
+{
+    return wo_ret_bool(vm, ax::NodeEditor::AcceptNewItem());
+}
+
+WO_API wo_api je_gui_node_editor_reject_new_item(wo_vm vm, wo_value args)
+{
+    ax::NodeEditor::RejectNewItem();
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_node_editor_accept_new_item_color(wo_vm vm, wo_value args)
+{
+    return wo_ret_bool(vm, ax::NodeEditor::AcceptNewItem(
+        val2colorf4(args + 0),
+        wo_float(args + 1)));
+}
+
+WO_API wo_api je_gui_node_editor_reject_new_item_color(wo_vm vm, wo_value args)
+{
+    ax::NodeEditor::RejectNewItem(
+        val2colorf4(args + 0),
+        wo_float(args + 1));
+    return wo_ret_void(vm);
+}
+
+
+WO_API wo_api je_gui_node_editor_accept_deleted_item(wo_vm vm, wo_value args)
+{
+    return wo_ret_bool(vm, ax::NodeEditor::AcceptDeletedItem());
+}
+
+WO_API wo_api je_gui_node_editor_reject_deleted_item(wo_vm vm, wo_value args)
+{
+    ax::NodeEditor::RejectDeletedItem();
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_node_editor_query_new_link (wo_vm vm, wo_value args)
+{
+    ax::NodeEditor::PinId start, end;
+    if (ax::NodeEditor::QueryNewLink(&start, &end))
+    {
+        wo_value v = wo_push_struct(vm, 2);
+        wo_value elem = wo_push_empty(vm);
+
+        wo_set_int(elem, (wo_int_t)start.Get());
+        wo_struct_set(v, 0, elem);
+
+        wo_set_int(elem, (wo_int_t)end.Get());
+        wo_struct_set(v, 1, elem);
+
+        return wo_ret_option_val(vm, v);
+    }
+    return wo_ret_option_none(vm);
+}
+
+WO_API wo_api je_gui_node_editor_query_new_node(wo_vm vm, wo_value args)
+{
+    ax::NodeEditor::PinId pin;
+    if (ax::NodeEditor::QueryNewNode(&pin))
+    {
+        return wo_ret_option_int(vm, (wo_int_t)pin.Get());
+    }
+    return wo_ret_option_none(vm);
+
+}
+
+WO_API wo_api je_gui_node_editor_query_deleted_node(wo_vm vm, wo_value args)
+{
+    ax::NodeEditor::NodeId node;
+    if (ax::NodeEditor::QueryDeletedNode(&node))
+    {
+        return wo_ret_option_int(vm, (wo_int_t)node.Get());
+    }
+    return wo_ret_option_none(vm);
+}
+
+WO_API wo_api je_gui_node_editor_query_deleted_link(wo_vm vm, wo_value args)
+{
+    ax::NodeEditor::LinkId link;
+    if (ax::NodeEditor::QueryDeletedLink(&link))
+    {
+        return wo_ret_option_int(vm, (wo_int_t)link.Get());
+    }
+    return wo_ret_option_none(vm);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void jegui_init_basic(
     bool need_flip_frame_buf,
     void* (*get_img_res)(jegl_resource*),
     void (*apply_shader_sampler)(jegl_resource*)
 )
 {
-    _jegui_need_flip_frambuf = need_flip_frame_buf;
-    _jegl_get_native_texture = get_img_res;
-    _jegl_bind_shader_sampler_state = apply_shader_sampler;
+    _je_gui_tls_ctx._jegui_need_flip_frambuf = need_flip_frame_buf;
+    _je_gui_tls_ctx._jegl_get_native_texture = get_img_res;
+    _je_gui_tls_ctx._jegl_bind_shader_sampler_state = apply_shader_sampler;
 
-     _jegl_rend_texture_shader = jeecs::graphic::shader::create(
-            "!/builtin/imgui_image_displayer.shader",
-            R"(
+    _je_gui_tls_ctx._jegl_rend_texture_shader = jeecs::graphic::shader::create(
+        "!/builtin/imgui_image_displayer.shader",
+        R"(
 import je::shader;
 ZTEST   (OFF);
 ZWRITE  (DISABLE);
@@ -2269,7 +2561,7 @@ public func frag(vf: v2f)
 }
 )");
 
-     _jegui_stop_work_flag = false;
+    _je_gui_tls_ctx._jegui_stop_work_flag = false;
     ImGui::CreateContext();
 
     // Set style:
@@ -2294,9 +2586,10 @@ public func frag(vf: v2f)
         jeecs_file_close(ttf_file);
     }
 }
+
 void jegui_update_basic()
 {
-    jegl_using_resource(_jegl_rend_texture_shader->resouce());
+    jegl_using_resource(_je_gui_tls_ctx._jegl_rend_texture_shader->resouce());
 
     ImGui::NewFrame();
     auto* viewport = ImGui::GetMainViewport();
@@ -2329,7 +2622,7 @@ void jegui_update_basic()
         }
     } while (0);
 
-    if (!_jegui_stop_work_flag)
+    if (!_je_gui_tls_ctx._jegui_stop_work_flag)
     {
         auto chain = _wo_job_list.pick_all();
         while (chain)
@@ -2384,7 +2677,7 @@ void jegui_shutdown_basic(bool reboot)
             delete cur_job;
         }
     }
-}
+        }
 
 bool jegui_shutdown_callback()
 {
