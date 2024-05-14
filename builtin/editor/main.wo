@@ -16,7 +16,8 @@ launch(func()
     {
         do Begin("Form");
             node_editor::Begin("Node Editor", node_editor_ctx);
-
+            PushStyleColor(ImGuiCol::ImGuiCol_Text, (255, 255, 255, 255));
+            
             node_editor::BeginNode(1: node_editor::NodeId);
             Text("Node 1");
             node_editor::BeginInputPin(2: node_editor::PinId);
@@ -34,6 +35,16 @@ launch(func()
             node_editor::EndPin();
             node_editor::BeginOutputPin(6: node_editor::PinId);
             Text("Pin 4 ->");
+            node_editor::EndPin();
+            node_editor::EndNode();
+
+            node_editor::BeginNode(7: node_editor::NodeId);
+            Text("Node 3");
+            node_editor::BeginInputPin(8: node_editor::PinId);
+            Text("-> Pin 4");
+            node_editor::EndPin();
+            node_editor::BeginOutputPin(9: node_editor::PinId);
+            Text("Pin 5 ->");
             node_editor::EndPin();
             node_editor::EndNode();
 
@@ -80,7 +91,7 @@ launch(func()
             }
             node_editor::EndDelete();
 
-
+            PopStyleColor(1);
             node_editor::End();
         End();
         // using je::gui::node_editor;

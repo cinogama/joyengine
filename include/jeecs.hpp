@@ -7392,7 +7392,6 @@ namespace jeecs
             const float ZRANGE = znear - zfar;
             const float TAN_HALF_FOV = tanf(angle / math::RAD2DEG / 2.0f);
 
-
             auto m = out_proj_mat;
             m[0][0] = TAN_HALF_FOV * WIDTH_HEIGHT_RATIO;
             m[0][1] = 0;

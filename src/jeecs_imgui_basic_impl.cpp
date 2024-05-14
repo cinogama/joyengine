@@ -484,7 +484,7 @@ R"(
     public func PushStyleColor(item: ImGuiCol, col: Color32RGBA)=> void;
 
     extern("libjoyecs", "je_gui_pop_style_color")
-    public func PopStyleColor()=> void;
+    public func PopStyleColor(n: int)=> void;
 
     using DrawListT = handle
     {
@@ -781,6 +781,37 @@ R"(
 
         extern("libjoyecs", "je_gui_node_editor_query_deleted_link")
         public func QueryDeletedLink()=> option<LinkId>;
+
+        public enum StyleColor
+        {
+            StyleColor_Bg,
+            StyleColor_Grid,
+            StyleColor_NodeBg,
+            StyleColor_NodeBorder,
+            StyleColor_HovNodeBorder,
+            StyleColor_SelNodeBorder,
+            StyleColor_NodeSelRect,
+            StyleColor_NodeSelRectBorder,
+            StyleColor_HovLinkBorder,
+            StyleColor_SelLinkBorder,
+            StyleColor_HighlightLinkBorder,
+            StyleColor_LinkSelRect,
+            StyleColor_LinkSelRectBorder,
+            StyleColor_PinRect,
+            StyleColor_PinRectBorder,
+            StyleColor_Flow,
+            StyleColor_FlowMarker,
+            StyleColor_GroupBg,
+            StyleColor_GroupBorder,
+
+            StyleColor_Count
+        }
+
+        extern("libjoyecs", "je_gui_node_editor_push_style_color")
+        public func PushStyleColor(style: StyleColor, color: Color32RGBA)=> void;
+
+        extern("libjoyecs", "je_gui_node_editor_pop_style_color")
+        public func PopStyleColor(n: int)=> void;
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1194,7 +1225,7 @@ WO_API wo_api je_gui_push_style_color(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_pop_style_color(wo_vm vm, wo_value args)
 {
-    ImGui::PopStyleColor();
+    ImGui::PopStyleColor((int)wo_int(args + 0));
     return wo_ret_void(vm);
 }
 
@@ -2462,7 +2493,7 @@ WO_API wo_api je_gui_node_editor_reject_deleted_item(wo_vm vm, wo_value args)
     return wo_ret_void(vm);
 }
 
-WO_API wo_api je_gui_node_editor_query_new_link (wo_vm vm, wo_value args)
+WO_API wo_api je_gui_node_editor_query_new_link(wo_vm vm, wo_value args)
 {
     ax::NodeEditor::PinId start, end;
     if (ax::NodeEditor::QueryNewLink(&start, &end))
@@ -2510,6 +2541,21 @@ WO_API wo_api je_gui_node_editor_query_deleted_link(wo_vm vm, wo_value args)
         return wo_ret_option_int(vm, (wo_int_t)link.Get());
     }
     return wo_ret_option_none(vm);
+}
+
+WO_API wo_api je_gui_node_editor_push_style_color(wo_vm vm, wo_value args)
+{
+    ax::NodeEditor::PushStyleColor(
+        (ax::NodeEditor::StyleColor)wo_int(args + 0),
+        val2colorf4(args + 1));
+
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_node_editor_pop_style_color(wo_vm vm, wo_value args)
+{
+    ax::NodeEditor::PopStyleColor((int)wo_int(args + 0));
+    return wo_ret_void(vm);
 }
 
 
@@ -2683,7 +2729,7 @@ void jegui_shutdown_basic(bool reboot)
             delete cur_job;
         }
     }
-        }
+}
 
 bool jegui_shutdown_callback()
 {
