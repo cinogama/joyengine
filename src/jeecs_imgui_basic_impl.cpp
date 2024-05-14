@@ -746,6 +746,12 @@ R"(
         extern("libjoyecs", "je_gui_node_editor_end_create")
         public func EndCreate()=> void;
 
+        extern("libjoyecs", "je_gui_node_editor_begin_delete")
+        public func BeginDelete()=> bool;
+
+        extern("libjoyecs", "je_gui_node_editor_end_delete")
+        public func EndDelete()=> void;
+
         extern("libjoyecs", "je_gui_node_editor_accept_new_item")
         public func AcceptNewItem()=> bool;
 
