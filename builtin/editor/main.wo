@@ -3,7 +3,7 @@ import je;
 import je::editor;
 import je::gui;
 
-import builtin::api::gui::node_editor;
+import builtin::api::gui::nodeeditor;
 
 using je::gui;
 

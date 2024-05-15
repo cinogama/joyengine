@@ -24,6 +24,9 @@ namespace jeapi::gui
         __current_node_id: mut option<NodeId>,
         __allocating_input_nodes: mut option<vec<_InputPin>>,
         __allocating_output_nodes: mut option<vec<_OutputPin>>,
+
+        input_port_texture: option<je::graphic::texture>,
+        output_port_texture: option<je::graphic::texture>,
     }
     {
         interface! ITyped
@@ -56,9 +59,27 @@ namespace jeapi::gui
             linked_pin: mut option<PinId>,
         }
         {
-            func update(self: _InputPin)
+            func update(self: _InputPin, context: node_editor)
             {
-                Text(self.name);
+                match (context.input_port_texture)
+                {
+                value(img)? ImageSize(img, 20., 20.);
+                none? Dummy(20., 20.);
+                }
+                
+                let (lt, rb) = GetItemRect();
+                let c = ((lt.0 + rb.0) / 2., (lt.1 + rb.1) / 2.);
+
+                SameLine();
+
+                gui::Text(self.name);                
+
+                BeginInputPin(self.id);
+                PinPivotRect(c, c);
+                PinRect(lt, rb);                
+                
+                EndPin();
+
                 if (self.linked_pin->has == false)
                 {
                     gui::PushStyleColor(ImGuiCol::ImGuiCol_Text, (0, 0, 0, 255));
@@ -76,9 +97,25 @@ namespace jeapi::gui
             linked_pins: vec<PinId>,
         }
         {
-            func update(self: _OutputPin)
+            func update(self: _OutputPin, context: node_editor)
             {
-                gui::Text(self.name);
+                gui::Text(self.name); 
+                SameLine();
+
+                match (context.output_port_texture)
+                {
+                value(img)? ImageSize(img, 20., 20.);
+                none? Dummy(20., 20.);
+                }
+                let (lt, rb) = GetItemRect();
+                let c = ((lt.0 + rb.0) / 2., (lt.1 + rb.1) / 2.);
+
+                BeginOutputPin(self.id);
+
+                PinPivotRect(c, c);
+                PinRect(lt, rb);
+              
+                EndPin();
             }
         }
 
@@ -111,13 +148,11 @@ namespace jeapi::gui
             {
                 BeginNode(self.id);
                 Text(self.instance->name());
-                Separator();
+
                 BeginGroup();
                 for (let ip : self.inputs)
                 {
-                    BeginInputPin(ip.id);
-                    ip->update();
-                    EndPin();
+                    ip->update(editor);
                 }
                 EndGroup();
                 SameLine();
@@ -126,9 +161,7 @@ namespace jeapi::gui
                 BeginGroup();
                 for (let op : self.outputs)
                 {
-                    BeginOutputPin(op.id);
-                    op->update();
-                    EndPin();
+                    op->update(editor);
                 }
                 EndGroup();
 
@@ -180,6 +213,9 @@ namespace jeapi::gui
                 __current_node_id = mut option::none,
                 __allocating_input_nodes = mut option::none,
                 __allocating_output_nodes = mut option::none,
+
+                input_port_texture = je::graphic::texture::load(option::none, "!/builtin/icon/InputPin.png"),
+                output_port_texture = je::graphic::texture::load(option::none, "!/builtin/icon/OutputPin.png"),
             };
         }
         func update_create(self: node_editor)
