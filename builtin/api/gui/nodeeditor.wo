@@ -64,7 +64,7 @@ namespace jeapi::gui
                 match (context.input_port_texture)
                 {
                 value(img)? ImageSize(img, 20., 20.);
-                none? Dummy(20., 20.);
+                none? Dummy((20., 20.));
                 }
                 
                 let (lt, rb) = GetItemRect();
@@ -105,7 +105,7 @@ namespace jeapi::gui
                 match (context.output_port_texture)
                 {
                 value(img)? ImageSize(img, 20., 20.);
-                none? Dummy(20., 20.);
+                none? Dummy((20., 20.));
                 }
                 let (lt, rb) = GetItemRect();
                 let c = ((lt.0 + rb.0) / 2., (lt.1 + rb.1) / 2.);
