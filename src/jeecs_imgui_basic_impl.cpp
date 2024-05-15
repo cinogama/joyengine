@@ -821,6 +821,12 @@ R"(
 
         extern("libjoyecs", "je_gui_node_editor_pop_style_color")
         public func PopStyleColor(n: int)=> void;
+
+        extern("libjoyecs", "je_gui_node_editor_delete_node")
+        public func DeleteNode(id: NodeId)=> bool;
+
+        extern("libjoyecs", "je_gui_node_editor_delete_link")
+        public func DeleteLink(id: LinkId)=> bool;
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2585,7 +2591,15 @@ WO_API wo_api je_gui_node_editor_pop_style_color(wo_vm vm, wo_value args)
     return wo_ret_void(vm);
 }
 
+WO_API wo_api je_gui_node_editor_delete_node(wo_vm vm, wo_value args)
+{
+    return wo_ret_bool(vm, ax::NodeEditor::DeleteNode((ax::NodeEditor::NodeId)wo_int(args + 0)));
+}
 
+WO_API wo_api je_gui_node_editor_delete_link(wo_vm vm, wo_value args)
+{
+    return wo_ret_bool(vm, ax::NodeEditor::DeleteLink((ax::NodeEditor::LinkId)wo_int(args + 0)));
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////
 

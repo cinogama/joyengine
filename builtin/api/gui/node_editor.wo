@@ -16,6 +16,7 @@ namespace jeapi::gui
         public func parse(self: ITyped, value: string)=> void;
         public func edit(self: ITyped)=> void;
         public func typename(self: ITyped)=> string;
+        public func maxoutput(self: ITyped)=> int;
 
         require Self::create is ()=> Self;
     }
@@ -24,6 +25,7 @@ namespace jeapi::gui
     {
         public func name(self: INode)=> string;
         public func onUpdate(self: INode, editor: node_editor)=> void;
+        public func onDelete(self: INode, editor: node_editor)=> bool;
 
         require Self::create is (node_editor)=> Self;
     }
@@ -50,26 +52,58 @@ namespace jeapi::gui
 
         links: map<LinkId, (PinId, PinId)>,
         nodes: map<NodeId, _Node>,
-        inputpins: map<PinId, _Pin>,
-        outputpins: map<PinId, _Pin>,
+        inputpins: map<PinId, _InputPin>,
+        outputpins: map<PinId, _OutputPin>,
 
         allocated_id: mut int,
 
         __current_node_id: mut option<NodeId>,
-        __allocating_input_nodes: mut option<vec<_Pin>>,
-        __allocating_output_nodes: mut option<vec<_Pin>>,
+        __allocating_input_nodes: mut option<vec<_InputPin>>,
+        __allocating_output_nodes: mut option<vec<_OutputPin>>,
     }
     {
-        using _Pin = struct
+        using _InputPin = struct
         {
             id: PinId,
             nodeid: NodeId,
             pin: Pin,
+            linked_pin: mut option<PinId>,
         }
         {
-            func update(self: _Pin)
+            func update(self: _InputPin)
             {
                 gui::Text(self.pin.name);
+                
+            }
+        }
+        using _OutputPin = struct
+        {
+            id: PinId,
+            nodeid: NodeId,
+            pin: Pin,
+            linked_pins: vec<PinId>,
+        }
+        {
+            func update(self: _OutputPin)
+            {
+                gui::Text(self.pin.name);
+            }
+        }
+
+        using Input<T> = struct
+        {
+            typed: T,
+            pin: _InputPin,
+        }
+        {
+            func create<T>(typedval: T, pin: _InputPin)
+                where require!(T: ITyped);
+            {
+                return Input
+                {
+                    typed = typedval,
+                    pin = pin,
+                };
             }
         }
 
@@ -77,8 +111,8 @@ namespace jeapi::gui
         {
             id: NodeId,
             instance: INode,
-            inputs: array<_Pin>,
-            outputs: array<_Pin>,
+            inputs: array<_InputPin>,
+            outputs: array<_OutputPin>,
         }
         {
             func update(self: _Node, editor: node_editor)
@@ -109,6 +143,28 @@ namespace jeapi::gui
             }
         }
 
+        func _get_all_link_of(self: node_editor, pinid: PinId)=> array<LinkId>
+        {
+            let mut result = []mut: vec<LinkId>;
+            for (let (lid, (aid, bid)) : self.links)
+            {
+                if (aid == pinid || bid == pinid)
+                {
+                    result->add(lid);
+                }
+            }
+            return result->unsafe::asarray;
+        }
+        func _check_linked(self: node_editor, a: PinId, b: PinId)=> bool
+        {
+            for (let (_, (aid, bid)) : self.links)
+            {
+                if (aid == a && bid == b)
+                    return true;
+            }
+            return false;
+        }
+
         public func create(title: string)
         {
             return node_editor
@@ -128,23 +184,8 @@ namespace jeapi::gui
                 __allocating_output_nodes = mut option::none,
             };
         }
-        public func update(self: node_editor)
+        func update_create(self: node_editor)
         {
-            node_editor::Begin(self.title, self.context);
-            gui::PushStyleColor(ImGuiCol::ImGuiCol_Text, (255, 255, 255, 255));
-
-            for (let (_, n) : self.nodes)
-            {
-                n->update(self);
-            }
-
-            // 在此处理链接
-            for (let (lid, (aid, bid)) : self.links)
-            {
-                // TODO: 颜色支持
-                Link(lid, aid, bid, (255, 255, 255, 255), 2.);
-            }
-
             if (BeginCreate((0, 255, 255, 255), 2.))
             {
                 match (QueryNewLink())
@@ -169,15 +210,34 @@ namespace jeapi::gui
                             // 此处检查类型
                             // TODO: 成环检测？
                             if (innode.nodeid != outnode.nodeid &&
-                                innode.pin.typeval->typename() == outnode.pin.typeval->typename())
+                                innode.pin.typeval->typename() == outnode.pin.typeval->typename() &&
+                                self->_check_linked(a, b) == false)
                             {
                                 accept = true;
                                 
                                 if (AcceptNewItem())
                                 {
+                                    // Only accept one link for input
+                                    for (let lid: self->_get_all_link_of(a))
+                                        do DeleteLink(lid);
+                                        
+                                    let max_output = innode.pin.typeval->maxoutput(); 
+                                    if (max_output > 0 && outnode.linked_pins->len() >= max_output)
+                                    {
+                                        // Remove first link
+                                        let first = outnode.linked_pins[0];
+                                        for (let lid: self->_get_all_link_of(first))
+                                            do DeleteLink(lid);
+
+                                        do outnode.linked_pins->remove(0);
+                                    }
+
                                     let linkid = self->alloc_id:<LinkId>();
                                     self.links->set(linkid, (a, b));
                                     Link(linkid, a, b, (255, 255, 255, 255), 2.);
+
+                                    innode.linked_pin = option::value(b);
+                                    outnode.linked_pins->add(a);
                                 }
                             }
                         }
@@ -190,6 +250,89 @@ namespace jeapi::gui
                 }
             }
             EndCreate();
+        }
+        func update_delete(self: node_editor)
+        {
+            if (BeginDelete())
+            {
+                for (;;)
+                {
+                    match (QueryDeletedNode())
+                    {
+                    value(nid)?
+                    {
+                        let node = self.nodes[nid];
+                        if (node.instance->onDelete(self) && AcceptDeletedItem())
+                        {
+                            for (let i : node.inputs)
+                            {
+                                for (let lid: self->_get_all_link_of(i.id))
+                                    do DeleteLink(lid);
+                            }
+                            for (let o : node.outputs)
+                            {
+                                for (let lid: self->_get_all_link_of(o.id))
+                                    do DeleteLink(lid);
+                            }
+
+                            do self.nodes->remove(nid);   
+                        }
+                        else
+                        {
+                            RejectDeletedItem();
+                        }
+                    }
+                    none? break;
+                    }
+                }
+                for (;;)
+                {
+                    match (QueryDeletedLink())
+                    {
+                    value(lid)?
+                    {
+                        if (AcceptDeletedItem())
+                        {
+                            let (aid, bid) = self.links[lid];
+                            do self.links->remove(lid);
+
+                            let innode = self.inputpins[aid];
+                            let outnode = self.outputpins[bid];
+
+                            match (innode.linked_pin)
+                            {
+                            value(linked_id)?
+                                if (linked_id == bid)
+                                    innode.linked_pin = option::none;
+                            none?;
+                            }
+                            do outnode.linked_pins->remove(outnode.linked_pins->find(aid));
+                        }
+                    }
+                    none? break;
+                    }
+                }
+            }
+            EndDelete();
+        }
+        public func update(self: node_editor)
+        {
+            node_editor::Begin(self.title, self.context);
+            gui::PushStyleColor(ImGuiCol::ImGuiCol_Text, (255, 255, 255, 255));
+
+            for (let (_, n) : self.nodes)
+            {
+                n->update(self);
+            }
+
+            // 在此处理链接
+            for (let (lid, (aid, bid)) : self.links)
+            {
+                // TODO: 颜色支持
+                Link(lid, aid, bid, (255, 255, 255, 255), 2.);
+            }
+            self->update_create();
+            self->update_delete();
             
             gui::PopStyleColor(1);
             node_editor::End();
@@ -211,17 +354,18 @@ namespace jeapi::gui
             let pin = Pin::create(val, name);
 
             assertmsg(self.__allocating_input_nodes->has,
-                "请在节点的onCreate方法中调用此函数.");
+                "请在节点的create方法中调用此函数.");
 
-            let _pin = _Pin{
+            let _pin = _InputPin{
                 id = self->alloc_id:<PinId>(), 
                 nodeid = self.__current_node_id->val, 
-                pin = pin 
+                pin = pin,
+                linked_pin = mut option::none,
             };
 
             self.inputpins->set(_pin.id, _pin);
             self.__allocating_input_nodes->val->add(_pin);
-            return val;
+            return Input::create(val, _pin);
         }
         public func add_output<TypeT>(self: node_editor, name: string)
             where require!(TypeT: ITyped);
@@ -230,12 +374,13 @@ namespace jeapi::gui
             let pin = Pin::create(val, name);
 
             assertmsg(self.__allocating_output_nodes->has,
-                "请在节点的onCreate方法中调用此函数.");
+                "请在节点的create方法中调用此函数.");
 
-            let _pin = _Pin{ 
+            let _pin = _OutputPin{ 
                 id = self->alloc_id:<PinId>(), 
                 nodeid = self.__current_node_id->val, 
-                pin = pin 
+                pin = pin,
+                linked_pins = []mut,
             };
 
             self.outputpins->set(_pin.id, _pin);
@@ -266,4 +411,6 @@ namespace jeapi::gui
             self.nodes->set(node.id, node);
         }
     }
+
+    public alias Input<T> = node_editor::Input<T>;
 }
