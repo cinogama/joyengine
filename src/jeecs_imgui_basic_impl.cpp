@@ -412,6 +412,11 @@ R"(
     extern("libjoyecs", "je_gui_image_size")
     public func ImageSize(tex: je::graphic::texture, width: real, height: real)=> void;
 
+    extern("libjoyecs", "je_gui_push_item_width")
+    public func PushItemWidth(width: real)=> void;
+
+    extern("libjoyecs", "je_gui_pop_item_width")
+    public func PopItemWidth()=> void;
 )"
 R"(
     extern("libjoyecs", "je_gui_push_clip_rect")
@@ -1948,6 +1953,18 @@ WO_API wo_api je_gui_colorpicker4(wo_vm vm, wo_value args)
         return wo_ret_option_val(vm, result);
     }
     return wo_ret_option_none(vm);
+}
+
+WO_API wo_api je_gui_push_item_width(wo_vm vm, wo_value args)
+{
+    ImGui::PushItemWidth(wo_float(args + 0));
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_pop_item_width(wo_vm vm, wo_value args)
+{
+    ImGui::PopItemWidth();
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api je_gui_input_text_box(wo_vm vm, wo_value args)

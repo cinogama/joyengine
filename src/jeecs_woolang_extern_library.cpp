@@ -155,6 +155,7 @@ WO_API wo_api je_gui_openpopup_on_item_click_label(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_openpopup_on_item_click_label_attr(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_pop_clip_rect(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_pop_id(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_pop_item_width(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_pop_style_color(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_pop_style_var(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_progress_bar(wo_vm vm, wo_value args);
@@ -162,6 +163,7 @@ WO_API wo_api je_gui_progress_bar_size(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_push_clip_rect(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_push_id(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_push_id_str(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_push_item_width(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_push_style_color(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_push_style_real(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_push_style_vec2(wo_vm vm, wo_value args);
@@ -612,6 +614,7 @@ void je_api_init()
         wo_extern_lib_func_t{"je_gui_openpopup_on_item_click_label_attr", (void*)&je_gui_openpopup_on_item_click_label_attr},
         wo_extern_lib_func_t{"je_gui_pop_clip_rect", (void*)&je_gui_pop_clip_rect},
         wo_extern_lib_func_t{"je_gui_pop_id", (void*)&je_gui_pop_id},
+        wo_extern_lib_func_t{"je_gui_pop_item_width", (void*)&je_gui_pop_item_width},
         wo_extern_lib_func_t{"je_gui_pop_style_color", (void*)&je_gui_pop_style_color},
         wo_extern_lib_func_t{"je_gui_pop_style_var", (void*)&je_gui_pop_style_var},
         wo_extern_lib_func_t{"je_gui_progress_bar", (void*)&je_gui_progress_bar},
@@ -619,6 +622,7 @@ void je_api_init()
         wo_extern_lib_func_t{"je_gui_push_clip_rect", (void*)&je_gui_push_clip_rect},
         wo_extern_lib_func_t{"je_gui_push_id", (void*)&je_gui_push_id},
         wo_extern_lib_func_t{"je_gui_push_id_str", (void*)&je_gui_push_id_str},
+        wo_extern_lib_func_t{"je_gui_push_item_width", (void*)&je_gui_push_item_width},
         wo_extern_lib_func_t{"je_gui_push_style_color", (void*)&je_gui_push_style_color},
         wo_extern_lib_func_t{"je_gui_push_style_real", (void*)&je_gui_push_style_real},
         wo_extern_lib_func_t{"je_gui_push_style_vec2", (void*)&je_gui_push_style_vec2},

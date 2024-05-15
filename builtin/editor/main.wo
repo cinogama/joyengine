@@ -10,69 +10,79 @@ using je::gui;
 let u = je::universe::create();
 je::editor::init_graphic_pipeline(u);
 
-let editor = jeapi::gui::node_editor::create("Demo");
+using jeapi::gui;
+using jeapi::gui::node_editor;
 
-using VoidType = ()
+let editor = node_editor::create("Demo");
+
+using IntType = (mut int)
 {
-    public func create()=> VoidType
-        where require!(VoidType: jeapi::gui::ITyped);
+    public func create()=> IntType
+        where require!(IntType: ITyped);
     {
-        return (): VoidType;
+        return (mut 0,): IntType;
     }
-    public func tostring(_: VoidType)=> string
+    public func tostring(self: IntType)=> string
     {
-        return "void";
+        return self.0: string;
     }
-    public func parse(_: VoidType, _: string)=> void
+    public func parse(self: IntType, val: string)=> void
     {
+        self.0 = val: int;
     }
-    public func edit(_: VoidType)=> void
+    public func edit(self: IntType, tag: string)=> void
     {
+        PushItemWidth(100.);
+        do InputInt(tag, self.0)->>\v = self.0 = v;;
+        PopItemWidth();
     }
-    public func typename(_: VoidType)=> string
+    public func typename(_: IntType)=> string
     {
-        return "VoidType";
+        return "IntType";
     }
-    public func maxoutput(_: VoidType)=> int
+    public func maxoutput(_: IntType)=> int
     {
         return 0;
     }
+    public func color(_: IntType)
+    {
+        return (62, 200, 104, 255);
+    }
 }
 
-using MyNodeExample = struct{
-    input: jeapi::gui::Input<VoidType>,
-    input2: jeapi::gui::Input<VoidType>,
+using AddInt = struct{
+    a: Input<IntType>,
+    b: Input<IntType>,
 }
 {
-    public func create(editor: jeapi::gui::node_editor)=> MyNodeExample
-        where require!(MyNodeExample: jeapi::gui::INode);
+    public func create(editor: node_editor)=> AddInt
+        where require!(AddInt: INode);
     {
-        editor->add_output:<VoidType>("output");
-        return MyNodeExample{
-            input = editor->add_input:<VoidType>("input"),
-            input2 = editor->add_input:<VoidType>("input2"),
+        editor->add_output:<IntType>("output");
+        return AddInt{
+            a = editor->add_input:<IntType>("a"),
+            b = editor->add_input:<IntType>("b"),
         };
     }
-    public func name(_: MyNodeExample)=> string
+    public func name(_: AddInt)=> string
     {
-        return "MyNodeExample";
+        return "AddInt";
     }
-    public func onUpdate(self: MyNodeExample, editor: jeapi::gui::node_editor)=> void
+    public func onUpdate(self: AddInt, editor: node_editor)=> void
     {
         do self; do editor;
-        Separator();
-        TextDisabled("嗝");
     }
-    public func onDelete(self: MyNodeExample, editor: jeapi::gui::node_editor)=> bool
+    public func onDelete(self: AddInt, editor: node_editor)=> bool
     {
         do self; do editor;
-        return false;
+        return true;
     }
 }
 
-editor->add_node:<MyNodeExample>();
-editor->add_node:<MyNodeExample>();
-editor->add_node:<MyNodeExample>();
+editor->add_node:<AddInt>();
+editor->add_node:<AddInt>();
+editor->add_node:<AddInt>();
+editor->add_node:<AddInt>();
 
 launch(func()
     {
