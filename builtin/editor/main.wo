@@ -3,96 +3,155 @@ import je;
 import je::editor;
 import je::gui;
 
+import builtin::api::gui::node_editor;
+
 using je::gui;
 
 let u = je::universe::create();
 je::editor::init_graphic_pipeline(u);
 
-let node_editor_ctx = node_editor::CreateContext();
+let editor = jeapi::gui::node_editor::create("Demo");
 
-let links = {}mut: map<node_editor::LinkId, (node_editor::PinId, node_editor::PinId)>;
+using VoidType = ()
+{
+    public func create()=> VoidType
+        where require!(VoidType: jeapi::gui::ITyped);
+    {
+        return (): VoidType;
+    }
+    public func tostring(_: VoidType)=> string
+    {
+        return "void";
+    }
+    public func parse(_: VoidType, _: string)=> void
+    {
+    }
+    public func edit(_: VoidType)=> void
+    {
+    }
+    public func typename(_: VoidType)=> string
+    {
+        return "VoidType";
+    }
+}
+using MyNodeExample = struct{
+    input: VoidType,
+}
+{
+    public func create(editor: jeapi::gui::node_editor)=> MyNodeExample
+        where require!(MyNodeExample: jeapi::gui::INode);
+    {
+        editor->add_output:<VoidType>("output");
+        return MyNodeExample{
+            input = editor->add_input:<VoidType>("input"),
+        };
+    }
+    public func name(_: MyNodeExample)=> string
+    {
+        return "MyNodeExample";
+    }
+    public func onUpdate(self: MyNodeExample, editor: jeapi::gui::node_editor)=> void
+    {
+        do self; do editor;
+    }
+}
+
+editor->add_node:<MyNodeExample>();
+editor->add_node:<MyNodeExample>();
 
 launch(func()
     {
         do Begin("Form");
-            node_editor::Begin("Node Editor", node_editor_ctx);
-            PushStyleColor(ImGuiCol::ImGuiCol_Text, (255, 255, 255, 255));
+            editor->update();
+            // node_editor::Begin("Node Editor", node_editor_ctx);
+            // PushStyleColor(ImGuiCol::ImGuiCol_Text, (255, 255, 255, 255));
             
-            node_editor::BeginNode(1: node_editor::NodeId);
-            Text("Node 1");
-            node_editor::BeginInputPin(2: node_editor::PinId);
-            Text("-> Pin 1");
-            node_editor::EndPin();
-            node_editor::BeginOutputPin(3: node_editor::PinId);
-            Text("Pin 2 ->");
-            node_editor::EndPin();
-            node_editor::EndNode();
+            // node_editor::BeginNode(1: node_editor::NodeId);
+            // Text("Node 1");
 
-            node_editor::BeginNode(4: node_editor::NodeId);
-            Text("Node 2");
-            node_editor::BeginInputPin(5: node_editor::PinId);
-            Text("-> Pin 3");
-            node_editor::EndPin();
-            node_editor::BeginOutputPin(6: node_editor::PinId);
-            Text("Pin 4 ->");
-            node_editor::EndPin();
-            node_editor::EndNode();
+            // Dummy((20., 20.));
+            // SameLine();
+            // let (tl, br) = GetItemRect();
+            // let center = ((tl.0 + br.0) / 2., (tl.1 + br.1) / 2.);
 
-            node_editor::BeginNode(7: node_editor::NodeId);
-            Text("Node 3");
-            node_editor::BeginInputPin(8: node_editor::PinId);
-            Text("-> Pin 4");
-            node_editor::EndPin();
-            node_editor::BeginOutputPin(9: node_editor::PinId);
-            Text("Pin 5 ->");
-            node_editor::EndPin();
-            node_editor::EndNode();
+            // node_editor::BeginInputPin(2: node_editor::PinId);
+            // node_editor::PinPivotRect(center, center);
+            // node_editor::PinRect(tl, br);
+            // Text("Pin 1");
+            // node_editor::EndPin();
+            // SameLine();
+            // node_editor::BeginOutputPin(3: node_editor::PinId);
+            // Text("Pin 2 ->");
+            // node_editor::EndPin();
+            // node_editor::EndNode();
 
-            for (let (lid, (aid, bid)) : links)
-            {
-                node_editor::Link(lid, aid, bid, (255, 255, 255, 255), 2.0);
-            }
+            // node_editor::BeginNode(4: node_editor::NodeId);
+            // Text("Node 2");
+            // node_editor::BeginInputPin(5: node_editor::PinId);
+            // Text("-> Pin 3");
+            // node_editor::EndPin();
+            // SameLine();
+            // node_editor::BeginOutputPin(6: node_editor::PinId);
+            // Text("Pin 4 ->");
+            // node_editor::EndPin();
+            // node_editor::EndNode();
 
-            if (node_editor::BeginCreate((0, 255, 255, 255), 2.))
-            {
-                match (node_editor::QueryNewLink())
-                {
-                value((a, b))?
-                    {
-                        if (node_editor::AcceptNewItem())
-                        {
-                            let linkid = (links->len + 1): node_editor::LinkId;
-                            links->set(linkid, (a, b));
-                            node_editor::Link(linkid, a, b, (255, 255, 255, 255), 2.0);
-                        }
-                    }
-                none?;
-                }
-            }
-            node_editor::EndCreate();
+            // node_editor::BeginNode(7: node_editor::NodeId);
+            // Text("Node 3");
+            // node_editor::BeginInputPin(8: node_editor::PinId);
+            // Text("-> Pin 4");
+            // node_editor::EndPin();
+            // SameLine();
+            // node_editor::BeginOutputPin(9: node_editor::PinId);
+            // Text("Pin 5 ->");
+            // node_editor::EndPin();
+            // node_editor::EndNode();
+
+            // for (let (lid, (aid, bid)) : links)
+            // {
+            //     node_editor::Link(lid, aid, bid, (255, 255, 255, 255), 2.0);
+            // }
+
+            // if (node_editor::BeginCreate((0, 255, 255, 255), 2.))
+            // {
+            //     match (node_editor::QueryNewLink())
+            //     {
+            //     value((a, b))?
+            //         {
+            //             if (node_editor::AcceptNewItem())
+            //             {
+            //                 let linkid = (links->len + 1): node_editor::LinkId;
+            //                 links->set(linkid, (a, b));
+            //                 node_editor::Link(linkid, a, b, (255, 255, 255, 255), 2.0);
+            //             }
+            //         }
+            //     none?;
+            //     }
+            // }
+            // node_editor::EndCreate();
             
-            if (node_editor::BeginDelete())
-            {
-                for (;;)
-                {
-                    match (node_editor::QueryDeletedLink())
-                    {
-                    value(lid)?
-                        {
-                            if (node_editor::AcceptDeletedItem())
-                            {
-                                do links->remove(lid);
-                            }
-                        }
-                    none?
-                        break;
-                    }
-                }
-            }
-            node_editor::EndDelete();
+            // if (node_editor::BeginDelete())
+            // {
+            //     for (;;)
+            //     {
+            //         match (node_editor::QueryDeletedLink())
+            //         {
+            //         value(lid)?
+            //             {
+            //                 if (node_editor::AcceptDeletedItem())
+            //                 {
+            //                     do links->remove(lid);
+            //                 }
+            //             }
+            //         none?
+            //             break;
+            //         }
+            //     }
+            // }
+            // node_editor::EndDelete();
 
-            PopStyleColor(1);
-            node_editor::End();
+            // PopStyleColor(1);
+            // node_editor::End();
         End();
         // using je::gui::node_editor;
 

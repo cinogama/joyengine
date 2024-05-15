@@ -697,7 +697,10 @@ R"(
     public func PushStyleVec2(style: StyleVar, val: ImVec2)=> void;
 
     extern("libjoyecs", "je_gui_pop_style_var")
-    public func PopStyleVar()=> void;
+    public func PopStyleVar(n: int)=> void;
+
+    extern("libjoyecs", "je_gui_dummy")
+    public func Dummy(sz: ImVec2)=> void;
 
     namespace node_editor
     {
@@ -736,6 +739,12 @@ R"(
 
         extern("libjoyecs", "je_gui_node_editor_end_pin")
         public func EndPin()=> void;
+
+        extern("libjoyecs", "je_gui_node_editor_pin_pivot_rect")
+        public func PinPivotRect(a: ImVec2, b: ImVec2)=> void;
+
+        extern("libjoyecs", "je_gui_node_editor_pin_rect")
+        public func PinRect(a: ImVec2, b: ImVec2)=> void;
 
         extern("libjoyecs", "je_gui_node_editor_link")
         public func Link(linkid: LinkId, output_pinid: PinId, input_pinid: PinId, color: Color32RGBA, board: real)=> void;
@@ -2355,7 +2364,13 @@ WO_API wo_api je_gui_push_style_vec2(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_pop_style_var(wo_vm vm, wo_value args)
 {
-    ImGui::PopStyleVar();
+    ImGui::PopStyleVar((int)wo_int(args + 0));
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_dummy(wo_vm vm, wo_value args)
+{
+    ImGui::Dummy(val2vec2(args + 0));
     return wo_ret_void(vm);
 }
 
@@ -2414,6 +2429,18 @@ WO_API wo_api je_gui_node_editor_begin_output_pin(wo_vm vm, wo_value args)
 WO_API wo_api je_gui_node_editor_end_pin(wo_vm vm, wo_value args)
 {
     ax::NodeEditor::EndPin();
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_node_editor_pin_pivot_rect(wo_vm vm, wo_value args)
+{
+    ax::NodeEditor::PinPivotRect(val2vec2(args + 0), val2vec2(args + 1));
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_node_editor_pin_rect(wo_vm vm, wo_value args)
+{
+    ax::NodeEditor::PinRect(val2vec2(args + 0), val2vec2(args + 1));
     return wo_ret_void(vm);
 }
 
@@ -2557,6 +2584,7 @@ WO_API wo_api je_gui_node_editor_pop_style_color(wo_vm vm, wo_value args)
     ax::NodeEditor::PopStyleColor((int)wo_int(args + 0));
     return wo_ret_void(vm);
 }
+
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////

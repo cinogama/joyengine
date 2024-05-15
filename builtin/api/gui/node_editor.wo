@@ -1,0 +1,269 @@
+import je;
+import je::gui;
+
+import pkg::interface;
+import pkg::worst;
+
+using je;
+using je::gui;
+using je::gui::node_editor;
+
+namespace jeapi::gui
+{
+    interface! ITyped
+    {
+        public func tostring(self: ITyped)=> string;
+        public func parse(self: ITyped, value: string)=> void;
+        public func edit(self: ITyped)=> void;
+        public func typename(self: ITyped)=> string;
+
+        require Self::create is ()=> Self;
+    }
+
+    interface! INode
+    {
+        public func name(self: INode)=> string;
+        public func onUpdate(self: INode, editor: node_editor)=> void;
+
+        require Self::create is (node_editor)=> Self;
+    }
+    
+    using Pin = struct{
+        typeval: ITyped,
+        name: string,
+    }
+    {
+        public func create<TypeT>(typeval: TypeT, name: string)
+            where require!(TypeT: ITyped);
+        {
+            return Pin
+            {
+                typeval = ITyped::create(typeval),
+                name = name,
+            };
+        }
+    }
+
+    using node_editor = struct{
+        title: string,
+        context: node_editor::EditorContext,
+
+        links: map<LinkId, (PinId, PinId)>,
+        nodes: map<NodeId, _Node>,
+        inputpins: map<PinId, _Pin>,
+        outputpins: map<PinId, _Pin>,
+
+        allocated_id: mut int,
+
+        __current_node_id: mut option<NodeId>,
+        __allocating_input_nodes: mut option<vec<_Pin>>,
+        __allocating_output_nodes: mut option<vec<_Pin>>,
+    }
+    {
+        using _Pin = struct
+        {
+            id: PinId,
+            nodeid: NodeId,
+            pin: Pin,
+        }
+        {
+            func update(self: _Pin)
+            {
+                gui::Text(self.pin.name);
+            }
+        }
+
+        using _Node = struct
+        {
+            id: NodeId,
+            instance: INode,
+            inputs: array<_Pin>,
+            outputs: array<_Pin>,
+        }
+        {
+            func update(self: _Node, editor: node_editor)
+            {
+                BeginNode(self.id);
+                Text(self.instance->name());
+                Separator();
+                BeginGroup();
+                for (let ip : self.inputs)
+                {
+                    BeginInputPin(ip.id);
+                    ip->update();
+                    EndPin();
+                }
+                EndGroup();
+                SameLine();
+                BeginGroup();
+                for (let op : self.outputs)
+                {
+                    BeginOutputPin(op.id);
+                    op->update();
+                    EndPin();
+                }
+                EndGroup();
+
+                self.instance->onUpdate(editor);
+                EndNode();
+            }
+        }
+
+        public func create(title: string)
+        {
+            return node_editor
+            {
+                title = title,
+                context = node_editor::CreateContext(),
+
+                links = {}mut,
+                nodes = {}mut,
+                inputpins = {}mut,
+                outputpins = {}mut,
+
+                allocated_id = mut 100,
+
+                __current_node_id = mut option::none,
+                __allocating_input_nodes = mut option::none,
+                __allocating_output_nodes = mut option::none,
+            };
+        }
+        public func update(self: node_editor)
+        {
+            node_editor::Begin(self.title, self.context);
+            gui::PushStyleColor(ImGuiCol::ImGuiCol_Text, (255, 255, 255, 255));
+
+            for (let (_, n) : self.nodes)
+            {
+                n->update(self);
+            }
+
+            // 在此处理链接
+            for (let (lid, (aid, bid)) : self.links)
+            {
+                // TODO: 颜色支持
+                Link(lid, aid, bid, (255, 255, 255, 255), 2.);
+            }
+
+            if (BeginCreate((0, 255, 255, 255), 2.))
+            {
+                match (QueryNewLink())
+                {
+                value((mut a, mut b))?
+                {
+                    if (!self.inputpins->contain(a))
+                    {
+                        let tmp = a;
+                        a = b;
+                        b = tmp;
+                    }
+
+                    let mut accept = false;
+                    match (self.inputpins->get(a)
+                        =>> \innode = self.outputpins->get(b)
+                            ->> \outnode = (innode, outnode);
+                            ;)
+                    {
+                    value((innode, outnode))?
+                        {
+                            // 此处检查类型
+                            // TODO: 成环检测？
+                            if (innode.nodeid != outnode.nodeid &&
+                                innode.pin.typeval->typename() == outnode.pin.typeval->typename())
+                            {
+                                accept = true;
+                                
+                                if (AcceptNewItem())
+                                {
+                                    let linkid = self->alloc_id:<LinkId>();
+                                    self.links->set(linkid, (a, b));
+                                    Link(linkid, a, b, (255, 255, 255, 255), 2.);
+                                }
+                            }
+                        }
+                    none?;
+                    }
+                    if (!accept)
+                        RejectNewItemColor((255, 0, 0, 255), 2.);
+                }
+                none?;
+                }
+            }
+            EndCreate();
+            
+            gui::PopStyleColor(1);
+            node_editor::End();
+        }
+
+        func alloc_id<T>(self: node_editor)
+            where std::is_same_type:<T, NodeId>
+                || std::is_same_type:<T, PinId>
+                || std::is_same_type:<T, LinkId>;
+        {
+            self.allocated_id += 1;
+            return self.allocated_id: T;
+        }
+
+        public func add_input<TypeT>(self: node_editor, name: string)
+            where require!(TypeT: ITyped);
+        {
+            let val = TypeT::create();
+            let pin = Pin::create(val, name);
+
+            assertmsg(self.__allocating_input_nodes->has,
+                "请在节点的onCreate方法中调用此函数.");
+
+            let _pin = _Pin{
+                id = self->alloc_id:<PinId>(), 
+                nodeid = self.__current_node_id->val, 
+                pin = pin 
+            };
+
+            self.inputpins->set(_pin.id, _pin);
+            self.__allocating_input_nodes->val->add(_pin);
+            return val;
+        }
+        public func add_output<TypeT>(self: node_editor, name: string)
+            where require!(TypeT: ITyped);
+        {
+            let val = TypeT::create();
+            let pin = Pin::create(val, name);
+
+            assertmsg(self.__allocating_output_nodes->has,
+                "请在节点的onCreate方法中调用此函数.");
+
+            let _pin = _Pin{ 
+                id = self->alloc_id:<PinId>(), 
+                nodeid = self.__current_node_id->val, 
+                pin = pin 
+            };
+
+            self.outputpins->set(_pin.id, _pin);
+            self.__allocating_output_nodes->val->add(_pin);
+        }
+        public func add_node<NodeT>(self: node_editor)
+            where require!(NodeT: INode);
+        {
+            let new_id = self->alloc_id:<NodeId>();
+
+            self.__current_node_id = option::value(new_id);
+            self.__allocating_input_nodes = option::value([]mut);
+            self.__allocating_output_nodes = option::value([]mut);
+
+            let node_instance = NodeT::create(self);
+
+            let node = _Node{
+                id = new_id,
+                instance = INode::create(node_instance),
+                inputs = self.__allocating_input_nodes->val->unsafe::asarray,
+                outputs = self.__allocating_output_nodes->val->unsafe::asarray,
+            };
+
+            self.__current_node_id = option::none;
+            self.__allocating_input_nodes = option::none;
+            self.__allocating_output_nodes = option::none;
+
+            self.nodes->set(node.id, node);
+        }
+    }
+}

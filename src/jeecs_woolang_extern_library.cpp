@@ -53,6 +53,7 @@ WO_API wo_api je_gui_draw_list_add_rect_filled(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_draw_list_add_text(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_draw_list_add_triangle(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_draw_list_add_triangle_filled(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_dummy(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_end(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_end_accept_drop_source(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_end_child(wo_vm vm, wo_value args);
@@ -134,6 +135,8 @@ WO_API wo_api je_gui_node_editor_end_delete(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_node_editor_end_node(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_node_editor_end_pin(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_node_editor_link(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_node_editor_pin_pivot_rect(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_node_editor_pin_rect(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_node_editor_pop_style_color(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_node_editor_push_style_color(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_node_editor_query_deleted_link(wo_vm vm, wo_value args);
@@ -505,6 +508,7 @@ void je_api_init()
         wo_extern_lib_func_t{"je_gui_draw_list_add_text", (void*)&je_gui_draw_list_add_text},
         wo_extern_lib_func_t{"je_gui_draw_list_add_triangle", (void*)&je_gui_draw_list_add_triangle},
         wo_extern_lib_func_t{"je_gui_draw_list_add_triangle_filled", (void*)&je_gui_draw_list_add_triangle_filled},
+        wo_extern_lib_func_t{"je_gui_dummy", (void*)&je_gui_dummy},
         wo_extern_lib_func_t{"je_gui_end", (void*)&je_gui_end},
         wo_extern_lib_func_t{"je_gui_end_accept_drop_source", (void*)&je_gui_end_accept_drop_source},
         wo_extern_lib_func_t{"je_gui_end_child", (void*)&je_gui_end_child},
@@ -586,6 +590,8 @@ void je_api_init()
         wo_extern_lib_func_t{"je_gui_node_editor_end_node", (void*)&je_gui_node_editor_end_node},
         wo_extern_lib_func_t{"je_gui_node_editor_end_pin", (void*)&je_gui_node_editor_end_pin},
         wo_extern_lib_func_t{"je_gui_node_editor_link", (void*)&je_gui_node_editor_link},
+        wo_extern_lib_func_t{"je_gui_node_editor_pin_pivot_rect", (void*)&je_gui_node_editor_pin_pivot_rect},
+        wo_extern_lib_func_t{"je_gui_node_editor_pin_rect", (void*)&je_gui_node_editor_pin_rect},
         wo_extern_lib_func_t{"je_gui_node_editor_pop_style_color", (void*)&je_gui_node_editor_pop_style_color},
         wo_extern_lib_func_t{"je_gui_node_editor_push_style_color", (void*)&je_gui_node_editor_push_style_color},
         wo_extern_lib_func_t{"je_gui_node_editor_query_deleted_link", (void*)&je_gui_node_editor_query_deleted_link},
