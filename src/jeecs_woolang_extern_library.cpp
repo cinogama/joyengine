@@ -81,6 +81,7 @@ WO_API wo_api je_gui_get_window_pos(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_image(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_image_scale(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_image_size(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_image_size_color(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_imagebutton_scale(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_imagebutton_size(wo_vm vm, wo_value args);
@@ -540,6 +541,7 @@ void je_api_init()
         wo_extern_lib_func_t{"je_gui_image", (void*)&je_gui_image},
         wo_extern_lib_func_t{"je_gui_image_scale", (void*)&je_gui_image_scale},
         wo_extern_lib_func_t{"je_gui_image_size", (void*)&je_gui_image_size},
+        wo_extern_lib_func_t{"je_gui_image_size_color", (void*)&je_gui_image_size_color},
         wo_extern_lib_func_t{"je_gui_imagebutton", (void*)&je_gui_imagebutton},
         wo_extern_lib_func_t{"je_gui_imagebutton_scale", (void*)&je_gui_imagebutton_scale},
         wo_extern_lib_func_t{"je_gui_imagebutton_size", (void*)&je_gui_imagebutton_size},

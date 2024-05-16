@@ -27,6 +27,8 @@ namespace jeapi::gui
 
         input_port_texture: option<je::graphic::texture>,
         output_port_texture: option<je::graphic::texture>,
+
+        node_info_dic: mut option<_NodeInfoDict>,
     }
     {
         interface! ITyped
@@ -50,6 +52,27 @@ namespace jeapi::gui
             require Self::create is (node_editor)=> Self;
         }
 
+        public alias NodeDict = dict<string, NodeDictItem>;
+        public union NodeDictItem
+        {
+            Node((node_editor)=>INode),
+            Dict(NodeDict),
+        }
+        using _NodeInfo = struct
+        {
+            name: string,
+            input_types: array<string>,
+            output_types: array<string>,
+            generator: (node_editor)=>INode,
+        };
+
+        alias _NodeInfoDict = dict<string, _NodeInfoDictItem>;
+        union _NodeInfoDictItem
+        {
+            Node(_NodeInfo),
+            Dict(_NodeInfoDict),
+        }
+
         using _InputPin = struct
         {
             id: PinId,
@@ -63,7 +86,7 @@ namespace jeapi::gui
             {
                 match (context.input_port_texture)
                 {
-                value(img)? ImageSize(img, 20., 20.);
+                value(img)? ImageSizeColor(img, 20., 20., self.typeval->color);
                 none? Dummy((20., 20.));
                 }
                 
@@ -104,7 +127,7 @@ namespace jeapi::gui
 
                 match (context.output_port_texture)
                 {
-                value(img)? ImageSize(img, 20., 20.);
+                value(img)? ImageSizeColor(img, 20., 20., self.typeval->color);
                 none? Dummy((20., 20.));
                 }
                 let (lt, rb) = GetItemRect();
@@ -196,9 +219,62 @@ namespace jeapi::gui
             let c = self.inputpins[a].typeval->color();
             Link(linkid, a, b, c, 2.);
         }
-        public func create(title: string)
+        func _generate_node_impl(self: node_editor, generator: (node_editor)=>INode)
         {
-            return node_editor
+            let new_id = self->alloc_id:<NodeId>();
+
+            self.__current_node_id = option::value(new_id);
+            self.__allocating_input_nodes = option::value([]mut);
+            self.__allocating_output_nodes = option::value([]mut);
+
+            let node = _Node{
+                id = new_id,
+                instance = INode::create(generator(self)),
+                inputs = self.__allocating_input_nodes->val->unsafe::asarray,
+                outputs = self.__allocating_output_nodes->val->unsafe::asarray,
+            };
+
+            self.__current_node_id = option::none;
+            self.__allocating_input_nodes = option::none;
+            self.__allocating_output_nodes = option::none;
+
+            return node;
+        }
+        func _generate_node_dict_item(self: node_editor, item: NodeDictItem)
+            => _NodeInfoDictItem
+        {
+            match (item)
+            {
+            Node(generator)?
+            {
+                let ninstance = self->_generate_node_impl(generator);
+                return _NodeInfoDictItem::Node(
+                    _NodeInfo{
+                        name = ninstance.instance->name(),
+                        input_types = ninstance.inputs->>\i = i.typeval->typename();,
+                        output_types = ninstance.outputs->>\o = o.typeval->typename();,
+                        generator = generator,
+                    });
+            }
+            Dict(d)?
+            {
+                return _NodeInfoDictItem::Dict(self->_generate_node_dict(d));
+            }
+            }
+        }
+        func _generate_node_dict(self: node_editor, nodedict: NodeDict)
+            => _NodeInfoDict
+        {
+            let result = {}mut: map<string, _NodeInfoDictItem>;
+            for (let (name, item) : nodedict)
+            {
+                result->set(name, self->_generate_node_dict_item(item));
+            }
+            return result->unsafe::asdict;
+        }
+        public func create(title: string, nodedict: NodeDict)
+        {
+            let self = node_editor
             {
                 title = title,
                 context = node_editor::CreateContext(),
@@ -214,9 +290,16 @@ namespace jeapi::gui
                 __allocating_input_nodes = mut option::none,
                 __allocating_output_nodes = mut option::none,
 
-                input_port_texture = je::graphic::texture::load(option::none, "!/builtin/icon/InputPin.png"),
-                output_port_texture = je::graphic::texture::load(option::none, "!/builtin/icon/OutputPin.png"),
+                input_port_texture = je::graphic::texture::load(
+                    option::none, "!/builtin/icon/InputPin.png"),
+                output_port_texture = je::graphic::texture::load(
+                    option::none, "!/builtin/icon/OutputPin.png"),
+
+                node_info_dic = mut option::none,
             };
+
+            self.node_info_dic = option::value(self->_generate_node_dict(nodedict));
+            return self;
         }
         func update_create(self: node_editor)
         {
@@ -423,25 +506,7 @@ namespace jeapi::gui
         public func add_node<NodeT>(self: node_editor)
             where require!(NodeT: INode);
         {
-            let new_id = self->alloc_id:<NodeId>();
-
-            self.__current_node_id = option::value(new_id);
-            self.__allocating_input_nodes = option::value([]mut);
-            self.__allocating_output_nodes = option::value([]mut);
-
-            let node_instance = NodeT::create(self);
-
-            let node = _Node{
-                id = new_id,
-                instance = INode::create(node_instance),
-                inputs = self.__allocating_input_nodes->val->unsafe::asarray,
-                outputs = self.__allocating_output_nodes->val->unsafe::asarray,
-            };
-
-            self.__current_node_id = option::none;
-            self.__allocating_input_nodes = option::none;
-            self.__allocating_output_nodes = option::none;
-
+            let node = self->_generate_node_impl(\e = INode::create(NodeT::create(e)););
             self.nodes->set(node.id, node);
         }
     }

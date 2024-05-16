@@ -411,6 +411,8 @@ R"(
     public func ImageScale(tex: je::graphic::texture, scale: real)=> void;
     extern("libjoyecs", "je_gui_image_size")
     public func ImageSize(tex: je::graphic::texture, width: real, height: real)=> void;
+    extern("libjoyecs", "je_gui_image_size_color")
+    public func ImageSizeColor(tex: je::graphic::texture, width: real, height: real, color: Color32RGBA)=> void;
 
     extern("libjoyecs", "je_gui_push_item_width")
     public func PushItemWidth(width: real)=> void;
@@ -1803,6 +1805,34 @@ WO_API wo_api je_gui_image_size(wo_vm vm, wo_value args)
             wo_float(args + 1),
             wo_float(args + 2)
         ), uvmin, uvmax);
+
+    dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
+
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_image_size_color(wo_vm vm, wo_value args)
+{
+    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
+
+    jegl_using_resource((*texture)->resouce());
+
+    ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
+    if (_je_gui_tls_ctx._jegui_need_flip_frambuf
+        && (*texture)->resouce()->m_raw_texture_data != nullptr
+        && 0 != ((*texture)->resouce()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
+    {
+        uvmin = ImVec2(0.0f, 0.0f);
+        uvmax = ImVec2(1.0f, 1.0f);
+    }
+
+    auto* dlist = ImGui::GetWindowDrawList();
+    dlist->AddCallback([](auto, auto) {_je_gui_tls_ctx._jegl_bind_shader_sampler_state(_je_gui_tls_ctx._jegl_rend_texture_shader->resouce()); }, nullptr);
+    ImGui::Image((ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture((*texture)->resouce()),
+        ImVec2(
+            wo_float(args + 1),
+            wo_float(args + 2)
+        ), uvmin, uvmax, val2colorf4(args + 3));
 
     dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
 

@@ -13,7 +13,7 @@ je::editor::init_graphic_pipeline(u);
 using jeapi::gui;
 using jeapi::gui::node_editor;
 
-let editor = node_editor::create("Demo");
+let editor = node_editor::create("Demo", {});
 
 using IntType = (mut int)
 {
