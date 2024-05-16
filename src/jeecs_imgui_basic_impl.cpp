@@ -834,6 +834,9 @@ R"(
 
         extern("libjoyecs", "je_gui_node_editor_delete_link")
         public func DeleteLink(id: LinkId)=> bool;
+
+        extern("libjoyecs", "je_gui_node_editor_set_node_position")
+        public func SetNodePosition(id: NodeId, pos: (real, real))=> void;
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2646,6 +2649,12 @@ WO_API wo_api je_gui_node_editor_delete_node(wo_vm vm, wo_value args)
 WO_API wo_api je_gui_node_editor_delete_link(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm, ax::NodeEditor::DeleteLink((ax::NodeEditor::LinkId)wo_int(args + 0)));
+}
+
+WO_API wo_api je_gui_node_editor_set_node_position(wo_vm vm, wo_value args)
+{
+    ax::NodeEditor::SetNodePosition((ax::NodeEditor::NodeId)wo_int(args + 0), val2vec2(args + 1));
+    return wo_ret_void(vm);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////

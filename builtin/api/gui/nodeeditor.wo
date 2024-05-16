@@ -29,6 +29,8 @@ namespace jeapi::gui
         output_port_texture: option<je::graphic::texture>,
 
         node_info_dic: mut option<_NodeInfoDict>,
+
+        executing_jobs: vec<()=> void>,
     }
     {
         interface! ITyped
@@ -50,6 +52,10 @@ namespace jeapi::gui
             public func onDelete(self: INode, editor: node_editor)=> bool;
 
             require Self::create is (node_editor)=> Self;
+        }
+        namespace INode
+        {
+            public let creator<T> = \e: node_editor = INode::create(T::create(e));;
         }
 
         public alias NodeDict = dict<string, NodeDictItem>;
@@ -296,10 +302,16 @@ namespace jeapi::gui
                     option::none, "!/builtin/icon/OutputPin.png"),
 
                 node_info_dic = mut option::none,
+
+                executing_jobs = []mut,
             };
 
             self.node_info_dic = option::value(self->_generate_node_dict(nodedict));
             return self;
+        }
+        public func execute(self: node_editor, job: ()=> void)
+        {
+            self.executing_jobs->add(job);
         }
         func update_create(self: node_editor)
         {
@@ -432,6 +444,41 @@ namespace jeapi::gui
             }
             EndDelete();
         }
+        func _menu_show_new_nodes(self: node_editor, d: _NodeInfoDict)
+        {
+            for (let (name, item) : d)
+            {
+                match (item)
+                {
+                Node(info)?
+                {
+                    if (MenuItem(info.name))
+                        self->_add_node_impl(
+                            self->_generate_node_impl(info.generator));
+                }
+                Dict(subd)?
+                {
+                    if (BeginMenu(name))
+                    {
+                        self->_menu_show_new_nodes(subd);
+                        EndMenu();
+                    }
+                }
+                }
+            }
+        }
+        func _context_menu(self: node_editor)
+        {
+            if (BeginPopupContextItem())
+            {
+                if (BeginMenu("新节点..."))
+                {
+                    self->_menu_show_new_nodes(self.node_info_dic->valor({}));
+                }
+
+                EndPopup();
+            }
+        }
         public func update(self: node_editor)
         {
             node_editor::Begin(self.title, self.context);
@@ -451,8 +498,17 @@ namespace jeapi::gui
             self->update_create();
             self->update_delete();
             
+            for (let job : self.executing_jobs)
+            {
+                job();
+            }
+            self.executing_jobs->clear();
+
             gui::PopStyleColor(1);
             node_editor::End();
+            
+            self->_context_menu();
+            
         }
 
         func alloc_id<T>(self: node_editor)
@@ -503,11 +559,17 @@ namespace jeapi::gui
             self.outputpins->set(_pin.id, _pin);
             self.__allocating_output_nodes->val->add(_pin);
         }
+        func _add_node_impl(self: node_editor, node: _Node)
+        {
+            self.nodes->set(node.id, node);
+            self->execute(\ = SetNodePosition(node.id, GetMousePos()););
+        }
         public func add_node<NodeT>(self: node_editor)
             where require!(NodeT: INode);
         {
-            let node = self->_generate_node_impl(\e = INode::create(NodeT::create(e)););
-            self.nodes->set(node.id, node);
+            self->_add_node_impl(
+                self->_generate_node_impl(
+                    \e = INode::create(NodeT::create(e));));
         }
     }
 }

@@ -13,8 +13,6 @@ je::editor::init_graphic_pipeline(u);
 using jeapi::gui;
 using jeapi::gui::node_editor;
 
-let editor = node_editor::create("Demo", {});
-
 using IntType = (mut int)
 {
     public func create()=> IntType
@@ -78,11 +76,40 @@ using AddInt = struct{
         return true;
     }
 }
+using Comment = struct{text: mut string}
+{
+    public func create(_: node_editor)=> Comment
+        where require!(Comment: INode);
+    {
+        return Comment{text = mut "注释节点"};
+    }
+    public func name(_: Comment)=> string
+    {
+        return "Comment";
+    }
+    public func onUpdate(self: Comment, _: node_editor)=> void
+    {
+        PushItemWidth(300.);
+        PushStyleColor(ImGuiCol::ImGuiCol_Text, (0, 0, 0, 255));
+        do InputText("##asdasdComment", self.text)->>\t = self.text = t;;
+        PopStyleColor(1);
+        PopItemWidth();
+    }
+    public func onDelete(self: Comment, editor: node_editor)=> bool
+    {
+        do self; do editor;
+        return true;
+    }
+}
 
-editor->add_node:<AddInt>();
-editor->add_node:<AddInt>();
-editor->add_node:<AddInt>();
-editor->add_node:<AddInt>();
+let editor = node_editor::create("Demo", {
+    ["运算"] = NodeDictItem::Dict({
+        ["AddInt"] = NodeDictItem::Node(INode::creator:<AddInt>),
+    }),
+    ["其他"] = NodeDictItem::Dict({
+        ["Comment"] = NodeDictItem::Node(INode::creator:<Comment>),
+    }),
+});
 
 launch(func()
     {
