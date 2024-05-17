@@ -29,6 +29,7 @@ namespace jeapi::gui
         output_port_texture: option<je::graphic::texture>,
 
         node_info_dic: mut option<_NodeInfoDict>,
+        context_menu: mut option<()=> void>,
 
         executing_jobs: vec<()=> void>,
     }
@@ -48,7 +49,7 @@ namespace jeapi::gui
         interface! INode
         {
             public func name(self: INode)=> string;
-            public func onUpdate(self: INode, editor: node_editor)=> void;
+            public func onUpdate(self: INode, editor: node_editor, tag: string)=> void;
             public func onDelete(self: INode, editor: node_editor)=> bool;
 
             require Self::create is (node_editor)=> Self;
@@ -194,7 +195,10 @@ namespace jeapi::gui
                 }
                 EndGroup();
 
-                self.instance->onUpdate(editor);
+                gui::PushStyleColor(ImGuiCol::ImGuiCol_Text, (0, 0, 0, 255));
+                self.instance->onUpdate(editor, F"##{self.instance->name()}[{self.id}]");
+                gui::PopStyleColor(1);
+
                 EndNode();
             }
         }
@@ -302,12 +306,19 @@ namespace jeapi::gui
                     option::none, "!/builtin/icon/OutputPin.png"),
 
                 node_info_dic = mut option::none,
+                context_menu = mut option::none,
 
                 executing_jobs = []mut,
             };
 
-            self.node_info_dic = option::value(self->_generate_node_dict(nodedict));
+            self.node_info_dic = option::value(
+                self->_generate_node_dict(nodedict));
+
             return self;
+        }
+        public func bind_context_menu(self: node_editor, menu: ()=> void)
+        {
+            self.context_menu = option::value(menu);
         }
         public func execute(self: node_editor, job: ()=> void)
         {
@@ -317,6 +328,15 @@ namespace jeapi::gui
         {
             if (BeginCreate((0, 255, 255, 255), 2.))
             {
+                match (QueryNewNode())
+                {
+                value(_)?
+                    if (AcceptNewItem())
+                    {
+                        std::println("QueryNewNode() get!");   
+                    }
+                none?;
+                }
                 match (QueryNewLink())
                 {
                 value((mut a, mut b))?
@@ -475,6 +495,12 @@ namespace jeapi::gui
                 {
                     self->_menu_show_new_nodes(self.node_info_dic->valor({}));
                 }
+                
+                match (self.context_menu)
+                {
+                value(menu)? menu();
+                none?;
+                }
 
                 EndPopup();
             }
@@ -485,10 +511,8 @@ namespace jeapi::gui
             gui::PushStyleColor(ImGuiCol::ImGuiCol_Text, (255, 255, 255, 255));
 
             for (let (_, n) : self.nodes)
-            {
                 n->update(self);
-            }
-
+     
             // 在此处理链接
             for (let (lid, (aid, bid)) : self.links)
             {
@@ -499,16 +523,14 @@ namespace jeapi::gui
             self->update_delete();
             
             for (let job : self.executing_jobs)
-            {
                 job();
-            }
+
             self.executing_jobs->clear();
 
             gui::PopStyleColor(1);
             node_editor::End();
             
-            self->_context_menu();
-            
+            self->_context_menu();            
         }
 
         func alloc_id<T>(self: node_editor)

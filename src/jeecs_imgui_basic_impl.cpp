@@ -837,6 +837,15 @@ R"(
 
         extern("libjoyecs", "je_gui_node_editor_set_node_position")
         public func SetNodePosition(id: NodeId, pos: (real, real))=> void;
+
+        extern("libjoyecs", "je_gui_node_editor_get_hovered_node")
+        public func GetHoveredNode()=> option<NodeId>;
+
+        extern("libjoyecs", "je_gui_node_editor_get_hovered_pin")
+        public func GetHoveredPin()=> option<PinId>;
+
+        extern("libjoyecs", "je_gui_node_editor_get_hovered_link")
+        public func GetHoveredLink()=> option<LinkId>;
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2602,6 +2611,7 @@ WO_API wo_api je_gui_node_editor_query_new_node(wo_vm vm, wo_value args)
     {
         return wo_ret_option_int(vm, (wo_int_t)pin.Get());
     }
+
     return wo_ret_option_none(vm);
 
 }
@@ -2655,6 +2665,33 @@ WO_API wo_api je_gui_node_editor_set_node_position(wo_vm vm, wo_value args)
 {
     ax::NodeEditor::SetNodePosition((ax::NodeEditor::NodeId)wo_int(args + 0), val2vec2(args + 1));
     return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_node_editor_get_hovered_node(wo_vm vm, wo_value args)
+{
+    auto id = ax::NodeEditor::GetHoveredNode();
+
+    if ((bool)id)
+        return wo_ret_option_int(vm, (wo_int_t)id.Get()); 
+    return wo_ret_option_none(vm);
+}
+
+WO_API wo_api je_gui_node_editor_get_hovered_pin(wo_vm vm, wo_value args)
+{
+    auto id = ax::NodeEditor::GetHoveredPin();
+    
+    if ((bool)id)
+        return wo_ret_option_int(vm, (wo_int_t)id.Get());
+    return wo_ret_option_none(vm);
+}
+
+WO_API wo_api je_gui_node_editor_get_hovered_link(wo_vm vm, wo_value args)
+{
+    auto id = ax::NodeEditor::GetHoveredLink();
+    
+    if ((bool)id)
+        return wo_ret_option_int(vm, (wo_int_t)id.Get());
+    return wo_ret_option_none(vm);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////

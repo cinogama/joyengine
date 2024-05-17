@@ -66,7 +66,7 @@ using AddInt = struct{
     {
         return "AddInt";
     }
-    public func onUpdate(self: AddInt, editor: node_editor)=> void
+    public func onUpdate(self: AddInt, editor: node_editor, _: string)=> void
     {
         do self; do editor;
     }
@@ -87,11 +87,11 @@ using Comment = struct{text: mut string}
     {
         return "Comment";
     }
-    public func onUpdate(self: Comment, _: node_editor)=> void
+    public func onUpdate(self: Comment, _: node_editor, tag: string)=> void
     {
         PushItemWidth(300.);
         PushStyleColor(ImGuiCol::ImGuiCol_Text, (0, 0, 0, 255));
-        do InputText("##asdasdComment", self.text)->>\t = self.text = t;;
+        do InputText(F"##text{tag}", self.text)->>\t = self.text = t;;
         PopStyleColor(1);
         PopItemWidth();
     }
