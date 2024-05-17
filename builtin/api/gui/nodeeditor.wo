@@ -30,6 +30,7 @@ namespace jeapi::gui
         output_port_texture: option<je::graphic::texture>,
 
         node_info_dic: mut option<_NodeInfoDict>,
+        node_info_flat_dic: mut option<dict<name, _NodeInfo>>,
         context_menu: mut option<()=> void>,
 
         executing_jobs: vec<()=> void>,
@@ -261,7 +262,7 @@ namespace jeapi::gui
 
             return node;
         }
-        func _generate_node_dict_item(self: node_editor, item: NodeDictItem)
+        func _generate_node_dict_item(self: node_editor, item: NodeDictItem, out_flat_map: map<string, _NodeInfo>)
             => _NodeInfoDictItem
         {
             match (item)
@@ -269,27 +270,28 @@ namespace jeapi::gui
             Node(generator)?
             {
                 let ninstance = self->_generate_node_impl(generator);
-                return _NodeInfoDictItem::Node(
-                    _NodeInfo{
+                let info = _NodeInfo{
                         name = ninstance.instance->name(),
                         input_types = ninstance.inputs->>\i = i.typeval->typename();,
                         output_types = ninstance.outputs->>\o = o.typeval->typename();,
                         generator = generator,
-                    });
+                    };
+                out_flat_map->set(info.name, info);
+                return _NodeInfoDictItem::Node(info);
             }
             Dict(d)?
             {
-                return _NodeInfoDictItem::Dict(self->_generate_node_dict(d));
+                return _NodeInfoDictItem::Dict(self->_generate_node_dict(d, out_flat_map));
             }
             }
         }
-        func _generate_node_dict(self: node_editor, nodedict: NodeDict)
+        func _generate_node_dict(self: node_editor, nodedict: NodeDict, out_flat_map: map<string, _NodeInfo>)
             => _NodeInfoDict
         {
             let result = {}mut: map<string, _NodeInfoDictItem>;
             for (let (name, item) : nodedict)
             {
-                result->set(name, self->_generate_node_dict_item(item));
+                result->set(name, self->_generate_node_dict_item(item, out_flat_map));
             }
             return result->unsafe::asdict;
         }
@@ -299,9 +301,18 @@ namespace jeapi::gui
             {
                 try! dat = data->dict::deserialize();
                 try! node_type = dat->get("type": dynamic);
-TODO;
+
+                try! mode_info = self.node_info_flat_dic=>>\d = d->get(node_type);;
+                let inputs = mode_info->get("datas": dynamic)->valor({}: dynamic)->valor({}: dynamic);
+                do inputs;
+
+                // TODO;
+                self->_add_node_impl(
+                    self->_generate_node_impl(
+                        mode_info.generator))
+
                 expected_value!;
-            };
+            }->has;
         }
         public func create(title: string, nodedict: NodeDict)
         {
@@ -327,14 +338,17 @@ TODO;
                     option::none, "!/builtin/icon/OutputPin.png"),
 
                 node_info_dic = mut option::none,
+                node_info_flat_dic = mut option::none,
                 context_menu = mut option::none,
 
                 executing_jobs = []mut,
                 context_menu_first_open_mouse = mut option::none,
             };
 
+            let flatmap = {}mut: map<string, _NodeInfo>;
             self.node_info_dic = option::value(
-                self->_generate_node_dict(nodedict));
+                self->_generate_node_dict(nodedict, flatmap));
+            self.node_info_flat_dic = option::value(flatmap->unsafe::asdict);
 
             return self;
         }
