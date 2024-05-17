@@ -3,6 +3,7 @@ import je::gui;
 
 import pkg::interface;
 import pkg::worst;
+import pkg::try;
 
 using je;
 using je::gui;
@@ -32,6 +33,8 @@ namespace jeapi::gui
         context_menu: mut option<()=> void>,
 
         executing_jobs: vec<()=> void>,
+        
+        context_menu_first_open_mouse: mut option<(real, real)>,
     }
     {
         interface! ITyped
@@ -201,6 +204,14 @@ namespace jeapi::gui
 
                 EndNode();
             }
+            
+            public func dump_data(self: _Node)
+            {
+                return {
+                    "type": self.instance->name(): dynamic,
+                    "datas": self.inputs->>\i = i.typeval->tostring();: dynamic,
+                }->serialize();
+            }
         }
 
         func _get_all_link_of(self: node_editor, pinid: PinId)=> array<LinkId>
@@ -282,6 +293,16 @@ namespace jeapi::gui
             }
             return result->unsafe::asdict;
         }
+        public func _restore_and_create_node(self: _Node, data: string)
+        {
+            return try!
+            {
+                try! dat = data->dict::deserialize();
+                try! node_type = dat->get("type": dynamic);
+TODO;
+                expected_value!;
+            };
+        }
         public func create(title: string, nodedict: NodeDict)
         {
             let self = node_editor
@@ -309,6 +330,7 @@ namespace jeapi::gui
                 context_menu = mut option::none,
 
                 executing_jobs = []mut,
+                context_menu_first_open_mouse = mut option::none,
             };
 
             self.node_info_dic = option::value(
@@ -491,11 +513,26 @@ namespace jeapi::gui
         {
             if (BeginPopupContextItem())
             {
+                if (! self.context_menu_first_open_mouse->has)
+                    self.context_menu_first_open_mouse = option::value(GetMousePos());
+
                 if (BeginMenu("新节点..."))
                 {
                     self->_menu_show_new_nodes(self.node_info_dic->valor({}));
                 }
-                
+                match (GetHoveredNode())
+                {
+                value(nid)?
+                    {
+                        if (MenuItem("复制"))
+                        {
+                            let node = self.nodes[nid];
+                            TODO;
+                        }
+                    }
+                none?;
+                }
+
                 match (self.context_menu)
                 {
                 value(menu)? menu();
@@ -584,7 +621,12 @@ namespace jeapi::gui
         func _add_node_impl(self: node_editor, node: _Node)
         {
             self.nodes->set(node.id, node);
-            self->execute(\ = SetNodePosition(node.id, GetMousePos()););
+            self->execute(
+                \ = SetNodePosition(
+                    node.id, 
+                    self.context_menu_first_open_mouse->valor(
+                        GetMousePos()))
+                ;);
         }
         public func add_node<NodeT>(self: node_editor)
             where require!(NodeT: INode);
