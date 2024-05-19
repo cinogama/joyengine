@@ -241,6 +241,8 @@ R"(
     public func IsMouseDragging(attr: ImGuiMouseButton)=> bool;
     extern("libjoyecs", "je_gui_is_mouse_down")
     public func IsMouseDown(attr: ImGuiMouseButton)=> bool;
+    extern("libjoyecs", "je_gui_is_mouse_released")
+    public func IsMouseReleased(attr: ImGuiMouseButton)=> bool;
 
     extern("libjoyecs", "je_gui_set_tooltip")
     public func SetTooltip(msg: string)=> bool;
@@ -832,11 +834,14 @@ R"(
         extern("libjoyecs", "je_gui_node_editor_delete_node")
         public func DeleteNode(id: NodeId)=> bool;
 
-        extern("libjoyecs", "je_gui_node_editor_delete_link")
-        public func DeleteLink(id: LinkId)=> bool;
+        extern("libjoyecs", "je_gui_node_editor_get_node_position")
+        public func GetNodePosition(id: NodeId)=> (real, real);
 
         extern("libjoyecs", "je_gui_node_editor_set_node_position")
         public func SetNodePosition(id: NodeId, pos: (real, real))=> void;
+
+        extern("libjoyecs", "je_gui_node_editor_delete_link")
+        public func DeleteLink(id: LinkId)=> bool;
 
         extern("libjoyecs", "je_gui_node_editor_get_hovered_node")
         public func GetHoveredNode()=> option<NodeId>;
@@ -846,6 +851,15 @@ R"(
 
         extern("libjoyecs", "je_gui_node_editor_get_hovered_link")
         public func GetHoveredLink()=> option<LinkId>;
+
+        extern("libjoyecs", "je_gui_node_editor_is_node_selected")
+        public func IsNodeSelected()=> option<LinkId>;
+
+        extern("libjoyecs", "je_gui_node_editor_canvas_to_screen")
+        public func CanvasToScreen(pos: (real, real))=> (real, real);
+
+        extern("libjoyecs", "je_gui_node_editor_screen_to_canvas")
+        public func ScreenToCanvas(pos: (real, real))=> (real, real);
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1468,6 +1482,10 @@ WO_API wo_api je_gui_is_mouse_down(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm, ImGui::IsMouseDown((ImGuiMouseButton)wo_int(args + 0)));
 }
+WO_API wo_api je_gui_is_mouse_released(wo_vm vm, wo_value args)
+{
+    return wo_ret_bool(vm, ImGui::IsMouseReleased((ImGuiMouseButton)wo_int(args + 0)));
+}
 
 WO_API wo_api je_gui_set_tooltip(wo_vm vm, wo_value args)
 {
@@ -1477,7 +1495,10 @@ WO_API wo_api je_gui_set_tooltip(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_treenodeex(wo_vm vm, wo_value args)
 {
-    return wo_ret_bool(vm, ImGui::TreeNodeEx(wo_string(args + 0), (ImGuiTreeNodeFlags)wo_int(args + 1)));
+    return wo_ret_bool(vm, 
+        ImGui::TreeNodeEx(
+            wo_string(args + 0), 
+            (ImGuiTreeNodeFlags)wo_int(args + 1)));
 }
 
 WO_API wo_api je_gui_treenode(wo_vm vm, wo_value args)
@@ -2661,6 +2682,22 @@ WO_API wo_api je_gui_node_editor_delete_link(wo_vm vm, wo_value args)
     return wo_ret_bool(vm, ax::NodeEditor::DeleteLink((ax::NodeEditor::LinkId)wo_int(args + 0)));
 }
 
+WO_API wo_api je_gui_node_editor_get_node_position(wo_vm vm, wo_value args)
+{
+    auto v2 = ax::NodeEditor::GetNodePosition((ax::NodeEditor::NodeId)wo_int(args + 0));
+
+    wo_value result = wo_push_struct(vm, 2);
+    wo_value val = wo_push_empty(vm);
+
+    wo_set_float(val, v2.x);
+    wo_struct_set(result, 0, val);
+
+    wo_set_float(val, v2.y);
+    wo_struct_set(result, 1, val);
+
+    return wo_ret_val(vm, result);
+}
+
 WO_API wo_api je_gui_node_editor_set_node_position(wo_vm vm, wo_value args)
 {
     ax::NodeEditor::SetNodePosition((ax::NodeEditor::NodeId)wo_int(args + 0), val2vec2(args + 1));
@@ -2692,6 +2729,45 @@ WO_API wo_api je_gui_node_editor_get_hovered_link(wo_vm vm, wo_value args)
     if ((bool)id)
         return wo_ret_option_int(vm, (wo_int_t)id.Get());
     return wo_ret_option_none(vm);
+}
+
+WO_API wo_api je_gui_node_editor_is_node_selected(wo_vm vm, wo_value args)
+{
+    return wo_ret_bool(vm, 
+        ax::NodeEditor::IsNodeSelected(
+            (ax::NodeEditor::NodeId)wo_int(args + 0)));
+}
+
+WO_API wo_api je_gui_node_editor_canvas_to_screen(wo_vm vm, wo_value args)
+{
+    auto v2 = ax::NodeEditor::CanvasToScreen(val2vec2(args + 0));
+    
+    wo_value result = wo_push_struct(vm, 2);
+    wo_value val = wo_push_empty(vm);
+
+    wo_set_float(val, v2.x);
+    wo_struct_set(result, 0, val);
+
+    wo_set_float(val, v2.y);
+    wo_struct_set(result, 1, val);
+
+    return wo_ret_val(vm, result);
+}
+
+WO_API wo_api je_gui_node_editor_screen_to_canvas(wo_vm vm, wo_value args)
+{
+    auto v2 = ax::NodeEditor::ScreenToCanvas(val2vec2(args + 0));
+
+    wo_value result = wo_push_struct(vm, 2);
+    wo_value val = wo_push_empty(vm);
+
+    wo_set_float(val, v2.x);
+    wo_struct_set(result, 0, val);
+
+    wo_set_float(val, v2.y);
+    wo_struct_set(result, 1, val);
+
+    return wo_ret_val(vm, result);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////

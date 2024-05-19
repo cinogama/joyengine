@@ -1,9 +1,13 @@
 import woo::std;
+import woo::debug;
+
 import je;
 import je::editor;
 import je::gui;
 
 import builtin::api::gui::nodeeditor;
+
+import pkg::fsys;
 
 using je::gui;
 
@@ -13,101 +17,223 @@ je::editor::init_graphic_pipeline(u);
 using jeapi::gui;
 using jeapi::gui::node_editor;
 
-using IntType = (mut int)
+using StringType = (mut string)
 {
-    public func create()=> IntType
-        where require!(IntType: ITyped);
+    public func create()=> StringType
+        where require!(StringType: ITyped);
     {
-        return (mut 0,): IntType;
+        return (mut "",): StringType;
     }
-    public func tostring(self: IntType)=> string
+    public func tostring(self: StringType)=> string
     {
-        return self.0: string;
+        return self.0;
     }
-    public func parse(self: IntType, val: string)=> void
+    public func parse(self: StringType, val: string)=> void
     {
-        self.0 = val: int;
+        self.0 = val;
     }
-    public func edit(self: IntType, tag: string)=> void
+    public func edit(self: StringType, tag: string)=> void
     {
         PushItemWidth(100.);
-        do InputInt(tag, self.0)->>\v = self.0 = v;;
+        do InputText(tag, self.0)->>\v = self.0 = v;;
         PopItemWidth();
     }
-    public func typename(_: IntType)=> string
+    public func typename(_: StringType)=> string
     {
-        return "IntType";
+        return "StringType";
     }
-    public func maxoutput(_: IntType)=> int
+    public func maxoutput(_: StringType)=> int
     {
         return 0;
     }
-    public func color(_: IntType)
+    public func color(_: StringType)
     {
-        return (62, 200, 104, 255);
+        return (62, 175, 150, 255);
     }
 }
 
-using AddInt = struct{
-    a: Input<IntType>,
-    b: Input<IntType>,
+using PathWalkerProducer = struct{
+    begin_path : mut string,
+    current_path: mut option<fsys::path_t>,
+    iterator: mut option<fsys::pathwalker_t>,
 }
 {
-    public func create(editor: node_editor)=> AddInt
-        where require!(AddInt: INode);
+    public func create()=> PathWalkerProducer
+        where require!(PathWalkerProducer: IProducer);
     {
-        editor->add_output:<IntType>("output");
-        return AddInt{
-            a = editor->add_input:<IntType>("a"),
-            b = editor->add_input:<IntType>("b"),
+        return PathWalkerProducer{
+            begin_path = mut "",
+            current_path = mut option::none,
+            iterator = mut option::none,
         };
     }
-    public func name(_: AddInt)=> string
+    public func reset(self: PathWalkerProducer)
     {
-        return "AddInt";
+        self.current_path = option::none;
+        self.iterator = fsys::walk(fsys::normalize(self.begin_path))->okay;
+        self.current_path = option::none;
     }
-    public func onUpdate(self: AddInt, editor: node_editor, _: string)=> void
+    public func movenext(self: PathWalkerProducer)=> bool
     {
-        do self; do editor;
+        self.current_path = self.iterator=>>\i = i->next;;
+        if (self.current_path->has)
+            return true;
+            
+        self.iterator = option::none;
+        return false;
     }
-    public func onDelete(self: AddInt, editor: node_editor)=> bool
+    public func tostring(self: PathWalkerProducer)=> string
     {
-        do self; do editor;
-        return true;
+        return self.begin_path;
     }
-}
-using Comment = struct{text: mut string}
-{
-    public func create(_: node_editor)=> Comment
-        where require!(Comment: INode);
+    public func parse(self: PathWalkerProducer, dat: string)=> void
     {
-        return Comment{text = mut "注释节点"};
+        self.begin_path = dat;
     }
-    public func name(_: Comment)=> string
+    public func edit(self: PathWalkerProducer, tag: string)=> void
     {
-        return "Comment";
-    }
-    public func onUpdate(self: Comment, _: node_editor, tag: string)=> void
-    {
-        PushItemWidth(300.);
-        PushStyleColor(ImGuiCol::ImGuiCol_Text, (0, 0, 0, 255));
-        do InputText(F"##text{tag}", self.text)->>\t = self.text = t;;
-        PopStyleColor(1);
+        PushItemWidth(100.);
+        do InputText(tag, self.begin_path)->>\v = self.begin_path = v;;
         PopItemWidth();
     }
-    public func onDelete(self: Comment, editor: node_editor)=> bool
+
+}
+using AddString = struct{
+    a: Input<StringType>,
+    b: Input<StringType>,
+    output: StringType,
+}
+{
+    public func create(editor: node_editor)=> AddString
+        where require!(AddString: INode);
     {
-        do self; do editor;
+        return AddString{
+            a = editor->add_input:<StringType>("a"),
+            b = editor->add_input:<StringType>("b"),
+            output = editor->add_output:<StringType>("output"),
+        };
+    }
+    public func name(_: AddString)=> string
+    {
+        return "AddString";
+    }
+    public func color(_: AddString)
+    {
+        return (0, 0, 0, 127);
+    }
+    public func onUpdate(_: AddString, _: node_editor, _: string)=> void
+    {
+    }
+    public func onDelete(_: AddString, _: node_editor)=> bool
+    {
         return true;
+    }
+    public func onEval(self: AddString, _: node_editor)=> void
+    {
+        let a = self.a->eval();
+        let b = self.b->eval();
+        self.output.0 = a.0 + b.0;
+    }
+    public func tostring(_: AddString)=> string
+    {
+        return "";
+    }
+    public func parse(_: AddString, _: string)=> void
+    {
+    }
+}
+
+using PathWalker = struct{
+    begin_path: PathWalkerProducer,
+    produce_path: StringType,
+}
+{
+    public func create(editor: node_editor)=> PathWalker
+        where require!(PathWalker: INode);
+    {
+        return PathWalker{
+            begin_path = editor->add_producer:<PathWalkerProducer>("起始路径"),
+            produce_path = editor->add_output:<StringType>("路径"),
+        };
+    }
+    public func name(_: PathWalker)=> string
+    {
+        return "PathWalker";
+    }
+    public func color(_: PathWalker)
+    {
+        return (30, 50, 30, 127);
+    }
+    public func onUpdate(_: PathWalker, _: node_editor, _: string)=> void
+    {
+    }
+    public func onDelete(_: PathWalker, _: node_editor)=> bool
+    {
+        return true;
+    }
+    public func onEval(self: PathWalker, _: node_editor)=> void
+    {
+        let path = self.begin_path.current_path->val->tostring();
+        self.produce_path.0 = path;
+    }
+    public func tostring(_: PathWalker)=> string
+    {
+        return "";
+    }
+    public func parse(_: PathWalker, _: string)=> void
+    {
+    }
+}
+
+using Print = struct{
+    msg: Input<StringType>,
+}
+{
+    public func create(editor: node_editor)=> Print
+        where require!(Print: INode);
+    {
+        return Print{
+            msg = editor->add_input:<StringType>("msg"),
+        };
+    }
+    public func name(_: Print)=> string
+    {
+        return "Print";
+    }
+    public func color(_: Print)
+    {
+        return (50, 30, 30, 127);
+    }
+    public func onUpdate(_: Print, _: node_editor, _: string)=> void
+    {
+    }
+    public func onDelete(_: Print, _: node_editor)=> bool
+    {
+        return true;
+    }
+    public func onEval(self: Print, _: node_editor)=> void
+    {
+        let msg = self.msg->eval();
+        std::println(msg.0);
+    }
+    public func tostring(_: Print)=> string
+    {
+        return "";
+    }
+    public func parse(_: Print, _: string)=> void
+    {
     }
 }
 
 let editor = node_editor::create("Demo", {
-    ["运算"] = NodeDictItem::Dict({
-        ["AddInt"] = NodeDictItem::Node(INode::creator:<AddInt>),
+    ["产生器"] = NodeDictItem::Dict({
+        ["PathWalker"] = NodeDictItem::Node(INode::creator:<PathWalker>),
     }),
-    ["其他"] = NodeDictItem::Dict({
-        ["Comment"] = NodeDictItem::Node(INode::creator:<Comment>),
+    ["运算"] = NodeDictItem::Dict({
+        ["AddString"] = NodeDictItem::Node(INode::creator:<AddString>),
+    }),
+    ["操作"] = NodeDictItem::Dict({
+        ["Print"] = NodeDictItem::Node(INode::creator:<Print>),
     }),
 });
 

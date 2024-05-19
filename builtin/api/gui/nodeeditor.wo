@@ -2,6 +2,7 @@ import je;
 import je::gui;
 
 import pkg::interface;
+import pkg::iterator;
 import pkg::worst;
 import pkg::try;
 
@@ -19,25 +20,39 @@ namespace jeapi::gui
         nodes: map<NodeId, _Node>,
         inputpins: map<PinId, _InputPin>,
         outputpins: map<PinId, _OutputPin>,
+        producers: map<PinId, _Producer>,
 
         allocated_id: mut int,
 
         __current_node_id: mut option<NodeId>,
+        __allocating_producers: mut option<vec<_Producer>>,
         __allocating_input_nodes: mut option<vec<_InputPin>>,
         __allocating_output_nodes: mut option<vec<_OutputPin>>,
+
+        context_menu_open_flag: mut bool,
+        _last_hoverd_node: mut option<NodeId>,
+        _last_hoverd_link: mut option<LinkId>,
+        _last_hoverd_pin: mut option<PinId>,
 
         input_port_texture: option<je::graphic::texture>,
         output_port_texture: option<je::graphic::texture>,
 
         node_info_dic: mut option<_NodeInfoDict>,
-        node_info_flat_dic: mut option<dict<name, _NodeInfo>>,
+        node_info_flat_dic: mut option<dict<string, _NodeInfo>>,
         context_menu: mut option<()=> void>,
 
         executing_jobs: vec<()=> void>,
-        
-        context_menu_first_open_mouse: mut option<(real, real)>,
     }
     {
+        interface! IProducer
+        {
+            public func reset(self: IProducer)=> void; // 重置迭代器状态
+            public func movenext(self: IProducer)=> bool; // 移动到下一个元素
+            public func tostring(self: IProducer)=> string;
+            public func parse(self: IProducer, dat: string)=> void;
+            public func edit(self: IProducer, tag: string)=> void;
+        }
+
         interface! ITyped
         {
             public func tostring(self: ITyped)=> string;
@@ -53,8 +68,12 @@ namespace jeapi::gui
         interface! INode
         {
             public func name(self: INode)=> string;
+            public func color(self: INode)=> (int, int, int, int);
             public func onUpdate(self: INode, editor: node_editor, tag: string)=> void;
             public func onDelete(self: INode, editor: node_editor)=> bool;
+            public func onEval(self: INode, editor: node_editor)=> void;
+            public func tostring(self: INode)=> string;
+            public func parse(self: INode, value: string)=> void;
 
             require Self::create is (node_editor)=> Self;
         }
@@ -83,7 +102,21 @@ namespace jeapi::gui
             Node(_NodeInfo),
             Dict(_NodeInfoDict),
         }
+        using _Producer = struct{
+            id: PinId,
+            producer: IProducer,
+            name: string,
+        }
+        {
+            func update(self: _Producer)
+            {
+                gui::Text(self.name);
 
+                gui::PushStyleColor(ImGuiCol::ImGuiCol_Text, (0, 0, 0, 255));
+                self.producer->edit(F"##{self.name}");
+                gui::PopStyleColor(1);
+            }
+        }
         using _InputPin = struct
         {
             id: PinId,
@@ -155,18 +188,38 @@ namespace jeapi::gui
 
         using Input<T> = struct
         {
-            typed: T,
+            val: T,
             pin: _InputPin,
+            context: node_editor,
         }
         {
-            func create<T>(typedval: T, pin: _InputPin)
+            func create<T>(val: T, pin: _InputPin, ctx: node_editor)
                 where require!(T: ITyped);
             {
                 return Input
                 {
-                    typed = typedval,
+                    val = val,
                     pin = pin,
+                    context = ctx,
                 };
+            }
+            public func eval<T>(self: Input<T>)=> T
+            {
+                match (self.pin.linked_pin)
+                {
+                value(linked_output)?
+                    {
+                        let outpin = self.context.outputpins[linked_output];
+                        let node = self.context.nodes[outpin.nodeid];
+
+                        if (! node.evaled)
+                            node.instance->onEval(self.context);
+
+                        self.val->parse(outpin.typeval->tostring());
+                    }
+                none?;
+                }
+                return self.val;
             }
         }
 
@@ -174,16 +227,27 @@ namespace jeapi::gui
         {
             id: NodeId,
             instance: INode,
+
+            producers: array<_Producer>,
             inputs: array<_InputPin>,
             outputs: array<_OutputPin>,
+
+            position: mut (real, real),
+
+            evaled: mut bool,
         }
         {
             func update(self: _Node, editor: node_editor)
             {
+                node_editor::PushStyleColor(StyleColor::StyleColor_NodeBg, self.instance->color());
                 BeginNode(self.id);
                 Text(self.instance->name());
 
                 BeginGroup();
+                for (let pp : self.producers)
+                {
+                    pp->update();
+                }
                 for (let ip : self.inputs)
                 {
                     ip->update(editor);
@@ -204,14 +268,18 @@ namespace jeapi::gui
                 gui::PopStyleColor(1);
 
                 EndNode();
+                node_editor::PopStyleColor(1);
+
+                self.position = GetNodePosition(self.id);
             }
-            
             public func dump_data(self: _Node)
             {
                 return {
-                    "type": self.instance->name(): dynamic,
-                    "datas": self.inputs->>\i = i.typeval->tostring();: dynamic,
-                }->serialize();
+                    ["type"] = self.instance->name(): dynamic,
+                    ["producers"] = self.producers->>\p = p.producer->tostring();: dynamic,
+                    ["inputs"] = self.inputs->>\i = i.typeval->tostring();: dynamic,
+                    ["data"] = self.instance->tostring(): dynamic,
+                }->serialize()->val;
             }
         }
 
@@ -246,17 +314,24 @@ namespace jeapi::gui
             let new_id = self->alloc_id:<NodeId>();
 
             self.__current_node_id = option::value(new_id);
+            self.__allocating_producers = option::value([]mut);
             self.__allocating_input_nodes = option::value([]mut);
             self.__allocating_output_nodes = option::value([]mut);
 
             let node = _Node{
                 id = new_id,
                 instance = INode::create(generator(self)),
+                producers = self.__allocating_producers->val->unsafe::asarray,
                 inputs = self.__allocating_input_nodes->val->unsafe::asarray,
                 outputs = self.__allocating_output_nodes->val->unsafe::asarray,
+
+                position = mut (0., 0.),
+
+                evaled = mut false,
             };
 
             self.__current_node_id = option::none;
+            self.__allocating_producers = option::none;
             self.__allocating_input_nodes = option::none;
             self.__allocating_output_nodes = option::none;
 
@@ -295,25 +370,156 @@ namespace jeapi::gui
             }
             return result->unsafe::asdict;
         }
-        public func _restore_and_create_node(self: _Node, data: string)
+        public func _restore_and_create_node(self: node_editor, data: string)
         {
             return try!
             {
                 try! dat = data->dict::deserialize();
-                try! node_type = dat->get("type": dynamic);
-
+                try! node_type = dat->get("type": dynamic)=>>\v = v->trycast:<string>;;
+                try! node_data = dat->get("data": dynamic)=>>\v = v->trycast:<string>;;
                 try! mode_info = self.node_info_flat_dic=>>\d = d->get(node_type);;
-                let inputs = mode_info->get("datas": dynamic)->valor({}: dynamic)->valor({}: dynamic);
-                do inputs;
+                let inputs = dat->get("inputs": dynamic)
+                    -> valor([]: dynamic)
+                    -> valor([]: array<string>)
+                    ;
+                let producers = dat->get("producers": dynamic)
+                    -> valor([]: dynamic)
+                    -> valor([]: array<string>)
+                    ;
 
-                // TODO;
-                self->_add_node_impl(
-                    self->_generate_node_impl(
-                        mode_info.generator))
-
-                expected_value!;
-            }->has;
+                let node = self->_generate_node_impl(mode_info.generator);
+                node.instance->parse(node_data);
+                for (let (idx, val): inputs->iter |> iterator::enumerate)
+                {
+                    do node.inputs->get(idx)->>\tval = tval.typeval->parse(val);;
+                }
+                for (let (idx, val): producers->iter |> iterator::enumerate)
+                {
+                    do node.producers->get(idx)->>\tval = tval.producer->parse(val);;
+                }
+                expected_value! node;
+            };
         }
+        using NodeDump = struct {
+            nodes: array<(string, array<PinId>, array<PinId>, (real, real))>,
+            links: array<(PinId, PinId)>,
+        }
+        {
+            alias NodeDumpData = dict<string, array<array<dynamic>>>;
+            public func dump(self: NodeDump)=> NodeDumpData
+            {
+                return {
+                    ["nodes"] = self.nodes->>\dat = [dat.0: dynamic, dat.1: dynamic, dat.2: dynamic, [(dat.3).0, (dat.3).1]: dynamic];,
+                    ["links"] = self.links->>\dat = [dat.0: dynamic, dat.1: dynamic];,
+                };
+            }
+            public func restore(dat: NodeDumpData)=> option<NodeDump>
+            {
+                return try!
+                {
+                    try! nodes = dat->get("nodes");
+                    try! links = dat->get("links");
+
+                    let result_nodes = []mut: vec<(string, array<PinId>, array<PinId>, (real, real))>;
+                    let result_links = []mut: vec<(PinId, PinId)>;
+                    for (let dat: nodes)
+                    {
+                        do try!
+                        {
+                            try! node_data = dat->get(0)=>>\dat = dat->trycast:<string>;;
+                            try! inputs = dat->get(1)=>> \dat = dat->trycast:<array<int>>;;
+                            try! outputs = dat->get(2)=>> \dat = dat->trycast:<array<int>>;;
+                            try! pos = dat->get(3)=>> \dat = dat->trycast:<array<real>>;;
+
+                            result_nodes->add(
+                                (
+                                    node_data, 
+                                    inputs->>\id = id: PinId;, 
+                                    outputs->>\id = id: PinId;, 
+                                    (pos[0], pos[1])
+                                ));
+
+                            expected_value!;
+                        };
+                    }
+                    for (let dat: links)
+                    {
+                        do try!
+                        {
+                            try! aid = dat->get(0)=>>\dat = dat->trycast:<int>;;
+                            try! bid = dat->get(1)=>>\dat = dat->trycast:<int>;;
+                            result_links->add((aid: PinId, bid: PinId));
+
+                            expected_value!;
+                        };
+                    }
+                    expected_value! NodeDump{
+                        nodes = result_nodes->unsafe::asarray,
+                        links = result_links->unsafe::asarray,
+                    };
+                };
+            }
+        }
+        public func restore(self: node_editor, dump: NodeDump)
+        {
+            let in_pin_id_map = {}mut: map<PinId, PinId>;
+            let out_pin_id_map = {}mut: map<PinId, PinId>;
+
+            for (let (node_data, inputs, outputs, pos) : dump.nodes)
+            {
+                do try!
+                {
+                    try! node = self->_restore_and_create_node(node_data);
+                    for (let (idx, old_pinid) : inputs->iter |> iterator::enumerate)
+                    {
+                        do node.inputs->get(idx)
+                            ->> \new_pinid = in_pin_id_map->set(old_pinid, new_pinid.id);
+                            ;
+                    }
+                    for (let (idx, old_pinid) : outputs->iter |> iterator::enumerate)
+                    {
+                        do node.outputs->get(idx)
+                            ->> \new_pinid = out_pin_id_map->set(old_pinid, new_pinid.id);
+                            ;
+                    }
+                    self->_add_node_impl(node);
+                    self->execute(func(){
+                        SetNodePosition(node.id, pos);
+                    });
+                    expected_value!;
+                };
+            }
+
+            for (let (aid, bid) : dump.links)
+            {
+                let new_aid = in_pin_id_map[aid];
+                let new_bid = out_pin_id_map[bid];
+
+                do self->_create_link(
+                    self.inputpins[new_aid], self.outputpins[new_bid]);
+            }
+        }
+        public func dump(self: node_editor)=> NodeDump
+        {
+            let nodes = []mut: vec<(string, array<PinId>, array<PinId>, (real, real))>;
+            let links = []mut: vec<(PinId, PinId)>;
+
+            for (let (_, node) : self.nodes)
+            {
+                let inputs = node.inputs->>\i = i.id;;
+                let outputs = node.outputs->>\o = o.id;;
+                nodes->add((node->dump_data(), inputs, outputs, node.position));
+            }
+            for (let (_, (aid, bid)) : self.links)
+            {
+                links->add((aid, bid));
+            }
+            return NodeDump{
+                nodes = nodes->unsafe::asarray,
+                links = links->unsafe::asarray,
+            };
+        }
+
         public func create(title: string, nodedict: NodeDict)
         {
             let self = node_editor
@@ -323,14 +529,21 @@ namespace jeapi::gui
 
                 links = {}mut,
                 nodes = {}mut,
+                producers = {}mut,
                 inputpins = {}mut,
                 outputpins = {}mut,
 
                 allocated_id = mut 100,
 
                 __current_node_id = mut option::none,
+                __allocating_producers = mut option::none,
                 __allocating_input_nodes = mut option::none,
                 __allocating_output_nodes = mut option::none,
+
+                context_menu_open_flag = mut false,
+                _last_hoverd_node = mut option::none,
+                _last_hoverd_link = mut option::none,
+                _last_hoverd_pin = mut option::none,
 
                 input_port_texture = je::graphic::texture::load(
                     option::none, "!/builtin/icon/InputPin.png"),
@@ -342,7 +555,6 @@ namespace jeapi::gui
                 context_menu = mut option::none,
 
                 executing_jobs = []mut,
-                context_menu_first_open_mouse = mut option::none,
             };
 
             let flatmap = {}mut: map<string, _NodeInfo>;
@@ -359,6 +571,31 @@ namespace jeapi::gui
         public func execute(self: node_editor, job: ()=> void)
         {
             self.executing_jobs->add(job);
+        }
+        func _create_link(self: node_editor, inpin: _InputPin, outpin: _OutputPin)
+        {
+             // Only accept one link for input
+            for (let lid: self->_get_all_link_of(inpin.id))
+                do DeleteLink(lid);
+                
+            let max_output = inpin.typeval->maxoutput(); 
+            if (max_output > 0 && outpin.linked_pins->len() >= max_output)
+            {
+                // Remove first link
+                let first = outpin.linked_pins[0];
+                for (let lid: self->_get_all_link_of(first))
+                    do DeleteLink(lid);
+
+                do outpin.linked_pins->remove(0);
+            }
+
+            let linkid = self->alloc_id:<LinkId>();
+            self.links->set(linkid, (inpin.id, outpin.id));
+
+            inpin.linked_pin = option::value(outpin.id);
+            outpin.linked_pins->add(inpin.id);
+
+            return linkid;
         }
         func update_create(self: node_editor)
         {
@@ -386,43 +623,26 @@ namespace jeapi::gui
 
                     let mut accept = false;
                     match (self.inputpins->get(a)
-                        =>> \innode = self.outputpins->get(b)
-                            ->> \outnode = (innode, outnode);
+                        =>> \inpin = self.outputpins->get(b)
+                            ->> \outpin = (inpin, outpin);
                             ;)
                     {
-                    value((innode, outnode))?
+                    value((inpin, outpin))?
                         {
                             // 此处检查类型
                             // TODO: 成环检测？
-                            if (innode.nodeid != outnode.nodeid &&
-                                innode.typeval->typename() == outnode.typeval->typename() &&
+                            if (inpin.nodeid != outpin.nodeid &&
+                                inpin.typeval->typename() == outpin.typeval->typename() &&
                                 self->_check_linked(a, b) == false)
                             {
                                 accept = true;
                                 
                                 if (AcceptNewItem())
                                 {
-                                    // Only accept one link for input
-                                    for (let lid: self->_get_all_link_of(a))
-                                        do DeleteLink(lid);
-                                        
-                                    let max_output = innode.typeval->maxoutput(); 
-                                    if (max_output > 0 && outnode.linked_pins->len() >= max_output)
-                                    {
-                                        // Remove first link
-                                        let first = outnode.linked_pins[0];
-                                        for (let lid: self->_get_all_link_of(first))
-                                            do DeleteLink(lid);
-
-                                        do outnode.linked_pins->remove(0);
-                                    }
-
-                                    let linkid = self->alloc_id:<LinkId>();
-                                    self.links->set(linkid, (a, b));
-                                    self->_draw_link(linkid, a, b);
-
-                                    innode.linked_pin = option::value(b);
-                                    outnode.linked_pins->add(a);
+                                    self->_draw_link(
+                                        self->_create_link(inpin, outpin), 
+                                        inpin.id, 
+                                        outpin.id);
                                 }
                             }
                         }
@@ -449,15 +669,21 @@ namespace jeapi::gui
                         let node = self.nodes[nid];
                         if (node.instance->onDelete(self) && AcceptDeletedItem())
                         {
+                            for (let p : node.producers)
+                            {
+                                do self.producers->remove(p.id);
+                            }
                             for (let i : node.inputs)
                             {
                                 for (let lid: self->_get_all_link_of(i.id))
                                     do DeleteLink(lid);
+                                do self.inputpins->remove(i.id);
                             }
                             for (let o : node.outputs)
                             {
                                 for (let lid: self->_get_all_link_of(o.id))
                                     do DeleteLink(lid);
+                                do self.outputpins->remove(o.id);
                             }
 
                             do self.nodes->remove(nid);   
@@ -481,17 +707,25 @@ namespace jeapi::gui
                             let (aid, bid) = self.links[lid];
                             do self.links->remove(lid);
 
-                            let innode = self.inputpins[aid];
-                            let outnode = self.outputpins[bid];
-
-                            match (innode.linked_pin)
+                            match (self.inputpins->get(aid))
                             {
-                            value(linked_id)?
-                                if (linked_id == bid)
-                                    innode.linked_pin = option::none;
+                            value(inpin)?
+                                match (inpin.linked_pin)
+                                {
+                                value(linked_id)?
+                                    if (linked_id == bid)
+                                        inpin.linked_pin = option::none;
+                                    none?;
+                                }
                             none?;
                             }
-                            do outnode.linked_pins->remove(outnode.linked_pins->find(aid));
+                            //
+                            match (self.outputpins->get(bid))
+                            {
+                            value(outpin)?
+                                do outpin.linked_pins->remove(outpin.linked_pins->find(aid));
+                            none?;
+                            }
                         }
                     }
                     none? break;
@@ -523,25 +757,106 @@ namespace jeapi::gui
                 }
             }
         }
-        func _context_menu(self: node_editor)
+        func _reset_eval_produce_state(_: node_editor, prods: array<_Producer>)
         {
-            if (BeginPopupContextItem())
+            for (let p : prods)
+                p.producer->reset();
+        }
+        func _reset_eval_node_state(_: node_editor, nodes: array<_Node>)
+        {
+            for (let n : nodes)
+                n.evaled = false;
+        }
+        func __collect_nodes(self: node_editor, node: _Node, out: vec<_Node>)
+        {
+            if (out->find(node) == -1)
             {
-                if (! self.context_menu_first_open_mouse->has)
-                    self.context_menu_first_open_mouse = option::value(GetMousePos());
+                out->add(node);
+                for (let inpin : node.inputs)
+                {
+                    match (inpin.linked_pin)
+                    {
+                    value(linked_id)?
+                    {
+                        let outpin = self.outputpins[linked_id];
+                        let outnode = self.nodes[outpin.nodeid];
+                        self->__collect_nodes(outnode, out);
+                    }
+                    none?;
+                    }
+                }
+            }
+        }
+        func _collect_nodes(self: node_editor, node: _Node)
+        {
+            let result = []mut: vec<_Node>;
+            self->__collect_nodes(node, result);
+            return result->unsafe::asarray;
+        }
+        func _collect_producers(_: node_editor, nodes: array<_Node>)
+        {
+            let result = []mut: vec<_Producer>;
+            for (let n : nodes)
+            {
+                for (let p : n.producers)
+                    result->add(p);
+            }
+            return result->unsafe::asarray;
+        }
+        func _context_menu(self: node_editor, current_hovered: (option<NodeId>, option<LinkId>, option<PinId>))
+        {
+            if (BeginPopupContextItemLabel("NodeEditorMainContextMenu"))
+            {
+                if (! self.context_menu_open_flag)
+                {
+                    self.context_menu_open_flag = true;
+                    self._last_hoverd_node = current_hovered.0;
+                    self._last_hoverd_link = current_hovered.1;
+                    self._last_hoverd_pin = current_hovered.2;
+                }
 
                 if (BeginMenu("新节点..."))
                 {
                     self->_menu_show_new_nodes(self.node_info_dic->valor({}));
+                    EndMenu();
                 }
-                match (GetHoveredNode())
+                match (self._last_hoverd_node)
                 {
                 value(nid)?
                     {
+                        Separator();
                         if (MenuItem("复制"))
                         {
                             let node = self.nodes[nid];
-                            TODO;
+
+                            do self->_restore_and_create_node(node->dump_data())
+                                ->> \node = self->_add_node_impl(node);
+                                ;
+                        }
+                        if (MenuItem("对此节点求值"))
+                        {
+                            let node = self.nodes[nid];
+                            let collected_nodes = self->_collect_nodes(self.nodes[nid]);
+                            let collected_producers = self->_collect_producers(collected_nodes);
+
+                            self->_reset_eval_produce_state(collected_producers);
+                            
+                            let check_producers = 
+                                \= collected_producers
+                                    ->> \p = p.producer->movenext();
+                                    -> reduce(\l, r = l && r;)
+                                    -> valor(true)
+                                ;
+                            ;
+
+                            for (;check_producers();)
+                            {
+                                self->_reset_eval_node_state(collected_nodes);
+
+                                node.instance->onEval(self);
+                                if (self.producers->empty())
+                                    break;
+                            }
                         }
                     }
                 none?;
@@ -555,6 +870,55 @@ namespace jeapi::gui
 
                 EndPopup();
             }
+            else
+            {
+                self.context_menu_open_flag = false;
+                self._last_hoverd_node = option::none;
+                self._last_hoverd_link = option::none;
+                self._last_hoverd_pin = option::none;
+            }
+
+            match (current_hovered.0=>>\nid = self.nodes->get(nid);)
+            {
+            value(node)?
+                {
+                    BeginTooltip();
+                    Text(node.instance->name());
+
+                    if (!node.producers->empty() || !node.inputs->empty() || !node.outputs->empty())
+                        TextDisabled("上一次求值结果：");
+
+                    if (!node.producers->empty() || !node.inputs->empty())
+                    {
+                        TextDisabled("输入：");
+                        for (let p : node.producers)
+                            Text(F"{p.name}: {p.producer->tostring()}");
+ 
+                        for (let p : node.inputs)
+                            Text(F"{p.name}: {p.typeval->tostring()}");
+                    }
+                    if (!node.outputs->empty())
+                    {
+                        TextDisabled("输出：");
+                        for (let p : node.outputs)
+                            Text(F"{p.name}: {p.typeval->tostring()}");
+                    }
+
+                    EndTooltip();
+                }
+            none?;
+            }
+        }
+        func _get_current_hoverd(_: node_editor)
+        {
+            return (
+                GetHoveredNode(),
+                GetHoveredLink(),
+                GetHoveredPin(),
+            );
+            // _last_hoverd_node: mut option<NodeId>,
+            // _last_hoverd_link: mut option<LinkId>,
+            // _last_hoverd_pin: mut option<PinId>,
         }
         public func update(self: node_editor)
         {
@@ -579,9 +943,11 @@ namespace jeapi::gui
             self.executing_jobs->clear();
 
             gui::PopStyleColor(1);
+
+            let hovered = self->_get_current_hoverd();
             node_editor::End();
-            
-            self->_context_menu();            
+
+            self->_context_menu(hovered);
         }
 
         func alloc_id<T>(self: node_editor)
@@ -593,6 +959,23 @@ namespace jeapi::gui
             return self.allocated_id: T;
         }
 
+        public func add_producer<ProducerT>(self: node_editor, name: string)
+            where require!(ProducerT: IProducer);
+        {
+            let producer = ProducerT::create();
+
+            assertmsg(self.__allocating_producers->has,
+                "请在节点的create方法中调用此函数.");
+
+            let _producer = _Producer{
+                id = self->alloc_id:<PinId>(), 
+                producer = IProducer::create(producer),
+                name = name,
+            };
+            self.__allocating_producers->val->add(_producer);
+
+            return producer;
+        }
         public func add_input<TypeT>(self: node_editor, name: string)
             where require!(TypeT: ITyped);
         {
@@ -608,10 +991,8 @@ namespace jeapi::gui
                 name = name,
                 linked_pin = mut option::none,
             };
-
-            self.inputpins->set(_pin.id, _pin);
             self.__allocating_input_nodes->val->add(_pin);
-            return Input::create(val, _pin);
+            return Input::create(val, _pin, self);
         }
         public func add_output<TypeT>(self: node_editor, name: string)
             where require!(TypeT: ITyped);
@@ -628,26 +1009,40 @@ namespace jeapi::gui
                 name = name,
                 linked_pins = []mut,
             };
-
-            self.outputpins->set(_pin.id, _pin);
             self.__allocating_output_nodes->val->add(_pin);
+
+            return val;
         }
         func _add_node_impl(self: node_editor, node: _Node)
         {
             self.nodes->set(node.id, node);
+
+            for (let _producer : node.producers)
+                self.producers->set(_producer.id, _producer);
+            for (let _input : node.inputs)
+                self.inputpins->set(_input.id, _input);
+            for (let _output : node.outputs)
+                self.outputpins->set(_output.id, _output);
+
             self->execute(
-                \ = SetNodePosition(
-                    node.id, 
-                    self.context_menu_first_open_mouse->valor(
-                        GetMousePos()))
-                ;);
+                \ = SetNodePosition(node.id, GetMousePos()););
         }
         public func add_node<NodeT>(self: node_editor)
             where require!(NodeT: INode);
         {
+            let mut node = mutable::create(option::none: option<NodeT>);
+
             self->_add_node_impl(
                 self->_generate_node_impl(
-                    \e = INode::create(NodeT::create(e));));
+                    func(e)
+                    {
+                        let n = NodeT::create(e);
+                        node->set(n);
+
+                        return n;
+                    }));
+
+            return node->get->val;
         }
     }
 }
