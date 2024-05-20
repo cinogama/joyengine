@@ -71,7 +71,7 @@ namespace jeapi::gui
             public func color(self: INode)=> (int, int, int, int);
             public func onUpdate(self: INode, editor: node_editor, tag: string)=> void;
             public func onDelete(self: INode, editor: node_editor)=> bool;
-            public func onEval(self: INode, editor: node_editor)=> void;
+            public func onEval(self: INode, editor: node_editor)=> bool;
             public func tostring(self: INode)=> string;
             public func parse(self: INode, value: string)=> void;
 
@@ -205,20 +205,6 @@ namespace jeapi::gui
             }
             public func eval<T>(self: Input<T>)=> T
             {
-                match (self.pin.linked_pin)
-                {
-                value(linked_output)?
-                    {
-                        let outpin = self.context.outputpins[linked_output];
-                        let node = self.context.nodes[outpin.nodeid];
-
-                        if (! node.evaled)
-                            node.instance->onEval(self.context);
-
-                        self.val->parse(outpin.typeval->tostring());
-                    }
-                none?;
-                }
                 return self.val;
             }
         }
@@ -771,7 +757,6 @@ namespace jeapi::gui
         {
             if (out->find(node) == -1)
             {
-                out->add(node);
                 for (let inpin : node.inputs)
                 {
                     match (inpin.linked_pin)
@@ -785,6 +770,7 @@ namespace jeapi::gui
                     none?;
                     }
                 }
+                out->add(node);
             }
         }
         func _collect_nodes(self: node_editor, node: _Node)
