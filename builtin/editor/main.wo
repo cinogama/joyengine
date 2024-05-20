@@ -55,7 +55,8 @@ using StringType = (mut string)
 using PathWalkerProducer = struct{
     begin_path : mut string,
     current_path: mut option<fsys::path_t>,
-    iterator: mut option<fsys::pathwalker_t>,
+    files: mut array<fsys::path_t>,
+    next_index: mut int,
 }
 {
     public func create()=> PathWalkerProducer
@@ -64,23 +65,29 @@ using PathWalkerProducer = struct{
         return PathWalkerProducer{
             begin_path = mut "",
             current_path = mut option::none,
-            iterator = mut option::none,
+            files = mut [],
+            next_index = mut 0,
         };
     }
     public func reset(self: PathWalkerProducer)
     {
         self.current_path = option::none;
-        self.iterator = fsys::walk(fsys::normalize(self.begin_path))->okay;
-        self.current_path = option::none;
+        self.files = fsys::subpath(fsys::normalize(self.begin_path))->unwarpor([]);
+        self.next_index = 0;
     }
-    public func movenext(self: PathWalkerProducer)=> bool
+    public func next(self: PathWalkerProducer)
     {
-        self.current_path = self.iterator=>>\i = i->next;;
-        if (self.current_path->has)
-            return true;
-            
-        self.iterator = option::none;
-        return false;
+        if (!self->finished())
+        {
+            let r = option::value(self.files[self.next_index]);
+            self.next_index += 1;
+            return r;
+        }
+        return option::none;
+    }
+    public func finished(self: PathWalkerProducer)=> bool
+    {
+        return self.next_index == self.files->len;
     }
     public func tostring(self: PathWalkerProducer)=> string
     {
@@ -128,17 +135,67 @@ using AddString = struct{
     {
         return true;
     }
-    public func onEval(self: AddString, _: node_editor)=> void
+    public func onEval(self: AddString, _: node_editor)=> bool
     {
         let a = self.a->eval();
         let b = self.b->eval();
         self.output.0 = a.0 + b.0;
+
+        return true;
     }
     public func tostring(_: AddString)=> string
     {
         return "";
     }
     public func parse(_: AddString, _: string)=> void
+    {
+    }
+}
+
+using IsFileFilter = struct{
+    inpath: Input<StringType>,
+    outpath: StringType,
+}
+{
+    public func create(editor: node_editor)=> IsFileFilter
+        where require!(IsFileFilter: INode);
+    {
+        return IsFileFilter{
+            inpath = editor->add_input:<StringType>("inpath"),
+            outpath = editor->add_output:<StringType>("outpath"),
+        };
+    }
+    public func name(_: IsFileFilter)=> string
+    {
+        return "IsFileFilter";
+    }
+    public func color(_: IsFileFilter)
+    {
+        return (0, 0, 0, 127);
+    }
+    public func onUpdate(_: IsFileFilter, _: node_editor, _: string)=> void
+    {
+    }
+    public func onDelete(_: IsFileFilter, _: node_editor)=> bool
+    {
+        return true;
+    }
+    public func onEval(self: IsFileFilter, _: node_editor)=> bool
+    {
+        let inpath = self.inpath->eval();
+
+        if (fsys::isfile(fsys::normalize(inpath.0)))
+        {
+            self.outpath.0 = inpath.0;
+            return true;
+        }
+        return false;
+    }
+    public func tostring(_: IsFileFilter)=> string
+    {
+        return "";
+    }
+    public func parse(_: IsFileFilter, _: string)=> void
     {
     }
 }
@@ -171,10 +228,18 @@ using PathWalker = struct{
     {
         return true;
     }
-    public func onEval(self: PathWalker, _: node_editor)=> void
+    public func onEval(self: PathWalker, _: node_editor)=> bool
     {
-        let path = self.begin_path.current_path->val->tostring();
-        self.produce_path.0 = path;
+        match (self.begin_path->next)
+        {
+        value(path)?
+            {
+                self.produce_path.0 = path->tostring;
+                return true;
+            }
+        none?
+            return false;
+        }
     }
     public func tostring(_: PathWalker)=> string
     {
@@ -211,10 +276,12 @@ using Print = struct{
     {
         return true;
     }
-    public func onEval(self: Print, _: node_editor)=> void
+    public func onEval(self: Print, _: node_editor)=> bool
     {
         let msg = self.msg->eval();
         std::println(msg.0);
+
+        return true;
     }
     public func tostring(_: Print)=> string
     {
@@ -231,6 +298,7 @@ let editor = node_editor::create("Demo", {
     }),
     ["运算"] = NodeDictItem::Dict({
         ["AddString"] = NodeDictItem::Node(INode::creator:<AddString>),
+        ["IsFileFilter"] = NodeDictItem::Node(INode::creator:<IsFileFilter>),
     }),
     ["操作"] = NodeDictItem::Dict({
         ["Print"] = NodeDictItem::Node(INode::creator:<Print>),

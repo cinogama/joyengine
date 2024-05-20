@@ -47,7 +47,7 @@ namespace jeapi::gui
         interface! IProducer
         {
             public func reset(self: IProducer)=> void; // 重置迭代器状态
-            public func movenext(self: IProducer)=> bool; // 移动到下一个元素
+            public func finished(self: IProducer)=> bool; // 检测迭代是否结束
             public func tostring(self: IProducer)=> string;
             public func parse(self: IProducer, dat: string)=> void;
             public func edit(self: IProducer, tag: string)=> void;
@@ -205,6 +205,15 @@ namespace jeapi::gui
             }
             public func eval<T>(self: Input<T>)=> T
             {
+                match (self.pin.linked_pin)
+                {
+                value(linked_output)?
+                    {
+                        let outpin = self.context.outputpins[linked_output];
+                        self.val->parse(outpin.typeval->tostring());
+                    }
+                none?;
+                }
                 return self.val;
             }
         }
@@ -701,7 +710,7 @@ namespace jeapi::gui
                                 value(linked_id)?
                                     if (linked_id == bid)
                                         inpin.linked_pin = option::none;
-                                    none?;
+                                none?;
                                 }
                             none?;
                             }
@@ -821,26 +830,33 @@ namespace jeapi::gui
                         }
                         if (MenuItem("对此节点求值"))
                         {
-                            let node = self.nodes[nid];
                             let collected_nodes = self->_collect_nodes(self.nodes[nid]);
                             let collected_producers = self->_collect_producers(collected_nodes);
 
                             self->_reset_eval_produce_state(collected_producers);
-                            
+
                             let check_producers = 
                                 \= collected_producers
-                                    ->> \p = p.producer->movenext();
-                                    -> reduce(\l, r = l && r;)
+                                    ->> \p = p.producer->finished();
+                                    -> reduce(\l, r = l || r;)
                                     -> valor(true)
                                 ;
                             ;
 
-                            for (;check_producers();)
+                            for (;;)
                             {
                                 self->_reset_eval_node_state(collected_nodes);
+                                for (let node: collected_nodes)
+                                {
+                                    if (! node.evaled)
+                                    {
+                                        node.evaled = true;
+                                        if (! node.instance->onEval(self))
+                                            break;
+                                    }
+                                }
 
-                                node.instance->onEval(self);
-                                if (self.producers->empty())
+                                if (check_producers())
                                     break;
                             }
                         }
