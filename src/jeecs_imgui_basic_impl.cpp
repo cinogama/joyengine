@@ -860,6 +860,12 @@ R"(
 
         extern("libjoyecs", "je_gui_node_editor_screen_to_canvas")
         public func ScreenToCanvas(pos: (real, real))=> (real, real);
+
+        extern("libjoyecs", "je_gui_node_editor_suspend")
+        public func Suspend()=> void;
+
+        extern("libjoyecs", "je_gui_node_editor_resume")
+        public func Resume()=> void;
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2768,6 +2774,18 @@ WO_API wo_api je_gui_node_editor_screen_to_canvas(wo_vm vm, wo_value args)
     wo_struct_set(result, 1, val);
 
     return wo_ret_val(vm, result);
+}
+
+WO_API wo_api je_gui_node_editor_suspend(wo_vm vm, wo_value args)
+{
+    ax::NodeEditor::Suspend();
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_node_editor_resume(wo_vm vm, wo_value args)
+{
+    ax::NodeEditor::Resume();
+    return wo_ret_void(vm);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////

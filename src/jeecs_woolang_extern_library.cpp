@@ -156,8 +156,10 @@ WO_API wo_api je_gui_node_editor_query_new_node(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_node_editor_reject_deleted_item(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_node_editor_reject_new_item(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_node_editor_reject_new_item_color(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_node_editor_resume(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_node_editor_screen_to_canvas(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_node_editor_set_node_position(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_node_editor_suspend(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_openpopup(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_openpopup_on_item_click(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_openpopup_on_item_click_attr(wo_vm vm, wo_value args);
@@ -625,8 +627,10 @@ void je_api_init()
         wo_extern_lib_func_t{"je_gui_node_editor_reject_deleted_item", (void*)&je_gui_node_editor_reject_deleted_item},
         wo_extern_lib_func_t{"je_gui_node_editor_reject_new_item", (void*)&je_gui_node_editor_reject_new_item},
         wo_extern_lib_func_t{"je_gui_node_editor_reject_new_item_color", (void*)&je_gui_node_editor_reject_new_item_color},
+        wo_extern_lib_func_t{"je_gui_node_editor_resume", (void*)&je_gui_node_editor_resume},
         wo_extern_lib_func_t{"je_gui_node_editor_screen_to_canvas", (void*)&je_gui_node_editor_screen_to_canvas},
         wo_extern_lib_func_t{"je_gui_node_editor_set_node_position", (void*)&je_gui_node_editor_set_node_position},
+        wo_extern_lib_func_t{"je_gui_node_editor_suspend", (void*)&je_gui_node_editor_suspend},
         wo_extern_lib_func_t{"je_gui_openpopup", (void*)&je_gui_openpopup},
         wo_extern_lib_func_t{"je_gui_openpopup_on_item_click", (void*)&je_gui_openpopup_on_item_click},
         wo_extern_lib_func_t{"je_gui_openpopup_on_item_click_attr", (void*)&je_gui_openpopup_on_item_click_attr},

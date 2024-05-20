@@ -113,7 +113,7 @@ namespace jeapi::gui
                 gui::Text(self.name);
 
                 gui::PushStyleColor(ImGuiCol::ImGuiCol_Text, (0, 0, 0, 255));
-                self.producer->edit(F"##{self.name}");
+                self.producer->edit(F"##{self.name}[{self.id}]");
                 gui::PopStyleColor(1);
             }
         }
@@ -455,46 +455,56 @@ namespace jeapi::gui
                 };
             }
         }
-        public func restore(self: node_editor, dump: NodeDump)
+        public func restore(self: node_editor, dat: string)
         {
-            let in_pin_id_map = {}mut: map<PinId, PinId>;
-            let out_pin_id_map = {}mut: map<PinId, PinId>;
-
-            for (let (node_data, inputs, outputs, pos) : dump.nodes)
+            let r = try!
             {
-                do try!
+                try! dump = dat->dict::deserialize
+                    =>> \dat = dat: dynamic->trycast:<NodeDump::NodeDumpData>();
+                    =>> \dat = NodeDump::restore(dat);
+                    ;
+
+                let in_pin_id_map = {}mut: map<PinId, PinId>;
+                let out_pin_id_map = {}mut: map<PinId, PinId>;
+
+                for (let (node_data, inputs, outputs, pos) : dump.nodes)
                 {
-                    try! node = self->_restore_and_create_node(node_data);
-                    for (let (idx, old_pinid) : inputs->iter |> iterator::enumerate)
+                    do try!
                     {
-                        do node.inputs->get(idx)
-                            ->> \new_pinid = in_pin_id_map->set(old_pinid, new_pinid.id);
-                            ;
-                    }
-                    for (let (idx, old_pinid) : outputs->iter |> iterator::enumerate)
-                    {
-                        do node.outputs->get(idx)
-                            ->> \new_pinid = out_pin_id_map->set(old_pinid, new_pinid.id);
-                            ;
-                    }
-                    self->_add_node_impl(node);
-                    self->execute(func(){
-                        SetNodePosition(node.id, pos);
-                    });
-                    expected_value!;
-                };
-            }
+                        try! node = self->_restore_and_create_node(node_data);
+                        for (let (idx, old_pinid) : inputs->iter |> iterator::enumerate)
+                        {
+                            do node.inputs->get(idx)
+                                ->> \new_pinid = in_pin_id_map->set(old_pinid, new_pinid.id);
+                                ;
+                        }
+                        for (let (idx, old_pinid) : outputs->iter |> iterator::enumerate)
+                        {
+                            do node.outputs->get(idx)
+                                ->> \new_pinid = out_pin_id_map->set(old_pinid, new_pinid.id);
+                                ;
+                        }
+                        self->_add_node_impl(node);
+                        self->execute(func(){
+                            SetNodePosition(node.id, pos);
+                        });
+                        expected_value!;
+                    };
+                }
 
-            for (let (aid, bid) : dump.links)
-            {
-                let new_aid = in_pin_id_map[aid];
-                let new_bid = out_pin_id_map[bid];
+                for (let (aid, bid) : dump.links)
+                {
+                    let new_aid = in_pin_id_map[aid];
+                    let new_bid = out_pin_id_map[bid];
 
-                do self->_create_link(
-                    self.inputpins[new_aid], self.outputpins[new_bid]);
-            }
+                    do self->_create_link(
+                        self.inputpins[new_aid], self.outputpins[new_bid]);
+                }
+                expected_value!;
+            };
+            return r->has();
         }
-        public func dump(self: node_editor)=> NodeDump
+        public func dump(self: node_editor)=> string
         {
             let nodes = []mut: vec<(string, array<PinId>, array<PinId>, (real, real))>;
             let links = []mut: vec<(PinId, PinId)>;
@@ -512,7 +522,7 @@ namespace jeapi::gui
             return NodeDump{
                 nodes = nodes->unsafe::asarray,
                 links = links->unsafe::asarray,
-            };
+            }->dump: string;
         }
 
         public func create(title: string, nodedict: NodeDict)

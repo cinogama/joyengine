@@ -57,22 +57,28 @@ using PathWalkerProducer = struct{
     current_path: mut option<fsys::path_t>,
     files: mut array<fsys::path_t>,
     next_index: mut int,
+
+    recursive: mut bool,
 }
 {
     public func create()=> PathWalkerProducer
-        where require!(PathWalkerProducer: IProducer);
+       // where require!(PathWalkerProducer: IProducer);
     {
         return PathWalkerProducer{
             begin_path = mut "",
             current_path = mut option::none,
             files = mut [],
             next_index = mut 0,
+            recursive = mut false,
         };
     }
     public func reset(self: PathWalkerProducer)
     {
         self.current_path = option::none;
-        self.files = fsys::subpath(fsys::normalize(self.begin_path))->unwarpor([]);
+        if (!self.recursive)
+            self.files = fsys::subpath(fsys::normalize(self.begin_path))->unwarpor([]);
+        else
+            self.files = fsys::allsubpath(fsys::normalize(self.begin_path))->unwarpor([]);
         self.next_index = 0;
     }
     public func next(self: PathWalkerProducer)
@@ -91,16 +97,22 @@ using PathWalkerProducer = struct{
     }
     public func tostring(self: PathWalkerProducer)=> string
     {
-        return self.begin_path;
+        return {
+            ["path"] = self.begin_path: dynamic,
+            ["recursive"] = self.recursive: dynamic,
+        }: string;
     }
     public func parse(self: PathWalkerProducer, dat: string)=> void
     {
-        self.begin_path = dat;
+        let data = dat->dict::deserialize->valor({});
+        self.begin_path = data->getor("path": dynamic, "": dynamic)->valor("");
+        self.recursive = data->getor("recursive": dynamic, false: dynamic)->valor(false);
     }
     public func edit(self: PathWalkerProducer, tag: string)=> void
     {
         PushItemWidth(100.);
-        do InputText(tag, self.begin_path)->>\v = self.begin_path = v;;
+        do InputText(F"##path{tag}", self.begin_path)->>\v = self.begin_path = v;;
+        do CheckBox(F"递归##recursive{tag}", self.recursive)->>\v = self.recursive = v;;
         PopItemWidth();
     }
 
@@ -196,6 +208,61 @@ using IsFileFilter = struct{
         return "";
     }
     public func parse(_: IsFileFilter, _: string)=> void
+    {
+    }
+}
+
+using FileExtensionFilter = struct{
+    inpath: Input<StringType>,
+    extension: Input<StringType>,
+    outpath: StringType,
+}
+{
+    public func create(editor: node_editor)=> FileExtensionFilter
+        where require!(FileExtensionFilter: INode);
+    {
+        return FileExtensionFilter{
+            inpath = editor->add_input:<StringType>("inpath"),
+            extension = editor->add_input:<StringType>("extension"),
+            outpath = editor->add_output:<StringType>("outpath"),
+        };
+    }
+    public func name(_: FileExtensionFilter)=> string
+    {
+        return "FileExtensionFilter";
+    }
+    public func color(_: FileExtensionFilter)
+    {
+        return (0, 0, 0, 127);
+    }
+    public func onUpdate(_: FileExtensionFilter, _: node_editor, _: string)=> void
+    {
+    }
+    public func onDelete(_: FileExtensionFilter, _: node_editor)=> bool
+    {
+        return true;
+    }
+    public func onEval(self: FileExtensionFilter, _: node_editor)=> bool
+    {
+        let inpath = self.inpath->eval();
+        let extension = self.extension->eval();
+
+        if (fsys::isfile(fsys::normalize(inpath.0)))
+        {
+            let ext = fsys::extension(fsys::normalize(inpath.0));
+            if (ext == extension.0)
+            {
+                self.outpath.0 = inpath.0;
+                return true;
+            }
+        }
+        return false;
+    }
+    public func tostring(_: FileExtensionFilter)=> string
+    {
+        return "";
+    }
+    public func parse(_: FileExtensionFilter, _: string)=> void
     {
     }
 }
@@ -296,9 +363,12 @@ let editor = node_editor::create("Demo", {
     ["产生器"] = NodeDictItem::Dict({
         ["PathWalker"] = NodeDictItem::Node(INode::creator:<PathWalker>),
     }),
+    ["过滤器"] = NodeDictItem::Dict({
+        ["IsFileFilter"] = NodeDictItem::Node(INode::creator:<IsFileFilter>),
+        ["FileExtensionFilter"] = NodeDictItem::Node(INode::creator:<FileExtensionFilter>),
+    }),
     ["运算"] = NodeDictItem::Dict({
         ["AddString"] = NodeDictItem::Node(INode::creator:<AddString>),
-        ["IsFileFilter"] = NodeDictItem::Node(INode::creator:<IsFileFilter>),
     }),
     ["操作"] = NodeDictItem::Dict({
         ["Print"] = NodeDictItem::Node(INode::creator:<Print>),
