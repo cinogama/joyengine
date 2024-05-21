@@ -16,28 +16,31 @@ namespace editor::gui
     {
         func get_script_lists(root_path: fsys::path_t, target_path: fsys::path_t)
         {
-            let result = []mut: vec<string>;
-            for (let p : fsys::recursive_walk())
-            {TODO;
-
-            }
-        }
-        public func create(path: fsys::path_t)
-        {
-            let form = jeapi::gui::form::create(
-                F"Workflow {path->tostring}",
-                func(form)
+            let result = []mut: vec<(array<string>, string)>;
+            for (let p : fsys::recursive_walk(target_path) |> iterator::iter_result)
+            {
+                if (fsys::isfile(p) && p->tostring->lower->endwith(".wo"))
                 {
-                    do form;
-                });
-
+                    do fsys::relative(fsys::parent(p), root_path)
+                        ->> \rpath = result->add(
+                            (rpath->split("/")->forall(\s = s != "";), fsys::purename(p)))
+                            ;
+                        ;
+                }
+            }
+            return result;
+        }
+        public func open(path: fsys::path_t)
+        {
             do fsys::mkdir(path / "type");
-            do fsys::mkdir(path / "node");
+            do fsys::mkdir(path / "node"); 
             do fsys::mkdir(path / "producer");
 
-
-
-            return Workflow{};
+            let mut running_script = "";
+            for (let (script_path, script_name) : get_script_lists(path, path / "type"))
+            {
+                running_script += "import ";
+            }
         }
     }
 }
