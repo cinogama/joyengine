@@ -255,7 +255,7 @@ namespace editor::gui::edit_forms
 
                                 PushStyleColor(ImGuiCol::ImGuiCol_Text, (50, 150, 100, 255));
                                 let show_group = TreeNodeEx(groupname, tree_attrib);
-                                PopStyleColor();
+                                PopStyleColor(1);
 
                                 if (show_group)
                                 {

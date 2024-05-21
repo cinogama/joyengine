@@ -5,6 +5,7 @@ import woo::shell;
 import builtin::editor::cpp::main;
 import builtin::editor::gui::animation2d;
 import builtin::editor::gui::particalbaker;
+import builtin::editor::gui::workflow;
 
 using je::gui;
 
@@ -161,6 +162,7 @@ namespace editor::gui
 
         [".shader"] = je::graphic::texture::load(option::none, F"!/builtin/icon/ShaderFile.png")->val,
         [".jemodule4"] = je::graphic::texture::load(option::none, F"!/builtin/icon/CppProgram.png")->val,
+        [".jeworkflow4"] = je::graphic::texture::load(option::none, F"!/builtin/icon/InputPin.png")->val,
 
         [".jeworld"] = je::graphic::texture::load(option::none, F"!/builtin/icon/World.png")->val,
         [".jeentity"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Entity.png")->val,
@@ -409,7 +411,7 @@ namespace editor::gui
             ->map(\_ = BeginPopupContextItem();)
             ->or(\ = BeginPopupContextWindow();))
         {
-            if (BeginMenu(F"新建..."))
+            if (BeginMenu("新建..."))
             {
                 if (MenuItem(F"空目录"))
                     jeapi::gui::form::input("新建空目录", F"在{current_work_path}新建空目录", "NewDir",
@@ -417,7 +419,7 @@ namespace editor::gui
                             ->map(\_ = force_update();)
                             ->or(\errid = jeapi::gui::form::errmsg("失败", F"创建目录失败{errid}");););
                 Separator();
-                if (MenuItem(F"空文件"))
+                if (MenuItem("空文件"))
                 {
                     jeapi::gui::form::input("新建空文件", F"在{current_work_path}新建空文件", "NewFile.txt",
                         \filename: string = fsys::exist(file_path)
@@ -427,7 +429,7 @@ namespace editor::gui
                                 | jeapi::gui::form::errmsg("创建空文件失败", "无法创建文件，可能是文件名非法或磁盘已满")
                         where file_path = fsys::normalize(current_work_path) / filename;);
                 }
-                if (MenuItem(F"Woolang 脚本"))
+                if (MenuItem("Woolang 脚本"))
                 {
                     let default_empty_script = 
 @"import woo::std;
@@ -447,7 +449,7 @@ je::log("Helloworld");
                                 | jeapi::gui::form::errmsg("创建Woolang 脚本失败", "无法创建文件，可能是文件名非法或磁盘已满")
                         where file_path = fsys::normalize(current_work_path) / (filename + ".wo"););
                 }
-                if (MenuItem(F"ToWoo Component 声明"))
+                if (MenuItem("ToWoo Component 声明"))
                 {
                     let default_empty_script = 
 @"import je::towoo::component;
@@ -464,7 +466,7 @@ component!
                                 | jeapi::gui::form::errmsg("创建ToWoo Component 声明失败", "无法创建文件，可能是文件名非法或磁盘已满")
                         where file_path = fsys::normalize(current_work_path) / (filename + ".jecomponent.wo"););
                 }
-                if (MenuItem(F"ToWoo System 脚本"))
+                if (MenuItem("ToWoo System 脚本"))
                 {
                     let default_empty_script = 
 @"import woo::std;
@@ -512,7 +514,7 @@ LATE_UPDATE!
                                 | jeapi::gui::form::errmsg("创建ToWoo System 脚本失败", "无法创建文件，可能是文件名非法或磁盘已满")
                         where file_path = fsys::normalize(current_work_path) / (filename + ".jesystem.wo"););
                 }
-                if (MenuItem(F"Physics2D 组配置"))
+                if (MenuItem("Physics2D 组配置"))
                 {
                     let default_empty_script = 
 @"import je::physics2d::config;
@@ -534,7 +536,7 @@ PHYSICS2D_COLLISIONS!
                                 | jeapi::gui::form::errmsg("创建Physics2D 组配置失败", "无法创建文件，可能是文件名非法或磁盘已满")
                         where file_path = fsys::normalize(current_work_path) / (filename + ".jephysics2d.wo"););
                 }
-                if (MenuItem(F"编辑器工具脚本"))
+                if (MenuItem("编辑器工具脚本"))
                 {
                     let default_empty_script = 
 @"import woo::std;
@@ -555,6 +557,18 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                                 ? force_update()
                                 | jeapi::gui::form::errmsg("创建编辑器工具脚本失败", "无法创建文件，可能是文件名非法或磁盘已满")
                         where file_path = fsys::normalize(current_work_path) / (filename + ".je.wo"););
+                }
+                if (MenuItem("Workflow"))
+                {
+                    jeapi::gui::form::input("新建Workflow", F"在{current_work_path}新建Workflow", "NewWorkflow",
+                        func(filename: string)
+                        {
+                            let path = fsys::normalize(current_work_path) / F"{filename}.jeworkflow4";
+                            if (fsys::exist(path) || fsys::mkdir(path)->iserr)
+                                jeapi::gui::form::errmsg("创建Workflow失败", "可能是同名文件已经存在或文件名路径不合法");
+                            else
+                                force_update();
+                        });
                 }
                 Separator();
                 if (MenuItem("世界"))
@@ -1517,7 +1531,7 @@ namespace $$MODULE_NAME$$
                             do Selectable(F"[{self.m_display_setting[level][0]}] {info}");
                            
                             if (color_setted)
-                                PopStyleColor();
+                                PopStyleColor(1);
                         }
                     }                       
 
@@ -1551,7 +1565,7 @@ namespace $$MODULE_NAME$$
                 {
                     PushStyleColor(ImGuiCol::ImGuiCol_Text, (75, 120, 200, 255));
                     Text(log_displayer->get_log_abstract);
-                    PopStyleColor();
+                    PopStyleColor(1);
             
                     log_displayer->update(context);
             

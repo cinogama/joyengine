@@ -466,7 +466,7 @@ namespace editor::gui::edit_forms
             treenode_attribute);
 
         if (is_variant_or_prefab)
-            PopStyleColor();
+            PopStyleColor(1);
 
         if (BeginDragDropSource())
         {
