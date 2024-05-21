@@ -4,6 +4,7 @@ import je;
 import woo::std;
 
 import pkg::fsys;
+import pkg::iterator;
 
 import builtin::api::gui::form;
 
@@ -11,9 +12,16 @@ namespace editor::gui
 {
     using Workflow = struct{
         path: fsys::path_t,
-        types: 
     }
     {
+        func get_script_lists(root_path: fsys::path_t, target_path: fsys::path_t)
+        {
+            let result = []mut: vec<string>;
+            for (let p : fsys::recursive_walk())
+            {TODO;
+
+            }
+        }
         public func create(path: fsys::path_t)
         {
             let form = jeapi::gui::form::create(
@@ -26,6 +34,8 @@ namespace editor::gui
             do fsys::mkdir(path / "type");
             do fsys::mkdir(path / "node");
             do fsys::mkdir(path / "producer");
+
+
 
             return Workflow{};
         }
