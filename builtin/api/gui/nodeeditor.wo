@@ -39,7 +39,8 @@ namespace jeapi::gui
 
         node_info_dic: mut option<_NodeInfoDict>,
         node_info_flat_dic: mut option<dict<string, _NodeInfo>>,
-        context_menu: mut option<()=> void>,
+        on_context_menu_callback: mut ()=> void,
+        on_eval_callback: mut ()=> void,
 
         show_create_menu: mut bool,
         creating_linking_pin: mut option<PinId>,
@@ -595,7 +596,8 @@ namespace jeapi::gui
 
                 node_info_dic = mut option::none,
                 node_info_flat_dic = mut option::none,
-                context_menu = mut option::none,
+                on_context_menu_callback = mut func(){},
+                on_eval_callback = mut func(){},
 
                 show_create_menu = mut false,
                 creating_linking_pin = mut option::none,
@@ -611,10 +613,6 @@ namespace jeapi::gui
             self.node_info_flat_dic = option::value(flatmap->unsafe::asdict);
 
             return self;
-        }
-        public func bind_context_menu(self: node_editor, menu: ()=> void)
-        {
-            self.context_menu = option::value(menu);
         }
         public func execute(self: node_editor, job: ()=> void)
         {
@@ -1033,17 +1031,7 @@ namespace jeapi::gui
                     }
                 none?;
                 }
-
-                match (self.context_menu)
-                {
-                value(menu)?
-                    {
-                        Separator();
-                        menu();
-                    }
-                none?;
-                }
-
+                self.on_context_menu_callback();
                 EndPopup();
             }
             else
@@ -1223,6 +1211,15 @@ namespace jeapi::gui
                     }));
 
             return node->get->val;
+        }
+
+        public func set_on_context_menu(self: node_editor, callback: ()=> void)
+        {
+            self.on_context_menu_callback = callback;
+        }
+        public func set_on_eval(self: node_editor, callback: ()=> void)
+        {
+            self.on_eval_callback = callback;
         }
     }
 }

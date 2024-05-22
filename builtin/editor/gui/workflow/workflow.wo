@@ -42,7 +42,24 @@ namespace editor::gui::workflow
             };
         }
 
-        let mut source = "import je::gui;";
+        let mut source = "import je;\n";
+        source += "import je::gui;\n";
+
+        source += @"
+namespace Editor
+{
+    let mut _universe = option::none: option<je::universe>;
+
+    public func get_universe()
+    {
+        return _universe->val;
+    }
+    extern func set_universe(u: je::universe)
+    {
+        _universe = option::value(u);
+    }
+}
+"@;
 
         alias dyn_map = map<dynamic, dynamic>;
         let node_type_map = {}mut: dyn_map;
@@ -127,7 +144,8 @@ namespace editor::gui::workflow
         {
             try! vm = vm::create(path->tostring + ".wo", source);
             do vm->run();
-
+            do vm->invoke("Editor::set_universe", 
+                [context->get_project->get_env->get_universe: dynamic]);
             expected_ok!;
         }
         catch! e
