@@ -407,6 +407,7 @@ namespace editor::gui
 
     func context_menu(path: option<PathInfo>, context: EditorContext)
     {
+        let cur_creating_path = current_work_path;
         if (path
             ->map(\_ = BeginPopupContextItem();)
             ->or(\ = BeginPopupContextWindow();))
@@ -414,20 +415,20 @@ namespace editor::gui
             if (BeginMenu("新建..."))
             {
                 if (MenuItem(F"空目录"))
-                    jeapi::gui::form::input("新建空目录", F"在{current_work_path}新建空目录", "NewDir",
-                        \dirname: string = fsys::mkdir(fsys::normalize(current_work_path) / dirname)
+                    jeapi::gui::form::input("新建空目录", F"在{cur_creating_path}新建空目录", "NewDir",
+                        \dirname: string = fsys::mkdir(fsys::normalize(cur_creating_path) / dirname)
                             ->map(\_ = force_update();)
                             ->or(\errid = jeapi::gui::form::errmsg("失败", F"创建目录失败{errid}");););
                 Separator();
                 if (MenuItem("空文件"))
                 {
-                    jeapi::gui::form::input("新建空文件", F"在{current_work_path}新建空文件", "NewFile.txt",
+                    jeapi::gui::form::input("新建空文件", F"在{cur_creating_path}新建空文件", "NewFile.txt",
                         \filename: string = fsys::exist(file_path)
                             ? jeapi::gui::form::errmsg("创建空文件失败", "同名文件已经存在")
                             | write_file_if_not_exist(file_path, "") 
                                 ? force_update()
                                 | jeapi::gui::form::errmsg("创建空文件失败", "无法创建文件，可能是文件名非法或磁盘已满")
-                        where file_path = fsys::normalize(current_work_path) / filename;);
+                        where file_path = fsys::normalize(cur_creating_path) / filename;);
                 }
                 if (MenuItem("Woolang 脚本"))
                 {
@@ -441,13 +442,13 @@ using je;
 // 可以在此处编写自己的代码：
 je::log("Helloworld");
 "@;
-                    jeapi::gui::form::input("新建Woolang 脚本", F"在{current_work_path}新建Woolang 脚本", "NewScript",
+                    jeapi::gui::form::input("新建Woolang 脚本", F"在{cur_creating_path}新建Woolang 脚本", "NewScript",
                         \filename: string = fsys::exist(file_path)
                             ? jeapi::gui::form::errmsg("创建Woolang 脚本失败", "同名文件已经存在")
                             | write_file_if_not_exist(file_path, F"// {filename}.wo\n{default_empty_script}") 
                                 ? force_update()
                                 | jeapi::gui::form::errmsg("创建Woolang 脚本失败", "无法创建文件，可能是文件名非法或磁盘已满")
-                        where file_path = fsys::normalize(current_work_path) / (filename + ".wo"););
+                        where file_path = fsys::normalize(cur_creating_path) / (filename + ".wo"););
                 }
                 if (MenuItem("ToWoo Component 声明"))
                 {
@@ -458,13 +459,13 @@ component!
 {
 }
 "@;
-                    jeapi::gui::form::input("新建ToWoo Component 声明", F"在{current_work_path}新建ToWoo Component 脚本", "NewToWooComponent",
+                    jeapi::gui::form::input("新建ToWoo Component 声明", F"在{cur_creating_path}新建ToWoo Component 脚本", "NewToWooComponent",
                         \filename: string = fsys::exist(file_path)
                             ? jeapi::gui::form::errmsg("创建ToWoo Component 声明失败", "同名文件已经存在")
                             | write_file_if_not_exist(file_path, F"// {filename}.jecomponent.wo\n{default_empty_script}") 
                                 ? func(){context->get_project->try_update_towoo(false);force_update();}()
                                 | jeapi::gui::form::errmsg("创建ToWoo Component 声明失败", "无法创建文件，可能是文件名非法或磁盘已满")
-                        where file_path = fsys::normalize(current_work_path) / (filename + ".jecomponent.wo"););
+                        where file_path = fsys::normalize(cur_creating_path) / (filename + ".jecomponent.wo"););
                 }
                 if (MenuItem("ToWoo System 脚本"))
                 {
@@ -506,13 +507,13 @@ LATE_UPDATE!
 {
 }
 "@;
-                    jeapi::gui::form::input("新建ToWoo System 脚本", F"在{current_work_path}新建ToWoo System 脚本", "NewToWooSystem",
+                    jeapi::gui::form::input("新建ToWoo System 脚本", F"在{cur_creating_path}新建ToWoo System 脚本", "NewToWooSystem",
                         \filename: string = fsys::exist(file_path)
                             ? jeapi::gui::form::errmsg("创建ToWoo System 脚本失败", "同名文件已经存在")
                             | write_file_if_not_exist(file_path, F"// {filename}.jesystem.wo\n{default_empty_script}") 
                                 ? func(){context->get_project->try_update_towoo(false);force_update();}()
                                 | jeapi::gui::form::errmsg("创建ToWoo System 脚本失败", "无法创建文件，可能是文件名非法或磁盘已满")
-                        where file_path = fsys::normalize(current_work_path) / (filename + ".jesystem.wo"););
+                        where file_path = fsys::normalize(cur_creating_path) / (filename + ".jesystem.wo"););
                 }
                 if (MenuItem("Physics2D 组配置"))
                 {
@@ -528,13 +529,13 @@ PHYSICS2D_COLLISIONS!
     普通物体, 普通物体;
 }
 "@;
-                    jeapi::gui::form::input("新建Physics2D 组配置", F"在{current_work_path}新建Physics2D 组配置", "group",
+                    jeapi::gui::form::input("新建Physics2D 组配置", F"在{cur_creating_path}新建Physics2D 组配置", "group",
                         \filename: string = fsys::exist(file_path)
                             ? jeapi::gui::form::errmsg("创建Physics2D 组配置失败", "同名文件已经存在")
                             | write_file_if_not_exist(file_path, F"// {filename}.jephysics2d.wo\n{default_empty_script}") 
                                 ? force_update()
                                 | jeapi::gui::form::errmsg("创建Physics2D 组配置失败", "无法创建文件，可能是文件名非法或磁盘已满")
-                        where file_path = fsys::normalize(current_work_path) / (filename + ".jephysics2d.wo"););
+                        where file_path = fsys::normalize(cur_creating_path) / (filename + ".jephysics2d.wo"););
                 }
                 if (MenuItem("编辑器工具脚本"))
                 {
@@ -550,39 +551,162 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
 
 }
 "@;
-                    jeapi::gui::form::input("新建编辑器工具脚本", F"在{current_work_path}新建编辑器工具脚本", "NewScript",
+                    jeapi::gui::form::input("新建编辑器工具脚本", F"在{cur_creating_path}新建编辑器工具脚本", "NewScript",
                         \filename: string = fsys::exist(file_path)
                             ? jeapi::gui::form::errmsg("创建编辑器工具脚本失败", "同名文件已经存在")
                             | write_file_if_not_exist(file_path, F"// {filename}.je.wo\n{default_empty_script}") 
                                 ? force_update()
                                 | jeapi::gui::form::errmsg("创建编辑器工具脚本失败", "无法创建文件，可能是文件名非法或磁盘已满")
-                        where file_path = fsys::normalize(current_work_path) / (filename + ".je.wo"););
+                        where file_path = fsys::normalize(cur_creating_path) / (filename + ".je.wo"););
                 }
-                if (MenuItem("Workflow"))
+                if (BeginMenu("Workflow"))
                 {
-                    jeapi::gui::form::input("新建Workflow", F"在{current_work_path}新建Workflow", "NewWorkflow",
-                        func(filename: string)
+                    if (MenuItem("新建 Workflow 图"))
+                    {
+                        jeapi::gui::form::input("新建 Workflow 图", F"在{cur_creating_path}新建 Workflow 图", "NewWorkflow",
+                            \filename: string = fsys::exist(file_path)
+                            ? jeapi::gui::form::errmsg("创建Workflow 图失败", "同名文件已经存在")
+                            | write_file_if_not_exist(file_path, "{}") 
+                                ? force_update()
+                                | jeapi::gui::form::errmsg("创建Workflow图失败", "无法创建文件，可能是文件名非法或磁盘已满")
+                        where file_path = fsys::normalize(cur_creating_path) / (filename + ".jeworkflow4"););
+                    }
+                    Separator();
+                    if (MenuItem("新建Node"))
+                    {
+                        let default_empty_script = 
+@"
+import woo::std;
+import je;
+import je::gui;
+import builtin::api::gui::nodeeditor;
+
+using $NEW_NODE_NAME$ = struct{}
+{
+    public func create(_: node_editor)=> $NEW_NODE_NAME$
+        where require!($NEW_NODE_NAME$: INode);
+    {
+        return $NEW_NODE_NAME${};
+    }
+    public func name(_: $NEW_NODE_NAME$)=> string
+    {
+        return "$NEW_NODE_NAME$";
+    }
+    public func color(_: $NEW_NODE_NAME$)
+    {
+        return (0, 0, 0, 127);
+    }
+    public func onUpdate(_: $NEW_NODE_NAME$, _: node_editor, _: string)=> void
+    {
+    }
+    public func onDelete(_: $NEW_NODE_NAME$, _: node_editor)=> bool
+    {
+        return true;
+    }
+    public func onEval(_: $NEW_NODE_NAME$, _: node_editor)=> bool
+    {
+        return true;
+    }
+    public func tostring(_: $NEW_NODE_NAME$)=> string
+    {
+        return "";
+    }
+    public func parse(_: $NEW_NODE_NAME$, _: string)=> void
+    {
+    }
+}
+"@;
+                        if (false == fsys::normalize(cur_creating_path)->tostring()->beginwith(
+                            (context->get_project->get_path / "resource" / "workflow" / "node")->tostring))
+                            jeapi::gui::form::errmsg("创建Workflow Node失败", "Node只能在@/resource/workflow/node目录下创建");
+                        else
                         {
-                            let path = fsys::normalize(current_work_path) / F"{filename}.jeworkflow4";
-                            if (fsys::exist(path) || fsys::mkdir(path)->iserr)
-                                jeapi::gui::form::errmsg("创建Workflow失败", "可能是同名文件已经存在或文件名路径不合法");
-                            else
-                                force_update();
-                        });
+                            jeapi::gui::form::input("新建 Workflow Node", F"在{cur_creating_path}新建 Workflow Node", "NewNode",
+                                func(filename: string)
+                                {
+                                    let file_path = fsys::normalize(cur_creating_path) / (filename + ".wo");
+                                    if (fsys::exist(file_path))
+                                        jeapi::gui::form::errmsg("创建Workflow Node失败", "同名文件已经存在");
+                                    
+                                    if (write_file_if_not_exist(file_path, default_empty_script->replace("$NEW_NODE_NAME$", filename)))
+                                        force_update();
+                                    else
+                                        jeapi::gui::form::errmsg("创建Workflow Node失败", "无法创建文件，可能是文件名非法或磁盘已满");
+                                });
+                        }
+                    }
+                    if (MenuItem("新建Type"))
+                    {
+                        let default_empty_script = 
+@"
+import woo::std;
+import je;
+import je::gui;
+import builtin::api::gui::nodeeditor;
+
+using $NEW_TYPE_NAME$ = struct{}
+{
+    public func create()=> $NEW_TYPE_NAME$
+        where require!($NEW_TYPE_NAME$: ITyped);
+    {
+        return $NEW_TYPE_NAME${};
+    }
+    public func tostring(self: $NEW_TYPE_NAME$)=> string
+    {
+        return "";
+    }
+    public func parse(_: $NEW_TYPE_NAME$, _: string)=> void
+    {
+    }
+    public func edit(_: $NEW_TYPE_NAME$, _: string)=> void
+    {
+        PushItemWidth(100.);
+        {
+        }
+        PopItemWidth();
+    }
+    public func typename(_: $NEW_TYPE_NAME$)=> string
+    {
+        return "$NEW_TYPE_NAME$";
+    }
+    public func maxoutput(_: $NEW_TYPE_NAME$)=> int
+    {
+        return 0;
+    }
+    public func color(_: $NEW_TYPE_NAME$)=> (int, int, int, int)
+    {
+        return (80, 40, 50, 255);
+    }
+}
+"@;
+                        jeapi::gui::form::input("新建 Workflow Type", F"在{cur_creating_path}新建 Workflow Type", "NewType",
+                            func(filename: string)
+                            {
+                                let file_path = fsys::normalize(cur_creating_path) / (filename + ".wo");
+                                if (fsys::exist(file_path))
+                                    jeapi::gui::form::errmsg("创建Workflow Type失败", "同名文件已经存在");
+                                
+                                if (write_file_if_not_exist(file_path, default_empty_script->replace("$NEW_TYPE_NAME$", filename)))
+                                    force_update();
+                                else
+                                    jeapi::gui::form::errmsg("创建Workflow Type失败", "无法创建文件，可能是文件名非法或磁盘已满");
+                            });
+                    }
+                    EndMenu();
                 }
                 Separator();
                 if (MenuItem("世界"))
                 {
-                    jeapi::gui::form::input("创建世界", F"将在{current_work_path}创建新世界：",
+                    jeapi::gui::form::input("创建世界", F"将在{cur_creating_path}创建新世界：",
                         "Newworld",
                         \new_world_name = launch(
                             edit_forms::show_world_creator, (context, new! edit_forms::WorldContext(
-                                context->get_project(), new_world_name, fsys::normalize(F"{current_work_path}/{new_world_name}.jeworld"),
+                                context->get_project(), new_world_name, fsys::normalize(F"{cur_creating_path}/{new_world_name}.jeworld"),
                                 func (w)
                                 {
                                     if (context->get_project()->serialize_world(w, true)
                                             ->> \wdat = write_file_if_not_exist(
-                                                fsys::normalize(F"{current_work_path}/{new_world_name}.jeworld"), 
+                                                fsys::normalize(F"{cur_creating_path}/{new_world_name}.jeworld"), 
                                                 wdat as dict<string, dynamic>: string)
                                                 ;
                                             ->  valor(false)
@@ -599,33 +723,33 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                 }
                 if (MenuItem("瓦片地图"))
                 {
-                    jeapi::gui::form::input("新建瓦片地图", F"在{current_work_path}新建瓦片地图", "NewTileMap",
+                    jeapi::gui::form::input("新建瓦片地图", F"在{cur_creating_path}新建瓦片地图", "NewTileMap",
                         \filename: string = fsys::exist(file_path)
                             ? jeapi::gui::form::errmsg("新建瓦片地图失败", "同名文件已经存在")
                             | write_file_if_not_exist(file_path, "{}") 
                                 ? func(){context->get_project->try_update_towoo(false);force_update();}()
                                 | jeapi::gui::form::errmsg("新建瓦片地图失败失败", "无法创建文件，可能是文件名非法或磁盘已满")
-                        where file_path = fsys::normalize(current_work_path) / (filename + ".jetilemap4"););
+                        where file_path = fsys::normalize(cur_creating_path) / (filename + ".jetilemap4"););
                 }
                 Separator();
                 if (BeginMenu("纹理"))
                 {
                     if (MenuItem(F"空白纹理"))
-                        create_image("White", current_work_path, func(img){
+                        create_image("White", cur_creating_path, func(img){
                             let (w, h) = img->size;
                             for (let mut x = 0 ; x < w; x += 1)
                                 for (let mut y = 0 ; y < h; y += 1)
                                     img->setpix((x, y), (1., 1., 1., 1.));
                         });
                     if (MenuItem(F"透明纹理"))
-                        create_image("Empty", current_work_path, func(img){
+                        create_image("Empty", cur_creating_path, func(img){
                             let (w, h) = img->size;
                             for (let mut x = 0 ; x < w; x += 1)
                                 for (let mut y = 0 ; y < h; y += 1)
                                     img->setpix((x, y), (0., 0., 0., 0.));
                         });
                     if (MenuItem(F"文本纹理"))
-                        create_font_image(context->get_project(), "Text", current_work_path);
+                        create_font_image(context->get_project(), "Text", cur_creating_path);
                         
                     EndMenu();
                 }
@@ -653,7 +777,7 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
 
                     let create_shader_at = func(shader_name: string, shader_src: string)
                     {
-                        let shader_path = fsys::normalize(F"{current_work_path}/{shader_name}.shader");
+                        let shader_path = fsys::normalize(F"{cur_creating_path}/{shader_name}.shader");
                         if (!write_file_if_not_exist(shader_path, shader_src))
                             jeapi::gui::form::errmsg("创建着色器失败", F"无法写入{shader_path}");
                         else
@@ -662,7 +786,7 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
 
                     for (let (shader_display_name, shader_path_name) : editor_origin_shaders)
                         if (MenuItem(shader_display_name))
-                            jeapi::gui::form::input("创建着色器", F"将在{current_work_path}创建{shader_display_name}：",
+                            jeapi::gui::form::input("创建着色器", F"将在{cur_creating_path}创建{shader_display_name}：",
                                 shader_path_name,
                                 \shader_name: string = 
                                     fsys::readall(fsys::normalize(F"{std::exepath()}/builtin/shader/{shader_path_name}.shader"))
@@ -677,10 +801,10 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                 {
                     if (MenuItem("2D帧序列"))
                     {
-                        jeapi::gui::form::input("新建2D帧动画", F"在{current_work_path}新建动画", "NewAnimation",
+                        jeapi::gui::form::input("新建2D帧动画", F"在{cur_creating_path}新建动画", "NewAnimation",
                             func (filename)
                             {
-                                let path = fsys::normalize(current_work_path) / F"{filename}.jeanim4";
+                                let path = fsys::normalize(cur_creating_path) / F"{filename}.jeanim4";
                                 if (fsys::exist(path))
                                     jeapi::gui::form::errmsg("创建2D帧动画失败", "可能是同名文件已经存在或文件名路径不合法");
                                 else
@@ -692,10 +816,10 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                     }
                     if (MenuItem("粒子动画"))
                     {
-                        jeapi::gui::form::input("新建粒子动画", F"在{current_work_path}新建动画", "NewPartical",
+                        jeapi::gui::form::input("新建粒子动画", F"在{cur_creating_path}新建动画", "NewPartical",
                             func (filename)
                             {
-                                let path = fsys::normalize(current_work_path) / F"{filename}.jepartical";
+                                let path = fsys::normalize(cur_creating_path) / F"{filename}.jepartical";
                                 if (fsys::exist(path))
                                     jeapi::gui::form::errmsg("创建粒子动画失败", "可能是同名文件已经存在或文件名路径不合法");
                                 else
@@ -710,8 +834,8 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                 if (MenuItem(F"C++模块"))
                 {
                     // 创建C++模块，就跟JoyEngineCSP差不多
-                    jeapi::gui::form::input("创建C++模块", F"将在{current_work_path}创建，请为项目命名：", "CppModule", 
-                        \module_name: string = CxxProject::start(module_name, current_work_path, context->get_project)
+                    jeapi::gui::form::input("创建C++模块", F"将在{cur_creating_path}创建，请为项目命名：", "CppModule", 
+                        \module_name: string = CxxProject::start(module_name, cur_creating_path, context->get_project)
                             ->> \ _ = force_update();
                             ->or(\reason = jeapi::gui::form::errmsg("创建C++模块失败", reason);)
                             ;
@@ -728,7 +852,7 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                 ;
                         
             if (MenuItem("在资源管理器中显示"))
-                do std::shell(F"explorer \"{fsys::normalize(current_work_path)->tostring->replace("/", "\\")}\"");
+                do std::shell(F"explorer \"{fsys::normalize(cur_creating_path)->tostring->replace("/", "\\")}\"");
 
             if (MenuItem(F"刷新"))
             {

@@ -5,42 +5,93 @@ import woo::std;
 
 import pkg::fsys;
 import pkg::iterator;
+import pkg::try;
 
 import builtin::api::gui::form;
 
-namespace editor::gui
+namespace editor::gui::workflow
 {
-    using Workflow = struct{
-        path: fsys::path_t,
-    }
+    public func open(path: fsys::path_t, context: EditorContext)
     {
-        func get_script_lists(root_path: fsys::path_t, target_path: fsys::path_t)
+        let workflow_node_path = context->get_project->get_path / "resource" / "workflow" / "node";
+
+        using NodeInfo = struct{
+            m_name: string,
+            m_namespace: array<string>,
+            m_path: fsys::path_t,
+        };
+
+        let nodes = []mut: vec<NodeInfo>;
+
+        for (let np : fsys::recursive_walk(workflow_node_path)->iterator::iter_result)
         {
-            let result = []mut: vec<(array<string>, string)>;
-            for (let p : fsys::recursive_walk(target_path) |> iterator::iter_result)
+            do try!
             {
-                if (fsys::isfile(p) && p->tostring->lower->endwith(".wo"))
+                let purename = fsys::purename(np);
+                try! relative = fsys::relative(fsys::parent(np), workflow_node_path);
+
+                let node_namespace = relative->split("/")-> forall(\p = p != "";);
+                nodes->add(
+                    NodeInfo{
+                        m_name = purename, 
+                        m_namespace = node_namespace, 
+                        m_path = np,
+                        });
+                expected_ok!;
+            };
+        }
+
+        let mut source = "";
+
+        alias dyn_map = map<dynamic, dynamic>;
+        let node_type_map = {}mut: dyn_map;
+        for (let n : nodes)
+        {
+            source += "import resource::workflow::node::" 
+                + n.m_namespace->reduce(\l,r = l + "::" + r;)
+                    ->> \v = v + "::";
+                    -> valor("") 
+                + n.m_name;
+            
+            let mut write_node_map = node_type_map: dynamic;
+            for (let name : n.m_namespace)
+                write_node_map = write_node_map->unsafe::cast:<dyn_map>->getorset(name: dynamic, {}mut: dynamic);
+
+            write_node_map->unsafe::cast:<dyn_map>->set(n.m_name: dynamic, nil: dynamic);            
+        }
+        source += "import builtin::api::gui::form;\n";
+        source += "import builtin::api::gui::nodeeditor;\n\n";
+
+        source += "using jeapi::gui::node_editor;\n";
+
+        source += "func main(){\n";
+        source += "    let nodedict = {\n";
+
+        func generate_node_dict(node_map: dyn_map)=> string
+        {
+            let mut source = "";
+            for (let (name, subpath_or_nil) : node_map)
+            {
+                let name_str = name as string;
+                if (subpath_or_nil is nil)
                 {
-                    do fsys::relative(fsys::parent(p), root_path)
-                        ->> \rpath = result->add(
-                            (rpath->split("/")->forall(\s = s != "";), fsys::purename(p)))
-                            ;
-                        ;
+                    source += "        [\"" + name_str + "\"] = NodeDictItem::Node(INode::creator:<PathWalker>),\n";
+                }
+                else
+                {
+                    source += "        [\"" + name_str + "\"] = NodeDictItem::Dict({\n";
+                    source += generate_node_dict(subpath_or_nil->unsafe::cast:<dyn_map>);
+                    source += "        }),\n";
                 }
             }
-            return result;
-        }
-        public func open(path: fsys::path_t)
-        {
-            do fsys::mkdir(path / "type");
-            do fsys::mkdir(path / "node"); 
-            do fsys::mkdir(path / "producer");
-
-            let mut running_script = "";
-            for (let (script_path, script_name) : get_script_lists(path, path / "type"))
-            {
-                running_script += "import ";
-            }
-        }
+            return source;
+        }     
+        source += generate_node_dict(node_type_map);
+        source += "    };\n";
+        source += "    let node_editor = jeapi::gui::node_editor::create(" + path->tostring->enstring + ", nodedict);\n";
+        source += "}\n";
+        source += "main();\n";
+        
+        std::println(source);
     }
 }

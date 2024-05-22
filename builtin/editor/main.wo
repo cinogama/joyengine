@@ -347,14 +347,28 @@ func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: di
                             // 在此处创建资源目录，包含一些基本的资源和未来自动创建的资源
                             do fsys::mkdir(p->get_path/"resource");
                             do fsys::mkdir(p->get_path/"resource"/"texture");
+                            do fsys::mkdir(p->get_path/"resource"/"workflow");
+                            do fsys::mkdir(p->get_path/"resource"/"workflow"/"node");
+                            do fsys::mkdir(p->get_path/"resource"/"workflow"/"type");
+                            do fsys::mkdir(p->get_path/"resource"/"workflow"/"producer");
+                            do fsys::writeall(p->get_path/"resource"/"workflow"/"node"/".gitkeepme", "");
+                            do fsys::writeall(p->get_path/"resource"/"workflow"/"type"/".gitkeepme", "");
+                            do fsys::writeall(p->get_path/"resource"/"workflow"/"producer"/".gitkeepme", "");
+
                             do fsys::writeall(p->get_path/"resource"/"texture"/"readme.md", 
 @"# Texture 目录
 ---
 此目录用于保存引擎自动生成的图像资源
 "@);
-                            do fsys::copy(fsys::normalize(F"{std::exepath()}/builtin/shader"), fsys::normalize(F"{p->get_path}/resource/shader"));
-                            do fsys::copy(fsys::normalize(F"{std::exepath()}/builtin/font"), fsys::normalize(F"{p->get_path}/resource/font"));
-                            do fsys::copy(fsys::normalize(F"{std::exepath()}/builtin/script/editor.wo"), fsys::normalize(F"{p->get_path}"));
+                            do fsys::copy(
+                                fsys::normalize(F"{std::exepath()}/builtin/shader"), 
+                                fsys::normalize(F"{p->get_path}/resource/shader"));
+                            do fsys::copy(
+                                fsys::normalize(F"{std::exepath()}/builtin/font"), 
+                                fsys::normalize(F"{p->get_path}/resource/font"));
+                            do fsys::copy(
+                                fsys::normalize(F"{std::exepath()}/builtin/script/editor.wo"),
+                                fsys::normalize(F"{p->get_path}"));
                             do fsys::writeall(p->get_path / ".gitignore", 
 @"# JoyEngine ECS git ignore config.
 
