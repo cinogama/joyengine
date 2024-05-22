@@ -11,6 +11,7 @@ namespace jeapi::gui
         name: string,
 
         body: (form)=>void,
+        size_constraint: mut (real, real, real, real),
 
         callback_close: mut ()=>bool,
 
@@ -25,6 +26,7 @@ namespace jeapi::gui
                 name = title,
                 
                 body = body,
+                size_constraint = mut (200., 100., 2000., 1000.),
 
                 callback_close = mut \ = true;,
 
@@ -46,7 +48,14 @@ namespace jeapi::gui
                         | \s: string, a: je::gui::WindowsAttribute = option::value(BeginAttr(s, a));
                         ;
 
-                    match (begin(F"{self.name}##{JobID()}", self._attribute))
+                    SetNextWindowSizeConstraints(
+                        (self.size_constraint.0, self.size_constraint.1), 
+                        (self.size_constraint.2, self.size_constraint.3));
+                    match (begin(self.name +
+                        (self._attribute: int->std::bitand(WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize: int) != 0
+                            ? F"##{JobID()}"
+                            | ""), 
+                        self._attribute))
                     {
                     value(show)?
                         if (show)
@@ -60,6 +69,10 @@ namespace jeapi::gui
                     return self.show;
                 }, ());
             }
+        }
+        public func set_size_constraint(self: form, minx: real, miny: real, maxx: real, maxy: real)
+        {
+            self.size_constraint = (minx, miny, maxx, maxy);
         }
         public func close(self: form)
         {
