@@ -308,6 +308,12 @@ namespace editor::gui
                             =>> \w =context->get_project->reset_editing_world(w);
                             ->  error
                     ;,
+                [".jeworkflow4"] = 
+                    func(p: PathInfo, context: EditorContext)
+                    {
+                        workflow::open(p.path, context);
+                        return option::none;
+                    },
                 [".jeanim4"] = 
                     func(p: PathInfo, context: EditorContext)
                     {
@@ -581,9 +587,13 @@ import je;
 import je::gui;
 import builtin::api::gui::nodeeditor;
 
+using je::gui;
+using jeapi::gui::node_editor;
+alias NodeEditor = jeapi::gui::node_editor;
+
 using $NEW_NODE_NAME$ = struct{}
 {
-    public func create(_: node_editor)=> $NEW_NODE_NAME$
+    public func create(_: NodeEditor)=> $NEW_NODE_NAME$
         where require!($NEW_NODE_NAME$: INode);
     {
         return $NEW_NODE_NAME${};
@@ -596,14 +606,14 @@ using $NEW_NODE_NAME$ = struct{}
     {
         return (0, 0, 0, 127);
     }
-    public func onUpdate(_: $NEW_NODE_NAME$, _: node_editor, _: string)=> void
+    public func onUpdate(_: $NEW_NODE_NAME$, _: NodeEditor, _: string)=> void
     {
     }
-    public func onDelete(_: $NEW_NODE_NAME$, _: node_editor)=> bool
+    public func onDelete(_: $NEW_NODE_NAME$, _: NodeEditor)=> bool
     {
         return true;
     }
-    public func onEval(_: $NEW_NODE_NAME$, _: node_editor)=> bool
+    public func onEval(_: $NEW_NODE_NAME$, _: NodeEditor)=> bool
     {
         return true;
     }
@@ -635,6 +645,7 @@ using $NEW_NODE_NAME$ = struct{}
                                 });
                         }
                     }
+
                     if (MenuItem("新建Type"))
                     {
                         let default_empty_script = 
@@ -644,6 +655,9 @@ import je;
 import je::gui;
 import builtin::api::gui::nodeeditor;
 
+using je::gui;
+using jeapi::gui::node_editor;
+
 using $NEW_TYPE_NAME$ = struct{}
 {
     public func create()=> $NEW_TYPE_NAME$
@@ -651,7 +665,7 @@ using $NEW_TYPE_NAME$ = struct{}
     {
         return $NEW_TYPE_NAME${};
     }
-    public func tostring(self: $NEW_TYPE_NAME$)=> string
+    public func tostring(_: $NEW_TYPE_NAME$)=> string
     {
         return "";
     }
@@ -675,7 +689,16 @@ using $NEW_TYPE_NAME$ = struct{}
     }
     public func color(_: $NEW_TYPE_NAME$)=> (int, int, int, int)
     {
-        return (80, 40, 50, 255);
+        return (180, 140, 150, 255);
+    }
+
+    public func get(_: $NEW_TYPE_NAME$)
+    {
+        // Get value from typevalue
+    }
+    public func set(_: $NEW_TYPE_NAME$, _: void)
+    {
+        // Set the value into typevalue
     }
 }
 "@;
@@ -690,6 +713,67 @@ using $NEW_TYPE_NAME$ = struct{}
                                     force_update();
                                 else
                                     jeapi::gui::form::errmsg("创建Workflow Type失败", "无法创建文件，可能是文件名非法或磁盘已满");
+                            });
+                    }
+                    if (MenuItem("新建Producer"))
+                    {
+                        let default_empty_script =
+@"
+import woo::std;
+import je;
+import je::gui;
+import builtin::api::gui::nodeeditor;
+
+using je::gui;
+using jeapi::gui::node_editor;
+
+using $NEW_PRODUCER_NAME$ = struct{}
+{
+    public func create()=> $NEW_PRODUCER_NAME$
+        where require!($NEW_PRODUCER_NAME$: IProducer);
+    {
+        return $NEW_PRODUCER_NAME${};
+    }
+    public func reset(_: $NEW_PRODUCER_NAME$)
+    {
+    }
+    public func finished(_: $NEW_PRODUCER_NAME$)=> bool
+    {
+        return true;
+    }
+    public func tostring(_: $NEW_PRODUCER_NAME$)=> string
+    {
+        return "";
+    }
+    public func parse(_: $NEW_PRODUCER_NAME$, _: string)=> void
+    {
+    }
+    public func edit(_: $NEW_PRODUCER_NAME$, _: string)=> void
+    {
+        PushItemWidth(100.);
+        {
+        }
+        PopItemWidth();
+    }
+
+    public func next(_: $NEW_PRODUCER_NAME$)
+    {
+        return option::none;
+    }
+}
+"@;
+
+                        jeapi::gui::form::input("新建 Workflow Producer", F"在{cur_creating_path}新建 Workflow Producer", "NewProducer",
+                            func(filename: string)
+                            {
+                                let file_path = fsys::normalize(cur_creating_path) / (filename + ".wo");
+                                if (fsys::exist(file_path))
+                                    jeapi::gui::form::errmsg("创建Workflow Producer失败", "同名文件已经存在");
+                                
+                                if (write_file_if_not_exist(file_path, default_empty_script->replace("$NEW_PRODUCER_NAME$", filename)))
+                                    force_update();
+                                else
+                                    jeapi::gui::form::errmsg("创建Workflow Producer失败", "无法创建文件，可能是文件名非法或磁盘已满");
                             });
                     }
                     EndMenu();

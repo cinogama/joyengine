@@ -6,6 +6,7 @@ import woo::std;
 import pkg::fsys;
 import pkg::iterator;
 import pkg::try;
+import pkg::vm;
 
 import builtin::api::gui::form;
 
@@ -30,7 +31,7 @@ namespace editor::gui::workflow
                 let purename = fsys::purename(np);
                 try! relative = fsys::relative(fsys::parent(np), workflow_node_path);
 
-                let node_namespace = relative->split("/")-> forall(\p = p != "";);
+                let node_namespace = relative->split("/")-> forall(\p = p != "" && p  != ".";);
                 nodes->add(
                     NodeInfo{
                         m_name = purename, 
@@ -41,7 +42,7 @@ namespace editor::gui::workflow
             };
         }
 
-        let mut source = "";
+        let mut source = "import je::gui;";
 
         alias dyn_map = map<dynamic, dynamic>;
         let node_type_map = {}mut: dyn_map;
@@ -51,7 +52,9 @@ namespace editor::gui::workflow
                 + n.m_namespace->reduce(\l,r = l + "::" + r;)
                     ->> \v = v + "::";
                     -> valor("") 
-                + n.m_name;
+                + n.m_name
+                + ";\n"
+                ;
             
             let mut write_node_map = node_type_map: dynamic;
             for (let name : n.m_namespace)
@@ -60,7 +63,10 @@ namespace editor::gui::workflow
             write_node_map->unsafe::cast:<dyn_map>->set(n.m_name: dynamic, nil: dynamic);            
         }
         source += "import builtin::api::gui::form;\n";
-        source += "import builtin::api::gui::nodeeditor;\n\n";
+        source += "import builtin::api::gui::nodeeditor;\n";
+        source += "import builtin::editor::gui::form::ask;\n";
+        source += "import builtin::editor::gui::form::msg;\n";
+        source += "import pkg::fsys;\n";
 
         source += "using jeapi::gui::node_editor;\n";
 
@@ -75,7 +81,7 @@ namespace editor::gui::workflow
                 let name_str = name as string;
                 if (subpath_or_nil is nil)
                 {
-                    source += "        [\"" + name_str + "\"] = NodeDictItem::Node(INode::creator:<PathWalker>),\n";
+                    source += "        [\"" + name_str + "\"] = NodeDictItem::Node(INode::creator:<" + name_str + ">),\n";
                 }
                 else
                 {
@@ -88,10 +94,45 @@ namespace editor::gui::workflow
         }     
         source += generate_node_dict(node_type_map);
         source += "    };\n";
-        source += "    let node_editor = jeapi::gui::node_editor::create(" + path->tostring->enstring + ", nodedict);\n";
+        source += F"    let doc_path = fsys::normalize(" + path->tostring->enstring + ");\n";
+        source += "    let node_editor = jeapi::gui::node_editor::create(\"workflow_node_editor\", nodedict);\n";
+        source += "    do fsys::readall(doc_path)->>\\dat = node_editor->restore(dat);;\n";
+        source += F"    let form = jeapi::gui::form::create(\"Workflow 编辑器: \" + doc_path->tostring, \n";
+        source += @"    func(_){
+            node_editor->update();
+        }"@;
+        source += "        );\n";
+        source += "    form->set_docking(true);\n";
+        source += "    form->set_autoresize(false);\n";
+        source += @"   form->set_callback_close(func(){
+            jeapi::gui::form::ask("即将关闭Workflow编辑器", 
+            "是否保存到:" + doc_path->tostring + "?", func(save){
+                if (save)
+                {
+                    if (!fsys::writeall(doc_path, node_editor->dump()))
+                    {
+                        jeapi::gui::form::msg("保存失败", "保存Workflow失败");
+                        return;
+                    }
+                }
+                form->force_close();
+            });
+            return false;
+        });"@;
+        source += "\n    form->show();\n";
         source += "}\n";
         source += "main();\n";
         
-        std::println(source);
+        do try!
+        {
+            try! vm = vm::create(path->tostring + ".wo", source);
+            do vm->run();
+
+            expected_ok!;
+        }
+        catch! e
+        {
+            jeapi::gui::form::errmsg("加载Workflow失败", e);
+        };
     }
 }

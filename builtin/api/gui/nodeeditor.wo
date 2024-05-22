@@ -191,6 +191,8 @@ namespace jeapi::gui
             }
         }
 
+        alias Producer<T> = T;
+        alias Output<T> = T;
         using Input<T> = struct
         {
             val: T,
@@ -525,11 +527,16 @@ namespace jeapi::gui
 
                 for (let (aid, bid) : dump.links)
                 {
-                    let new_aid = in_pin_id_map[aid];
-                    let new_bid = out_pin_id_map[bid];
+                    do try!
+                    {
+                        try! new_aid = in_pin_id_map->get(aid);
+                        try! new_bid = out_pin_id_map->get(bid);
 
-                    do self->_create_link(
-                        self.inputpins[new_aid], self.outputpins[new_bid]);
+                        do self->_create_link(
+                            self.inputpins[new_aid], self.outputpins[new_bid]);
+
+                        expected_value!;
+                    };
                 }
                 expected_value!;
             };
