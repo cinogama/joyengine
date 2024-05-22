@@ -1736,10 +1736,10 @@ WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args)
 
         if (uniforms->m_uniform_type >= jegl_shader::uniform_type::INT
             && uniforms->m_uniform_type <= jegl_shader::uniform_type::TEXTURE)
-            wo_set_int(elem, 1 + uniforms->m_uniform_type);
+            wo_set_int(elem, uniforms->m_uniform_type);
         else
             // Others
-            wo_set_int(elem, 2 + jegl_shader::uniform_type::TEXTURE);
+            wo_set_int(elem, 1 + jegl_shader::uniform_type::TEXTURE);
 
         wo_struct_set(val, 0, elem);
 
