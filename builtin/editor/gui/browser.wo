@@ -589,10 +589,11 @@ import builtin::api::gui::nodeeditor;
 
 using je::gui;
 using jeapi::gui::node_editor;
-alias NodeEditor = jeapi::gui::node_editor;
 
 using $NEW_NODE_NAME$ = struct{}
 {
+    alias NodeEditor = jeapi::gui::node_editor;
+    
     public func create(_: NodeEditor)=> $NEW_NODE_NAME$
         where require!($NEW_NODE_NAME$: INode);
     {

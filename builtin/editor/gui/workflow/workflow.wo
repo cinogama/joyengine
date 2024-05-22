@@ -26,6 +26,9 @@ namespace editor::gui::workflow
 
         for (let np : fsys::recursive_walk(workflow_node_path)->iterator::iter_result)
         {
+            if (!fsys::isfile(np) || fsys::extension(np)->lower != ".wo")
+                continue;
+
             do try!
             {
                 let purename = fsys::purename(np);
