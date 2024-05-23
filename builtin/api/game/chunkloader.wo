@@ -242,11 +242,11 @@ namespace jeapi::loader
         {
             return self.m_chunks;
         }
-        public func load_chunk(self: chunkloader, chunk: chunk, callback: chunk::layer::InstanceEntityCallbackT)
+        public func load_chunk(_: chunkloader, chunk: chunk, callback: chunk::layer::InstanceEntityCallbackT)
         {
             chunk->instance(callback);
         }
-        public func unload_chunk(self: chunkloader, chunk: chunk)
+        public func unload_chunk(_: chunkloader, chunk: chunk)
         {
             chunk->unload();
         }
