@@ -2468,7 +2468,10 @@ WO_API wo_api je_gui_dummy(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_node_editor_context_create(wo_vm vm, wo_value args)
 {
-    ax::NodeEditor::EditorContext* ctx = ax::NodeEditor::CreateEditor();
+    ax::NodeEditor::Config c;
+    c.SettingsFile = nullptr;
+
+    ax::NodeEditor::EditorContext* ctx = ax::NodeEditor::CreateEditor(&c);
     return wo_ret_gchandle(vm, ctx, nullptr,
         [](void* p)
         {
