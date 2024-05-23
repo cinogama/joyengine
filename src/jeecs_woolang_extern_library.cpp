@@ -230,6 +230,7 @@ WO_API wo_api wojeapi_add_entity_to_world_with_prefab(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_add_prefab_to_world_with_components(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_add_system_to_world(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_apply_camera_framebuf_setting(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_apply_singleton(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_audio_buffer_byte_rate(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_audio_buffer_byte_size(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_audio_buffer_load(wo_vm vm, wo_value args);
@@ -253,6 +254,7 @@ WO_API wo_api wojeapi_audio_source_stop(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_bind_texture_for_entity(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_build_commit(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_build_version(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_check_thread(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_clear_singletons(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_close_entity(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_close_world(wo_vm vm, wo_value args);
@@ -319,7 +321,6 @@ WO_API wo_api wojeapi_input_window_size(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_is_child_of_entity(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_is_top_entity(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_load_module(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_lock_rmutex(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_log(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_logerr(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_logfatal(wo_vm vm, wo_value args);
@@ -457,7 +458,6 @@ WO_API wo_api wojeapi_universe_set_frame_deltatime(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_universe_set_max_deltatime(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_universe_set_timescale(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_unload_module(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_unlock_rmutex(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_unregister_log_callback(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_update_editor_mouse_pos(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_wait_thread(wo_vm vm, wo_value args);
@@ -699,6 +699,7 @@ void je_api_init()
         wo_extern_lib_func_t{"wojeapi_add_prefab_to_world_with_components", (void*)&wojeapi_add_prefab_to_world_with_components},
         wo_extern_lib_func_t{"wojeapi_add_system_to_world", (void*)&wojeapi_add_system_to_world},
         wo_extern_lib_func_t{"wojeapi_apply_camera_framebuf_setting", (void*)&wojeapi_apply_camera_framebuf_setting},
+        wo_extern_lib_func_t{"wojeapi_apply_singleton", (void*)&wojeapi_apply_singleton},
         wo_extern_lib_func_t{"wojeapi_audio_buffer_byte_rate", (void*)&wojeapi_audio_buffer_byte_rate},
         wo_extern_lib_func_t{"wojeapi_audio_buffer_byte_size", (void*)&wojeapi_audio_buffer_byte_size},
         wo_extern_lib_func_t{"wojeapi_audio_buffer_load", (void*)&wojeapi_audio_buffer_load},
@@ -722,6 +723,7 @@ void je_api_init()
         wo_extern_lib_func_t{"wojeapi_bind_texture_for_entity", (void*)&wojeapi_bind_texture_for_entity},
         wo_extern_lib_func_t{"wojeapi_build_commit", (void*)&wojeapi_build_commit},
         wo_extern_lib_func_t{"wojeapi_build_version", (void*)&wojeapi_build_version},
+        wo_extern_lib_func_t{"wojeapi_check_thread", (void*)&wojeapi_check_thread},
         wo_extern_lib_func_t{"wojeapi_clear_singletons", (void*)&wojeapi_clear_singletons},
         wo_extern_lib_func_t{"wojeapi_close_entity", (void*)&wojeapi_close_entity},
         wo_extern_lib_func_t{"wojeapi_close_world", (void*)&wojeapi_close_world},
@@ -788,7 +790,6 @@ void je_api_init()
         wo_extern_lib_func_t{"wojeapi_is_child_of_entity", (void*)&wojeapi_is_child_of_entity},
         wo_extern_lib_func_t{"wojeapi_is_top_entity", (void*)&wojeapi_is_top_entity},
         wo_extern_lib_func_t{"wojeapi_load_module", (void*)&wojeapi_load_module},
-        wo_extern_lib_func_t{"wojeapi_lock_rmutex", (void*)&wojeapi_lock_rmutex},
         wo_extern_lib_func_t{"wojeapi_log", (void*)&wojeapi_log},
         wo_extern_lib_func_t{"wojeapi_logerr", (void*)&wojeapi_logerr},
         wo_extern_lib_func_t{"wojeapi_logfatal", (void*)&wojeapi_logfatal},
@@ -926,7 +927,6 @@ void je_api_init()
         wo_extern_lib_func_t{"wojeapi_universe_set_max_deltatime", (void*)&wojeapi_universe_set_max_deltatime},
         wo_extern_lib_func_t{"wojeapi_universe_set_timescale", (void*)&wojeapi_universe_set_timescale},
         wo_extern_lib_func_t{"wojeapi_unload_module", (void*)&wojeapi_unload_module},
-        wo_extern_lib_func_t{"wojeapi_unlock_rmutex", (void*)&wojeapi_unlock_rmutex},
         wo_extern_lib_func_t{"wojeapi_unregister_log_callback", (void*)&wojeapi_unregister_log_callback},
         wo_extern_lib_func_t{"wojeapi_update_editor_mouse_pos", (void*)&wojeapi_update_editor_mouse_pos},
         wo_extern_lib_func_t{"wojeapi_wait_thread", (void*)&wojeapi_wait_thread},

@@ -13,6 +13,16 @@ std::list<std::pair<int, std::string>> _jewo_log_buffer;
 std::mutex _jewo_all_alive_vm_threads_mx;
 std::unordered_set<wo_vm> _jewo_all_alive_vm_threads;
 
+struct _je_thread
+{
+    std::thread* m_thread;
+    std::atomic_bool m_finished;
+
+    JECS_DISABLE_MOVE_AND_COPY(_je_thread);
+
+    _je_thread() = default;
+};
+
 WO_API wo_api wojeapi_startup_thread(wo_vm vm, wo_value args)
 {
     wo_value arguments = args + 1;
@@ -29,32 +39,49 @@ WO_API wo_api wojeapi_startup_thread(wo_vm vm, wo_value args)
     std::lock_guard g1(_jewo_all_alive_vm_threads_mx);
     _jewo_all_alive_vm_threads.insert(co_vmm);
 
-    return wo_ret_gchandle(vm, new std::thread([=]
-        {
-            wo_invoke_value(co_vmm, cofunc, argument_count);
+    _je_thread* thread_instance = new _je_thread();
+    thread_instance->m_finished.store(false);
+    thread_instance->m_thread =
+        new std::thread([=]
+            {
+                wo_invoke_value(co_vmm, cofunc, argument_count);
+                thread_instance->m_finished.store(true);
 
-            std::lock_guard g2(_jewo_all_alive_vm_threads_mx);
-            _jewo_all_alive_vm_threads.erase(co_vmm);
+                do
+                {
+                    std::lock_guard g2(_jewo_all_alive_vm_threads_mx);
+                    _jewo_all_alive_vm_threads.erase(co_vmm);
 
-            wo_release_vm(co_vmm);
-        }),
+                    wo_release_vm(co_vmm);
+                } while (0);
+            });
+
+    return wo_ret_gchandle(vm, thread_instance,
         nullptr,
         [](void* ptr)
         {
-            std::thread* t = std::launder(reinterpret_cast<std::thread*>(ptr));
+            _je_thread* t = std::launder(reinterpret_cast<_je_thread*>(ptr));
 
-            if (t->joinable())
-                t->detach();
+            if (t->m_thread->joinable())
+                t->m_thread->detach();
+
+            delete t->m_thread;
             delete t;
         });
 }
 
 WO_API wo_api wojeapi_wait_thread(wo_vm vm, wo_value args)
 {
-    std::thread* t = std::launder(reinterpret_cast<std::thread*>(wo_pointer(args + 0)));
-    if (t->joinable())
-        t->join();
+    _je_thread* t = std::launder(reinterpret_cast<_je_thread*>(wo_pointer(args + 0)));
+    if (t->m_thread->joinable())
+        t->m_thread->join();
     return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_check_thread(wo_vm vm, wo_value args)
+{
+    _je_thread* t = std::launder(reinterpret_cast<_je_thread*>(wo_pointer(args + 0)));
+    return wo_ret_bool(vm, t->m_finished.load());
 }
 
 WO_API wo_api wojeapi_abort_all_thread(wo_vm vm, wo_value args)
@@ -2115,7 +2142,7 @@ WO_API wo_api  wojeapi_get_all_internal_scripts(wo_vm vm, wo_value args)
             auto* dat = wo_virtual_file_data(vfhandle, &len);
 
             wo_set_string(key, vm, vpath);
-            wo_set_buffer(val, vm, dat, len);            
+            wo_set_buffer(val, vm, dat, len);
             wo_map_set(result, key, val);
         }
     }
@@ -2128,6 +2155,8 @@ struct _jewo_singleton
 {
     wo_pin_value m_value;
     std::recursive_mutex* m_mutex;
+
+    JECS_DISABLE_MOVE_AND_COPY(_jewo_singleton);
 
     _jewo_singleton(wo_value value)
         : m_mutex(new std::recursive_mutex())
@@ -2155,7 +2184,7 @@ jeecs::basic::resource<_jewo_singleton> _jewo_create_singleton(wo_vm vm, const c
         wo_value ret = wo_invoke_value(vm, func, 0);
         if (ret != nullptr)
         {
-            return _jewo_singleton_list[token] = 
+            return _jewo_singleton_list[token] =
                 new _jewo_singleton(ret);
         }
         return nullptr;
@@ -2167,41 +2196,46 @@ void _jewo_clear_singletons()
     _jewo_singleton_list.clear();
 }
 
-WO_API wo_api wojeapi_lock_rmutex(wo_vm vm, wo_value args)
-{
-    std::recursive_mutex* m = std::launder(reinterpret_cast<std::recursive_mutex*>(wo_pointer(args + 0)));
-    m->lock();
-    return wo_ret_void(vm);
-}
-
-WO_API wo_api wojeapi_unlock_rmutex(wo_vm vm, wo_value args)
-{
-    std::recursive_mutex* m = std::launder(reinterpret_cast<std::recursive_mutex*>(wo_pointer(args + 0)));
-    m->unlock();
-    return wo_ret_void(vm);
-}
-
 WO_API wo_api wojeapi_create_singleton(wo_vm vm, wo_value args)
 {
-    wo_value result = wo_push_struct(vm, 2);
-
     auto singleton = _jewo_create_singleton(vm, wo_string(args + 0), args + 1);
     if (singleton != nullptr)
     {
-        const auto* s = singleton.get();
-
-        wo_value val = wo_push_empty(vm);
-        wo_pin_value_get(val, s->m_value);
-        wo_struct_set(result, 0, val);
-
-        wo_set_pointer(val, s->m_mutex);
-        wo_struct_set(result, 1, val);
-
-        return wo_ret_val(vm, result);
+        return wo_ret_gchandle(vm,
+            new jeecs::basic::resource<_jewo_singleton>(singleton),
+            nullptr,
+            [](void* p)
+            {
+                delete std::launder(
+                    reinterpret_cast<
+                    jeecs::basic::resource<_jewo_singleton>*>(
+                        p));
+            });
     }
     return wo_ret_panic(vm, "Failed to create singleton: '%s': %s.",
         wo_string(args + 0),
         wo_get_runtime_error(vm));
+}
+WO_API wo_api wojeapi_apply_singleton(wo_vm vm, wo_value args)
+{
+    jeecs::basic::resource<_jewo_singleton> singleton =
+        *std::launder(
+            reinterpret_cast<
+            jeecs::basic::resource<_jewo_singleton>*>(
+                wo_pointer(args + 0)));
+    wo_value f = args + 1;
+
+    std::lock_guard g1(*(singleton->m_mutex));
+
+    auto val = wo_push_empty(vm);
+    wo_pin_value_get(val, singleton->m_value);
+
+    wo_value result = wo_invoke_value(vm, f, 1);
+    if (result == nullptr)
+        return wo_ret_panic(vm, "Failed to apply singleton: %s.",
+            wo_get_runtime_error(vm));
+
+    return wo_ret_val(vm, result);
 }
 WO_API wo_api wojeapi_clear_singletons(wo_vm vm, wo_value args)
 {
@@ -2414,7 +2448,7 @@ WO_API wo_api wojeapi_dynamic_parser_edit(wo_vm vm, wo_value args)
 
         auto* val = wo_pointer(args + 1);
         auto* tag = wo_string(args + 2);
-        
+
         auto& parser = fnd->second;
 
         assert(parser->m_edit != 0);
@@ -2796,35 +2830,27 @@ namespace je
     public func start_coroutine<FT, ArgTs>(f: FT, args: ArgTs)=> void
         where f(args...) is void;
 
-    using rmutex = handle
-    {
-        extern("libjoyecs", "wojeapi_lock_rmutex", slow)
-        private func lock(self: rmutex)=> void;
-
-        extern("libjoyecs", "wojeapi_unlock_rmutex")
-        private func unlock(self: rmutex)=> void;
-    }    
-
     using singleton<T> = struct{
-        m_fetcher: ()=> (T, rmutex)
+        instantiate: ()=>_singleton_instantiate<T>,
     }
     {
-        public func create<T>(token: string, f: ()=>T)=> singleton<T>
+        using _singleton_instantiate<T> = gchandle
         {
             extern("libjoyecs", "wojeapi_create_singleton")
-                func _singleton<T>(token: string, f: ()=>T)=> (T, rmutex);
+            private func create<T>(token: string, f: ()=>T)=> _singleton_instantiate<T>;
 
-            return singleton{ 
-                m_fetcher = \ = _singleton(token, f);,
+            extern("libjoyecs", "wojeapi_apply_singleton")
+            private func apply<T, R>(self: _singleton_instantiate<T>, f: (T)=> R)=> R;
+        }
+        public func create<T>(token: string, f: ()=>T)
+        {
+            return singleton:<T>{   
+                instantiate = \ = _singleton_instantiate::create(token, f);,
             };
         }
         public func apply<T, R>(self: singleton<T>, f: (T)=> R)=> R
         {
-            let (v, m) = self.m_fetcher();
-            m->lock();
-            let r = f(v);
-            m->unlock();
-            return r;
+            return self.instantiate()->apply(f);
         }
 
         namespace unsafe
@@ -2847,6 +2873,9 @@ namespace je
         }
         extern("libjoyecs", "wojeapi_wait_thread", slow)
         public func wait(self: thread)=> void;
+
+        extern("libjoyecs", "wojeapi_check_thread", slow)
+        public func finished(self: thread)=> bool;
     }
 
     extern("libjoyecs", "wojeapi_generate_uid")
