@@ -10,7 +10,6 @@ using je;
 namespace jeapi::loader
 {
     using chunkloader = struct{
-        m_mx: je::rmutex,
         m_chunks: dict<int, dict<int, chunk>>,
     }
     {
@@ -214,7 +213,6 @@ namespace jeapi::loader
 
                         return option::value(
                             chunkloader{
-                                m_mx = rmutex::create(),
                                 m_chunks = result->unsafe::asdict,
                             });
 
@@ -230,13 +228,6 @@ namespace jeapi::loader
                 return option::none;
             }
         }
-        func lock_do<T>(self: chunkloader, job: ()=> T)
-        {
-            self.m_mx->lock();
-            let ret = job();
-            self.m_mx->unlock();
-            return ret;
-        }
         public func close(self: chunkloader)
         {
             for (let (_, cs) : self.m_chunks)
@@ -245,10 +236,7 @@ namespace jeapi::loader
         }
         public func get_chunk(self: chunkloader, x: int, y: int)
         {
-            return self->lock_do(func()
-            {
-                return self.m_chunks->get(x)=>> \ys = ys->get(y);;
-            });
+            return self.m_chunks->get(x)=>> \ys = ys->get(y);;
         }
         public func get_chunks(self: chunkloader)
         {
@@ -256,17 +244,11 @@ namespace jeapi::loader
         }
         public func load_chunk(self: chunkloader, chunk: chunk, callback: chunk::layer::InstanceEntityCallbackT)
         {
-            return self->lock_do(func()
-            {
-                chunk->instance(callback);
-            });
+            chunk->instance(callback);
         }
         public func unload_chunk(self: chunkloader, chunk: chunk)
         {
-            return self->lock_do(func()
-            {
-                chunk->unload();
-            });
+            chunk->unload();
         }
     }
 }

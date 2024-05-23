@@ -7,32 +7,6 @@
 
 wo_integer_t _je_wo_extern_symb_rsfunc(wo_vm vm, wo_string_t name);
 
-WO_API wo_api wojeapi_create_rmutex(wo_vm vm, wo_value args)
-{
-    return wo_ret_gchandle(vm, new std::recursive_mutex, nullptr,
-        [](void* p)
-        {
-            delete std::launder(reinterpret_cast<std::recursive_mutex*>(p));
-        });
-}
-WO_API wo_api wojeapi_lock_rmutex(wo_vm vm, wo_value args)
-{
-    std::recursive_mutex* m = std::launder(reinterpret_cast<std::recursive_mutex*>(wo_pointer(args + 0)));
-    m->lock();
-    return wo_ret_void(vm);
-}
-WO_API wo_api wojeapi_trylock_rmutex(wo_vm vm, wo_value args)
-{
-    std::recursive_mutex* m = std::launder(reinterpret_cast<std::recursive_mutex*>(wo_pointer(args + 0)));
-    return wo_ret_bool(vm, m->try_lock());
-}
-WO_API wo_api wojeapi_unlock_rmutex(wo_vm vm, wo_value args)
-{
-    std::recursive_mutex* m = std::launder(reinterpret_cast<std::recursive_mutex*>(wo_pointer(args + 0)));
-    m->unlock();
-    return wo_ret_void(vm);
-}
-
 std::atomic_flag _jewo_log_buffer_mx = {};
 std::list<std::pair<int, std::string>> _jewo_log_buffer;
 
@@ -2150,9 +2124,26 @@ WO_API wo_api  wojeapi_get_all_internal_scripts(wo_vm vm, wo_value args)
 }
 
 std::recursive_mutex _jewo_singleton_list_mx;
-std::unordered_map<std::string, wo_pin_value> _jewo_singleton_list;
+struct _jewo_singleton
+{
+    wo_pin_value m_value;
+    std::recursive_mutex* m_mutex;
 
-wo_pin_value _jewo_create_singleton(wo_vm vm, const char* token, wo_value func)
+    _jewo_singleton(wo_value value)
+        : m_mutex(new std::recursive_mutex())
+    {
+        m_value = wo_create_pin_value();
+        wo_pin_value_set(m_value, value);
+    }
+    ~_jewo_singleton()
+    {
+        wo_close_pin_value(m_value);
+        delete m_mutex;
+    }
+};
+std::unordered_map<std::string, jeecs::basic::resource<_jewo_singleton>> _jewo_singleton_list;
+
+jeecs::basic::resource<_jewo_singleton> _jewo_create_singleton(wo_vm vm, const char* token, wo_value func)
 {
     std::lock_guard g1(_jewo_singleton_list_mx);
 
@@ -2164,10 +2155,8 @@ wo_pin_value _jewo_create_singleton(wo_vm vm, const char* token, wo_value func)
         wo_value ret = wo_invoke_value(vm, func, 0);
         if (ret != nullptr)
         {
-            wo_pin_value pinval = wo_create_pin_value();
-            wo_pin_value_set(pinval, ret);
-            _jewo_singleton_list[token] = pinval;
-            return pinval;
+            return _jewo_singleton_list[token] = 
+                new _jewo_singleton(ret);
         }
         return nullptr;
     }
@@ -2175,22 +2164,40 @@ wo_pin_value _jewo_create_singleton(wo_vm vm, const char* token, wo_value func)
 void _jewo_clear_singletons()
 {
     std::lock_guard g1(_jewo_singleton_list_mx);
-    for (auto& [_, p] : _jewo_singleton_list)
-    {
-        wo_close_pin_value(p);
-    }
     _jewo_singleton_list.clear();
+}
+
+WO_API wo_api wojeapi_lock_rmutex(wo_vm vm, wo_value args)
+{
+    std::recursive_mutex* m = std::launder(reinterpret_cast<std::recursive_mutex*>(wo_pointer(args + 0)));
+    m->lock();
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_unlock_rmutex(wo_vm vm, wo_value args)
+{
+    std::recursive_mutex* m = std::launder(reinterpret_cast<std::recursive_mutex*>(wo_pointer(args + 0)));
+    m->unlock();
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api wojeapi_create_singleton(wo_vm vm, wo_value args)
 {
-    wo_pin_value pinvalue = _jewo_create_singleton(vm, wo_string(args + 0), args + 1);
-    if (pinvalue != nullptr)
-    {
-        wo_value val = wo_push_empty(vm);
-        wo_pin_value_get(val, pinvalue);
+    wo_value result = wo_push_struct(vm, 2);
 
-        return wo_ret_val(vm, val);
+    auto singleton = _jewo_create_singleton(vm, wo_string(args + 0), args + 1);
+    if (singleton != nullptr)
+    {
+        const auto* s = singleton.get();
+
+        wo_value val = wo_push_empty(vm);
+        wo_pin_value_get(val, s->m_value);
+        wo_struct_set(result, 0, val);
+
+        wo_set_pointer(val, s->m_mutex);
+        wo_struct_set(result, 1, val);
+
+        return wo_ret_val(vm, result);
     }
     return wo_ret_panic(vm, "Failed to create singleton: '%s': %s.",
         wo_string(args + 0),
@@ -2789,27 +2796,35 @@ namespace je
     public func start_coroutine<FT, ArgTs>(f: FT, args: ArgTs)=> void
         where f(args...) is void;
 
+    using rmutex = handle
+    {
+        extern("libjoyecs", "wojeapi_lock_rmutex", slow)
+        private func lock(self: rmutex)=> void;
+
+        extern("libjoyecs", "wojeapi_unlock_rmutex")
+        private func unlock(self: rmutex)=> void;
+    }    
+
     using singleton<T> = struct{
-        m_reader    : ()=> T,
-        m_guard     : rmutex
+        m_fetcher: ()=> (T, rmutex)
     }
     {
         public func create<T>(token: string, f: ()=>T)=> singleton<T>
         {
             extern("libjoyecs", "wojeapi_create_singleton")
-                func _singleton<T>(token: string, f: ()=>T)=> T;
+                func _singleton<T>(token: string, f: ()=>T)=> (T, rmutex);
 
             return singleton{ 
-                m_reader = \=_singleton(token, f);,
-                m_guard = rmutex::create()
+                m_fetcher = \ = _singleton(token, f);,
             };
         }
         public func apply<T, R>(self: singleton<T>, f: (T)=> R)=> R
         {
-            self.m_guard->lock();
-            let r = self.m_reader();
-            self.m_guard->unlock();
-            return f(r);
+            let (v, m) = self.m_fetcher();
+            m->lock();
+            let r = f(v);
+            m->unlock();
+            return r;
         }
 
         namespace unsafe
@@ -2833,21 +2848,6 @@ namespace je
         extern("libjoyecs", "wojeapi_wait_thread", slow)
         public func wait(self: thread)=> void;
     }
-
-    using rmutex = gchandle
-    {
-        extern("libjoyecs", "wojeapi_create_rmutex")
-        public func create()=> rmutex;
-    
-        extern("libjoyecs", "wojeapi_lock_rmutex", slow)
-        public func lock(self: rmutex)=> void;
-
-        extern("libjoyecs", "wojeapi_trylock_rmutex")
-        public func trylock(self: rmutex)=> bool;
-
-        extern("libjoyecs", "wojeapi_unlock_rmutex")
-        public func unlock(self: rmutex)=> void;
-    }    
 
     extern("libjoyecs", "wojeapi_generate_uid")
         public func uid()=> string;

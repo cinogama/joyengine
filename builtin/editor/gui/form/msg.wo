@@ -16,7 +16,7 @@ namespace jeapi::gui::form
         title: string, 
         text: string)
     {
-        form::create(F"{title}", 
+        do form::create(F"{title}", false,
             func(f)
             {
                 Text(text);

@@ -117,7 +117,7 @@ namespace Editor
         source += F"    let doc_path = fsys::normalize(" + path->tostring->enstring + ");\n";
         source += "    let node_editor = jeapi::gui::node_editor::create(\"workflow_node_editor\", nodedict);\n";
         source += "    do fsys::readall(doc_path)->>\\dat = node_editor->restore(dat);;\n";
-        source += F"    let form = jeapi::gui::form::create(\"Workflow 编辑器: \" + doc_path->tostring, \n";
+        source += F"    let form = jeapi::gui::form::create(\"Workflow 编辑器: \" + doc_path->tostring, true,\n";
         source += @"    func(_){
             node_editor->update();
         }"@;
@@ -139,7 +139,10 @@ namespace Editor
             });
             return false;
         });"@;
-        source += "\n    form->show();\n";
+        source += "\n";
+        source += "    form->set_size_constraint(300., 200., 3000., 3000.);\n";
+        source += "    if (!form->show())\n";
+        source += "         jeapi::gui::form::errmsg(\"打开失败\", doc_path->tostring + \"已在编辑中，不能重复打开\");\n";
         source += "}\n";
         source += "main();\n";
         

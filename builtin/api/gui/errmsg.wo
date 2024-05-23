@@ -27,7 +27,7 @@ namespace jeapi::gui
         boom_icon->pix((3, 3))->set_color(black_color);
         boom_icon->pix((3, 1))->set_color(black_color);        
 
-        let f = form::create(F"{title}", 
+        let f = form::create(F"{title}", false,
             func(f)
             {
                 ImageSize(boom_icon, 32., 32.);
@@ -41,6 +41,6 @@ namespace jeapi::gui
             });
 
         f->set_closeable(false);   
-        f->show;
+        do f->show;
     }
 }

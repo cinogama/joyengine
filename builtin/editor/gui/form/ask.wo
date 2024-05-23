@@ -13,7 +13,7 @@ namespace jeapi::gui::form
         text: string, 
         okevent: (bool)=> void)
     {
-        form::create(F"{title}", 
+        do form::create(F"{title}", false,
             func(f)
             {
                 Text(text);

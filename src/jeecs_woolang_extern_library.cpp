@@ -260,7 +260,6 @@ WO_API wo_api wojeapi_component_get_all_members(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_crc64_file(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_crc64_string(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_create_fimg_packer(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_create_rmutex(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_create_singleton(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_create_universe(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_create_world_in_universe(wo_vm vm, wo_value args);
@@ -443,7 +442,6 @@ WO_API wo_api wojeapi_towoo_update_api(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_towoo_update_component(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_towoo_update_component_data(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_towoo_userinterface_origin_layout(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_trylock_rmutex(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_type_basic_type(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_type_id(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_type_is_component(wo_vm vm, wo_value args);
@@ -731,7 +729,6 @@ void je_api_init()
         wo_extern_lib_func_t{"wojeapi_crc64_file", (void*)&wojeapi_crc64_file},
         wo_extern_lib_func_t{"wojeapi_crc64_string", (void*)&wojeapi_crc64_string},
         wo_extern_lib_func_t{"wojeapi_create_fimg_packer", (void*)&wojeapi_create_fimg_packer},
-        wo_extern_lib_func_t{"wojeapi_create_rmutex", (void*)&wojeapi_create_rmutex},
         wo_extern_lib_func_t{"wojeapi_create_singleton", (void*)&wojeapi_create_singleton},
         wo_extern_lib_func_t{"wojeapi_create_universe", (void*)&wojeapi_create_universe},
         wo_extern_lib_func_t{"wojeapi_create_world_in_universe", (void*)&wojeapi_create_world_in_universe},
@@ -914,7 +911,6 @@ void je_api_init()
         wo_extern_lib_func_t{"wojeapi_towoo_update_component", (void*)&wojeapi_towoo_update_component},
         wo_extern_lib_func_t{"wojeapi_towoo_update_component_data", (void*)&wojeapi_towoo_update_component_data},
         wo_extern_lib_func_t{"wojeapi_towoo_userinterface_origin_layout", (void*)&wojeapi_towoo_userinterface_origin_layout},
-        wo_extern_lib_func_t{"wojeapi_trylock_rmutex", (void*)&wojeapi_trylock_rmutex},
         wo_extern_lib_func_t{"wojeapi_type_basic_type", (void*)&wojeapi_type_basic_type},
         wo_extern_lib_func_t{"wojeapi_type_id", (void*)&wojeapi_type_id},
         wo_extern_lib_func_t{"wojeapi_type_is_component", (void*)&wojeapi_type_is_component},

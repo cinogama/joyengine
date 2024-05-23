@@ -14,21 +14,27 @@ namespace jeapi::gui
         size_constraint: mut (real, real, real, real),
 
         callback_close: mut ()=>bool,
+        is_unique_form: bool,
 
         _closeable: mut bool,
         _attribute: mut WindowsAttribute,
     }
     {
-        public func create(title: string, body: (form)=>void)
+        let _showing_forms = singleton::create(
+            "JE_EDITOR_JEAPI_GUI_FORM_SHOWING_FORMS", 
+            \ = {}mut: map<string, mut void>;);
+
+        public func create(title: string, unique_form: bool, body: (form)=>void)
         {
             return form{
                 show = mut false,
                 name = title,
                 
                 body = body,
-                size_constraint = mut (200., 100., 2000., 1000.),
+                size_constraint = mut (50., 50., 2000., 2000.),
 
                 callback_close = mut \ = true;,
+                is_unique_form = unique_form,
 
                 _closeable = mut true,
                 _attribute = mut 
@@ -37,10 +43,26 @@ namespace jeapi::gui
                     + WindowsAttribute::ImGuiWindowFlags_NoCollapse,
             };
         }
+        
         public func show(self: form)
         {
             if (!self.show)
             {
+                if (self.is_unique_form)
+                {
+                    if (_showing_forms->apply(
+                        func(m)
+                        {
+                            let contained = m->contain(self.name);
+                            m[self.name] = do nil;
+
+                            return contained;
+                        }))
+                    {
+                        return false;
+                    }
+                }
+
                 self.show = true;
                 launch(func(){    
                     let begin = self._closeable 
@@ -51,24 +73,31 @@ namespace jeapi::gui
                     SetNextWindowSizeConstraints(
                         (self.size_constraint.0, self.size_constraint.1), 
                         (self.size_constraint.2, self.size_constraint.3));
-                    match (begin(self.name +
-                        (self._attribute: int->std::bitand(WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize: int) != 0
-                            ? F"##{JobID()}"
-                            | ""), 
-                        self._attribute))
-                    {
-                    value(show)?
-                        if (show)
-                            self.body(self);
-                    none?
-                        self->close();
-                    }
 
+                    let tilte = self.name + (self.is_unique_form ? F"##{JobID()}" | "");
+                    let show_may_none = begin(tilte, self._attribute);
+
+                    if (show_may_none->valor(true))
+                        self.body(self);
+
+                    if (! show_may_none->has)
+                        self->close();
+                    
                     End();
 
-                    return self.show;
+                    if (!self.show)
+                    {
+                        if (self.is_unique_form)
+                            _showing_forms->apply(\ m = do m->remove(self.name););
+                        
+                        return false;
+                    }
+                    return true;
+
                 }, ());
+                return true;
             }
+            return false;
         }
         public func set_size_constraint(self: form, minx: real, miny: real, maxx: real, maxy: real)
         {
