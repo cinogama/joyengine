@@ -588,9 +588,8 @@ namespace je::physics2d::config
         }
         public func collide_each_other(a: CollideGroupInfo, b: CollideGroupInfo)
         {
-            using std;
-            a.m_collide_mask = a.m_collide_mask->bitor(1->bitshl(b.m_self_gid));
-            b.m_collide_mask = b.m_collide_mask->bitor(1->bitshl(a.m_self_gid));
+            a.m_collide_mask = a.m_collide_mask->bor(1->bshl(b.m_self_gid));
+            b.m_collide_mask = b.m_collide_mask->bor(1->bshl(a.m_self_gid));
         }
     }
 }
