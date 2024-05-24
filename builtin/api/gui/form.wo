@@ -129,9 +129,9 @@ namespace jeapi::gui
         public func set_apply_attribute(self: form, attribute: WindowsAttribute, apply: bool)
         {
             if (apply)
-                self._attribute = self._attribute: int->std::bitor(attribute: int): WindowsAttribute;
+                self._attribute = self._attribute: int->bor(attribute: int): WindowsAttribute;
             else
-                self._attribute = self._attribute: int->std::bitand(attribute: int->std::bitnot): WindowsAttribute;
+                self._attribute = self._attribute: int->band(attribute: int->bnot): WindowsAttribute;
         }
 
         public func set_docking(self: form, dockable: bool)

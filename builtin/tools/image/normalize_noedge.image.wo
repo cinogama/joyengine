@@ -15,7 +15,7 @@ func height(color: (real, real, real, real))
 func wraptex(t: je::graphic::texture, x: int, y: int)
 {
     let (w, h) = t->size();
-    return tex(t, std::max(0, std::min(w-1, x)), std::max(0, std::min(h-1, y)));
+    return tex(t, math::max(0, math::min(w-1, x)), math::max(0, math::min(h-1, y)));
 }
 
 public func pixel(t: je::graphic::texture, x: int, y: int)

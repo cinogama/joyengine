@@ -458,7 +458,7 @@ namespace Light2D::Range::light_shape
                 let v = vec::create(count * layer_count, mut (0., 0.): vec2);
                 for (let mut ilayer = 0; ilayer < layer_count; ilayer += 1)
                 {
-                    for (let mut ipoint = 0; ipoint < std::min(count, point_count); ipoint += 1)
+                    for (let mut ipoint = 0; ipoint < math::min(count, point_count); ipoint += 1)
                     {
                         v[ilayer * count + ipoint] = point_data[ilayer * point_count + ipoint];
                     }
@@ -480,7 +480,7 @@ namespace Light2D::Range::light_shape
             TextDisabled("* 请保持最内层为凸多边形");
             match (jeapi::gui::widget::poseditor(
                 F"##shape##{tag}", 
-                std::min(GetContentRegionAvail().0, 400.),
+                math::min(GetContentRegionAvail().0, 400.),
                 layered_positions as vec<array<vec2>>->unsafe::cast:<array<array<(real, real)>>>,
                 0.01,
                 func(a, i)
@@ -574,7 +574,7 @@ namespace Light2D::BlockShadow::block_mesh
 
             match (jeapi::gui::widget::poseditor(
                 F"##block_mesh##{tag}", 
-                std::min(GetContentRegionAvail().0, 400.),
+                math::min(GetContentRegionAvail().0, 400.),
                 [val: array<vec2>->>\p = p: (real, real);],
                 0.01,
                 func(a, i)

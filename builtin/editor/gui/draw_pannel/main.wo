@@ -255,8 +255,8 @@ namespace editor::gui::drawpannel
                                                                     open->set(false);
                                                                     
                                                                     let new_texture = new! je::graphic::texture(image_new_sz...);
-                                                                    for (let mut ix = 0; ix < std::min(image_new_sz[0], image_old_sz[0]); ix += 1)
-                                                                        for (let mut iy = 0; iy < std::min(image_new_sz[1], image_old_sz[1]); iy += 1)
+                                                                    for (let mut ix = 0; ix < math::min(image_new_sz[0], image_old_sz[0]); ix += 1)
+                                                                        for (let mut iy = 0; iy < math::min(image_new_sz[1], image_old_sz[1]); iy += 1)
                                                                             new_texture->pix((ix, iy))->set_color(texture->pix((ix, iy))->get_color());
 
                                                                     images[index][1] = new_texture;

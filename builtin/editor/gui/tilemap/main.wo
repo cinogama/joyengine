@@ -11,6 +11,9 @@ import pkg::image;
 import pkg::iterator;
 
 using std;
+using int;
+using math;
+
 using je;
 using je::gui;
 using je::editor;
@@ -34,37 +37,35 @@ namespace editor::gui::tilemap
     {
         func get_way_name(self: WrapingTileWay)
         {
-            using std;
-
             let mut name = "";
             
-            if (bitand(self: int, UP: int) != 0)
+            if (band(self: int, UP: int) != 0)
                 name += "u";
-            if (bitand(self: int, DOWN: int) != 0)
+            if (band(self: int, DOWN: int) != 0)
                 name += "d";
-            if (bitand(self: int, LEFT: int) != 0)
+            if (band(self: int, LEFT: int) != 0)
                 name += "l";
-            if (bitand(self: int, RIGHT: int) != 0)
+            if (band(self: int, RIGHT: int) != 0)
                 name += "r";
 
-            if (bitand(self: int, LEFTUP: int) != 0)
+            if (band(self: int, LEFTUP: int) != 0)
             {
-                assert(bitand(self: int, LEFT: int) != 0 && bitand(self: int, UP: int) != 0);
+                assert(band(self: int, LEFT: int) != 0 && band(self: int, UP: int) != 0);
                 name += "a";
             }
-            if (bitand(self: int, LEFTDOWN: int) != 0)
+            if (band(self: int, LEFTDOWN: int) != 0)
             {
-                assert(bitand(self: int, LEFT: int) != 0 && bitand(self: int, DOWN: int) != 0);
+                assert(band(self: int, LEFT: int) != 0 && band(self: int, DOWN: int) != 0);
                 name += "b";
             }
-            if (bitand(self: int, RIGHTUP: int) != 0)
+            if (band(self: int, RIGHTUP: int) != 0)
             {
-                assert(bitand(self: int, RIGHT: int) != 0 && bitand(self: int, UP: int) != 0);
+                assert(band(self: int, RIGHT: int) != 0 && band(self: int, UP: int) != 0);
                 name += "c";
             }
-            if (bitand(self: int, RIGHTDOWN: int) != 0)
+            if (band(self: int, RIGHTDOWN: int) != 0)
             {
-                assert(bitand(self: int, RIGHT: int) != 0 && bitand(self: int, DOWN: int) != 0);
+                assert(band(self: int, RIGHT: int) != 0 && band(self: int, DOWN: int) != 0);
                 name += "d";
             }
             return name == "" ? "x" | immut name;
@@ -82,11 +83,11 @@ namespace editor::gui::tilemap
             let (tile_w, tile_h) = (maintex_w / xcount, maintex_h / ycount);
             let (mut lux, mut luy) = (ix * tile_w, (ycount - iy) * tile_h);
 
-            if (bitand(self: int, UP: int) != 0)
+            if (band(self: int, UP: int) != 0)
             {
-                if (bitand(self: int, LEFT: int) != 0)
+                if (band(self: int, LEFT: int) != 0)
                 {
-                    if (bitand(self: int, LEFTUP: int) != 0)
+                    if (band(self: int, LEFTUP: int) != 0)
                     {
                         lux += tile_w;
                         luy -= tile_h * 2;
@@ -103,7 +104,7 @@ namespace editor::gui::tilemap
             }
             else
             {
-                if (bitand(self: int, LEFT: int) != 0)
+                if (band(self: int, LEFT: int) != 0)
                 {
                     lux += tile_w;
                     luy -= tile_h;
@@ -135,11 +136,11 @@ namespace editor::gui::tilemap
             let (mut lux, mut luy) = (ix * tile_w, (ycount - iy) * tile_h);
 
             // 左下角，顾名思义只关心坐标和下边以及左下部分的情况
-            if (bitand(self: int, DOWN: int) != 0)
+            if (band(self: int, DOWN: int) != 0)
             {
-                if (bitand(self: int, LEFT: int) != 0)
+                if (band(self: int, LEFT: int) != 0)
                 {
-                    if (bitand(self: int, LEFTDOWN: int) != 0)
+                    if (band(self: int, LEFTDOWN: int) != 0)
                     {
                         lux += tile_w;
                         luy -= tile_h + tile_h / 2;
@@ -157,7 +158,7 @@ namespace editor::gui::tilemap
             }
             else
             {
-                if (bitand(self: int, LEFT: int) != 0)
+                if (band(self: int, LEFT: int) != 0)
                 {
                     lux += tile_w;
                     luy -= tile_h * 2 + tile_h / 2;
@@ -189,11 +190,11 @@ namespace editor::gui::tilemap
             let (mut lux, mut luy) = (ix * tile_w, (ycount - iy) * tile_h);
 
             // 右上角，顾名思义只关心坐标和上边以及右上部分的情况
-            if (bitand(self: int, UP: int) != 0)
+            if (band(self: int, UP: int) != 0)
             {
-                if (bitand(self: int, RIGHT: int) != 0)
+                if (band(self: int, RIGHT: int) != 0)
                 {
-                    if (bitand(self: int, RIGHTUP: int) != 0)
+                    if (band(self: int, RIGHTUP: int) != 0)
                     {
                         lux += tile_w / 2;
                         luy -= tile_h * 2;
@@ -211,7 +212,7 @@ namespace editor::gui::tilemap
             }
             else
             {
-                if (bitand(self: int, RIGHT: int) != 0)
+                if (band(self: int, RIGHT: int) != 0)
                 {
                     lux += tile_w / 2;
                     luy -= tile_h;
@@ -244,11 +245,11 @@ namespace editor::gui::tilemap
             let (mut lux, mut luy) = (ix * tile_w, (ycount - iy) * tile_h);
 
             // 右下角，顾名思义只关心坐标和下边以及右下部分的情况
-            if (bitand(self: int, DOWN: int) != 0)
+            if (band(self: int, DOWN: int) != 0)
             {
-                if (bitand(self: int, RIGHT: int) != 0)
+                if (band(self: int, RIGHT: int) != 0)
                 {
-                    if (bitand(self: int, RIGHTDOWN: int) != 0)
+                    if (band(self: int, RIGHTDOWN: int) != 0)
                     {
                         lux += tile_w / 2;
                         luy -= tile_h + tile_h / 2;
@@ -267,7 +268,7 @@ namespace editor::gui::tilemap
             }
             else
             {
-                if (bitand(self: int, RIGHT: int) != 0)
+                if (band(self: int, RIGHT: int) != 0)
                 {
                     lux += tile_w / 2;
                     luy -= tile_h * 2 + tile_h / 2;
@@ -787,8 +788,8 @@ namespace editor::gui::tilemap
                             value(tex)?
                                 {
                                     let (x, y) = tex->size;
-                                    create_context.m_tile_x_count = std::max(1, x / 16);
-                                    create_context.m_tile_y_count = std::max(1, y / 16);
+                                    create_context.m_tile_x_count = math::max(1, x / 16);
+                                    create_context.m_tile_y_count = math::max(1, y / 16);
                                 }
                             none?
                                 ;
@@ -800,7 +801,7 @@ namespace editor::gui::tilemap
                             match (create_context.m_texture)
                             {
                             value(tex)?
-                                    ImageScale(tex, std::min(200. / tex->size[0]: real, 300. / tex->size[1]: real));
+                                    ImageScale(tex, math::min(200. / tex->size[0]: real, 300. / tex->size[1]: real));
                             none? Text("暂无预览");
                             }
                             
@@ -810,8 +811,8 @@ namespace editor::gui::tilemap
                             
                             BeginGroup();
                             do InputText("名称", create_context.m_name)->>\newname = create_context.m_name = newname;;
-                            do InputInt("X方向Tile数量", create_context.m_tile_x_count)->>\newc = create_context.m_tile_x_count = std::max(1, newc);;
-                            do InputInt("Y方向Tile数量", create_context.m_tile_y_count)->>\newc = create_context.m_tile_y_count = std::max(1, newc);;
+                            do InputInt("X方向Tile数量", create_context.m_tile_x_count)->>\newc = create_context.m_tile_x_count = math::max(1, newc);;
+                            do InputInt("Y方向Tile数量", create_context.m_tile_y_count)->>\newc = create_context.m_tile_y_count = math::max(1, newc);;
                             EndGroup();
 
                             if (Button("创建"))
@@ -1064,27 +1065,27 @@ namespace editor::gui::tilemap
                     if (self->get_tile(layer, x, y + 1)->>\t = std::issame(t, centertile);->valor(false))
                         way += WrapingTileWay::DOWN;
 
-                    if (way: int->std::bitand(WrapingTileWay::UP: int) != 0)
+                    if (way: int->band(WrapingTileWay::UP: int) != 0)
                     {
-                        if (way: int->std::bitand(WrapingTileWay::RIGHT: int) != 0)
+                        if (way: int->band(WrapingTileWay::RIGHT: int) != 0)
                         {
                             if (self->get_tile(layer, x + 1, y - 1)->>\t = std::issame(t, centertile);->valor(false))
                                 way += WrapingTileWay::RIGHTUP;
                         }
-                        if (way: int->std::bitand(WrapingTileWay::LEFT: int) != 0)
+                        if (way: int->band(WrapingTileWay::LEFT: int) != 0)
                         {
                             if (self->get_tile(layer, x - 1, y - 1)->>\t = std::issame(t, centertile);->valor(false))
                                 way += WrapingTileWay::LEFTUP;
                         }
                     }
-                    if (way: int->std::bitand(WrapingTileWay::DOWN: int) != 0)
+                    if (way: int->band(WrapingTileWay::DOWN: int) != 0)
                     {
-                        if (way: int->std::bitand(WrapingTileWay::RIGHT: int) != 0)
+                        if (way: int->band(WrapingTileWay::RIGHT: int) != 0)
                         {
                             if (self->get_tile(layer, x + 1, y + 1)->>\t = std::issame(t, centertile);->valor(false))
                                 way += WrapingTileWay::RIGHTDOWN;
                         }
-                        if (way: int->std::bitand(WrapingTileWay::LEFT: int) != 0)
+                        if (way: int->band(WrapingTileWay::LEFT: int) != 0)
                         {
                             if (self->get_tile(layer, x - 1, y + 1)->>\t = std::issame(t, centertile);->valor(false))
                                 way += WrapingTileWay::LEFTDOWN;

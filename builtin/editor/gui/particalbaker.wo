@@ -450,7 +450,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                 BeginGroup();
                 
                 let (avail_w, avail_h) = GetContentRegionAvail();
-                do InputTextMultilineSize("##source", partical_context.m_script, std::max(400., avail_w), avail_h)
+                do InputTextMultilineSize("##source", partical_context.m_script, math::max(400., avail_w), avail_h)
                     ->> \t = partical_context.m_script = t;;
 
                 EndGroup();
