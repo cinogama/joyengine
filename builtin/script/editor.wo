@@ -8,6 +8,7 @@ import je::gui;
 import je::towoo;
 
 import pkg::worst;
+import pkg::math;
 import pkg::iterator;
 
 import builtin::api::gui::file;
