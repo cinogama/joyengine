@@ -213,6 +213,7 @@ extern public func _start_baking(context: ParticalContext, econtext: _EditorCont
 
     let DEFAULT_SOURCE = 
 @"// Particalbaker Script
+
 import woo::std;
 import pkg::worst;
 import je::particalbacker;
@@ -236,10 +237,21 @@ public func perparticle(_ /*launch_frame*/: int)
 {
     return PerparticleContext{
         pos = mut upos2ppox((0., 0.)),
-        speed = mut(randreal(-32., 32.), randreal(-32., 32.)),
+        speed = mut(rand(-32., 32.), rand(-32., 32.)),
         life = mut 1. + deltatime(),
         maxlife = 1.,
     };
+}
+
+public func stamp(x: real, y: real)
+{
+    return [
+        ppos2upox((x + 1.0, y)),
+        ppos2upox((x - 1.0, y)),
+        ppos2upox((x, y)),
+        ppos2upox((x, y + 1.0)),
+        ppos2upox((x, y - 1.0)),
+    ];
 }
 
 public func position(_ /*frame*/: int, context: PerparticleContext)
@@ -251,13 +263,7 @@ public func position(_ /*frame*/: int, context: PerparticleContext)
     context.life -= deltatime();
 
     // Make a star shape.
-    return [
-        ppos2upox((x + 1.0, y)),
-        ppos2upox((x - 1.0, y)),
-        ppos2upox((x, y)),
-        ppos2upox((x, y + 1.0)),
-        ppos2upox((x, y - 1.0)),
-    ];
+    return stamp(x, y);
 }
 
 public func color(_/*frame*/: int, context: PerparticleContext)
