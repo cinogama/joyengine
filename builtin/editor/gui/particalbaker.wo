@@ -390,7 +390,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                 }
 
                 BeginGroup();
-                do BeginChildSize("##prof", 320., GetContentRegionAvail()[1]);
+                do BeginChildSize("##prof", 410., GetContentRegionAvail()[1]);
                     Text("帧数");
                     SameLine();
                     do InputInt("##framecount", partical_context.m_frame_count)
@@ -415,7 +415,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                 
                     let (w, h) = partical_context.m_frame_size;
 
-                    do BeginChildSize("##review", w: real * 300. / h: real, 300.);
+                    do BeginChildSize("##review", 395., h: real * 395. / w: real);
                 
                     let frames = partical_context.m_frames_caches;
                 
