@@ -415,9 +415,10 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                 
                     let (w, h) = partical_context.m_frame_size;
 
-                    do BeginChildSize("##review", 395., h: real * 395. / w: real);
-                
                     let frames = partical_context.m_frames_caches;
+                    ProgressBar(frames->empty ? 0. | econtext.m_frame_index: real / frames->len: real);
+                
+                    do BeginChildSize("##review", 395., h: real * 395. / w: real);
                 
                     if (std::time() - econtext.m_last_update_time >= partical_context.m_frame_rate)
                     {
@@ -428,8 +429,6 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                     econtext.m_frame_index = frames->empty
                         ? 0
                         | econtext.m_frame_index % frames->len;
-                
-                    ProgressBar(frames->empty ? 0. | econtext.m_frame_index: real / frames->len: real);
                 
                     let drawlist = GetWindowDrawList();
                     do InvisibleButton("##draw_space", GetContentRegionAvail());
