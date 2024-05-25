@@ -97,13 +97,13 @@ let mut partical_context = nil->unsafe::cast:<ParticalContext>();
 let mut baking_cache = []: array<je::graphic::texture>;
 let baking_launch_record = []mut: vec<(int, int)>;
 
-public func upos2ppox(upos: (real, real))=> (real, real)
+public func u2p(upos: (real, real))=> (real, real)
 {
     let (w, h) = partical_context.m_frame_size;
     let (px, py) = upos;
     return (px / 2. * w: real, py / 2. * h: real);
 }
-public func ppos2upox(upos: (real, real))=> (real, real)
+public func p2u(upos: (real, real))=> (real, real)
 {
     let (w, h) = partical_context.m_frame_size;
     let (ipx, ipy) = upos;
@@ -125,7 +125,7 @@ func draw(mut frame: int, pos: (real, real), color: (real, real, real, real))
     let (w, h) = partical_context.m_frame_size;
     let (ipx, ipy) = pos...
         -> \px, py = (px + 1., py + 1.);
-        -> upos2ppox...
+        -> u2p...
         -> \px, py = (math::round(px), math::round(py));
         ;
 
@@ -236,7 +236,7 @@ using PerparticleContext = struct{
 public func perparticle(_ /*launch_frame*/: int)
 {
     return PerparticleContext{
-        pos = mut upos2ppox((0., 0.)),
+        pos = mut u2p((0., 0.)),
         speed = mut(rand(-32., 32.), rand(-32., 32.)),
         life = mut 1. + deltatime(),
         maxlife = 1.,
@@ -246,11 +246,11 @@ public func perparticle(_ /*launch_frame*/: int)
 public func stamp(x: real, y: real)
 {
     return [
-        ppos2upox((x + 1.0, y)),
-        ppos2upox((x - 1.0, y)),
-        ppos2upox((x, y)),
-        ppos2upox((x, y + 1.0)),
-        ppos2upox((x, y - 1.0)),
+        p2u((x + 1.0, y)),
+        p2u((x - 1.0, y)),
+        p2u((x, y)),
+        p2u((x, y + 1.0)),
+        p2u((x, y - 1.0)),
     ];
 }
 
