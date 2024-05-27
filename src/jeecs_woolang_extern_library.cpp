@@ -265,8 +265,6 @@ WO_API wo_api wojeapi_create_fimg_packer(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_create_singleton(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_create_universe(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_create_world_in_universe(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_current_platform_config(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_delay_unload_module(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_deltatime(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_dynamic_parser_clear(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_dynamic_parser_edit(wo_vm vm, wo_value args);
@@ -734,8 +732,6 @@ void je_api_init()
         wo_extern_lib_func_t{"wojeapi_create_singleton", (void*)&wojeapi_create_singleton},
         wo_extern_lib_func_t{"wojeapi_create_universe", (void*)&wojeapi_create_universe},
         wo_extern_lib_func_t{"wojeapi_create_world_in_universe", (void*)&wojeapi_create_world_in_universe},
-        wo_extern_lib_func_t{"wojeapi_current_platform_config", (void*)&wojeapi_current_platform_config},
-        wo_extern_lib_func_t{"wojeapi_delay_unload_module", (void*)&wojeapi_delay_unload_module},
         wo_extern_lib_func_t{"wojeapi_deltatime", (void*)&wojeapi_deltatime},
         wo_extern_lib_func_t{"wojeapi_dynamic_parser_clear", (void*)&wojeapi_dynamic_parser_clear},
         wo_extern_lib_func_t{"wojeapi_dynamic_parser_edit", (void*)&wojeapi_dynamic_parser_edit},

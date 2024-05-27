@@ -155,6 +155,9 @@ void je_default_graphic_interface_sync_func(jegl_context* gthread, void*)
         }).detach();
 }
 
+void _jeecs_entry_register_core_systems(
+    jeecs::typing::type_unregister_guard* guard);
+
 void je_init(int argc, char** argv)
 {
     // Update default graphic sync funciton
@@ -219,6 +222,7 @@ void je_init(int argc, char** argv)
 
     _je_unregister_guard = new jeecs::typing::type_unregister_guard();
     jeecs::entry::module_entry(_je_unregister_guard);
+    _jeecs_entry_register_core_systems(_je_unregister_guard);
 }
 
 wo_integer_t crc64_of_source_and_api()
@@ -451,17 +455,6 @@ void je_module_unload(void* lib)
     if (auto leave = (jeecs::typing::module_leave_t)
         wo_load_func(lib, "jeecs_module_leave"))
         leave();
-    jeecs::debug::loginfo("Module: '%p' request to unloaded", lib);
+    jeecs::debug::loginfo("Module: '%p' request to unload.", lib);
     wo_unload_lib(lib);
-}
-
-void je_module_delay_unload(void* lib)
-{
-    assert(lib);
-    if (auto leave = (jeecs::typing::module_leave_t)
-        wo_load_func(lib, "jeecs_module_leave"))
-        leave();
-    jeecs::debug::loginfo("Module: '%p' request to unloaded", lib);
-    std::lock_guard g1(_free_module_list_mx);
-    _free_module_list.push_back(lib);
 }

@@ -51,9 +51,30 @@ namespace editor
             return CMAKE_PATH_MAY_NULL->>\p = fsys::isfile(p);->valor(false);
         }
 
-        func _lib_append_suffix(libname: string)
+        func _config_name(rttype: std::platform::runtime_type)
         {
-            return name 
+            return rttype == std::platform::runtime_type::DEBUG ? "debug" | "relwithdebinfo";
+        }
+
+        func _lib_append_suffix_for_link(libname: string, rttype: std::platform::runtime_type)
+        {
+            let isdebug = rttype == std::platform::runtime_type::DEBUG;
+
+            return libname 
+                + (std::platform::bitwidth == 32 ? "32" | "")
+                + (isdebug ? "_debug" | "")
+                + (std::platform::os == std::platform::os_type::WIN32
+                    ? ".lib"
+                    | std::platform::os == std::platform::os_type::MACOS
+                        ? ".a"
+                        | ".so")
+                ;
+        }
+        func _lib_append_suffix(libname: string, rttype: std::platform::runtime_type)
+        {
+            let isdebug = rttype == std::platform::runtime_type::DEBUG;
+
+            return libname 
                 + (std::platform::bitwidth == 32 ? "32" | "")
                 + (isdebug ? "_debug" | "")
                 + (std::platform::os == std::platform::os_type::WIN32
@@ -63,11 +84,11 @@ namespace editor
                         | ".so")
                 ;
         }
-        public func get_dylib_files_by_config(isdebug: bool)
+        public func get_dylib_files_by_config(rttype: std::platform::runtime_type)
         {
             let libname = ["libjoyecs", "libwoo"];
             return libname
-                ->> \name = _lib_append_suffix(name);
+                ->> \name = _lib_append_suffix(name, rttype);
                 ;
         }
 
@@ -158,26 +179,25 @@ else ()
     set (JEMODULE_BUILD_TYPE STATIC)
 endif ()
 
-file(GLOB_RECURSE jemodule_system_src_cpp ../../systems/*.cpp)
-file(GLOB_RECURSE jemodule_system_src_hpp ../../systems/*.hpp)
-file(GLOB_RECURSE jemodule_system_src_c ../../systems/*.c)
-file(GLOB_RECURSE jemodule_system_src_h ../../systems/*.h)
+file(GLOB_RECURSE jemodule_system_src_cpp ./systems/*.cpp)
+file(GLOB_RECURSE jemodule_system_src_hpp ./systems/*.hpp)
+file(GLOB_RECURSE jemodule_system_src_c ./systems/*.c)
+file(GLOB_RECURSE jemodule_system_src_h ./systems/*.h)
 
-file(GLOB_RECURSE jemodule_component_src_cpp ../../components/*.cpp)
-file(GLOB_RECURSE jemodule_component_src_hpp ../../components/*.hpp)
-file(GLOB_RECURSE jemodule_component_src_c ../../components/*.c)
-file(GLOB_RECURSE jemodule_component_src_h ../../components/*.h)
+file(GLOB_RECURSE jemodule_component_src_cpp ./components/*.cpp)
+file(GLOB_RECURSE jemodule_component_src_hpp ./components/*.hpp)
+file(GLOB_RECURSE jemodule_component_src_c ./components/*.c)
+file(GLOB_RECURSE jemodule_component_src_h ./components/*.h)
 
-file(GLOB_RECURSE jemodule_source_src_cpp ../../sources/*.cpp)
-file(GLOB_RECURSE jemodule_source_src_hpp ../../sources/*.hpp)
-file(GLOB_RECURSE jemodule_source_src_c ../../sources/*.c)
-file(GLOB_RECURSE jemodule_source_src_h ../../sources/*.h)
+file(GLOB_RECURSE jemodule_source_src_cpp ./sources/*.cpp)
+file(GLOB_RECURSE jemodule_source_src_hpp ./sources/*.hpp)
+file(GLOB_RECURSE jemodule_source_src_c ./sources/*.c)
+file(GLOB_RECURSE jemodule_source_src_h ./sources/*.h)
 
-find_library(jemodule_jeecs_lib "${JEMODULE_ENGINE_CORE_LIB_FILENAME}" ../../engine/library)
-find_library(jemodule_woolang_lib "${JEMODULE_WOOLANG_LIB_FILENAME}" ../../engine/library)
+find_library(jemodule_jeecs_lib "${JEMODULE_ENGINE_CORE_LIB_FILENAME}" ./engine/library)
+find_library(jemodule_woolang_lib "${JEMODULE_WOOLANG_LIB_FILENAME}" ./engine/library)
 
 #####################################################################
-
 add_library($$JEMODULE_PROJECT_NAME$$ 
     ${JEMODULE_BUILD_TYPE}
     
@@ -196,18 +216,25 @@ add_library($$JEMODULE_PROJECT_NAME$$
     ${jemodule_source_src_c}
     ${jemodule_source_src_h}
 
-    ./../main.cpp
-    ../../loader.hpp)
+    ./main.cpp
+    ./loader.hpp)
 
-target_include_directories($$JEMODULE_PROJECT_NAME$$ PRIVATE ../../engine/include)
-target_include_directories($$JEMODULE_PROJECT_NAME$$ PRIVATE ../../systems)
-target_include_directories($$JEMODULE_PROJECT_NAME$$ PRIVATE ../../components)
-target_include_directories($$JEMODULE_PROJECT_NAME$$ PRIVATE ../../sources)
+target_include_directories($$JEMODULE_PROJECT_NAME$$ PRIVATE ./engine/include)
+target_include_directories($$JEMODULE_PROJECT_NAME$$ PRIVATE ./systems)
+target_include_directories($$JEMODULE_PROJECT_NAME$$ PRIVATE ./components)
+target_include_directories($$JEMODULE_PROJECT_NAME$$ PRIVATE ./sources)
 
 set_target_properties($$JEMODULE_PROJECT_NAME$$ PROPERTIES OUTPUT_NAME lib$$JEMODULE_PROJECT_NAME$$)
 set_target_properties($$JEMODULE_PROJECT_NAME$$ PROPERTIES PREFIX "")
 
 target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${jemodule_jeecs_lib} ${jemodule_woolang_lib})
+
+target_compile_features($$JEMODULE_PROJECT_NAME$$ PRIVATE cxx_std_17)
+if(MSVC) 
+    target_compile_options($$JEMODULE_PROJECT_NAME$$ PRIVATE "/source-charset:utf-8")
+else()
+    target_compile_options($$JEMODULE_PROJECT_NAME$$ PRIVATE -fno-exceptions)
+endif()
 "@;
             let content = CMAKE_FILE_CONTENT->replace("$$JEMODULE_PROJECT_NAME$$", name);
             if (!writeall(cxx_proj_path/"CMakeLists.txt", content))
@@ -246,10 +273,10 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${jemodule_jeecs_lib} ${jemodule
             }
             return option::none;
         }
-        func load_library_of_platform(self: CxxProject, config: string)
+        func load_library_of_platform(self: CxxProject, rttype: std::platform::runtime_type)
         {
             assert(!self.module_instance->has);
-            match (search_file_in(get_current_runtime_path(self->get_runtime_path(config))->val, ".dll"))
+            match (search_file_in(get_current_runtime_path(self->get_runtime_path(rttype))->val, ".dll"))
             {
             value(p)? 
                 return self.module_instance := je::load_module(self.name, p->tostring);
@@ -296,27 +323,27 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${jemodule_jeecs_lib} ${jemodule
 
             return newest_path;
         }
-        func get_runtime_path(self: CxxProject, config: string)
+        func get_runtime_path(self: CxxProject, rttype: std::platform::runtime_type)
         {
-            return self.path/"runtime"/config;
+            return self.path/"runtime"/_config_name(rttype);
         }
-        public func get_build_dll_path(self: CxxProject, config: string)
+        public func get_build_dll_path(self: CxxProject, rttype: std::platform::runtime_type)
         {
-            return search_file_in(self.path/"build"/config, ".dll");
+            return search_file_in(self.path/"build"/_config_name(rttype), ".dll");
         }
-        func update_library_of_platform(self: CxxProject, config: string)
+        func update_library_of_platform(self: CxxProject, rttype: std::platform::runtime_type)
         {
             using fsys;
 
             // 获取编译出来的二进制，移动到一个统一的位置
-            if (!exist(self->get_runtime_path(config)))
-                do mkdir(self->get_runtime_path(config))->unwarp;
+            if (!exist(self->get_runtime_path(rttype)))
+                do mkdir(self->get_runtime_path(rttype))->unwarp;
 
-            assert(exist(self->get_runtime_path(config)));
+            assert(exist(self->get_runtime_path(rttype)));
 
-            let newest_runtime_path = get_newest_runtime_path(self->get_runtime_path(config));
+            let newest_runtime_path = get_newest_runtime_path(self->get_runtime_path(rttype));
 
-            match (self->get_build_dll_path(config))
+            match (self->get_build_dll_path(rttype))
             {
             value(p)? 
                 assert(copy(p, newest_runtime_path/filename(p))->isok);
@@ -325,7 +352,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${jemodule_jeecs_lib} ${jemodule
 
             // 调试时，vs调试器可能会自动附加pdb，导致重新编译失败
             // 为了避免蠢蛋vs干蠢事，这里直接把pdb文件移到runtime目录下
-            match (search_file_in(self.path/"build"/config, ".pdb"))
+            match (search_file_in(self.path/"build"/_config_name(rttype), ".pdb"))
             {
             value(p)?
                 assert(move(p, newest_runtime_path/filename(p))->isok);
@@ -450,7 +477,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${jemodule_jeecs_lib} ${jemodule
                 return result::err(errmsg);
             ok(mut created_module)?
             {
-                let config = "debug";
+                let rttype = std::platform::runtime_type::DEBUG;
 
                 // 校验最后一次编译时的引擎版本，如果不一致，那么删掉全部动态库
                 let is_same_version = fsys::readall(path / "version.json")
@@ -460,9 +487,9 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${jemodule_jeecs_lib} ${jemodule
                 if (is_same_version)
                 {
                     // 获取最新的模块版本，将其保留并重命名为0，删除其他全部版本
-                    do get_current_runtime_id(created_module->get_runtime_path(config))
+                    do get_current_runtime_id(created_module->get_runtime_path(rttype))
                         ->map(\newest_id: int = 
-                            subpath(created_module->get_runtime_path(config))
+                            subpath(created_module->get_runtime_path(rttype))
                                 ->map(\child_paths = child_paths
                                     ->forall(\path = !isdir(path) || newest_id != filename(path): int;)
                                     ->map(\path = remove(path)->unwarp;)
@@ -479,15 +506,14 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${jemodule_jeecs_lib} ${jemodule
                     do fsys::remove(path / "runtime");
                     do fsys::remove(path / "loader.hpp");
                 }
-
+                
                 let founding_newest_result = 
-                    get_current_runtime_path(created_module->get_runtime_path(config))
+                    get_current_runtime_path(created_module->get_runtime_path(rttype))
                         ->> \dllpath = 
                             filename(dllpath) == "0" 
                             ? result::ok(dllpath)
-                            | move(dllpath, created_module->get_runtime_path(config)/"0");
+                            | move(dllpath, created_module->get_runtime_path(rttype)/"0");
                         ->  or(\ = result::err(0: fsys::errno_t););
-                     
                 match (founding_newest_result)
                 {
                 err(no)?
@@ -500,10 +526,10 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${jemodule_jeecs_lib} ${jemodule
                         do proj->deactive_module(created_module);
                         try! reloaded_created_module = open_for_loading(path, proj);
                         
-                        try! _ = reloaded_created_module->compile(je::platform(), option::none);
+                        try! _ = reloaded_created_module->compile(rttype, option::none);
 
                         created_module = reloaded_created_module;
-                        created_module->update_library_of_platform(config);
+                        created_module->update_library_of_platform(rttype);
                     }
                     else
                         throw! F"清理模块失败({founding_newest_result->error->val})";
@@ -511,8 +537,8 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${jemodule_jeecs_lib} ${jemodule
                     ;
                 }
 
-                if (!created_module->load_library_of_platform(config)->has)
-                    throw! F"无法为当前运行时{config}加载模块，请检查";
+                if (!created_module->load_library_of_platform(rttype)->has)
+                    throw! F"无法为当前运行时{_config_name(rttype)}加载模块，请检查";
 
                 expected_ok! created_module;
             }
@@ -521,7 +547,7 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${jemodule_jeecs_lib} ${jemodule
         }
         public func close(self: CxxProject)
         {
-            do self.module_instance->> \m = je::delay_unload_module(m);;
+            do self.module_instance->> \m = je::unload_module(m);;
             self.module_instance = option::none;
         }
 
@@ -575,12 +601,10 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${jemodule_jeecs_lib} ${jemodule
                 return context.show;
             }, ());
 
-            let config = rttype == std::platform::runtime_type::DEBUG ? "debug" | "relwithdebinfo";
-
             context.compile_thread = 
                 option::value(new! thread(func ()
                 {
-                    match (self->compile(config, option::value(context)))
+                    match (self->compile(rttype, option::value(context)))
                     {
                     ok(_)?
                     {
@@ -605,10 +629,10 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${jemodule_jeecs_lib} ${jemodule
                                         self->close();
 
                                         // 编译成功，更新文件到runtime
-                                        self->update_library_of_platform(config);
+                                        self->update_library_of_platform(rttype);
 
                                         // 加载模块！
-                                        assert(self->load_library_of_platform(config)->has);
+                                        assert(self->load_library_of_platform(rttype)->has);
 
                                         self.project->update_towoo_after_dump_and_close(true);
                                         self.project->restore_all_world(dump_worlds);
@@ -624,8 +648,10 @@ target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${jemodule_jeecs_lib} ${jemodule
                 },()));
         }
 
-        public func compile(self: CxxProject, config: string, context: option<compile_context>)
+        public func compile(self: CxxProject, rttype: std::platform::runtime_type, context: option<compile_context>)
         {
+            let config = _config_name(rttype); 
+
             try! CMAKE_PATH = CMAKE_PATH_MAY_NULL->okor("无法找到CMake，请检查CMake配置和环境变量");
 
             do context->>\context = context.display_msg = "正在检查工具链";;
@@ -720,22 +746,23 @@ $$REGISTER_SYSTEM_TYPES$$
             do context->>\context = context.display_msg = F"正在使用CMake生成编译配置\n{config}";;
             do context->>\context = context.progress = 15;;
 
+            let building_path = self.path->tostring + "/msvcbuild_" + config;
+
             if (start_process(CMAKE_PATH->tostring, 
                 [
                     CMAKE_PATH->tostring, 
                     self.path->tostring, 
-                    "-B", self.path->tostring + "/msvcbuild_" + config,
+                    "-B", building_path,
                     F"-DCMAKE_BUILD_TYPE={config}",
                     F"-DBUILD_SHARED_LIBS=ON",
-                    F"-DJEMODULE_ENGINE_CORE_LIB_FILENAME={_lib_append_suffix("libjoyecs")}",
-                    F"-DJEMODULE_WOOLANG_LIB_FILENAME={_lib_append_suffix("libwoo")}"
+                    F"-DJEMODULE_ENGINE_CORE_LIB_FILENAME={_lib_append_suffix_for_link("libjoyecs", std::platform::runtime)}",
+                    F"-DJEMODULE_WOOLANG_LIB_FILENAME={_lib_append_suffix_for_link("libwoo", std::platform::runtime)}"
                 ]) != true)
             {
                 do context->>\context = context.display_msg = "CMake生成失败";;
                 return result::err("CMake生成失败");
             }
 
-            let msvc_proj_path = self.path/F"msvcbuild_{config}"/"builder"/config/F"{self.name->replace(" ", "_")}.vcxproj";
             let msvc_compile_result_path = self.path/F"msvcbuild_{config}"/"compile.log";
 
             do remove(msvc_compile_result_path)->unwarp;
@@ -747,7 +774,7 @@ $$REGISTER_SYSTEM_TYPES$$
                 CMAKE_PATH->tostring, 
                 [
                     CMAKE_PATH->tostring, 
-                    "--build", msvc_proj_path->tostring, 
+                    "--build", building_path, 
                     "--config", config, 
                     "-j", thread::concurrency(): string
                 ]);

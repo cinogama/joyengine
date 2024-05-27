@@ -150,7 +150,9 @@ namespace editor::gui::edit_forms
                 do thread::create(func()
                     {
                         config.m_pack_output_log->add("正在编译模块");
-                        let compile_results = proj->get_all_modules->>\k, v = (k, (v, v->compile(je::platform(), option::none)));;
+                        let compile_results = proj->get_all_modules
+                            ->> \k, v = (k, (v, v->compile(std::platform::runtime_type::RELEASE, option::none)));
+                            ;
                         let error_compiling = compile_results->forall(\_, r = r[1]->iserr;);
                         if (error_compiling->empty == false)
                         {
@@ -169,7 +171,8 @@ namespace editor::gui::edit_forms
                             // 1.1 将生成的C++模块打入包内，并记录文件列表
                             let dll_module_path = compile_results
                                 ->  unmapping
-                                ->> \kv = (kv[1][0], bind_wrap_path(kv[1][0]->get_build_dll_path(je::platform())->val)); // 必须有
+                                ->> \kv = (kv[1][0], bind_wrap_path(kv[1][0]->get_build_dll_path(
+                                    std::platform::runtime_type::RELEASE)->val)); // 必须有
                                 ;
 
                             // 1.2 创建路径，准备打包
@@ -242,7 +245,7 @@ namespace editor::gui::edit_forms
                                     ;
                             }
 
-                            do CxxProject::get_dylib_files_by_config(false)
+                            do CxxProject::get_dylib_files_by_config(std::platform::runtime_type::RELEASE)
                                 ->> \libpath = 
                                     do fsys::copy(
                                         fsys::normalize(
@@ -330,7 +333,7 @@ namespace editor::gui::edit_forms
                                     je::towoo::unregister_component(tinfo);
 
                                 for (let libhandle : LOADED_MODULE_HANDLES)
-                                    je::delay_unload_module(libhandle);                               
+                                    je::unload_module(libhandle);                               
                             "@;
 
                             // 1.5.1 生成加载动态库相关代码

@@ -263,43 +263,6 @@ WO_API wo_api wojeapi_get_all_logs(wo_vm vm, wo_value args)
     return wo_ret_val(vm, result);
 }
 
-WO_API wo_api wojeapi_current_platform_config(wo_vm vm, wo_value args)
-{
-    return wo_ret_string(vm,
-#if defined(JE_OS_WINDOWS)
-        "win32_"
-#elif defined(JE_OS_ANDROID)
-        "android_"
-#elif defined(JE_OS_LINUX)
-        "linux_"
-#elif defined(JE_OS_UNKNOWN)
-        "unknown_"
-#else
-#error "Known os type."
-#endif
-
-#if defined(NDEBUG)
-        "release_"
-#else
-        "debug_"
-#endif
-
-#if defined (JE_PLATFORM_X86)
-        "x86"
-#elif defined (JE_PLATFORM_X64)
-        "x64"
-#elif defined (JE_PLATFORM_ARM)
-        "arm"
-#elif defined (JE_PLATFORM_ARM64)
-        "arm64"
-#elif defined (JE_PLATFORM_UNKNOWN)
-        "unknown"
-#else
-#error "Known os type."
-#endif
-    );
-}
-
 WO_API wo_api wojeapi_load_module(wo_vm vm, wo_value args)
 {
     return wo_ret_option_ptr_may_null(vm, je_module_load(wo_string(args + 0), wo_string(args + 1)));
@@ -308,12 +271,6 @@ WO_API wo_api wojeapi_load_module(wo_vm vm, wo_value args)
 WO_API wo_api wojeapi_unload_module(wo_vm vm, wo_value args)
 {
     je_module_unload(wo_pointer(args + 0));
-    return wo_ret_void(vm);
-}
-
-WO_API wo_api wojeapi_delay_unload_module(wo_vm vm, wo_value args)
-{
-    je_module_delay_unload(wo_pointer(args + 0));
     return wo_ret_void(vm);
 }
 
@@ -2881,14 +2838,8 @@ namespace je
     extern("libjoyecs", "wojeapi_generate_uid")
         public func uid()=> string;
 
-    extern("libjoyecs", "wojeapi_current_platform_config")
-    public func platform()=> string;
-
     extern("libjoyecs", "wojeapi_load_module")
     public func load_module(name: string, path: string)=> option<handle>;
-
-    extern("libjoyecs", "wojeapi_delay_unload_module")
-    public func delay_unload_module(module: handle)=> void;
 
     extern("libjoyecs", "wojeapi_unload_module")
     public func unload_module(module: handle)=> void;

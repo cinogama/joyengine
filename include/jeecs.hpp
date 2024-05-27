@@ -1393,17 +1393,6 @@ je_uid_generate [基本接口]
 */
 JE_API void je_uid_generate(jeecs::typing::uid_t* out_uid);
 
-/////////////////////////// CORE /////////////////////////////////
-
-/*
-jeecs_entry_register_core_systems [基本接口]
-注册引擎内置的组件和系统类型，在调用jeecs::entry::module_entry时会一并执行
-请参见：
-    jeecs::entry::module_entry
-*/
-JE_API void jeecs_entry_register_core_systems(
-    jeecs::typing::type_unregister_guard* guard);
-
 /////////////////////////// FILE /////////////////////////////////
 
 /*
@@ -3243,12 +3232,6 @@ je_module_unload [基本接口]
 立即卸载某个动态库
 */
 JE_API void je_module_unload(void* lib);
-
-/*
-je_module_delay_unload [基本接口]
-延迟卸载某个动态库，会在执行je_finish时正式释放
-*/
-JE_API void je_module_delay_unload(void* lib);
 
 // Audio
 struct jeal_device;
@@ -9764,9 +9747,6 @@ R"(namespace Light2D::Range
                 [](jeecs::basic::string* v, wo_vm, wo_value value) {
                     *v = wo_string(value);
                 }, "string", "");
-
-            // 1. register core&graphic systems.
-            jeecs_entry_register_core_systems(guard);
 
             je_towoo_update_api();
         }
