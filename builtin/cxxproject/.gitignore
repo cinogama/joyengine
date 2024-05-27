@@ -1,0 +1,17 @@
+# Ignore cpp module's useless files.
+# Builtin files
+/build/
+/engine/
+/msvcbuild_*/
+/runtime/
+
+# Auto-generate files
+/builder/
+/CMakeLists.txt
+/loader.hpp
+/version.json
+
+# Ignore IDE File
+/.vscode/
+/.vs/
+/CMakeSettings.json

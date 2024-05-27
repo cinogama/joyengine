@@ -242,9 +242,12 @@ namespace editor::gui::edit_forms
                                     ;
                             }
 
-                            do CxxProject::get_lib_files_by_config(je::platform())
-                                ->> \lf = lf->get_dynamic_libs
-                                        ->> \libpath = do fsys::copy(fsys::normalize(F"{std::exepath()}/{libpath}"), export_path / libpath)->unwarp;
+                            do CxxProject::get_dylib_files_by_config(false)
+                                ->> \libpath = 
+                                    do fsys::copy(
+                                        fsys::normalize(
+                                            F"{std::exepath()}/{libpath}"), 
+                                            export_path / libpath)->unwarp
                                     ;
                                 ;
                             do fsys::copy(fsys::normalize(F"{std::exepath()}/OpenAL32.dll"), export_path / "OpenAL32.dll")->unwarp;

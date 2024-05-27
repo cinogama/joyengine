@@ -990,7 +990,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
 
         if (engine_path_crc64 == specify_module_path_crc64)
         {
-            module->update_compile(je::platform());
+            module->update_compile(std::platform::runtime_type::DEBUG);
         }
         else
         {
@@ -999,9 +999,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
                 {
                     if (choice)
                     {
-                        let update_result = 
-                            CxxProject::update_engine_file(module.path)
-                                =>> \r = CxxProject::generate_module_config(module.project, module.name, module.path, r);;
+                        let update_result = CxxProject::update_engine_file(module.path);
                         if (!update_result->isok)
                         {
                             jeapi::gui::form::errmsg("重新编译失败", F"{module.path}更新引擎文件失败：\n{update_result->error->val}");
@@ -1009,7 +1007,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
                         }
                     }
                     else; // 点NO 啥也不干~
-                    module->update_compile(je::platform());
+                    module->update_compile(std::platform::runtime_type::DEBUG);
                 });
         }
     }
