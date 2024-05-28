@@ -986,7 +986,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
     {
         // 检查一下引擎的提供的文件，确认是否需要重新编译
         let engine_path_crc64 = crc_path(CxxProject::ENGINE_HEADER_PATH);
-        let specify_module_path_crc64 = crc_path(module.path/"engine"/"include");
+        let specify_module_path_crc64 = crc_path(module.path/".engine"/"include");
 
         if (engine_path_crc64 == specify_module_path_crc64)
         {
