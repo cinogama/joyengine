@@ -51,8 +51,20 @@ namespace editor
 
         m_world_has_been_dumped: mut bool,
         m_enable_update_towoo: mut bool,
+
+        // 如果进入安全模式，则不允许保存世界
+        m_safe_mode: mut bool,
     }
     {
+        func entry_safe_mode(self: Project)
+        {
+            if (self.m_safe_mode == false)
+            {
+                self.m_safe_mode = true;
+                jeapi::gui::form::errmsg("安全模式", "项目进入安全模式，保存世界的操作将不被允许");
+            }
+        }
+
         public func get_name(self: Project)
         {
             return self.m_name;
@@ -455,6 +467,8 @@ namespace editor
 
                 m_world_has_been_dumped = mut false,
                 m_enable_update_towoo = mut true,
+
+                m_safe_mode = mut false,
             };
 
             proj->_create_default_configs(env);
@@ -549,18 +563,37 @@ namespace editor
             }
 
             // TODO: 加载失败和二进制文件怎么git还需考虑一下
-            do dat->get("modules")
-                ->> \d = d as array<dynamic> 
-                    =>> \p = err->has ? [(p, err->val)] | []
-                        where err = CxxProject::load(module_name, self)->error
-                            , module_name = path / p as string
-                        ;
-                    ;
-                ->  valor([])
-                ->> \mr = jeapi::gui::form::errmsg("加载失败", F"无法加载 '{mr[0]}'：{mr[1]}"); 
-                ;
-            
+            for (let module_name : dat->get("modules")
+                =>> \p = p->trycast:<array<string>>();
+                ->> \p = p->iter; 
+                -> iterator::iter_option)
+            {
+                let module_path = path / module_name;
+                match (CxxProject::load(module_path, self))
+                {
+                ok(m)?
+                    self->active_module(m);
+                err(msg)?
+                    {
+                        self->entry_safe_mode();
+                        jeapi::gui::form::errmsg("加载失败", F"无法加载 '{module_path->tostring}'：{msg}");
+                    }
+                }
+            }
+
             self->update_towoo_after_dump_and_close(false);
+            je::gui::launch(func(){
+                std::yield();
+                std::yield();
+                std::yield();
+
+                if (self.m_towoo_context->has_bad_scripts)
+                {
+                    self->entry_safe_mode();
+                    jeapi::gui::form::errmsg("加载失败", "初始化时 ToWoo 有编译失败未解决");
+                }
+                return false;
+            }, ());
 
             match (je::towoo::unsafe::dynamic_parser::update_all("@/editor.wo"))
             {
@@ -611,6 +644,7 @@ namespace editor
             let bad_list = self.m_towoo_context->get_bad_scripts
                 ->> \p = p->tostring;
                 ->  reduce(\l, r = l + "\n" + r;);
+
             match (bad_list)
             {
             value(badlist)?
@@ -1066,6 +1100,12 @@ namespace editor
         }
         public func save_world(self: Project, w: je::world)
         {
+            if (self.m_safe_mode)
+            {
+                jeapi::gui::form::errmsg("错误", "安全模式下无法保存世界");
+                return false;
+            }
+
             return self->get_project_world(w)
                 =>> func(pw)
                 { 

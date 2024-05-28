@@ -227,6 +227,10 @@ namespace editor
         {
             return self.m_bad_towoo_script->toarray->std::sort(\l, r = l < r;);
         }
+        public func has_bad_scripts(self: ToWooContext)
+        {
+            return !self.m_bad_towoo_script->empty;
+        }
         public func get_removing_components(self: ToWooContext)
         {
             return self.m_removing_component->unmapping->>\kv=kv[0];->std::sort(\l, r = l < r;);
