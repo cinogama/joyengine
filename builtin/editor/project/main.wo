@@ -64,6 +64,10 @@ namespace editor
                 jeapi::gui::form::errmsg("安全模式", "项目进入安全模式，保存世界的操作将不被允许");
             }
         }
+        public func is_in_safe_mode(self: Project)
+        {
+            return self.m_safe_mode;
+        }
 
         public func get_name(self: Project)
         {

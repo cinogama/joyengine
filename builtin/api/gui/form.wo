@@ -74,7 +74,7 @@ namespace jeapi::gui
                         (self.size_constraint.0, self.size_constraint.1), 
                         (self.size_constraint.2, self.size_constraint.3));
 
-                    let tilte = self.name + (self.is_unique_form ? F"##{JobID()}" | "");
+                    let tilte = self.name + (self.is_unique_form ? "" | F"##{JobID()}");
                     let show_may_none = begin(tilte, self._attribute);
 
                     if (show_may_none->valor(true))

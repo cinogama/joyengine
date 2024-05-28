@@ -260,7 +260,7 @@ endif()
         {
             using fsys;
 
-            for (let p : subpath(dir)->okay->val)
+            for (let p : walk(dir)->iterator::iter_result)
             {
                 if (isdir(p))
                 {

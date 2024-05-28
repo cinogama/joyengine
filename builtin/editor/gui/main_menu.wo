@@ -307,6 +307,18 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                             ;
                         EndMenu();
                     }
+                    if (context->get_project->is_in_safe_mode)
+                    {
+                        let show_red = std::time(): int % 2 == 0;
+                        
+                        if (show_red)
+                            PushStyleColor(ImGuiCol::ImGuiCol_Text, (255, 0, 0, 255));
+
+                        do MenuItem("* 处于安全模式中");
+
+                        if (show_red)
+                            PopStyleColor(1);
+                    }
                     EndMainMenuBar();
                 }
 
