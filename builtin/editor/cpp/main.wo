@@ -102,12 +102,12 @@ namespace editor
                 throw! F"无法找到C++模块项目，{cxx_proj_path}目录不存在";
 
             // 1. 删除engine目录
-            do remove(cxx_proj_path/"engine")->unwarp;
-            do mkdir(cxx_proj_path/"engine")->unwarp;
-            do mkdir(cxx_proj_path/"engine"/"library")->unwarp;
+            do remove(cxx_proj_path/".engine")->unwarp;
+            do mkdir(cxx_proj_path/".engine")->unwarp;
+            do mkdir(cxx_proj_path/".engine"/"library")->unwarp;
 
             // 2. 把新的engine移过来，把引擎的头文件复制过来
-            let r = copy(ENGINE_HEADER_PATH, cxx_proj_path/"engine"/"include");
+            let r = copy(ENGINE_HEADER_PATH, cxx_proj_path/".engine"/"include");
 
             if (r->iserr)
                 throw! F"复制引擎相关文件失败({r->error->val})";
@@ -122,7 +122,7 @@ namespace editor
                     && (filename(p)->lower->beginwith("libjoyecs")
                         ||filename(p)->lower->beginwith("libwoo")))
                 {
-                    try! _ = copy(p, cxx_proj_path/"engine"/"library"/filename(p))
+                    try! _ = copy(p, cxx_proj_path/".engine"/"library"/filename(p))
                         -> orbind(\errno = result::err(F"复制文件：`{p}` 失败({errno})");)
                         ;
                 }
@@ -167,10 +167,10 @@ set (JEMODULE_WOOLANG_LIB_FILENAME  "libwoo"  CACHE STRING
     "The file name of woolang library.")
 
 #####################################################################
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/${CMAKE_BUILD_TYPE}")
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/${CMAKE_BUILD_TYPE}")
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/${CMAKE_BUILD_TYPE}")
-set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build/${CMAKE_BUILD_TYPE}")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/.build/${CMAKE_BUILD_TYPE}")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/.build/${CMAKE_BUILD_TYPE}")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/.build/${CMAKE_BUILD_TYPE}")
+set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/.build/${CMAKE_BUILD_TYPE}")
 
 #####################################################################
 if (BUILD_SHARED_LIBS)
@@ -194,8 +194,8 @@ file(GLOB_RECURSE jemodule_source_src_hpp ./sources/*.hpp)
 file(GLOB_RECURSE jemodule_source_src_c ./sources/*.c)
 file(GLOB_RECURSE jemodule_source_src_h ./sources/*.h)
 
-find_library(jemodule_jeecs_lib "${JEMODULE_ENGINE_CORE_LIB_FILENAME}" ./engine/library)
-find_library(jemodule_woolang_lib "${JEMODULE_WOOLANG_LIB_FILENAME}" ./engine/library)
+find_library(jemodule_jeecs_lib "${JEMODULE_ENGINE_CORE_LIB_FILENAME}" ./.engine/library)
+find_library(jemodule_woolang_lib "${JEMODULE_WOOLANG_LIB_FILENAME}" ./.engine/library)
 
 #####################################################################
 add_library($$JEMODULE_PROJECT_NAME$$ 
@@ -219,7 +219,7 @@ add_library($$JEMODULE_PROJECT_NAME$$
     ./main.cpp
     ./loader.hpp)
 
-target_include_directories($$JEMODULE_PROJECT_NAME$$ PRIVATE ./engine/include)
+target_include_directories($$JEMODULE_PROJECT_NAME$$ PRIVATE ./.engine/include)
 target_include_directories($$JEMODULE_PROJECT_NAME$$ PRIVATE ./systems)
 target_include_directories($$JEMODULE_PROJECT_NAME$$ PRIVATE ./components)
 target_include_directories($$JEMODULE_PROJECT_NAME$$ PRIVATE ./sources)
@@ -325,11 +325,11 @@ endif()
         }
         func get_runtime_path(self: CxxProject, rttype: std::platform::runtime_type)
         {
-            return self.path/"runtime"/_config_name(rttype);
+            return self.path/".runtime"/_config_name(rttype);
         }
         public func get_build_dll_path(self: CxxProject, rttype: std::platform::runtime_type)
         {
-            return search_file_in(self.path/"build"/_config_name(rttype), ".dll");
+            return search_file_in(self.path/".build"/_config_name(rttype), ".dll");
         }
         func update_library_of_platform(self: CxxProject, rttype: std::platform::runtime_type)
         {
@@ -352,7 +352,7 @@ endif()
 
             // 调试时，vs调试器可能会自动附加pdb，导致重新编译失败
             // 为了避免蠢蛋vs干蠢事，这里直接把pdb文件移到runtime目录下
-            match (search_file_in(self.path/"build"/_config_name(rttype), ".pdb"))
+            match (search_file_in(self.path/".build"/_config_name(rttype), ".pdb"))
             {
             value(p)?
                 assert(move(p, newest_runtime_path/filename(p))->isok);
@@ -500,10 +500,9 @@ endif()
                 else
                 {
                     // 删除build builder engine runtime loader.hpp和 config.jeinf，用于准备重新编译
-                    do fsys::remove(path / "build");
-                    do fsys::remove(path / "builder");
-                    do fsys::remove(path / "engine");
-                    do fsys::remove(path / "runtime");
+                    do fsys::remove(path / ".build");
+                    do fsys::remove(path / ".engine");
+                    do fsys::remove(path / ".runtime");
                     do fsys::remove(path / "loader.hpp");
                 }
                 
@@ -746,7 +745,7 @@ $$REGISTER_SYSTEM_TYPES$$
             do context->>\context = context.display_msg = F"正在使用CMake生成编译配置\n{config}";;
             do context->>\context = context.progress = 15;;
 
-            let building_path = self.path->tostring + "/msvcbuild_" + config;
+            let building_path = self.path->tostring + "/.build_" + config;
 
             if (start_process(CMAKE_PATH->tostring, 
                 [

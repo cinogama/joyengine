@@ -1,13 +1,11 @@
 # Ignore cpp module's useless files.
 # Builtin files
-/build/
-/engine/
-/msvcbuild_*/
-/runtime/
+/.build/
+/.engine/
+/.build_*/
+/.runtime/
 
 # Auto-generate files
-/builder/
-/CMakeLists.txt
 /loader.hpp
 /version.json
 
