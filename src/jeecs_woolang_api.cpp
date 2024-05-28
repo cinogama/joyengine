@@ -2212,7 +2212,7 @@ struct dynamic_parser_impl_t
 
 std::mutex  _je_dynamic_parser_mx;
 wo_vm       _je_dynamic_parser_vm = nullptr;
-std::unordered_map<const jeecs::typing::type_info*, std::unique_ptr<dynamic_parser_impl_t>>
+std::unordered_map<jeecs::typing::typeid_t, std::unique_ptr<dynamic_parser_impl_t>>
 _je_dynamic_parser_impls;
 
 void _je_dynamic_parser_clear()
@@ -2249,14 +2249,16 @@ void _je_dynamic_parser_update_types()
 
                 if (saving_func != 0 || restoring_func != 0 || edit_func != 0)
                 {
-                    _je_dynamic_parser_impls.insert(std::make_pair(*cur_type, std::make_unique<dynamic_parser_impl_t>(
-                        dynamic_parser_impl_t
-                        {
-                            saving_func,
-                            restoring_func,
-                            edit_func,
-                            script_parser
-                        })));
+                    _je_dynamic_parser_impls.insert(
+                        std::make_pair(
+                            (*cur_type)->m_id, std::make_unique<dynamic_parser_impl_t>(
+                                dynamic_parser_impl_t
+                                {
+                                    saving_func,
+                                    restoring_func,
+                                    edit_func,
+                                    script_parser
+                                })));
                 }
             }
 
@@ -2342,7 +2344,7 @@ WO_API wo_api wojeapi_dynamic_parser_saving(wo_vm vm, wo_value args)
     std::lock_guard g1(_je_dynamic_parser_mx);
 
     auto* type = (const jeecs::typing::type_info*)wo_pointer(args + 0);
-    auto fnd = _je_dynamic_parser_impls.find(type);
+    auto fnd = _je_dynamic_parser_impls.find(type->m_id);
 
     if (fnd != _je_dynamic_parser_impls.end())
     {
@@ -2369,7 +2371,7 @@ WO_API wo_api wojeapi_dynamic_parser_restoring(wo_vm vm, wo_value args)
     std::lock_guard g1(_je_dynamic_parser_mx);
 
     auto* type = (const jeecs::typing::type_info*)wo_pointer(args + 0);
-    auto fnd = _je_dynamic_parser_impls.find(type);
+    auto fnd = _je_dynamic_parser_impls.find(type->m_id);
 
     if (fnd != _je_dynamic_parser_impls.end())
     {
@@ -2397,7 +2399,7 @@ WO_API wo_api wojeapi_dynamic_parser_edit(wo_vm vm, wo_value args)
     std::lock_guard g1(_je_dynamic_parser_mx);
 
     auto* type = (const jeecs::typing::type_info*)wo_pointer(args + 0);
-    auto fnd = _je_dynamic_parser_impls.find(type);
+    auto fnd = _je_dynamic_parser_impls.find(type->m_id);
 
     if (fnd != _je_dynamic_parser_impls.end())
     {
