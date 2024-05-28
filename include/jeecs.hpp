@@ -728,7 +728,7 @@ je_typing_reset [基本接口]
     * 成员字段将被重置，请重新注册
 */
 JE_API void je_typing_reset(
-    const jeecs::typing::type_info*         _tinfo,
+    const jeecs::typing::type_info* _tinfo,
     size_t                                  _size,
     size_t                                  _align,
     jeecs::typing::construct_func_t         _constructor,
@@ -787,8 +787,8 @@ je_register_member [基本接口]
 JE_API void je_register_member(
     const jeecs::typing::type_info* _classtype,
     const jeecs::typing::type_info* _membertype,
-    const char*                     _member_name,
-    const char*                     _woovalue_type_may_null,
+    const char* _member_name,
+    const char* _woovalue_type_may_null,
     wo_value                        _woovalue_init_may_null,
     ptrdiff_t                       _member_offset);
 
@@ -3011,7 +3011,7 @@ jegl_uhost_get_or_create_for_universe [基本接口]
     * config 被用于指示图形配置，若首次创建图形接口则使用此设置，
     若图形接口已经创建，则调用jegl_reboot_graphic_thread以应用图形配置
     * 若需要使用默认配置或不改变图形设置，请传入 nullptr
-    * 创建出的 uhost 将通过 je_ecs_universe_register_exit_callback 接口注册 
+    * 创建出的 uhost 将通过 je_ecs_universe_register_exit_callback 接口注册
     Universe 的退出回调，以便在 Universe 退出时释放 uhost 实例
 请参见：
     jegl_reboot_graphic_thread
@@ -3624,6 +3624,14 @@ namespace jeecs
         JE_DECL_SFINAE_CHECKER_HELPLER(has_ApplyUpdate, &T::ApplyUpdate);
         JE_DECL_SFINAE_CHECKER_HELPLER(has_CommitUpdate, &T::CommitUpdate);
 
+        JE_DECL_SFINAE_CHECKER_HELPLER(has__select_begin, &T::_select_begin);
+        JE_DECL_SFINAE_CHECKER_HELPLER(has__select_continue, &T::_select_continue);
+
+        template<typename T>
+        constexpr bool sfinae_is_game_system_v =
+            typing::sfinae_has__select_begin<T>::value &&
+            typing::sfinae_has__select_continue<T>::value;
+
 #undef JE_DECL_SFINAE_CHECKER_HELPLER
     }
 
@@ -4233,38 +4241,81 @@ namespace jeecs
 
             static void state_update(void* _ptr)
             {
-                if constexpr (typing::sfinae_has_StateUpdate<T>::value)
-                    std::launder(reinterpret_cast<T*>(_ptr))->StateUpdate();
+                if constexpr (typing::sfinae_is_game_system_v<T>)
+                {
+                    T* sys = std::launder(reinterpret_cast<T*>(_ptr));
+                    sys->_select_begin();
+                    if constexpr (typing::sfinae_has_StateUpdate<T>::value)
+                    {
+                        sys->StateUpdate(sys->_select_continue());
+                    }
+                }
             }
             static void pre_update(void* _ptr)
             {
-                if constexpr (typing::sfinae_has_PreUpdate<T>::value)
-                    std::launder(reinterpret_cast<T*>(_ptr))->PreUpdate();
+                if constexpr (typing::sfinae_is_game_system_v<T>)
+                {
+                    if constexpr (typing::sfinae_has_PreUpdate<T>::value)
+                    {
+                        T* sys = std::launder(reinterpret_cast<T*>(_ptr));
+                        sys->PreUpdate(sys->_select_continue());
+                    }
+                }
             }
             static void update(void* _ptr)
             {
-                if constexpr (typing::sfinae_has_Update<T>::value)
-                    std::launder(reinterpret_cast<T*>(_ptr))->Update();
+                if constexpr (typing::sfinae_is_game_system_v<T>)
+                {
+                    if constexpr (typing::sfinae_has_Update<T>::value)
+                    {
+                        T* sys = std::launder(reinterpret_cast<T*>(_ptr));
+                        sys->Update(sys->_select_continue());
+                    }
+                }
             }
             static void script_update(void* _ptr)
             {
-                if constexpr (typing::sfinae_has_ScriptUpdate<T>::value)
-                    std::launder(reinterpret_cast<T*>(_ptr))->ScriptUpdate();
+                if constexpr (typing::sfinae_is_game_system_v<T>)
+                {
+                    if constexpr (typing::sfinae_has_ScriptUpdate<T>::value)
+                    {
+                        T* sys = std::launder(reinterpret_cast<T*>(_ptr));
+                        sys->ScriptUpdate(sys->_select_continue());
+                    }
+                }
             }
             static void late_update(void* _ptr)
             {
-                if constexpr (typing::sfinae_has_LateUpdate<T>::value)
-                    std::launder(reinterpret_cast<T*>(_ptr))->LateUpdate();
+                if constexpr (typing::sfinae_is_game_system_v<T>)
+                {
+                    if constexpr (typing::sfinae_has_LateUpdate<T>::value)
+                    {
+                        T* sys = std::launder(reinterpret_cast<T*>(_ptr));
+                        sys->LateUpdate(sys->_select_continue());
+                    }
+                }
             }
             static void apply_update(void* _ptr)
             {
-                if constexpr (typing::sfinae_has_ApplyUpdate<T>::value)
-                    std::launder(reinterpret_cast<T*>(_ptr))->ApplyUpdate();
+                if constexpr (typing::sfinae_is_game_system_v<T>)
+                {
+                    if constexpr (typing::sfinae_has_ApplyUpdate<T>::value)
+                    {
+                        T* sys = std::launder(reinterpret_cast<T*>(_ptr));
+                        sys->ApplyUpdate(sys->_select_continue());
+                    }
+                }
             }
             static void commit_update(void* _ptr)
             {
-                if constexpr (typing::sfinae_has_CommitUpdate<T>::value)
-                    std::launder(reinterpret_cast<T*>(_ptr))->CommitUpdate();
+                if constexpr (typing::sfinae_is_game_system_v<T>)
+                {
+                    if constexpr (typing::sfinae_has_CommitUpdate<T>::value)
+                    {
+                        T* sys = std::launder(reinterpret_cast<T*>(_ptr));
+                        sys->CommitUpdate(sys->_select_continue());
+                    }
+                }
             }
 
             static void parse_from_script_type(void* _ptr, wo_vm vm, wo_value val)
@@ -4574,14 +4625,14 @@ namespace jeecs
         {
             struct member_info
             {
-                const type_info*    m_class_type;
+                const type_info* m_class_type;
 
-                const char*         m_member_name;
-                
-                const char*         m_woovalue_type_may_null;
+                const char* m_member_name;
+
+                const char* m_woovalue_type_may_null;
                 wo_pin_value        m_woovalue_init_may_null;
 
-                const type_info*    m_member_type;
+                const type_info* m_member_type;
                 ptrdiff_t           m_member_offset;
 
                 member_info* m_next_member;
@@ -5458,7 +5509,7 @@ namespace jeecs
 #ifndef NDEBUG
             jeecs::debug::loginfo("New selector(%p) created.", this);
 #endif
-        }
+    }
 
         ~selector()
         {
@@ -5519,7 +5570,7 @@ namespace jeecs
                 ++m_any_id;
             }
         }
-    };
+};
 
     class game_universe
     {
@@ -5598,6 +5649,7 @@ namespace jeecs
     class game_system
     {
         JECS_DISABLE_MOVE_AND_COPY(game_system);
+
     private:
         game_world _m_game_world;
         selector   _m_default_selector;
@@ -5641,9 +5693,13 @@ namespace jeecs
         }
 
         // Select from default selector
-        inline selector& select_begin() noexcept
+        inline selector& _select_begin() noexcept
         {
             _m_default_selector.select_begin(get_world());
+            return _m_default_selector;
+        }
+        inline selector& _select_continue() noexcept
+        {
             return _m_default_selector;
         }
     };
@@ -5963,7 +6019,7 @@ namespace jeecs
             {
                 return x * _v2.x + y * _v2.y;
             }
-            
+
             inline float max() const noexcept
             {
                 return std::max(x, y);
@@ -6481,7 +6537,7 @@ namespace jeecs
             {
                 return x * _v4.x + y * _v4.y + z * _v4.z + w * _v4.w;
             }
-           
+
             inline float max() const noexcept
             {
                 return std::max(std::max(std::max(x, y), z), w);
@@ -8576,8 +8632,8 @@ namespace jeecs
                 size_t                      m_point_count;
                 basic::vector<float>        m_strength;
                 basic::vector<math::vec2>   m_positions;
-                jeecs::basic::resource<jeecs::graphic::vertex> 
-                                            m_light_mesh;
+                jeecs::basic::resource<jeecs::graphic::vertex>
+                    m_light_mesh;
 
                 light_shape()
                     : m_point_count(0)
@@ -8591,7 +8647,7 @@ namespace jeecs
                 static const char* JEScriptTypeDeclare()
                 {
                     return
-R"(namespace Light2D::Range
+                        R"(namespace Light2D::Range
 {
     public using light_shape = struct{
         public m_point_count: int,
@@ -8673,7 +8729,7 @@ R"(namespace Light2D::Range
                     wo_pop_stack(vm);
                 }
             };
-            
+
             float decay = 1.0f;
             light_shape shape;
 
@@ -8895,9 +8951,9 @@ R"(namespace Light2D::Range
                     };
                     struct component_data
                     {
-                        const jeecs::typing::type_info*     m_component_type;
+                        const jeecs::typing::type_info* m_component_type;
                         const jeecs::typing::typeinfo_member::member_info*
-                                                            m_member_info;
+                            m_member_info;
                         data_value                          m_member_value;
                         bool                                m_offset_mode;
 

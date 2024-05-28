@@ -18,10 +18,8 @@ namespace jeecs
 
         }
 
-        void CommitUpdate()
+        void CommitUpdate(jeecs::selector& selector)
         {
-            auto& selector = select_begin();
-
             selector.exec([this](Audio::Listener& listener, Transform::Translation& trans)
                 {
                     audio::listener::set_position(trans.world_position);

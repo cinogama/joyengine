@@ -2367,7 +2367,9 @@ namespace jeecs_impl
     {
         ecs_world* cur_world = (ecs_world*)_ecs_world;
 
-        ecs_world::system_container_t& active_systems = cur_world->get_system_instances();
+        ecs_world::system_container_t& active_systems = 
+            cur_world->get_system_instances();
+
         ParallelForeach(
             active_systems.begin(), active_systems.end(),
             [cur_world](ecs_world::system_container_t::value_type& val)

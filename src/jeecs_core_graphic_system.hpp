@@ -398,7 +398,7 @@ public let frag =
         {
         }
 
-        void CommitUpdate()
+        void CommitUpdate(jeecs::selector& selector)
         {
             auto WINDOWS_SIZE = jeecs::input::windowsize();
             WINDOWS_WIDTH = (size_t)WINDOWS_SIZE.x;
@@ -410,8 +410,6 @@ public let frag =
             this->branch_allocate_begin();
 
             std::unordered_map<typing::uid_t, UserInterface::Origin*> parent_origin_list;
-
-            auto& selector = select_begin();
 
             selector.anyof<OrthoProjection, PerspectiveProjection>();
             selector.exec(&UserInterfaceGraphicPipelineSystem::PrepareCameras);
@@ -713,7 +711,7 @@ public let frag =
 
         }
 
-        void CommitUpdate()
+        void CommitUpdate(jeecs::selector& selector)
         {
             auto WINDOWS_SIZE = jeecs::input::windowsize();
             WINDOWS_WIDTH = (size_t)WINDOWS_SIZE.x;
@@ -723,8 +721,6 @@ public let frag =
             m_renderer_list.clear();
 
             this->branch_allocate_begin();
-
-            auto& selector = select_begin();
 
             selector.anyof<OrthoProjection, PerspectiveProjection>();
             selector.exec(&UnlitGraphicPipelineSystem::PrepareCameras);
@@ -1528,7 +1524,7 @@ public func frag(_: v2f)
 
         }
 
-        void CommitUpdate()
+        void CommitUpdate(jeecs::selector& selector)
         {
             auto WINDOWS_SIZE = jeecs::input::windowsize();
             WINDOWS_WIDTH = (size_t)WINDOWS_SIZE.x;
@@ -1540,8 +1536,6 @@ public func frag(_: v2f)
             m_renderer_list.clear();
 
             this->branch_allocate_begin();
-
-            auto& selector = select_begin();
 
             selector.anyof<OrthoProjection, PerspectiveProjection>();
             selector.exec(&DeferLight2DGraphicPipelineSystem::PrepareCameras);
@@ -2660,11 +2654,9 @@ public func frag(_: v2f)
 
         }
 
-        void StateUpdate()
+        void StateUpdate(jeecs::selector& selector)
         {
             _fixed_time += deltatime();
-
-            auto& selector = select_begin();
 
             selector.exec([this](game_entity e, Animation2D::FrameAnimation& frame_animation, Renderer::Shaders* shaders)
                 {

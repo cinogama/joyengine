@@ -202,7 +202,7 @@ namespace jeecs
             return true;
         }
 
-        void StateUpdate()
+        void StateUpdate(jeecs::selector& selector)
         {
             b2BodyDef default_rigidbody_config;
 
@@ -210,8 +210,6 @@ namespace jeecs
 
             std::map<size_t, std::unique_ptr<Physics2DWorldContext>>
                 _m_this_frame_alive_worlds;
-
-            auto& selector = select_begin();
 
             selector.exec([&](Physics2D::World& world)
                 {

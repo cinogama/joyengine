@@ -1180,9 +1180,9 @@ namespace $$MODULE_NAME$$
         $$SYSTEM_NAME$$(jeecs::game_world world);
         ~$$SYSTEM_NAME$$();
         
-        void PreUpdate();
-        void Update();
-        void LateUpdate();
+        void PreUpdate(jeecs::selector&);
+        void Update(jeecs::selector&);
+        void LateUpdate(jeecs::selector&);
     };
 }
 "@;
@@ -1205,17 +1205,17 @@ namespace $$MODULE_NAME$$
         
     }
 
-    void $$SYSTEM_NAME$$::PreUpdate()
+    void $$SYSTEM_NAME$$::PreUpdate(jeecs::selector& selector)
     {
 
     }
 
-    void $$SYSTEM_NAME$$::Update()
+    void $$SYSTEM_NAME$$::Update(jeecs::selector& selector)
     {
 
     }
 
-    void $$SYSTEM_NAME$$::LateUpdate()
+    void $$SYSTEM_NAME$$::LateUpdate(jeecs::selector& selector)
     {
 
     }

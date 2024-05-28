@@ -746,7 +746,7 @@ public let frag =
             }
         }
 
-        void CommitUpdate()
+        void CommitUpdate(jeecs::selector& selector)
         {
             _inputs.w = input::keydown(input::keycode::W);
             _inputs.s = input::keydown(input::keycode::S);
@@ -769,8 +769,6 @@ public let frag =
                 _inputs.wheel_delta_count = (int)input::wheel(0).y - _inputs._wheel_count_record;
             }
             _inputs._wheel_count_record = (int)input::wheel(0).y;
-
-            auto& selector = select_begin();
 
             // 获取被选中的实体
             selector.exec([this](game_entity e)

@@ -103,11 +103,10 @@ namespace jeecs
             }
         }
 
-        void ApplyUpdate()
+        void ApplyUpdate(jeecs::selector& selector)
         {
             m_anchor_list.clear();
 
-            auto& selector = select_begin();
             selector.exec(&TranslationUpdatingSystem::UpdateAnchorTransPair);
             selector.exec(&TranslationUpdatingSystem::LocalToWorldUpdate);
             selector.exec(&TranslationUpdatingSystem::LocalToParentUpdate);

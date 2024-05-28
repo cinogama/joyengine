@@ -263,15 +263,15 @@ namespace jeecs
                 ScriptRuntimeSystem::system_instance = nullptr;
             }
 
-            void PreUpdate()
+            void PreUpdate(jeecs::selector&)
             {
                 update_step_work(m_pre_dependences);
             }
-            void Update()
+            void Update(jeecs::selector&)
             {
                 update_step_work(m_dependences);
             }
-            void LateUpdate()
+            void LateUpdate(jeecs::selector&)
             {
                 update_step_work(m_late_dependences);
             }
