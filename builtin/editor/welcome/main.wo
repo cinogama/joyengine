@@ -61,6 +61,10 @@ namespace jeapi::welcome
                     TextDisabled("Copyright (c) 2014-2023 Omar Cornut.");
                     TextDisabled("Dear ImGui is licensed under the MIT License");
 
+                    Text("Imgui-node-editor https://github.com/thedmd/imgui-node-editor");
+                    TextDisabled("Copyright (c) 2019 Michał Cichoń.");
+                    TextDisabled("Imgui-node-editor is licensed under the MIT License");
+
                     Text("Box2D https://box2d.org/");
                     TextDisabled("Copyright (c) 2019 Erin Catto.");
                     TextDisabled("Box2D is licensed under the MIT License");
