@@ -202,14 +202,24 @@ namespace editor::gui::edit_forms
         let mut clicked_component = option::none: option<string>;
         for (let (pscope, pnameinfos): scoped_type->unmapping->std::sort(\a, b = a.0 < b.0;))
         {
-            TextDisabled(pscope == "" ? "<无>" | pscope);
+            let tree_attrib = TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
 
-            for (let pnameinfo: pnameinfos)
+            PushStyleColor(ImGuiCol::ImGuiCol_Text, (50, 150, 100, 255));
+            let show_group = TreeNodeEx(pscope == "" ? "<无>" | pscope, tree_attrib);
+            PopStyleColor(1);
+
+            if (show_group)
             {
-                do InvisibleButton(F"##{pscope}$PADDING", (2., 1.));
-                SameLine();
-                if (show_component(pnameinfo...))
-                    clicked_component = option::value(pnameinfo[0]);
+                for (let pnameinfo: pnameinfos)
+                {
+                    do InvisibleButton(F"##{pscope}$PADDING", (2., 1.));
+                    SameLine();
+                    if (show_component(pnameinfo...))
+                        clicked_component = option::value(pnameinfo[0]);
+                }
+                TreePop();
             }
         }
         return clicked_component;
