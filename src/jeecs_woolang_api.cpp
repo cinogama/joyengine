@@ -1363,6 +1363,23 @@ WO_API wo_api wojeapi_texture_create(wo_vm vm, wo_value args)
             delete (jeecs::basic::resource<jeecs::graphic::texture>*)ptr;
         });
 }
+WO_API wo_api wojeapi_texture_clip(wo_vm vm, wo_value args)
+{
+    auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
+
+    return wo_ret_gchandle(vm,
+        new jeecs::basic::resource<jeecs::graphic::texture>(
+            jeecs::graphic::texture::clip(
+                *loaded_texture, 
+                (size_t)wo_int(args + 1), 
+                (size_t)wo_int(args + 2), 
+                (size_t)wo_int(args + 3), 
+                (size_t)wo_int(args + 4))
+        ), nullptr,
+        [](void* ptr) {
+            delete (jeecs::basic::resource<jeecs::graphic::texture>*)ptr;
+        });
+}
 
 WO_API wo_api wojeapi_texture_bind_path(wo_vm vm, wo_value args)
 {
@@ -3059,6 +3076,9 @@ namespace je
 
             extern("libjoyecs", "wojeapi_texture_create", slow)
             public func create(width: int, height: int)=> texture;
+
+             extern("libjoyecs", "wojeapi_texture_clip", slow)
+            public func clip(src: texture, x: int, y: int, w: int, h: int)=> texture;
 
             extern("libjoyecs", "wojeapi_texture_bind_path")
             public func bind_path(self: texture, new_path: string)=> void;

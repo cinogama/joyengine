@@ -601,18 +601,18 @@ namespace Light2D::BlockShadow::block_mesh
         }
     }
 }
-namespace Animation2D::FrameAnimation::animation_list
+namespace Animation::FrameAnimation::animation_list
 {
     using parser = void
     {
-        public extern func saving(val: Animation2D::FrameAnimation::animation_list)=> string
+        public extern func saving(val: Animation::FrameAnimation::animation_list)=> string
         {
             return val: array<animation_state>
                 ->> \state = [state.m_path: dynamic, state.m_animation: dynamic, state.m_loop: dynamic];
                 ->  serialize
                 ->  val;
         }
-        public extern func restoring(dat: string)=> Animation2D::FrameAnimation::animation_list
+        public extern func restoring(dat: string)=> Animation::FrameAnimation::animation_list
         {
             return dat->array::deserialize->valor([])
                 ->> \state = 
@@ -627,7 +627,7 @@ namespace Animation2D::FrameAnimation::animation_list
                 : animation_list;
                 ;
         }
-        public extern func edit(mut val: Animation2D::FrameAnimation::animation_list, tag: string)=> option<Animation2D::FrameAnimation::animation_list>
+        public extern func edit(mut val: Animation::FrameAnimation::animation_list, tag: string)=> option<Animation::FrameAnimation::animation_list>
         {
             let mut need_update = false;
             
@@ -642,7 +642,7 @@ namespace Animation2D::FrameAnimation::animation_list
                                 m_path = "",
                                 m_animation = "", 
                                 m_loop = false,
-                            }): Animation2D::FrameAnimation::animation_list;
+                            }): Animation::FrameAnimation::animation_list;
                     need_update = true;
                 }
             none?;
@@ -706,7 +706,7 @@ namespace Animation2D::FrameAnimation::animation_list
             }
 
             if (need_update)
-                return option::value(newval->toarray: Animation2D::FrameAnimation::animation_list);
+                return option::value(newval->toarray: Animation::FrameAnimation::animation_list);
             else
                 return option::none;
         }

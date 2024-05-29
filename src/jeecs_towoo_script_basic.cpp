@@ -1783,16 +1783,25 @@ WO_API wo_api wojeapi_towoo_transform_translation_global_rot(wo_vm vm, wo_value 
     return wo_ret_val(vm, wo_push_quat(vm, trans->world_rotation));
 }
 
-WO_API wo_api wojeapi_towoo_animation2D_frameanimation_active_animation(wo_vm vm, wo_value args)
+WO_API wo_api wojeapi_towoo_animation_frameanimation_active_animation(wo_vm vm, wo_value args)
 {
     wo_value c = wo_push_empty(vm);
     wo_struct_get(c, args + 0, 0);
-    auto* anim = (jeecs::Animation2D::FrameAnimation*)wo_pointer(c);
+    auto* anim = (jeecs::Animation::FrameAnimation*)wo_pointer(c);
 
     anim->animations.active_action(
         (size_t)wo_int(args + 1), wo_string(args + 2), wo_bool(args + 3));
 
     return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_towoo_animation_frameanimation_is_playing(wo_vm vm, wo_value args)
+{
+    wo_value c = wo_push_empty(vm);
+    wo_struct_get(c, args + 0, 0);
+    auto* anim = (jeecs::Animation::FrameAnimation*)wo_pointer(c);
+
+    return wo_ret_bool(vm, anim->animations.is_playing((size_t)wo_int(args + 1)));
 }
 
 WO_API wo_api wojeapi_towoo_audio_playing_set_buffer(wo_vm vm, wo_value args)
@@ -2350,12 +2359,15 @@ namespace Physics2D
             public func check(self: CollisionResult, another: Rigidbody)=> option<collide_result>;
     }
 }
-namespace Animation2D
+namespace Animation
 {
     namespace FrameAnimation
     {
-        extern("libjoyecs", "wojeapi_towoo_animation2D_frameanimation_active_animation")
+        extern("libjoyecs", "wojeapi_towoo_animation_frameanimation_active_animation")
             public func active_action(self: FrameAnimation, animation_id: int, name: string, loop: bool)=> void;
+
+        extern("libjoyecs", "wojeapi_towoo_animation_frameanimation_is_playing")
+            public func is_playing(self: FrameAnimation, animation_id: int)=> bool;
     }
 }
 namespace Audio

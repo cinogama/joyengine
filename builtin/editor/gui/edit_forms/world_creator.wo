@@ -59,7 +59,7 @@ namespace editor::gui::edit_forms
             // 添加默认图形管线
             context->active("Graphic::UnlitGraphicPipelineSystem");
 
-            context->append("Animation2D::FrameAnimation2DSystem");
+            context->append("Animation::FrameAnimationSystem");
             context->append("Script::ScriptRuntimeSystem");
             
             context->_sort();

@@ -5509,7 +5509,7 @@ namespace jeecs
 #ifndef NDEBUG
             jeecs::debug::loginfo("New selector(%p) created.", this);
 #endif
-    }
+        }
 
         ~selector()
         {
@@ -5570,7 +5570,7 @@ namespace jeecs
                 ++m_any_id;
             }
         }
-};
+    };
 
     class game_universe
     {
@@ -6986,6 +6986,51 @@ namespace jeecs
 
                 if (res != nullptr)
                     return new texture(res);
+
+                return nullptr;
+            }
+            static basic::resource<texture> clip(
+                const basic::resource<texture>& src, size_t x, size_t y, size_t w, size_t h)
+            {
+                jegl_texture::format new_texture_format = (jegl_texture::format)(
+                    src->resouce()->m_raw_texture_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK);
+                jegl_resource* res = jegl_create_texture(w, h, new_texture_format);
+
+                // Create texture must be successfully.
+                assert(res != nullptr);
+
+                if (res != nullptr)
+                {
+                    auto* new_texture = new texture(res);
+
+#if 0
+                    for (size_t iy = 0; iy < h; ++iy)
+                    {
+                        for (size_t ix = 0; ix < w; ++ix)
+                        {
+                            new_texture->pix(ix, iy).set(
+                                src->pix(ix + x, iy + y).get());
+                        }
+                    }
+#else
+                    auto color_depth = (int)new_texture_format;
+                    auto* dst_pixels = new_texture->resouce()->m_raw_texture_data->m_pixels;
+                    auto* src_pixels = src->resouce()->m_raw_texture_data->m_pixels;
+
+                    size_t src_w = std::min(w, src->resouce()->m_raw_texture_data->m_width);
+                    size_t src_h = std::min(h, src->resouce()->m_raw_texture_data->m_height);
+
+                    for (size_t iy = 0; iy < src_h; ++iy)
+                    {
+                        memcpy(
+                            dst_pixels + iy * w * color_depth, 
+                            src_pixels + (x + (y + iy) * src_w) * color_depth,
+                            src_w * color_depth);
+                    }
+#endif
+
+                    return new_texture;
+                }
                 return nullptr;
             }
 
@@ -7000,11 +7045,14 @@ namespace jeecs
                     assert(_texture->m_type == jegl_resource::type::TEXTURE);
                     assert(sizeof(jegl_texture::pixel_data_t) == 1);
 
+                    auto color_depth =
+                        _m_texture->m_format & jegl_texture::format::COLOR_DEPTH_MASK;
+
                     if (x < _m_texture->m_width && y < _m_texture->m_height)
                         _m_pixel =
                         _m_texture->m_pixels
-                        + y * _m_texture->m_width * _m_texture->m_format
-                        + x * _m_texture->m_format;
+                        + y * _m_texture->m_width * color_depth
+                        + x * color_depth;
                     else
                         _m_pixel = nullptr;
                 }
@@ -7015,9 +7063,17 @@ namespace jeecs
                     switch (_m_texture->m_format)
                     {
                     case jegl_texture::format::MONO:
-                        return math::vec4{ _m_pixel[0] / 255.0f, _m_pixel[0] / 255.0f, _m_pixel[0] / 255.0f, _m_pixel[0] / 255.0f };
+                        return math::vec4{
+                            _m_pixel[0] / 255.0f,
+                            _m_pixel[0] / 255.0f,
+                            _m_pixel[0] / 255.0f,
+                            _m_pixel[0] / 255.0f };
                     case jegl_texture::format::RGBA:
-                        return math::vec4{ _m_pixel[0] / 255.0f, _m_pixel[1] / 255.0f, _m_pixel[2] / 255.0f, _m_pixel[3] / 255.0f };
+                        return math::vec4{
+                            _m_pixel[0] / 255.0f,
+                            _m_pixel[1] / 255.0f,
+                            _m_pixel[2] / 255.0f,
+                            _m_pixel[3] / 255.0f };
                     default:
                         assert(0); return {};
                     }
@@ -7030,13 +7086,28 @@ namespace jeecs
                     switch (_m_texture->m_format)
                     {
                     case jegl_texture::format::MONO:
-                        _m_pixel[0] = math::clamp((jegl_texture::pixel_data_t)round(value.x * 255.0f), (jegl_texture::pixel_data_t)0, (jegl_texture::pixel_data_t)255);
+                        _m_pixel[0] = math::clamp(
+                            (jegl_texture::pixel_data_t)round(value.x * 255.0f),
+                            (jegl_texture::pixel_data_t)0,
+                            (jegl_texture::pixel_data_t)255);
                         break;
                     case jegl_texture::format::RGBA:
-                        _m_pixel[0] = math::clamp((jegl_texture::pixel_data_t)round(value.x * 255.0f), (jegl_texture::pixel_data_t)0, (jegl_texture::pixel_data_t)255);
-                        _m_pixel[1] = math::clamp((jegl_texture::pixel_data_t)round(value.y * 255.0f), (jegl_texture::pixel_data_t)0, (jegl_texture::pixel_data_t)255);
-                        _m_pixel[2] = math::clamp((jegl_texture::pixel_data_t)round(value.z * 255.0f), (jegl_texture::pixel_data_t)0, (jegl_texture::pixel_data_t)255);
-                        _m_pixel[3] = math::clamp((jegl_texture::pixel_data_t)round(value.w * 255.0f), (jegl_texture::pixel_data_t)0, (jegl_texture::pixel_data_t)255);
+                        _m_pixel[0] = math::clamp(
+                            (jegl_texture::pixel_data_t)round(value.x * 255.0f),
+                            (jegl_texture::pixel_data_t)0,
+                            (jegl_texture::pixel_data_t)255);
+                        _m_pixel[1] = math::clamp(
+                            (jegl_texture::pixel_data_t)round(value.y * 255.0f),
+                            (jegl_texture::pixel_data_t)0,
+                            (jegl_texture::pixel_data_t)255);
+                        _m_pixel[2] = math::clamp(
+                            (jegl_texture::pixel_data_t)round(value.z * 255.0f),
+                            (jegl_texture::pixel_data_t)0,
+                            (jegl_texture::pixel_data_t)255);
+                        _m_pixel[3] = math::clamp(
+                            (jegl_texture::pixel_data_t)round(value.w * 255.0f),
+                            (jegl_texture::pixel_data_t)0,
+                            (jegl_texture::pixel_data_t)255);
                         break;
                     default:
                         assert(0); break;
@@ -8894,7 +8965,7 @@ namespace jeecs
             }
         };
     }
-    namespace Animation2D
+    namespace Animation
     {
         struct FrameAnimation
         {
@@ -9175,15 +9246,21 @@ namespace jeecs
                         m_animations[id].set_loop(loop);
                     }
                 }
+                bool is_playing(size_t id)const
+                {
+                    if (id < m_animations.size())
+                        return m_animations[id].m_current_action != "";
+                    return false;
+                }
 
                 static const char* JEScriptTypeName()
                 {
-                    return "Animation2D::FrameAnimation::animation_list";
+                    return "Animation::FrameAnimation::animation_list";
                 }
                 static const char* JEScriptTypeDeclare()
                 {
                     return
-                        R"(namespace Animation2D::FrameAnimation
+                        R"(namespace Animation::FrameAnimation
 {
     public using animation_state = struct{
         public m_path: string,
@@ -9665,7 +9742,7 @@ namespace jeecs
             type_info::register_type<Renderer::Textures>(guard, "Renderer::Textures");
             type_info::register_type<Renderer::Color>(guard, "Renderer::Color");
 
-            type_info::register_type<Animation2D::FrameAnimation>(guard, "Animation2D::FrameAnimation");
+            type_info::register_type<Animation::FrameAnimation>(guard, "Animation::FrameAnimation");
 
             type_info::register_type<Camera::Clip>(guard, "Camera::Clip");
             type_info::register_type<Camera::FrustumCulling>(guard, "Camera::FrustumCulling");

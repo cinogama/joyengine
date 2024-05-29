@@ -388,6 +388,7 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_float3(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_store_bad_shader_uniforms_float4(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_store_bad_shader_uniforms_int(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_texture_bind_path(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_texture_clip(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_texture_create(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_texture_get_pixel(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_texture_get_size(wo_vm vm, wo_value args);
@@ -399,7 +400,8 @@ WO_API wo_api wojeapi_texture_set_pixel_color(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_texture_take_snapshot(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_textures_of_entity(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_towoo_add_component(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_animation2D_frameanimation_active_animation(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_animation_frameanimation_active_animation(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_animation_frameanimation_is_playing(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_towoo_audio_playing_set_buffer(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_towoo_audio_source_get_source(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_towoo_get_component(wo_vm vm, wo_value args);
@@ -855,6 +857,7 @@ void je_api_init()
         wo_extern_lib_func_t{"wojeapi_store_bad_shader_uniforms_float4", (void*)&wojeapi_store_bad_shader_uniforms_float4},
         wo_extern_lib_func_t{"wojeapi_store_bad_shader_uniforms_int", (void*)&wojeapi_store_bad_shader_uniforms_int},
         wo_extern_lib_func_t{"wojeapi_texture_bind_path", (void*)&wojeapi_texture_bind_path},
+        wo_extern_lib_func_t{"wojeapi_texture_clip", (void*)&wojeapi_texture_clip},
         wo_extern_lib_func_t{"wojeapi_texture_create", (void*)&wojeapi_texture_create},
         wo_extern_lib_func_t{"wojeapi_texture_get_pixel", (void*)&wojeapi_texture_get_pixel},
         wo_extern_lib_func_t{"wojeapi_texture_get_size", (void*)&wojeapi_texture_get_size},
@@ -866,7 +869,8 @@ void je_api_init()
         wo_extern_lib_func_t{"wojeapi_texture_take_snapshot", (void*)&wojeapi_texture_take_snapshot},
         wo_extern_lib_func_t{"wojeapi_textures_of_entity", (void*)&wojeapi_textures_of_entity},
         wo_extern_lib_func_t{"wojeapi_towoo_add_component", (void*)&wojeapi_towoo_add_component},
-        wo_extern_lib_func_t{"wojeapi_towoo_animation2D_frameanimation_active_animation", (void*)&wojeapi_towoo_animation2D_frameanimation_active_animation},
+        wo_extern_lib_func_t{"wojeapi_towoo_animation_frameanimation_active_animation", (void*)&wojeapi_towoo_animation_frameanimation_active_animation},
+        wo_extern_lib_func_t{"wojeapi_towoo_animation_frameanimation_is_playing", (void*)&wojeapi_towoo_animation_frameanimation_is_playing},
         wo_extern_lib_func_t{"wojeapi_towoo_audio_playing_set_buffer", (void*)&wojeapi_towoo_audio_playing_set_buffer},
         wo_extern_lib_func_t{"wojeapi_towoo_audio_source_get_source", (void*)&wojeapi_towoo_audio_source_get_source},
         wo_extern_lib_func_t{"wojeapi_towoo_get_component", (void*)&wojeapi_towoo_get_component},
