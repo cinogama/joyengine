@@ -69,9 +69,9 @@ func multi_samping_glowing_bloom(tex: texture2d, uv : float2, bias : float)
     let gos_rgb = multi_sampling_for_bias_glowing_level2(tex, uv, bias);
     let gos_rgb_hdr = gos_rgb / (gos_rgb + float3::one);
     let gos_rgb_hdr_brightness =
-        float::new(0.3) * gos_rgb_hdr->x
-        + float::new(0.49) * gos_rgb_hdr->y
-        + float::new(0.11) * gos_rgb_hdr->z;
+        float::const(0.3) * gos_rgb_hdr->x
+        + float::const(0.49) * gos_rgb_hdr->y
+        + float::const(0.11) * gos_rgb_hdr->z;
 
     return gos_rgb_hdr_brightness * gos_rgb + (1. - gos_rgb_hdr_brightness) * rgb;
 }
@@ -86,17 +86,17 @@ let SelfLumine      = je_light2d_defer_self_luminescence;
 
 public func frag(vf: v2f)
 {
-    let albedo_color_rgb = pow(texture(Albedo, vf.uv)->xyz, float3::new(2.2, 2.2, 2.2));
+    let albedo_color_rgb = pow(texture(Albedo, vf.uv)->xyz, float3::const(2.2, 2.2, 2.2));
 
     let glowing_color_rgb = 
-        multi_samping_glowing_bloom(Light, vf.uv, float::new(3.))
-        + multi_samping_glowing_bloom(SelfLumine, vf.uv, float::new(1.5))
-        + float3::new(0.03, 0.03, 0.03);
+        multi_samping_glowing_bloom(Light, vf.uv, float::const(3.))
+        + multi_samping_glowing_bloom(SelfLumine, vf.uv, float::const(1.5))
+        + float3::const(0.03, 0.03, 0.03);
 
     let mixed_color_rgb = max(float3::zero, albedo_color_rgb * glowing_color_rgb);
 
     let hdr_color_rgb = mixed_color_rgb / (mixed_color_rgb + float3::one);
-    let hdr_ambient_with_gamma = pow(hdr_color_rgb, float3::new(1. / 2.2, 1. / 2.2, 1. / 2.2));
+    let hdr_ambient_with_gamma = pow(hdr_color_rgb, float3::const(1. / 2.2, 1. / 2.2, 1. / 2.2));
 
     return fout{
         color = je_color * float4::create(hdr_ambient_with_gamma, 1.)

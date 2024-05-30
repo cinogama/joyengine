@@ -41,7 +41,7 @@ const char* shader_pbr_src = R"(
 
 import je::shader;
 
-public let PI = float::new(3.1415926535897932384626);
+public let PI = float::const(3.1415926535897932384626);
 
 SHADER_FUNCTION!
 public func DistributionGGX(N: float3, H: float3, roughness: float)
@@ -62,7 +62,7 @@ SHADER_FUNCTION!
 public func GeometrySchlickGGX(NdotV: float, roughness: float)
 {
     let r = roughness + float::one;
-    let k = r * r / float::new(8.);
+    let k = r * r / float::const(8.);
     
     let nom = NdotV;
     let denom = NdotV * (float::one - k) + k;
@@ -85,7 +85,7 @@ public func GeometrySmith(N: float3, V: float3, L: float3, roughness: float)
 SHADER_FUNCTION!
 public func FresnelSchlick(cosTheta: float, F0: float3)
 {
-    return F0 + (float3::one - F0) * pow(float::one - cosTheta, float::new(5.));
+    return F0 + (float3::one - F0) * pow(float::one - cosTheta, float::const(5.));
 }
 )";
 

@@ -793,7 +793,7 @@ public func uniform_texture<ShaderResultT>(uniform_name:string, sampler: sampler
 public func uniform<ShaderResultT>(uniform_name:string, init_value: ShaderResultT)
 {
     if (init_value is real)
-        return _uniform_with_init:<float>(_get_type_enum:<float>(), uniform_name, float::new(init_value));
+        return _uniform_with_init:<float>(_get_type_enum:<float>(), uniform_name, float::const(init_value));
     else
         return _uniform_with_init:<ShaderResultT>(_get_type_enum:<ShaderResultT>(), uniform_name, init_value);
 }
@@ -911,11 +911,11 @@ namespace real
 
 namespace float
 {
-    public let zero = float::new(0.);
-    public let one = float::new(1.);
+    public let zero = float::const(0.);
+    public let one = float::const(1.);
 
     extern("libjoyecs", "jeecs_shader_float_create")
-    public func new(init_val:real)=> float;
+    public func const(init_val:real)=> float;
 
     public func create(...)=> float{return apply_operation:<float>("float", ......);}
 
@@ -950,11 +950,11 @@ namespace float
 }
 namespace float2
 {
-    public let zero = float2::new(0., 0.);
-    public let one = float2::new(1., 1.);
+    public let zero = float2::const(0., 0.);
+    public let one = float2::const(1., 1.);
 
     extern("libjoyecs", "jeecs_shader_float2_create")
-    public func new(x:real, y:real)=> float2;
+    public func const(x:real, y:real)=> float2;
 
     public func create(...)=> float2{return apply_operation:<float2>("float2", ......);}
 
@@ -985,11 +985,11 @@ namespace float2
 }
 namespace float3
 {
-    public let zero = float3::new(0., 0., 0.);
-    public let one = float3::new(1., 1., 1.);
+    public let zero = float3::const(0., 0., 0.);
+    public let one = float3::const(1., 1., 1.);
 
     extern("libjoyecs", "jeecs_shader_float3_create")
-    public func new(x:real, y:real, z:real)=> float3;
+    public func const(x:real, y:real, z:real)=> float3;
 
     public func create(...)=> float3{return apply_operation:<float3>("float3", ......);}
 
@@ -1032,11 +1032,11 @@ namespace float3
 )" R"(
 namespace float4
 {
-    public let zero = float4::new(0., 0., 0., 0.);
-    public let one = float4::new(1., 1., 1., 1.);
+    public let zero = float4::const(0., 0., 0., 0.);
+    public let one = float4::const(1., 1., 1., 1.);
 
     extern("libjoyecs", "jeecs_shader_float4_create")
-    public func new(x:real, y:real, z:real, w:real)=> float4;
+    public func const(x:real, y:real, z:real, w:real)=> float4;
 
     public func create(...)=> float4{return apply_operation:<float4>("float4", ......);}
 
@@ -1131,13 +1131,13 @@ namespace float4
 
 namespace float4x4
 {
-    public let unit = float4x4::new(
+    public let unit = float4x4::const(
         1., 0., 0., 0.,
         0., 1., 0., 0.,
         0., 0., 1., 0.,
         0., 0., 0., 1.);
     extern("libjoyecs", "jeecs_shader_float4x4_create")
-    public func new(
+    public func const(
         p00:real, p01:real, p02:real, p03:real,
         p10:real, p11:real, p12:real, p13:real,
         p20:real, p21:real, p22:real, p23:real,
@@ -1162,13 +1162,13 @@ namespace float4x4
 
 namespace float3x3
 {
-    public let unit = float3x3::new(
+    public let unit = float3x3::const(
         1., 0., 0.,
         0., 1., 0.,
         0., 0., 1.,);
 
     extern("libjoyecs", "jeecs_shader_float3x3_create")
-    public func new(
+    public func const(
         p00:real, p01:real, p02:real,
         p10:real, p11:real, p12:real,
         p20:real, p21:real, p22:real)=> float3x3;

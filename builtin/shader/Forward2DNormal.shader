@@ -45,15 +45,15 @@ public func vert(v: vin)
         pos = je_p * vspace_position,
         vpos = vspace_position->xyz / vspace_position->w,
         uv = uvtrans(v.uv, je_tiling, je_offset),
-        vtangent_x = vtangent(float3::new(1., 0., 0.)),
-        vtangent_y = vtangent(float3::new(0., 1., 0.)),
-        vtangent_z = vtangent(float3::new(0., 0., -1.)),
+        vtangent_x = vtangent(float3::const(1., 0., 0.)),
+        vtangent_y = vtangent(float3::const(0., 1., 0.)),
+        vtangent_z = vtangent(float3::const(0., 0., -1.)),
     };
 }
 
 func get_normal_from_map(normal_map: texture2d, uv : float2)
 {
-    return (float::new(2.) * texture(normal_map, uv)->xyz) - float3::new(1., 1., 1.);
+    return (float::const(2.) * texture(normal_map, uv)->xyz) - float3::const(1., 1., 1.);
 }
 
 func transed_normal_tangent_map(normal_map: texture2d, vertex_info : v2f)

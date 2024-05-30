@@ -451,8 +451,8 @@ public let frag =
         color = float4::create(show_color, 1.),
         self_lum = float4::create(show_color * 100., 1.),
         }
-        where show_color = lerp(f.color, float3::new(1., 1., 1.), ratio)
-            , ratio = step(float::new(0.5), je_color->x)
+        where show_color = lerp(f.color, float3::const(1., 1., 1.), ratio)
+            , ratio = step(float::const(0.5), je_color->x)
     ;
 ;
         )" });

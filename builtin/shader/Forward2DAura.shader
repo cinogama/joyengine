@@ -44,10 +44,10 @@ let decay   = uniform("Decay", float::one);
 
 public func frag(vf: v2f)
 {
-    let dv = clamp(1. - length((vf.uv - float2::new(0.5, 0.5)) * 2.), 0., 1.);
+    let dv = clamp(1. - length((vf.uv - float2::const(0.5, 0.5)) * 2.), 0., 1.);
 
     return fout{
-        albedo = float4::new(0.,0.,0.,0.),
+        albedo = float4::const(0.,0.,0.,0.),
         self_luminescence = float4::create(color->xyz, pow(dv, decay)) * color->w,
         vspace_position = float4::zero,
         vspace_normalize = float4::zero,

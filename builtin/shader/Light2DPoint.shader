@@ -90,13 +90,13 @@ let Shadow      = je_light2d_defer_shadow;
 
 public func frag(vf: v2f)
 {  
-    let uv = uvframebuf((vf.pos->xy / vf.pos->w + float2::new(1., 1.)) /2.);
+    let uv = uvframebuf((vf.pos->xy / vf.pos->w + float2::const(1., 1.)) /2.);
 
     let pixvpos = vf.vpos->xyz / vf.vpos->w;
 
     let vposition = texture(VPosition, uv)->xyz;
     let vnormalize = texture(VNormalize, uv)->xyz;
-    let uvdistance = clamp(length((vf.uv - float2::new(0.5, 0.5)) * 2.), 0., 1.);
+    let uvdistance = clamp(length((vf.uv - float2::const(0.5, 0.5)) * 2.), 0., 1.);
     let fgdistance = distance(vposition, pixvpos);
 
     let shadow_factor = multi_sampling_for_bias_shadow(Shadow, uv);
