@@ -138,7 +138,8 @@ struct jegl_shader_value
                     wdata[i] = data[i];
             }
             else
-                wo_fail(0xD000, "Unknown type to init, should be f");
+                wo_fail(WO_FAIL_JE_BAD_INIT_SHADER_VALUE, 
+                    "Unknown type to init, should be float4x4, float3x3 or float2x2.");
         }
     }
     void set_used_val(size_t id)

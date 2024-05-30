@@ -11,6 +11,9 @@
 #define JE_VERSION_WRAP(A, B, C) #A "." #B "." #C
 #define JE_CORE_VERSION JE_VERSION_WRAP(4, 6, 3)
 
+#define WO_FAIL_JE_FATAL_ERROR 0xD101
+#define WO_FAIL_JE_BAD_INIT_SHADER_VALUE 0xD102
+
 #include <cstdint>
 #include <cstring>
 #include <cstdlib>
@@ -3586,8 +3589,7 @@ namespace jeecs
         [[noreturn]] inline void logfatal(const char* format, ArgTs&& ... args)
         {
             je_log(JE_LOG_FATAL, format, args...);
-            je_clock_sleep_for(1.0);
-            abort();
+            wo_fail(WO_FAIL_JE_FATAL_ERROR, format, args...);
         }
     }
 
@@ -8324,12 +8326,12 @@ namespace jeecs
                 typing::register_member(guard, &Relatively::use_vertical_ratio, "use_vertical_ratio");
             }
         };
-        struct Distortion
+        struct Rotation
         {
             float angle = 0.0f;
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(guard, &Distortion::angle, "angle");
+                typing::register_member(guard, &Rotation::angle, "angle");
             }
         };
     };
@@ -9732,7 +9734,7 @@ namespace jeecs
             type_info::register_type<Transform::Translation>(guard, "Transform::Translation");
 
             type_info::register_type<UserInterface::Origin>(guard, "UserInterface::Origin");
-            type_info::register_type<UserInterface::Distortion>(guard, "UserInterface::Distortion");
+            type_info::register_type<UserInterface::Rotation>(guard, "UserInterface::Rotation");
             type_info::register_type<UserInterface::Absolute>(guard, "UserInterface::Absolute");
             type_info::register_type<UserInterface::Relatively>(guard, "UserInterface::Relatively");
 
