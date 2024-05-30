@@ -26,7 +26,7 @@ using fout = struct {
 public func vert(v: vin)
 {
     return v2f{
-        pos = float4::create(v.vertex, 1.),
+        pos = vec4(v.vertex, 1.),
         uv = uvframebuf(v.uv),
     };
 }
@@ -39,10 +39,10 @@ let VPosition       = je_light2d_defer_vspace_position;
 // let VNormalize      = je_light2d_defer_vspace_normalize;
 // let Shadow          = je_light2d_defer_shadow;
 
-let fog_begin_distance  = uniform("FogBeginDistance", float::const(20.));
-let fog_max_distance    = uniform("FogMaxDistance", float::const(100.));
-let fog_end_distance    = uniform("FogEndDistance", float::const(1000.));
-let fog_attenuation     = uniform("FogAttenuation", float::const(1.));
+let fog_begin_distance  = uniform("FogBeginDistance", 20.);
+let fog_max_distance    = uniform("FogMaxDistance", 100.);
+let fog_end_distance    = uniform("FogEndDistance", 1000.);
+let fog_attenuation     = uniform("FogAttenuation", 1.);
 let fog_color           = uniform("FogColor", float3::one);
 
 public func frag(vf: v2f)
@@ -65,6 +65,6 @@ public func frag(vf: v2f)
     let fog_factor = pow(clamp(fog_raw_factor, 0., 1.), fog_attenuation);
 
     return fout{
-        color = je_color * float4::create(lerp(hdr_ambient_with_gamma, fog_color, fog_factor), 1.)
+        color = je_color * vec4(lerp(hdr_ambient_with_gamma, fog_color, fog_factor), 1.)
     };
 }

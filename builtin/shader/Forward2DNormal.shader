@@ -40,7 +40,7 @@ func vtangent(normal: float3)
 
 public func vert(v: vin)
 {
-    let vspace_position = je_mv * float4::create(v.vertex, 1.);
+    let vspace_position = je_mv * vec4(v.vertex, 1.);
     return v2f{
         pos = je_p * vspace_position,
         vpos = vspace_position->xyz / vspace_position->w,
@@ -75,7 +75,7 @@ public func frag(vf: v2f)
     return fout{
         albedo = je_color * alphatest(texture(Albedo, vf.uv)),
         self_luminescence = float4::zero,
-        vspace_position = float4::create(vf.vpos, 1.),
-        vspace_normalize = float4::create(transed_normal_tangent_map(Normalize, vf), 1.),
+        vspace_position = vec4(vf.vpos, 1.),
+        vspace_normalize = vec4(transed_normal_tangent_map(Normalize, vf), 1.),
     };
 }

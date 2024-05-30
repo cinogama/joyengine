@@ -31,7 +31,7 @@ using fout = struct {
 
 public func vert(v: vin)
 {
-    let vpos = je_mv * float4::create(v.vertex, 1.);
+    let vpos = je_mv * vec4(v.vertex, 1.);
     return v2f{
         pos  = je_p * vpos,
         vpos = vpos->xyz / vpos->w,
@@ -48,7 +48,7 @@ public func frag(vf: v2f)
 
     return fout{
         albedo = float4::const(0.,0.,0.,0.),
-        self_luminescence = float4::create(color->xyz, pow(dv, decay)) * color->w,
+        self_luminescence = vec4(color->xyz, pow(dv, decay)) * color->w,
         vspace_position = float4::zero,
         vspace_normalize = float4::zero,
     };

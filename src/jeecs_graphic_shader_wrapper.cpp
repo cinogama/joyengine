@@ -1185,6 +1185,31 @@ namespace float3x3
     }
 }
 
+public func vec1(...)
+{
+    return float::create(......);
+}
+public func vec2(...)
+{
+    return float2::create(......);
+}
+public func vec3(...)
+{
+    return float3::create(......);
+}
+public func vec4(...)
+{
+    return float4::create(......);
+}
+public func mat4(...)
+{
+    return float4x4::create(......);
+}
+public func mat3(...)
+{
+    return float3x3::create(......);
+}
+
 namespace shader
 {
     using shader_wrapper = gchandle;

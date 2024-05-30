@@ -2831,7 +2831,7 @@ using fout = struct{
 public func vert(v: vin)
 {
     return v2f{
-        pos = float4::create(v.vertex, 1.),
+        pos = vec4(v.vertex, 1.),
         uv = v.uv,
     };
 }

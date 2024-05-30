@@ -26,7 +26,7 @@ using fout = struct {
 public func vert(v: vin)
 {
     return v2f{
-        pos = float4::create(v.vertex, 1.),
+        pos = vec4(v.vertex, 1.),
         uv = uvframebuf(v.uv),
     };
 }
@@ -44,7 +44,7 @@ func multi_sampling_for_bias_glowing_level1(tex: texture2d, uv : float2, bias: f
     let reso_inv = float2::one / je_light2d_resolutin;
     for (let (x, y, weight) : bias_weight)
     {
-        result = result + texture(tex, uv + reso_inv * float2::create(x, y) * bias)->xyz * weight;
+        result = result + texture(tex, uv + reso_inv * vec2(x, y) * bias)->xyz * weight;
     }
     return result;
 }
@@ -57,7 +57,7 @@ func multi_sampling_for_bias_glowing_level2(tex: texture2d, uv: float2, bias: fl
     for (let (x, y, weight) : bias_weight)
     {
         result = result + multi_sampling_for_bias_glowing_level1(
-            tex, uv + reso_inv * float2::create(x, y) * bias, bias) * weight;
+            tex, uv + reso_inv * vec2(x, y) * bias, bias) * weight;
     }
     return result;
 }
@@ -69,9 +69,9 @@ func multi_samping_glowing_bloom(tex: texture2d, uv : float2, bias : float)
     let gos_rgb = multi_sampling_for_bias_glowing_level2(tex, uv, bias);
     let gos_rgb_hdr = gos_rgb / (gos_rgb + float3::one);
     let gos_rgb_hdr_brightness =
-        float::const(0.3) * gos_rgb_hdr->x
-        + float::const(0.49) * gos_rgb_hdr->y
-        + float::const(0.11) * gos_rgb_hdr->z;
+        0.3 * gos_rgb_hdr->x
+        + 0.49 * gos_rgb_hdr->y
+        + 0.11 * gos_rgb_hdr->z;
 
     return gos_rgb_hdr_brightness * gos_rgb + (1. - gos_rgb_hdr_brightness) * rgb;
 }
@@ -99,6 +99,6 @@ public func frag(vf: v2f)
     let hdr_ambient_with_gamma = pow(hdr_color_rgb, float3::const(1. / 2.2, 1. / 2.2, 1. / 2.2));
 
     return fout{
-        color = je_color * float4::create(hdr_ambient_with_gamma, 1.)
+        color = je_color * vec4(hdr_ambient_with_gamma, 1.)
     };
 }

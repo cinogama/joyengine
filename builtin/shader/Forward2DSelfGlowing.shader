@@ -33,7 +33,7 @@ using fout = struct {
 
 public func vert(v: vin)
 {
-    let vpos = je_mv * float4::create(v.vertex, 1.);
+    let vpos = je_mv * vec4(v.vertex, 1.);
     let vnorm = v.normal * je_mv->float3x3;
     return v2f{
         pos = je_p * vpos,
@@ -53,8 +53,8 @@ public func frag(vf: v2f)
     let albedo_color = je_color * texture(Albedo, vf.uv);
     return fout{
         albedo = alphatest(albedo_color),
-        self_luminescence = float4::create(albedo_color->xyz * self_glowing, 1.),
-        vspace_position = float4::create(vf.vpos, 1.),
-        vspace_normalize = float4::create(vf.vnorm, 1.),
+        self_luminescence = vec4(albedo_color->xyz * self_glowing, 1.),
+        vspace_position = vec4(vf.vpos, 1.),
+        vspace_normalize = vec4(vf.vnorm, 1.),
     };
 }

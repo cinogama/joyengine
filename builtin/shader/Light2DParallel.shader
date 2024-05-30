@@ -25,7 +25,7 @@ using fout = struct {
 public func vert(v: vin)
 {
     return v2f{
-        pos = float4::create(v.vertex, 0.5) * 2.,
+        pos = vec4(v.vertex, 0.5) * 2.,
         light_vdir = normalize(
             je_mv->float3x3 * float3::const(0., -1., 1.)),
     };
@@ -47,7 +47,7 @@ func multi_sampling_for_bias_shadow(shadow: texture2d, reso: float2, uv: float2)
 
     for (let (x, y, weight) : bias_weight)
     {
-        let shadow_weight = texture(shadow, uv + reso_inv * float2::create(x, y) * bias)->x;
+        let shadow_weight = texture(shadow, uv + reso_inv * vec2(x, y) * bias)->x;
         shadow_factor = max(shadow_factor, shadow_weight * weight);
     }
     return 1. - shadow_factor;
@@ -82,10 +82,10 @@ public func frag(vf: v2f)
     let shadow_factor = multi_sampling_for_bias_shadow(Shadow, je_light2d_resolutin, uv);
 
     let vnormalize = normalize(
-        texture(VNormalize, uv)->xyz - float3::create(0., 0., normal_z_offset));
+        texture(VNormalize, uv)->xyz - vec3(0., 0., normal_z_offset));
 
     return fout{
-        color = float4::create(
+        color = vec4(
             apply_parallel_light_effect(
                 vnormalize,
                 vf.light_vdir,

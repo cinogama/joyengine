@@ -26,7 +26,7 @@ using fout = struct {
 public func vert(v: vin)
 {
     return v2f{
-        pos = float4::create(v.vertex, 1.),
+        pos = vec4(v.vertex, 1.),
         uv = uvframebuf(v.uv),
     };
 }
@@ -53,6 +53,6 @@ public func frag(vf: v2f)
     let hdr_ambient_with_gamma = pow(hdr_color_rgb, float3::const(1. / 2.2, 1. / 2.2, 1. / 2.2));
 
     return fout{
-        color = je_color * float4::create(hdr_ambient_with_gamma, 1.)
+        color = je_color * vec4(hdr_ambient_with_gamma, 1.)
     };
 }

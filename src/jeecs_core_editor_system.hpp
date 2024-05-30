@@ -442,14 +442,14 @@ using fout = struct {
 public let vert = 
     \v: vin = v2f { pos = je_mvp * vertex_pos, 
                     color = v.color } 
-        where vertex_pos = float4::create(v.vertex, 1.)
+        where vertex_pos = vec4(v.vertex, 1.)
     ;
 ;
         
 public let frag = 
     \f: v2f = fout{ 
-        color = float4::create(show_color, 1.),
-        self_lum = float4::create(show_color * 100., 1.),
+        color = vec4(show_color, 1.),
+        self_lum = vec4(show_color * 100., 1.),
         }
         where show_color = lerp(f.color, float3::const(1., 1., 1.), ratio)
             , ratio = step(float::const(0.5), je_color->x)
@@ -474,11 +474,11 @@ using fout = struct {
     self_lum: float4,
 };
         
-public let vert = \v: vin = v2f{ pos = je_mvp * float4::create(v.vertex, 1.) };;
+public let vert = \v: vin = v2f{ pos = je_mvp * vec4(v.vertex, 1.) };;
 public let frag = 
     \_: v2f = fout{ 
-        color = float4::create(0.5, 1., 0.5, 1.),
-        self_lum = float4::create(1., 100., 1., 1.),
+        color = float4::const(0.5, 1., 0.5, 1.),
+        self_lum = float4::const(1., 100., 1., 1.),
     }
     ;
 ;

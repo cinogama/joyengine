@@ -138,10 +138,10 @@ using fout = struct {
 
 public let vert = 
 \v: vin = v2f{ pos = je_mvp * vertex_pos }
-    where vertex_pos = float4::create(v.vertex, 1.);;
+    where vertex_pos = vec4(v.vertex, 1.);;
 
 public let frag = 
-\_: v2f = fout{ color = float4::create(t, 0., t, 1.) }
+\_: v2f = fout{ color = vec4(t, 0., t, 1.) }
     where t = je_time->y();;
 
 )");
@@ -1033,7 +1033,7 @@ using fout = struct{
 public func vert(v: vin)
 {
     return v2f{
-        pos = je_mvp * float4::create(v.vertex, 1.),
+        pos = je_mvp * vec4(v.vertex, 1.),
         uv = uvtrans(v.uv, je_tiling, je_offset),
     };
 }
@@ -1041,10 +1041,10 @@ public func frag(vf: v2f)
 {
     let nearest_clamp = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
     let Main = uniform_texture:<texture2d>("Main", nearest_clamp, 0);
-    let final_shadow = alphatest(float4::create(je_color->xyz, texture(Main, vf.uv)->w));
+    let final_shadow = alphatest(vec4(je_color->xyz, texture(Main, vf.uv)->w));
 
     return fout{
-        shadow_factor = float4::create(final_shadow->x, final_shadow->x, final_shadow->x, float::one)
+        shadow_factor = vec4(final_shadow->x, final_shadow->x, final_shadow->x, float::one)
     };
 }
 )") };
@@ -1076,14 +1076,14 @@ using fout = struct{
 
 public func vert(v: vin)
 {
-    let light2d_vpos = je_v * float4::create(je_color->xyz, 1.);
+    let light2d_vpos = je_v * vec4(je_color->xyz, 1.);
     let shadow_scale_factor = je_color->w;
 
-    let vpos = je_mv * float4::create(v.vertex, 1.);
+    let vpos = je_mv * vec4(v.vertex, 1.);
     let shadow_vpos = normalize((vpos->xyz / vpos->w) - (light2d_vpos->xyz / light2d_vpos->w)) * shadow_scale_factor;
     
     return v2f{
-        pos = je_p * float4::create((vpos->xyz / vpos->w) + shadow_vpos, 1.),
+        pos = je_p * vec4((vpos->xyz / vpos->w) + shadow_vpos, 1.),
         uv = uvtrans(v.uv, je_tiling, je_offset),
     };
 }
@@ -1092,12 +1092,12 @@ public func frag(vf: v2f)
     let linear_clamp = sampler2d::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
     let Main = uniform_texture:<texture2d>("Main", linear_clamp, 0);
     let final_shadow = alphatest(
-        float4::create(
+        vec4(
             je_local_scale,     // NOTE: je_local_scale->x is shadow factor here.
             texture(Main, vf.uv)->w));
 
     return fout{
-        shadow_factor = float4::create(float3::one, final_shadow->x)
+        shadow_factor = vec4(float3::one, final_shadow->x)
     };
 }
 )") };
@@ -1129,14 +1129,14 @@ using fout = struct{
 
 public func vert(v: vin)
 {
-    let light2d_vdir = (je_v * float4::create(je_color->xyz, 1.))->xyz - movement(je_v);
+    let light2d_vdir = (je_v * vec4(je_color->xyz, 1.))->xyz - movement(je_v);
     let shadow_scale_factor = je_color->w;
 
-    let vpos = je_mv * float4::create(v.vertex, 1.);
+    let vpos = je_mv * vec4(v.vertex, 1.);
     let shadow_vpos = normalize(light2d_vdir) * shadow_scale_factor;
     
     return v2f{
-        pos = je_p * float4::create((vpos->xyz / vpos->w) + shadow_vpos, 1.),
+        pos = je_p * vec4((vpos->xyz / vpos->w) + shadow_vpos, 1.),
         uv = uvtrans(v.uv, je_tiling, je_offset),
     };
 }
@@ -1145,12 +1145,12 @@ public func frag(vf: v2f)
     let linear_clamp = sampler2d::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
     let Main = uniform_texture:<texture2d>("Main", linear_clamp, 0);
     let final_shadow = alphatest(
-        float4::create(
+        vec4(
             je_local_scale,     // NOTE: je_local_scale->x is shadow factor here.
             texture(Main, vf.uv)->w));
 
     return fout{
-        shadow_factor = float4::create(float3::one, final_shadow->x)
+        shadow_factor = vec4(float3::one, final_shadow->x)
     };
 }
 )") };
@@ -1183,17 +1183,17 @@ using fout = struct{
 
 public func vert(v: vin)
 {
-    let light2d_vpos = je_v * float4::create(je_color->xyz, 1.);
+    let light2d_vpos = je_v * vec4(je_color->xyz, 1.);
     let shadow_scale_factor = je_color->w;
 
-    let vpos = je_mv * float4::create(v.vertex, 1.);
-    let centerpos = je_mv * float4::create(0., 0., 0., 1.);
+    let vpos = je_mv * vec4(v.vertex, 1.);
+    let centerpos = je_mv * vec4(0., 0., 0., 1.);
     let shadow_vpos = normalize(
         (centerpos->xyz / centerpos->w) - (light2d_vpos->xyz / light2d_vpos->w)
     ) * shadow_scale_factor;
     
     return v2f{
-        pos = je_p * float4::create((vpos->xyz / vpos->w) + shadow_vpos * v.factor, 1.),
+        pos = je_p * vec4((vpos->xyz / vpos->w) + shadow_vpos * v.factor, 1.),
         uv = uvtrans(v.uv, je_tiling, je_offset),
     };
 }
@@ -1202,12 +1202,12 @@ public func frag(vf: v2f)
     let linear_clamp = sampler2d::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
     let Main = uniform_texture:<texture2d>("Main", linear_clamp, 0);
     let final_shadow = alphatest(
-        float4::create(
+        vec4(
             je_local_scale,     // NOTE: je_local_scale->x is shadow factor here.
             texture(Main, vf.uv)->w));
 
     return fout{
-        shadow_factor = float4::create(float3::one, final_shadow->x)
+        shadow_factor = vec4(float3::one, final_shadow->x)
     };
 }
 )") };
@@ -1240,14 +1240,14 @@ using fout = struct{
 
 public func vert(v: vin)
 {
-    let light2d_vdir = (je_v * float4::create(je_color->xyz, 1.))->xyz - movement(je_v);
+    let light2d_vdir = (je_v * vec4(je_color->xyz, 1.))->xyz - movement(je_v);
     let shadow_scale_factor = je_color->w;
 
-    let vpos = je_mv * float4::create(v.vertex, 1.);
+    let vpos = je_mv * vec4(v.vertex, 1.);
     let shadow_vpos = normalize(light2d_vdir) * shadow_scale_factor;
     
     return v2f{
-        pos = je_p * float4::create((vpos->xyz / vpos->w) + shadow_vpos * v.factor, 1.),
+        pos = je_p * vec4((vpos->xyz / vpos->w) + shadow_vpos * v.factor, 1.),
         uv = uvtrans(v.uv, je_tiling, je_offset),
     };
 }
@@ -1256,12 +1256,12 @@ public func frag(vf: v2f)
     let linear_clamp = sampler2d::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
     let Main = uniform_texture:<texture2d>("Main", linear_clamp, 0);
     let final_shadow = alphatest(
-        float4::create(
+        vec4(
             je_local_scale,     // NOTE: je_local_scale->x is shadow factor here.
             texture(Main, vf.uv)->w));
 
     return fout{
-        shadow_factor = float4::create(float3::one, final_shadow->x)
+        shadow_factor = vec4(float3::one, final_shadow->x)
     };
 }
 )") };
@@ -1293,18 +1293,18 @@ public func vert(v: vin)
 {
     // ATTENTION: We will using je_color: float4 to pass lwpos.
     let light_vpos = je_v * je_color;
-    let vpos = je_mv * float4::create(v.vertex, 1.);
+    let vpos = je_mv * vec4(v.vertex, 1.);
 
-    let shadow_vdir = float3::create(normalize(vpos->xy - light_vpos->xy), 0.) * 2000. * v.factor;
+    let shadow_vdir = vec3(normalize(vpos->xy - light_vpos->xy), 0.) * 2000. * v.factor;
     
-    return v2f{pos = je_p * float4::create(vpos->xyz + shadow_vdir, 1.)};   
+    return v2f{pos = je_p * vec4(vpos->xyz + shadow_vdir, 1.)};   
 }
 
 public func frag(_: v2f)
 {
     // NOTE: je_local_scale->x is shadow factor here.
     return fout{
-        shadow_factor = float4::create(float3::one, je_local_scale->x)
+        shadow_factor = vec4(float3::one, je_local_scale->x)
     };
 }
 )") };
@@ -1337,18 +1337,18 @@ public func vert(v: vin)
 {
     // ATTENTION: We will using je_color: float4 to pass lwpos.
     let light_vdir = (je_v * je_color)->xyz - movement(je_v);
-    let vpos = je_mv * float4::create(v.vertex, 1.);
+    let vpos = je_mv * vec4(v.vertex, 1.);
 
-    let shadow_vdir = float3::create(normalize(light_vdir->xy), 0.) * 2000. * v.factor;
+    let shadow_vdir = vec3(normalize(light_vdir->xy), 0.) * 2000. * v.factor;
     
-    return v2f{pos = je_p * float4::create(vpos->xyz + shadow_vdir, 1.)};   
+    return v2f{pos = je_p * vec4(vpos->xyz + shadow_vdir, 1.)};   
 }
 
 public func frag(_: v2f)
 {
     // NOTE: je_local_scale->x is shadow factor here.
     return fout{
-        shadow_factor = float4::create(float3::one, je_local_scale->x)
+        shadow_factor = vec4(float3::one, je_local_scale->x)
     };
 }
 )") };
@@ -1380,18 +1380,18 @@ public func vert(v: vin)
 {
     // ATTENTION: We will using je_color: float4 to pass lwpos.
     let light_vpos = je_v * je_color;
-    let vpos = je_mv * float4::create(v.vertex, 1.);
+    let vpos = je_mv * vec4(v.vertex, 1.);
 
-    let shadow_vdir = float3::create(normalize(vpos->xy - light_vpos->xy), 0.) * 2000. * v.factor;
+    let shadow_vdir = vec3(normalize(vpos->xy - light_vpos->xy), 0.) * 2000. * v.factor;
     
-    return v2f{pos = je_p * float4::create(vpos->xyz + shadow_vdir, 1.)};   
+    return v2f{pos = je_p * vec4(vpos->xyz + shadow_vdir, 1.)};   
 }
 
 public func frag(_: v2f)
 {
     // NOTE: je_local_scale->x is shadow factor here.
     return fout{
-        shadow_factor = float4::create(float3::one, je_local_scale->x)
+        shadow_factor = vec4(float3::one, je_local_scale->x)
     };
 }
 )") };
@@ -1423,18 +1423,18 @@ public func vert(v: vin)
 {
     // ATTENTION: We will using je_color: float4 to pass lwpos.
     let light_vdir = (je_v * je_color)->xyz - movement(je_v);
-    let vpos = je_mv * float4::create(v.vertex, 1.);
+    let vpos = je_mv * vec4(v.vertex, 1.);
 
-    let shadow_vdir = float3::create(normalize(light_vdir->xy), 0.) * 2000. * v.factor;
+    let shadow_vdir = vec3(normalize(light_vdir->xy), 0.) * 2000. * v.factor;
     
-    return v2f{pos = je_p * float4::create(vpos->xyz + shadow_vdir, 1.)};   
+    return v2f{pos = je_p * vec4(vpos->xyz + shadow_vdir, 1.)};   
 }
 
 public func frag(_: v2f)
 {
     // NOTE: je_local_scale->x is shadow factor here.
     return fout{
-        shadow_factor = float4::create(float3::one, je_local_scale->x)
+        shadow_factor = vec4(float3::one, je_local_scale->x)
     };
 }
 )") };
