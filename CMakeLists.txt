@@ -18,7 +18,7 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 option(JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD  "Install pkgs by baozi when building."  ON)
 option(JE4_COPYING_BUILTIN_FILES            "Copy builtin files to build."          ON)
 option(JE4_STATIC_LINK_MODULE_AND_PKGS      "Static link packages into engine."     ON)
-option(JE4_BUILD_SHARED_CORE                "Build shared engine core library."		ON)
+option(JE4_BUILD_SHARED_CORE                "Build shared engine core library."     ON)
 
 option(JE4_ENABLE_DX11_GAPI         "Enable DX11 Graphic api"           OFF)
 option(JE4_ENABLE_OPENGL330_GAPI    "Enable OpenGL 3.3 Graphic API"     OFF)
@@ -71,22 +71,22 @@ if (JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD)
     set (WO_CMAKE_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
     string (TOUPPER ${WO_CMAKE_BUILD_TYPE} WO_CMAKE_BUILD_TYPE_UPPER_CASE)
 
-	if ("${WO_CMAKE_BUILD_TYPE_UPPER_CASE}" STREQUAL "DEBUG")
-		set(JE4_FETCHING_BAOZI_CMDLINE "baozi install -source -nonative -profile debug")
-	else ()
-		set(JE4_FETCHING_BAOZI_CMDLINE "baozi install -source -nonative")
-	endif ()
-	
-	message(STATUS "Fetching woolang packages.")
-	
+    if ("${WO_CMAKE_BUILD_TYPE_UPPER_CASE}" STREQUAL "DEBUG")
+        set(JE4_FETCHING_BAOZI_CMDLINE "baozi install -source -nonative -profile debug")
+    else ()
+        set(JE4_FETCHING_BAOZI_CMDLINE "baozi install -source -nonative")
+    endif ()
+    
+    message(STATUS "Fetching woolang packages.")
+    
     if (WIN32)
-		execute_process(
-			COMMAND cmd /c ${JE4_FETCHING_BAOZI_CMDLINE} 
-			WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        execute_process(
+            COMMAND cmd /c ${JE4_FETCHING_BAOZI_CMDLINE} 
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
     else()
-		execute_process(
-			COMMAND sh -c "${JE4_FETCHING_BAOZI_CMDLINE}"
-			WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        execute_process(
+            COMMAND sh -c "${JE4_FETCHING_BAOZI_CMDLINE}"
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
     endif()
 else()
     message(STATUS "JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD is disabled.")

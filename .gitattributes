@@ -1,2 +1,3 @@
-/src/jeecs_3rd_pkg_extern_library.cpp=lf
-/src/jeecs_woolang_extern_library.cpp=lf
+/src/jeecs_extern_library_woo_api.cpp=lf
+/src/jeecs_extern_library_3rd_pkg.cpp=lf
+/src/jeecs_extern_library_module.cpp=lf
