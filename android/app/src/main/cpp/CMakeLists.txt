@@ -7,17 +7,17 @@ project("joyengineecs4a")
 
 # Setting for JoyEngineECS 4 Android.
 set(JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD OFF CACHE BOOL "Disable install baozi on Android" FORCE)
-set(JE4_COPYING_BUILTIN_FILES OFF CACHE BOOL "Disable copy builtin files on Android" FORCE)
-set(JE4_EXECUTE_BUILD_SCRIPT OFF CACHE BOOL "Disable build script on Android" FORCE)
-set(JE4_STATIC_LINK_WOOLANG_PKGS OFF CACHE BOOL "Disable static link packages on Android." FORCE)
+set(JE4_COPYING_BUILTIN_FILES           OFF CACHE BOOL "Disable copy builtin files on Android" FORCE)
+set(JE4_STATIC_LINK_MODULE_AND_PKGS     OFF CACHE BOOL "Disable static link packages on Android." FORCE)
+set(JE4_BUILD_SHARED_CORE              OFF CACHE BOOL "Disable static engine core and woolang on Android." FORCE)
 
-set(JE4_ENABLE_DX11_GAPI OFF CACHE BOOL "Disable DX11 on Android" FORCE)
-set(JE4_ENABLE_OPENGL330_GAPI OFF CACHE BOOL "Disable OpenGL 3.3 on Android" FORCE)
-set(JE4_ENABLE_OPENGLES300_GAPI ON CACHE BOOL "Enable OpenGLES 3.0 on Android" FORCE)
-set(JE4_ENABLE_VULKAN130_GAPI OFF CACHE BOOL "Disable Vulkan1.3 on Android" FORCE)
-set(JE4_ENABLE_METAL_GAPI OFF CACHE BOOL "Disable Metal on Android" FORCE)
+set(JE4_ENABLE_DX11_GAPI                OFF CACHE BOOL "Disable DX11 on Android" FORCE)
+set(JE4_ENABLE_OPENGL330_GAPI           OFF CACHE BOOL "Disable OpenGL 3.3 on Android" FORCE)
+set(JE4_ENABLE_OPENGLES300_GAPI         ON CACHE BOOL "Enable OpenGLES 3.0 on Android" FORCE)
+set(JE4_ENABLE_VULKAN130_GAPI           OFF CACHE BOOL "Disable Vulkan1.3 on Android" FORCE)
+set(JE4_ENABLE_METAL_GAPI               OFF CACHE BOOL "Disable Metal on Android" FORCE)
 
-set(WO_SUPPORT_ASMJIT OFF CACHE BOOL "Disable JIT on Android" FORCE)
+set(WO_SUPPORT_ASMJIT                   OFF CACHE BOOL "Disable JIT on Android" FORCE)
 
 # Searches for a package provided by the game activity dependency
 find_package(game-activity REQUIRED CONFIG)

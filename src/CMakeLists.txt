@@ -160,14 +160,12 @@ set (jeecs_core_sources
     "../include/jeecs.hpp")
 
 # Build engine shared/static library
-if (${BUILD_SHARED_LIBS})
-    target_compile_definitions(joyengine_core_configs INTERFACE -DWO_SHARED_LIB)
+if (BUILD_SHARED_LIBS)
     add_library(joyecs SHARED ${jeecs_core_sources})
     if(UNIX)
         target_compile_options(joyecs PRIVATE -Wall -rdynamic)
     endif()
 else()
-    target_compile_definitions(joyengine_core_configs INTERFACE -DWO_STATIC_LIB)
     add_library(joyecs STATIC ${jeecs_core_sources})
 endif()
 
@@ -193,7 +191,7 @@ target_link_libraries(joyecs
     PRIVATE joyengine_core_configs
     PRIVATE ${jeecs_system_libs}
     PRIVATE ${jeecs_graphic_libs}
-    PRIVATE ${JE4_STATIC_LINKED_PKG_LIST}
+    PRIVATE ${JE4_STATIC_LINKED_PKG_AND_MODULE_LIST}
     PRIVATE woolang
     PRIVATE box2d 
     PRIVATE OpenAL 

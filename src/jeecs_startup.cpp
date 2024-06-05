@@ -40,8 +40,9 @@ extern const char* jeecs_physics2d_config_src;
 void jeal_init();
 void je_log_init();
 void jegl_shader_generator_init();
-void je_api_init();
-void je_3rd_pkg_init();
+void je_extern_lib_woo_api_init();
+void je_extern_lib_3rd_pkgs_init();
+void je_extern_lib_module_init();
 
 void je_ecs_finish();
 void jeal_finish();
@@ -49,8 +50,9 @@ void jegl_finish();
 void jetowoo_finish();
 void je_log_finish();
 void jegl_shader_generator_shutdown();
-void je_api_finish();
-void je_3rd_pkg_finish();
+void je_extern_lib_woo_api_finish();
+void je_extern_lib_3rd_pkgs_finish();
+void je_extern_lib_module_finish();
 
 void _jewo_clear_singletons();
 
@@ -205,8 +207,9 @@ void je_init(int argc, char** argv)
     jeecs_file_set_host_path(wo_exe_path());
     jeecs_file_set_runtime_path(wo_exe_path());
 
-    je_3rd_pkg_init();
-    je_api_init();
+    je_extern_lib_woo_api_init();
+    je_extern_lib_3rd_pkgs_init();
+    je_extern_lib_module_init();
 
     wo_virtual_source(jeecs_physics2d_config_path, jeecs_physics2d_config_src, false);
     wo_virtual_source(jeecs_towoo_path, jeecs_towoo_src, false);
@@ -401,8 +404,9 @@ void je_finish()
             _free_module_list.clear();
 
             // Free registered external libraries.
-            je_3rd_pkg_finish();
-            je_api_finish();
+            je_extern_lib_module_finish();
+            je_extern_lib_3rd_pkgs_finish();
+            je_extern_lib_woo_api_finish();
 
         }, nullptr
     );

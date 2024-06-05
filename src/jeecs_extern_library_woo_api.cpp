@@ -468,7 +468,7 @@ WO_API wo_api wojeapi_world_is_valid(wo_vm vm, wo_value args);
 
 void* _je_api_lib_handle = nullptr;
 
-void je_api_init()
+void je_extern_lib_woo_api_init()
 {
     assert(_je_api_lib_handle == nullptr);
 
@@ -939,7 +939,7 @@ void je_api_init()
     _je_api_lib_handle = wo_register_lib("libjoyecs", je_fs);
 }
 
-void je_api_finish()
+void je_extern_lib_woo_api_finish()
 {
     assert(_je_api_lib_handle != nullptr);
 

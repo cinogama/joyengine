@@ -9,7 +9,7 @@
 #include "wo.h"
 
 #define JE_VERSION_WRAP(A, B, C) #A "." #B "." #C
-#define JE_CORE_VERSION JE_VERSION_WRAP(4, 7, 0)
+#define JE_CORE_VERSION JE_VERSION_WRAP(4, 7, 1)
 
 #define WO_FAIL_JE_FATAL_ERROR 0xD101
 #define WO_FAIL_JE_BAD_INIT_SHADER_VALUE 0xD102
@@ -45,16 +45,17 @@
 #include <execution>
 #endif
 
-#define WO_FORCE_CAPI extern "C"{
-#define WO_FORCE_CAPI_END }
+#define JE_FORCE_CAPI WO_FORCE_CAPI
+#define JE_FORCE_CAPI_END WO_FORCE_CAPI_END
 
-#ifdef _WIN32
-#   define JE_IMPORT __declspec(dllimport)
-#   define JE_EXPORT __declspec(dllexport)
+#ifdef WO_SHARED_LIB
+#   define JE4_SHARED_CORE
 #else
-#   define JE_IMPORT extern
-#   define JE_EXPORT extern
+#   define JE4_STATIC_CORE
 #endif
+
+#define JE_IMPORT WO_IMPORT
+#define JE_EXPORT WO_EXPORT
 
 #ifdef JE_IMPL
 #   define JE_IMPORT_OR_EXPORT JE_EXPORT
@@ -62,7 +63,11 @@
 #   define JE_IMPORT_OR_EXPORT JE_IMPORT
 #endif
 
-#define JE_API JE_IMPORT_OR_EXPORT
+#ifdef JE4_STATIC_CORE
+#   define JE_API
+#else
+#   define JE_API JE_IMPORT_OR_EXPORT
+#endif
 
 #ifdef _WIN32
 #		define JE_OS_WINDOWS
@@ -598,7 +603,7 @@ namespace std
     };
 }
 
-WO_FORCE_CAPI
+JE_FORCE_CAPI
 
 /*
 je_mem_alloc [基本接口]
@@ -3518,7 +3523,7 @@ JE_DECL_ATOMIC_OPERATOR_API(intptr_t);
 
 #undef JE_DECL_ATOMIC_OPERATOR_API
 
-WO_FORCE_CAPI_END
+JE_FORCE_CAPI_END
 
 namespace jeecs
 {

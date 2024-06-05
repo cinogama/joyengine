@@ -4,7 +4,7 @@
 #define JE_ENABLE_DEBUG_API
 #include "jeecs.hpp"
 
-#if JE4_STATIC_LINK_WOOLANG_PKGS
+#if JE4_STATIC_LINK_MODULE_AND_PKGS
 WO_API wo_api buffer_append_buffer_builder(wo_vm vm, wo_value args);
 WO_API wo_api buffer_append_f32_builder(wo_vm vm, wo_value args);
 WO_API wo_api buffer_append_f64_builder(wo_vm vm, wo_value args);
@@ -221,11 +221,11 @@ WO_API wo_api vmbin_address(wo_vm vm, wo_value args);
 #endif
 
 std::vector<void*> _je_3rd_pkg_lib_handle;
-void je_3rd_pkg_init()
+void je_extern_lib_3rd_pkgs_init()
 {
     assert(_je_3rd_pkg_lib_handle.empty()); 
 
-#if JE4_STATIC_LINK_WOOLANG_PKGS
+#if JE4_STATIC_LINK_MODULE_AND_PKGS
     wo_extern_lib_func_t libbuffer_fs[] = {
         wo_extern_lib_func_t{"buffer_append_buffer_builder", (void*)&buffer_append_buffer_builder},
         wo_extern_lib_func_t{"buffer_append_f32_builder", (void*)&buffer_append_f32_builder},
@@ -502,7 +502,7 @@ void je_3rd_pkg_init()
 #endif    
 }
 
-void je_3rd_pkg_finish()
+void je_extern_lib_3rd_pkgs_finish()
 {
     for (auto* lib : _je_3rd_pkg_lib_handle)
     {

@@ -360,3 +360,4 @@ _deps
 !/build/
 /pkg/*
 /3rd/pkg/*
+/module/*

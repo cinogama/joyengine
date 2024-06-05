@@ -94,9 +94,7 @@ namespace editor
 
         // 引擎的库目录
         public func update_engine_file(cxx_proj_path: fsys::path_t)
-        {
-            using fsys;
-        
+        {        
             // 从引擎根目录更新引擎相关头文件和库文件
             if (!exist(cxx_proj_path))
                 throw! F"无法找到C++模块项目，{cxx_proj_path}目录不存在";
@@ -127,31 +125,10 @@ namespace editor
                         ;
                 }
             }
-
             return result::ok(do nil);
         }
-        
-        public func start(name: string, locpath: string, proj: Project)=> result<CxxProject, string>
+        public func regenerate_cmake_doc(self: CxxProject)
         {
-            using fsys;
-            using fsys;
-
-            // 在指定目录下创建Cxx项目目录
-            let cxx_proj_path = normalize(locpath)/F"{name}.jemodule4";
-            if (exist(cxx_proj_path))
-                return result::err(F"无法创建C++模块项目，{cxx_proj_path}目录已经存在");
-
-            let r = copy(CXX_PROJECT_EXAMPLE_PATH, cxx_proj_path)
-                ->  flip
-                ->> \errid = F"复制文件失败({errid})";
-                ->  flip
-                =>> \_ = update_engine_file(cxx_proj_path);;
-            if (r->iserr)
-            {
-                do remove(cxx_proj_path)->unwarp;
-                return r->fail;
-            }
-
             let CMAKE_FILE_CONTENT = 
 @"# CMakeList for JoyEngine Module
 cmake_minimum_required (VERSION 3.16)
@@ -173,11 +150,13 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/.build/${CMAKE_B
 set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/.build/${CMAKE_BUILD_TYPE}")
 
 #####################################################################
-if (BUILD_SHARED_LIBS)
-    set (JEMODULE_BUILD_TYPE SHARED)
-else ()
-    set (JEMODULE_BUILD_TYPE STATIC)
-endif ()
+if(BUILD_SHARED_LIBS)
+    set(JEMODULE_BUILD_TYPE SHARED)
+    find_library(jemodule_jeecs_lib "${JEMODULE_ENGINE_CORE_LIB_FILENAME}" ./.engine/library)
+    find_library(jemodule_woolang_lib "${JEMODULE_WOOLANG_LIB_FILENAME}" ./.engine/library)
+else()
+    set(JEMODULE_BUILD_TYPE STATIC)
+endif()
 
 file(GLOB_RECURSE jemodule_system_src_cpp ./systems/*.cpp)
 file(GLOB_RECURSE jemodule_system_src_hpp ./systems/*.hpp)
@@ -193,9 +172,6 @@ file(GLOB_RECURSE jemodule_source_src_cpp ./sources/*.cpp)
 file(GLOB_RECURSE jemodule_source_src_hpp ./sources/*.hpp)
 file(GLOB_RECURSE jemodule_source_src_c ./sources/*.c)
 file(GLOB_RECURSE jemodule_source_src_h ./sources/*.h)
-
-find_library(jemodule_jeecs_lib "${JEMODULE_ENGINE_CORE_LIB_FILENAME}" ./.engine/library)
-find_library(jemodule_woolang_lib "${JEMODULE_WOOLANG_LIB_FILENAME}" ./.engine/library)
 
 #####################################################################
 add_library($$JEMODULE_PROJECT_NAME$$ 
@@ -219,6 +195,17 @@ add_library($$JEMODULE_PROJECT_NAME$$
     ./main.cpp
     ./loader.hpp)
 
+if(BUILD_SHARED_LIBS)
+    target_link_libraries($$JEMODULE_PROJECT_NAME$$ 
+        PRIVATE ${jemodule_jeecs_lib} 
+        PRIVATE ${jemodule_woolang_lib})
+else()
+    target_compile_definitions(
+        $$JEMODULE_PROJECT_NAME$$ 
+            PRIVATE -Djeecs_module_entry=jestatic_module_$$JEMODULE_PROJECT_NAME$$_entry
+            PRIVATE -Djeecs_module_leave=jestatic_module_$$JEMODULE_PROJECT_NAME$$_leave)
+endif()
+
 target_include_directories($$JEMODULE_PROJECT_NAME$$ PRIVATE ./.engine/include)
 target_include_directories($$JEMODULE_PROJECT_NAME$$ PRIVATE ./systems)
 target_include_directories($$JEMODULE_PROJECT_NAME$$ PRIVATE ./components)
@@ -227,8 +214,6 @@ target_include_directories($$JEMODULE_PROJECT_NAME$$ PRIVATE ./sources)
 set_target_properties($$JEMODULE_PROJECT_NAME$$ PROPERTIES OUTPUT_NAME lib$$JEMODULE_PROJECT_NAME$$)
 set_target_properties($$JEMODULE_PROJECT_NAME$$ PROPERTIES PREFIX "")
 
-target_link_libraries($$JEMODULE_PROJECT_NAME$$ ${jemodule_jeecs_lib} ${jemodule_woolang_lib})
-
 target_compile_features($$JEMODULE_PROJECT_NAME$$ PRIVATE cxx_std_17)
 if(MSVC) 
     target_compile_options($$JEMODULE_PROJECT_NAME$$ PRIVATE "/source-charset:utf-8")
@@ -236,24 +221,48 @@ else()
     target_compile_options($$JEMODULE_PROJECT_NAME$$ PRIVATE -fno-exceptions)
 endif()
 "@;
-            let content = CMAKE_FILE_CONTENT->replace("$$JEMODULE_PROJECT_NAME$$", name);
-            if (!writeall(cxx_proj_path/"CMakeLists.txt", content))
+            let content = CMAKE_FILE_CONTENT->replace("$$JEMODULE_PROJECT_NAME$$", self.name);
+            if (!writeall(self.path / "CMakeLists.txt", content))
             {
-                do remove(cxx_proj_path)->unwarp;
-                return result::err(F"无法写入'{cxx_proj_path}/CMakeLists.txt'");
+                return result::err(F"无法写入'{self.path}/CMakeLists.txt'");
             }
+            return result::ok(do nil);
+        }
+        public func start(name: string, locpath: string, proj: Project)=> result<CxxProject, string>
+        {
+            // 在指定目录下创建Cxx项目目录
+            let cxx_proj_path = normalize(locpath)/F"{name}.jemodule4";
 
-            let created_module = CxxProject{ 
-                name = name, 
-                path = cxx_proj_path, 
-                module_instance = mut option::none,
-                project = proj,
+            return 
+                try!
+                {
+                    if (exist(cxx_proj_path))
+                        throw! F"无法创建C++模块项目，{cxx_proj_path}目录已经存在";
+
+                    try! _ = copy(CXX_PROJECT_EXAMPLE_PATH, cxx_proj_path)
+                        ->  flip
+                        ->> \errid = F"复制文件失败({errid})";
+                        ->  flip
+                        =>> \_ = update_engine_file(cxx_proj_path);
+                        ;
+
+                    let created_module = CxxProject{ 
+                        name = name, 
+                        path = cxx_proj_path, 
+                        module_instance = mut option::none,
+                        project = proj,
+                    };
+
+                    try! _ = created_module->regenerate_cmake_doc;
+                    created_module->update_compile(std::platform::runtime_type::DEBUG);
+
+                    expected_ok! created_module;
+                }
+                catch! e
+                {
+                    do remove(cxx_proj_path)->unwarp;
+                    return e;
                 };
-
-            // 最后，编译一下当前平台
-            created_module->update_compile(std::platform::runtime_type::DEBUG);
-
-            return result::ok(created_module);
         }
 
         func search_file_in(dir: fsys::path_t, exname: string)=> option<fsys::path_t>
@@ -520,7 +529,7 @@ endif()
                     {
                         // 根本没找到对应的运行库，就近开始现场编一个
                         je::logwarn("动态库未找到，正在重新编译");
-
+                        try! _ = created_module->regenerate_cmake_doc;
                         try! _ = update_engine_file(created_module.path);
                         do proj->deactive_module(created_module);
                         try! reloaded_created_module = open_for_loading(path, proj);

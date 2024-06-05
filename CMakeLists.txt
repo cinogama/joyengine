@@ -17,7 +17,8 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
 option(JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD  "Install pkgs by baozi when building."  ON)
 option(JE4_COPYING_BUILTIN_FILES            "Copy builtin files to build."          ON)
-option(JE4_STATIC_LINK_WOOLANG_PKGS         "Static link packages into engine."     ON)
+option(JE4_STATIC_LINK_MODULE_AND_PKGS      "Static link packages into engine."     ON)
+option(JE4_BUILD_SHARED_CORE                "Build shared engine core library."		ON)
 
 option(JE4_ENABLE_DX11_GAPI         "Enable DX11 Graphic api"           OFF)
 option(JE4_ENABLE_OPENGL330_GAPI    "Enable OpenGL 3.3 Graphic API"     OFF)
@@ -39,8 +40,6 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static box2d" FORCE)
 set(BOX2D_BUILD_UNIT_TESTS OFF CACHE BOOL "Donot built box2d unit-test." FORCE)
 set(BOX2D_BUILD_TESTBED OFF CACHE BOOL "Donot built box2d test cases." FORCE)
 add_subdirectory("3rd/box2d")
-set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic woolang" FORCE)
-add_subdirectory("3rd/woolang")
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static assimp" FORCE)
 add_subdirectory("3rd/assimp")
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glslangc" FORCE)
@@ -65,6 +64,7 @@ if (JE4_ENABLE_DX11_GAPI
         add_subdirectory("3rd/glfw")
     endif()
 endif()
+
 ##############################################################################
 
 if (JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD)
@@ -94,13 +94,14 @@ endif()
 
 set (JE4_BUILD_SCRIPT_CMDS "")
 
-if (JE4_STATIC_LINK_WOOLANG_PKGS)
+if (JE4_STATIC_LINK_MODULE_AND_PKGS)
      list(APPEND JE4_BUILD_SCRIPT_CMDS "-static-link-pkgs")
 endif()
 if (JE4_ENABLE_OPENGLES300_GAPI AND WIN32)
     list(APPEND JE4_BUILD_SCRIPT_CMDS "-gles-win32")
 endif()
 
+##############################################################################
 # Execute build work script.
 execute_process(
     COMMAND woodriver ./script/build.wo ${JE4_BUILD_SCRIPT_CMDS} 
@@ -132,7 +133,15 @@ if (JE4_COPYING_BUILTIN_FILES)
     endif()
 endif()
 
+add_library(joyengine_core_macro INTERFACE)
+if (JE4_BUILD_SHARED_CORE)
+    target_compile_definitions(joyengine_core_macro INTERFACE -DWO_SHARED_LIB)
+else()
+    target_compile_definitions(joyengine_core_macro INTERFACE -DWO_STATIC_LIB)
+endif()
+
 add_library(joyengine_configs INTERFACE)
+target_link_libraries(joyengine_configs INTERFACE joyengine_core_macro)
 target_compile_features(joyengine_configs INTERFACE cxx_std_17)
 if(MSVC) 
     target_compile_options(joyengine_configs INTERFACE "/source-charset:utf-8")
@@ -142,19 +151,18 @@ endif()
 
 ##############################################################################
 
-set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic joyengine core" FORCE)
-
 include_directories("include")
 include_directories("3rd/woolang/include")
 
 # Scan /3rd/pkg/* to build the pkg and then static link them into joyecs.
-if (JE4_STATIC_LINK_WOOLANG_PKGS)
-    target_compile_definitions(joyengine_configs INTERFACE -DJE4_STATIC_LINK_WOOLANG_PKGS=1)
+if (JE4_STATIC_LINK_MODULE_AND_PKGS)
+    target_compile_definitions(joyengine_configs INTERFACE -DJE4_STATIC_LINK_MODULE_AND_PKGS=1)
 
     set(BAOZI_BUILD_BY_MGR          OFF     CACHE BOOL "Donot apply something for baozi, we will compile it ourself." FORCE)
     set(BAOZI_WOOLIB_NAME           ""      CACHE STRING "Static link, don't need link woolang library." FORCE)
     set(BAOZI_BUILD_SHARED          OFF     CACHE BOOL "Build static link library." FORCE)
-    set(BAOZI_CMAKE_FORMAT_VERSION "1.0.2"  CACHE STRING "Used baozi cmake-doc version" FORCE)
+    set(BAOZI_CMAKE_FORMAT_VERSION  "1.0.2" CACHE STRING "Used baozi cmake-doc version." FORCE)
+    set(BUILD_SHARED_LIBS           OFF     CACHE BOOL "Build static modules." FORCE)
 
     macro(JE4_GET_SUB_DIR_LIST result curdir)
       file(GLOB children RELATIVE ${curdir} ${curdir}/*)
@@ -168,9 +176,10 @@ if (JE4_STATIC_LINK_WOOLANG_PKGS)
     endmacro()
 
     JE4_GET_SUB_DIR_LIST(JE4_STATIC_LINKING_PKG_DIR_LIST ${CMAKE_CURRENT_SOURCE_DIR}/3rd/pkg)
-    set(JE4_STATIC_LINKED_PKG_LIST "")
+    JE4_GET_SUB_DIR_LIST(JE4_STATIC_LINKING_MODULE_DIR_LIST ${CMAKE_CURRENT_SOURCE_DIR}/module)
+    set(JE4_STATIC_LINKED_PKG_AND_MODULE_LIST "")
 
-    # Get and add subdirectories.
+    # Get all valid woolang packages.
     foreach(pkg_name ${JE4_STATIC_LINKING_PKG_DIR_LIST})
         set(pkg_fullpath "${CMAKE_CURRENT_SOURCE_DIR}/3rd/pkg/${pkg_name}")
 
@@ -179,7 +188,10 @@ if (JE4_STATIC_LINK_WOOLANG_PKGS)
             add_subdirectory("${pkg_fullpath}")
 
             if (TARGET ${pkg_name})
-                list(APPEND JE4_STATIC_LINKED_PKG_LIST ${pkg_name})
+                # Define link-type-macro for pkg.
+                target_link_libraries(${pkg_name} PRIVATE joyengine_core_macro)
+                list(APPEND JE4_STATIC_LINKED_PKG_AND_MODULE_LIST ${pkg_name})
+                
                 if ("${pkg_name}" STREQUAL "image")
                     target_compile_definitions(joyengine_configs INTERFACE -DJE4_STB_IMAGE_STATIC_IMPLED=1)
                 endif ()
@@ -189,12 +201,42 @@ if (JE4_STATIC_LINK_WOOLANG_PKGS)
         endif()
     endforeach()
 
+    # Get all valid engine modules.
+   foreach(module_name ${JE4_STATIC_LINKING_MODULE_DIR_LIST})
+        set(module_fullpath "${CMAKE_CURRENT_SOURCE_DIR}/module/${module_name}")
+
+        if (EXISTS "${module_fullpath}/CMakeLists.txt")
+            message(STATUS "Engine module named: ${module_name} found!")
+            add_subdirectory("${module_fullpath}")
+            
+            # module name is like `name.jemodule4`, we need pick out the `name` part as target name.
+            string(REGEX REPLACE "^(.*)\\.jemodule4$" "\\1" pure_module_name ${module_name})
+
+            if (TARGET ${pure_module_name})
+                # Define link-type-macro for module.
+                target_link_libraries(${pure_module_name} PRIVATE joyengine_core_macro)
+
+                list(APPEND JE4_STATIC_LINKED_PKG_AND_MODULE_LIST ${pure_module_name})
+            else()
+                message(FATAL_ERROR "Target '${pure_module_name}' not valid.")
+            endif()
+        endif()
+endforeach()
+
 else()
-    target_compile_definitions(joyengine_configs INTERFACE -DJE4_STATIC_LINK_WOOLANG_PKGS=0)
+    target_compile_definitions(joyengine_configs INTERFACE -DJE4_STATIC_LINK_MODULE_AND_PKGS=0)
 endif()
 ##############################################################################
 
+if (JE4_BUILD_SHARED_CORE)
+    set(BUILD_SHARED_LIBS ON CACHE BOOL "Build dynamic joyengine core." FORCE)
+else()
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static joyengine core." FORCE)
+endif()
+add_subdirectory("3rd/woolang")
 add_subdirectory("src")
+
+##############################################################################
 
 file(GLOB_RECURSE jedriver_src driver/*.cpp)
 add_executable(jedriver ${jedriver_src} "include/jeecs.hpp")
