@@ -50,6 +50,10 @@ Thanks to the [stb](https://github.com/nothings/stb) library for providing vario
 
 Thanks to [imgui](https://github.com/ocornut/imgui) for taking the pain out of writing a messy UI, they seem to be called `Dear ImGui` now.
 
+[Imgui Node Editor](https://github.com/thedmd/imgui-node-editor) 是一个有趣的节点编辑器，它基于 imgui。虽然暂时没有完全想好要用它做什么，不过引擎提供了一部分相关的接口，同时按照我的设想实现了 Wolkflow 机制，谢谢它的作者。
+
+[Imgui Node Editor](https://github.com/thedmd/imgui-node-editor) is an interesting node editor based on imgui. Although I haven't fully figured out what to use it for, the engine provides some related interfaces, and according to my idea, the Wolkflow mechanism is implemented. Thank you to its author.
+
 感谢 [box2d](https://box2d.org/)提供了良好的物理效果，这真的是个很棒的物理引擎，非常感谢。
 
 Thanks to [box2d](https://box2d.org/) for providing nice physical effects, This is really a great physics engine, thanks a lot.
