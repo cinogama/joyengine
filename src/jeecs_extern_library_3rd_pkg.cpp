@@ -5,6 +5,11 @@
 #include "jeecs.hpp"
 
 #if JE4_STATIC_LINK_MODULE_AND_PKGS
+WO_API wo_api async_create(wo_vm vm, wo_value args);
+WO_API wo_api async_dispatch(wo_vm vm, wo_value args);
+WO_API wo_api async_promise_abondon(wo_vm vm, wo_value args);
+WO_API wo_api async_promise_produce(wo_vm vm, wo_value args);
+WO_API wo_api async_promise_wait(wo_vm vm, wo_value args);
 WO_API wo_api buffer_append_buffer_builder(wo_vm vm, wo_value args);
 WO_API wo_api buffer_append_f32_builder(wo_vm vm, wo_value args);
 WO_API wo_api buffer_append_f64_builder(wo_vm vm, wo_value args);
@@ -226,6 +231,17 @@ void je_extern_lib_3rd_pkgs_init()
     assert(_je_3rd_pkg_lib_handle.empty()); 
 
 #if JE4_STATIC_LINK_MODULE_AND_PKGS
+    wo_extern_lib_func_t libasync_fs[] = {
+        wo_extern_lib_func_t{"async_create", (void*)&async_create},
+        wo_extern_lib_func_t{"async_dispatch", (void*)&async_dispatch},
+        wo_extern_lib_func_t{"async_promise_abondon", (void*)&async_promise_abondon},
+        wo_extern_lib_func_t{"async_promise_produce", (void*)&async_promise_produce},
+        wo_extern_lib_func_t{"async_promise_wait", (void*)&async_promise_wait},
+        WO_EXTERN_LIB_FUNC_END,
+    };
+    _je_3rd_pkg_lib_handle.push_back(
+        wo_register_lib("libasync", libasync_fs));
+
     wo_extern_lib_func_t libbuffer_fs[] = {
         wo_extern_lib_func_t{"buffer_append_buffer_builder", (void*)&buffer_append_buffer_builder},
         wo_extern_lib_func_t{"buffer_append_f32_builder", (void*)&buffer_append_f32_builder},
