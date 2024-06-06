@@ -2929,9 +2929,17 @@ namespace je
         public func mouseviewpos(group: int)=> (real, real);
     }
 
-    public using typeinfo = handle;
-    namespace typeinfo
+    public using typeinfo = handle
     {
+        public func operator == (self: typeinfo, another: typeinfo)
+        {
+            return self->id() == another->id();
+        }
+        public func operator != (self: typeinfo, another: typeinfo)
+        {
+            return self->id() != another->id();
+        }
+
         extern("libjoyecs", "wojeapi_type_is_component")
         public func is_component(self: typeinfo)=> bool;
 

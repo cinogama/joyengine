@@ -20,7 +20,7 @@ namespace editor::gui::animation2d
         VEC2((real, real)),
         VEC3((real, real, real)),
         VEC4((real, real, real, real)),
-        QUAT4((real, real, real, real)),
+        QUAT4((real, real, real)),
     }
     namespace DataValue
     {
@@ -33,7 +33,7 @@ namespace editor::gui::animation2d
             VEC2((x, y))? return F"({x}, {y})";
             VEC3((x, y, z))? return F"({x}, {y}, {z})";
             VEC4((x, y, z, w))? return F"({x}, {y}, {z}, {w})";
-            QUAT4((x, y, z, w))? return F"({x}, {y}, {z}, {w})";
+            QUAT4((x, y, z))? return F"({x}, {y}, {z})";
             }
         }
     }
@@ -162,7 +162,7 @@ namespace editor::gui::animation2d
         VEC2(v)? return VEC2(lerp(v, b->unsafe::cast :<(void, (real, real))>()[1], deg));
         VEC3(v)? return VEC3(lerp(v, b->unsafe::cast :<(void, (real, real, real))>()[1], deg));
         VEC4(v)? return VEC4(lerp(v, b->unsafe::cast :<(void, (real, real, real, real))>()[1], deg));
-        QUAT4(v)? return QUAT4(lerp(v, b->unsafe::cast :<(void, (real, real, real, real))>()[1], deg));
+        QUAT4(v)? return QUAT4(lerp(v, b->unsafe::cast :<(void, (real, real, real))>()[1], deg));
         }
     }
 
@@ -237,7 +237,7 @@ namespace editor::gui::animation2d
                     let z = bufdata->readf32();
                     let w = bufdata->readf32();
                     
-                    return DataValue::QUAT4((x, y, z, w));
+                    return DataValue::QUAT4((x, y, z, w):quat->euler_angle: (real, real, real));
                 }
                 std::panic(F"Unknown type: {value_type}");
             }
@@ -374,8 +374,10 @@ namespace editor::gui::animation2d
                                 result = result->appendf32(z);
                                 result = result->appendf32(w);
                             }
-                        QUAT4((x, y, z, w))?
+                        QUAT4((ex, ey, ez))?
                             {
+                                let (x, y, z, w) = quat::euler(ex, ey, ez);
+
                                 result = result->appendui8(DataValueType::QUAT4 : int);
                                 result = result->appendf32(x);
                                 result = result->appendf32(y);
@@ -424,8 +426,10 @@ namespace editor::gui::animation2d
                                 result = result->appendf32(z);
                                 result = result->appendf32(w);
                             }
-                        QUAT4((x, y, z, w))?
+                        QUAT4((ex, ey, ez))?
                             {
+                                let (x, y, z, w) = quat::euler(ex, ey, ez);
+
                                 result = result->appendui8(DataValueType::QUAT4 : int);
                                 result = result->appendf32(x);
                                 result = result->appendf32(y);
@@ -743,11 +747,11 @@ namespace editor::gui::animation2d
                                                                 }
                                                                 else if (member_type == je::typeinfo::quat)
                                                                 {
-                                                                    editing_value->set(DataValue::QUAT4((0., 0., 0., 0.)));
-                                                                    lerp_end_value->set(DataValue::QUAT4((1., 1., 1., 1.)));
+                                                                    editing_value->set(DataValue::QUAT4((0., 0., 0.)));
+                                                                    lerp_end_value->set(DataValue::QUAT4((360., 360., 360.)));
                                                                 }
                                                             }
-
+                                                            
                                                             match (editing_value->get)
                                                             {
                                                             INT(n)?
@@ -760,8 +764,8 @@ namespace editor::gui::animation2d
                                                                 do InputFloat3("值", x, y, z)->>\nv = editing_value->set(VEC3(nv));;
                                                             VEC4((x, y, z, w))?
                                                                 do InputFloat4("值", x, y, z, w)->>\nv = editing_value->set(VEC4(nv));;
-                                                            QUAT4((x, y, z, w))?
-                                                                do InputFloat4("值", x, y, z, w)->>\nv = editing_value->set(QUAT4(nv));;
+                                                            QUAT4((x, y, z))?
+                                                                do InputFloat3("值", x, y, z)->>\nv = editing_value->set(QUAT4(nv));;
                                                             }
 
                                                             if (lerp_mode->get)
@@ -778,8 +782,8 @@ namespace editor::gui::animation2d
                                                                     do InputFloat3("插值目标", x, y, z)->>\nv = lerp_end_value->set(VEC3(nv));;
                                                                 VEC4((x, y, z, w))?
                                                                     do InputFloat4("插值目标", x, y, z, w)->>\nv = lerp_end_value->set(VEC4(nv));;
-                                                                QUAT4((x, y, z, w))?
-                                                                    do InputFloat4("插值目标", x, y, z, w)->>\nv = lerp_end_value->set(QUAT4(nv));;
+                                                                QUAT4((x, y, z))?
+                                                                    do InputFloat3("插值目标", x, y, z)->>\nv = lerp_end_value->set(QUAT4(nv));;
                                                                 }
                                                             }
 
@@ -918,8 +922,8 @@ namespace editor::gui::animation2d
                                                         do InputFloat3("值", x, y, z)->>\nv = uniform_types[uniform_type_selected->get()][1] = VEC3(nv);;
                                                     VEC4((x, y, z, w))?
                                                         do InputFloat4("值", x, y, z, w)->>\nv = uniform_types[uniform_type_selected->get()][1] = VEC4(nv);;
-                                                    QUAT4((x, y, z, w))?
-                                                        do InputFloat4("值", x, y, z, w)->>\nv = uniform_types[uniform_type_selected->get()][1] = QUAT4(nv);;
+                                                    QUAT4((x, y, z))?
+                                                        do InputFloat3("值", x, y, z)->>\nv = uniform_types[uniform_type_selected->get()][1] = QUAT4(nv);;
                                                     }
 
                                                     if (lerp_mode->get)
@@ -936,8 +940,8 @@ namespace editor::gui::animation2d
                                                             do InputFloat3("插值目标", x, y, z)->>\nv = uniform_types[uniform_type_selected->get()][2] = VEC3(nv);;
                                                         VEC4((x, y, z, w))?
                                                             do InputFloat4("插值目标", x, y, z, w)->>\nv = uniform_types[uniform_type_selected->get()][2] = VEC4(nv);;
-                                                        QUAT4((x, y, z, w))?
-                                                            do InputFloat4("插值目标", x, y, z, w)->>\nv = uniform_types[uniform_type_selected->get()][2] = QUAT4(nv);;
+                                                        QUAT4((x, y, z))?
+                                                            do InputFloat3("插值目标", x, y, z)->>\nv = uniform_types[uniform_type_selected->get()][2] = QUAT4(nv);;
                                                         }
                                                     }
 
@@ -1172,8 +1176,8 @@ namespace editor::gui::animation2d
                                     do InputFloat3("值", x, y, z)->>\nv = cdata.m_value = VEC3(nv);;
                                 VEC4((x, y, z, w))?
                                     do InputFloat4("值", x, y, z, w)->>\nv = cdata.m_value = VEC4(nv);;
-                                QUAT4((x, y, z, w))?
-                                    do InputFloat4("值", x, y, z, w)->>\nv = cdata.m_value = QUAT4(nv);;
+                                QUAT4((x, y, z))?
+                                    do InputFloat3("值", x, y, z)->>\nv = cdata.m_value = QUAT4(nv);;
                                 }
                                 do CheckBox("偏移模式", cdata.m_offset_mode)->>\nv = cdata.m_offset_mode = nv;;
                             }
@@ -1196,8 +1200,8 @@ namespace editor::gui::animation2d
                                 do InputFloat3("值", x, y, z)->>\nv = udata.m_value = VEC3(nv);;
                             VEC4((x, y, z, w))?
                                 do InputFloat4("值", x, y, z, w)->>\nv = udata.m_value = VEC4(nv);;
-                            QUAT4((x, y, z, w))?
-                                do InputFloat4("值", x, y, z, w)->>\nv = udata.m_value = QUAT4(nv);;
+                            QUAT4((x, y, z))?
+                                do InputFloat3("值", x, y, z)->>\nv = udata.m_value = QUAT4(nv);;
                             }
                         }
                     None?
