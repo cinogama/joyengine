@@ -377,6 +377,9 @@ namespace jeecs_impl
                 // Not found? find it from woolang name?
                 for (auto* typeinfo : _m_type_records)
                 {
+                    if (typeinfo == nullptr)
+                        continue;
+
                     if (typeinfo->m_script_parsers != nullptr &&
                         strcmp(typeinfo->m_script_parsers->m_woolang_typename, name) == 0)
                         return typeinfo;
