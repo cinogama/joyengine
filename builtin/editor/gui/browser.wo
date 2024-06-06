@@ -159,21 +159,23 @@ namespace editor::gui
         [".ttf"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Font.png")->val,
 
         [".wav"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Music.png")->val,
+                
+        [".wo"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Plugins.png")->val,
 
         [".shader"] = je::graphic::texture::load(option::none, F"!/builtin/icon/ShaderFile.png")->val,
-        [".jemodule4"] = je::graphic::texture::load(option::none, F"!/builtin/icon/CppProgram.png")->val,
-        [".jeworkflow4"] = je::graphic::texture::load(option::none, F"!/builtin/icon/InputPin.png")->val,
-
-        [".jeworld"] = je::graphic::texture::load(option::none, F"!/builtin/icon/World.png")->val,
-        [".jeentity"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Entity.png")->val,
-
-        [".jeanim4"] = je::graphic::texture::load(option::none, F"!/builtin/icon/AnimationFile.png")->val,
         
-        [".wo"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Plugins.png")->val,
-        [".jetilemap4"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Tilemap.png")->val,
-        [".jepartical"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Partical.png")->val,
+        [".je4module"] = je::graphic::texture::load(option::none, F"!/builtin/icon/CppProgram.png")->val,
+        [".je4workflow"] = je::graphic::texture::load(option::none, F"!/builtin/icon/InputPin.png")->val,
 
-        [".jecache4"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Joy.png")->val,
+        [".je4world"] = je::graphic::texture::load(option::none, F"!/builtin/icon/World.png")->val,
+        [".je4entity"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Entity.png")->val,
+
+        [".je4animation"] = je::graphic::texture::load(option::none, F"!/builtin/icon/AnimationFile.png")->val,
+
+        [".je4tilemap"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Tilemap.png")->val,
+        [".je4partical"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Partical.png")->val,
+
+        [".je4cache"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Joy.png")->val,
     };
 
     // 根据文件拓展名返回文件的类型
@@ -232,7 +234,7 @@ namespace editor::gui
     {
         func should_hide(self: PathInfo)
         {
-            static let HIDING_FILE_TYPE = [".jecache4"];
+            static let HIDING_FILE_TYPE = [".je4cache"];
             
             if (editor_need_hiding_file)
             {
@@ -302,19 +304,19 @@ namespace editor::gui
         func get_open_method(self: PathInfo)
         {
             static let registed_open_method = {
-                [".jeworld"] = 
+                [".je4world"] = 
                     \p: PathInfo, context: EditorContext = 
                         context->get_project->load_world(p.path)
                             =>> \w =context->get_project->reset_editing_world(w);
                             ->  error
                     ;,
-                [".jeworkflow4"] = 
+                [".je4workflow"] = 
                     func(p: PathInfo, context: EditorContext)
                     {
                         workflow::open(p.path, context);
                         return option::none;
                     },
-                [".jeanim4"] = 
+                [".je4animation"] = 
                     func(p: PathInfo, context: EditorContext)
                     {
                         match (animation2d::AnimationContext::open(p.path))
@@ -328,7 +330,7 @@ namespace editor::gui
                             return option::value(F"无法打开和编辑帧动画文件：{p.path}");
                         }
                     },
-                [".jepartical"] = 
+                [".je4partical"] = 
                     func (p: PathInfo, context: EditorContext)
                     {
                         match (particalbaker::ParticalContext::load(p.path))
@@ -342,7 +344,7 @@ namespace editor::gui
                             return option::value(F"无法打开和编辑粒子动画文件：{p.path}");
                         }
                     },
-                [".jetilemap4"] = 
+                [".je4tilemap"] = 
                     func (p: PathInfo, context: EditorContext)
                     {
                         match (fsys::readall(p.path)=>>\dat = dat->dict::deserialize->>\dat = dat->>\k, v = (k as string, v);;;)
@@ -575,7 +577,7 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                             | write_file_if_not_exist(file_path, "{}") 
                                 ? force_update()
                                 | jeapi::gui::form::errmsg("创建Workflow图失败", "无法创建文件，可能是文件名非法或磁盘已满")
-                        where file_path = fsys::normalize(cur_creating_path) / (filename + ".jeworkflow4"););
+                        where file_path = fsys::normalize(cur_creating_path) / (filename + ".je4workflow"););
                     }
                     Separator();
                     if (MenuItem("新建Node"))
@@ -786,12 +788,12 @@ using $NEW_PRODUCER_NAME$ = struct{}
                         "Newworld",
                         \new_world_name = launch(
                             edit_forms::show_world_creator, (context, new! edit_forms::WorldContext(
-                                context->get_project(), new_world_name, fsys::normalize(F"{cur_creating_path}/{new_world_name}.jeworld"),
+                                context->get_project(), new_world_name, fsys::normalize(F"{cur_creating_path}/{new_world_name}.je4world"),
                                 func (w)
                                 {
                                     if (context->get_project()->serialize_world(w, true)
                                             ->> \wdat = write_file_if_not_exist(
-                                                fsys::normalize(F"{cur_creating_path}/{new_world_name}.jeworld"), 
+                                                fsys::normalize(F"{cur_creating_path}/{new_world_name}.je4world"), 
                                                 wdat as dict<string, dynamic>: string)
                                                 ;
                                             ->  valor(false)
@@ -814,7 +816,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
                             | write_file_if_not_exist(file_path, "{}") 
                                 ? func(){context->get_project->try_update_towoo(false);force_update();}()
                                 | jeapi::gui::form::errmsg("新建瓦片地图失败失败", "无法创建文件，可能是文件名非法或磁盘已满")
-                        where file_path = fsys::normalize(cur_creating_path) / (filename + ".jetilemap4"););
+                        where file_path = fsys::normalize(cur_creating_path) / (filename + ".je4tilemap"););
                 }
                 Separator();
                 if (BeginMenu("纹理"))
@@ -889,7 +891,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
                         jeapi::gui::form::input("新建2D帧动画", F"在{cur_creating_path}新建动画", "NewAnimation",
                             func (filename)
                             {
-                                let path = fsys::normalize(cur_creating_path) / F"{filename}.jeanim4";
+                                let path = fsys::normalize(cur_creating_path) / F"{filename}.je4animation";
                                 if (fsys::exist(path))
                                     jeapi::gui::form::errmsg("创建2D帧动画失败", "可能是同名文件已经存在或文件名路径不合法");
                                 else
@@ -904,7 +906,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
                         jeapi::gui::form::input("新建粒子动画", F"在{cur_creating_path}新建动画", "NewPartical",
                             func (filename)
                             {
-                                let path = fsys::normalize(cur_creating_path) / F"{filename}.jepartical";
+                                let path = fsys::normalize(cur_creating_path) / F"{filename}.je4partical";
                                 if (fsys::exist(path))
                                     jeapi::gui::form::errmsg("创建粒子动画失败", "可能是同名文件已经存在或文件名路径不合法");
                                 else
@@ -1049,7 +1051,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
     }
     func file_item_menu(path: PathInfo, context: EditorContext)
     {
-        let NOT_MODIFIABLE_FILES = [".jeproj4", ".jemodule4"];
+        let NOT_MODIFIABLE_FILES = [".je4project", ".je4module"];
         let is_modifiable_file = NOT_MODIFIABLE_FILES->find(path.externname) == -1;
 
         if (path.externname == ".shader")
@@ -1060,7 +1062,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
             }
             Separator();
         }
-        else if (path.externname == ".jemodule4")
+        else if (path.externname == ".je4module")
         {
             if (MenuItem(F"重新编译此模块"))
             {
@@ -1409,7 +1411,7 @@ namespace $$MODULE_NAME$$
                         ->> func(_){context->get_project->try_update_towoo(false);force_update();}
                         ->  or(\errid = jeapi::gui::form::errmsg("失败", F"删除失败({errid})");)
                         ;
-                    do fsys::remove(fsys::parent(path.path) / (fsys::filename(path.path) + ".jecache4"));
+                    do fsys::remove(fsys::parent(path.path) / (fsys::filename(path.path) + ".je4cache"));
                 });
         }        
     }
@@ -1555,7 +1557,7 @@ namespace $$MODULE_NAME$$
                         {
                         value(entity_json)?
                             {
-                                let filepath = fsys::normalize(current_work_path) / (e->editor::name + ".jeentity");
+                                let filepath = fsys::normalize(current_work_path) / (e->editor::name + ".je4entity");
                                 let prefab_data = e->towoo::get_component:<Editor::Prefab>;
                                 if (fsys::exist(filepath))
                                 {

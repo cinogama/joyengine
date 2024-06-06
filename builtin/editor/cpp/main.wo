@@ -508,7 +508,7 @@ endif()
                 }
                 else
                 {
-                    // 删除build builder engine runtime loader.hpp和 config.jeinf，用于准备重新编译
+                    // 删除build builder engine runtime loader.hpp，用于准备重新编译
                     do fsys::remove(path / ".build");
                     do fsys::remove(path / ".engine");
                     do fsys::remove(path / ".runtime");

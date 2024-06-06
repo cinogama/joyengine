@@ -425,7 +425,7 @@ namespace editor
                 return flock->trylock();
             none?
                 {
-                    let projfile = self.m_path / "project.jeproj4.lock";
+                    let projfile = self.m_path / "project.je4project.lock";
                     // 不可以锁定目录
                     if (fsys::isdir(projfile) == true)
                         return false;
@@ -702,7 +702,7 @@ namespace editor
                 jeapi::gui::form::errmsg("错误", F"项目中的一些世界保存失败:\n{failed_file_list}\n项目保存未能完成");
                 return false;
             }
-            else if (!fsys::writeall(self.m_path/"project.jeproj4", dat as dict<string, dynamic>: string))
+            else if (!fsys::writeall(self.m_path/"project.je4project", dat as dict<string, dynamic>: string))
             {
                 jeapi::gui::form::errmsg("错误", F"保存项目文件失败");
                 return false;

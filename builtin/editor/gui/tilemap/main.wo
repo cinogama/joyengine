@@ -639,7 +639,7 @@ namespace editor::gui::tilemap
                 if (tileset.modifed == false)
                     continue;  // 如果没有修改，就不保存了
 
-                let tileset_path = tilemap_path / F"{tileset.uid}.jetileset4";
+                let tileset_path = tilemap_path / F"{tileset.uid}.je4tileset";
                 match (tileset->serialize)
                 {
                 ok(data)?
@@ -659,7 +659,7 @@ namespace editor::gui::tilemap
 
             for (let file: fsys::allsubpath(tilemap_path)->unwarpor([]))
             {
-                if (fsys::extension(file)->lower == ".jetileset4")
+                if (fsys::extension(file)->lower == ".je4tileset")
                 {
                     match (fsys::readall(file))
                     {
@@ -949,7 +949,7 @@ namespace editor::gui::tilemap
                                                 }
                                             }
                                             do self.m_tile_sets->remove(index);
-                                            do fsys::remove(self.m_context->get_project->get_path / "resource" / "tilemap" / F"{tset.uid}.jetileset4");
+                                            do fsys::remove(self.m_context->get_project->get_path / "resource" / "tilemap" / F"{tset.uid}.je4tileset");
                                         }
                                     });
                             }
@@ -1619,7 +1619,7 @@ namespace editor::gui::tilemap
                                         ["texture"] = F"chunk_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}_{layer}.png": dynamic,
                                         ["size"] = chunksz: dynamic,
                                     };
-                                    if (!fsys::writeall(target_chunk_path / F"chunk_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}_{layer}.json", chunk_info: string))
+                                    if (!fsys::writeall(target_chunk_path / F"chunk_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}_{layer}.je4chunk", chunk_info: string))
                                     {
                                         jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_chunk_path->tostring}");
                                     }
@@ -1634,20 +1634,20 @@ namespace editor::gui::tilemap
                                 if (!chunks_pos_info->contain(chunk.m_position.0))
                                     chunks_pos_info->set(chunk.m_position.0, {}mut);
 
-                                chunks_pos_info[chunk.m_position.0]->set(chunk.m_position.1, F"chunk_{chunk.m_position.0}_{chunk.m_position.1}.json");
+                                chunks_pos_info[chunk.m_position.0]->set(chunk.m_position.1, F"chunk_{chunk.m_position.0}_{chunk.m_position.1}.je4chunk");
 
                                 if (!
                                     {
                                         ["layers"] = chunk.m_image_layers
-                                            ->> \layerid = (layerid, F"chunk_{chunk.m_position.0}_{chunk.m_position.1}_{layerid}.json");
+                                            ->> \layerid = (layerid, F"chunk_{chunk.m_position.0}_{chunk.m_position.1}_{layerid}.je4chunk");
                                             ->  mapping
-                                    }: string -> \dat = fsys::writeall(target_chunk_path / F"chunk_{chunk.m_position.0}_{chunk.m_position.1}.json", dat);)
+                                    }: string -> \dat = fsys::writeall(target_chunk_path / F"chunk_{chunk.m_position.0}_{chunk.m_position.1}.je4chunk", dat);)
                                 {
                                     jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_chunk_path->tostring}");                                    
                                 }
                             }
 
-                            if (fsys::writeall(target_chunk_path / F"chunklist.json", chunks_pos_info: string) == false)
+                            if (fsys::writeall(target_chunk_path / F"chunklist.je4chunklist", chunks_pos_info: string) == false)
                                 jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_path->tostring}");
                         }
                         none?;

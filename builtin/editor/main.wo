@@ -378,19 +378,24 @@ func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: di
 /.temporary/*
 /imgui.ini
 /*.dmp
-/project.jeproj4.lock
+/project.je4project.lock
 /pkg/*
 
 # Ignore cache files.
-*.jecache4
+*.je4cache
 "@);
                             do fsys::writeall(p->get_path / ".gitattributes", 
 @"# JoyEngine ECS
 
-project.jeproj4 text eol=lf
-config.jeinf text eol=lf
-*.jeworld text eol=lf
-*.jeentity text eol=lf
+project.je4project text eol=lf
+*.je4world text eol=lf
+*.je4entity text eol=lf
+*.je4workflow text eol=lf
+*.je4tilemap text eol=lf
+*.je4tileset text eol=lf
+*.je4partical text eol=lf
+*.je4chunk text eol=lf
+*.je4chunklist text eol=lf
 "@);
                             match (je::towoo::unsafe::dynamic_parser::update_all("@/editor.wo"))
                             {
@@ -417,7 +422,7 @@ config.jeinf text eol=lf
 
 func open_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict<dynamic, dynamic>, f: std::mutable<bool>)
 {
-    let proj_path = path/"project.jeproj4";
+    let proj_path = path/"project.je4project";
 
     // 确保目录存在
     if (! fsys::exist(proj_path))

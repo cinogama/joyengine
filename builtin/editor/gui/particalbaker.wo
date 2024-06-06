@@ -307,7 +307,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
 
                             let filename = fsys::purename(partical_context.m_path);
                             let outimgpath = fsys::parent(partical_context.m_path) / (filename + ".png");
-                            let outanimpath = fsys::parent(partical_context.m_path) / (filename + ".jeanim4");
+                            let outanimpath = fsys::parent(partical_context.m_path) / (filename + ".je4animation");
                             jeapi::gui::form::ask("确认导出", F"即将导出并覆盖到{outimgpath->tostring} 和 {outanimpath->tostring}，是否确认导出当前烘焙结果？",
                                 func(ok)
                                 {

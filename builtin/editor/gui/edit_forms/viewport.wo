@@ -362,7 +362,7 @@ namespace editor::gui::edit_forms
                             value(path)?
                                 {
                                     let filepath = proj->parse_path_normalize(path);
-                                    if (fsys::extension(filepath)->lower == ".jeentity")
+                                    if (fsys::extension(filepath)->lower == ".je4entity")
                                     {
                                         if (debug_world
                                                 =>> func(w)

@@ -25,16 +25,16 @@ namespace editor::gui::edit_forms
         // 如果是文件，才考虑打包
         if (fsys::isfile(originpath))
         {
-            if (fsys::extension(originpath)->lower == ".jeproj4")
+            if (fsys::extension(originpath)->lower == ".je4project")
                 return Action::SKIP;  // 跳过项目文件
                 
             if (fsys::extension(originpath)->lower == ".dmp")
                 return Action::SKIP;  // 跳过崩溃转储文件
 
-            if (fsys::extension(originpath)->lower == ".jetilemap4")
+            if (fsys::extension(originpath)->lower == ".je4tilemap")
                 return Action::SKIP;  // 跳过tilemap文件
 
-            if (fsys::extension(originpath)->lower == ".jetileset4")
+            if (fsys::extension(originpath)->lower == ".je4tileset")
                 return Action::SKIP;  // 跳过tileset文件
             
             if (fsys::filename(originpath)->lower == "imgui.ini")
@@ -43,7 +43,7 @@ namespace editor::gui::edit_forms
             if (fsys::extension(originpath)->lower == ".dmp")
                 return Action::SKIP;  // 跳过崩溃转储文件
 
-            if (fsys::extension(originpath)->lower == ".jecache4")
+            if (fsys::extension(originpath)->lower == ".je4cache")
                 return Action::SKIP;  // 跳过构造缓存文件
 
             if (fsys::extension(originpath)->lower == ".shader")
@@ -52,7 +52,7 @@ namespace editor::gui::edit_forms
                     match (je::graphic::shader::load(option::none, originpath->tostring))
                     {
                     value(_)?
-                        return [(originpath->tostring + ".jecache4", packpath + ".jecache4")];
+                        return [(originpath->tostring + ".je4cache", packpath + ".je4cache")];
                     none?
                         {
                             pconfig.m_pack_output_log->add(F"无法编译着色器，跳过：{packpath}");
@@ -92,7 +92,7 @@ namespace editor::gui::edit_forms
                 });
             }
 
-            if (packpath->lower->find(".jemodule4/") != -1)
+            if (packpath->lower->find(".je4module/") != -1)
                 return Action::SKIP;  // 跳过C++工程文件
 
             if (packpath->lower->find("/.runtime/") != -1)
@@ -437,7 +437,7 @@ namespace editor::gui::edit_forms
     {
         let all_project_files = fsys::allsubpath(context->get_project->get_path)->unwarp;
         let selecting_all_worlds_file = all_project_files
-            ->  forall(\p = fsys::extension(p)->lower == ".jeworld";)
+            ->  forall(\p = fsys::extension(p)->lower == ".je4world";)
             ->> \p = (context->get_project->make_path_normalize(p), mut false);
             ;
             
