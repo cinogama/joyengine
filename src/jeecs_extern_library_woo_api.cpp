@@ -430,7 +430,7 @@ WO_API wo_api wojeapi_type_is_system(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_type_members(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_type_name(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_type_of(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_typeinfo_get_unregister_count(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_typemgr_get_unregister_count(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_universe_get_frame_deltatime(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_universe_get_max_deltatime(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_universe_get_timescale(wo_vm vm, wo_value args);
@@ -879,7 +879,7 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"wojeapi_type_members", (void*)&wojeapi_type_members},
         wo_extern_lib_func_t{"wojeapi_type_name", (void*)&wojeapi_type_name},
         wo_extern_lib_func_t{"wojeapi_type_of", (void*)&wojeapi_type_of},
-        wo_extern_lib_func_t{"wojeapi_typeinfo_get_unregister_count", (void*)&wojeapi_typeinfo_get_unregister_count},
+        wo_extern_lib_func_t{"wojeapi_typemgr_get_unregister_count", (void*)&wojeapi_typemgr_get_unregister_count},
         wo_extern_lib_func_t{"wojeapi_universe_get_frame_deltatime", (void*)&wojeapi_universe_get_frame_deltatime},
         wo_extern_lib_func_t{"wojeapi_universe_get_max_deltatime", (void*)&wojeapi_universe_get_max_deltatime},
         wo_extern_lib_func_t{"wojeapi_universe_get_timescale", (void*)&wojeapi_universe_get_timescale},

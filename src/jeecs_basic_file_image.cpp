@@ -19,8 +19,11 @@
 using length_t = uint64_t;
 
 constexpr length_t DEFAULT_IMAGE_SIZE = 1 * 1024 * 1024;
-constexpr const char* FIMAGE_TABLE_EXTENSION_NAME = ".jeimgidx4";
-constexpr const char* FIMAGE_FILE_EXTENSION_NAME = ".jeimg4";
+constexpr const char* FIMAGE_TABLE_EXTENSION_NAME = ".je4index";
+constexpr const char* FIMAGE_FILE_EXTENSION_NAME = ".je4image";
+constexpr const char* FIMAGE_TABLE_NAME = "images";
+constexpr const char* FIMAGE_FILE_NAME = "disk";
+
 
 struct fimg_image_head
 {
@@ -160,7 +163,7 @@ fimg_img* fimg_open_img(const char* path)
     // If you don't want to specify the path, you can call 'fimg_read_img' with null;
     size_t fimg_index_file_length = 0;
     auto fimg_fp = _je_file_open(
-        (path + "/fimg_table"s + FIMAGE_TABLE_EXTENSION_NAME).c_str(),
+        (path + "/"s + FIMAGE_TABLE_NAME + FIMAGE_TABLE_EXTENSION_NAME).c_str(),
         &fimg_index_file_length);
 
     if (!fimg_fp)
@@ -209,7 +212,8 @@ void fimg_close_img(fimg_img* img)
 {
     delete img;
 }
-size_t fimg_save_buffer_to_img_impl(fimg_creating_context* ctx, const void* buffer, size_t buffer_len)
+size_t fimg_save_buffer_to_img_impl(
+    fimg_creating_context* ctx, const void* buffer, size_t buffer_len)
 {
     unsigned char* write_byte_buffer = (unsigned char*)buffer;
     size_t real_read_sz = 0;
@@ -227,7 +231,13 @@ size_t fimg_save_buffer_to_img_impl(fimg_creating_context* ctx, const void* buff
 
         if (ctx->writing_offset >= (size_t)ctx->image->fimg_head.MAX_FILE_SINGLE_IMG_SIZE)
         {
-            FILE* imgwrite = fopen((ctx->writing_path + "/disk-" + std::to_string(ctx->image->fimg_head.disk_count) + FIMAGE_FILE_EXTENSION_NAME).c_str(), "wb");
+            const auto writing_image_file_path = 
+                ctx->writing_path + "/" 
+                + FIMAGE_FILE_NAME 
+                + std::to_string(ctx->image->fimg_head.disk_count) 
+                + FIMAGE_FILE_EXTENSION_NAME;
+
+            FILE* imgwrite = fopen(writing_image_file_path.c_str(), "wb");
 
             fwrite(ctx->writing_buffer, 1, (size_t)ctx->image->fimg_head.MAX_FILE_SINGLE_IMG_SIZE, imgwrite);
             fclose(imgwrite);
@@ -240,7 +250,8 @@ size_t fimg_save_buffer_to_img_impl(fimg_creating_context* ctx, const void* buff
 
     return buffer_len;
 }
-size_t fimg_save_file_to_img_impl(fimg_creating_context* ctx, const char* file_path)
+size_t fimg_save_file_to_img_impl(
+    fimg_creating_context* ctx, const char* file_path)
 {
     FILE* fp = fopen(file_path, "rb");
     if (fp)
@@ -256,7 +267,13 @@ size_t fimg_save_file_to_img_impl(fimg_creating_context* ctx, const char* file_p
             ctx->writing_offset += real_read_sz;
             if (ctx->writing_offset >= (size_t)ctx->image->fimg_head.MAX_FILE_SINGLE_IMG_SIZE)
             {
-                FILE* imgwrite = fopen((ctx->writing_path + "/disk-" + std::to_string(ctx->image->fimg_head.disk_count) + FIMAGE_FILE_EXTENSION_NAME).c_str(), "wb");
+                const auto writing_image_file_path =
+                    ctx->writing_path + "/"
+                    + FIMAGE_FILE_NAME
+                    + std::to_string(ctx->image->fimg_head.disk_count)
+                    + FIMAGE_FILE_EXTENSION_NAME;
+
+                FILE* imgwrite = fopen(writing_image_file_path.c_str(), "wb");
 
                 fwrite(ctx->writing_buffer, 1, (size_t)ctx->image->fimg_head.MAX_FILE_SINGLE_IMG_SIZE, imgwrite);
                 fclose(imgwrite);
@@ -274,7 +291,8 @@ size_t fimg_save_file_to_img_impl(fimg_creating_context* ctx, const char* file_p
     return (size_t)-1;
 }
 
-fimg_creating_context* fimg_create_new_img_for_storing(const char* storing_path, size_t packsize)
+fimg_creating_context* fimg_create_new_img_for_storing(
+    const char* storing_path, size_t packsize)
 {
     using namespace std;
 
@@ -293,7 +311,8 @@ fimg_creating_context* fimg_create_new_img_for_storing(const char* storing_path,
     return ctx;
 }
 
-bool fimg_storing_buffer_to_img(fimg_creating_context* ctx, const void* buffer, size_t len, const char* aimpath)
+bool fimg_storing_buffer_to_img(
+    fimg_creating_context* ctx, const void* buffer, size_t len, const char* aimpath)
 {
     using namespace std;
 
@@ -321,7 +340,8 @@ bool fimg_storing_buffer_to_img(fimg_creating_context* ctx, const void* buffer, 
     }
     return false;
 }
-bool fimg_storing_file_to_img(fimg_creating_context* ctx, const char* filepath, const char* aimpath)
+bool fimg_storing_file_to_img(
+    fimg_creating_context* ctx, const char* filepath, const char* aimpath)
 {
     using namespace std;
 
@@ -355,12 +375,18 @@ void fimg_finish_saving_img_and_close(fimg_creating_context* ctx)
     using namespace std;
 
     // Save last FIMAGE_FILE_EXTENSION_NAME
-    FILE* lastimgwrite = fopen((ctx->writing_path + "/disk-" + std::to_string(ctx->image->fimg_head.disk_count) + FIMAGE_FILE_EXTENSION_NAME).c_str(), "wb");
+    const auto writing_image_file_path = 
+        ctx->writing_path + "/" 
+        + FIMAGE_FILE_NAME 
+        + std::to_string(ctx->image->fimg_head.disk_count) 
+        + FIMAGE_FILE_EXTENSION_NAME;
+
+    FILE* lastimgwrite = fopen(writing_image_file_path.c_str(), "wb");
     fwrite(ctx->writing_buffer, 1, ctx->writing_offset, lastimgwrite);
     fclose(lastimgwrite);
 
     // Save FIMAGE_TABLE_EXTENSION_NAME
-    FILE* imgwrite = fopen((ctx->writing_path + "/fimg_table"s + FIMAGE_TABLE_EXTENSION_NAME).c_str(), "wb");
+    FILE* imgwrite = fopen((ctx->writing_path + "/" + FIMAGE_TABLE_NAME + FIMAGE_TABLE_EXTENSION_NAME).c_str(), "wb");
     ++ctx->image->fimg_head.disk_count;
     fwrite(&ctx->image->fimg_head, sizeof(ctx->image->fimg_head), 1, imgwrite);
     for (auto& fdata : ctx->image->file_map)
@@ -469,12 +495,18 @@ jeecs_fimg_file* fimg_open_file(fimg_img* img, const char* fpath)
         size_t start_diff = (size_t)f.img_offset;
         for (size_t img_byte = 0; img_byte < f.file_size;)
         {
-            auto disk_path = img->path + "/disk-" + std::to_string(img_index) + FIMAGE_FILE_EXTENSION_NAME;
+            const auto reading_image_file_path =
+                img->path + "/" 
+                + FIMAGE_FILE_NAME 
+                + std::to_string(img_index) 
+                + FIMAGE_FILE_EXTENSION_NAME;
+
             size_t _useless = 0;
-            auto* disk_file_handle = _je_file_open(disk_path.c_str(), &_useless);
+            auto* disk_file_handle = _je_file_open(reading_image_file_path.c_str(), &_useless);
             if (disk_file_handle == nullptr)
             {
-                jeecs::debug::logerr("Unable to open disk-%zu: '%s' when trying to read '%s'.", img_index, disk_path.c_str(), fpath);
+                jeecs::debug::logerr("Unable to open disk-%zu: '%s' when trying to read '%s'.",
+                    img_index, reading_image_file_path.c_str(), fpath);
                 fimg_close_file(fptr);
                 return nullptr;
             }

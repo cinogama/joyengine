@@ -304,7 +304,7 @@ wo_vm _jewo_open_file_to_compile_vm(const char* vpath)
 wo_vm try_open_cached_binary()
 {
     wo_integer_t expect_crc = 0;
-    auto* srccrc = jeecs_file_open("@/builtin/editor.crc.jecache4");
+    auto* srccrc = jeecs_file_open("@/builtin/editor.crc.je4cache");
     if (srccrc == nullptr)
         return nullptr;
 
@@ -317,7 +317,7 @@ wo_vm try_open_cached_binary()
     if (crc64_of_source_and_api() != expect_crc)
         return nullptr;
 
-    return _jewo_open_file_to_compile_vm("@/builtin/editor.woo.jecache4");
+    return _jewo_open_file_to_compile_vm("@/builtin/editor.woo.je4cache");
 }
 
 bool je_main_script_entry()
@@ -338,7 +338,7 @@ bool je_main_script_entry()
         size_t binary_length;
         void* buffer = wo_dump_binary(vmm, true, &binary_length);
 
-        FILE* objdump = fopen((std::string(wo_exe_path()) + "/builtin/editor.woo.jecache4").c_str(), "wb");
+        FILE* objdump = fopen((std::string(wo_exe_path()) + "/builtin/editor.woo.je4cache").c_str(), "wb");
         if (objdump != nullptr)
         {
             size_t writelen = fwrite(buffer, 1, binary_length, objdump);
@@ -346,7 +346,7 @@ bool je_main_script_entry()
             fclose(objdump);
         }
         auto api_src_crc64 = crc64_of_source_and_api();
-        FILE* srccrc = fopen((std::string(wo_exe_path()) + "/builtin/editor.crc.jecache4").c_str(), "wb");
+        FILE* srccrc = fopen((std::string(wo_exe_path()) + "/builtin/editor.crc.je4cache").c_str(), "wb");
         if (srccrc != nullptr)
         {
             size_t writecount = fwrite(&api_src_crc64, sizeof(api_src_crc64), 1, srccrc);

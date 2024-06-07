@@ -162,7 +162,7 @@ void je_extern_lib_woo_api_finish()
 
 func generate_je_static_module_decls()=> result<void, string>
 {
-    let module_name_regex = regex::create(@"(.*)\.jemodule4"@);
+    let module_name_regex = regex::create(@"(.*)\.je4module"@);
     let module_name_list = []mut: vec<string>;
 
     for (let p : walk(workpath / "module")->iterator::iter_result)

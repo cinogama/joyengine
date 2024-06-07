@@ -37,7 +37,7 @@ jeecs_file* jeecs_load_cache_file(const char* filepath, uint32_t format_version,
 {
     using namespace std;
 
-    string file_cache_path = filepath + ".jecache4"s;
+    string file_cache_path = filepath + ".je4cache"s;
     // 1. Try open cache file for read.
     if (auto* cache_file = jeecs_file_open(file_cache_path.c_str()))
     {
@@ -96,7 +96,7 @@ void* jeecs_create_cache_file(const char* filepath, uint32_t format_version, wo_
         return nullptr;
     }
 
-    string file_cache_path = filepath + ".jecache4"s;
+    string file_cache_path = filepath + ".je4cache"s;
     if (file_cache_path[0] == '@')
         file_cache_path = jeecs_file_get_runtime_path() + file_cache_path.substr(1);
     if (file_cache_path[0] == '!')

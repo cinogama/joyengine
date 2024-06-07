@@ -209,8 +209,8 @@ if (JE4_STATIC_LINK_MODULE_AND_PKGS)
             message(STATUS "Engine module named: ${module_name} found!")
             add_subdirectory("${module_fullpath}")
             
-            # module name is like `name.jemodule4`, we need pick out the `name` part as target name.
-            string(REGEX REPLACE "^(.*)\\.jemodule4$" "\\1" pure_module_name ${module_name})
+            # module name is like `name.je4module`, we need pick out the `name` part as target name.
+            string(REGEX REPLACE "^(.*)\\.je4module$" "\\1" pure_module_name ${module_name})
 
             if (TARGET ${pure_module_name})
                 # Define link-type-macro for module.
