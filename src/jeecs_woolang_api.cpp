@@ -1882,7 +1882,7 @@ WO_API wo_api wojeapi_towoo_update_api(wo_vm vm, wo_value args)
     return wo_ret_void(vm);
 }
 
-WO_API wo_api wojeapi_typeinfo_get_unregister_count(wo_vm vm, wo_value args)
+WO_API wo_api wojeapi_typemgr_get_unregister_count(wo_vm vm, wo_value args)
 {
     return wo_ret_int(vm, (wo_integer_t)jedbg_get_unregister_type_count());
 }
@@ -2246,7 +2246,7 @@ namespace je
     }
     namespace typeinfo
     {
-        extern("libjoyecs", "wojeapi_typeinfo_get_unregister_count")
+        extern("libjoyecs", "wojeapi_typemgr_get_unregister_count")
         public func get_unregister_count()=> int;
     }
         
