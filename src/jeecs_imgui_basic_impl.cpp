@@ -2476,14 +2476,14 @@ WO_API wo_api je_gui_node_editor_context_create(wo_vm vm, wo_value args)
         [](void* p)
         {
             ax::NodeEditor::DestroyEditor(
-                std::launder(reinterpret_cast<ax::NodeEditor::EditorContext*>(p)));
+                    reinterpret_cast<ax::NodeEditor::EditorContext*>(p));
         });
 }
 
 WO_API wo_api je_gui_node_editor_begin(wo_vm vm, wo_value args)
 {
     ax::NodeEditor::EditorContext* ctx =
-        std::launder(reinterpret_cast<ax::NodeEditor::EditorContext*>(wo_pointer(args + 1)));
+        reinterpret_cast<ax::NodeEditor::EditorContext*>(wo_pointer(args + 1));
 
     ax::NodeEditor::SetCurrentEditor(ctx);
     ax::NodeEditor::Begin(wo_string(args + 0));

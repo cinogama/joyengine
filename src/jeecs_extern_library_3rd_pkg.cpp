@@ -191,29 +191,6 @@ WO_API wo_api thread_rw_mutex_trylock_read(wo_vm vm, wo_value args);
 WO_API wo_api thread_rw_mutex_unlock(wo_vm vm, wo_value args);
 WO_API wo_api thread_rw_mutex_unlock_read(wo_vm vm, wo_value args);
 WO_API wo_api thread_wait(wo_vm vm, wo_value args);
-WO_API wo_api time_duration_add(wo_vm vm, wo_value args);
-WO_API wo_api time_duration_create_hms(wo_vm vm, wo_value args);
-WO_API wo_api time_duration_div_duration(wo_vm vm, wo_value args);
-WO_API wo_api time_duration_div_int(wo_vm vm, wo_value args);
-WO_API wo_api time_duration_get_hms(wo_vm vm, wo_value args);
-WO_API wo_api time_duration_large(wo_vm vm, wo_value args);
-WO_API wo_api time_duration_less(wo_vm vm, wo_value args);
-WO_API wo_api time_duration_mod(wo_vm vm, wo_value args);
-WO_API wo_api time_duration_mul(wo_vm vm, wo_value args);
-WO_API wo_api time_duration_sub(wo_vm vm, wo_value args);
-WO_API wo_api time_point_add(wo_vm vm, wo_value args);
-WO_API wo_api time_point_large(wo_vm vm, wo_value args);
-WO_API wo_api time_point_less(wo_vm vm, wo_value args);
-WO_API wo_api time_point_sub_duration(wo_vm vm, wo_value args);
-WO_API wo_api time_point_sub_point(wo_vm vm, wo_value args);
-WO_API wo_api time_point_utc_now(wo_vm vm, wo_value args);
-WO_API wo_api time_timezone_get_all(wo_vm vm, wo_value args);
-WO_API wo_api time_timezone_get_current(wo_vm vm, wo_value args);
-WO_API wo_api time_timezone_get_name(wo_vm vm, wo_value args);
-WO_API wo_api time_timezone_get_weekday(wo_vm vm, wo_value args);
-WO_API wo_api time_timezone_parse_local(wo_vm vm, wo_value args);
-WO_API wo_api time_timezone_to_local(wo_vm vm, wo_value args);
-WO_API wo_api time_timezone_try_get(wo_vm vm, wo_value args);
 WO_API wo_api vm_create(wo_vm vm, wo_value args);
 WO_API wo_api vm_create_virtual_script(wo_vm vm, wo_value args);
 WO_API wo_api vm_invoke(wo_vm vm, wo_value args);
@@ -470,35 +447,6 @@ void je_extern_lib_3rd_pkgs_init()
     };
     _je_3rd_pkg_lib_handle.push_back(
         wo_register_lib("libthread", libthread_fs));
-
-    wo_extern_lib_func_t libtime_fs[] = {
-        wo_extern_lib_func_t{"time_duration_add", (void*)&time_duration_add},
-        wo_extern_lib_func_t{"time_duration_create_hms", (void*)&time_duration_create_hms},
-        wo_extern_lib_func_t{"time_duration_div_duration", (void*)&time_duration_div_duration},
-        wo_extern_lib_func_t{"time_duration_div_int", (void*)&time_duration_div_int},
-        wo_extern_lib_func_t{"time_duration_get_hms", (void*)&time_duration_get_hms},
-        wo_extern_lib_func_t{"time_duration_large", (void*)&time_duration_large},
-        wo_extern_lib_func_t{"time_duration_less", (void*)&time_duration_less},
-        wo_extern_lib_func_t{"time_duration_mod", (void*)&time_duration_mod},
-        wo_extern_lib_func_t{"time_duration_mul", (void*)&time_duration_mul},
-        wo_extern_lib_func_t{"time_duration_sub", (void*)&time_duration_sub},
-        wo_extern_lib_func_t{"time_point_add", (void*)&time_point_add},
-        wo_extern_lib_func_t{"time_point_large", (void*)&time_point_large},
-        wo_extern_lib_func_t{"time_point_less", (void*)&time_point_less},
-        wo_extern_lib_func_t{"time_point_sub_duration", (void*)&time_point_sub_duration},
-        wo_extern_lib_func_t{"time_point_sub_point", (void*)&time_point_sub_point},
-        wo_extern_lib_func_t{"time_point_utc_now", (void*)&time_point_utc_now},
-        wo_extern_lib_func_t{"time_timezone_get_all", (void*)&time_timezone_get_all},
-        wo_extern_lib_func_t{"time_timezone_get_current", (void*)&time_timezone_get_current},
-        wo_extern_lib_func_t{"time_timezone_get_name", (void*)&time_timezone_get_name},
-        wo_extern_lib_func_t{"time_timezone_get_weekday", (void*)&time_timezone_get_weekday},
-        wo_extern_lib_func_t{"time_timezone_parse_local", (void*)&time_timezone_parse_local},
-        wo_extern_lib_func_t{"time_timezone_to_local", (void*)&time_timezone_to_local},
-        wo_extern_lib_func_t{"time_timezone_try_get", (void*)&time_timezone_try_get},
-        WO_EXTERN_LIB_FUNC_END,
-    };
-    _je_3rd_pkg_lib_handle.push_back(
-        wo_register_lib("libtime", libtime_fs));
 
     wo_extern_lib_func_t libvm_fs[] = {
         wo_extern_lib_func_t{"vm_create", (void*)&vm_create},
