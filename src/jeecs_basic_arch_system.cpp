@@ -1552,10 +1552,8 @@ namespace jeecs_impl
                                 }
                                 else
                                 {
-                                    const auto* tinfo = jeecs::typing::type_info::of(tid);
-
                                     jeecs::debug::logerr("Cannot remove component: '%s' from prefab(%p:%zuv%zu).",
-                                        tinfo->m_typename,
+                                        jeecs::typing::type_info::of(tid)->m_typename,
                                         current_entity._m_in_chunk,
                                         (size_t)current_entity._m_id,
                                         (size_t)current_entity._m_version);
@@ -1575,18 +1573,17 @@ namespace jeecs_impl
                                     // Trying to remove.
                                     if (new_chunk_types.erase(tid))
                                     {
-                                        current_entity.chunk()
-                                            ->destruct_component_addr_with_typeid(
-                                                current_entity._m_id,
-                                                tid);
+                                        current_entity.chunk()->destruct_component_addr_with_typeid(
+                                            current_entity._m_id,
+                                            tid);
                                     }
 #ifndef NDEBUG
                                     else
                                         jeecs::debug::logwarn("Trying to remove '%s' from entity '%p:%zuv%zu', but the specify entity donot contain this component, skip.",
-                                            typeinfo->m_typename,
+                                            jeecs::typing::type_info::of(tid)->m_typename,
                                             current_entity._m_in_chunk, current_entity._m_id, current_entity._m_version);
 #endif
-                                    }
+                                }
                                 else
                                 {
                                     append_component_type_addr_map[tid] = instance;
@@ -1598,15 +1595,14 @@ namespace jeecs_impl
                                     {
 #ifndef NDEBUG
                                         jeecs::debug::logwarn("Trying to append '%s' to entity '%p:%zuv%zu', but the specify entity already contained this component, replace it.",
-                                            typeinfo->m_typename,
+                                            jeecs::typing::type_info::of(tid)->m_typename,
                                             current_entity._m_in_chunk, current_entity._m_id, current_entity._m_version);
 #endif
                                         // Old component already contained in this entity.
                                         // Destroy old one for replacing.
-                                        current_entity.chunk()
-                                            ->destruct_component_addr_with_typeid(
-                                                current_entity._m_id, tid);
-                                }
+                                        current_entity.chunk()->destruct_component_addr_with_typeid(
+                                            current_entity._m_id, tid);
+                                    }
                                 }
                             }
 
