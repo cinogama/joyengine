@@ -425,7 +425,7 @@ namespace jeecs
                                         assert(filter_type.m_requirement == requirement::type::CONTAIN
                                             || filter_type.m_requirement == requirement::type::EXCEPT);
 
-                                        bool has_component = je_ecs_world_entity_get_component(&e, filter_type.m_type);
+                                        bool has_component = je_ecs_world_entity_get_component(&e, filter_type.m_type->m_id);
                                         if ((filter_type.m_requirement == requirement::type::CONTAIN) != has_component)
                                         {
                                             is_this_group = false;

@@ -1167,7 +1167,7 @@ je_ecs_world_add_system_instance [基本接口]
 */
 JE_API jeecs::game_system* je_ecs_world_add_system_instance(
     void* world,
-    const jeecs::typing::type_info* type);
+    jeecs::typing::typeid_t type);
 
 /*
 je_ecs_world_get_system_instance [基本接口]
@@ -1176,7 +1176,7 @@ je_ecs_world_get_system_instance [基本接口]
 */
 JE_API jeecs::game_system* je_ecs_world_get_system_instance(
     void* world,
-    const jeecs::typing::type_info* type);
+    jeecs::typing::typeid_t type);
 
 /*
 je_ecs_world_remove_system_instance [基本接口]
@@ -1187,7 +1187,7 @@ je_ecs_world_remove_system_instance [基本接口]
 */
 JE_API void je_ecs_world_remove_system_instance(
     void* world,
-    const jeecs::typing::type_info* type);
+    jeecs::typing::typeid_t type);
 
 /*
 je_ecs_world_create_entity_with_components [基本接口]
@@ -1205,7 +1205,7 @@ component_ids 应该指向一个储存有N+1个jeecs::typing::typeid_t实例的�
 JE_API void je_ecs_world_create_entity_with_components(
     void* world,
     jeecs::game_entity* out_entity,
-    jeecs::typing::typeid_t* component_ids);
+    const jeecs::typing::typeid_t* component_ids);
 
 /*
 je_ecs_world_create_prefab_with_components [基本接口]
@@ -1218,7 +1218,7 @@ je_ecs_world_create_prefab_with_components [基本接口]
 JE_API void je_ecs_world_create_prefab_with_components(
     void* world,
     jeecs::game_entity* out_entity,
-    jeecs::typing::typeid_t* component_ids);
+    const jeecs::typing::typeid_t* component_ids);
 
 /*
 je_ecs_world_create_entity_with_prefab [基本接口]
@@ -1260,7 +1260,7 @@ je_ecs_world_entity_add_component [基本接口]
 */
 JE_API void* je_ecs_world_entity_add_component(
     const jeecs::game_entity* entity,
-    const jeecs::typing::type_info* component_info);
+    jeecs::typing::typeid_t type);
 
 /*
 je_ecs_world_entity_remove_component [基本接口]
@@ -1275,7 +1275,7 @@ je_ecs_world_entity_remove_component [基本接口]
 */
 JE_API void je_ecs_world_entity_remove_component(
     const jeecs::game_entity* entity,
-    const jeecs::typing::type_info* component_info);
+    jeecs::typing::typeid_t type);
 
 /*
 je_ecs_world_entity_get_component [基本接口]
@@ -1286,12 +1286,12 @@ je_ecs_world_entity_get_component [基本接口]
 */
 JE_API void* je_ecs_world_entity_get_component(
     const jeecs::game_entity* entity,
-    const jeecs::typing::type_info* component_info);
+    jeecs::typing::typeid_t type);
 
 /*
 je_ecs_world_of_entity [基本接口]
 获取实体所在的世界
-若实体索引是`无效值`或已失效，则返回nullptr
+若实体索引是`无效值`，则返回nullptr
 请参见：
     jeecs::game_entity::game_world
 */
@@ -3494,7 +3494,7 @@ JE_API void jedbg_set_editing_entity_uid(const jeecs::typing::euid_t uid);
 JE_API jeecs::typing::euid_t jedbg_get_editing_entity_uid();
 
 JE_API void jedbg_get_entity_arch_information(
-    const jeecs::game_entity* _entity,
+    jeecs::game_entity* _entity,
     size_t* _out_chunk_size,
     size_t* _out_entity_size,
     size_t* _out_all_entity_count_in_chunk);
@@ -4816,6 +4816,14 @@ namespace jeecs
             {
                 return of<T>()->m_id;
             }
+            inline static typeid_t id(typeid_t _tid)
+            {
+                return of(_tid)->m_id;
+            }
+            inline static typeid_t id(const char* name)
+            {
+                return of(name)->m_id;
+            }
 
             template<typename T>
             inline static const type_info* register_type(
@@ -4926,7 +4934,6 @@ namespace jeecs
             const char* membname)
         {
             const type_info* membt = type_info::register_type<MemberT>(guard, nullptr);
-
             assert(membt->m_type_class == je_typing_class::JE_BASIC_TYPE);
 
             je_register_member(
@@ -5027,40 +5034,39 @@ namespace jeecs
         }
 
 
-        inline jeecs::game_system* add_system(const jeecs::typing::type_info* type)
+        inline jeecs::game_system* add_system(jeecs::typing::typeid_t type)
         {
-            assert(type->m_type_class == je_typing_class::JE_SYSTEM);
             return je_ecs_world_add_system_instance(handle(), type);
         }
 
         template<typename SystemT>
         inline SystemT* add_system()
         {
-            return (SystemT*)add_system(typing::type_info::of<SystemT>(typeid(SystemT).name()));
+            return static_cast<SystemT*>(add_system(
+                typing::type_info::id<SystemT>()));
         }
 
-        inline jeecs::game_system* get_system(const jeecs::typing::type_info* type)
+        inline jeecs::game_system* get_system(jeecs::typing::typeid_t type)
         {
-            assert(type->m_type_class == je_typing_class::JE_SYSTEM);
             return je_ecs_world_get_system_instance(handle(), type);
         }
 
         template<typename SystemT>
         inline SystemT* get_system()
         {
-            return static_cast<SystemT*>(get_system(typing::type_info::of<SystemT>()));
+            return static_cast<SystemT*>(get_system(
+                typing::type_info::id<SystemT>()));
         }
 
-        inline void remove_system(const jeecs::typing::type_info* type)
+        inline void remove_system(jeecs::typing::typeid_t type)
         {
-            assert(type->m_type_class == je_typing_class::JE_SYSTEM);
             je_ecs_world_remove_system_instance(handle(), type);
         }
 
         template<typename SystemT>
         inline void remove_system()
         {
-            remove_system(typing::type_info::of<SystemT>(typeid(SystemT).name()));
+            remove_system(typing::type_info::id<SystemT>());
         }
 
 
@@ -5720,21 +5726,21 @@ namespace jeecs
     inline T* game_entity::get_component()const noexcept
     {
         return (T*)je_ecs_world_entity_get_component(this,
-            typing::type_info::of<T>());
+            typing::type_info::id<T>());
     }
 
     template<typename T>
     inline T* game_entity::add_component()const noexcept
     {
         return (T*)je_ecs_world_entity_add_component(this,
-            typing::type_info::of<T>());
+            typing::type_info::id<T>());
     }
 
     template<typename T>
     inline void game_entity::remove_component() const noexcept
     {
         return je_ecs_world_entity_remove_component(this,
-            typing::type_info::of<T>());
+            typing::type_info::id<T>());
     }
 
     inline jeecs::game_world game_entity::game_world() const noexcept

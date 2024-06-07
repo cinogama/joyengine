@@ -687,11 +687,17 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
             return;
         }
 
-        let (size_x, size_y, _) = e->get_component(typeinfo::load("Transform::LocalScale")->val)
-            =>> \c = c->get_member("scale");
-            ->> \m = m[1]->float3;
-            ->  valor((1., 1., 1.))
-            ;
+        let mut size_x = 1., mut size_y = 1.;
+        match (e->towoo::get_component:<Transform::LocalScale>)
+        {
+        value(lscale)?
+        {
+            let (x, y, _) = lscale.scale->get;
+            size_x = x;
+            size_y = y;            
+        }
+        none?;
+        }
 
         let create_and_copy_0pass_texture = func()
         {

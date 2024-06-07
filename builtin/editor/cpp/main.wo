@@ -231,7 +231,7 @@ endif()
         public func start(name: string, locpath: string, proj: Project)=> result<CxxProject, string>
         {
             // 在指定目录下创建Cxx项目目录
-            let cxx_proj_path = normalize(locpath)/F"{name}.jemodule4";
+            let cxx_proj_path = normalize(locpath)/F"{name}.je4module";
 
             return 
                 try!

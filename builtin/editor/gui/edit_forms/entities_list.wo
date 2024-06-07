@@ -194,12 +194,13 @@ namespace editor::gui::edit_forms
                                 none?;
                                 value(einst)?
                                     {
-                                        do einst->get_component(je::typeinfo::load("Transform::LocalScale")->val)
-                                            =>> \m = m->get_member("scale");
-                                            ->> \tv = tv...
-                                                ->\_, v = v->set_float3(ctx.width, ctx.height, 1.);
-                                                ;
-                                            ;
+                                        match (einst->towoo::get_component:<Transform::LocalScale>())
+                                        {
+                                        value(lscale)?
+                                            lscale.scale->set((ctx.width, ctx.height, 1.): vec3);
+                                        none?;
+                                        }
+
                                         let tex = new! je::graphic::texture(ctx.x_pixel_count, ctx.y_pixel_count);
                                         einst->bind_texture(0, tex);
 

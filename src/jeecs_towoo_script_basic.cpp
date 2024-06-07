@@ -359,7 +359,7 @@ WO_API wo_api wojeapi_towoo_add_component(wo_vm vm, wo_value args)
     auto e = std::launder(reinterpret_cast<jeecs::game_entity*>(wo_pointer(args + 0)));
     auto ty = std::launder(reinterpret_cast<const jeecs::typing::type_info*>(wo_pointer(args + 1)));
 
-    void* comp = je_ecs_world_entity_add_component(e, ty);
+    void* comp = je_ecs_world_entity_add_component(e, ty->m_id);
     if (comp != nullptr)
     {
         wo_value val = wo_push_empty(vm);
@@ -373,7 +373,7 @@ WO_API wo_api wojeapi_towoo_get_component(wo_vm vm, wo_value args)
     auto e = std::launder(reinterpret_cast<jeecs::game_entity*>(wo_pointer(args + 0)));
     auto ty = std::launder(reinterpret_cast<const jeecs::typing::type_info*>(wo_pointer(args + 1)));
 
-    void* comp = je_ecs_world_entity_get_component(e, ty);
+    void* comp = je_ecs_world_entity_get_component(e, ty->m_id);
     if (comp != nullptr)
     {
         wo_value val = wo_push_empty(vm);
@@ -387,7 +387,7 @@ WO_API wo_api wojeapi_towoo_remove_component(wo_vm vm, wo_value args)
     auto e = std::launder(reinterpret_cast<jeecs::game_entity*>(wo_pointer(args + 0)));
     auto ty = std::launder(reinterpret_cast<const jeecs::typing::type_info*>(wo_pointer(args + 1)));
 
-    je_ecs_world_entity_remove_component(e, ty);
+    je_ecs_world_entity_remove_component(e, ty->m_id);
     return wo_ret_void(vm);
 }
 WO_API wo_api wojeapi_towoo_member_get(wo_vm vm, wo_value args)

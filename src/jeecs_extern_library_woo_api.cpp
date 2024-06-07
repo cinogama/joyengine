@@ -325,26 +325,6 @@ WO_API wo_api wojeapi_logfatal(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_loginfo(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_logwarn(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_mark_shared_glresource_outdated(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_native_value_bool(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_native_value_float(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_native_value_float2(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_native_value_float3(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_native_value_float4(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_native_value_int(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_native_value_int2(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_native_value_je_string(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_native_value_rot_euler3(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_native_value_set_bool(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_native_value_set_float(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_native_value_set_float2(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_native_value_set_float3(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_native_value_set_float4(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_native_value_set_int(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_native_value_set_int2(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_native_value_set_je_string(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_native_value_set_rot_euler3(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_native_value_unsafe_get(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_native_value_unsafe_set(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_pack_buffer_to_fimg_packer(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_pack_file_to_fimg_packer(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_read_file_all(wo_vm vm, wo_value args);
@@ -794,26 +774,6 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"wojeapi_loginfo", (void*)&wojeapi_loginfo},
         wo_extern_lib_func_t{"wojeapi_logwarn", (void*)&wojeapi_logwarn},
         wo_extern_lib_func_t{"wojeapi_mark_shared_glresource_outdated", (void*)&wojeapi_mark_shared_glresource_outdated},
-        wo_extern_lib_func_t{"wojeapi_native_value_bool", (void*)&wojeapi_native_value_bool},
-        wo_extern_lib_func_t{"wojeapi_native_value_float", (void*)&wojeapi_native_value_float},
-        wo_extern_lib_func_t{"wojeapi_native_value_float2", (void*)&wojeapi_native_value_float2},
-        wo_extern_lib_func_t{"wojeapi_native_value_float3", (void*)&wojeapi_native_value_float3},
-        wo_extern_lib_func_t{"wojeapi_native_value_float4", (void*)&wojeapi_native_value_float4},
-        wo_extern_lib_func_t{"wojeapi_native_value_int", (void*)&wojeapi_native_value_int},
-        wo_extern_lib_func_t{"wojeapi_native_value_int2", (void*)&wojeapi_native_value_int2},
-        wo_extern_lib_func_t{"wojeapi_native_value_je_string", (void*)&wojeapi_native_value_je_string},
-        wo_extern_lib_func_t{"wojeapi_native_value_rot_euler3", (void*)&wojeapi_native_value_rot_euler3},
-        wo_extern_lib_func_t{"wojeapi_native_value_set_bool", (void*)&wojeapi_native_value_set_bool},
-        wo_extern_lib_func_t{"wojeapi_native_value_set_float", (void*)&wojeapi_native_value_set_float},
-        wo_extern_lib_func_t{"wojeapi_native_value_set_float2", (void*)&wojeapi_native_value_set_float2},
-        wo_extern_lib_func_t{"wojeapi_native_value_set_float3", (void*)&wojeapi_native_value_set_float3},
-        wo_extern_lib_func_t{"wojeapi_native_value_set_float4", (void*)&wojeapi_native_value_set_float4},
-        wo_extern_lib_func_t{"wojeapi_native_value_set_int", (void*)&wojeapi_native_value_set_int},
-        wo_extern_lib_func_t{"wojeapi_native_value_set_int2", (void*)&wojeapi_native_value_set_int2},
-        wo_extern_lib_func_t{"wojeapi_native_value_set_je_string", (void*)&wojeapi_native_value_set_je_string},
-        wo_extern_lib_func_t{"wojeapi_native_value_set_rot_euler3", (void*)&wojeapi_native_value_set_rot_euler3},
-        wo_extern_lib_func_t{"wojeapi_native_value_unsafe_get", (void*)&wojeapi_native_value_unsafe_get},
-        wo_extern_lib_func_t{"wojeapi_native_value_unsafe_set", (void*)&wojeapi_native_value_unsafe_set},
         wo_extern_lib_func_t{"wojeapi_pack_buffer_to_fimg_packer", (void*)&wojeapi_pack_buffer_to_fimg_packer},
         wo_extern_lib_func_t{"wojeapi_pack_file_to_fimg_packer", (void*)&wojeapi_pack_file_to_fimg_packer},
         wo_extern_lib_func_t{"wojeapi_read_file_all", (void*)&wojeapi_read_file_all},
