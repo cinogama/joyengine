@@ -376,14 +376,14 @@ namespace editor::gui::edit_forms
                 if (MenuItem("2D物理（静态）"))
                 {
                     context->add_components("Physics2D::Rigidbody");
-                    context->add_components("Physics2D::BoxCollider");
+                    context->add_components("Physics2D::Collider::Box");
                     context->add_components("Physics2D::Friction");
                 }
 
                 if (MenuItem("2D物理（动力学）"))
                 {
                     context->add_components("Physics2D::Rigidbody");
-                    context->add_components("Physics2D::BoxCollider");
+                    context->add_components("Physics2D::Collider::Box");
                     context->add_components("Physics2D::Friction");
                     context->add_components("Physics2D::Kinematics");
                     context->add_components("Physics2D::Mass");
@@ -392,7 +392,7 @@ namespace editor::gui::edit_forms
                 if (MenuItem("2D物理（高速动力学）"))
                 {
                     context->add_components("Physics2D::Rigidbody");
-                    context->add_components("Physics2D::BoxCollider");
+                    context->add_components("Physics2D::Collider::Box");
                     context->add_components("Physics2D::Friction");
                     context->add_components("Physics2D::Kinematics");
                     context->add_components("Physics2D::Mass");

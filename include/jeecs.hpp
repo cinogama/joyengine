@@ -7036,7 +7036,7 @@ namespace jeecs
                     for (size_t iy = 0; iy < src_h; ++iy)
                     {
                         memcpy(
-                            dst_pixels + iy * w * color_depth, 
+                            dst_pixels + iy * w * color_depth,
                             src_pixels + (x + (y + iy) * src_w) * color_depth,
                             src_w * color_depth);
                     }
@@ -8583,23 +8583,17 @@ namespace jeecs
             float       record_restitution = 0.f;
 
             size_t      layerid = 0;
-            math::vec2  position_offset = { 0.f, 0.f };
-            float       rotation_offset = 0.f;
 
             Rigidbody() = default;
             Rigidbody(Rigidbody&&) = default;
             Rigidbody(const Rigidbody& other)
                 : layerid(other.layerid)
-                , position_offset(other.position_offset)
-                , rotation_offset(other.rotation_offset)
             {
                 // Do nothing
             }
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &Rigidbody::layerid, "layerid");
-                typing::register_member(guard, &Rigidbody::position_offset, "position_offset");
-                typing::register_member(guard, &Rigidbody::rotation_offset, "rotation_offset");
             }
         };
         struct Mass
@@ -8655,27 +8649,45 @@ namespace jeecs
         {
 
         };
-        struct BoxCollider
+        namespace Transform
         {
-            void* native_fixture = nullptr;
-            math::vec2 scale = { 1.f, 1.f };
-
-            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            struct Position
             {
-                typing::register_member(guard, &BoxCollider::scale, "scale");
-            }
-        };
-        struct CircleCollider
+                math::vec2 offset = { 0.f, 0.f };
+                static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+                {
+                    typing::register_member(guard, &Position::offset, "offset");
+                }
+            };
+            struct Rotation
+            {
+                float offset = 0.f;
+                static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+                {
+                    typing::register_member(guard, &Rotation::offset, "offset");
+                }
+            };
+            struct Scale
+            {
+                math::vec2 scale = { 1.f, 1.f };
+                static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+                {
+                    typing::register_member(guard, &Scale::scale, "scale");
+                }
+            };
+        }
+        namespace Collider
         {
-            void* native_fixture = nullptr;
-            float scale = 1.f;
-
-            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            struct Box
             {
-                typing::register_member(guard, &CircleCollider::scale, "scale");
-            }
-        };
-
+                void* native_fixture = nullptr;
+            };
+            struct Circle
+            {
+                void* native_fixture = nullptr;
+            };
+        }
+       
         struct CollisionResult
         {
             struct collide_result
@@ -9783,8 +9795,11 @@ namespace jeecs
             type_info::register_type<Physics2D::Kinematics>(guard, "Physics2D::Kinematics");
             type_info::register_type<Physics2D::Mass>(guard, "Physics2D::Mass");
             type_info::register_type<Physics2D::Bullet>(guard, "Physics2D::Bullet");
-            type_info::register_type<Physics2D::BoxCollider>(guard, "Physics2D::BoxCollider");
-            type_info::register_type<Physics2D::CircleCollider>(guard, "Physics2D::CircleCollider");
+            type_info::register_type<Physics2D::Collider::Box>(guard, "Physics2D::Collider::Box");
+            type_info::register_type<Physics2D::Collider::Circle>(guard, "Physics2D::Collider::Circle");
+            type_info::register_type<Physics2D::Transform::Position>(guard, "Physics2D::Transform::Position");
+            type_info::register_type<Physics2D::Transform::Rotation>(guard, "Physics2D::Transform::Rotation");
+            type_info::register_type<Physics2D::Transform::Scale>(guard, "Physics2D::Transform::Scale");
             type_info::register_type<Physics2D::Restitution>(guard, "Physics2D::Restitution");
             type_info::register_type<Physics2D::Friction>(guard, "Physics2D::Friction");
             type_info::register_type<Physics2D::CollisionResult>(guard, "Physics2D::CollisionResult");
