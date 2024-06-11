@@ -9,7 +9,7 @@
 #include "wo.h"
 
 #define JE_VERSION_WRAP(A, B, C) #A "." #B "." #C
-#define JE_CORE_VERSION JE_VERSION_WRAP(4, 7, 1)
+#define JE_CORE_VERSION JE_VERSION_WRAP(4, 7, 2)
 
 #define WO_FAIL_JE_FATAL_ERROR 0xD101
 #define WO_FAIL_JE_BAD_INIT_SHADER_VALUE 0xD102
