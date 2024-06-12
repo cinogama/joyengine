@@ -148,325 +148,330 @@ namespace editor::gui::edit_forms
                         {
                         value(cur_e)?
                         { 
-                            let eeid = jeapi::debug::get_entity_editor_id(cur_e);
-                            let current_entity_chunk_info = cur_e->chunkinfo;
-
-                            do BeginChildSize("basic_info", 0., 120.);
-                            Text("实体名");
-                            SameLine();
-                            do InputText(F"##entity_name##{current_entity_chunk_info}", cur_e->editor::name())->> func(new_name)
-                                {
-                                    if (!context->get_project->is_debugging)
-                                        cur_e->editor::set_name(new_name);
-                                };
-
-                            Text(current_entity_chunk_info);                    
-
-                            let (chunk_size, entity_size, entity_count) = je::editor::get_entity_arch_information(cur_e);
-                            Text(F"区块/实体体积: {chunk_size}/{entity_size}={entity_count}");
-
-                            let prefab = cur_e->towoo::get_component:<Editor::Prefab>;
-                            if (prefab->has)
+                            do try!
                             {
-                                let prefab_menu = func(){
-                                    if (MenuItem("更新到预设"))
+                                try! eeid = jeapi::debug::get_entity_editor_id(cur_e);
+                                                            let current_entity_chunk_info = cur_e->chunkinfo;
+
+                                do BeginChildSize("basic_info", 0., 120.);
+                                Text("实体名");
+                                SameLine();
+                                do InputText(F"##entity_name##{current_entity_chunk_info}", cur_e->editor::name())->> func(new_name)
                                     {
-                                        let p = prefab->val.path->get;
-                                        jeapi::gui::form::ask("更新预设体？", F"是否确认覆盖并应用全部'{p}'的预设体？",
+                                        if (!context->get_project->is_debugging)
+                                            cur_e->editor::set_name(new_name);
+                                    };
+
+                                Text(current_entity_chunk_info);                    
+
+                                let (chunk_size, entity_size, entity_count) = je::editor::get_entity_arch_information(cur_e);
+                                Text(F"区块/实体体积: {chunk_size}/{entity_size}={entity_count}");
+
+                                let prefab = cur_e->towoo::get_component:<Editor::Prefab>;
+                                if (prefab->has)
+                                {
+                                    let prefab_menu = func(){
+                                        if (MenuItem("更新到预设"))
+                                        {
+                                            let p = prefab->val.path->get;
+                                            jeapi::gui::form::ask("更新预设体？", F"是否确认覆盖并应用全部'{p}'的预设体？",
+                                                func (op)
+                                                {
+                                                    if (op)
+                                                    {
+                                                        match (jeapi::prefab_manager::update_prefab(cur_e))
+                                                        {
+                                                        value(updated_prefab_data)?
+                                                            {
+                                                                match (context->get_project->dump_and_close_all_world())
+                                                                {
+                                                                ok(dat)?
+                                                                    {
+                                                                        je::gui::launch(func()
+                                                                            {
+                                                                                if (!updated_prefab_data->serialize
+                                                                                    ->> \dat = fsys::writeall(
+                                                                                            context->get_project->parse_path_normalize(p), 
+                                                                                            dat)
+                                                                                        ;
+                                                                                    ->  valor(false))
+                                                                                {
+                                                                                    jeapi::gui::form::errmsg("失败", F"更新预设体失败，无法写入：{p}");
+                                                                                }
+                                                                                context->get_project->restore_all_world(dat);
+                                                                                return false;
+                                                                            }, ());
+                                                                    }
+                                                                err(msg)?
+                                                                    jeapi::gui::form::errmsg("失败", F"更新预设体失败: {msg}");
+                                                                }
+                                                            }
+                                                        none?
+                                                            jeapi::gui::form::errmsg("失败", 
+                                                                F"更新失败，可能是预设体'{p}'或其父预设体文件丢失");
+                                                        }
+                                                    }
+                                                });
+                                        }
+                                    };
+                                    if (jeapi::gui::widget::File("预设体", prefab->val.path->get, prefab_menu)->>\p = p == "";->valor(false))
+                                    {
+                                        jeapi::gui::form::ask("解除预设体？", F"是否确认解除'{cur_e->editor::name}'的预设体？",
                                             func (op)
                                             {
                                                 if (op)
-                                                {
-                                                    match (jeapi::prefab_manager::update_prefab(cur_e))
+                                                    eeid->justdo(\e = e->towoo::remove_component:<Editor::Prefab>;);
+                                            });
+                                        
+                                    }
+                                }
+
+                                EndChild();
+                                
+                                let (_, mut _1_3_height) = GetContentRegionAvail();
+                                _1_3_height /= 3.;
+                                _1_3_height -= 5.;
+
+                                // 2. 遍历实体的非Editor组件
+                                do BeginChildSize("component_editor", 0., 2. * _1_3_height);
+
+                                let grouped_components = {}mut: map<string, vec<(je::typeinfo, je::component)>>;
+                                for (let (ctype, component): cur_e->editor::get_components)
+                                {
+                                    let names = ctype->name->split("::");
+                                    let groupname = names->len >= 2 ? names[0] | "<无>";
+                                    
+                                    grouped_components->getorset(groupname, []mut)
+                                            ->add((ctype, component));
+                                }
+
+                                for (let (groupname, components): grouped_components->unmapping->std::sort(\l, r = l.0 < r.0;))
+                                {
+                                    if (!get_is_albe_to_display_debug_entity() && groupname == "Editor")
+                                        // 事编辑器组件，跳过显示，不然就露馅了
+                                        continue;
+                                    
+                                    let tree_attrib = TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
+                                        + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
+                                        + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
+
+                                    PushStyleColor(ImGuiCol::ImGuiCol_Text, (50, 150, 100, 255));
+                                    let show_group = TreeNodeEx(groupname, tree_attrib);
+                                    PopStyleColor(1);
+
+                                    if (show_group)
+                                    {
+                                        BeginGroup();
+
+                                        for (let (ctype, component) : components)
+                                        {
+                                            // 嘿，我知道这个长长的东西很诡异，但是这个的功能只是把类型名的开头去掉，剩下的部分中间用"::"连接拼起来
+                                            if (TreeNodeEx(ctype->name->split("::")->sub(1)->reduce(\l, r= l + "::" + r;)->or(\=ctype->name;),
+                                                tree_attrib + TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen))
+                                            {
+                                                jeapi::gui::context_menu(func(){
+                                                    if (MenuItem(F"移除"))
                                                     {
-                                                    value(updated_prefab_data)?
-                                                        {
-                                                            match (context->get_project->dump_and_close_all_world())
-                                                            {
-                                                            ok(dat)?
-                                                                {
-                                                                    je::gui::launch(func()
-                                                                        {
-                                                                            if (!updated_prefab_data->serialize
-                                                                                ->> \dat = fsys::writeall(
-                                                                                        context->get_project->parse_path_normalize(p), 
-                                                                                        dat)
-                                                                                    ;
-                                                                                ->  valor(false))
-                                                                            {
-                                                                                jeapi::gui::form::errmsg("失败", F"更新预设体失败，无法写入：{p}");
-                                                                            }
-                                                                            context->get_project->restore_all_world(dat);
-                                                                            return false;
-                                                                        }, ());
-                                                                }
-                                                            err(msg)?
-                                                                jeapi::gui::form::errmsg("失败", F"更新预设体失败: {msg}");
-                                                            }
-                                                        }
-                                                    none?
-                                                        jeapi::gui::form::errmsg("失败", 
-                                                            F"更新失败，可能是预设体'{p}'或其父预设体文件丢失");
-                                                    }
-                                                }
-                                            });
-                                    }
-                                };
-                                if (jeapi::gui::widget::File("预设体", prefab->val.path->get, prefab_menu)->>\p = p == "";->valor(false))
-                                {
-                                    jeapi::gui::form::ask("解除预设体？", F"是否确认解除'{cur_e->editor::name}'的预设体？",
-                                        func (op)
-                                        {
-                                            if (op)
-                                                eeid->justdo(\e = e->towoo::remove_component:<Editor::Prefab>;);
-                                        });
-                                    
-                                }
-                            }
+                                                        let ename = cur_e->editor::name;
 
-                            EndChild();
-                            
-                            let (_, mut _1_3_height) = GetContentRegionAvail();
-                            _1_3_height /= 3.;
-                            _1_3_height -= 5.;
-
-                            // 2. 遍历实体的非Editor组件
-                            do BeginChildSize("component_editor", 0., 2. * _1_3_height);
-
-                            let grouped_components = {}mut: map<string, vec<(je::typeinfo, je::component)>>;
-                            for (let (ctype, component): cur_e->editor::get_components)
-                            {
-                                let names = ctype->name->split("::");
-                                let groupname = names->len >= 2 ? names[0] | "<无>";
-                                
-                                grouped_components->getorset(groupname, []mut)
-                                        ->add((ctype, component));
-                            }
-
-                            for (let (groupname, components): grouped_components->unmapping->std::sort(\l, r = l.0 < r.0;))
-                            {
-                                if (!get_is_albe_to_display_debug_entity() && groupname == "Editor")
-                                    // 事编辑器组件，跳过显示，不然就露馅了
-                                    continue;
-                                
-                                let tree_attrib = TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
-                                    + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
-                                    + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
-
-                                PushStyleColor(ImGuiCol::ImGuiCol_Text, (50, 150, 100, 255));
-                                let show_group = TreeNodeEx(groupname, tree_attrib);
-                                PopStyleColor(1);
-
-                                if (show_group)
-                                {
-                                    BeginGroup();
-
-                                    for (let (ctype, component) : components)
-                                    {
-                                        // 嘿，我知道这个长长的东西很诡异，但是这个的功能只是把类型名的开头去掉，剩下的部分中间用"::"连接拼起来
-                                        if (TreeNodeEx(ctype->name->split("::")->sub(1)->reduce(\l, r= l + "::" + r;)->or(\=ctype->name;),
-                                            tree_attrib + TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen))
-                                        {
-                                            jeapi::gui::context_menu(func(){
-                                                if (MenuItem(F"移除"))
-                                                {
-                                                    let ename = cur_e->editor::name;
-
-                                                    jeapi::gui::form::ask(
-                                                        "确认？", 
-                                                        F"即将从实体{ename}中移除组件{ctype->name}，是否确认？", 
-                                                        func(asure){
-                                                            if (asure)
-                                                                eeid->justdo(\e=e->remove_component(ctype););
-                                                        });
-                                                }
-                                                if (MenuItem(F"重置"))
-                                                {
-                                                    jeapi::gui::form::ask(
-                                                        "确认？", 
-                                                        F"即将重置组件{ctype->name}，是否确认？", 
-                                                        func(asure){
-                                                            eeid->justdo(func(e){
+                                                        jeapi::gui::form::ask(
+                                                            "确认？", 
+                                                            F"即将从实体{ename}中移除组件{ctype->name}，是否确认？", 
+                                                            func(asure){
                                                                 if (asure)
-                                                                {
-                                                                    // 非常简单，要求移除，然后重新添加组件
-                                                                    // NOTE: 顺便说明一下，JoyEngine的ArchSystem对于一次性
-                                                                    //       给定所有组件，然后创建实体。理论上性能开销小于
-                                                                    //       逐个追加组件。
-                                                                    e->remove_component(ctype);
-                                                                    do e->add_component(ctype);
-                                                                }
+                                                                    eeid->justdo(\e=e->remove_component(ctype););
                                                             });
-                                                        });
-                                                }
-                                            });
+                                                    }
+                                                    if (MenuItem(F"重置"))
+                                                    {
+                                                        jeapi::gui::form::ask(
+                                                            "确认？", 
+                                                            F"即将重置组件{ctype->name}，是否确认？", 
+                                                            func(asure){
+                                                                eeid->justdo(func(e){
+                                                                    if (asure)
+                                                                    {
+                                                                        // 非常简单，要求移除，然后重新添加组件
+                                                                        // NOTE: 顺便说明一下，JoyEngine的ArchSystem对于一次性
+                                                                        //       给定所有组件，然后创建实体。理论上性能开销小于
+                                                                        //       逐个追加组件。
+                                                                        e->remove_component(ctype);
+                                                                        do e->add_component(ctype);
+                                                                    }
+                                                                });
+                                                            });
+                                                    }
+                                                });
 
-                                            Separator();
-                                            for (let (mname, mtype, mvalue): component->get_members)
-                                            {
-                                                do InvisibleButton(F"##{mname}$PADDING", (2., 1.));
-                                                SameLine();
-                                                BeginGroup();
-
-                                                TextDisabled(mname);
-        
-                                                if (!je::towoo::unsafe::dynamic_parser::edit(
-                                                    mtype, mvalue, mname + "##" + current_entity_chunk_info))
-                                                {
-                                                    TextDisabled(F"没有找到适配 {mtype->name} 的编辑器");
-                                                }
-
-                                                EndGroup();
-                                            }
-                                            Separator();
-                                            TreePop();
-                                        }
-                                    }
-                                    
-                                    EndGroup();
-                                    TreePop();
-                                }
-                            }
-
-                            EndChild();
-
-                            do BeginChildSize("material_editor", 0., _1_3_height);
-                            Text("材质编辑器");
-                            Separator();
-                            // 3. 遍历实体的材质（如果有
-
-                            static let Shaders = je::typeinfo::load("Renderer::Shaders")->val();
-                            static let BadShadersUniform = je::typeinfo::load("Editor::BadShadersUniform")->val();
-                            match (cur_e->get_component(Shaders))
-                            {
-                            value(_)?
-                                {
-                                    if (cur_e->get_component(BadShadersUniform)->has)
-                                    {
-                                        let bad_shader_paths = cur_e->editor::get_bad_shader_paths();
-                                        TextDisabled(F"有{bad_shader_paths->len}个着色器存在问题:");
-
-                                        for (let path: bad_shader_paths)
-                                        {
-                                            do Button(path);
-                                            jeapi::gui::context_menu(func(){
-                                                do MenuItemEnabled(path, false);
-                                                do MenuItemEnabled("请选择其中一项来尝试解决问题", false);
                                                 Separator();
-                                                if (MenuItem("重新编译着色器"))
+                                                for (let (mname, mtype, mvalue): component->get_members)
                                                 {
-                                                    update_shader(context, path);
-                                                }
-                                                if (MenuItem("移除这个着色器"))
-                                                {
-                                                    jeapi::gui::form::ask("确认？", F"即将移除着色器: {path}", func(opt){
-                                                        if (opt)
-                                                            eeid->justdo(\e = e->editor::remove_name_for_bad_shader_update(path););
-                                                    });
-                                                } 
-                                            });
-                                        }
-                                    }
-                                    else
-                                    {
-                                        let mut shaders = cur_e->get_shaders();
+                                                    do InvisibleButton(F"##{mname}$PADDING", (2., 1.));
+                                                    SameLine();
+                                                    BeginGroup();
 
-                                        let mut index = 0, mut shaders_has_updated = false;
-                                        for (let shader : shaders->dup())
-                                        {
-                                            match (show_shader(context, cur_e, shader, index))
-                                            {
-                                            AddShader(shad)?
-                                                {
-                                                    shaders = shaders->inlay(index, shad);
-                                                    shaders_has_updated = true;
+                                                    TextDisabled(mname);
+            
+                                                    if (!je::towoo::unsafe::dynamic_parser::edit(
+                                                        mtype, mvalue, mname + "##" + current_entity_chunk_info))
+                                                    {
+                                                        TextDisabled(F"没有找到适配 {mtype->name} 的编辑器");
+                                                    }
+
+                                                    EndGroup();
                                                 }
-                                            DelShader?
-                                                {
-                                                    shaders = shaders->erase(index);
-                                                    shaders_has_updated = true;
-                                                }
-                                            DoNothing? /* 没有动作 */;
+                                                Separator();
+                                                TreePop();
                                             }
-                                            index += 1;
-                                        } // end show shader.
+                                        }
+                                        
+                                        EndGroup();
+                                        TreePop();
+                                    }
+                                }
 
-                                        do Button("[拖动shader文件到此处添加新的pass]");
-                                        if (BeginPopupContextItem())
+                                EndChild();
+
+                                do BeginChildSize("material_editor", 0., _1_3_height);
+                                Text("材质编辑器");
+                                Separator();
+                                // 3. 遍历实体的材质（如果有
+
+                                static let Shaders = je::typeinfo::load("Renderer::Shaders")->val();
+                                static let BadShadersUniform = je::typeinfo::load("Editor::BadShadersUniform")->val();
+                                match (cur_e->get_component(Shaders))
+                                {
+                                value(_)?
+                                    {
+                                        if (cur_e->get_component(BadShadersUniform)->has)
                                         {
-                                            static let mut shaders_in_project = 
-                                                fsys::allsubpath(context->get_project->get_path)
-                                                    ->> \paths = paths->forall(\p = fsys::extension(p)->lower == ".shader";);
-                                                    ->  or(\_ = [];)
-                                                ;
+                                            let bad_shader_paths = cur_e->editor::get_bad_shader_paths();
+                                            TextDisabled(F"有{bad_shader_paths->len}个着色器存在问题:");
 
-                                            if (MenuItem("重新获取Shader"))
+                                            for (let path: bad_shader_paths)
                                             {
-                                                shaders_in_project = 
+                                                do Button(path);
+                                                jeapi::gui::context_menu(func(){
+                                                    do MenuItemEnabled(path, false);
+                                                    do MenuItemEnabled("请选择其中一项来尝试解决问题", false);
+                                                    Separator();
+                                                    if (MenuItem("重新编译着色器"))
+                                                    {
+                                                        update_shader(context, path);
+                                                    }
+                                                    if (MenuItem("移除这个着色器"))
+                                                    {
+                                                        jeapi::gui::form::ask("确认？", F"即将移除着色器: {path}", func(opt){
+                                                            if (opt)
+                                                                eeid->justdo(\e = e->editor::remove_name_for_bad_shader_update(path););
+                                                        });
+                                                    } 
+                                                });
+                                            }
+                                        }
+                                        else
+                                        {
+                                            let mut shaders = cur_e->get_shaders();
+
+                                            let mut index = 0, mut shaders_has_updated = false;
+                                            for (let shader : shaders->dup())
+                                            {
+                                                match (show_shader(context, cur_e, shader, index))
+                                                {
+                                                AddShader(shad)?
+                                                    {
+                                                        shaders = shaders->inlay(index, shad);
+                                                        shaders_has_updated = true;
+                                                    }
+                                                DelShader?
+                                                    {
+                                                        shaders = shaders->erase(index);
+                                                        shaders_has_updated = true;
+                                                    }
+                                                DoNothing? /* 没有动作 */;
+                                                }
+                                                index += 1;
+                                            } // end show shader.
+
+                                            do Button("[拖动shader文件到此处添加新的pass]");
+                                            if (BeginPopupContextItem())
+                                            {
+                                                static let mut shaders_in_project = 
                                                     fsys::allsubpath(context->get_project->get_path)
                                                         ->> \paths = paths->forall(\p = fsys::extension(p)->lower == ".shader";);
                                                         ->  or(\_ = [];)
                                                     ;
-                                            }
 
-                                            Separator();
-
-                                            if (shaders_in_project->empty())
-                                                do MenuItemEnabled("无", false);
-                                            else
-                                            {
-                                                for (let path : shaders_in_project)
+                                                if (MenuItem("重新获取Shader"))
                                                 {
-                                                    let npath = context->get_project->make_path_normalize(path);
-                                                    if (MenuItem(npath))
+                                                    shaders_in_project = 
+                                                        fsys::allsubpath(context->get_project->get_path)
+                                                            ->> \paths = paths->forall(\p = fsys::extension(p)->lower == ".shader";);
+                                                            ->  or(\_ = [];)
+                                                        ;
+                                                }
+
+                                                Separator();
+
+                                                if (shaders_in_project->empty())
+                                                    do MenuItemEnabled("无", false);
+                                                else
+                                                {
+                                                    for (let path : shaders_in_project)
                                                     {
-                                                        // NOTE: 哈哈哈 第三个加载来咯
-                                                        match (je::graphic::shader::load(cur_e->get_world->get_universe->option::value, npath))
+                                                        let npath = context->get_project->make_path_normalize(path);
+                                                        if (MenuItem(npath))
                                                         {
-                                                        value(shader)?
-                                                        {
-                                                            shaders = shaders->append(shader);
-                                                            shaders_has_updated = true;
-                                                        }
-                                                        none?
-                                                            jeapi::gui::form::errmsg("加载着色器失败", F"无法加载文件{npath}作为着色器");
+                                                            // NOTE: 哈哈哈 第三个加载来咯
+                                                            match (je::graphic::shader::load(cur_e->get_world->get_universe->option::value, npath))
+                                                            {
+                                                            value(shader)?
+                                                            {
+                                                                shaders = shaders->append(shader);
+                                                                shaders_has_updated = true;
+                                                            }
+                                                            none?
+                                                                jeapi::gui::form::errmsg("加载着色器失败", F"无法加载文件{npath}作为着色器");
+                                                            }
                                                         }
                                                     }
                                                 }
-                                            }
 
-                                            EndPopup();
-                                        }
-                                        match (jeapi::gui::widget::accept_file_for_current_widget())
-                                        {
-                                        value(shader_path)?
+                                                EndPopup();
+                                            }
+                                            match (jeapi::gui::widget::accept_file_for_current_widget())
                                             {
-                                                // TODO: 为啥会有两个地方加载shader，这个地方的代码写得跟鬼一样
-                                                //      检查代码实现，上面也有一个加载shader，两边代码一模一样，
-                                                //      搞什么鬼
-                                                match (je::graphic::shader::load(cur_e->get_world->get_universe->option::value, shader_path))
+                                            value(shader_path)?
                                                 {
-                                                value(shader)?
-                                                {
-                                                    shaders = shaders->append(shader);
-                                                    shaders_has_updated = true;
+                                                    // TODO: 为啥会有两个地方加载shader，这个地方的代码写得跟鬼一样
+                                                    //      检查代码实现，上面也有一个加载shader，两边代码一模一样，
+                                                    //      搞什么鬼
+                                                    match (je::graphic::shader::load(cur_e->get_world->get_universe->option::value, shader_path))
+                                                    {
+                                                    value(shader)?
+                                                    {
+                                                        shaders = shaders->append(shader);
+                                                        shaders_has_updated = true;
+                                                    }
+                                                    none?
+                                                        jeapi::gui::form::errmsg("加载着色器失败", F"无法加载文件{shader_path}作为着色器");
+                                                    }
                                                 }
-                                                none?
-                                                    jeapi::gui::form::errmsg("加载着色器失败", F"无法加载文件{shader_path}作为着色器");
-                                                }
+                                            none? /* 没有文件拖入，不干任何事情 */;
                                             }
-                                        none? /* 没有文件拖入，不干任何事情 */;
-                                        }
 
-                                        if (shaders_has_updated)
-                                        cur_e->set_shaders(shaders);
+                                            if (shaders_has_updated)
+                                            cur_e->set_shaders(shaders);
+                                        }
                                     }
+                                none?
+                                    Text("当前实体没有Renderer::Shaders组件");
                                 }
-                            none?
-                                Text("当前实体没有Renderer::Shaders组件");
-                            }
-                            // 3.1 遍历材质的Uniform数据和纹理信息
-                            EndChild();
+                                // 3.1 遍历材质的Uniform数据和纹理信息
+                                EndChild();
+
+                                expected_value!;
+                            };
                         }
                         none?
                             TextDisabled("没有编辑中的实体");

@@ -715,7 +715,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
             ;
         launch(edittexture, (
             context,
-            option::value(jeapi::debug::get_entity_editor_id(e)),
+            jeapi::debug::get_entity_editor_id(e),
             id_tex_list,
             DrawContextT{
                 scale = mut 10.,

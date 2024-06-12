@@ -257,17 +257,6 @@ namespace jeecs
         };
 
         /*
-        jeecs::typing::euid_t [类型别名]
-        引擎实体的跟踪ID，实体创建时自动分配，并不随组件变化而变化
-        需要注意的是，此值仅适合用于调试或编辑器环境，因为引擎只简单地递增分配，不保证分配绝对唯一的ID
-            * 无效值是 0，从失效实体中取出的ID即为0，引擎保证不分配0作为实体的ID
-        请参见：
-            je_ecs_entity_uid
-            jeecs::game_entity::get_euid
-        */
-        using euid_t = size_t;
-
-        /*
         jeecs::typing::uid_t [类型别名]
         全局唯一标识符的类型别名
         请参见：
@@ -282,6 +271,8 @@ namespace jeecs
             je_clock_time_stamp
         */
         using ms_stamp_t = uint64_t;
+
+        using debug_eid_t = uint64_t;
 
         template<typename T>
         struct _origin_type
@@ -449,7 +440,6 @@ namespace jeecs
 
         struct meta
         {
-            size_t                          m_euid;
             jeecs::typing::version_t        m_version;
             jeecs::game_entity::entity_stat m_stat;
         };
@@ -516,21 +506,17 @@ namespace jeecs
         */
         inline void close() const noexcept;
 
-        /*
-        jeecs::game_entity::get_euid [方法]
-        若索引未失效，则返回实体的跟踪ID，否则返回0
-        请参见：
-            jeecs::typing::euid_t
-        */
-        inline typing::euid_t get_euid() const noexcept;
-
         inline bool operator == (const game_entity& e) const noexcept
         {
-            return _m_in_chunk == e._m_in_chunk && _m_id == e._m_id && _m_version == e._m_version;
+            return _m_in_chunk == e._m_in_chunk && 
+                _m_id == e._m_id &&
+                _m_version == e._m_version;
         }
         inline bool operator != (const game_entity& e) const noexcept
         {
-            return _m_in_chunk != e._m_in_chunk || _m_id != e._m_id || _m_version != e._m_version;
+            return _m_in_chunk != e._m_in_chunk ||
+                _m_id != e._m_id ||
+                _m_version != e._m_version;
         }
     };
 
@@ -1305,17 +1291,6 @@ je_ecs_world_set_able [基本接口]
         世界销毁请求和激活世界请求
 */
 JE_API void je_ecs_world_set_able(void* world, bool enable);
-
-/*
-je_ecs_entity_uid [基本接口]
-获取实体的跟踪ID
-若实体索引是`无效值`或已失效，则返回无效值0
-请参见：
-    jeecs::typing::euid_t
-    jeecs::game_entity::get_euid
-*/
-JE_API jeecs::typing::euid_t je_ecs_entity_uid(
-    const jeecs::game_entity* entity);
 
 // ATTENTION: These 2 functions have no thread-safe-promise.
 /*
@@ -3489,9 +3464,11 @@ JE_API size_t jedbg_get_unregister_type_count(void);
 // NOTE: need free the return result by 'je_mem_free'
 JE_API const jeecs::typing::type_info** jedbg_get_all_system_attached_in_world(void* _world);
 
-JE_API void jedbg_set_editing_entity_uid(const jeecs::typing::euid_t uid);
+JE_API void jedbg_set_editing_entity_uid(const jeecs::typing::debug_eid_t uid);
 
-JE_API jeecs::typing::euid_t jedbg_get_editing_entity_uid();
+JE_API jeecs::typing::debug_eid_t jedbg_get_editing_entity_uid();
+
+JE_API jeecs::typing::debug_eid_t jedbg_get_entity_uid(const jeecs::game_entity* e);
 
 JE_API void jedbg_get_entity_arch_information(
     jeecs::game_entity* _entity,
@@ -9437,11 +9414,6 @@ namespace jeecs
                 typing::register_member(guard, &Playing::loop, "loop");
             }
         };
-    }
-
-    inline typing::euid_t game_entity::get_euid() const noexcept
-    {
-        return je_ecs_entity_uid(this);
     }
 
     namespace math

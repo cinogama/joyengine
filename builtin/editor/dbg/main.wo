@@ -43,9 +43,9 @@ namespace jeapi::debug
         public childs: array<EntityChilds>
     };
 
-    public func get_entity_editor_id(entity: je::entity)=> Eeid
+    public func get_entity_editor_id(entity: je::entity)=> option<Eeid>
     {
-        return entity->editor::get_entity_uid: handle: Eeid;
+        return entity->editor::get_entity_uid->>\eid = eid: handle: Eeid;;
     }
     
     alias OperationCallback = (option<je::entity>)=>void;
@@ -71,12 +71,16 @@ namespace jeapi::debug
             =>> \w = w->get_all_entities;
             ->> func(e)
             {
-                let euid = get_entity_editor_id(e);
-                do current_request->get(euid)
-                    ->> \jobs = jobs
-                        ->> \job = job(option::value(e));;
-                    ->> \_ = current_request->remove(euid);
-                    ;
+                match (get_entity_editor_id(e))
+                {
+                value(euid)?
+                    do current_request->get(euid)
+                        ->> \jobs = jobs
+                            ->> \job = job(option::value(e));;
+                        ->> \_ = current_request->remove(euid);
+                        ;
+                none?;
+                }
             };
 
         for (let (_, jobs) : current_request)
@@ -98,39 +102,47 @@ namespace jeapi::debug
 
         for (let e: all_entities)
         {
-            let ech = EntityChilds{
-                e = e, 
-                uid = get_entity_editor_id(e),
-                childs = [],
-            };
-            
-            // 将当前实体塞进anchored_entity，用于保证所有实体都能找到妈妈（bushi
-            match (e->editor::get_anchor_uid)
+            match (get_entity_editor_id(e))
             {
-            value(uid)?
-                anchored_entity->set(uid, ech);
-            none?;
-            }
-
-            // 获取当前实体的“父实体”，如果没有则将当前实体塞进root_entity
-            match (e->editor::get_parent_anchor_uid)
-            {
-            none?
-                root_entity->add(ech);
-            value(uid)?
+            none? continue;
+            value(eid)?
                 {
-                    match (anchored_entity->get(uid))
+                    let ech = EntityChilds{
+                        e = e, 
+                        uid = eid,
+                        childs = [],
+                    };
+                    
+                    // 将当前实体塞进anchored_entity，用于保证所有实体都能找到妈妈（bushi
+                    match (e->editor::get_anchor_uid)
                     {
-                    value(parentech)?
-                        parentech.childs as array<EntityChilds>
-                            ->  unsafe::cast :<vec<EntityChilds>>
-                            ->  add(ech)
-                            ;
+                    value(uid)?
+                        anchored_entity->set(uid, ech);
+                    none?;
+                    }
+
+                    // 获取当前实体的“父实体”，如果没有则将当前实体塞进root_entity
+                    match (e->editor::get_parent_anchor_uid)
+                    {
                     none?
-                        // 在anchored_entity里面没找到uid对应的父实体，则放到待定集，最后再处理
-                        pending_entity->add(ech);
+                        root_entity->add(ech);
+                    value(uid)?
+                        {
+                            match (anchored_entity->get(uid))
+                            {
+                            value(parentech)?
+                                parentech.childs as array<EntityChilds>
+                                    ->  unsafe::cast :<vec<EntityChilds>>
+                                    ->  add(ech)
+                                    ;
+                            none?
+                                // 在anchored_entity里面没找到uid对应的父实体，则放到待定集，最后再处理
+                                pending_entity->add(ech);
+                            }
+                        }
                     }
                 }
+
             }
         }
 
@@ -174,6 +186,6 @@ namespace jeapi::debug
             }
             return option::none;
         }
-        return find_entity(get_all_entities_layer_from_world(world), get_entity_editor_id(e));
+        return get_entity_editor_id(e)=>>\eid = find_entity(get_all_entities_layer_from_world(world), eid);;
     }
 }

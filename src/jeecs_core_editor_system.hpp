@@ -59,6 +59,14 @@ namespace jeecs
                 typing::register_member(guard, &Prefab::path, "path");
             }
         };
+        struct EntityId
+        {
+            jeecs::typing::debug_eid_t eid;
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &EntityId::eid, "eid");
+            }
+        };
 
         // Used for store uniform vars of failed-shader in entity. used for 'update' shaders
         struct BadShadersUniform
@@ -109,6 +117,7 @@ namespace jeecs
     struct DefaultEditorSystem : public game_system
     {
         inline static bool _editor_enabled = true;
+        inline static jeecs::typing::debug_eid_t _allocate_eid = 0;
 
         enum coord_mode
         {
@@ -771,10 +780,19 @@ public let frag =
             _inputs._wheel_count_record = (int)input::wheel(0).y;
 
             // 获取被选中的实体
-            selector.exec([this](game_entity e)
+            selector.exec([this](game_entity e, Editor::EntityId* eid)
                 {
-                    if (e.get_euid() == jedbg_get_editing_entity_uid())
-                        _inputs.selected_entity = std::optional(e);
+                    if (eid == nullptr)
+                    {
+                        auto* ec = e.add_component<Editor::EntityId>();
+                        if (ec != nullptr)
+                            ec->eid = ++this->_allocate_eid;
+                    }
+                    else
+                    {
+                        if (eid->eid == jedbg_get_editing_entity_uid())
+                            _inputs.selected_entity = std::optional(e);
+                    }
                 }
             );
 
@@ -846,7 +864,9 @@ public let frag =
             {
                 auto _set_editing_entity = [](const jeecs::game_entity& e)
                     {
-                        jedbg_set_editing_entity_uid(e.get_euid());
+                        auto* eid = e.get_component<Editor::EntityId>();
+                        if (eid != nullptr)
+                            jedbg_set_editing_entity_uid(eid->eid);
                     };
 
                 if (!selected_list.empty())
@@ -1317,4 +1337,22 @@ WO_API wo_api wojeapi_set_editing_coord_mode(wo_vm vm, wo_value args)
         sys->_coord = (jeecs::DefaultEditorSystem::coord_mode)wo_int(args + 1);
 
     return wo_ret_void(vm);
+}
+
+static jeecs::typing::debug_eid_t _editor_entity_uid;
+
+void jedbg_set_editing_entity_uid(const jeecs::typing::debug_eid_t uid)
+{
+    _editor_entity_uid = uid;
+}
+jeecs::typing::debug_eid_t jedbg_get_editing_entity_uid()
+{
+    return _editor_entity_uid;
+}
+jeecs::typing::debug_eid_t jedbg_get_entity_uid(const jeecs::game_entity* e)
+{
+    auto* eid = e->get_component<jeecs::Editor::EntityId>();
+    if (eid == nullptr)
+        return 0;
+    return eid->eid;
 }

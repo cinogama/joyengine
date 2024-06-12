@@ -357,7 +357,11 @@ namespace jeapi
                             ->> \idn = idn[0];
                         ;
                     ->> \dat = need_euid
-                        ? dat->apply("euid", saving_entity->editor::get_entity_uid as je::entity::editor::euid_t: handle: int: dynamic)
+                        ? dat->apply(
+                            "euid", 
+                            saving_entity
+                                ->editor::get_entity_uid
+                                ->valor(0: handle: je::entity::editor::euid_t): handle: int: dynamic)
                         | dat
                         ;
                     ;

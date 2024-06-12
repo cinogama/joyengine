@@ -193,7 +193,7 @@ namespace editor::gui
         {
             jeapi::debug::Eeid::editor::select(
                 self.m_editing_entity_euid := e
-                    ->>\e = jeapi::debug::get_entity_editor_id(e););
+                    =>>\e = jeapi::debug::get_entity_editor_id(e););
         }
         public func get_editing_entity(self: EditorContext)
         {

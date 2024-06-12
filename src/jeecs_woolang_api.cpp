@@ -571,7 +571,7 @@ WO_API wo_api wojeapi_get_world_from_entity(wo_vm vm, wo_value args)
 
 WO_API wo_api wojeapi_set_editing_entity_uid(wo_vm vm, wo_value args)
 {
-    jedbg_set_editing_entity_uid((jeecs::typing::euid_t)wo_handle(args + 0));
+    jedbg_set_editing_entity_uid((jeecs::typing::debug_eid_t)wo_handle(args + 0));
     return wo_ret_void(vm);
 }
 
@@ -587,7 +587,7 @@ WO_API wo_api wojeapi_world_is_valid(wo_vm vm, wo_value args)
 }
 WO_API wo_api wojeapi_get_editing_entity_uid(wo_vm vm, wo_value args)
 {
-    jeecs::typing::euid_t uid = jedbg_get_editing_entity_uid();
+    jeecs::typing::debug_eid_t uid = jedbg_get_editing_entity_uid();
 
     if (uid != 0)
         return wo_ret_option_handle(vm, (wo_handle_t)uid);
@@ -596,7 +596,11 @@ WO_API wo_api wojeapi_get_editing_entity_uid(wo_vm vm, wo_value args)
 WO_API wo_api wojeapi_get_entity_uid(wo_vm vm, wo_value args)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-    return wo_ret_handle(vm, (wo_handle_t)entity->get_euid());
+    jeecs::typing::debug_eid_t uid = jedbg_get_entity_uid(entity);
+
+    if (uid != 0)
+        return wo_ret_option_handle(vm, (wo_handle_t)uid);
+    return wo_ret_option_none(vm);
 }
 
 WO_API wo_api wojeapi_get_entity_anchor_uuid(wo_vm vm, wo_value args)
@@ -2280,11 +2284,11 @@ namespace je
         {
             public using euid_t = handle;
 
+            extern("libjoyecs", "wojeapi_get_entity_uid")
+            public func get_entity_uid(self: entity)=> option<euid_t>;
+
             extern("libjoyecs", "wojeapi_get_editing_entity_uid")
             public func get_editing_uid()=> option<euid_t>;
-
-            extern("libjoyecs", "wojeapi_get_entity_uid")
-            public func get_entity_uid(self: entity)=> euid_t;
 
             extern("libjoyecs", "wojeapi_set_parent")
             public func set_parent(self: entity, parent: entity, force: bool)=> bool;
@@ -2405,7 +2409,7 @@ namespace je
             public func set_editing_uid(id: option<euid_t>)
             {
                 extern("libjoyecs", "wojeapi_set_editing_entity_uid")
-                    public func _set_editing_entity(euid: euid_t)=> void;
+                    public func _set_editing_entity(eid: euid_t)=> void;
 
                 extern("libjoyecs", "wojeapi_reset_editing_entity_uid")
                     public func _reset_editing_entity()=> void;
