@@ -8530,9 +8530,7 @@ namespace jeecs
             math::vec2  gravity = math::vec2(0.f, -9.8f);
             bool        sleepable = true;
             bool        continuous = true;
-
-            size_t      velocity_step = 8;
-            size_t      position_step = 3;
+            size_t      step = 4;
 
             basic::fileresource<void> group_config;
 
@@ -8542,15 +8540,17 @@ namespace jeecs
                 typing::register_member(guard, &World::gravity, "gravity");
                 typing::register_member(guard, &World::sleepable, "sleepable");
                 typing::register_member(guard, &World::continuous, "continuous");
-                typing::register_member(guard, &World::velocity_step, "velocity_step");
-                typing::register_member(guard, &World::position_step, "position_step");
+                typing::register_member(guard, &World::step, "step");
                 typing::register_member(guard, &World::group_config, "group_config");
             }
         };
 
         struct Rigidbody
         {
-            void* native_rigidbody = nullptr;
+            using rigidbody_id_t = uint64_t;
+            constexpr static rigidbody_id_t null_rigidbody = 0;
+
+            rigidbody_id_t native_rigidbody = null_rigidbody;
             Rigidbody* _arch_updated_modify_hack = nullptr;
 
             bool        rigidbody_just_created = false;
@@ -8655,13 +8655,20 @@ namespace jeecs
         }
         namespace Collider
         {
+            using shape_id_t = uint64_t;
+            constexpr static shape_id_t null_shape = 0;
+
             struct Box
             {
-                void* native_fixture = nullptr;
+                shape_id_t native_shape = null_shape;
             };
             struct Circle
             {
-                void* native_fixture = nullptr;
+                shape_id_t native_shape = null_shape;
+            };
+            struct Capsule
+            {
+                shape_id_t native_shape = null_shape;
             };
         }
        
@@ -9769,6 +9776,7 @@ namespace jeecs
             type_info::register_type<Physics2D::Bullet>(guard, "Physics2D::Bullet");
             type_info::register_type<Physics2D::Collider::Box>(guard, "Physics2D::Collider::Box");
             type_info::register_type<Physics2D::Collider::Circle>(guard, "Physics2D::Collider::Circle");
+            type_info::register_type<Physics2D::Collider::Capsule>(guard, "Physics2D::Collider::Capsule");
             type_info::register_type<Physics2D::Transform::Position>(guard, "Physics2D::Transform::Position");
             type_info::register_type<Physics2D::Transform::Rotation>(guard, "Physics2D::Transform::Rotation");
             type_info::register_type<Physics2D::Transform::Scale>(guard, "Physics2D::Transform::Scale");

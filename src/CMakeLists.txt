@@ -6,7 +6,7 @@ include_directories("../3rd/stb")
 include_directories("../3rd/imgui")
 include_directories("../3rd/imgui/backends")
 include_directories("../3rd/imgui/misc/cpp")
-include_directories("../3rd/box2d/include")
+include_directories("../3rd/box2c/include")
 include_directories("../3rd/openal-soft/include")
 include_directories("../3rd/assimp/include")
 include_directories("../3rd/vulkan/include")
@@ -183,7 +183,7 @@ else()
 endif()
 
 if (NOT WIN32)
-    target_compile_options (box2d PRIVATE -fPIC)
+    target_compile_options (box2c PRIVATE -fPIC)
 endif()
 
 target_link_libraries(joyecs 

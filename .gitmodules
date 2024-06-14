@@ -18,10 +18,6 @@
     path = 3rd/woolang
     url = https://git.cinogama.net/cinogamaproject/woolang.git
     branch = release
-[submodule "3rd/box2d"]
-    path = 3rd/box2d
-    url = https://git.cinogama.net/cinogamaproject/joyengineecs/box2d.git
-    branch = master_v2_4_1
 [submodule "3rd/openal-soft"]
     path = 3rd/openal-soft
     url = https://git.cinogama.net/cinogamaproject/joyengineecs/openal-soft.git
@@ -50,3 +46,7 @@
 	path = 3rd/imgui-node-editor
 	url = https://git.cinogama.net/cinogamaproject/joyengineecs/imgui-node-editor.git
 	branch = master
+[submodule "3rd/box2c"]
+	path = 3rd/box2c
+	url = https://git.cinogama.net/cinogamaproject/joyengineecs/box2c.git
+	branch = main
