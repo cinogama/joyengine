@@ -1,4 +1,4 @@
-﻿# librscene
+# librscene
 #
 cmake_minimum_required (VERSION 3.7)
 
@@ -183,7 +183,7 @@ else()
 endif()
 
 if (NOT WIN32)
-    target_compile_options (box2c PRIVATE -fPIC)
+    target_compile_options (box2d PRIVATE -fPIC)
 endif()
 
 target_link_libraries(joyecs 
