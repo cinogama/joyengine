@@ -108,8 +108,8 @@
 #define StateUpdate         StateUpdate     // 用于将初始状态给予各个组件(Animation)
 #define Update              Update          // * 用户更新
 #define PhysicsUpdate       PhysicsUpdate   // 用于物理引擎的状态更新(PhysicsUpdate)
-#define LateUpdate          LateUpdate      // * 用户延迟更新
 #define ApplyUpdate         ApplyUpdate     // 用于最终更新(Translation)
+#define LateUpdate          LateUpdate      // * 用户延迟更新
 #define CommitUpdate        CommitUpdate    // 用于最终提交(Graphic)
 
 /*
@@ -4645,8 +4645,8 @@ namespace jeecs
         */
         struct typeinfo_system_updater
         {
-            update_func_t m_state_update;
             update_func_t m_pre_update;
+            update_func_t m_state_update;
             update_func_t m_update;
             update_func_t m_physics_update;
             update_func_t m_late_update;

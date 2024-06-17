@@ -237,8 +237,8 @@ namespace jeecs_impl
 
         void declear_system_updater(
             jeecs::typing::type_info* _typeinfo,
-            jeecs::typing::update_func_t _state_update,
             jeecs::typing::update_func_t _pre_update,
+            jeecs::typing::update_func_t _state_update,
             jeecs::typing::update_func_t _update,
             jeecs::typing::update_func_t _physics_update,
             jeecs::typing::update_func_t _late_update,
@@ -253,8 +253,8 @@ namespace jeecs_impl
             }
             else
             {
-                assert(_state_update != nullptr);
                 assert(_pre_update != nullptr);
+                assert(_state_update != nullptr);
                 assert(_update != nullptr);
                 assert(_physics_update != nullptr);
                 assert(_late_update != nullptr);
@@ -262,8 +262,8 @@ namespace jeecs_impl
                 assert(_commit_update != nullptr);
 
                 jeecs::typing::typeinfo_system_updater* updater = new jeecs::typing::typeinfo_system_updater();
-                updater->m_state_update = _state_update;
                 updater->m_pre_update = _pre_update;
+                updater->m_state_update = _state_update;
                 updater->m_update = _update;
                 updater->m_physics_update = _physics_update;
                 updater->m_late_update = _late_update;
@@ -527,8 +527,8 @@ void je_register_system_updater(
     jeecs_impl::global_factory_holder::holder()
         ->declear_system_updater(
             const_cast<jeecs::typing::type_info*>(_type),
+            _pre_update, 
             _state_update,
-            _pre_update,
             _update,
             _physics_update,
             _late_update,
