@@ -133,7 +133,7 @@ namespace jeecs_impl
                     return false;
 
                 next_read_place = (read_place + 1) % _m_queue_size;
-                
+
             } while (!_m_head.compare_exchange_weak(read_place, next_read_place));
 
             *out_value = _m_queue_buffer[read_place];
@@ -175,15 +175,15 @@ namespace jeecs_impl
 
             byte_t                  _m_chunk_buffer[CHUNK_SIZE];
 
-            const types_set*        _m_types;
-            const archtypes_map*    _m_arch_typeinfo_mapping;
+            const types_set* _m_types;
+            const archtypes_map* _m_arch_typeinfo_mapping;
             const size_t            _m_entity_count;
             const size_t            _m_entity_size;
 
             jeecs::game_entity::meta* _m_entities_meta;
-            arch_type*              _m_arch_type;
+            arch_type* _m_arch_type;
             mcmp_lockfree_fixed_loop_queue<jeecs::typing::entity_id_in_chunk_t>
-                                    _m_free_slots;
+                _m_free_slots;
 #ifndef NDEBUG
             std::atomic_size_t       _m_debug_free_count;
 #endif
@@ -361,10 +361,10 @@ namespace jeecs_impl
 
                 command_add_free_slot(eid);
 
+                ++_m_arch_type->_m_free_count;
 #ifndef NDEBUG
                 ++_m_debug_free_count;
 #endif
-                ++_m_arch_type->_m_free_count;
             }
         };
 
@@ -416,7 +416,7 @@ namespace jeecs_impl
 
             inline bool is_valid() const noexcept
             {
-                return _m_in_chunk != nullptr && 
+                return _m_in_chunk != nullptr &&
                     _m_in_chunk->is_entity_valid(_m_id, _m_version);
             }
         };
@@ -507,20 +507,23 @@ namespace jeecs_impl
             auto* alive_chunks = _m_chunks.pick_all();
 
             // 2. 转存chunks，然后从尾到头开始整理碎片
-            std::vector<arch_chunk*> chunks;
+            std::list<arch_chunk*> chunks;
             while (alive_chunks)
             {
-                chunks.push_back(alive_chunks);
+                // 使得老区块集中于头部，这样方便后续整理
+                chunks.push_front(alive_chunks);
                 alive_chunks = alive_chunks->last;
             }
 
             if (!chunks.empty())
             {
-                size_t target_chunk_idx = 0, pick_chunk_idx = chunks.size() - 1;
-                while (pick_chunk_idx > target_chunk_idx)
+                auto target_chunk_idx = chunks.begin(), pick_chunk_idx = chunks.end();
+                --pick_chunk_idx;
+
+                while (pick_chunk_idx != target_chunk_idx)
                 {
-                    auto* target_chunk = chunks[target_chunk_idx];
-                    auto* pick_chunk = chunks[pick_chunk_idx];
+                    auto* target_chunk = *target_chunk_idx;
+                    auto* pick_chunk = *pick_chunk_idx;
 
                     auto* pick_chunk_metas = pick_chunk->get_entity_meta();
 
@@ -541,7 +544,6 @@ namespace jeecs_impl
                             if (moving_entity_meta->m_stat == jeecs::game_entity::entity_stat::READY)
                             {
                                 // OK, 继续搬运，这搬运组件多是一件美事啊
-                                bool alloc_new_entity_success = true;
                                 jeecs::typing::entity_id_in_chunk_t new_entity_id;
                                 jeecs::typing::version_t new_entity_version;
 
@@ -550,18 +552,26 @@ namespace jeecs_impl
                                 while (!target_chunk->alloc_entity_id(&new_entity_id, &new_entity_version))
                                 {
                                     // 如果target_chunk满了，就移动到下一个target
-                                    if (target_chunk_idx + 1 < pick_chunk_idx)
-                                        target_chunk = chunks[++target_chunk_idx];
+                                    if (++target_chunk_idx != pick_chunk_idx)
+                                        target_chunk = *target_chunk_idx;
                                     else
                                     {
                                         // 哦吼，满啦！
-                                        alloc_new_entity_success = false;
+                                        gap_filling_completed = true;
                                         break;
-                                    }                                       
+                                    }
                                 }
 
-                                if (alloc_new_entity_success)
+                                if (!gap_filling_completed)
                                 {
+                                    // 占位成功，先将计数更新
+                                    size_t _debug_count = _m_free_count--;
+                                    (void)_debug_count;
+#ifndef NDEBUG
+                                    // NOTE: _m_free_count 必不可能为0，因为刚刚才成功创建了实体ID 
+                                    assert(_debug_count != 0);
+#endif
+
                                     // OK, 开始搬运
                                     for (auto& arch_typeinfo : _m_arch_typeinfo_mapping)
                                     {
@@ -590,7 +600,6 @@ namespace jeecs_impl
                                 else
                                 {
                                     // 满了，没法搬了，摆烂吧
-                                    gap_filling_completed = true;
                                     break;
                                 }
                             }
@@ -622,22 +631,35 @@ namespace jeecs_impl
                         _m_total_count -= _m_entity_count_per_chunk;
 
                         delete pick_chunk;
-                        chunks[pick_chunk_idx] = nullptr;
+                        *pick_chunk_idx = nullptr;
                     }
 
-                    // 代码执行到这里，说明要么a) pick_chunk中的实体都被搬走了，要么b)已经没有空隙了
+                    // NOTE: 代码执行到这里，说明要么:
+                    //  a) pick_chunk中的实体都被搬走了，要么
+                    //  b) target_chunk已经没有空隙了
+                    // 
                     // 无论哪种情况，我们都需要将pick_chunk_idx向前移动
 
-                    assert(pick_chunk_idx != 0); // 不可能是0，因为如果是0，一开始就进不来
-                    --pick_chunk_idx;
+                    if (gap_filling_completed)
+                    {
+                        assert(pick_chunk_idx == target_chunk_idx);
+                    }
+                    else
+                    {
+                        assert(pick_chunk_idx != target_chunk_idx);
+                        --pick_chunk_idx;
+                    }
                 }
             }
 
             // OK, 碎片整理完毕，将新的chunk队列重新挂载回去
+            // NOTE: 按给定顺序插回，这样可以使得富集实体的区块集中在尾部，使得实体查询更快
             for (auto* chunk : chunks)
             {
-                if (chunk != nullptr)
-                    _m_chunks.add_one(chunk);
+                if (chunk == nullptr)
+                    break;
+
+                _m_chunks.add_one(chunk);
             }
         }
 
@@ -647,12 +669,13 @@ namespace jeecs_impl
             while (true)
             {
                 size_t free_entity_count = _m_free_count.load();
-                while (free_entity_count)
+                while (0 != free_entity_count)
                 {
                     if (!_m_free_count.compare_exchange_weak(
-                        free_entity_count, 
-                        free_entity_count - 1))
+                        free_entity_count, free_entity_count - 1))
+                    {
                         continue;
+                    }
 
                     // OK There is a usable place for entity
                     arch_chunk* peek_chunk = _m_chunks.peek();
