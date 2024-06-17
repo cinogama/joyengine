@@ -897,13 +897,7 @@ public let frag =
                     assert(rendentity.translation);
 
                     float MAT4_MVP[4][4];
-                    float MAT4_MODEL[4][4];
-                    float MAT4_LOCAL_SCALE[4][4] = {
-                        {rendentity.translation->local_scale.x,0.0f,0.0f,0.0f},
-                        {0.0f,rendentity.translation->local_scale.y,0.0f,0.0f},
-                        {0.0f,0.0f,rendentity.translation->local_scale.z,0.0f},
-                        {0.0f,0.0f,0.0f,1.0f} };
-                    math::mat4xmat4(MAT4_MODEL, rendentity.translation->object2world, MAT4_LOCAL_SCALE);
+                    const float (&MAT4_MODEL)[4][4] = rendentity.translation->object2world;
                     math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
                     math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
@@ -1986,13 +1980,7 @@ public func frag(_: v2f)
                                                 SIZE_MAX);
                                             auto* builtin_uniform = using_shadow_pass_shader->m_builtin;
 
-                                            float MAT4_MODEL[4][4];
-                                            float MAT4_LOCAL_SCALE[4][4] = {
-                                                {blockarch.translation->local_scale.x,0.0f,0.0f,0.0f},
-                                                {0.0f,blockarch.translation->local_scale.y,0.0f,0.0f},
-                                                {0.0f,0.0f,blockarch.translation->local_scale.z,0.0f},
-                                                {0.0f,0.0f,0.0f,1.0f} };
-                                            math::mat4xmat4(MAT4_MODEL, blockarch.translation->object2world, MAT4_LOCAL_SCALE);
+                                            const float(&MAT4_MODEL)[4][4] = blockarch.translation->object2world;
                                             math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
                                             math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
@@ -2050,15 +2038,7 @@ public func frag(_: v2f)
 
                                         auto* builtin_uniform = shape_shadow_pass->m_builtin;
 
-                                        float MAT4_MODEL[4][4];
-                                        float MAT4_LOCAL_SCALE[4][4] = {
-                                            {blockarch.translation->local_scale.x,0.0f,0.0f,0.0f},
-                                            {0.0f,blockarch.translation->local_scale.y,0.0f,0.0f},
-                                            {0.0f,0.0f,blockarch.translation->local_scale.z,0.0f},
-                                            {0.0f,0.0f,0.0f,1.0f}
-                                        };
-
-                                        math::mat4xmat4(MAT4_MODEL, blockarch.translation->object2world, MAT4_LOCAL_SCALE);
+                                        const float(&MAT4_MODEL)[4][4] = blockarch.translation->object2world;
                                         math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
                                         math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
@@ -2122,15 +2102,7 @@ public func frag(_: v2f)
 
                                         auto* builtin_uniform = sprite_shadow_pass->m_builtin;
 
-                                        float MAT4_MODEL[4][4];
-                                        float MAT4_LOCAL_SCALE[4][4] = {
-                                            {blockarch.translation->local_scale.x,0.0f,0.0f,0.0f},
-                                            {0.0f,blockarch.translation->local_scale.y,0.0f,0.0f},
-                                            {0.0f,0.0f,blockarch.translation->local_scale.z,0.0f},
-                                            {0.0f,0.0f,0.0f,1.0f}
-                                        };
-
-                                        math::mat4xmat4(MAT4_MODEL, blockarch.translation->object2world, MAT4_LOCAL_SCALE);
+                                        const float(&MAT4_MODEL)[4][4] = blockarch.translation->object2world;
                                         math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
                                         math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
@@ -2209,13 +2181,7 @@ public func frag(_: v2f)
                                                 texture_group);
                                             auto* builtin_uniform = sub_shadow_pass->m_builtin;
 
-                                            float MAT4_MODEL[4][4];
-                                            float MAT4_LOCAL_SCALE[4][4] = {
-                                                {block_in_layer->translation->local_scale.x,0.0f,0.0f,0.0f},
-                                                {0.0f,block_in_layer->translation->local_scale.y,0.0f,0.0f},
-                                                {0.0f,0.0f,block_in_layer->translation->local_scale.z,0.0f},
-                                                {0.0f,0.0f,0.0f,1.0f} };
-                                            math::mat4xmat4(MAT4_MODEL, block_in_layer->translation->object2world, MAT4_LOCAL_SCALE);
+                                            const float(&MAT4_MODEL)[4][4] = block_in_layer->translation->object2world;
                                             math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
                                             math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
@@ -2332,13 +2298,7 @@ public func frag(_: v2f)
                             continue;
                     }
 
-                    float MAT4_MODEL[4][4];
-                    float MAT4_LOCAL_SCALE[4][4] = {
-                        {rendentity.translation->local_scale.x,0.0f,0.0f,0.0f},
-                        {0.0f,rendentity.translation->local_scale.y,0.0f,0.0f},
-                        {0.0f,0.0f,rendentity.translation->local_scale.z,0.0f},
-                        {0.0f,0.0f,0.0f,1.0f} };
-                    math::mat4xmat4(MAT4_MODEL, rendentity.translation->object2world, MAT4_LOCAL_SCALE);
+                    const float(&MAT4_MODEL)[4][4] = rendentity.translation->object2world;
                     math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
                     math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
@@ -2457,13 +2417,7 @@ public func frag(_: v2f)
                             : m_defer_light2d_host._no_shadow->resouce());
 
                         // 开始渲染光照！
-                        float MAT4_MODEL[4][4];
-                        float MAT4_LOCAL_SCALE[4][4] = {
-                            {light2d.translation->local_scale.x,0.0f,0.0f,0.0f},
-                            {0.0f,light2d.translation->local_scale.y,0.0f,0.0f},
-                            {0.0f,0.0f,light2d.translation->local_scale.z,0.0f},
-                            {0.0f,0.0f,0.0f,1.0f} };
-                        math::mat4xmat4(MAT4_MODEL, light2d.translation->object2world, MAT4_LOCAL_SCALE);
+                        const float(&MAT4_MODEL)[4][4] = light2d.translation->object2world;
                         math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
                         math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 

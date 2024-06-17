@@ -21,97 +21,130 @@ namespace jeecs
         using LocalToWorld = Transform::LocalToWorld;
         using Translation = Transform::Translation;
 
-        struct anchor
+        struct AnchoredTrans
         {
-            const Translation* m_translation;
+            Anchor* anchor_may_null;
+            Translation* trans;
+            LocalToParent* l2p;
         };
 
-        template<typename T>
-        static void _generate_mat_from_local(float(*out_mat)[4], const T* local)
-        {
-            float temp_mat_trans[4][4] = {};
-            temp_mat_trans[0][0]
-                = temp_mat_trans[1][1]
-                = temp_mat_trans[2][2]
-                = temp_mat_trans[3][3] = 1.0f;
-            temp_mat_trans[3][0] = local->pos.x;
-            temp_mat_trans[3][1] = local->pos.y;
-            temp_mat_trans[3][2] = local->pos.z;
-
-            float temp_mat_rotation[4][4];
-            local->rot.create_matrix(temp_mat_rotation);
-
-            math::mat4xmat4(out_mat, temp_mat_trans, temp_mat_rotation);
-        }
-
-        std::unordered_map<typing::uid_t, anchor> m_anchor_list;
+        std::unordered_map<typing::uuid, Translation*> m_binded_trans;
 
         TranslationUpdatingSystem(game_world world) :game_system(world)
         {
         }
 
-        void UpdateAnchorTransPair(Anchor& anchor, Translation& trans)
-        {
-            m_anchor_list[anchor.uid].m_translation = &trans;
-        }
-
-        void LocalToWorldUpdate(LocalPosition* position, LocalRotation* rotation, LocalScale* scale, LocalToWorld& l2w)
-        {
-            l2w.pos = position ? position->pos : math::vec3();
-            l2w.rot = rotation ? rotation->rot : math::quat();
-            l2w.scale = scale ? scale->scale : math::vec3(1, 1, 1);
-        }
-        void LocalToParentUpdate(LocalPosition* position, LocalRotation* rotation, LocalScale* scale, LocalToParent& l2p)
-        {
-            l2p.pos = position ? position->pos : math::vec3();
-            l2p.rot = rotation ? rotation->rot : math::quat();
-            l2p.scale = scale ? scale->scale : math::vec3(1, 1, 1);
-        }
-
-        void LocalToWorldTrans(LocalToWorld& l2w, Translation& trans)
-        {
-            trans.set_rotation(l2w.rot);
-            trans.set_position(l2w.pos);
-            trans.set_scale(l2w.scale);
-
-            _generate_mat_from_local(trans.object2world, &l2w);
-        }
-
-        void LocalToParentTrans(LocalToParent& l2p, Translation& trans)
-        {
-            // Get parent's translation, then apply them.
-            auto fnd = m_anchor_list.find(l2p.parent_uid);
-            if (fnd != m_anchor_list.end())
-            {
-                const Translation* parent_trans = fnd->second.m_translation;
-                trans.set_rotation(parent_trans->world_rotation * l2p.rot);
-                trans.set_position(parent_trans->world_rotation * l2p.pos + parent_trans->world_position);
-                trans.set_scale(l2p.scale); // TODO: need apply scale? 
-
-                float local_trans[4][4];
-                _generate_mat_from_local(local_trans, &l2p);
-                math::mat4xmat4(trans.object2world, parent_trans->object2world, local_trans);
-            }
-            else
-            {
-                // Parent is not exist, treate it as l2w
-                trans.set_rotation(l2p.rot);
-                trans.set_position(l2p.pos);
-                trans.set_scale(l2p.scale);
-
-                _generate_mat_from_local(trans.object2world, &l2p);
-            }
-        }
-
         void ApplyUpdate(jeecs::selector& selector)
         {
-            m_anchor_list.clear();
+            m_binded_trans.clear();
 
-            selector.exec(&TranslationUpdatingSystem::UpdateAnchorTransPair);
-            selector.exec(&TranslationUpdatingSystem::LocalToWorldUpdate);
-            selector.exec(&TranslationUpdatingSystem::LocalToParentUpdate);
-            selector.exec(&TranslationUpdatingSystem::LocalToWorldTrans);
-            selector.exec(&TranslationUpdatingSystem::LocalToParentTrans);
+            // 对于有L2W的组件，在此优先处理
+            selector.except<LocalToParent>();
+            selector.exec(
+                [this](
+                    Anchor* anchor,
+                    Translation& trans,
+                    LocalToWorld& l2w,
+                    LocalPosition* position,
+                    LocalRotation* rotation,
+                    LocalScale* scale)
+                {
+                    l2w.pos = position ? position->pos : math::vec3();
+                    l2w.rot = rotation ? rotation->rot : math::quat();
+                    l2w.scale = scale ? scale->scale : math::vec3(1.f, 1.f, 1.f);
+
+                    trans.set_rotation(l2w.rot);
+                    trans.set_position(l2w.pos);
+                    trans.set_scale(l2w.scale);
+
+                    if (anchor != nullptr)
+                    {
+                        // 对于L2W的变换，其直接作为变换起点集合
+                        m_binded_trans.insert(std::make_pair(anchor->uid, &trans));
+                    }
+                });
+
+            std::list<AnchoredTrans> pending_anchor_information;
+
+            // 对于有L2P先进行应用，稍后更新到Translation上
+            selector.except<LocalToWorld>();
+            selector.exec(
+                [&](Anchor* anchor,
+                    Translation& trans,
+                    LocalToParent& l2p,
+                    LocalPosition* position,
+                    LocalRotation* rotation,
+                    LocalScale* scale)
+                {
+                    l2p.pos = position ? position->pos : math::vec3();
+                    l2p.rot = rotation ? rotation->rot : math::quat();
+                    l2p.scale = scale ? scale->scale : math::vec3(1.f, 1.f, 1.f);
+
+                    pending_anchor_information.push_back(
+                        AnchoredTrans{
+                            anchor,
+                            &trans,
+                            &l2p });
+                });
+
+            size_t count = 0;
+            for (;;)
+            {
+                count = pending_anchor_information.size();
+                for (auto idx = pending_anchor_information.begin();
+                    idx != pending_anchor_information.end();)
+                {
+                    auto current_idx = idx++;
+
+                    auto fnd = m_binded_trans.find(current_idx->l2p->parent_uid);
+                    if (fnd != m_binded_trans.end())
+                    {
+                        // 父变换已决，应用之
+                        const Translation* parent_trans = fnd->second;
+                        current_idx->trans->set_rotation(parent_trans->world_rotation * current_idx->l2p->rot);
+                        current_idx->trans->set_position(parent_trans->world_rotation * current_idx->l2p->pos + parent_trans->world_position);
+                        current_idx->trans->set_scale(current_idx->l2p->scale);
+
+                        // 完成应用，将当前变换绑定到binding，然后从pending中删除当前项
+                        if (current_idx->anchor_may_null != nullptr)
+                            m_binded_trans.insert(std::make_pair(current_idx->anchor_may_null->uid, current_idx->trans));
+
+                        pending_anchor_information.erase(current_idx);
+                    }
+                }
+                if (pending_anchor_information.size() == count)
+                {
+                    // 剩余变换缺失父变换或祖变换，不做处理以确保问题立即被发现；
+                    break;
+                }
+            }
+
+            // 到此为止，所有的变换均已应用到 Translation 上，现在更新变换矩阵
+            selector.exec(
+                [](Translation& trans)
+                {
+                    float temp_mat_trans[4][4] = {};
+                    temp_mat_trans[0][0] =
+                        temp_mat_trans[1][1] =
+                        temp_mat_trans[2][2] =
+                        temp_mat_trans[3][3] = 1.0f;
+                    temp_mat_trans[3][0] = trans.world_position.x;
+                    temp_mat_trans[3][1] = trans.world_position.y;
+                    temp_mat_trans[3][2] = trans.world_position.z;
+
+                    float temp_mat_rotation[4][4];
+                    trans.world_rotation.create_matrix(temp_mat_rotation);
+
+                    float tmp_rot_trans_mat[4][4];
+                    math::mat4xmat4(tmp_rot_trans_mat, temp_mat_trans, temp_mat_rotation);
+
+                    float temp_mat_scale[4][4] = {};
+                    temp_mat_scale[0][0] = trans.local_scale.x;
+                    temp_mat_scale[1][1] = trans.local_scale.y;
+                    temp_mat_scale[2][2] = trans.local_scale.z;
+                    temp_mat_scale[3][3] = 1.0f;
+                    math::mat4xmat4(trans.object2world, tmp_rot_trans_mat, temp_mat_scale);
+                });
         }
     };
 }
