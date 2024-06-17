@@ -104,12 +104,12 @@
 #define JEParseFromScriptType   JEParseFromScriptType
 #define JEParseToScriptType     JEParseToScriptType
 
-#define StateUpdate         StateUpdate     // 用于将初始状态给予各个组件(PhysicsUpdate Animation)
-#define PreUpdate           PreUpdate       // * 用户读取
-#define Update              Update          // * 用户写入
-#define ScriptUpdate        ScriptUpdate    // 用于脚本控制和更新(RuntimeScript)
-#define LateUpdate          LateUpdate      // * 用户更新
-#define ApplyUpdate         ApplyUpdate     // 用于最终影响一些特殊组件，这些组件通常不会被其他地方写入(Translation)
+#define PreUpdate           PreUpdate       // * 用户预更新，
+#define StateUpdate         StateUpdate     // 用于将初始状态给予各个组件(Animation)
+#define Update              Update          // * 用户更新
+#define PhysicsUpdate       PhysicsUpdate   // 用于物理引擎的状态更新(PhysicsUpdate)
+#define LateUpdate          LateUpdate      // * 用户延迟更新
+#define ApplyUpdate         ApplyUpdate     // 用于最终更新(Translation)
 #define CommitUpdate        CommitUpdate    // 用于最终提交(Graphic)
 
 /*
@@ -809,10 +809,10 @@ je_register_system_updater [基本接口]
 */
 JE_API void je_register_system_updater(
     const jeecs::typing::type_info* _type,
-    jeecs::typing::update_func_t _state_update,
     jeecs::typing::update_func_t _pre_update,
+    jeecs::typing::update_func_t _state_update,
     jeecs::typing::update_func_t _update,
-    jeecs::typing::update_func_t _script_update,
+    jeecs::typing::update_func_t _physics_update,
     jeecs::typing::update_func_t _late_update,
     jeecs::typing::update_func_t _apply_update,
     jeecs::typing::update_func_t _commit_update);
@@ -3603,7 +3603,7 @@ namespace jeecs
         JE_DECL_SFINAE_CHECKER_HELPLER(has_StateUpdate, &T::StateUpdate);
         JE_DECL_SFINAE_CHECKER_HELPLER(has_PreUpdate, &T::PreUpdate);
         JE_DECL_SFINAE_CHECKER_HELPLER(has_Update, &T::Update);
-        JE_DECL_SFINAE_CHECKER_HELPLER(has_ScriptUpdate, &T::ScriptUpdate);
+        JE_DECL_SFINAE_CHECKER_HELPLER(has_PhysicsUpdate, &T::PhysicsUpdate);
         JE_DECL_SFINAE_CHECKER_HELPLER(has_LateUpdate, &T::LateUpdate);
         JE_DECL_SFINAE_CHECKER_HELPLER(has_ApplyUpdate, &T::ApplyUpdate);
         JE_DECL_SFINAE_CHECKER_HELPLER(has_CommitUpdate, &T::CommitUpdate);
@@ -4223,26 +4223,27 @@ namespace jeecs
                         , typeid(T).name());
             }
 
-            static void state_update(void* _ptr)
+            static void pre_update(void* _ptr)
             {
                 if constexpr (typing::sfinae_is_game_system_v<T>)
                 {
                     T* sys = std::launder(reinterpret_cast<T*>(_ptr));
                     sys->_select_begin();
-                    if constexpr (typing::sfinae_has_StateUpdate<T>::value)
+
+                    if constexpr (typing::sfinae_has_PreUpdate<T>::value)
                     {
-                        sys->StateUpdate(sys->_select_continue());
+                        sys->PreUpdate(sys->_select_continue());
                     }
                 }
             }
-            static void pre_update(void* _ptr)
+            static void state_update(void* _ptr)
             {
                 if constexpr (typing::sfinae_is_game_system_v<T>)
                 {
-                    if constexpr (typing::sfinae_has_PreUpdate<T>::value)
+                    if constexpr (typing::sfinae_has_StateUpdate<T>::value)
                     {
                         T* sys = std::launder(reinterpret_cast<T*>(_ptr));
-                        sys->PreUpdate(sys->_select_continue());
+                        sys->StateUpdate(sys->_select_continue());
                     }
                 }
             }
@@ -4257,14 +4258,14 @@ namespace jeecs
                     }
                 }
             }
-            static void script_update(void* _ptr)
+            static void physics_update(void* _ptr)
             {
                 if constexpr (typing::sfinae_is_game_system_v<T>)
                 {
-                    if constexpr (typing::sfinae_has_ScriptUpdate<T>::value)
+                    if constexpr (typing::sfinae_has_PhysicsUpdate<T>::value)
                     {
                         T* sys = std::launder(reinterpret_cast<T*>(_ptr));
-                        sys->ScriptUpdate(sys->_select_continue());
+                        sys->PhysicsUpdate(sys->_select_continue());
                     }
                 }
             }
@@ -4647,7 +4648,7 @@ namespace jeecs
             update_func_t m_state_update;
             update_func_t m_pre_update;
             update_func_t m_update;
-            update_func_t m_script_update;
+            update_func_t m_physics_update;
             update_func_t m_late_update;
             update_func_t m_apply_update;
             update_func_t m_commit_update;
@@ -4823,10 +4824,10 @@ namespace jeecs
                 {
                     je_register_system_updater(
                         local_type,
-                        basic::default_functions<T>::state_update,
                         basic::default_functions<T>::pre_update,
+                        basic::default_functions<T>::state_update,
                         basic::default_functions<T>::update,
-                        basic::default_functions<T>::script_update,
+                        basic::default_functions<T>::physics_update,
                         basic::default_functions<T>::late_update,
                         basic::default_functions<T>::apply_update,
                         basic::default_functions<T>::commit_update);

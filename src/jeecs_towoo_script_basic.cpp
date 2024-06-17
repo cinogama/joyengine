@@ -650,10 +650,10 @@ const jeecs::typing::type_info* je_towoo_register_system(
                         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::mover);
 
                     je_register_system_updater(towoo_system_tinfo,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::state_update,
                         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::pre_update,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::state_update,
                         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::update,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::script_update,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::physics_update,
                         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::late_update,
                         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::apply_update,
                         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::commit_update);

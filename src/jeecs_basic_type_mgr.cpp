@@ -240,7 +240,7 @@ namespace jeecs_impl
             jeecs::typing::update_func_t _state_update,
             jeecs::typing::update_func_t _pre_update,
             jeecs::typing::update_func_t _update,
-            jeecs::typing::update_func_t _script_update,
+            jeecs::typing::update_func_t _physics_update,
             jeecs::typing::update_func_t _late_update,
             jeecs::typing::update_func_t _apply_update,
             jeecs::typing::update_func_t _commit_update)
@@ -256,7 +256,7 @@ namespace jeecs_impl
                 assert(_state_update != nullptr);
                 assert(_pre_update != nullptr);
                 assert(_update != nullptr);
-                assert(_script_update != nullptr);
+                assert(_physics_update != nullptr);
                 assert(_late_update != nullptr);
                 assert(_apply_update != nullptr);
                 assert(_commit_update != nullptr);
@@ -265,7 +265,7 @@ namespace jeecs_impl
                 updater->m_state_update = _state_update;
                 updater->m_pre_update = _pre_update;
                 updater->m_update = _update;
-                updater->m_script_update = _script_update;
+                updater->m_physics_update = _physics_update;
                 updater->m_late_update = _late_update;
                 updater->m_apply_update = _apply_update;
                 updater->m_commit_update = _commit_update;
@@ -516,10 +516,10 @@ void je_register_script_parser(
 
 void je_register_system_updater(
     const jeecs::typing::type_info* _type,
-    jeecs::typing::update_func_t _state_update,
     jeecs::typing::update_func_t _pre_update,
+    jeecs::typing::update_func_t _state_update,
     jeecs::typing::update_func_t _update,
-    jeecs::typing::update_func_t _script_update,
+    jeecs::typing::update_func_t _physics_update,
     jeecs::typing::update_func_t _late_update,
     jeecs::typing::update_func_t _apply_update,
     jeecs::typing::update_func_t _commit_update)
@@ -530,7 +530,7 @@ void je_register_system_updater(
             _state_update,
             _pre_update,
             _update,
-            _script_update,
+            _physics_update,
             _late_update,
             _apply_update,
             _commit_update);

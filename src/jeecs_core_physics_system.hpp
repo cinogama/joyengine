@@ -220,7 +220,7 @@ namespace jeecs
             return true;
         }
 
-        void StateUpdate(jeecs::selector& selector)
+        void PhysicsUpdate(jeecs::selector& selector)
         {
             ++m_simulate_round_count;
 

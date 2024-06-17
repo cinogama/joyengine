@@ -125,12 +125,15 @@ namespace jeecs_impl
         bool pop(T* out_value)
         {
             size_t read_place = _m_head.load();
-            size_t next_read_place = (read_place + 1) % _m_queue_size;
+            size_t next_read_place;
 
             do
             {
                 if (read_place == _m_tail_for_reading.load())
                     return false;
+
+                next_read_place = (read_place + 1) % _m_queue_size;
+                
             } while (!_m_head.compare_exchange_weak(read_place, next_read_place));
 
             *out_value = _m_queue_buffer[read_place];
@@ -532,16 +535,10 @@ namespace jeecs_impl
                     {
                         auto* moving_entity_meta = &pick_chunk_metas[i];
 
-                        // 如果当前位置并不空闲，且实体状态一切OK，则开始转移
+                        // 如果当前位置并不空闲，且实体状态一切OK，则需要开始转移
                         if (free_places.find(i) == free_places.end())
                         {
-                            if (moving_entity_meta->m_stat == jeecs::game_entity::entity_stat::UNAVAILABLE)
-                            {
-                                // 当前区块被占用，但尚未完成提交，状态仍然是UNAVAILABLE；这种实体无法搬运，
-                                // 因为提交请求会强关联到这个位置，擅自移动会导致激活失败，此处直接跳过，不做处理
-                                // NOTE: 不过如果区块中有这种实体，这个区块就没法释放了（哭）
-                            }
-                            else
+                            if (moving_entity_meta->m_stat == jeecs::game_entity::entity_stat::READY)
                             {
                                 // OK, 继续搬运，这搬运组件多是一件美事啊
                                 bool alloc_new_entity_success = true;
@@ -553,14 +550,14 @@ namespace jeecs_impl
                                 while (!target_chunk->alloc_entity_id(&new_entity_id, &new_entity_version))
                                 {
                                     // 如果target_chunk满了，就移动到下一个target
-                                    if (pick_chunk_idx <= target_chunk_idx + 1)
+                                    if (target_chunk_idx + 1 < pick_chunk_idx)
+                                        target_chunk = chunks[++target_chunk_idx];
+                                    else
                                     {
                                         // 哦吼，满啦！
                                         alloc_new_entity_success = false;
                                         break;
-                                    }
-                                    else
-                                        target_chunk = chunks[++target_chunk_idx];
+                                    }                                       
                                 }
 
                                 if (alloc_new_entity_success)
@@ -597,6 +594,13 @@ namespace jeecs_impl
                                     break;
                                 }
                             }
+                            else
+                            {
+                                // 当前区块被占用，可能是预设体或者尚未完成提交的实体，我们无法执行任何操作
+                                // 因为无论是哪一种，都必须保证实体的数据保持在原地；
+                                // 
+                                // TODO: 将包含预设体的区块移动到前面，这样可以最大化利用空间
+                            }
                         }
                         else
                         {
@@ -612,6 +616,8 @@ namespace jeecs_impl
                     // 如果pick_chunk中的实体都是空闲的，那么我们就可以直接释放这个chunk了
                     if (stubborn_count == 0)
                     {
+                        assert(!gap_filling_completed);
+
                         _m_free_count -= _m_entity_count_per_chunk;
                         _m_total_count -= _m_entity_count_per_chunk;
 
@@ -640,33 +646,37 @@ namespace jeecs_impl
             std::shared_lock sg1(_m_chunk_list_defragmentation_mx);
             while (true)
             {
-                size_t free_entity_count = _m_free_count;
+                size_t free_entity_count = _m_free_count.load();
                 while (free_entity_count)
                 {
-                    if (_m_free_count.compare_exchange_weak(free_entity_count, free_entity_count - 1))
-                    {
-                        // OK There is a usable place for entity
-                        arch_chunk* peek_chunk = _m_chunks.peek();
-                        while (peek_chunk)
-                        {
-                            if (peek_chunk->alloc_entity_id(out_eid, out_eversion))
-                            {
-                                *out_chunk = peek_chunk;
-                                return;
-                            }
-                            peek_chunk = peek_chunk->last;
-                        }
-                        // 有空位，但是没有找到空位（我在说什么？），这是不可能的！
-                        abort();
-                    }
-                }
+                    if (!_m_free_count.compare_exchange_weak(
+                        free_entity_count, 
+                        free_entity_count - 1))
+                        continue;
 
+                    // OK There is a usable place for entity
+                    arch_chunk* peek_chunk = _m_chunks.peek();
+                    while (peek_chunk)
+                    {
+                        if (peek_chunk->alloc_entity_id(out_eid, out_eversion))
+                        {
+                            *out_chunk = peek_chunk;
+                            return;
+                        }
+                        peek_chunk = peek_chunk->last;
+                    }
+                    // 有空位，但是没有找到空位（我在说什么？），这是不可能的！
+                    abort();
+                }
                 // OK, 没有空位了，我们需要创建新的chunk
+                // 
+                // NOTE: 实际上如果有并行执行的添加实体操作，此处可能创建"不必要"的实体区块
+                //      不过问题不大，因为我们有碎片整理机制。
                 arch_chunk* new_chunk = new arch_chunk(this);
                 _m_chunks.add_one(new_chunk);
 
-                _m_free_count += _m_entity_count_per_chunk;
                 _m_total_count += _m_entity_count_per_chunk;
+                _m_free_count += _m_entity_count_per_chunk;
             }
         }
         entity instance_entity(const entity* prefab) noexcept
@@ -2360,14 +2370,14 @@ namespace jeecs_impl
             active_systems.begin(), active_systems.end(),
             [cur_world](ecs_world::system_container_t::value_type& val)
             {
-                val.first->m_system_updaters->m_state_update(val.second);
+                val.first->m_system_updaters->m_pre_update(val.second);
             }
         );
         ParallelForeach(
             active_systems.begin(), active_systems.end(),
             [cur_world](ecs_world::system_container_t::value_type& val)
             {
-                val.first->m_system_updaters->m_pre_update(val.second);
+                val.first->m_system_updaters->m_state_update(val.second);
             }
         );
         ParallelForeach(
@@ -2381,7 +2391,7 @@ namespace jeecs_impl
             active_systems.begin(), active_systems.end(),
             [cur_world](ecs_world::system_container_t::value_type& val)
             {
-                val.first->m_system_updaters->m_script_update(val.second);
+                val.first->m_system_updaters->m_physics_update(val.second);
             }
         );
         ParallelForeach(
@@ -2513,6 +2523,7 @@ void je_ecs_world_create_entity_with_components(
 
     auto&& entity = std::launder(reinterpret_cast<jeecs_impl::ecs_world*>(world))
         ->create_entity_with_component(types, jeecs::game_entity::entity_stat::READY);
+
     out_entity->_set_arch_chunk_info(entity._m_in_chunk, entity._m_id, entity._m_version);
 }
 void je_ecs_world_create_prefab_with_components(
