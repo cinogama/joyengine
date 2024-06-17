@@ -308,6 +308,9 @@ namespace jeecs_impl
         void undeclear_type(jeecs::typing::type_info* tinfo)
         {
             std::lock_guard g1(_m_factory_mx);
+
+            // Update the age count.
+            ++m_type_unregistered_count;
             
             assert(tinfo->m_id != jeecs::typing::INVALID_TYPE_ID && tinfo->m_id <= _m_type_records.size());
             auto* type_list = _m_type_records.at(tinfo->m_id - 1);

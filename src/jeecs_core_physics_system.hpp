@@ -204,7 +204,7 @@ namespace jeecs
             , m_simulate_round_count(0)
         {
             assert(JE_B2JBody(b2_nullBodyId) == Physics2D::Rigidbody::null_rigidbody);
-            assert(JE_B2JBody(b2_nullShapeId) == Physics2D::Collider::null_shape);
+            assert(JE_B2JShape(b2_nullShapeId) == Physics2D::Collider::null_shape);
         }
 
         inline static bool check_if_need_update_vec2(const b2Vec2& a, const math::vec2& b) noexcept
