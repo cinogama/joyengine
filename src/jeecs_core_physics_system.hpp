@@ -603,18 +603,21 @@ namespace jeecs
                                 kinematics->lock_movement_x ? 0.0f : new_velocity.x,
                                 kinematics->lock_movement_y ? 0.0f : new_velocity.y
                             };
-                            localposition.set_global_position(
+                            translation.set_global_position(
                                 math::vec3(
                                     kinematics->lock_movement_x ? translation.world_position.x : new_position.x - final_offset_position.x,
                                     kinematics->lock_movement_y ? translation.world_position.y : new_position.y - final_offset_position.y,
                                     translation.world_position.z),
-                                translation, &localrotation);
+                                &localposition,
+                                &localrotation);
 
                             kinematics->angular_velocity = b2Body_GetAngularVelocity(rigidbody_instance);
 
                             auto world_angle = translation.world_rotation.euler_angle();
                             world_angle.z = final_offset_rotation;
-                            localrotation.set_global_rotation(math::quat::euler(world_angle), translation);
+                            translation.set_global_rotation(
+                                math::quat::euler(world_angle),
+                                &localrotation);
                         }
                         if (collisions != nullptr)
                         {

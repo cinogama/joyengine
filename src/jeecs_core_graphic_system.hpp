@@ -398,7 +398,7 @@ public let frag =
         {
         }
 
-        void CommitUpdate(jeecs::selector& selector)
+        void GraphicUpdate(jeecs::selector& selector)
         {
             auto WINDOWS_SIZE = jeecs::input::windowsize();
             WINDOWS_WIDTH = (size_t)WINDOWS_SIZE.x;
@@ -718,7 +718,7 @@ public let frag =
 
         }
 
-        void CommitUpdate(jeecs::selector& selector)
+        void GraphicUpdate(jeecs::selector& selector)
         {
             auto WINDOWS_SIZE = jeecs::input::windowsize();
             WINDOWS_WIDTH = (size_t)WINDOWS_SIZE.x;
@@ -1525,7 +1525,7 @@ public func frag(_: v2f)
 
         }
 
-        void CommitUpdate(jeecs::selector& selector)
+        void GraphicUpdate(jeecs::selector& selector)
         {
             auto WINDOWS_SIZE = jeecs::input::windowsize();
             WINDOWS_WIDTH = (size_t)WINDOWS_SIZE.x;

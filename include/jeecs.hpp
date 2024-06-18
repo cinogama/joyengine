@@ -105,12 +105,13 @@
 #define JEParseToScriptType     JEParseToScriptType
 
 #define PreUpdate           PreUpdate       // * 用户预更新，
-#define StateUpdate         StateUpdate     // 用于将初始状态给予各个组件(Animation)
+#define StateUpdate         StateUpdate     // 用于将初始状态给予各个组件 (Animation)
 #define Update              Update          // * 用户更新
-#define PhysicsUpdate       PhysicsUpdate   // 用于物理引擎的状态更新(PhysicsUpdate)
-#define ApplyUpdate         ApplyUpdate     // 用于最终更新(Translation)
+#define TransformUpdate     TransformUpdate // 用于更新物体的变换和关系 (Transform)
+#define PhysicsUpdate       PhysicsUpdate   // 用于物理引擎的状态更新 (PhysicsUpdate)
 #define LateUpdate          LateUpdate      // * 用户延迟更新
-#define CommitUpdate        CommitUpdate    // 用于最终提交(Graphic)
+#define CommitUpdate        CommitUpdate    // 用于提交最终生效的数据 (Transform, Audio)
+#define GraphicUpdate       GraphicUpdate   // 用于将数据呈现到用户界面
 
 /*
 jeecs [命名空间]
@@ -508,7 +509,7 @@ namespace jeecs
 
         inline bool operator == (const game_entity& e) const noexcept
         {
-            return _m_in_chunk == e._m_in_chunk && 
+            return _m_in_chunk == e._m_in_chunk &&
                 _m_id == e._m_id &&
                 _m_version == e._m_version;
         }
@@ -813,9 +814,10 @@ JE_API void je_register_system_updater(
     jeecs::typing::update_func_t _state_update,
     jeecs::typing::update_func_t _update,
     jeecs::typing::update_func_t _physics_update,
+    jeecs::typing::update_func_t _transform_update,
     jeecs::typing::update_func_t _late_update,
-    jeecs::typing::update_func_t _apply_update,
-    jeecs::typing::update_func_t _commit_update);
+    jeecs::typing::update_func_t _commit_update,
+    jeecs::typing::update_func_t _graphic_update);
 
 ////////////////////// ToWoo //////////////////////
 /*
@@ -3600,13 +3602,14 @@ namespace jeecs
         // void T::JEParseToScriptType(wo_vm vm, wo_value val) const
         JE_DECL_SFINAE_CHECKER_HELPLER(has_JEParseToScriptType, &T::JEParseToScriptType);
 
-        JE_DECL_SFINAE_CHECKER_HELPLER(has_StateUpdate, &T::StateUpdate);
         JE_DECL_SFINAE_CHECKER_HELPLER(has_PreUpdate, &T::PreUpdate);
+        JE_DECL_SFINAE_CHECKER_HELPLER(has_StateUpdate, &T::StateUpdate);
         JE_DECL_SFINAE_CHECKER_HELPLER(has_Update, &T::Update);
         JE_DECL_SFINAE_CHECKER_HELPLER(has_PhysicsUpdate, &T::PhysicsUpdate);
+        JE_DECL_SFINAE_CHECKER_HELPLER(has_TransformUpdate, &T::TransformUpdate);
         JE_DECL_SFINAE_CHECKER_HELPLER(has_LateUpdate, &T::LateUpdate);
-        JE_DECL_SFINAE_CHECKER_HELPLER(has_ApplyUpdate, &T::ApplyUpdate);
         JE_DECL_SFINAE_CHECKER_HELPLER(has_CommitUpdate, &T::CommitUpdate);
+        JE_DECL_SFINAE_CHECKER_HELPLER(has_GraphicUpdate, &T::GraphicUpdate);
 
         JE_DECL_SFINAE_CHECKER_HELPLER(has__select_begin, &T::_select_begin);
         JE_DECL_SFINAE_CHECKER_HELPLER(has__select_continue, &T::_select_continue);
@@ -4269,6 +4272,17 @@ namespace jeecs
                     }
                 }
             }
+            static void transform_update(void* _ptr)
+            {
+                if constexpr (typing::sfinae_is_game_system_v<T>)
+                {
+                    if constexpr (typing::sfinae_has_TransformUpdate<T>::value)
+                    {
+                        T* sys = std::launder(reinterpret_cast<T*>(_ptr));
+                        sys->TransformUpdate(sys->_select_continue());
+                    }
+                }
+            }
             static void late_update(void* _ptr)
             {
                 if constexpr (typing::sfinae_is_game_system_v<T>)
@@ -4280,17 +4294,6 @@ namespace jeecs
                     }
                 }
             }
-            static void apply_update(void* _ptr)
-            {
-                if constexpr (typing::sfinae_is_game_system_v<T>)
-                {
-                    if constexpr (typing::sfinae_has_ApplyUpdate<T>::value)
-                    {
-                        T* sys = std::launder(reinterpret_cast<T*>(_ptr));
-                        sys->ApplyUpdate(sys->_select_continue());
-                    }
-                }
-            }
             static void commit_update(void* _ptr)
             {
                 if constexpr (typing::sfinae_is_game_system_v<T>)
@@ -4299,6 +4302,17 @@ namespace jeecs
                     {
                         T* sys = std::launder(reinterpret_cast<T*>(_ptr));
                         sys->CommitUpdate(sys->_select_continue());
+                    }
+                }
+            }
+            static void graphic_update(void* _ptr)
+            {
+                if constexpr (typing::sfinae_is_game_system_v<T>)
+                {
+                    if constexpr (typing::sfinae_has_GraphicUpdate<T>::value)
+                    {
+                        T* sys = std::launder(reinterpret_cast<T*>(_ptr));
+                        sys->GraphicUpdate(sys->_select_continue());
                     }
                 }
             }
@@ -4649,9 +4663,10 @@ namespace jeecs
             update_func_t m_state_update;
             update_func_t m_update;
             update_func_t m_physics_update;
+            update_func_t m_transform_update;
             update_func_t m_late_update;
-            update_func_t m_apply_update;
             update_func_t m_commit_update;
+            update_func_t m_graphic_update;
         };
 
         class type_unregister_guard
@@ -4828,9 +4843,10 @@ namespace jeecs
                         basic::default_functions<T>::state_update,
                         basic::default_functions<T>::update,
                         basic::default_functions<T>::physics_update,
+                        basic::default_functions<T>::transform_update,
                         basic::default_functions<T>::late_update,
-                        basic::default_functions<T>::apply_update,
-                        basic::default_functions<T>::commit_update);
+                        basic::default_functions<T>::commit_update,
+                        basic::default_functions<T>::graphic_update);
                 }
 
                 if constexpr (sfinae_has_JEScriptTypeName<T>::value &&
@@ -8111,41 +8127,9 @@ namespace jeecs
 
         */
 
-        struct Translation
-        {
-            float object2world[4][4] = { };
-
-            math::vec3 world_position = { 0,0,0 };
-            math::quat world_rotation;
-            math::vec3 local_scale = { 1,1,1 };
-
-            inline void set_position(const math::vec3& _v3) noexcept
-            {
-                world_position = _v3;
-            }
-            inline void set_scale(const math::vec3& _v3) noexcept
-            {
-                local_scale = _v3;
-            }
-            inline void set_rotation(const math::quat& _quat)noexcept
-            {
-                world_rotation = _quat;
-            }
-        };
-
         struct LocalRotation
         {
             math::quat rot;
-            inline math::quat get_parent_global_rotation(const Translation& translation)const noexcept
-            {
-                return translation.world_rotation * rot.inverse();
-            }
-            inline void set_global_rotation(const math::quat& _rot, const Translation& translation) noexcept
-            {
-                auto x = get_parent_global_rotation(translation).inverse();
-                rot = _rot * get_parent_global_rotation(translation).inverse();
-            }
-
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &LocalRotation::rot, "rot");
@@ -8155,23 +8139,6 @@ namespace jeecs
         struct LocalPosition
         {
             math::vec3 pos;
-
-            inline math::vec3 get_parent_global_position(const Translation& translation, const LocalRotation* rotation) const noexcept
-            {
-                if (rotation)
-                    return translation.world_position - rotation->get_parent_global_rotation(translation) * pos;
-                else
-                    return translation.world_position - translation.world_rotation * pos;
-            }
-
-            void set_global_position(const math::vec3& _pos, const Translation& translation, const LocalRotation* rotation) noexcept
-            {
-                if (rotation)
-                    pos = rotation->get_parent_global_rotation(translation).inverse() * (_pos - get_parent_global_position(translation, rotation));
-                else
-                    pos = translation.world_rotation.inverse() * (_pos - get_parent_global_position(translation, nullptr));
-            }
-
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &LocalPosition::pos, "pos");
@@ -8185,6 +8152,41 @@ namespace jeecs
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &LocalScale::scale, "scale");
+            }
+        };
+
+        struct Translation
+        {
+            float object2world[4][4] = { };
+
+            math::vec3 world_position = { 0,0,0 };
+            math::quat world_rotation;
+            math::vec3 local_scale = { 1,1,1 };
+
+            math::quat get_parent_rotation(const LocalRotation* local_rot) const noexcept
+            {
+                if (local_rot != nullptr)
+                    return world_rotation * local_rot->rot.inverse();
+                return world_rotation;
+            }
+            math::vec3 get_parent_position(const LocalPosition* local_pos, const LocalRotation* rotation) const noexcept
+            {
+                if (local_pos)
+                    return world_position - get_parent_rotation(rotation) * local_pos->pos;
+                return world_position;
+            }
+
+            void set_global_rotation(const math::quat& _rot, LocalRotation* rot)
+            {
+                if (rot)
+                    rot->rot = _rot * get_parent_rotation(rot).inverse();
+                world_rotation = _rot;
+            }
+            void set_global_position(const math::vec3& _pos, LocalPosition* pos, const LocalRotation* rot)
+            {
+                if (pos)
+                    pos->pos = get_parent_rotation(rot).inverse() * (_pos - get_parent_position(pos, rot));
+                world_position = _pos;
             }
         };
 
@@ -8672,7 +8674,7 @@ namespace jeecs
                 shape_id_t native_shape = null_shape;
             };
         }
-       
+
         struct CollisionResult
         {
             struct collide_result

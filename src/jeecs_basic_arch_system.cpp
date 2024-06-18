@@ -2414,6 +2414,13 @@ namespace jeecs_impl
             active_systems.begin(), active_systems.end(),
             [cur_world](ecs_world::system_container_t::value_type& val)
             {
+                val.first->m_system_updaters->m_transform_update(val.second);
+            }
+        );
+        ParallelForeach(
+            active_systems.begin(), active_systems.end(),
+            [cur_world](ecs_world::system_container_t::value_type& val)
+            {
                 val.first->m_system_updaters->m_physics_update(val.second);
             }
         );
@@ -2428,14 +2435,14 @@ namespace jeecs_impl
             active_systems.begin(), active_systems.end(),
             [cur_world](ecs_world::system_container_t::value_type& val)
             {
-                val.first->m_system_updaters->m_apply_update(val.second);
+                val.first->m_system_updaters->m_commit_update(val.second);
             }
         );
         ParallelForeach(
             active_systems.begin(), active_systems.end(),
             [cur_world](ecs_world::system_container_t::value_type& val)
             {
-                val.first->m_system_updaters->m_commit_update(val.second);
+                val.first->m_system_updaters->m_graphic_update(val.second);
             }
         );
     }

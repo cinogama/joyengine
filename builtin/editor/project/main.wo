@@ -979,17 +979,15 @@ namespace editor
             let camera_local_rotation = camera->towoo::get_component :<Transform::LocalRotation>->val;
 
             let rpos = cameradat->getor("root_position", [0., 0., 0.]: dynamic) as array<dynamic>->>\e = e as real;;
-            do root_local_position->set_global_pos(
+            root_translation->set_global_pos(
                 (rpos[0], rpos[1], rpos[2]): vec3, 
-                root_translation, 
-                option::value(root_local_rotation)
-            );
+                option::value(root_local_position), 
+                option::value(root_local_rotation));
 
             let rrot = cameradat->getor("root_rotation", [0., 0., 0., 1.]: dynamic) as array<dynamic>->>\e = e as real;;
-            do root_local_rotation->set_global_rot(
+            root_translation->set_global_rot(
                 (rrot[0], rrot[1], rrot[2], rrot[3]): quat, 
-                root_translation
-            );
+                option::value(root_local_rotation));
 
             let crot = cameradat->getor("camera_rotation", [0., 0., 0., 1.]: dynamic) as array<dynamic>->>\e = e as real;;
             camera_local_rotation.rot->set((crot[0], crot[1], crot[2], crot[3]): quat);

@@ -683,11 +683,10 @@ public let frag =
 
                     if (mover.mode == Editor::EntityMover::mover_mode::movement && editing_pos_may_null)
                     {
-                        editing_pos_may_null->set_global_position(
+                        editing_trans->set_global_position(
                             editing_trans->world_position + diff.dot(screen_axis) * (trans.world_rotation * (mover.axis * distance * factor)),
-                            *editing_trans,
-                            editing_rot_may_null
-                        );
+                            editing_pos_may_null,
+                            editing_rot_may_null);
                     }
                     else if (mover.mode == Editor::EntityMover::mover_mode::scale && editing_scale_may_null)
                     {
@@ -755,7 +754,7 @@ public let frag =
             }
         }
 
-        void CommitUpdate(jeecs::selector& selector)
+        void StateUpdate(jeecs::selector& selector)
         {
             _inputs.w = input::keydown(input::keycode::W);
             _inputs.s = input::keydown(input::keycode::S);

@@ -241,9 +241,10 @@ namespace jeecs_impl
             jeecs::typing::update_func_t _state_update,
             jeecs::typing::update_func_t _update,
             jeecs::typing::update_func_t _physics_update,
+            jeecs::typing::update_func_t _transform_update,
             jeecs::typing::update_func_t _late_update,
-            jeecs::typing::update_func_t _apply_update,
-            jeecs::typing::update_func_t _commit_update)
+            jeecs::typing::update_func_t _commit_update,
+            jeecs::typing::update_func_t _graphic_update)
         {
             if (_typeinfo->m_system_updaters != nullptr)
             {
@@ -257,18 +258,20 @@ namespace jeecs_impl
                 assert(_state_update != nullptr);
                 assert(_update != nullptr);
                 assert(_physics_update != nullptr);
+                assert(_transform_update != nullptr);
                 assert(_late_update != nullptr);
-                assert(_apply_update != nullptr);
                 assert(_commit_update != nullptr);
+                assert(_graphic_update != nullptr);
 
                 jeecs::typing::typeinfo_system_updater* updater = new jeecs::typing::typeinfo_system_updater();
                 updater->m_pre_update = _pre_update;
                 updater->m_state_update = _state_update;
                 updater->m_update = _update;
                 updater->m_physics_update = _physics_update;
+                updater->m_transform_update = _transform_update;
                 updater->m_late_update = _late_update;
-                updater->m_apply_update = _apply_update;
                 updater->m_commit_update = _commit_update;
+                updater->m_graphic_update = _graphic_update;
 
                 _typeinfo->m_system_updaters = updater;
             }
@@ -520,9 +523,10 @@ void je_register_system_updater(
     jeecs::typing::update_func_t _state_update,
     jeecs::typing::update_func_t _update,
     jeecs::typing::update_func_t _physics_update,
+    jeecs::typing::update_func_t _transform_update,
     jeecs::typing::update_func_t _late_update,
-    jeecs::typing::update_func_t _apply_update,
-    jeecs::typing::update_func_t _commit_update)
+    jeecs::typing::update_func_t _commit_update,
+    jeecs::typing::update_func_t _graphic_update)
 {
     jeecs_impl::global_factory_holder::holder()
         ->declear_system_updater(
@@ -531,9 +535,10 @@ void je_register_system_updater(
             _state_update,
             _update,
             _physics_update,
+            _transform_update,
             _late_update,
-            _apply_update,
-            _commit_update);
+            _commit_update,
+            _graphic_update);
 }
 
 ///////////////////////////////////////////////////////////////////////////

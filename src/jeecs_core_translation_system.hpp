@@ -36,7 +36,7 @@ namespace jeecs
         {
         }
 
-        void ApplyUpdate(jeecs::selector& selector)
+        void TransformUpdate(jeecs::selector& selector)
         {
             m_binded_trans.clear();
 
@@ -55,9 +55,9 @@ namespace jeecs
                     l2w.rot = rotation ? rotation->rot : math::quat();
                     l2w.scale = scale ? scale->scale : math::vec3(1.f, 1.f, 1.f);
 
-                    trans.set_rotation(l2w.rot);
-                    trans.set_position(l2w.pos);
-                    trans.set_scale(l2w.scale);
+                    trans.world_rotation = l2w.rot;
+                    trans.world_position = l2w.pos;
+                    trans.local_scale = l2w.scale;
 
                     if (anchor != nullptr)
                     {
@@ -103,9 +103,9 @@ namespace jeecs
                     {
                         // 父变换已决，应用之
                         const Translation* parent_trans = fnd->second;
-                        current_idx->trans->set_rotation(parent_trans->world_rotation * current_idx->l2p->rot);
-                        current_idx->trans->set_position(parent_trans->world_rotation * current_idx->l2p->pos + parent_trans->world_position);
-                        current_idx->trans->set_scale(current_idx->l2p->scale);
+                        current_idx->trans->world_rotation = parent_trans->world_rotation * current_idx->l2p->rot;
+                        current_idx->trans->world_position = parent_trans->world_rotation * current_idx->l2p->pos + parent_trans->world_position;
+                        current_idx->trans->local_scale = current_idx->l2p->scale;
 
                         // 完成应用，将当前变换绑定到binding，然后从pending中删除当前项
                         if (current_idx->anchor_may_null != nullptr)
@@ -120,7 +120,9 @@ namespace jeecs
                     break;
                 }
             }
-
+        }
+        void CommitUpdate(jeecs::selector& selector)
+        {
             // 到此为止，所有的变换均已应用到 Translation 上，现在更新变换矩阵
             selector.exec(
                 [](Translation& trans)

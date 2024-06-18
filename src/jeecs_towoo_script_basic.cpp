@@ -654,9 +654,10 @@ const jeecs::typing::type_info* je_towoo_register_system(
                         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::state_update,
                         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::update,
                         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::physics_update,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::transform_update,
                         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::late_update,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::apply_update,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::commit_update);
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::commit_update,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::graphic_update);
 
                     assert(jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems.find(towoo_system_tinfo) ==
                         jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems.end());
@@ -1576,14 +1577,12 @@ WO_API wo_api wojeapi_towoo_math_quat_slerp(wo_vm vm, wo_value args)
 
 WO_API wo_api wojeapi_towoo_physics2d_collisionresult_all(wo_vm vm, wo_value args)
 {
-    wo_value c = wo_push_empty(vm);
-    wo_struct_get(c, args + 0, 0);
-    auto* collisionResult = (jeecs::Physics2D::CollisionResult*)wo_pointer(c);
+    auto& collisionResult = wo_component<jeecs::Physics2D::CollisionResult>(args + 0);
 
-    wo_set_map(c, vm, collisionResult->results.size());
+    wo_value c = wo_push_map(vm, collisionResult.results.size());
     auto key = wo_push_empty(vm);
     auto val = wo_push_empty(vm);
-    for (auto& [rigidbody, result] : collisionResult->results)
+    for (auto& [rigidbody, result] : collisionResult.results)
     {
         jeecs::towoo::ToWooBaseSystem::create_component_struct(
             key, vm, rigidbody, jeecs::typing::type_info::of<jeecs::Physics2D::Rigidbody>());
@@ -1602,14 +1601,10 @@ WO_API wo_api wojeapi_towoo_physics2d_collisionresult_all(wo_vm vm, wo_value arg
 
 WO_API wo_api wojeapi_towoo_physics2d_collisionresult_check(wo_vm vm, wo_value args)
 {
-    wo_value c = wo_push_empty(vm);
-    wo_struct_get(c, args + 0, 0);
-    auto* collisionResult = (jeecs::Physics2D::CollisionResult*)wo_pointer(c);
+    auto& collisionResult = wo_component<jeecs::Physics2D::CollisionResult>(args + 0);
+    auto& rigidbody = wo_component<jeecs::Physics2D::Rigidbody>(args + 1);
 
-    wo_struct_get(c, args + 1, 0);
-    auto* rigidbody = (jeecs::Physics2D::Rigidbody*)wo_pointer(c);
-
-    auto* result = collisionResult->check(rigidbody);
+    auto* result = collisionResult.check(&rigidbody);
     if (result != nullptr)
     {
         wo_value ret = wo_push_struct(vm, 2);
@@ -1623,24 +1618,20 @@ WO_API wo_api wojeapi_towoo_physics2d_collisionresult_check(wo_vm vm, wo_value a
 
 WO_API wo_api wojeapi_towoo_renderer_textures_bind_texture(wo_vm vm, wo_value args)
 {
-    wo_value c = wo_push_empty(vm);
-    wo_struct_get(c, args + 0, 0);
-    auto* textures = (jeecs::Renderer::Textures*)wo_pointer(c);
+    auto& textures = wo_component<jeecs::Renderer::Textures>(args + 0);
     size_t pass = (size_t)wo_int(args + 1);
     auto* tex = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 2);
 
-    textures->bind_texture(pass, *tex);
+    textures.bind_texture(pass, *tex);
     return wo_ret_void(vm);
 }
 
 WO_API wo_api wojeapi_towoo_renderer_textures_get_texture(wo_vm vm, wo_value args)
 {
-    wo_value c = wo_push_empty(vm);
-    wo_struct_get(c, args + 0, 0);
-    auto* textures = (jeecs::Renderer::Textures*)wo_pointer(c);
+    auto& textures = wo_component<jeecs::Renderer::Textures>(args + 0);
     size_t pass = (size_t)wo_int(args + 1);
 
-    auto tex = textures->get_texture(pass);
+    auto tex = textures.get_texture(pass);
 
     if (tex != nullptr)
     {
@@ -1657,9 +1648,7 @@ WO_API wo_api wojeapi_towoo_renderer_textures_get_texture(wo_vm vm, wo_value arg
 
 WO_API wo_api wojeapi_towoo_renderer_shaders_set_uniform(wo_vm vm, wo_value args)
 {
-    wo_value c = wo_push_empty(vm);
-    wo_struct_get(c, args + 0, 0);
-    auto* shaders = (jeecs::Renderer::Shaders*)wo_pointer(c);
+    auto& shaders = wo_component<jeecs::Renderer::Shaders>(args + 0);
     const char* name = wo_string(args + 1);
     wo_value val = args + 2;
 
@@ -1667,9 +1656,9 @@ WO_API wo_api wojeapi_towoo_renderer_shaders_set_uniform(wo_vm vm, wo_value args
     switch (valtype)
     {
     case WO_INTEGER_TYPE:
-        shaders->set_uniform(name, (int)wo_int(val)); break;
+        shaders.set_uniform(name, (int)wo_int(val)); break;
     case WO_REAL_TYPE:
-        shaders->set_uniform(name, wo_float(val)); break;
+        shaders.set_uniform(name, wo_float(val)); break;
     case WO_STRUCT_TYPE:
     {
         wo_value v = wo_push_empty(vm);
@@ -1677,38 +1666,17 @@ WO_API wo_api wojeapi_towoo_renderer_shaders_set_uniform(wo_vm vm, wo_value args
         {
         case 2:
         {
-            jeecs::math::vec2 v2;
-            wo_struct_get(v, val, 0);
-            v2.x = wo_float(v);
-            wo_struct_get(v, val, 1);
-            v2.y = wo_float(v);
-            shaders->set_uniform(name, v2);
+            shaders.set_uniform(name, wo_vec2(val));
             break;
         }
         case 3:
         {
-            jeecs::math::vec3 v3;
-            wo_struct_get(v, val, 0);
-            v3.x = wo_float(v);
-            wo_struct_get(v, val, 1);
-            v3.y = wo_float(v);
-            wo_struct_get(v, val, 2);
-            v3.z = wo_float(v);
-            shaders->set_uniform(name, v3);
+            shaders.set_uniform(name, wo_vec3(val));
             break;
         }
         case 4:
         {
-            jeecs::math::vec4 v4;
-            wo_struct_get(v, val, 0);
-            v4.x = wo_float(v);
-            wo_struct_get(v, val, 1);
-            v4.y = wo_float(v);
-            wo_struct_get(v, val, 2);
-            v4.z = wo_float(v);
-            wo_struct_get(v, val, 3);
-            v4.w = wo_float(v);
-            shaders->set_uniform(name, v4);
+            shaders.set_uniform(name, wo_vec4(val));
             break;
         }
         default:
@@ -1724,16 +1692,16 @@ WO_API wo_api wojeapi_towoo_renderer_shaders_set_uniform(wo_vm vm, wo_value args
 
 WO_API wo_api wojeapi_towoo_renderer_shaders_set_shaders(wo_vm vm, wo_value args)
 {
-    wo_value c = wo_push_empty(vm);
-    wo_struct_get(c, args + 0, 0);
-    auto* shaders = (jeecs::Renderer::Shaders*)wo_pointer(c);
+    auto& shaders = wo_component<jeecs::Renderer::Shaders>(args + 0);
 
-    shaders->shaders.clear();
+    wo_value c = wo_push_empty(vm);
+
+    shaders.shaders.clear();
     auto setting_shaders_len = wo_lengthof(args + 1);
     for (wo_integer_t i = 0; i < setting_shaders_len; ++i)
     {
         wo_arr_get(c, args + 1, i);
-        shaders->shaders.push_back(
+        shaders.shaders.push_back(
             *std::launder(reinterpret_cast<
                 jeecs::basic::resource<jeecs::graphic::shader>*>(
                     wo_pointer(c))));
@@ -1744,14 +1712,12 @@ WO_API wo_api wojeapi_towoo_renderer_shaders_set_shaders(wo_vm vm, wo_value args
 
 WO_API wo_api wojeapi_towoo_renderer_shaders_get_shaders(wo_vm vm, wo_value args)
 {
-    wo_value c = wo_push_empty(vm);
-    wo_struct_get(c, args + 0, 0);
-    auto* shaders = (jeecs::Renderer::Shaders*)wo_pointer(c);
+    auto& shaders = wo_component<jeecs::Renderer::Shaders>(args + 0);
 
-    wo_set_arr(c, vm, 0);
+    wo_value c = wo_push_arr(vm, 0);
 
     wo_value elem = wo_push_empty(vm);
-    for (auto& shad : shaders->shaders)
+    for (auto& shad : shaders.shaders)
     {
         wo_set_gchandle(elem, vm,
             new jeecs::basic::resource<jeecs::graphic::shader>(shad), nullptr,
@@ -1768,28 +1734,57 @@ WO_API wo_api wojeapi_towoo_renderer_shaders_get_shaders(wo_vm vm, wo_value args
 
 WO_API wo_api wojeapi_towoo_transform_translation_global_pos(wo_vm vm, wo_value args)
 {
-    wo_value c = wo_push_empty(vm);
-    wo_struct_get(c, args + 0, 0);
-    auto* trans = (jeecs::Transform::Translation*)wo_pointer(c);
-
-    return wo_ret_val(vm, wo_push_vec3(vm, trans->world_position));
+    auto& trans = wo_component<jeecs::Transform::Translation>(args + 0);
+    return wo_ret_val(vm, wo_push_vec3(vm, trans.world_position));
 }
 WO_API wo_api wojeapi_towoo_transform_translation_global_rot(wo_vm vm, wo_value args)
 {
-    wo_value c = wo_push_empty(vm);
-    wo_struct_get(c, args + 0, 0);
-    auto* trans = (jeecs::Transform::Translation*)wo_pointer(c);
+    auto& trans = wo_component<jeecs::Transform::Translation>(args + 0);
+    return wo_ret_val(vm, wo_push_quat(vm, trans.world_rotation));
+}
 
-    return wo_ret_val(vm, wo_push_quat(vm, trans->world_rotation));
+WO_API wo_api wojeapi_towoo_transform_translation_parent_pos(wo_vm vm, wo_value args)
+{
+    auto& trans = wo_component<jeecs::Transform::Translation>(args + 0);
+
+    wo_value ret = wo_push_vec3(vm, trans.get_parent_position(
+        wo_option_component<jeecs::Transform::LocalPosition>(args + 1),
+        wo_option_component<jeecs::Transform::LocalRotation>(args + 2)));
+    return wo_ret_val(vm, ret);
+}
+WO_API wo_api wojeapi_towoo_transform_translation_parent_rot(wo_vm vm, wo_value args)
+{
+    auto& trans = wo_component<jeecs::Transform::Translation>(args + 0);
+
+    wo_value ret = wo_push_quat(vm, trans.get_parent_rotation(
+        wo_option_component<jeecs::Transform::LocalRotation>(args + 1)));
+    return wo_ret_val(vm, ret);
+}
+
+WO_API wo_api wojeapi_towoo_transform_translation_set_global_pos(wo_vm vm, wo_value args)
+{
+    auto& trans = wo_component<jeecs::Transform::Translation>(args + 0);
+    auto pos = wo_vec3(args + 1);
+    auto* lpos = wo_option_component<jeecs::Transform::LocalPosition>(args + 2);
+    auto* lrot = wo_option_component<jeecs::Transform::LocalRotation>(args + 3);
+
+    trans.set_global_position(pos, lpos, lrot);
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_towoo_transform_translation_set_global_rot(wo_vm vm, wo_value args)
+{
+    auto& trans = wo_component<jeecs::Transform::Translation>(args + 0);
+    auto rot = wo_quat(args + 1);
+    auto* lrot = wo_option_component<jeecs::Transform::LocalRotation>(args + 2);
+
+    trans.set_global_rotation(rot, lrot);
+    return wo_ret_void(vm);
 }
 
 WO_API wo_api wojeapi_towoo_animation_frameanimation_active_animation(wo_vm vm, wo_value args)
 {
-    wo_value c = wo_push_empty(vm);
-    wo_struct_get(c, args + 0, 0);
-    auto* anim = (jeecs::Animation::FrameAnimation*)wo_pointer(c);
-
-    anim->animations.active_action(
+    auto& anim = wo_component<jeecs::Animation::FrameAnimation>(args + 0);
+    anim.animations.active_action(
         (size_t)wo_int(args + 1), wo_string(args + 2), wo_bool(args + 3));
 
     return wo_ret_void(vm);
@@ -1797,111 +1792,42 @@ WO_API wo_api wojeapi_towoo_animation_frameanimation_active_animation(wo_vm vm, 
 
 WO_API wo_api wojeapi_towoo_animation_frameanimation_is_playing(wo_vm vm, wo_value args)
 {
-    wo_value c = wo_push_empty(vm);
-    wo_struct_get(c, args + 0, 0);
-    auto* anim = (jeecs::Animation::FrameAnimation*)wo_pointer(c);
+    auto& anim = wo_component<jeecs::Animation::FrameAnimation>(args + 0);
 
-    return wo_ret_bool(vm, anim->animations.is_playing((size_t)wo_int(args + 1)));
+    return wo_ret_bool(vm, anim.animations.is_playing((size_t)wo_int(args + 1)));
 }
 
 WO_API wo_api wojeapi_towoo_audio_playing_set_buffer(wo_vm vm, wo_value args)
 {
-    wo_value c = wo_push_empty(vm);
-    wo_struct_get(c, args + 0, 0);
-    auto* playing = (jeecs::Audio::Playing*)wo_pointer(c);
+    auto& playing = wo_component<jeecs::Audio::Playing>(args + 0);
 
     auto* buf = (jeecs::basic::resource<jeecs::audio::buffer>*)wo_pointer(args + 1);
-    playing->set_buffer(*buf);
+    playing.set_buffer(*buf);
 
     return wo_ret_void(vm);
 }
 
 WO_API wo_api wojeapi_towoo_audio_source_get_source(wo_vm vm, wo_value args)
 {
-    wo_value c = wo_push_empty(vm);
-    wo_struct_get(c, args + 0, 0);
-    auto* playing = (jeecs::Audio::Source*)wo_pointer(c);
-
+    auto& source = wo_component<jeecs::Audio::Source>(args + 0);
     return wo_ret_gchandle(vm,
-        new jeecs::basic::resource<jeecs::audio::source>(playing->source),
+        new jeecs::basic::resource<jeecs::audio::source>(source.source),
         nullptr,
         [](void* p) {delete (jeecs::basic::resource<jeecs::audio::source>*)p; });
 }
 
 WO_API wo_api wojeapi_towoo_userinterface_origin_layout(wo_vm vm, wo_value args)
 {
-    wo_value c = wo_push_empty(vm);
-    wo_struct_get(c, args + 0, 0);
-    auto* origin = (jeecs::UserInterface::Origin*)wo_pointer(c);
+    auto& origin = wo_component<jeecs::UserInterface::Origin>(args + 0);
 
     auto r = wo_vec2(args + 1);
-    auto range = origin->get_layout(r.x, r.y);
+    auto range = origin.get_layout(r.x, r.y);
 
     auto result = wo_push_struct(vm, 2);
     wo_struct_set(result, 0, wo_push_vec2(vm, jeecs::math::vec2(range.x, range.y)));
     wo_struct_set(result, 1, wo_push_vec2(vm, jeecs::math::vec2(range.z, range.w)));
 
     return wo_ret_val(vm, result);
-}
-
-WO_API wo_api wojeapi_towoo_transform_localrotation_get_parent_global_rot(wo_vm vm, wo_value args)
-{
-    wo_value c = wo_push_empty(vm);
-    wo_struct_get(c, args + 0, 0);
-    auto* lrot = (jeecs::Transform::LocalRotation*)wo_pointer(c);
-
-    wo_struct_get(c, args + 1, 0);
-    auto* translation = (jeecs::Transform::Translation*)wo_pointer(c);
-
-    return wo_ret_val(vm,
-        wo_push_quat(vm, lrot->get_parent_global_rotation(*translation)));
-}
-
-WO_API wo_api wojeapi_towoo_transform_localrotation_set_global_rot(wo_vm vm, wo_value args)
-{
-    wo_value c = wo_push_empty(vm);
-    wo_struct_get(c, args + 0, 0);
-    auto* lrot = (jeecs::Transform::LocalRotation*)wo_pointer(c);
-
-    auto rot = wo_quat(args + 1);
-
-    wo_struct_get(c, args + 2, 0);
-    auto* translation = (jeecs::Transform::Translation*)wo_pointer(c);
-
-    lrot->set_global_rotation(rot, *translation);
-
-    return wo_ret_void(vm);
-}
-
-WO_API wo_api wojeapi_towoo_transform_localposition_get_parent_global_pos(wo_vm vm, wo_value args)
-{
-    wo_value c = wo_push_empty(vm);
-    wo_struct_get(c, args + 0, 0);
-    auto* lpos = (jeecs::Transform::LocalPosition*)wo_pointer(c);
-
-    wo_struct_get(c, args + 1, 0);
-    auto* translation = (jeecs::Transform::Translation*)wo_pointer(c);
-
-    auto* lrot = wo_option_component<jeecs::Transform::LocalRotation>(args + 2);
-
-    return wo_ret_val(vm,
-        wo_push_vec3(vm, lpos->get_parent_global_position(*translation, lrot)));
-}
-WO_API wo_api wojeapi_towoo_transform_localposition_set_global_pos(wo_vm vm, wo_value args)
-{
-    wo_value c = wo_push_empty(vm);
-    wo_struct_get(c, args + 0, 0);
-    auto* lpos = (jeecs::Transform::LocalPosition*)wo_pointer(c);
-
-    auto pos = wo_vec3(args + 1);
-
-    wo_struct_get(c, args + 2, 0);
-    auto* translation = (jeecs::Transform::Translation*)wo_pointer(c);
-
-    auto* lrot = wo_option_component<jeecs::Transform::LocalRotation>(args + 3);
-
-    lpos->set_global_position(pos, *translation, lrot);
-    return wo_ret_void(vm);
 }
 
 const char* jeecs_towoo_path = "je/towoo.wo";
@@ -2294,22 +2220,16 @@ namespace Transform
 
         extern("libjoyecs", "wojeapi_towoo_transform_translation_global_rot")
             public func get_global_rot(self: Translation)=> quat;
-    }
-    namespace LocalPosition
-    {
-        extern("libjoyecs", "wojeapi_towoo_transform_localposition_get_parent_global_pos")
-            public func get_parent_global_pos(self: LocalPosition, trans: Translation, rot: option<LocalRotation>)=> vec3;
 
-        extern("libjoyecs", "wojeapi_towoo_transform_localposition_set_global_pos")
-            public func set_global_pos(self: LocalPosition, pos: vec3, trans: Translation, rot: option<LocalRotation>)=> void;
-    }
-    namespace LocalRotation
-    {
-        extern("libjoyecs", "wojeapi_towoo_transform_localrotation_get_parent_global_rot")
-            public func get_parent_global_rot(self: LocalRotation, trans: Translation)=> quat;
+        extern("libjoyecs", "wojeapi_towoo_transform_translation_parent_pos")
+            public func get_parent_pos(self: Translation, lpos: option<LocalPosition>, lrot: option<LocalRotation>)=> vec3;
+        extern("libjoyecs", "wojeapi_towoo_transform_translation_parent_rot")
+            public func get_parent_rot(self: Translation, lrot: option<LocalRotation>)=> quat;
 
-        extern("libjoyecs", "wojeapi_towoo_transform_localrotation_set_global_rot")
-            public func set_global_rot(self: LocalRotation, rot: quat, trans: Translation)=> void;
+        extern("libjoyecs", "wojeapi_towoo_transform_translation_set_global_pos") 
+            public func set_global_pos(self: Translation, pos: vec3, wlpos: option<LocalPosition>, lrot: option<LocalRotation>)=> void;
+        extern("libjoyecs", "wojeapi_towoo_transform_translation_set_global_rot")
+            public func set_global_rot(self: Translation, rot: quat, wlrot: option<LocalRotation>)=> void;
     }
 }
 namespace UserInterface

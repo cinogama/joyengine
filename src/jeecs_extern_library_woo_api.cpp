@@ -411,12 +411,12 @@ WO_API wo_api wojeapi_towoo_renderer_shaders_set_shaders(wo_vm vm, wo_value args
 WO_API wo_api wojeapi_towoo_renderer_shaders_set_uniform(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_towoo_renderer_textures_bind_texture(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_towoo_renderer_textures_get_texture(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_transform_localposition_get_parent_global_pos(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_transform_localposition_set_global_pos(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_transform_localrotation_get_parent_global_rot(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_transform_localrotation_set_global_rot(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_towoo_transform_translation_global_pos(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_towoo_transform_translation_global_rot(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_transform_translation_parent_pos(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_transform_translation_parent_rot(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_transform_translation_set_global_pos(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_transform_translation_set_global_rot(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_towoo_unregister_component(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_towoo_unregister_system(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_towoo_update_api(wo_vm vm, wo_value args);
@@ -860,12 +860,12 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"wojeapi_towoo_renderer_shaders_set_uniform", (void*)&wojeapi_towoo_renderer_shaders_set_uniform},
         wo_extern_lib_func_t{"wojeapi_towoo_renderer_textures_bind_texture", (void*)&wojeapi_towoo_renderer_textures_bind_texture},
         wo_extern_lib_func_t{"wojeapi_towoo_renderer_textures_get_texture", (void*)&wojeapi_towoo_renderer_textures_get_texture},
-        wo_extern_lib_func_t{"wojeapi_towoo_transform_localposition_get_parent_global_pos", (void*)&wojeapi_towoo_transform_localposition_get_parent_global_pos},
-        wo_extern_lib_func_t{"wojeapi_towoo_transform_localposition_set_global_pos", (void*)&wojeapi_towoo_transform_localposition_set_global_pos},
-        wo_extern_lib_func_t{"wojeapi_towoo_transform_localrotation_get_parent_global_rot", (void*)&wojeapi_towoo_transform_localrotation_get_parent_global_rot},
-        wo_extern_lib_func_t{"wojeapi_towoo_transform_localrotation_set_global_rot", (void*)&wojeapi_towoo_transform_localrotation_set_global_rot},
         wo_extern_lib_func_t{"wojeapi_towoo_transform_translation_global_pos", (void*)&wojeapi_towoo_transform_translation_global_pos},
         wo_extern_lib_func_t{"wojeapi_towoo_transform_translation_global_rot", (void*)&wojeapi_towoo_transform_translation_global_rot},
+        wo_extern_lib_func_t{"wojeapi_towoo_transform_translation_parent_pos", (void*)&wojeapi_towoo_transform_translation_parent_pos},
+        wo_extern_lib_func_t{"wojeapi_towoo_transform_translation_parent_rot", (void*)&wojeapi_towoo_transform_translation_parent_rot},
+        wo_extern_lib_func_t{"wojeapi_towoo_transform_translation_set_global_pos", (void*)&wojeapi_towoo_transform_translation_set_global_pos},
+        wo_extern_lib_func_t{"wojeapi_towoo_transform_translation_set_global_rot", (void*)&wojeapi_towoo_transform_translation_set_global_rot},
         wo_extern_lib_func_t{"wojeapi_towoo_unregister_component", (void*)&wojeapi_towoo_unregister_component},
         wo_extern_lib_func_t{"wojeapi_towoo_unregister_system", (void*)&wojeapi_towoo_unregister_system},
         wo_extern_lib_func_t{"wojeapi_towoo_update_api", (void*)&wojeapi_towoo_update_api},
