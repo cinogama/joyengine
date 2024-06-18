@@ -8,6 +8,8 @@
 #endif
 #include "jeecs.hpp"
 
+#include <list>
+
 namespace jeecs
 {
     struct TranslationUpdatingSystem :public game_system
