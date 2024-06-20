@@ -256,7 +256,7 @@ endif()
                     try! _ = created_module->regenerate_cmake_doc;
                     created_module->update_compile(std::platform::runtime_type::DEBUG);
 
-                    expected_ok! created_module;
+                    return_ok! created_module;
                 }
                 catch! e
                 {
@@ -548,7 +548,7 @@ endif()
                 if (!created_module->load_library_of_platform(rttype)->has)
                     throw! F"无法为当前运行时{_config_name(rttype)}加载模块，请检查";
 
-                expected_ok! created_module;
+                return_ok! created_module;
             }
             
             }// End of match

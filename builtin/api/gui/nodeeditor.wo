@@ -327,9 +327,9 @@ namespace jeapi::gui
 
                 // 检查成环的思路是，检查输出节点b是否作为输入节点a的输入节点
                 if (self->_collect_depend_nodes(inputnode)->find(outpin.nodeid) != -1)
-                    expected_value! true;
+                    return_value! true;
 
-                expected_value! false;
+                return_value! false;
             };
             return r->valor(true);
         }
@@ -426,7 +426,7 @@ namespace jeapi::gui
                 {
                     do node.producers->get(idx)->>\tval = tval.producer->parse(val);;
                 }
-                expected_value! node;
+                return_value! node;
             };
         }
         using NodeDump = struct {
@@ -468,7 +468,7 @@ namespace jeapi::gui
                                     (pos[0], pos[1])
                                 ));
 
-                            expected_value!;
+                            return_value!;
                         };
                     }
                     for (let dat: links)
@@ -479,10 +479,10 @@ namespace jeapi::gui
                             try! bid = dat->get(1)=>>\dat = dat->trycast:<int>;;
                             result_links->add((aid: PinId, bid: PinId));
 
-                            expected_value!;
+                            return_value!;
                         };
                     }
-                    expected_value! NodeDump{
+                    return_value! NodeDump{
                         nodes = result_nodes->unsafe::asarray,
                         links = result_links->unsafe::asarray,
                     };
@@ -522,7 +522,7 @@ namespace jeapi::gui
                         self->execute(func(){
                             SetNodePosition(node.id, pos);
                         });
-                        expected_value!;
+                        return_value!;
                     };
                 }
 
@@ -536,10 +536,10 @@ namespace jeapi::gui
                         do self->_create_link(
                             self.inputpins[new_aid], self.outputpins[new_bid]);
 
-                        expected_value!;
+                        return_value!;
                     };
                 }
-                expected_value!;
+                return_value!;
             };
             return r->has();
         }

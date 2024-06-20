@@ -41,7 +41,7 @@ namespace editor::gui::workflow
                         m_namespace = node_namespace, 
                         m_path = np,
                         });
-                expected_ok!;
+                return_ok!;
             };
         }
 
@@ -152,7 +152,7 @@ namespace Editor
             do vm->run();
             do vm->invoke("Editor::set_universe", 
                 [context->get_project->get_env->get_universe: dynamic]);
-            expected_ok!;
+            return_ok!;
         }
         catch! e
         {
