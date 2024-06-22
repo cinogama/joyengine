@@ -9892,6 +9892,15 @@ namespace jeecs
                     *v = wo_string(value);
                 }, "string", "");
 
+            typing::register_script_parser<std::string>(
+                guard,
+                [](const std::string* v, wo_vm vm, wo_value value) {
+                    wo_set_string(value, vm, v->c_str());
+                },
+                [](std::string* v, wo_vm, wo_value value) {
+                    *v = wo_string(value);
+                }, "string", "");
+
             je_towoo_update_api();
         }
 
