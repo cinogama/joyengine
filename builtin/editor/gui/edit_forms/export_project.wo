@@ -25,6 +25,15 @@ namespace editor::gui::edit_forms
         // 如果是文件，才考虑打包
         if (fsys::isfile(originpath))
         {
+            if (packpath->lower->find("/.runtime/") != -1)
+                return Action::SKIP;  // 跳过缓存文件
+
+            if (packpath->lower->find("/.export/") != -1)
+                return Action::SKIP;  // 跳过导出目录，尽管这个目录正常情况下本身也会被删掉
+
+            if (packpath->lower->find("/.temporary/") != -1)
+                return Action::SKIP;  // 跳过临时文件
+
             if (fsys::extension(originpath)->lower == ".je4project")
                 return Action::SKIP;  // 跳过项目文件
                 
@@ -94,15 +103,6 @@ namespace editor::gui::edit_forms
 
             if (packpath->lower->find(".je4module/") != -1)
                 return Action::SKIP;  // 跳过C++工程文件
-
-            if (packpath->lower->find("/.runtime/") != -1)
-                return Action::SKIP;  // 跳过缓存文件
-
-            if (packpath->lower->find("/.export/") != -1)
-                return Action::SKIP;  // 跳过导出目录，尽管这个目录正常情况下本身也会被删掉
-
-            if (packpath->lower->find("/.temporary/") != -1)
-                return Action::SKIP;  // 跳过临时文件
             
             if (packpath->lower->find("/.git/") != -1)
                 return Action::SKIP;  // 跳过git文件
