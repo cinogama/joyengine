@@ -38,7 +38,7 @@ func copy_all_licenses()
                 }
             }
         }
-        expected_ok!;
+        return_ok!;
     }
     catch! errono
     {
@@ -61,7 +61,7 @@ func copy_opengles_emu_env_libs()=> result<void, string>
     do mkdir(build_path / "openglessl");
     do copy(gles_env_path / "openglessl", build_path / "openglessl");
 
-    expected_ok!;
+    return_ok!;
 }
 
 func copy_pkgs(copy_src_only: bool)=> result<void, string>
@@ -85,7 +85,7 @@ func copy_pkgs(copy_src_only: bool)=> result<void, string>
             do copy(path, target_path / relative_path);
         }
     }
-    expected_ok!;
+    return_ok!;
 }
 
 func scan_extern_function_in_path(i)
@@ -157,7 +157,7 @@ void je_extern_lib_woo_api_finish()
 
     if (!writeall(workpath / "src" / "jeecs_extern_library_woo_api.cpp", result))
         throw! F"Failed to update jeecs_extern_library_woo_api.cpp.";
-    expected_ok!;
+    return_ok!;
 }
 
 func generate_je_static_module_decls()=> result<void, string>
@@ -296,7 +296,7 @@ void je_extern_lib_3rd_pkgs_finish()
 
     if (!writeall(workpath / "src" / "jeecs_extern_library_3rd_pkg.cpp", result))
         throw! F"Failed to update jeecs_extern_library_3rd_pkg.cpp.";
-    expected_ok!;
+    return_ok!;
 }
 
 func main()
@@ -322,7 +322,7 @@ func main()
     try! _ = generate_je_static_module_decls();
     try! _ = copy_all_licenses();
 
-    expected_ok!;
+    return_ok!;
 }
 
 match (main())
