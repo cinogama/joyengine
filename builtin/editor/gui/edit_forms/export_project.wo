@@ -107,7 +107,9 @@ namespace editor::gui::edit_forms
             if (packpath->lower->find("/.git/") != -1)
                 return Action::SKIP;  // 跳过git文件
 
-            if (fsys::extension(originpath)->lower == ".dll")
+            if (fsys::extension(originpath)->lower == ".dll" ||
+                fsys::extension(originpath)->lower == ".so" ||
+                fsys::extension(originpath)->lower == ".dylib")
                 return Action::ORIGIN; // 原样复制到打包路径
 
             return Action::PACK;
