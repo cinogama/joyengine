@@ -100,9 +100,9 @@ namespace editor
                 throw! F"无法找到C++模块项目，{cxx_proj_path}目录不存在";
 
             // 1. 删除engine目录
-            do remove(cxx_proj_path/".engine")->unwarp;
-            do mkdir(cxx_proj_path/".engine")->unwarp;
-            do mkdir(cxx_proj_path/".engine"/"library")->unwarp;
+            do remove(cxx_proj_path/".engine")->unwrap;
+            do mkdir(cxx_proj_path/".engine")->unwrap;
+            do mkdir(cxx_proj_path/".engine"/"library")->unwrap;
 
             // 2. 把新的engine移过来，把引擎的头文件复制过来
             let r = copy(ENGINE_HEADER_PATH, cxx_proj_path/".engine"/"include");
@@ -260,7 +260,7 @@ endif()
                 }
                 catch! e
                 {
-                    do remove(cxx_proj_path)->unwarp;
+                    do remove(cxx_proj_path)->unwrap;
                     return e;
                 };
         }
@@ -327,7 +327,7 @@ endif()
                     -> \id: int = runtime_dll_path / id: string;
                     ;
             assert(!exist(newest_path));
-            do mkdir(newest_path)->unwarp;
+            do mkdir(newest_path)->unwrap;
             assert(exist(newest_path));
 
             return newest_path;
@@ -346,7 +346,7 @@ endif()
 
             // 获取编译出来的二进制，移动到一个统一的位置
             if (!exist(self->get_runtime_path(rttype)))
-                do mkdir(self->get_runtime_path(rttype))->unwarp;
+                do mkdir(self->get_runtime_path(rttype))->unwrap;
 
             assert(exist(self->get_runtime_path(rttype)));
 
@@ -453,7 +453,7 @@ endif()
         func generate_varify_info(self: CxxProject)
         {
             let source_code_versions = {}mut: map<string, int>;
-            for (let path : fsys::allsubpath(self.path)->unwarpor([])) 
+            for (let path : fsys::allsubpath(self.path)->unwrapor([])) 
             {
                 if (fsys::isfile(path))
                 {
@@ -501,7 +501,7 @@ endif()
                             subpath(created_module->get_runtime_path(rttype))
                                 ->map(\child_paths = child_paths
                                     ->forall(\path = !isdir(path) || newest_id != filename(path): int;)
-                                    ->map(\path = remove(path)->unwarp;)
+                                    ->map(\path = remove(path)->unwrap;)
                                 ;)
                         ;)
                     ;
@@ -773,7 +773,7 @@ $$REGISTER_SYSTEM_TYPES$$
 
             let msvc_compile_result_path = self.path/F"msvcbuild_{config}"/"compile.log";
 
-            do remove(msvc_compile_result_path)->unwarp;
+            do remove(msvc_compile_result_path)->unwrap;
 
             do context->>\context = context.display_msg = F"正在构建二进制文件\n{config}";;
             do context->>\context = context.progress = 45;;

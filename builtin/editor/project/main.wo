@@ -232,7 +232,7 @@ namespace editor
         public func close_all_world(self: Project)
         {
             // OK 关闭全部现存世界
-            do self.m_worlds->toarray->> \pw = self->destroy_world(pw.m_world_instance)->unwarp();;
+            do self.m_worlds->toarray->> \pw = self->destroy_world(pw.m_world_instance)->unwrap();;
         }
         public func dump_and_close_all_world(self: Project)
         {
@@ -1165,7 +1165,7 @@ namespace editor
                 // 如果还有世界，那么选择第一个作为编辑中世界顶替
                 self.m_worlds->get(0)
                     ->> \w = need_update_new_editing_world 
-                        ? self->reset_editing_world(w.m_world_instance)->unwarp
+                        ? self->reset_editing_world(w.m_world_instance)->unwrap
                         | nil: void
                         ; // 必须成功
                     ->  or(\ = self.m_editing_world = option::none;)

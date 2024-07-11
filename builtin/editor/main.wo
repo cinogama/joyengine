@@ -65,7 +65,7 @@ using Path = struct {
         {
             let arr = 
                 fsys::subpath(path.path)
-                    ->  unwarp
+                    ->  unwrap
                     ->  forall(\child_path = fsys::isdir(child_path);)
                     ->> \child_path = Path
                         {

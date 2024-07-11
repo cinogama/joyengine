@@ -12,12 +12,12 @@ namespace editor::gui
 {
     public func show_edit_forms(context: EditorContext)
     {
-        let open_worlds_list = context->register_editor_form_controlor("世界列表")->unwarp;
-        let open_entities_list = context->register_editor_form_controlor("实体列表")->unwarp;
-        let open_inspector = context->register_editor_form_controlor("检视面板")->unwarp;
-        let open_viewport = context->register_editor_form_controlor("视口")->unwarp;
-        let open_browser = context->register_editor_form_controlor("资源浏览器")->unwarp;
-        let open_logger = context->register_editor_form_controlor("日志查看器")->unwarp;
+        let open_worlds_list = context->register_editor_form_controlor("世界列表")->unwrap;
+        let open_entities_list = context->register_editor_form_controlor("实体列表")->unwrap;
+        let open_inspector = context->register_editor_form_controlor("检视面板")->unwrap;
+        let open_viewport = context->register_editor_form_controlor("视口")->unwrap;
+        let open_browser = context->register_editor_form_controlor("资源浏览器")->unwrap;
+        let open_logger = context->register_editor_form_controlor("日志查看器")->unwrap;
 
         context->fixed_launch_editor_form(edit_forms::show_worlds_list, (context, open_worlds_list));
         context->fixed_launch_editor_form(edit_forms::show_entities_list, (context, open_entities_list));

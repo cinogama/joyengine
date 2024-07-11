@@ -312,7 +312,7 @@ namespace editor::gui::edit_forms
 
                                 if ((world_context.callback->val)(created_world) == false)
                                 {
-                                    world_context.current_project->destroy_world(created_world)->unwarp;
+                                    world_context.current_project->destroy_world(created_world)->unwrap;
                                 }
                                 return false;
                             }, ());
