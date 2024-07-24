@@ -9272,7 +9272,7 @@ namespace jeecs
                 static const char* JEScriptTypeDeclare()
                 {
                     return
-                        R"(namespace Animation::FrameAnimation
+R"(namespace Animation::FrameAnimation
 {
     public using animation_state = struct{
         public m_path: string,
