@@ -289,7 +289,7 @@ namespace editor::gui
             // 当前目录的子项目尚未获取，在这里获取一下塞进去
             let sublist = 
                 fsys::subpath(self.path)
-                    ->unwarp
+                    ->unwrap
                     ->map(\current_subpath = PathInfo{
                         path = current_subpath, 
                         name = fsys::filename(current_subpath),
@@ -1121,7 +1121,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
                                 func(sure: bool){
                                     if (!sure) return;
                                     do components->remove(components->find(s));
-                                    do fsys::remove(file_path)->unwarp;
+                                    do fsys::remove(file_path)->unwrap;
                                 });
                         EndPopup();
                     }
@@ -1142,8 +1142,8 @@ using $NEW_PRODUCER_NAME$ = struct{}
                                     if (!sure) return;
 
                                     do systems->remove(systems->find(s));
-                                    do fsys::remove(path.path/"systems"/F"{s}.hpp")->unwarp;
-                                    do fsys::remove(file_path)->unwarp;
+                                    do fsys::remove(path.path/"systems"/F"{s}.hpp")->unwrap;
+                                    do fsys::remove(file_path)->unwrap;
                                 });
                         EndPopup();
                     }
@@ -1237,8 +1237,8 @@ namespace $$MODULE_NAME$$
                                                         ->replace("$$SYSTEM_NAME$$", system_name))
                                                     )
                                                 {
-                                                    do fsys::remove(path.path/"systems"/F"{system_name}.hpp")->unwarp;
-                                                    do fsys::remove(path.path/"systems"/F"{system_name}.cpp")->unwarp;
+                                                    do fsys::remove(path.path/"systems"/F"{system_name}.hpp")->unwrap;
+                                                    do fsys::remove(path.path/"systems"/F"{system_name}.cpp")->unwrap;
 
                                                     jeapi::gui::form::errmsg("创建系统失败", "无法创建和写入系统源文件");
                                                 }
@@ -1294,7 +1294,7 @@ namespace $$MODULE_NAME$$
                                                         ->replace("$$COMPONENT_NAME$$", component_name))
                                                     )
                                                 {
-                                                    do fsys::remove(path.path/"components"/F"{component_name}.hpp")->unwarp;
+                                                    do fsys::remove(path.path/"components"/F"{component_name}.hpp")->unwrap;
                                                     jeapi::gui::form::errmsg("创建组件失败", "无法创建和写入组件源文件");
                                                 }
                                                 else
@@ -1495,7 +1495,7 @@ namespace $$MODULE_NAME$$
 
             now_item_in_path =
                 fsys::subpath(fsys::normalize(current_work_path))
-                    ->  unwarp
+                    ->  unwrap
                     ->> \subpath = PathInfo{ 
                             path = subpath,
                             name = fsys::filename(subpath),

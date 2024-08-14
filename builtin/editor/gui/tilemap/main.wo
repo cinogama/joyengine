@@ -657,7 +657,7 @@ namespace editor::gui::tilemap
             let tilemap_path = self.m_context->get_project->get_path / "resource" / "tilemap";
             do fsys::mkdir(tilemap_path);
 
-            for (let file: fsys::allsubpath(tilemap_path)->unwarpor([]))
+            for (let file: fsys::allsubpath(tilemap_path)->unwrapor([]))
             {
                 if (fsys::extension(file)->lower == ".je4tileset")
                 {
@@ -1585,7 +1585,7 @@ namespace editor::gui::tilemap
                             let target_chunk_path = target_path / F"{name}_chunks";
                             
                             do fsys::mkdir(target_chunk_path);
-                            for (let p: fsys::subpath(target_chunk_path)->unwarpor([]))
+                            for (let p: fsys::subpath(target_chunk_path)->unwrapor([]))
                             {
                                 match (fsys::remove(p))
                                 {

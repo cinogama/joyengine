@@ -32,6 +32,7 @@ WO_API wo_api buffer_appendui16_buffer(wo_vm vm, wo_value args);
 WO_API wo_api buffer_appendui32_buffer(wo_vm vm, wo_value args);
 WO_API wo_api buffer_appendui64_buffer(wo_vm vm, wo_value args);
 WO_API wo_api buffer_appendui8_buffer(wo_vm vm, wo_value args);
+WO_API wo_api buffer_clear_builder(wo_vm vm, wo_value args);
 WO_API wo_api buffer_create_builder(wo_vm vm, wo_value args);
 WO_API wo_api buffer_create_from_allocation_builder(wo_vm vm, wo_value args);
 WO_API wo_api buffer_create_from_buffer_builder(wo_vm vm, wo_value args);
@@ -125,6 +126,7 @@ WO_API wo_api filesys_extension(wo_vm vm, wo_value args);
 WO_API wo_api filesys_filename(wo_vm vm, wo_value args);
 WO_API wo_api filesys_isdir(wo_vm vm, wo_value args);
 WO_API wo_api filesys_isfile(wo_vm vm, wo_value args);
+WO_API wo_api filesys_last_write_time(wo_vm vm, wo_value args);
 WO_API wo_api filesys_mkdir(wo_vm vm, wo_value args);
 WO_API wo_api filesys_move(wo_vm vm, wo_value args);
 WO_API wo_api filesys_normalize(wo_vm vm, wo_value args);
@@ -202,8 +204,10 @@ WO_API wo_api time_duration_mod(wo_vm vm, wo_value args);
 WO_API wo_api time_duration_mul(wo_vm vm, wo_value args);
 WO_API wo_api time_duration_sub(wo_vm vm, wo_value args);
 WO_API wo_api time_point_add(wo_vm vm, wo_value args);
+WO_API wo_api time_point_from_stamp(wo_vm vm, wo_value args);
 WO_API wo_api time_point_large(wo_vm vm, wo_value args);
 WO_API wo_api time_point_less(wo_vm vm, wo_value args);
+WO_API wo_api time_point_stamp(wo_vm vm, wo_value args);
 WO_API wo_api time_point_sub_duration(wo_vm vm, wo_value args);
 WO_API wo_api time_point_sub_point(wo_vm vm, wo_value args);
 WO_API wo_api time_point_utc_now(wo_vm vm, wo_value args);
@@ -265,6 +269,7 @@ void je_extern_lib_3rd_pkgs_init()
         wo_extern_lib_func_t{"buffer_appendui32_buffer", (void*)&buffer_appendui32_buffer},
         wo_extern_lib_func_t{"buffer_appendui64_buffer", (void*)&buffer_appendui64_buffer},
         wo_extern_lib_func_t{"buffer_appendui8_buffer", (void*)&buffer_appendui8_buffer},
+        wo_extern_lib_func_t{"buffer_clear_builder", (void*)&buffer_clear_builder},
         wo_extern_lib_func_t{"buffer_create_builder", (void*)&buffer_create_builder},
         wo_extern_lib_func_t{"buffer_create_from_allocation_builder", (void*)&buffer_create_from_allocation_builder},
         wo_extern_lib_func_t{"buffer_create_from_buffer_builder", (void*)&buffer_create_from_buffer_builder},
@@ -382,6 +387,7 @@ void je_extern_lib_3rd_pkgs_init()
         wo_extern_lib_func_t{"filesys_filename", (void*)&filesys_filename},
         wo_extern_lib_func_t{"filesys_isdir", (void*)&filesys_isdir},
         wo_extern_lib_func_t{"filesys_isfile", (void*)&filesys_isfile},
+        wo_extern_lib_func_t{"filesys_last_write_time", (void*)&filesys_last_write_time},
         wo_extern_lib_func_t{"filesys_mkdir", (void*)&filesys_mkdir},
         wo_extern_lib_func_t{"filesys_move", (void*)&filesys_move},
         wo_extern_lib_func_t{"filesys_normalize", (void*)&filesys_normalize},
@@ -483,8 +489,10 @@ void je_extern_lib_3rd_pkgs_init()
         wo_extern_lib_func_t{"time_duration_mul", (void*)&time_duration_mul},
         wo_extern_lib_func_t{"time_duration_sub", (void*)&time_duration_sub},
         wo_extern_lib_func_t{"time_point_add", (void*)&time_point_add},
+        wo_extern_lib_func_t{"time_point_from_stamp", (void*)&time_point_from_stamp},
         wo_extern_lib_func_t{"time_point_large", (void*)&time_point_large},
         wo_extern_lib_func_t{"time_point_less", (void*)&time_point_less},
+        wo_extern_lib_func_t{"time_point_stamp", (void*)&time_point_stamp},
         wo_extern_lib_func_t{"time_point_sub_duration", (void*)&time_point_sub_duration},
         wo_extern_lib_func_t{"time_point_sub_point", (void*)&time_point_sub_point},
         wo_extern_lib_func_t{"time_point_utc_now", (void*)&time_point_utc_now},

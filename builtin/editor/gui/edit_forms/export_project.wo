@@ -125,7 +125,7 @@ namespace editor::gui::edit_forms
  
         // 1. 删掉 .export 目录下的内容
         config.m_pack_output_log->add("正在删除 .export 目录");
-        do fsys::remove(normalized_path/".export")->unwarp;
+        do fsys::remove(normalized_path/".export")->unwrap;
 
         // 2. 遍历所有目录，记录下所有文件的原始路径和最终路径
         match (fsys::allsubpath(normalized_path))
@@ -200,7 +200,7 @@ namespace editor::gui::edit_forms
                                 config.m_pack_output_log->add(F"复制 {ppath}");
 
                                 // assert(fimg->pack(opath, ppath));
-                                do copy_origin(opath, ppath)->unwarp;
+                                do copy_origin(opath, ppath)->unwrap;
                             }
 
                             for (let (opath, (ppath, method)) : all_need_pack_files)
@@ -215,7 +215,7 @@ namespace editor::gui::edit_forms
                                 ORIGIN?
                                     {
                                         config.m_pack_output_log->add(F"复制 {ppath}");
-                                        do copy_origin(opath, ppath)->unwarp;
+                                        do copy_origin(opath, ppath)->unwrap;
                                     }
                                 ACTION(action)?
                                     {
@@ -232,7 +232,7 @@ namespace editor::gui::edit_forms
 
                             // 1.4 将引擎本体移动至打包目录
                             config.m_pack_output_log->add(F"正在复制引擎运行时");
-                            do fsys::copy(fsys::normalize(std::args()[0]), export_path/F"{proj->get_name}.exe")->unwarp;
+                            do fsys::copy(fsys::normalize(std::args()[0]), export_path/F"{proj->get_name}.exe")->unwrap;
 
                             if (fsys::isfile(fsys::workpath() / "icon.ico"))
                             {
@@ -252,10 +252,10 @@ namespace editor::gui::edit_forms
                                     do fsys::copy(
                                         fsys::normalize(
                                             F"{std::exepath()}/{libpath}"), 
-                                            export_path / libpath)->unwarp
+                                            export_path / libpath)->unwrap
                                     ;
                                 ;
-                            do fsys::copy(fsys::normalize(F"{std::exepath()}/OpenAL32.dll"), export_path / "OpenAL32.dll")->unwarp;
+                            do fsys::copy(fsys::normalize(F"{std::exepath()}/OpenAL32.dll"), export_path / "OpenAL32.dll")->unwrap;
                             
                             // 1.5 将启动脚本编译后打入镜像
                             config.m_pack_output_log->add(F"正在打包启动脚本");
@@ -409,7 +409,7 @@ namespace editor::gui::edit_forms
                                 ->replace("$APPLY_TITLE$", F"je::editor::set_window_title({proj->get_name->enstring});");
 
                             let (start_up_script_binary, start_up_script_binary_sz) = 
-                                new! vm("@/builtin/main.wo", final_boot_script)->unwarp->save_binary(saving_woolang_pdi);
+                                new! vm("@/builtin/main.wo", final_boot_script)->unwrap->save_binary(saving_woolang_pdi);
 
                             assert(fimg->pack_buffer(start_up_script_binary->ptr, start_up_script_binary_sz, "@/builtin/main.wo"));
 
@@ -437,7 +437,7 @@ namespace editor::gui::edit_forms
     }
     public func show_export_project(context: EditorContext)
     {
-        let all_project_files = fsys::allsubpath(context->get_project->get_path)->unwarp;
+        let all_project_files = fsys::allsubpath(context->get_project->get_path)->unwrap;
         let selecting_all_worlds_file = all_project_files
             ->  forall(\p = fsys::extension(p)->lower == ".je4world";)
             ->> \p = (context->get_project->make_path_normalize(p), mut false);
@@ -610,7 +610,7 @@ namespace editor::gui::edit_forms
                             m_pack_output_log = []mut,
                             m_finished = mut false,
                         };
-                        do _export_logic(saving_debug_info->get, context->get_project, conf)->unwarp;
+                        do _export_logic(saving_debug_info->get, context->get_project, conf)->unwrap;
                         pack_config_instance->set(option::value(conf));
                         step->set(current_step_count + 1);
                     }

@@ -38,7 +38,7 @@ namespace editor
         {
             let fetched_scripts = {}mut: map<path_t, int>;
             let _repeat_checker = {}mut: map<string, path_t>;
-            for (let p : allsubpath(self.m_project_path)->unwarpor([]))
+            for (let p : allsubpath(self.m_project_path)->unwrapor([]))
             {
                 if (isfile(p) && filename(p)->lower->endwith(type))
                 {
@@ -177,7 +177,7 @@ namespace editor
         public func check_for_update(self: ToWooContext)
         {
             let fetched_scripts = {}mut: map<path_t, int>;
-            for (let p : allsubpath(self.m_project_path)->unwarpor([]))
+            for (let p : allsubpath(self.m_project_path)->unwrapor([]))
             {
                 if (isfile(p) && (
                     filename(p)->lower->endwith(".jesystem.wo")

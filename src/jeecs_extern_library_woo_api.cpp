@@ -97,6 +97,7 @@ WO_API wo_api je_gui_input_int2_box(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_input_int3_box(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_input_int4_box(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_input_int_box(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_input_text_attr_box(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_input_text_box(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_input_text_multiline(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_input_text_multiline_size(wo_vm vm, wo_value args);
@@ -546,6 +547,7 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"je_gui_input_int3_box", (void*)&je_gui_input_int3_box},
         wo_extern_lib_func_t{"je_gui_input_int4_box", (void*)&je_gui_input_int4_box},
         wo_extern_lib_func_t{"je_gui_input_int_box", (void*)&je_gui_input_int_box},
+        wo_extern_lib_func_t{"je_gui_input_text_attr_box", (void*)&je_gui_input_text_attr_box},
         wo_extern_lib_func_t{"je_gui_input_text_box", (void*)&je_gui_input_text_box},
         wo_extern_lib_func_t{"je_gui_input_text_multiline", (void*)&je_gui_input_text_multiline},
         wo_extern_lib_func_t{"je_gui_input_text_multiline_size", (void*)&je_gui_input_text_multiline_size},

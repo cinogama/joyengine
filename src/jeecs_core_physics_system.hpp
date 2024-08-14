@@ -583,7 +583,6 @@ namespace jeecs
                         b2BodyId rigidbody_instance = JE_J2BBody(rigidbody.native_rigidbody);
 
                         auto new_position = b2Body_GetPosition(rigidbody_instance);
-
                         if (kinematics != nullptr &&
                             rigidbody.rigidbody_just_created == false)
                         {
@@ -610,7 +609,7 @@ namespace jeecs
                                     translation.world_position.z),
                                 &localposition,
                                 &localrotation);
-
+                            
                             kinematics->angular_velocity = b2Body_GetAngularVelocity(rigidbody_instance);
 
                             auto world_angle = translation.world_rotation.euler_angle();
