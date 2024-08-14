@@ -244,9 +244,9 @@ func main()
 {
     let root_dir = fsys::normalize(std::exepath());
     let files = fsys::allsubpath(root_dir/"builtin/api")
-        ->  unwarpor([])
+        ->  unwrapor([])
         ->  connect(fsys::allsubpath(root_dir/"builtin/editor")
-                ->unwarpor([]));
+                ->unwrapor([]));
 
     let mut crc64_result = "wooscript_crc64_";
 
