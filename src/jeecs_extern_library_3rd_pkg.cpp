@@ -11,6 +11,7 @@ WO_API wo_api async_promise_abondon(wo_vm vm, wo_value args);
 WO_API wo_api async_promise_produce(wo_vm vm, wo_value args);
 WO_API wo_api async_promise_wait(wo_vm vm, wo_value args);
 WO_API wo_api buffer_append_buffer_builder(wo_vm vm, wo_value args);
+WO_API wo_api buffer_append_buffer_builder_builder(wo_vm vm, wo_value args);
 WO_API wo_api buffer_append_f32_builder(wo_vm vm, wo_value args);
 WO_API wo_api buffer_append_f64_builder(wo_vm vm, wo_value args);
 WO_API wo_api buffer_append_handle_builder(wo_vm vm, wo_value args);
@@ -75,6 +76,7 @@ WO_API wo_api buffer_peekui64_buffer(wo_vm vm, wo_value args);
 WO_API wo_api buffer_peekui8_buffer(wo_vm vm, wo_value args);
 WO_API wo_api buffer_ptr_to_read_builder(wo_vm vm, wo_value args);
 WO_API wo_api buffer_ptr_to_write_builder(wo_vm vm, wo_value args);
+WO_API wo_api buffer_random(wo_vm vm, wo_value args);
 WO_API wo_api buffer_read_buffer_builder(wo_vm vm, wo_value args);
 WO_API wo_api buffer_read_f32_builder(wo_vm vm, wo_value args);
 WO_API wo_api buffer_read_f64_builder(wo_vm vm, wo_value args);
@@ -248,6 +250,7 @@ void je_extern_lib_3rd_pkgs_init()
 
     wo_extern_lib_func_t libbuffer_fs[] = {
         wo_extern_lib_func_t{"buffer_append_buffer_builder", (void*)&buffer_append_buffer_builder},
+        wo_extern_lib_func_t{"buffer_append_buffer_builder_builder", (void*)&buffer_append_buffer_builder_builder},
         wo_extern_lib_func_t{"buffer_append_f32_builder", (void*)&buffer_append_f32_builder},
         wo_extern_lib_func_t{"buffer_append_f64_builder", (void*)&buffer_append_f64_builder},
         wo_extern_lib_func_t{"buffer_append_handle_builder", (void*)&buffer_append_handle_builder},
@@ -312,6 +315,7 @@ void je_extern_lib_3rd_pkgs_init()
         wo_extern_lib_func_t{"buffer_peekui8_buffer", (void*)&buffer_peekui8_buffer},
         wo_extern_lib_func_t{"buffer_ptr_to_read_builder", (void*)&buffer_ptr_to_read_builder},
         wo_extern_lib_func_t{"buffer_ptr_to_write_builder", (void*)&buffer_ptr_to_write_builder},
+        wo_extern_lib_func_t{"buffer_random", (void*)&buffer_random},
         wo_extern_lib_func_t{"buffer_read_buffer_builder", (void*)&buffer_read_buffer_builder},
         wo_extern_lib_func_t{"buffer_read_f32_builder", (void*)&buffer_read_f32_builder},
         wo_extern_lib_func_t{"buffer_read_f64_builder", (void*)&buffer_read_f64_builder},
