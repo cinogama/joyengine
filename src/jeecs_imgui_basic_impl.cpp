@@ -2419,7 +2419,7 @@ WO_API wo_api je_gui_unregister_exit_callback(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_set_font(wo_vm vm, wo_value args)
 {
-    size_t argc = (size_t)wo_vaarg_count(vm);
+    size_t argc = (size_t)wo_argc(vm);
 
     if (argc == 1)
         jegui_set_font(nullptr, (size_t)wo_int(args + 0));

@@ -927,7 +927,7 @@ WO_API wo_api wojeapi_input_update_window_title(wo_vm vm, wo_value args)
 // ECS OTHER
 WO_API wo_api wojeapi_log(wo_vm vm, wo_value args)
 {
-    size_t argc = (size_t)wo_vaarg_count(vm);
+    size_t argc = (size_t)wo_argc(vm);
     std::string disp;
 
     for (size_t i = 0; i < argc; i++)
@@ -939,7 +939,7 @@ WO_API wo_api wojeapi_log(wo_vm vm, wo_value args)
 
 WO_API wo_api wojeapi_loginfo(wo_vm vm, wo_value args)
 {
-    size_t argc = (size_t)wo_vaarg_count(vm);
+    size_t argc = (size_t)wo_argc(vm);
     std::string disp;
 
     for (size_t i = 0; i < argc; i++)
@@ -951,7 +951,7 @@ WO_API wo_api wojeapi_loginfo(wo_vm vm, wo_value args)
 
 WO_API wo_api wojeapi_logwarn(wo_vm vm, wo_value args)
 {
-    size_t argc = (size_t)wo_vaarg_count(vm);
+    size_t argc = (size_t)wo_argc(vm);
     std::string disp;
 
     for (size_t i = 0; i < argc; i++)
@@ -963,7 +963,7 @@ WO_API wo_api wojeapi_logwarn(wo_vm vm, wo_value args)
 
 WO_API wo_api wojeapi_logerr(wo_vm vm, wo_value args)
 {
-    size_t argc = (size_t)wo_vaarg_count(vm);
+    size_t argc = (size_t)wo_argc(vm);
     std::string disp;
 
     for (size_t i = 0; i < argc; i++)
@@ -975,7 +975,7 @@ WO_API wo_api wojeapi_logerr(wo_vm vm, wo_value args)
 
 WO_API wo_api wojeapi_logfatal(wo_vm vm, wo_value args)
 {
-    size_t argc = (size_t)wo_vaarg_count(vm);
+    size_t argc = (size_t)wo_argc(vm);
     std::string disp;
 
     for (size_t i = 0; i < argc; i++)

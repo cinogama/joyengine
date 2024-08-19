@@ -263,7 +263,7 @@ WO_API wo_api jeecs_shader_sampler2d_bind_texture(wo_vm vm, wo_value args)
 }
 WO_API wo_api jeecs_shader_apply_operation(wo_vm vm, wo_value args)
 {
-    size_t argc = (size_t)wo_vaarg_count(vm);
+    size_t argc = (size_t)wo_argc(vm);
 
     bool result_is_const = true;
     std::vector<jegl_shader_value*> tmp_svalue;
