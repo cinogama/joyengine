@@ -964,7 +964,7 @@ extern func _init_towoo_component(name: string)
 
             if (depth <= 0 && (ty == "," || ty == "}" || ty == "=" || ty == ""))
                 break;
-            type += lexer->next;
+            type += lexer->next + " ";
         }
 
         let mut woolang_val_init = "";
@@ -987,7 +987,7 @@ extern func _init_towoo_component(name: string)
 
                 if (depth <= 0 && (ty == "," || ty == "}" || ty == "=" || ty == ""))
                     break;
-                woolang_val_init += lexer->next;
+                woolang_val_init += lexer->next + " ";
             }
         }
 
