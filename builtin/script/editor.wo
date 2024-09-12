@@ -489,7 +489,7 @@ namespace Light2D::Range::light_shape
                     let r = []mut: vec<((real, real), (real, real))>;
                     for (let (idx, p) : a[i]->iter |> iterator::enumerate)
                     {
-                        r->add((a[i][idx - 1], p));
+                        r->add((a[i][(idx > 0 ? idx | a[i]->len) - 1], p));
 
                         if (i > 0)
                             r->add((a[i - 1][idx], p));
