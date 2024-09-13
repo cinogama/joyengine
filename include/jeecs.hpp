@@ -9467,7 +9467,8 @@ R"(namespace Animation::FrameAnimation
                 if (ortho)
                 {
                     // not perspective
-                    orgin = camera_trans.world_position + camera_trans.world_rotation * vec3{ ray_world[0], ray_world[1], 0 };
+                    orgin = camera_trans.world_position 
+                        + camera_trans.world_rotation * vec3{ ray_world[0], ray_world[1], 0 };
                     direction = vec3(0, 0, 1);
                 }
                 else
@@ -9677,7 +9678,7 @@ R"(namespace Animation::FrameAnimation
 
                 //rot and transform
                 for (int i = 0; i < 8; i++)
-                    finalBoxPos[i] = mat4trans(translation.object2world, translation.local_scale * finalBoxPos[i]);
+                    finalBoxPos[i] = mat4trans(translation.object2world, finalBoxPos[i]);
 
                 {
                     //front
