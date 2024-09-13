@@ -79,16 +79,16 @@
 #		define JE_OS_UNKNOWN
 #endif
 
-#if defined(_X86_)||defined(__i386)||(defined(_WIN32)&&!defined(_WIN64))
+#if defined(_X86_)||defined(__i386) || defined(_M_IX86)
 #		define JE_PLATFORM_X86
 #		define JE_PLATFORM_M32
-#elif defined(__x86_64)||defined(_M_X64)
+#elif defined(__x86_64) || defined(_M_AMD64)
 #		define JE_PLATFORM_X64
 #		define JE_PLATFORM_M64
-#elif defined(__arm)
+#elif defined(__arm) || defined(_M_ARM)
 #		define JE_PLATFORM_ARM
 #		define JE_PLATFORM_M32
-#elif defined(__aarch64__)
+#elif defined(__aarch64__) || defined(_M_ARM64)
 #		define JE_PLATFORM_ARM64
 #		define JE_PLATFORM_M64
 #else

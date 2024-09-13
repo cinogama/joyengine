@@ -16,7 +16,7 @@
           "value": "False",
           "type": "BOOL"
         },
-		{
+        {
           "name": "JE4_ENABLE_DX11_GAPI",
           "value": "True",
           "type": "BOOL"
@@ -65,6 +65,18 @@
           "type": "BOOL"
         }
       ]
+    },
+    {
+      "name": "x86-Release",
+      "generator": "Ninja",
+      "configurationType": "RelWithDebInfo",
+      "buildRoot": "${projectDir}\\out\\build\\${name}",
+      "installRoot": "${projectDir}\\out\\install\\${name}",
+      "cmakeCommandArgs": "",
+      "buildCommandArgs": "",
+      "ctestCommandArgs": "",
+      "inheritEnvironments": [ "msvc_x86" ],
+      "variables": []
     }
   ]
 }

@@ -8,7 +8,7 @@ android {
 
     defaultConfig {
         applicationId = "net.cinogama.joyengineecs4a"
-        minSdk = 27
+        minSdk = 28
         targetSdk = 33
         versionCode = 1
         versionName = "1.0"
