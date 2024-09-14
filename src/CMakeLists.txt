@@ -176,6 +176,9 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 8)
     set_target_properties(joyecs PROPERTIES RELEASE_POSTFIX "")
     set_target_properties(joyecs PROPERTIES DEBUG_POSTFIX "_debug")
 elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
+    # NOTE: In 32bit platform, we need use ImU64 to replace ImTextureID for vulkan backend.
+    target_compile_definitions(joyecs PRIVATE -DImTextureID=ImU64)
+
     set_target_properties(joyecs PROPERTIES RELEASE_POSTFIX "32")
     set_target_properties(joyecs PROPERTIES DEBUG_POSTFIX "32_debug")
 else()

@@ -977,8 +977,8 @@ struct _jegui_thread_local_context
     jeecs::basic::resource<jeecs::graphic::shader>
         _jegl_rend_texture_shader = nullptr;
 
-    void* (*_jegl_get_native_texture)(jegl_resource*) = nullptr;
-    void (*_jegl_bind_shader_sampler_state)(jegl_resource*) = nullptr;
+    jegui_user_image_loader_t _jegl_get_native_texture = nullptr;
+    jegui_user_sampler_loader_t _jegl_bind_shader_sampler_state = nullptr;
 };
 thread_local _jegui_thread_local_context _je_gui_tls_ctx;
 
@@ -2835,12 +2835,10 @@ WO_API wo_api je_gui_node_editor_resume(wo_vm vm, wo_value args)
 
 ////////////////////////////////////////////////////////////////////////////////////////////
 
-
 void jegui_init_basic(
     bool need_flip_frame_buf,
-    void* (*get_img_res)(jegl_resource*),
-    void (*apply_shader_sampler)(jegl_resource*)
-)
+    jegui_user_image_loader_t get_img_res,
+    jegui_user_sampler_loader_t apply_shader_sampler)
 {
     _je_gui_tls_ctx._jegui_need_flip_frambuf = need_flip_frame_buf;
     _je_gui_tls_ctx._jegl_get_native_texture = get_img_res;

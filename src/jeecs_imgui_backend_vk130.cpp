@@ -101,8 +101,8 @@ int jegui_android_PollUnicodeChars()
 #   endif
 
 void jegui_init_vk130(
-    void* (*get_img_res)(jegl_resource*),
-    void (*apply_shader_sampler)(jegl_resource*),
+    jegui_user_image_loader_t get_img_res,
+    jegui_user_sampler_loader_t apply_shader_sampler,
     void* window_handle,
     ImGui_ImplVulkan_InitInfo* vkinfo,
     VkRenderPass pass,

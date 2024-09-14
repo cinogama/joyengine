@@ -121,7 +121,7 @@ namespace jeecs::graphic::api::gl3
         glEnable(GL_DEPTH_TEST);
 
         jegui_init_gl330(
-            [](auto* res) {return (void*)(intptr_t)res->m_handle.m_uint1; },
+            [](auto* res) {return (uint64_t)res->m_handle.m_uint1; },
             [](auto* res)
             {
                 if (res->m_raw_shader_data != nullptr)

@@ -9,11 +9,11 @@
 #include <Windows.h>
 
 void jegui_init_dx11(
-    void* (*get_img_res)(jegl_resource*),
-    void (*apply_shader_sampler)(jegl_resource*),
+    jegui_user_image_loader_t get_img_res,
+    jegui_user_sampler_loader_t apply_shader_sampler,
     void* window_handle,
-    void* d11device, 
-    void* d11context, 
+    void* d11device,
+    void* d11context,
     bool reboot);
 void jegui_update_dx11();
 void jegui_shutdown_dx11(bool reboot);
@@ -29,9 +29,9 @@ void jegui_win32_append_unicode16_char(wchar_t wch);
 #   endif 
 
 void jegui_init_gl330(
-    void* (*get_img_res)(jegl_resource*),
-    void (*apply_shader_sampler)(jegl_resource*),
-    void* window_handle, 
+    jegui_user_image_loader_t get_img_res,
+    jegui_user_sampler_loader_t apply_shader_sampler,
+    void* window_handle,
     bool reboot);
 void jegui_update_gl330();
 void jegui_shutdown_gl330(bool reboot);
@@ -41,8 +41,8 @@ void jegui_shutdown_gl330(bool reboot);
 #   include <imgui_impl_vulkan.h>
 
 void jegui_init_vk130(
-    void* (*get_img_res)(jegl_resource*),
-    void (*apply_shader_sampler)(jegl_resource*),
+    jegui_user_image_loader_t get_img_res,
+    jegui_user_sampler_loader_t apply_shader_sampler,
     void* window_handle,
     ImGui_ImplVulkan_InitInfo* vkinfo,
     VkRenderPass pass,
@@ -53,7 +53,7 @@ void jegui_shutdown_vk130(bool reboot);
 #endif
 
 void jegui_init_none(
-    void* (*get_img_res)(jegl_resource*),
-    void (*apply_shader_sampler)(jegl_resource*));
+    jegui_user_image_loader_t get_img_res,
+    jegui_user_sampler_loader_t apply_shader_sampler);
 void jegui_update_none();
 void jegui_shutdown_none(bool reboot);

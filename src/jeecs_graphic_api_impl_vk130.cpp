@@ -527,7 +527,7 @@ VK_API_PLATFORM_API_LIST
 
             void flush_descriptor_set_allocator()
             {
-                m_binded_pipeline_layout = nullptr;
+                m_binded_pipeline_layout = VK_NULL_HANDLE;
 
                 m_vk_shader_uniform_variable_sets.flush_descriptor_set_allocator();
                 m_vk_shader_uniform_block_sets.flush_descriptor_set_allocator();
@@ -584,7 +584,7 @@ VK_API_PLATFORM_API_LIST
             }
             void apply_binding_work()
             {
-                assert(m_binded_pipeline_layout != nullptr);
+                assert(m_binded_pipeline_layout != VK_NULL_HANDLE);
 
                 // 更新Uniform variables
                 if (VK_NULL_HANDLE == m_updated_sets[DescriptorSetType::UNIFORM_VARIABLES])
@@ -913,7 +913,7 @@ VK_API_PLATFORM_API_LIST
             semaphore_create_info.pNext = nullptr;
             semaphore_create_info.flags = 0;
 
-            VkSemaphore result = nullptr;
+            VkSemaphore result = VK_NULL_HANDLE;
             if (VK_SUCCESS != vkCreateSemaphore(
                 _vk_logic_device,
                 &semaphore_create_info,
@@ -936,7 +936,7 @@ VK_API_PLATFORM_API_LIST
             fence_create_info.pNext = nullptr;
             fence_create_info.flags = 0; // 创建时必须被设置为空就绪状态
 
-            VkFence result = nullptr;
+            VkFence result = VK_NULL_HANDLE;
             if (VK_SUCCESS != vkCreateFence(_vk_logic_device, &fence_create_info, nullptr, &result))
             {
                 jeecs::debug::logfatal("Failed to create vk130 fence.");
@@ -1266,9 +1266,9 @@ VK_API_PLATFORM_API_LIST
             swapchain_create_info.presentMode = _vk_surface_present_mode;
             swapchain_create_info.clipped = VK_TRUE;
 
-            swapchain_create_info.oldSwapchain = nullptr;
+            swapchain_create_info.oldSwapchain = VK_NULL_HANDLE;
 
-            if (_vk_swapchain != nullptr)
+            if (_vk_swapchain != VK_NULL_HANDLE)
                 destroy_swap_chain();
 
             if (VK_SUCCESS != vkCreateSwapchainKHR(_vk_logic_device, &swapchain_create_info, nullptr, &_vk_swapchain))
@@ -1344,7 +1344,7 @@ VK_API_PLATFORM_API_LIST
             const std::vector<const char*>& required_device_layers,
             const std::vector<const char*>& required_device_extensions)
         {
-            assert(_vk_surface != nullptr);
+            assert(_vk_surface != VK_NULL_HANDLE);
 
             VkPhysicalDeviceProperties prop = {};
             vkGetPhysicalDeviceProperties(device, &prop);
@@ -1423,7 +1423,7 @@ VK_API_PLATFORM_API_LIST
         {
             _vk_this_context = this;
 
-            _vk_last_command_buffer_semaphore = nullptr;
+            _vk_last_command_buffer_semaphore = VK_NULL_HANDLE;
             _vk_wait_for_last_command_buffer_stage = VkPipelineStageFlagBits::VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
 
             _vk_current_target_framebuffer = nullptr;
@@ -1437,7 +1437,7 @@ VK_API_PLATFORM_API_LIST
 
             _vk_vsync_config = config->m_fps == 0;
 
-            _vk_swapchain = nullptr;
+            _vk_swapchain = VK_NULL_HANDLE;
 
             // 获取所有支持的层
             uint32_t vk_layer_count;
@@ -1625,7 +1625,7 @@ VK_API_PLATFORM_API_LIST
             }
 
 #ifndef NDEBUG
-            _vk_debug_manager = nullptr;
+            _vk_debug_manager = VK_NULL_HANDLE;
 
             if (vk_validation_layer_supported)
             {
@@ -1772,7 +1772,7 @@ VK_API_PLATFORM_API_LIST
 
             vkDestroyDevice(_vk_logic_device, nullptr);
 #ifndef NDEBUG
-            if (_vk_debug_manager != nullptr)
+            if (_vk_debug_manager != VK_NULL_HANDLE)
             {
                 assert(vkDestroyDebugUtilsMessengerEXT != nullptr);
                 vkDestroyDebugUtilsMessengerEXT(_vk_instance, _vk_debug_manager, nullptr);
@@ -2583,9 +2583,9 @@ VK_API_PLATFORM_API_LIST
         {
             jevk11_texture* texture = new jevk11_texture{};
 
-            texture->m_vk_texture_image = nullptr; // 不设置此项，不需要释放
+            texture->m_vk_texture_image = VK_NULL_HANDLE; // 不设置此项，不需要释放
             texture->m_vk_texture_image_view = create_image_view(image, format, aspect_flags);
-            texture->m_vk_texture_image_memory = nullptr;
+            texture->m_vk_texture_image_memory = VK_NULL_HANDLE;
             texture->m_vk_texture_format = format;
 
             return texture;
@@ -2891,9 +2891,9 @@ VK_API_PLATFORM_API_LIST
         {
             vkDestroyImageView(_vk_logic_device, texture->m_vk_texture_image_view, nullptr);
 
-            if (texture->m_vk_texture_image != nullptr)
+            if (texture->m_vk_texture_image != VK_NULL_HANDLE)
                 vkDestroyImage(_vk_logic_device, texture->m_vk_texture_image, nullptr);
-            if (texture->m_vk_texture_image_memory != nullptr)
+            if (texture->m_vk_texture_image_memory != VK_NULL_HANDLE)
                 vkFreeMemory(_vk_logic_device, texture->m_vk_texture_image_memory, nullptr);
             //vkDestroyBuffer(_vk_logic_device, texture->m_vk_texture_buffer, nullptr);
             //vkFreeMemory(_vk_logic_device, texture->m_vk_texture_buffer_memory, nullptr);
@@ -2970,7 +2970,7 @@ VK_API_PLATFORM_API_LIST
             end_command_buffer_record(_vk_current_command_buffer);
 
             // OK 提交页面
-            assert(_vk_last_command_buffer_semaphore != nullptr);
+            assert(_vk_last_command_buffer_semaphore != VK_NULL_HANDLE);
 
             VkSubmitInfo submit_info = {};
             submit_info.sType = VkStructureType::VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -2981,7 +2981,7 @@ VK_API_PLATFORM_API_LIST
             submit_info.commandBufferCount = 1;
             submit_info.pCommandBuffers = &_vk_current_command_buffer;
 
-            auto* new_semphore = _vk_command_buffer_allocator->allocate_semaphore();
+            auto new_semphore = _vk_command_buffer_allocator->allocate_semaphore();
 
             submit_info.signalSemaphoreCount = 1;
             submit_info.pSignalSemaphores = &new_semphore;
@@ -3263,7 +3263,7 @@ VK_API_PLATFORM_API_LIST
             auto cmdbuf = begin_temp_command_buffer_records();
 
             jegui_init_vk130(
-                [](jegl_resource* res)->void*
+                [](jegl_resource* res)
                 {
                     auto vk11_texture = reinterpret_cast<jevk11_texture*>(res->m_handle.m_ptr);
                     auto desc_set = jegl_vk130_context::_vk_this_context
@@ -3296,7 +3296,7 @@ VK_API_PLATFORM_API_LIST
                         0,
                         nullptr);
 
-                    return desc_set;
+                    return (uint64_t)desc_set;
                 },
                 [](auto* res)
                 {
@@ -3324,7 +3324,7 @@ VK_API_PLATFORM_API_LIST
         assert(context->_vk_current_target_framebuffer != nullptr);
 
         VkRenderPass target_pass = context->_vk_current_target_framebuffer->m_rendpass;
-        assert(target_pass != nullptr);
+        assert(target_pass != VK_NULL_HANDLE);
 
         auto fnd = m_target_pass_pipelines.find(target_pass);
         if (fnd != m_target_pass_pipelines.end())
@@ -3367,13 +3367,13 @@ VK_API_PLATFORM_API_LIST
         pipeline_create_info.layout = m_blob_data->m_pipeline_layout;
         pipeline_create_info.renderPass = target_pass;
         pipeline_create_info.subpass = 0;
-        pipeline_create_info.basePipelineHandle = nullptr;  // TODO: 看着我们可以使用子渲染管线？稍后考虑
+        pipeline_create_info.basePipelineHandle = VK_NULL_HANDLE;  // TODO: 看着我们可以使用子渲染管线？稍后考虑
         pipeline_create_info.basePipelineIndex = -1;
 
         VkPipeline pipeline;
         if (VK_SUCCESS != context->vkCreateGraphicsPipelines(
             context->_vk_logic_device,
-            nullptr,
+            VK_NULL_HANDLE,
             1,
             &pipeline_create_info,
             nullptr,
@@ -3754,7 +3754,7 @@ VK_API_PLATFORM_API_LIST
 }
 
 // 在此处为imgui提供vulkan接口:
-VkResult vkWaitForFences(
+VkResult VKAPI_CALL vkWaitForFences(
     VkDevice                                    device,
     uint32_t                                    fenceCount,
     const VkFence* pFences,
@@ -3765,7 +3765,7 @@ VkResult vkWaitForFences(
     return jegl_vk130_context::_vk_this_context->vkWaitForFences(device, fenceCount, pFences, waitAll, timeout);
 }
 
-VkResult vkResetFences(
+VkResult VKAPI_CALL vkResetFences(
     VkDevice                                    device,
     uint32_t                                    fenceCount,
     const VkFence* pFences)
@@ -3774,7 +3774,7 @@ VkResult vkResetFences(
     return jegl_vk130_context::_vk_this_context->vkResetFences(device, fenceCount, pFences);
 }
 
-void vkUpdateDescriptorSets(
+void VKAPI_CALL vkUpdateDescriptorSets(
     VkDevice                                    device,
     uint32_t                                    descriptorWriteCount,
     const VkWriteDescriptorSet* pDescriptorWrites,
@@ -3790,7 +3790,7 @@ void vkUpdateDescriptorSets(
         pDescriptorCopies);
 }
 
-VkResult vkMapMemory(
+VkResult VKAPI_CALL vkMapMemory(
     VkDevice                                    device,
     VkDeviceMemory                              memory,
     VkDeviceSize                                offset,
@@ -3808,7 +3808,7 @@ VkResult vkMapMemory(
         ppData);
 }
 
-void vkUnmapMemory(
+void VKAPI_CALL vkUnmapMemory(
     VkDevice                                    device,
     VkDeviceMemory                              memory)
 {
@@ -3818,7 +3818,7 @@ void vkUnmapMemory(
         memory);
 }
 
-VkResult vkResetCommandBuffer(
+VkResult VKAPI_CALL vkResetCommandBuffer(
     VkCommandBuffer                             commandBuffer,
     VkCommandBufferResetFlags                   flags)
 {
@@ -3828,7 +3828,7 @@ VkResult vkResetCommandBuffer(
         flags);
 }
 
-VkResult vkQueueSubmit(
+VkResult VKAPI_CALL vkQueueSubmit(
     VkQueue                                     queue,
     uint32_t                                    submitCount,
     const VkSubmitInfo* pSubmits,
@@ -3842,7 +3842,7 @@ VkResult vkQueueSubmit(
         fence);
 }
 
-VkResult vkQueuePresentKHR(
+VkResult VKAPI_CALL vkQueuePresentKHR(
     VkQueue                                     queue,
     const VkPresentInfoKHR* pPresentInfo)
 {
@@ -3852,7 +3852,7 @@ VkResult vkQueuePresentKHR(
         pPresentInfo);
 }
 
-VkResult vkGetSwapchainImagesKHR(
+VkResult VKAPI_CALL vkGetSwapchainImagesKHR(
     VkDevice                                    device,
     VkSwapchainKHR                              swapchain,
     uint32_t* pSwapchainImageCount,
@@ -3866,7 +3866,7 @@ VkResult vkGetSwapchainImagesKHR(
         pSwapchainImages);
 }
 
-VkResult vkGetPhysicalDeviceSurfaceSupportKHR(
+VkResult VKAPI_CALL vkGetPhysicalDeviceSurfaceSupportKHR(
     VkPhysicalDevice                            physicalDevice,
     uint32_t                                    queueFamilyIndex,
     VkSurfaceKHR                                surface,
@@ -3880,7 +3880,7 @@ VkResult vkGetPhysicalDeviceSurfaceSupportKHR(
         pSupported);
 }
 
-VkResult vkGetPhysicalDeviceSurfacePresentModesKHR(
+VkResult VKAPI_CALL vkGetPhysicalDeviceSurfacePresentModesKHR(
     VkPhysicalDevice                            physicalDevice,
     VkSurfaceKHR                                surface,
     uint32_t* pPresentModeCount,
@@ -3894,7 +3894,7 @@ VkResult vkGetPhysicalDeviceSurfacePresentModesKHR(
         pPresentModes);
 }
 
-VkResult vkGetPhysicalDeviceSurfaceFormatsKHR(
+VkResult VKAPI_CALL vkGetPhysicalDeviceSurfaceFormatsKHR(
     VkPhysicalDevice                            physicalDevice,
     VkSurfaceKHR                                surface,
     uint32_t* pSurfaceFormatCount,
@@ -3908,7 +3908,7 @@ VkResult vkGetPhysicalDeviceSurfaceFormatsKHR(
         pSurfaceFormats);
 }
 
-VkResult vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+VkResult VKAPI_CALL vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
     VkPhysicalDevice                            physicalDevice,
     VkSurfaceKHR                                surface,
     VkSurfaceCapabilitiesKHR* pSurfaceCapabilities)
@@ -3920,7 +3920,7 @@ VkResult vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
         pSurfaceCapabilities);
 }
 
-void vkGetPhysicalDeviceMemoryProperties(
+void VKAPI_CALL vkGetPhysicalDeviceMemoryProperties(
     VkPhysicalDevice                            physicalDevice,
     VkPhysicalDeviceMemoryProperties* pMemoryProperties)
 {
@@ -3930,7 +3930,7 @@ void vkGetPhysicalDeviceMemoryProperties(
         pMemoryProperties);
 }
 
-PFN_vkVoidFunction vkGetInstanceProcAddr(
+PFN_vkVoidFunction VKAPI_CALL vkGetInstanceProcAddr(
     VkInstance                                  instance,
     const char* pName)
 {
@@ -3940,7 +3940,7 @@ PFN_vkVoidFunction vkGetInstanceProcAddr(
         pName);
 }
 
-void vkGetImageMemoryRequirements(
+void VKAPI_CALL vkGetImageMemoryRequirements(
     VkDevice                                    device,
     VkImage                                     image,
     VkMemoryRequirements* pMemoryRequirements)
@@ -3952,7 +3952,7 @@ void vkGetImageMemoryRequirements(
         pMemoryRequirements);
 }
 
-void vkGetBufferMemoryRequirements(
+void VKAPI_CALL vkGetBufferMemoryRequirements(
     VkDevice                                    device,
     VkBuffer                                    buffer,
     VkMemoryRequirements* pMemoryRequirements)
@@ -3964,7 +3964,7 @@ void vkGetBufferMemoryRequirements(
         pMemoryRequirements);
 }
 
-void vkFreeMemory(
+void VKAPI_CALL vkFreeMemory(
     VkDevice                                    device,
     VkDeviceMemory                              memory,
     const VkAllocationCallbacks* pAllocator)
@@ -3976,7 +3976,7 @@ void vkFreeMemory(
         pAllocator);
 }
 
-VkResult vkFreeDescriptorSets(
+VkResult VKAPI_CALL vkFreeDescriptorSets(
     VkDevice                                    device,
     VkDescriptorPool                            descriptorPool,
     uint32_t                                    descriptorSetCount,
@@ -3990,7 +3990,7 @@ VkResult vkFreeDescriptorSets(
         pDescriptorSets);
 }
 
-void vkFreeCommandBuffers(
+void VKAPI_CALL vkFreeCommandBuffers(
     VkDevice                                    device,
     VkCommandPool                               commandPool,
     uint32_t                                    commandBufferCount,
@@ -4004,7 +4004,7 @@ void vkFreeCommandBuffers(
         pCommandBuffers);
 }
 
-VkResult vkFlushMappedMemoryRanges(
+VkResult VKAPI_CALL vkFlushMappedMemoryRanges(
     VkDevice                                    device,
     uint32_t                                    memoryRangeCount,
     const VkMappedMemoryRange* pMemoryRanges)
@@ -4016,7 +4016,7 @@ VkResult vkFlushMappedMemoryRanges(
         pMemoryRanges);
 }
 
-VkResult vkEndCommandBuffer(
+VkResult VKAPI_CALL vkEndCommandBuffer(
     VkCommandBuffer                             commandBuffer)
 {
     using namespace jeecs::graphic::api::vk130;
@@ -4024,7 +4024,7 @@ VkResult vkEndCommandBuffer(
         commandBuffer);
 }
 
-VkResult vkDeviceWaitIdle(
+VkResult VKAPI_CALL vkDeviceWaitIdle(
     VkDevice                                    device)
 {
     using namespace jeecs::graphic::api::vk130;
@@ -4032,7 +4032,7 @@ VkResult vkDeviceWaitIdle(
         device);
 }
 
-void vkDestroySwapchainKHR(
+void VKAPI_CALL vkDestroySwapchainKHR(
     VkDevice                                    device,
     VkSwapchainKHR                              swapchain,
     const VkAllocationCallbacks* pAllocator)
@@ -4044,7 +4044,7 @@ void vkDestroySwapchainKHR(
         pAllocator);
 }
 
-void vkDestroySurfaceKHR(
+void VKAPI_CALL vkDestroySurfaceKHR(
     VkInstance                                  instance,
     VkSurfaceKHR                                surface,
     const VkAllocationCallbacks* pAllocator)
@@ -4056,7 +4056,7 @@ void vkDestroySurfaceKHR(
         pAllocator);
 }
 
-void vkDestroyShaderModule(
+void VKAPI_CALL vkDestroyShaderModule(
     VkDevice                                    device,
     VkShaderModule                              shaderModule,
     const VkAllocationCallbacks* pAllocator)
@@ -4068,7 +4068,7 @@ void vkDestroyShaderModule(
         pAllocator);
 }
 
-VkResult vkResetCommandPool(
+VkResult VKAPI_CALL vkResetCommandPool(
     VkDevice                                    device,
     VkCommandPool                               commandPool,
     VkCommandPoolResetFlags                     flags)
@@ -4080,7 +4080,7 @@ VkResult vkResetCommandPool(
         flags);
 }
 
-void vkDestroySemaphore(
+void VKAPI_CALL vkDestroySemaphore(
     VkDevice                                    device,
     VkSemaphore                                 semaphore,
     const VkAllocationCallbacks* pAllocator)
@@ -4092,7 +4092,7 @@ void vkDestroySemaphore(
         pAllocator);
 }
 
-void vkDestroySampler(
+void VKAPI_CALL vkDestroySampler(
     VkDevice                                    device,
     VkSampler                                   sampler,
     const VkAllocationCallbacks* pAllocator)
@@ -4104,7 +4104,7 @@ void vkDestroySampler(
         pAllocator);
 }
 
-void vkDestroyRenderPass(
+void VKAPI_CALL vkDestroyRenderPass(
     VkDevice                                    device,
     VkRenderPass                                renderPass,
     const VkAllocationCallbacks* pAllocator)
@@ -4116,7 +4116,7 @@ void vkDestroyRenderPass(
         pAllocator);
 }
 
-void vkDestroyPipeline(
+void VKAPI_CALL vkDestroyPipeline(
     VkDevice                                    device,
     VkPipeline                                  pipeline,
     const VkAllocationCallbacks* pAllocator)
@@ -4128,7 +4128,7 @@ void vkDestroyPipeline(
         pAllocator);
 }
 
-void vkDestroyPipelineLayout(
+void VKAPI_CALL vkDestroyPipelineLayout(
     VkDevice                                    device,
     VkPipelineLayout                            pipelineLayout,
     const VkAllocationCallbacks* pAllocator)
@@ -4140,7 +4140,7 @@ void vkDestroyPipelineLayout(
         pAllocator);
 }
 
-void vkDestroyImage(
+void VKAPI_CALL vkDestroyImage(
     VkDevice                                    device,
     VkImage                                     image,
     const VkAllocationCallbacks* pAllocator)
@@ -4152,7 +4152,7 @@ void vkDestroyImage(
         pAllocator);
 }
 
-void vkDestroyImageView(
+void VKAPI_CALL vkDestroyImageView(
     VkDevice                                    device,
     VkImageView                                 imageView,
     const VkAllocationCallbacks* pAllocator)
@@ -4164,7 +4164,7 @@ void vkDestroyImageView(
         pAllocator);
 }
 
-void vkDestroyFramebuffer(
+void VKAPI_CALL vkDestroyFramebuffer(
     VkDevice                                    device,
     VkFramebuffer                               framebuffer,
     const VkAllocationCallbacks* pAllocator)
@@ -4176,7 +4176,7 @@ void vkDestroyFramebuffer(
         pAllocator);
 }
 
-void vkDestroyFence(
+void VKAPI_CALL vkDestroyFence(
     VkDevice                                    device,
     VkFence                                     fence,
     const VkAllocationCallbacks* pAllocator)
@@ -4188,7 +4188,7 @@ void vkDestroyFence(
         pAllocator);
 }
 
-void vkDestroyDescriptorSetLayout(
+void VKAPI_CALL vkDestroyDescriptorSetLayout(
     VkDevice                                    device,
     VkDescriptorSetLayout                       descriptorSetLayout,
     const VkAllocationCallbacks* pAllocator)
@@ -4200,7 +4200,7 @@ void vkDestroyDescriptorSetLayout(
         pAllocator);
 }
 
-void vkDestroyDescriptorPool(
+void VKAPI_CALL vkDestroyDescriptorPool(
     VkDevice                                    device,
     VkDescriptorPool                            descriptorPool,
     const VkAllocationCallbacks* pAllocator)
@@ -4212,7 +4212,7 @@ void vkDestroyDescriptorPool(
         pAllocator);
 }
 
-void vkDestroyBuffer(
+void VKAPI_CALL vkDestroyBuffer(
     VkDevice                                    device,
     VkBuffer                                    buffer,
     const VkAllocationCallbacks* pAllocator)
@@ -4224,7 +4224,7 @@ void vkDestroyBuffer(
         pAllocator);
 }
 
-VkResult vkCreateSwapchainKHR(
+VkResult VKAPI_CALL vkCreateSwapchainKHR(
     VkDevice                                    device,
     const VkSwapchainCreateInfoKHR* pCreateInfo,
     const VkAllocationCallbacks* pAllocator,
@@ -4238,7 +4238,7 @@ VkResult vkCreateSwapchainKHR(
         pSwapchain);
 }
 
-VkResult vkCreateShaderModule(
+VkResult VKAPI_CALL vkCreateShaderModule(
     VkDevice                                    device,
     const VkShaderModuleCreateInfo* pCreateInfo,
     const VkAllocationCallbacks* pAllocator,
@@ -4252,7 +4252,7 @@ VkResult vkCreateShaderModule(
         pShaderModule);
 }
 
-VkResult vkCreateSemaphore(
+VkResult VKAPI_CALL vkCreateSemaphore(
     VkDevice                                    device,
     const VkSemaphoreCreateInfo* pCreateInfo,
     const VkAllocationCallbacks* pAllocator,
@@ -4266,7 +4266,7 @@ VkResult vkCreateSemaphore(
         pSemaphore);
 }
 
-VkResult vkCreateSampler(
+VkResult VKAPI_CALL vkCreateSampler(
     VkDevice                                    device,
     const VkSamplerCreateInfo* pCreateInfo,
     const VkAllocationCallbacks* pAllocator,
@@ -4280,7 +4280,7 @@ VkResult vkCreateSampler(
         pSampler);
 }
 
-VkResult vkCreateRenderPass(
+VkResult VKAPI_CALL vkCreateRenderPass(
     VkDevice                                    device,
     const VkRenderPassCreateInfo* pCreateInfo,
     const VkAllocationCallbacks* pAllocator,
@@ -4294,7 +4294,7 @@ VkResult vkCreateRenderPass(
         pRenderPass);
 }
 
-VkResult vkCreatePipelineLayout(
+VkResult VKAPI_CALL vkCreatePipelineLayout(
     VkDevice                                    device,
     const VkPipelineLayoutCreateInfo* pCreateInfo,
     const VkAllocationCallbacks* pAllocator,
@@ -4308,7 +4308,7 @@ VkResult vkCreatePipelineLayout(
         pPipelineLayout);
 }
 
-VkResult vkCreateImageView(
+VkResult VKAPI_CALL vkCreateImageView(
     VkDevice                                    device,
     const VkImageViewCreateInfo* pCreateInfo,
     const VkAllocationCallbacks* pAllocator,
@@ -4322,7 +4322,7 @@ VkResult vkCreateImageView(
         pView);
 }
 
-VkResult vkCreateImage(
+VkResult VKAPI_CALL vkCreateImage(
     VkDevice                                    device,
     const VkImageCreateInfo* pCreateInfo,
     const VkAllocationCallbacks* pAllocator,
@@ -4336,7 +4336,7 @@ VkResult vkCreateImage(
         pImage);
 }
 
-VkResult vkCreateGraphicsPipelines(
+VkResult VKAPI_CALL vkCreateGraphicsPipelines(
     VkDevice                                    device,
     VkPipelineCache                             pipelineCache,
     uint32_t                                    createInfoCount,
@@ -4354,7 +4354,7 @@ VkResult vkCreateGraphicsPipelines(
         pPipelines);
 }
 
-VkResult vkCreateFramebuffer(
+VkResult VKAPI_CALL vkCreateFramebuffer(
     VkDevice                                    device,
     const VkFramebufferCreateInfo* pCreateInfo,
     const VkAllocationCallbacks* pAllocator,
@@ -4368,7 +4368,7 @@ VkResult vkCreateFramebuffer(
         pFramebuffer);
 }
 
-VkResult vkCreateFence(
+VkResult VKAPI_CALL vkCreateFence(
     VkDevice                                    device,
     const VkFenceCreateInfo* pCreateInfo,
     const VkAllocationCallbacks* pAllocator,
@@ -4382,7 +4382,7 @@ VkResult vkCreateFence(
         pFence);
 }
 
-VkResult vkCreateDescriptorSetLayout(
+VkResult VKAPI_CALL vkCreateDescriptorSetLayout(
     VkDevice                                    device,
     const VkDescriptorSetLayoutCreateInfo* pCreateInfo,
     const VkAllocationCallbacks* pAllocator,
@@ -4396,7 +4396,7 @@ VkResult vkCreateDescriptorSetLayout(
         pSetLayout);
 }
 
-VkResult vkCreateCommandPool(
+VkResult VKAPI_CALL vkCreateCommandPool(
     VkDevice                                    device,
     const VkCommandPoolCreateInfo* pCreateInfo,
     const VkAllocationCallbacks* pAllocator,
@@ -4410,7 +4410,7 @@ VkResult vkCreateCommandPool(
         pCommandPool);
 }
 
-VkResult vkCreateBuffer(
+VkResult VKAPI_CALL vkCreateBuffer(
     VkDevice                                    device,
     const VkBufferCreateInfo* pCreateInfo,
     const VkAllocationCallbacks* pAllocator,
@@ -4424,7 +4424,7 @@ VkResult vkCreateBuffer(
         pBuffer);
 }
 
-void vkDestroyCommandPool(
+void VKAPI_CALL vkDestroyCommandPool(
     VkDevice                                    device,
     VkCommandPool                               commandPool,
     const VkAllocationCallbacks* pAllocator)
@@ -4436,7 +4436,7 @@ void vkDestroyCommandPool(
         pAllocator);
 }
 
-void vkCmdSetViewport(
+void VKAPI_CALL vkCmdSetViewport(
     VkCommandBuffer                             commandBuffer,
     uint32_t                                    firstViewport,
     uint32_t                                    viewportCount,
@@ -4450,7 +4450,7 @@ void vkCmdSetViewport(
         pViewports);
 }
 
-void vkCmdSetScissor(
+void VKAPI_CALL vkCmdSetScissor(
     VkCommandBuffer                             commandBuffer,
     uint32_t                                    firstScissor,
     uint32_t                                    scissorCount,
@@ -4464,7 +4464,7 @@ void vkCmdSetScissor(
         pScissors);
 }
 
-void vkCmdPushConstants(
+void VKAPI_CALL vkCmdPushConstants(
     VkCommandBuffer                             commandBuffer,
     VkPipelineLayout                            layout,
     VkShaderStageFlags                          stageFlags,
@@ -4482,7 +4482,7 @@ void vkCmdPushConstants(
         pValues);
 }
 
-void vkCmdPipelineBarrier(
+void VKAPI_CALL vkCmdPipelineBarrier(
     VkCommandBuffer                             commandBuffer,
     VkPipelineStageFlags                        srcStageMask,
     VkPipelineStageFlags                        dstStageMask,
@@ -4508,7 +4508,7 @@ void vkCmdPipelineBarrier(
         pImageMemoryBarriers);
 }
 
-void vkCmdEndRenderPass(
+void VKAPI_CALL vkCmdEndRenderPass(
     VkCommandBuffer                             commandBuffer)
 {
     using namespace jeecs::graphic::api::vk130;
@@ -4516,7 +4516,7 @@ void vkCmdEndRenderPass(
         commandBuffer);
 }
 
-void vkCmdDrawIndexed(
+void VKAPI_CALL vkCmdDrawIndexed(
     VkCommandBuffer                             commandBuffer,
     uint32_t                                    indexCount,
     uint32_t                                    instanceCount,
@@ -4534,7 +4534,7 @@ void vkCmdDrawIndexed(
         firstInstance);
 }
 
-void vkCmdCopyBufferToImage(
+void VKAPI_CALL vkCmdCopyBufferToImage(
     VkCommandBuffer                             commandBuffer,
     VkBuffer                                    srcBuffer,
     VkImage                                     dstImage,
@@ -4552,7 +4552,7 @@ void vkCmdCopyBufferToImage(
         pRegions);
 }
 
-void vkCmdBindVertexBuffers(
+void VKAPI_CALL vkCmdBindVertexBuffers(
     VkCommandBuffer                             commandBuffer,
     uint32_t                                    firstBinding,
     uint32_t                                    bindingCount,
@@ -4568,7 +4568,7 @@ void vkCmdBindVertexBuffers(
         pOffsets);
 }
 
-void vkCmdBindPipeline(
+void VKAPI_CALL vkCmdBindPipeline(
     VkCommandBuffer                             commandBuffer,
     VkPipelineBindPoint                         pipelineBindPoint,
     VkPipeline                                  pipeline)
@@ -4580,7 +4580,7 @@ void vkCmdBindPipeline(
         pipeline);
 }
 
-void vkCmdBindIndexBuffer(
+void VKAPI_CALL vkCmdBindIndexBuffer(
     VkCommandBuffer                             commandBuffer,
     VkBuffer                                    buffer,
     VkDeviceSize                                offset,
@@ -4594,7 +4594,7 @@ void vkCmdBindIndexBuffer(
         indexType);
 }
 
-void vkCmdBindDescriptorSets(
+void VKAPI_CALL vkCmdBindDescriptorSets(
     VkCommandBuffer                             commandBuffer,
     VkPipelineBindPoint                         pipelineBindPoint,
     VkPipelineLayout                            layout,
@@ -4616,7 +4616,7 @@ void vkCmdBindDescriptorSets(
         pDynamicOffsets);
 }
 
-void vkCmdBeginRenderPass(
+void VKAPI_CALL vkCmdBeginRenderPass(
     VkCommandBuffer                             commandBuffer,
     const VkRenderPassBeginInfo* pRenderPassBegin,
     VkSubpassContents                           contents)
@@ -4628,7 +4628,7 @@ void vkCmdBeginRenderPass(
         contents);
 }
 
-VkResult vkBindImageMemory(
+VkResult VKAPI_CALL vkBindImageMemory(
     VkDevice                                    device,
     VkImage                                     image,
     VkDeviceMemory                              memory,
@@ -4642,7 +4642,7 @@ VkResult vkBindImageMemory(
         memoryOffset);
 }
 
-VkResult vkBindBufferMemory(
+VkResult VKAPI_CALL vkBindBufferMemory(
     VkDevice                                    device,
     VkBuffer                                    buffer,
     VkDeviceMemory                              memory,
@@ -4656,7 +4656,7 @@ VkResult vkBindBufferMemory(
         memoryOffset);
 }
 
-VkResult vkBeginCommandBuffer(
+VkResult VKAPI_CALL vkBeginCommandBuffer(
     VkCommandBuffer                             commandBuffer,
     const VkCommandBufferBeginInfo* pBeginInfo)
 {
@@ -4666,7 +4666,7 @@ VkResult vkBeginCommandBuffer(
         pBeginInfo);
 }
 
-VkResult vkAllocateMemory(
+VkResult VKAPI_CALL vkAllocateMemory(
     VkDevice                                    device,
     const VkMemoryAllocateInfo* pAllocateInfo,
     const VkAllocationCallbacks* pAllocator,
@@ -4680,7 +4680,7 @@ VkResult vkAllocateMemory(
         pMemory);
 }
 
-VkResult vkAllocateDescriptorSets(
+VkResult VKAPI_CALL vkAllocateDescriptorSets(
     VkDevice                                    device,
     const VkDescriptorSetAllocateInfo* pAllocateInfo,
     VkDescriptorSet* pDescriptorSets)
@@ -4692,7 +4692,7 @@ VkResult vkAllocateDescriptorSets(
         pDescriptorSets);
 }
 
-VkResult vkAllocateCommandBuffers(
+VkResult VKAPI_CALL vkAllocateCommandBuffers(
     VkDevice                                    device,
     const VkCommandBufferAllocateInfo* pAllocateInfo,
     VkCommandBuffer* pCommandBuffers)
@@ -4704,7 +4704,7 @@ VkResult vkAllocateCommandBuffers(
         pCommandBuffers);
 }
 
-VkResult vkAcquireNextImageKHR(
+VkResult VKAPI_CALL vkAcquireNextImageKHR(
     VkDevice                                    device,
     VkSwapchainKHR                              swapchain,
     uint64_t                                    timeout,

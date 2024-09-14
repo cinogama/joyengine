@@ -355,7 +355,7 @@ namespace jeecs::graphic::api::dx11
         jegui_init_dx11(
             [](auto* res) {
                 auto* resource = std::launder(reinterpret_cast<jedx11_texture*>(res->m_handle.m_ptr));
-                return (void*)(intptr_t)resource->m_texture_view.Get();
+                return (uint64_t)resource->m_texture_view.Get();
             },
             [](auto* res)
             {

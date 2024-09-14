@@ -3064,6 +3064,10 @@ jegui_set_font [基本接口]
 */
 JE_API void jegui_set_font(const char* path, size_t size);
 
+typedef uint64_t jegui_user_image_handle_t;
+typedef jegui_user_image_handle_t(*jegui_user_image_loader_t)(jegl_resource*);
+typedef void(*jegui_user_sampler_loader_t)(jegl_resource*);
+
 /*
 jegui_init_basic [基本接口]
 初始化ImGUI
@@ -3075,8 +3079,8 @@ jegui_init_basic [基本接口]
 */
 JE_API void jegui_init_basic(
     bool need_flip_frame_buf,
-    void* (*get_img_res)(jegl_resource*),
-    void (*apply_shader_sampler)(jegl_resource*));
+    jegui_user_image_loader_t get_img_res,
+    jegui_user_sampler_loader_t apply_shader_sampler);
 
 /*
 jegui_update_basic [基本接口]

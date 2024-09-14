@@ -10,8 +10,8 @@
 #   include <imgui_impl_dx11.h>
 
 void jegui_init_dx11(
-    void* (*get_img_res)(jegl_resource*),
-    void (*apply_shader_sampler)(jegl_resource*),
+    jegui_user_image_loader_t get_img_res,
+    jegui_user_sampler_loader_t apply_shader_sampler,
     void* window_handle,
     void* d11device,
     void* d11context,

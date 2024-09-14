@@ -6,8 +6,8 @@
 #include <imgui.h>
 
 void jegui_init_none(
-    void* (*get_img_res)(jegl_resource*),
-    void (*apply_shader_sampler)(jegl_resource*))
+    jegui_user_image_loader_t get_img_res,
+    jegui_user_sampler_loader_t apply_shader_sampler)
 {
     jegui_init_basic(false, get_img_res, apply_shader_sampler);
     ImGuiIO& io = ImGui::GetIO();
