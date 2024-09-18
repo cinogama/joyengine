@@ -59,7 +59,7 @@ namespace jeapi
             {
             value(path)?
                 {
-                    let raw_dat = serialize::raw_entity(e, true);
+                    let raw_dat = serialize::raw_entity(e, false);
                     match (je::file::readall(path)
                         =>> \dat = dat->dict::deserialize
                             =>> \d = d->get("prefab": dynamic)
