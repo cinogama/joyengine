@@ -2784,6 +2784,8 @@ public func frag(_: v2f)
                                                 }
                                             }
                                         };
+                                    
+                                    auto current_animation_frame_count = active_animation_frames->v.frames.size();
 
                                     if (animation.m_current_frame_index == SIZE_MAX || animation.m_last_speed != frame_animation.speed)
                                     {
@@ -2796,14 +2798,12 @@ public func frag(_: v2f)
                                     else
                                     {
                                         // 到达下一次更新时间！检查间隔时间，并跳转到对应的帧
-                                        auto current_animation_frame_count = active_animation_frames->v.frames.size();
-
                                         auto delta_time_between_frams = _fixed_time - animation.m_next_update_time;
                                         auto next_frame_index = (animation.m_current_frame_index + 1) % current_animation_frame_count;
 
                                         while (delta_time_between_frams > active_animation_frames->v.frames[next_frame_index].m_frame_time / frame_animation.speed)
                                         {
-                                            if (animation.m_loop == false && next_frame_index == 0)
+                                            if (animation.m_loop == false && next_frame_index == current_animation_frame_count - 1)
                                                 break;
 
                                             // 在此应用跳过帧的deltaframe数据
@@ -2813,19 +2813,18 @@ public func frag(_: v2f)
                                             next_frame_index = (next_frame_index + 1) % current_animation_frame_count;
                                         }
 
-                                        if (animation.m_loop == false && next_frame_index == 0)
-                                        {
-                                            // 帧动画播放完毕，最后更新到最后一帧，然后终止动画
-                                            finish_animation = true;
-                                            next_frame_index = current_animation_frame_count - 1;
-                                        }
-
                                         animation.m_current_frame_index = next_frame_index;
                                         animation.m_next_update_time =
                                             _fixed_time
                                             + active_animation_frames->v.frames[animation.m_current_frame_index].m_frame_time / frame_animation.speed
                                             - delta_time_between_frams
                                             + math::random(-frame_animation.jitter, frame_animation.jitter) / frame_animation.speed;
+                                    }
+
+                                    if (animation.m_loop == false)
+                                    {
+                                        if (animation.m_current_frame_index == current_animation_frame_count - 1)
+                                            finish_animation = true;
                                     }
 
                                     auto& updating_frame = active_animation_frames->v.frames[animation.m_current_frame_index];
