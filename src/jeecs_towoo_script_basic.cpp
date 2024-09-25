@@ -1821,11 +1821,17 @@ WO_API wo_api wojeapi_towoo_userinterface_origin_layout(wo_vm vm, wo_value args)
     auto& origin = wo_component<jeecs::UserInterface::Origin>(args + 0);
 
     auto r = wo_vec2(args + 1);
-    auto range = origin.get_layout(r.x, r.y);
 
-    auto result = wo_push_struct(vm, 2);
-    wo_struct_set(result, 0, wo_push_vec2(vm, jeecs::math::vec2(range.x, range.y)));
-    wo_struct_set(result, 1, wo_push_vec2(vm, jeecs::math::vec2(range.z, range.w)));
+    jeecs::math::vec2 abssize;
+    jeecs::math::vec2 absoffset;
+    jeecs::math::vec2 center_offset;
+
+    origin.get_layout(r.x, r.y, &absoffset, &abssize, &center_offset);
+
+    auto result = wo_push_struct(vm, 3);
+    wo_struct_set(result, 0, wo_push_vec2(vm, absoffset));
+    wo_struct_set(result, 1, wo_push_vec2(vm, abssize));
+    wo_struct_set(result, 2, wo_push_vec2(vm, center_offset));
 
     return wo_ret_val(vm, result);
 }
@@ -2237,7 +2243,7 @@ namespace UserInterface
     namespace Origin
     {
         extern("libjoyecs", "wojeapi_towoo_userinterface_origin_layout")
-            public func get_layout(self: Origin, display_range: vec2)=> (vec2, vec2);
+            public func get_layout(self: Origin, display_range: vec2)=> (vec2, vec2, vec2);
     }
 }
 namespace Renderer

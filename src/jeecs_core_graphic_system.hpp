@@ -624,8 +624,10 @@ public let frag =
                         * _using_tiling = &default_tiling,
                         * _using_offset = &default_offset;
 
-                    auto uilayout = rendentity.ui_origin->get_layout((float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT);
-                    math::vec2 uioffset = math::vec2(uilayout.x, uilayout.y), uisize = math::vec2(uilayout.z, uilayout.w);
+                    math::vec2 uioffset, uisize, uicenteroffset;
+                    rendentity.ui_origin->get_layout(
+                        (float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT, &uioffset, &uisize, &uicenteroffset);
+
                     uioffset.x -= (float)RENDAIMBUFFER_WIDTH / 2.0f;
                     uioffset.y -= (float)RENDAIMBUFFER_HEIGHT / 2.0f;
 
@@ -652,8 +654,24 @@ public let frag =
                     };
                     if (rendentity.ui_rotation != nullptr)
                     {
+                        const float MAT4_UI_CENTER_OFFSET[4][4] = {
+                            {1.0f, 0.0f, 0.0f, 0.0f},
+                            {0.0f, 1.0f, 0.0f, 0.0f},
+                            {0.0f, 0.0f, 1.0f, 0.0f},
+                            {uicenteroffset.x, uicenteroffset.y, 0.0f, 1.0f}
+                        };
+                        const float MAT4_UI_INV_CENTER_OFFSET[4][4] = {
+                           {1.0f, 0.0f, 0.0f, 0.0f},
+                           {0.0f, 1.0f, 0.0f, 0.0f},
+                           {0.0f, 0.0f, 1.0f, 0.0f},
+                           {-uicenteroffset.x, -uicenteroffset.y, 0.0f, 1.0f}
+                        };
+
                         math::quat q(0.0f, 0.0f, rendentity.ui_rotation->angle);
                         q.create_matrix(MAT4_UI_ROTATION);
+
+                        math::mat4xmat4(MAT4_UI_MV/* tmp */, MAT4_UI_ROTATION, MAT4_UI_CENTER_OFFSET);
+                        math::mat4xmat4(MAT4_UI_ROTATION, MAT4_UI_INV_CENTER_OFFSET, MAT4_UI_MV/* tmp */);
                     }
                     math::mat4xmat4(MAT4_UI_MV/* tmp */, MAT4_UI_OFFSET, MAT4_UI_ROTATION);
                     math::mat4xmat4(MAT4_UI_MODEL, MAT4_UI_MV/* tmp */, MAT4_UI_SIZE);

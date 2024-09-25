@@ -8252,7 +8252,7 @@ namespace jeecs
 
             // 用于计算ui元素的绝对坐标和大小，接受显示区域的宽度和高度，获取以屏幕左下角为原点的元素位置和大小。
             // 其中位置是ui元素中心位置，而非坐标原点位置。
-            math::vec4 get_layout(float w, float h) const
+            void get_layout(float w, float h, math::vec2* out_absoffset, math::vec2* out_abssize, math::vec2* out_center_offset) const
             {
                 math::vec2 rel2abssize = scale * math::vec2(w, h);
                 math::vec2 rel2absoffset = global_location * math::vec2(w, h);
@@ -8272,21 +8272,40 @@ namespace jeecs
                 math::vec2 absoffset = global_offset + rel2absoffset;
 
                 // 消除中心偏差
+                math::vec2 center_offset = {};
+
                 if (left_origin)
+                {
                     absoffset.x += abssize.x / 2.0f;
+                    center_offset.x = abssize.x / 2.0f;
+                }
                 else if (right_origin)
+                {
                     absoffset.x += w - abssize.x / 2.0f;
+                    center_offset.x = - abssize.x / 2.0f;
+                }
                 else
                     absoffset.x += w / 2.0f;
 
                 if (buttom_origin)
+                {
                     absoffset.y += abssize.y / 2.0f;
+                    center_offset.y = abssize.y / 2.0f;
+                }
                 else if (top_origin)
+                {
                     absoffset.y += h - abssize.y / 2.0f;
+                    center_offset.y = - abssize.y / 2.0f;
+                }
                 else
                     absoffset.y += h / 2.0f;
 
-                return math::vec4(absoffset.x, absoffset.y, abssize.x, abssize.y);
+                if (out_center_offset)
+                    *out_center_offset = center_offset;
+                if (out_abssize)
+                    *out_abssize = abssize;
+                if (out_absoffset)
+                    *out_absoffset = absoffset;
             }
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
@@ -9276,7 +9295,7 @@ namespace jeecs
                 static const char* JEScriptTypeDeclare()
                 {
                     return
-R"(namespace Animation::FrameAnimation
+                        R"(namespace Animation::FrameAnimation
 {
     public using animation_state = struct{
         public m_path: string,
@@ -9471,7 +9490,7 @@ R"(namespace Animation::FrameAnimation
                 if (ortho)
                 {
                     // not perspective
-                    orgin = camera_trans.world_position 
+                    orgin = camera_trans.world_position
                         + camera_trans.world_rotation * vec3{ ray_world[0], ray_world[1], 0 };
                     direction = vec3(0, 0, 1);
                 }
