@@ -1058,7 +1058,10 @@ WO_API wo_api wojeapi_reload_texture_of_entity(wo_vm vm, wo_value args)
         for (auto& texture_res : textures->textures)
         {
             assert(texture_res.m_texture != nullptr && texture_res.m_texture->resouce() != nullptr);
-            if (old_texture_path == texture_res.m_texture->resouce()->m_path)
+
+            const char* existed_texture_path = texture_res.m_texture->resouce()->m_path;
+
+            if (existed_texture_path != nullptr && old_texture_path == existed_texture_path)
                 texture_res.m_texture = newtexture;
         }
     }
