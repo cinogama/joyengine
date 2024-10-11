@@ -618,14 +618,14 @@ namespace UserInterface::Origin::origin_center
             let mut newval = val;
             BeginGroup();
             {
-                if (CheckBox(F"##{tag}_lu", origin_center::left + origin_center::up == val))->has)
-                    newval = origin_center::left + origin_center::up;
+                if (CheckBox(F"##{tag}_lu", origin_center::left + origin_center::top == val)->has)
+                    newval = origin_center::left + origin_center::top;
                 SameLine();
-                if (CheckBox(F"##{tag}_u", origin_center::up == val)->has)
-                    newval = origin_center::up;
+                if (CheckBox(F"##{tag}_u", origin_center::top == val)->has)
+                    newval = origin_center::top;
                 SameLine();
-                if (CheckBox(F"##{tag}_ru", origin_center::right + origin_center::up == val)->has)
-                    newval = origin_center::right + origin_center::up;
+                if (CheckBox(F"##{tag}_ru", origin_center::right + origin_center::top == val)->has)
+                    newval = origin_center::right + origin_center::top;
 
                 if (CheckBox(F"##{tag}_l", origin_center::left == val)->has)
                     newval = origin_center::left;
@@ -648,9 +648,9 @@ namespace UserInterface::Origin::origin_center
             EndGroup();
 
             if (newval != val)
-                return value(newval);
+                return option::value(newval);
             else
-                return none;
+                return option::none;
         }
     }
 }

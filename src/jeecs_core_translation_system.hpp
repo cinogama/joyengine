@@ -29,13 +29,6 @@ namespace jeecs
 
         void TransfromStageUpdate(jeecs::selector& selector)
         {
-            struct AnchoredTrans
-            {
-                Anchor* anchor_may_null;
-                Translation* trans;
-                LocalToParent* l2p;
-            };
-
             std::unordered_map<typing::uuid, Translation*> binded_trans;
 
             // 对于有L2W的组件，在此优先处理
@@ -64,6 +57,12 @@ namespace jeecs
                     }
                 });
 
+            struct AnchoredTrans
+            {
+                Anchor* anchor_may_null;
+                Translation* trans;
+                LocalToParent* l2p;
+            };
             std::list<AnchoredTrans> pending_anchor_information;
 
             // 对于有L2P先进行应用，稍后更新到Translation上
@@ -122,12 +121,102 @@ namespace jeecs
 
         void UserInterfaceStageUpdate(jeecs::selector& selector)
         {
+            std::unordered_map<typing::uuid, UserInterface::Origin*> binded_origins;
 
+            struct AnchoredOrigin
+            {
+                Anchor*                 anchor_may_null;
+                UserInterface::Origin*  origin;
+                LocalToParent*          l2p;
+            };
+            std::list<AnchoredOrigin> pending_anchor_information;
+
+            selector.exec(
+                [this, &binded_origins, &pending_anchor_information](
+                    Anchor* anchor,
+                    Transform::LocalToParent* l2p,
+                    UserInterface::Origin& origin,
+                    UserInterface::Absolute* absolute,
+                    UserInterface::Relatively* relatively)
+                {
+                    if (absolute != nullptr)
+                    {
+                        origin.global_offset = absolute->offset;
+                        origin.size = absolute->size;
+                    }
+                    else
+                        origin.size = {};
+
+                    if (relatively != nullptr)
+                    {
+                        origin.global_location = relatively->location;
+                        origin.scale = relatively->scale;
+
+                        origin.keep_vertical_ratio = relatively->use_vertical_ratio;
+                    }
+                    else
+                    {
+                        origin.scale = {};
+                        // NOTE: We dont care `keep_vertical_ratio` if rel is not exist.
+                    }
+                    
+                    if (l2p != nullptr)
+                    {
+                        pending_anchor_information.push_back(
+                            AnchoredOrigin{
+                                anchor,
+                                & origin,
+                                l2p });
+                    }
+                    else
+                    {
+                        // 是根UI元素
+                        origin.root_center = origin.elem_center;
+                        if (anchor != nullptr)
+                        {
+                            binded_origins.insert(std::make_pair(anchor->uid, &origin));
+                        }
+                    }
+                });
+
+            size_t count = 0;
+            for (;;)
+            {
+                count = pending_anchor_information.size();
+                for (auto idx = pending_anchor_information.begin();
+                    idx != pending_anchor_information.end();)
+                {
+                    auto current_idx = idx++;
+
+                    auto fnd = binded_origins.find(current_idx->l2p->parent_uid);
+                    if (fnd != binded_origins.end())
+                    {
+                        // 父变换已决，应用之
+                        const UserInterface::Origin* parent_origin = fnd->second;
+
+                        current_idx->origin->root_center = parent_origin->root_center;
+                        current_idx->origin->global_location += parent_origin->global_location;
+                        current_idx->origin->global_offset += parent_origin->global_offset;
+
+                        // 完成应用，将当前变换绑定到binding，然后从pending中删除当前项
+                        if (current_idx->anchor_may_null != nullptr)
+                            binded_origins.insert(std::make_pair(current_idx->anchor_may_null->uid, current_idx->origin));
+
+                        pending_anchor_information.erase(current_idx);
+                    }
+                }
+                if (pending_anchor_information.size() == count)
+                {
+                    // 剩余变换缺失父变换或祖变换，不做处理以确保问题立即被发现；
+                    break;
+                }
+            }
         }
 
         void TransformUpdate(jeecs::selector& selector)
         {
             TransfromStageUpdate(selector);
+            UserInterfaceStageUpdate(selector);
         }
         void CommitUpdate(jeecs::selector& selector)
         {

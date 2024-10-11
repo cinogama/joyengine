@@ -430,56 +430,6 @@ public let frag =
                     );
                 });
 
-            selector.exec([this, &parent_origin_list](
-                Transform::LocalToParent* l2p,
-                UserInterface::Origin& origin,
-                UserInterface::Absolute* absolute,
-                UserInterface::Relatively* relatively)
-                {
-                    UserInterface::Origin* parent_origin = nullptr;
-                    if (l2p != nullptr)
-                    {
-                        auto fnd = parent_origin_list.find(l2p->parent_uid);
-                        if (fnd != parent_origin_list.end())
-                            parent_origin = fnd->second;
-                    }
-
-                    if (parent_origin != nullptr)
-                    {
-                        origin.global_offset = parent_origin->global_offset;
-                        origin.global_location = parent_origin->global_location;
-                        origin.root_center = parent_origin->root_center;
-                    }
-                    else
-                    {
-                        origin.global_offset = {};
-                        origin.global_location = {};
-                        origin.root_center = origin.elem_center;
-                    }
-
-                    if (absolute != nullptr)
-                    {
-                        origin.global_offset += absolute->offset;
-                        origin.size = absolute->size;
-                    }
-                    else
-                        origin.size = {};
-
-                    if (relatively != nullptr)
-                    {
-                        origin.global_location += relatively->location;
-                        origin.scale = relatively->scale;
-
-                        origin.keep_vertical_ratio = relatively->use_vertical_ratio;
-                    }
-                    else
-                    {
-                        origin.scale = {};
-                        // NOTE: We dont care `keep_vertical_ratio` if rel is not exist.
-                    }
-                }
-            );
-
             selector.anyof<UserInterface::Absolute, UserInterface::Relatively>();
             selector.except<Light2D::Point, Light2D::Parallel, Light2D::Range>();
             selector.exec(
