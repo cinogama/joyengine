@@ -601,6 +601,59 @@ namespace Light2D::BlockShadow::block_mesh
         }
     }
 }
+namespace UserInterface::Origin::origin_center
+{
+    using parser = void
+    {
+        public extern func saving(val: UserInterface::Origin::origin_center)=> string
+        {
+            return val: int: string;
+        }
+        public extern func restoring(dat: string)=> UserInterface::Origin::origin_center
+        {
+            return dat: int: UserInterface::Origin::origin_center;
+        }
+        public extern func edit(val: UserInterface::Origin::origin_center, tag: string)=> option<UserInterface::Origin::origin_center>
+        {
+            let mut newval = val;
+            BeginGroup();
+            {
+                if (CheckBox(F"##{tag}_lu", origin_center::left + origin_center::top == val)->has)
+                    newval = origin_center::left + origin_center::top;
+                SameLine();
+                if (CheckBox(F"##{tag}_u", origin_center::top == val)->has)
+                    newval = origin_center::top;
+                SameLine();
+                if (CheckBox(F"##{tag}_ru", origin_center::right + origin_center::top == val)->has)
+                    newval = origin_center::right + origin_center::top;
+
+                if (CheckBox(F"##{tag}_l", origin_center::left == val)->has)
+                    newval = origin_center::left;
+                SameLine();
+                if (CheckBox(F"##{tag}_c", origin_center::center == val)->has)
+                    newval = origin_center::center;
+                SameLine();
+                if (CheckBox(F"##{tag}_r", origin_center::right == val)->has)
+                    newval = origin_center::right;
+
+                if (CheckBox(F"##{tag}_lb", origin_center::left + origin_center::bottom == val)->has)
+                    newval = origin_center::left + origin_center::bottom;
+                SameLine();
+                if (CheckBox(F"##{tag}_b", origin_center::bottom == val)->has)
+                    newval = origin_center::bottom;
+                SameLine();
+                if (CheckBox(F"##{tag}_rb", origin_center::right + origin_center::bottom == val)->has)
+                    newval = origin_center::right + origin_center::bottom;
+            }
+            EndGroup();
+
+            if (newval != val)
+                return option::value(newval);
+            else
+                return option::none;
+        }
+    }
+}
 namespace Animation::FrameAnimation::animation_list
 {
     using parser = void
