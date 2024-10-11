@@ -23,27 +23,25 @@ namespace jeecs
         using LocalToWorld = Transform::LocalToWorld;
         using Translation = Transform::Translation;
 
-        struct AnchoredTrans
-        {
-            Anchor* anchor_may_null;
-            Translation* trans;
-            LocalToParent* l2p;
-        };
-
-        std::unordered_map<typing::uuid, Translation*> m_binded_trans;
-
         TranslationUpdatingSystem(game_world world) :game_system(world)
         {
         }
 
-        void TransformUpdate(jeecs::selector& selector)
+        void TransfromStageUpdate(jeecs::selector& selector)
         {
-            m_binded_trans.clear();
+            struct AnchoredTrans
+            {
+                Anchor* anchor_may_null;
+                Translation* trans;
+                LocalToParent* l2p;
+            };
+
+            std::unordered_map<typing::uuid, Translation*> binded_trans;
 
             // 对于有L2W的组件，在此优先处理
             selector.except<LocalToParent>();
             selector.exec(
-                [this](
+                [this, &binded_trans](
                     Anchor* anchor,
                     Translation& trans,
                     LocalToWorld& l2w,
@@ -62,7 +60,7 @@ namespace jeecs
                     if (anchor != nullptr)
                     {
                         // 对于L2W的变换，其直接作为变换起点集合
-                        m_binded_trans.insert(std::make_pair(anchor->uid, &trans));
+                        binded_trans.insert(std::make_pair(anchor->uid, &trans));
                     }
                 });
 
@@ -98,8 +96,8 @@ namespace jeecs
                 {
                     auto current_idx = idx++;
 
-                    auto fnd = m_binded_trans.find(current_idx->l2p->parent_uid);
-                    if (fnd != m_binded_trans.end())
+                    auto fnd = binded_trans.find(current_idx->l2p->parent_uid);
+                    if (fnd != binded_trans.end())
                     {
                         // 父变换已决，应用之
                         const Translation* parent_trans = fnd->second;
@@ -109,7 +107,7 @@ namespace jeecs
 
                         // 完成应用，将当前变换绑定到binding，然后从pending中删除当前项
                         if (current_idx->anchor_may_null != nullptr)
-                            m_binded_trans.insert(std::make_pair(current_idx->anchor_may_null->uid, current_idx->trans));
+                            binded_trans.insert(std::make_pair(current_idx->anchor_may_null->uid, current_idx->trans));
 
                         pending_anchor_information.erase(current_idx);
                     }
@@ -120,6 +118,16 @@ namespace jeecs
                     break;
                 }
             }
+        }
+
+        void UserInterfaceStageUpdate(jeecs::selector& selector)
+        {
+
+        }
+
+        void TransformUpdate(jeecs::selector& selector)
+        {
+            TransfromStageUpdate(selector);
         }
         void CommitUpdate(jeecs::selector& selector)
         {

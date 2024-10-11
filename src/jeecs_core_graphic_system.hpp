@@ -448,12 +448,13 @@ public let frag =
                     {
                         origin.global_offset = parent_origin->global_offset;
                         origin.global_location = parent_origin->global_location;
-                        origin.keep_vertical_ratio = parent_origin->keep_vertical_ratio;
+                        origin.root_center = parent_origin->root_center;
                     }
                     else
                     {
                         origin.global_offset = {};
                         origin.global_location = {};
+                        origin.root_center = origin.elem_center;
                     }
 
                     if (absolute != nullptr)
@@ -468,10 +469,14 @@ public let frag =
                     {
                         origin.global_location += relatively->location;
                         origin.scale = relatively->scale;
+
                         origin.keep_vertical_ratio = relatively->use_vertical_ratio;
                     }
                     else
+                    {
                         origin.scale = {};
+                        // NOTE: We dont care `keep_vertical_ratio` if rel is not exist.
+                    }
                 }
             );
 
@@ -661,10 +666,10 @@ public let frag =
                             {uicenteroffset.x, uicenteroffset.y, 0.0f, 1.0f}
                         };
                         const float MAT4_UI_INV_CENTER_OFFSET[4][4] = {
-                           {1.0f, 0.0f, 0.0f, 0.0f},
-                           {0.0f, 1.0f, 0.0f, 0.0f},
-                           {0.0f, 0.0f, 1.0f, 0.0f},
-                           {-uicenteroffset.x, -uicenteroffset.y, 0.0f, 1.0f}
+                            {1.0f, 0.0f, 0.0f, 0.0f},
+                            {0.0f, 1.0f, 0.0f, 0.0f},
+                            {0.0f, 0.0f, 1.0f, 0.0f},
+                            {-uicenteroffset.x, -uicenteroffset.y, 0.0f, 1.0f}
                         };
 
                         math::quat q(0.0f, 0.0f, rendentity.ui_rotation->angle);

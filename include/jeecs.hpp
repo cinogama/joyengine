@@ -8237,18 +8237,28 @@ namespace jeecs
     {
         struct Origin
         {
-            bool left_origin = false;
-            bool right_origin = false;
-            bool top_origin = false;
-            bool buttom_origin = false;
+            enum origin_center : uint8_t
+            {
+                center  = 0,
+
+                left    = 1 << 0,
+                right   = 1 << 1,
+                top     = 1 << 2,
+                bottom  = 1 << 3,
+            };
+
+            origin_center elem_center = origin_center::center;
+            origin_center root_center = origin_center::center;
 
             // Will be update by uipipeline
+            // Abs
             math::vec2 size = {};
+            math::vec2 global_offset = {};
+            // Rel
             math::vec2 scale = {};
-            math::vec2 global_offset = { 0.0f, 0.0f };
+            math::vec2 global_location = {};
 
             bool keep_vertical_ratio = false;
-            math::vec2 global_location = { 0.0f, 0.0f };
 
             // 用于计算ui元素的绝对坐标和大小，接受显示区域的宽度和高度，获取以屏幕左下角为原点的元素位置和大小。
             // 其中位置是ui元素中心位置，而非坐标原点位置。
@@ -8274,31 +8284,41 @@ namespace jeecs
                 // 消除中心偏差
                 math::vec2 center_offset = {};
 
-                if (left_origin)
+                absoffset.x += w / 2.0f;
+                absoffset.y += h / 2.0f;
+                
+                ////////////////////////////////////
+                if (root_center & origin_center::left)
+                    absoffset.x += -w / 2.0f;
+                if (root_center & origin_center::right)
+                    absoffset.x += w / 2.0f;
+
+                if (root_center & origin_center::top)
+                    absoffset.y += h / 2.0f;
+                if (root_center & origin_center::bottom)
+                    absoffset.y += -h / 2.0f;
+
+                //////////////////////////////////// 
+                if (elem_center & origin_center::left)
                 {
                     absoffset.x += abssize.x / 2.0f;
                     center_offset.x = abssize.x / 2.0f;
                 }
-                else if (right_origin)
+                if (elem_center & origin_center::right)
                 {
-                    absoffset.x += w - abssize.x / 2.0f;
+                    absoffset.x += - abssize.x / 2.0f;
                     center_offset.x = - abssize.x / 2.0f;
                 }
-                else
-                    absoffset.x += w / 2.0f;
-
-                if (buttom_origin)
+                if (elem_center & origin_center::top)
+                {
+                    absoffset.y += -abssize.y / 2.0f;
+                    center_offset.y = - abssize.y / 2.0f;
+                }
+                if (elem_center & origin_center::bottom)
                 {
                     absoffset.y += abssize.y / 2.0f;
                     center_offset.y = abssize.y / 2.0f;
                 }
-                else if (top_origin)
-                {
-                    absoffset.y += h - abssize.y / 2.0f;
-                    center_offset.y = - abssize.y / 2.0f;
-                }
-                else
-                    absoffset.y += h / 2.0f;
 
                 if (out_center_offset)
                     *out_center_offset = center_offset;
@@ -8310,10 +8330,7 @@ namespace jeecs
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(guard, &Origin::left_origin, "left_origin");
-                typing::register_member(guard, &Origin::right_origin, "right_origin");
-                typing::register_member(guard, &Origin::top_origin, "top_origin");
-                typing::register_member(guard, &Origin::buttom_origin, "buttom_origin");
+                typing::register_member(guard, &Origin::elem_center, "elem_center");
             }
         };
         struct Absolute
@@ -9660,7 +9677,7 @@ namespace jeecs
                         if (f.intersected && f.distance < minResult.distance)
                             minResult = f;
                     }
-                    //buttom
+                    //bottom
                     {
                         auto&& f = intersect_rectangle(finalBoxPos[2], finalBoxPos[3], finalBoxPos[7], finalBoxPos[6]);
                         if (f.intersected && f.distance < minResult.distance)
@@ -9924,6 +9941,28 @@ namespace jeecs
                 [](std::string* v, wo_vm, wo_value value) {
                     *v = wo_string(value);
                 }, "string", "");
+
+            typing::register_script_parser<UserInterface::Origin::origin_center>(
+                guard,
+                [](const UserInterface::Origin::origin_center* v, wo_vm vm, wo_value value) {
+                    wo_set_int(value, *v);
+                },
+                [](UserInterface::Origin::origin_center* v, wo_vm, wo_value value) {
+                    *v = (UserInterface::Origin::origin_center)wo_int(value);
+                }, "UserInterface::Origin::origin_center", R"(
+namespace UserInterface::Origin
+{
+    public enum origin_center
+    {
+        center  = 0,
+
+        left    = 1,
+        right   = 2,
+        top     = 4,
+        bottom  = 8,
+    }
+}
+)");
 
             je_towoo_update_api();
         }
