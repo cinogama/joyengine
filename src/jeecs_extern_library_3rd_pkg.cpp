@@ -177,6 +177,35 @@ WO_API wo_api math_tan(wo_vm vm, wo_value args);
 WO_API wo_api math_tanh(wo_vm vm, wo_value args);
 WO_API wo_api math_trunc(wo_vm vm, wo_value args);
 WO_API wo_api math_truncf(wo_vm vm, wo_value args);
+WO_API wo_api socket_ipv4_create(wo_vm vm, wo_value args);
+WO_API wo_api socket_ipv4_ipaddr(wo_vm vm, wo_value args);
+WO_API wo_api socket_ipv6_create(wo_vm vm, wo_value args);
+WO_API wo_api socket_ipv6_ipaddr(wo_vm vm, wo_value args);
+WO_API wo_api socket_tcp_fd(wo_vm vm, wo_value args);
+WO_API wo_api socket_tcp_host_fd(wo_vm vm, wo_value args);
+WO_API wo_api socket_tcp_host_ipv4_accept(wo_vm vm, wo_value args);
+WO_API wo_api socket_tcp_host_ipv6_accept(wo_vm vm, wo_value args);
+WO_API wo_api socket_tcp_recv_ipv4(wo_vm vm, wo_value args);
+WO_API wo_api socket_tcp_recv_ipv6(wo_vm vm, wo_value args);
+WO_API wo_api socket_tcp_recvbuf_ipv4(wo_vm vm, wo_value args);
+WO_API wo_api socket_tcp_recvbuf_ipv6(wo_vm vm, wo_value args);
+WO_API wo_api socket_tcp_send_buffer_ipv4(wo_vm vm, wo_value args);
+WO_API wo_api socket_tcp_send_buffer_ipv6(wo_vm vm, wo_value args);
+WO_API wo_api socket_tcp_send_ipv4(wo_vm vm, wo_value args);
+WO_API wo_api socket_tcp_send_ipv6(wo_vm vm, wo_value args);
+WO_API wo_api socket_udp_fd(wo_vm vm, wo_value args);
+WO_API wo_api socket_udp_ipv4_bind(wo_vm vm, wo_value args);
+WO_API wo_api socket_udp_ipv4_create(wo_vm vm, wo_value args);
+WO_API wo_api socket_udp_ipv6_bind(wo_vm vm, wo_value args);
+WO_API wo_api socket_udp_ipv6_create(wo_vm vm, wo_value args);
+WO_API wo_api socket_udp_recvbuffrom_ipv4(wo_vm vm, wo_value args);
+WO_API wo_api socket_udp_recvbuffrom_ipv6(wo_vm vm, wo_value args);
+WO_API wo_api socket_udp_recvfrom_ipv4(wo_vm vm, wo_value args);
+WO_API wo_api socket_udp_recvfrom_ipv6(wo_vm vm, wo_value args);
+WO_API wo_api socket_udp_sendto_buffer_ipv4(wo_vm vm, wo_value args);
+WO_API wo_api socket_udp_sendto_buffer_ipv6(wo_vm vm, wo_value args);
+WO_API wo_api socket_udp_sendto_ipv4(wo_vm vm, wo_value args);
+WO_API wo_api socket_udp_sendto_ipv6(wo_vm vm, wo_value args);
 WO_API wo_api thread_concurrency_count(wo_vm vm, wo_value args);
 WO_API wo_api thread_create(wo_vm vm, wo_value args);
 WO_API wo_api thread_mutex_create(wo_vm vm, wo_value args);
@@ -431,6 +460,41 @@ void je_extern_lib_3rd_pkgs_init()
     };
     _je_3rd_pkg_lib_handle.push_back(
         wo_register_lib("libmath", libmath_fs));
+
+    wo_extern_lib_func_t libsocket_fs[] = {
+        wo_extern_lib_func_t{"socket_ipv4_create", (void*)&socket_ipv4_create},
+        wo_extern_lib_func_t{"socket_ipv4_ipaddr", (void*)&socket_ipv4_ipaddr},
+        wo_extern_lib_func_t{"socket_ipv6_create", (void*)&socket_ipv6_create},
+        wo_extern_lib_func_t{"socket_ipv6_ipaddr", (void*)&socket_ipv6_ipaddr},
+        wo_extern_lib_func_t{"socket_tcp_fd", (void*)&socket_tcp_fd},
+        wo_extern_lib_func_t{"socket_tcp_host_fd", (void*)&socket_tcp_host_fd},
+        wo_extern_lib_func_t{"socket_tcp_host_ipv4_accept", (void*)&socket_tcp_host_ipv4_accept},
+        wo_extern_lib_func_t{"socket_tcp_host_ipv6_accept", (void*)&socket_tcp_host_ipv6_accept},
+        wo_extern_lib_func_t{"socket_tcp_recv_ipv4", (void*)&socket_tcp_recv_ipv4},
+        wo_extern_lib_func_t{"socket_tcp_recv_ipv6", (void*)&socket_tcp_recv_ipv6},
+        wo_extern_lib_func_t{"socket_tcp_recvbuf_ipv4", (void*)&socket_tcp_recvbuf_ipv4},
+        wo_extern_lib_func_t{"socket_tcp_recvbuf_ipv6", (void*)&socket_tcp_recvbuf_ipv6},
+        wo_extern_lib_func_t{"socket_tcp_send_buffer_ipv4", (void*)&socket_tcp_send_buffer_ipv4},
+        wo_extern_lib_func_t{"socket_tcp_send_buffer_ipv6", (void*)&socket_tcp_send_buffer_ipv6},
+        wo_extern_lib_func_t{"socket_tcp_send_ipv4", (void*)&socket_tcp_send_ipv4},
+        wo_extern_lib_func_t{"socket_tcp_send_ipv6", (void*)&socket_tcp_send_ipv6},
+        wo_extern_lib_func_t{"socket_udp_fd", (void*)&socket_udp_fd},
+        wo_extern_lib_func_t{"socket_udp_ipv4_bind", (void*)&socket_udp_ipv4_bind},
+        wo_extern_lib_func_t{"socket_udp_ipv4_create", (void*)&socket_udp_ipv4_create},
+        wo_extern_lib_func_t{"socket_udp_ipv6_bind", (void*)&socket_udp_ipv6_bind},
+        wo_extern_lib_func_t{"socket_udp_ipv6_create", (void*)&socket_udp_ipv6_create},
+        wo_extern_lib_func_t{"socket_udp_recvbuffrom_ipv4", (void*)&socket_udp_recvbuffrom_ipv4},
+        wo_extern_lib_func_t{"socket_udp_recvbuffrom_ipv6", (void*)&socket_udp_recvbuffrom_ipv6},
+        wo_extern_lib_func_t{"socket_udp_recvfrom_ipv4", (void*)&socket_udp_recvfrom_ipv4},
+        wo_extern_lib_func_t{"socket_udp_recvfrom_ipv6", (void*)&socket_udp_recvfrom_ipv6},
+        wo_extern_lib_func_t{"socket_udp_sendto_buffer_ipv4", (void*)&socket_udp_sendto_buffer_ipv4},
+        wo_extern_lib_func_t{"socket_udp_sendto_buffer_ipv6", (void*)&socket_udp_sendto_buffer_ipv6},
+        wo_extern_lib_func_t{"socket_udp_sendto_ipv4", (void*)&socket_udp_sendto_ipv4},
+        wo_extern_lib_func_t{"socket_udp_sendto_ipv6", (void*)&socket_udp_sendto_ipv6},
+        WO_EXTERN_LIB_FUNC_END,
+    };
+    _je_3rd_pkg_lib_handle.push_back(
+        wo_register_lib("libsocket", libsocket_fs));
 
     wo_extern_lib_func_t libthread_fs[] = {
         wo_extern_lib_func_t{"thread_concurrency_count", (void*)&thread_concurrency_count},
