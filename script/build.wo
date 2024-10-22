@@ -90,7 +90,7 @@ func copy_pkgs(copy_src_only: bool)=> result<void, string>
 
 func scan_extern_function_in_path(i)
 {
-    let r = regex::create(@"extern\(\s*\"(.*?)\"\s*,\s*\"(.*?)\""@);
+    let r = regex::create(@"extern\s*\(\s*\"(.*?)\"\s*,\s*\"(.*?)\""@);
     let iter = i 
         |> filter_map(\p = isfile(p) ? readall(p) | option::none;)
         |> flat_map(\p = r->search(p);)

@@ -177,6 +177,10 @@ WO_API wo_api math_tan(wo_vm vm, wo_value args);
 WO_API wo_api math_tanh(wo_vm vm, wo_value args);
 WO_API wo_api math_trunc(wo_vm vm, wo_value args);
 WO_API wo_api math_truncf(wo_vm vm, wo_value args);
+WO_API wo_api socket_epoll_create(wo_vm vm, wo_value args);
+WO_API wo_api socket_epoll_ctl(wo_vm vm, wo_value args);
+WO_API wo_api socket_epoll_wait(wo_vm vm, wo_value args);
+WO_API wo_api socket_error_to_string(wo_vm vm, wo_value args);
 WO_API wo_api socket_ipv4_create(wo_vm vm, wo_value args);
 WO_API wo_api socket_ipv4_ipaddr(wo_vm vm, wo_value args);
 WO_API wo_api socket_ipv6_create(wo_vm vm, wo_value args);
@@ -185,6 +189,10 @@ WO_API wo_api socket_tcp_fd(wo_vm vm, wo_value args);
 WO_API wo_api socket_tcp_host_fd(wo_vm vm, wo_value args);
 WO_API wo_api socket_tcp_host_ipv4_accept(wo_vm vm, wo_value args);
 WO_API wo_api socket_tcp_host_ipv6_accept(wo_vm vm, wo_value args);
+WO_API wo_api socket_tcp_ipv4_connect(wo_vm vm, wo_value args);
+WO_API wo_api socket_tcp_ipv4_host(wo_vm vm, wo_value args);
+WO_API wo_api socket_tcp_ipv6_connect(wo_vm vm, wo_value args);
+WO_API wo_api socket_tcp_ipv6_host(wo_vm vm, wo_value args);
 WO_API wo_api socket_tcp_recv_ipv4(wo_vm vm, wo_value args);
 WO_API wo_api socket_tcp_recv_ipv6(wo_vm vm, wo_value args);
 WO_API wo_api socket_tcp_recvbuf_ipv4(wo_vm vm, wo_value args);
@@ -462,6 +470,10 @@ void je_extern_lib_3rd_pkgs_init()
         wo_register_lib("libmath", libmath_fs));
 
     wo_extern_lib_func_t libsocket_fs[] = {
+        wo_extern_lib_func_t{"socket_epoll_create", (void*)&socket_epoll_create},
+        wo_extern_lib_func_t{"socket_epoll_ctl", (void*)&socket_epoll_ctl},
+        wo_extern_lib_func_t{"socket_epoll_wait", (void*)&socket_epoll_wait},
+        wo_extern_lib_func_t{"socket_error_to_string", (void*)&socket_error_to_string},
         wo_extern_lib_func_t{"socket_ipv4_create", (void*)&socket_ipv4_create},
         wo_extern_lib_func_t{"socket_ipv4_ipaddr", (void*)&socket_ipv4_ipaddr},
         wo_extern_lib_func_t{"socket_ipv6_create", (void*)&socket_ipv6_create},
@@ -470,6 +482,10 @@ void je_extern_lib_3rd_pkgs_init()
         wo_extern_lib_func_t{"socket_tcp_host_fd", (void*)&socket_tcp_host_fd},
         wo_extern_lib_func_t{"socket_tcp_host_ipv4_accept", (void*)&socket_tcp_host_ipv4_accept},
         wo_extern_lib_func_t{"socket_tcp_host_ipv6_accept", (void*)&socket_tcp_host_ipv6_accept},
+        wo_extern_lib_func_t{"socket_tcp_ipv4_connect", (void*)&socket_tcp_ipv4_connect},
+        wo_extern_lib_func_t{"socket_tcp_ipv4_host", (void*)&socket_tcp_ipv4_host},
+        wo_extern_lib_func_t{"socket_tcp_ipv6_connect", (void*)&socket_tcp_ipv6_connect},
+        wo_extern_lib_func_t{"socket_tcp_ipv6_host", (void*)&socket_tcp_ipv6_host},
         wo_extern_lib_func_t{"socket_tcp_recv_ipv4", (void*)&socket_tcp_recv_ipv4},
         wo_extern_lib_func_t{"socket_tcp_recv_ipv6", (void*)&socket_tcp_recv_ipv6},
         wo_extern_lib_func_t{"socket_tcp_recvbuf_ipv4", (void*)&socket_tcp_recvbuf_ipv4},
