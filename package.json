@@ -69,7 +69,7 @@
         "socket" : {
             "path" : "pkg",
             "remote" : "https://git.cinogama.net/cinogamaproject/woolangpackages",
-			"src" : "3rd/pkg",
+            "src" : "3rd/pkg",
             "version" : "1.0.0"
         },
         "thread" : {

@@ -47,7 +47,8 @@ jeecs_file* jeecs_load_cache_file(const char* filepath, uint32_t format_version,
         jeecs_file_read(&cache_mgr_ver, sizeof(uint32_t), 1, cache_file);
         if (cache_mgr_ver != CACHE_MANAGER_MAIN_VERSION || CACHE_MANAGER_MAIN_VERSION == 0)
         {
-            jeecs::debug::loginfo("Found cache file when loading '%s', but cache's MGR_VERSION din't match.",
+            jeecs::debug::loginfo(
+                "Found cache file when loading '%s', but cache's MGR_VERSION din't match.",
                 filepath);
             jeecs_file_close(cache_file);
             return nullptr;

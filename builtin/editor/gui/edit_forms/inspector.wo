@@ -189,12 +189,9 @@ namespace editor::gui::edit_forms
                                                                     {
                                                                         je::gui::launch(func()
                                                                             {
-                                                                                if (!updated_prefab_data->serialize
-                                                                                    ->> \dat = fsys::writeall(
-                                                                                            context->get_project->parse_path_normalize(p), 
-                                                                                            dat)
-                                                                                        ;
-                                                                                    ->  valor(false))
+                                                                                if (!fsys::writeall(
+                                                                                        context->get_project->parse_path_normalize(p), 
+                                                                                        updated_prefab_data: string))
                                                                                 {
                                                                                     jeapi::gui::form::errmsg("失败", F"更新预设体失败，无法写入：{p}");
                                                                                 }

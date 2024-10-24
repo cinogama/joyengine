@@ -706,7 +706,7 @@ namespace editor::gui::tilemap
 
             return {
                 ["tilesets"] = self.m_tile_sets->>\t = t.uid;->toarray as array<string>: dynamic,
-                ["tiles"] = tilelists->> \v = v->serialize->val;: dynamic,
+                ["tiles"] = tilelists->> \v = v: string;: dynamic,
             };
         }
 

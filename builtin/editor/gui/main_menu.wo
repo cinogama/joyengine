@@ -121,7 +121,7 @@ namespace editor::gui
                             if (check)
                             {
                                 if (! fsys::writeall(context->get_project->get_path / "style.config",
-                                    dump_current_style_color()->serialize->val))
+                                    dump_current_style_color(): string))
                                     errmsg("保存样式失败", "无法写入文件：'" + (context->get_project->get_path / "style.config")->tostring + "'");
                             }
                             else

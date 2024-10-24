@@ -98,9 +98,9 @@ namespace editor
         }
         public func create_dump(self: Project, dumpped: array<(dict<string, dynamic>, fsys::path_t)>)
         {
-            do fsys::mkdir(self.m_path / ".runtime");
+            do fsys::mkdir(self.m_path / ".temporary" / "jeeditor");
             if (! dumpped->>\kv = [kv[0]: dynamic, kv[1]->tostring: dynamic];->serialize
-                ->> \dat = fsys::writeall(self.m_path / ".runtime" / "debugcontext.dump", dat);
+                ->> \dat = fsys::writeall(self.m_path / ".temporary" / "jeeditor" / "debugcontext.dump", dat);
                 ->  valor(false))
             {
                 jeapi::gui::form::errmsg("警告", "调试上下文创建失败，这可能导致崩溃无法恢复上次调试状态");
@@ -109,7 +109,7 @@ namespace editor
         }
         public func restore_dump(self: Project)
         {
-            match (fsys::readall(self.m_path / ".runtime" / "debugcontext.dump")=>> \dat = dat->array::deserialize;)
+            match (fsys::readall(self.m_path / ".temporary" / "jeeditor" / "debugcontext.dump")=>> \dat = dat->array::deserialize;)
             {
             value(dat)?
                 jeapi::gui::form::ask("是否恢复", "检查到上次引擎在调试过程中意外退出，是否恢复之前的编辑器状态？",
@@ -132,7 +132,7 @@ namespace editor
         }
         public func clear_dump(self: Project)
         {
-            do fsys::remove(self.m_path / ".runtime" / "debugcontext.dump");
+            do fsys::remove(self.m_path / ".temporary" / "jeeditor" / "debugcontext.dump");
         }
         public func stop_debug(self: Project)
         {
@@ -609,7 +609,7 @@ namespace editor
                 }
             }
 
-            match (fsys::readall(self.m_path / ".runtime" / "world.list")=>> \dat = dat->dict::deserialize;)
+            match (fsys::readall(self.m_path / ".temporary" / "jeeditor" / "world.list")=>> \dat = dat->dict::deserialize;)
             {
             value(dat)?
                 for (let (wpath, isediting) : dat)
@@ -666,8 +666,8 @@ namespace editor
                 ["modules"] = self.m_modules->unmapping->>\kv = kv[0]->tostring->sub(self.m_path->tostring->len);: dynamic,
             };
 
-            // 编辑中的世界保存到 .runtime 目录内
-            do fsys::mkdir(self.m_path / ".runtime");
+            // 编辑中的世界保存到 .temporary 目录内
+            do fsys::mkdir(self.m_path / ".temporary" / "jeeditor");
 
             if (! self.m_worlds
                 ->> \pw = (
@@ -676,7 +676,7 @@ namespace editor
                     ;
                 ->  mapping
                 ->  serialize
-                ->> \dat = fsys::writeall(self.m_path / ".runtime" / "world.list", dat);
+                ->> \dat = fsys::writeall(self.m_path / ".temporary" / "jeeditor" / "world.list", dat);
                 ->  valor(false))
             {
                 jeapi::gui::form::errmsg("失败", "保存编辑中的世界列表失败");
@@ -819,7 +819,7 @@ namespace editor
         }
         public func get_vfile_export_path(self: Project)
         {
-            return self.m_path / ".temporary" / "jeediror" / "virtual";
+            return self.m_path / ".temporary" / "jeeditor" / "virtual";
         }
         public func update_vfile_for_wooly(self: Project)
         {
@@ -1081,7 +1081,7 @@ namespace editor
 
         public func try_load_all_camera_debug_info_map(self: Project)
         {
-            let debug_camera_map_path = self.m_path / ".runtime" / "world_debug_camera.list";
+            let debug_camera_map_path = self.m_path / ".temporary" / "jeeditor" / "world_debug_camera.list";
             try! data = fsys::readall(debug_camera_map_path)=>> \dat = dat->dict::deserialize;;
 
             return_value! data
@@ -1094,7 +1094,7 @@ namespace editor
         }
         public func try_update_camera_debug_info_map(self: Project, p: fsys::path_t, dat: dict<string, dynamic>)
         {
-            let debug_camera_map_path = self.m_path / ".runtime" / "world_debug_camera.list";
+            let debug_camera_map_path = self.m_path / ".temporary" / "jeeditor" / "world_debug_camera.list";
             let old_dat = self->try_load_all_camera_debug_info_map()->valor({})->tomap;
 
             old_dat->set(self->make_path_normalize(p), dat);
