@@ -183,8 +183,10 @@ WO_API wo_api socket_epoll_wait(wo_vm vm, wo_value args);
 WO_API wo_api socket_error_to_string(wo_vm vm, wo_value args);
 WO_API wo_api socket_ipv4_create(wo_vm vm, wo_value args);
 WO_API wo_api socket_ipv4_ipaddr(wo_vm vm, wo_value args);
+WO_API wo_api socket_ipv4_tryparse(wo_vm vm, wo_value args);
 WO_API wo_api socket_ipv6_create(wo_vm vm, wo_value args);
 WO_API wo_api socket_ipv6_ipaddr(wo_vm vm, wo_value args);
+WO_API wo_api socket_ipv6_tryparse(wo_vm vm, wo_value args);
 WO_API wo_api socket_tcp_fd(wo_vm vm, wo_value args);
 WO_API wo_api socket_tcp_host_fd(wo_vm vm, wo_value args);
 WO_API wo_api socket_tcp_host_ipv4_accept(wo_vm vm, wo_value args);
@@ -240,6 +242,10 @@ WO_API wo_api vm_load(wo_vm vm, wo_value args);
 WO_API wo_api vm_run(wo_vm vm, wo_value args);
 WO_API wo_api vm_save_binary(wo_vm vm, wo_value args);
 WO_API wo_api vmbin_address(wo_vm vm, wo_value args);
+
+WO_API void je_static_wo_pkg_socket_entry();
+
+WO_API void je_static_wo_pkg_socket_exit();
 
 #endif
 
@@ -476,8 +482,10 @@ void je_extern_lib_3rd_pkgs_init()
         wo_extern_lib_func_t{"socket_error_to_string", (void*)&socket_error_to_string},
         wo_extern_lib_func_t{"socket_ipv4_create", (void*)&socket_ipv4_create},
         wo_extern_lib_func_t{"socket_ipv4_ipaddr", (void*)&socket_ipv4_ipaddr},
+        wo_extern_lib_func_t{"socket_ipv4_tryparse", (void*)&socket_ipv4_tryparse},
         wo_extern_lib_func_t{"socket_ipv6_create", (void*)&socket_ipv6_create},
         wo_extern_lib_func_t{"socket_ipv6_ipaddr", (void*)&socket_ipv6_ipaddr},
+        wo_extern_lib_func_t{"socket_ipv6_tryparse", (void*)&socket_ipv6_tryparse},
         wo_extern_lib_func_t{"socket_tcp_fd", (void*)&socket_tcp_fd},
         wo_extern_lib_func_t{"socket_tcp_host_fd", (void*)&socket_tcp_host_fd},
         wo_extern_lib_func_t{"socket_tcp_host_ipv4_accept", (void*)&socket_tcp_host_ipv4_accept},
@@ -550,12 +558,15 @@ void je_extern_lib_3rd_pkgs_init()
     _je_3rd_pkg_lib_handle.push_back(
         wo_register_lib("libvm", libvm_fs));
 
+    je_static_wo_pkg_socket_entry();
 
 #endif    
 }
 
 void je_extern_lib_3rd_pkgs_finish()
 {
+    je_static_wo_pkg_socket_exit();
+
     for (auto* lib : _je_3rd_pkg_lib_handle)
     {
         assert(lib != nullptr);
