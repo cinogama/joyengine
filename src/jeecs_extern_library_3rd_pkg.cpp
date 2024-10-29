@@ -181,12 +181,14 @@ WO_API wo_api socket_epoll_create(wo_vm vm, wo_value args);
 WO_API wo_api socket_epoll_ctl(wo_vm vm, wo_value args);
 WO_API wo_api socket_epoll_wait(wo_vm vm, wo_value args);
 WO_API wo_api socket_error_to_string(wo_vm vm, wo_value args);
-WO_API wo_api socket_ipv4_create(wo_vm vm, wo_value args);
-WO_API wo_api socket_ipv4_ipaddr(wo_vm vm, wo_value args);
-WO_API wo_api socket_ipv4_tryparse(wo_vm vm, wo_value args);
-WO_API wo_api socket_ipv6_create(wo_vm vm, wo_value args);
-WO_API wo_api socket_ipv6_ipaddr(wo_vm vm, wo_value args);
-WO_API wo_api socket_ipv6_tryparse(wo_vm vm, wo_value args);
+WO_API wo_api socket_ipv4_parse(wo_vm vm, wo_value args);
+WO_API wo_api socket_ipv4_to_string(wo_vm vm, wo_value args);
+WO_API wo_api socket_ipv4addr_create(wo_vm vm, wo_value args);
+WO_API wo_api socket_ipv4addr_ipaddr(wo_vm vm, wo_value args);
+WO_API wo_api socket_ipv6_parse(wo_vm vm, wo_value args);
+WO_API wo_api socket_ipv6_to_string(wo_vm vm, wo_value args);
+WO_API wo_api socket_ipv6addr_create(wo_vm vm, wo_value args);
+WO_API wo_api socket_ipv6addr_ipaddr(wo_vm vm, wo_value args);
 WO_API wo_api socket_tcp_fd(wo_vm vm, wo_value args);
 WO_API wo_api socket_tcp_host_fd(wo_vm vm, wo_value args);
 WO_API wo_api socket_tcp_host_ipv4_accept(wo_vm vm, wo_value args);
@@ -480,12 +482,14 @@ void je_extern_lib_3rd_pkgs_init()
         wo_extern_lib_func_t{"socket_epoll_ctl", (void*)&socket_epoll_ctl},
         wo_extern_lib_func_t{"socket_epoll_wait", (void*)&socket_epoll_wait},
         wo_extern_lib_func_t{"socket_error_to_string", (void*)&socket_error_to_string},
-        wo_extern_lib_func_t{"socket_ipv4_create", (void*)&socket_ipv4_create},
-        wo_extern_lib_func_t{"socket_ipv4_ipaddr", (void*)&socket_ipv4_ipaddr},
-        wo_extern_lib_func_t{"socket_ipv4_tryparse", (void*)&socket_ipv4_tryparse},
-        wo_extern_lib_func_t{"socket_ipv6_create", (void*)&socket_ipv6_create},
-        wo_extern_lib_func_t{"socket_ipv6_ipaddr", (void*)&socket_ipv6_ipaddr},
-        wo_extern_lib_func_t{"socket_ipv6_tryparse", (void*)&socket_ipv6_tryparse},
+        wo_extern_lib_func_t{"socket_ipv4_parse", (void*)&socket_ipv4_parse},
+        wo_extern_lib_func_t{"socket_ipv4_to_string", (void*)&socket_ipv4_to_string},
+        wo_extern_lib_func_t{"socket_ipv4addr_create", (void*)&socket_ipv4addr_create},
+        wo_extern_lib_func_t{"socket_ipv4addr_ipaddr", (void*)&socket_ipv4addr_ipaddr},
+        wo_extern_lib_func_t{"socket_ipv6_parse", (void*)&socket_ipv6_parse},
+        wo_extern_lib_func_t{"socket_ipv6_to_string", (void*)&socket_ipv6_to_string},
+        wo_extern_lib_func_t{"socket_ipv6addr_create", (void*)&socket_ipv6addr_create},
+        wo_extern_lib_func_t{"socket_ipv6addr_ipaddr", (void*)&socket_ipv6addr_ipaddr},
         wo_extern_lib_func_t{"socket_tcp_fd", (void*)&socket_tcp_fd},
         wo_extern_lib_func_t{"socket_tcp_host_fd", (void*)&socket_tcp_host_fd},
         wo_extern_lib_func_t{"socket_tcp_host_ipv4_accept", (void*)&socket_tcp_host_ipv4_accept},
