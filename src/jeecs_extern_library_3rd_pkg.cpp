@@ -10,6 +10,7 @@ WO_API wo_api async_dispatch(wo_vm vm, wo_value args);
 WO_API wo_api async_promise_abondon(wo_vm vm, wo_value args);
 WO_API wo_api async_promise_produce(wo_vm vm, wo_value args);
 WO_API wo_api async_promise_wait(wo_vm vm, wo_value args);
+
 WO_API wo_api buffer_append_buffer_builder(wo_vm vm, wo_value args);
 WO_API wo_api buffer_append_buffer_builder_builder(wo_vm vm, wo_value args);
 WO_API wo_api buffer_append_f32_builder(wo_vm vm, wo_value args);
@@ -103,13 +104,16 @@ WO_API wo_api buffer_write_i8_builder(wo_vm vm, wo_value args);
 WO_API wo_api buffer_write_ui16_builder(wo_vm vm, wo_value args);
 WO_API wo_api buffer_write_ui32_builder(wo_vm vm, wo_value args);
 WO_API wo_api buffer_write_ui8_builder(wo_vm vm, wo_value args);
+
 WO_API wo_api crashhandler_init(wo_vm vm, wo_value args);
+
 WO_API wo_api wo_libimage_create_image(wo_vm vm, wo_value args);
 WO_API wo_api wo_libimage_get_pix_from_image(wo_vm vm, wo_value args);
 WO_API wo_api wo_libimage_get_size_of_image(wo_vm vm, wo_value args);
 WO_API wo_api wo_libimage_open_image(wo_vm vm, wo_value args);
 WO_API wo_api wo_libimage_save_image(wo_vm vm, wo_value args);
 WO_API wo_api wo_libimage_set_pix_to_image(wo_vm vm, wo_value args);
+
 WO_API wo_api process_create_process(wo_vm vm, wo_value args);
 WO_API wo_api process_flock_create(wo_vm vm, wo_value args);
 WO_API wo_api process_flock_lock(wo_vm vm, wo_value args);
@@ -117,6 +121,7 @@ WO_API wo_api process_flock_trylock(wo_vm vm, wo_value args);
 WO_API wo_api process_flock_unlock(wo_vm vm, wo_value args);
 WO_API wo_api process_getpid(wo_vm vm, wo_value args);
 WO_API wo_api process_wait_process(wo_vm vm, wo_value args);
+
 WO_API wo_api file_is_same_file(wo_vm vm, wo_value args);
 WO_API wo_api file_readall(wo_vm vm, wo_value args);
 WO_API wo_api file_writeall(wo_vm vm, wo_value args);
@@ -143,11 +148,13 @@ WO_API wo_api filesys_size(wo_vm vm, wo_value args);
 WO_API wo_api filesys_tmppath(wo_vm vm, wo_value args);
 WO_API wo_api filesys_walker_next(wo_vm vm, wo_value args);
 WO_API wo_api filesys_workpath(wo_vm vm, wo_value args);
+
 WO_API wo_api regex_create(wo_vm vm, wo_value args);
 WO_API wo_api regex_match(wo_vm vm, wo_value args);
 WO_API wo_api regex_replace(wo_vm vm, wo_value args);
 WO_API wo_api regex_search(wo_vm vm, wo_value args);
 WO_API wo_api regex_search_next(wo_vm vm, wo_value args);
+
 WO_API wo_api math_acos(wo_vm vm, wo_value args);
 WO_API wo_api math_acosh(wo_vm vm, wo_value args);
 WO_API wo_api math_asin(wo_vm vm, wo_value args);
@@ -177,6 +184,7 @@ WO_API wo_api math_tan(wo_vm vm, wo_value args);
 WO_API wo_api math_tanh(wo_vm vm, wo_value args);
 WO_API wo_api math_trunc(wo_vm vm, wo_value args);
 WO_API wo_api math_truncf(wo_vm vm, wo_value args);
+
 WO_API wo_api socket_epoll_create(wo_vm vm, wo_value args);
 WO_API wo_api socket_epoll_ctl(wo_vm vm, wo_value args);
 WO_API wo_api socket_epoll_wait(wo_vm vm, wo_value args);
@@ -218,6 +226,7 @@ WO_API wo_api socket_udp_sendto_buffer_ipv4(wo_vm vm, wo_value args);
 WO_API wo_api socket_udp_sendto_buffer_ipv6(wo_vm vm, wo_value args);
 WO_API wo_api socket_udp_sendto_ipv4(wo_vm vm, wo_value args);
 WO_API wo_api socket_udp_sendto_ipv6(wo_vm vm, wo_value args);
+
 WO_API wo_api thread_concurrency_count(wo_vm vm, wo_value args);
 WO_API wo_api thread_create(wo_vm vm, wo_value args);
 WO_API wo_api thread_mutex_create(wo_vm vm, wo_value args);
@@ -236,6 +245,7 @@ WO_API wo_api thread_rw_mutex_trylock_read(wo_vm vm, wo_value args);
 WO_API wo_api thread_rw_mutex_unlock(wo_vm vm, wo_value args);
 WO_API wo_api thread_rw_mutex_unlock_read(wo_vm vm, wo_value args);
 WO_API wo_api thread_wait(wo_vm vm, wo_value args);
+
 WO_API wo_api vm_create(wo_vm vm, wo_value args);
 WO_API wo_api vm_create_virtual_script(wo_vm vm, wo_value args);
 WO_API wo_api vm_invoke(wo_vm vm, wo_value args);
@@ -244,6 +254,7 @@ WO_API wo_api vm_load(wo_vm vm, wo_value args);
 WO_API wo_api vm_run(wo_vm vm, wo_value args);
 WO_API wo_api vm_save_binary(wo_vm vm, wo_value args);
 WO_API wo_api vmbin_address(wo_vm vm, wo_value args);
+
 
 WO_API void je_static_wo_pkg_socket_entry();
 

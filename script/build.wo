@@ -293,6 +293,8 @@ func generate_je_3rd_pkg_decls()=> result<void, string>
     {
         for (let f : funcname)
             result += F"WO_API wo_api {f}(wo_vm vm, wo_value args);\n";
+
+        result += "\n";
     }
 
     result += "\n";
