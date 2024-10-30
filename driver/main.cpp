@@ -19,14 +19,16 @@ int main(int argc, char** argv)
 
     je_init(argc, argv);
 
-    auto* guard = new jeecs::typing::type_unregister_guard();
+    do
     {
-        entry::module_entry(guard);
+        jeecs::typing::type_unregister_guard guard;
+        entry::module_entry(&guard);
         {
             je_main_script_entry();
         }
-        entry::module_leave(guard);
-    }
-    delete guard;
+        entry::module_leave(&guard);
+
+    } while (0);
+
     je_finish();
 }

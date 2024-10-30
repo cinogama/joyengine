@@ -223,6 +223,7 @@ void je_init(int argc, char** argv)
     wo_virtual_source(gui_api_path, gui_api_src, false);
     jeal_init();
 
+    assert(_je_unregister_guard == nullptr);
     _je_unregister_guard = new jeecs::typing::type_unregister_guard();
     jeecs::entry::module_entry(_je_unregister_guard);
     _jeecs_entry_register_core_systems(_je_unregister_guard);
@@ -375,6 +376,7 @@ std::mutex _free_module_list_mx;
 
 void je_finish()
 {
+    assert(_je_unregister_guard != nullptr);
     jeecs::entry::module_leave(_je_unregister_guard);
 
     je_ecs_finish();
