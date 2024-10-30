@@ -1398,13 +1398,22 @@ namespace $$MODULE_NAME$$
         if (MenuItemEnabled("重命名", is_modifiable_file))
         {
             jeapi::gui::form::input("重命名", F"请输入{path.path}的新名称", path.name, 
-                \newname: string = fsys::move(path.path, fsys::parent(path.path)/newname)
-                    ->> func(_){context->get_project->try_update_towoo(false);force_update();}
-                    ->or(\errid = jeapi::gui::form::errmsg("失败", F"重命名失败({errid})");););
+                \new_name = editor::gui::refactor(context, path.path, fsys::parent(path.path)/new_name)
+                    -> or(\errid = jeapi::gui::form::errmsg("失败", F"重命名失败({errid})");)
+                ;);
+                // \new_name: string = fsys::move(path.path, fsys::parent(path.path)/new_name)
+                //     ->> func(_){context->get_project->try_update_towoo(false);force_update();}
+                //     ->or(\errid = jeapi::gui::form::errmsg("失败", F"重命名失败({errid})");););
         }
         if (MenuItemEnabled("移动到...", is_modifiable_file))
         {
-
+            jeapi::gui::form::input("移动到……", F"请输入{path.path}的路径", path.path->tostring, 
+                \new_path = editor::gui::refactor(context, path.path, fsys::normalize(new_path))
+                    -> or(\errid = jeapi::gui::form::errmsg("失败", F"重命名失败({errid})");)
+                ;);
+                // \new_path: string = fsys::move(path.path, fsys::normalize(new_path))
+                //     ->> func(_){context->get_project->try_update_towoo(false);force_update();}
+                //     ->or(\errid = jeapi::gui::form::errmsg("失败", F"重命名失败({errid})");););
         }
         if (MenuItemEnabled("删除", is_modifiable_file))
         {
@@ -1744,6 +1753,13 @@ namespace $$MODULE_NAME$$
                             
                             do Selectable(F"[{self.m_display_setting[level][0]}] {info}");
                            
+                            if (IsItemHovered())
+                            {
+                                BeginTooltip();
+                                Text(info);
+                                EndTooltip();
+                            }
+
                             if (color_setted)
                                 PopStyleColor(1);
                         }

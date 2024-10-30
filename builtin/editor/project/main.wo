@@ -555,6 +555,24 @@ namespace editor
             return self.m_towoo_context;
         }
 
+        public func load_worlds_from_list(self: Project)
+        {
+            match (fsys::readall(self.m_path / ".temporary" / "jeeditor" / "world.list")=>> \dat = dat->dict::deserialize;)
+            {
+            value(dat)?
+                for (let (wpath, isediting) : dat)
+                {
+                    match (self->load_world(self.m_path / wpath as string))
+                    {
+                    ok(w)?
+                        if (isediting as bool) do self->reset_editing_world(w);
+                    err(info)?
+                        jeapi::gui::form::errmsg("失败", F"无法加载世界 '{wpath as string}': {info}");
+                    }
+                }
+            none?;
+            }
+        }
         public func load(path: fsys::path_t, dat: dict<string, dynamic>)
         {
             try! self = create(dat["name"] as string, path);
@@ -609,21 +627,7 @@ namespace editor
                 }
             }
 
-            match (fsys::readall(self.m_path / ".temporary" / "jeeditor" / "world.list")=>> \dat = dat->dict::deserialize;)
-            {
-            value(dat)?
-                for (let (wpath, isediting) : dat)
-                {
-                    match (self->load_world(self.m_path / wpath as string))
-                    {
-                    ok(w)?
-                        if (isediting as bool) do self->reset_editing_world(w);
-                    err(info)?
-                        jeapi::gui::form::errmsg("失败", F"无法加载世界 '{wpath as string}': {info}");
-                    }
-                }
-            none?;
-            }
+            self->load_worlds_from_list;
 
             // 设置style必须等到gui开起来，这里设置，可能图形库尚未启动，就炸了
             // launch出去自动执行
