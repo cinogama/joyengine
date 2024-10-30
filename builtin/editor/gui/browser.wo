@@ -6,6 +6,7 @@ import builtin::editor::cpp::main;
 import builtin::editor::gui::animation2d;
 import builtin::editor::gui::particalbaker;
 import builtin::editor::gui::workflow;
+import builtin::editor::gui::refactor;
 
 using je::gui;
 
@@ -1396,10 +1397,14 @@ namespace $$MODULE_NAME$$
         }
         if (MenuItemEnabled("重命名", is_modifiable_file))
         {
-            jeapi::gui::form::input("重命名", F"请输入{path.path}的新名称", F"{path.name}", 
+            jeapi::gui::form::input("重命名", F"请输入{path.path}的新名称", path.name, 
                 \newname: string = fsys::move(path.path, fsys::parent(path.path)/newname)
                     ->> func(_){context->get_project->try_update_towoo(false);force_update();}
                     ->or(\errid = jeapi::gui::form::errmsg("失败", F"重命名失败({errid})");););
+        }
+        if (MenuItemEnabled("移动到...", is_modifiable_file))
+        {
+
         }
         if (MenuItemEnabled("删除", is_modifiable_file))
         {

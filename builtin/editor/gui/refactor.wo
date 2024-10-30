@@ -1,0 +1,10 @@
+import pkg::fsys;
+
+namespace editor::gui
+{
+    public func refactor(old_path: fsys::path_t, target_path: fsys::path_t)
+    {
+        do old_path;
+        do target_path;
+    }
+}
