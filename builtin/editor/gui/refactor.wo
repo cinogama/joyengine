@@ -208,7 +208,9 @@ namespace editor::gui
             // 3. 刷新browser
             force_update();
 
-            self.m_editor_context->get_project->try_update_towoo(false);
+            // 4. 更新towoo
+            self.m_editor_context->get_project
+                ->update_towoo_after_dump_and_close(true);
         }
     }
 
@@ -226,7 +228,7 @@ namespace editor::gui
                         {
                             std::yield();
 
-                            // 5. 重新加载
+                            // 5. 重新拉起world list
                             context->get_project->load_worlds_from_list();
                         }
                         return false;
