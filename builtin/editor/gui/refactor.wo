@@ -185,14 +185,21 @@ namespace editor::gui
                 jeapi::gui::errmsg("重命名/移动失败", F"重命名文件 `{self.m_old_path->tostring()}` 为 `{self.m_target_path->tostring()}` 失败：{e}");
             };
 
-            // 4. 重载towoo
-            self.m_editor_context->get_project->try_update_towoo(false);
-
-            // 5. 刷新browser
+            // 3. 刷新browser
             force_update();
 
-            // 3. 重新加载
-            self.m_editor_context->get_project->load_worlds_from_list();
+            launch(func(){
+                // 4. 重载towoo
+                self.m_editor_context->get_project->try_update_towoo(false);
+
+                std::yield();
+
+                // 5. 重新加载
+                self.m_editor_context->get_project->load_worlds_from_list();
+                return false;
+            }, ());
+
+            
         }
     }
 
@@ -219,6 +226,7 @@ namespace editor::gui
         let checked_files = {}mut: map<RefactorAskContent::ReplacingContent, void>;
 
         let load_world_list_after_form_closed = std::mutable::create(true);
+        let select_all = std::mutable::create(true);
 
         let f = jeapi::gui::form::create("重构中……", true, 
             func(this_form){
@@ -249,7 +257,10 @@ namespace editor::gui
 
                 let (old, new) = content.m_replacing_aim[cur_step];
                 
-                let choose_all = Button("全选");
+                if (Button("全选"))
+                    select_all->set(true);
+                else if (Button("全不选"))
+                    checked_files->clear;
 
                 SameLine();
                 TextDisabled(F"更新 `{old}` => `{new}`");
@@ -264,7 +275,7 @@ namespace editor::gui
                         if (replace_content.m_replacing_place->empty)
                             continue;
                         
-                        if (choose_all)
+                        if (select_all->get)
                             checked_files->set(replace_content, do nil);
 
                         has_any_file_to_update = true;
@@ -296,11 +307,14 @@ namespace editor::gui
                             EndTooltip();
                         }
                     }
+                    select_all->set(false);
                 }
                 EndChild();
 
                 if (Button("应用修改") || !has_any_file_to_update)
                 {
+                    select_all->set(true);
+
                     for (let (replace_content, _) : checked_files)
                     {
                         replace_content->apply_update(old, new);
