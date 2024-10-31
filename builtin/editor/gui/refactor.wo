@@ -82,8 +82,23 @@ namespace editor::gui
             }
             public func apply_update(self: ReplacingContent, old: string, new: string)
             {
+                if (self.m_able_to_update == false)
+                    return;
+
                 self.m_updated = true;
-                self.m_content = self.m_content->replace(old, new);
+
+                let mut result = "";
+                let mut begin_place = 0;
+
+                for (let (_, _, idx) : self.m_replacing_place)
+                {
+                    result += self.m_content->subto(begin_place, idx - begin_place);
+                    result += new;
+                    begin_place = idx + old->len;
+                }
+                result += self.m_content->sub(begin_place);
+
+                self.m_content = result;
             }
         }
 
@@ -315,9 +330,12 @@ namespace editor::gui
                 {
                     select_all->set(true);
 
-                    for (let (replace_content, _) : checked_files)
+                    if (has_any_file_to_update)
                     {
-                        replace_content->apply_update(old, new);
+                        for (let (replace_content, _) : checked_files)
+                        {
+                            replace_content->apply_update(old, new);
+                        }
                     }
 
                     if (!content->prepare_update())
