@@ -18,6 +18,11 @@ using je::gui;
 
 namespace editor::gui
 {
+    func is_identify_char(c: char)=> bool
+    {
+        return c->isalnum || c == '_';
+    }
+
     using RefactorAskContent = struct{
         m_editor_context: EditorContext,
 
@@ -61,9 +66,9 @@ namespace editor::gui
 
                     place = find_place + old->len;
 
-                    if (find_place > 0 && self.m_content[find_place - 1]->isalnum)
+                    if (find_place > 0 && self.m_content[find_place - 1]->is_identify_char)
                         continue;
-                    if (place < self.m_content->len && self.m_content[place]->isalnum)
+                    if (place < self.m_content->len && self.m_content[place]->is_identify_char)
                         continue;
 
                     all_find_place->add(find_place);
