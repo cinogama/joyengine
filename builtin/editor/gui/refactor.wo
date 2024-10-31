@@ -203,37 +203,35 @@ namespace editor::gui
             // 3. 刷新browser
             force_update();
 
-            launch(func(){
-                // 4. 重载towoo
-                self.m_editor_context->get_project->try_update_towoo(false);
-
-                std::yield();
-
-                // 5. 重新加载
-                self.m_editor_context->get_project->load_worlds_from_list();
-                return false;
-            }, ());
-
-            
+            self.m_editor_context->get_project->try_update_towoo(false);
         }
     }
 
     public func refactor(context: EditorContext, old_path: fsys::path_t, target_path: fsys::path_t)
     {
         try! content = RefactorAskContent::create(context, old_path, target_path);
-        let raise_final_check = func(){
+        let raise_final_check = func(need_raise_world_list: bool){
             jeapi::gui::form::ask("重构准备完成", "即将应用所有选定重构，是否确认继续重命名/移动？", 
                 func(ok){
                     if (ok)
-                    {
                         content->apply();
-                    }
+                    
+                    launch(func(){
+                        if (need_raise_world_list)
+                        {
+                            std::yield();
+
+                            // 5. 重新加载
+                            context->get_project->load_worlds_from_list();
+                        }
+                        return false;
+                    }, ());
                 });
         };
 
         if (! content->prepare_update())
         {
-            raise_final_check();
+            raise_final_check(false);
             return_ok!;
         }
 
@@ -347,7 +345,7 @@ namespace editor::gui
                         // All done...
                         load_world_list_after_form_closed->set(false);
 
-                        raise_final_check();
+                        raise_final_check(true);
                         this_form->close;
                     }
                 }
