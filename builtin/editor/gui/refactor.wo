@@ -210,12 +210,18 @@ namespace editor::gui
 
             // 4. 更新towoo
             self.m_editor_context->get_project
-                ->update_towoo_after_dump_and_close(true);
+                ->update_towoo_after_dump_and_close(false);
         }
     }
 
     public func refactor(context: EditorContext, old_path: fsys::path_t, target_path: fsys::path_t)
     {
+        if (fsys::exist(target_path))
+        {
+            jeapi::gui::errmsg("目标文件已存在", F"文件 `{target_path->tostring()}` 已存在，请先删除或移动目标文件");
+            return_ok!;
+        }
+
         try! content = RefactorAskContent::create(context, old_path, target_path);
         let raise_final_check = func(need_raise_world_list: bool){
             jeapi::gui::form::ask("重构准备完成", "即将应用所有选定重构，是否确认继续重命名/移动？", 

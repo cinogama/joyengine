@@ -19,8 +19,8 @@ namespace editor
         m_loaded_towoo: mut dict<path_t, (int, je::typeinfo)>,
         m_bad_towoo_script: vec<path_t>,
 
-        m_removing_component: map<string, void>,
-        m_removing_system: map<string, void>,
+        m_removing_component: map<string, je::typeinfo>,
+        m_removing_system: map<string, je::typeinfo>,
     }
     {
         public func get_loaded_towoo(self: ToWooContext)
@@ -76,7 +76,7 @@ namespace editor
                     if (fullupdate || fetched_scripts->contain(p) == false || fetched_scripts[p] != c)
                     {
                         if (fetched_scripts->contain(p) == false)
-                            self.m_removing_system->set(pure_component_or_system_name(purename(p)), do nil);
+                            self.m_removing_system->set(pure_component_or_system_name(purename(p)), t);
                     }
                     else
                     {
@@ -98,7 +98,7 @@ namespace editor
                     if (fullupdate || fetched_scripts->contain(p) == false || fetched_scripts[p] != c)
                     {
                         if (fetched_scripts->contain(p) == false)
-                            self.m_removing_component->set(pure_component_or_system_name(purename(p)), do nil);
+                            self.m_removing_component->set(pure_component_or_system_name(purename(p)), t);
                     }
                     else
                     {
@@ -222,6 +222,12 @@ namespace editor
                 else if (filename(p)->lower->endwith(".jesystem.wo"))
                     towoo::unregister_system(tinfo);
             }
+
+            for (let (_, t) : self.m_removing_component)
+                towoo::unregister_component(t);
+
+            for (let (_, t) : self.m_removing_system)
+                towoo::unregister_system(t);
         }
         public func get_bad_scripts(self: ToWooContext)
         {
