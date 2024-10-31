@@ -240,7 +240,7 @@ namespace editor::gui
         let all_world_saved_and_closed = std::mutable::create(false);
         let checked_files = {}mut: map<RefactorAskContent::ReplacingContent, void>;
 
-        let load_world_list_after_form_closed = std::mutable::create(true);
+        let load_world_list_after_form_closed = std::mutable::create(false);
         let select_all = std::mutable::create(true);
 
         let f = jeapi::gui::form::create("重构中……", true, 
@@ -260,6 +260,7 @@ namespace editor::gui
                         {
                             context->get_project->close_all_world();
                             all_world_saved_and_closed->set(true);
+                            load_world_list_after_form_closed->set(true);
                         }
                     }
                     return;
@@ -274,7 +275,10 @@ namespace editor::gui
                 
                 if (Button("全选"))
                     select_all->set(true);
-                else if (Button("全不选"))
+
+                SameLine();
+                
+                if (Button("全不选"))
                     checked_files->clear;
 
                 SameLine();
