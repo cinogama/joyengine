@@ -185,8 +185,10 @@ WO_API wo_api math_tanh(wo_vm vm, wo_value args);
 WO_API wo_api math_trunc(wo_vm vm, wo_value args);
 WO_API wo_api math_truncf(wo_vm vm, wo_value args);
 
+WO_API wo_api socket_epoll_add(wo_vm vm, wo_value args);
 WO_API wo_api socket_epoll_create(wo_vm vm, wo_value args);
-WO_API wo_api socket_epoll_ctl(wo_vm vm, wo_value args);
+WO_API wo_api socket_epoll_del(wo_vm vm, wo_value args);
+WO_API wo_api socket_epoll_mod(wo_vm vm, wo_value args);
 WO_API wo_api socket_epoll_wait(wo_vm vm, wo_value args);
 WO_API wo_api socket_error_to_string(wo_vm vm, wo_value args);
 WO_API wo_api socket_ipv4_parse(wo_vm vm, wo_value args);
@@ -489,8 +491,10 @@ void je_extern_lib_3rd_pkgs_init()
         wo_register_lib("libmath", libmath_fs));
 
     wo_extern_lib_func_t libsocket_fs[] = {
+        wo_extern_lib_func_t{"socket_epoll_add", (void*)&socket_epoll_add},
         wo_extern_lib_func_t{"socket_epoll_create", (void*)&socket_epoll_create},
-        wo_extern_lib_func_t{"socket_epoll_ctl", (void*)&socket_epoll_ctl},
+        wo_extern_lib_func_t{"socket_epoll_del", (void*)&socket_epoll_del},
+        wo_extern_lib_func_t{"socket_epoll_mod", (void*)&socket_epoll_mod},
         wo_extern_lib_func_t{"socket_epoll_wait", (void*)&socket_epoll_wait},
         wo_extern_lib_func_t{"socket_error_to_string", (void*)&socket_error_to_string},
         wo_extern_lib_func_t{"socket_ipv4_parse", (void*)&socket_ipv4_parse},
