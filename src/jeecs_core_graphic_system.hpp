@@ -1628,10 +1628,11 @@ public func frag(_: v2f)
                             || shadowbuffer->buffer->width() != shadowbuffer->resolution_width
                             || shadowbuffer->buffer->height() != shadowbuffer->resolution_height;
 
-                        if (generate_new_framebuffer && shadowbuffer->resolution_width > 0 && shadowbuffer->resolution_height > 0)
+                        if (generate_new_framebuffer)
                         {
                             shadowbuffer->buffer = graphic::framebuffer::create(
-                                shadowbuffer->resolution_width, shadowbuffer->resolution_height,
+                                std::max((size_t)1, shadowbuffer->resolution_width), 
+                                std::max((size_t)1, shadowbuffer->resolution_height),
                                 {
                                     jegl_texture::format::RGBA,
                                     // Only store shadow value to R-pass
