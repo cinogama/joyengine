@@ -979,6 +979,8 @@ struct _jegui_thread_local_context
 
     jegui_user_image_loader_t _jegl_get_native_texture = nullptr;
     jegui_user_sampler_loader_t _jegl_bind_shader_sampler_state = nullptr;
+
+    std::string _jegui_imgui_config_path;
 };
 thread_local _jegui_thread_local_context _je_gui_tls_ctx;
 
@@ -2885,6 +2887,9 @@ public func frag(vf: v2f)
 }
 )");
 
+    _je_gui_tls_ctx._jegui_imgui_config_path = 
+        jeecs_file_get_host_path() + std::string("/builtin/imgui.ini.je4cache");
+
     _je_gui_tls_ctx._jegui_stop_work_flag = false;
     ImGui::CreateContext();
 
@@ -2893,6 +2898,8 @@ public func frag(vf: v2f)
 
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    io.IniFilename = _je_gui_tls_ctx._jegui_imgui_config_path.c_str();
+   
     auto* ttf_file = specify_font_path ? jeecs_file_open(specify_font_path.value().c_str()) : nullptr;
     if (ttf_file == nullptr)
         // Default font

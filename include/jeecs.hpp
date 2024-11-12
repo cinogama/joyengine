@@ -1672,8 +1672,8 @@ struct jegl_interface_config
     // 不限制帧率请设置为 SIZE_MAX
     size_t          m_fps;
 
-    const char* m_title;
-    void* m_userdata;
+    const char*     m_title;
+    void*           m_userdata;
 };
 
 struct jegl_context_notifier;

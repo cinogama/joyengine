@@ -425,7 +425,7 @@ namespace editor
                 return flock->trylock();
             none?
                 {
-                    let projfile = self.m_path / "project.je4project.lock";
+                    let projfile = self.m_path / "project.je4project.je4lock";
                     // 不可以锁定目录
                     if (fsys::isdir(projfile) == true)
                         return false;
@@ -633,7 +633,7 @@ namespace editor
             // launch出去自动执行
             je::gui::launch(func()
                 {
-                    do je::file::readall("@/style.config")
+                    do je::file::readall("@/editor.je4style")
                         =>> \style_dat = style_dat->dict::deserialize;
                         ->> \style_dat = style_dat
                             ->> \k, v = (k as int: je::gui::ImGuiCol, v as array<dynamic>->>\e = e: real;);

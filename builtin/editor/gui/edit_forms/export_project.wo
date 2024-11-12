@@ -45,15 +45,27 @@ namespace editor::gui::edit_forms
 
             if (fsys::extension(originpath)->lower == ".je4tileset")
                 return Action::SKIP;  // 跳过tileset文件
-            
-            if (fsys::filename(originpath)->lower == "imgui.ini")
-                return Action::SKIP;  // 跳过imgui.ini
 
             if (fsys::extension(originpath)->lower == ".dmp")
                 return Action::SKIP;  // 跳过崩溃转储文件
 
             if (fsys::extension(originpath)->lower == ".je4cache")
                 return Action::SKIP;  // 跳过构造缓存文件
+
+            if (fsys::extension(originpath)->lower == ".je4lock")
+                return Action::SKIP;  // 跳过项目文件
+
+            if (fsys::extension(originpath)->lower == ".je4style")
+                return Action::SKIP;  // 跳过样式文件
+
+            if (fsys::filename(originpath)->lower == ".gitattributes")            
+                return Action::SKIP;  // 跳过git属性文件
+
+            if (fsys::filename(originpath)->lower == ".gitignore")
+                return Action::SKIP;  // 跳过git忽略文件
+
+            if (fsys::filename(originpath)->lower == ".gitmodules")
+                return Action::SKIP;  // 跳过git子模块文件
 
             if (fsys::extension(originpath)->lower == ".shader")
                 return Action::ACTION(func(pconfig, _){

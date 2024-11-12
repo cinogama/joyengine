@@ -235,7 +235,11 @@ namespace editor::gui
     {
         func should_hide(self: PathInfo)
         {
-            static let HIDING_FILE_TYPE = [".je4cache"];
+            static let HIDING_FILE_TYPE = [
+                ".je4cache", 
+                ".je4project", 
+                ".je4lock", 
+                ".je4style"];
             
             if (editor_need_hiding_file)
             {

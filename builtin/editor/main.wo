@@ -159,7 +159,7 @@ func open_path_to_do_sth(action_after_choice: (option<fsys::path_t>)=>void)
 
 func read_editor_data()
 {
-    return fsys::readall(fsys::normalize(std::exepath())/"editor.dat")
+    return fsys::readall(fsys::normalize(std::exepath()) / "builtin" / "editor.dat")
         =>> \dat = dict::deserialize(dat);
         ->  valor({})
         ;
@@ -185,7 +185,7 @@ func save_editor_data_after_exit(dat: dict<dynamic, dynamic>, proj_name: string,
         ->inlay(0, [proj_name, proj_path->tostring]): dynamic);
 
     assert(
-        fsys::writeall(fsys::normalize(std::exepath())/"editor.dat", newdat->serialize->val)
+        fsys::writeall(fsys::normalize(std::exepath()) / "builtin" / "editor.dat", newdat->serialize->val)
     );
 
     assert(fsys::setworkpath(fsys::normalize(std::exepath())));
@@ -384,8 +384,7 @@ func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: di
 /*.dmp
 
 # Ignore editor data files.
-/imgui.ini
-/project.je4project.lock
+/project.je4project.je4lock
 
 # Ignore cache files.
 *.je4cache
@@ -534,7 +533,7 @@ for (;;)
                                                 {
                                                     do historys->remove(index);
                                                     assert(
-                                                        fsys::writeall(fsys::normalize(std::exepath())/"editor.dat", editor_configs->serialize->val)
+                                                        fsys::writeall(fsys::normalize(std::exepath())/ "builtin" / "editor.dat", editor_configs->serialize->val)
                                                     );
                                                 }
                                             none?;

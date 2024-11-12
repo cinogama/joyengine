@@ -120,9 +120,9 @@ namespace editor::gui
                             formopen->set(false);
                             if (check)
                             {
-                                if (! fsys::writeall(context->get_project->get_path / "style.config",
+                                if (! fsys::writeall(context->get_project->get_path / "editor.je4style",
                                     dump_current_style_color(): string))
-                                    errmsg("保存样式失败", "无法写入文件：'" + (context->get_project->get_path / "style.config")->tostring + "'");
+                                    errmsg("保存样式失败", "无法写入文件：'" + (context->get_project->get_path / "editor.je4style")->tostring + "'");
                             }
                             else
                                 restore_config(origin_style);
