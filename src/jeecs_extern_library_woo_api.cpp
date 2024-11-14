@@ -424,6 +424,7 @@ WO_API wo_api wojeapi_towoo_update_api(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_towoo_update_component(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_towoo_update_component_data(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_towoo_userinterface_origin_layout(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_towoo_userinterface_origin_mouse_on(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_type_basic_type(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_type_id(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_type_is_component(wo_vm vm, wo_value args);
@@ -874,6 +875,7 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"wojeapi_towoo_update_component", (void*)&wojeapi_towoo_update_component},
         wo_extern_lib_func_t{"wojeapi_towoo_update_component_data", (void*)&wojeapi_towoo_update_component_data},
         wo_extern_lib_func_t{"wojeapi_towoo_userinterface_origin_layout", (void*)&wojeapi_towoo_userinterface_origin_layout},
+        wo_extern_lib_func_t{"wojeapi_towoo_userinterface_origin_mouse_on", (void*)&wojeapi_towoo_userinterface_origin_mouse_on},
         wo_extern_lib_func_t{"wojeapi_type_basic_type", (void*)&wojeapi_type_basic_type},
         wo_extern_lib_func_t{"wojeapi_type_id", (void*)&wojeapi_type_id},
         wo_extern_lib_func_t{"wojeapi_type_is_component", (void*)&wojeapi_type_is_component},

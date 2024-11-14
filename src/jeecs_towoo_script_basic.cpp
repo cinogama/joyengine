@@ -1836,6 +1836,17 @@ WO_API wo_api wojeapi_towoo_userinterface_origin_layout(wo_vm vm, wo_value args)
     return wo_ret_val(vm, result);
 }
 
+WO_API wo_api wojeapi_towoo_userinterface_origin_mouse_on(wo_vm vm, wo_value args)
+{
+    auto& origin = wo_component<jeecs::UserInterface::Origin>(args + 0);
+
+    auto r = wo_vec2(args + 1);
+    auto a = wo_float(args + 2);
+    auto m = wo_vec2(args + 3);
+
+    return wo_ret_bool(vm, origin.mouse_on(r.x, r.y, a, m));
+}
+
 const char* jeecs_towoo_path = "je/towoo.wo";
 const char* jeecs_towoo_src = R"(// (C)Cinogama. 
 import je::towoo::types;
@@ -2244,6 +2255,9 @@ namespace UserInterface
     {
         extern("libjoyecs", "wojeapi_towoo_userinterface_origin_layout")
             public func get_layout(self: Origin, display_range: vec2)=> (vec2, vec2, vec2);
+
+        extern("libjoyecs", "wojeapi_towoo_userinterface_origin_mouse_on")
+            public func mouse_on(self: Origin, display_range: vec2, angle: real, mouse_pos: vec2)=> bool;
     }
 }
 namespace Renderer

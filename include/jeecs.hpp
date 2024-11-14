@@ -8328,6 +8328,23 @@ namespace jeecs
                     *out_absoffset = absoffset;
             }
 
+            bool mouse_on(float w, float h, float rot_angle, math::vec2 mouse_view_pos)
+            {
+                math::vec2 absoffset;
+                math::vec2 abssize;
+
+                math::vec2 absmouse = (mouse_view_pos + math::vec2(1.f, 1.f)) / 2.f * math::vec2(w, h);
+                get_layout(w, h, &absoffset, &abssize, nullptr);
+
+                const math::vec3 corrected_mouse_diff = 
+                    (math::quat::euler(0., 0., -rot_angle) * math::vec3(absmouse - absoffset));
+
+                const float absdiffx = abs(corrected_mouse_diff.x);
+                const float absdiffy = abs(corrected_mouse_diff.y);
+
+                return absdiffx < abssize.x / 2.f && absdiffy < abssize.y / 2.f;
+            }
+
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &Origin::elem_center, "elem_center");
