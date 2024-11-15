@@ -633,10 +633,10 @@ R"(
         {
             let drag_result = types
                 ->> \type = (type, AcceptDragDropPayload(type));
-                ->  forall(\accept_type_result = accept_result->has
+                ->  forall(\accept_type_result = accept_result->is_value
                     where (_, accept_result) = accept_type_result;)
                 ->  get(0)
-                ->> \e = (e[0], e[1]->val);
+                ->> \e = (e[0], e[1]->unwrap);
                 ;
 
             EndDragDropTarget();

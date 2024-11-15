@@ -61,7 +61,7 @@ namespace jeapi::gui::form
                 Text(F"    {native_src}: {native_lineno}");
                 Text(F"    {native_funcname}");
                 TextDisabled("描述：");
-                Text(F"    {native_errorno->tohex}: {reason}");
+                Text(F"    {native_errorno->to_hex}: {reason}");
                 TextDisabled("调用堆栈：");
 
                 let (w, _) = GetContentRegionAvail();

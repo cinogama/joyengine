@@ -54,7 +54,7 @@ namespace jeapi::debug
     func safety_entity_operation(euid: Eeid, operation: OperationCallback)
     {
         // 将UID放进处理队列中，如果实际上没有找到此实体，那么就弹窗报警
-        request_list->getorset(euid, []mut)->add(operation);
+        request_list->get_or_set(euid, []mut)->add(operation);
     }
 
     public func update_safety_entity_operation_requests(universe: je::universe)
@@ -149,7 +149,7 @@ namespace jeapi::debug
         // OK 所有实体过了一遍了，处理待定集的实体
         for (let pending_ech : pending_entity)
         {
-            match (anchored_entity->get(pending_ech.e->editor::get_parent_anchor_uid->val))
+            match (anchored_entity->get(pending_ech.e->editor::get_parent_anchor_uid->unwrap))
             {
             value(parentech)?
                 parentech.childs as array<EntityChilds>

@@ -740,7 +740,7 @@ namespace je::physics2d::config
     */
     using std::token_type;
 
-    let group_name = lexer->expecttoken(l_identifier)->valor("<Empty>");
+    let group_name = lexer->expect_token(l_identifier)->or("<Empty>");
     if (lexer->next != "{")
     {
         lexer->error("Unexpected token, should be '{'.");
@@ -765,7 +765,7 @@ namespace je::physics2d::config
                     return "";
                 }
 
-                types->add((typename, mode->valor("CONTAIN")));
+                types->add((typename, mode->or("CONTAIN")));
                 typename = "";
                 break;
             }
@@ -785,18 +785,18 @@ namespace je::physics2d::config
             }
             else if (token == "except")
             {
-                if (mode->has)
+                if (mode->is_value)
                 {
-                    lexer->error(F"Duplicately marked attributes have been previously marked as `{mode->val}`");
+                    lexer->error(F"Duplicately marked attributes have been previously marked as `{mode->unwrap}`");
                     return "";
                 }
                 mode = option::value("EXCEPT");
             }
             else if (token == "contain")
             {
-                if (mode->has)
+                if (mode->is_value)
                 {
-                    lexer->error(F"Duplicately marked attributes have been previously marked as `{mode->val}`");
+                    lexer->error(F"Duplicately marked attributes have been previously marked as `{mode->unwrap}`");
                     return "";
                 }
                 mode = option::value("CONTAIN");

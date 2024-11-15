@@ -89,7 +89,7 @@ namespace editor::gui::edit_forms
         {
             for(let (name, uniform_val) : shader->get_uniforms()->unmapping->std::sort(\l, r = l.0 < r.0;))
             {
-                if (name->beginwith("JOYENGINE_"))
+                if (name->begin_with("JOYENGINE_"))
                     continue; // 引擎的内置shader-uniform变量，跳过显示
 
                 match (uniform_val)
@@ -108,14 +108,14 @@ namespace editor::gui::edit_forms
                     {
                         let texture_path = 
                             textures->get(id)
-                                    ->map(\tex = tex->path->valor("<内置>");)
-                                    ->valor(F"<没有绑定到通道{id}的纹理>");
+                                    ->map(\tex = tex->path->or("<内置>");)
+                                    ->or(F"<没有绑定到通道{id}的纹理>");
                                 
                         do jeapi::gui::widget::File(name, texture_path, \=do nil;)
                             ->> \path = context->get_project->make_path_normalize(fsys::normalize(path));
                             ->> \path =  je::graphic::texture::load(option::none, path)
                                 ->> \tex = entity->bind_texture(id, tex);
-                                ->  or(\= path != "" 
+                                ->  or_do(\= path != "" 
                                         ? jeapi::gui::form::errmsg("加载纹理失败", F"无法加载文件{path}作为纹理")
                                         | jeapi::gui::form::errmsg("清空纹理失败", "纹理文件不允许被清空");)
                                 ;
@@ -168,12 +168,12 @@ namespace editor::gui::edit_forms
                                 Text(F"区块/实体体积: {chunk_size}/{entity_size}={entity_count}");
 
                                 let prefab = cur_e->towoo::get_component:<Editor::Prefab>;
-                                if (prefab->has)
+                                if (prefab->is_value)
                                 {
                                     let prefab_menu = func(){
                                         if (MenuItem("更新到预设"))
                                         {
-                                            let p = prefab->val.path->get;
+                                            let p = prefab->unwrap.path->get;
                                             jeapi::gui::form::ask("更新预设体？", F"是否确认覆盖并应用全部'{p}'的预设体？",
                                                 func (op)
                                                 {
@@ -211,7 +211,7 @@ namespace editor::gui::edit_forms
                                                 });
                                         }
                                     };
-                                    if (jeapi::gui::widget::File("预设体", prefab->val.path->get, prefab_menu)->>\p = p == "";->valor(false))
+                                    if (jeapi::gui::widget::File("预设体", prefab->unwrap.path->get, prefab_menu)->>\p = p == "";->or(false))
                                     {
                                         jeapi::gui::form::ask("解除预设体？", F"是否确认解除'{cur_e->editor::name}'的预设体？",
                                             func (op)
@@ -238,7 +238,7 @@ namespace editor::gui::edit_forms
                                     let names = ctype->name->split("::");
                                     let groupname = names->len >= 2 ? names[0] | "<无>";
                                     
-                                    grouped_components->getorset(groupname, []mut)
+                                    grouped_components->get_or_set(groupname, []mut)
                                             ->add((ctype, component));
                                 }
 
@@ -263,7 +263,7 @@ namespace editor::gui::edit_forms
                                         for (let (ctype, component) : components)
                                         {
                                             // 嘿，我知道这个长长的东西很诡异，但是这个的功能只是把类型名的开头去掉，剩下的部分中间用"::"连接拼起来
-                                            if (TreeNodeEx(ctype->name->split("::")->sub(1)->reduce(\l, r= l + "::" + r;)->or(\=ctype->name;),
+                                            if (TreeNodeEx(ctype->name->split("::")->sub(1)->reduce(\l, r= l + "::" + r;)->or_do(\=ctype->name;),
                                                 tree_attrib + TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen))
                                             {
                                                 jeapi::gui::context_menu(func(){
@@ -334,13 +334,13 @@ namespace editor::gui::edit_forms
                                 Separator();
                                 // 3. 遍历实体的材质（如果有
 
-                                static let Shaders = je::typeinfo::load("Renderer::Shaders")->val();
-                                static let BadShadersUniform = je::typeinfo::load("Editor::BadShadersUniform")->val();
+                                static let Shaders = je::typeinfo::load("Renderer::Shaders")->unwrap();
+                                static let BadShadersUniform = je::typeinfo::load("Editor::BadShadersUniform")->unwrap();
                                 match (cur_e->get_component(Shaders))
                                 {
                                 value(_)?
                                     {
-                                        if (cur_e->get_component(BadShadersUniform)->has)
+                                        if (cur_e->get_component(BadShadersUniform)->is_value)
                                         {
                                             let bad_shader_paths = cur_e->editor::get_bad_shader_paths();
                                             TextDisabled(F"有{bad_shader_paths->len}个着色器存在问题:");
@@ -396,7 +396,7 @@ namespace editor::gui::edit_forms
                                                 static let mut shaders_in_project = 
                                                     fsys::allsubpath(context->get_project->get_path)
                                                         ->> \paths = paths->forall(\p = fsys::extension(p)->lower == ".shader";);
-                                                        ->  or(\_ = [];)
+                                                        ->  or([])
                                                     ;
 
                                                 if (MenuItem("重新获取Shader"))
@@ -404,7 +404,7 @@ namespace editor::gui::edit_forms
                                                     shaders_in_project = 
                                                         fsys::allsubpath(context->get_project->get_path)
                                                             ->> \paths = paths->forall(\p = fsys::extension(p)->lower == ".shader";);
-                                                            ->  or(\_ = [];)
+                                                            ->  or([])
                                                         ;
                                                 }
 

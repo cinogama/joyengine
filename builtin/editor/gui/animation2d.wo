@@ -325,7 +325,7 @@ namespace editor::gui::animation2d
                 // 2. 保存当前动作的帧数量和名称
                 result = result
                     ->appendi64(action_data.m_frames->len)
-                    ->appendi64(action_name->bytelen)
+                    ->appendi64(action_name->byte_len)
                     + action_name as string : buffer;
 
                 for (let frame: action_data.m_frames)
@@ -336,9 +336,9 @@ namespace editor::gui::animation2d
                     result = result->appendi64(frame.m_component_dats->len);
                     for (let cdata : frame.m_component_dats)
                     {
-                        result = result->appendi64(cdata.m_component_name->bytelen)
+                        result = result->appendi64(cdata.m_component_name->byte_len)
                             + cdata.m_component_name as string: buffer;
-                        result = result->appendi64(cdata.m_member_name->bytelen)
+                        result = result->appendi64(cdata.m_member_name->byte_len)
                             + cdata.m_member_name as string: buffer;
                         result = result->appendui8(cdata.m_offset_mode? 1 | 0);
                         match (cdata.m_value)
@@ -390,7 +390,7 @@ namespace editor::gui::animation2d
                     result = result->appendi64(frame.m_uniform_dats->len);
                     for (let udata : frame.m_uniform_dats)
                     {
-                        result = result->appendi64(udata.m_uniform_name->bytelen)
+                        result = result->appendi64(udata.m_uniform_name->byte_len)
                             + udata.m_uniform_name as string: buffer;
 
                         match (udata.m_value)
@@ -648,7 +648,7 @@ namespace editor::gui::animation2d
                                     if (MenuItem("新建组件数据"))
                                     {
                                         let all_components = je::typeinfo::get_all_components_types()
-                                            -> forall(\t = ! t->name()->beginwith("Editor::");)
+                                            -> forall(\t = ! t->name()->begin_with("Editor::");)
                                             -> std::sort(\at, bt = at->name() < bt->name();)
                                             ;
 
@@ -678,7 +678,7 @@ namespace editor::gui::animation2d
 
                                                     let members = all_components->get(selecting_id->get)
                                                         ->> \t = t->get_members_info;
-                                                        ->  valor([]);
+                                                        ->  or([]);
 
                                                     SameLine();
 
@@ -1067,7 +1067,7 @@ namespace editor::gui::animation2d
                 BeginGroup();
                     Text("帧时间");
                     SameLine();
-                    do InputFloatFormat("##frame_time", selected_frame->>\f = f.m_time;->valor(0.), "%.6f")
+                    do InputFloatFormat("##frame_time", selected_frame->>\f = f.m_time;->or(0.), "%.6f")
                         ->> \nv = selected_frame
                             ->> \f = f.m_time = nv;
                             ;
@@ -1094,7 +1094,7 @@ namespace editor::gui::animation2d
                                             {
                                                 if (ok)
                                                 {
-                                                    for (let fm : selected_animation->val.m_frames)
+                                                    for (let fm : selected_animation->unwrap.m_frames)
                                                         fm.m_component_dats->swap(
                                                             fm.m_component_dats->forall(
                                                                 \dcdata = dcdata.m_component_name != cdata.m_component_name
@@ -1136,7 +1136,7 @@ namespace editor::gui::animation2d
                                             func(ok)
                                             {
                                                 if (ok)
-                                                    for (let fm : selected_animation->val.m_frames)
+                                                    for (let fm : selected_animation->unwrap.m_frames)
                                                         fm.m_uniform_dats->swap(
                                                             fm.m_uniform_dats->forall(
                                                                 \dudata = dudata.m_uniform_name != udata.m_uniform_name

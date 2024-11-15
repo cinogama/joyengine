@@ -16,14 +16,14 @@ namespace jeapi
     {
         func combine_prefab_data(a: dict<string, dynamic>, b: dict<string, dynamic>)
         {
-            let d = a->tomap;
+            let d = a->to_map;
 
-            let base_components = d->getor("components", {}: dynamic) as dict<dynamic, dynamic>
+            let base_components = d->get_or("components", {}: dynamic) as dict<dynamic, dynamic>
                     ->> \k, v = (k: string, v as dict<dynamic, dynamic>
                         ->> \k, v = (k: string, v: string);
-                        ->  tomap)
+                        ->  to_map)
                         ;
-                    ->  tomap;
+                    ->  to_map;
 
             if (b->contain("name"))
                 d->set("name", b["name"]);
@@ -37,7 +37,7 @@ namespace jeapi
                     ;
                 for (let (c, ms) : components)
                 {
-                    let members = base_components->getorset(c, {}mut);
+                    let members = base_components->get_or_set(c, {}mut);
                     for (let (m, v) : ms)
                         members->set(m, v);
                 }
@@ -91,7 +91,7 @@ namespace jeapi
                 {
                     let parent_prefab = dat->get("prefab")
                         =>> \p = load_prefab(p: string);
-                        ->  valor({});
+                        ->  or({});
                     return value(combine_prefab_data(parent_prefab, dat));
                 }
             none?
@@ -123,24 +123,24 @@ namespace jeapi
         }
         public func dump_prefab_dat(p: string, dat: dict<string, dynamic>)
         {
-            let result = dat->tomap;
+            let result = dat->to_map;
 
             result->set("prefab", p: dynamic);
 
             let components = result->get("components")
                 ->> \d=d->unsafe::cast:<dict<string, dict<string, string>>>
-                    ->> \k, v = (k, v->tomap);
-                    ->  tomap
+                    ->> \k, v = (k, v->to_map);
+                    ->  to_map
                     ;
-                ->  valor({}mut);
+                ->  or({}mut);
 
             let shaders = result->get("shaders")
                 ->> \d = d->unsafe::cast:<array<array<dynamic>>>;
-                ->  valor([])
+                ->  or([])
                 ;
             let textures = result->get("textures")
                 ->> \d = d->unsafe::cast:<dict<int, string>>;
-                ->  valor({})
+                ->  or({})
                 ;
 
             let prefab_data = load_prefab(p);
@@ -159,7 +159,7 @@ namespace jeapi
                             let result_ms = components[c];
                             for (let (m, v) : ms)
                             {
-                                if (result_ms->get(m)->>\vv = vv == v;->valor(false))
+                                if (result_ms->get(m)->>\vv = vv == v;->or(false))
                                     assert(result_ms->remove(m));
                             }
                             if (result_ms->empty)
@@ -241,8 +241,8 @@ namespace jeapi
     {        
         func has_bad_shader(e: je::entity)
         {
-            static let BadShadersUniform = je::typeinfo::load("Editor::BadShadersUniform")->val();
-            return e->get_component(BadShadersUniform)->has;
+            static let BadShadersUniform = je::typeinfo::load("Editor::BadShadersUniform")->unwrap();
+            return e->get_component(BadShadersUniform)->is_value;
         }
         public func varify_all_shader_is_valid_in_world(w: je::world)
         {
@@ -275,7 +275,7 @@ namespace jeapi
                             let result = {}mut: map<string, array<dynamic>>;
                             for(let (name, uniform_val) : shad->get_uniforms())
                             {
-                                if (name->beginwith("JOYENGINE_"))
+                                if (name->begin_with("JOYENGINE_"))
                                     continue; // 引擎的内置shader-uniform变量，跳过
                                 match (uniform_val)
                                 {
@@ -293,7 +293,7 @@ namespace jeapi
                                     others? /* do nothing */;
                                 }
                             }
-                            return result->todict;
+                            return result->to_dict;
                         }
                     ;
                 ;
@@ -303,14 +303,14 @@ namespace jeapi
             return
                 saving_entity
                     ->  editor::get_components_types()
-                    ->  forall(\t = !t->name->beginwith("Editor::");)
-                    =>> \t = component->has ? [(t, component->val)] | []
+                    ->  forall(\t = !t->name->begin_with("Editor::");)
+                    =>> \t = component->is_value ? [(t, component->unwrap)] | []
                         where
                             component = saving_entity->get_component(t);
                     ->> \tc = (t->name, collect_members)
                         where 
                             collect_members = c->get_members()
-                                ->> \name_type_addr_pair = (name, towoo::unsafe::dynamic_parser::saving(type, addr)->valor("<?>"))
+                                ->> \name_type_addr_pair = (name, towoo::unsafe::dynamic_parser::saving(type, addr)->or("<?>"))
                                     where (name, type, addr) = name_type_addr_pair
                                     ;
                                 ->  mapping,
@@ -325,8 +325,8 @@ namespace jeapi
                             ["components"] = m: dynamic,
                             // 如果纹理是内置的，也就是说这个纹理实际上没有路径，那么跳过它
                             ["textures"] = saving_entity->get_entity_texture_passes
-                                =>> \k, v = used_texture_id_pass->find(k) != -1 && v->has 
-                                    ? {[k] = v->val} 
+                                =>> \k, v = used_texture_id_pass->find(k) != -1 && v->is_value 
+                                    ? {[k] = v->unwrap} 
                                     | {}
                                     ; 
                                 : dynamic,
@@ -338,7 +338,7 @@ namespace jeapi
                                     =>> \nv = nv...
                                         ->  func(name, uniformval)
                                             {
-                                                if (!name->beginwith("JOYENGINE_"))
+                                                if (!name->begin_with("JOYENGINE_"))
                                                 {
                                                     match (uniformval)
                                                     {
@@ -361,7 +361,7 @@ namespace jeapi
                             "euid", 
                             saving_entity
                                 ->editor::get_entity_uid
-                                ->valor(0: handle: je::entity::editor::euid_t): handle: int: dynamic)
+                                ->or(0: handle: je::entity::editor::euid_t): handle: int: dynamic)
                         | dat
                         ;
                     ;
@@ -378,21 +378,21 @@ namespace jeapi
             if (!bad_shader_entity->empty)
                 return result::err(bad_shader_entity);
 
-            static let INVISABLE = je::typeinfo::load("Editor::Invisable")->val;
+            static let INVISABLE = je::typeinfo::load("Editor::Invisable")->unwrap;
 
             alias entity_info_t = dict<string, dynamic>;
 
             let entities_json_list = 
                 w->get_all_entities
                     // 跳过编辑器上的不可见实体
-                    ->  forall(\e = !e->get_component(INVISABLE)->has;)
-                    =>> \e = oe->has ? [oe->val] | [] where oe = serialize::entity(e, need_euid);
+                    ->  forall(\e = !e->get_component(INVISABLE)->is_value;)
+                    =>> \e = oe->is_value ? [oe->unwrap] | [] where oe = serialize::entity(e, need_euid);
                     ;
 
             let editing_systems_type_list = 
                 w->get_all_systems
                     ->> \st = st->name;
-                    ->  forall(\n = !n->beginwith("Editor::");)
+                    ->  forall(\n = !n->begin_with("Editor::");)
                     ;
 
             return result::ok({
@@ -442,7 +442,7 @@ namespace jeapi
         func _typeinfo_or_warning(typename: string)
         {
             let tinfo = je::typeinfo::load(typename);
-            if (!tinfo->has)
+            if (!tinfo->is_value)
             {
                 je::logerr(F"无法找到{typename}，请检查是否有模块未加载成功");
                 jeapi::gui::errmsg("找不到类型", 
@@ -474,10 +474,10 @@ namespace jeapi
                                 ->> \p = (p[0] as string, p[1] as string);
                                 ->  mapping)
                         ;
-                    ->  forall(\td = td[0]->has;)
-                    ->> \td = (td[0]->val, td[1]);
+                    ->  forall(\td = td[0]->is_value;)
+                    ->> \td = (td[0]->unwrap, td[1]);
                     ;
-                ->  valor([]);
+                ->  or([]);
 
             if (component_types_dat->empty)
                 return option::none;
@@ -493,14 +493,14 @@ namespace jeapi
                             let s = graphic::shader::load(w->get_universe->option::value, spath);
                             shads->add((s, spath, shader_path_dat_pair: array<dynamic>[1] as dict<dynamic, dynamic>));
                         }
-                        return shads->toarray;
+                        return shads->to_array;
                     }
                 ->> func(arr)
                     {
-                        if (! arr->forall(\d = d[0]->has == false;)->empty)
+                        if (! arr->forall(\d = d[0]->is_value == false;)->empty)
                             return result::err(arr->>\d = (d[1], d[2]););
                         else
-                            return result::ok(arr->>\d = (d[0]->val, d[2]););
+                            return result::ok(arr->>\d = (d[0]->unwrap, d[2]););
                     }
                 ;
 
@@ -508,16 +508,16 @@ namespace jeapi
                 w, component_types_dat
                     ->> \tp = tp[0];
                     // 检查加载的shader是否有非法的，如果有，那么实体要带上一个BadShadersUniform组件
-                    ->  connect(in_editor && shaders_and_dat->>\r=r->iserr;->valor(false)
-                            ? [je::typeinfo::load("Editor::BadShadersUniform")->val] 
+                    ->  connect(in_editor && shaders_and_dat->>\r=r->is_err;->or(false)
+                            ? [je::typeinfo::load("Editor::BadShadersUniform")->unwrap] 
                             | [])
-                    ->  connect(in_editor ? [je::typeinfo::load("Editor::Name")->val] | [])
-                    ->  connect(in_editor && prefab_path->has ? [je::typeinfo::load("Editor::Prefab")->val] | [] )
+                    ->  connect(in_editor ? [je::typeinfo::load("Editor::Name")->unwrap] | [])
+                    ->  connect(in_editor && prefab_path->is_value ? [je::typeinfo::load("Editor::Prefab")->unwrap] | [] )
                 );
 
-            if (in_editor && prefab_path->has)
+            if (in_editor && prefab_path->is_value)
             {
-                entity->editor::set_prefab_path(prefab_path->val);
+                entity->editor::set_prefab_path(prefab_path->unwrap);
             }
 
             // 开始应用数据
@@ -535,7 +535,7 @@ namespace jeapi
                 ;
             // 考虑一下异步加载？
             // 开始加载shader
-            match (shaders_and_dat->valor(result::ok([])))
+            match (shaders_and_dat->or(result::ok([])))
             {
             ok(dats)?
                 {

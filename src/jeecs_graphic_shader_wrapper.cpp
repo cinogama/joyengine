@@ -1265,10 +1265,10 @@ namespace shader
             vertext_out_result,
             fragment_out_result,
             configs,
-            struct_uniform_blocks_decls->toarray,
-            sampler2d::created_sampler2ds->toarray,
+            struct_uniform_blocks_decls->to_array,
+            sampler2d::created_sampler2ds->to_array,
             registered_custom_methods->unmapping,
-            shader_function::_generate_functions->toarray);
+            shader_function::_generate_functions->to_array);
     }
 }
 
@@ -1610,17 +1610,17 @@ public func CULL(cull: CullConfig)
 {
     let eat_token = func(expect_name: string, expect_type: std::token_type)
                     {
-                        let (token, out_result) = lexer->nexttoken;
+                        let (token, out_result) = lexer->next_token;
                         if (token != expect_type)
                             lexer->error(F"Expect '{expect_name}' here, but get '{out_result}'");
                         return out_result;
                     };
     let try_eat_token = func(expect_type: std::token_type)=> option<string>
                     {
-                        let (token, out_result) = lexer->peektoken();
+                        let (token, out_result) = lexer->peek_token();
                         if (token != expect_type)
                             return option::none;
-                        do lexer->nexttoken;
+                        do lexer->next_token;
                         return option::value(out_result);
                     };
 
@@ -1634,7 +1634,7 @@ public func CULL(cull: CullConfig)
     let struct_infos = []mut: vec<(string, string)>;
     while (true)
     {
-        if (try_eat_token(std::token_type::l_right_curly_braces)->has())
+        if (try_eat_token(std::token_type::l_right_curly_braces)->is_value())
             // Meet '}', end work!
             break;
 
@@ -1646,7 +1646,7 @@ public func CULL(cull: CullConfig)
 
         struct_infos->add((struct_member, struct_shader_type));
 
-        if (!try_eat_token(std::token_type::l_comma)->has())
+        if (!try_eat_token(std::token_type::l_comma)->is_value())
         {
             do eat_token("}", std::token_type::l_right_curly_braces);
             break;
@@ -1723,17 +1723,17 @@ using struct_define = handle
 {
     let eat_token = func(expect_name: string, expect_type: std::token_type)
                     {
-                        let (token, out_result) = lexer->nexttoken;
+                        let (token, out_result) = lexer->next_token;
                         if (token != expect_type)
                             lexer->error(F"Expect '{expect_name}' here, but get '{out_result}'");
                         return out_result;
                     };
     let try_eat_token = func(expect_type: std::token_type)=> option<string>
                     {
-                        let (token, out_result) = lexer->peektoken();
+                        let (token, out_result) = lexer->peek_token();
                         if (token != expect_type)
                             return option::none;
-                        do lexer->nexttoken;
+                        do lexer->next_token;
                         return option::value(out_result);
                     };
 
@@ -1747,7 +1747,7 @@ using struct_define = handle
     let struct_infos = []mut: vec<(string, (string, bool))>;
     while (true)
     {
-        if (try_eat_token(std::token_type::l_right_curly_braces)->has())
+        if (try_eat_token(std::token_type::l_right_curly_braces)->is_value())
             // Meet '}', end work!
             break;
 
@@ -1758,9 +1758,9 @@ using struct_define = handle
         let is_struct = try_eat_token(std::token_type::l_struct);
         let struct_shader_type = eat_token("IDENTIFIER", std::token_type::l_identifier);
 
-        struct_infos->add((struct_member, (struct_shader_type, is_struct->has)));
+        struct_infos->add((struct_member, (struct_shader_type, is_struct->is_value)));
 
-        if (!try_eat_token(std::token_type::l_comma)->has())
+        if (!try_eat_token(std::token_type::l_comma)->is_value())
         {
             do eat_token("}", std::token_type::l_right_curly_braces);
             break;
@@ -1821,17 +1821,17 @@ using uniform_block = struct_define
 {
     let eat_token = func(expect_name: string, expect_type: std::token_type)
                     {
-                        let (token, out_result) = lexer->nexttoken;
+                        let (token, out_result) = lexer->next_token;
                         if (token != expect_type)
                             lexer->error(F"Expect '{expect_name}' here, but get '{out_result}'");
                         return out_result;
                     };
     let try_eat_token = func(expect_type: std::token_type)=> option<string>
                     {
-                        let (token, out_result) = lexer->peektoken();
+                        let (token, out_result) = lexer->peek_token();
                         if (token != expect_type)
                             return option::none;
-                        do lexer->nexttoken;
+                        do lexer->next_token;
                         return option::value(out_result);
                     };
 
@@ -1849,7 +1849,7 @@ using uniform_block = struct_define
     let struct_infos = []mut: vec<(string, (string, bool))>;
     while (true)
     {
-        if (try_eat_token(std::token_type::l_right_curly_braces)->has())
+        if (try_eat_token(std::token_type::l_right_curly_braces)->is_value())
             // Meet '}', end work!
             break;
 
@@ -1860,9 +1860,9 @@ using uniform_block = struct_define
         let is_struct = try_eat_token(std::token_type::l_struct);
         let struct_shader_type = eat_token("IDENTIFIER", std::token_type::l_identifier);
 
-        struct_infos->add((struct_member, (struct_shader_type, is_struct->has)));
+        struct_infos->add((struct_member, (struct_shader_type, is_struct->is_value)));
 
-        if (!try_eat_token(std::token_type::l_comma)->has())
+        if (!try_eat_token(std::token_type::l_comma)->is_value())
         {
             do eat_token("}", std::token_type::l_right_curly_braces);
             break;

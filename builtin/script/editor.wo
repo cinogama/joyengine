@@ -220,12 +220,12 @@ namespace ivec2
     {
         public extern func saving(val: ivec2)=> string
         {
-            return [val.0, val.1]->serialize->valor("[0,0]");
+            return [val.0, val.1]->serialize->or("[0,0]");
         }
         public extern func restoring(dat: string)=> ivec2
         {
-            let data = dat->array::deserialize->valor([0: dynamic, 0: dynamic])->> \x = x: int;;
-            return (data->getor(0, 0), data->getor(1, 0)): ivec2;
+            let data = dat->array::deserialize->or([0: dynamic, 0: dynamic])->> \x = x: int;;
+            return (data->get_or(0, 0), data->get_or(1, 0)): ivec2;
         }
         public extern func edit(val: ivec2, tag: string)=> option<ivec2>
         {
@@ -239,12 +239,12 @@ namespace vec2
     {
         public extern func saving(val: vec2)=> string
         {
-            return [val.0, val.1]->serialize->valor("[0,0]");
+            return [val.0, val.1]->serialize->or("[0,0]");
         }
         public extern func restoring(dat: string)=> vec2
         {
-            let data = dat->array::deserialize->valor([0: dynamic, 0: dynamic])->> \x = x: real;;
-            return (data->getor(0, 0.), data->getor(1, 0.)): vec2;
+            let data = dat->array::deserialize->or([0: dynamic, 0: dynamic])->> \x = x: real;;
+            return (data->get_or(0, 0.), data->get_or(1, 0.)): vec2;
         }
         public extern func edit(val: vec2, tag: string)=> option<vec2>
         {
@@ -258,12 +258,12 @@ namespace vec3
     {
         public extern func saving(val: vec3)=> string
         {
-            return [val.0, val.1, val.2]->serialize->valor("[0,0,0]");
+            return [val.0, val.1, val.2]->serialize->or("[0,0,0]");
         }
         public extern func restoring(dat: string)=> vec3
         {
-            let data = dat->array::deserialize->valor([0: dynamic, 0: dynamic, 0: dynamic])->> \x = x: real;;
-            return (data->getor(0, 0.), data->getor(1, 0.), data->getor(2, 0.)): vec3;
+            let data = dat->array::deserialize->or([0: dynamic, 0: dynamic, 0: dynamic])->> \x = x: real;;
+            return (data->get_or(0, 0.), data->get_or(1, 0.), data->get_or(2, 0.)): vec3;
         }
         public extern func edit(val: vec3, tag: string)=> option<vec3>
         {
@@ -277,12 +277,12 @@ namespace vec4
     {
         public extern func saving(val: vec4)=> string
         {
-            return [val.0, val.1, val.2, val.3]->serialize->valor("[0,0,0,0]");
+            return [val.0, val.1, val.2, val.3]->serialize->or("[0,0,0,0]");
         }
         public extern func restoring(dat: string)=> vec4
         {
-            let data = dat->array::deserialize->valor([0: dynamic, 0: dynamic, 0: dynamic, 0: dynamic])->> \x = x: real;;
-            return (data->getor(0, 0.), data->getor(1, 0.), data->getor(2, 0.), data->getor(3, 0.)): vec4;
+            let data = dat->array::deserialize->or([0: dynamic, 0: dynamic, 0: dynamic, 0: dynamic])->> \x = x: real;;
+            return (data->get_or(0, 0.), data->get_or(1, 0.), data->get_or(2, 0.), data->get_or(3, 0.)): vec4;
         }
         public extern func edit(val: vec4, tag: string)=> option<vec4>
         {
@@ -296,12 +296,12 @@ namespace quat
     {
         public extern func saving(val: quat)=> string
         {
-            return [val.0, val.1, val.2, val.3]->serialize->valor("[0,0,0,0]");
+            return [val.0, val.1, val.2, val.3]->serialize->or("[0,0,0,0]");
         }
         public extern func restoring(dat: string)=> quat
         {
-            let data = dat->array::deserialize->valor([0: dynamic, 0: dynamic, 0: dynamic, 0: dynamic])->> \x = x: real;;
-            return (data->getor(0, 0.), data->getor(1, 0.), data->getor(2, 0.), data->getor(3, 0.)): quat;
+            let data = dat->array::deserialize->or([0: dynamic, 0: dynamic, 0: dynamic, 0: dynamic])->> \x = x: real;;
+            return (data->get_or(0, 0.), data->get_or(1, 0.), data->get_or(2, 0.), data->get_or(3, 0.)): quat;
         }
         public extern func edit(val: quat, tag: string)=> option<quat>
         {
@@ -316,7 +316,7 @@ namespace fileresource_void
     {
         public extern func saving(val: fileresource_void)=> string
         {
-            return val: option<string>->valor("");
+            return val: option<string>->or("");
         }
         public extern func restoring(dat: string)=> fileresource_void
         {
@@ -327,7 +327,7 @@ namespace fileresource_void
         }
         public extern func edit(val: fileresource_void, tag: string)=> option<fileresource_void>
         {
-            match (jeapi::gui::widget::File(F"文件：##{tag}", val: option<string>->valor(""), \=do nil;))
+            match (jeapi::gui::widget::File(F"文件：##{tag}", val: option<string>->or(""), \=do nil;))
             {
             value(p)?
                 if (p == "")
@@ -346,7 +346,7 @@ namespace fileresource_audio_buffer
     {
         public extern func saving(val: fileresource_audio_buffer)=> string
         {
-            return val: option<string>->valor("");
+            return val: option<string>->or("");
         }
         public extern func restoring(dat: string)=> fileresource_audio_buffer
         {
@@ -357,7 +357,7 @@ namespace fileresource_audio_buffer
         }
         public extern func edit(val: fileresource_audio_buffer, tag: string)=> option<fileresource_audio_buffer>
         {
-            match (jeapi::gui::widget::File(F"音频文件：##{tag}", val: option<string>->valor(""), \=do nil;))
+            match (jeapi::gui::widget::File(F"音频文件：##{tag}", val: option<string>->or(""), \=do nil;))
             {
             value(p)?
                 if (p == "")
@@ -418,16 +418,16 @@ namespace Light2D::Range::light_shape
                 ["m_positions"] = val.m_positions->>\v2 = v2->parser::saving;: dynamic,
             };
             
-            return dat->serialize->val;
+            return dat->serialize->unwrap;
         }
         public extern func restoring(dat: string)=> Light2D::Range::light_shape
         {
-            let data = dat->dict::deserialize->valor({});
+            let data = dat->dict::deserialize->or({});
             return Light2D::Range::light_shape
             {
-                m_point_count = data->getor("m_point_count": dynamic, 0: dynamic)->valor(0),
-                m_strength = data->getor("m_strength": dynamic, []: dynamic)->valor([]: array<dynamic>)->> \e = e->valor(0.0);,
-                m_positions = data->getor("m_positions": dynamic, []: dynamic)->valor([]: array<dynamic>)->> \v2 = vec2::parser::restoring(v2: string);,
+                m_point_count = data->get_or("m_point_count": dynamic, 0: dynamic)->or(0),
+                m_strength = data->get_or("m_strength": dynamic, []: dynamic)->or([]: array<dynamic>)->> \e = e->or(0.0);,
+                m_positions = data->get_or("m_positions": dynamic, []: dynamic)->or([]: array<dynamic>)->> \v2 = vec2::parser::restoring(v2: string);,
             };
         }
         public extern func edit(val: Light2D::Range::light_shape, tag: string)=> option<Light2D::Range::light_shape>
@@ -475,7 +475,7 @@ namespace Light2D::Range::light_shape
             let layered_positions = []mut: vec<array<vec2>>;
             for (let mut offset = 0; offset < layer_count; offset += 1)
                 layered_positions->add(
-                    point_data->subto(offset * point_count, point_count));
+                    point_data->sub_len(offset * point_count, point_count));
 
             Text("形状网格");
             TextDisabled("* 请保持最内层为凸多边形");
@@ -494,7 +494,7 @@ namespace Light2D::Range::light_shape
                         if (i > 0)
                             r->add((a[i - 1][idx], p));
                     }
-                    return r->toarray;
+                    return r->to_array;
                 },
             ))
             {
@@ -502,7 +502,7 @@ namespace Light2D::Range::light_shape
             {
                 point_data = posgroups
                     ->  reduce(\l, r = l->connect(r);)
-                    ->  valor([])
+                    ->  or([])
                     ->> \e = e: vec2;
                     ;
                 need_update = true;
@@ -551,12 +551,12 @@ namespace Light2D::BlockShadow::block_mesh
         {
             return val: array<vec2>
                 ->> \v2 = v2->parser::saving;
-                -> serialize->val
+                -> serialize->unwrap
                 ;
         }
         public extern func restoring(dat: string)=> Light2D::BlockShadow::block_mesh
         {
-            return dat->array::deserialize->valor([])
+            return dat->array::deserialize->or([])
                 ->> \v2 = vec2::parser::restoring(v2: string);
                 : block_mesh;
         }
@@ -586,7 +586,7 @@ namespace Light2D::BlockShadow::block_mesh
                         if (idx > 0)
                             r->add((a[i][idx - 1], p));
                     }
-                    return r->toarray;
+                    return r->to_array;
                 },
             ))
             {
@@ -618,31 +618,31 @@ namespace UserInterface::Origin::origin_center
             let mut newval = val;
             BeginGroup();
             {
-                if (CheckBox(F"##{tag}_lu", origin_center::left + origin_center::top == val)->has)
+                if (CheckBox(F"##{tag}_lu", origin_center::left + origin_center::top == val)->is_value)
                     newval = origin_center::left + origin_center::top;
                 SameLine();
-                if (CheckBox(F"##{tag}_u", origin_center::top == val)->has)
+                if (CheckBox(F"##{tag}_u", origin_center::top == val)->is_value)
                     newval = origin_center::top;
                 SameLine();
-                if (CheckBox(F"##{tag}_ru", origin_center::right + origin_center::top == val)->has)
+                if (CheckBox(F"##{tag}_ru", origin_center::right + origin_center::top == val)->is_value)
                     newval = origin_center::right + origin_center::top;
 
-                if (CheckBox(F"##{tag}_l", origin_center::left == val)->has)
+                if (CheckBox(F"##{tag}_l", origin_center::left == val)->is_value)
                     newval = origin_center::left;
                 SameLine();
-                if (CheckBox(F"##{tag}_c", origin_center::center == val)->has)
+                if (CheckBox(F"##{tag}_c", origin_center::center == val)->is_value)
                     newval = origin_center::center;
                 SameLine();
-                if (CheckBox(F"##{tag}_r", origin_center::right == val)->has)
+                if (CheckBox(F"##{tag}_r", origin_center::right == val)->is_value)
                     newval = origin_center::right;
 
-                if (CheckBox(F"##{tag}_lb", origin_center::left + origin_center::bottom == val)->has)
+                if (CheckBox(F"##{tag}_lb", origin_center::left + origin_center::bottom == val)->is_value)
                     newval = origin_center::left + origin_center::bottom;
                 SameLine();
-                if (CheckBox(F"##{tag}_b", origin_center::bottom == val)->has)
+                if (CheckBox(F"##{tag}_b", origin_center::bottom == val)->is_value)
                     newval = origin_center::bottom;
                 SameLine();
-                if (CheckBox(F"##{tag}_rb", origin_center::right + origin_center::bottom == val)->has)
+                if (CheckBox(F"##{tag}_rb", origin_center::right + origin_center::bottom == val)->is_value)
                     newval = origin_center::right + origin_center::bottom;
             }
             EndGroup();
@@ -663,19 +663,19 @@ namespace Animation::FrameAnimation::animation_list
             return val: array<animation_state>
                 ->> \state = [state.m_path: dynamic, state.m_animation: dynamic, state.m_loop: dynamic];
                 ->  serialize
-                ->  val;
+                ->  unwrap;
         }
         public extern func restoring(dat: string)=> Animation::FrameAnimation::animation_list
         {
-            return dat->array::deserialize->valor([])
+            return dat->array::deserialize->or([])
                 ->> \state = 
                         animation_state
                         {
-                            m_path = state_dat->getor(0, "": dynamic)->valor(""), 
-                            m_animation = state_dat->getor(1, "": dynamic)->valor(""), 
-                            m_loop = state_dat->getor(2, false: dynamic)->valor(false), 
+                            m_path = state_dat->get_or(0, "": dynamic)->or(""), 
+                            m_animation = state_dat->get_or(1, "": dynamic)->or(""), 
+                            m_loop = state_dat->get_or(2, false: dynamic)->or(false), 
                         }
-                        where state_dat = state->valor([]: array<dynamic>)
+                        where state_dat = state->or([]: array<dynamic>)
                     ;
                 : animation_list;
                 ;
@@ -759,7 +759,7 @@ namespace Animation::FrameAnimation::animation_list
             }
 
             if (need_update)
-                return option::value(newval->toarray: Animation::FrameAnimation::animation_list);
+                return option::value(newval->to_array: Animation::FrameAnimation::animation_list);
             else
                 return option::none;
         }

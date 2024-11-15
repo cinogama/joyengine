@@ -85,9 +85,9 @@ namespace editor::gui::edit_forms
             
             if (fsys::extension(originpath)->lower == ".wo")
             {
-                if (fsys::filename(originpath)->lower->endwith(".je.wo"))
+                if (fsys::filename(originpath)->lower->end_with(".je.wo"))
                     return Action::SKIP;  // 跳过工具脚本
-                if (fsys::filename(originpath)->lower->endwith(".image.wo"))
+                if (fsys::filename(originpath)->lower->end_with(".image.wo"))
                     return Action::SKIP;  // 跳过图像处理脚本
 
                 return Action::ACTION(func(pconfig, fimg){
@@ -167,7 +167,7 @@ namespace editor::gui::edit_forms
                         let compile_results = proj->get_all_modules
                             ->> \k, v = (k, (v, v->compile(std::platform::runtime_type::RELEASE, option::none)));
                             ;
-                        let error_compiling = compile_results->forall(\_, r = r[1]->iserr;);
+                        let error_compiling = compile_results->forall(\_, r = r[1]->is_err;);
                         if (error_compiling->empty == false)
                         {
                             // 有编译失败，跳过！
@@ -186,7 +186,7 @@ namespace editor::gui::edit_forms
                             let dll_module_path = compile_results
                                 ->  unmapping
                                 ->> \kv = (kv[1][0], bind_wrap_path(kv[1][0]->get_build_dll_path(
-                                    std::platform::runtime_type::RELEASE)->val)); // 必须有
+                                    std::platform::runtime_type::RELEASE)->unwrap)); // 必须有
                                 ;
 
                             // 1.2 创建路径，准备打包
@@ -248,9 +248,9 @@ namespace editor::gui::edit_forms
 
                             if (fsys::isfile(fsys::workpath() / "icon.ico"))
                             {
-                                do new! process(F"{std::exepath()}/builtin/rcedit-x64.exe", 
+                                do new! process(F"{std::host_path()}/builtin/rcedit-x64.exe", 
                                     [
-                                        F"{std::exepath()}/builtin/rcedit-x64.exe",
+                                        F"{std::host_path()}/builtin/rcedit-x64.exe",
                                         (export_path / F"{proj->get_name}.exe")->tostring, 
                                         "--set-icon", 
                                         (fsys::workpath() / "icon.ico")->tostring,
@@ -263,11 +263,11 @@ namespace editor::gui::edit_forms
                                 ->> \libpath = 
                                     do fsys::copy(
                                         fsys::normalize(
-                                            F"{std::exepath()}/{libpath}"), 
+                                            F"{std::host_path()}/{libpath}"), 
                                             export_path / libpath)->unwrap
                                     ;
                                 ;
-                            do fsys::copy(fsys::normalize(F"{std::exepath()}/OpenAL32.dll"), export_path / "OpenAL32.dll")->unwrap;
+                            do fsys::copy(fsys::normalize(F"{std::host_path()}/OpenAL32.dll"), export_path / "OpenAL32.dll")->unwrap;
                             
                             // 1.5 将启动脚本编译后打入镜像
                             config.m_pack_output_log->add(F"正在打包启动脚本");
@@ -288,7 +288,7 @@ namespace editor::gui::edit_forms
                                 {
                                     let world_dat = je::file::readall(path)
                                         =>> \dat = dict::deserialize(dat);
-                                        ->  val
+                                        ->  unwrap
                                         ->> \k, v = (k as string, v);
                                         ;
                                     
@@ -360,7 +360,7 @@ namespace editor::gui::edit_forms
 
                                 let runtime_loading_code = 
                                     "LOADED_MODULE_HANDLES->add(" 
-                                    + "je::load_module($MODULENAME$, std::exepath() + $MODULERPATH$)->val"
+                                    + "je::load_module($MODULENAME$, std::host_path() + $MODULERPATH$)->unwrap"
                                     + ");";
 
                                 dylib_loader +=
@@ -372,23 +372,23 @@ namespace editor::gui::edit_forms
 
                             // 1.5.2 加载ToWoo类型
                             let loading_towoo_components = proj->get_all_towoo_scripts_name_and_path
-                                ->  forall(\_, paths = fsys::filename(paths[0])->lower->endwith(".jecomponent.wo");)
+                                ->  forall(\_, paths = fsys::filename(paths[0])->lower->end_with(".jecomponent.wo");)
                                 ->  unmapping
                                 ->> \pathnameandpath = F"LOADED_TOWOO_COMPONENT_TYPES->add(je::towoo::update_component({
-                                        name->enstring}, {path->enstring})->val);\n"
+                                        name->enstring}, {path->enstring})->unwrap);\n"
                                         where (name, (_, path)) = pathnameandpath
                                     ;
                                 ->  reduce(\l, r = l + r;)
-                                ->  valor("");
+                                ->  or("");
                             let loading_towoo_systems = proj->get_all_towoo_scripts_name_and_path
-                                ->  forall(\_, paths = fsys::filename(paths[0])->lower->endwith(".jesystem.wo");)
+                                ->  forall(\_, paths = fsys::filename(paths[0])->lower->end_with(".jesystem.wo");)
                                 ->  unmapping
                                 ->> \pathnameandpath = F"LOADED_TOWOO_SYSTEM_TYPES->add(je::towoo::update_system({
-                                        name->enstring}, {path->enstring})->val);\n"
+                                        name->enstring}, {path->enstring})->unwrap);\n"
                                         where (name, (_, path)) = pathnameandpath
                                     ;
                                 ->  reduce(\l, r = l + r;)
-                                ->  valor("");
+                                ->  or("");
 
                             // 1.5.3 应用项目设置
                             config.m_pack_output_log->add(F"正在生成应用项目设置的脚本");
@@ -639,7 +639,7 @@ namespace editor::gui::edit_forms
                     let (avail_width, avail_height) = GetContentRegionAvail();
                     if (BeginListBox("##", avail_width, avail_height))
                     {
-                        let logs = pack_config_instance->get->val.m_pack_output_log;
+                        let logs = pack_config_instance->get->unwrap.m_pack_output_log;
                         for (let mut index = logs->len; index > 0; index -= 1)
                             do Selectable(logs[index - 1]);
 
@@ -648,7 +648,7 @@ namespace editor::gui::edit_forms
                     
                     EndChild();
                     
-                    if (pack_config_instance->get->val.m_finished)
+                    if (pack_config_instance->get->unwrap.m_finished)
                     {
                         if (ButtonSize("完成", (cur_width, 0.)))
                             open = false;

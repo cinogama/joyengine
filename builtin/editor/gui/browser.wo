@@ -25,7 +25,7 @@ namespace editor::gui
     func create_font_image(proj: Project, default_name: string, location: string)
     {
         let fonts = fsys::allsubpath(proj->get_path/"resource"/"font")
-            -> or(\_=[];)
+            -> or([])
             -> forall(\path = fsys::isfile(path) && fsys::extension(path)->lower == ".ttf";)
             ->> \path = proj->make_path_normalize(path);
             ;
@@ -43,7 +43,7 @@ namespace editor::gui
             if (Begin(F"在{location}创建纹理"))
             {
                 Text("文件名");
-                create_context[0] = InputText("##imagename", create_context[0])->valor(create_context[0]);
+                create_context[0] = InputText("##imagename", create_context[0])->or(create_context[0]);
 
                 Separator();
 
@@ -58,7 +58,7 @@ namespace editor::gui
 
                 let (w, h) = GetContentRegionAvail();
                 create_context[1] = InputTextMultilineSize("##imagetext", create_context[1], w, h - 30.)
-                    ->valor(create_context[1]);
+                    ->or(create_context[1]);
 
                 if (Button("创建"))
                 {
@@ -108,17 +108,17 @@ namespace editor::gui
                 if (Begin(F"在{location}创建纹理"))
                 {
                     Text("文件名");
-                    context[2] = InputText("##imagename", context[2])->valor(context[2]);
+                    context[2] = InputText("##imagename", context[2])->or(context[2]);
 
                     Separator();
 
                     Text("宽");
                     SameLine();
-                    context[0] = InputInt("##width", context[0])->valor(context[0]);
+                    context[0] = InputInt("##width", context[0])->or(context[0]);
 
                     Text("高");
                     SameLine();
-                    context[1] = InputInt("##height", context[1])->valor(context[1]);
+                    context[1] = InputInt("##height", context[1])->or(context[1]);
 
                     if (Button("创建"))
                     {
@@ -152,40 +152,40 @@ namespace editor::gui
 
     // 用于储存文件拓展名和图标的对应关系
     let FILE_TYPE_ICONS = {
-        [".png"] = je::graphic::texture::load(option::none, F"!/builtin/icon/TextureFile.png")->val,
-        [".jpg"] = je::graphic::texture::load(option::none, F"!/builtin/icon/TextureFile.png")->val,
-        [".bmp"] = je::graphic::texture::load(option::none, F"!/builtin/icon/TextureFile.png")->val,
-        [".psd"] = je::graphic::texture::load(option::none, F"!/builtin/icon/TextureFile.png")->val,
+        [".png"] = je::graphic::texture::load(option::none, F"!/builtin/icon/TextureFile.png")->unwrap,
+        [".jpg"] = je::graphic::texture::load(option::none, F"!/builtin/icon/TextureFile.png")->unwrap,
+        [".bmp"] = je::graphic::texture::load(option::none, F"!/builtin/icon/TextureFile.png")->unwrap,
+        [".psd"] = je::graphic::texture::load(option::none, F"!/builtin/icon/TextureFile.png")->unwrap,
 
-        [".ttf"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Font.png")->val,
+        [".ttf"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Font.png")->unwrap,
 
-        [".wav"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Music.png")->val,
+        [".wav"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Music.png")->unwrap,
                 
-        [".wo"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Plugins.png")->val,
+        [".wo"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Plugins.png")->unwrap,
 
-        [".shader"] = je::graphic::texture::load(option::none, F"!/builtin/icon/ShaderFile.png")->val,
+        [".shader"] = je::graphic::texture::load(option::none, F"!/builtin/icon/ShaderFile.png")->unwrap,
         
-        [".je4module"] = je::graphic::texture::load(option::none, F"!/builtin/icon/CppProgram.png")->val,
-        [".je4workflow"] = je::graphic::texture::load(option::none, F"!/builtin/icon/InputPin.png")->val,
+        [".je4module"] = je::graphic::texture::load(option::none, F"!/builtin/icon/CppProgram.png")->unwrap,
+        [".je4workflow"] = je::graphic::texture::load(option::none, F"!/builtin/icon/InputPin.png")->unwrap,
 
-        [".je4world"] = je::graphic::texture::load(option::none, F"!/builtin/icon/World.png")->val,
-        [".je4entity"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Entity.png")->val,
+        [".je4world"] = je::graphic::texture::load(option::none, F"!/builtin/icon/World.png")->unwrap,
+        [".je4entity"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Entity.png")->unwrap,
 
-        [".je4animation"] = je::graphic::texture::load(option::none, F"!/builtin/icon/AnimationFile.png")->val,
+        [".je4animation"] = je::graphic::texture::load(option::none, F"!/builtin/icon/AnimationFile.png")->unwrap,
 
-        [".je4tilemap"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Tilemap.png")->val,
-        [".je4partical"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Partical.png")->val,
+        [".je4tilemap"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Tilemap.png")->unwrap,
+        [".je4partical"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Partical.png")->unwrap,
 
-        [".je4cache"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Joy.png")->val,
+        [".je4cache"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Joy.png")->unwrap,
     };
 
     // 根据文件拓展名返回文件的类型
     private func get_file_icon_by_extern_name(_path: PathInfo, context: EditorContext)
     {
         static let default_path_icon 
-            = je::graphic::texture::load(option::none, F"!/builtin/icon/FilePath.png")->val;
+            = je::graphic::texture::load(option::none, F"!/builtin/icon/FilePath.png")->unwrap;
         static let default_file_icon 
-            = je::graphic::texture::load(option::none, F"!/builtin/icon/File.png")->val;
+            = je::graphic::texture::load(option::none, F"!/builtin/icon/File.png")->unwrap;
 
         let mut icon = FILE_TYPE_ICONS->get(_path.externname);
         if (IMAGE_FILE_EXTERN_NAMES->find(_path.externname) != -1)
@@ -244,7 +244,7 @@ namespace editor::gui
             if (editor_need_hiding_file)
             {
                 return HIDING_FILE_TYPE->find(self.externname) != -1
-                    || self.name->beginwith(".");
+                    || self.name->begin_with(".");
             }
             return false;
         }
@@ -374,7 +374,7 @@ namespace editor::gui
 
             return registed_open_method
                 ->  get(self.externname)
-                ->  valor(
+                ->  or(
                     func (p, _)
                     {
                         do new! thread(func()
@@ -423,7 +423,7 @@ namespace editor::gui
         let cur_creating_path = current_work_path;
         if (path
             ->map(\_ = BeginPopupContextItem();)
-            ->or(\ = BeginPopupContextWindow();))
+            ->or_do(\ = BeginPopupContextWindow();))
         {
             if (BeginMenu("新建..."))
             {
@@ -431,7 +431,7 @@ namespace editor::gui
                     jeapi::gui::form::input("新建空目录", F"在{cur_creating_path}新建空目录", "NewDir",
                         \dirname: string = fsys::mkdir(fsys::normalize(cur_creating_path) / dirname)
                             ->map(\_ = force_update();)
-                            ->or(\errid = jeapi::gui::form::errmsg("失败", F"创建目录失败{errid}");););
+                            ->or_do(\errid = jeapi::gui::form::errmsg("失败", F"创建目录失败{errid}");););
                 Separator();
                 if (MenuItem("空文件"))
                 {
@@ -634,7 +634,7 @@ using $NEW_NODE_NAME$ = struct{}
     }
 }
 "@;
-                        if (false == fsys::normalize(cur_creating_path)->tostring()->beginwith(
+                        if (false == fsys::normalize(cur_creating_path)->tostring()->begin_with(
                             (context->get_project->get_path / "resource" / "workflow" / "node")->tostring))
                             jeapi::gui::form::errmsg("创建Workflow Node失败", "Node只能在@/resource/workflow/node目录下创建");
                         else
@@ -801,7 +801,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
                                                 fsys::normalize(F"{cur_creating_path}/{new_world_name}.je4world"), 
                                                 wdat as dict<string, dynamic>: string)
                                                 ;
-                                            ->  valor(false)
+                                            ->  or(false)
                                         == false)
                                     {
                                         jeapi::gui::form::errmsg("创建世界失败", "无法创建文件，可能是文件名非法或磁盘已满");
@@ -881,9 +881,9 @@ using $NEW_PRODUCER_NAME$ = struct{}
                             jeapi::gui::form::input("创建着色器", F"将在{cur_creating_path}创建{shader_display_name}：",
                                 shader_path_name,
                                 \shader_name: string = 
-                                    fsys::readall(fsys::normalize(F"{std::exepath()}/builtin/shader/{shader_path_name}.shader"))
+                                    fsys::readall(fsys::normalize(F"{std::host_path()}/builtin/shader/{shader_path_name}.shader"))
                                         ->> \src = create_shader_at(shader_name, src);
-                                        ->  or(\ = je::logerr(F"打开内置着色器文件{shader_path_name}失败，请检查编辑器目录");)
+                                        ->  or_do(\ = je::logerr(F"打开内置着色器文件{shader_path_name}失败，请检查编辑器目录");)
                                     ;
                                 ); // end of inputbox
                   
@@ -929,7 +929,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
                     jeapi::gui::form::input("创建C++模块", F"将在{cur_creating_path}创建，请为项目命名：", "CppModule", 
                         \module_name: string = CxxProject::start(module_name, cur_creating_path, context->get_project)
                             ->> \ _ = force_update();
-                            ->or(\reason = jeapi::gui::form::errmsg("创建C++模块失败", reason);)
+                            ->or_do(\reason = jeapi::gui::form::errmsg("创建C++模块失败", reason);)
                             ;
                         );
                 }
@@ -963,7 +963,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
         using je::editor;
         let normalized_path = path;
         let pure_path = 
-            \p: string = p->beginwith(normalized_path->tostring()) 
+            \p: string = p->begin_with(normalized_path->tostring()) 
                 ? p->sub(normalized_path->tostring()->len)
                 | p
             ;
@@ -980,13 +980,13 @@ using $NEW_PRODUCER_NAME$ = struct{}
             -> okay
             =>> \childs = childs
                 ->> \child = isfile(child)
-                    ? fsys::filename(fsys::normalize(pchild)) + crc64file(child->tostring)->val: string 
+                    ? fsys::filename(fsys::normalize(pchild)) + crc64file(child->tostring)->unwrap: string 
                     | pchild
                     where pchild = pure_path(child->tostring);
                 ->  reduce(\l, r = l + r;)
                 ->> \str = crc64str(str);
                 ;
-            ->  val;
+            ->  unwrap;
     }
 
     func try_update_recompile(module: CxxProject)
@@ -1007,9 +1007,9 @@ using $NEW_PRODUCER_NAME$ = struct{}
                     if (choice)
                     {
                         let update_result = CxxProject::update_engine_file(module.path);
-                        if (!update_result->isok)
+                        if (!update_result->is_ok)
                         {
-                            jeapi::gui::form::errmsg("重新编译失败", F"{module.path}更新引擎文件失败：\n{update_result->error->val}");
+                            jeapi::gui::form::errmsg("重新编译失败", F"{module.path}更新引擎文件失败：\n{update_result->error->unwrap}");
                             return;
                         }
                     }
@@ -1027,7 +1027,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
                 ->> dowhat
                 ;
             ->  reduce(\l, r = l && r;)
-            ->  valor(false)
+            ->  or(false)
             ;
     }
     public func update_shader(context: EditorContext, path: string)
@@ -1097,20 +1097,20 @@ using $NEW_PRODUCER_NAME$ = struct{}
                 let components = fsys::subpath(path.path/"components")
                         ->map(\s = s
                              ->forall(\f = fsys::extension(f) == ".hpp";)
-                             ->map(\f = fname->subto(0, fname->len - 4)
+                             ->map(\f = fname->sub_len(0, fname->len - 4)
                                 where fname = fsys::filename(f);)
                             ;)
-                        ->or(\_=[];)
-                        ->tovec;
+                        ->or([])
+                        ->to_vec;
                 let systems = fsys::subpath(path.path/"systems")
                     ->okay
                     ->map(\s = s
                          ->forall(\f = fsys::extension(f) == ".hpp";)
-                         ->map(\f = fname->subto(0, fname->len - 4)
+                         ->map(\f = fname->sub_len(0, fname->len - 4)
                             where fname = fsys::filename(f);)
                         ;)
-                    ->valor([])
-                    ->tovec;
+                    ->or([])
+                    ->to_vec;
 
                 let display_usable_component = func(s: string)
                 {
@@ -1403,21 +1403,21 @@ namespace $$MODULE_NAME$$
         {
             jeapi::gui::form::input("重命名", F"请输入{path.path}的新名称", path.name, 
                 \new_name = editor::gui::refactor(context, path.path, fsys::parent(path.path)/new_name)
-                    -> or(\errid = jeapi::gui::form::errmsg("失败", F"重命名失败({errid})");)
+                    -> or_do(\errid = jeapi::gui::form::errmsg("失败", F"重命名失败({errid})");)
                 ;);
                 // \new_name: string = fsys::move(path.path, fsys::parent(path.path)/new_name)
                 //     ->> func(_){context->get_project->try_update_towoo(false);force_update();}
-                //     ->or(\errid = jeapi::gui::form::errmsg("失败", F"重命名失败({errid})");););
+                //     ->or_do(\errid = jeapi::gui::form::errmsg("失败", F"重命名失败({errid})");););
         }
         if (MenuItemEnabled("移动到...", is_modifiable_file))
         {
             jeapi::gui::form::input("移动到……", F"请输入{path.path}的路径", path.path->tostring, 
                 \new_path = editor::gui::refactor(context, path.path, fsys::normalize(new_path))
-                    -> or(\errid = jeapi::gui::form::errmsg("失败", F"重命名失败({errid})");)
+                    -> or_do(\errid = jeapi::gui::form::errmsg("失败", F"重命名失败({errid})");)
                 ;);
                 // \new_path: string = fsys::move(path.path, fsys::normalize(new_path))
                 //     ->> func(_){context->get_project->try_update_towoo(false);force_update();}
-                //     ->or(\errid = jeapi::gui::form::errmsg("失败", F"重命名失败({errid})");););
+                //     ->or_do(\errid = jeapi::gui::form::errmsg("失败", F"重命名失败({errid})");););
         }
         if (MenuItemEnabled("删除", is_modifiable_file))
         {
@@ -1427,7 +1427,7 @@ namespace $$MODULE_NAME$$
                     if (!sure) return;
                     do fsys::remove(path.path)
                         ->> func(_){context->get_project->try_update_towoo(false);force_update();}
-                        ->  or(\errid = jeapi::gui::form::errmsg("失败", F"删除失败({errid})");)
+                        ->  or_do(\errid = jeapi::gui::form::errmsg("失败", F"删除失败({errid})");)
                         ;
                     do fsys::remove(fsys::parent(path.path) / (fsys::filename(path.path) + ".je4cache"));
                 });
@@ -1580,7 +1580,7 @@ namespace $$MODULE_NAME$$
                                 if (fsys::exist(filepath))
                                 {
                                     // 如果实体已经是预设体，那么拒绝覆盖已有的预设体以规避蛋疼的循环引用问题
-                                    if (prefab_data->has)
+                                    if (prefab_data->is_value)
                                         jeapi::gui::form::errmsg("无法覆盖预设体", "不允许已经为预设体的实体保存覆盖预设体文件");
                                     else
                                         jeapi::gui::form::ask("是否覆盖", F"文件{filepath->tostring}已存在，是否覆盖？",
@@ -1590,7 +1590,7 @@ namespace $$MODULE_NAME$$
                                                     do fsys::writeall(filepath, entity_json);
                                                     eid->justdo(func(e)
                                                     {
-                                                        let prefab = e->towoo::add_component:<Editor::Prefab>->val;
+                                                        let prefab = e->towoo::add_component:<Editor::Prefab>->unwrap;
                                                         prefab.path->set(context->get_project->make_path_normalize(filepath));
                                                     });
                                                     force_update();
@@ -1600,10 +1600,10 @@ namespace $$MODULE_NAME$$
                                 else
                                 {
                                     let mut create = true;
-                                    if (prefab_data->has)
+                                    if (prefab_data->is_value)
                                     {
-                                        if (prefab_data->val.path->get == context->get_project->make_path_normalize(filepath)
-                                            || false == fsys::isfile(context->get_project->parse_path_normalize(prefab_data->val.path->get)))
+                                        if (prefab_data->unwrap.path->get == context->get_project->make_path_normalize(filepath)
+                                            || false == fsys::isfile(context->get_project->parse_path_normalize(prefab_data->unwrap.path->get)))
                                         {
                                             create = false;
                                             jeapi::gui::form::errmsg("无法创建预设体", "变体原所属的预设体丢失");
@@ -1612,7 +1612,7 @@ namespace $$MODULE_NAME$$
                                     if (create)
                                     {
                                         do fsys::writeall(filepath, entity_json);
-                                        let prefab = e->towoo::add_component:<Editor::Prefab>->val;
+                                        let prefab = e->towoo::add_component:<Editor::Prefab>->unwrap;
                                         prefab.path->set(context->get_project->make_path_normalize(filepath));
                                         force_update();
                                     }
@@ -1753,7 +1753,7 @@ namespace $$MODULE_NAME$$
                         {
                             let color_setted = self.m_display_setting[level][2]
                                 ->> \col = true where _ = PushStyleColor(ImGuiCol::ImGuiCol_Text, col);
-                                ->  valor(false);
+                                ->  or(false);
                             
                             do Selectable(F"[{self.m_display_setting[level][0]}] {info}");
                            
@@ -1781,7 +1781,7 @@ namespace $$MODULE_NAME$$
                 -> unmapping
                 ->> \kv = F"{kv[1][0]} {kv[1][3]}";
                 -> reduce(\l, r = l + " " + r;)
-                -> valor("");
+                -> or("");
         }
     }
     public func show_logger(context: EditorContext, open: std::mutable<bool>)

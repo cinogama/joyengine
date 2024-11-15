@@ -25,7 +25,7 @@ namespace editor
         return new! process(process, args)
             =>> \pid = pid->wait->okay;
             ->> \status = status == 0: process::status_t ? true | false;
-            ->  valor(false);
+            ->  or(false);
     }
 
     public using CxxProject = struct {
@@ -39,16 +39,16 @@ namespace editor
         let CMAKE_PATH_MAY_NULL =  std::env("CMAKE")->>\p = fsys::normalize(F"{p}/cmake.exe");;
 
         // C++模块样例，创建项目文件时会复制这个目录
-        let CXX_PROJECT_EXAMPLE_PATH = fsys::normalize(F"{std::exepath()}/builtin/cxxproject");
+        let CXX_PROJECT_EXAMPLE_PATH = fsys::normalize(F"{std::host_path()}/builtin/cxxproject");
 
         // 引擎的头文件路径
-        public let ENGINE_HEADER_PATH = fsys::normalize(F"{std::exepath()}/builtin/include");
+        public let ENGINE_HEADER_PATH = fsys::normalize(F"{std::host_path()}/builtin/include");
 
-        let ENGINE_CORE_LIBRARYS_LOCATE_PATH = fsys::normalize(std::exepath());
+        let ENGINE_CORE_LIBRARYS_LOCATE_PATH = fsys::normalize(std::host_path());
 
         public func is_builder_ready()
         {
-            return CMAKE_PATH_MAY_NULL->>\p = fsys::isfile(p);->valor(false);
+            return CMAKE_PATH_MAY_NULL->>\p = fsys::isfile(p);->or(false);
         }
 
         func _config_name(rttype: std::platform::runtime_type)
@@ -107,8 +107,8 @@ namespace editor
             // 2. 把新的engine移过来，把引擎的头文件复制过来
             let r = copy(ENGINE_HEADER_PATH, cxx_proj_path/".engine"/"include");
 
-            if (r->iserr)
-                throw! F"复制引擎相关文件失败({r->error->val})";
+            if (r->is_err)
+                throw! F"复制引擎相关文件失败({r->error->unwrap})";
 
             // 2. 开始复制库文件, 顺便确认支持的平台
             for (let p : walk(ENGINE_CORE_LIBRARYS_LOCATE_PATH)->iterator::iter_result)
@@ -117,11 +117,11 @@ namespace editor
                     (extension(p)->lower == ".lib" 
                         || extension(p)->lower == ".so" 
                         || extension(p)->lower == ".dylib")
-                    && (filename(p)->lower->beginwith("libjoyecs")
-                        ||filename(p)->lower->beginwith("libwoo")))
+                    && (filename(p)->lower->begin_with("libjoyecs")
+                        ||filename(p)->lower->begin_with("libwoo")))
                 {
                     try! _ = copy(p, cxx_proj_path/".engine"/"library"/filename(p))
-                        -> orbind(\errno = result::err(F"复制文件：`{p}` 失败({errno})");)
+                        -> map_err(\errno = F"复制文件：`{p}` 失败({errno})";)
                         ;
                 }
             }
@@ -240,9 +240,7 @@ endif()
                         throw! F"无法创建C++模块项目，{cxx_proj_path}目录已经存在";
 
                     try! _ = copy(CXX_PROJECT_EXAMPLE_PATH, cxx_proj_path)
-                        ->  flip
-                        ->> \errid = F"复制文件失败({errid})";
-                        ->  flip
+                        -> map_err(\errid = F"复制文件失败({errid})";)
                         =>> \_ = update_engine_file(cxx_proj_path);
                         ;
 
@@ -274,7 +272,7 @@ endif()
                 if (isdir(p))
                 {
                     let r = search_file_in(p, exname);
-                    if (r->has)
+                    if (r->is_value)
                         return r;
                 }
                 else if (extension(p)->upper == exname->upper)
@@ -284,8 +282,8 @@ endif()
         }
         func load_library_of_platform(self: CxxProject, rttype: std::platform::runtime_type)
         {
-            assert(!self.module_instance->has);
-            match (search_file_in(get_current_runtime_path(self->get_runtime_path(rttype))->val, ".dll"))
+            assert(!self.module_instance->is_value);
+            match (search_file_in(get_current_runtime_path(self->get_runtime_path(rttype))->unwrap, ".dll"))
             {
             value(p)? 
                 return self.module_instance := je::load_module(self.name, p->tostring);
@@ -323,7 +321,7 @@ endif()
             let newest_path = 
                 get_current_runtime_id(runtime_dll_path)
                     -> map(\id: int = id + 1;)
-                    -> valor(0)
+                    -> or(0)
                     -> \id: int = runtime_dll_path / id: string;
                     ;
             assert(!exist(newest_path));
@@ -355,7 +353,7 @@ endif()
             match (self->get_build_dll_path(rttype))
             {
             value(p)? 
-                assert(copy(p, newest_runtime_path/filename(p))->isok);
+                assert(copy(p, newest_runtime_path/filename(p))->is_ok);
             none? std::panic("Output binary file not found;");
             }
 
@@ -364,7 +362,7 @@ endif()
             match (search_file_in(self.path/".build"/_config_name(rttype), ".pdb"))
             {
             value(p)?
-                assert(move(p, newest_runtime_path/filename(p))->isok);
+                assert(move(p, newest_runtime_path/filename(p))->is_ok);
             none?
                 ; // 没有pdb就算了，可能是release
             }
@@ -404,7 +402,7 @@ endif()
                             ;
                         =>> \v = EngineVersionInfo::restore(v);
                         ->> \v = v->isequal(EngineVersionInfo::current());
-                        ->  valor(false)
+                        ->  or(false)
                         ;
                     
                     if (engine_version_is_same == false)
@@ -435,7 +433,7 @@ endif()
                                         let crc64 = je::editor::crc64file(path->tostring());
                                         varified_file += 1;
 
-                                        if (! srclist->get(wpath)->>\crc = crc == crc64->valor(0);->valor(false))
+                                        if (! srclist->get(wpath)->>\crc = crc == crc64->or(0);->or(false))
                                             return false;
                                     }
                                 }
@@ -453,7 +451,7 @@ endif()
         func generate_varify_info(self: CxxProject)
         {
             let source_code_versions = {}mut: map<string, int>;
-            for (let path : fsys::allsubpath(self.path)->unwrapor([])) 
+            for (let path : fsys::allsubpath(self.path)->or([])) 
             {
                 if (fsys::isfile(path))
                 {
@@ -466,7 +464,7 @@ endif()
                         let wpath = self.project->make_path_normalize(path);
                         let crc64 = je::editor::crc64file(path->tostring());
 
-                        source_code_versions->set(wpath, crc64->valor(0));
+                        source_code_versions->set(wpath, crc64->or(0));
                     }
                 }
             }
@@ -474,7 +472,7 @@ endif()
             return {
                 ["engine_version"] = EngineVersionInfo::current()->serialize: dynamic,
                 ["sources"] = source_code_versions: dynamic
-            }->serialize->val;
+            }->serialize->unwrap;
         }
         public func load(path: fsys::path_t, proj: Project)
         {
@@ -491,7 +489,7 @@ endif()
                 // 校验最后一次编译时的引擎版本，如果不一致，那么删掉全部动态库
                 let is_same_version = fsys::readall(path / "version.json")
                     ->> \dat = created_module->check_verify_info(dat);
-                    ->  valor(false)
+                    ->  or(false)
                     ;
                 if (is_same_version)
                 {
@@ -521,7 +519,7 @@ endif()
                             filename(dllpath) == "0" 
                             ? result::ok(dllpath)
                             | move(dllpath, created_module->get_runtime_path(rttype)/"0");
-                        ->  or(\ = result::err(0: fsys::errno_t););
+                        ->  or(result::err(0: fsys::errno_t));
                 match (founding_newest_result)
                 {
                 err(no)?
@@ -540,12 +538,12 @@ endif()
                         created_module->update_library_of_platform(rttype);
                     }
                     else
-                        throw! F"清理模块失败({founding_newest_result->error->val})";
+                        throw! F"清理模块失败({founding_newest_result->error->unwrap})";
                 _?
                     ;
                 }
 
-                if (!created_module->load_library_of_platform(rttype)->has)
+                if (!created_module->load_library_of_platform(rttype)->is_value)
                     throw! F"无法为当前运行时{_config_name(rttype)}加载模块，请检查";
 
                 return_ok! created_module;
@@ -640,7 +638,7 @@ endif()
                                         self->update_library_of_platform(rttype);
 
                                         // 加载模块！
-                                        assert(self->load_library_of_platform(rttype)->has);
+                                        assert(self->load_library_of_platform(rttype)->is_value);
 
                                         self.project->update_towoo_after_dump_and_close(true);
                                         self.project->restore_all_world(dump_worlds);
@@ -660,7 +658,7 @@ endif()
         {
             let config = _config_name(rttype); 
 
-            try! CMAKE_PATH = CMAKE_PATH_MAY_NULL->okor("无法找到CMake，请检查CMake配置和环境变量");
+            try! CMAKE_PATH = CMAKE_PATH_MAY_NULL->ok_or("无法找到CMake，请检查CMake配置和环境变量");
 
             do context->>\context = context.display_msg = "正在检查工具链";;
             do context->>\context = context.progress = 0;;
@@ -677,20 +675,20 @@ endif()
             let components = subpath(self.path/"components")
                 ->> \childs = childs
                     ->  forall(\f = extension(f)->lower == ".hpp";)
-                    ->> \f = fname->subto(0, fname->len - 4)
+                    ->> \f = fname->sub_len(0, fname->len - 4)
                         where fname = filename(f)
                         ;
                     ;
-                ->or(\_=[];);
+                ->or([]);
             
             let systems = subpath(self.path/"systems")
                 ->> \childs = childs
                     ->  forall(\f = extension(f)->lower == ".hpp";)
-                    ->> \f = fname->subto(0, fname->len - 4)
+                    ->> \f = fname->sub_len(0, fname->len - 4)
                         where fname = filename(f)
                         ;
                     ;
-                ->or(\_=[];);
+                ->or([]);
 
             let loader_header = 
 @"#pragma once
@@ -720,23 +718,23 @@ $$REGISTER_SYSTEM_TYPES$$
                 components
                     ->map(\f: string = F"#include \"{f}.hpp\"";)
                     ->reduce(\l: string, r: string = l + "\n" + r;)
-                    ->valor("");
+                    ->or("");
             let import_system_headers = 
                 systems
                     ->map(\f: string = F"#include \"{f}.hpp\"";)
                     ->reduce(\l: string, r: string = l + "\n" + r;)
-                    ->valor("");
+                    ->or("");
 
             let register_component_types =
                 components
                     ->map(\f: string = F"        typing::type_info::register_type<{self.name}::{f}>(guard, \"{self.name}::{f}\");";)
                     ->reduce(\l: string, r: string = l + "\n" + r;)
-                    ->valor("");
+                    ->or("");
             let register_system_types = 
                 systems
                     ->map(\f: string = F"        typing::type_info::register_type<{self.name}::{f}>(guard, \"{self.name}::{f}\");";)
                     ->reduce(\l: string, r: string = l + "\n" + r;)
-                    ->valor("");
+                    ->or("");
 
             let loader_src = 
                 loader_header
@@ -791,7 +789,7 @@ $$REGISTER_SYSTEM_TYPES$$
             do context
                 ->> \context = 
                     context.massive_msg = option::value(
-                        compile_result->valor("没有找到编译日志，查看控制台获取更多信息"))
+                        compile_result->or("没有找到编译日志，查看控制台获取更多信息"))
                     ;
                 ;
 

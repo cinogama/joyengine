@@ -114,15 +114,15 @@ namespace editor::gui::edit_forms
                             if (MenuItem("终止调试"))
                                 do context->stop_debug()->error->>\e = jeapi::gui::form::errmsg("失败", F"终止调试失败, {e}");;
                         }
-                        if (MenuItemEnabled("3D/2D编辑模式", debug_camera_entity->has))
+                        if (MenuItemEnabled("3D/2D编辑模式", debug_camera_entity->is_value))
                         {
-                            update_camera_2d3d_mode(debug_camera_entity->val, 
-                                !debug_camera_entity->val->towoo::get_component :<Camera::OrthoProjection>->has);
+                            update_camera_2d3d_mode(debug_camera_entity->unwrap, 
+                                !debug_camera_entity->unwrap->towoo::get_component :<Camera::OrthoProjection>->is_value);
                         }
-                        if (MenuItemEnabled("开启/关闭2D光照预览", debug_camera_entity->has))
+                        if (MenuItemEnabled("开启/关闭2D光照预览", debug_camera_entity->is_value))
                         {
-                            update_camera_2dlight_mode(debug_camera_entity->val,
-                                !debug_camera_entity->val->towoo::get_component :<Light2D::CameraPostPass>->has);
+                            update_camera_2dlight_mode(debug_camera_entity->unwrap,
+                                !debug_camera_entity->unwrap->towoo::get_component :<Light2D::CameraPostPass>->is_value);
                         }
                         static let MOVER_MODE = {
                             [je::editor::mover_mode::nospecify] = "未指定",
@@ -136,8 +136,8 @@ namespace editor::gui::edit_forms
                             [je::editor::coord_mode::local] = "局部坐标系",
                             };
 
-                        let mut mover_mode = debug_world->>\w = je::editor::get_editing_mover_mode(w);->valor(je::editor::mover_mode::selection);
-                        let mut coord_mode = debug_world->>\w = je::editor::get_editing_coord_mode(w);->valor(je::editor::coord_mode::global);
+                        let mut mover_mode = debug_world->>\w = je::editor::get_editing_mover_mode(w);->or(je::editor::mover_mode::selection);
+                        let mut coord_mode = debug_world->>\w = je::editor::get_editing_coord_mode(w);->or(je::editor::coord_mode::global);
 
                         if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::C]))
                             mover_mode = je::editor::mover_mode::selection;
@@ -162,20 +162,20 @@ namespace editor::gui::edit_forms
                             last_click_time = std::time();
                         }
 
-                        if (BeginMenuEnabled(F"{MOVER_MODE[mover_mode]}|{COORD_MODE[coord_mode]}", debug_camera_entity->has))
+                        if (BeginMenuEnabled(F"{MOVER_MODE[mover_mode]}|{COORD_MODE[coord_mode]}", debug_camera_entity->is_value))
                         {   
-                            if (MenuItemShortcutSelectedEnabled("仅选中", "Tab + C", mover_mode == je::editor::mover_mode::selection, debug_camera_entity->has)->has)
+                            if (MenuItemShortcutSelectedEnabled("仅选中", "Tab + C", mover_mode == je::editor::mover_mode::selection, debug_camera_entity->is_value)->is_value)
                                 mover_mode = je::editor::mover_mode::selection;
-                            if (MenuItemShortcutSelectedEnabled("移动", "Tab + T", mover_mode == je::editor::mover_mode::movement, debug_camera_entity->has)->has)
+                            if (MenuItemShortcutSelectedEnabled("移动", "Tab + T", mover_mode == je::editor::mover_mode::movement, debug_camera_entity->is_value)->is_value)
                                 mover_mode = je::editor::mover_mode::movement;
-                            if (MenuItemShortcutSelectedEnabled("旋转", "Tab + R", mover_mode == je::editor::mover_mode::rotation, debug_camera_entity->has)->has)
+                            if (MenuItemShortcutSelectedEnabled("旋转", "Tab + R", mover_mode == je::editor::mover_mode::rotation, debug_camera_entity->is_value)->is_value)
                                 mover_mode = je::editor::mover_mode::rotation;
-                            if (MenuItemShortcutSelectedEnabled("缩放", "Tab + S", mover_mode == je::editor::mover_mode::scale, debug_camera_entity->has)->has)
+                            if (MenuItemShortcutSelectedEnabled("缩放", "Tab + S", mover_mode == je::editor::mover_mode::scale, debug_camera_entity->is_value)->is_value)
                                 mover_mode = je::editor::mover_mode::scale;
                             Separator();
-                            if (MenuItemShortcutSelectedEnabled("全局坐标系", "Tab + G", coord_mode == je::editor::coord_mode::global, debug_camera_entity->has)->has)
+                            if (MenuItemShortcutSelectedEnabled("全局坐标系", "Tab + G", coord_mode == je::editor::coord_mode::global, debug_camera_entity->is_value)->is_value)
                                 coord_mode = je::editor::coord_mode::global;
-                            if (MenuItemShortcutSelectedEnabled("局部坐标系", "Tab + L", coord_mode == je::editor::coord_mode::local, debug_camera_entity->has)->has)
+                            if (MenuItemShortcutSelectedEnabled("局部坐标系", "Tab + L", coord_mode == je::editor::coord_mode::local, debug_camera_entity->is_value)->is_value)
                                 coord_mode = je::editor::coord_mode::local;
                             Separator();
                             if (MenuItem("重置视口摄像机"))
@@ -253,7 +253,7 @@ namespace editor::gui::edit_forms
                             do MenuItemEnabled("组件", false);
                             for (let (p, _): towoo_context->get_loaded_towoo)
                             {
-                                if (fsys::filename(p)->lower->endwith(".jecomponent.wo"))
+                                if (fsys::filename(p)->lower->end_with(".jecomponent.wo"))
                                     if (MenuItem(ToWooContext::pure_component_or_system_name(fsys::purename(p))))
                                         jeapi::gui::widget::invoke_click_file_callback(proj->make_path_normalize(p));
                             }
@@ -261,7 +261,7 @@ namespace editor::gui::edit_forms
                             do MenuItemEnabled("系统", false);
                             for (let (p, _): towoo_context->get_loaded_towoo)
                             {
-                                if (fsys::filename(p)->lower->endwith(".jesystem.wo"))
+                                if (fsys::filename(p)->lower->end_with(".jesystem.wo"))
                                     if (MenuItem(ToWooContext::pure_component_or_system_name(fsys::purename(p))))
                                         jeapi::gui::widget::invoke_click_file_callback(proj->make_path_normalize(p));
                             }
@@ -353,7 +353,7 @@ namespace editor::gui::edit_forms
 
                             if (BeginPopup("RightClickContextMenu"))
                             {
-                                entity_edit_context_menu(context, debug_world->val, context->get_editing_entity);
+                                entity_edit_context_menu(context, debug_world->unwrap, context->get_editing_entity);
                                 EndPopup();
                             }
 
@@ -377,7 +377,7 @@ namespace editor::gui::edit_forms
                                                         do e->>\e = set_new_created_entity_pos(w, e);;
                                                         return e;
                                                     }
-                                                ->  has == false)
+                                                ->  is_value == false)
                                         {
                                             jeapi::gui::form::errmsg("失败", "加载实体失败");
                                         }  
@@ -414,7 +414,7 @@ namespace editor::gui::edit_forms
                                                                 {
                                                                     match (editor::gui::edit_forms::fast_create_entity(
                                                                         context, 
-                                                                        debug_world->val, 
+                                                                        debug_world->unwrap, 
                                                                         fsys::purename(filepath), 
                                                                         [
                                                                             "Transform::LocalPosition",
@@ -429,11 +429,11 @@ namespace editor::gui::edit_forms
                                                                     {
                                                                     value(e)?
                                                                         {
-                                                                            let default_shader = je::graphic::shader::load(e->get_world->get_universe->option::value, "@/resource/shader/Unlit.shader")->val;
+                                                                            let default_shader = je::graphic::shader::load(e->get_world->get_universe->option::value, "@/resource/shader/Unlit.shader")->unwrap;
                                                                             e->set_shaders([default_shader]);
                                                                             e->bind_texture(0, tex);
 
-                                                                            let localscale = e->towoo::get_component :<Transform::LocalScale>()->val;
+                                                                            let localscale = e->towoo::get_component :<Transform::LocalScale>()->unwrap;
                                                                             let (px, py) = tex->size;
                                                                             localscale.scale->set(
                                                                                 (px: real / entity_create_context.pixel_per_unit: real, 

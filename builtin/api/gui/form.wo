@@ -77,10 +77,10 @@ namespace jeapi::gui
                     let tilte = self.name + (self.is_unique_form ? "" | F"##{JobID()}");
                     let show_may_none = begin(tilte, self._attribute);
 
-                    if (show_may_none->valor(true))
+                    if (show_may_none->or(true))
                         self.body(self);
 
-                    if (! show_may_none->has)
+                    if (! show_may_none->is_value)
                         self->close();
                     
                     End();

@@ -80,7 +80,7 @@ namespace editor
         public func make_path_normalize(self: Project, path: fsys::path_t)
         {
             let npath = path->tostring;
-            if (npath->beginwith(self.m_path->tostring + "/"))
+            if (npath->begin_with(self.m_path->tostring + "/"))
             {
                 return "@" + npath->sub(self.m_path->tostring->len);
             }
@@ -88,20 +88,20 @@ namespace editor
         }
         public func parse_path_normalize(self: Project, path: string)
         {
-            if (path->beginwith("@"))
+            if (path->begin_with("@"))
                 return fsys::normalize(self.m_path->tostring + path->sub(1));
             return fsys::normalize(path);
         }
         public func is_debugging(self: Project)
         {
-            return self.m_debug_context->has;
+            return self.m_debug_context->is_value;
         }
         public func create_dump(self: Project, dumpped: array<(dict<string, dynamic>, fsys::path_t)>)
         {
             do fsys::mkdir(self.m_path / ".temporary" / "jeeditor");
             if (! dumpped->>\kv = [kv[0]: dynamic, kv[1]->tostring: dynamic];->serialize
                 ->> \dat = fsys::writeall(self.m_path / ".temporary" / "jeeditor" / "debugcontext.dump", dat);
-                ->  valor(false))
+                ->  or(false))
             {
                 jeapi::gui::form::errmsg("警告", "调试上下文创建失败，这可能导致崩溃无法恢复上次调试状态");
                 je::logwarn("调试上下文创建失败，这可能导致崩溃无法恢复上次调试状态");
@@ -152,7 +152,7 @@ namespace editor
             self.m_enable_update_towoo = false;
 
             // 关闭调试上下文，保证恢复上下文时project已经不再处于debug状态
-            let dumped_worlds = self.m_debug_context->val.m_dumped_editing_worlds;
+            let dumped_worlds = self.m_debug_context->unwrap.m_dumped_editing_worlds;
             self.m_debug_context = option::none;
             
             // 恢复所有世界！
@@ -190,9 +190,9 @@ namespace editor
             // OK 接下来在当前世界上创建游戏世界，至于在哪个世界渲染……emm
             for (let (wdat, _) : context.m_dumped_editing_worlds)
             {
-                let wdat_map = wdat->tomap();
-                let syss = wdat_map->getor("runtime_systems", []: dynamic) as array<dynamic>->connect(
-                    wdat_map->getor("systems", []: dynamic) as array<dynamic>
+                let wdat_map = wdat->to_map();
+                let syss = wdat_map->get_or("runtime_systems", []: dynamic) as array<dynamic>->connect(
+                    wdat_map->get_or("systems", []: dynamic) as array<dynamic>
                 );
                 wdat_map->set("systems", syss: dynamic);
                 jeapi::deserialize::world(self->get_env->get_universe, wdat_map->unsafe::cast:< typeof(wdat)>, true)
@@ -213,11 +213,11 @@ namespace editor
         }
         public func dump_all_world(self: Project)
         {
-            let dump_dats = self.m_worlds->toarray
-                =>> \pw = dat->has 
-                    ? [(dat->val->apply("is_editing", self->get_editing_world
+            let dump_dats = self.m_worlds->to_array
+                =>> \pw = dat->is_value 
+                    ? [(dat->unwrap->apply("is_editing", self->get_editing_world
                         ->> \ew = ew == pw.m_world_instance;
-                        ->  valor(false) as bool: dynamic), 
+                        ->  or(false) as bool: dynamic), 
                         pw.m_world_path)] 
                     | [] 
                     where dat = self->serialize_world(pw.m_world_instance, true)
@@ -232,7 +232,7 @@ namespace editor
         public func close_all_world(self: Project)
         {
             // OK 关闭全部现存世界
-            do self.m_worlds->toarray->> \pw = self->destroy_world(pw.m_world_instance)->unwrap();;
+            do self.m_worlds->to_array->> \pw = self->destroy_world(pw.m_world_instance)->unwrap();;
         }
         public func dump_and_close_all_world(self: Project)
         {
@@ -274,11 +274,11 @@ namespace editor
 
             self.m_configs->set("JE_PROJECT_EDITOR_SYSTEM", 
                 new! IConfig(new! Config(
-                    typeinfo::load(DEFAULT_EDITOR_SYSTEM_NAME)->val,
+                    typeinfo::load(DEFAULT_EDITOR_SYSTEM_NAME)->unwrap,
                     func(origin_editor_system)
                     {
                         let USABLE_EDITOR_SYSTEMS = typeinfo::get_all_systems_types()
-                                ->  forall(\t = t->name->beginwith("Editor::"););
+                                ->  forall(\t = t->name->begin_with("Editor::"););
                         let USABLE_EDITOR_SYSTEM_NAMES =  USABLE_EDITOR_SYSTEMS
                                 ->> \t = t->name;;
 
@@ -336,9 +336,9 @@ namespace editor
                         Text("GUI字体");
                         let (font_path, font_size) = config;
 
-                        let new_font_path = InputText("##fontpath", font_path)->valor(font_path);
+                        let new_font_path = InputText("##fontpath", font_path)->or(font_path);
                         SameLine();
-                        let new_font_size = InputInt("##fontsize", font_size)->valor(font_size);
+                        let new_font_size = InputInt("##fontsize", font_size)->or(font_size);
 
                         TextDisabled("* 重启后生效");
 
@@ -347,9 +347,9 @@ namespace editor
                         return option::none;
                     },
                     func(_,n){je::gui::set_font(option::value(n[0]), n[1]); return true;},
-                    \v = [v[0]: dynamic, v[1]: dynamic]->serialize->val;,
+                    \v = [v[0]: dynamic, v[1]: dynamic]->serialize->unwrap;,
                     func (str){
-                        let v = array::deserialize(str)->val;
+                        let v = array::deserialize(str)->unwrap;
                         return option::value((v[0] as string, v[1] as int));
                     },
                     \dat = F"je::gui::set_font(option::value({font->enstring}), {size});"
@@ -395,16 +395,16 @@ namespace editor
                             do fsys::mkdir(self.m_path / ".vscode");
                             let vsc_config_path = self.m_path / ".vscode" / "settings.json";
 
-                            let dat = fsys::readall(vsc_config_path)=>>\dat = dat->map::deserialize;->valor({}mut);
+                            let dat = fsys::readall(vsc_config_path)=>>\dat = dat->map::deserialize;->or({}mut);
 
                             dat->set("wooly.enable": dynamic, true: dynamic);
                             dat->set("wooly.scanroots": dynamic, [
-                                    fsys::normalize(std::exepath())->tostring,
+                                    fsys::normalize(std::host_path())->tostring,
                                     self.m_path->tostring,
                                     self->get_vfile_export_path->tostring,
                                 ]: dynamic);
 
-                            if (!fsys::writeall(vsc_config_path, dat->serialize->val))
+                            if (!fsys::writeall(vsc_config_path, dat->serialize->unwrap))
                             {
                                 jeapi::gui::form::errmsg("错误", "无法写入VSCode配置文件");
                                 return false;
@@ -430,7 +430,7 @@ namespace editor
                     if (fsys::isdir(projfile) == true)
                         return false;
                     let flock = new! process::flock(projfile->tostring);
-                    let result = flock->>\fl = fl->trylock();->valor(false);
+                    let result = flock->>\fl = fl->trylock();->or(false);
                     if (result)
                     {
                         self.m_proj_file_lock = flock;
@@ -490,11 +490,11 @@ namespace editor
         }
         public func active_module(self: Project, module: CxxProject)
         {
-            assert (std::issame(self.m_modules->getorset(module.path, module), module));
+            assert (std::is_same(self.m_modules->get_or_set(module.path, module), module));
         }
         public func deactive_module(self: Project, module: CxxProject)
         {
-            assert (std::issame(self.m_modules->getor(module.path, module), module));
+            assert (std::is_same(self.m_modules->get_or(module.path, module), module));
             if (self.m_modules->remove(module.path))
             {
                 module->close();
@@ -580,7 +580,7 @@ namespace editor
             // 先加载配置！这非常重要！
             for (let (name, val) : dat["configs"] as dict<dynamic, dynamic>->> \k, v = (k as string, v as string);)
             {
-                if (! self.m_configs->get(name)->> \config = config->parse(val);->valor(false))
+                if (! self.m_configs->get(name)->> \config = config->parse(val);->or(false))
                     je::logerr(F"选项 {name} = {val} 未在项目中找到或设置失败");
             }
 
@@ -676,12 +676,12 @@ namespace editor
             if (! self.m_worlds
                 ->> \pw = (
                         pw.m_world_path->tostring->sub(self.m_path->tostring->len), 
-                        self->get_editing_world->>\w = w == pw.m_world_instance;->valor(false))
+                        self->get_editing_world->>\w = w == pw.m_world_instance;->or(false))
                     ;
                 ->  mapping
                 ->  serialize
                 ->> \dat = fsys::writeall(self.m_path / ".temporary" / "jeeditor" / "world.list", dat);
-                ->  valor(false))
+                ->  or(false))
             {
                 jeapi::gui::form::errmsg("失败", "保存编辑中的世界列表失败");
                 je::logwarn("保存编辑中的世界列表失败");
@@ -690,7 +690,7 @@ namespace editor
 
             // 顺手保存所有世界
             let failed_saving_worlds = self.m_worlds
-                ->  toarray
+                ->  to_array
                 =>> \pw = saving_success ?  [] | [pw]
                     where saving_success = self->save_world(pw.m_world_instance)
                     ;
@@ -701,7 +701,7 @@ namespace editor
                 let failed_file_list = failed_saving_worlds
                     ->> \pw = pw.m_world_path->tostring;
                     ->  reduce(\l, r = l + "\n" + r;)
-                    ->  val;
+                    ->  unwrap;
 
                 jeapi::gui::form::errmsg("错误", F"项目中的一些世界保存失败:\n{failed_file_list}\n项目保存未能完成");
                 return false;
@@ -752,7 +752,7 @@ namespace editor
         }
         func is_project_world(self: Project, world: je::world)
         {
-            return self->get_project_world(world)->has;
+            return self->get_project_world(world)->is_value;
         }
         public func get_editing_world(self: Project)
         {
@@ -772,7 +772,7 @@ namespace editor
         }
         public func set_worlds_runtime_systems(self: Project, world: je::world, syss: array<je::typeinfo>)
         {
-            return self->get_project_world(world)->>\pw = pw.m_runtime_systems = syss;->has;
+            return self->get_project_world(world)->>\pw = pw.m_runtime_systems = syss;->is_value;
         }
         public func reset_editing_world(self: Project, world: je::world)=> result<void, string>
         {
@@ -817,9 +817,9 @@ namespace editor
         {
             return self->get_config("JE_PROJECT_EDITOR_SYSTEM")
                 ->> \config = config->tostring;
-                ->  valor(DEFAULT_EDITOR_SYSTEM_NAME)
+                ->  or(DEFAULT_EDITOR_SYSTEM_NAME)
                 ->  je::typeinfo::load
-                ->  val;
+                ->  unwrap;
         }
         public func get_vfile_export_path(self: Project)
         {
@@ -859,7 +859,7 @@ namespace editor
 
             // 世界编辑器已经做平了这一块
             // do world.m_world_instance->add_system(
-            //     je::typeinfo::load("Translation::TranslationUpdatingSystem")->val);
+            //     je::typeinfo::load("Translation::TranslationUpdatingSystem")->unwrap);
 
             // 创建默认世界之后，自动顺便创建调试使用的摄像机
             let camera_walker = world.m_world_instance->add_entity([
@@ -929,7 +929,7 @@ namespace editor
         }
         public func set_world_remark(self: Project, w: je::world, remark: string)
         {
-            return self->get_project_world(w)->> \pw = pw.m_remark_note = remark;->has;
+            return self->get_project_world(w)->> \pw = pw.m_remark_note = remark;->is_value;
         }
         public func serialize_entity(_: Project, e: je::entity)
         {
@@ -953,7 +953,7 @@ namespace editor
                     let pos = trans->get_global_pos;
                     let rot = trans->get_global_rot;
 
-                    let crot = debug_camera_rot->valor(quat::ident);
+                    let crot = debug_camera_rot->or(quat::ident);
 
                     let debug_camera_info = {
                         ["root_position"] = [pos[0], pos[1], pos[2]]: dynamic,
@@ -961,10 +961,10 @@ namespace editor
                         ["camera_rotation"] = [crot[0], crot[1], crot[2], crot[3]]: dynamic,
                         ["camera_in_2d_mode"] = debug_camera
                             =>> \e = e->towoo::get_component :<Camera::OrthoProjection>;
-                            ->  has: dynamic,
+                            ->  is_value: dynamic,
                         ["camera_in_2d_light"] = debug_camera
                             =>> \e = e->towoo::get_component :<Light2D::CameraPostPass>;
-                            ->  has: dynamic,
+                            ->  is_value: dynamic,
                     };
                     return option::value(debug_camera_info);
                 }
@@ -976,31 +976,31 @@ namespace editor
             try! camera_root = gui::edit_forms::get_debug_camera_root(w);
             try! camera = gui::edit_forms::get_debug_camera(w);
 
-            let root_translation = camera_root->towoo::get_component :<Transform::Translation>->val;
-            let root_local_position = camera_root->towoo::get_component :<Transform::LocalPosition>->val;
-            let root_local_rotation = camera_root->towoo::get_component :<Transform::LocalRotation>->val;
+            let root_translation = camera_root->towoo::get_component :<Transform::Translation>->unwrap;
+            let root_local_position = camera_root->towoo::get_component :<Transform::LocalPosition>->unwrap;
+            let root_local_rotation = camera_root->towoo::get_component :<Transform::LocalRotation>->unwrap;
 
-            let camera_local_rotation = camera->towoo::get_component :<Transform::LocalRotation>->val;
+            let camera_local_rotation = camera->towoo::get_component :<Transform::LocalRotation>->unwrap;
 
-            let rpos = cameradat->getor("root_position", [0., 0., 0.]: dynamic) as array<dynamic>->>\e = e as real;;
+            let rpos = cameradat->get_or("root_position", [0., 0., 0.]: dynamic) as array<dynamic>->>\e = e as real;;
             root_translation->set_global_pos(
                 (rpos[0], rpos[1], rpos[2]): vec3, 
                 option::value(root_local_position), 
                 option::value(root_local_rotation));
 
-            let rrot = cameradat->getor("root_rotation", [0., 0., 0., 1.]: dynamic) as array<dynamic>->>\e = e as real;;
+            let rrot = cameradat->get_or("root_rotation", [0., 0., 0., 1.]: dynamic) as array<dynamic>->>\e = e as real;;
             root_translation->set_global_rot(
                 (rrot[0], rrot[1], rrot[2], rrot[3]): quat, 
                 option::value(root_local_rotation));
 
-            let crot = cameradat->getor("camera_rotation", [0., 0., 0., 1.]: dynamic) as array<dynamic>->>\e = e as real;;
+            let crot = cameradat->get_or("camera_rotation", [0., 0., 0., 1.]: dynamic) as array<dynamic>->>\e = e as real;;
             camera_local_rotation.rot->set((crot[0], crot[1], crot[2], crot[3]): quat);
 
-            if (cameradat->getor("camera_in_2d_mode", false: dynamic) as bool)
+            if (cameradat->get_or("camera_in_2d_mode", false: dynamic) as bool)
             {
                 gui::edit_forms::update_camera_2d3d_mode(camera, true);
             }
-            if (cameradat->getor("camera_in_2d_light", false: dynamic) as bool)
+            if (cameradat->get_or("camera_in_2d_light", false: dynamic) as bool)
             {
                 gui::edit_forms::update_camera_2dlight_mode(camera, true);
             }
@@ -1013,13 +1013,13 @@ namespace editor
                 =>> \pw = jeapi::serialize::world(w, true)->okay
                     ->> func (dat)
                         {
-                            let mdat = dat->tomap;
+                            let mdat = dat->to_map;
                             mdat->set("entities", dat["entities"] as array<dynamic>
                                 ->  std::sort(
                                         \l, r = 
-                                            (l as dict<dynamic, dynamic>->getor("euid": dynamic, 0H: dynamic) as int) 
+                                            (l as dict<dynamic, dynamic>->get_or("euid": dynamic, 0H: dynamic) as int) 
                                             < 
-                                            (r as dict<dynamic, dynamic>->getor("euid": dynamic, 0H: dynamic) as int)
+                                            (r as dict<dynamic, dynamic>->get_or("euid": dynamic, 0H: dynamic) as int)
                                         ;
                                     )
                                 ->> \edat = edat as dict<dynamic, dynamic>->erase("euid": dynamic);
@@ -1049,13 +1049,13 @@ namespace editor
                     m_world_instance = self.m_env->load_world(dat),
                     m_world_path = file_path,
                     m_runtime_systems = 
-                        mut dat->getor("runtime_systems", []: dynamic) as array<dynamic>
-                            =>> \elem = systype->has ? [systype->val] | []
+                        mut dat->get_or("runtime_systems", []: dynamic) as array<dynamic>
+                            =>> \elem = systype->is_value ? [systype->unwrap] | []
                                 where systype = je::typeinfo::load(elem as string);,
-                    m_remark_note = mut dat->getor("remark", "": dynamic) as string,
+                    m_remark_note = mut dat->get_or("remark", "": dynamic) as string,
                 });
 
-            if (dat->getor("is_editing", false: dynamic) as bool)
+            if (dat->get_or("is_editing", false: dynamic) as bool)
                 do self->reset_editing_world(w);
 
             match (dat->get("debug_camera"))
@@ -1073,7 +1073,7 @@ namespace editor
                             std::yield();
 
                             // NOTE: 世界刚创建出来，第一帧无法获取到摄像机，需要等待若干帧
-                            if (self->set_debug_camera_info(w, cameradat)->has)
+                            if (self->set_debug_camera_info(w, cameradat)->is_value)
                                 break;
                         }
                         return false;
@@ -1089,7 +1089,7 @@ namespace editor
             try! data = fsys::readall(debug_camera_map_path)=>> \dat = dat->dict::deserialize;;
 
             return_value! data
-                ->> \k, v = (k->valor(""), v->valor({}: dict<dynamic, dynamic>)->>\k, v = (k->valor(""), v););
+                ->> \k, v = (k->or(""), v->or({}: dict<dynamic, dynamic>)->>\k, v = (k->or(""), v););
                 ;
         }
         public func try_fetch_camera_debug_info_map(self: Project, p: fsys::path_t)
@@ -1099,10 +1099,10 @@ namespace editor
         public func try_update_camera_debug_info_map(self: Project, p: fsys::path_t, dat: dict<string, dynamic>)
         {
             let debug_camera_map_path = self.m_path / ".temporary" / "jeeditor" / "world_debug_camera.list";
-            let old_dat = self->try_load_all_camera_debug_info_map()->valor({})->tomap;
+            let old_dat = self->try_load_all_camera_debug_info_map()->or({})->to_map;
 
             old_dat->set(self->make_path_normalize(p), dat);
-            return fsys::writeall(debug_camera_map_path, old_dat->serialize->val);
+            return fsys::writeall(debug_camera_map_path, old_dat->serialize->unwrap);
         }
         public func save_world(self: Project, w: je::world)
         {
@@ -1123,7 +1123,7 @@ namespace editor
                         ->> \dat = fsys::writeall(pw.m_world_path, dat as dict<string, dynamic>: string);
                     ;
                 }
-                ->  valor(false);
+                ->  or(false);
         }
         public func load_world(self: Project, file_path: fsys::path_t)
         {
@@ -1137,7 +1137,7 @@ namespace editor
                             ;
                         ->> \d = d->apply(
                                 "debug_camera", 
-                                self->try_fetch_camera_debug_info_map(file_path)->valor({}): dynamic
+                                self->try_fetch_camera_debug_info_map(file_path)->or({}): dynamic
                             )
                             ;
                         ;
@@ -1161,7 +1161,7 @@ namespace editor
             {
                 // 如果当前编辑中的世界就是待删除的世界，那么需要更新新的编辑世界
                 let need_update_new_editing_world = 
-                    self->get_editing_world->>\rw = rw == world;->valor(false);
+                    self->get_editing_world->>\rw = rw == world;->or(false);
                
                 // NOTE: 必须在切换完成之后才能从世界列表中移除世界，否则无法正确获取编辑中的世界
                 do self.m_worlds->remove(self.m_worlds->find(w));
@@ -1172,7 +1172,7 @@ namespace editor
                         ? self->reset_editing_world(w.m_world_instance)->unwrap
                         | nil: void
                         ; // 必须成功
-                    ->  or(\ = self.m_editing_world = option::none;)
+                    ->  or_do(\ = self.m_editing_world = option::none;)
                     ;
 
                 world->close;

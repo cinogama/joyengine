@@ -138,7 +138,7 @@ namespace editor::gui
             {
             value(eid)? 
                 eid->dosth(func(oentity){
-                    if (oentity->has == false)
+                    if (oentity->is_value == false)
                         self->set_editing_entity(none);
                 }); 
             none?;
@@ -203,7 +203,7 @@ namespace editor::gui
         {
             do self.m_editing_entity_euid
                 ->> \eid = eid->dosth(f);
-                ->  or(\= f(option::none);)
+                ->  or_do(\= f(option::none);)
                 ;
         }
 

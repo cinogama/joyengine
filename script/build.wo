@@ -75,7 +75,7 @@ func copy_pkgs(copy_src_only: bool)=> result<void, string>
         if (isfile(path))
         {
             try! relative_path = relative(path, source_path)
-                -> orbind(\eno = result::err(F"Failed to get relative path: {eno}."););
+                -> map_err(\eno = F"Failed to get relative path: {eno}.";);
 
             do mkdir(parent(target_path / relative_path));
 

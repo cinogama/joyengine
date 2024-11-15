@@ -40,7 +40,7 @@ namespace jeapi::varify
                 ["engine_core_version"] = self.engine_core_version,
                 ["engine_commit_version"] = self.engine_commit_version,
                 ["woolang_version"] = self.woolang_version,
-            }->serialize->val;
+            }->serialize->unwrap;
         }
         public func isequal(self: EngineVersionInfo, another: EngineVersionInfo)
         {

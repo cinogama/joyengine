@@ -20,7 +20,7 @@ namespace editor::gui
 {
     func is_identify_char(c: char)=> bool
     {
-        return c->isalnum || c == '_';
+        return c->is_alnum || c == '_';
     }
 
     using RefactorAskContent = struct{
@@ -60,7 +60,7 @@ namespace editor::gui
 
                 for (;;)
                 {
-                    let find_place = self.m_content->findfrom(old, place);
+                    let find_place = self.m_content->find_from(old, place);
                     if (find_place == -1)
                         break;
 
@@ -76,12 +76,12 @@ namespace editor::gui
 
                 self.m_replacing_place = all_find_place->unsafe::asarray
                     ->> \idx = (
-                            self.m_content->subto(idx - pre_print_len, pre_print_len)->replace_blank, 
-                            self.m_content->subto(idx + old->len, 30)->replace_blank,
+                            self.m_content->sub_len(idx - pre_print_len, pre_print_len)->replace_blank, 
+                            self.m_content->sub_len(idx + old->len, 30)->replace_blank,
                             idx
                             )
                         where pre_print_len = math::min(idx, 30)
-                            , replace_blank = \s: string = s->chars->>\c = c->isspace ? ' ' | c;->str;
+                            , replace_blank = \s: string = s->chars->>\c = c->is_space ? ' ' | c;->str;
                         ;
                     ;
             }
@@ -97,7 +97,7 @@ namespace editor::gui
 
                 for (let (_, _, idx) : self.m_replacing_place)
                 {
-                    result += self.m_content->subto(begin_place, idx - begin_place);
+                    result += self.m_content->sub_len(begin_place, idx - begin_place);
                     result += new;
                     begin_place = idx + old->len;
                 }
@@ -114,14 +114,14 @@ namespace editor::gui
             let old_file_name = fsys::filename(old_path);
 
             let old_fndidx = old_pure_name->find(".");
-            let old_pure_pure_name = old_fndidx == -1 ? "" | old_pure_name->subto(0, old_fndidx);
+            let old_pure_pure_name = old_fndidx == -1 ? "" | old_pure_name->sub_len(0, old_fndidx);
 
             let target_normalize_path = context->get_project->make_path_normalize(target_path);
             let target_pure_name = fsys::purename(target_path);
             let target_file_name = fsys::filename(target_path);
 
             let new_fndidx = target_pure_name->find(".");
-            let target_pure_pure_name = new_fndidx == -1 ? "" | target_pure_name->subto(0, new_fndidx);
+            let target_pure_pure_name = new_fndidx == -1 ? "" | target_pure_name->sub_len(0, new_fndidx);
 
             if (old_normalize_path == "" || old_pure_name == "" || old_file_name == "")
                 throw! "无效路径";
@@ -141,7 +141,7 @@ namespace editor::gui
             // 扫描指定文件类型，查找上述字符串的引用关系
             let all_file_need_tobe_update = 
                 allsubpath(fsys::workpath())
-                    -> unwrapor([])
+                    -> or([])
                     -> iter
                     |> filter(\p = focus_file_type->find(extension(p)->lower) != -1;)
                     |> filter(\p = isfile(p);)

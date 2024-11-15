@@ -43,7 +43,7 @@ namespace editor::Project
         {
             return self.m_widget(self.m_value)
                 ->> \v = self->modify(v);
-                ->  valor(false);
+                ->  or(false);
         }
         public func tostring<T>(self: Config<T>)
         {
@@ -53,7 +53,7 @@ namespace editor::Project
         {
             return self.m_parse(dat)
                 ->> \val = self->modify(val);
-                ->  valor(false);
+                ->  or(false);
         }
         public func apply<T>(self: Config<T>)
         {

@@ -381,9 +381,9 @@ namespace editor::gui::tilemap
 
             try! tiletexture = 
                 graphic::texture::load(option::none, context->get_project->make_path_normalize(imgpath))
-                ->  orbind(\=_create_clip_texture(context, imgpath, maintex, ix, iy, xcount, ycount);)
+                ->  or_bind(\=_create_clip_texture(context, imgpath, maintex, ix, iy, xcount, ycount);)
                 ->> \t = result::ok(t): result<graphic::texture, string>;
-                ->  valor(result::err("无法加载或创建Tile纹理"))
+                ->  or(result::err("无法加载或创建Tile纹理"))
                 ;
             return result::ok(Tile{
                 maintex = maintex,
@@ -404,7 +404,7 @@ namespace editor::gui::tilemap
                     if (d->contain(way))
                         return d[way];
                     
-                    let texpath = context->get_project->parse_path_normalize(self.texture->path->val);
+                    let texpath = context->get_project->parse_path_normalize(self.texture->path->unwrap);
                     let purefilename = fsys::purename(texpath);
                     let (maintex_w, maintex_h) = self.maintex->size;
                     let (tile_w, tile_h) = self.texture->size;
@@ -450,7 +450,7 @@ namespace editor::gui::tilemap
         func serialize(self: Tile)
         {
             return {
-                ["auto_wrap"] = self.auto_wrap->has as bool: dynamic,
+                ["auto_wrap"] = self.auto_wrap->is_value as bool: dynamic,
                 ["walkable"] = self.walkable as bool: dynamic,
                 ["non_periodic_expansion"] = self.non_periodic_expansion as bool: dynamic,
             };
@@ -473,7 +473,7 @@ namespace editor::gui::tilemap
             try! crc64 = tilemaptex->path
                 =>> \p = crc64file(context->get_project->parse_path_normalize(p)->tostring);
                 ->> \crc = result::ok(crc): result<int, string>;
-                ->  valor(result::err("创建TileSet的纹理必须是从文件加载的"))
+                ->  or(result::err("创建TileSet的纹理必须是从文件加载的"))
                 ;
 
             let tiles = []mut: vec<array<Tile>>;
@@ -519,7 +519,7 @@ namespace editor::gui::tilemap
                     {
                     value(newtile)?
                         {
-                            if (tile.auto_wrap->has)
+                            if (tile.auto_wrap->is_value)
                                 newtile->set_auto_warping(true);
                             if (tile.walkable)
                                 newtile.walkable = true;
@@ -536,7 +536,7 @@ namespace editor::gui::tilemap
 
         func getsize(self: TileMapSet)
         {
-            return (self.tiles->len, self.tiles->get(0)->>\a=a->len;->valor(0));
+            return (self.tiles->len, self.tiles->get(0)->>\a=a->len;->or(0));
         }
         func gettile(self: TileMapSet, x: int, y: int)
         {
@@ -547,14 +547,14 @@ namespace editor::gui::tilemap
         {
             let texture_path = self.texture->path;
 
-            if (texture_path->has == false)
+            if (texture_path->is_value == false)
                 return result::err("无法获取纹理路径");
             
             let size = self->getsize;
 
             return result::ok({
                 ["name"] = self.name as string: dynamic,
-                ["texture"] = texture_path->val as string: dynamic,
+                ["texture"] = texture_path->unwrap as string: dynamic,
                 ["size"] = [size[0], size[1]]: dynamic,
                 ["uid"] = self.uid as string: dynamic,
                 ["tiles"] = self.tiles=>>\tiles = tiles;->>\t = t->serialize; as array<dict<string, dynamic>>: dynamic,
@@ -571,19 +571,19 @@ namespace editor::gui::tilemap
             let tiles = data["tiles"] as array<dynamic>->>\e = e as dict<dynamic, dynamic>->>\k, v = (k as string, v);;;
 
             let texture = graphic::texture::load(option::none, texture_path);
-            if (texture->has == false)
+            if (texture->is_value == false)
                 return result::err("无法加载纹理");
 
-            try! tileset = new! TileMapSet(context, name, uid, texture->val, size[0], size[1]);
+            try! tileset = new! TileMapSet(context, name, uid, texture->unwrap, size[0], size[1]);
             for (let mut ix = 0; ix < size[0]; ix += 1)
             {
                 for (let mut iy = 0; iy < size[1]; iy += 1)
                 {
                     let tiledata = tiles[ix * size[1] + iy];
-                    let tile = tileset->gettile(ix, iy)->val;
-                    tile->set_auto_warping(tiledata->getor("auto_wrap", false: dynamic)->valor(false));
-                    tile.walkable = tiledata->getor("walkable", false: dynamic)->valor(false);
-                    tile.non_periodic_expansion = tiledata->getor("non_periodic_expansion", false: dynamic)->valor(false);
+                    let tile = tileset->gettile(ix, iy)->unwrap;
+                    tile->set_auto_warping(tiledata->get_or("auto_wrap", false: dynamic)->or(false));
+                    tile.walkable = tiledata->get_or("walkable", false: dynamic)->or(false);
+                    tile.non_periodic_expansion = tiledata->get_or("non_periodic_expansion", false: dynamic)->or(false);
                 }
             }
 
@@ -657,7 +657,7 @@ namespace editor::gui::tilemap
             let tilemap_path = self.m_context->get_project->get_path / "resource" / "tilemap";
             do fsys::mkdir(tilemap_path);
 
-            for (let file: fsys::allsubpath(tilemap_path)->unwrapor([]))
+            for (let file: fsys::allsubpath(tilemap_path)->or([]))
             {
                 if (fsys::extension(file)->lower == ".je4tileset")
                 {
@@ -665,7 +665,7 @@ namespace editor::gui::tilemap
                     {
                     value(data)?
                         match (TileMapSet::deserialize(
-                            self.m_context, data->dict::deserialize->valor({})->>\k, v = (k as string, v);))
+                            self.m_context, data->dict::deserialize->or({})->>\k, v = (k as string, v);))
                         {
                         ok(tileset)?
                             self.m_tile_sets->add(tileset);
@@ -699,13 +699,13 @@ namespace editor::gui::tilemap
                     {
                         tilelists->add([layer, x, y, tileset_id_mapping[tile.uid], tile.location[0], tile.location[1]]);
                         if (!tile.walkable)
-                            unwalkable_mapping->getorset(x, {}mut)->set(y, do nil);
+                            unwalkable_mapping->get_or_set(x, {}mut)->set(y, do nil);
                     }
                 }
             }
 
             return {
-                ["tilesets"] = self.m_tile_sets->>\t = t.uid;->toarray as array<string>: dynamic,
+                ["tilesets"] = self.m_tile_sets->>\t = t.uid;->to_array as array<string>: dynamic,
                 ["tiles"] = tilelists->> \v = v: string;: dynamic,
             };
         }
@@ -713,8 +713,8 @@ namespace editor::gui::tilemap
         // 从mapdata中读取瓦片数据并创建瓦片实例
         func load_tiles(self: TileEditContext, mapdata: dict<string, dynamic>)
         {
-            let tileset_id_mapping = mapdata->getor("tilesets", []: dynamic) as array<dynamic>->>\e = e as string;;
-            let tiles = mapdata->getor("tiles", []: dynamic) as array<dynamic>->>\e = array::deserialize(e as string)->val->>\e = e as int;;;
+            let tileset_id_mapping = mapdata->get_or("tilesets", []: dynamic) as array<dynamic>->>\e = e as string;;
+            let tiles = mapdata->get_or("tiles", []: dynamic) as array<dynamic>->>\e = array::deserialize(e as string)->unwrap->>\e = e as int;;;
 
             let existed_tileset_uid = self.m_tile_sets->>\tileset = (tileset.uid, tileset);->mapping;
             let tileset_mapping = {}mut: map<int, TileMapSet>;
@@ -736,8 +736,8 @@ namespace editor::gui::tilemap
                 {
                 value(tileset)?
                     {
-                        let tile = tileset->gettile(tx, ty)->val;
-                        self.m_layerd_tiles->getorset(layer, {}mut)->getorset(x, {}mut)->set(y, tile);
+                        let tile = tileset->gettile(tx, ty)->unwrap;
+                        self.m_layerd_tiles->get_or_set(layer, {}mut)->get_or_set(x, {}mut)->set(y, tile);
                     }
                 none?
                     ; // 已经报过错了，这里就简单忽略
@@ -756,7 +756,7 @@ namespace editor::gui::tilemap
         func apply_draw_tile(self: TileEditContext, x: int, y: int)
         {
             do self->get_selected_tile->> \tile = 
-                self.m_layerd_tiles->getorset(self.m_drawing_layer, {}mut)->getorset(x, {}mut)->set(y, tile);;
+                self.m_layerd_tiles->get_or_set(self.m_drawing_layer, {}mut)->get_or_set(x, {}mut)->set(y, tile);;
         }
         func clear_draw_tile(self: TileEditContext, x: int, y: int)
         {
@@ -765,10 +765,10 @@ namespace editor::gui::tilemap
         func create_tilemap_form(self: TileEditContext, replacing_tile: option<TileMapSet>)
         {
             let create_context = struct{
-                m_name = mut replacing_tile->>\t = t.name;->valor("新建tileset"),
+                m_name = mut replacing_tile->>\t = t.name;->or("新建tileset"),
                 m_texture = mut replacing_tile->>\t = t.texture;,
-                m_tile_x_count = mut replacing_tile->>\t = t->getsize[0];->valor(1),
-                m_tile_y_count = mut replacing_tile->>\t = t->getsize[1];->valor(1),
+                m_tile_x_count = mut replacing_tile->>\t = t->getsize[0];->or(1),
+                m_tile_y_count = mut replacing_tile->>\t = t->getsize[1];->or(1),
             };
             launch(func()
                 {
@@ -779,7 +779,7 @@ namespace editor::gui::tilemap
                         if (show)
                         {
                             match (jeapi::gui::widget::File("使用的Tileset纹理", 
-                                create_context.m_texture=>>\t=t->path;->valor(""),
+                                create_context.m_texture=>>\t=t->path;->or(""),
                                 \=do nil;)
                                 =>> \newpath = create_context.m_texture := graphic::texture::load(
                                     option::none, newpath);
@@ -969,7 +969,7 @@ namespace editor::gui::tilemap
                             let (blockcountx, blockcounty) = tset->getsize;
                             let (blockw, blockh) = (rangew / blockcountx: real, rangeh / blockcounty: real);
 
-                            match (CheckBox("自动铺开", self->get_selected_tile->>\t = t.auto_wrap->has;->valor(false)))
+                            match (CheckBox("自动铺开", self->get_selected_tile->>\t = t.auto_wrap->is_value;->or(false)))
                             {
                             value(opt)?
                                 {
@@ -979,7 +979,7 @@ namespace editor::gui::tilemap
                             none?;
                             }
                                                         
-                            match (CheckBox("可行走", self->get_selected_tile->>\t = t.walkable;->valor(false)))
+                            match (CheckBox("可行走", self->get_selected_tile->>\t = t.walkable;->or(false)))
                             {
                             value(opt)?
                                 {
@@ -989,7 +989,7 @@ namespace editor::gui::tilemap
                             none?;
                             }
 
-                            match (CheckBox("非周期性展开", self->get_selected_tile->>\t = t.non_periodic_expansion;->valor(false)))
+                            match (CheckBox("非周期性展开", self->get_selected_tile->>\t = t.non_periodic_expansion;->or(false)))
                             {
                             value(opt)?
                                 {
@@ -1056,25 +1056,25 @@ namespace editor::gui::tilemap
             value(centertile)?
                 {
                     let mut way = WrapingTileWay::NOTHING;
-                    if (self->get_tile(layer, x + 1, y)->>\t = std::issame(t, centertile);->valor(false))
+                    if (self->get_tile(layer, x + 1, y)->>\t = std::is_same(t, centertile);->or(false))
                         way += WrapingTileWay::RIGHT;
-                    if (self->get_tile(layer, x - 1, y)->>\t = std::issame(t, centertile);->valor(false))
+                    if (self->get_tile(layer, x - 1, y)->>\t = std::is_same(t, centertile);->or(false))
                         way += WrapingTileWay::LEFT;
-                    if (self->get_tile(layer, x, y - 1)->>\t = std::issame(t, centertile);->valor(false))
+                    if (self->get_tile(layer, x, y - 1)->>\t = std::is_same(t, centertile);->or(false))
                         way += WrapingTileWay::UP;
-                    if (self->get_tile(layer, x, y + 1)->>\t = std::issame(t, centertile);->valor(false))
+                    if (self->get_tile(layer, x, y + 1)->>\t = std::is_same(t, centertile);->or(false))
                         way += WrapingTileWay::DOWN;
 
                     if (way: int->band(WrapingTileWay::UP: int) != 0)
                     {
                         if (way: int->band(WrapingTileWay::RIGHT: int) != 0)
                         {
-                            if (self->get_tile(layer, x + 1, y - 1)->>\t = std::issame(t, centertile);->valor(false))
+                            if (self->get_tile(layer, x + 1, y - 1)->>\t = std::is_same(t, centertile);->or(false))
                                 way += WrapingTileWay::RIGHTUP;
                         }
                         if (way: int->band(WrapingTileWay::LEFT: int) != 0)
                         {
-                            if (self->get_tile(layer, x - 1, y - 1)->>\t = std::issame(t, centertile);->valor(false))
+                            if (self->get_tile(layer, x - 1, y - 1)->>\t = std::is_same(t, centertile);->or(false))
                                 way += WrapingTileWay::LEFTUP;
                         }
                     }
@@ -1082,12 +1082,12 @@ namespace editor::gui::tilemap
                     {
                         if (way: int->band(WrapingTileWay::RIGHT: int) != 0)
                         {
-                            if (self->get_tile(layer, x + 1, y + 1)->>\t = std::issame(t, centertile);->valor(false))
+                            if (self->get_tile(layer, x + 1, y + 1)->>\t = std::is_same(t, centertile);->or(false))
                                 way += WrapingTileWay::RIGHTDOWN;
                         }
                         if (way: int->band(WrapingTileWay::LEFT: int) != 0)
                         {
-                            if (self->get_tile(layer, x - 1, y + 1)->>\t = std::issame(t, centertile);->valor(false))
+                            if (self->get_tile(layer, x - 1, y + 1)->>\t = std::is_same(t, centertile);->or(false))
                                 way += WrapingTileWay::LEFTDOWN;
                         }
                     }
@@ -1227,10 +1227,10 @@ namespace editor::gui::tilemap
 
             let xs = xys->>\xy = xy[0];, ys = xys->>\xy = xy[1];;
 
-            let max_x = xs->reduce(\l, r = max(l, r);)->valor(0);
-            let min_x = xs->reduce(\l, r = min(l, r);)->valor(0);
-            let max_y = ys->reduce(\l, r = max(l, r);)->valor(0);
-            let min_y = ys->reduce(\l, r = min(l, r);)->valor(0);
+            let max_x = xs->reduce(\l, r = max(l, r);)->or(0);
+            let min_x = xs->reduce(\l, r = min(l, r);)->or(0);
+            let max_y = ys->reduce(\l, r = max(l, r);)->or(0);
+            let min_y = ys->reduce(\l, r = min(l, r);)->or(0);
 
             return ((min_x, max_x), (min_y, max_y));
         }
@@ -1267,7 +1267,7 @@ namespace editor::gui::tilemap
                     let RANDOMABLE_WAYS_0 = WrapingTileWay::NOTHING;
                     let RANDOMABLE_WAYS_1 = WrapingTileWay::UP + WrapingTileWay::DOWN + WrapingTileWay::LEFT + WrapingTileWay::RIGHT;
                     let RANDOMABLE_WAYS_2 = RANDOMABLE_WAYS_1 + WrapingTileWay::LEFTUP + WrapingTileWay::RIGHTUP + WrapingTileWay::LEFTDOWN + WrapingTileWay::RIGHTDOWN;
-                    let RANDOM_METHOD = tile.non_periodic_expansion && (tile.auto_wrap->has == false ||
+                    let RANDOM_METHOD = tile.non_periodic_expansion && (tile.auto_wrap->is_value == false ||
                         tile_way == RANDOMABLE_WAYS_0 || tile_way == RANDOMABLE_WAYS_1 || tile_way == RANDOMABLE_WAYS_2)
                         ? fake_random(layer, x, y)
                         | 0;
@@ -1348,7 +1348,7 @@ namespace editor::gui::tilemap
                     let RANDOMABLE_WAYS_0 = WrapingTileWay::NOTHING;
                     let RANDOMABLE_WAYS_1 = WrapingTileWay::UP + WrapingTileWay::DOWN + WrapingTileWay::LEFT + WrapingTileWay::RIGHT;
                     let RANDOMABLE_WAYS_2 = RANDOMABLE_WAYS_1 + WrapingTileWay::LEFTUP + WrapingTileWay::RIGHTUP + WrapingTileWay::LEFTDOWN + WrapingTileWay::RIGHTDOWN;
-                    let RANDOM_METHOD = tile.non_periodic_expansion && (tile.auto_wrap->has == false ||
+                    let RANDOM_METHOD = tile.non_periodic_expansion && (tile.auto_wrap->is_value == false ||
                         tile_way == RANDOMABLE_WAYS_0 || tile_way == RANDOMABLE_WAYS_1 || tile_way == RANDOMABLE_WAYS_2)
                         ? fake_random(layer, x, y)
                         | 0;
@@ -1450,7 +1450,7 @@ namespace editor::gui::tilemap
                     let RANDOMABLE_WAYS_0 = WrapingTileWay::NOTHING;
                     let RANDOMABLE_WAYS_1 = WrapingTileWay::UP + WrapingTileWay::DOWN + WrapingTileWay::LEFT + WrapingTileWay::RIGHT;
                     let RANDOMABLE_WAYS_2 = RANDOMABLE_WAYS_1 + WrapingTileWay::LEFTUP + WrapingTileWay::RIGHTUP + WrapingTileWay::LEFTDOWN + WrapingTileWay::RIGHTDOWN;
-                    let RANDOM_METHOD = tile.non_periodic_expansion && (tile.auto_wrap->has == false ||
+                    let RANDOM_METHOD = tile.non_periodic_expansion && (tile.auto_wrap->is_value == false ||
                         tile_way == RANDOMABLE_WAYS_0 || tile_way == RANDOMABLE_WAYS_1 || tile_way == RANDOMABLE_WAYS_2)
                         ? fake_random(layer, x, y)
                         | 0;
@@ -1499,7 +1499,7 @@ namespace editor::gui::tilemap
                     result->add(ChunkDatas
                         {
                             m_chunk_pos = (x, -negy),
-                            m_layers = chunk.m_layers->todict->>\k, v = (k, (v.m_image, v.m_walkable->>\e = immut e;));,
+                            m_layers = chunk.m_layers->to_dict->>\k, v = (k, (v.m_image, v.m_walkable->>\e = immut e;));,
                             m_chunk_size = chunksize,
                         });
                 }
@@ -1538,7 +1538,7 @@ namespace editor::gui::tilemap
                     do CheckBox("导出分层纹理", export_image.m_export_layer_image)
                         ->> \newv = export_image.m_export_layer_image = newv;
                         ;
-                    do CheckBox("导出分块纹理", export_image.m_export_chunk_image->has)
+                    do CheckBox("导出分块纹理", export_image.m_export_chunk_image->is_value)
                         ->> \newv = export_image.m_export_chunk_image = 
                                 newv ? option::value(16) | option::none
                             ;
@@ -1559,7 +1559,7 @@ namespace editor::gui::tilemap
 
                     BeginDisabled(false == (export_image.m_export_full_image ||
                         export_image.m_export_layer_image ||
-                        export_image.m_export_chunk_image->has));
+                        export_image.m_export_chunk_image->is_value));
 
                     if (Button("创建"))
                     {
@@ -1585,7 +1585,7 @@ namespace editor::gui::tilemap
                             let target_chunk_path = target_path / F"{name}_chunks";
                             
                             do fsys::mkdir(target_chunk_path);
-                            for (let p: fsys::subpath(target_chunk_path)->unwrapor([]))
+                            for (let p: fsys::subpath(target_chunk_path)->or([]))
                             {
                                 match (fsys::remove(p))
                                 {

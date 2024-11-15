@@ -32,7 +32,7 @@ namespace editor::gui::edit_forms
                         let is_debugging = context->get_project->is_debugging;
                         for (let world : context->get_project->get_env->get_universe->get_all_worlds)
                         {
-                            let current_world_is_editing = editing_world->>\w = w == world;->valor(false);
+                            let current_world_is_editing = editing_world->>\w = w == world;->or(false);
                             let is_selected = SelectableSelected(F"{world->name}##{world as je::world: handle}", 
                                 current_world_is_editing);
                             let is_hovered = IsItemHovered();
@@ -50,7 +50,7 @@ namespace editor::gui::edit_forms
                                 value(p)? Text(p->tostring);
                                 none?;
                                 }
-                                Text(context->get_project->get_world_remark(world)->valor("(无)"));
+                                Text(context->get_project->get_world_remark(world)->or("(无)"));
                                 EndTooltip();
                             }
                             if (BeginPopupContextItem())
@@ -58,7 +58,7 @@ namespace editor::gui::edit_forms
                                 if (MenuItemEnabled("编辑", !is_debugging))
                                     if (! WorldContext::edit(context->get_project(), world)
                                         ->> \wcontext = launch(show_world_creator, (context, wcontext));
-                                        ->  has)
+                                        ->  is_value)
                                     {
                                         std::panic("TODO, 选中的世界居然不存在嗝");
                                     }
@@ -80,7 +80,7 @@ namespace editor::gui::edit_forms
                                     jeapi::gui::form::multiinput(
                                         "编辑世界注释", 
                                         F"请输入世界'{world->name}'的注释说明", 
-                                        context->get_project->get_world_remark(world)->valor("(无)"), 
+                                        context->get_project->get_world_remark(world)->or("(无)"), 
                                         func(newremark){
                                             if (!context->get_project->set_world_remark(world, newremark))
                                                 jeapi::gui::form::errmsg("失败", "在项目中没有找到世界");

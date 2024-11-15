@@ -138,7 +138,7 @@ namespace editor::gui
     private func _save_world(context: EditorContext)
     {
         let proj = context->get_project;
-        if (proj->get_editing_world->>\w = proj->save_world(w);->valor(false) == false)
+        if (proj->get_editing_world->>\w = proj->save_world(w);->or(false) == false)
         {
             jeapi::gui::form::errmsg("错误", "保存当前世界失败"); 
         }
@@ -278,7 +278,7 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                                                 proj->get_env->get_universe as je::universe: dynamic,
                                                 proj->get_editing_world as option<je::world>: dynamic,
                                                 opentity: dynamic,
-                                            ])->has)
+                                            ])->is_value)
                                         {
                                             jeapi::gui::form::errmsg("错误", "脚本运行时发生错误");
                                         }

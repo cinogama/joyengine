@@ -30,8 +30,8 @@ namespace editor::gui::edit_forms
     }
     func _set_parent(child: jeapi::debug::EntityChilds, parent: jeapi::debug::EntityChilds)
     {
-        static let LocalToParent = je::typeinfo::load("Transform::LocalToParent")->val(),
-                   LocalToWorld  = je::typeinfo::load("Transform::LocalToWorld")->val();
+        static let LocalToParent = je::typeinfo::load("Transform::LocalToParent")->unwrap(),
+                   LocalToWorld  = je::typeinfo::load("Transform::LocalToWorld")->unwrap();
 
         if (child->_is_ancestor(parent))
         {
@@ -46,10 +46,10 @@ namespace editor::gui::edit_forms
             // 如果子实体此时有父节点，那么就将目标父节点挂载子节点上，否则就把目标父节点设置为L2W
             do child.e->editor::get_parent_anchor_uid()
                  ->> \uid = parent.e->editor::set_parent_with_uid(uid, true);
-                 ->or(func(){
-                    if (parent.e->get_component(LocalToParent)->has())
+                 -> or_do(func(){
+                    if (parent.e->get_component(LocalToParent)->is_value())
                         parent.e->remove_component(LocalToParent);
-                    if (!parent.e->get_component(LocalToWorld)->has())
+                    if (!parent.e->get_component(LocalToWorld)->is_value())
                         do parent.e->add_component(LocalToWorld);
                     return true;
                  });
@@ -63,7 +63,7 @@ namespace editor::gui::edit_forms
             jeapi::gui::form::errmsg("失败", "无法创建实体，世界不存在。");
             return option::none;
         }
-        let e = w->add_entity(cs->>\tname = je::typeinfo::load(tname)->val;);
+        let e = w->add_entity(cs->>\tname = je::typeinfo::load(tname)->unwrap;);
         e->editor::set_name(name);
 
         set_new_created_entity_pos(w, e);
@@ -72,7 +72,7 @@ namespace editor::gui::edit_forms
     }
     public func entity_edit_context_menu(context: EditorContext, w: je::world, euid: option<jeapi::debug::Eeid>)
     {
-        let has_editing_entity = euid->has;
+        let has_editing_entity = euid->is_value;
         if (MenuItem("创建实体"))
             launch(show_entity_creator, (context, new! EntityContext()));
         if (BeginMenu("快速创建实体"))
@@ -207,7 +207,7 @@ namespace editor::gui::edit_forms
                                         let default_shader_path = "@/resource/shader/Unlit.shader";
                                         do je::graphic::shader::load(einst->get_world->get_universe->option::value, default_shader_path)
                                             ->> \s = einst->set_shaders([s]);
-                                            ->  or(\ = jeapi::gui::form::errmsg("加载默认着色器失败", F"无法加载'{default_shader_path}'作为默认着色器，跳过");)
+                                            ->  or_do(\ = jeapi::gui::form::errmsg("加载默认着色器失败", F"无法加载'{default_shader_path}'作为默认着色器，跳过");)
                                             ;
                                         
                                         drawpannel::drawedit(context, einst);
@@ -248,7 +248,7 @@ namespace editor::gui::edit_forms
                         let default_shader_path = "@/resource/shader/Light2DPoint.shader";
                         do je::graphic::shader::load(e->get_world->get_universe->option::value, default_shader_path)
                             ->> \s = e->set_shaders([s]);
-                            ->  or(\ = jeapi::gui::form::errmsg("加载默认着色器失败", F"无法加载'{default_shader_path}'作为默认着色器，跳过");)
+                            ->  or_do(\ = jeapi::gui::form::errmsg("加载默认着色器失败", F"无法加载'{default_shader_path}'作为默认着色器，跳过");)
                             ;
                     };
             }
@@ -273,7 +273,7 @@ namespace editor::gui::edit_forms
                         let default_shader_path = "@/resource/shader/Light2DRange.shader";
                         do je::graphic::shader::load(e->get_world->get_universe->option::value, default_shader_path)
                             ->> \s = e->set_shaders([s]);
-                            ->  or(\ = jeapi::gui::form::errmsg("加载默认着色器失败", F"无法加载'{default_shader_path}'作为默认着色器，跳过");)
+                            ->  or_do(\ = jeapi::gui::form::errmsg("加载默认着色器失败", F"无法加载'{default_shader_path}'作为默认着色器，跳过");)
                             ;
                     };
             }
@@ -298,7 +298,7 @@ namespace editor::gui::edit_forms
                         let default_shader_path = "@/resource/shader/Light2DParallel.shader";
                         do je::graphic::shader::load(e->get_world->get_universe->option::value, default_shader_path)
                             ->> \s = e->set_shaders([s]);
-                            ->  or(\ = jeapi::gui::form::errmsg("加载默认着色器失败", F"无法加载'{default_shader_path}'作为默认着色器，跳过");)
+                            ->  or_do(\ = jeapi::gui::form::errmsg("加载默认着色器失败", F"无法加载'{default_shader_path}'作为默认着色器，跳过");)
                             ;
                     };
             }
@@ -368,8 +368,8 @@ namespace editor::gui::edit_forms
                     ->> func(e)
                     {
                         // 如果成功创建实体，在此重置实体的 Transform::Anchor 组件（如果有的话）
-                        static let Anchor = je::typeinfo::load("Transform::Anchor")->val;
-                        if (e->get_component(Anchor)->has)
+                        static let Anchor = je::typeinfo::load("Transform::Anchor")->unwrap;
+                        if (e->get_component(Anchor)->is_value)
                         {
                             e->remove_component(Anchor);
                             do e->add_component(Anchor);
@@ -447,19 +447,19 @@ namespace editor::gui::edit_forms
             + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
             + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
             // 如果当前实体被选中，那么高亮
-            + (context->get_editing_entity()->>\eeid = eeid == e.uid;->valor(false) 
+            + (context->get_editing_entity()->>\eeid = eeid == e.uid;->or(false) 
                 ? TreeNodeAttribute::ImGuiTreeNodeFlags_Selected
                 | TreeNodeAttribute::ImGuiTreeNodeFlags_None);
             ;
 
         static let 
-            Invisable = je::typeinfo::load("Editor::Invisable")->val;
+            Invisable = je::typeinfo::load("Editor::Invisable")->unwrap;
 
-        if (!get_is_albe_to_display_debug_entity() && e.e->get_component(Invisable)->has)
+        if (!get_is_albe_to_display_debug_entity() && e.e->get_component(Invisable)->is_value)
             // 不可见实体，不准看！
             return;
 
-        let is_variant_or_prefab = e.e->towoo::get_component:<Editor::Prefab>->has;
+        let is_variant_or_prefab = e.e->towoo::get_component:<Editor::Prefab>->is_value;
 
         if (is_variant_or_prefab)
             PushStyleColor(ImGuiCol::ImGuiCol_Text, (75, 100, 213, 255));

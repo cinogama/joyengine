@@ -358,14 +358,14 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                             ok(vmm)?
                                 {
                                     do vmm->jit;
-                                    if (!vmm->run()->has)
+                                    if (!vmm->run()->is_value)
                                         jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本运行终止，可能存在错误，请检查日志");
                                     
                                     econtext.m_frame_index = 1;
 
                                     do new! thread(func(){
                                         econtext.m_enable_bake = false;
-                                        if (!vmm->invoke("_start_baking", [partical_context: dynamic, econtext: dynamic])->has)
+                                        if (!vmm->invoke("_start_baking", [partical_context: dynamic, econtext: dynamic])->is_value)
                                             jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本运行终止，可能存在错误，请检查日志");
                                         econtext.m_enable_bake = true;
                                     }, ());

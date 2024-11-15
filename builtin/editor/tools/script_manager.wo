@@ -49,7 +49,7 @@ namespace editor::tools
         let new_path_results = {}mut: map<string, fsys::path_t>;
 
         match (fsys::allsubpath(project->get_path)
-            =>> \p = fsys::allsubpath(fsys::normalize(std::exepath()))
+            =>> \p = fsys::allsubpath(fsys::normalize(std::host_path()))
                 ->> \ep = p->connect(ep);
                 ;)
         {
@@ -60,9 +60,9 @@ namespace editor::tools
                 for (let path : subpaths)
                 {
                     let filename = fsys::filename(path);
-                    if (filename->lower->endwith(".je.wo"))
+                    if (filename->lower->end_with(".je.wo"))
                     {
-                        new_path_results->set(filename->subto(0, filename->len - 6), path);
+                        new_path_results->set(filename->sub_len(0, filename->len - 6), path);
                     }
                 }
             }

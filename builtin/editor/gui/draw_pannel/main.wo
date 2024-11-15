@@ -198,7 +198,7 @@ namespace editor::gui::drawpannel
                                 history_mgr->redo();
                         }
 
-                        let texture_path = path->valor("<内置>");
+                        let texture_path = path->or("<内置>");
                         if (BeginTabItem(F"通道{passid}: {texture_path}"))
                         {
                             if (BeginMenuBar())
@@ -298,7 +298,7 @@ namespace editor::gui::drawpannel
                                     {
                                         for (let (opassid, otexture, path) : images)
                                         {
-                                            if (MenuItemEnabled(F"通道{opassid}：{path->valor("<内置>")}", passid != opassid))
+                                            if (MenuItemEnabled(F"通道{opassid}：{path->or("<内置>")}", passid != opassid))
                                             {
                                                 jeapi::gui::form::ask("是否确认", "将覆盖当前通道纹理，操作不可撤销，是否继续？",
                                                     func(ok)
@@ -544,7 +544,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                 let projpath = context->get_project()->get_path;
                 let saving_path = path
                     ->> \p = fsys::normalize(p);
-                    ->  or(func()
+                    ->  or_do(func()
                         {
                             let genuidpath = \ = projpath/"resource"/"texture"/F"{je::uid()}.png";;
                             let mut name = genuidpath();
@@ -569,7 +569,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                                             context->get_project->get_env->get_universe->option::value, 
                                             // NOTE: saving_path是一个可能为规范路径 也有可能是项目路径的东西，这里直接简单处理了
                                             //       照理来说应该区分出类型再分别处理
-                                            context->get_project->make_path_normalize(fsys::normalize(saving_path)))->val);
+                                            context->get_project->make_path_normalize(fsys::normalize(saving_path)))->unwrap);
                                     )
                                     ;
                                 ;
@@ -647,7 +647,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
     {
         // 检查实体有没有纹理组件，然后遍历检查所有纹理是否都存在，有没有没有路径的问题
         // 如果发现不正常的纹理就给个提示
-        if (!e->get_component(typeinfo::load("Renderer::Textures")->val)->has)
+        if (!e->get_component(typeinfo::load("Renderer::Textures")->unwrap)->is_value)
         {
             jeapi::gui::form::errmsg("无法绘制当前实体", "当前实体不包含 Renderer::Textures 组件，无法绘制");
             return;
@@ -662,7 +662,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                     =>> \nv = nv...
                         ->  func(name, uniformval)
                             {
-                                if (!name->beginwith("JOYENGINE_"))
+                                if (!name->begin_with("JOYENGINE_"))
                                 {
                                     match (uniformval)
                                     {
@@ -710,7 +710,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
 
         let id_tex_list = used_texture_id_pass 
             ->> \id = (id, mut tex, mut tex->path)
-                where tex = textures->get(id)-> or(\= create_and_copy_0pass_texture();)
+                where tex = textures->get(id)-> or_do(create_and_copy_0pass_texture)
                 ;
             ;
         launch(edittexture, (
@@ -733,7 +733,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                 edited_textures = id_tex_list
                     ->> \id_text = (id_text[1], (id_text[0], new! HistoryManager(id_text[1])));
                     ->  mapping
-                    ->  tomap
+                    ->  to_map
                     ,
                 openform = mut true,
             }

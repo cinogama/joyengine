@@ -61,7 +61,7 @@ using Path = struct {
     }
     func childs(path: Path, update: bool)
     {
-        if (update || !path.childs->has)
+        if (update || !path.childs->is_value)
         {
             let arr = 
                 fsys::subpath(path.path)
@@ -78,7 +78,7 @@ using Path = struct {
             path.childs = option::value(arr);            
         }
 
-        return path.childs->val;
+        return path.childs->unwrap;
     }
     func show(path: Path)=> option<fsys::path_t>
     {
@@ -90,7 +90,7 @@ using Path = struct {
                 + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
                 + selected_path
                     ->map(\p = p->tostring == path.path->tostring;)
-                    ->valor(false)
+                    ->or(false)
                     ->\b: bool = 
                         b   ? TreeNodeAttribute::ImGuiTreeNodeFlags_Selected
                             | TreeNodeAttribute::ImGuiTreeNodeFlags_None;);
@@ -118,7 +118,7 @@ using Path = struct {
         static let roots = _get_available_root_paths();
 
         return roots
-            =>> \path = r->has ? [r->val] | [] where r = path->show();
+            =>> \path = r->is_value ? [r->unwrap] | [] where r = path->show();
             ->  get(0)
             =>> \p = fsys::isdir(p) ? option::value(p) | option::none;
             ;
@@ -159,16 +159,16 @@ func open_path_to_do_sth(action_after_choice: (option<fsys::path_t>)=>void)
 
 func read_editor_data()
 {
-    return fsys::readall(fsys::normalize(std::exepath()) / "builtin" / "editor.dat")
+    return fsys::readall(fsys::normalize(std::host_path()) / "builtin" / "editor.dat")
         =>> \dat = dict::deserialize(dat);
-        ->  valor({})
+        ->  or({})
         ;
 }
 
 func apply_editor_data_when_start_up_project(dat: dict<dynamic, dynamic>)
 {
     let form_size = dat
-        ->  getor("form_size": dynamic, [1344, 768]: dynamic) as array<dynamic>
+        ->  get_or("form_size": dynamic, [1344, 768]: dynamic) as array<dynamic>
         ->> \d = d as int;
         ;
     je::editor::set_window_size(form_size[0], form_size[1]);
@@ -176,19 +176,19 @@ func apply_editor_data_when_start_up_project(dat: dict<dynamic, dynamic>)
 func save_editor_data_after_exit(dat: dict<dynamic, dynamic>, proj_name: string, proj_path: fsys::path_t)
 {
     let (win_w, win_h) = je::input::windowsize();
-    let project_histories = dat->getor("history": dynamic, []: dynamic) as array<dynamic>->unsafe::cast:< array<array<string>> >;
+    let project_histories = dat->get_or("history": dynamic, []: dynamic) as array<dynamic>->unsafe::cast:< array<array<string>> >;
     
-    let newdat = dat->tomap();
+    let newdat = dat->to_map();
     newdat->set("form_size": dynamic, [win_w, win_h]: dynamic);
     newdat->set("history": dynamic, project_histories
         ->forall(\record = record[1] != proj_path->tostring;)
         ->inlay(0, [proj_name, proj_path->tostring]): dynamic);
 
     assert(
-        fsys::writeall(fsys::normalize(std::exepath()) / "builtin" / "editor.dat", newdat->serialize->val)
+        fsys::writeall(fsys::normalize(std::host_path()) / "builtin" / "editor.dat", newdat->serialize->unwrap)
     );
 
-    assert(fsys::setworkpath(fsys::normalize(std::exepath())));
+    assert(fsys::setworkpath(fsys::normalize(std::host_path())));
 }
 
 func my_ask_for_get_yes_no_cancel_result(
@@ -361,13 +361,13 @@ func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: di
 此目录用于保存引擎自动生成的图像资源
 "@);
                             do fsys::copy(
-                                fsys::normalize(F"{std::exepath()}/builtin/shader"), 
+                                fsys::normalize(F"{std::host_path()}/builtin/shader"), 
                                 fsys::normalize(F"{p->get_path}/resource/shader"));
                             do fsys::copy(
-                                fsys::normalize(F"{std::exepath()}/builtin/font"), 
+                                fsys::normalize(F"{std::host_path()}/builtin/font"), 
                                 fsys::normalize(F"{p->get_path}/resource/font"));
                             do fsys::copy(
-                                fsys::normalize(F"{std::exepath()}/builtin/script/editor.wo"),
+                                fsys::normalize(F"{std::host_path()}/builtin/script/editor.wo"),
                                 fsys::normalize(F"{p->get_path}"));
                             do fsys::writeall(p->get_path / ".gitignore", 
 @"# JoyEngine ECS git ignore config.
@@ -469,16 +469,16 @@ je::editor::register_panic_hook(jeapi::gui::form::panic);
 
 for (;;)
 {
-    let create_project_icon = je::graphic::texture::load(option::none, F"!/builtin/icon/Create.png")->val;
-    let load_project_icon = je::graphic::texture::load(option::none, F"!/builtin/icon/Load.png")->val;
-    let exit_editor_icon = je::graphic::texture::load(option::none, F"!/builtin/icon/Exit.png")->val;
+    let create_project_icon = je::graphic::texture::load(option::none, F"!/builtin/icon/Create.png")->unwrap;
+    let load_project_icon = je::graphic::texture::load(option::none, F"!/builtin/icon/Load.png")->unwrap;
+    let exit_editor_icon = je::graphic::texture::load(option::none, F"!/builtin/icon/Exit.png")->unwrap;
     
     action_after_guide_form_closed = \ = result::ok(\=do nil;);;
 
     let u = new! editor::Environment();
     {
         let editor_configs = read_editor_data();
-        let historys = editor_configs->getor("history": dynamic, []: dynamic) as array<dynamic>->unsafe::cast:< vec<array<string>> >;
+        let historys = editor_configs->get_or("history": dynamic, []: dynamic) as array<dynamic>->unsafe::cast:< vec<array<string>> >;
 
         je::editor::init_graphic_pipeline(u->get_universe());
 
@@ -533,7 +533,7 @@ for (;;)
                                                 {
                                                     do historys->remove(index);
                                                     assert(
-                                                        fsys::writeall(fsys::normalize(std::exepath())/ "builtin" / "editor.dat", editor_configs->serialize->val)
+                                                        fsys::writeall(fsys::normalize(std::host_path())/ "builtin" / "editor.dat", editor_configs->serialize->unwrap)
                                                     );
                                                 }
                                             none?;

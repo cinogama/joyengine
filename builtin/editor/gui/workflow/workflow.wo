@@ -55,7 +55,7 @@ namespace Editor
 
     public func get_universe()
     {
-        return _universe->val;
+        return _universe->unwrap;
     }
     extern func set_universe(u: je::universe)
     {
@@ -71,14 +71,14 @@ namespace Editor
             source += "import resource::workflow::node::" 
                 + n.m_namespace->reduce(\l,r = l + "::" + r;)
                     ->> \v = v + "::";
-                    -> valor("") 
+                    -> or("") 
                 + n.m_name
                 + ";\n"
                 ;
             
             let mut write_node_map = node_type_map: dynamic;
             for (let name : n.m_namespace)
-                write_node_map = write_node_map->unsafe::cast:<dyn_map>->getorset(name: dynamic, {}mut: dynamic);
+                write_node_map = write_node_map->unsafe::cast:<dyn_map>->get_or_set(name: dynamic, {}mut: dynamic);
 
             write_node_map->unsafe::cast:<dyn_map>->set(n.m_name: dynamic, nil: dynamic);            
         }

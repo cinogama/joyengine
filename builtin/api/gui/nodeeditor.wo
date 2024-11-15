@@ -153,7 +153,7 @@ namespace jeapi::gui
                 
                 EndPin();
 
-                if (self.linked_pin->has == false)
+                if (self.linked_pin->is_value == false)
                 {
                     gui::PushStyleColor(ImGuiCol::ImGuiCol_Text, (0, 0, 0, 255));
                     self.typeval->edit(F"##{self.name}[{self.id}]");
@@ -282,7 +282,7 @@ namespace jeapi::gui
                     ["producers"] = self.producers->>\p = p.producer->tostring();: dynamic,
                     ["inputs"] = self.inputs->>\i = i.typeval->tostring();: dynamic,
                     ["data"] = self.instance->tostring(): dynamic,
-                }->serialize()->val;
+                }->serialize()->unwrap;
             }
         }
 
@@ -331,7 +331,7 @@ namespace jeapi::gui
 
                 return_value! false;
             };
-            return r->valor(true);
+            return r->or(true);
         }
         func _draw_link(self: node_editor, linkid: LinkId, a: PinId, b: PinId)
         {
@@ -350,9 +350,9 @@ namespace jeapi::gui
             let node = _Node{
                 id = new_id,
                 instance = INode::create(generator(self)),
-                producers = self.__allocating_producers->val->unsafe::asarray,
-                inputs = self.__allocating_input_nodes->val->unsafe::asarray,
-                outputs = self.__allocating_output_nodes->val->unsafe::asarray,
+                producers = self.__allocating_producers->unwrap->unsafe::asarray,
+                inputs = self.__allocating_input_nodes->unwrap->unsafe::asarray,
+                outputs = self.__allocating_output_nodes->unwrap->unsafe::asarray,
 
                 position = mut (0., 0.),
 
@@ -408,12 +408,12 @@ namespace jeapi::gui
                 try! node_data = dat->get("data": dynamic)=>>\v = v->trycast:<string>;;
                 try! mode_info = self.node_info_flat_dic=>>\d = d->get(node_type);;
                 let inputs = dat->get("inputs": dynamic)
-                    -> valor([]: dynamic)
-                    -> valor([]: array<string>)
+                    -> or([]: dynamic)
+                    -> or([]: array<string>)
                     ;
                 let producers = dat->get("producers": dynamic)
-                    -> valor([]: dynamic)
-                    -> valor([]: array<string>)
+                    -> or([]: dynamic)
+                    -> or([]: array<string>)
                     ;
 
                 let node = self->_generate_node_impl(mode_info.generator);
@@ -541,7 +541,7 @@ namespace jeapi::gui
                 }
                 return_value!;
             };
-            return r->has();
+            return r->is_value();
         }
         public func dump(self: node_editor)=> string
         {
@@ -888,7 +888,7 @@ namespace jeapi::gui
         }
         func _menu_show_new_nodes(self: node_editor)
         {
-            let mut d = self.node_info_dic->valor({});
+            let mut d = self.node_info_dic->or({});
 
             match (self.creating_linking_pin)
             {
@@ -1007,7 +1007,7 @@ namespace jeapi::gui
                                 \= collected_producers
                                     ->> \p = p.producer->finished();
                                     -> reduce(\l, r = l || r;)
-                                    -> valor(true)
+                                    -> or(true)
                                 ;
                             ;
 
@@ -1131,7 +1131,7 @@ namespace jeapi::gui
         {
             let producer = ProducerT::create();
 
-            assertmsg(self.__allocating_producers->has,
+            assertmsg(self.__allocating_producers->is_value,
                 "请在节点的create方法中调用此函数.");
 
             let _producer = _Producer{
@@ -1139,7 +1139,7 @@ namespace jeapi::gui
                 producer = IProducer::create(producer),
                 name = name,
             };
-            self.__allocating_producers->val->add(_producer);
+            self.__allocating_producers->unwrap->add(_producer);
 
             return producer;
         }
@@ -1148,17 +1148,17 @@ namespace jeapi::gui
         {
             let val = TypeT::create();
 
-            assertmsg(self.__allocating_input_nodes->has,
+            assertmsg(self.__allocating_input_nodes->is_value,
                 "请在节点的create方法中调用此函数.");
 
             let _pin = _InputPin{
                 id = self->alloc_id:<PinId>(), 
-                nodeid = self.__current_node_id->val, 
+                nodeid = self.__current_node_id->unwrap, 
                 typeval = ITyped::create(val),
                 name = name,
                 linked_pin = mut option::none,
             };
-            self.__allocating_input_nodes->val->add(_pin);
+            self.__allocating_input_nodes->unwrap->add(_pin);
             return Input::create(val, _pin, self);
         }
         public func add_output<TypeT>(self: node_editor, name: string)
@@ -1166,17 +1166,17 @@ namespace jeapi::gui
         {
             let val = TypeT::create();
 
-            assertmsg(self.__allocating_output_nodes->has,
+            assertmsg(self.__allocating_output_nodes->is_value,
                 "请在节点的create方法中调用此函数.");
 
             let _pin = _OutputPin{ 
                 id = self->alloc_id:<PinId>(), 
-                nodeid = self.__current_node_id->val, 
+                nodeid = self.__current_node_id->unwrap, 
                 typeval = ITyped::create(val),
                 name = name,
                 linked_pins = []mut,
             };
-            self.__allocating_output_nodes->val->add(_pin);
+            self.__allocating_output_nodes->unwrap->add(_pin);
 
             return val;
         }
@@ -1210,7 +1210,7 @@ namespace jeapi::gui
                         return n;
                     }));
 
-            return node->get->val;
+            return node->get->unwrap;
         }
 
         public func set_on_context_menu(self: node_editor, callback: ()=> void)

@@ -468,7 +468,7 @@ namespace je::towoo
             + script_parser_info->m_woolang_typedecl + "\n"
             "namespace " + script_parser_info->m_woolang_typename + "\n{\n"
             + "    using type = void\n    {\n"
-            + "        public let typeinfo = je::typeinfo::load(\"" + script_parser_info->m_woolang_typename + "\")->val;\n"
+            + "        public let typeinfo = je::typeinfo::load(\"" + script_parser_info->m_woolang_typename + "\")->unwrap;\n"
             "    }\n}\n\n";
     }
 
@@ -539,7 +539,7 @@ import je::towoo::types;
             woolang_component_type_decl += std::string(
                 "    using type = void\n"
                 "    {\n"
-                "        public let typeinfo = je::typeinfo::load(\"") + typeinfo->m_typename + "\")->val;\n"
+                "        public let typeinfo = je::typeinfo::load(\"") + typeinfo->m_typename + "\")->unwrap;\n"
                 "    }\n";
 
             woolang_component_type_decl += "}\n";

@@ -7,8 +7,8 @@ namespace editor::gui::edit_forms
     public func get_debug_camera_root(w: je::world)
     {
         return w->get_all_entities->forall(\e = 
-                e->get_component(je::typeinfo::load("Editor::EditorWalker")->val)->has
-                && !e->get_component(je::typeinfo::load("Camera::RendToFramebuffer")->val)->has
+                e->get_component(je::typeinfo::load("Editor::EditorWalker")->unwrap)->is_value
+                && !e->get_component(je::typeinfo::load("Camera::RendToFramebuffer")->unwrap)->is_value
             ;)
             ->reduce(\l, _ = l;)
             ;
@@ -17,8 +17,8 @@ namespace editor::gui::edit_forms
     public func get_debug_camera(w: je::world)
     {
         return w->get_all_entities->forall(\e = 
-                e->get_component(je::typeinfo::load("Editor::EditorWalker")->val)->has
-                && e->get_component(je::typeinfo::load("Camera::RendToFramebuffer")->val)->has
+                e->get_component(je::typeinfo::load("Editor::EditorWalker")->unwrap)->is_value
+                && e->get_component(je::typeinfo::load("Camera::RendToFramebuffer")->unwrap)->is_value
             ;)
             ->reduce(\l, _ = l;)
             ;
@@ -37,7 +37,7 @@ namespace editor::gui::edit_forms
                     ->> \cti = cti->get_global_pos + camera_rot * (0., 0., 1.): vec3
                         where camera_rot = cti->get_global_rot
                         ;
-                    ->  valor((0., 0., 0.): vec3)
+                    ->  or((0., 0., 0.): vec3)
                     ;
                 do ep->>\epi = epi.pos->set(target_pos);;
             }
@@ -45,7 +45,7 @@ namespace editor::gui::edit_forms
         }
     }
 
-    let icon_entity_image = je::graphic::texture::load(option::none, F"!/builtin/icon/Component.png")->val;
+    let icon_entity_image = je::graphic::texture::load(option::none, F"!/builtin/icon/Component.png")->unwrap;
     using EntityContext = struct {
         name  : mut string,
         edit_entity      : option<jeapi::debug::Eeid>,
@@ -62,7 +62,7 @@ namespace editor::gui::edit_forms
                 name = mut "新实体",
                 edit_entity = option::none,
                 has_append_types = []mut,
-                not_append_types = je::typeinfo::get_all_components_types()->tovec,
+                not_append_types = je::typeinfo::get_all_components_types()->to_vec,
                 tversion = je::typeinfo::get_unregister_count(),
 
                 ori_append_types = []mut,
@@ -73,7 +73,7 @@ namespace editor::gui::edit_forms
     
             // 不显示所有编辑器组件
             for (let comp : comps)
-                if (!comp->name->beginwith("Editor::"))
+                if (!comp->name->begin_with("Editor::"))
                     context.not_append_types->add(comp);
     
             return context;
@@ -84,7 +84,7 @@ namespace editor::gui::edit_forms
                 name = mut "PENDING",
                 edit_entity = option::value(entity),
                 has_append_types = []mut,
-                not_append_types = je::typeinfo::get_all_components_types()->tovec,
+                not_append_types = je::typeinfo::get_all_components_types()->to_vec,
                 tversion = je::typeinfo::get_unregister_count(),
 
                 ori_append_types = []mut,
@@ -97,14 +97,14 @@ namespace editor::gui::edit_forms
         
                 // 不显示所有编辑器组件
                 for (let comp : comps)
-                    if (!comp->name()->beginwith("Editor::"))
+                    if (!comp->name()->begin_with("Editor::"))
                         context.not_append_types->add(comp);
         
                 // 把当前已有的组件处理一下
                 let all_comps = context.not_append_types->dup();
                 for (let comp : all_comps)
                 {
-                    if (e->get_component(comp)->has)
+                    if (e->get_component(comp)->is_value)
                     {
                         context->add_components(comp->name);
                         context.ori_append_types->add(comp);
@@ -162,7 +162,7 @@ namespace editor::gui::edit_forms
         if (rfnd == -1)
             return (typename, "");
         else
-            return (typename->sub(rfnd + 1), typename->subto(0, rfnd - 1));
+            return (typename->sub(rfnd + 1), typename->sub_len(0, rfnd - 1));
     }
 
     func show_component(typename: string, scopename: string, purename: string)
@@ -195,7 +195,7 @@ namespace editor::gui::edit_forms
 
         do typenames
             ->> \n = _get_entity_name_and_scope(n)...
-                ->  \pname, pscope = scoped_type->getorset(pscope, []mut)->add((n, pscope, pname));
+                ->  \pname, pscope = scoped_type->get_or_set(pscope, []mut)->add((n, pscope, pname));
                 ;
             ;
 
@@ -279,7 +279,7 @@ namespace editor::gui::edit_forms
 
         if (BeginMenuBar())
         {
-            let menu_button_text = context.edit_entity->has ? "应用" | "创建";
+            let menu_button_text = context.edit_entity->is_value ? "应用" | "创建";
 
             if (MenuItemEnabled(menu_button_text, context.name != "" 
                             && !context.has_append_types->empty))
@@ -418,7 +418,7 @@ namespace editor::gui::edit_forms
 
         je::gui::SetNextWindowSizeConstraints((500., 300.), (2000., 1000.));
         let mut open = true;
-        match (BeginAttrOpen(entity_context.edit_entity->has 
+        match (BeginAttrOpen(entity_context.edit_entity->is_value 
             ? F"编辑实体##{JobID()}"
             | F"创建新实体##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar))
         {
@@ -434,10 +434,10 @@ namespace editor::gui::edit_forms
                             eeid->justdo(func(e){
                                 // 0. 获取准备新增的组件
                                 let add_components = entity_context.has_append_types->forall(
-                                    \type: je::typeinfo = !e->get_component(type)->has;);
+                                    \type: je::typeinfo = !e->get_component(type)->is_value;);
                                 // 1. 获取即将移除的组件
                                 let removing_components = entity_context.not_append_types->forall(
-                                        \type: je::typeinfo = e->get_component(type)->has;);
+                                        \type: je::typeinfo = e->get_component(type)->is_value;);
 
                                 do add_components->map(\t: je::typeinfo = e->add_component(t););
                                 do removing_components->map(\t: je::typeinfo = e->remove_component(t););
@@ -451,7 +451,7 @@ namespace editor::gui::edit_forms
                         {
                         value(w)?
                             {
-                                let e = w->add_entity(entity_context.has_append_types->toarray);
+                                let e = w->add_entity(entity_context.has_append_types->to_array);
                                 e->editor::set_name(entity_context.name);
 
                                 set_new_created_entity_pos(w, e);

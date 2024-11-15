@@ -15,7 +15,7 @@ namespace jeapi::loader
     {
         func _get_located_path(path: string)
         {
-            return path->subto(0, path->rfind("/") + 1);
+            return path->sub_len(0, path->rfind("/") + 1);
         }
 
         using chunk = struct{
@@ -51,7 +51,7 @@ namespace jeapi::loader
                         try! wkable = dat->get("walkable": dynamic)
                             =>> \v = v->trycast:<array<dynamic>>;
                             ->> \v = v
-                                ->> \e = e->valor(false);
+                                ->> \e = e->or(false);
                                 ;
                             ;
 
@@ -178,7 +178,7 @@ namespace jeapi::loader
 
         public func create(path: string)
         {
-            let parent_path = path->subto(0, path->rfind("/") + 1);
+            let parent_path = path->sub_len(0, path->rfind("/") + 1);
             match (file::readall(path)=>>\dat = dat->dict::deserialize;)
             {
             value(dat)?

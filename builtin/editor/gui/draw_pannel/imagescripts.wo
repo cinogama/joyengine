@@ -60,12 +60,12 @@ extern func main(target_texture: je::graphic::texture)
             try! vmm =  vm::load(p->tostring);
             do vmm->jit;
 
-            if (!vmm->run->has)
+            if (!vmm->run->is_value)
                 return result::err(F"脚本 {name} 执行失败");
 
             for (let t : ts)
             {
-                if (!vmm->invoke("main", [t: dynamic])->has)
+                if (!vmm->invoke("main", [t: dynamic])->is_value)
                     return result::err(F"脚本 {name} 执行失败");
             }
             
@@ -81,13 +81,13 @@ extern func main(target_texture: je::graphic::texture)
     {
         let r = {}mut: map<string, fsys::path_t>;
 
-        for (let path : fsys::allsubpath(fsys::normalize(std::exepath()))
-                -> or(\_=[];)
+        for (let path : fsys::allsubpath(fsys::normalize(std::host_path()))
+                -> or([])
                 -> connect(fsys::allsubpath(proj->get_path)
-                    -> or(\_=[];))
+                    -> or([]))
             )
         {
-            if (!path->tostring->lower->endwith(".image.wo"))
+            if (!path->tostring->lower->end_with(".image.wo"))
                 continue;
 
             r->set(fsys::purename(path), path);
@@ -97,8 +97,8 @@ extern func main(target_texture: je::graphic::texture)
             // ok(vmm)?
             //     {
             //         do vmm->jit;
-            //         assert(vmm->run->has);
-            //         let name = vmm->invoke("name", [])->val as string;
+            //         assert(vmm->run->is_value);
+            //         let name = vmm->invoke("name", [])->unwrap as string;
             //         r->set(name == ""? fsys::purename(path) | name, vmm);
             //     }
             // err(msg)?

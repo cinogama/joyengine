@@ -32,15 +32,15 @@ namespace editor
             let idx = name->find(".");
             if (idx == -1)
                 return name;
-            return name->subto(0, idx);
+            return name->sub_len(0, idx);
         }
         func fetch_file(self: ToWooContext, type: string)
         {
             let fetched_scripts = {}mut: map<path_t, int>;
             let _repeat_checker = {}mut: map<string, path_t>;
-            for (let p : allsubpath(self.m_project_path)->unwrapor([]))
+            for (let p : allsubpath(self.m_project_path)->or([]))
             {
-                if (isfile(p) && filename(p)->lower->endwith(type))
+                if (isfile(p) && filename(p)->lower->end_with(type))
                 {
                     match (editor::crc64file(p->tostring))
                     {
@@ -71,7 +71,7 @@ namespace editor
             let fetched_scripts = self->fetch_file(".jesystem.wo");
             for (let (p, (c, t)) : self.m_loaded_towoo)
             {
-                if (filename(p)->lower->endwith(".jesystem.wo"))
+                if (filename(p)->lower->end_with(".jesystem.wo"))
                 {
                     if (fullupdate || fetched_scripts->contain(p) == false || fetched_scripts[p] != c)
                     {
@@ -93,7 +93,7 @@ namespace editor
             let fetched_scripts = self->fetch_file(".jecomponent.wo");
             for (let (p, (c, t)) : self.m_loaded_towoo)
             {
-                if (filename(p)->lower->endwith(".jecomponent.wo"))
+                if (filename(p)->lower->end_with(".jecomponent.wo"))
                 {
                     if (fullupdate || fetched_scripts->contain(p) == false || fetched_scripts[p] != c)
                     {
@@ -122,7 +122,7 @@ namespace editor
             for (let (p, c) : fetched_components)
             {
                 // TODO: 文件系统特性(大小写问题)，考虑更正确的姿势
-                assert(filename(p)->lower->endwith(".jecomponent.wo"));
+                assert(filename(p)->lower->end_with(".jecomponent.wo"));
                 do self.m_removing_component->remove(pure_component_or_system_name(purename(p)));
                 match (towoo::update_component(pure_component_or_system_name(purename(p)), p->tostring))
                 {
@@ -140,7 +140,7 @@ namespace editor
             for (let (p, c) : fetched_system)
             {
                 // TODO: 文件系统特性(大小写问题)，考虑更正确的姿势
-                assert(filename(p)->lower->endwith(".jesystem.wo"));
+                assert(filename(p)->lower->end_with(".jesystem.wo"));
                 do self.m_removing_system->remove(pure_component_or_system_name(purename(p)));
                 match (towoo::update_system(pure_component_or_system_name(purename(p)), p->tostring))
                 {
@@ -177,11 +177,11 @@ namespace editor
         public func check_for_update(self: ToWooContext)
         {
             let fetched_scripts = {}mut: map<path_t, int>;
-            for (let p : allsubpath(self.m_project_path)->unwrapor([]))
+            for (let p : allsubpath(self.m_project_path)->or([]))
             {
                 if (isfile(p) && (
-                    filename(p)->lower->endwith(".jesystem.wo")
-                    || filename(p)->lower->endwith(".jecomponent.wo")))
+                    filename(p)->lower->end_with(".jesystem.wo")
+                    || filename(p)->lower->end_with(".jecomponent.wo")))
                 {
                     match (editor::crc64file(p->tostring))
                     {
@@ -217,9 +217,9 @@ namespace editor
         {
             for (let (p, (_, tinfo)) : self.m_loaded_towoo)
             {
-                if (filename(p)->lower->endwith(".jecomponent.wo"))
+                if (filename(p)->lower->end_with(".jecomponent.wo"))
                     towoo::unregister_component(tinfo);
-                else if (filename(p)->lower->endwith(".jesystem.wo"))
+                else if (filename(p)->lower->end_with(".jesystem.wo"))
                     towoo::unregister_system(tinfo);
             }
 
@@ -231,7 +231,7 @@ namespace editor
         }
         public func get_bad_scripts(self: ToWooContext)
         {
-            return self.m_bad_towoo_script->toarray->std::sort(\l, r = l < r;);
+            return self.m_bad_towoo_script->to_array->std::sort(\l, r = l < r;);
         }
         public func has_bad_scripts(self: ToWooContext)
         {

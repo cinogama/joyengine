@@ -23,9 +23,9 @@ namespace jeapi::gui::inputmgr
 
     public func keyspush(keys: array<je::keycode>)
     {
-        if (keys->>keydown_at_last_frame->reduce(\l, r = l && r;)->valor(false))
+        if (keys->>keydown_at_last_frame->reduce(\l, r = l && r;)->or(false))
         {
-            return !keys->>keydown->reduce(\l, r = l && r;)->valor(true);
+            return !keys->>keydown->reduce(\l, r = l && r;)->or(true);
         }
         return false;
     }

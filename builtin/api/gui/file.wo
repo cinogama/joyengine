@@ -49,7 +49,7 @@ namespace jeapi::gui::widget
 
         let fnd = name->find("##");
 
-        Text(fnd == -1 ? name | name->subto(0, fnd));
+        Text(fnd == -1 ? name | name->sub_len(0, fnd));
         SameLine();
         if (Button((path == ""? "<空>" | path) + F"##{name}"))
             invoke_click_file_callback(path);

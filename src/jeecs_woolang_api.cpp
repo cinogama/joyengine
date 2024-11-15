@@ -2322,7 +2322,7 @@ namespace je
                 return self->get_components_types()
                     // If current entity died, we can still get types from chunk, but 
                     // failed to get component instance. Check here.
-                    =>> \tid = comp->has ? [(tid, comp->val)] | []
+                    =>> \tid = comp->is_value ? [(tid, comp->unwrap)] | []
                         where comp = self->get_component(tid);
                     ->  mapping;
             }

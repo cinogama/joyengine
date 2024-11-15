@@ -156,7 +156,7 @@ namespace editor::gui::drawpannel::tools
             // 窝窝头偷大懒
             if (self.m_last_pos[0] != pos[0] || self.m_last_pos[1] != pos[1])
             {
-                self.m_snapshot->val->restore();
+                self.m_snapshot->unwrap->restore();
                 draw_line(target, color, self.m_first_pos, pos);
                 self.m_last_pos = pos;
             }
@@ -193,7 +193,7 @@ namespace editor::gui::drawpannel::tools
             // 窝窝头偷大懒
             if (self.m_last_pos[0] != pos[0] || self.m_last_pos[1] != pos[1])
             {
-                self.m_snapshot->val->restore();
+                self.m_snapshot->unwrap->restore();
                 let (x1, y1) = self.m_first_pos, (x2, y2) = pos;
                 draw_line(target, color, (x1, y1), (x2, y1));
                 draw_line(target, color, (x2, y1), (x2, y2));
@@ -235,7 +235,7 @@ namespace editor::gui::drawpannel::tools
                     let filling_stack = [(x, y)]mut;
                     while (!filling_stack->empty)
                     {
-                        let (px, py) = filling_stack->popval();
+                        let (px, py) = filling_stack->unwrap_pop();
                         if (px >= 0 && px < w && py >= 0 && py < h)
                         {
                             let pixel = target->pix((px, py));

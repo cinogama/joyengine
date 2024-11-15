@@ -156,7 +156,7 @@ namespace jeapi::gui::widget
                 ->unsafe::cast:<array<(real, real)>>);
         }
 
-        if (is_hovered_on_zone && has_hovered_point == false && moving_point_context->has() == false)
+        if (is_hovered_on_zone && has_hovered_point == false && moving_point_context->is_value() == false)
         {
             // 如果没有悬停在任何点上，并且鼠标按下，则认为是在拖动整个视图
             if (mouse_down)

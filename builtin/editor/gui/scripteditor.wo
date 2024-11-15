@@ -37,7 +37,7 @@ namespace editor::gui
                 try! data = proj->dump_all_world;
 
                 return result::ok(History{
-                    m_abs = script->subto(0, 20),
+                    m_abs = script->sub_len(0, 20),
                     m_script = script,
                     m_data = data,
                 });
@@ -176,8 +176,8 @@ namespace editor::gui
             self.m_history_index += 1;
 
             do vmm->jit;
-            if (!vmm->run->has
-             || !self.m_hook_callback(vmm)->has)
+            if (!vmm->run->is_value
+             || !self.m_hook_callback(vmm)->is_value)
             {
                 return result::err("运行脚本时发生错误");
             }

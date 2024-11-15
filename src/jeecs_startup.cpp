@@ -243,18 +243,18 @@ using je::editor;
 
 func main()
 {
-    let root_dir = fsys::normalize(std::exepath());
+    let root_dir = fsys::normalize(std::host_path());
     let files = fsys::allsubpath(root_dir/"builtin/api")
-        ->  unwrapor([])
+        ->  or([])
         ->  connect(fsys::allsubpath(root_dir/"builtin/editor")
-                ->unwrapor([]));
+                ->or([]));
 
     let mut crc64_result = "wooscript_crc64_";
 
     for (let p : files)
     {   
         let path = p->tostring;
-        crc64_result += F"{crc64file(path)->valor(0)}:{crc64str(path)};";
+        crc64_result += F"{crc64file(path)->or(0)}:{crc64str(path)};";
     }
 
     return crc64str(crc64_result);
@@ -275,7 +275,7 @@ return main();
     wo_close_vm(vmm);
 
     if (crc64_result == 0)
-        jeecs::debug::logwarn("Unable to eval crc64 of builtin editor scripts.");
+        jeecs::debug::logerr("Unable to eval crc64 of builtin editor scripts.");
 
     return crc64_result;
 }

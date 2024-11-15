@@ -4,7 +4,7 @@ using je::gui;
 
 namespace editor::gui::edit_forms
 {
-    let icon_world_image = je::graphic::texture::load(option::none, F"!/builtin/icon/System.png")->val;
+    let icon_world_image = je::graphic::texture::load(option::none, F"!/builtin/icon/System.png")->unwrap;
 
     using WorldContext  = struct {
         name  : mut string,
@@ -34,7 +34,7 @@ namespace editor::gui::edit_forms
                 current_project = proj,
                 has_append_types = []mut,
                 has_active_types = []mut,
-                not_append_types = je::typeinfo::get_all_systems_types()->tovec,
+                not_append_types = je::typeinfo::get_all_systems_types()->to_vec,
 
                 target_path = path,
                 callback = option::value(callback),
@@ -46,11 +46,11 @@ namespace editor::gui::edit_forms
         
             for (let sys : all_systems)
                 // 不显示所有编辑器/图形系统
-                if (!sys->name()->beginwith("Editor::"))
-                    if (sys->name()->beginwith("Translation::"))
+                if (!sys->name()->begin_with("Editor::"))
+                    if (sys->name()->begin_with("Translation::"))
                         // 默认添加Translation相关系统
                         context.has_active_types->add(sys);
-                    else if (sys->name()->beginwith("Tickline::"))
+                    else if (sys->name()->begin_with("Tickline::"))
                         // 默认添加Tickline相关系统
                         context.has_append_types->add(sys);
                     else
@@ -74,9 +74,9 @@ namespace editor::gui::edit_forms
                 current_project = proj,
                 has_append_types = []mut,
                 has_active_types = []mut,
-                not_append_types = je::typeinfo::get_all_systems_types()->tovec,
+                not_append_types = je::typeinfo::get_all_systems_types()->to_vec,
 
-                target_path = proj->get_world_path(world)->val,
+                target_path = proj->get_world_path(world)->unwrap,
                 callback = option::none,
                 tversion = je::typeinfo::get_unregister_count(),
             };
@@ -86,12 +86,12 @@ namespace editor::gui::edit_forms
         
             for (let sys : all_systems)
                 // 不显示所有编辑器/图形系统
-                if (!sys->name()->beginwith("Editor::"))
+                if (!sys->name()->begin_with("Editor::"))
                     context.not_append_types->add(sys);
     
             // 处理一下已经创建/添加的系统
             for (let actived_sys : world->get_all_systems())
-                if (!actived_sys->name()->beginwith("Editor::"))
+                if (!actived_sys->name()->begin_with("Editor::"))
                     context->active(actived_sys->name());
     
             match(proj->get_worlds_runtime_systems(world))
@@ -254,7 +254,7 @@ namespace editor::gui::edit_forms
 
         if (BeginMenuBar())
         {
-            if (context.edit_world->has())
+            if (context.edit_world->is_value())
             {
                 if (MenuItemEnabled("更新", context.name != ""))
                     create_world = true;
@@ -278,7 +278,7 @@ namespace editor::gui::edit_forms
 
         je::gui::SetNextWindowSizeConstraints((500., 300.), (2000., 1000.));
         let mut open = true;
-        match (BeginAttrOpen(world_context.edit_world->has() ? F"编辑世界##{JobID()}" | F"创建新世界##{JobID()}", 
+        match (BeginAttrOpen(world_context.edit_world->is_value() ? F"编辑世界##{JobID()}" | F"创建新世界##{JobID()}", 
             WindowsAttribute::ImGuiWindowFlags_MenuBar))
         {
         value(show)?
@@ -298,7 +298,7 @@ namespace editor::gui::edit_forms
                                 do created_world->add_system(active_sys);
 
                             if (! world_context.current_project->set_worlds_runtime_systems(
-                                created_world, world_context.has_append_types->toarray))
+                                created_world, world_context.has_append_types->to_array))
                             {
                                 je::logfatal("无法添加运行时激活的系统，未知的错误");
                             }
@@ -310,7 +310,7 @@ namespace editor::gui::edit_forms
                                 std::yield();
                                 std::yield();
 
-                                if ((world_context.callback->val)(created_world) == false)
+                                if ((world_context.callback->unwrap)(created_world) == false)
                                 {
                                     world_context.current_project->destroy_world(created_world)->unwrap;
                                 }
@@ -321,7 +321,7 @@ namespace editor::gui::edit_forms
                         value(world)?
                         {
                             if (! world_context.current_project->set_worlds_runtime_systems(
-                                world, world_context.has_append_types->toarray))
+                                world, world_context.has_append_types->to_array))
                             {
                                 je::logfatal("无法添加运行时激活的系统，未知的错误");
                             }
