@@ -3708,8 +3708,8 @@ namespace jeecs
                 }
                 reference& operator = (reference&& mr)
                 {
-                    m_singleton = r.m_singleton;
-                    m_instance = r.m_instance;
+                    m_singleton = mr.m_singleton;
+                    m_instance = mr.m_instance;
 
                     assert(m_singleton != nullptr);
                     assert(m_instance != nullptr);
