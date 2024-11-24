@@ -159,7 +159,7 @@ func open_path_to_do_sth(action_after_choice: (option<fsys::path_t>)=>void)
 
 func read_editor_data()
 {
-    return fsys::readall(fsys::normalize(std::host_path()) / "builtin" / "editor.dat")
+    return fsys::readall(fsys::normalize(std::host_path()) / "builtin" / "editor.dat.je4cache")
         =>> \dat = dict::deserialize(dat);
         ->  or({})
         ;
@@ -185,7 +185,7 @@ func save_editor_data_after_exit(dat: dict<dynamic, dynamic>, proj_name: string,
         ->inlay(0, [proj_name, proj_path->tostring]): dynamic);
 
     assert(
-        fsys::writeall(fsys::normalize(std::host_path()) / "builtin" / "editor.dat", newdat->serialize->unwrap)
+        fsys::writeall(fsys::normalize(std::host_path()) / "builtin" / "editor.dat.je4cache", newdat->serialize->unwrap)
     );
 
     assert(fsys::setworkpath(fsys::normalize(std::host_path())));
@@ -533,7 +533,7 @@ for (;;)
                                                 {
                                                     do historys->remove(index);
                                                     assert(
-                                                        fsys::writeall(fsys::normalize(std::host_path())/ "builtin" / "editor.dat", editor_configs->serialize->unwrap)
+                                                        fsys::writeall(fsys::normalize(std::host_path())/ "builtin" / "editor.dat.je4cache", editor_configs->serialize->unwrap)
                                                     );
                                                 }
                                             none?;
