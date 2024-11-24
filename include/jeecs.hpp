@@ -27,9 +27,9 @@
 #include <mutex>
 #include <shared_mutex>
 #include <set>
-#include <unordered_map>
-#include <unordered_set>
 #include <map>
+#include <unordered_set>
+#include <unordered_map>
 #include <algorithm>
 #include <functional>
 #include <type_traits>
@@ -3632,6 +3632,139 @@ namespace jeecs
     */
     namespace basic
     {
+        /*
+        jeecs::basic::singleton [类型]
+        用于管理系统之间共享的单例实例，使用acquire方法获取和创建reference
+            * 当最后一个reference析构时，单例实例会被释放
+            * 首次（或之前的单例释放之后的首次）获取时，会调用默认构造函数创建实例
+        */
+        template<typename T>
+        class singleton
+        {
+            std::mutex  m_singleton_mutex;
+            T*          m_instance;
+            size_t      m_ref_count;
+
+            JECS_DISABLE_MOVE_AND_COPY(singleton);
+
+        public:
+            singleton()
+                : m_ref_count(nullptr)
+                , m_instance(0)
+            {
+            }
+            ~singleton()
+            {
+                assert(m_instance == nullptr);
+                assert(m_ref_count == 0);
+            }
+
+            class reference
+            {
+                singleton*  m_singleton;
+                T*          m_instance;
+
+            public:
+                reference(singleton* s, T* inst)
+                    : m_singleton(s)
+                    , m_instance(inst)
+                {
+                    assert(m_singleton != nullptr);
+                    assert(m_instance != nullptr);
+                }
+                reference(const reference& r)
+                    : m_singleton(r.m_singleton)
+                    , m_instance(r.m_instance)
+                {
+                    assert(m_singleton != nullptr);
+                    assert(m_instance != nullptr);
+
+                    std::lock_guard g(m_singleton->m_singleton_mutex);
+                    m_singleton->m_ref_count++;
+                }
+                reference(reference&& mr)
+                    : m_singleton(mr.m_singleton)
+                    , m_instance(mr.m_instance)
+                {
+                    assert(m_singleton != nullptr);
+                    assert(m_instance != nullptr);
+
+                    mr.m_singleton = nullptr;
+                    mr.m_instance = nullptr;
+                }
+
+                reference& operator = (const reference& r)
+                {
+                    m_singleton = r.m_singleton;
+                    m_instance = r.m_instance;
+
+                    assert(m_singleton != nullptr);
+                    assert(m_instance != nullptr);
+
+                    std::lock_guard g(m_singleton->m_singleton_mutex);
+                    m_singleton->m_ref_count++;
+
+                    return *this;
+                }
+                reference& operator = (reference&& mr)
+                {
+                    m_singleton = r.m_singleton;
+                    m_instance = r.m_instance;
+
+                    assert(m_singleton != nullptr);
+                    assert(m_instance != nullptr);
+
+                    mr.m_singleton = nullptr;
+                    mr.m_instance = nullptr;
+
+                    return *this;
+                }
+
+                ~reference()
+                {
+                    if (m_singleton != nullptr)
+                    {
+                        assert(m_instance == m_singleton->m_instance);
+                        m_singleton->_release();
+                    }
+                }
+
+                T* operator -> ()
+                {
+                    return m_instance;
+                }
+                T* get()
+                {
+                    return m_instance;
+                }
+            };
+
+            reference acquire()
+            {
+                std::unique_lock g(m_singleton_mutex);
+                
+                if (0 == m_ref_count++)
+                {
+                    // Create instance.
+                    m_instance = new T();
+                }
+
+                g.unlock();
+                return reference(this, m_instance);
+            }
+            void _release()
+            {
+                std::lock_guard g(m_singleton_mutex);
+                if (0 == --m_ref_count)
+                {
+                    delete m_instance;
+                    m_instance = nullptr;
+                }
+            }
+
+        };
+
+
         /*
         jeecs::basic::vector [类型]
         用于存放大小可变的连续存储容器
