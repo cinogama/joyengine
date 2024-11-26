@@ -3649,8 +3649,8 @@ namespace jeecs
 
         public:
             singleton()
-                : m_ref_count(nullptr)
-                , m_instance(0)
+                : m_instance(nullptr)
+                , m_ref_count(0)
             {
             }
             ~singleton()
@@ -3720,6 +3720,19 @@ namespace jeecs
                     return *this;
                 }
 
+                void lock()
+                {
+                    m_singleton->m_singleton_mutex.lock();
+                }
+                bool try_lock()
+                {
+                    return m_singleton->m_singleton_mutex.try_lock();
+                }
+                void unlock()
+                {
+                    m_singleton->m_singleton_mutex.unlock();
+                }
+
                 ~reference()
                 {
                     if (m_singleton != nullptr)
@@ -3761,7 +3774,6 @@ namespace jeecs
                     m_instance = nullptr;
                 }
             }
-
         };
 
 
