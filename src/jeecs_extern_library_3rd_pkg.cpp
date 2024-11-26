@@ -279,7 +279,7 @@ void je_extern_lib_3rd_pkgs_init()
         WO_EXTERN_LIB_FUNC_END,
     };
     _je_3rd_pkg_lib_handle.push_back(
-        wo_register_lib("libasync", libasync_fs));
+        wo_fake_lib("libasync", libasync_fs));
 
     wo_extern_lib_func_t libbuffer_fs[] = {
         wo_extern_lib_func_t{"buffer_append_buffer_builder", (void*)&buffer_append_buffer_builder},
@@ -378,14 +378,14 @@ void je_extern_lib_3rd_pkgs_init()
         WO_EXTERN_LIB_FUNC_END,
     };
     _je_3rd_pkg_lib_handle.push_back(
-        wo_register_lib("libbuffer", libbuffer_fs));
+        wo_fake_lib("libbuffer", libbuffer_fs));
 
     wo_extern_lib_func_t libcrashhandler_fs[] = {
         wo_extern_lib_func_t{"crashhandler_init", (void*)&crashhandler_init},
         WO_EXTERN_LIB_FUNC_END,
     };
     _je_3rd_pkg_lib_handle.push_back(
-        wo_register_lib("libcrashhandler", libcrashhandler_fs));
+        wo_fake_lib("libcrashhandler", libcrashhandler_fs));
 
     wo_extern_lib_func_t libimage_fs[] = {
         wo_extern_lib_func_t{"wo_libimage_create_image", (void*)&wo_libimage_create_image},
@@ -397,7 +397,7 @@ void je_extern_lib_3rd_pkgs_init()
         WO_EXTERN_LIB_FUNC_END,
     };
     _je_3rd_pkg_lib_handle.push_back(
-        wo_register_lib("libimage", libimage_fs));
+        wo_fake_lib("libimage", libimage_fs));
 
     wo_extern_lib_func_t libprocess_fs[] = {
         wo_extern_lib_func_t{"process_create_process", (void*)&process_create_process},
@@ -410,7 +410,7 @@ void je_extern_lib_3rd_pkgs_init()
         WO_EXTERN_LIB_FUNC_END,
     };
     _je_3rd_pkg_lib_handle.push_back(
-        wo_register_lib("libprocess", libprocess_fs));
+        wo_fake_lib("libprocess", libprocess_fs));
 
     wo_extern_lib_func_t libfsys_fs[] = {
         wo_extern_lib_func_t{"file_is_same_file", (void*)&file_is_same_file},
@@ -442,7 +442,7 @@ void je_extern_lib_3rd_pkgs_init()
         WO_EXTERN_LIB_FUNC_END,
     };
     _je_3rd_pkg_lib_handle.push_back(
-        wo_register_lib("libfsys", libfsys_fs));
+        wo_fake_lib("libfsys", libfsys_fs));
 
     wo_extern_lib_func_t libregex_fs[] = {
         wo_extern_lib_func_t{"regex_create", (void*)&regex_create},
@@ -453,7 +453,7 @@ void je_extern_lib_3rd_pkgs_init()
         WO_EXTERN_LIB_FUNC_END,
     };
     _je_3rd_pkg_lib_handle.push_back(
-        wo_register_lib("libregex", libregex_fs));
+        wo_fake_lib("libregex", libregex_fs));
 
     wo_extern_lib_func_t libmath_fs[] = {
         wo_extern_lib_func_t{"math_acos", (void*)&math_acos},
@@ -488,7 +488,7 @@ void je_extern_lib_3rd_pkgs_init()
         WO_EXTERN_LIB_FUNC_END,
     };
     _je_3rd_pkg_lib_handle.push_back(
-        wo_register_lib("libmath", libmath_fs));
+        wo_fake_lib("libmath", libmath_fs));
 
     wo_extern_lib_func_t libsocket_fs[] = {
         wo_extern_lib_func_t{"socket_epoll_add", (void*)&socket_epoll_add},
@@ -537,7 +537,7 @@ void je_extern_lib_3rd_pkgs_init()
         WO_EXTERN_LIB_FUNC_END,
     };
     _je_3rd_pkg_lib_handle.push_back(
-        wo_register_lib("libsocket", libsocket_fs));
+        wo_fake_lib("libsocket", libsocket_fs));
 
     wo_extern_lib_func_t libthread_fs[] = {
         wo_extern_lib_func_t{"thread_concurrency_count", (void*)&thread_concurrency_count},
@@ -561,7 +561,7 @@ void je_extern_lib_3rd_pkgs_init()
         WO_EXTERN_LIB_FUNC_END,
     };
     _je_3rd_pkg_lib_handle.push_back(
-        wo_register_lib("libthread", libthread_fs));
+        wo_fake_lib("libthread", libthread_fs));
 
     wo_extern_lib_func_t libvm_fs[] = {
         wo_extern_lib_func_t{"vm_create", (void*)&vm_create},
@@ -575,7 +575,7 @@ void je_extern_lib_3rd_pkgs_init()
         WO_EXTERN_LIB_FUNC_END,
     };
     _je_3rd_pkg_lib_handle.push_back(
-        wo_register_lib("libvm", libvm_fs));
+        wo_fake_lib("libvm", libvm_fs));
 
     je_static_wo_pkg_socket_entry();
 

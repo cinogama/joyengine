@@ -62,6 +62,9 @@ wo_value _je_global_panic_hook_function;
 
 jegl_graphic_api_entry _jegl_host_graphic_api = nullptr;
 
+std::mutex _je_delay_free_libs_mx;
+std::list<void*> _je_delay_free_libs;
+
 jeecs::typing::type_unregister_guard* _je_unregister_guard = nullptr;
 
 void jegl_set_host_graphic_api(jegl_graphic_api_entry api)
@@ -132,7 +135,7 @@ WO_API wo_api wojeapi_editor_register_panic_hook(wo_vm vm, wo_value args)
     _je_global_panic_hook_function = wo_push_val(_je_global_panic_hooker, args + 0);
 
     if (_je_global_old_panic_handler == nullptr)
-        _je_global_old_panic_handler = wo_regist_fail_handler(_jedbg_hook_woolang_panic);
+        _je_global_old_panic_handler = wo_register_fail_handler(_jedbg_hook_woolang_panic);
 
     return wo_ret_void(vm);
 }
@@ -162,6 +165,8 @@ void _jeecs_entry_register_core_systems(
 
 void je_init(int argc, char** argv)
 {
+    assert(_je_delay_free_libs.empty());
+    
     // Update default graphic sync funciton
     jegl_register_sync_thread_callback(
         je_default_graphic_interface_sync_func, nullptr);
@@ -391,7 +396,7 @@ void je_finish()
     }
     if (_je_global_old_panic_handler != nullptr)
     {
-        wo_regist_fail_handler(_je_global_old_panic_handler);
+        wo_register_fail_handler(_je_global_old_panic_handler);
         _je_global_old_panic_handler = nullptr;
     }
 
@@ -422,6 +427,10 @@ void je_finish()
 
     je_log_finish();
 
+    for (auto* delay_free_lib : _je_delay_free_libs)
+        wo_free_lib(delay_free_lib);
+
+    _je_delay_free_libs.clear();    
 }
 
 const char* je_build_version()
@@ -458,9 +467,14 @@ void* je_module_func(void* lib, const char* funcname)
 void je_module_unload(void* lib)
 {
     assert(lib);
-    if (auto leave = (jeecs::typing::module_leave_t)
-        wo_load_func(lib, "jeecs_module_leave"))
+    if (auto leave = (jeecs::typing::module_leave_t)wo_load_func(lib, "jeecs_module_leave"))
         leave();
     jeecs::debug::loginfo("Module: '%p' request to unload.", lib);
-    wo_unload_lib(lib);
+    wo_unregister_lib(lib);
+    
+    // NOTE: Woolang GCptr will invoke some function defined in lib in GC Thread job, 
+    //  to make sure safety, all the lib will be free in je_finish. 
+    std::lock_guard g(_je_delay_free_libs_mx);
+    _je_delay_free_libs.push_back(lib);
+
 }

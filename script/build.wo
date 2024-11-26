@@ -178,7 +178,7 @@ void je_extern_lib_woo_api_init()
     result += 
 @"      WO_EXTERN_LIB_FUNC_END,
     };
-    _je_api_lib_handle = wo_register_lib("libjoyecs", je_fs);
+    _je_api_lib_handle = wo_fake_lib("libjoyecs", je_fs);
 }
 
 void je_extern_lib_woo_api_finish()
@@ -246,7 +246,7 @@ void je_extern_lib_module_init()
         result += F"        wo_extern_lib_func_t\{\"jeecs_module_leave\", (void*)&jestatic_module_{mname}_leave\},\n";
         result += F"        WO_EXTERN_LIB_FUNC_END,\n    };\n";
         result += F"    _je_static_module_lib_handle.push_back(\n"
-                + F"        wo_register_lib(\"{mname}\", {mname}_fs));\n\n";
+                + F"        wo_fake_lib(\"{mname}\", {mname}_fs));\n\n";
     }
 
     result += @"
@@ -330,7 +330,7 @@ void je_extern_lib_3rd_pkgs_init()
 
         result += F"        WO_EXTERN_LIB_FUNC_END,\n    };\n";
         result += F"    _je_3rd_pkg_lib_handle.push_back(\n"
-                + F"        wo_register_lib(\"{libname}\", {libname}_fs));\n\n";
+                + F"        wo_fake_lib(\"{libname}\", {libname}_fs));\n\n";
     }
     
     for (let pkgname : libentry)

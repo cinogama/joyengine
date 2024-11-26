@@ -900,7 +900,7 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"wojeapi_world_is_valid", (void*)&wojeapi_world_is_valid},
       WO_EXTERN_LIB_FUNC_END,
     };
-    _je_api_lib_handle = wo_register_lib("libjoyecs", je_fs);
+    _je_api_lib_handle = wo_fake_lib("libjoyecs", je_fs);
 }
 
 void je_extern_lib_woo_api_finish()
