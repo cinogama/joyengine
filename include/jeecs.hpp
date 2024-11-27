@@ -5165,8 +5165,8 @@ namespace jeecs
         inline game_entity add_prefab()
         {
             typing::typeid_t component_ids[] = {
-                typing::type_info::id<FirstCompT>(typeid(FirstCompT).name()),
-                typing::type_info::id<CompTs>(typeid(CompTs).name())...,
+                typing::type_info::id<FirstCompT>(),
+                typing::type_info::id<CompTs>()...,
                 typing::INVALID_TYPE_ID
             };
             game_entity gentity;
