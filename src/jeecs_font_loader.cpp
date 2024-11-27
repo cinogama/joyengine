@@ -14,6 +14,15 @@ struct je_stb_font_data
 
     size_t          m_board_size_x;
     size_t          m_board_size_y;
+
+    int32_t         m_ascent;
+    int32_t         m_descent;
+    int32_t         m_line_gap;
+    int32_t         m_line_space;
+
+    float           m_x_scale_for_pix;
+    float           m_y_scale_for_pix;
+
     je_font_char_updater_t m_updater;
 
     std::mutex                                         m_character_set_mx;
@@ -48,7 +57,23 @@ je_font* je_font_load(
         fontdata->m_board_size_y = board_blank_size_y;
         fontdata->m_updater = char_texture_updater;
 
-        stbtt_InitFont(&fontdata->m_font, fontdata->m_font_file_buf, stbtt_GetFontOffsetForIndex(fontdata->m_font_file_buf, 0));
+        stbtt_InitFont(&fontdata->m_font, fontdata->m_font_file_buf, 
+            stbtt_GetFontOffsetForIndex(fontdata->m_font_file_buf, 0));
+
+        int ascent, descent, line_gap;
+        stbtt_GetFontVMetrics(&fontdata->m_font, &ascent, &descent, &line_gap);
+
+        fontdata->m_ascent = (int32_t)ascent;
+        fontdata->m_descent = (int32_t)descent;
+        fontdata->m_line_gap = (int32_t)line_gap;
+
+        // https://www.ffutop.com/posts/2024-06-19-freetype-glyph/
+        fontdata->m_line_space = fontdata->m_ascent - fontdata->m_descent + fontdata->m_line_gap;
+
+        fontdata->m_x_scale_for_pix = 
+            stbtt_ScaleForPixelHeight(&fontdata->m_font, fontdata->m_scale_x);
+        fontdata->m_y_scale_for_pix = 
+            stbtt_ScaleForPixelHeight(&fontdata->m_font, fontdata->m_scale_y);
     }
     else
     {
@@ -84,19 +109,15 @@ jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long chcode)
     ch.m_char = (wchar_t)chcode;
 
     /////////////////////////////////////////////////
-
-    auto real_scalex = stbtt_ScaleForPixelHeight(&font->m_font, font->m_scale_x);
-    auto real_scaley = stbtt_ScaleForPixelHeight(&font->m_font, font->m_scale_y);
-
     int x0, y0, x1, y1, advance, lsb, pixel_w, pixel_h;
 
     stbtt_GetCodepointHMetrics(&font->m_font, chcode, &advance, &lsb);
-    stbtt_GetCodepointBitmapBoxSubpixel(&font->m_font, chcode, real_scalex, real_scaley, 0, 0, &x0, &y0, &x1, &y1);
+    stbtt_GetCodepointBox(&font->m_font, chcode, &x0, &y0, &x1, &y1);
 
     auto ch_tex_buffer = stbtt_GetCodepointBitmap(
         &font->m_font,
-        real_scalex,
-        real_scaley,
+        font->m_x_scale_for_pix,
+        font->m_y_scale_for_pix,
         chcode,
         &pixel_w,
         &pixel_h,
@@ -107,12 +128,12 @@ jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long chcode)
     // 所以为了保证所有显示仍然正确，需要让字体的大小扩大，
     // 基线偏移亦要考虑边框
 
-    ch.m_width = x1 - x0 + 2 * (int)font->m_board_size_x;
-    ch.m_height = y1 - y0 + 2 * (int)font->m_board_size_y;
-    ch.m_advised_w = (int)(real_scalex * (float)advance);
-    ch.m_advised_h = -(int)font->m_scale_y;
-    ch.m_baseline_offset_x = x0 - (int)font->m_board_size_x;
-    ch.m_baseline_offset_y = -(y0 - (int)font->m_board_size_y);
+    ch.m_width = pixel_w + 2 * (int)font->m_board_size_x;
+    ch.m_height = pixel_h + 2 * (int)font->m_board_size_y;
+    ch.m_advance_x = (int)round(font->m_x_scale_for_pix * (float)advance);
+    ch.m_advance_y = -(int)round(font->m_y_scale_for_pix * (float)font->m_line_space);
+    ch.m_baseline_offset_x = (int)round(font->m_x_scale_for_pix * (float)x0) - (int)font->m_board_size_x;
+    ch.m_baseline_offset_y = (int)round(font->m_y_scale_for_pix * (float)y0) - (int)font->m_board_size_y;
 
     ch.m_texture =
         jeecs::graphic::texture::create(

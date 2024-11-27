@@ -168,7 +168,7 @@ are generated using Bison and comply with GPLv3 with special bison exception."@
         {
         value(f)?
         {
-            let chtex = f->load_string( "Joy{scale:0.75}{offset:(0.2, -0.1)}4.x{scale:1}\nEngine");
+            let chtex = f->load_string("Joy{scale:0.7}{offset:(0.2, 0.3)}4.x{scale:1.0}\nengine");
             let (width, height) = chtex->size;
 
             let mut display_bar = "-";

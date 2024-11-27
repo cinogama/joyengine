@@ -1323,9 +1323,9 @@ WO_API wo_api wojeapi_font_load_char(wo_vm vm, wo_value args)
     wo_set_int(elem, ch->m_height);
     wo_struct_set(result, 3, elem);
 
-    wo_set_int(elem, ch->m_advised_w);
+    wo_set_int(elem, ch->m_advance_x);
     wo_struct_set(result, 4, elem);
-    wo_set_int(elem, ch->m_advised_h);
+    wo_set_int(elem, ch->m_advance_y);
     wo_struct_set(result, 5, elem);
 
     wo_set_int(elem, ch->m_baseline_offset_x);
