@@ -7,6 +7,8 @@ const char* commit_sha_from_cicd =
 #include "jeecs_commit_msg.hpp"
 };
 
+#include <list>
+
 extern const char* shader_wrapper_path;
 extern const char* shader_wrapper_src;
 
