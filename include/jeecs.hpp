@@ -2353,6 +2353,7 @@ jegl_create_texture [基本接口]
     * 若指定的格式包含 COLOR16、DEPTH、FRAMEBUF、CUBE 或有 MSAA 支持，则不创建像素缓冲，
         对应纹理原始数据的像素将被设置为 nullptr
     * 所有的图形资源都通过 jegl_close_resource 关闭并等待图形线程释放
+    * 考虑到部分图形库的实现，如果指定的宽度或高度为 0，jegl_create_texture将视为 1
 请参见：
     jegl_close_resource
 */
