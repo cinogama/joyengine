@@ -110,7 +110,7 @@
 #define TransformUpdate     TransformUpdate // 用于更新物体的变换和关系 (Transform)
 #define PhysicsUpdate       PhysicsUpdate   // 用于物理引擎的状态更新 (PhysicsUpdate)
 #define LateUpdate          LateUpdate      // * 用户延迟更新
-#define CommitUpdate        CommitUpdate    // 用于提交最终生效的数据 (Transform, Audio)
+#define CommitUpdate        CommitUpdate    // 用于提交最终生效的数据 (Transform, Audio, ScriptRuntime)
 #define GraphicUpdate       GraphicUpdate   // 用于将数据呈现到用户界面
 
 /*

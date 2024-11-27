@@ -114,7 +114,7 @@ namespace jeecs
             }
         }
 
-        void StateUpdate(jeecs::selector&)
+        void CommitUpdate(jeecs::selector&)
         {
             system_instance = this;
 
