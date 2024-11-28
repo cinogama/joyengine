@@ -448,7 +448,7 @@ WO_API wo_api wojeapi_wheel_count(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_woolang_version(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_world_is_valid(wo_vm vm, wo_value args);
 
-void* _je_api_lib_handle = nullptr;
+wo_dylib_handle_t _je_api_lib_handle = nullptr;
 
 void je_extern_lib_woo_api_init()
 {
@@ -900,13 +900,13 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"wojeapi_world_is_valid", (void*)&wojeapi_world_is_valid},
       WO_EXTERN_LIB_FUNC_END,
     };
-    _je_api_lib_handle = wo_fake_lib("libjoyecs", je_fs);
+    _je_api_lib_handle = wo_fake_lib("libjoyecs", je_fs, nullptr);
 }
 
 void je_extern_lib_woo_api_finish()
 {
     assert(_je_api_lib_handle != nullptr);
 
-    wo_unload_lib(_je_api_lib_handle);
+    wo_unload_lib(_je_api_lib_handle, WO_DYLIB_UNREF_AND_BURY);
     _je_api_lib_handle = nullptr;
 }

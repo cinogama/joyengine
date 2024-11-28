@@ -319,7 +319,7 @@ VK_API_PLATFORM_API_LIST
             ~vklibrary_instance_proxy()
             {
                 assert(_instance != nullptr);
-                wo_unload_lib(_instance);
+                wo_unload_lib(_instance, WO_DYLIB_UNREF);
             }
 
             JECS_DISABLE_MOVE_AND_COPY(vklibrary_instance_proxy);

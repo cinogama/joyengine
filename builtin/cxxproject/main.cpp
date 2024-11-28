@@ -4,7 +4,7 @@
 jeecs::typing::type_unregister_guard* _module_guard;
 
 extern "C" {
-	JE_EXPORT void jeecs_module_entry()
+	JE_EXPORT void jeecs_module_entry(wo_dylib_handle_t lib_instance)
 	{
 		_module_guard = new jeecs::typing::type_unregister_guard();
 		jemodule::register_types(_module_guard);

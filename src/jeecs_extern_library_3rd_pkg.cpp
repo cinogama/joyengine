@@ -105,7 +105,13 @@ WO_API wo_api buffer_write_ui16_builder(wo_vm vm, wo_value args);
 WO_API wo_api buffer_write_ui32_builder(wo_vm vm, wo_value args);
 WO_API wo_api buffer_write_ui8_builder(wo_vm vm, wo_value args);
 
-WO_API wo_api crashhandler_init(wo_vm vm, wo_value args);
+WO_API wo_api process_create_process(wo_vm vm, wo_value args);
+WO_API wo_api process_flock_create(wo_vm vm, wo_value args);
+WO_API wo_api process_flock_lock(wo_vm vm, wo_value args);
+WO_API wo_api process_flock_trylock(wo_vm vm, wo_value args);
+WO_API wo_api process_flock_unlock(wo_vm vm, wo_value args);
+WO_API wo_api process_getpid(wo_vm vm, wo_value args);
+WO_API wo_api process_wait_process(wo_vm vm, wo_value args);
 
 WO_API wo_api wo_libimage_create_image(wo_vm vm, wo_value args);
 WO_API wo_api wo_libimage_get_pix_from_image(wo_vm vm, wo_value args);
@@ -114,13 +120,7 @@ WO_API wo_api wo_libimage_open_image(wo_vm vm, wo_value args);
 WO_API wo_api wo_libimage_save_image(wo_vm vm, wo_value args);
 WO_API wo_api wo_libimage_set_pix_to_image(wo_vm vm, wo_value args);
 
-WO_API wo_api process_create_process(wo_vm vm, wo_value args);
-WO_API wo_api process_flock_create(wo_vm vm, wo_value args);
-WO_API wo_api process_flock_lock(wo_vm vm, wo_value args);
-WO_API wo_api process_flock_trylock(wo_vm vm, wo_value args);
-WO_API wo_api process_flock_unlock(wo_vm vm, wo_value args);
-WO_API wo_api process_getpid(wo_vm vm, wo_value args);
-WO_API wo_api process_wait_process(wo_vm vm, wo_value args);
+WO_API wo_api crashhandler_init(wo_vm vm, wo_value args);
 
 WO_API wo_api file_is_same_file(wo_vm vm, wo_value args);
 WO_API wo_api file_readall(wo_vm vm, wo_value args);
@@ -258,13 +258,13 @@ WO_API wo_api vm_save_binary(wo_vm vm, wo_value args);
 WO_API wo_api vmbin_address(wo_vm vm, wo_value args);
 
 
-WO_API void je_static_wo_pkg_socket_entry();
+WO_API void je_static_wo_pkg_socket_entry(wo_dylib_handle_t lib_instance);
 
 WO_API void je_static_wo_pkg_socket_exit();
 
 #endif
 
-std::vector<void*> _je_3rd_pkg_lib_handle;
+std::vector<wo_dylib_handle_t> _je_3rd_pkg_lib_handle;
 void je_extern_lib_3rd_pkgs_init()
 {
     assert(_je_3rd_pkg_lib_handle.empty()); 
@@ -279,7 +279,7 @@ void je_extern_lib_3rd_pkgs_init()
         WO_EXTERN_LIB_FUNC_END,
     };
     _je_3rd_pkg_lib_handle.push_back(
-        wo_fake_lib("libasync", libasync_fs));
+        wo_fake_lib("libasync", libasync_fs, nullptr));
 
     wo_extern_lib_func_t libbuffer_fs[] = {
         wo_extern_lib_func_t{"buffer_append_buffer_builder", (void*)&buffer_append_buffer_builder},
@@ -378,26 +378,7 @@ void je_extern_lib_3rd_pkgs_init()
         WO_EXTERN_LIB_FUNC_END,
     };
     _je_3rd_pkg_lib_handle.push_back(
-        wo_fake_lib("libbuffer", libbuffer_fs));
-
-    wo_extern_lib_func_t libcrashhandler_fs[] = {
-        wo_extern_lib_func_t{"crashhandler_init", (void*)&crashhandler_init},
-        WO_EXTERN_LIB_FUNC_END,
-    };
-    _je_3rd_pkg_lib_handle.push_back(
-        wo_fake_lib("libcrashhandler", libcrashhandler_fs));
-
-    wo_extern_lib_func_t libimage_fs[] = {
-        wo_extern_lib_func_t{"wo_libimage_create_image", (void*)&wo_libimage_create_image},
-        wo_extern_lib_func_t{"wo_libimage_get_pix_from_image", (void*)&wo_libimage_get_pix_from_image},
-        wo_extern_lib_func_t{"wo_libimage_get_size_of_image", (void*)&wo_libimage_get_size_of_image},
-        wo_extern_lib_func_t{"wo_libimage_open_image", (void*)&wo_libimage_open_image},
-        wo_extern_lib_func_t{"wo_libimage_save_image", (void*)&wo_libimage_save_image},
-        wo_extern_lib_func_t{"wo_libimage_set_pix_to_image", (void*)&wo_libimage_set_pix_to_image},
-        WO_EXTERN_LIB_FUNC_END,
-    };
-    _je_3rd_pkg_lib_handle.push_back(
-        wo_fake_lib("libimage", libimage_fs));
+        wo_fake_lib("libbuffer", libbuffer_fs, nullptr));
 
     wo_extern_lib_func_t libprocess_fs[] = {
         wo_extern_lib_func_t{"process_create_process", (void*)&process_create_process},
@@ -410,7 +391,26 @@ void je_extern_lib_3rd_pkgs_init()
         WO_EXTERN_LIB_FUNC_END,
     };
     _je_3rd_pkg_lib_handle.push_back(
-        wo_fake_lib("libprocess", libprocess_fs));
+        wo_fake_lib("libprocess", libprocess_fs, nullptr));
+
+    wo_extern_lib_func_t libimage_fs[] = {
+        wo_extern_lib_func_t{"wo_libimage_create_image", (void*)&wo_libimage_create_image},
+        wo_extern_lib_func_t{"wo_libimage_get_pix_from_image", (void*)&wo_libimage_get_pix_from_image},
+        wo_extern_lib_func_t{"wo_libimage_get_size_of_image", (void*)&wo_libimage_get_size_of_image},
+        wo_extern_lib_func_t{"wo_libimage_open_image", (void*)&wo_libimage_open_image},
+        wo_extern_lib_func_t{"wo_libimage_save_image", (void*)&wo_libimage_save_image},
+        wo_extern_lib_func_t{"wo_libimage_set_pix_to_image", (void*)&wo_libimage_set_pix_to_image},
+        WO_EXTERN_LIB_FUNC_END,
+    };
+    _je_3rd_pkg_lib_handle.push_back(
+        wo_fake_lib("libimage", libimage_fs, nullptr));
+
+    wo_extern_lib_func_t libcrashhandler_fs[] = {
+        wo_extern_lib_func_t{"crashhandler_init", (void*)&crashhandler_init},
+        WO_EXTERN_LIB_FUNC_END,
+    };
+    _je_3rd_pkg_lib_handle.push_back(
+        wo_fake_lib("libcrashhandler", libcrashhandler_fs, nullptr));
 
     wo_extern_lib_func_t libfsys_fs[] = {
         wo_extern_lib_func_t{"file_is_same_file", (void*)&file_is_same_file},
@@ -442,7 +442,7 @@ void je_extern_lib_3rd_pkgs_init()
         WO_EXTERN_LIB_FUNC_END,
     };
     _je_3rd_pkg_lib_handle.push_back(
-        wo_fake_lib("libfsys", libfsys_fs));
+        wo_fake_lib("libfsys", libfsys_fs, nullptr));
 
     wo_extern_lib_func_t libregex_fs[] = {
         wo_extern_lib_func_t{"regex_create", (void*)&regex_create},
@@ -453,7 +453,7 @@ void je_extern_lib_3rd_pkgs_init()
         WO_EXTERN_LIB_FUNC_END,
     };
     _je_3rd_pkg_lib_handle.push_back(
-        wo_fake_lib("libregex", libregex_fs));
+        wo_fake_lib("libregex", libregex_fs, nullptr));
 
     wo_extern_lib_func_t libmath_fs[] = {
         wo_extern_lib_func_t{"math_acos", (void*)&math_acos},
@@ -488,7 +488,7 @@ void je_extern_lib_3rd_pkgs_init()
         WO_EXTERN_LIB_FUNC_END,
     };
     _je_3rd_pkg_lib_handle.push_back(
-        wo_fake_lib("libmath", libmath_fs));
+        wo_fake_lib("libmath", libmath_fs, nullptr));
 
     wo_extern_lib_func_t libsocket_fs[] = {
         wo_extern_lib_func_t{"socket_epoll_add", (void*)&socket_epoll_add},
@@ -534,10 +534,12 @@ void je_extern_lib_3rd_pkgs_init()
         wo_extern_lib_func_t{"socket_udp_sendto_buffer_ipv6", (void*)&socket_udp_sendto_buffer_ipv6},
         wo_extern_lib_func_t{"socket_udp_sendto_ipv4", (void*)&socket_udp_sendto_ipv4},
         wo_extern_lib_func_t{"socket_udp_sendto_ipv6", (void*)&socket_udp_sendto_ipv6},
+        wo_extern_lib_func_t{"wolib_entry", (void*)&je_static_wo_pkg_socket_entry},
+        wo_extern_lib_func_t{"wolib_exit", (void*)&je_static_wo_pkg_socket_exit},
         WO_EXTERN_LIB_FUNC_END,
     };
     _je_3rd_pkg_lib_handle.push_back(
-        wo_fake_lib("libsocket", libsocket_fs));
+        wo_fake_lib("libsocket", libsocket_fs, nullptr));
 
     wo_extern_lib_func_t libthread_fs[] = {
         wo_extern_lib_func_t{"thread_concurrency_count", (void*)&thread_concurrency_count},
@@ -561,7 +563,7 @@ void je_extern_lib_3rd_pkgs_init()
         WO_EXTERN_LIB_FUNC_END,
     };
     _je_3rd_pkg_lib_handle.push_back(
-        wo_fake_lib("libthread", libthread_fs));
+        wo_fake_lib("libthread", libthread_fs, nullptr));
 
     wo_extern_lib_func_t libvm_fs[] = {
         wo_extern_lib_func_t{"vm_create", (void*)&vm_create},
@@ -575,21 +577,19 @@ void je_extern_lib_3rd_pkgs_init()
         WO_EXTERN_LIB_FUNC_END,
     };
     _je_3rd_pkg_lib_handle.push_back(
-        wo_fake_lib("libvm", libvm_fs));
+        wo_fake_lib("libvm", libvm_fs, nullptr));
 
-    je_static_wo_pkg_socket_entry();
 
 #endif    
 }
 
 void je_extern_lib_3rd_pkgs_finish()
 {
-    je_static_wo_pkg_socket_exit();
 
     for (auto* lib : _je_3rd_pkg_lib_handle)
     {
         assert(lib != nullptr);
-        wo_unload_lib(lib);
+        wo_unload_lib(lib, WO_DYLIB_UNREF_AND_BURY);
     }
     _je_3rd_pkg_lib_handle.clear();
 }

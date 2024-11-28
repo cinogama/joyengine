@@ -180,7 +180,7 @@ namespace jeecs
 
         struct type_info;
 
-        using module_entry_t = void(*)(void);
+        using module_entry_t = void(*)(wo_dylib_handle_t);
         using module_leave_t = void(*)(void);
 
         using construct_func_t = void(*)(void*, void*, const jeecs::typing::type_info*);
@@ -3210,19 +3210,19 @@ JE_API bool je_io_fetch_update_windowtitle(const char** out_title);
 je_module_load [基本接口]
 以name为名字，加载指定路径的动态库（遵循woolang规则）加载失败返回nullptr
 */
-JE_API void* je_module_load(const char* name, const char* path);
+JE_API wo_dylib_handle_t je_module_load(const char* name, const char* path);
 
 /*
 je_module_func [基本接口]
 从动态库中加载某个函数，返回函数的地址
 */
-JE_API void* je_module_func(void* lib, const char* funcname);
+JE_API void* je_module_func(wo_dylib_handle_t lib, const char* funcname);
 
 /*
 je_module_unload [基本接口]
 立即卸载某个动态库
 */
-JE_API void je_module_unload(void* lib);
+JE_API void je_module_unload(wo_dylib_handle_t lib);
 
 // Audio
 struct jeal_device;

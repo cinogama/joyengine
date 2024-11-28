@@ -378,9 +378,6 @@ bool je_main_script_entry()
     return !failed_in_start_script;
 }
 
-std::vector<void*> _free_module_list;
-std::mutex _free_module_list_mx;
-
 void je_finish()
 {
     assert(_je_unregister_guard != nullptr);
@@ -406,11 +403,10 @@ void je_finish()
 
     wo_finish([](void*)
         {
-            std::lock_guard g1(_free_module_list_mx);
-            for (auto* mod : _free_module_list)
-                wo_unload_lib(mod);
+            for (auto* mod : _je_delay_free_libs)
+                wo_unload_lib(mod, WO_DYLIB_UNREF);
 
-            _free_module_list.clear();
+            _je_delay_free_libs.clear();
 
             // Free registered external libraries.
             je_extern_lib_module_finish();
@@ -428,11 +424,6 @@ void je_finish()
     jegl_shader_generator_shutdown();
 
     je_log_finish();
-
-    for (auto* delay_free_lib : _je_delay_free_libs)
-        wo_free_lib(delay_free_lib);
-
-    _je_delay_free_libs.clear();    
 }
 
 const char* je_build_version()
@@ -445,13 +436,13 @@ const char* je_build_commit()
     return commit_sha_from_cicd;
 }
 
-void* je_module_load(const char* name, const char* path)
+wo_dylib_handle_t je_module_load(const char* name, const char* path)
 {
-    if (void* lib = wo_load_lib(name, path, nullptr, false))
+    if (wo_dylib_handle_t lib = wo_load_lib(name, path, nullptr, false))
     {
         if (auto entry = (jeecs::typing::module_entry_t)
             wo_load_func(lib, "jeecs_module_entry"))
-            entry();
+            entry(lib);
 
         jeecs::debug::loginfo("Module: '%s'(%p) loaded", path, lib);
         return lib;
@@ -460,21 +451,21 @@ void* je_module_load(const char* name, const char* path)
     return nullptr;
 }
 
-void* je_module_func(void* lib, const char* funcname)
+void* je_module_func(wo_dylib_handle_t lib, const char* funcname)
 {
     assert(lib);
     return wo_load_func(lib, funcname);
 }
 
-void je_module_unload(void* lib)
+void je_module_unload(wo_dylib_handle_t lib)
 {
     assert(lib);
     if (auto leave = (jeecs::typing::module_leave_t)wo_load_func(lib, "jeecs_module_leave"))
         leave();
     jeecs::debug::loginfo("Module: '%p' request to unload.", lib);
-    wo_unregister_lib(lib);
+    wo_unload_lib(lib, WO_DYLIB_BURY);
     
-    // NOTE: Woolang GCptr will invoke some function defined in lib in GC Thread job, 
+    // NOTE: Woolang GCptr may invoke some function defined in lib in GC Thread job, 
     //  to make sure safety, all the lib will be free in je_finish. 
     std::lock_guard g(_je_delay_free_libs_mx);
     _je_delay_free_libs.push_back(lib);

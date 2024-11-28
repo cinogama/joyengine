@@ -11,7 +11,7 @@ extern "C"
 }
 #endif
 
-std::vector<void*> _je_static_module_lib_handle;
+std::vector<wo_dylib_handle_t> _je_static_module_lib_handle;
 void je_extern_lib_module_init()
 {
     assert(_je_static_module_lib_handle.empty());
@@ -25,7 +25,7 @@ void je_extern_lib_module_finish()
     for (auto* lib : _je_static_module_lib_handle)
     {
         assert(lib != nullptr);
-        wo_unload_lib(lib);
+        wo_unload_lib(lib, WO_DYLIB_UNREF_AND_BURY);
     }
     _je_static_module_lib_handle.clear();
 }
