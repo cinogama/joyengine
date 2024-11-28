@@ -469,5 +469,4 @@ void je_module_unload(wo_dylib_handle_t lib)
     //  to make sure safety, all the lib will be free in je_finish. 
     std::lock_guard g(_je_delay_free_libs_mx);
     _je_delay_free_libs.push_back(lib);
-
 }
