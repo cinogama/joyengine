@@ -467,7 +467,7 @@ namespace jeecs
                             if (check_if_need_update_float(b2Body_GetAngularDamping(rigidbody_instance), kinematics->angular_damping))
                                 b2Body_SetAngularDamping(rigidbody_instance, kinematics->angular_damping);
                             if (check_if_need_update_float(b2Body_GetGravityScale(rigidbody_instance), kinematics->gravity_scale))
-                                b2Body_SetAngularDamping(rigidbody_instance, kinematics->gravity_scale);
+                                b2Body_SetGravityScale(rigidbody_instance, kinematics->gravity_scale);
 
                             if (b2Body_IsFixedRotation(rigidbody_instance) != kinematics->lock_rotation)
                             {
