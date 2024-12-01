@@ -3643,7 +3643,8 @@ namespace jeecs
         template<typename T>
         class singleton
         {
-            std::mutex  m_singleton_mutex;
+            std::shared_mutex  
+                        m_singleton_mutex;
             T*          m_instance;
             size_t      m_ref_count;
 
@@ -3733,6 +3734,19 @@ namespace jeecs
                 void unlock()
                 {
                     m_singleton->m_singleton_mutex.unlock();
+                }
+
+                void lock_shared()
+                {
+                    m_singleton->m_singleton_mutex.lock_shared();
+                }
+                bool try_lock_shared()
+                {
+                    return m_singleton->m_singleton_mutex.try_lock_shared();
+                }
+                void unlock_shared()
+                {
+                    m_singleton->m_singleton_mutex.unlock_shared();
                 }
 
                 ~reference()
