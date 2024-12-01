@@ -421,7 +421,7 @@ namespace editor::gui::edit_forms
                                 ->replace("$APPLY_TITLE$", F"je::editor::set_window_title({proj->get_name->enstring});");
 
                             let (start_up_script_binary, start_up_script_binary_sz) = 
-                                new! vm("@/builtin/main.wo", final_boot_script)->unwrap->save_binary(saving_woolang_pdi);
+                                new! vm("@/builtin/main.wo", final_boot_script: buffer)->unwrap->save_binary(saving_woolang_pdi);
 
                             assert(fimg->pack_buffer(start_up_script_binary->ptr, start_up_script_binary_sz, "@/builtin/main.wo"));
 

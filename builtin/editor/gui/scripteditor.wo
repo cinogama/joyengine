@@ -169,7 +169,7 @@ namespace editor::gui
         func run_script(self: ScriptEditor)
         {
             try! history = new! History(self.m_project, self.m_source);
-            try! vmm = vm::create(F"_jeditor_{JobID()}.wo", self.m_source);
+            try! vmm = vm::create(F"_jeditor_{JobID()}.wo", self.m_source: buffer);
 
             assert(self.m_history->shrink(self.m_history_index));
             self.m_history->add(history);

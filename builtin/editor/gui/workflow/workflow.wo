@@ -148,7 +148,7 @@ namespace Editor
         
         do try!
         {
-            try! vm = vm::create(path->tostring + ".wo", source);
+            try! vm = vm::create(path->tostring + ".wo", source: buffer);
             do vm->run();
             do vm->invoke("Editor::set_universe", 
                 [context->get_project->get_env->get_universe: dynamic]);

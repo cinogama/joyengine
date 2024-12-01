@@ -353,7 +353,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                         if (MenuItem("烘焙"))
                         {
                             match (new! vm("je/particalbacker/baker.wo", 
-                                partical_context.m_script))
+                                partical_context.m_script: buffer))
                             {
                             ok(vmm)?
                                 {
