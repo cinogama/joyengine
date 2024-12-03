@@ -111,15 +111,26 @@ namespace editor::gui::edit_forms
                                     ->map(\tex = tex->path->or("<内置>");)
                                     ->or(F"<没有绑定到通道{id}的纹理>");
                                 
-                        do jeapi::gui::widget::File(name, texture_path, \=do nil;)
-                            ->> \path = context->get_project->make_path_normalize(fsys::normalize(path));
-                            ->> \path =  je::graphic::texture::load(option::none, path)
-                                ->> \tex = entity->bind_texture(id, option::value(tex));
-                                ->  or_do(\= path != "" 
-                                        ? jeapi::gui::form::errmsg("加载纹理失败", F"无法加载文件{path}作为纹理")
-                                        | jeapi::gui::form::errmsg("清空纹理失败", "纹理文件不允许被清空");)
-                                ;
-                            ;
+                        match (jeapi::gui::widget::File(name, texture_path, \=do nil;))
+                        {
+                        value(path)?
+                        {
+                            if (path == "")
+                                entity->bind_texture(id, option::none);
+                            else
+                            {
+                                let wpath = context->get_project->make_path_normalize(fsys::normalize(path));
+                                match (je::graphic::texture::load(entity->get_world->get_universe->option::value, wpath))
+                                {
+                                value(text)?
+                                    entity->bind_texture(id, option::value(text));
+                                none?
+                                    jeapi::gui::form::errmsg("加载纹理失败", F"无法加载文件{wpath}作为纹理");
+                                }
+                            }
+                        }
+                        none?;
+                        }
                     }
                     others?
                         Text(F"<不受支持的uniform类型> {name}");
@@ -370,6 +381,9 @@ namespace editor::gui::edit_forms
                                 none?
                                     TextDisabled("当前实体没有Renderer::Shape组件");
                                 }
+                                
+                                Separator();
+
                                 match (cur_e->get_component(Shaders))
                                 {
                                 value(_)?
