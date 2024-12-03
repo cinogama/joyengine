@@ -431,7 +431,7 @@ namespace editor::gui::edit_forms
                                                                         {
                                                                             let default_shader = je::graphic::shader::load(e->get_world->get_universe->option::value, "@/resource/shader/Unlit.shader")->unwrap;
                                                                             e->set_shaders([default_shader]);
-                                                                            e->bind_texture(0, tex);
+                                                                            e->bind_texture(0, option::value(tex));
 
                                                                             let localscale = e->towoo::get_component :<Transform::LocalScale>()->unwrap;
                                                                             let (px, py) = tex->size;

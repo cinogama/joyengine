@@ -569,7 +569,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                                             context->get_project->get_env->get_universe->option::value, 
                                             // NOTE: saving_path是一个可能为规范路径 也有可能是项目路径的东西，这里直接简单处理了
                                             //       照理来说应该区分出类型再分别处理
-                                            context->get_project->make_path_normalize(fsys::normalize(saving_path)))->unwrap);
+                                            context->get_project->make_path_normalize(fsys::normalize(saving_path))));
                                     )
                                     ;
                                 ;

@@ -202,7 +202,7 @@ namespace editor::gui::edit_forms
                                         }
 
                                         let tex = new! je::graphic::texture(ctx.x_pixel_count, ctx.y_pixel_count);
-                                        einst->bind_texture(0, tex);
+                                        einst->bind_texture(0, option::value(tex));
 
                                         let default_shader_path = "@/resource/shader/Unlit.shader";
                                         do je::graphic::shader::load(einst->get_world->get_universe->option::value, default_shader_path)

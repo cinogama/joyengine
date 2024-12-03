@@ -50,6 +50,8 @@ namespace jeapi
             d->set("components", base_components: dynamic);
             do b->get("textures")->>\texs = d->set("textures", texs);;
             do b->get("shaders")->>\shads = d->set("shaders", shads);;
+            do b->get("shape")->>\shap = d->set("shape", shap);;
+
             return d as map<string, dynamic>
                 ->  unsafe::cast:<dict<string, dynamic>>;
         }
@@ -142,6 +144,9 @@ namespace jeapi
                 ->> \d = d->unsafe::cast:<dict<int, string>>;
                 ->  or({})
                 ;
+            let shape = result->get("shape")
+                ->> \d = d as string;
+                -> or("");
 
             let prefab_data = load_prefab(p);
             match (prefab_data
@@ -220,6 +225,16 @@ namespace jeapi
                             do result->remove("textures");
                     }
                 }
+            none?;
+            }
+            match (prefab_data
+                =>> \d = d->get("shape")
+                ->> \d = d: string;
+                ;)
+            {
+            value(prefab_shape)?
+                if (shape == prefab_shape)
+                    do result->remove("shape");
             none?;
             }
             
@@ -331,6 +346,7 @@ namespace jeapi
                                     ; 
                                 : dynamic,
                             ["shaders"] = saving_entity->get_entity_shaders_informs: dynamic,
+                            ["shape"] = saving_entity->get_shape=>>\shape = shape->path;->or(""): dynamic,
                         }
                         where used_texture_id_pass = saving_entity->get_shaders()
                             =>> \shader = shader->get_uniforms()
@@ -565,9 +581,19 @@ namespace jeapi
                     {
                         for (let (passid, path) : textures: dict<dynamic, dynamic>)
                             do graphic::texture::load(w->get_universe->option::value, path as string)
-                                ->> \tex = entity->bind_texture(passid as int, tex);
+                                ->> \tex = entity->bind_texture(passid as int, option::value(tex));
                                 ;
                     };
+
+            // 加载vertex
+            do entity_dat->get("shape")
+                =>> \shape = vertex_path != "" 
+                    ? graphic::vertex::load(w->get_universe->option::value, vertex_path)
+                    | option::none
+                    where vertex_path = shape as string
+                    ;
+                ->> \vertex = entity->set_shape(option::value(vertex));
+                ;
 
             if (in_editor)
                 do entity_dat

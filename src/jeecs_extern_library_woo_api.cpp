@@ -302,6 +302,7 @@ WO_API wo_api wojeapi_get_entity_name(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_get_entity_uid(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_get_framebuf_texture(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_get_parent_anchor_uid(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_shape_of_entity(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_get_sleep_suppression(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_get_system_from_world(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args);
@@ -346,6 +347,7 @@ WO_API wo_api wojeapi_set_parent(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_set_parent_with_uid(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_set_runtime_path(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_set_shaders_of_entity(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_set_shape_for_entity(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_set_sleep_suppression(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_set_uniforms_float(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_set_uniforms_float2(wo_vm vm, wo_value args);
@@ -442,6 +444,9 @@ WO_API wo_api wojeapi_universe_set_timescale(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_unload_module(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_unregister_log_callback(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_update_editor_mouse_pos(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_vertex_create(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_vertex_load(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_vertex_path(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_wait_thread(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_wait_universe(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_wheel_count(wo_vm vm, wo_value args);
@@ -753,6 +758,7 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"wojeapi_get_entity_uid", (void*)&wojeapi_get_entity_uid},
         wo_extern_lib_func_t{"wojeapi_get_framebuf_texture", (void*)&wojeapi_get_framebuf_texture},
         wo_extern_lib_func_t{"wojeapi_get_parent_anchor_uid", (void*)&wojeapi_get_parent_anchor_uid},
+        wo_extern_lib_func_t{"wojeapi_get_shape_of_entity", (void*)&wojeapi_get_shape_of_entity},
         wo_extern_lib_func_t{"wojeapi_get_sleep_suppression", (void*)&wojeapi_get_sleep_suppression},
         wo_extern_lib_func_t{"wojeapi_get_system_from_world", (void*)&wojeapi_get_system_from_world},
         wo_extern_lib_func_t{"wojeapi_get_uniforms_from_shader", (void*)&wojeapi_get_uniforms_from_shader},
@@ -797,6 +803,7 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"wojeapi_set_parent_with_uid", (void*)&wojeapi_set_parent_with_uid},
         wo_extern_lib_func_t{"wojeapi_set_runtime_path", (void*)&wojeapi_set_runtime_path},
         wo_extern_lib_func_t{"wojeapi_set_shaders_of_entity", (void*)&wojeapi_set_shaders_of_entity},
+        wo_extern_lib_func_t{"wojeapi_set_shape_for_entity", (void*)&wojeapi_set_shape_for_entity},
         wo_extern_lib_func_t{"wojeapi_set_sleep_suppression", (void*)&wojeapi_set_sleep_suppression},
         wo_extern_lib_func_t{"wojeapi_set_uniforms_float", (void*)&wojeapi_set_uniforms_float},
         wo_extern_lib_func_t{"wojeapi_set_uniforms_float2", (void*)&wojeapi_set_uniforms_float2},
@@ -893,6 +900,9 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"wojeapi_unload_module", (void*)&wojeapi_unload_module},
         wo_extern_lib_func_t{"wojeapi_unregister_log_callback", (void*)&wojeapi_unregister_log_callback},
         wo_extern_lib_func_t{"wojeapi_update_editor_mouse_pos", (void*)&wojeapi_update_editor_mouse_pos},
+        wo_extern_lib_func_t{"wojeapi_vertex_create", (void*)&wojeapi_vertex_create},
+        wo_extern_lib_func_t{"wojeapi_vertex_load", (void*)&wojeapi_vertex_load},
+        wo_extern_lib_func_t{"wojeapi_vertex_path", (void*)&wojeapi_vertex_path},
         wo_extern_lib_func_t{"wojeapi_wait_thread", (void*)&wojeapi_wait_thread},
         wo_extern_lib_func_t{"wojeapi_wait_universe", (void*)&wojeapi_wait_universe},
         wo_extern_lib_func_t{"wojeapi_wheel_count", (void*)&wojeapi_wheel_count},

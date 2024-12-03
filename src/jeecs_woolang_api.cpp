@@ -1418,11 +1418,118 @@ WO_API wo_api wojeapi_bind_texture_for_entity(wo_vm vm, wo_value args)
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
 
     if (jeecs::Renderer::Textures* textures = entity->get_component<jeecs::Renderer::Textures>())
-        textures->bind_texture((size_t)wo_int(args + 1), *(jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 2));
+    {
+        wo_value elem = wo_push_empty(vm);
+        if (wo_option_get(elem, args + 2))
+        {
+            textures->bind_texture(
+                (size_t)wo_int(args + 1), 
+                *(jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(elem));
+        }
+        else
+        {
+            textures->bind_texture((size_t)wo_int(args + 1), nullptr);
+        }
+    }
 
     // TODO: 如果当前实体不包含jeecs::Renderer::Textures组件，在此panic?
 
     return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_set_shape_for_entity(wo_vm vm, wo_value args)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+
+    if (jeecs::Renderer::Shape* shape = entity->get_component<jeecs::Renderer::Shape>())
+    {
+        wo_value elem = wo_push_empty(vm);
+        if (wo_option_get(elem, args + 1))
+            shape->vertex = *(jeecs::basic::resource<jeecs::graphic::vertex>*)wo_pointer(elem);
+        else
+            shape->vertex = nullptr;
+    }
+
+    // TODO: 如果当前实体不包含jeecs::Renderer::Textures组件，在此panic?
+
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_get_shape_of_entity(wo_vm vm, wo_value args)
+{
+    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
+
+    if (jeecs::Renderer::Shape* shape = entity->get_component<jeecs::Renderer::Shape>())
+    {
+        if (shape->vertex != nullptr)
+            return wo_ret_option_pointer(vm, 
+                new jeecs::basic::resource<jeecs::graphic::vertex>(shape->vertex));
+    }
+
+    return wo_ret_option_none(vm);
+}
+
+WO_API wo_api wojeapi_vertex_load(wo_vm vm, wo_value args)
+{
+    jegl_context* gcontext = nullptr;
+
+    wo_value universe_ptr = wo_push_empty(vm);
+    if (wo_option_get(universe_ptr, args + 0))
+    {
+        gcontext = jegl_uhost_get_context(
+            jegl_uhost_get_or_create_for_universe(
+                wo_pointer(universe_ptr), nullptr));
+    }
+
+    auto loaded_vertex = jeecs::graphic::vertex::load(gcontext, wo_string(args + 1));
+
+    if (loaded_vertex != nullptr)
+        return wo_ret_option_gchandle(vm,
+            new jeecs::basic::resource<jeecs::graphic::vertex>(loaded_vertex), nullptr,
+            [](void* ptr) {
+                delete (jeecs::basic::resource<jeecs::graphic::vertex>*)ptr;
+            });
+
+    return wo_ret_option_none(vm);
+}
+
+WO_API wo_api wojeapi_vertex_create(wo_vm vm, wo_value args)
+{
+    // vertices: array<real>, indices: array<int>
+    jegl_vertex::type vertex_type = (jegl_vertex::type)wo_int(args + 0);
+    std::vector<float> vertices(wo_lengthof(args + 1));
+    std::vector<size_t> indices(wo_lengthof(args + 2));
+
+    wo_value elem = wo_push_empty(vm);
+    for (size_t i = 0; i < vertices.size(); ++i)
+    {
+        wo_arr_get(elem, args + 1, i);
+        vertices[i] = wo_float(elem);
+    }
+
+    for (size_t i = 0; i < indices.size(); ++i)
+    {
+        wo_arr_get(elem, args + 2, i);
+        indices[i] = (size_t)wo_int(elem);
+    }
+
+    auto loaded_vertex = jeecs::graphic::vertex::create(
+        vertex_type, vertices, indices);
+
+    return wo_ret_gchandle(vm,
+        new jeecs::basic::resource<jeecs::graphic::vertex>(loaded_vertex), nullptr,
+        [](void* ptr) {
+            delete (jeecs::basic::resource<jeecs::graphic::vertex>*)ptr;
+        });
+}
+
+WO_API wo_api wojeapi_vertex_path(wo_vm vm, wo_value args)
+{
+    auto* loaded_vertex = (jeecs::basic::resource<jeecs::graphic::vertex>*)wo_pointer(args + 0);
+
+    if (auto path = (*loaded_vertex)->resouce()->m_path)
+        return wo_ret_option_string(vm, path);
+    return wo_ret_option_none(vm);
 }
 
 WO_API wo_api wojeapi_shaders_of_entity(wo_vm vm, wo_value args)
@@ -2867,6 +2974,26 @@ namespace je
         extern("libjoyecs", "wojeapi_graphic_shrink_cache", slow)
         public func shrink_cache(u: universe, target_count: int)=> void;
 
+        public using vertex = gchandle
+        {
+            public enum type
+            {
+                LINES = 0,
+                LINESTRIP,
+                TRIANGLES,
+                TRIANGLESTRIP,
+            }
+
+            extern("libjoyecs", "wojeapi_vertex_load", slow)
+            public func load(univ: option<universe>, path: string)=> option<vertex>;
+
+            extern("libjoyecs", "wojeapi_vertex_create", slow)
+            public func create(vtype: type, vertices: array<real>, indices: array<int>)=> vertex;
+
+            extern("libjoyecs", "wojeapi_vertex_path")
+            public func path(self: vertex)=> option<string>;
+        }
+
         public using texture = gchandle
         {
             extern("libjoyecs", "wojeapi_texture_open", slow)
@@ -3147,7 +3274,13 @@ R"(
         public func get_textures(self: entity)=> dict<int, graphic::texture>;
 
         extern("libjoyecs", "wojeapi_bind_texture_for_entity")
-        public func bind_texture(self: entity, id: int, tex: graphic::texture)=> void;
+        public func bind_texture(self: entity, id: int, tex: option<graphic::texture>)=> void;
+
+        extern("libjoyecs", "wojeapi_set_shape_for_entity")
+        public func set_shape(self: entity, shape: option<graphic::vertex>)=> void;
+
+        extern("libjoyecs", "wojeapi_get_shape_of_entity")
+        public func get_shape(self: entity)=> option<graphic::vertex>;
 
     } // end of namespace entity
 

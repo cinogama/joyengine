@@ -114,7 +114,7 @@ namespace editor::gui::edit_forms
                         do jeapi::gui::widget::File(name, texture_path, \=do nil;)
                             ->> \path = context->get_project->make_path_normalize(fsys::normalize(path));
                             ->> \path =  je::graphic::texture::load(option::none, path)
-                                ->> \tex = entity->bind_texture(id, tex);
+                                ->> \tex = entity->bind_texture(id, option::value(tex));
                                 ->  or_do(\= path != "" 
                                         ? jeapi::gui::form::errmsg("加载纹理失败", F"无法加载文件{path}作为纹理")
                                         | jeapi::gui::form::errmsg("清空纹理失败", "纹理文件不允许被清空");)
@@ -333,9 +333,43 @@ namespace editor::gui::edit_forms
                                 Text("材质编辑器");
                                 Separator();
                                 // 3. 遍历实体的材质（如果有
-
+                                static let Shape = je::typeinfo::load("Renderer::Shape")->unwrap();
                                 static let Shaders = je::typeinfo::load("Renderer::Shaders")->unwrap();
                                 static let BadShadersUniform = je::typeinfo::load("Editor::BadShadersUniform")->unwrap();
+                                match (cur_e->get_component(Shape))
+                                {
+                                value(_)?
+                                {
+                                    let current_shape_path = 
+                                        cur_e->get_shape
+                                            ->> \v = v->path->or("<内置>");
+                                            -> or("<面片>");
+
+                                    match (jeapi::gui::widget::File("绘制形状", current_shape_path, \=do nil;))
+                                    {
+                                    value(shape_path)?
+                                    {
+                                        if (shape_path != "")
+                                        {
+                                            let path = context->get_project->make_path_normalize(fsys::normalize(shape_path));
+
+                                            match (je::graphic::vertex::load(cur_e->get_world->get_universe->option::value, path))
+                                            {
+                                            value(vertex)?
+                                                cur_e->set_shape(option::value <| vertex);
+                                            none?
+                                                jeapi::gui::form::errmsg("加载形状失败", F"无法加载文件{path}作为形状");
+                                            }
+                                        }
+                                        else
+                                            cur_e->set_shape(option::none);
+                                    }
+                                    none?;
+                                    }
+                                }
+                                none?
+                                    TextDisabled("当前实体没有Renderer::Shape组件");
+                                }
                                 match (cur_e->get_component(Shaders))
                                 {
                                 value(_)?
@@ -462,7 +496,7 @@ namespace editor::gui::edit_forms
                                         }
                                     }
                                 none?
-                                    Text("当前实体没有Renderer::Shaders组件");
+                                    TextDisabled("当前实体没有Renderer::Shaders组件");
                                 }
                                 // 3.1 遍历材质的Uniform数据和纹理信息
                                 EndChild();

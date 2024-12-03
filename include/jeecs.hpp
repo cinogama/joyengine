@@ -8613,11 +8613,16 @@ namespace jeecs
             void bind_texture(size_t passid, const basic::resource<graphic::texture>& texture)
             {
                 assert(texture != nullptr);
-                for (auto& [pass, tex] : textures)
+                for (auto i = textures.begin(); i != textures.end(); ++i)
                 {
+                    auto& [pass, tex] = *i;
                     if (pass == passid)
                     {
-                        tex = texture;
+                        if (texture)
+                            tex = texture;
+                        else
+                            textures.erase(i);
+
                         return;
                     }
                 }
