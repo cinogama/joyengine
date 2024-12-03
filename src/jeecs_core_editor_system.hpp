@@ -433,7 +433,11 @@ namespace jeecs
                         { R"(
 import je::shader;
         
-ZTEST (ALWAYS);
+SHARED  (true);
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (ONE, ZERO);
+CULL    (NONE);
         
 VAO_STRUCT! vin {
     vertex : float3,
@@ -454,7 +458,6 @@ public let vert =
         where vertex_pos = vec4(v.vertex, 1.)
     ;
 ;
-        
 public let frag = 
     \f: v2f = fout{ 
         color = vec4(show_color, 1.),
@@ -470,7 +473,11 @@ public let frag =
                         { R"(
 import je::shader;
         
-ZTEST (LESS);
+SHARED  (true);
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (ONE, ZERO);
+CULL    (NONE);
         
 VAO_STRUCT! vin {
     vertex : float3,
@@ -558,8 +565,8 @@ public let frag =
                 axis_z_e.get_component<Renderer::Shape>()->vertex = axis_z;
                 select_box.get_component<Renderer::Shape>()->vertex = select_box_vert;
 
-                select_box.get_component<Renderer::Rendqueue>()->rend_queue = 0;
-                axis_x_e.get_component<Renderer::Rendqueue>()->rend_queue =
+                select_box.get_component<Renderer::Rendqueue>()->rend_queue = 
+                    axis_x_e.get_component<Renderer::Rendqueue>()->rend_queue =
                     axis_y_e.get_component<Renderer::Rendqueue>()->rend_queue =
                     axis_z_e.get_component<Renderer::Rendqueue>()->rend_queue = 100000;
 
@@ -842,8 +849,6 @@ public let frag =
                                     eshape->vertex->resouce()->m_raw_vertex_data->m_y_max - eshape->vertex->resouce()->m_raw_vertex_data->m_y_min,
                                     eshape->vertex->resouce()->m_raw_vertex_data->m_z_max - eshape->vertex->resouce()->m_raw_vertex_data->m_z_min
                                 ));
-
-                        localScale.scale = 1.05f * localScale.scale;
                     }
                     else
                     {
