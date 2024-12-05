@@ -9,6 +9,17 @@ using operation_t = std::variant<jegl_shader_value::type_base_t, calc_func_t>;
 
 const std::vector<std::pair<std::string, std::vector<operation_t>>> _operation_table =
 {
+{"+", {jegl_shader_value::INTEGER, jegl_shader_value::INTEGER,
+reduce_method{return new jegl_shader_value(args[0]->m_integer + args[1]->m_integer); }}},
+{"-", {jegl_shader_value::INTEGER, jegl_shader_value::INTEGER,
+reduce_method{return new jegl_shader_value(args[0]->m_integer - args[1]->m_integer); }}},
+{"*", {jegl_shader_value::INTEGER, jegl_shader_value::INTEGER,
+reduce_method{return new jegl_shader_value(args[0]->m_integer * args[1]->m_integer); }}},
+{"/", {jegl_shader_value::INTEGER, jegl_shader_value::INTEGER,
+reduce_method{return new jegl_shader_value(args[0]->m_integer / args[1]->m_integer); }}},
+{"-", {jegl_shader_value::INTEGER,
+reduce_method{return new jegl_shader_value(-args[0]->m_integer); }}},
+
 {"+", {jegl_shader_value::FLOAT, jegl_shader_value::FLOAT,
 reduce_method{return new jegl_shader_value(args[0]->m_float + args[1]->m_float); }}},
 {"-", {jegl_shader_value::FLOAT, jegl_shader_value::FLOAT,
@@ -114,9 +125,15 @@ reduce_method{return new jegl_shader_value(
 -args[0]->m_float4[2],
 -args[0]->m_float4[3]); }} },
 
+{ "int", {jegl_shader_value::INTEGER,
+reduce_method{return new jegl_shader_value(args[0]->m_integer); }} },
+{ "int", {jegl_shader_value::FLOAT,
+reduce_method{return new jegl_shader_value((int)args[0]->m_float); }} },
 //
 {"float", {jegl_shader_value::FLOAT,
 reduce_method{return new jegl_shader_value(args[0]->m_float); }} },
+{ "float", {jegl_shader_value::INTEGER,
+reduce_method{return new jegl_shader_value((float)args[0]->m_integer); }} },
 //
 {"float2", {jegl_shader_value::FLOAT, jegl_shader_value::FLOAT,
 reduce_method{return new jegl_shader_value(args[0]->m_float, args[1]->m_float); }} },

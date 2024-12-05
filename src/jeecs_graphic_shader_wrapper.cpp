@@ -62,6 +62,12 @@ WO_API wo_api jeecs_shader_float_create(wo_vm vm, wo_value args)
         new jegl_shader_value(
             (float)wo_real(args + 0)), nullptr, _free_shader_value);
 }
+WO_API wo_api jeecs_shader_integer_create(wo_vm vm, wo_value args)
+{
+    return wo_ret_gchandle(vm,
+        new jegl_shader_value(
+            (int)wo_int(args + 0)), nullptr, _free_shader_value);
+}
 WO_API wo_api jeecs_shader_float2_create(wo_vm vm, wo_value args)
 {
     return wo_ret_gchandle(vm,
@@ -622,24 +628,23 @@ public enum shader_value_type
     UNIFORM_BLOCK_VARIABLE = 0x0008,
     FAST_EVAL = 0x0010,
     //
-    TYPE_MASK = 0x0000'ff00,
+    TYPE_MASK = 0x000F'FF00,
 
     FLOAT = 0x0100,
     FLOAT2 = 0x0200,
-    FLOAT3 = 0x0300,
-    FLOAT4 = 0x0400,
+    FLOAT3 = 0x0400,
+    FLOAT4 = 0x0800,
 
-    FLOAT2x2 = 0x0500,
-    FLOAT3x3 = 0x0600,
-    FLOAT4x4 = 0x0700,
+    FLOAT2x2 = 0x1000,
+    FLOAT3x3 = 0x2000,
+    FLOAT4x4 = 0x4000,
 
-    TEXTURE2D = 0x0800,
-    TEXTURE_CUBE = 0x0900,
-    TEXTURE2D_MS = 0x0a00,
+    INTEGER = 0x8000,
 
-    INTEGER = 0x0b00,
-
-    STRUCT = 0x0c00,
+    TEXTURE2D = 0x010000,
+    TEXTURE_CUBE = 0x020000,
+    TEXTURE2D_MS = 0x040000,
+    STRUCT = 0x080000,
 }
 
 public using float = gchandle;
@@ -911,6 +916,38 @@ namespace real
 
     public func operator / <T>(a:real, b:T)=> float
         where b is float;
+    {
+        return apply_operation:<float>("/", a, b);
+    }
+}
+
+namespace integer
+{
+    public let zero = integer::const(0);
+    public let one = integer::const(1);
+
+    extern("libjoyecs", "jeecs_shader_integer_create")
+    public func const(init_val: int)=> integer;
+
+    public func create(...)=> integer{return apply_operation:<integer>("int", ......);}
+
+     public func operator + <T>(a: integer, b:T)=> integer
+        where b is integer || b is int;
+    {
+        return apply_operation:<integer>("+", a, b);
+    }
+    public func operator - <T>(a:integer, b:T)=> integer
+        where b is integer || b is int;
+    {
+        return apply_operation:<float>("-", a, b);
+    }
+    public func operator * <T>(a:integer, b:T)=> integer
+        where b is integer || b is int;
+    {
+        return apply_operation:<float>("*", a, b);
+    }
+    public func operator / <T>(a:integer, b:T)=> integer
+        where b is integer || b is int;
     {
         return apply_operation:<float>("/", a, b);
     }
@@ -1191,7 +1228,10 @@ namespace float3x3
             return apply_operation:<float3>("*", a, b);
     }
 }
-
+public func ivec1(...)
+{
+    return integer::create(......);
+}
 public func vec1(...)
 {
     return float::create(......);
@@ -1831,7 +1871,7 @@ using struct_define = handle
         out_struct_decl += F"    public func {vao_member_name}(self: {graphic_struct_name}_t";
         if (array_size->is_value())
         {
-            out_struct_decl += F"index) where index is integer || index is int;\n\{\n        ";
+            out_struct_decl += F", index) where index is integer || index is int;\n\{\n        ";
         
             if (is_struct_type)
                 out_struct_decl += F"return self: gchandle: structure->get_index:<structure>(\"{vao_member_name}\", index): gchandle: {vao_shader_type}_t;\n";
@@ -1875,7 +1915,7 @@ using uniform_block = struct_define
         self: handle: struct_define->append_struct_member(name, struct_type);
         return shared_uniform:<structure>(name): gchandle: StructDefineT;
     }
-    public func append_uniform_array<T>(self: uniform_block, name: string, array_size: int)
+    /*public func append_uniform_array<T>(self: uniform_block, name: string, array_size: int)
     {
         self: handle: struct_define->append_member_array:<T>(name, array_size);
         return shared_uniform:<T>(name);
@@ -1884,7 +1924,7 @@ using uniform_block = struct_define
     {
         self: handle: struct_define->append_struct_member_array(name, struct_type, array_size);
         return shared_uniform:<structure>(name): gchandle: StructDefineT;
-    }
+    }*/
 }
 
 #macro UNIFORM_BUFFER
@@ -1916,7 +1956,7 @@ using uniform_block = struct_define
     do eat_token("{", std::token_type::l_left_curly_braces);
     
     // 1. Get struct item name.
-    let struct_infos = []mut: vec<(string, (string, bool, option<int>))>;
+    let struct_infos = []mut: vec<(string, (string, bool))>;
     while (true)
     {
         if (try_eat_token(std::token_type::l_right_curly_braces)->is_value())
@@ -1929,15 +1969,8 @@ using uniform_block = struct_define
         // Shader type only have a identifier and without template.
         let is_struct = try_eat_token(std::token_type::l_struct);
         let struct_shader_type = eat_token("Identifier", std::token_type::l_identifier);
-        let mut array_size = option::none: option<int>;
-
-        if (try_eat_token(std::token_type::l_index_begin)->is_value())
-        {
-            array_size = option::value(eat_token("Integer literal", std::token_type::l_literal_integer): int);
-            do eat_token("]", std::token_type::l_index_end);
-        }
-
-        struct_infos->add((struct_member, (struct_shader_type, is_struct->is_value, array_size)));
+     
+        struct_infos->add((struct_member, (struct_shader_type, is_struct->is_value)));
 
         if (!try_eat_token(std::token_type::l_comma)->is_value())
         {
@@ -1950,22 +1983,13 @@ using uniform_block = struct_define
 
     //  OK We have current struct info, built struct out
     let mut out_struct_decl = F"public let {graphic_struct_name} = uniform_block::create(\"{graphic_struct_name}\", {bind_place});";
-    for(let (vao_member_name, (vao_shader_type, is_struct_type, array_size)) : struct_infos)
+    for(let (vao_member_name, (vao_shader_type, is_struct_type)) : struct_infos)
     {
         out_struct_decl += F"public let {vao_member_name} = {graphic_struct_name}->";
-        match (array_size)
-        {
-        none?
-            if (is_struct_type)
-                out_struct_decl += F"append_struct_uniform:<{vao_shader_type}_t>(\"{vao_member_name->upper}\", {vao_shader_type});\n";
-            else
-                out_struct_decl += F"append_uniform:<{vao_shader_type}>(\"{vao_member_name->upper}\");\n";
-        value(size)?
-            if (is_struct_type)
-                out_struct_decl += F"append_struct_uniform_array:<{vao_shader_type}_t>(\"{vao_member_name->upper}\", {vao_shader_type}, {size});\n";
-            else
-                out_struct_decl += F"append_uniform_array:<{vao_shader_type}>(\"{vao_member_name->upper}\", {size});\n";
-        }
+        if (is_struct_type)
+            out_struct_decl += F"append_struct_uniform:<{vao_shader_type}_t>(\"{vao_member_name->upper}\", {vao_shader_type});\n";
+        else
+            out_struct_decl += F"append_uniform:<{vao_shader_type}>(\"{vao_member_name->upper}\");\n";
     }
     return out_struct_decl;
 }

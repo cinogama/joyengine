@@ -221,6 +221,7 @@ WO_API wo_api jeecs_shader_float4_create(wo_vm vm, wo_value args);
 WO_API wo_api jeecs_shader_float4x4_create(wo_vm vm, wo_value args);
 WO_API wo_api jeecs_shader_float_create(wo_vm vm, wo_value args);
 WO_API wo_api jeecs_shader_get_vertex_in(wo_vm vm, wo_value args);
+WO_API wo_api jeecs_shader_integer_create(wo_vm vm, wo_value args);
 WO_API wo_api jeecs_shader_sampler2d_bind_texture(wo_vm vm, wo_value args);
 WO_API wo_api jeecs_shader_texture2d_set_channel(wo_vm vm, wo_value args);
 WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args);
@@ -677,6 +678,7 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"jeecs_shader_float4x4_create", (void*)&jeecs_shader_float4x4_create},
         wo_extern_lib_func_t{"jeecs_shader_float_create", (void*)&jeecs_shader_float_create},
         wo_extern_lib_func_t{"jeecs_shader_get_vertex_in", (void*)&jeecs_shader_get_vertex_in},
+        wo_extern_lib_func_t{"jeecs_shader_integer_create", (void*)&jeecs_shader_integer_create},
         wo_extern_lib_func_t{"jeecs_shader_sampler2d_bind_texture", (void*)&jeecs_shader_sampler2d_bind_texture},
         wo_extern_lib_func_t{"jeecs_shader_texture2d_set_channel", (void*)&jeecs_shader_texture2d_set_channel},
         wo_extern_lib_func_t{"jeecs_shader_wrap_result_pack", (void*)&jeecs_shader_wrap_result_pack},

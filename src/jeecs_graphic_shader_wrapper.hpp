@@ -24,24 +24,23 @@ struct jegl_shader_value
         UNIFORM_BLOCK_VARIABLE = 0x0008,
         FAST_EVAL = 0x0010,
         //
-        TYPE_MASK = 0x0000'ff00,
+        TYPE_MASK = 0x000F'FF00,
 
         FLOAT = 0x0100,
         FLOAT2 = 0x0200,
-        FLOAT3 = 0x0300,
-        FLOAT4 = 0x0400,
+        FLOAT3 = 0x0400,
+        FLOAT4 = 0x0800,
 
-        FLOAT2x2 = 0x0500,
-        FLOAT3x3 = 0x0600,
-        FLOAT4x4 = 0x0700,
+        FLOAT2x2 = 0x1000,
+        FLOAT3x3 = 0x2000,
+        FLOAT4x4 = 0x4000,
 
-        TEXTURE2D = 0x0800,
-        TEXTURE_CUBE = 0x0900,
-        TEXTURE2D_MS = 0x0a00,
+        INTEGER = 0x8000,
 
-        INTEGER = 0x0b00,
-
-        STRUCT = 0x0c00,
+        TEXTURE2D = 0x010000,
+        TEXTURE_CUBE = 0x020000,
+        TEXTURE2D_MS = 0x040000,
+        STRUCT = 0x080000,
     };
 
     type m_type;
@@ -232,9 +231,7 @@ struct jegl_shader_value
     }
     inline bool is_texture() const
     {
-        return m_type == type::TEXTURE2D
-            || m_type == type::TEXTURE2D_MS
-            || m_type == type::TEXTURE_CUBE;
+        return 0 != (m_type & (type::TEXTURE2D | type::TEXTURE2D_MS | type::TEXTURE_CUBE));
     }
 };
 

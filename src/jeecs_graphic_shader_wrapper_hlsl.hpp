@@ -140,8 +140,11 @@ namespace jeecs
                             }
                             else if (value->m_opname[0] == '.')
                             {
-                                assert(variables.size() == 1);
+                                assert(variables.size() == 1 || variables.size() == 2);
                                 eval_expr += variables[0] + value->m_opname;
+
+                                if (variables.size() == 2)
+                                    eval_expr += "[" + variables[1] + "]";
                             }
                             else
                             {
