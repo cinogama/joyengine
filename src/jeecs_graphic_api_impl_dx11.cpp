@@ -1047,6 +1047,7 @@ namespace jeecs::graphic::api::dx11
             texture_describe.ArraySize = 1;
 
             bool float16 = 0 != (resource->m_raw_texture_data->m_format & jegl_texture::format::FLOAT16);
+            bool is_cube = 0 != (resource->m_raw_texture_data->m_format & jegl_texture::format::CUBE);
 
             switch (resource->m_raw_texture_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
             {
@@ -1060,6 +1061,8 @@ namespace jeecs::graphic::api::dx11
                     ? DXGI_FORMAT_R16G16B16A16_FLOAT
                     : DXGI_FORMAT_R8G8B8A8_UNORM;
                 break;
+            default:
+                texture_describe.Format = DXGI_FORMAT_UNKNOWN;
             }
 
             // 不使用MSAA
@@ -1072,52 +1075,40 @@ namespace jeecs::graphic::api::dx11
             texture_describe.MiscFlags = 0;
 
             jedx11_texture* jedx11_texture_res = new jedx11_texture;
+            D3D11_SUBRESOURCE_DATA texture_sub_data;
+            D3D11_SUBRESOURCE_DATA* texture_sub_data_ptr = nullptr;
+
+            D3D11_SHADER_RESOURCE_VIEW_DESC texture_shader_view_describe;
+
+            texture_shader_view_describe.Format = texture_describe.Format;
+            texture_shader_view_describe.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+            texture_shader_view_describe.Texture2D.MipLevels = 1;
+            texture_shader_view_describe.Texture2D.MostDetailedMip = 0;
 
             if ((resource->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF)
                 == jegl_texture::format::FRAMEBUF)
             {
                 if (resource->m_raw_texture_data->m_format & jegl_texture::format::DEPTH)
                 {
-                    texture_describe.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+                    texture_describe.Format = DXGI_FORMAT_R24G8_TYPELESS;
                     texture_describe.Usage = D3D11_USAGE_DEFAULT;
 
                     // 不使用MSAA
                     texture_describe.SampleDesc.Count = 1;
                     texture_describe.SampleDesc.Quality = 0;
 
-                    texture_describe.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+                    texture_describe.BindFlags |= D3D11_BIND_DEPTH_STENCIL;
 
-                    // 创建深度缓冲区以及深度模板视图
-                    JERCHECK(context->m_dx_device->CreateTexture2D(
-                        &texture_describe, nullptr,
-                        jedx11_texture_res->m_texture.GetAddressOf()));
-                    // JERCHECK(context->m_dx_device->CreateShaderResourceView(
-                    //     jedx11_texture_res->m_texture.Get(), nullptr,
-                    //     jedx11_texture_res->m_texture_view.GetAddressOf()));
+                    texture_shader_view_describe.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
                 }
                 else
                 {
                     texture_describe.BindFlags |= D3D11_BIND_RENDER_TARGET;
                     texture_describe.Usage = D3D11_USAGE_DEFAULT;
-
-                    JERCHECK(context->m_dx_device->CreateTexture2D(
-                        &texture_describe, nullptr, jedx11_texture_res->m_texture.GetAddressOf()));
-
-                    D3D11_SHADER_RESOURCE_VIEW_DESC texture_shader_view_describe;
-                    texture_shader_view_describe.Format = texture_describe.Format;
-                    texture_shader_view_describe.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-                    texture_shader_view_describe.Texture2D.MipLevels = 1;
-                    texture_shader_view_describe.Texture2D.MostDetailedMip = 0;
-
-                    JERCHECK(context->m_dx_device->CreateShaderResourceView(
-                        jedx11_texture_res->m_texture.Get(),
-                        &texture_shader_view_describe,
-                        jedx11_texture_res->m_texture_view.GetAddressOf()));
                 }
             }
             else
             {
-                D3D11_SUBRESOURCE_DATA texture_sub_data;
                 texture_sub_data.pSysMem = resource->m_raw_texture_data->m_pixels;
                 texture_sub_data.SysMemPitch =
                     (UINT)resource->m_raw_texture_data->m_width *
@@ -1129,21 +1120,20 @@ namespace jeecs::graphic::api::dx11
                     ((UINT)resource->m_raw_texture_data->m_format &
                         jegl_texture::format::COLOR_DEPTH_MASK);
 
-                JERCHECK(context->m_dx_device->CreateTexture2D(
-                    &texture_describe, &texture_sub_data,
-                    jedx11_texture_res->m_texture.GetAddressOf()));
-
-                D3D11_SHADER_RESOURCE_VIEW_DESC texture_shader_view_describe;
-                texture_shader_view_describe.Format = texture_describe.Format;
-                texture_shader_view_describe.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-                texture_shader_view_describe.Texture2D.MipLevels = 1;
-                texture_shader_view_describe.Texture2D.MostDetailedMip = 0;
-
-                JERCHECK(context->m_dx_device->CreateShaderResourceView(
-                    jedx11_texture_res->m_texture.Get(),
-                    &texture_shader_view_describe,
-                    jedx11_texture_res->m_texture_view.GetAddressOf()));
+                texture_sub_data_ptr = &texture_sub_data;
             }
+
+            assert(DXGI_FORMAT_UNKNOWN != texture_describe.Format);
+            assert(DXGI_FORMAT_UNKNOWN != texture_shader_view_describe.Format);
+
+            JERCHECK(context->m_dx_device->CreateTexture2D(
+                &texture_describe, texture_sub_data_ptr,
+                jedx11_texture_res->m_texture.GetAddressOf()));
+
+            JERCHECK(context->m_dx_device->CreateShaderResourceView(
+                jedx11_texture_res->m_texture.Get(),
+                &texture_shader_view_describe,
+                jedx11_texture_res->m_texture_view.GetAddressOf()));
 
             JEDX11_TRACE_DEBUG_NAME(jedx11_texture_res->m_texture,
                 std::string(resource->m_path == nullptr ? "_builtin_texture_" : resource->m_path) + "_Texture");
@@ -1233,9 +1223,16 @@ namespace jeecs::graphic::api::dx11
                 {
                     if (jedx11_framebuffer_res->m_depth_view.Get() == nullptr)
                     {
+                        D3D11_DEPTH_STENCIL_VIEW_DESC depth_view_describe;
+                        depth_view_describe.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+                        depth_view_describe.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+                        depth_view_describe.Texture2D.MipSlice = 0;
+                        depth_view_describe.Flags = 0;
+
                         JERCHECK(context->m_dx_device->CreateDepthStencilView(
                             std::launder(reinterpret_cast<jedx11_texture*>(attachment->resouce()->m_handle.m_ptr))->m_texture.Get(),
-                            nullptr, jedx11_framebuffer_res->m_depth_view.GetAddressOf()));
+                            &depth_view_describe, 
+                            jedx11_framebuffer_res->m_depth_view.GetAddressOf()));
 
                         JEDX11_TRACE_DEBUG_NAME(jedx11_framebuffer_res->m_depth_view, "Framebuffer_DepthView");
                     }

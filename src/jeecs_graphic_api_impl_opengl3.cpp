@@ -484,13 +484,33 @@ namespace jeecs::graphic::api::gl3
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
+            const GLenum jegl_texture_cube_map_ways[] = {
+                GL_TEXTURE_CUBE_MAP_POSITIVE_X,
+                GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
+                GL_TEXTURE_CUBE_MAP_POSITIVE_Y,
+                GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
+                GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
+                GL_TEXTURE_CUBE_MAP_NEGATIVE_Z
+            };
+
             if (is_depth)
             {
                 if (is_16bit)
                     jeecs::debug::logerr("Depth texture cannot use 16bit.");
 
                 if (is_cube)
-                    assert(0); // TODO;
+                {
+                    for (auto way : jegl_texture_cube_map_ways)
+                    {
+                        glTexImage2D(way, 0, GL_DEPTH_COMPONENT,
+                            (GLsizei)resource->m_raw_texture_data->m_width,
+                            (GLsizei)resource->m_raw_texture_data->m_height,
+                            0,
+                            GL_DEPTH_COMPONENT, GL_UNSIGNED_INT,
+                            NULL
+                        );
+                    }
+                }
                 else
                     glTexImage2D(gl_texture_type, 0, GL_DEPTH_COMPONENT,
                         (GLsizei)resource->m_raw_texture_data->m_width,
@@ -516,7 +536,17 @@ namespace jeecs::graphic::api::gl3
                 }
 
                 if (is_cube)
-                    assert(0); // todo;
+                {
+                    for (auto way : jegl_texture_cube_map_ways)
+                    {
+                        glTexImage2D(way, 0, texture_aim_format,
+                            (GLsizei)resource->m_raw_texture_data->m_width,
+                            (GLsizei)resource->m_raw_texture_data->m_height,
+                            0, texture_src_format,
+                            is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
+                            resource->m_raw_texture_data->m_pixels);
+                    }
+                }
                 else
                 {
                     glTexImage2D(gl_texture_type,

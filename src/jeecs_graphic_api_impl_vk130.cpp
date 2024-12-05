@@ -2781,6 +2781,7 @@ VK_API_PLATFORM_API_LIST
         jevk11_texture* create_texture_instance(jegl_resource* resource)
         {
             jegl_texture* texture_raw_data = resource->m_raw_texture_data;
+            bool is_cube = 0 != (resource->m_raw_texture_data->m_format & jegl_texture::format::CUBE);
 
             if (texture_raw_data->m_format & jegl_texture::format::FRAMEBUF)
             {
@@ -3611,6 +3612,7 @@ VK_API_PLATFORM_API_LIST
                 {
                     resource->m_raw_texture_data->m_modified = false;
                     // Modified, free current resource id, reload one.
+
                     close_resource(ctx, resource);
                     resource->m_handle.m_ptr = nullptr;
                     create_resource(ctx, nullptr, resource);

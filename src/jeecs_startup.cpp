@@ -78,6 +78,8 @@ jegl_graphic_api_entry jegl_get_host_graphic_api(void)
 {
     if (_jegl_host_graphic_api == nullptr)
     {
+        return jegl_using_vk130_apis;
+
 #if defined(JE_ENABLE_DX11_GAPI)
         return jegl_using_dx11_apis;
 #elif defined(JE_ENABLE_GL330_GAPI) || defined(JE_ENABLE_GLES300_GAPI)

@@ -52,26 +52,33 @@ namespace jeecs
                     break;
                 }
             }
+            std::string generate_struct_body(shader_wrapper* wrapper, shader_struct_define* st)
+            {
+                std::string decl = "";
+                for (auto& variable_inform : st->variables)
+                {
+                    if (variable_inform.type == jegl_shader_value::type::STRUCT)
+                        decl += "    " + variable_inform.struct_type_may_nil->name + " " + variable_inform.name;
+                    else
+                        decl += "    " + get_typename(variable_inform.type) + " " + variable_inform.name + "";
+
+                    if (variable_inform.array_size)
+                        decl += "[" + std::to_string(variable_inform.array_size.value()) + "]";
+
+                    decl += +";\n";
+                }
+                return decl;
+            }
             virtual std::string generate_struct(shader_wrapper* wrapper, shader_struct_define* st) override
             {
                 std::string decl = "struct " + st->name + "\n{\n";
-                for (auto& variable_inform : st->variables)
-                    if (variable_inform.type == jegl_shader_value::type::STRUCT)
-                        decl += "    " + variable_inform.struct_type_may_nil->name + " " + variable_inform.name + ";\n";
-                    else
-                        decl += "    " + get_typename(variable_inform.type) + " " + variable_inform.name + ";\n";
-
+                decl += generate_struct_body(wrapper, st);
                 return decl + "};\n";
             }
             virtual std::string generate_uniform_block(shader_wrapper* wrapper, shader_struct_define* st) override
             {
                 std::string decl = attrib_binding(st->binding_place, 1) + "cbuffer " + st->name + ": register(b" + std::to_string(st->binding_place + 1) + ")\n{\n";
-                for (auto& variable_inform : st->variables)
-                    if (variable_inform.type == jegl_shader_value::type::STRUCT)
-                        decl += "    " + variable_inform.struct_type_may_nil->name + " " + variable_inform.name + ";\n";
-                    else
-                        decl += "    " + get_typename(variable_inform.type) + " " + variable_inform.name + ";\n";
-
+                decl += generate_struct_body(wrapper, st);
                 return decl + "};\n";
             }
 
@@ -104,15 +111,17 @@ namespace jeecs
                             for (size_t i = 0; i < value->m_opnums_count; i++)
                                 variables.push_back(generate_code(context, value->m_opnums[i], target, out_src));
 
+                            std::string eval_expr;
+
                             if (value->m_opname == "+"s
                                 || value->m_opname == "-"s
                                 || value->m_opname == "/"s)
                             {
                                 assert(variables.size() == 2 || value->m_opname == "-"s);
                                 if (variables.size() == 1)
-                                    apply += value->m_opname + variables[0];
+                                    eval_expr += value->m_opname + variables[0];
                                 else
-                                    apply += variables[0] + " " + value->m_opname + " " + variables[1];
+                                    eval_expr += variables[0] + " " + value->m_opname + " " + variables[1];
                             }
                             else if (value->m_opname == "*"s)
                             {
@@ -123,16 +132,16 @@ namespace jeecs
                                     || value->m_opnums[1]->get_type() == jegl_shader_value::type::FLOAT2x2
                                     || value->m_opnums[1]->get_type() == jegl_shader_value::type::FLOAT3x3
                                     || value->m_opnums[1]->get_type() == jegl_shader_value::type::FLOAT4x4)
-                                    apply += "mul(" + variables[0] + "," + variables[1] + ")";
+                                    eval_expr += "mul(" + variables[0] + "," + variables[1] + ")";
                                 else
                                 {
-                                    apply += variables[0] + " " + value->m_opname + " " + variables[1];
+                                    eval_expr += variables[0] + " " + value->m_opname + " " + variables[1];
                                 }
                             }
                             else if (value->m_opname[0] == '.')
                             {
                                 assert(variables.size() == 1);
-                                apply += variables[0] + value->m_opname;
+                                eval_expr += variables[0] + value->m_opname;
                             }
                             else
                             {
@@ -143,7 +152,7 @@ namespace jeecs
                                     assert(variables.size() == 2);
 
                                     if (value->m_opnums[0]->is_shader_in_value())
-                                        apply +=
+                                        eval_expr +=
                                         variables[0]
                                         + ".Sample("
                                         + variables[0]
@@ -152,7 +161,7 @@ namespace jeecs
                                         + variables[1]
                                         + ")";
                                     else
-                                        apply +=
+                                        eval_expr +=
                                         variables[0]
                                         + ".Sample(sampler_"
                                         + std::to_string(value->m_opnums[0]->m_binded_sampler_id)
@@ -182,13 +191,13 @@ namespace jeecs
                                     }
 
                                     if (is_casting_op)
-                                        apply += "(" + funcname + ")(";
+                                        eval_expr += "(" + funcname + ")(";
                                     else
-                                        apply += funcname + "(";
+                                        eval_expr += funcname + "(";
 
                                     for (size_t i = 0; i < variables.size(); i++)
                                     {
-                                        apply += variables[i];
+                                        eval_expr += variables[i];
 
                                         if (0 != (value->m_opnums[i]->get_type() & (
                                             jegl_shader_value::type::TEXTURE2D
@@ -196,19 +205,19 @@ namespace jeecs
                                             | jegl_shader_value::type::TEXTURE_CUBE)))
                                         {
                                             if (value->m_opnums[i]->is_shader_in_value())
-                                                apply += ", " + variables[i] + "_sampler";
+                                                eval_expr += ", " + variables[i] + "_sampler";
                                             else
-                                                apply += ", sampler_" + std::to_string(value->m_opnums[i]->m_binded_sampler_id);
+                                                eval_expr += ", sampler_" + std::to_string(value->m_opnums[i]->m_binded_sampler_id);
                                         }
 
                                         if (i + 1 != variables.size())
-                                            apply += ", ";
+                                            eval_expr += ", ";
                                     }
-                                    apply += ")";
+                                    eval_expr += ")";
                                 }
                             }
-                            apply += ";";
 
+                            apply += eval_expr + ";";
                             *out_src += apply + "\n";
                         }
                     }

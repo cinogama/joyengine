@@ -309,18 +309,17 @@ WO_API wo_api jeecs_shader_apply_operation(wo_vm vm, wo_value args)
     wo_string_t operation = wo_string(args + 1);
 
     if (operation[0] == '.')
-        ;
+        // Index operation.
+        result_type = (jegl_shader_value::type)(result_type | jegl_shader_value::type::FAST_EVAL);
     else
     {
         auto* reduce_func = get_const_reduce_func(operation, _types.data(), _types.size());
         if (operation[0] == '#')
-        {
             // Custom method 
-        }
+            ;
         else if (operation[0] == '%')
-        {
             // Type casting 
-        }
+            result_type = (jegl_shader_value::type)(result_type | jegl_shader_value::type::FAST_EVAL);
         else
         {
             if (!reduce_func)
@@ -428,15 +427,22 @@ WO_API wo_api jeecs_shader_append_struct_member(wo_vm vm, wo_value args)
     variable_member_define.type = (jegl_shader_value::type)wo_int(args + 1);
     variable_member_define.name = wo_string(args + 2);
 
-    if (variable_member_define.type == jegl_shader_value::type::STRUCT)
+    wo_value elem = wo_push_empty(vm);
+    if (wo_option_get(elem, args + 3))
     {
-        wo_value elem = wo_push_empty(vm);
-
-        wo_struct_get(elem, args + 3, 1);
+        assert(variable_member_define.type == jegl_shader_value::type::STRUCT);
         variable_member_define.struct_type_may_nil = (shader_struct_define*)wo_pointer(elem);
     }
     else
+    {
+        assert(variable_member_define.type != jegl_shader_value::type::STRUCT);
         variable_member_define.struct_type_may_nil = nullptr;
+    }
+
+    if (wo_option_get(elem, args + 4))
+        variable_member_define.array_size = (size_t)wo_int(elem);
+    else
+        variable_member_define.array_size = std::nullopt;
 
     block->variables.push_back(variable_member_define);
 
@@ -614,25 +620,26 @@ public enum shader_value_type
     SHADER_IN_VALUE = 0x0002,
     UNIFORM_VARIABLE = 0x0004,
     UNIFORM_BLOCK_VARIABLE = 0x0008,
+    FAST_EVAL = 0x0010,
     //
-    TYPE_MASK = 0x00000FFF0,
+    TYPE_MASK = 0x0000'ff00,
 
-    FLOAT = 0x0010,
-    FLOAT2 = 0x0020,
-    FLOAT3 = 0x0040,
-    FLOAT4 = 0x0080,
+    FLOAT = 0x0100,
+    FLOAT2 = 0x0200,
+    FLOAT3 = 0x0300,
+    FLOAT4 = 0x0400,
 
-    FLOAT2x2 = 0x0100,
-    FLOAT3x3 = 0x0200,
-    FLOAT4x4 = 0x0400,
+    FLOAT2x2 = 0x0500,
+    FLOAT3x3 = 0x0600,
+    FLOAT4x4 = 0x0700,
 
     TEXTURE2D = 0x0800,
-    TEXTURE_CUBE = 0x1000,
-    TEXTURE2D_MS = 0x2000,
+    TEXTURE_CUBE = 0x0900,
+    TEXTURE2D_MS = 0x0a00,
 
-    INTEGER = 0x4000,
+    INTEGER = 0x0b00,
 
-    STRUCT = 0x8000,
+    STRUCT = 0x0c00,
 }
 
 public using float = gchandle;
@@ -1372,6 +1379,12 @@ public func abs<T>(a: T)
     return apply_operation:<result_gl_t<T>>("abs", a);
 }
 
+public func sign<T>(a: T)
+    where is_vec_1_4:<T>;
+{
+    return apply_operation:<result_gl_t<T>>("sign", a);
+}
+
 public func negative<T>(a: T)
     where is_vec_1_4:<T>;
 {
@@ -1379,7 +1392,9 @@ public func negative<T>(a: T)
 }
 
 public func pow<T, U>(a: T, b: U)
-    where is_vec_1_4:<T> && b is T || (b is float && a is real) || (b is real && a is float);
+    where (is_vec_1_4:<T> && b is T) 
+        || (b is float && a is real) 
+        || (b is real && a is float);
 {
     return apply_operation:<result_gl_t<T>>("pow", a, b);
 }
@@ -1626,7 +1641,7 @@ public func CULL(cull: CullConfig)
 
     // using VAO_STRUCT! vin { ...
     // 0. Get struct name, then eat '{'
-    let vao_struct_name = eat_token("IDENTIFIER", std::token_type::l_identifier);
+    let vao_struct_name = eat_token("Identifier", std::token_type::l_identifier);
 
     do eat_token("{", std::token_type::l_left_curly_braces);
     
@@ -1638,11 +1653,11 @@ public func CULL(cull: CullConfig)
             // Meet '}', end work!
             break;
 
-        let struct_member = eat_token("IDENTIFIER", std::token_type::l_identifier);
+        let struct_member = eat_token("Identifier", std::token_type::l_identifier);
         do eat_token(":", std::token_type::l_typecast);
 
         // Shader type only have a identifier and without template.
-        let struct_shader_type = eat_token("IDENTIFIER", std::token_type::l_identifier);
+        let struct_shader_type = eat_token("Identifier", std::token_type::l_identifier);
 
         struct_infos->add((struct_member, struct_shader_type));
 
@@ -1694,7 +1709,12 @@ namespace structure
 using struct_define = handle
 {
     extern("libjoyecs", "jeecs_shader_append_struct_member")
-    func _append_member(self: struct_define, type: shader_value_type, name: string, st: option<struct_define>)=> void;
+    func _append_member(
+        self: struct_define, 
+        type: shader_value_type,
+        name: string, 
+        st: option<struct_define>, 
+        array_size: option<int>)=> void;
 
     public func create(name: string)
     {
@@ -1707,11 +1727,19 @@ using struct_define = handle
     }
     public func append_member<T>(self: struct_define, name: string)
     {
-        _append_member(self, _get_type_enum:<T>(), name, option::none);
+        _append_member(self, _get_type_enum:<T>(), name, option::none, option::none);
     }
     public func append_struct_member(self: struct_define, name: string, struct_type: struct_define)
     {
-        _append_member(self, shader_value_type::STRUCT, name, option::value(struct_type));
+        _append_member(self, shader_value_type::STRUCT, name, option::value(struct_type), option::none);
+    }
+    public func append_member_array<T>(self: struct_define, name: string, array_size: int)
+    {
+        _append_member(self, _get_type_enum:<T>(), name, option::none, option::value(array_size));
+    }
+    public func append_struct_member_array(self: struct_define, name: string, struct_type: struct_define, array_size: int)
+    {
+        _append_member(self, shader_value_type::STRUCT, name, option::value(struct_type), option::value(array_size));
     }
     
     extern("libjoyecs", "jeecs_shader_bind_struct_as_uniform_buffer")
@@ -1739,47 +1767,67 @@ using struct_define = handle
 
     // using GRAPHIC_STRUCT example { ...
     // 0. Get struct name, then eat '{'
-    let graphic_struct_name = eat_token("IDENTIFIER", std::token_type::l_identifier);
+    let graphic_struct_name = eat_token("Identifier", std::token_type::l_identifier);
 
     do eat_token("{", std::token_type::l_left_curly_braces);
     
     // 1. Get struct item name.
-    let struct_infos = []mut: vec<(string, (string, bool))>;
+    let struct_infos = []mut: vec<(string, (string, bool, option<int>))>;
     while (true)
     {
         if (try_eat_token(std::token_type::l_right_curly_braces)->is_value())
             // Meet '}', end work!
             break;
 
-        let struct_member = eat_token("IDENTIFIER", std::token_type::l_identifier);
+        let struct_member = eat_token("Identifier", std::token_type::l_identifier);
         do eat_token(":", std::token_type::l_typecast);
 
         // Shader type only have a identifier and without template.
         let is_struct = try_eat_token(std::token_type::l_struct);
-        let struct_shader_type = eat_token("IDENTIFIER", std::token_type::l_identifier);
+        let struct_shader_type = eat_token("Identifier", std::token_type::l_identifier);
+        let mut array_size = option::none: option<int>;
 
-        struct_infos->add((struct_member, (struct_shader_type, is_struct->is_value)));
+        if (try_eat_token(std::token_type::l_index_begin)->is_value())
+        {
+            array_size = option::value(eat_token("Integer literal", std::token_type::l_literal_integer): int);
+            do eat_token("]", std::token_type::l_index_end);
+        }
+        
+        struct_infos->add((struct_member, (struct_shader_type, is_struct->is_value, array_size)));
 
         if (!try_eat_token(std::token_type::l_comma)->is_value())
         {
             do eat_token("}", std::token_type::l_right_curly_braces);
             break;
         }
+        
     }
     // End, need a ';' here.
     do eat_token(";", std::token_type::l_semicolon);
 
     //  OK We have current struct info, built struct out
     let mut out_struct_decl = F"public let {graphic_struct_name} = struct_define::create(\"{graphic_struct_name}\");";
-    for(let (vao_member_name, (vao_shader_type, is_struct_type)) : struct_infos)
-        if (is_struct_type)
-            out_struct_decl += F"{graphic_struct_name}->append_struct_member(\"{vao_member_name}\", {vao_shader_type});\n";
-        else
-            out_struct_decl += F"{graphic_struct_name}->append_member:<{vao_shader_type}>(\"{vao_member_name}\");\n";
+    for(let (vao_member_name, (vao_shader_type, is_struct_type, array_size)) : struct_infos)
+        match (array_size)
+        {  
+        none?
+            if (is_struct_type)
+                out_struct_decl += F"{graphic_struct_name}->append_struct_member(\"{vao_member_name}\", {vao_shader_type});\n";
+            else
+                out_struct_decl += F"{graphic_struct_name}->append_member:<{vao_shader_type}>(\"{vao_member_name}\");\n";
+        value(size)?
+            if (is_struct_type)
+                out_struct_decl += F"{graphic_struct_name}->append_struct_member_array(\"{vao_member_name}\", {vao_shader_type}, {size});\n";
+            else
+                out_struct_decl += F"{graphic_struct_name}->append_member_array:<{vao_shader_type}>(\"{vao_member_name}\", {size});\n";
+        }
 
     out_struct_decl += F"public using {graphic_struct_name}_t = structure\n\{\n";
-    for(let (vao_member_name, (vao_shader_type, is_struct_type)) : struct_infos)
+    for (let (vao_member_name, (vao_shader_type, is_struct_type, array_size)) : struct_infos)
     {
+// TODO;
+        do array_size;
+
         out_struct_decl += F"    public func {vao_member_name}(self: {graphic_struct_name}_t)\n\{\n        ";
         
         if (is_struct_type)
@@ -1809,11 +1857,20 @@ using uniform_block = struct_define
         self: handle: struct_define->append_member:<T>(name);
         return shared_uniform:<T>(name);
     }
-
-    public func append_struct_uniform(self: uniform_block, name: string, struct_type: struct_define)
+    public func append_struct_uniform<StructDefineT>(self: uniform_block, name: string, struct_type: struct_define)
     {
         self: handle: struct_define->append_struct_member(name, struct_type);
-        return shared_uniform:<structure>(name);
+        return shared_uniform:<structure>(name): gchandle: StructDefineT;
+    }
+    public func append_uniform_array<T>(self: uniform_block, name: string, array_size: int)
+    {
+        self: handle: struct_define->append_member_array:<T>(name, array_size);
+        return shared_uniform:<T>(name);
+    }
+    public func append_struct_uniform_array<StructDefineT>(self: uniform_block, name: string, struct_type: struct_define, array_size: int)
+    {
+        self: handle: struct_define->append_struct_member_array(name, struct_type, array_size);
+        return shared_uniform:<structure>(name): gchandle: StructDefineT;
     }
 }
 
@@ -1837,7 +1894,7 @@ using uniform_block = struct_define
 
     // using UNIFORM_BUFFER example = BIND_PLACE { ...
     // 0. Get struct name, then eat '{'
-    let graphic_struct_name = eat_token("IDENTIFIER", std::token_type::l_identifier);
+    let graphic_struct_name = eat_token("Identifier", std::token_type::l_identifier);
 
     do eat_token("=", std::token_type::l_assign);
 
@@ -1846,21 +1903,28 @@ using uniform_block = struct_define
     do eat_token("{", std::token_type::l_left_curly_braces);
     
     // 1. Get struct item name.
-    let struct_infos = []mut: vec<(string, (string, bool))>;
+    let struct_infos = []mut: vec<(string, (string, bool, option<int>))>;
     while (true)
     {
         if (try_eat_token(std::token_type::l_right_curly_braces)->is_value())
             // Meet '}', end work!
             break;
 
-        let struct_member = eat_token("IDENTIFIER", std::token_type::l_identifier);
+        let struct_member = eat_token("Identifier", std::token_type::l_identifier);
         do eat_token(":", std::token_type::l_typecast);
 
         // Shader type only have a identifier and without template.
         let is_struct = try_eat_token(std::token_type::l_struct);
-        let struct_shader_type = eat_token("IDENTIFIER", std::token_type::l_identifier);
+        let struct_shader_type = eat_token("Identifier", std::token_type::l_identifier);
+        let mut array_size = option::none: option<int>;
 
-        struct_infos->add((struct_member, (struct_shader_type, is_struct->is_value)));
+        if (try_eat_token(std::token_type::l_index_begin)->is_value())
+        {
+            array_size = option::value(eat_token("Integer literal", std::token_type::l_literal_integer): int);
+            do eat_token("]", std::token_type::l_index_end);
+        }
+
+        struct_infos->add((struct_member, (struct_shader_type, is_struct->is_value, array_size)));
 
         if (!try_eat_token(std::token_type::l_comma)->is_value())
         {
@@ -1873,12 +1937,23 @@ using uniform_block = struct_define
 
     //  OK We have current struct info, built struct out
     let mut out_struct_decl = F"public let {graphic_struct_name} = uniform_block::create(\"{graphic_struct_name}\", {bind_place});";
-    for(let (vao_member_name, (vao_shader_type, is_struct_type)) : struct_infos)
-        if (is_struct_type)
-            out_struct_decl += F"public let {vao_member_name} = {graphic_struct_name}->append_struct_uniform(\"{vao_member_name->upper}\", {vao_shader_type}): gchandle: {vao_shader_type}_t;\n";
-        else
-            out_struct_decl += F"public let {vao_member_name} = {graphic_struct_name}->append_uniform:<{vao_shader_type}>(\"{vao_member_name->upper}\");\n";
-
+    for(let (vao_member_name, (vao_shader_type, is_struct_type, array_size)) : struct_infos)
+    {
+        out_struct_decl += F"public let {vao_member_name} = {graphic_struct_name}->";
+        match (array_size)
+        {
+        none?
+            if (is_struct_type)
+                out_struct_decl += F"append_struct_uniform:<{vao_shader_type}_t>(\"{vao_member_name->upper}\", {vao_shader_type});\n";
+            else
+                out_struct_decl += F"append_uniform:<{vao_shader_type}>(\"{vao_member_name->upper}\");\n";
+        value(size)?
+            if (is_struct_type)
+                out_struct_decl += F"append_struct_uniform_array:<{vao_shader_type}_t>(\"{vao_member_name->upper}\", {vao_shader_type}, {size});\n";
+            else
+                out_struct_decl += F"append_uniform_array:<{vao_shader_type}>(\"{vao_member_name->upper}\", {size});\n";
+        }
+    }
     return out_struct_decl;
 }
 

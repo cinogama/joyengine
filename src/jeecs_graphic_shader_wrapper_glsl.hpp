@@ -39,26 +39,33 @@ namespace jeecs
                     break;
                 }
             }
+            std::string generate_struct_body(shader_wrapper* wrapper, shader_struct_define* st)
+            {
+                std::string decl = "";
+                for (auto& variable_inform : st->variables)
+                {
+                    if (variable_inform.type == jegl_shader_value::type::STRUCT)
+                        decl += "    " + variable_inform.struct_type_may_nil->name + " " + variable_inform.name;
+                    else
+                        decl += "    " + get_typename(variable_inform.type) + " " + variable_inform.name + "";
+
+                    if (variable_inform.array_size)
+                       decl += "[" + std::to_string(variable_inform.array_size.value()) + "]";
+
+                    decl += +";\n";
+                }
+                return decl;
+            }
             virtual std::string generate_struct(shader_wrapper* wrapper, shader_struct_define* st) override
             {
                 std::string decl = "struct " + st->name + "\n{\n";
-                for (auto& variable_inform : st->variables)
-                    if (variable_inform.type == jegl_shader_value::type::STRUCT)
-                        decl += "    " + variable_inform.struct_type_may_nil->name + " " + variable_inform.name + ";\n";
-                    else
-                        decl += "    " + get_typename(variable_inform.type) + " " + variable_inform.name + ";\n";
-
+                decl += generate_struct_body(wrapper, st);
                 return decl + "};\n";
             }
             virtual std::string generate_uniform_block(shader_wrapper* wrapper, shader_struct_define* st) override
             {
                 std::string decl = "layout (std140) uniform " + st->name + "\n{\n";
-                for (auto& variable_inform : st->variables)
-                    if (variable_inform.type == jegl_shader_value::type::STRUCT)
-                        decl += "    " + variable_inform.struct_type_may_nil->name + " " + variable_inform.name + ";\n";
-                    else
-                        decl += "    " + get_typename(variable_inform.type) + " " + variable_inform.name + ";\n";
-
+                decl += generate_struct_body(wrapper, st);
                 return decl + "};\n";
             }
 
@@ -91,6 +98,8 @@ namespace jeecs
                             for (size_t i = 0; i < value->m_opnums_count; i++)
                                 variables.push_back(generate_code(context, value->m_opnums[i], target, out_src));
 
+                            std::string eval_expr;
+
                             if (value->m_opname == "+"s
                                 || value->m_opname == "-"s
                                 || value->m_opname == "*"s
@@ -98,14 +107,14 @@ namespace jeecs
                             {
                                 assert(variables.size() == 2 || value->m_opname == "-"s);
                                 if (variables.size() == 1)
-                                    apply += value->m_opname + " "s + variables[0];
+                                    eval_expr += value->m_opname + " "s + variables[0];
                                 else
-                                    apply += variables[0] + " " + value->m_opname + " " + variables[1];
+                                    eval_expr += variables[0] + " " + value->m_opname + " " + variables[1];
                             }
                             else if (value->m_opname[0] == '.')
                             {
                                 assert(variables.size() == 1);
-                                apply += variables[0] + value->m_opname;
+                                eval_expr += variables[0] + value->m_opname;
                             }
                             else
                             {
@@ -138,17 +147,17 @@ namespace jeecs
                                     }
                                 }
 
-                                apply += funcname + "("s;
+                                eval_expr += funcname + "("s;
                                 for (size_t i = 0; i < variables.size(); i++)
                                 {
-                                    apply += variables[i];
+                                    eval_expr += variables[i];
                                     if (i + 1 != variables.size())
-                                        apply += ", ";
+                                        eval_expr += ", ";
                                 }
-                                apply += ")";
+                                eval_expr += ")";
                             }
-                            apply += ";";
 
+                            apply += eval_expr + ";";
                             *out_src += apply + "\n";
                         }
                     }

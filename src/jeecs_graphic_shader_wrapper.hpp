@@ -10,6 +10,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <optional>
 
 struct jegl_shader_value
 {
@@ -21,26 +22,26 @@ struct jegl_shader_value
         SHADER_IN_VALUE = 0x0002,
         UNIFORM_VARIABLE = 0x0004,
         UNIFORM_BLOCK_VARIABLE = 0x0008,
+        FAST_EVAL = 0x0010,
         //
-        TYPE_MASK = 0x00000FFF0,
+        TYPE_MASK = 0x0000'ff00,
 
-        FLOAT = 0x0010,
-        FLOAT2 = 0x0020,
-        FLOAT3 = 0x0040,
-        FLOAT4 = 0x0080,
+        FLOAT = 0x0100,
+        FLOAT2 = 0x0200,
+        FLOAT3 = 0x0300,
+        FLOAT4 = 0x0400,
 
-        FLOAT2x2 = 0x0100,
-        FLOAT3x3 = 0x0200,
-        FLOAT4x4 = 0x0400,
+        FLOAT2x2 = 0x0500,
+        FLOAT3x3 = 0x0600,
+        FLOAT4x4 = 0x0700,
 
         TEXTURE2D = 0x0800,
-        TEXTURE_CUBE = 0x1000,
-        TEXTURE2D_MS = 0x2000,
+        TEXTURE_CUBE = 0x0900,
+        TEXTURE2D_MS = 0x0a00,
 
-        INTEGER = 0x4000,
+        INTEGER = 0x0b00,
 
-        STRUCT = 0x8000,
-
+        STRUCT = 0x0c00,
     };
 
     type m_type;
@@ -205,6 +206,10 @@ struct jegl_shader_value
     {
         return !(m_type & CALC_VALUE);
     }
+    inline bool is_fast_eval() const noexcept
+    {
+        return 0!= (m_type & FAST_EVAL);
+    }
     inline bool is_calc_value() const noexcept
     {
         return !is_init_value();
@@ -295,6 +300,15 @@ public:
         var_name = fnd->second;
         return false;
     }
+    bool update_fast_eval_var_name(jegl_shader_value* val, const std::string& fast_expr)
+    {
+        if (val->is_fast_eval())
+        {
+            _calced_value[val] = fast_expr;
+            return true;
+        }
+        return false;
+    }
 
     static jegl_shader::uniform_type get_outside_type(jegl_shader_value::type ty)
     {
@@ -371,6 +385,7 @@ struct shader_struct_define
     {
         std::string name;
         jegl_shader_value::type type;
+        std::optional<size_t> array_size;
 
         shader_struct_define* struct_type_may_nil;
     };
