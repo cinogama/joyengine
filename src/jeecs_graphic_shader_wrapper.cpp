@@ -1295,7 +1295,7 @@ public func uvtrans(uv: float2, tiling: float2, offset: float2)
 {
     return (uv + offset) * tiling;
 }
-
+)" R"(
 let _uvframebuf = custom_method:<float2>("JEBUILTIN_Uvframebuffer",
 @"
 vec2 JEBUILTIN_Uvframebuffer(vec2 v)
@@ -1523,8 +1523,6 @@ public func alphatest(colf4: float4)=> float4
     return _alphatest(colf4);
 }
 
-)"
-R"(
 enum ZConfig
 {
     OFF = 0,
@@ -1704,6 +1702,11 @@ namespace structure
     {
         return apply_operation:<ElemT>("." + name, self);
     }
+    public func get_index<ElemT, IndexT>(self: structure, name: string, index: IndexT)
+        where index is integer || index is int;
+    {
+        return apply_operation:<ElemT>("." + name, self, index);
+    }
 }
 
 using struct_define = handle
@@ -1825,15 +1828,25 @@ using struct_define = handle
     out_struct_decl += F"public using {graphic_struct_name}_t = structure\n\{\n";
     for (let (vao_member_name, (vao_shader_type, is_struct_type, array_size)) : struct_infos)
     {
-// TODO;
-        do array_size;
-
-        out_struct_decl += F"    public func {vao_member_name}(self: {graphic_struct_name}_t)\n\{\n        ";
+        out_struct_decl += F"    public func {vao_member_name}(self: {graphic_struct_name}_t";
+        if (array_size->is_value())
+        {
+            out_struct_decl += F"index) where index is integer || index is int;\n\{\n        ";
         
-        if (is_struct_type)
-            out_struct_decl += F"return self: gchandle: structure->get:<structure>(\"{vao_member_name}\"): gchandle: {vao_shader_type}_t;\n";
+            if (is_struct_type)
+                out_struct_decl += F"return self: gchandle: structure->get_index:<structure>(\"{vao_member_name}\", index): gchandle: {vao_shader_type}_t;\n";
+            else
+                out_struct_decl += F"return self: gchandle: structure->get_index:<{vao_shader_type}>(\"{vao_member_name}\", index);\n";
+        }
         else
-            out_struct_decl += F"return self: gchandle: structure->get:<{vao_shader_type}>(\"{vao_member_name}\");\n";
+        {
+            out_struct_decl += F")\n\{\n        ";
+        
+            if (is_struct_type)
+                out_struct_decl += F"return self: gchandle: structure->get:<structure>(\"{vao_member_name}\"): gchandle: {vao_shader_type}_t;\n";
+            else
+                out_struct_decl += F"return self: gchandle: structure->get:<{vao_shader_type}>(\"{vao_member_name}\");\n";
+        }
 
         out_struct_decl += "    }\n";
     }
@@ -1841,7 +1854,7 @@ using struct_define = handle
 
     return out_struct_decl;
 }
-
+)" R"(
 using uniform_block = struct_define
 {
     public func create(name: string, binding_place: int)

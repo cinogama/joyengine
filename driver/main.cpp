@@ -39,7 +39,7 @@ CULL    (NONE);
 
 UNIFORM_BUFFER! _MY_BONE = 1
 {
-    bone_trans: float4x4[128],
+    bone_trans: float[128],
 };
 
 VAO_STRUCT! vin {
