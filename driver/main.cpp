@@ -37,6 +37,11 @@ ZWRITE  (ENABLE);
 BLEND   (ONE, ZERO);
 CULL    (NONE);
 
+UNIFORM_BUFFER! _MY_BONE = 1
+{
+    bone_trans: float4x4[128],
+};
+
 VAO_STRUCT! vin {
     vertex  : float3,
     uv      : float2,
@@ -68,6 +73,7 @@ public func frag(vf: v2f)
         color = alphatest(je_color * vec4(texture(Main, vf.uv)->xyz, 1.0)),
     };
 }
+
 )");
         printf("%s\n\n%s\n", 
             r ? r->resouce()->m_raw_shader_data->m_vertex_hlsl_src : "", 

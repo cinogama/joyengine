@@ -139,7 +139,7 @@ struct jegl_shader_value
                     wdata[i] = data[i];
             }
             else
-                wo_fail(WO_FAIL_JE_BAD_INIT_SHADER_VALUE, 
+                wo_fail(WO_FAIL_JE_BAD_INIT_SHADER_VALUE,
                     "Unknown type to init, should be float4x4, float3x3 or float2x2.");
         }
     }
@@ -208,7 +208,7 @@ struct jegl_shader_value
     }
     inline bool is_fast_eval() const noexcept
     {
-        return 0!= (m_type & FAST_EVAL);
+        return 0 != (m_type & FAST_EVAL);
     }
     inline bool is_calc_value() const noexcept
     {
@@ -229,6 +229,12 @@ struct jegl_shader_value
     inline type get_type() const
     {
         return (type)(m_type & TYPE_MASK);
+    }
+    inline bool is_texture() const
+    {
+        return m_type == type::TEXTURE2D
+            || m_type == type::TEXTURE2D_MS
+            || m_type == type::TEXTURE_CUBE;
     }
 };
 
@@ -257,7 +263,7 @@ public:
 
     std::unordered_set<std::string> _used_builtin_func;
 
-    bool get_var_name(jegl_shader_value* val, std::string& var_name, generate_target target)
+    bool get_var_name_and_check_if_need_generate_expr(jegl_shader_value* val, std::string& var_name, generate_target target)
     {
         if (val->is_init_value())
             return true;

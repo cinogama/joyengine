@@ -91,7 +91,7 @@ namespace jeecs
                 using namespace std;
 
                 std::string varname;
-                if (context->get_var_name(value, varname, target))
+                if (context->get_var_name_and_check_if_need_generate_expr(value, varname, target))
                 {
                     if (value->is_calc_value())
                     {
@@ -199,10 +199,7 @@ namespace jeecs
                                     {
                                         eval_expr += variables[i];
 
-                                        if (0 != (value->m_opnums[i]->get_type() & (
-                                            jegl_shader_value::type::TEXTURE2D
-                                            | jegl_shader_value::type::TEXTURE2D_MS
-                                            | jegl_shader_value::type::TEXTURE_CUBE)))
+                                        if (value->m_opnums[i]->is_texture())
                                         {
                                             if (value->m_opnums[i]->is_shader_in_value())
                                                 eval_expr += ", " + variables[i] + "_sampler";
@@ -217,8 +214,13 @@ namespace jeecs
                                 }
                             }
 
-                            apply += eval_expr + ";";
-                            *out_src += apply + "\n";
+                            if (context->update_fast_eval_var_name(value, eval_expr))
+                                varname = eval_expr;
+                            else
+                            {
+                                apply += eval_expr + ";";
+                                *out_src += apply + "\n";
+                            }
                         }
                     }
                     else
