@@ -552,6 +552,24 @@ namespace jeecs::graphic::api::dx11
                         vlayout.Format = DXGI_FORMAT_R32_SINT;
                         layout_begin_offset += 4;
                         break;
+                    case jegl_shader::uniform_type::INT2:
+                        vlayout.SemanticIndex = INT_COUNT++;
+                        vlayout.SemanticName = "BLENDINDICES";
+                        vlayout.Format = DXGI_FORMAT_R32G32_SINT;
+                        layout_begin_offset += 8;
+                        break;
+                    case jegl_shader::uniform_type::INT3:
+                        vlayout.SemanticIndex = INT_COUNT++;
+                        vlayout.SemanticName = "BLENDINDICES";
+                        vlayout.Format = DXGI_FORMAT_R32G32B32_SINT;
+                        layout_begin_offset += 12;
+                        break;
+                    case jegl_shader::uniform_type::INT4:
+                        vlayout.SemanticIndex = INT_COUNT++;
+                        vlayout.SemanticName = "BLENDINDICES";
+                        vlayout.Format = DXGI_FORMAT_R32G32B32A32_SINT;
+                        layout_begin_offset += 16;
+                        break;
                     case jegl_shader::uniform_type::FLOAT:
                         vlayout.SemanticIndex = FLOAT_COUNT++;
                         vlayout.SemanticName = "BLENDWEIGHT";
@@ -673,12 +691,15 @@ namespace jeecs::graphic::api::dx11
                     case jegl_shader::uniform_type::FLOAT:
                         unit_size = 4;
                         break;
+                    case jegl_shader::uniform_type::INT2:
                     case jegl_shader::uniform_type::FLOAT2:
                         unit_size = 8;
                         break;
+                    case jegl_shader::uniform_type::INT3:
                     case jegl_shader::uniform_type::FLOAT3:
                         unit_size = 12;
                         break;
+                    case jegl_shader::uniform_type::INT4:
                     case jegl_shader::uniform_type::FLOAT4:
                         unit_size = 16;
                         break;

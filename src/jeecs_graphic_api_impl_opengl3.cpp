@@ -243,26 +243,56 @@ namespace jeecs::graphic::api::gl3
         switch (type)
         {
         case jegl_shader::INT:
-            glUniform1i((GLint)location, *(const int*)val); break;
+        {
+            glUniform1i((GLint)location, *reinterpret_cast<const int*>(val)); 
+            break;
+        }
+        case jegl_shader::INT2:
+        {
+            const int * vptr = reinterpret_cast<const int*>(val);
+            glUniform2i((GLint)location, vptr[0], vptr[1]); 
+            break;
+        }
+        case jegl_shader::INT3:
+        {
+            const int* vptr = reinterpret_cast<const int*>(val);
+            glUniform3i((GLint)location, vptr[0], vptr[1], vptr[2]); 
+            break;
+        }
+        case jegl_shader::INT4:
+        {
+            const int* vptr = reinterpret_cast<const int*>(val);
+            glUniform4i((GLint)location, vptr[0], vptr[1], vptr[2], vptr[3]); 
+            break;
+        }
         case jegl_shader::FLOAT:
-            glUniform1f((GLint)location, *(const float*)val); break;
+        {
+            glUniform1f((GLint)location, *reinterpret_cast<const float*>(val));
+            break;
+        }
         case jegl_shader::FLOAT2:
-            glUniform2f((GLint)location
-                , ((const jeecs::math::vec2*)val)->x
-                , ((const jeecs::math::vec2*)val)->y); break;
+        {
+            const float* vptr = reinterpret_cast<const float*>(val);
+            glUniform2f((GLint)location, vptr[0], vptr[1]);
+            break;
+        }
         case jegl_shader::FLOAT3:
-            glUniform3f((GLint)location
-                , ((const jeecs::math::vec3*)val)->x
-                , ((const jeecs::math::vec3*)val)->y
-                , ((const jeecs::math::vec3*)val)->z); break;
+        {
+            const float* vptr = reinterpret_cast<const float*>(val);
+            glUniform3f((GLint)location, vptr[0], vptr[1], vptr[2]);
+            break;
+        }
         case jegl_shader::FLOAT4:
-            glUniform4f((GLint)location
-                , ((const jeecs::math::vec4*)val)->x
-                , ((const jeecs::math::vec4*)val)->y
-                , ((const jeecs::math::vec4*)val)->z
-                , ((const jeecs::math::vec4*)val)->w); break;
-        case jegl_shader::FLOAT4X4:
-            glUniformMatrix4fv((GLint)location, 1, false, (float*)val); break;
+        {
+            const float* vptr = reinterpret_cast<const float*>(val);
+            glUniform4f((GLint)location, vptr[0], vptr[1], vptr[2], vptr[3]);
+            break;
+        }
+        case jegl_shader::FLOAT4X4:   
+        {
+            glUniformMatrix4fv((GLint)location, 1, false, reinterpret_cast<const float*>(val));
+            break;
+        }
         default:
             jeecs::debug::logerr("Unknown uniform variable type to set."); break;
         }
@@ -600,7 +630,7 @@ namespace jeecs::graphic::api::gl3
 
                 glEnableVertexAttribArray(i);
                 glVertexAttribPointer(i, (GLint)resource->m_raw_vertex_data->m_vertex_formats[i].m_count,
-                    GL_FLOAT, GL_FALSE,
+                    format_type, GL_FALSE,
                     (GLsizei)(resource->m_raw_vertex_data->m_data_size_per_point),
                     (void*)(offset * sizeof(float)));
 

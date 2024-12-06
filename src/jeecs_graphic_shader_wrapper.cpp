@@ -68,6 +68,24 @@ WO_API wo_api jeecs_shader_integer_create(wo_vm vm, wo_value args)
         new jegl_shader_value(
             (int)wo_int(args + 0)), nullptr, _free_shader_value);
 }
+WO_API wo_api jeecs_shader_integer2_create(wo_vm vm, wo_value args)
+{
+    return wo_ret_gchandle(vm,
+        new jegl_shader_value(
+            (int)wo_int(args + 0), (int)wo_int(args + 1)), nullptr, _free_shader_value);
+}
+WO_API wo_api jeecs_shader_integer3_create(wo_vm vm, wo_value args)
+{
+    return wo_ret_gchandle(vm,
+        new jegl_shader_value(
+            (int)wo_int(args + 0), (int)wo_int(args + 1), (int)wo_int(args + 2)), nullptr, _free_shader_value);
+}
+WO_API wo_api jeecs_shader_integer4_create(wo_vm vm, wo_value args)
+{
+    return wo_ret_gchandle(vm,
+        new jegl_shader_value(
+            (int)wo_int(args + 0), (int)wo_int(args + 1), (int)wo_int(args + 2), (int)wo_int(args + 3)), nullptr, _free_shader_value);
+}
 WO_API wo_api jeecs_shader_float2_create(wo_vm vm, wo_value args)
 {
     return wo_ret_gchandle(vm,
@@ -628,23 +646,26 @@ public enum shader_value_type
     UNIFORM_BLOCK_VARIABLE = 0x0008,
     FAST_EVAL = 0x0010,
     //
-    TYPE_MASK = 0x000F'FF00,
+    TYPE_MASK = 0x00FF'FF00,
 
-    FLOAT = 0x0100,
-    FLOAT2 = 0x0200,
-    FLOAT3 = 0x0400,
-    FLOAT4 = 0x0800,
+    FLOAT   = 0x0100,
+    FLOAT2  = 0x0200,
+    FLOAT3  = 0x0400,
+    FLOAT4  = 0x0800,
 
-    FLOAT2x2 = 0x1000,
-    FLOAT3x3 = 0x2000,
-    FLOAT4x4 = 0x4000,
+    FLOAT2x2    = 0x1000,
+    FLOAT3x3    = 0x2000,
+    FLOAT4x4    = 0x4000,
 
-    INTEGER = 0x8000,
+    INTEGER     = 0x8000,
+    INTEGER2    = 0x010000,
+    INTEGER3    = 0x020000,
+    INTEGER4    = 0x040000,
 
-    TEXTURE2D = 0x010000,
-    TEXTURE_CUBE = 0x020000,
-    TEXTURE2D_MS = 0x040000,
-    STRUCT = 0x080000,
+    TEXTURE2D   = 0x080000,
+    TEXTURE_CUBE = 0x100000,
+    TEXTURE2D_MS = 0x200000,
+    STRUCT      = 0x400000,
 }
 
 public using float = gchandle;
@@ -659,7 +680,11 @@ public using float4x4 = gchandle;
 public using texture2d = gchandle;
 public using texture2dms = gchandle;
 public using texturecube = gchandle;
+
 public using integer = gchandle;
+public using integer2 = gchandle;
+public using integer3 = gchandle;
+public using integer4 = gchandle;
 
 public using structure = gchandle;
 
@@ -678,7 +703,12 @@ public let LINEAR = fliter::LINEAR;
 public let CLAMP = wrap::CLAMP;
 public let REPEAT = wrap::REPEAT;
 
-alias result_gl_t<T> = typeof(std::declval:<T>() is real ? std::declval:<float>() | std::declval:<T>());
+alias result_gl_t<T> = typeof(
+    std::declval:<T>() is real 
+    ? std::declval:<float>() 
+    | std::declval:<T>() is int 
+        ? std::declval:<integer>()
+        | std::declval:<T>());
 
 let registered_custom_methods = {}mut: map<string, (string, string)>;
 
@@ -754,6 +784,12 @@ private func _get_type_enum<ShaderValueT>()=> shader_value_type
         return shader_value_type::TEXTURE_CUBE;
     else if (std::is_same_type:<ShaderValueT, integer>)
         return shader_value_type::INTEGER;
+    else if (std::is_same_type:<ShaderValueT, integer2>)
+        return shader_value_type::INTEGER2;
+    else if (std::is_same_type:<ShaderValueT, integer3>)
+        return shader_value_type::INTEGER3;
+    else if (std::is_same_type:<ShaderValueT, integer4>)
+        return shader_value_type::INTEGER4;
     else if (std::is_same_type:<ShaderValueT, structure>)
         return shader_value_type::STRUCT;
 
@@ -889,7 +925,7 @@ using shader_function = struct{
         };
     }
 }
-
+)" R"(
 namespace real
 {
     public func operator + <T>(a:real, b:T)=> float
@@ -952,7 +988,110 @@ namespace integer
         return apply_operation:<float>("/", a, b);
     }
 }
+namespace integer2
+{
+    extern("libjoyecs", "jeecs_shader_integer2_create")
+    public func const(x: int, y: int)=> integer2;
 
+    public func x(self:integer2)=> integer{return apply_operation:<integer>(".x", self);}
+    public func y(self:integer2)=> integer{return apply_operation:<integer>(".y", self);}
+    public func xy(self:integer2)=> integer2{return apply_operation:<integer2>(".xy", self);}
+    public func yx(self:integer2)=> integer2{return apply_operation:<integer2>(".yx", self);}
+}
+namespace integer3
+{
+    extern("libjoyecs", "jeecs_shader_integer3_create")
+    public func const(x: int, y: int, z: int)=> integer3;
+
+    public func x(self:integer3)=> integer{return apply_operation:<integer>(".x", self);}
+    public func y(self:integer3)=> integer{return apply_operation:<integer>(".y", self);}
+    public func z(self:integer3)=> integer{return apply_operation:<integer>(".z", self);}
+    public func xy(self:integer3)=> integer2{return apply_operation:<integer2>(".xy", self);}
+    public func yz(self:integer3)=> integer2{return apply_operation:<integer2>(".yz", self);}
+    public func xz(self:integer3)=> integer2{return apply_operation:<integer2>(".xz", self);}
+    public func yx(self:integer3)=> integer2{return apply_operation:<integer2>(".yx", self);}
+    public func zy(self:integer3)=> integer2{return apply_operation:<integer2>(".zy", self);}
+    public func zx(self:integer3)=> integer2{return apply_operation:<integer2>(".zx", self);}
+    public func xyz(self:integer3)=> integer3{return apply_operation:<integer3>(".xyz", self);}
+    public func xzy(self:integer3)=> integer3{return apply_operation:<integer3>(".xzy", self);}
+    public func yxz(self:integer3)=> integer3{return apply_operation:<integer3>(".yxz", self);}
+    public func yzx(self:integer3)=> integer3{return apply_operation:<integer3>(".yzx", self);}
+    public func zxy(self:integer3)=> integer3{return apply_operation:<integer3>(".zxy", self);}
+    public func zyx(self:integer3)=> integer3{return apply_operation:<integer3>(".zyx", self);}
+}
+namespace integer4
+{
+    extern("libjoyecs", "jeecs_shader_integer4_create")
+    public func const(x: int, y: int, z: int, w: int)=> integer4;
+
+    public func x(self:integer4)=> integer{return apply_operation:<integer>(".x", self);}
+    public func y(self:integer4)=> integer{return apply_operation:<integer>(".y", self);}
+    public func z(self:integer4)=> integer{return apply_operation:<integer>(".z", self);}
+    public func w(self:integer4)=> integer{return apply_operation:<integer>(".w", self);}
+
+    public func xy(self:integer4)=> integer2{return apply_operation:<integer2>(".xy", self);}
+    public func yz(self:integer4)=> integer2{return apply_operation:<integer2>(".yz", self);}
+    public func xz(self:integer4)=> integer2{return apply_operation:<integer2>(".xz", self);}
+    public func yx(self:integer4)=> integer2{return apply_operation:<integer2>(".yx", self);}
+    public func zy(self:integer4)=> integer2{return apply_operation:<integer2>(".zy", self);}
+    public func zx(self:integer4)=> integer2{return apply_operation:<integer2>(".zx", self);}
+    public func xw(self:integer4)=> integer2{return apply_operation:<integer2>(".xw", self);}
+    public func wx(self:integer4)=> integer2{return apply_operation:<integer2>(".wx", self);}
+    public func yw(self:integer4)=> integer2{return apply_operation:<integer2>(".yw", self);}
+    public func wy(self:integer4)=> integer2{return apply_operation:<integer2>(".wy", self);}
+    public func zw(self:integer4)=> integer2{return apply_operation:<integer2>(".zw", self);}
+    public func wz(self:integer4)=> integer2{return apply_operation:<integer2>(".wz", self);}
+
+    public func xyz(self:integer4)=> integer3{return apply_operation:<integer3>(".xyz", self);}
+    public func xzy(self:integer4)=> integer3{return apply_operation:<integer3>(".xzy", self);}
+    public func yxz(self:integer4)=> integer3{return apply_operation:<integer3>(".yxz", self);}
+    public func yzx(self:integer4)=> integer3{return apply_operation:<integer3>(".yzx", self);}
+    public func zxy(self:integer4)=> integer3{return apply_operation:<integer3>(".zxy", self);}
+    public func zyx(self:integer4)=> integer3{return apply_operation:<integer3>(".zyx", self);}
+    public func wyz(self:integer4)=> integer3{return apply_operation:<integer3>(".wyz", self);}
+    public func wzy(self:integer4)=> integer3{return apply_operation:<integer3>(".wzy", self);}
+    public func ywz(self:integer4)=> integer3{return apply_operation:<integer3>(".ywz", self);}
+    public func yzw(self:integer4)=> integer3{return apply_operation:<integer3>(".yzw", self);}
+    public func zwy(self:integer4)=> integer3{return apply_operation:<integer3>(".zwy", self);}
+    public func zyw(self:integer4)=> integer3{return apply_operation:<integer3>(".zyw", self);}
+    public func xwz(self:integer4)=> integer3{return apply_operation:<integer3>(".xwz", self);}
+    public func xzw(self:integer4)=> integer3{return apply_operation:<integer3>(".xzw", self);}
+    public func wxz(self:integer4)=> integer3{return apply_operation:<integer3>(".wxz", self);}
+    public func wzx(self:integer4)=> integer3{return apply_operation:<integer3>(".wzx", self);}
+    public func zxw(self:integer4)=> integer3{return apply_operation:<integer3>(".zxw", self);}
+    public func zwx(self:integer4)=> integer3{return apply_operation:<integer3>(".zwx", self);}
+    public func xyw(self:integer4)=> integer3{return apply_operation:<integer3>(".xyw", self);}
+    public func xwy(self:integer4)=> integer3{return apply_operation:<integer3>(".xwy", self);}
+    public func yxw(self:integer4)=> integer3{return apply_operation:<integer3>(".yxw", self);}
+    public func ywx(self:integer4)=> integer3{return apply_operation:<integer3>(".ywx", self);}
+    public func wxy(self:integer4)=> integer3{return apply_operation:<integer3>(".wxy", self);}
+    public func wyx(self:integer4)=> integer3{return apply_operation:<integer3>(".wyx", self);}
+
+    public func xyzw(self:integer4)=> integer4{return apply_operation:<integer4>(".xyzw", self);}
+    public func xzyw(self:integer4)=> integer4{return apply_operation:<integer4>(".xzyw", self);}
+    public func yxzw(self:integer4)=> integer4{return apply_operation:<integer4>(".yxzw", self);}
+    public func yzxw(self:integer4)=> integer4{return apply_operation:<integer4>(".yzxw", self);}
+    public func zxyw(self:integer4)=> integer4{return apply_operation:<integer4>(".zxyw", self);}
+    public func zyxw(self:integer4)=> integer4{return apply_operation:<integer4>(".zyxw", self);}
+    public func wyzx(self:integer4)=> integer4{return apply_operation:<integer4>(".wyzx", self);}
+    public func wzyx(self:integer4)=> integer4{return apply_operation:<integer4>(".wzyx", self);}
+    public func ywzx(self:integer4)=> integer4{return apply_operation:<integer4>(".ywzx", self);}
+    public func yzwx(self:integer4)=> integer4{return apply_operation:<integer4>(".yzwx", self);}
+    public func zwyx(self:integer4)=> integer4{return apply_operation:<integer4>(".zwyx", self);}
+    public func zywx(self:integer4)=> integer4{return apply_operation:<integer4>(".zywx", self);}
+    public func xwzy(self:integer4)=> integer4{return apply_operation:<integer4>(".xwzy", self);}
+    public func xzwy(self:integer4)=> integer4{return apply_operation:<integer4>(".xzwy", self);}
+    public func wxzy(self:integer4)=> integer4{return apply_operation:<integer4>(".wxzy", self);}
+    public func wzxy(self:integer4)=> integer4{return apply_operation:<integer4>(".wzxy", self);}
+    public func zxwy(self:integer4)=> integer4{return apply_operation:<integer4>(".zxwy", self);}
+    public func zwxy(self:integer4)=> integer4{return apply_operation:<integer4>(".zwxy", self);}
+    public func xywz(self:integer4)=> integer4{return apply_operation:<integer4>(".xywz", self);}
+    public func xwyz(self:integer4)=> integer4{return apply_operation:<integer4>(".xwyz", self);}
+    public func yxwz(self:integer4)=> integer4{return apply_operation:<integer4>(".yxwz", self);}
+    public func ywxz(self:integer4)=> integer4{return apply_operation:<integer4>(".ywxz", self);}
+    public func wxyz(self:integer4)=> integer4{return apply_operation:<integer4>(".wxyz", self);}
+    public func wyxz(self:integer4)=> integer4{return apply_operation:<integer4>(".wyxz", self);}
+}
 namespace float
 {
     public let zero = float::const(0.);
@@ -2417,11 +2556,32 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
                     memcpy(variable->mat4x4, init_val->m_float4x4, 4 * 4 * sizeof(float));
                     break;
                 case jegl_shader_value::type::INTEGER:
-                    variable->n = init_val->m_integer; break;
+                    variable->ix = init_val->m_integer; break;
+                case jegl_shader_value::type::INTEGER2:
+                {
+                    variable->ix = init_val->m_integer2[0];
+                    variable->iy = init_val->m_integer2[1];
+                    break;
+                }
+                case jegl_shader_value::type::INTEGER3:
+                {
+                    variable->ix = init_val->m_integer3[0];
+                    variable->iy = init_val->m_integer3[1];
+                    variable->iz = init_val->m_integer3[2];
+                    break;
+                }
+                case jegl_shader_value::type::INTEGER4:
+                {
+                    variable->ix = init_val->m_integer4[0];
+                    variable->iy = init_val->m_integer4[1];
+                    variable->iz = init_val->m_integer4[2];
+                    variable->iw = init_val->m_integer4[3];
+                    break;
+                }
                 case jegl_shader_value::type::TEXTURE2D:
                 case jegl_shader_value::type::TEXTURE2D_MS:
                 case jegl_shader_value::type::TEXTURE_CUBE:
-                    variable->n = uniform_info.m_value->m_uniform_texture_channel; break;
+                    variable->ix = uniform_info.m_value->m_uniform_texture_channel; break;
                 default:
                     jeecs::debug::logerr("Unsupport uniform variable type."); break;
                 }

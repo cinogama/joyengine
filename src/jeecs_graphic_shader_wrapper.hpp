@@ -24,23 +24,26 @@ struct jegl_shader_value
         UNIFORM_BLOCK_VARIABLE = 0x0008,
         FAST_EVAL = 0x0010,
         //
-        TYPE_MASK = 0x000F'FF00,
+        TYPE_MASK = 0x00FF'FF00,
 
-        FLOAT = 0x0100,
-        FLOAT2 = 0x0200,
-        FLOAT3 = 0x0400,
-        FLOAT4 = 0x0800,
+        FLOAT   = 0x0100,
+        FLOAT2  = 0x0200,
+        FLOAT3  = 0x0400,
+        FLOAT4  = 0x0800,
 
-        FLOAT2x2 = 0x1000,
-        FLOAT3x3 = 0x2000,
-        FLOAT4x4 = 0x4000,
+        FLOAT2x2    = 0x1000,
+        FLOAT3x3    = 0x2000,
+        FLOAT4x4    = 0x4000,
 
-        INTEGER = 0x8000,
+        INTEGER     = 0x8000,
+        INTEGER2    = 0x010000,
+        INTEGER3    = 0x020000,
+        INTEGER4    = 0x040000,
 
-        TEXTURE2D = 0x010000,
-        TEXTURE_CUBE = 0x020000,
-        TEXTURE2D_MS = 0x040000,
-        STRUCT = 0x080000,
+        TEXTURE2D   = 0x080000,
+        TEXTURE_CUBE = 0x100000,
+        TEXTURE2D_MS = 0x200000,
+        STRUCT      = 0x400000,
     };
 
     type m_type;
@@ -56,6 +59,9 @@ struct jegl_shader_value
         float m_float3x3[3][3];
         float m_float4x4[4][4];
         int m_integer;
+        int m_integer2[2];
+        int m_integer3[3];
+        int m_integer4[4];
         struct
         {
             const char* m_opname;
@@ -80,6 +86,30 @@ struct jegl_shader_value
         , m_integer(init_val)
         , m_ref_count(0)
     {
+    }
+    jegl_shader_value(int x, int y)
+        : m_type((type)(type::INTEGER2 | type::INIT_VALUE))
+        , m_ref_count(0)
+    {
+        m_integer2[0] = x;
+        m_integer2[1] = y;
+    }
+    jegl_shader_value(int x, int y, int z)
+        : m_type((type)(type::INTEGER3 | type::INIT_VALUE))
+        , m_ref_count(0)
+    {
+        m_integer3[0] = x;
+        m_integer3[1] = y;
+        m_integer3[2] = z;
+    }
+    jegl_shader_value(int x, int y, int z, int w)
+        : m_type((type)(type::INTEGER4 | type::INIT_VALUE))
+        , m_ref_count(0)
+    {
+        m_integer4[0] = x;
+        m_integer4[1] = y;
+        m_integer4[2] = z;
+        m_integer4[3] = w;
     }
 
     jegl_shader_value(float init_val)
@@ -319,6 +349,12 @@ public:
         {
         case jegl_shader_value::type::INTEGER:
             return jegl_shader::uniform_type::INT;
+        case jegl_shader_value::type::INTEGER2:
+            return jegl_shader::uniform_type::INT2;
+        case jegl_shader_value::type::INTEGER3:
+            return jegl_shader::uniform_type::INT3;
+        case jegl_shader_value::type::INTEGER4:
+            return jegl_shader::uniform_type::INT4;
         case jegl_shader_value::type::FLOAT:
             return jegl_shader::uniform_type::FLOAT;
         case jegl_shader_value::type::FLOAT2:

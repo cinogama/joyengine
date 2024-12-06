@@ -11,7 +11,7 @@ CULL    (NONE);
 
 GRAPHIC_STRUCT! Bone
 {
-    bones:  float4x4[1024],
+    bones:  float4x4[256],
 };
 
 UNIFORM_BUFFER! Bones = 6
@@ -20,8 +20,11 @@ UNIFORM_BUFFER! Bones = 6
 };
 
 VAO_STRUCT! vin {
-    vertex  : float3,
-    uv      : float2,
+    vertex      : float3,
+    uv          : float2,
+    normal      : float3,
+    bone_index  : integer4,
+    bone_weight : float4,
 };
 
 using v2f = struct {

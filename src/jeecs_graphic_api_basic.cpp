@@ -884,6 +884,12 @@ void _jegl_free_resource_instance(jegl_resource* resource)
     }
 }
 
+void _jegl_free_vertex_bone_data(const jegl_vertex::bone_data* b)
+{
+    je_mem_free((void*)b->m_name);
+    je_mem_free((void*)b);
+}
+
 void jegl_close_resource(jegl_resource* resource)
 {
     assert(resource != nullptr);
@@ -914,6 +920,11 @@ void jegl_close_resource(jegl_resource* resource)
             // close resource's raw data, then send this resource to closing-queue
             je_mem_free((void*)resource->m_raw_vertex_data->m_vertex_datas);
             je_mem_free((void*)resource->m_raw_vertex_data->m_vertex_formats);
+            for (size_t bone_idx = 0; bone_idx < resource->m_raw_vertex_data->m_bone_count; ++bone_idx)
+                _jegl_free_vertex_bone_data(resource->m_raw_vertex_data->m_bones[bone_idx]);
+
+            je_mem_free((void*)resource->m_raw_vertex_data->m_bones);
+            
             delete resource->m_raw_vertex_data;
             break;
         case jegl_resource::FRAMEBUF:
@@ -1448,6 +1459,8 @@ jegl_resource* jegl_load_texture(jegl_context* context, const char* path)
 
 jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
 {
+    const size_t MAX_BONE_COUNT = 256;
+
     auto* shared_vertex = jegl_try_load_shared_resource(context, path);
     if (shared_vertex != nullptr && shared_vertex->m_type == jegl_resource::type::VERTEX)
         return shared_vertex;
@@ -1465,12 +1478,27 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
     std::stack<aiNode*> m_node_stack;
     m_node_stack.push(scene->mRootNode);
 
-    std::vector<float> vertex_datas;
-    const jegl_vertex::data_layout format[] = {
+    struct jegl_standard_model_vertex_t
+    {
+        float m_vertex[3];
+        float m_texcoord[2];
+        float m_normal[3];
+
+        int32_t m_bone_id[4];
+        float m_bone_weight[4];
+    };
+    static_assert(sizeof(jegl_standard_model_vertex_t) == 64);
+
+    const jegl_vertex::data_layout jegl_standard_model_vertex_format[] = {
         {jegl_vertex::data_type::FLOAT32, 3},
         {jegl_vertex::data_type::FLOAT32, 2},
-        {jegl_vertex::data_type::FLOAT32, 3}
+        {jegl_vertex::data_type::FLOAT32, 3},
+        {jegl_vertex::data_type::INT32, 4},
+        {jegl_vertex::data_type::FLOAT32, 4},
     };
+
+    std::vector<jegl_standard_model_vertex_t> vertex_datas;
+    std::unordered_map<std::string, const jegl_vertex::bone_data*> named_bone_map;
 
     while (!m_node_stack.empty())
     {
@@ -1480,32 +1508,94 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
         for (size_t i = 0; i < current_node->mNumChildren; ++i)
             m_node_stack.push(current_node->mChildren[i]);
 
+        size_t bone_counter = 0;
+
         for (size_t i = 0; i < current_node->mNumMeshes; ++i)
         {
             auto* mesh = scene->mMeshes[current_node->mMeshes[i]];
+            const size_t current_model_vertex_offset = vertex_datas.size();
 
             for (size_t f = 0; f < mesh->mNumFaces; ++f)
             {
                 auto& face = mesh->mFaces[f];
                 assert(face.mNumIndices == 3);
 
+                const auto* texcrood_0 = mesh->mTextureCoords[0];
+
                 for (size_t i = 0; i < face.mNumIndices; ++i)
                 {
                     auto& index = face.mIndices[i];
+
                     auto& vertex = mesh->mVertices[index];
-                    auto& texcoord = mesh->mTextureCoords[0][index];
                     auto& normal = mesh->mNormals[index];
 
-                    vertex_datas.push_back(vertex.x);
-                    vertex_datas.push_back(vertex.y);
-                    vertex_datas.push_back(vertex.z);
+                    jegl_standard_model_vertex_t model_vertex = {};
+                    model_vertex.m_vertex[0] = vertex.x;
+                    model_vertex.m_vertex[1] = vertex.y;
+                    model_vertex.m_vertex[2] = vertex.z;
+                    if (texcrood_0 != nullptr)
+                    {
+                        model_vertex.m_texcoord[0] = texcrood_0[index].x;
+                        model_vertex.m_texcoord[1] = texcrood_0[index].y;
+                    }
+                    model_vertex.m_normal[0] = normal.x;
+                    model_vertex.m_normal[1] = normal.y;
+                    model_vertex.m_normal[2] = normal.z;
 
-                    vertex_datas.push_back(texcoord.x);
-                    vertex_datas.push_back(texcoord.y);
+                    vertex_datas.push_back(model_vertex);
+                }
+            }
 
-                    vertex_datas.push_back(normal.x);
-                    vertex_datas.push_back(normal.y);
-                    vertex_datas.push_back(normal.z);
+            for (size_t bone_idx = 0; bone_idx < mesh->mNumBones; ++bone_idx)
+            {
+                size_t bone_id;
+                auto fnd = named_bone_map.find(mesh->mBones[bone_idx]->mName.C_Str());
+                if (fnd == named_bone_map.end())
+                {
+                    jegl_vertex::bone_data* bone_data = 
+                        (jegl_vertex::bone_data*)je_mem_alloc(sizeof(jegl_vertex::bone_data));
+
+                    assert(bone_data != nullptr);
+                    bone_data->m_name = jeecs::basic::make_new_string(mesh->mBones[bone_idx]->mName.C_Str());
+                    bone_data->m_index = bone_counter++;
+                    assert(bone_data->m_name != nullptr);
+
+                    const auto& offset_matrix = mesh->mBones[bone_idx]->mOffsetMatrix;
+                    for (size_t ix = 0; ix < 4; ++ix)
+                    {
+                        for (size_t iy = 0; iy < 4; ++iy)
+                        {
+                            bone_data->m_m2b_trans[ix][iy] = offset_matrix[iy][ix];
+                        }
+                    }
+
+                    named_bone_map.insert(std::make_pair(bone_data->m_name, bone_data));
+                    bone_id = bone_data->m_index;
+                }
+                else
+                    bone_id = fnd->second->m_index;
+
+                if (bone_id >= MAX_BONE_COUNT)
+                    // Too many bones, skip to avoid overflow.
+                    continue;
+                
+                auto* weights = mesh->mBones[bone_idx]->mWeights;
+                size_t numWeights = (size_t)mesh->mBones[bone_idx]->mNumWeights;
+
+                for (size_t weight_index = 0; weight_index < numWeights; ++weight_index)
+                {
+                    auto& weight = weights[weight_index];
+                    auto& vertex = vertex_datas[weight.mVertexId + current_model_vertex_offset];
+
+                    for (size_t i = 0; i < 4; ++i)
+                    {
+                        if (vertex.m_bone_weight[i] == 0.f)
+                        {
+                            vertex.m_bone_id[i] = (int32_t)bone_id;
+                            vertex.m_bone_weight[i] = weight.mWeight;
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -1514,14 +1604,36 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
     auto* vertex = jegl_create_vertex(
         jegl_vertex::type::TRIANGLES,
         vertex_datas.data(),
-        vertex_datas.size() * sizeof(float),
-        format,
-        sizeof(format) / sizeof(jegl_vertex::data_layout));
+        vertex_datas.size() * sizeof(jegl_standard_model_vertex_t),
+        jegl_standard_model_vertex_format,
+        sizeof(jegl_standard_model_vertex_format) / sizeof(jegl_vertex::data_layout));
 
     if (vertex != nullptr)
     {
         vertex->m_path = jeecs::basic::make_new_string(path);
+
+        const jegl_vertex::bone_data** bones = 
+            (const jegl_vertex::bone_data**)je_mem_alloc(
+                named_bone_map.size() * sizeof(const jegl_vertex::bone_data*));
+
+        size_t idx = 0;
+        for (auto& [_, bonedata] : named_bone_map)
+            bones[idx++] = bonedata;
+
+        std::sort(bones + 0, bones + 1,
+            [](const jegl_vertex::bone_data* a, const jegl_vertex::bone_data* b)
+            {
+                return a->m_index < b->m_index;
+            });
+        vertex->m_raw_vertex_data->m_bones = bones;
+        vertex->m_raw_vertex_data->m_bone_count = idx;
+
         return jegl_try_update_shared_resource(context, vertex);
+    }
+    else
+    {
+        for (auto& [_, bonedata] : named_bone_map)
+            _jegl_free_vertex_bone_data(bonedata);
     }
     return nullptr;
 }
@@ -1563,6 +1675,8 @@ jegl_resource* jegl_create_vertex(
     vertex->m_raw_vertex_data->m_format_count = format_length;
     vertex->m_raw_vertex_data->m_point_count = point_count;
     vertex->m_raw_vertex_data->m_data_size_per_point = data_size_per_point;
+    vertex->m_raw_vertex_data->m_bones = nullptr;
+    vertex->m_raw_vertex_data->m_bone_count = 0;
 
     vertex->m_raw_vertex_data->m_vertex_datas
         = (float*)je_mem_alloc(data_length);
@@ -1736,7 +1850,16 @@ void jegl_bind_shader(jegl_resource* shader)
                     break;
                 case jegl_shader::uniform_type::INT:
                 case jegl_shader::uniform_type::TEXTURE:
-                    jegl_uniform_int(uniform_vars->m_index, uniform_vars->n);
+                    jegl_uniform_int(uniform_vars->m_index, uniform_vars->ix);
+                    break;
+                case jegl_shader::uniform_type::INT2:
+                    jegl_uniform_int2(uniform_vars->m_index, uniform_vars->ix, uniform_vars->iy);
+                    break;
+                case jegl_shader::uniform_type::INT3:
+                    jegl_uniform_int3(uniform_vars->m_index, uniform_vars->ix, uniform_vars->iy, uniform_vars->iz);
+                    break;
+                case jegl_shader::uniform_type::INT4:
+                    jegl_uniform_int4(uniform_vars->m_index, uniform_vars->ix, uniform_vars->iy, uniform_vars->iz, uniform_vars->iw);
                     break;
                 default:
                     jeecs::debug::logerr("Unsupport uniform variable type."); break;
@@ -1789,6 +1912,27 @@ void jegl_uniform_int(uint32_t location, int value)
     _current_graphic_thread->m_apis->set_uniform(_current_graphic_thread->m_userdata, location, jegl_shader::INT, &value);
 }
 
+void jegl_uniform_int2(uint32_t location, int x, int y)
+{
+    // NOTE: This method designed for using after 'jegl_using_resource'
+    int value[2] = { x,y };
+    _current_graphic_thread->m_apis->set_uniform(_current_graphic_thread->m_userdata, location, jegl_shader::INT2, &value);
+}
+
+void jegl_uniform_int3(uint32_t location, int x, int y, int z)
+{
+    // NOTE: This method designed for using after 'jegl_using_resource'
+    int value[3] = { x,y,z };
+    _current_graphic_thread->m_apis->set_uniform(_current_graphic_thread->m_userdata, location, jegl_shader::INT3, &value);
+}
+
+void jegl_uniform_int4(uint32_t location, int x, int y, int z, int w)
+{
+    // NOTE: This method designed for using after 'jegl_using_resource'
+    int value[4] = { x,y,z,w };
+    _current_graphic_thread->m_apis->set_uniform(_current_graphic_thread->m_userdata, location, jegl_shader::INT4, &value);
+}
+
 void jegl_uniform_float(uint32_t location, float value)
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
@@ -1798,21 +1942,21 @@ void jegl_uniform_float(uint32_t location, float value)
 void jegl_uniform_float2(uint32_t location, float x, float y)
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
-    jeecs::math::vec2 value = { x,y };
+    float value[] = {x,y};
     _current_graphic_thread->m_apis->set_uniform(_current_graphic_thread->m_userdata, location, jegl_shader::FLOAT2, &value);
 }
 
 void jegl_uniform_float3(uint32_t location, float x, float y, float z)
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
-    jeecs::math::vec3 value = { x,y,z };
+    float value[] = {x,y,z};
     _current_graphic_thread->m_apis->set_uniform(_current_graphic_thread->m_userdata, location, jegl_shader::FLOAT3, &value);
 }
 
 void jegl_uniform_float4(uint32_t location, float x, float y, float z, float w)
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
-    jeecs::math::vec4 value = { x,y,z,w };
+    float value[] = {x,y,z,w};
     _current_graphic_thread->m_apis->set_uniform(_current_graphic_thread->m_userdata, location, jegl_shader::FLOAT4, &value);
 }
 

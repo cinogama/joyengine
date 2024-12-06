@@ -1622,7 +1622,34 @@ WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args)
         {
         case jegl_shader::uniform_type::INT:
         case jegl_shader::uniform_type::TEXTURE:
-            wo_set_int(elem, uniforms->n); break;
+            wo_set_int(elem, uniforms->ix); break;
+        case jegl_shader::uniform_type::INT2:
+            wo_set_struct(elem, vm, 2);
+            wo_set_int(key, uniforms->ix);
+            wo_struct_set(elem, 0, key);
+            wo_set_int(key, uniforms->iy);
+            wo_struct_set(elem, 1, key);
+            break;
+        case jegl_shader::uniform_type::INT3:
+            wo_set_struct(elem, vm, 3);
+            wo_set_int(key, uniforms->ix);
+            wo_struct_set(elem, 0, key);
+            wo_set_int(key, uniforms->iy);
+            wo_struct_set(elem, 1, key);
+            wo_set_int(key, uniforms->iz);
+            wo_struct_set(elem, 2, key);
+            break;
+        case jegl_shader::uniform_type::INT4:
+            wo_set_struct(elem, vm, 4);
+            wo_set_int(key, uniforms->ix);
+            wo_struct_set(elem, 0, key);
+            wo_set_int(key, uniforms->iy);
+            wo_struct_set(elem, 1, key);
+            wo_set_int(key, uniforms->iz);
+            wo_struct_set(elem, 2, key);
+            wo_set_int(key, uniforms->iw);
+            wo_struct_set(elem, 3, key);
+            break;
         case jegl_shader::uniform_type::FLOAT:
             wo_set_float(elem, uniforms->x); break;
         case jegl_shader::uniform_type::FLOAT2:
@@ -1669,6 +1696,27 @@ WO_API wo_api wojeapi_set_uniforms_int(wo_vm vm, wo_value args)
 {
     auto* shader = (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(args + 0);
     (*shader)->set_uniform(wo_string(args + 1), (int)wo_int(args + 2));
+
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_set_uniforms_int2(wo_vm vm, wo_value args)
+{
+    auto* shader = (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(args + 0);
+    (*shader)->set_uniform(wo_string(args + 1), (int)wo_int(args + 2), (int)wo_int(args + 3));
+
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_set_uniforms_int3(wo_vm vm, wo_value args)
+{
+    auto* shader = (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(args + 0);
+    (*shader)->set_uniform(wo_string(args + 1), (int)wo_int(args + 2), (int)wo_int(args + 3), (int)wo_int(args + 4));
+
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_set_uniforms_int4(wo_vm vm, wo_value args)
+{
+    auto* shader = (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(args + 0);
+    (*shader)->set_uniform(wo_string(args + 1), (int)wo_int(args + 2), (int)wo_int(args + 3), (int)wo_int(args + 4), (int)wo_int(args + 5));
 
     return wo_ret_void(vm);
 }
@@ -3069,6 +3117,9 @@ R"(
             public union uniform_variable
             {
                 integer(int),
+                integer2((int, int)),
+                integer3((int, int, int)),  
+                integer4((int, int, int, int)),
                 float(real),
                 float2((real, real)),
                 float3((real, real, real)),
@@ -3089,47 +3140,49 @@ R"(
             public func get_uniforms(self: shader)=> map<string, uniform_variable>;
 
             public func set_uniform<T>(self: shader, name: string, val: T)
-                where std::declval:<T>() is int
-                   || std::declval:<T>() is real
-                   || std::declval:<T>() is (real, real)
-                   || std::declval:<T>() is (real, real, real)
-                   || std::declval:<T>() is (real, real, real, real);
+                where val is int
+                    || val is (int, int)
+                    || val is (int, int, int)  
+                    || val is (int, int, int, int)
+                    || val is real
+                    || val is (real, real)
+                    || val is (real, real, real)
+                    || val is (real, real, real, real);
             {
-                if (std::declval:<T>() is int)
-                {
-                    extern("libjoyecs", "wojeapi_set_uniforms_int")
-                    func _set_uniform_int(shad: shader, name: string, val: int)=> void;
+                extern("libjoyecs", "wojeapi_set_uniforms_int")
+                func _set_uniform_int(shad: shader, name: string, val: int)=> void;
+                extern("libjoyecs", "wojeapi_set_uniforms_int2")
+                func _set_uniform_int2(shad: shader, name: string, x: int, y: int)=> void;
+                extern("libjoyecs", "wojeapi_set_uniforms_int3")    
+                func _set_uniform_int3(shad: shader, name: string, x: int, y: int, z: int)=> void;
+                extern("libjoyecs", "wojeapi_set_uniforms_int4")
+                func _set_uniform_int4(shad: shader, name: string, x: int, y: int, z: int, w: int)=> void;
 
+                extern("libjoyecs", "wojeapi_set_uniforms_float")
+                func _set_uniform_float(shad: shader, name: string, val: real)=> void;
+                extern("libjoyecs", "wojeapi_set_uniforms_float2")
+                func _set_uniform_float2(shad: shader, name: string, x: real, y: real)=> void;
+                extern("libjoyecs", "wojeapi_set_uniforms_float3")
+                func _set_uniform_float3(shad: shader, name: string, x: real, y: real, z: real)=> void;
+                extern("libjoyecs", "wojeapi_set_uniforms_float4")
+                func _set_uniform_float4(shad: shader, name: string, x: real, y: real, z: real, w: real)=> void;
+
+                if (val is int)
                     _set_uniform_int(self, name, val);
-                }
-                else if (std::declval:<T>() is real)
-                {
-                    extern("libjoyecs", "wojeapi_set_uniforms_float")
-                    func _set_uniform_float(shad: shader, name: string, val: real)=> void;
-
+                if (val is (int, int))
+                    _set_uniform_int2(self, name, val...);
+                else if (val is (int, int, int))
+                    _set_uniform_int3(self, name, val...);
+                else if (val is (int, int, int, int))
+                    _set_uniform_int4(self, name, val...);
+                else if (val is real)
                     _set_uniform_float(self, name, val);
-                }
-                else if (std::declval:<T>() is (real, real))
-                {
-                    extern("libjoyecs", "wojeapi_set_uniforms_float2")
-                    func _set_uniform_float2(shad: shader, name: string, x: real, y: real)=> void;
-                    let (x, y) = val;
-                    _set_uniform_float2(self, name, x, y);
-                }
-                else if (std::declval:<T>() is (real, real, real))
-                {
-                    extern("libjoyecs", "wojeapi_set_uniforms_float3")
-                    func _set_uniform_float3(shad: shader, name: string, x: real, y: real, z: real)=> void;
-                    let (x, y, z) = val;
-                    _set_uniform_float3(self, name, x, y, z);
-                }
-                else if (std::declval:<T>() is (real, real, real, real))
-                {
-                    extern("libjoyecs", "wojeapi_set_uniforms_float4")
-                    func _set_uniform_float4(shad: shader, name: string, x: real, y: real, z: real, w: real)=> void;
-                    let (x, y, z, w) = val;
-                    _set_uniform_float4(self, name, x, y, z, w);
-                }
+                else if (val is (real, real))
+                    _set_uniform_float2(self, name, val...);
+                else if (val is (real, real, real))
+                    _set_uniform_float3(self, name, val...);
+                else if (val is (real, real, real, real))
+                    _set_uniform_float4(self, name, val...);
                 else
                     std::panic("Here should not been exec.");
             }

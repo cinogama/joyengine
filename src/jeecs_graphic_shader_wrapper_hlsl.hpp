@@ -26,6 +26,14 @@ namespace jeecs
             {
                 switch (type)
                 {
+                case jegl_shader_value::type::INTEGER:
+                    return "int";
+                case jegl_shader_value::type::INTEGER2:
+                    return "int2";
+                case jegl_shader_value::type::INTEGER3:
+                    return "int3";
+                case jegl_shader_value::type::INTEGER4:
+                    return "int4";
                 case jegl_shader_value::type::FLOAT:
                     return "float";
                 case jegl_shader_value::type::FLOAT2:
@@ -427,6 +435,9 @@ namespace jeecs
                     switch (wrap->vertex_in[i])
                     {
                     case jegl_shader_value::type::INTEGER:
+                    case jegl_shader_value::type::INTEGER2:
+                    case jegl_shader_value::type::INTEGER3:
+                    case jegl_shader_value::type::INTEGER4:
                         vertex_in_semantics[i] = "BLENDINDICES" + std::to_string(INT_COUNT++);
                         break;
                     case jegl_shader_value::type::FLOAT:

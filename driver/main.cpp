@@ -57,7 +57,7 @@ int main(int argc, char** argv)
 
     struct BonesData
     {
-        float bones[1024][16];
+        float bones_mat4x4[1024][16];
     };
     struct BoneUbo
     {

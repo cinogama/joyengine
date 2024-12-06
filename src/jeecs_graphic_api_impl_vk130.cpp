@@ -2059,6 +2059,22 @@ VK_API_PLATFORM_API_LIST
                 shader_blob->m_vertex_input_attribute_descriptions[i].offset = (uint32_t)vertex_point_data_size;
                 switch (resource->m_raw_shader_data->m_vertex_in[i].m_type)
                 {
+                case jegl_shader::uniform_type::INT:
+                    shader_blob->m_vertex_input_attribute_descriptions[i].format = VkFormat::VK_FORMAT_R32_SINT;
+                    vertex_point_data_size += sizeof(int32_t);
+                    break;
+                case jegl_shader::uniform_type::INT2:
+                    shader_blob->m_vertex_input_attribute_descriptions[i].format = VkFormat::VK_FORMAT_R32G32_SINT;
+                    vertex_point_data_size += sizeof(int32_t) * 2;
+                    break;
+                case jegl_shader::uniform_type::INT3:
+                    shader_blob->m_vertex_input_attribute_descriptions[i].format = VkFormat::VK_FORMAT_R32G32B32_SINT;
+                    vertex_point_data_size += sizeof(int32_t) * 3;
+                    break;
+                case jegl_shader::uniform_type::INT4:
+                    shader_blob->m_vertex_input_attribute_descriptions[i].format = VkFormat::VK_FORMAT_R32G32B32A32_SINT;
+                    vertex_point_data_size += sizeof(int32_t) * 4;
+                    break;
                 case jegl_shader::uniform_type::FLOAT:
                     shader_blob->m_vertex_input_attribute_descriptions[i].format = VkFormat::VK_FORMAT_R32_SFLOAT;
                     vertex_point_data_size += sizeof(float);
@@ -2321,14 +2337,17 @@ VK_API_PLATFORM_API_LIST
                     unit_size = 4;
                     allign_base = 4;
                     break;
+                case jegl_shader::uniform_type::INT2:
                 case jegl_shader::uniform_type::FLOAT2:
                     unit_size = 8;
                     allign_base = 8;
                     break;
+                case jegl_shader::uniform_type::INT3:
                 case jegl_shader::uniform_type::FLOAT3:
                     unit_size = 12;
                     allign_base = 16;
                     break;
+                case jegl_shader::uniform_type::INT4:
                 case jegl_shader::uniform_type::FLOAT4:
                     unit_size = 16;
                     allign_base = 16;
@@ -3734,12 +3753,15 @@ VK_API_PLATFORM_API_LIST
         case jegl_shader::FLOAT:
             memcpy(reinterpret_cast<void*>((intptr_t)context->_vk_current_binded_shader->m_uniform_cpu_buffer + location), val, 4);
             break;
+        case jegl_shader::INT2:
         case jegl_shader::FLOAT2:
             memcpy(reinterpret_cast<void*>((intptr_t)context->_vk_current_binded_shader->m_uniform_cpu_buffer + location), val, 8);
             break;
+        case jegl_shader::INT3:
         case jegl_shader::FLOAT3:
             memcpy(reinterpret_cast<void*>((intptr_t)context->_vk_current_binded_shader->m_uniform_cpu_buffer + location), val, 12);
             break;
+        case jegl_shader::INT4:
         case jegl_shader::FLOAT4:
             memcpy(reinterpret_cast<void*>((intptr_t)context->_vk_current_binded_shader->m_uniform_cpu_buffer + location), val, 16);
             break;

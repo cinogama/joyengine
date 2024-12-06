@@ -13,6 +13,14 @@ namespace jeecs
             {
                 switch (type)
                 {
+                case jegl_shader_value::type::INTEGER:
+                    return "int";
+                case jegl_shader_value::type::INTEGER2:
+                    return "ivec2";
+                case jegl_shader_value::type::INTEGER3:
+                    return "ivec3";
+                case jegl_shader_value::type::INTEGER4:
+                    return "ivec4";
                 case jegl_shader_value::type::FLOAT:
                     return "float";
                 case jegl_shader_value::type::FLOAT2:

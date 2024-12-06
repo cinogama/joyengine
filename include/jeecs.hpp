@@ -1760,6 +1760,13 @@ struct jegl_vertex
         size_t m_count;
     };
     
+    struct bone_data
+    {
+        const char* m_name;
+        size_t      m_index;
+        float       m_m2b_trans[4][4];
+    };
+
     float           m_x_min, m_x_max,
                     m_y_min, m_y_max,
                     m_z_min, m_z_max;
@@ -1770,6 +1777,9 @@ struct jegl_vertex
     size_t          m_point_count;
     size_t          m_data_size_per_point;
     type            m_type;
+    const bone_data**
+                    m_bones;
+    size_t          m_bone_count;
 };
 
 /*
@@ -1810,6 +1820,9 @@ struct jegl_shader
     enum uniform_type
     {
         INT,
+        INT2,
+        INT3,
+        INT4,
         FLOAT,
         FLOAT2,
         FLOAT3,
@@ -1849,7 +1862,10 @@ struct jegl_shader
             {
                 float x, y, z, w;
             };
-            int n;
+            struct
+            {
+                int ix, iy, iz, iw;
+            };
             float mat4x4[4][4];
         };
 
@@ -2670,6 +2686,33 @@ jegl_uniform_int 不会初始化着色器，请在操作之前调用 jegl_bind_s
 JE_API void jegl_uniform_int(uint32_t location, int value);
 
 /*
+jegl_uniform_int2 [基本接口]
+向当前着色器指定位置的一致变量设置一个二维整型矢量数值
+jegl_uniform_int2 不会初始化着色器，请在操作之前调用 jegl_bind_shader
+以确保着色器完成初始化
+    * 此函数只允许在图形线程内调用
+*/
+JE_API void jegl_uniform_int2(uint32_t location, int x, int y);
+
+/*
+jegl_uniform_int3 [基本接口]
+向当前着色器指定位置的一致变量设置一个三维整型矢量数值
+jegl_uniform_int3 不会初始化着色器，请在操作之前调用 jegl_bind_shader
+以确保着色器完成初始化
+    * 此函数只允许在图形线程内调用
+*/
+JE_API void jegl_uniform_int3(uint32_t location, int x, int y, int z);
+
+/*
+jegl_uniform_int4 [基本接口]
+向当前着色器指定位置的一致变量设置一个四维整型矢量数值
+jegl_uniform_int4 不会初始化着色器，请在操作之前调用 jegl_bind_shader
+以确保着色器完成初始化
+    * 此函数只允许在图形线程内调用
+*/
+JE_API void jegl_uniform_int4(uint32_t location, int x, int y, int z, int w);
+
+/*
 jegl_uniform_float [基本接口]
 向当前着色器指定位置的一致变量设置一个单精度浮点数值
     * jegl_uniform_float 不会初始化着色器，请在操作之前调用 jegl_bind_shader
@@ -2838,6 +2881,45 @@ JE_API void jegl_rchain_set_uniform_int(
     jegl_rendchain_rend_action* act,
     uint32_t binding_place,
     int val);
+
+/*
+jegl_rchain_set_uniform_int2 [基本接口]
+为 act 指定的绘制操作应用二维整型矢量一致变量
+请参见：
+    jegl_rendchain_rend_action
+*/
+JE_API void jegl_rchain_set_uniform_int2(
+    jegl_rendchain_rend_action* act,
+    uint32_t binding_place,
+    int x,
+    int y);
+
+/*
+jegl_rchain_set_uniform_int3 [基本接口]
+为 act 指定的绘制操作应用三维整型矢量一致变量
+请参见：
+    jegl_rendchain_rend_action
+*/
+JE_API void jegl_rchain_set_uniform_int3(
+    jegl_rendchain_rend_action* act,
+    uint32_t binding_place,
+    int x,
+    int y,
+    int z);
+
+/*
+jegl_rchain_set_uniform_int4 [基本接口]
+为 act 指定的绘制操作应用四维整型矢量一致变量
+请参见：
+    jegl_rendchain_rend_action
+*/
+JE_API void jegl_rchain_set_uniform_int4(
+    jegl_rendchain_rend_action* act,
+    uint32_t binding_place,
+    int x,
+    int y,
+    int z,
+    int w);
 
 /*
 jegl_rchain_set_uniform_float [基本接口]
@@ -7371,11 +7453,80 @@ namespace jeecs
                     {
                         if (jegl_shad_uniforms->m_uniform_type !=
                             jegl_shader::uniform_type::INT)
-                            debug::logerr("Trying set uniform('%s' = %d) to shader(%p), but current uniform type is not 'INT'."
-                                , name.c_str(), val, this);
+                            debug::logerr("Trying set uniform('%s' = %d) to shader(%p), but current uniform type is not 'INT'.",
+                                name.c_str(), val, this);
                         else
                         {
-                            jegl_shad_uniforms->n = val;
+                            jegl_shad_uniforms->ix = val;
+                            jegl_shad_uniforms->m_updated = true;
+                        }
+                        return;
+                    }
+                    jegl_shad_uniforms = jegl_shad_uniforms->m_next;
+                }
+            }
+            void set_uniform(const std::string& name, int x, int y)noexcept
+            {
+                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                while (jegl_shad_uniforms)
+                {
+                    if (jegl_shad_uniforms->m_name == name)
+                    {
+                        if (jegl_shad_uniforms->m_uniform_type !=
+                            jegl_shader::uniform_type::INT)
+                            debug::logerr("Trying set uniform('%s' = %d, %d) to shader(%p), but current uniform type is not 'INT2'."
+                                , name.c_str(), x, y, this);
+                        else
+                        {
+                            jegl_shad_uniforms->ix = x;
+                            jegl_shad_uniforms->iy = y;
+                            jegl_shad_uniforms->m_updated = true;
+                        }
+                        return;
+                    }
+                    jegl_shad_uniforms = jegl_shad_uniforms->m_next;
+                }
+            }
+            void set_uniform(const std::string& name, int x, int y, int z)noexcept
+            {
+                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                while (jegl_shad_uniforms)
+                {
+                    if (jegl_shad_uniforms->m_name == name)
+                    {
+                        if (jegl_shad_uniforms->m_uniform_type !=
+                            jegl_shader::uniform_type::INT)
+                            debug::logerr("Trying set uniform('%s' = %d, %d, %d) to shader(%p), but current uniform type is not 'INT3'."
+                                , name.c_str(), x, y, z, this);
+                        else
+                        {
+                            jegl_shad_uniforms->ix = x;
+                            jegl_shad_uniforms->iy = y;
+                            jegl_shad_uniforms->iz = z;
+                            jegl_shad_uniforms->m_updated = true;
+                        }
+                        return;
+                    }
+                    jegl_shad_uniforms = jegl_shad_uniforms->m_next;
+                }
+            }
+            void set_uniform(const std::string& name, int x, int y, int z, int w)noexcept
+            {
+                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                while (jegl_shad_uniforms)
+                {
+                    if (jegl_shad_uniforms->m_name == name)
+                    {
+                        if (jegl_shad_uniforms->m_uniform_type !=
+                            jegl_shader::uniform_type::INT)
+                            debug::logerr("Trying set uniform('%s' = %d, %d, %d, %d) to shader(%p), but current uniform type is not 'INT4'."
+                                , name.c_str(), x, y, z, w, this);
+                        else
+                        {
+                            jegl_shad_uniforms->ix = x;
+                            jegl_shad_uniforms->iy = y;
+                            jegl_shad_uniforms->iz = z;
+                            jegl_shad_uniforms->iw = w;
                             jegl_shad_uniforms->m_updated = true;
                         }
                         return;
