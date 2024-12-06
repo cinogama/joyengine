@@ -26,7 +26,7 @@ struct jegl_uniform_data_node
 };
 struct jegl_binding_texture_data_node
 {
-    size_t m_texture_index;
+    jegl_rchain_texture_group_idx_t m_texture_index;
     std::unordered_map<size_t, jegl_resource*> m_binding_textures;
 };
 struct jegl_rendchain_rend_action
@@ -35,7 +35,7 @@ struct jegl_rendchain_rend_action
     jegl_resource* m_vertex;
     jegl_resource* m_shader;
     std::vector<size_t> m_binding_uniforms;
-    size_t m_binding_textures;
+    jegl_rchain_texture_group_idx_t m_binding_texture_group_idx;
 };
 struct jegl_rendchain
 {
@@ -175,7 +175,7 @@ jegl_rendchain_rend_action* jegl_rchain_draw(
 
     assert(texture_group == SIZE_MAX || texture_group < chain->m_binding_textures_count);
 
-    action.m_binding_textures = texture_group;
+    action.m_binding_texture_group_idx = texture_group;
     action.m_binding_uniforms.clear();
     action.m_shader = shader;
     action.m_vertex = vertex;
@@ -335,7 +335,11 @@ void jegl_rchain_set_builtin_uniform_float4x4(jegl_rendchain_rend_action* act, u
     memcpy(uniform->m_float4x4, mat, sizeof(uniform->m_float4x4));
 }
 
-void jegl_rchain_bind_texture(jegl_rendchain* chain, size_t texture_group, size_t binding_pass, jegl_resource* texture)
+void jegl_rchain_bind_texture(
+    jegl_rendchain* chain,
+    jegl_rchain_texture_group_idx_t texture_group, 
+    size_t binding_pass, 
+    jegl_resource* texture)
 {
     assert(texture->m_type == jegl_resource::type::TEXTURE);
     assert(texture_group < chain->m_binding_textures_count);
@@ -376,11 +380,11 @@ void jegl_rchain_commit(jegl_rendchain* chain, jegl_context* glthread)
     {
         auto& action = chain->m_rend_actions[aidx];
 
-        if (last_used_texture != action.m_binding_textures && action.m_binding_textures != SIZE_MAX)
-            for (auto& [pass, texture] : chain->m_binding_textures[action.m_binding_textures].m_binding_textures)
+        if (last_used_texture != action.m_binding_texture_group_idx && action.m_binding_texture_group_idx != SIZE_MAX)
+            for (auto& [pass, texture] : chain->m_binding_textures[action.m_binding_texture_group_idx].m_binding_textures)
                 jegl_bind_texture(texture, pass);
 
-        last_used_texture = action.m_binding_textures;
+        last_used_texture = action.m_binding_texture_group_idx;
 
         jegl_bind_shader(action.m_shader);
         if (action.m_shader->m_raw_shader_data != nullptr)

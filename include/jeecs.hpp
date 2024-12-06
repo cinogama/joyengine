@@ -2864,6 +2864,7 @@ JE_API jegl_rchain_texture_group_idx_t jegl_rchain_allocate_texture_group(
 jegl_rchain_draw [基本接口]
 将指定的顶点，使用指定的着色器和纹理将绘制操作作用到绘制链上
     * 若绘制的物体不需要使用纹理，可以使用不绑定纹理的纹理组或传入 SIZE_MAX
+    * 返回的对象仅限在同一个渲染链的下一次绘制命令开始之前使用。
 */
 JE_API jegl_rendchain_rend_action* jegl_rchain_draw(
     jegl_rendchain* chain,
@@ -3063,7 +3064,7 @@ jegl_rchain_bind_texture [基本接口]
 */
 JE_API void jegl_rchain_bind_texture(
     jegl_rendchain* chain,
-    size_t texture_group,
+    jegl_rchain_texture_group_idx_t texture_group,
     size_t binding_pass,
     jegl_resource* texture);
 
