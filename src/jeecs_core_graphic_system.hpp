@@ -106,15 +106,21 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 
         DefaultResources()
         {
+            const float default_shape_quad_data[] = {
+                -0.5f, 0.5f, 0.0f,      0.0f, 1.0f,  0.0f, 0.0f, -1.0f,
+                -0.5f, -0.5f, 0.0f,     0.0f, 0.0f,  0.0f, 0.0f, -1.0f,
+                0.5f, 0.5f, 0.0f,       1.0f, 1.0f,  0.0f, 0.0f, -1.0f,
+                0.5f, -0.5f, 0.0f,      1.0f, 0.0f,  0.0f, 0.0f, -1.0f,
+            };
             default_shape_quad =
                 graphic::vertex::create(jegl_vertex::TRIANGLESTRIP,
+                    default_shape_quad_data,
+                    sizeof(default_shape_quad_data),
                     {
-                        -0.5f, 0.5f, 0.0f,      0.0f, 1.0f,  0.0f, 0.0f, -1.0f,
-                        -0.5f, -0.5f, 0.0f,     0.0f, 0.0f,  0.0f, 0.0f, -1.0f,
-                        0.5f, 0.5f, 0.0f,       1.0f, 1.0f,  0.0f, 0.0f, -1.0f,
-                        0.5f, -0.5f, 0.0f,      1.0f, 0.0f,  0.0f, 0.0f, -1.0f,
-                    },
-                    { 3, 2, 3 });
+                        {jegl_vertex::data_type::FLOAT32, 3},
+                        {jegl_vertex::data_type::FLOAT32, 2},
+                        {jegl_vertex::data_type::FLOAT32, 3},
+                    });
 
             default_texture = graphic::texture::create(2, 2, jegl_texture::format::RGBA);
             default_texture->pix(0, 0).set({ 1.f, 0.25f, 1.f, 1.f });
@@ -870,7 +876,7 @@ public let frag =
                     assert(rendentity.translation);
 
                     float MAT4_MVP[4][4];
-                    const float (&MAT4_MODEL)[4][4] = rendentity.translation->object2world;
+                    const float(&MAT4_MODEL)[4][4] = rendentity.translation->object2world;
                     math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
                     math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
@@ -954,23 +960,34 @@ public let frag =
                 _no_shadow = texture::create(1, 1, jegl_texture::format::RGBA);
                 _no_shadow->pix(0, 0).set(math::vec4(0.f, 0.f, 0.f, 0.f));
 
+                const float _screen_vertex_data[] = {
+                    -1.f, 1.f, 0.f,     0.f, 1.f,
+                    -1.f, -1.f, 0.f,    0.f, 0.f,
+                    1.f, 1.f, 0.f,      1.f, 1.f,
+                    1.f, -1.f, 0.f,     1.f, 0.f,
+                };
                 _screen_vertex = vertex::create(jegl_vertex::type::TRIANGLESTRIP,
+                    _screen_vertex_data,
+                    sizeof(_screen_vertex_data),
                     {
-                        -1.f, 1.f, 0.f,     0.f, 1.f,
-                        -1.f, -1.f, 0.f,    0.f, 0.f,
-                        1.f, 1.f, 0.f,      1.f, 1.f,
-                        1.f, -1.f, 0.f,     1.f, 0.f,
-                    },
-                    { 3, 2 });
+                        {jegl_vertex::data_type::FLOAT32, 3},
+                        {jegl_vertex::data_type::FLOAT32, 2},
+                    });
 
+                const float _sprite_shadow_vertex_data[] = {
+                   -1.f, 1.f, 0.f,     0.f, 1.f,
+                   -1.f, -1.f, 0.f,    0.f, 0.f,
+                   1.f, 1.f, 0.f,      1.f, 1.f,
+                   1.f, -1.f, 0.f,     1.f, 0.f,
+                };
                 _sprite_shadow_vertex = vertex::create(jegl_vertex::TRIANGLESTRIP,
+                    _sprite_shadow_vertex_data,
+                    sizeof(_sprite_shadow_vertex_data),
                     {
-                        -0.5f, -0.5f, 0.0f,     0.0f, 1.0f,  1.0f,
-                        -0.5f, -0.5f, 0.0f,     0.0f, 0.0f,  0.0f,
-                        0.5f, -0.5f, 0.0f,      1.0f, 1.0f,  1.0f,
-                        0.5f, -0.5f, 0.0f,      1.0f, 0.0f,  0.0f,
-                    },
-                    { 3, 2, 1 });
+                        {jegl_vertex::data_type::FLOAT32, 3},
+                        {jegl_vertex::data_type::FLOAT32, 2},
+                        {jegl_vertex::data_type::FLOAT32, 1},
+                    });
 
                 // 用于消除阴影对象本身的阴影
                 _defer_light2d_shadow_sub_pass
@@ -1631,7 +1648,7 @@ public func frag(_: v2f)
                         if (generate_new_framebuffer)
                         {
                             shadowbuffer->buffer = graphic::framebuffer::create(
-                                std::max((size_t)1, shadowbuffer->resolution_width), 
+                                std::max((size_t)1, shadowbuffer->resolution_width),
                                 std::max((size_t)1, shadowbuffer->resolution_height),
                                 {
                                     jegl_texture::format::RGBA,
@@ -1711,7 +1728,11 @@ public func frag(_: v2f)
 
                             range->shape.m_light_mesh = jeecs::graphic::vertex::create(
                                 jegl_vertex::type::TRIANGLESTRIP,
-                                vertex_datas, { 3, 1 });
+                                vertex_datas.data(), vertex_datas.size() * sizeof(float),
+                                {
+                                    {jegl_vertex::data_type::FLOAT32, 3},
+                                    {jegl_vertex::data_type::FLOAT32, 1},
+                                });
                         }
                     }
                 });
@@ -1747,7 +1768,11 @@ public func frag(_: v2f)
                                 }
                                 blockshadow->mesh.m_block_mesh = jeecs::graphic::vertex::create(
                                     jegl_vertex::type::TRIANGLESTRIP,
-                                    _vertex_buffer, { 3,1 });
+                                    _vertex_buffer.data(), _vertex_buffer.size() * sizeof(float),
+                                    {
+                                        {jegl_vertex::data_type::FLOAT32, 3},
+                                        {jegl_vertex::data_type::FLOAT32, 1},
+                                    });
                             }
                             else
                                 blockshadow->mesh.m_block_mesh = nullptr;
@@ -1998,7 +2023,7 @@ public func frag(_: v2f)
                                                 jegl_rchain_bind_texture(light2d_shadow_rend_chain, texture_group, 0, m_default_resources.default_texture->resouce());
                                         }
 
-                                        jeecs::graphic::vertex* using_shape = 
+                                        jeecs::graphic::vertex* using_shape =
                                             (blockarch.shape == nullptr || blockarch.shape->vertex == nullptr)
                                             ? m_default_resources.default_shape_quad.get()
                                             : blockarch.shape->vertex.get()
@@ -2758,7 +2783,7 @@ public func frag(_: v2f)
                                                 }
                                             }
                                         };
-                                    
+
                                     auto current_animation_frame_count = active_animation_frames->v.frames.size();
 
                                     if (animation.m_current_frame_index == SIZE_MAX || animation.m_last_speed != frame_animation.speed)

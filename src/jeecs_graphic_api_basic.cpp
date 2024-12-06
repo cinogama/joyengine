@@ -363,13 +363,13 @@ void _je_graphic_shared_context::shrink_shared_resource_cache(size_t target_reso
     };
 
     std::priority_queue<
-        obsolete_resource, 
-        std::vector<obsolete_resource>, 
+        obsolete_resource,
+        std::vector<obsolete_resource>,
         std::greater<obsolete_resource>
     > obs_queue;
 
     for (auto& [path, loadcount] : shared_resource_used_counts)
-        obs_queue.push(obsolete_resource{path, loadcount });
+        obs_queue.push(obsolete_resource{ path, loadcount });
 
     while (obs_queue.size() > target_resource_count)
     {
@@ -867,7 +867,7 @@ void _jegl_free_resource_instance(jegl_resource* resource)
                 del_res->m_destroy_resource);
 
         auto* binding_count = std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_binding_count));
-        if (-- * binding_count == jeecs::typing::INVALID_UINT32)
+        if (--*binding_count == jeecs::typing::INVALID_UINT32)
         {
             delete binding_count;
             delete del_res->m_destroy_resource;
@@ -1310,7 +1310,7 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src, bool i
     wo_run(vmm);
 
     wo_integer_t generate_shader_func;
-    [[maybe_unused]]wo_handle_t generate_shader_jit_func;
+    [[maybe_unused]] wo_handle_t generate_shader_jit_func;
 
     if (!wo_extern_symb(vmm, "shader::generate", &generate_shader_func, &generate_shader_jit_func))
     {
@@ -1466,7 +1466,11 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
     m_node_stack.push(scene->mRootNode);
 
     std::vector<float> vertex_datas;
-    const size_t format[] = { 3, 2, 3 };
+    const jegl_vertex::data_layout format[] = {
+        {jegl_vertex::data_type::FLOAT32, 3},
+        {jegl_vertex::data_type::FLOAT32, 2},
+        {jegl_vertex::data_type::FLOAT32, 3}
+    };
 
     while (!m_node_stack.empty())
     {
@@ -1510,9 +1514,9 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
     auto* vertex = jegl_create_vertex(
         jegl_vertex::type::TRIANGLES,
         vertex_datas.data(),
+        vertex_datas.size() * sizeof(float),
         format,
-        vertex_datas.size(),
-        sizeof(format) / sizeof(size_t));
+        sizeof(format) / sizeof(jegl_vertex::data_layout));
 
     if (vertex != nullptr)
     {
@@ -1524,42 +1528,48 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
 
 jegl_resource* jegl_create_vertex(
     jegl_vertex::type type,
-    const float* datas,
-    const size_t* format,
+    const void* datas,
     size_t data_length,
+    const jegl_vertex::data_layout* format,
     size_t format_length)
 {
-    size_t datacount_per_point = 0;
+    size_t data_size_per_point = 0;
     for (size_t i = 0; i < format_length; ++i)
-        datacount_per_point += format[i];
+        data_size_per_point += format[i].m_count * 4;  /* Both int32 & float32 is 4 byte*/
 
-    auto point_count = data_length / datacount_per_point;
+    auto point_count = data_length / data_size_per_point;
 
+    if (data_size_per_point == 0)
+    {
+        jeecs::debug::logerr("Bad format, point donot contain any data.");
+        return nullptr;
+    }
     if (point_count == 0)
     {
         jeecs::debug::logerr("Vertex data donot contain any completed point.");
         return nullptr;
     }
 
+    if (data_length % data_size_per_point)
+        jeecs::debug::logwarn("Vertex data & format not matched, please check.");
+
+    assert(format_length > 0);
+
     jegl_resource* vertex = _create_resource();
     vertex->m_type = jegl_resource::VERTEX;
     vertex->m_raw_vertex_data = new jegl_vertex();
 
-    if (data_length % datacount_per_point)
-        jeecs::debug::logwarn("Vertex data & format not matched, please check.");
-
     vertex->m_raw_vertex_data->m_type = type;
     vertex->m_raw_vertex_data->m_format_count = format_length;
     vertex->m_raw_vertex_data->m_point_count = point_count;
-    vertex->m_raw_vertex_data->m_data_count_per_point = datacount_per_point;
+    vertex->m_raw_vertex_data->m_data_size_per_point = data_size_per_point;
 
     vertex->m_raw_vertex_data->m_vertex_datas
-        = (float*)je_mem_alloc(point_count * datacount_per_point * sizeof(float));
+        = (float*)je_mem_alloc(data_length);
     vertex->m_raw_vertex_data->m_vertex_formats
-        = (size_t*)je_mem_alloc(format_length * sizeof(size_t));
+        = (jegl_vertex::data_layout*)je_mem_alloc(format_length * sizeof(jegl_vertex::data_layout));
 
-    memcpy(vertex->m_raw_vertex_data->m_vertex_datas, datas,
-        point_count * datacount_per_point * sizeof(float));
+    memcpy(vertex->m_raw_vertex_data->m_vertex_datas, datas, data_length);
 
     memcpy(vertex->m_raw_vertex_data->m_vertex_formats, format,
         format_length * sizeof(size_t));
@@ -1570,22 +1580,22 @@ jegl_resource* jegl_create_vertex(
         y_min = 0.f, y_max = 0.f,
         z_min = 0.f, z_max = 0.f;
 
-    if (format[0] == 3)
+    if (format[0].m_count == 3 && format[0].m_type == jegl_vertex::data_type::FLOAT32)
     {
-        if (point_count > 0)
-        {
-            // First data group is position(by default).
-            x_min = x_max = datas[0];
-            y_min = y_max = datas[1];
-            z_min = z_max = datas[2];
-        }
+        // First data group is position(by default).
+        x_min = x_max = reinterpret_cast<const float*>(datas)[0];
+        y_min = y_max = reinterpret_cast<const float*>(datas)[1];
+        z_min = z_max = reinterpret_cast<const float*>(datas)[2];
 
         // First data group is position(by default).
-        for (size_t i = 0; i < point_count; ++i)
+        for (size_t i = 1; i < point_count; ++i)
         {
-            float x = datas[0 + i * datacount_per_point];
-            float y = datas[1 + i * datacount_per_point];
-            float z = datas[2 + i * datacount_per_point];
+            const float* fdata = reinterpret_cast<const float*>(
+                reinterpret_cast<const char*>(datas) + i * data_size_per_point);
+
+            float x = fdata[0];
+            float y = fdata[1];
+            float z = fdata[2];
 
             x_min = std::min(x, x_min);
             x_max = std::max(x, x_max);

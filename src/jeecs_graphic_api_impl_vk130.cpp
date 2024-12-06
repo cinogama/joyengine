@@ -2450,8 +2450,7 @@ VK_API_PLATFORM_API_LIST
             }
 
             size_t vertex_buffer_size = resource->m_raw_vertex_data->m_point_count *
-                resource->m_raw_vertex_data->m_data_count_per_point *
-                sizeof(float);
+                resource->m_raw_vertex_data->m_data_size_per_point;
 
             // 获取所需分配的内存类型
             alloc_vk_device_buffer_memory(
@@ -2482,8 +2481,7 @@ VK_API_PLATFORM_API_LIST
             vertex->m_vertex_point_count =
                 (uint32_t)resource->m_raw_vertex_data->m_point_count;
             vertex->m_size = (VkDeviceSize)vertex_buffer_size;
-            vertex->m_stride = (VkDeviceSize)
-                (resource->m_raw_vertex_data->m_data_count_per_point * sizeof(float));
+            vertex->m_stride = (VkDeviceSize)resource->m_raw_vertex_data->m_data_size_per_point;
             return vertex;
         }
         void destroy_vertex_instance(jevk11_vertex* vertex)

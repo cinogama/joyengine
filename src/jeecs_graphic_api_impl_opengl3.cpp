@@ -573,20 +573,38 @@ namespace jeecs::graphic::api::gl3
             glBindVertexArray(vao);
             glBindBuffer(GL_ARRAY_BUFFER, vbo);
             glBufferData(GL_ARRAY_BUFFER,
-                resource->m_raw_vertex_data->m_point_count * resource->m_raw_vertex_data->m_data_count_per_point * sizeof(float),
+                resource->m_raw_vertex_data->m_point_count * resource->m_raw_vertex_data->m_data_size_per_point,
                 resource->m_raw_vertex_data->m_vertex_datas,
                 GL_STATIC_DRAW);
 
             size_t offset = 0;
             for (unsigned int i = 0; i < (unsigned int)resource->m_raw_vertex_data->m_format_count; i++)
             {
+                size_t format_size;
+                GLenum format_type;
+                
+                switch (resource->m_raw_vertex_data->m_vertex_formats[i].m_type)
+                {
+                case jegl_vertex::data_type::FLOAT32:
+                    format_size = sizeof(float);
+                    format_type = GL_FLOAT;
+                    break;
+                case jegl_vertex::data_type::INT32:
+                    format_size = sizeof(int);
+                    format_type = GL_INT;
+                    break;
+                default:
+                    jeecs::debug::logfatal("Bad vertex data type.");
+                    break;
+                }
+
                 glEnableVertexAttribArray(i);
-                glVertexAttribPointer(i, (GLint)resource->m_raw_vertex_data->m_vertex_formats[i],
+                glVertexAttribPointer(i, (GLint)resource->m_raw_vertex_data->m_vertex_formats[i].m_count,
                     GL_FLOAT, GL_FALSE,
-                    (GLsizei)(resource->m_raw_vertex_data->m_data_count_per_point * sizeof(float)),
+                    (GLsizei)(resource->m_raw_vertex_data->m_data_size_per_point),
                     (void*)(offset * sizeof(float)));
 
-                offset += resource->m_raw_vertex_data->m_vertex_formats[i];
+                offset += format_size * resource->m_raw_vertex_data->m_vertex_formats[i].m_count;
             }
 
             const static GLenum DRAW_METHODS[] = {

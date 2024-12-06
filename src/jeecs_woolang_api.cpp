@@ -1498,7 +1498,7 @@ WO_API wo_api wojeapi_vertex_create(wo_vm vm, wo_value args)
     // vertices: array<real>, indices: array<int>
     jegl_vertex::type vertex_type = (jegl_vertex::type)wo_int(args + 0);
     std::vector<float> vertices(wo_lengthof(args + 1));
-    std::vector<size_t> indices(wo_lengthof(args + 2));
+    std::vector<jegl_vertex::data_layout> indices(wo_lengthof(args + 2));
 
     wo_value elem = wo_push_empty(vm);
     for (size_t i = 0; i < vertices.size(); ++i)
@@ -1510,11 +1510,14 @@ WO_API wo_api wojeapi_vertex_create(wo_vm vm, wo_value args)
     for (size_t i = 0; i < indices.size(); ++i)
     {
         wo_arr_get(elem, args + 2, i);
-        indices[i] = (size_t)wo_int(elem);
+        indices[i] = { jegl_vertex::data_type::FLOAT32, (size_t)wo_int(elem) };
     }
 
     auto loaded_vertex = jeecs::graphic::vertex::create(
-        vertex_type, vertices, indices);
+        vertex_type, 
+        vertices.data(), 
+        vertices.size() * sizeof(float), 
+        indices);
 
     return wo_ret_gchandle(vm,
         new jeecs::basic::resource<jeecs::graphic::vertex>(loaded_vertex), nullptr,

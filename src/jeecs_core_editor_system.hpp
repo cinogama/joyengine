@@ -187,18 +187,41 @@ namespace jeecs
         DefaultEditorSystem(game_world w)
             : game_system(w)
         {
+            const float axis_x_data[] = {
+                -1.f, 0.f, 0.f,       0.25f, 0.f, 0.f,
+                1.f, 0.f, 0.f,       1.f,   0.f, 0.f
+            };
             axis_x = graphic::vertex::create(jegl_vertex::type::LINES,
-                { -1.f, 0.f, 0.f,       0.25f, 0.f, 0.f,
-                   1.f, 0.f, 0.f,       1.f,   0.f, 0.f },
-                { 3, 3 });
+                axis_x_data,
+                sizeof(axis_x_data),
+                {
+                    {jegl_vertex::data_type::FLOAT32, 3},
+                    {jegl_vertex::data_type::FLOAT32, 3},
+                });
+
+            const float axis_y_data[] = {
+                0.f, -1.f, 0.f,       0.f, 0.25f, 0.f,
+                0.f, 1.f, 0.f,        0.f, 1.f, 0.f,
+            };
             axis_y = graphic::vertex::create(jegl_vertex::type::LINES,
-                { 0.f, -1.f, 0.f,       0.f, 0.25f, 0.f,
-                  0.f, 1.f, 0.f,        0.f, 1.f, 0.f },
-                { 3, 3 });
+                axis_y_data,
+                sizeof(axis_y_data),
+                {
+                    {jegl_vertex::data_type::FLOAT32, 3},
+                    {jegl_vertex::data_type::FLOAT32, 3},
+                });
+
+            const float axis_z_data[] = {
+                0.f, 0.f, -1.f,       0.f, 0.f, 0.25f,
+                0.f, 0.f,  1.f,       0.f, 0.f, 1.f
+            };
             axis_z = graphic::vertex::create(jegl_vertex::type::LINES,
-                { 0.f, 0.f, -1.f,       0.f, 0.f, 0.25f,
-                  0.f, 0.f,  1.f,       0.f, 0.f, 1.f },
-                { 3, 3 });
+                axis_z_data,
+                sizeof(axis_z_data),
+                {
+                    {jegl_vertex::data_type::FLOAT32, 3},
+                    {jegl_vertex::data_type::FLOAT32, 3},
+                });
             circ_x = _create_circle_vertex({ 1.f, 0.f, 0.f });
             circ_y = _create_circle_vertex({ 0.f, 1.f, 0.f });
             circ_z = _create_circle_vertex({ 0.f, 0.f, 1.f });
@@ -404,7 +427,14 @@ namespace jeecs
                 points.push_back(anx.y);
                 points.push_back(anx.z);
             }
-            return graphic::vertex::create(jegl_vertex::type::LINESTRIP, points, { 3, 3 });
+            return graphic::vertex::create(
+                jegl_vertex::type::LINESTRIP, 
+                points.data(), 
+                points.size() * sizeof(float), 
+                {
+                    {jegl_vertex::data_type::FLOAT32, 3},
+                    {jegl_vertex::data_type::FLOAT32, 3},
+                });
         }
 
         void UpdateAndCreateMover(game_entity mover_entity,
@@ -419,14 +449,18 @@ namespace jeecs
             {
                 mover.init = true;
 
+                const float select_box_vert_data[] = {
+                    -0.5f,-0.5f,-0.5f,    0.5f,-0.5f,-0.5f,    0.5f,0.5f,-0.5f,      -0.5f,0.5f,-0.5f,     -0.5f,-0.5f,-0.5f,
+                    -0.5f,-0.5f,0.5f,    0.5f,-0.5f,0.5f,    0.5f,0.5f,0.5f,      -0.5f,0.5f,0.5f,     -0.5f,-0.5f,0.5f,
+                    -0.5f,0.5f,0.5f,       -0.5f,0.5f,-0.5f,    0.5f,0.5f,-0.5f,  0.5f,0.5f,0.5f,0.5f,-0.5f,0.5f,0.5f,-0.5f,-0.5f
+                };
                 basic::resource<graphic::vertex> select_box_vert =
                     graphic::vertex::create(jegl_vertex::type::LINESTRIP,
+                        select_box_vert_data,
+                        sizeof(select_box_vert_data),
                         {
-                               -0.5f,-0.5f,-0.5f,    0.5f,-0.5f,-0.5f,    0.5f,0.5f,-0.5f,      -0.5f,0.5f,-0.5f,     -0.5f,-0.5f,-0.5f,
-                               -0.5f,-0.5f,0.5f,    0.5f,-0.5f,0.5f,    0.5f,0.5f,0.5f,      -0.5f,0.5f,0.5f,     -0.5f,-0.5f,0.5f,
-                               -0.5f,0.5f,0.5f,       -0.5f,0.5f,-0.5f,    0.5f,0.5f,-0.5f,  0.5f,0.5f,0.5f,0.5f,-0.5f,0.5f,0.5f,-0.5f,-0.5f
-                        },
-                        { 3 });
+                            {jegl_vertex::data_type::FLOAT32, 3},
+                        });
 
                 basic::resource<graphic::shader>
                     axis_shader = graphic::shader::create("!/builtin/mover_axis.shader",
@@ -565,7 +599,7 @@ public let frag =
                 axis_z_e.get_component<Renderer::Shape>()->vertex = axis_z;
                 select_box.get_component<Renderer::Shape>()->vertex = select_box_vert;
 
-                select_box.get_component<Renderer::Rendqueue>()->rend_queue = 
+                select_box.get_component<Renderer::Rendqueue>()->rend_queue =
                     axis_x_e.get_component<Renderer::Rendqueue>()->rend_queue =
                     axis_y_e.get_component<Renderer::Rendqueue>()->rend_queue =
                     axis_z_e.get_component<Renderer::Rendqueue>()->rend_queue = 100000;

@@ -1166,12 +1166,11 @@ namespace jeecs::graphic::api::dx11
             UINT StructureByteStride;
 
             vertex->m_count = (UINT)resource->m_raw_vertex_data->m_point_count;
-            vertex->m_stride = resource->m_raw_vertex_data->m_data_count_per_point;
+            vertex->m_stride = resource->m_raw_vertex_data->m_data_size_per_point;
 
             vertex_buffer_describe.ByteWidth =
                 (UINT)(resource->m_raw_vertex_data->m_point_count
-                    * resource->m_raw_vertex_data->m_data_count_per_point
-                    * sizeof(float));
+                    * resource->m_raw_vertex_data->m_data_size_per_point);
 
             vertex_buffer_describe.Usage = D3D11_USAGE_IMMUTABLE;
             vertex_buffer_describe.BindFlags = D3D11_BIND_VERTEX_BUFFER;
@@ -1415,7 +1414,7 @@ namespace jeecs::graphic::api::dx11
         auto* vertex = std::launder(reinterpret_cast<jedx11_vertex*>(vert->m_handle.m_ptr));
 
         const UINT offset = 0;
-        const UINT strides = vertex->m_stride * sizeof(float);
+        const UINT strides = vertex->m_stride;
         context->m_dx_context->IASetVertexBuffers(
             0, 1, vertex->m_vbo.GetAddressOf(), &strides, &offset);
         context->m_dx_context->IASetPrimitiveTopology(vertex->m_method);

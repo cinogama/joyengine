@@ -1748,17 +1748,28 @@ struct jegl_vertex
         TRIANGLES,
         TRIANGLESTRIP,
     };
-    float
-        m_x_min, m_x_max,
-        m_y_min, m_y_max,
-        m_z_min, m_z_max;
+    enum data_type
+    {
+        INT32 = 0,
+        FLOAT32,
+    };
 
-    float* m_vertex_datas;
-    size_t* m_vertex_formats;
-    size_t m_format_count;
-    size_t m_point_count;
-    size_t m_data_count_per_point;
-    type m_type;
+    struct data_layout
+    {
+        data_type m_type;
+        size_t m_count;
+    };
+    
+    float           m_x_min, m_x_max,
+                    m_y_min, m_y_max,
+                    m_z_min, m_z_max;
+
+    float*          m_vertex_datas;
+    data_layout*    m_vertex_formats;
+    size_t          m_format_count;
+    size_t          m_point_count;
+    size_t          m_data_size_per_point;
+    type            m_type;
 };
 
 /*
@@ -2384,11 +2395,11 @@ jegl_create_vertex [基本接口]
     jegl_close_resource
 */
 JE_API jegl_resource* jegl_create_vertex(
-    jegl_vertex::type   type,
-    const float* datas,
-    const size_t* format,
-    size_t              data_length,
-    size_t              format_length);
+    jegl_vertex::type               type,
+    const void*                     datas,
+    size_t                          data_length,
+    const jegl_vertex::data_layout* format,
+    size_t                          format_length);
 
 /*
 jegl_create_framebuf [基本接口]
@@ -2791,6 +2802,8 @@ jegl_rchain_clear_depth_buffer [基本接口]
 */
 JE_API void jegl_rchain_clear_depth_buffer(jegl_rendchain* chain);
 
+typedef size_t jegl_rchain_texture_group_idx_t;
+
 /*
 jegl_rchain_allocate_texture_group [基本接口]
 创建纹理组，返回可通过jegl_rchain_draw作用于绘制操作或jegl_rchain_bind_pre_texture_group
@@ -2801,7 +2814,8 @@ jegl_rchain_allocate_texture_group [基本接口]
     jegl_rchain_bind_texture
     jegl_rchain_bind_pre_texture_group
 */
-JE_API size_t jegl_rchain_allocate_texture_group(jegl_rendchain* chain);
+JE_API jegl_rchain_texture_group_idx_t jegl_rchain_allocate_texture_group(
+    jegl_rendchain* chain);
 
 /*
 jegl_rchain_draw [基本接口]
@@ -2812,7 +2826,7 @@ JE_API jegl_rendchain_rend_action* jegl_rchain_draw(
     jegl_rendchain* chain,
     jegl_resource* shader,
     jegl_resource* vertex,
-    size_t texture_group);
+    jegl_rchain_texture_group_idx_t texture_group);
 
 /*
 jegl_rchain_set_uniform_int [基本接口]
@@ -7475,9 +7489,13 @@ namespace jeecs
                     return new vertex(res);
                 return nullptr;
             }
-            static basic::resource<vertex> create(jegl_vertex::type type, const std::vector<float>& pdatas, const std::vector<size_t>& formats)
+            static basic::resource<vertex> create(
+                jegl_vertex::type type, 
+                const void*       pdatas, 
+                size_t            dlen,
+                const std::vector<jegl_vertex::data_layout> fdatas)
             {
-                auto* res = jegl_create_vertex(type, pdatas.data(), formats.data(), pdatas.size(), formats.size());
+                auto* res = jegl_create_vertex(type, pdatas, dlen, fdatas.data(), fdatas.size());
                 if (res != nullptr)
                     return new vertex(res);
                 return nullptr;

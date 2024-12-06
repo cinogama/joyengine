@@ -139,7 +139,7 @@ void jegl_rchain_clear_depth_buffer(jegl_rendchain* chain)
 {
     chain->m_clear_target_frame_depth_buffer = true;
 }
-size_t jegl_rchain_allocate_texture_group(jegl_rendchain* chain)
+jegl_rchain_texture_group_idx_t jegl_rchain_allocate_texture_group(jegl_rendchain* chain)
 {
     size_t texture_index = chain->m_binding_textures_count++;
     if (texture_index >= chain->m_binding_textures.size())
@@ -150,9 +150,10 @@ size_t jegl_rchain_allocate_texture_group(jegl_rendchain* chain)
             });
     }
     chain->m_binding_textures[texture_index].m_binding_textures.clear();
-    return texture_index;
+    return (jegl_rchain_texture_group_idx_t)texture_index;
 }
-jegl_rendchain_rend_action* jegl_rchain_draw(jegl_rendchain* chain, jegl_resource* shader, jegl_resource* vertex, size_t texture_group)
+jegl_rendchain_rend_action* jegl_rchain_draw(
+    jegl_rendchain* chain, jegl_resource* shader, jegl_resource* vertex, jegl_rchain_texture_group_idx_t texture_group)
 {
     assert(shader->m_type == jegl_resource::type::SHADER);
     assert(vertex->m_type == jegl_resource::type::VERTEX);
