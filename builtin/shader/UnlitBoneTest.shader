@@ -38,8 +38,16 @@ using fout = struct {
 
 public func vert(v: vin)
 {
+    let origin_vertex_pos = vec4(v.vertex, 1.);
+    let mut total_postion = origin_vertex_pos;
+
+    total_postion += (data->bones(v.bone_index->x) * origin_vertex_pos) * v.bone_weight->x;
+    total_postion += (data->bones(v.bone_index->y) * origin_vertex_pos) * v.bone_weight->y;
+    total_postion += (data->bones(v.bone_index->z) * origin_vertex_pos) * v.bone_weight->z;
+    total_postion += (data->bones(v.bone_index->w) * origin_vertex_pos) * v.bone_weight->w;
+
     return v2f{
-        pos = vec4(0., -0.5, 0., 0.) + vec4(v.vertex, 1.) * vec4(0.005, 0.005, -0.005, 1.),
+        pos = vec4(0., -0.5, 0., 0.) + total_postion * vec4(0.005, 0.005, -0.005, 1.),
         uv = v.uv, //uvtrans(v.uv, je_tiling, je_offset),
     };
 }

@@ -1686,7 +1686,7 @@ jegl_resource* jegl_create_vertex(
     memcpy(vertex->m_raw_vertex_data->m_vertex_datas, datas, data_length);
 
     memcpy(vertex->m_raw_vertex_data->m_vertex_formats, format,
-        format_length * sizeof(size_t));
+        format_length * sizeof(jegl_vertex::data_layout));
 
     // Calc size by default:
     float

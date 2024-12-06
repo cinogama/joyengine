@@ -613,26 +613,28 @@ namespace jeecs::graphic::api::gl3
                 size_t format_size;
                 GLenum format_type;
                 
+                glEnableVertexAttribArray(i);
+
                 switch (resource->m_raw_vertex_data->m_vertex_formats[i].m_type)
                 {
                 case jegl_vertex::data_type::FLOAT32:
                     format_size = sizeof(float);
-                    format_type = GL_FLOAT;
+                    glVertexAttribPointer(i, (GLint)resource->m_raw_vertex_data->m_vertex_formats[i].m_count,
+                        GL_FLOAT, GL_FALSE,
+                        (GLsizei)(resource->m_raw_vertex_data->m_data_size_per_point),
+                        (void*)offset);
                     break;
                 case jegl_vertex::data_type::INT32:
                     format_size = sizeof(int);
-                    format_type = GL_INT;
+                    glVertexAttribIPointer(i, (GLint)resource->m_raw_vertex_data->m_vertex_formats[i].m_count,
+                        GL_INT,
+                        (GLsizei)(resource->m_raw_vertex_data->m_data_size_per_point),
+                        (void*)offset);
                     break;
                 default:
                     jeecs::debug::logfatal("Bad vertex data type.");
                     break;
                 }
-
-                glEnableVertexAttribArray(i);
-                glVertexAttribPointer(i, (GLint)resource->m_raw_vertex_data->m_vertex_formats[i].m_count,
-                    format_type, GL_FALSE,
-                    (GLsizei)(resource->m_raw_vertex_data->m_data_size_per_point),
-                    (void*)(offset * sizeof(float)));
 
                 offset += format_size * resource->m_raw_vertex_data->m_vertex_formats[i].m_count;
             }

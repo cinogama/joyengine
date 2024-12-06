@@ -26,13 +26,13 @@ int main(int argc, char** argv)
     config.m_display_mode = jegl_interface_config::display_mode::WINDOWED;
     config.m_enable_resize = true;
     config.m_msaa = 0;
-    config.m_width = 512;
-    config.m_height = 512;
+    config.m_width = 1024;
+    config.m_height = 1024;
     config.m_fps = 0;
     config.m_title = "Demo";
     config.m_userdata = nullptr;
 
-    jegl_set_host_graphic_api(jegl_using_vk130_apis);
+    jegl_set_host_graphic_api(jegl_using_opengl3_apis);
     jeecs::graphic_uhost* uhost = jegl_uhost_get_or_create_for_universe(u.handle(), &config);
     jegl_context* gthread = jegl_uhost_get_context(uhost);
 
@@ -57,7 +57,7 @@ int main(int argc, char** argv)
 
     struct BonesData
     {
-        float bones_mat4x4[1024][16];
+        float bones_mat4x4[1024][4][4];
     };
     struct BoneUbo
     {
@@ -66,8 +66,18 @@ int main(int argc, char** argv)
 
     BoneUbo bone_ubo = {};
 
+    for (size_t bidx = 0; bidx < vertex->resouce()->m_raw_vertex_data->m_bone_count; ++bidx)
+    {
+        memcpy(
+            bone_ubo.data.bones_mat4x4[bidx], 
+            vertex->resouce()->m_raw_vertex_data->m_bones[bidx]->m_m2b_trans,
+            4 * 16);
+    }
+
     basic::resource<graphic::uniformbuffer> bone_ubo_buffer = 
         graphic::uniformbuffer::create(6, sizeof(bone_ubo));
+
+    bone_ubo_buffer->update_buffer(0, sizeof(bone_ubo), &bone_ubo);
 
     // 循环图形更新，直到图形接口退出
     do
