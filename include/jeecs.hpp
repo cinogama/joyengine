@@ -2996,6 +2996,39 @@ JE_API void jegl_rchain_set_builtin_uniform_int(
     int val);
 
 /*
+jegl_rchain_set_builtin_uniform_int2 [基本接口]
+为 act 指定的绘制操作应用二维整型一致变量
+请参见：
+    jegl_rendchain_rend_action
+*/
+JE_API void jegl_rchain_set_builtin_uniform_int2(
+    jegl_rendchain_rend_action* act,
+    uint32_t* binding_place,
+    int x, int y);
+
+/*
+jegl_rchain_set_builtin_uniform_int3 [基本接口]
+为 act 指定的绘制操作应用三维整型一致变量
+请参见：
+    jegl_rendchain_rend_action
+*/
+JE_API void jegl_rchain_set_builtin_uniform_int3(
+    jegl_rendchain_rend_action* act,
+    uint32_t* binding_place,
+    int x, int y, int z);
+
+/*
+jegl_rchain_set_builtin_uniform_int4 [基本接口]
+为 act 指定的绘制操作应用四维整型一致变量
+请参见：
+    jegl_rendchain_rend_action
+*/
+JE_API void jegl_rchain_set_builtin_uniform_int4(
+    jegl_rendchain_rend_action* act,
+    uint32_t* binding_place,
+    int x, int y, int z, int w);
+
+/*
 jegl_rchain_set_builtin_uniform_float [基本接口]
 为 act 指定的绘制操作应用单精度浮点数一致变量
 请参见：
