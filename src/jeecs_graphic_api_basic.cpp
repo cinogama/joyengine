@@ -918,8 +918,9 @@ void jegl_close_resource(jegl_resource* resource)
             break;
         case jegl_resource::VERTEX:
             // close resource's raw data, then send this resource to closing-queue
-            je_mem_free((void*)resource->m_raw_vertex_data->m_vertex_datas);
-            je_mem_free((void*)resource->m_raw_vertex_data->m_vertex_formats);
+            je_mem_free((void*)resource->m_raw_vertex_data->m_vertexs);
+            je_mem_free((void*)resource->m_raw_vertex_data->m_indexs);
+            je_mem_free((void*)resource->m_raw_vertex_data->m_formats);
             for (size_t bone_idx = 0; bone_idx < resource->m_raw_vertex_data->m_bone_count; ++bone_idx)
                 _jegl_free_vertex_bone_data(resource->m_raw_vertex_data->m_bones[bone_idx]);
 
@@ -1498,7 +1499,8 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
     };
 
     std::vector<jegl_standard_model_vertex_t> vertex_datas;
-    std::unordered_map<std::string, const jegl_vertex::bone_data*> named_bone_map;
+    std::vector<uint32_t> index_datas;
+    std::vector<const jegl_vertex::bone_data*> bones;
 
     while (!m_node_stack.empty())
     {
@@ -1515,65 +1517,63 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
             auto* mesh = scene->mMeshes[current_node->mMeshes[i]];
             const size_t current_model_vertex_offset = vertex_datas.size();
 
+            const auto* texcrood_0 = mesh->mTextureCoords[0];
+
+            for (size_t index = 0; index < mesh->mNumVertices; ++index)
+            {
+                auto& vertex = mesh->mVertices[index];
+                auto& normal = mesh->mNormals[index];
+
+                jegl_standard_model_vertex_t model_vertex = {};
+                model_vertex.m_vertex[0] = vertex.x;
+                model_vertex.m_vertex[1] = vertex.y;
+                model_vertex.m_vertex[2] = vertex.z;
+                if (texcrood_0 != nullptr)
+                {
+                    model_vertex.m_texcoord[0] = texcrood_0[index].x;
+                    model_vertex.m_texcoord[1] = texcrood_0[index].y;
+                }
+                model_vertex.m_normal[0] = normal.x;
+                model_vertex.m_normal[1] = normal.y;
+                model_vertex.m_normal[2] = normal.z;
+
+                model_vertex.m_bone_id[0] = -1;
+                model_vertex.m_bone_id[1] = -1;
+                model_vertex.m_bone_id[2] = -1;
+                model_vertex.m_bone_id[3] = -1;
+
+                vertex_datas.push_back(model_vertex);
+            }
             for (size_t f = 0; f < mesh->mNumFaces; ++f)
             {
                 auto& face = mesh->mFaces[f];
                 assert(face.mNumIndices == 3);
 
-                const auto* texcrood_0 = mesh->mTextureCoords[0];
-
-                for (size_t i = 0; i < face.mNumIndices; ++i)
-                {
-                    auto& index = face.mIndices[i];
-
-                    auto& vertex = mesh->mVertices[index];
-                    auto& normal = mesh->mNormals[index];
-
-                    jegl_standard_model_vertex_t model_vertex = {};
-                    model_vertex.m_vertex[0] = vertex.x;
-                    model_vertex.m_vertex[1] = vertex.y;
-                    model_vertex.m_vertex[2] = vertex.z;
-                    if (texcrood_0 != nullptr)
-                    {
-                        model_vertex.m_texcoord[0] = texcrood_0[index].x;
-                        model_vertex.m_texcoord[1] = texcrood_0[index].y;
-                    }
-                    model_vertex.m_normal[0] = normal.x;
-                    model_vertex.m_normal[1] = normal.y;
-                    model_vertex.m_normal[2] = normal.z;
-
-                    vertex_datas.push_back(model_vertex);
-                }
+                for (size_t fvertex_index = 0; fvertex_index < face.mNumIndices; ++fvertex_index)
+                    index_datas.push_back(face.mIndices[fvertex_index] + current_model_vertex_offset);
             }
 
             for (size_t bone_idx = 0; bone_idx < mesh->mNumBones; ++bone_idx)
             {
-                size_t bone_id;
-                auto fnd = named_bone_map.find(mesh->mBones[bone_idx]->mName.C_Str());
-                if (fnd == named_bone_map.end())
+                jegl_vertex::bone_data* bone_data = 
+                    (jegl_vertex::bone_data*)je_mem_alloc(sizeof(jegl_vertex::bone_data));
+
+                assert(bone_data != nullptr);
+                bone_data->m_name = jeecs::basic::make_new_string(mesh->mBones[bone_idx]->mName.C_Str());
+                bone_data->m_index = bone_counter++;
+                assert(bone_data->m_name != nullptr);
+
+                const auto& offset_matrix = mesh->mBones[bone_idx]->mOffsetMatrix;
+                for (size_t ix = 0; ix < 4; ++ix)
                 {
-                    jegl_vertex::bone_data* bone_data = 
-                        (jegl_vertex::bone_data*)je_mem_alloc(sizeof(jegl_vertex::bone_data));
-
-                    assert(bone_data != nullptr);
-                    bone_data->m_name = jeecs::basic::make_new_string(mesh->mBones[bone_idx]->mName.C_Str());
-                    bone_data->m_index = bone_counter++;
-                    assert(bone_data->m_name != nullptr);
-
-                    const auto& offset_matrix = mesh->mBones[bone_idx]->mOffsetMatrix;
-                    for (size_t ix = 0; ix < 4; ++ix)
+                    for (size_t iy = 0; iy < 4; ++iy)
                     {
-                        for (size_t iy = 0; iy < 4; ++iy)
-                        {
-                            bone_data->m_m2b_trans[ix][iy] = offset_matrix[iy][ix];
-                        }
+                        bone_data->m_m2b_trans[ix][iy] = offset_matrix[iy][ix];
                     }
-
-                    named_bone_map.insert(std::make_pair(bone_data->m_name, bone_data));
-                    bone_id = bone_data->m_index;
                 }
-                else
-                    bone_id = fnd->second->m_index;
+
+                bones.push_back(bone_data);
+                size_t bone_id = bone_data->m_index;
 
                 if (bone_id >= MAX_BONE_COUNT)
                     // Too many bones, skip to avoid overflow.
@@ -1587,16 +1587,32 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
                     auto& weight = weights[weight_index];
                     auto& vertex = vertex_datas[weight.mVertexId + current_model_vertex_offset];
 
-                    for (size_t i = 0; i < 4; ++i)
+                    size_t min_weight_index = 0;
+                    for (size_t i = 1; i < 4; ++i)
                     {
-                        if (vertex.m_bone_weight[i] == 0.f)
-                        {
-                            vertex.m_bone_id[i] = (int32_t)bone_id;
-                            vertex.m_bone_weight[i] = weight.mWeight;
-                            break;
-                        }
+                        if (vertex.m_vertex[i] == -1 
+                            || abs(vertex.m_bone_weight[i]) < abs(vertex.m_bone_weight[min_weight_index]))
+                            min_weight_index = i;
+                    }
+
+                    if (vertex.m_bone_weight[min_weight_index] < weight.mWeight)
+                    {
+                        vertex.m_bone_id[min_weight_index] = (int32_t)bone_id;
+                        vertex.m_bone_weight[min_weight_index] = weight.mWeight;
                     }
                 }
+            }
+        }
+    }
+
+    for (auto& vdata : vertex_datas)
+    {
+        for (size_t i = 0; i < 4; ++i)
+        {
+            if (vdata.m_bone_id[i] == -1)
+            {
+                vdata.m_bone_id[i] = 0;
+                vdata.m_bone_weight[i] = 0.f;
             }
         }
     }
@@ -1605,6 +1621,8 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
         jegl_vertex::type::TRIANGLES,
         vertex_datas.data(),
         vertex_datas.size() * sizeof(jegl_standard_model_vertex_t),
+        index_datas.data(),
+        index_datas.size(),
         jegl_standard_model_vertex_format,
         sizeof(jegl_standard_model_vertex_format) / sizeof(jegl_vertex::data_layout));
 
@@ -1612,51 +1630,49 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
     {
         vertex->m_path = jeecs::basic::make_new_string(path);
 
-        const jegl_vertex::bone_data** bones = 
+        const jegl_vertex::bone_data** cbones = 
             (const jegl_vertex::bone_data**)je_mem_alloc(
-                named_bone_map.size() * sizeof(const jegl_vertex::bone_data*));
+                bones.size() * sizeof(const jegl_vertex::bone_data*));
 
-        size_t idx = 0;
-        for (auto& [_, bonedata] : named_bone_map)
-            bones[idx++] = bonedata;
+        memcpy(
+            cbones, 
+            bones.data(), 
+            bones.size() * sizeof(const jegl_vertex::bone_data*));
 
-        std::sort(bones + 0, bones + 1,
-            [](const jegl_vertex::bone_data* a, const jegl_vertex::bone_data* b)
-            {
-                return a->m_index < b->m_index;
-            });
-        vertex->m_raw_vertex_data->m_bones = bones;
-        vertex->m_raw_vertex_data->m_bone_count = idx;
+        vertex->m_raw_vertex_data->m_bones = cbones;
+        vertex->m_raw_vertex_data->m_bone_count = bones.size();
 
         return jegl_try_update_shared_resource(context, vertex);
     }
     else
     {
-        for (auto& [_, bonedata] : named_bone_map)
+        for (auto* bonedata : bones)
             _jegl_free_vertex_bone_data(bonedata);
     }
     return nullptr;
 }
 
 jegl_resource* jegl_create_vertex(
-    jegl_vertex::type type,
-    const void* datas,
-    size_t data_length,
+    jegl_vertex::type               type,
+    const void*                     datas,
+    size_t                          data_length,
+    const uint32_t*                 indexs,
+    size_t                          index_count,
     const jegl_vertex::data_layout* format,
-    size_t format_length)
+    size_t                          format_count)
 {
     size_t data_size_per_point = 0;
-    for (size_t i = 0; i < format_length; ++i)
+    for (size_t i = 0; i < format_count; ++i)
         data_size_per_point += format[i].m_count * 4;  /* Both int32 & float32 is 4 byte*/
 
-    auto point_count = data_length / data_size_per_point;
+    auto data_group_count = data_length / data_size_per_point;
 
     if (data_size_per_point == 0)
     {
         jeecs::debug::logerr("Bad format, point donot contain any data.");
         return nullptr;
     }
-    if (point_count == 0)
+    if (data_group_count == 0)
     {
         jeecs::debug::logerr("Vertex data donot contain any completed point.");
         return nullptr;
@@ -1665,28 +1681,33 @@ jegl_resource* jegl_create_vertex(
     if (data_length % data_size_per_point)
         jeecs::debug::logwarn("Vertex data & format not matched, please check.");
 
-    assert(format_length > 0);
+    assert(format_count > 0);
 
     jegl_resource* vertex = _create_resource();
     vertex->m_type = jegl_resource::VERTEX;
     vertex->m_raw_vertex_data = new jegl_vertex();
 
     vertex->m_raw_vertex_data->m_type = type;
-    vertex->m_raw_vertex_data->m_format_count = format_length;
-    vertex->m_raw_vertex_data->m_point_count = point_count;
     vertex->m_raw_vertex_data->m_data_size_per_point = data_size_per_point;
     vertex->m_raw_vertex_data->m_bones = nullptr;
     vertex->m_raw_vertex_data->m_bone_count = 0;
 
-    vertex->m_raw_vertex_data->m_vertex_datas
-        = (float*)je_mem_alloc(data_length);
-    vertex->m_raw_vertex_data->m_vertex_formats
-        = (jegl_vertex::data_layout*)je_mem_alloc(format_length * sizeof(jegl_vertex::data_layout));
+    void * data_buffer = (void*)je_mem_alloc(data_length);
+    memcpy(data_buffer, datas, data_length);
+    vertex->m_raw_vertex_data->m_vertexs = data_buffer;
+    vertex->m_raw_vertex_data->m_vertex_length = data_length;
 
-    memcpy(vertex->m_raw_vertex_data->m_vertex_datas, datas, data_length);
+    uint32_t* index_buffer = (uint32_t*)je_mem_alloc(index_count * sizeof(uint32_t));
+    memcpy(index_buffer, indexs, index_count * sizeof(uint32_t));
+    vertex->m_raw_vertex_data->m_indexs = index_buffer;
+    vertex->m_raw_vertex_data->m_index_count = index_count;
 
-    memcpy(vertex->m_raw_vertex_data->m_vertex_formats, format,
-        format_length * sizeof(jegl_vertex::data_layout));
+    jegl_vertex::data_layout* formats
+        = (jegl_vertex::data_layout*)je_mem_alloc(format_count * sizeof(jegl_vertex::data_layout));
+    memcpy(formats, format,
+        format_count * sizeof(jegl_vertex::data_layout));
+    vertex->m_raw_vertex_data->m_formats = formats;
+    vertex->m_raw_vertex_data->m_format_count = format_count;
 
     // Calc size by default:
     float
@@ -1702,7 +1723,7 @@ jegl_resource* jegl_create_vertex(
         z_min = z_max = reinterpret_cast<const float*>(datas)[2];
 
         // First data group is position(by default).
-        for (size_t i = 1; i < point_count; ++i)
+        for (size_t i = 1; i < data_group_count; ++i)
         {
             const float* fdata = reinterpret_cast<const float*>(
                 reinterpret_cast<const char*>(datas) + i * data_size_per_point);

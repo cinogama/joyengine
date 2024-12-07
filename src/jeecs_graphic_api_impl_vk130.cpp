@@ -289,6 +289,9 @@ VK_API_PLATFORM_API_LIST
         VkBuffer m_vk_vertex_buffer;
         VkDeviceMemory m_vk_vertex_buffer_memory;
 
+        VkBuffer m_vk_index_buffer;
+        VkDeviceMemory m_vk_index_buffer_memory;
+
         uint32_t m_vertex_point_count;
         VkDeviceSize m_size;
         VkDeviceSize m_stride;
@@ -2468,8 +2471,7 @@ VK_API_PLATFORM_API_LIST
                 break;
             }
 
-            size_t vertex_buffer_size = resource->m_raw_vertex_data->m_point_count *
-                resource->m_raw_vertex_data->m_data_size_per_point;
+            size_t vertex_buffer_size = resource->m_raw_vertex_data->m_vertex_length;
 
             // 获取所需分配的内存类型
             alloc_vk_device_buffer_memory(
@@ -2491,22 +2493,52 @@ VK_API_PLATFORM_API_LIST
                 &vertex_buffer_memory_ptr);
             memcpy(
                 vertex_buffer_memory_ptr,
-                resource->m_raw_vertex_data->m_vertex_datas,
+                resource->m_raw_vertex_data->m_vertexs,
                 vertex_buffer_size);
             vkUnmapMemory(
                 _vk_logic_device,
                 vertex->m_vk_vertex_buffer_memory);
 
+            // 创建索引缓冲区
+            alloc_vk_device_buffer_memory(
+                resource->m_raw_vertex_data->m_index_count * sizeof(uint32_t),
+                VkBufferUsageFlagBits::VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                &vertex->m_vk_index_buffer,
+                &vertex->m_vk_index_buffer_memory);
+
+            void* index_buffer_memory_ptr = nullptr;
+            vkMapMemory(
+                _vk_logic_device,
+                vertex->m_vk_index_buffer_memory,
+                0,
+                resource->m_raw_vertex_data->m_index_count * sizeof(uint32_t),
+                0,
+                &index_buffer_memory_ptr);
+            memcpy(
+                index_buffer_memory_ptr,
+                resource->m_raw_vertex_data->m_indexs,
+                resource->m_raw_vertex_data->m_index_count * sizeof(uint32_t));
+            vkUnmapMemory(
+                _vk_logic_device,
+                vertex->m_vk_index_buffer_memory);
+
             vertex->m_vertex_point_count =
-                (uint32_t)resource->m_raw_vertex_data->m_point_count;
+                (uint32_t)resource->m_raw_vertex_data->m_index_count;
             vertex->m_size = (VkDeviceSize)vertex_buffer_size;
             vertex->m_stride = (VkDeviceSize)resource->m_raw_vertex_data->m_data_size_per_point;
+
             return vertex;
         }
         void destroy_vertex_instance(jevk11_vertex* vertex)
         {
             vkDestroyBuffer(_vk_logic_device, vertex->m_vk_vertex_buffer, nullptr);
             vkFreeMemory(_vk_logic_device, vertex->m_vk_vertex_buffer_memory, nullptr);
+
+            vkDestroyBuffer(_vk_logic_device, vertex->m_vk_index_buffer, nullptr);
+            vkFreeMemory(_vk_logic_device, vertex->m_vk_index_buffer_memory, nullptr);
+
             delete vertex;
         }
 
@@ -3255,10 +3287,17 @@ VK_API_PLATFORM_API_LIST
                 &vertex->m_size,
                 &vertex->m_stride);
 
-            vkCmdDraw(
+            vkCmdBindIndexBuffer(
                 _vk_current_command_buffer,
-                vertex->m_vertex_point_count,
+                vertex->m_vk_index_buffer,
+                0,
+                VK_INDEX_TYPE_UINT32);
+
+            vkCmdDrawIndexed(
+                _vk_current_command_buffer,
+                (uint32_t)vertex->m_vertex_point_count,
                 1,
+                0,
                 0,
                 0);
         }

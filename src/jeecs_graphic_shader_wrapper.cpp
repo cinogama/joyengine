@@ -842,6 +842,8 @@ public func uniform<ShaderResultT>(uniform_name:string, init_value: ShaderResult
 {
     if (init_value is real)
         return _uniform_with_init:<float>(_get_type_enum:<float>(), uniform_name, float::const(init_value));
+    else if (init_value is int)
+        return _uniform_with_init:<integer>(_get_type_enum:<integer>(), uniform_name, integer::const(init_value));
     else
         return _uniform_with_init:<ShaderResultT>(_get_type_enum:<ShaderResultT>(), uniform_name, init_value);
 }

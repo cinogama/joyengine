@@ -302,6 +302,7 @@ namespace jeecs::graphic::api::gl3
     {
         GLuint m_vao;
         GLuint m_vbo;
+        GLuint m_ebo;
         GLenum m_method;
         GLsizei m_pointcount;
     };
@@ -596,15 +597,22 @@ namespace jeecs::graphic::api::gl3
         }
         case jegl_resource::type::VERTEX:
         {
-            GLuint vao, vbo;
+            GLuint vao, vbo, ebo;
             glGenVertexArrays(1, &vao);
             glGenBuffers(1, &vbo);
+            glGenBuffers(1, &ebo);
 
             glBindVertexArray(vao);
             glBindBuffer(GL_ARRAY_BUFFER, vbo);
             glBufferData(GL_ARRAY_BUFFER,
-                resource->m_raw_vertex_data->m_point_count * resource->m_raw_vertex_data->m_data_size_per_point,
-                resource->m_raw_vertex_data->m_vertex_datas,
+                resource->m_raw_vertex_data->m_vertex_length,
+                resource->m_raw_vertex_data->m_vertexs,
+                GL_STATIC_DRAW);
+
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+                resource->m_raw_vertex_data->m_index_count * sizeof(uint32_t),
+                resource->m_raw_vertex_data->m_indexs,
                 GL_STATIC_DRAW);
 
             size_t offset = 0;
@@ -615,18 +623,18 @@ namespace jeecs::graphic::api::gl3
                 
                 glEnableVertexAttribArray(i);
 
-                switch (resource->m_raw_vertex_data->m_vertex_formats[i].m_type)
+                switch (resource->m_raw_vertex_data->m_formats[i].m_type)
                 {
                 case jegl_vertex::data_type::FLOAT32:
                     format_size = sizeof(float);
-                    glVertexAttribPointer(i, (GLint)resource->m_raw_vertex_data->m_vertex_formats[i].m_count,
+                    glVertexAttribPointer(i, (GLint)resource->m_raw_vertex_data->m_formats[i].m_count,
                         GL_FLOAT, GL_FALSE,
                         (GLsizei)(resource->m_raw_vertex_data->m_data_size_per_point),
                         (void*)offset);
                     break;
                 case jegl_vertex::data_type::INT32:
                     format_size = sizeof(int);
-                    glVertexAttribIPointer(i, (GLint)resource->m_raw_vertex_data->m_vertex_formats[i].m_count,
+                    glVertexAttribIPointer(i, (GLint)resource->m_raw_vertex_data->m_formats[i].m_count,
                         GL_INT,
                         (GLsizei)(resource->m_raw_vertex_data->m_data_size_per_point),
                         (void*)offset);
@@ -636,7 +644,7 @@ namespace jeecs::graphic::api::gl3
                     break;
                 }
 
-                offset += format_size * resource->m_raw_vertex_data->m_vertex_formats[i].m_count;
+                offset += format_size * resource->m_raw_vertex_data->m_formats[i].m_count;
             }
 
             const static GLenum DRAW_METHODS[] = {
@@ -649,8 +657,9 @@ namespace jeecs::graphic::api::gl3
             auto* vertex_data = new jegl3_vertex_data;
             vertex_data->m_vao = vao;
             vertex_data->m_vbo = vbo;
+            vertex_data->m_ebo = ebo;
             vertex_data->m_method = DRAW_METHODS[(size_t)resource->m_raw_vertex_data->m_type];
-            vertex_data->m_pointcount = (GLsizei)resource->m_raw_vertex_data->m_point_count;
+            vertex_data->m_pointcount = (GLsizei)resource->m_raw_vertex_data->m_index_count;
 
             resource->m_handle.m_ptr = vertex_data;
             break;
@@ -976,6 +985,7 @@ namespace jeecs::graphic::api::gl3
             jegl3_vertex_data* vdata = std::launder(reinterpret_cast<jegl3_vertex_data*>(resource->m_handle.m_ptr));
             glDeleteVertexArrays(1, &vdata->m_vao);
             glDeleteBuffers(1, &vdata->m_vbo);
+            glDeleteBuffers(1, &vdata->m_ebo);
             delete vdata;
             break;
         }
@@ -1018,7 +1028,7 @@ namespace jeecs::graphic::api::gl3
         glBindVertexArray(vdata->m_vao);
 
         if (vdata != nullptr)
-            glDrawArrays(vdata->m_method, 0, vdata->m_pointcount);
+            glDrawElements(vdata->m_method, vdata->m_pointcount, GL_UNSIGNED_INT, 0);
     }
 
     void gl_set_rend_to_framebuffer(jegl_context::userdata_t ctx, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)

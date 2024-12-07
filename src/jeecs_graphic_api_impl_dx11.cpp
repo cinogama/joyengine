@@ -90,6 +90,7 @@ namespace jeecs::graphic::api::dx11
     struct jedx11_vertex
     {
         jegl_dx11_context::MSWRLComPtr<ID3D11Buffer> m_vbo;
+        jegl_dx11_context::MSWRLComPtr<ID3D11Buffer> m_ebo;
         UINT m_count;
         UINT m_stride;
         D3D_PRIMITIVE_TOPOLOGY m_method;
@@ -1177,21 +1178,13 @@ namespace jeecs::graphic::api::dx11
             vertex->m_method =
                 DRAW_METHODS[resource->m_raw_vertex_data->m_type];
 
-            D3D11_BUFFER_DESC vertex_buffer_describe;
-
-            UINT ByteWidth;
-            D3D11_USAGE Usage;
-            UINT BindFlags;
-            UINT CPUAccessFlags;
-            UINT MiscFlags;
-            UINT StructureByteStride;
-
-            vertex->m_count = (UINT)resource->m_raw_vertex_data->m_point_count;
+            vertex->m_count = (UINT)resource->m_raw_vertex_data->m_index_count;
             vertex->m_stride = resource->m_raw_vertex_data->m_data_size_per_point;
 
+            // 新建顶点缓冲区
+            D3D11_BUFFER_DESC vertex_buffer_describe;
             vertex_buffer_describe.ByteWidth =
-                (UINT)(resource->m_raw_vertex_data->m_point_count
-                    * resource->m_raw_vertex_data->m_data_size_per_point);
+                (UINT)resource->m_raw_vertex_data->m_vertex_length;
 
             vertex_buffer_describe.Usage = D3D11_USAGE_IMMUTABLE;
             vertex_buffer_describe.BindFlags = D3D11_BIND_VERTEX_BUFFER;
@@ -1199,9 +1192,8 @@ namespace jeecs::graphic::api::dx11
             vertex_buffer_describe.MiscFlags = 0;
             vertex_buffer_describe.StructureByteStride = 0;
 
-            // 新建顶点缓冲区
             D3D11_SUBRESOURCE_DATA vertex_buffer_data;
-            vertex_buffer_data.pSysMem = resource->m_raw_vertex_data->m_vertex_datas;
+            vertex_buffer_data.pSysMem = resource->m_raw_vertex_data->m_vertexs;
             vertex_buffer_data.SysMemPitch = 0;
             vertex_buffer_data.SysMemSlicePitch = 0;
             JERCHECK(context->m_dx_device->CreateBuffer(
@@ -1211,6 +1203,30 @@ namespace jeecs::graphic::api::dx11
 
             JEDX11_TRACE_DEBUG_NAME(vertex->m_vbo,
                 std::string(resource->m_path == nullptr ? "_builtin_vertex_" : resource->m_path) + "_Vbo");
+
+            // 新建索引缓冲区
+            static_assert(sizeof(uint32_t) == sizeof(UINT));
+
+            D3D11_BUFFER_DESC index_buffer_describe;
+            index_buffer_describe.ByteWidth =
+                (UINT)resource->m_raw_vertex_data->m_index_count * sizeof(uint32_t);
+            index_buffer_describe.Usage = D3D11_USAGE_IMMUTABLE;
+            index_buffer_describe.BindFlags = D3D11_BIND_INDEX_BUFFER;
+            index_buffer_describe.CPUAccessFlags = 0;
+            index_buffer_describe.MiscFlags = 0;
+            index_buffer_describe.StructureByteStride = 0;
+
+            D3D11_SUBRESOURCE_DATA index_buffer_data;
+            index_buffer_data.pSysMem = resource->m_raw_vertex_data->m_indexs;
+            index_buffer_data.SysMemPitch = 0;
+            index_buffer_data.SysMemSlicePitch = 0;
+            JERCHECK(context->m_dx_device->CreateBuffer(
+                &index_buffer_describe,
+                &index_buffer_data,
+                vertex->m_ebo.GetAddressOf()));
+
+            JEDX11_TRACE_DEBUG_NAME(vertex->m_ebo,
+                std::string(resource->m_path == nullptr ? "_builtin_vertex_" : resource->m_path) + "_Ebo");            
 
             resource->m_handle.m_ptr = vertex;
 
@@ -1436,11 +1452,12 @@ namespace jeecs::graphic::api::dx11
 
         const UINT offset = 0;
         const UINT strides = vertex->m_stride;
+        context->m_dx_context->IASetIndexBuffer(
+            vertex->m_ebo.Get(), DXGI_FORMAT_R32_UINT, 0);
         context->m_dx_context->IASetVertexBuffers(
             0, 1, vertex->m_vbo.GetAddressOf(), &strides, &offset);
         context->m_dx_context->IASetPrimitiveTopology(vertex->m_method);
-
-        context->m_dx_context->Draw(vertex->m_count, 0);
+        context->m_dx_context->DrawIndexed(vertex->m_count, 0, 0);
     }
 
     void dx11_bind_shader(jegl_context::userdata_t ctx, jegl_resource* shader)

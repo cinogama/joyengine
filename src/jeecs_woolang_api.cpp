@@ -1498,7 +1498,8 @@ WO_API wo_api wojeapi_vertex_create(wo_vm vm, wo_value args)
     // vertices: array<real>, indices: array<int>
     jegl_vertex::type vertex_type = (jegl_vertex::type)wo_int(args + 0);
     std::vector<float> vertices(wo_lengthof(args + 1));
-    std::vector<jegl_vertex::data_layout> indices(wo_lengthof(args + 2));
+    std::vector<uint32_t> indices(wo_lengthof(args + 2));
+    std::vector<jegl_vertex::data_layout> formats(wo_lengthof(args + 3));
 
     wo_value elem = wo_push_empty(vm);
     for (size_t i = 0; i < vertices.size(); ++i)
@@ -1506,18 +1507,23 @@ WO_API wo_api wojeapi_vertex_create(wo_vm vm, wo_value args)
         wo_arr_get(elem, args + 1, i);
         vertices[i] = wo_float(elem);
     }
-
     for (size_t i = 0; i < indices.size(); ++i)
     {
         wo_arr_get(elem, args + 2, i);
-        indices[i] = { jegl_vertex::data_type::FLOAT32, (size_t)wo_int(elem) };
+        indices[i] = (uint32_t)wo_int(elem);
+    }
+    for (size_t i = 0; i < formats.size(); ++i)
+    {
+        wo_arr_get(elem, args + 3, i);
+        formats[i] = { jegl_vertex::data_type::FLOAT32, (size_t)wo_int(elem) };
     }
 
     auto loaded_vertex = jeecs::graphic::vertex::create(
         vertex_type, 
         vertices.data(), 
         vertices.size() * sizeof(float), 
-        indices);
+        indices,
+        formats);
 
     return wo_ret_gchandle(vm,
         new jeecs::basic::resource<jeecs::graphic::vertex>(loaded_vertex), nullptr,
@@ -3039,7 +3045,7 @@ namespace je
             public func load(univ: option<universe>, path: string)=> option<vertex>;
 
             extern("libjoyecs", "wojeapi_vertex_create", slow)
-            public func create(vtype: type, vertices: array<real>, indices: array<int>)=> vertex;
+            public func create(vtype: type, vertices: array<real>, indexs: array<int>, indices: array<int>)=> vertex;
 
             extern("libjoyecs", "wojeapi_vertex_path")
             public func path(self: vertex)=> option<string>;

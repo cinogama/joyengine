@@ -117,6 +117,9 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                     default_shape_quad_data,
                     sizeof(default_shape_quad_data),
                     {
+                        0, 1, 2, 3
+                    },
+                    {
                         {jegl_vertex::data_type::FLOAT32, 3},
                         {jegl_vertex::data_type::FLOAT32, 2},
                         {jegl_vertex::data_type::FLOAT32, 3},
@@ -970,6 +973,9 @@ public let frag =
                     _screen_vertex_data,
                     sizeof(_screen_vertex_data),
                     {
+                        0, 1, 2, 3
+                    },
+                    {
                         {jegl_vertex::data_type::FLOAT32, 3},
                         {jegl_vertex::data_type::FLOAT32, 2},
                     });
@@ -984,9 +990,11 @@ public let frag =
                     _sprite_shadow_vertex_data,
                     sizeof(_sprite_shadow_vertex_data),
                     {
+                        0, 1, 2, 3
+                    },
+                    {
                         {jegl_vertex::data_type::FLOAT32, 3},
                         {jegl_vertex::data_type::FLOAT32, 2},
-                        {jegl_vertex::data_type::FLOAT32, 1},
                     });
 
                 // 用于消除阴影对象本身的阴影
@@ -1664,13 +1672,16 @@ public func frag(_: v2f)
                             && !range->shape.m_positions.empty())
                         {
                             std::vector<float> vertex_datas;
+                            std::vector<uint32_t> index_datas;
                             auto append_point =
-                                [&vertex_datas, &range](const math::vec2& p, size_t layerid)
+                                [&vertex_datas, &index_datas, &range](const math::vec2& p, size_t layerid)
                                 {
                                     vertex_datas.push_back(p.x);
                                     vertex_datas.push_back(p.y);
                                     vertex_datas.push_back(0.f);
                                     vertex_datas.push_back(range->shape.m_strength[layerid]);
+
+                                    index_datas.push_back((uint32_t)index_datas.size());
                                 };
 
                             size_t layer_count = range->shape.m_strength.size();
@@ -1729,6 +1740,7 @@ public func frag(_: v2f)
                             range->shape.m_light_mesh = jeecs::graphic::vertex::create(
                                 jegl_vertex::type::TRIANGLESTRIP,
                                 vertex_datas.data(), vertex_datas.size() * sizeof(float),
+                                index_datas,
                                 {
                                     {jegl_vertex::data_type::FLOAT32, 3},
                                     {jegl_vertex::data_type::FLOAT32, 1},
@@ -1756,6 +1768,7 @@ public func frag(_: v2f)
                         if (blockshadow->mesh.m_block_mesh == nullptr)
                         {
                             std::vector<float> _vertex_buffer;
+                            std::vector<uint32_t> _index_buffer;
                             if (!blockshadow->mesh.m_block_points.empty())
                             {
                                 for (auto& point : blockshadow->mesh.m_block_points)
@@ -1765,10 +1778,16 @@ public func frag(_: v2f)
                                             point.x, point.y, 0.f, 0.f,
                                             point.x, point.y, 0.f, 1.f,
                                         });
+                                    _index_buffer.insert(_index_buffer.end(),
+                                        {
+                                            (uint32_t)_vertex_buffer.size() - 2,
+                                            (uint32_t)_vertex_buffer.size() - 1,
+                                        });
                                 }
                                 blockshadow->mesh.m_block_mesh = jeecs::graphic::vertex::create(
                                     jegl_vertex::type::TRIANGLESTRIP,
                                     _vertex_buffer.data(), _vertex_buffer.size() * sizeof(float),
+                                    _index_buffer,
                                     {
                                         {jegl_vertex::data_type::FLOAT32, 3},
                                         {jegl_vertex::data_type::FLOAT32, 1},

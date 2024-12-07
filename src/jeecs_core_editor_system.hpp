@@ -195,6 +195,9 @@ namespace jeecs
                 axis_x_data,
                 sizeof(axis_x_data),
                 {
+                    0, 1
+                },
+                {
                     {jegl_vertex::data_type::FLOAT32, 3},
                     {jegl_vertex::data_type::FLOAT32, 3},
                 });
@@ -207,6 +210,9 @@ namespace jeecs
                 axis_y_data,
                 sizeof(axis_y_data),
                 {
+                    0, 1
+                },
+                {
                     {jegl_vertex::data_type::FLOAT32, 3},
                     {jegl_vertex::data_type::FLOAT32, 3},
                 });
@@ -218,6 +224,9 @@ namespace jeecs
             axis_z = graphic::vertex::create(jegl_vertex::type::LINES,
                 axis_z_data,
                 sizeof(axis_z_data),
+                {
+                    0, 1
+                },
                 {
                     {jegl_vertex::data_type::FLOAT32, 3},
                     {jegl_vertex::data_type::FLOAT32, 3},
@@ -397,6 +406,7 @@ namespace jeecs
             const size_t half_step_count = 50;
 
             std::vector<float> points;
+            std::vector<uint32_t> indices;
             for (size_t i = 0; i < half_step_count; ++i)
             {
                 // x2 + y2 = r2
@@ -411,6 +421,8 @@ namespace jeecs
                 points.push_back(anx.x);
                 points.push_back(anx.y);
                 points.push_back(anx.z);
+
+                indices.push_back((uint32_t)indices.size());
             }
             for (size_t i = 0; i <= half_step_count; ++i)
             {
@@ -426,11 +438,14 @@ namespace jeecs
                 points.push_back(anx.x);
                 points.push_back(anx.y);
                 points.push_back(anx.z);
+
+                indices.push_back((uint32_t)indices.size());
             }
             return graphic::vertex::create(
                 jegl_vertex::type::LINESTRIP, 
                 points.data(), 
                 points.size() * sizeof(float), 
+                indices,
                 {
                     {jegl_vertex::data_type::FLOAT32, 3},
                     {jegl_vertex::data_type::FLOAT32, 3},
@@ -450,19 +465,22 @@ namespace jeecs
                 mover.init = true;
 
                 const float select_box_vert_data[] = {
-                    -0.5f, -0.5f, -0.5f,    0.5f, -0.5f, -0.5f, 
-                    0.5f, 0.5f, -0.5f,      -0.5f, 0.5f, -0.5f, 
-                    -0.5f, -0.5f, -0.5f,    -0.5f, -0.5f, 0.5f, 
-                    0.5f, -0.5f, 0.5f,      0.5f, 0.5f, 0.5f, 
-                    -0.5f, 0.5f, 0.5f,      -0.5f, -0.5f, 0.5f, 
-                    -0.5f, 0.5f, 0.5f,      -0.5f, 0.5f, -0.5f, 
-                    0.5f, 0.5f, -0.5f,      0.5f, 0.5f, 0.5f, 
-                    0.5f, -0.5f, 0.5f,      0.5f, -0.5f, -0.5f,
+                    -0.5f, -0.5f, -0.5f,
+                    0.5f, -0.5f, -0.5f,
+                    0.5f, 0.5f, -0.5f,
+                    -0.5f, 0.5f, -0.5f,
+                    -0.5f, -0.5f, 0.5f,
+                    0.5f, -0.5f, 0.5f,
+                    0.5f, 0.5f, 0.5f,
+                    -0.5f, 0.5f, 0.5f,
                 };
                 basic::resource<graphic::vertex> select_box_vert =
                     graphic::vertex::create(jegl_vertex::type::LINESTRIP,
                         select_box_vert_data,
                         sizeof(select_box_vert_data),
+                        {
+                            0, 1, 2, 3, 0, 4, 5, 6, 7, 4, 5, 1, 2, 6, 7, 3
+                        },
                         {
                             {jegl_vertex::data_type::FLOAT32, 3},
                         });

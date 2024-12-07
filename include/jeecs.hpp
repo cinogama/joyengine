@@ -1771,10 +1771,13 @@ struct jegl_vertex
                     m_y_min, m_y_max,
                     m_z_min, m_z_max;
 
-    float*          m_vertex_datas;
-    data_layout*    m_vertex_formats;
+    const void*     m_vertexs;
+    size_t          m_vertex_length;
+    const uint32_t* m_indexs;
+    size_t          m_index_count;
+    const data_layout*    
+                    m_formats;
     size_t          m_format_count;
-    size_t          m_point_count;
     size_t          m_data_size_per_point;
     type            m_type;
     const bone_data**
@@ -2414,8 +2417,10 @@ JE_API jegl_resource* jegl_create_vertex(
     jegl_vertex::type               type,
     const void*                     datas,
     size_t                          data_length,
+    const uint32_t*                 indexs,
+    size_t                          index_count,
     const jegl_vertex::data_layout* format,
-    size_t                          format_length);
+    size_t                          format_count);
 
 /*
 jegl_create_framebuf [基本接口]
@@ -2871,6 +2876,16 @@ JE_API jegl_rendchain_rend_action* jegl_rchain_draw(
     jegl_resource* shader,
     jegl_resource* vertex,
     jegl_rchain_texture_group_idx_t texture_group);
+
+/*
+jegl_rchain_set_uniform_buffer [基本接口]
+为 act 指定的绘制操作应用一致变量缓冲区
+请参见：
+    jegl_rendchain_rend_action
+*/
+JE_API void jegl_rchain_set_uniform_buffer(
+    jegl_rendchain_rend_action* act,
+    jegl_resource* uniform_buffer);
 
 /*
 jegl_rchain_set_uniform_int [基本接口]
@@ -7658,6 +7673,21 @@ namespace jeecs
                     jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
             }
+
+            uint32_t get_uniform_location(const std::string& name)
+            {
+                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                while (jegl_shad_uniforms)
+                {
+                    if (jegl_shad_uniforms->m_name == name)
+                    {
+                        return jegl_shad_uniforms->m_index;
+                    }
+                    jegl_shad_uniforms = jegl_shad_uniforms->m_next;
+                }
+
+                return typing::INVALID_UINT32;
+            }
         };
 
         class vertex : public resource_basic
@@ -7678,9 +7708,15 @@ namespace jeecs
                 jegl_vertex::type type, 
                 const void*       pdatas, 
                 size_t            dlen,
+                const std::vector<uint32_t> idatas,
                 const std::vector<jegl_vertex::data_layout> fdatas)
             {
-                auto* res = jegl_create_vertex(type, pdatas, dlen, fdatas.data(), fdatas.size());
+                auto* res = jegl_create_vertex(
+                    type, 
+                    pdatas, dlen, 
+                    idatas.data(), idatas.size(), 
+                    fdatas.data(), fdatas.size());
+
                 if (res != nullptr)
                     return new vertex(res);
                 return nullptr;
