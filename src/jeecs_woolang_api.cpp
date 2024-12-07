@@ -1763,6 +1763,9 @@ WO_API wo_api wojeapi_get_bad_shader_list_of_entity(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_store_bad_shader_name(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_remove_bad_shader_name(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_store_bad_shader_uniforms_int(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_store_bad_shader_uniforms_int2(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_store_bad_shader_uniforms_int3(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_store_bad_shader_uniforms_int4(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_store_bad_shader_uniforms_float(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_store_bad_shader_uniforms_float2(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_store_bad_shader_uniforms_float3(wo_vm vm, wo_value args);
@@ -2525,47 +2528,48 @@ namespace je
             namespace bad_shader_handle_t
             {
                 public func store_uniform_dat_for_bad_shader_update<T>(shadhandle: bad_shader_handle_t, name: string, val: T)
-                    where std::declval:<T>() is int
-                           || std::declval:<T>() is real
-                           || std::declval:<T>() is (real, real)
-                           || std::declval:<T>() is (real, real, real)
-                           || std::declval:<T>() is (real, real, real, real);
+                    where val is int
+                        || val is (int, int)
+                        || val is (int, int, int)
+                        || val is (int, int, int, int)
+                        || val is real
+                        || val is (real, real)
+                        || val is (real, real, real)
+                        || val is (real, real, real, real);
                 {
-                    if (std::declval:<T>() is int)
-                    {
-                        extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_int")
-                        func _set_uniform_int(shadhandle: bad_shader_handle_t, name: string, val: int)=> void;
+                    extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_int")
+                    func _set_uniform_int(shadhandle: bad_shader_handle_t, name: string, val: int)=> void;
+                    extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_int2")
+                    func _set_uniform_int2(shadhandle: bad_shader_handle_t, name: string, x: int, y: int)=> void;
+                    extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_int3")
+                    func _set_uniform_int3(shadhandle: bad_shader_handle_t, name: string, x: int, y: int, z: int)=> void;
+                    extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_int4")
+                    func _set_uniform_int4(shadhandle: bad_shader_handle_t, name: string, x: int, y: int, z: int, w: int)=> void;
+                    extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float")
+                    func _set_uniform_float(shadhandle: bad_shader_handle_t, name: string, val: real)=> void;
+                    extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float2")
+                    func _set_uniform_float2(shadhandle: bad_shader_handle_t, name: string, x: real, y: real)=> void;
+                    extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float3")
+                    func _set_uniform_float3(shadhandle: bad_shader_handle_t, name: string, x: real, y: real, z: real)=> void;
+                    extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float4")
+                    func _set_uniform_float4(shadhandle: bad_shader_handle_t, name: string, x: real, y: real, z: real, w: real)=> void;
 
+                    if (val is int)
                         _set_uniform_int(shadhandle, name, val);
-                    }
-                    else if (std::declval:<T>() is real)
-                    {
-                        extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float")
-                        func _set_uniform_float(shadhandle: bad_shader_handle_t, name: string, val: real)=> void;
-
+                    else if (val is (int, int))
+                        _set_uniform_int2(shadhandle, name, val...);
+                    else if (val is (int, int, int))
+                        _set_uniform_int3(shadhandle, name, val...);
+                    else if (val is (int, int, int, int))
+                        _set_uniform_int4(shadhandle, name, val...);
+                    else if (val is real)
                         _set_uniform_float(shadhandle, name, val);
-                    }
-                    else if (std::declval:<T>() is (real, real))
-                    {
-                        extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float2")
-                        func _set_uniform_float2(shadhandle: bad_shader_handle_t, name: string, x: real, y: real)=> void;
-                        let (x, y) = val;
-                        _set_uniform_float2(shadhandle, name, x, y);
-                    }
-                    else if (std::declval:<T>() is (real, real, real))
-                    {
-                        extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float3")
-                        func _set_uniform_float3(shadhandle: bad_shader_handle_t, name: string, x: real, y: real, z: real)=> void;
-                        let (x, y, z) = val;
-                        _set_uniform_float3(shadhandle, name, x, y, z);
-                    }
-                    else if (std::declval:<T>() is (real, real, real, real))
-                    {
-                        extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float4")
-                        func _set_uniform_float4(shadhandle: bad_shader_handle_t, name: string, x: real, y: real, z: real, w: real)=> void;
-                        let (x, y, z, w) = val;
-                        _set_uniform_float4(shadhandle, name, x, y, z, w);
-                    }
+                    else if (val is (real, real))
+                        _set_uniform_float2(shadhandle, name, val...);
+                    else if (val is (real, real, real))
+                        _set_uniform_float3(shadhandle, name, val...);
+                    else if (val is (real, real, real, real))
+                        _set_uniform_float4(shadhandle, name, val...);
                     else
                         std::panic("Here should not been exec.");
                 }

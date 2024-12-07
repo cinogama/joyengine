@@ -377,6 +377,9 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_float2(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_store_bad_shader_uniforms_float3(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_store_bad_shader_uniforms_float4(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_store_bad_shader_uniforms_int(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_store_bad_shader_uniforms_int2(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_store_bad_shader_uniforms_int3(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_store_bad_shader_uniforms_int4(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_texture_bind_path(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_texture_clip(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_texture_create(wo_vm vm, wo_value args);
@@ -840,6 +843,9 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"wojeapi_store_bad_shader_uniforms_float3", (void*)&wojeapi_store_bad_shader_uniforms_float3},
         wo_extern_lib_func_t{"wojeapi_store_bad_shader_uniforms_float4", (void*)&wojeapi_store_bad_shader_uniforms_float4},
         wo_extern_lib_func_t{"wojeapi_store_bad_shader_uniforms_int", (void*)&wojeapi_store_bad_shader_uniforms_int},
+        wo_extern_lib_func_t{"wojeapi_store_bad_shader_uniforms_int2", (void*)&wojeapi_store_bad_shader_uniforms_int2},
+        wo_extern_lib_func_t{"wojeapi_store_bad_shader_uniforms_int3", (void*)&wojeapi_store_bad_shader_uniforms_int3},
+        wo_extern_lib_func_t{"wojeapi_store_bad_shader_uniforms_int4", (void*)&wojeapi_store_bad_shader_uniforms_int4},
         wo_extern_lib_func_t{"wojeapi_texture_bind_path", (void*)&wojeapi_texture_bind_path},
         wo_extern_lib_func_t{"wojeapi_texture_clip", (void*)&wojeapi_texture_clip},
         wo_extern_lib_func_t{"wojeapi_texture_create", (void*)&wojeapi_texture_create},

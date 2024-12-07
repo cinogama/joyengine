@@ -296,6 +296,12 @@ namespace jeapi
                                 {
                                     integer(n)? 
                                         result->set(name, [n: dynamic]);
+                                    integer2((x, y))?
+                                        result->set(name, [x: dynamic, y: dynamic]);
+                                    integer3((x, y, z))?
+                                        result->set(name, [x: dynamic, y: dynamic, z: dynamic]);
+                                    integer4((x, y, z, w))?
+                                        result->set(name, [x: dynamic, y: dynamic, z: dynamic, w: dynamic]);
                                     float(x)?
                                         result->set(name, [x: dynamic]);
                                     float2((x, y))?
@@ -427,8 +433,16 @@ namespace jeapi
             assert(val->len > 0);
             if (val[0] is int)
             {
-                assert(val->len == 1);
-                _restore_shader_of_entity(shad, uname, val[0] as int);
+                if (val->len == 1)
+                    _restore_shader_of_entity(shad, uname, val[0] as int);
+                else if (val->len == 2)
+                    _restore_shader_of_entity(shad, uname, (val[0] as int, val[1] as int));
+                else if (val->len == 3)
+                    _restore_shader_of_entity(shad, uname, (val[0] as int, val[1] as int, val[2] as int));
+                else if (val->len == 4)
+                    _restore_shader_of_entity(shad, uname, (val[0] as int, val[1] as int, val[2] as int, val[3] as int));
+                else
+                    std::panic("invalid uniform value length when restore.");
             }
             else if (val[0] is real)
             {

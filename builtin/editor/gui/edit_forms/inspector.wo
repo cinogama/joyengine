@@ -96,6 +96,12 @@ namespace editor::gui::edit_forms
                 {
                     integer(n)?
                         do InputInt(name, n) ->> \n = shader->set_uniform(name, n);;
+                    integer2((x, y))?
+                        do InputInt2(name, x, y) ->> \xy = shader->set_uniform(name, xy);;
+                    integer3((x, y, z))?
+                        do InputInt3(name, x, y, z) ->> \xyz = shader->set_uniform(name, xyz);;
+                    integer4((x, y, z, w))?
+                        do InputInt4(name, x, y, z, w) ->> \xyzw = shader->set_uniform(name, xyzw);;
                     float(x)?
                         do InputFloat(name, x) ->> \x = shader->set_uniform(name, x);;
                     float2((x, y))?

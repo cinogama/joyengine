@@ -981,10 +981,10 @@ public let frag =
                     });
 
                 const float _sprite_shadow_vertex_data[] = {
-                   -1.f, 1.f, 0.f,     0.f, 1.f,
-                   -1.f, -1.f, 0.f,    0.f, 0.f,
-                   1.f, 1.f, 0.f,      1.f, 1.f,
-                   1.f, -1.f, 0.f,     1.f, 0.f,
+                   -0.5f, -0.5f, 0.0f,     0.0f, 1.0f,  1.0f,
+                    -0.5f, -0.5f, 0.0f,     0.0f, 0.0f,  0.0f,
+                    0.5f, -0.5f, 0.0f,      1.0f, 1.0f,  1.0f,
+                    0.5f, -0.5f, 0.0f,      1.0f, 0.0f,  0.0f,
                 };
                 _sprite_shadow_vertex = vertex::create(jegl_vertex::TRIANGLESTRIP,
                     _sprite_shadow_vertex_data,
@@ -995,6 +995,7 @@ public let frag =
                     {
                         {jegl_vertex::data_type::FLOAT32, 3},
                         {jegl_vertex::data_type::FLOAT32, 2},
+                        {jegl_vertex::data_type::FLOAT32, 1},
                     });
 
                 // 用于消除阴影对象本身的阴影
@@ -1778,10 +1779,12 @@ public func frag(_: v2f)
                                             point.x, point.y, 0.f, 0.f,
                                             point.x, point.y, 0.f, 1.f,
                                         });
+
+                                    uint32_t _index_offset = _index_buffer.size();
                                     _index_buffer.insert(_index_buffer.end(),
                                         {
-                                            (uint32_t)_vertex_buffer.size() - 2,
-                                            (uint32_t)_vertex_buffer.size() - 1,
+                                            _index_offset,
+                                            _index_offset + 1,
                                         });
                                 }
                                 blockshadow->mesh.m_block_mesh = jeecs::graphic::vertex::create(
