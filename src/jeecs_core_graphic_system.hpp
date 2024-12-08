@@ -420,7 +420,6 @@ public let frag =
 
             std::unordered_map<typing::uid_t, UserInterface::Origin*> parent_origin_list;
 
-            selector.anyof<OrthoProjection, PerspectiveProjection>();
             selector.exec(&UserInterfaceGraphicPipelineSystem::PrepareCameras);
 
             selector.exec([&](Transform::Anchor& anchor, UserInterface::Origin& origin)
@@ -1074,10 +1073,14 @@ public func vert(v: vin)
 
     let vpos = je_mv * vec4(v.vertex, 1.);
     let shadow_vpos = normalize((vpos->xyz / vpos->w) - (light2d_vpos->xyz / light2d_vpos->w)) * shadow_scale_factor;
-    
+
+    let shadow_tiling_scale = je_local_scale->yz;
+    let shadow_tiling_scale_apply_offset = 
+        (float2::const(0.5, 0.5) - v.uv) * 2. * (float2::one - shadow_tiling_scale);
+
     return v2f{
         pos = je_p * vec4((vpos->xyz / vpos->w) + shadow_vpos, 1.),
-        uv = uvtrans(v.uv, je_tiling, je_offset),
+        uv = uvtrans(v.uv, je_tiling, je_offset) + shadow_tiling_scale_apply_offset,
     };
 }
 public func frag(vf: v2f)
@@ -1127,10 +1130,14 @@ public func vert(v: vin)
 
     let vpos = je_mv * vec4(v.vertex, 1.);
     let shadow_vpos = normalize(light2d_vdir) * shadow_scale_factor;
-    
+
+    let shadow_tiling_scale = je_local_scale->yz;
+    let shadow_tiling_scale_apply_offset = 
+        (float2::const(0.5, 0.5) - v.uv) * 2. * (float2::one - shadow_tiling_scale);    
+
     return v2f{
         pos = je_p * vec4((vpos->xyz / vpos->w) + shadow_vpos, 1.),
-        uv = uvtrans(v.uv, je_tiling, je_offset),
+        uv = uvtrans(v.uv, je_tiling, je_offset) + shadow_tiling_scale_apply_offset,
     };
 }
 public func frag(vf: v2f)
@@ -1986,7 +1993,12 @@ public func frag(_: v2f)
 
                                     bool block_is_behind_light = false;
 
-                                    if (blockarch.blockshadow != nullptr && blockarch.blockshadow->factor > 0.f)
+                                    bool light_is_above_block = lightarch.topdown == nullptr
+                                        ? blockarch.translation->world_position.z >= lightarch.translation->world_position.z
+                                        : blockarch.translation->world_position.y >= lightarch.translation->world_position.y;
+
+                                    if (blockarch.blockshadow != nullptr && blockarch.blockshadow->factor > 0.f
+                                        && (!light_is_above_block || !blockarch.blockshadow->auto_disable))
                                     {
                                         if (blockarch.blockshadow->mesh.m_block_mesh != nullptr)
                                         {
@@ -2033,7 +2045,8 @@ public func frag(_: v2f)
                                                     1.f);
                                         }
                                     }
-                                    if (blockarch.shapeshadow != nullptr && blockarch.shapeshadow->factor > 0.f)
+                                    if (blockarch.shapeshadow != nullptr && blockarch.shapeshadow->factor > 0.f
+                                        && (light_is_above_block || !blockarch.shapeshadow->auto_disable))
                                     {
                                         auto texture_group = jegl_rchain_allocate_texture_group(light2d_shadow_rend_chain);
                                         if (blockarch.textures != nullptr)
@@ -2067,12 +2080,12 @@ public func frag(_: v2f)
                                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, MAT4_MV);
                                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mvp, float4x4, MAT4_MVP);
 
-                                        // 通过 local_scale.x 传递阴影权重，.y .z 通道预留
+                                        // 通过 local_scale.x 传递阴影权重，.y .z 通道则用于传入tiling_scale参数
                                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform,
                                             local_scale, float3,
                                             blockarch.shapeshadow->factor,
-                                            0.f,
-                                            0.f);
+                                            blockarch.shapeshadow->tiling_scale.x,
+                                            blockarch.shapeshadow->tiling_scale.y);
 
                                         if (blockarch.textures != nullptr)
                                         {
@@ -2216,7 +2229,7 @@ public func frag(_: v2f)
                                                 0.f,
                                                 0.f);*/
 
-                                            if (block_in_layer->selfshadow->auto_uncover &&
+                                            if (block_in_layer->selfshadow->auto_disable &&
                                                 (lightarch.topdown == nullptr
                                                     ? block_in_layer->translation->world_position.z >= lightarch.translation->world_position.z
                                                     : block_in_layer->translation->world_position.y >= lightarch.translation->world_position.y))

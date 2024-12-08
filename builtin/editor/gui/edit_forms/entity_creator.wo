@@ -289,114 +289,154 @@ namespace editor::gui::edit_forms
             }
             if (BeginMenu("常用组件集合"))
             {
-                if (MenuItem("重置列表"))
+                if (MenuItem("移除全部组件"))
                     context->reset_context_cur_components();
 
                 Separator();
 
-                if (MenuItem("一般坐标变换"))
+                if (BeginMenu("变换（Transform）"))
                 {
-                    context->add_components("Transform::LocalPosition");
-                    context->add_components("Transform::LocalRotation");
-                    context->add_components("Transform::LocalScale");
-                    context->add_components("Transform::LocalToWorld");
-                    context->add_components("Transform::Translation");
+                    if (MenuItem("一般变换"))
+                    {
+                        context->add_components("Transform::LocalPosition");
+                        context->add_components("Transform::LocalRotation");
+                        context->add_components("Transform::LocalScale");
+                        context->add_components("Transform::LocalToWorld");
+                        context->add_components("Transform::Translation");
+                    }
+                    if (MenuItem("UI变换"))
+                    {
+                        context->add_components("UserInterface::Origin");
+                        context->add_components("UserInterface::Absolute");
+                        context->add_components("UserInterface::Relatively");
+                        context->add_components("Transform::Translation");
+                    }
+                    EndMenu();
                 }
-
-                if (MenuItem("UI变换"))
-                {
-                    context->add_components("UserInterface::Origin");
-                    context->add_components("UserInterface::Absolute");
-                    context->add_components("UserInterface::Relatively");
-                }
-
-                if (MenuItem("基本渲染"))
+               
+                if (MenuItem("基本渲染（Renderer）"))
                 {
                     context->add_components("Renderer::Shape");
                     context->add_components("Renderer::Shaders");
                     context->add_components("Renderer::Textures");
                 }
 
-                if (MenuItem("2D阴影（平行）"))
+                if (BeginMenu("2D光照（Light2D）"))
                 {
-                    context->add_components("Light2D::BlockShadow");
-                }
-                if (MenuItem("2D阴影（精灵图）"))
-                {
-                    context->add_components("Light2D::SpriteShadow");
-                }
-                if (MenuItem("2D阴影（自身）"))
-                {
-                    context->add_components("Light2D::SelfShadow");
-                }
-
-                if (MenuItem("摄像机（透视）"))
-                {
-                    context->add_components("Camera::Clip");
-                    context->add_components("Camera::Projection");
-                    context->add_components("Camera::PerspectiveProjection");
-                    context->add_components("Camera::Viewport");
-                    context->add_components("Camera::FrustumCulling");
-                }
-
-                if (MenuItem("摄像机（平行）"))
-                {
-                    context->add_components("Camera::Clip");
-                    context->add_components("Camera::Projection");
-                    context->add_components("Camera::OrthoProjection");
-                    context->add_components("Camera::Viewport");
-                    context->add_components("Camera::FrustumCulling");
+                    if (MenuItem("点光源"))
+                    {
+                        context->add_components("Light2D::Point");
+                        context->add_components("Light2D::Gain");
+                        context->add_components("Light2D::ShadowBuffer");
+                    }
+                    if (MenuItem("范围光源"))
+                    {
+                        context->add_components("Light2D::Range");
+                        context->add_components("Light2D::Gain");
+                        context->add_components("Light2D::ShadowBuffer");
+                    }
+                    if (MenuItem("平行光源"))
+                    {
+                        context->add_components("Light2D::Parallel");
+                        context->add_components("Light2D::Gain");
+                        context->add_components("Light2D::ShadowBuffer");
+                    }
+                    EndMenu();
                 }
 
-                if (MenuItem("2D光照后处理"))
+                if (BeginMenu("2D阴影（Shadow2D）"))
                 {
-                    context->add_components("Light2D::CameraPostPass");
-                    context->add_components("Renderer::Shaders");
+                     if (MenuItem("常用组合"))
+                    {
+                        context->add_components("Light2D::ShapeShadow");
+                        context->add_components("Light2D::BlockShadow");
+                        context->add_components("Light2D::SelfShadow");
+                    }
+                    if (MenuItem("形状"))
+                    {
+                        context->add_components("Light2D::ShapeShadow");
+                    }
+                    if (MenuItem("块投射"))
+                    {
+                        context->add_components("Light2D::BlockShadow");
+                    }
+                    if (MenuItem("精灵图（俯视角）"))
+                    {
+                        context->add_components("Light2D::SpriteShadow");
+                    }
+                    if (MenuItem("自身"))
+                    {
+                        context->add_components("Light2D::SelfShadow");
+                    }
+                    EndMenu();
+                }
+                
+                if (BeginMenu("摄像机（Camera）"))
+                {
+                    if (MenuItem("透视投影"))
+                    {
+                        context->add_components("Camera::Clip");
+                        context->add_components("Camera::Projection");
+                        context->add_components("Camera::PerspectiveProjection");
+                        context->add_components("Camera::Viewport");
+                        context->add_components("Camera::FrustumCulling");
+                    }
+                    if (MenuItem("平行投影"))
+                    {
+                        context->add_components("Camera::Clip");
+                        context->add_components("Camera::Projection");
+                        context->add_components("Camera::OrthoProjection");
+                        context->add_components("Camera::Viewport");
+                        context->add_components("Camera::FrustumCulling");
+                    }
+                    if (MenuItem("仅UI投影"))
+                    {
+                        context->add_components("Camera::Projection");
+                    }
+
+                    if (MenuItem("2D光照后处理流程"))
+                    {
+                        context->add_components("Light2D::CameraPostPass");
+                        context->add_components("Renderer::Shaders");
+                    }
+                    EndMenu();
                 }
 
-                if (MenuItem("2D光源（点）"))
+                if (BeginMenu("2D物理（Physics2D）"))
                 {
-                    context->add_components("Light2D::Point");
-                    context->add_components("Light2D::Gain");
-                    context->add_components("Light2D::ShadowBuffer");
-                }
-                if (MenuItem("2D光源（范围）"))
-                {
-                    context->add_components("Light2D::Range");
-                    context->add_components("Light2D::Gain");
-                    context->add_components("Light2D::ShadowBuffer");
-                }
-                if (MenuItem("2D光源（平行）"))
-                {
-                    context->add_components("Light2D::Parallel");
-                    context->add_components("Light2D::Gain");
-                    context->add_components("Light2D::ShadowBuffer");
-                }
-
-                if (MenuItem("2D物理（静态）"))
-                {
-                    context->add_components("Physics2D::Rigidbody");
-                    context->add_components("Physics2D::Collider::Box");
-                    context->add_components("Physics2D::Friction");
-                }
-
-                if (MenuItem("2D物理（动力学）"))
-                {
-                    context->add_components("Physics2D::Rigidbody");
-                    context->add_components("Physics2D::Collider::Box");
-                    context->add_components("Physics2D::Friction");
-                    context->add_components("Physics2D::Kinematics");
-                    context->add_components("Physics2D::Mass");
-                }
-
-                if (MenuItem("2D物理（高速动力学）"))
-                {
-                    context->add_components("Physics2D::Rigidbody");
-                    context->add_components("Physics2D::Collider::Box");
-                    context->add_components("Physics2D::Friction");
-                    context->add_components("Physics2D::Kinematics");
-                    context->add_components("Physics2D::Mass");
-                    context->add_components("Physics2D::Bullet");
+                    if (MenuItem("静态"))
+                    {
+                        context->add_components("Physics2D::Rigidbody");
+                        context->add_components("Physics2D::Collider::Box");
+                        context->add_components("Physics2D::Friction");
+                    }
+                    if (MenuItem("动力学"))
+                    {
+                        context->add_components("Physics2D::Rigidbody");
+                        context->add_components("Physics2D::Collider::Box");
+                        context->add_components("Physics2D::Friction");
+                        context->add_components("Physics2D::Kinematics");
+                        context->add_components("Physics2D::Mass");
+                    }
+                    if (MenuItem("高速动力学"))
+                    {
+                        context->add_components("Physics2D::Rigidbody");
+                        context->add_components("Physics2D::Collider::Box");
+                        context->add_components("Physics2D::Friction");
+                        context->add_components("Physics2D::Kinematics");
+                        context->add_components("Physics2D::Mass");
+                        context->add_components("Physics2D::Bullet");
+                    }
+                    if (MenuItem("弹性"))
+                    {
+                        context->add_components("Physics2D::Restitution");
+                    }
+                    Separator();
+                    if (MenuItem("世界配置"))
+                    {
+                        context->add_components("Physics2D::World");
+                    }
+                    EndMenu();
                 }
 
                 EndMenu();

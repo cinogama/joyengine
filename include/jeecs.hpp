@@ -9395,23 +9395,29 @@ namespace jeecs
             block_mesh mesh;
             float factor = 1.0f;
             bool reverse = false;
+            bool auto_disable = true;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &BlockShadow::mesh, "mesh");
                 typing::register_member(guard, &BlockShadow::factor, "factor");
                 typing::register_member(guard, &BlockShadow::reverse, "reverse");
+                typing::register_member(guard, &BlockShadow::auto_disable, "auto_disable");
             }
         };
         struct ShapeShadow
         {
             float factor = 1.0f;
             float distance = 1.0f;
+            math::vec2 tiling_scale = math::vec2(1.f, 1.f);
+            bool auto_disable = true;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &ShapeShadow::factor, "factor");
                 typing::register_member(guard, &ShapeShadow::distance, "distance");
+                typing::register_member(guard, &ShapeShadow::tiling_scale, "tiling_scale");
+                typing::register_member(guard, &ShapeShadow::auto_disable, "auto_disable");
             }
         };
         struct SpriteShadow
@@ -9429,12 +9435,12 @@ namespace jeecs
         struct SelfShadow
         {
             float factor = 1.0f;
-            bool auto_uncover = true;
+            bool auto_disable = true;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &SelfShadow::factor, "factor");
-                typing::register_member(guard, &SelfShadow::auto_uncover, "auto_uncover");
+                typing::register_member(guard, &SelfShadow::auto_disable, "auto_disable");
             }
         };
     }
