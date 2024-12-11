@@ -445,13 +445,15 @@ WO_API wo_api jeecs_shader_bind_struct_as_uniform_buffer(wo_vm vm, wo_value args
 
 WO_API wo_api jeecs_shader_append_struct_member(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     shader_struct_define* block = (shader_struct_define*)wo_pointer(args + 0);
 
     shader_struct_define::struct_variable variable_member_define;
     variable_member_define.type = (jegl_shader_value::type)wo_int(args + 1);
     variable_member_define.name = wo_string(args + 2);
 
-    wo_value elem = wo_push_empty(vm);
+    wo_value elem = s + 0;
     if (wo_option_get(elem, args + 3))
     {
         assert(variable_member_define.type == jegl_shader_value::type::STRUCT);
@@ -475,6 +477,8 @@ WO_API wo_api jeecs_shader_append_struct_member(wo_vm vm, wo_value args)
 
 WO_API wo_api jeecs_shader_create_shader_value_out(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     wo_value voutstruct = args + 1;
 
     if (wo_valuetype(voutstruct) != WO_STRUCT_TYPE)
@@ -483,7 +487,7 @@ WO_API wo_api jeecs_shader_create_shader_value_out(wo_vm vm, wo_value args)
     uint16_t structsz = (uint16_t)wo_lengthof(voutstruct);
 
     // is vertex out, check it
-    wo_value elem = wo_push_empty(vm);
+    wo_value elem = s + 0;
 
     // If vertext
     if (wo_bool(args + 0))
@@ -511,11 +515,15 @@ WO_API wo_api jeecs_shader_create_shader_value_out(wo_vm vm, wo_value args)
 }
 WO_API wo_api jeecs_shader_create_fragment_in(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 2, &args);
+
     shader_value_outs* values = (shader_value_outs*)wo_pointer(args + 0);
 
     uint16_t fragmentin_size = (uint16_t)values->out_values.size();
-    wo_value out_struct = wo_push_struct(vm, fragmentin_size);
-    wo_value elem = wo_push_empty(vm);
+    wo_value out_struct = s + 0;
+    wo_value elem = s + 1;
+
+    wo_set_struct(out_struct, vm, fragmentin_size);
 
     for (uint16_t i = 0; i < fragmentin_size; i++)
     {
@@ -530,8 +538,10 @@ WO_API wo_api jeecs_shader_create_fragment_in(wo_vm vm, wo_value args)
 
 WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args)
 {
-    wo_value elem = wo_push_empty(vm);
-    wo_value val = wo_push_empty(vm);
+    wo_value s = wo_reserve_stack(vm, 2, &args);
+
+    wo_value elem = s + 0;
+    wo_value val = s + 1;
 
     shader_wrapper* wrapper = new shader_wrapper(
         (shader_value_outs*)wo_pointer(args + 1),

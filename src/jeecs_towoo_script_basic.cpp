@@ -69,7 +69,7 @@ namespace jeecs
 
             // 执行代码使用的虚拟机
             wo_vm m_job_vm;
-            wo_value m_context;
+            wo_pin_value m_context;
             wo_integer_t m_create_function;
             wo_integer_t m_close_function;
             const jeecs::typing::type_info* m_type;
@@ -99,8 +99,12 @@ namespace jeecs
                     m_dependences = base_info->m_works;
                     m_late_dependences = base_info->m_lateworks;
 
-                    wo_push_pointer(m_job_vm, w.handle());
-                    wo_value v = wo_invoke_rsfunc(m_job_vm, m_create_function, 1);
+                    wo_value m_job_vm_s = wo_reserve_stack(m_job_vm, 1, nullptr);
+                    wo_set_pointer(m_job_vm_s + 0, w.handle());
+
+                    wo_value v = wo_invoke_rsfunc(m_job_vm, m_create_function, 1, nullptr, &m_job_vm_s);
+                    wo_pop_stack(m_job_vm, 1);
+
                     if (v == nullptr)
                     {
                         jeecs::debug::logerr("Failed to invoke 'create' function for system: '%s'.",
@@ -109,7 +113,11 @@ namespace jeecs
                         m_job_vm = nullptr;
                     }
                     else
-                        m_context = wo_push_val(m_job_vm, v);
+                    {
+                        m_context = wo_create_pin_value();
+                        wo_pin_value_set_dup(m_context, v);
+                    }
+                     
                 }
                 else
                 {
@@ -122,8 +130,10 @@ namespace jeecs
             {
                 if (m_job_vm != nullptr)
                 {
-                    wo_push_val(m_job_vm, m_context);
-                    wo_value v = wo_invoke_rsfunc(m_job_vm, m_close_function, 1);
+                    wo_value s = wo_reserve_stack(m_job_vm, 1, nullptr);
+
+                    wo_pin_value_get(s, m_context);
+                    wo_value v = wo_invoke_rsfunc(m_job_vm, m_close_function, 1, nullptr, &s);
                     if (v == nullptr)
                     {
                         jeecs::debug::logerr("Failed to invoke 'close' function for system: '%s'.",
@@ -131,6 +141,7 @@ namespace jeecs
                     }
 
                     wo_release_vm(m_job_vm);
+                    wo_close_pin_value(m_context);
                 }
             }
 
@@ -178,15 +189,16 @@ namespace jeecs
                 if (m_job_vm == nullptr)
                     return;
 
-                wo_value tmp_elem = wo_push_empty(m_job_vm);
-
                 for (auto& work : works)
                 {
                     if (work.m_is_single_work)
                     {
-                        wo_push_val(m_job_vm, m_context);
+                        wo_value s = wo_reserve_stack(m_job_vm, 1, nullptr);
+                        wo_pin_value_get(s, m_context);
+
                         // Invoke!
-                        wo_invoke_value(m_job_vm, &work.m_function, 1);
+                        wo_invoke_value(m_job_vm, &work.m_function, 1, nullptr, &s);
+                        wo_pop_stack(m_job_vm, 1);
                     }
                     else
                     {
@@ -204,13 +216,20 @@ namespace jeecs
                                     {
                                         // game_entity{ cur_chunk, eid, version }
                                         // Valid! prepare to invoke!
-                                        for (size_t argidx = work.m_used_components.size(); argidx > 0; --argidx)
-                                        {
-                                            void* component = selector::get_component_from_archchunk_ptr(archinfo, cur_chunk, eid, argidx - 1);
-                                            const auto* typeinfo = work.m_used_components[argidx - 1];
+                                        const size_t used_component_count = work.m_used_components.size();
+                                        wo_value s = wo_reserve_stack(m_job_vm, used_component_count + 2 + 1, nullptr);
 
-                                            wo_value component_st = wo_push_empty(m_job_vm);
-                                            switch (work.m_dependence.m_requirements[argidx - 1].m_require)
+                                        wo_value tmp_elem = s + used_component_count + 2;
+
+                                        for (auto cmpidx = work.m_used_components.begin(); cmpidx != work.m_used_components.end(); ++cmpidx)
+                                        {
+                                            const size_t cmpid = cmpidx - work.m_used_components.begin();
+
+                                            void* component = selector::get_component_from_archchunk_ptr(archinfo, cur_chunk, eid, cmpid);
+                                            const auto* typeinfo = *cmpidx;
+
+                                            wo_value component_st = s + 2 + cmpid;
+                                            switch (work.m_dependence.m_requirements[cmpid].m_require)
                                             {
                                             case jeecs::requirement::type::CONTAIN:
                                             {
@@ -240,14 +259,15 @@ namespace jeecs
                                         }
 
                                         // Push entity
-                                        wo_push_gchandle(m_job_vm, new jeecs::game_entity{ cur_chunk , eid, version }, nullptr,
+                                        wo_set_gchandle(s + 1, m_job_vm, new jeecs::game_entity{ cur_chunk , eid, version }, nullptr,
                                             [](void* eptr) {delete std::launder(reinterpret_cast<jeecs::game_entity*>(eptr)); });
 
                                         // Push context
-                                        wo_push_val(m_job_vm, m_context);
+                                        wo_pin_value_get(s + 0, m_context);
 
                                         // Invoke!
-                                        wo_invoke_value(m_job_vm, &work.m_function, work.m_used_components.size() + 2);
+                                        wo_invoke_value(m_job_vm, &work.m_function, used_component_count + 2, nullptr, &s);
+                                        wo_pop_stack(m_job_vm, used_component_count + 2 + 1);
                                     }
                                 }
 
@@ -257,8 +277,6 @@ namespace jeecs
                         }
                     }
                 }
-
-                wo_pop_stack(m_job_vm);
 
                 ScriptRuntimeSystem::system_instance = nullptr;
             }
@@ -356,13 +374,15 @@ namespace jeecs
 }
 WO_API wo_api wojeapi_towoo_add_component(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     auto e = std::launder(reinterpret_cast<jeecs::game_entity*>(wo_pointer(args + 0)));
     auto ty = std::launder(reinterpret_cast<const jeecs::typing::type_info*>(wo_pointer(args + 1)));
 
     void* comp = je_ecs_world_entity_add_component(e, ty->m_id);
     if (comp != nullptr)
     {
-        wo_value val = wo_push_empty(vm);
+        wo_value val = s + 0;
         jeecs::towoo::ToWooBaseSystem::create_component_struct(val, vm, comp, ty);
         return wo_ret_option_val(vm, val);
     }
@@ -370,13 +390,15 @@ WO_API wo_api wojeapi_towoo_add_component(wo_vm vm, wo_value args)
 }
 WO_API wo_api wojeapi_towoo_get_component(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     auto e = std::launder(reinterpret_cast<jeecs::game_entity*>(wo_pointer(args + 0)));
     auto ty = std::launder(reinterpret_cast<const jeecs::typing::type_info*>(wo_pointer(args + 1)));
 
     void* comp = je_ecs_world_entity_get_component(e, ty->m_id);
     if (comp != nullptr)
     {
-        wo_value val = wo_push_empty(vm);
+        wo_value val = s + 0;
         jeecs::towoo::ToWooBaseSystem::create_component_struct(val, vm, comp, ty);
         return wo_ret_option_val(vm, val);
     }
@@ -392,9 +414,11 @@ WO_API wo_api wojeapi_towoo_remove_component(wo_vm vm, wo_value args)
 }
 WO_API wo_api wojeapi_towoo_member_get(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     auto ty = std::launder(reinterpret_cast<const jeecs::typing::type_info*>(wo_pointer(args + 0)));
 
-    wo_value val = wo_push_empty(vm);
+    wo_value val = s + 0;
 
     assert(ty->get_script_parser() != nullptr);
     ty->get_script_parser()->m_script_parse_c2w(wo_pointer(args + 1), vm, val);
@@ -670,14 +694,17 @@ const jeecs::typing::type_info* je_towoo_register_system(
                             = std::move(systinfo);
                     } while (0);
 
+                    wo_value s = wo_reserve_stack(vm, 1, nullptr);
+                    wo_set_pointer(s + 0, (void*)towoo_system_tinfo);
 
-                    wo_push_pointer(vm, (void*)towoo_system_tinfo);
-                    if (nullptr == wo_invoke_rsfunc(vm, initfunc, 1))
+                    if (nullptr == wo_invoke_rsfunc(vm, initfunc, 1, nullptr, &s))
                         // No need for locking
                         jeecs::debug::logerr("Failed to register: '%s', '_init_towoo_system' failed: '%s'.",
                             system_name, wo_get_runtime_error(vm));
                     else
                         sysinfo_ptr->m_is_good = true;
+
+                    wo_pop_stack(vm, 1);
 
                     return towoo_system_tinfo;
                 }
@@ -710,6 +737,8 @@ enum _jetowoo_job_type
 };
 WO_API wo_api wojeapi_towoo_register_system_job(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 2, &args);
+
     // wojeapi_towoo_register_system_job(tinfo: je::typeinfo, function, requirements: array<(type, gid, typeinfo)>, arg_comp_count: int)
     std::lock_guard g1(jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems_mx);
 
@@ -732,8 +761,8 @@ WO_API wo_api wojeapi_towoo_register_system_job(wo_vm vm, wo_value args)
     wo_value requirements = args + 3;
     wo_integer_t component_arg_count = wo_int(args + 4);
     bool is_single_work = wo_bool(args + 5);
-    wo_value requirement_info = wo_push_empty(vm);
-    wo_value elem = wo_push_empty(vm);
+    wo_value requirement_info = s + 0;
+    wo_value elem = s + 1;
 
     stepwork.m_is_single_work = is_single_work;
 
@@ -782,6 +811,8 @@ WO_API wo_api wojeapi_towoo_register_system_job(wo_vm vm, wo_value args)
 }
 WO_API wo_api wojeapi_towoo_update_component_data(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 3, &args);
+
     // wojeapi_towoo_register_component(name, [(name, typeinfo, option<typename>)])
     std::string component_name = wo_string(args + 0);
 
@@ -811,9 +842,9 @@ WO_API wo_api wojeapi_towoo_update_component_data(wo_vm vm, wo_value args)
         size_t m_offset;
     };
     std::vector<_member_info> member_defs;
-    wo_value member_def = wo_push_empty(vm);
-    wo_value member_info = wo_push_empty(vm);
-    wo_value wooval_init = wo_push_empty(vm);
+    wo_value member_def = s + 0;
+    wo_value member_info = s + 1;
+    wo_value wooval_init = s + 2;
     for (wo_integer_t i = 0; i < member_count; ++i)
     {
         wo_arr_get(member_def, members, i);
@@ -1446,30 +1477,6 @@ void wo_set_quat(wo_value target, wo_vm vm, const jeecs::math::quat& v)
     wo_struct_set(target, 3, &tmp);
 }
 
-wo_value wo_push_vec2(wo_vm vm, const jeecs::math::vec2& v)
-{
-    wo_value result = wo_push_empty(vm);
-    wo_set_vec2(result, vm, v);
-    return result;
-}
-wo_value wo_push_vec3(wo_vm vm, const jeecs::math::vec3& v)
-{
-    wo_value result = wo_push_empty(vm);
-    wo_set_vec3(result, vm, v);
-    return result;
-}
-wo_value wo_push_vec4(wo_vm vm, const jeecs::math::vec4& v)
-{
-    wo_value result = wo_push_empty(vm);
-    wo_set_vec4(result, vm, v);
-    return result;
-}
-wo_value wo_push_quat(wo_vm vm, const jeecs::math::quat& v)
-{
-    wo_value result = wo_push_empty(vm);
-    wo_set_quat(result, vm, v);
-    return result;
-}
 template<typename T>
 T& wo_component(wo_value val)
 {
@@ -1511,6 +1518,8 @@ WO_API wo_api wojeapi_towoo_ray_from_camera(wo_vm vm, wo_value args)
 }
 WO_API wo_api wojeapi_towoo_ray_intersect_entity(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     auto* ray = (jeecs::math::ray*)wo_pointer(args + 0);
     auto result = ray->intersect_entity(
         wo_component<jeecs::Transform::Translation>(args + 1),
@@ -1518,19 +1527,27 @@ WO_API wo_api wojeapi_towoo_ray_intersect_entity(wo_vm vm, wo_value args)
         wo_float(args + 3));
     if (result.intersected)
     {
-        return wo_ret_option_val(vm, wo_push_vec3(vm, result.place));
+        wo_set_vec3(s + 0, vm, result.place);
+        return wo_ret_option_val(vm, s + 0);
     }
     return wo_ret_option_none(vm);
 }
 WO_API wo_api wojeapi_towoo_ray_origin(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     auto* ray = (jeecs::math::ray*)wo_pointer(args + 0);
-    return wo_ret_val(vm, wo_push_vec3(vm, ray->orgin));
+
+    wo_set_vec3(s + 0, vm, ray->orgin);
+    return wo_ret_val(vm, s + 0);
 }
 WO_API wo_api wojeapi_towoo_ray_direction(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
     auto* ray = (jeecs::math::ray*)wo_pointer(args + 0);
-    return wo_ret_val(vm, wo_push_vec3(vm, ray->direction));
+
+    wo_set_vec3(s + 0, vm, ray->direction);
+    return wo_ret_val(vm, s + 0);
 }
 WO_API wo_api wojeapi_towoo_math_sqrt(wo_vm vm, wo_value args)
 {
@@ -1566,22 +1583,29 @@ WO_API wo_api wojeapi_towoo_math_atan2(wo_vm vm, wo_value args)
 }
 WO_API wo_api wojeapi_towoo_math_quat_slerp(wo_vm vm, wo_value args)
 {
-    wo_value q = wo_push_quat(vm,
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+    wo_set_quat(
+        s + 0,
+        vm,
         jeecs::math::quat::slerp(
             wo_quat(args + 0),
             wo_quat(args + 1),
             wo_float(args + 2))
     );
-    return wo_ret_val(vm, q);
+    return wo_ret_val(vm, s + 0);
 }
 
 WO_API wo_api wojeapi_towoo_physics2d_collisionresult_all(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 3, &args);
     auto& collisionResult = wo_component<jeecs::Physics2D::CollisionResult>(args + 0);
 
-    wo_value c = wo_push_map(vm, collisionResult.results.size());
-    auto key = wo_push_empty(vm);
-    auto val = wo_push_empty(vm);
+    wo_value c = s + 0;
+    auto key = s + 1;
+    auto val = s + 2;
+
+    wo_set_map(c, vm, collisionResult.results.size());
+
     for (auto& [rigidbody, result] : collisionResult.results)
     {
         jeecs::towoo::ToWooBaseSystem::create_component_struct(
@@ -1601,15 +1625,23 @@ WO_API wo_api wojeapi_towoo_physics2d_collisionresult_all(wo_vm vm, wo_value arg
 
 WO_API wo_api wojeapi_towoo_physics2d_collisionresult_check(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 2, &args);
+
     auto& collisionResult = wo_component<jeecs::Physics2D::CollisionResult>(args + 0);
     auto& rigidbody = wo_component<jeecs::Physics2D::Rigidbody>(args + 1);
 
     auto* result = collisionResult.check(&rigidbody);
     if (result != nullptr)
     {
-        wo_value ret = wo_push_struct(vm, 2);
-        wo_struct_set(ret, 0, wo_push_vec2(vm, result->position));
-        wo_struct_set(ret, 1, wo_push_vec2(vm, result->normalize));
+        wo_value ret = s + 0; 
+        
+        wo_set_struct(ret, vm, 2);
+
+        wo_set_vec2(s + 1, vm, result->position);
+        wo_struct_set(ret, 0, s + 1);
+
+        wo_set_vec2(s + 1, vm, result->normalize);
+        wo_struct_set(ret, 1, s + 1);
 
         return wo_ret_option_val(vm, ret);
     }
@@ -1648,6 +1680,8 @@ WO_API wo_api wojeapi_towoo_renderer_textures_get_texture(wo_vm vm, wo_value arg
 
 WO_API wo_api wojeapi_towoo_renderer_shaders_set_uniform(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     auto& shaders = wo_component<jeecs::Renderer::Shaders>(args + 0);
     const char* name = wo_string(args + 1);
     wo_value val = args + 2;
@@ -1661,7 +1695,7 @@ WO_API wo_api wojeapi_towoo_renderer_shaders_set_uniform(wo_vm vm, wo_value args
         shaders.set_uniform(name, wo_float(val)); break;
     case WO_STRUCT_TYPE:
     {
-        wo_value v = wo_push_empty(vm);
+        wo_value v = s + 0;
         switch (wo_lengthof(val))
         {
         case 2:
@@ -1692,9 +1726,10 @@ WO_API wo_api wojeapi_towoo_renderer_shaders_set_uniform(wo_vm vm, wo_value args
 
 WO_API wo_api wojeapi_towoo_renderer_shaders_set_shaders(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
     auto& shaders = wo_component<jeecs::Renderer::Shaders>(args + 0);
 
-    wo_value c = wo_push_empty(vm);
+    wo_value c = s + 0;
 
     shaders.shaders.clear();
     auto setting_shaders_len = wo_lengthof(args + 1);
@@ -1712,11 +1747,14 @@ WO_API wo_api wojeapi_towoo_renderer_shaders_set_shaders(wo_vm vm, wo_value args
 
 WO_API wo_api wojeapi_towoo_renderer_shaders_get_shaders(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 2, &args);
     auto& shaders = wo_component<jeecs::Renderer::Shaders>(args + 0);
 
-    wo_value c = wo_push_arr(vm, 0);
+    wo_value c = s + 0; 
+    wo_value elem = s + 1;
 
-    wo_value elem = wo_push_empty(vm);
+    wo_set_arr(c, vm, 0);
+
     for (auto& shad : shaders.shaders)
     {
         wo_set_gchandle(elem, vm,
@@ -1734,31 +1772,42 @@ WO_API wo_api wojeapi_towoo_renderer_shaders_get_shaders(wo_vm vm, wo_value args
 
 WO_API wo_api wojeapi_towoo_transform_translation_global_pos(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     auto& trans = wo_component<jeecs::Transform::Translation>(args + 0);
-    return wo_ret_val(vm, wo_push_vec3(vm, trans.world_position));
+
+    wo_set_vec3(s + 0, vm, trans.world_position);
+    return wo_ret_val(vm, s + 0);
 }
 WO_API wo_api wojeapi_towoo_transform_translation_global_rot(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     auto& trans = wo_component<jeecs::Transform::Translation>(args + 0);
-    return wo_ret_val(vm, wo_push_quat(vm, trans.world_rotation));
+
+    wo_set_quat(s + 0, vm, trans.world_rotation);
+    return wo_ret_val(vm, s + 0);
 }
 
 WO_API wo_api wojeapi_towoo_transform_translation_parent_pos(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     auto& trans = wo_component<jeecs::Transform::Translation>(args + 0);
 
-    wo_value ret = wo_push_vec3(vm, trans.get_parent_position(
+    wo_set_vec3(s + 0, vm, trans.get_parent_position(
         wo_option_component<jeecs::Transform::LocalPosition>(args + 1),
         wo_option_component<jeecs::Transform::LocalRotation>(args + 2)));
-    return wo_ret_val(vm, ret);
+    return wo_ret_val(vm, s + 0);
 }
 WO_API wo_api wojeapi_towoo_transform_translation_parent_rot(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
     auto& trans = wo_component<jeecs::Transform::Translation>(args + 0);
 
-    wo_value ret = wo_push_quat(vm, trans.get_parent_rotation(
+    wo_set_quat(s + 0, vm, trans.get_parent_rotation(
         wo_option_component<jeecs::Transform::LocalRotation>(args + 1)));
-    return wo_ret_val(vm, ret);
+    return wo_ret_val(vm, s + 0);
 }
 
 WO_API wo_api wojeapi_towoo_transform_translation_set_global_pos(wo_vm vm, wo_value args)
@@ -1818,6 +1867,7 @@ WO_API wo_api wojeapi_towoo_audio_source_get_source(wo_vm vm, wo_value args)
 
 WO_API wo_api wojeapi_towoo_userinterface_origin_layout(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 2, &args);
     auto& origin = wo_component<jeecs::UserInterface::Origin>(args + 0);
 
     auto r = wo_vec2(args + 1);
@@ -1828,12 +1878,18 @@ WO_API wo_api wojeapi_towoo_userinterface_origin_layout(wo_vm vm, wo_value args)
 
     origin.get_layout(r.x, r.y, &absoffset, &abssize, &center_offset);
 
-    auto result = wo_push_struct(vm, 3);
-    wo_struct_set(result, 0, wo_push_vec2(vm, absoffset));
-    wo_struct_set(result, 1, wo_push_vec2(vm, abssize));
-    wo_struct_set(result, 2, wo_push_vec2(vm, center_offset));
+    wo_set_struct(s + 0, vm, 3);
 
-    return wo_ret_val(vm, result);
+    wo_set_vec2(s + 1, vm, absoffset);
+    wo_struct_set(s + 0, 0, s + 1);
+
+    wo_set_vec2(s + 1, vm, abssize);
+    wo_struct_set(s + 0, 1, s + 1);
+
+    wo_set_vec2(s + 1, vm, center_offset);
+    wo_struct_set(s + 0, 2, s + 1);
+
+    return wo_ret_val(vm, s + 0);
 }
 
 WO_API wo_api wojeapi_towoo_userinterface_origin_mouse_on(wo_vm vm, wo_value args)

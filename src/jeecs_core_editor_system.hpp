@@ -1393,13 +1393,18 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
 }
 WO_API wo_api wojeapi_get_bad_shader_list_of_entity(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 2, &args);
+
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
     jeecs::Editor::BadShadersUniform* bad_uniform = entity->get_component<jeecs::Editor::BadShadersUniform>();
 
     assert(bad_uniform != nullptr);
 
-    wo_value result = wo_push_arr(vm, 0);
-    wo_value elem = wo_push_empty(vm);
+    wo_value result = s + 0;
+    wo_value elem = s + 1;
+
+    wo_set_arr(result, vm, 0);
+
     for (auto& ok_or_bad_shader : bad_uniform->stored_uniforms)
     {
         if (ok_or_bad_shader.is_ok() == false)

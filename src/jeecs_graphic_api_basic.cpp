@@ -1330,7 +1330,7 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src, bool i
         wo_close_vm(vmm);
         return nullptr;
     }
-    if (wo_value retval = wo_invoke_rsfunc(vmm, generate_shader_func, 0))
+    if (wo_value retval = wo_invoke_rsfunc(vmm, generate_shader_func, 0, nullptr, nullptr))
     {
         void* shader_graph = wo_pointer(retval);
 

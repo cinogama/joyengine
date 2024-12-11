@@ -44,14 +44,14 @@ WO_API wo_api wojeapi_startup_coroutine(wo_vm vm, wo_value args)
     auto argument_count = wo_lengthof(arguments);
 
     wo_vm co_vmm = wo_borrow_vm(vm);
-    wo_value cofunc = wo_push_val(co_vmm, args + 0);
+    wo_value co_vmm_s = wo_reserve_stack(co_vmm,  (size_t)argument_count, nullptr);
 
-    for (auto i = argument_count; i > 0; --i)
+    for (size_t i = 0; i < argument_count; --i)
     {
-        wo_struct_get(wo_push_empty(co_vmm), arguments, (uint16_t)(i - 1));
+        wo_struct_get(co_vmm_s + i, arguments, (uint16_t)i);
     }
 
-    wo_dispatch_value(co_vmm, cofunc, argument_count);
+    wo_dispatch_value(co_vmm, args + 0, argument_count, nullptr, &co_vmm_s);
 
     jeecs::ScriptRuntimeSystem::system_instance->dispatch_coroutine_vm(co_vmm);
 

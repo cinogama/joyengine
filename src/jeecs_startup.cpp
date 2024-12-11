@@ -60,7 +60,7 @@ void _jewo_clear_singletons();
 
 wo_fail_handler _je_global_old_panic_handler = nullptr;
 wo_vm _je_global_panic_hooker = nullptr;
-wo_value _je_global_panic_hook_function;
+wo_pin_value _je_global_panic_hook_function;
 
 jegl_graphic_api_entry _jegl_host_graphic_api = nullptr;
 
@@ -107,14 +107,18 @@ void _jedbg_hook_woolang_panic(
         rterrcode, reason, functionname, src_file, lineno, 
         trace == nullptr ? "<no-found>" : trace);
 
-    wo_push_string(_je_global_panic_hooker, trace == nullptr ? "<no-found>" : trace);
-    wo_push_string(_je_global_panic_hooker, reason);
-    wo_push_int(_je_global_panic_hooker, (wo_integer_t)rterrcode);
-    wo_push_string(_je_global_panic_hooker, functionname);
-    wo_push_int(_je_global_panic_hooker, (wo_integer_t)lineno);
-    wo_push_string(_je_global_panic_hooker, src_file);
+    wo_value _je_global_panic_hooker_s = wo_reserve_stack(_je_global_panic_hooker, 7, nullptr);
 
-    if (wo_invoke_value(_je_global_panic_hooker, _je_global_panic_hook_function, 6) != nullptr)
+    wo_set_string(_je_global_panic_hooker_s + 0, _je_global_panic_hooker, src_file);
+    wo_set_int(_je_global_panic_hooker_s + 1, (wo_integer_t)lineno);
+    wo_set_string(_je_global_panic_hooker_s + 2, _je_global_panic_hooker, functionname);
+    wo_set_int(_je_global_panic_hooker_s + 3, (wo_integer_t)rterrcode);
+    wo_set_string(_je_global_panic_hooker_s + 4, _je_global_panic_hooker, reason);
+    wo_set_string(_je_global_panic_hooker_s + 5, _je_global_panic_hooker, trace == nullptr ? "<no-found>" : trace);
+
+    wo_pin_value_get(_je_global_panic_hooker_s + 6, _je_global_panic_hook_function);
+
+    if (wo_invoke_value(_je_global_panic_hooker, _je_global_panic_hooker_s + 6, 6, nullptr, &_je_global_panic_hooker_s) != nullptr)
     {
         // Abort specify vm;
         wo_abort_vm(vm);
@@ -125,6 +129,8 @@ void _jedbg_hook_woolang_panic(
         assert(_je_global_old_panic_handler != nullptr);
         _je_global_old_panic_handler(vm, src_file, lineno, functionname, rterrcode, reason);
     }
+
+    wo_pop_stack(_je_global_panic_hooker, 7);
 }
 
 WO_API wo_api wojeapi_editor_register_panic_hook(wo_vm vm, wo_value args)
@@ -134,7 +140,9 @@ WO_API wo_api wojeapi_editor_register_panic_hook(wo_vm vm, wo_value args)
         wo_release_vm(_je_global_panic_hooker);
 
     _je_global_panic_hooker = wo_borrow_vm(vm);
-    _je_global_panic_hook_function = wo_push_val(_je_global_panic_hooker, args + 0);
+    _je_global_panic_hook_function = wo_create_pin_value();
+
+    wo_pin_value_set(_je_global_panic_hook_function, args + 0);
 
     if (_je_global_old_panic_handler == nullptr)
         _je_global_old_panic_handler = wo_register_fail_handler(_jedbg_hook_woolang_panic);
@@ -179,6 +187,7 @@ void je_init(int argc, char** argv)
 
     jegl_shader_generator_init();
 
+    wo_enable_jit(false);
     wo_init(argc, argv);
 
     for (int i = 1; i < argc - 1; ++i)
@@ -391,7 +400,10 @@ void je_finish()
     if (_je_global_panic_hooker != nullptr)
     {
         wo_release_vm(_je_global_panic_hooker);
+        wo_close_pin_value(_je_global_panic_hook_function);
+
         _je_global_panic_hooker = nullptr;
+        _je_global_panic_hook_function = nullptr;
     }
     if (_je_global_old_panic_handler != nullptr)
     {

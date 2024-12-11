@@ -126,7 +126,7 @@ namespace jeecs
             assert(_coroutine_list.empty());
             for (auto co_vm : current_co_list)
             {
-                wo_value result = wo_dispatch(co_vm);
+                wo_value result = wo_dispatch(co_vm, nullptr, nullptr);
                 if (result == nullptr)
                 {
                     jeecs::debug::logerr("Coroutine %p failed: '%s':\n %s",

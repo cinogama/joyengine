@@ -6357,29 +6357,24 @@ namespace jeecs
             }
             void JEParseFromScriptType(wo_vm vm, wo_value v)
             {
-                wo_value elem = wo_push_empty(vm);
+                _wo_value elem;
 
-                wo_struct_get(elem, v, 0);
-                x = wo_float(elem);
+                wo_struct_get(&elem, v, 0);
+                x = wo_float(&elem);
 
-                wo_struct_get(elem, v, 1);
-                y = wo_float(elem);
-
-                wo_pop_stack(vm);
+                wo_struct_get(&elem, v, 1);
+                y = wo_float(&elem);
             }
             void JEParseToScriptType(wo_vm vm, wo_value v) const
             {
                 wo_set_struct(v, vm, 2);
-                wo_value elem = wo_push_empty(vm);
+                _wo_value elem;
 
-                wo_set_float(elem, x);
-                wo_struct_set(v, 0, elem);
+                wo_set_float(&elem, x);
+                wo_struct_set(v, 0, &elem);
 
-                wo_set_float(elem, y);
-                wo_struct_set(v, 1, elem);
-
-                wo_pop_stack(vm);
-
+                wo_set_float(&elem, y);
+                wo_struct_set(v, 1, &elem);
             }
         };
         inline static constexpr vec2 operator * (float _f, const vec2& _v2) noexcept
@@ -6514,28 +6509,24 @@ namespace jeecs
 
             void JEParseFromScriptType(wo_vm vm, wo_value v)
             {
-                wo_value elem = wo_push_empty(vm);
+                _wo_value elem;
 
-                wo_struct_get(elem, v, 0);
-                x = (int)wo_int(elem);
+                wo_struct_get(&elem, v, 0);
+                x = (int)wo_int(&elem);
 
-                wo_struct_get(elem, v, 1);
-                y = (int)wo_int(elem);
-
-                wo_pop_stack(vm);
+                wo_struct_get(&elem, v, 1);
+                y = (int)wo_int(&elem);
             }
             void JEParseToScriptType(wo_vm vm, wo_value v) const
             {
                 wo_set_struct(v, vm, 2);
-                wo_value elem = wo_push_empty(vm);
+                _wo_value elem;
 
-                wo_set_int(elem, (wo_integer_t)x);
-                wo_struct_set(v, 0, elem);
+                wo_set_int(&elem, (wo_integer_t)x);
+                wo_struct_set(v, 0, &elem);
 
-                wo_set_int(elem, (wo_integer_t)y);
-                wo_struct_set(v, 1, elem);
-
-                wo_pop_stack(vm);
+                wo_set_int(&elem, (wo_integer_t)y);
+                wo_struct_set(v, 1, &elem);
             }
         };
 
@@ -6690,34 +6681,30 @@ namespace jeecs
             }
             void JEParseFromScriptType(wo_vm vm, wo_value v)
             {
-                wo_value elem = wo_push_empty(vm);
+                _wo_value elem;
 
-                wo_struct_get(elem, v, 0);
-                x = wo_float(elem);
+                wo_struct_get(&elem, v, 0);
+                x = wo_float(&elem);
 
-                wo_struct_get(elem, v, 1);
-                y = wo_float(elem);
+                wo_struct_get(&elem, v, 1);
+                y = wo_float(&elem);
 
-                wo_struct_get(elem, v, 2);
-                z = wo_float(elem);
-
-                wo_pop_stack(vm);
+                wo_struct_get(&elem, v, 2);
+                z = wo_float(&elem);
             }
             void JEParseToScriptType(wo_vm vm, wo_value v) const
             {
                 wo_set_struct(v, vm, 3);
-                wo_value elem = wo_push_empty(vm);
+                _wo_value elem;
 
-                wo_set_float(elem, x);
-                wo_struct_set(v, 0, elem);
+                wo_set_float(&elem, x);
+                wo_struct_set(v, 0, &elem);
 
-                wo_set_float(elem, y);
-                wo_struct_set(v, 1, elem);
+                wo_set_float(&elem, y);
+                wo_struct_set(v, 1, &elem);
 
-                wo_set_float(elem, z);
-                wo_struct_set(v, 2, elem);
-
-                wo_pop_stack(vm);
+                wo_set_float(&elem, z);
+                wo_struct_set(v, 2, &elem);
             }
         };
         inline static constexpr vec3 operator * (float _f, const vec3& _v3) noexcept
@@ -6875,40 +6862,36 @@ namespace jeecs
             }
             void JEParseFromScriptType(wo_vm vm, wo_value v)
             {
-                wo_value elem = wo_push_empty(vm);
+                _wo_value elem;
 
-                wo_struct_get(elem, v, 0);
-                x = wo_float(elem);
+                wo_struct_get(&elem, v, 0);
+                x = wo_float(&elem);
 
-                wo_struct_get(elem, v, 1);
-                y = wo_float(elem);
+                wo_struct_get(&elem, v, 1);
+                y = wo_float(&elem);
 
-                wo_struct_get(elem, v, 2);
-                z = wo_float(elem);
+                wo_struct_get(&elem, v, 2);
+                z = wo_float(&elem);
 
-                wo_struct_get(elem, v, 3);
-                w = wo_float(elem);
-
-                wo_pop_stack(vm);
+                wo_struct_get(&elem, v, 3);
+                w = wo_float(&elem);
             }
             void JEParseToScriptType(wo_vm vm, wo_value v) const
             {
                 wo_set_struct(v, vm, 4);
-                wo_value elem = wo_push_empty(vm);
+                _wo_value elem;
 
-                wo_set_float(elem, x);
-                wo_struct_set(v, 0, elem);
+                wo_set_float(&elem, x);
+                wo_struct_set(v, 0, &elem);
 
-                wo_set_float(elem, y);
-                wo_struct_set(v, 1, elem);
+                wo_set_float(&elem, y);
+                wo_struct_set(v, 1, &elem);
 
-                wo_set_float(elem, z);
-                wo_struct_set(v, 2, elem);
+                wo_set_float(&elem, z);
+                wo_struct_set(v, 2, &elem);
 
-                wo_set_float(elem, w);
-                wo_struct_set(v, 3, elem);
-
-                wo_pop_stack(vm);
+                wo_set_float(&elem, w);
+                wo_struct_set(v, 3, &elem);
             }
         };
         inline static constexpr vec4 operator * (float _f, const vec4& _v4) noexcept
@@ -7184,40 +7167,36 @@ namespace jeecs
             }
             void JEParseFromScriptType(wo_vm vm, wo_value v)
             {
-                wo_value elem = wo_push_empty(vm);
+                _wo_value elem;
 
-                wo_struct_get(elem, v, 0);
-                x = wo_float(elem);
+                wo_struct_get(&elem, v, 0);
+                x = wo_float(&elem);
 
-                wo_struct_get(elem, v, 1);
-                y = wo_float(elem);
+                wo_struct_get(&elem, v, 1);
+                y = wo_float(&elem);
 
-                wo_struct_get(elem, v, 2);
-                z = wo_float(elem);
+                wo_struct_get(&elem, v, 2);
+                z = wo_float(&elem);
 
-                wo_struct_get(elem, v, 3);
-                w = wo_float(elem);
-
-                wo_pop_stack(vm);
+                wo_struct_get(&elem, v, 3);
+                w = wo_float(&elem);
             }
             void JEParseToScriptType(wo_vm vm, wo_value v) const
             {
                 wo_set_struct(v, vm, 4);
-                wo_value elem = wo_push_empty(vm);
+                _wo_value elem;
 
-                wo_set_float(elem, x);
-                wo_struct_set(v, 0, elem);
+                wo_set_float(&elem, x);
+                wo_struct_set(v, 0, &elem);
 
-                wo_set_float(elem, y);
-                wo_struct_set(v, 1, elem);
+                wo_set_float(&elem, y);
+                wo_struct_set(v, 1, &elem);
 
-                wo_set_float(elem, z);
-                wo_struct_set(v, 2, elem);
+                wo_set_float(&elem, z);
+                wo_struct_set(v, 2, &elem);
 
-                wo_set_float(elem, w);
-                wo_struct_set(v, 3, elem);
-
-                wo_pop_stack(vm);
+                wo_set_float(&elem, w);
+                wo_struct_set(v, 3, &elem);
             }
         };
 
@@ -9202,9 +9181,9 @@ namespace jeecs
                 }
                 void JEParseFromScriptType(wo_vm vm, wo_value v)
                 {
-                    wo_value val = wo_push_empty(vm);
-                    wo_value strengths = wo_push_empty(vm);
-                    wo_value positions = wo_push_empty(vm);
+                    wo_value val = wo_register(vm, WO_REG_T0);
+                    wo_value strengths = wo_register(vm, WO_REG_T1);
+                    wo_value positions = wo_register(vm, WO_REG_T2);
 
                     wo_struct_get(val, v, 0);
                     wo_struct_get(strengths, v, 1);
@@ -9236,15 +9215,11 @@ namespace jeecs
                             m_positions.push_back(pos);
                         }
                     }
-
-                    wo_pop_stack(vm);
-                    wo_pop_stack(vm);
-                    wo_pop_stack(vm);
                 }
                 void JEParseToScriptType(wo_vm vm, wo_value v) const
                 {
-                    wo_value val = wo_push_empty(vm);
-                    wo_value arr = wo_push_empty(vm);
+                    wo_value val = wo_register(vm, WO_REG_T0);
+                    wo_value arr = wo_register(vm, WO_REG_T1);
 
                     wo_set_struct(v, vm, 3);
 
@@ -9268,9 +9243,6 @@ namespace jeecs
                         wo_arr_set(arr, (wo_integer_t)i, val);
                     }
                     wo_struct_set(v, 2, arr);
-
-                    wo_pop_stack(vm);
-                    wo_pop_stack(vm);
                 }
             };
 
@@ -9361,7 +9333,7 @@ namespace jeecs
                 {
                     m_block_mesh = nullptr;
 
-                    wo_value pos = wo_push_empty(vm);
+                    wo_value pos = wo_register(vm, WO_REG_T0);
                     size_t point_count = (size_t)wo_lengthof(v);
 
                     m_block_points.clear();
@@ -9375,11 +9347,10 @@ namespace jeecs
 
                         m_block_points.push_back(position);
                     }
-                    wo_pop_stack(vm);
                 }
                 void JEParseToScriptType(wo_vm vm, wo_value v) const
                 {
-                    wo_value pos = wo_push_empty(vm);
+                    wo_value pos = wo_register(vm, WO_REG_T1);
 
                     wo_set_arr(v, vm, (wo_integer_t)m_block_points.size());
 
@@ -9388,7 +9359,6 @@ namespace jeecs
                         m_block_points.at(i).JEParseToScriptType(vm, pos);
                         wo_arr_set(v, (wo_integer_t)i, pos);
                     }
-                    wo_pop_stack(vm);
                 }
             };
 
@@ -9753,8 +9723,8 @@ namespace jeecs
                 {
                     m_animations.clear();
 
-                    wo_value animation = wo_push_empty(vm);
-                    wo_value tmp = wo_push_empty(vm);
+                    wo_value animation = wo_register(vm, WO_REG_T0);
+                    wo_value tmp = wo_register(vm, WO_REG_T1);
                     size_t animation_count = (size_t)wo_lengthof(v);
 
                     for (size_t i = 0; i < animation_count; ++i)
@@ -9773,14 +9743,11 @@ namespace jeecs
                         wo_struct_get(tmp, animation, 2);
                         animation_inst.set_loop(wo_bool(tmp));
                     }
-
-                    wo_pop_stack(vm);
-                    wo_pop_stack(vm);
                 }
                 void JEParseToScriptType(wo_vm vm, wo_value v) const
                 {
-                    wo_value animation = wo_push_empty(vm);
-                    wo_value tmp = wo_push_empty(vm);
+                    wo_value animation = wo_register(vm, WO_REG_T0);
+                    wo_value tmp = wo_register(vm, WO_REG_T1);
 
                     wo_set_arr(v, vm, (wo_integer_t)m_animations.size());
 
@@ -9800,9 +9767,6 @@ namespace jeecs
 
                         wo_arr_set(v, (wo_integer_t)i, animation);
                     }
-
-                    wo_pop_stack(vm);
-                    wo_pop_stack(vm);
                 }
             };
 
@@ -10271,14 +10235,12 @@ namespace jeecs
                         wo_set_option_none(value, vm);
                 },
                 [](basic::fileresource<void>* v, wo_vm vm, wo_value value) {
-                    wo_value result = wo_push_empty(vm);
+                    wo_value result = wo_register(vm, WO_REG_T0);
 
                     if (wo_option_get(result, value))
                         v->load(wo_string(result));
                     else
                         v->clear();
-
-                    wo_pop_stack(vm);
 
                 }, "fileresource_void", "public using fileresource_void = option<string>;");
 
@@ -10291,14 +10253,12 @@ namespace jeecs
                         wo_set_option_none(value, vm);
                 },
                 [](basic::fileresource<audio::buffer>* v, wo_vm vm, wo_value value) {
-                    wo_value result = wo_push_empty(vm);
+                    wo_value result = wo_register(vm, WO_REG_T0);
 
                     if (wo_option_get(result, value))
                         v->load(wo_string(result));
                     else
                         v->clear();
-
-                    wo_pop_stack(vm);
 
                 }, "fileresource_audio_buffer", "public using fileresource_audio_buffer = option<string>;");
 

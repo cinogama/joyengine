@@ -95,17 +95,19 @@ namespace jeecs
                             // array<group_config_info_t>
                             wo_value result = wo_run(vmm);
 
+                            wo_value vmm_s = wo_reserve_stack(vmm, 4, nullptr);
+
                             // group_config_info_t: struct{types, collider_mask}
-                            wo_value group_config_info = wo_push_empty(vmm);
+                            wo_value group_config_info = vmm_s + 0; 
 
                             // array<(const type_info*, Requirement)>
-                            wo_value filter_types = wo_push_empty(vmm);
+                            wo_value filter_types = vmm_s + 1;
 
                             // Requirement
-                            wo_value group_requirement = wo_push_empty(vmm);
+                            wo_value group_requirement = vmm_s + 2;
 
                             // int/const type_info*
-                            wo_value group_collide_with_mask = wo_push_empty(vmm);
+                            wo_value group_collide_with_mask = vmm_s + 3;
 
                             if (result == nullptr)
                                 jeecs::debug::logerr("Unable to resolve physics group config: '%s': %s.",

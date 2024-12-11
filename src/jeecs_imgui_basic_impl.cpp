@@ -986,7 +986,7 @@ thread_local _jegui_thread_local_context _je_gui_tls_ctx;
 
 
 wo_vm exit_callback_handler_vm = nullptr;
-wo_value exit_callback_function = nullptr;
+wo_pin_value exit_callback_function = nullptr;
 
 std::optional<std::string> specify_font_path = std::nullopt;
 size_t specify_font_size = 18;
@@ -1081,83 +1081,96 @@ WO_API wo_api je_gui_get_clip_board_text(wo_vm vm, wo_value args)
     return wo_ret_string(vm, t == nullptr ? "" : t);
 }
 
-wo_value push_float2_to_struct(wo_vm vm, float x, float y)
+wo_value set_float2_to_struct(wo_value v, wo_vm vm, float x, float y)
 {
-    wo_value ret = wo_push_struct(vm, 2);
-    wo_value elem = wo_push_empty(vm);
-    wo_set_float(elem, x);
-    wo_struct_set(ret, 0, elem);
-    wo_set_float(elem, y);
-    wo_struct_set(ret, 1, elem);
-    return ret;
+    wo_set_struct(v, vm, 2);
+    _wo_value elem;
+    wo_set_float(&elem, x);
+    wo_struct_set(v, 0, &elem);
+    wo_set_float(&elem, y);
+    wo_struct_set(v, 1, &elem);
+    return v;
 }
-wo_value push_float3_to_struct(wo_vm vm, float x, float y, float z)
+wo_value set_float3_to_struct(wo_value v, wo_vm vm, float x, float y, float z)
 {
-    wo_value ret = wo_push_struct(vm, 3);
-    wo_value elem = wo_push_empty(vm);
-    wo_set_float(elem, x);
-    wo_struct_set(ret, 0, elem);
-    wo_set_float(elem, y);
-    wo_struct_set(ret, 1, elem);
-    wo_set_float(elem, z);
-    wo_struct_set(ret, 2, elem);
-    return ret;
+    wo_set_struct(v, vm, 3);
+    _wo_value elem;
+    wo_set_float(&elem, x);
+    wo_struct_set(v, 0, &elem);
+    wo_set_float(&elem, y);
+    wo_struct_set(v, 1, &elem);
+    wo_set_float(&elem, z);
+    wo_struct_set(v, 2, &elem);
+    return v;
 }
-wo_value push_float4_to_struct(wo_vm vm, float x, float y, float z, float w)
+wo_value set_float4_to_struct(wo_value v, wo_vm vm, float x, float y, float z, float w)
 {
-    wo_value ret = wo_push_struct(vm, 4);
-    wo_value elem = wo_push_empty(vm);
-    wo_set_float(elem, x);
-    wo_struct_set(ret, 0, elem);
-    wo_set_float(elem, y);
-    wo_struct_set(ret, 1, elem);
-    wo_set_float(elem, z);
-    wo_struct_set(ret, 2, elem);
-    wo_set_float(elem, w);
-    wo_struct_set(ret, 3, elem);
-    return ret;
+    wo_set_struct(v, vm, 4);
+    _wo_value elem;
+    wo_set_float(&elem, x);
+    wo_struct_set(v, 0, &elem);
+    wo_set_float(&elem, y);
+    wo_struct_set(v, 1, &elem);
+    wo_set_float(&elem, z);
+    wo_struct_set(v, 2, &elem);
+    wo_set_float(&elem, w);
+    wo_struct_set(v, 3, &elem);
+    return v;
 }
 
 WO_API wo_api je_gui_get_window_pos(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     auto&& wpos = ImGui::GetWindowPos();
-    return wo_ret_val(vm, push_float2_to_struct(vm, wpos.x, wpos.y));
+
+    return wo_ret_val(vm, set_float2_to_struct(s + 0, vm, wpos.x, wpos.y));
 }
 
 WO_API wo_api je_gui_get_mouse_pos(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     auto&& mpos = ImGui::GetMousePos();
-    return wo_ret_val(vm, push_float2_to_struct(vm, mpos.x, mpos.y));
+    return wo_ret_val(vm, set_float2_to_struct(s + 0, vm, mpos.x, mpos.y));
 }
 
 WO_API wo_api je_gui_get_mouse_delta_pos(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     auto&& mdpos = ImGui::GetIO().MouseDelta;
-    return wo_ret_val(vm, push_float2_to_struct(vm, mdpos.x, mdpos.y));
+    return wo_ret_val(vm, set_float2_to_struct(s + 0, vm, mdpos.x, mdpos.y));
 }
 
 WO_API wo_api je_gui_get_cursor_pos(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     auto&& cpos = ImGui::GetCursorPos();
-    return wo_ret_val(vm, push_float2_to_struct(vm, cpos.x, cpos.y));
+    return wo_ret_val(vm, set_float2_to_struct(s + 0, vm, cpos.x, cpos.y));
 }
 WO_API wo_api je_gui_get_item_rect_size(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     auto&& isize = ImGui::GetItemRectSize();
-    return wo_ret_val(vm, push_float2_to_struct(vm, isize.x, isize.y));
+    return wo_ret_val(vm, set_float2_to_struct(s + 0, vm, isize.x, isize.y));
 }
 
 WO_API wo_api je_gui_get_item_rect(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 2, &args);
+
     auto&& isizemin = ImGui::GetItemRectMin();
     auto&& isizemax = ImGui::GetItemRectMax();
 
-    wo_value ret = wo_push_struct(vm, 2);
+    wo_set_struct(s + 0, vm, 2);
 
-    wo_struct_set(ret, 0, push_float2_to_struct(vm, isizemin.x, isizemin.y));
-    wo_struct_set(ret, 1, push_float2_to_struct(vm, isizemax.x, isizemax.y));
+    wo_struct_set(s + 0, 0, set_float2_to_struct(s + 1, vm, isizemin.x, isizemin.y));
+    wo_struct_set(s + 0, 1, set_float2_to_struct(s + 1, vm, isizemax.x, isizemax.y));
 
-    return wo_ret_val(vm, ret);
+    return wo_ret_val(vm, s + 0);
 }
 
 WO_API wo_api je_gui_push_id_str(wo_vm vm, wo_value args)
@@ -1216,11 +1229,16 @@ WO_API wo_api je_gui_begintabitem(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_begintabitem_open(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 2, &args);
+
     bool open = true;
     bool display = ImGui::BeginTabItem(wo_string(args + 0), &open, (ImGuiTabBarFlags)wo_int(args + 1));
 
-    wo_value ret = wo_push_struct(vm, 2);
-    wo_value elem = wo_push_empty(vm);
+    wo_value ret = s + 0;  
+    wo_value elem = s + 1;
+
+    wo_set_struct(ret, vm, 2);
+
     wo_set_bool(elem, display);
     wo_struct_set(ret, 0, elem);
     wo_set_bool(elem, open);
@@ -1553,11 +1571,13 @@ WO_API wo_api je_gui_treepop(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_listbox(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     int selected_item = -1;
     int max_height_item = -1;
 
     std::vector<const char*> items((size_t)wo_lengthof(args + 1));
-    wo_value elem = wo_push_empty(vm);
+    wo_value elem = s + 0;
     for (size_t i = 0; i < items.size(); i++)
     {
         wo_arr_get(elem, args + 1, i);
@@ -1572,11 +1592,13 @@ WO_API wo_api je_gui_listbox(wo_vm vm, wo_value args)
 }
 WO_API wo_api je_gui_listbox_select(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     int selected_item = (int)wo_int(args + 2);
     int max_height_item = -1;
 
     std::vector<const char*> items((size_t)wo_lengthof(args + 1));
-    wo_value elem = wo_push_empty(vm);
+    wo_value elem = s + 0;
     for (size_t i = 0; i < items.size(); i++)
     {
         wo_arr_get(elem, args + 1, i);
@@ -1591,11 +1613,13 @@ WO_API wo_api je_gui_listbox_select(wo_vm vm, wo_value args)
 }
 WO_API wo_api je_gui_listbox_select_height(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     int selected_item = (int)wo_int(args + 2);
     int max_height_item = (int)wo_int(args + 3);
 
     std::vector<const char*> items((size_t)wo_lengthof(args + 1));
-    wo_value elem = wo_push_empty(vm);
+    wo_value elem = s + 0;
     for (size_t i = 0; i < items.size(); i++)
     {
         wo_arr_get(elem, args + 1, i);
@@ -1611,12 +1635,14 @@ WO_API wo_api je_gui_listbox_select_height(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_listbox_withsize(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     //func ListBox(label:string, items:array<string>, ref select_item:int, width:real, height:real)=> int;
     int origin_selected_index = (int)wo_int(args + 2);
     int selected_index = -1;
     bool value_updated = false;
 
-    wo_value elem = wo_push_empty(vm);
+    wo_value elem = s + 0;
 
     if (ImGui::BeginListBox(wo_string(args + 0), ImVec2(wo_float(args + 3), wo_float(args + 4))))
     {
@@ -2002,8 +2028,10 @@ WO_API wo_api je_gui_imagebutton_size(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_content_region_avail(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     auto&& sz = ImGui::GetContentRegionAvail();
-    return wo_ret_val(vm, push_float2_to_struct(vm, sz.x, sz.y));
+    return wo_ret_val(vm, set_float2_to_struct(s + 0, vm, sz.x, sz.y));
 }
 
 WO_API wo_api je_gui_set_next_window_size_constraints(wo_vm vm, wo_value args)
@@ -2030,9 +2058,11 @@ WO_API wo_api je_gui_colorbutton(wo_vm vm, wo_value args)
 }
 WO_API wo_api je_gui_colorpicker4(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 2, &args);
+
     float rgba[4] = {};
 
-    wo_value elem = wo_push_empty(vm);
+    wo_value elem = s + 0;
     wo_struct_get(elem, args + 1, 0);
     rgba[0] = wo_float(elem);
     wo_struct_get(elem, args + 1, 1);
@@ -2044,15 +2074,9 @@ WO_API wo_api je_gui_colorpicker4(wo_vm vm, wo_value args)
 
     if (ImGui::ColorPicker4(wo_string(args + 0), rgba))
     {
-        wo_value result = wo_push_struct(vm, 4);
-        wo_set_float(elem, rgba[0]);
-        wo_struct_set(result, 0, elem);
-        wo_set_float(elem, rgba[1]);
-        wo_struct_set(result, 1, elem);
-        wo_set_float(elem, rgba[2]);
-        wo_struct_set(result, 2, elem);
-        wo_set_float(elem, rgba[3]);
-        wo_struct_set(result, 3, elem);
+        wo_value result = s + 1;
+        set_float4_to_struct(result, vm, rgba[0], rgba[1], rgba[2], rgba[3]);
+
         return wo_ret_option_val(vm, result);
     }
     return wo_ret_option_none(vm);
@@ -2112,6 +2136,8 @@ WO_API wo_api je_gui_input_int_box(wo_vm vm, wo_value args)
 }
 WO_API wo_api je_gui_input_int2_box(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 2, &args);
+
     wo_string_t label = wo_string(args + 0);
     int values[] = { (int)wo_int(args + 1), (int)wo_int(args + 2) };
     bool update = false;
@@ -2120,8 +2146,11 @@ WO_API wo_api je_gui_input_int2_box(wo_vm vm, wo_value args)
 
     if (update)
     {
-        wo_value result = wo_push_struct(vm, 2);
-        wo_value elem = wo_push_empty(vm);
+        wo_value result = s + 0;  
+        wo_value elem = s + 1; 
+
+        wo_set_struct(result, vm, 2);
+
         wo_set_int(elem, (int)values[0]);
         wo_struct_set(result, 0, elem);
         wo_set_int(elem, (int)values[1]);
@@ -2132,6 +2161,8 @@ WO_API wo_api je_gui_input_int2_box(wo_vm vm, wo_value args)
 }
 WO_API wo_api je_gui_input_int3_box(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 2, &args);
+
     wo_string_t label = wo_string(args + 0);
     int values[] = { (int)wo_int(args + 1), (int)wo_int(args + 2), (int)wo_int(args + 3) };
     bool update = false;
@@ -2140,8 +2171,11 @@ WO_API wo_api je_gui_input_int3_box(wo_vm vm, wo_value args)
 
     if (update)
     {
-        wo_value result = wo_push_struct(vm, 3);
-        wo_value elem = wo_push_empty(vm);
+        wo_value result = s + 0;
+        wo_value elem = s + 1;
+
+        wo_set_struct(result, vm, 3);
+
         wo_set_int(elem, (int)values[0]);
         wo_struct_set(result, 0, elem);
         wo_set_int(elem, (int)values[1]);
@@ -2154,6 +2188,8 @@ WO_API wo_api je_gui_input_int3_box(wo_vm vm, wo_value args)
 }
 WO_API wo_api je_gui_input_int4_box(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 2, &args);
+
     wo_string_t label = wo_string(args + 0);
     int values[] = { (int)wo_int(args + 1), (int)wo_int(args + 2), (int)wo_int(args + 3), (int)wo_int(args + 4) };
     bool update = false;
@@ -2162,8 +2198,11 @@ WO_API wo_api je_gui_input_int4_box(wo_vm vm, wo_value args)
 
     if (update)
     {
-        wo_value result = wo_push_struct(vm, 4);
-        wo_value elem = wo_push_empty(vm);
+        wo_value result = s + 0;
+        wo_value elem = s + 1;
+
+        wo_set_struct(result, vm, 4);
+
         wo_set_int(elem, (int)values[0]);
         wo_struct_set(result, 0, elem);
         wo_set_int(elem, (int)values[1]);
@@ -2203,6 +2242,8 @@ WO_API wo_api je_gui_input_float_box(wo_vm vm, wo_value args)
 }
 WO_API wo_api je_gui_input_float2_box(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     wo_string_t label = wo_string(args + 0);
     float values[] = { wo_float(args + 1), wo_float(args + 2) };
     bool update = false;
@@ -2211,12 +2252,14 @@ WO_API wo_api je_gui_input_float2_box(wo_vm vm, wo_value args)
 
     if (update)
     {
-        return wo_ret_option_val(vm, push_float2_to_struct(vm, values[0], values[1]));
+        return wo_ret_option_val(vm, set_float2_to_struct(s + 0, vm, values[0], values[1]));
     }
     return wo_ret_option_none(vm);
 }
 WO_API wo_api je_gui_input_float3_box(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     wo_string_t label = wo_string(args + 0);
     float values[] = { wo_float(args + 1), wo_float(args + 2), wo_float(args + 3) };
     bool update = false;
@@ -2225,12 +2268,14 @@ WO_API wo_api je_gui_input_float3_box(wo_vm vm, wo_value args)
 
     if (update)
     {
-        return wo_ret_option_val(vm, push_float3_to_struct(vm, values[0], values[1], values[2]));
+        return wo_ret_option_val(vm, set_float3_to_struct(s + 0, vm, values[0], values[1], values[2]));
     }
     return wo_ret_option_none(vm);
 }
 WO_API wo_api je_gui_input_float4_box(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     wo_string_t label = wo_string(args + 0);
     float values[] = { wo_float(args + 1), wo_float(args + 2), wo_float(args + 3), wo_float(args + 4) };
     bool update = false;
@@ -2239,7 +2284,7 @@ WO_API wo_api je_gui_input_float4_box(wo_vm vm, wo_value args)
 
     if (update)
     {
-        return wo_ret_option_val(vm, push_float4_to_struct(vm, values[0], values[1], values[2], values[3]));
+        return wo_ret_option_val(vm, set_float4_to_struct(s + 0, vm, values[0], values[1], values[2], values[3]));
     }
     return wo_ret_option_none(vm);
 }
@@ -2259,6 +2304,8 @@ WO_API wo_api je_gui_input_float_format_box(wo_vm vm, wo_value args)
 }
 WO_API wo_api je_gui_input_float2_format_box(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     wo_string_t label = wo_string(args + 0);
     float values[] = { wo_float(args + 1), wo_float(args + 2) };
     bool update = false;
@@ -2268,12 +2315,14 @@ WO_API wo_api je_gui_input_float2_format_box(wo_vm vm, wo_value args)
 
     if (update)
     {
-        return wo_ret_option_val(vm, push_float2_to_struct(vm, values[0], values[1]));
+        return wo_ret_option_val(vm, set_float2_to_struct(s + 0, vm, values[0], values[1]));
     }
     return wo_ret_option_none(vm);
 }
 WO_API wo_api je_gui_input_float3_format_box(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     wo_string_t label = wo_string(args + 0);
     float values[] = { wo_float(args + 1), wo_float(args + 2), wo_float(args + 3) };
     bool update = false;
@@ -2283,12 +2332,14 @@ WO_API wo_api je_gui_input_float3_format_box(wo_vm vm, wo_value args)
 
     if (update)
     {
-        return wo_ret_option_val(vm, push_float3_to_struct(vm, values[0], values[1], values[2]));
+        return wo_ret_option_val(vm, set_float3_to_struct(s + 0, vm, values[0], values[1], values[2]));
     }
     return wo_ret_option_none(vm);
 }
 WO_API wo_api je_gui_input_float4_format_box(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     wo_string_t label = wo_string(args + 0);
     float values[] = { wo_float(args + 1), wo_float(args + 2), wo_float(args + 3), wo_float(args + 4) };
     bool update = false;
@@ -2298,7 +2349,7 @@ WO_API wo_api je_gui_input_float4_format_box(wo_vm vm, wo_value args)
 
     if (update)
     {
-        return wo_ret_option_val(vm, push_float4_to_struct(vm, values[0], values[1], values[2], values[3]));
+        return wo_ret_option_val(vm, set_float4_to_struct(s + 0, vm, values[0], values[1], values[2], values[3]));
     }
     return wo_ret_option_none(vm);
 }
@@ -2330,8 +2381,10 @@ WO_API wo_api je_gui_input_text_multiline_size(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_combo(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     std::vector<const char*> combo_items;
-    wo_value elem = wo_push_empty(vm);
+    wo_value elem = s + 0;
     for (wo_integer_t i = 0; i < wo_lengthof(args + 1); ++i)
     {
         wo_arr_get(elem, args + 1, i);
@@ -2351,11 +2404,12 @@ WO_API wo_api je_gui_launch(wo_vm vm, wo_value args)
     wo_value argpacks = args + 2;
 
     wo_vm vmm = wo_borrow_vm(vm);
+    wo_value vmm_s = wo_reserve_stack(vmm, 2, nullptr);
 
-    wo_push_val(vmm, argpacks);
-    wo_push_val(vmm, jobfunc);
+    wo_set_val(vmm_s + 0, jobfunc);
+    wo_set_val(vmm_s + 1, argpacks);
 
-    wo_dispatch_value(vmm, args + 0, 2);
+    wo_dispatch_value(vmm, args + 0, 2, nullptr, &vmm_s);
 
     gui_wo_job_coroutine* guico = new gui_wo_job_coroutine;
     guico->work_vm = vmm;
@@ -2372,6 +2426,7 @@ WO_API wo_api je_gui_stop_all_work(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_get_input_state(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 2, &args);
     jeecs::input::keycode kcode = (jeecs::input::keycode)wo_int(args + 0);
 
     std::lock_guard g1(_key_state_record_mx);
@@ -2386,8 +2441,11 @@ WO_API wo_api je_gui_get_input_state(wo_vm vm, wo_value args)
         fnd = _key_state_record.find(kcode);
     }
 
-    wo_value v = wo_push_struct(vm, 2);
-    wo_value elem = wo_push_empty(vm);
+    wo_value v = s + 0;  
+    wo_value elem = s + 1;
+
+    wo_set_struct(v, vm, 2);
+
     wo_set_bool(elem, fnd->second.m_last_frame_down);
     wo_struct_set(v, 0, elem);
     wo_set_bool(elem, fnd->second.m_this_frame_down);
@@ -2403,7 +2461,9 @@ WO_API wo_api je_gui_register_exit_callback(wo_vm vm, wo_value args)
     assert(exit_callback_handler_vm == nullptr && exit_callback_function == nullptr);
 
     exit_callback_handler_vm = wo_borrow_vm(vm);
-    exit_callback_function = wo_push_val(exit_callback_handler_vm, args + 0);
+    exit_callback_function = wo_create_pin_value();
+    
+    wo_pin_value_set(exit_callback_function, args + 0);
 
     return wo_ret_void(vm);
 }
@@ -2413,6 +2473,8 @@ WO_API wo_api je_gui_unregister_exit_callback(wo_vm vm, wo_value args)
         return wo_ret_panic(vm, "Callback not found.");
 
     wo_release_vm(exit_callback_handler_vm);
+    wo_close_pin_value(exit_callback_function);
+
     exit_callback_handler_vm = nullptr;
     exit_callback_function = nullptr;
 
@@ -2433,18 +2495,22 @@ WO_API wo_api je_gui_set_font(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_style_get_config_color(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     ImGuiStyle* style = &ImGui::GetStyle();
     auto color = style->Colors[wo_int(args + 0)];
 
-    return wo_ret_val(vm, push_float4_to_struct(vm, color.x, color.y, color.z, color.w));
+    return wo_ret_val(vm, set_float4_to_struct(s + 0, vm, color.x, color.y, color.z, color.w));
 }
 
 WO_API wo_api je_gui_style_set_config_color(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
     ImGuiStyle* style = &ImGui::GetStyle();
     auto& color = style->Colors[wo_int(args + 0)];
 
-    wo_value elem = wo_push_empty(vm);
+    wo_value elem = s + 0;
     wo_struct_get(elem, args + 1, 0);
     color.x = wo_float(elem);
     wo_struct_get(elem, args + 1, 1);
@@ -2661,11 +2727,15 @@ WO_API wo_api je_gui_node_editor_reject_deleted_item(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_node_editor_query_new_link(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 2, &args);
+
     ax::NodeEditor::PinId start, end;
     if (ax::NodeEditor::QueryNewLink(&start, &end))
     {
-        wo_value v = wo_push_struct(vm, 2);
-        wo_value elem = wo_push_empty(vm);
+        wo_value v = s + 0; 
+        wo_value elem = s + 1;
+
+        wo_set_struct(v, vm, 2);
 
         wo_set_int(elem, (wo_int_t)start.Get());
         wo_struct_set(v, 0, elem);
@@ -2737,10 +2807,14 @@ WO_API wo_api je_gui_node_editor_delete_link(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_node_editor_get_node_position(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 2, &args);
+
     auto v2 = ax::NodeEditor::GetNodePosition((ax::NodeEditor::NodeId)wo_int(args + 0));
 
-    wo_value result = wo_push_struct(vm, 2);
-    wo_value val = wo_push_empty(vm);
+    wo_value result = s + 0; 
+    wo_value val = s + 1;
+
+    wo_set_struct(result, vm, 2);
 
     wo_set_float(val, v2.x);
     wo_struct_set(result, 0, val);
@@ -2793,10 +2867,14 @@ WO_API wo_api je_gui_node_editor_is_node_selected(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_node_editor_canvas_to_screen(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 2, &args);
+
     auto v2 = ax::NodeEditor::CanvasToScreen(val2vec2(args + 0));
     
-    wo_value result = wo_push_struct(vm, 2);
-    wo_value val = wo_push_empty(vm);
+    wo_value result = s + 0;  
+    wo_value val = s + 1;
+
+    wo_set_struct(result, vm, 2);
 
     wo_set_float(val, v2.x);
     wo_struct_set(result, 0, val);
@@ -2809,10 +2887,14 @@ WO_API wo_api je_gui_node_editor_canvas_to_screen(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_node_editor_screen_to_canvas(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 2, &args);
+
     auto v2 = ax::NodeEditor::ScreenToCanvas(val2vec2(args + 0));
 
-    wo_value result = wo_push_struct(vm, 2);
-    wo_value val = wo_push_empty(vm);
+    wo_value result = s + 0;
+    wo_value val = s + 1;
+
+    wo_set_struct(result, vm, 2);
 
     wo_set_float(val, v2.x);
     wo_struct_set(result, 0, val);
@@ -2961,7 +3043,7 @@ void jegui_update_basic()
             auto cur_job = chain;
             chain = chain->last;
 
-            auto result = wo_dispatch(cur_job->work_vm);
+            auto result = wo_dispatch(cur_job->work_vm, nullptr, nullptr);
             if (result == WO_CONTINUE)
             {
                 _wo_job_list.add_one(cur_job);
@@ -3019,7 +3101,10 @@ bool jegui_shutdown_callback()
     if (exit_callback_handler_vm == nullptr)
         return true;
 
-    auto result = wo_invoke_value(exit_callback_handler_vm, exit_callback_function, 0);
+    wo_value tmp = wo_register(exit_callback_handler_vm, WO_REG_T0);
+
+    wo_pin_value_get(tmp, exit_callback_function);
+    auto result = wo_invoke_value(exit_callback_handler_vm, tmp, 0, nullptr, nullptr);
     if (result == nullptr)
         return false;
 
