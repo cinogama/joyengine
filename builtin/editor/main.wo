@@ -465,7 +465,7 @@ func open_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict
 
 }
 
-// je::editor::register_panic_hook(jeapi::gui::form::panic);
+je::editor::register_panic_hook(jeapi::gui::form::panic);
 
 for (;;)
 {

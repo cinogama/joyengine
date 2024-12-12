@@ -187,7 +187,6 @@ void je_init(int argc, char** argv)
 
     jegl_shader_generator_init();
 
-    wo_enable_jit(false);
     wo_init(argc, argv);
 
     for (int i = 1; i < argc - 1; ++i)
