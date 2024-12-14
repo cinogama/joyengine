@@ -704,7 +704,7 @@ $$INCLUDE_SYSTEM_HEADERS$$
 
 namespace jemodule
 {
-    void register_types(jeecs::typing::type_unregister_guard* guard)
+    static void register_types(jeecs::typing::type_unregister_guard* guard)
     {
         using namespace jeecs;
         // Here to load components/system

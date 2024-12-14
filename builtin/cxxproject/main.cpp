@@ -1,7 +1,7 @@
 #include "jeecs.hpp"
 #include "loader.hpp"
 
-jeecs::typing::type_unregister_guard* _module_guard;
+static jeecs::typing::type_unregister_guard* _module_guard;
 
 extern "C" {
 	JE_EXPORT void jeecs_module_entry(wo_dylib_handle_t lib_instance)

@@ -2475,7 +2475,7 @@ WO_API wo_api wojeapi_dynamic_parser_restoring(wo_vm vm, wo_value args)
 
         assert(parser->m_restoring != 0);
 
-        wo_value _je_dynamic_parser_vm_s = wo_reserve_stack(_je_dynamic_parser_vm, 1, &args);
+        wo_value _je_dynamic_parser_vm_s = wo_reserve_stack(_je_dynamic_parser_vm, 1, nullptr);
         wo_set_val(_je_dynamic_parser_vm_s + 0, args + 2);
 
         wo_value result = wo_invoke_rsfunc(
