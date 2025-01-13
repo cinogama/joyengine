@@ -519,7 +519,7 @@ namespace editor::gui::edit_forms
                     Text("请选择启动时默认渲染的画面分辨率");
                     Text("* 默认为 1366x768");
 
-                    let static reso_list = [
+                    static let reso_list = [
                         ("1280x720 [16:9]", (1280, 720)),
                         ("1366x768 [16:9]", (1366, 768)),
                         ("1920x1080 [16:9]", (1920, 1080)),

@@ -3034,10 +3034,10 @@ namespace je
         }
 
         extern("libjoyecs", "wojeapi_type_is_component")
-        public func is_component(self: typeinfo)=> bool;
+        public func is_component(self: typeinfo)=> ::bool;
 
         extern("libjoyecs", "wojeapi_type_is_system")
-        public func is_system(self: typeinfo)=> bool;
+        public func is_system(self: typeinfo)=> ::bool;
 
         extern("libjoyecs", "wojeapi_get_all_registed_types")
         public func get_all_registed_types()=> array<typeinfo>;
@@ -3061,7 +3061,7 @@ namespace je
         public func loadid(id: int)=> option<typeinfo>;
 
         extern("libjoyecs", "wojeapi_type_id")
-        public func id(self: typeinfo)=> int;
+        public func id(self: typeinfo)=> ::int;
 
         extern("libjoyecs", "wojeapi_type_name")
         public func name(self: typeinfo)=> string;

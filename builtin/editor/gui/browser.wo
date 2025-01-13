@@ -1659,7 +1659,7 @@ namespace $$MODULE_NAME$$
         {
             match (path.type->get)
             {
-            PathType::dir(_)?
+            dir(_)?
             {
                 let mut attribute = TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
                                 + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
@@ -1682,7 +1682,7 @@ namespace $$MODULE_NAME$$
                     // 如果目录被折叠起来，则删除缓存，等待下次展开时重新获取
                     path.type->set(PathType::dir(option::none));
             }
-            PathType::file?
+            file?
                 ; // path_tree只显示目录，跳过文件
             }
         }
