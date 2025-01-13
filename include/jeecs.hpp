@@ -10278,21 +10278,21 @@ namespace jeecs
                 *v = (typename std::remove_reference<decltype(*v)>::type)wo_int(value);
                 };
             typing::register_script_parser<int8_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
-                "int8", "alias int8 = int;");
+                "int8", "public alias int8 = int;");
             typing::register_script_parser<int16_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
-                "int16", "alias int16 = int;");
+                "int16", "public alias int16 = int;");
             typing::register_script_parser<int32_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
-                "int32", "alias int32 = int;");
+                "int32", "public alias int32 = int;");
             typing::register_script_parser<int64_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
-                "int64", "alias int64 = int;");
+                "int64", "public alias int64 = int;");
             typing::register_script_parser<uint8_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
-                "uint8", "alias uint8 = int;");
+                "uint8", "public alias uint8 = int;");
             typing::register_script_parser<uint16_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
-                "uint16", "alias uint16 = int;");
+                "uint16", "public alias uint16 = int;");
             typing::register_script_parser<uint32_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
-                "uint32", "alias uint32 = int;");
+                "uint32", "public alias uint32 = int;");
             typing::register_script_parser<uint64_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
-                "uint64", "alias uint64 = int;");
+                "uint64", "public alias uint64 = int;");
 
             typing::register_script_parser<float>(
                 guard,
@@ -10301,7 +10301,7 @@ namespace jeecs
                 },
                 [](float* v, wo_vm, wo_value value) {
                     *v = wo_float(value);
-                }, "float", "alias float = real;");
+                }, "float", "public alias float = real;");
             typing::register_script_parser<double>(
                 guard,
                 [](const double* v, wo_vm, wo_value value) {

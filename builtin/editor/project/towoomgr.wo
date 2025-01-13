@@ -46,17 +46,17 @@ namespace editor
                     {
                     value(crc64_code)?
                     {
-                        let purename = pure_component_or_system_name(purename(p));
-                        if (_repeat_checker->contain(purename))
+                        let file_purename = pure_component_or_system_name(purename(p));
+                        if (_repeat_checker->contain(file_purename))
                         {
-                            let warn_msg = F"发现同名的ToWoo：`{p}` 和 `{_repeat_checker[purename]}`，\n这可能导致错误的行为，请检查并排除。";
+                            let warn_msg = F"发现同名的ToWoo：`{p}` 和 `{_repeat_checker[file_purename]}`，\n这可能导致错误的行为，请检查并排除。";
 
                             je::logwarn(warn_msg);
                             jeapi::gui::form::errmsg("同名ToWoo提示", warn_msg);
                         }
                         else
                         {
-                            _repeat_checker->set(purename, p);
+                            _repeat_checker->set(file_purename, p);
                             fetched_scripts->set(p, crc64_code);
                         }
                     }

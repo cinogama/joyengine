@@ -449,7 +449,7 @@ namespace je::towoo
             extern("libjoyecs", "wojeapi_towoo_member_get")
             func member_get_impl<T, TInfo>(type: je::typeinfo, self: member<T, TInfo>)=> T;
         
-            return member_get_impl(TInfo::typeinfo, self);
+            return member_get_impl(typeof:<TInfo>::typeinfo, self);
         }
     
         public func set<T, TInfo>(self: member<T, TInfo>, val: T)=> void
@@ -457,7 +457,7 @@ namespace je::towoo
             extern("libjoyecs", "wojeapi_towoo_member_set")
             func member_set_impl<T, TInfo>(type: je::typeinfo, self: member<T, TInfo>, val: T)=> void;
 
-            member_set_impl(TInfo::typeinfo, self, val);
+            member_set_impl(typeof:<TInfo>::typeinfo, self, val);
         }
     }
 }
