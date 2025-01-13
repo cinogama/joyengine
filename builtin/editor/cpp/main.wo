@@ -423,11 +423,11 @@ endif()
                             {
                                 if (fsys::isfile(path))
                                 {
-                                    let extension = fsys::extension(path)->lower;
-                                    if (extension == ".cpp" 
-                                        || extension == ".hpp" 
-                                        || extension == ".c" 
-                                        || extension == ".h")
+                                    let file_extension = fsys::extension(path)->lower;
+                                    if (file_extension == ".cpp" 
+                                        || file_extension == ".hpp" 
+                                        || file_extension == ".c" 
+                                        || file_extension == ".h")
                                     {
                                         let wpath = self.project->make_path_normalize(path);
                                         let crc64 = je::editor::crc64file(path->tostring());
@@ -455,11 +455,11 @@ endif()
             {
                 if (fsys::isfile(path))
                 {
-                    let extension = fsys::extension(path)->lower;
-                    if (extension == ".cpp" 
-                        || extension == ".hpp" 
-                        || extension == ".c" 
-                        || extension == ".h")
+                    let file_extension = fsys::extension(path)->lower;
+                    if (file_extension == ".cpp" 
+                        || file_extension == ".hpp" 
+                        || file_extension == ".c" 
+                        || file_extension == ".h")
                     {
                         let wpath = self.project->make_path_normalize(path);
                         let crc64 = je::editor::crc64file(path->tostring());

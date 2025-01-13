@@ -2553,7 +2553,7 @@ namespace je
     namespace typeinfo
     {
         extern("libjoyecs", "wojeapi_typemgr_get_unregister_count")
-        public func get_unregister_count()=> int;
+        public func get_unregister_count()=> ::int;
     }
         
     namespace graphic
@@ -3055,19 +3055,19 @@ namespace je
         }
 
         extern("libjoyecs", "wojeapi_type_of", repeat)
-        public func load(name: string)=> option<typeinfo>;
+        public func load(name: ::string)=> option<typeinfo>;
 
         extern("libjoyecs", "wojeapi_type_of", repeat)
-        public func loadid(id: int)=> option<typeinfo>;
+        public func loadid(id: ::int)=> option<typeinfo>;
 
         extern("libjoyecs", "wojeapi_type_id")
         public func id(self: typeinfo)=> ::int;
 
         extern("libjoyecs", "wojeapi_type_name")
-        public func name(self: typeinfo)=> string;
+        public func name(self: typeinfo)=> ::string;
 
         extern("libjoyecs", "wojeapi_script_type_name")
-        public func script_name(self: typeinfo)=> option<string>;
+        public func script_name(self: typeinfo)=> option<::string>;
 
         enum basic_type
         {
@@ -3077,7 +3077,7 @@ namespace je
         private func get_basic_type(tid: basic_type)=> typeinfo;
 
         extern("libjoyecs", "wojeapi_type_members")
-        public func get_members_info(self: typeinfo)=> array<(string, typeinfo)>;
+        public func get_members_info(self: typeinfo)=> array<(::string, typeinfo)>;
 
         public let int = typeinfo::get_basic_type(basic_type::INT);
         public let int2 = typeinfo::get_basic_type(basic_type::INT2);

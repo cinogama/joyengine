@@ -1918,19 +1918,19 @@ namespace je::entity::towoo
         private func _remove_component<T>(self: entity, tid: je::typeinfo)=> void;
 
     public func add_component<T>(self: entity)=> option<T>
-        where T::type::typeinfo is je::typeinfo;
+        where typeof:<T>::type::typeinfo is je::typeinfo;
     {
-        return _add_component:<T>(self, T::type::typeinfo);
+        return _add_component:<T>(self, typeof:<T>::type::typeinfo);
     }
     public func get_component<T>(self: entity)=> option<T>
-        where T::type::typeinfo is je::typeinfo;
+        where typeof:<T>::type::typeinfo is je::typeinfo;
     {
-        return _get_component:<T>(self, T::type::typeinfo);
+        return _get_component:<T>(self, typeof:<T>::type::typeinfo);
     }
     public func remove_component<T>(self: entity)=> void
-        where T::type::typeinfo is je::typeinfo;
+        where typeof:<T>::type::typeinfo is je::typeinfo;
     {
-        _remove_component:<T>(self, T::type::typeinfo);
+        _remove_component:<T>(self, typeof:<T>::type::typeinfo);
     }
 }
 

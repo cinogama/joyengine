@@ -269,7 +269,7 @@ namespace jeapi
         }
 
         alias texture_inform = string;
-        func get_entity_texture_passes(saving_entity: entity)=> dict<int, option<texture_inform>>
+        func get_entity_texture_passes(saving_entity: je::entity)=> dict<int, option<texture_inform>>
         {
             // 获取实体绑定的通道和纹理信息
             return saving_entity->get_textures
@@ -279,7 +279,7 @@ namespace jeapi
 
         alias shader_inform = dict<string, array<dynamic>>;
         //                          uniform_name uniform_vals
-        func get_entity_shaders_informs(saving_entity: entity)=> array<array<dynamic>/*(string, shader_inform)*/>
+        func get_entity_shaders_informs(saving_entity: je::entity)=> array<array<dynamic>/*(string, shader_inform)*/>
         {
             // 获取实体绑定的shader和uniform信息, uniform 信息仅包括int/float/float2，3，4类型的信息
             // {[shader_path] = shader_inform}
@@ -325,9 +325,9 @@ namespace jeapi
                 saving_entity
                     ->  editor::get_components_types()
                     ->  forall(\t = !t->name->begin_with("Editor::");)
-                    =>> \t = component->is_value ? [(t, component->unwrap)] | []
+                    =>> \t = component_instance->is_value ? [(t, component_instance->unwrap)] | []
                         where
-                            component = saving_entity->get_component(t);
+                            component_instance = saving_entity->get_component(t);
                     ->> \tc = (t->name, collect_members)
                         where 
                             collect_members = c->get_members()
@@ -534,7 +534,7 @@ namespace jeapi
                     }
                 ;
 
-            let entity = f(
+            let entity_instance = f(
                 w, component_types_dat
                     ->> \tp = tp[0];
                     // 检查加载的shader是否有非法的，如果有，那么实体要带上一个BadShadersUniform组件
@@ -547,7 +547,7 @@ namespace jeapi
 
             if (in_editor && prefab_path->is_value)
             {
-                entity->editor::set_prefab_path(prefab_path->unwrap);
+                entity_instance->editor::set_prefab_path(prefab_path->unwrap);
             }
 
             // 开始应用数据
@@ -559,7 +559,7 @@ namespace jeapi
                                 where (mname, mtype, mvalue) = name_type_addr_pair
                                 ;
                             ;
-                    where compmaynotfound = entity->get_component(ctype)
+                    where compmaynotfound = entity_instance->get_component(ctype)
                         , (ctype, dat) = cdata
                     ;
                 ;
@@ -574,14 +574,14 @@ namespace jeapi
                         for (let (uname, uval): uniform_vars)
                             restore_shader_of_entity(shad, uname as string, uval as array<dynamic>);
                     }
-                    entity->set_shaders(dats->>\shad_and_uvars = shad_and_uvars[0];);
+                    entity_instance->set_shaders(dats->>\shad_and_uvars = shad_and_uvars[0];);
                 }
             err(dats)?
                 if (in_editor)
                 {
                     for (let (path, uniform_vars) : dats)
                     {
-                        let badshad = entity->editor::store_name_for_bad_shader_update(path);
+                        let badshad = entity_instance->editor::store_name_for_bad_shader_update(path);
 
                         for (let (uname, uval): uniform_vars)
                             restore_shader_of_entity(badshad, uname as string, uval as array<dynamic>);
@@ -595,7 +595,7 @@ namespace jeapi
                     {
                         for (let (passid, path) : textures: dict<dynamic, dynamic>)
                             do graphic::texture::load(w->get_universe->option::value, path as string)
-                                ->> \tex = entity->bind_texture(passid as int, option::value(tex));
+                                ->> \tex = entity_instance->bind_texture(passid as int, option::value(tex));
                                 ;
                     };
 
@@ -606,15 +606,15 @@ namespace jeapi
                     | option::none
                     where vertex_path = shape as string
                     ;
-                ->> \vertex = entity->set_shape(option::value(vertex));
+                ->> \vertex = entity_instance->set_shape(option::value(vertex));
                 ;
 
             if (in_editor)
                 do entity_dat
                     ->  get("name")
-                    ->> \n = entity->editor::set_name(n as string);;
+                    ->> \n = entity_instance->editor::set_name(n as string);;
 
-            return option::value(entity);
+            return option::value(entity_instance);
         }
 
         public func entity(
