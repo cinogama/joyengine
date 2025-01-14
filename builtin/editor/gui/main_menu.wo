@@ -83,9 +83,9 @@ namespace editor::gui
                 SetNextWindowSizeConstraints((700., 550.), (700., 550.));
                 match (BeginOpen(F"样式编辑器"))
                 {
-                value(show)?
+                value(show_val)?
                     {
-                        if (show)
+                        if (show_val)
                         {
                             if (Button("使用默认暗色配置")) SetStyleColorDark();
                             SameLine();
@@ -207,8 +207,8 @@ namespace editor::gui
                                 let mut open = true;
                                 match (BeginOpen("项目设置"))
                                 {
-                                value(show)?
-                                    if (show)
+                                value(show_val)?
+                                    if (show_val)
                                     {
                                         for (let (_, iconfig) : context->get_project->get_configs)
                                         {
@@ -241,8 +241,8 @@ namespace editor::gui
                                 {
                                     match (tools::run_tool_script(context, script_name, context->get_project))
                                     {
-                                    err(msg)?
-                                        jeapi::gui::form::errmsg("失败", F"运行脚本失败：{msg}");
+                                    err(msg_val)?
+                                        jeapi::gui::form::errmsg("失败", F"运行脚本失败：{msg_val}");
                                     ok(_)?;
                                     }
                                 }

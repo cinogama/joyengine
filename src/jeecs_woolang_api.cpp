@@ -2446,7 +2446,7 @@ WO_API wo_api wojeapi_dynamic_parser_saving(wo_vm vm, wo_value args)
         wo_value value = s + 0;
         parser->m_script_parser->m_script_parse_c2w(val, vm, value);
 
-        wo_value _je_dynamic_parser_vm_s = wo_reserve_stack(_je_dynamic_parser_vm, 1, &args);
+        wo_value _je_dynamic_parser_vm_s = wo_reserve_stack(_je_dynamic_parser_vm, 1, nullptr);
         wo_set_val(_je_dynamic_parser_vm_s + 0, value);
         wo_value result = wo_invoke_rsfunc(
             _je_dynamic_parser_vm, parser->m_saving, 1, nullptr, &_je_dynamic_parser_vm_s);
@@ -2662,6 +2662,23 @@ namespace je
 
             namespace bad_shader_handle_t
             {
+                extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_int")
+                func _set_uniform_int(shadhandle: bad_shader_handle_t, name: string, val: int)=> void;
+                extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_int2")
+                func _set_uniform_int2(shadhandle: bad_shader_handle_t, name: string, x: int, y: int)=> void;
+                extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_int3")
+                func _set_uniform_int3(shadhandle: bad_shader_handle_t, name: string, x: int, y: int, z: int)=> void;
+                extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_int4")
+                func _set_uniform_int4(shadhandle: bad_shader_handle_t, name: string, x: int, y: int, z: int, w: int)=> void;
+                extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float")
+                func _set_uniform_float(shadhandle: bad_shader_handle_t, name: string, val: real)=> void;
+                extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float2")
+                func _set_uniform_float2(shadhandle: bad_shader_handle_t, name: string, x: real, y: real)=> void;
+                extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float3")
+                func _set_uniform_float3(shadhandle: bad_shader_handle_t, name: string, x: real, y: real, z: real)=> void;
+                extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float4")
+                func _set_uniform_float4(shadhandle: bad_shader_handle_t, name: string, x: real, y: real, z: real, w: real)=> void;
+
                 public func store_uniform_dat_for_bad_shader_update<T>(shadhandle: bad_shader_handle_t, name: string, val: T)
                     where val is int
                         || val is (int, int)
@@ -2672,23 +2689,6 @@ namespace je
                         || val is (real, real, real)
                         || val is (real, real, real, real);
                 {
-                    extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_int")
-                    func _set_uniform_int(shadhandle: bad_shader_handle_t, name: string, val: int)=> void;
-                    extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_int2")
-                    func _set_uniform_int2(shadhandle: bad_shader_handle_t, name: string, x: int, y: int)=> void;
-                    extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_int3")
-                    func _set_uniform_int3(shadhandle: bad_shader_handle_t, name: string, x: int, y: int, z: int)=> void;
-                    extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_int4")
-                    func _set_uniform_int4(shadhandle: bad_shader_handle_t, name: string, x: int, y: int, z: int, w: int)=> void;
-                    extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float")
-                    func _set_uniform_float(shadhandle: bad_shader_handle_t, name: string, val: real)=> void;
-                    extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float2")
-                    func _set_uniform_float2(shadhandle: bad_shader_handle_t, name: string, x: real, y: real)=> void;
-                    extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float3")
-                    func _set_uniform_float3(shadhandle: bad_shader_handle_t, name: string, x: real, y: real, z: real)=> void;
-                    extern("libjoyecs", "wojeapi_store_bad_shader_uniforms_float4")
-                    func _set_uniform_float4(shadhandle: bad_shader_handle_t, name: string, x: real, y: real, z: real, w: real)=> void;
-
                     if (val is int)
                         _set_uniform_int(shadhandle, name, val);
                     else if (val is (int, int))
@@ -3284,6 +3284,24 @@ R"(
             extern("libjoyecs", "wojeapi_get_uniforms_from_shader")
             public func get_uniforms(self: shader)=> map<string, uniform_variable>;
 
+            extern("libjoyecs", "wojeapi_set_uniforms_int")
+            func _set_uniform_int(shad: shader, name: string, val: int)=> void;
+            extern("libjoyecs", "wojeapi_set_uniforms_int2")
+            func _set_uniform_int2(shad: shader, name: string, x: int, y: int)=> void;
+            extern("libjoyecs", "wojeapi_set_uniforms_int3")    
+            func _set_uniform_int3(shad: shader, name: string, x: int, y: int, z: int)=> void;
+            extern("libjoyecs", "wojeapi_set_uniforms_int4")
+            func _set_uniform_int4(shad: shader, name: string, x: int, y: int, z: int, w: int)=> void;
+
+            extern("libjoyecs", "wojeapi_set_uniforms_float")
+            func _set_uniform_float(shad: shader, name: string, val: real)=> void;
+            extern("libjoyecs", "wojeapi_set_uniforms_float2")
+            func _set_uniform_float2(shad: shader, name: string, x: real, y: real)=> void;
+            extern("libjoyecs", "wojeapi_set_uniforms_float3")
+            func _set_uniform_float3(shad: shader, name: string, x: real, y: real, z: real)=> void;
+            extern("libjoyecs", "wojeapi_set_uniforms_float4")
+            func _set_uniform_float4(shad: shader, name: string, x: real, y: real, z: real, w: real)=> void;
+
             public func set_uniform<T>(self: shader, name: string, val: T)
                 where val is int
                     || val is (int, int)
@@ -3294,24 +3312,6 @@ R"(
                     || val is (real, real, real)
                     || val is (real, real, real, real);
             {
-                extern("libjoyecs", "wojeapi_set_uniforms_int")
-                func _set_uniform_int(shad: shader, name: string, val: int)=> void;
-                extern("libjoyecs", "wojeapi_set_uniforms_int2")
-                func _set_uniform_int2(shad: shader, name: string, x: int, y: int)=> void;
-                extern("libjoyecs", "wojeapi_set_uniforms_int3")    
-                func _set_uniform_int3(shad: shader, name: string, x: int, y: int, z: int)=> void;
-                extern("libjoyecs", "wojeapi_set_uniforms_int4")
-                func _set_uniform_int4(shad: shader, name: string, x: int, y: int, z: int, w: int)=> void;
-
-                extern("libjoyecs", "wojeapi_set_uniforms_float")
-                func _set_uniform_float(shad: shader, name: string, val: real)=> void;
-                extern("libjoyecs", "wojeapi_set_uniforms_float2")
-                func _set_uniform_float2(shad: shader, name: string, x: real, y: real)=> void;
-                extern("libjoyecs", "wojeapi_set_uniforms_float3")
-                func _set_uniform_float3(shad: shader, name: string, x: real, y: real, z: real)=> void;
-                extern("libjoyecs", "wojeapi_set_uniforms_float4")
-                func _set_uniform_float4(shad: shader, name: string, x: real, y: real, z: real, w: real)=> void;
-
                 if (val is int)
                     _set_uniform_int(self, name, val);
                 if (val is (int, int))

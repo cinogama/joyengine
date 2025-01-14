@@ -174,7 +174,7 @@ namespace editor::gui::drawpannel
 
     func edittexture(
         context: EditorContext, 
-        entity: option<jeapi::debug::Eeid>, 
+        entity_euid: option<jeapi::debug::Eeid>, 
         images: array<(int, mut graphic::texture, mut option<string>)>, 
         draw_context: DrawContextT)
     {
@@ -563,7 +563,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                     {
                         if (save_texture_to_path(edited_texture, context->get_project->parse_path_normalize(saving_path)))
                         {
-                            do entity
+                            do entity_euid
                                 ->> \eid = eid->justdo(
                                         \e = e->bind_texture(passid, je::graphic::texture::load(
                                             context->get_project->get_env->get_universe->option::value, 

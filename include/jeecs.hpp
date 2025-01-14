@@ -10229,38 +10229,52 @@ namespace jeecs
             typing::register_script_parser<basic::fileresource<void>>(
                 guard,
                 [](const basic::fileresource<void>* v, wo_vm vm, wo_value value) {
+                    wo_value result = wo_register(vm, WO_REG_T0);
+                    wo_set_struct(value, vm, 1);
+
                     if (v->has_resource())
-                        wo_set_option_string(value, vm, v->get_path().c_str());
+                        wo_set_option_string(result, vm, v->get_path().c_str());
                     else
-                        wo_set_option_none(value, vm);
+                        wo_set_option_none(result, vm);
+
+                    wo_struct_set(value, 0, result);
                 },
                 [](basic::fileresource<void>* v, wo_vm vm, wo_value value) {
                     wo_value result = wo_register(vm, WO_REG_T0);
+                    wo_struct_get(result, value, 0);
 
-                    if (wo_option_get(result, value))
+                    if (wo_option_get(result, result))
                         v->load(wo_string(result));
                     else
                         v->clear();
-
-                }, "fileresource_void", "public using fileresource_void = option<string>;");
+                },
+                "fileresource_void", 
+                "public using fileresource_void = struct{ public path: option<string> };");
 
             typing::register_script_parser<basic::fileresource<audio::buffer>>(
                 guard,
                 [](const basic::fileresource<audio::buffer>* v, wo_vm vm, wo_value value) {
+                    wo_value result = wo_register(vm, WO_REG_T0);
+                    wo_set_struct(value, vm, 1);
+
                     if (v->has_resource())
-                        wo_set_option_string(value, vm, v->get_path().c_str());
+                        wo_set_option_string(result, vm, v->get_path().c_str());
                     else
-                        wo_set_option_none(value, vm);
+                        wo_set_option_none(result, vm);
+
+                    wo_struct_set(value, 0, result);
                 },
                 [](basic::fileresource<audio::buffer>* v, wo_vm vm, wo_value value) {
                     wo_value result = wo_register(vm, WO_REG_T0);
+                    wo_struct_get(result, value, 0);
 
-                    if (wo_option_get(result, value))
+                    if (wo_option_get(result, result))
                         v->load(wo_string(result));
                     else
                         v->clear();
-
-                }, "fileresource_audio_buffer", "public using fileresource_audio_buffer = option<string>;");
+                }, 
+                "fileresource_audio_buffer", 
+                "public using fileresource_audio_buffer = fileresource_void;");
 
             typing::register_script_parser<bool>(
                 guard,

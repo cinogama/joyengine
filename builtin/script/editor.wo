@@ -316,24 +316,24 @@ namespace fileresource_void
     {
         public extern func saving(val: fileresource_void)=> string
         {
-            return val: option<string>->or("");
+            return val.path->or("");
         }
         public extern func restoring(dat: string)=> fileresource_void
         {
             if (dat == "")
-                return option::none: fileresource_void;
+                return fileresource_void{ path = option::none };
             else
-                return option::value(dat): fileresource_void;
+                return fileresource_void{ path = option::value(dat) };
         }
         public extern func edit(val: fileresource_void, tag: string)=> option<fileresource_void>
         {
-            match (jeapi::gui::widget::File(F"文件：##{tag}", val: option<string>->or(""), \=do nil;))
+            match (jeapi::gui::widget::File(F"文件：##{tag}", val.path->or(""), \=do nil;))
             {
             value(p)?
                 if (p == "")
-                    return option::value(option::none: fileresource_void);
+                    return option::value(fileresource_void{ path = option::none });
                 else
-                    return option::value(option::value(p): fileresource_void);
+                    return option::value(fileresource_void{ path = option::value(p) });
             none?
                 return option::none;
             }
@@ -346,24 +346,24 @@ namespace fileresource_audio_buffer
     {
         public extern func saving(val: fileresource_audio_buffer)=> string
         {
-            return val: option<string>->or("");
+            return val.path->or("");
         }
         public extern func restoring(dat: string)=> fileresource_audio_buffer
         {
             if (dat == "")
-                return option::none: fileresource_audio_buffer;
+                return fileresource_audio_buffer{ path = option::none };
             else
-                return option::value(dat): fileresource_audio_buffer;
+                return fileresource_audio_buffer{ path = option::value(dat) };
         }
         public extern func edit(val: fileresource_audio_buffer, tag: string)=> option<fileresource_audio_buffer>
         {
-            match (jeapi::gui::widget::File(F"音频文件：##{tag}", val: option<string>->or(""), \=do nil;))
+            match (jeapi::gui::widget::File(F"文件：##{tag}", val.path->or(""), \=do nil;))
             {
             value(p)?
                 if (p == "")
-                    return option::value(option::none: fileresource_audio_buffer);
+                    return option::value(fileresource_audio_buffer{ path = option::none });
                 else
-                    return option::value(option::value(p): fileresource_audio_buffer);
+                    return option::value(fileresource_audio_buffer{ path = option::value(p) });
             none?
                 return option::none;
             }

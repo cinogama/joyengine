@@ -17,7 +17,7 @@ using je::gui;
 
 namespace editor::gui::edit_forms
 {
-    func _is_ancestor(cur: jeapi::debug::EntityChilds, checking: jeapi::debug::EntityChilds)
+    func _is_ancestor(cur: jeapi::debug::EntityChilds, checking: jeapi::debug::EntityChilds)=> bool
     {
         for (let child: cur.childs)
         {
@@ -70,7 +70,7 @@ namespace editor::gui::edit_forms
 
         return option::value(e);
     }
-    public func entity_edit_context_menu(context: EditorContext, w: je::world, euid: option<jeapi::debug::Eeid>)
+    public func entity_edit_context_menu(context: EditorContext, w: je::world, euid: option<jeapi::debug::Eeid>)=> void
     {
         let has_editing_entity = euid->is_value;
         if (MenuItem("创建实体"))
@@ -417,7 +417,7 @@ namespace editor::gui::edit_forms
                         F"即将销毁实体{e->editor::name}\n是否同时销毁其全部子实体？", 
                         func(close_child_entity){
                             let edata = jeapi::debug::find_entity_and_child_by_instance(w, e);
-                            func close_entity_impl(e, close_all)
+                            func close_entity_impl(e, close_all)=> void
                             {
                                 e.uid->justdo(\e = e->close(););
                                 if (close_all)
@@ -437,7 +437,7 @@ namespace editor::gui::edit_forms
                 ;
         }
     }
-    func display_entity_and_child_tree(context: EditorContext, w: je::world, e: jeapi::debug::EntityChilds)
+    func display_entity_and_child_tree(context: EditorContext, w: je::world, e: jeapi::debug::EntityChilds)=> void
     {
         let treenode_attribute = 
             (e.childs->empty 

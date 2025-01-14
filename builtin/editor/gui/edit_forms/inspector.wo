@@ -249,7 +249,7 @@ namespace editor::gui::edit_forms
                                 // 2. 遍历实体的非Editor组件
                                 do BeginChildSize("component_editor", 0., 2. * _1_3_height);
 
-                                let grouped_components = {}mut: map<string, vec<(je::typeinfo, je::component)>>;
+                                let grouped_components = {}mut: ::map<string, vec<(je::typeinfo, je::component)>>;
                                 for (let (ctype, component): cur_e->editor::get_components)
                                 {
                                     let names = ctype->name->split("::");

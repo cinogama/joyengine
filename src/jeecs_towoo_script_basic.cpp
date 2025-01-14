@@ -1978,13 +1978,13 @@ namespace je::mathf
     }
 
     public func lerp<T>(a: T, b: T, deg: real)
-        where !((a * deg) is pending);
+        where typeid:<typeof(a * deg)> != 0;
     {
         return a * (1. - deg) + b * deg;
     }
 
     public func clamp<T>(a: T, min: T, max: T)
-        where !((a < a) is pending);
+        where typeid:<typeof(a < a)> != 0;
     {
         if (a < min)
             return min;

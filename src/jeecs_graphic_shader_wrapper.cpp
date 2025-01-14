@@ -308,7 +308,7 @@ WO_API wo_api jeecs_shader_apply_operation(wo_vm vm, wo_value args)
     {
         auto value_type = wo_valuetype(args + i);
         if (value_type != WO_INTEGER_TYPE && value_type != WO_REAL_TYPE && value_type != WO_GCHANDLE_TYPE && value_type != WO_HANDLE_TYPE)
-            return wo_ret_halt(vm, "Cannot do this operations: argument type should be number or shader_value.");
+            return wo_ret_panic(vm, "Cannot do this operations: argument type should be number or shader_value.");
 
         jegl_shader_value* sval;
         if (value_type == WO_GCHANDLE_TYPE || value_type == WO_HANDLE_TYPE)
@@ -641,6 +641,23 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args)
         });
 }
 
+WO_API wo_api jeecs_shader_real_raw_op_add(wo_vm vm, wo_value args)
+{
+    return wo_ret_real(vm, wo_real(args + 0) + wo_real(args + 1));
+}
+WO_API wo_api jeecs_shader_real_raw_op_sub(wo_vm vm, wo_value args)
+{
+    return wo_ret_real(vm, wo_real(args + 0) - wo_real(args + 1));
+}
+WO_API wo_api jeecs_shader_real_raw_op_mul(wo_vm vm, wo_value args)
+{
+    return wo_ret_real(vm, wo_real(args + 0) * wo_real(args + 1));
+}
+WO_API wo_api jeecs_shader_real_raw_op_div(wo_vm vm, wo_value args)
+{
+    return wo_ret_real(vm, wo_real(args + 0) / wo_real(args + 1));
+}
+
 const char* shader_wrapper_path = "je/shader.wo";
 const char* shader_wrapper_src = R"(
 // JoyEngineECS RScene shader wrapper
@@ -938,34 +955,52 @@ using shader_function = struct{
     }
 }
 )" R"(
+extern("libjoyecs", "jeecs_shader_real_raw_op_add")
+func _real_origin_add(a: real, b: real)=> real;
+extern("libjoyecs", "jeecs_shader_real_raw_op_sub")
+func _real_origin_sub(a: real, b: real)=> real;
+extern("libjoyecs", "jeecs_shader_real_raw_op_mul")
+func _real_origin_mul(a: real, b: real)=> real;
+extern("libjoyecs", "jeecs_shader_real_raw_op_div")
+func _real_origin_div(a: real, b: real)=> real;
 namespace real
 {
-    public func operator + <T>(a:real, b:T)=> float
-        where b is float;
+    public func operator + <T>(a:real, b:T)
+        where b is float || b is real;
     {
-        return apply_operation:<float>("+", a, b);
+        if (b is real)
+            return _real_origin_add(a, b);
+        else
+            return b + a;
     }
-    public func operator - <T>(a:real, b:T)=> float
-        where b is float;
+    public func operator - <T>(a:real, b:T)
+        where b is float || b is real;
     {
-        return apply_operation:<float>("-", a, b);
+        if (b is real)
+            return _real_origin_sub(a, b);
+        else
+            return b + (-a);
     }
     public func operator * <T>(a:real, b:T)
         where b is float 
             || b is float2 
             || b is float3 
-            || b is float4;
+            || b is float4
+            || b is real;
     {
-        if (b is float || b is real)
-            return apply_operation:<float>("*", a, b);
+        if (b is real)
+            return _real_origin_mul(a, b);
         else
             return b * a;
     }
 
-    public func operator / <T>(a:real, b:T)=> float
-        where b is float;
+    public func operator / <T>(a:real, b:T)
+        where b is float || b is real;
     {
-        return apply_operation:<float>("/", a, b);
+        if (b is real)
+            return _real_origin_div(a, b);
+        else
+            return apply_operation:<float>("/", a, b);
     }
 }
 
@@ -1340,9 +1375,9 @@ namespace float4x4
 
     public func create(...)=> float4x4{return apply_operation:<float4x4>("float4x4", ......);}
 
-    public func float3x3(self: float4x4)=> float3x3
+    public func float3x3(self: float4x4)=> ::float3x3
     {
-        return apply_operation:<float3x3>("%float3x3", self);
+        return apply_operation:<::float3x3>("%float3x3", self);
     }
 
     public func operator * <T>(a:float4x4, b:T)

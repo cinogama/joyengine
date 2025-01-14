@@ -370,7 +370,7 @@ namespace editor::gui::tilemap
         func create(context: EditorContext, 
             maintex: graphic::texture, 
             crc64: int, 
-            uid: string,
+            uidval: string,
             ix: int, iy: int, 
             xcount: int, ycount: int)
         {
@@ -389,7 +389,7 @@ namespace editor::gui::tilemap
                 maintex = maintex,
                 texture = tiletexture,
                 location = (ix, iy),
-                uid = uid,
+                uid = uidval,
                 auto_wrap = mut option::none,
                 walkable = mut false,
                 non_periodic_expansion = mut false,
@@ -464,11 +464,10 @@ namespace editor::gui::tilemap
         texture: mut graphic::texture,
         tiles: mut array<array<Tile>>,
         uid: string,
-
         modifed: mut bool,
     }
     {
-        func _clip_tiles(context: EditorContext, uid: string, tilemaptex: graphic::texture, xcount: int, ycount: int)
+        func _clip_tiles(context: EditorContext, uid_val: string, tilemaptex: graphic::texture, xcount: int, ycount: int)
         {
             try! crc64 = tilemaptex->path
                 =>> \p = crc64file(context->get_project->parse_path_normalize(p)->tostring);
@@ -482,7 +481,7 @@ namespace editor::gui::tilemap
                 let ytiles = []mut: vec<Tile>;
                 for (let mut iy = 0; iy < ycount; iy += 1)
                 {
-                    try! tile = new! Tile(context, tilemaptex, crc64, uid, ix, iy, xcount, ycount);
+                    try! tile = new! Tile(context, tilemaptex, crc64, uid_val, ix, iy, xcount, ycount);
                     ytiles->add(tile);
                 }
                 tiles->add(ytiles as vec<Tile>->unsafe::cast :<array<Tile>>());
@@ -490,16 +489,16 @@ namespace editor::gui::tilemap
             return result::ok(tiles as vec<array<Tile>>->unsafe::cast :<array<array<Tile>>>());
         }
 
-        func create(context: EditorContext, name: string, uid: string, tilemaptex: graphic::texture, xcount: int, ycount: int)
+        func create(context: EditorContext, name: string, uid_val: string, tilemaptex: graphic::texture, xcount: int, ycount: int)
         {           
-            try! tiles = _clip_tiles(context, uid, tilemaptex, xcount, ycount);
+            try! tiles = _clip_tiles(context, uid_val, tilemaptex, xcount, ycount);
             return result::ok(
                 TileMapSet
                 {
                     name = mut name,
                     texture = mut tilemaptex,
                     tiles = mut tiles,
-                    uid = uid,
+                    uid = uid_val,
                     modifed = mut false,
                 });
         }
@@ -567,14 +566,14 @@ namespace editor::gui::tilemap
             let name = data["name"] as string;
             let texture_path = data["texture"] as string;
             let size = data["size"] as array<dynamic>->>\e = e as int;;
-            let uid = data["uid"] as string;
+            let uid_val = data["uid"] as string;
             let tiles = data["tiles"] as array<dynamic>->>\e = e as dict<dynamic, dynamic>->>\k, v = (k as string, v);;;
 
             let texture = graphic::texture::load(option::none, texture_path);
             if (texture->is_value == false)
                 return result::err("无法加载纹理");
 
-            try! tileset = new! TileMapSet(context, name, uid, texture->unwrap, size[0], size[1]);
+            try! tileset = new! TileMapSet(context, name, uid_val, texture->unwrap, size[0], size[1]);
             for (let mut ix = 0; ix < size[0]; ix += 1)
             {
                 for (let mut iy = 0; iy < size[1]; iy += 1)
@@ -1284,7 +1283,10 @@ namespace editor::gui::tilemap
                         \ux: real, uy: real = tile_texture->pix((ipx, ipy))->get_color
                             where ipx = clamp(px, 0, tile_texture_w - 1)
                                 , ipy = clamp(py, 0, tile_texture_h - 1)
-                                , clamp = \v: int, min: int, max: int = v < min ? min | v > max ? max | v;
+                                , clamp = 
+                                    \v: int, min_val: int, max_val: int = 
+                                        v < min_val ? min_val | v > max_val ? max_val | v
+                                    ;
                                 , px = math::round(nx * tile_texture_w: real)
                                 , py = math::round(ny * tile_texture_h: real)
                                 , (nx, ny) = RANDOM_ROTATION(ux, uy)
@@ -1365,7 +1367,10 @@ namespace editor::gui::tilemap
                         \ux: real, uy: real = tile_texture->pix((ipx, ipy))->get_color
                             where ipx = clamp(px, 0, tile_texture_w - 1)
                                 , ipy = clamp(py, 0, tile_texture_h - 1)
-                                , clamp = \v: int, min: int, max: int = v < min ? min | v > max ? max | v;
+                                , clamp = 
+                                    \v: int, min_val: int, max_val: int = 
+                                        v < min_val ? min_val | v > max_val ? max_val | v
+                                    ;
                                 , px = math::round(nx * tile_texture_w: real)
                                 , py = math::round(ny * tile_texture_h: real)
                                 , (nx, ny) = RANDOM_ROTATION(ux, uy)
@@ -1468,7 +1473,10 @@ namespace editor::gui::tilemap
                         \ux: real, uy: real = tile_texture->pix((ipx, ipy))->get_color
                             where ipx = clamp(px, 0, tile_texture_w - 1)
                                 , ipy = clamp(py, 0, tile_texture_h - 1)
-                                , clamp = \v: int, min: int, max: int = v < min ? min | v > max ? max | v;
+                                , clamp = 
+                                    \v: int, min_val: int, max_val: int = 
+                                        v < min_val ? min_val | v > max_val ? max_val | v
+                                    ;
                                 , px = math::round(nx * tile_texture_w: real)
                                 , py = math::round(ny * tile_texture_h: real)
                                 , (nx, ny) = RANDOM_ROTATION(ux, uy)
@@ -1628,7 +1636,7 @@ namespace editor::gui::tilemap
                             }
 
                             // 保存区块信息
-                            let chunks_pos_info = {}mut: map<int, map<int, string>>;
+                            let chunks_pos_info = {}mut: ::map<int, ::map<int, string>>;
                             for (let chunk: saved_chunks)
                             {
                                 if (!chunks_pos_info->contain(chunk.m_position.0))

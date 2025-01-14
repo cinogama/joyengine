@@ -249,7 +249,7 @@ namespace editor::gui
         }
 
         let all_world_saved_and_closed = std::mutable::create(false);
-        let checked_files = {}mut: map<RefactorAskContent::ReplacingContent, void>;
+        let checked_files = {}mut: ::map<RefactorAskContent::ReplacingContent, void>;
 
         let load_world_list_after_form_closed = std::mutable::create(false);
         let select_all = std::mutable::create(true);

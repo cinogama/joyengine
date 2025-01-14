@@ -969,12 +969,6 @@ using $NEW_PRODUCER_NAME$ = struct{}
             ;
         ;
 
-        func debug(msg)
-        {
-            std::println(msg);
-            return msg;
-        }
-
         return normalized_path
             -> allsubpath()
             -> okay
@@ -1380,15 +1374,15 @@ namespace $$MODULE_NAME$$
         }
         if (MenuItemEnabled("复制文件", is_modifiable_file))
         {
-            let path = path.path;
-            let mut target_path = fsys::parent(path) / (fsys::purename(path) + "(1)" + fsys::extension(path));
+            let fsys_path = path.path;
+            let mut target_path = fsys::parent(fsys_path) / (fsys::purename(fsys_path) + "(1)" + fsys::extension(fsys_path));
 
             for (let mut n = 2; ; n += 1)
                 if (fsys::exist(target_path))
-                    target_path = fsys::parent(path) / (fsys::purename(path) + F"({n})" + fsys::extension(path));
+                    target_path = fsys::parent(fsys_path) / (fsys::purename(fsys_path) + F"({n})" + fsys::extension(fsys_path));
                 else break;
 
-            match (fsys::copy(path, target_path))
+            match (fsys::copy(fsys_path, target_path))
             {
             ok(_)?
                 {
@@ -1655,7 +1649,7 @@ namespace $$MODULE_NAME$$
         }
 
         // 用于递归展示所有子目录等
-        func _show_paths(path: PathInfo)
+        func _show_paths(path: PathInfo)=> void
         {
             match (path.type->get)
             {
@@ -1702,7 +1696,7 @@ namespace $$MODULE_NAME$$
             return LogHook{
                 m_logs = []mut,
                 m_display_setting = {
-                    [je::editor::loglevel::NORMAL] = ("普通", mut true, option::none, mut 0),
+                    [je::editor::loglevel::NORMAL] = ("普通", mut true, option::none: option<(int, int, int, int)>, mut 0),
                     [je::editor::loglevel::INFO] = ("信息", mut true, option::value((0,255,127,255)), mut 0),
                     [je::editor::loglevel::WARNING] = ("警告", mut true, option::value((200,200,0,255)), mut 0),
                     [je::editor::loglevel::ERROR] = ("错误", mut true, option::value((200,0,0,200)), mut 0),
