@@ -980,7 +980,7 @@ namespace real
         if (b is real)
             return _real_origin_sub(a, b);
         else
-            return b + (-a);
+            return apply_operation:<float>("-", a, b);
     }
     public func operator * <T>(a:real, b:T)
         where b is float 

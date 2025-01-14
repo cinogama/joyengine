@@ -207,10 +207,6 @@ WO_API wo_api jeecs_shader_append_struct_member(wo_vm vm, wo_value args);
 WO_API wo_api jeecs_shader_apply_operation(wo_vm vm, wo_value args);
 WO_API wo_api jeecs_shader_bind_struct_as_uniform_buffer(wo_vm vm, wo_value args);
 WO_API wo_api jeecs_shader_create_fragment_in(wo_vm vm, wo_value args);
-WO_API wo_api jeecs_shader_real_raw_op_add(wo_vm vm, wo_value args);
-WO_API wo_api jeecs_shader_real_raw_op_sub(wo_vm vm, wo_value args);
-WO_API wo_api jeecs_shader_real_raw_op_mul(wo_vm vm, wo_value args);
-WO_API wo_api jeecs_shader_real_raw_op_div(wo_vm vm, wo_value args);
 WO_API wo_api jeecs_shader_create_rot_mat4x4(wo_vm vm, wo_value args);
 WO_API wo_api jeecs_shader_create_sampler2d(wo_vm vm, wo_value args);
 WO_API wo_api jeecs_shader_create_shader_value_out(wo_vm vm, wo_value args);
@@ -229,6 +225,10 @@ WO_API wo_api jeecs_shader_integer2_create(wo_vm vm, wo_value args);
 WO_API wo_api jeecs_shader_integer3_create(wo_vm vm, wo_value args);
 WO_API wo_api jeecs_shader_integer4_create(wo_vm vm, wo_value args);
 WO_API wo_api jeecs_shader_integer_create(wo_vm vm, wo_value args);
+WO_API wo_api jeecs_shader_real_raw_op_add(wo_vm vm, wo_value args);
+WO_API wo_api jeecs_shader_real_raw_op_div(wo_vm vm, wo_value args);
+WO_API wo_api jeecs_shader_real_raw_op_mul(wo_vm vm, wo_value args);
+WO_API wo_api jeecs_shader_real_raw_op_sub(wo_vm vm, wo_value args);
 WO_API wo_api jeecs_shader_sampler2d_bind_texture(wo_vm vm, wo_value args);
 WO_API wo_api jeecs_shader_texture2d_set_channel(wo_vm vm, wo_value args);
 WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args);
@@ -677,10 +677,6 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"jeecs_shader_apply_operation", (void*)&jeecs_shader_apply_operation},
         wo_extern_lib_func_t{"jeecs_shader_bind_struct_as_uniform_buffer", (void*)&jeecs_shader_bind_struct_as_uniform_buffer},
         wo_extern_lib_func_t{"jeecs_shader_create_fragment_in", (void*)&jeecs_shader_create_fragment_in},
-        wo_extern_lib_func_t{"jeecs_shader_real_raw_op_add", (void*)&jeecs_shader_real_raw_op_add },
-        wo_extern_lib_func_t{ "jeecs_shader_real_raw_op_sub", (void*)&jeecs_shader_real_raw_op_sub },
-        wo_extern_lib_func_t{"jeecs_shader_real_raw_op_mul", (void*)&jeecs_shader_real_raw_op_mul },
-        wo_extern_lib_func_t{ "jeecs_shader_real_raw_op_div", (void*)&jeecs_shader_real_raw_op_div },
         wo_extern_lib_func_t{"jeecs_shader_create_rot_mat4x4", (void*)&jeecs_shader_create_rot_mat4x4},
         wo_extern_lib_func_t{"jeecs_shader_create_sampler2d", (void*)&jeecs_shader_create_sampler2d},
         wo_extern_lib_func_t{"jeecs_shader_create_shader_value_out", (void*)&jeecs_shader_create_shader_value_out},
@@ -699,6 +695,10 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"jeecs_shader_integer3_create", (void*)&jeecs_shader_integer3_create},
         wo_extern_lib_func_t{"jeecs_shader_integer4_create", (void*)&jeecs_shader_integer4_create},
         wo_extern_lib_func_t{"jeecs_shader_integer_create", (void*)&jeecs_shader_integer_create},
+        wo_extern_lib_func_t{"jeecs_shader_real_raw_op_add", (void*)&jeecs_shader_real_raw_op_add},
+        wo_extern_lib_func_t{"jeecs_shader_real_raw_op_div", (void*)&jeecs_shader_real_raw_op_div},
+        wo_extern_lib_func_t{"jeecs_shader_real_raw_op_mul", (void*)&jeecs_shader_real_raw_op_mul},
+        wo_extern_lib_func_t{"jeecs_shader_real_raw_op_sub", (void*)&jeecs_shader_real_raw_op_sub},
         wo_extern_lib_func_t{"jeecs_shader_sampler2d_bind_texture", (void*)&jeecs_shader_sampler2d_bind_texture},
         wo_extern_lib_func_t{"jeecs_shader_texture2d_set_channel", (void*)&jeecs_shader_texture2d_set_channel},
         wo_extern_lib_func_t{"jeecs_shader_wrap_result_pack", (void*)&jeecs_shader_wrap_result_pack},
