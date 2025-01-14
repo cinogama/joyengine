@@ -2108,7 +2108,7 @@ WO_API wo_api wojeapi_towoo_update_component(wo_vm vm, wo_value args)
                 }
                 else
                 {
-                    wo_value cvm_s = wo_reserve_stack(cvm, 1, &args);
+                    wo_value cvm_s = wo_reserve_stack(cvm, 1, nullptr);
                     wo_set_string(cvm_s + 0, cvm, component_name);
                     auto* retval = wo_invoke_rsfunc(cvm, initfunc, 1, nullptr, &cvm_s);
                     wo_pop_stack(cvm, 1);

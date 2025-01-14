@@ -308,7 +308,7 @@ WO_API wo_api jeecs_shader_apply_operation(wo_vm vm, wo_value args)
     {
         auto value_type = wo_valuetype(args + i);
         if (value_type != WO_INTEGER_TYPE && value_type != WO_REAL_TYPE && value_type != WO_GCHANDLE_TYPE && value_type != WO_HANDLE_TYPE)
-            return wo_ret_panic(vm, "Cannot do this operations: argument type should be number or shader_value.");
+            return wo_ret_halt(vm, "Cannot do this operations: argument type should be number or shader_value.");
 
         jegl_shader_value* sval;
         if (value_type == WO_GCHANDLE_TYPE || value_type == WO_HANDLE_TYPE)
@@ -955,16 +955,17 @@ using shader_function = struct{
     }
 }
 )" R"(
-extern("libjoyecs", "jeecs_shader_real_raw_op_add")
-func _real_origin_add(a: real, b: real)=> real;
-extern("libjoyecs", "jeecs_shader_real_raw_op_sub")
-func _real_origin_sub(a: real, b: real)=> real;
-extern("libjoyecs", "jeecs_shader_real_raw_op_mul")
-func _real_origin_mul(a: real, b: real)=> real;
-extern("libjoyecs", "jeecs_shader_real_raw_op_div")
-func _real_origin_div(a: real, b: real)=> real;
 namespace real
 {
+    extern("libjoyecs", "jeecs_shader_real_raw_op_add")
+    func _real_origin_add(a: real, b: real)=> real;
+    extern("libjoyecs", "jeecs_shader_real_raw_op_sub")
+    func _real_origin_sub(a: real, b: real)=> real;
+    extern("libjoyecs", "jeecs_shader_real_raw_op_mul")
+    func _real_origin_mul(a: real, b: real)=> real;
+    extern("libjoyecs", "jeecs_shader_real_raw_op_div")
+    func _real_origin_div(a: real, b: real)=> real;
+
     public func operator + <T>(a:real, b:T)
         where b is float || b is real;
     {

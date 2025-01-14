@@ -931,7 +931,7 @@ namespace je::towoo::component
     let registered_member_infoms = []mut: vec<(string, typeinfo, option<(string, dynamic)>)>;
     public func register_member<TInfo>(name: string, typename_and_init_val: option<(string, dynamic)>)
     {
-       registered_member_infoms->add((name, TInfo::typeinfo, typename_and_init_val));
+       registered_member_infoms->add((name, typeof:<TInfo>::typeinfo, typename_and_init_val));
     }
 }
 
