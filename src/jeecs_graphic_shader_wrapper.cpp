@@ -789,35 +789,35 @@ using sampler2d = gchandle
 
 private func _get_type_enum<ShaderValueT>()=> shader_value_type
 {
-    if (std::is_same_type:<ShaderValueT, float>)
+    if (std::type_traits::is_same:<ShaderValueT, float>)
         return shader_value_type::FLOAT;
-    else if (std::is_same_type:<ShaderValueT, float2>)
+    else if (std::type_traits::is_same:<ShaderValueT, float2>)
         return shader_value_type::FLOAT2;
-    else if (std::is_same_type:<ShaderValueT, float3>)
+    else if (std::type_traits::is_same:<ShaderValueT, float3>)
         return shader_value_type::FLOAT3;
-    else if (std::is_same_type:<ShaderValueT, float4>)
+    else if (std::type_traits::is_same:<ShaderValueT, float4>)
         return shader_value_type::FLOAT4;
-    else if (std::is_same_type:<ShaderValueT, float2x2>)
+    else if (std::type_traits::is_same:<ShaderValueT, float2x2>)
         return shader_value_type::FLOAT2x2;
-    else if (std::is_same_type:<ShaderValueT, float3x3>)
+    else if (std::type_traits::is_same:<ShaderValueT, float3x3>)
         return shader_value_type::FLOAT3x3;
-    else if (std::is_same_type:<ShaderValueT, float4x4>)
+    else if (std::type_traits::is_same:<ShaderValueT, float4x4>)
         return shader_value_type::FLOAT4x4;
-    else if (std::is_same_type:<ShaderValueT, texture2d>)
+    else if (std::type_traits::is_same:<ShaderValueT, texture2d>)
         return shader_value_type::TEXTURE2D;
-    else if (std::is_same_type:<ShaderValueT, texture2dms>)
+    else if (std::type_traits::is_same:<ShaderValueT, texture2dms>)
         return shader_value_type::TEXTURE2D_MS;
-    else if (std::is_same_type:<ShaderValueT, texturecube>)
+    else if (std::type_traits::is_same:<ShaderValueT, texturecube>)
         return shader_value_type::TEXTURE_CUBE;
-    else if (std::is_same_type:<ShaderValueT, integer>)
+    else if (std::type_traits::is_same:<ShaderValueT, integer>)
         return shader_value_type::INTEGER;
-    else if (std::is_same_type:<ShaderValueT, integer2>)
+    else if (std::type_traits::is_same:<ShaderValueT, integer2>)
         return shader_value_type::INTEGER2;
-    else if (std::is_same_type:<ShaderValueT, integer3>)
+    else if (std::type_traits::is_same:<ShaderValueT, integer3>)
         return shader_value_type::INTEGER3;
-    else if (std::is_same_type:<ShaderValueT, integer4>)
+    else if (std::type_traits::is_same:<ShaderValueT, integer4>)
         return shader_value_type::INTEGER4;
-    else if (std::is_same_type:<ShaderValueT, structure>)
+    else if (std::type_traits::is_same:<ShaderValueT, structure>)
         return shader_value_type::STRUCT;
 
     std::halt("Unknown type, not shader type?");

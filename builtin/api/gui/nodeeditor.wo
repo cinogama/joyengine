@@ -1118,9 +1118,9 @@ namespace jeapi::gui
         }
 
         func alloc_id<T>(self: node_editor)
-            where std::is_same_type:<T, NodeId>
-                || std::is_same_type:<T, PinId>
-                || std::is_same_type:<T, LinkId>;
+            where std::type_traits::is_same:<T, NodeId>
+                || std::type_traits::is_same:<T, PinId>
+                || std::type_traits::is_same:<T, LinkId>;
         {
             self.allocated_id += 1;
             return self.allocated_id: T;
