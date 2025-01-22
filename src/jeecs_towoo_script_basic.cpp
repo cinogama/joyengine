@@ -1104,7 +1104,7 @@ namespace je::towoo::system
         }
         public func contain<CompT>(self: ToWooSystemFuncJob, is_arg: bool)
         {
-            self.m_requirement->add((require_type::CONTAIN, self.m_require_group, CompT::type::typeinfo));
+            self.m_requirement->add((require_type::CONTAIN, self.m_require_group, typeof:<CompT>::type::typeinfo));
             self.m_require_group += 1;
             if (is_arg)
                 self.m_argument_count += 1;
@@ -1112,14 +1112,14 @@ namespace je::towoo::system
         }
         public func maynot<CompT>(self: ToWooSystemFuncJob)
         {
-            self.m_requirement->add((require_type::MAYNOT, self.m_require_group, CompT::type::typeinfo));
+            self.m_requirement->add((require_type::MAYNOT, self.m_require_group, typeof:<CompT>::type::typeinfo));
             self.m_require_group += 1;
             self.m_argument_count += 1;
             return self;
         }
         public func except<CompT>(self: ToWooSystemFuncJob)
         {
-            self.m_requirement->add((require_type::EXCEPT, self.m_require_group, CompT::type::typeinfo));
+            self.m_requirement->add((require_type::EXCEPT, self.m_require_group, typeof:<CompT>::type::typeinfo));
             self.m_require_group += 1;
             return self;
         }
