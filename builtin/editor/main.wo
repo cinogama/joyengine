@@ -25,6 +25,9 @@ import builtin::editor::gui::main;
 
 jeapi::welcome::display_copyright_msg();
 
+// Debug.
+je::editor::register_panic_hook(jeapi::gui::form::panic);
+
 using je::gui;
 
 let mut action_after_guide_form_closed = \ = result::ok(\=do nil;); as ()=>result<()=>void, string>;
@@ -464,8 +467,6 @@ func open_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict
     }
 
 }
-
-// je::editor::register_panic_hook(jeapi::gui::form::panic);
 
 for (;;)
 {
