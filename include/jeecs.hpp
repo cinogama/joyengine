@@ -9270,33 +9270,35 @@ namespace jeecs
         };
         struct ShadowBuffer
         {
-            size_t resolution_width = 1024;
-            size_t resolution_height = 768;
+            float precision = 10.f;
 
             basic::resource<graphic::framebuffer> buffer = nullptr;
 
             ShadowBuffer() = default;
             ShadowBuffer(const ShadowBuffer& another)
-                : resolution_width(another.resolution_width)
-                , resolution_height(another.resolution_width)
-            {}
+                : precision(another.precision)
+            {
+            }
             ShadowBuffer(ShadowBuffer&&) = default;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(guard, &ShadowBuffer::resolution_width, "resolution_width");
-                typing::register_member(guard, &ShadowBuffer::resolution_height, "resolution_height");
+                typing::register_member(guard, &ShadowBuffer::precision, "precision");
             }
         };
         struct CameraPostPass
         {
-            basic::resource<graphic::framebuffer> post_rend_target = nullptr;
-            basic::resource<jeecs::graphic::framebuffer> post_light_target = nullptr;
+            basic::resource<graphic::framebuffer> 
+                post_rend_target = nullptr;
+            basic::resource<jeecs::graphic::framebuffer> 
+                post_light_target = nullptr;
 
             float ratio = 1.0f;
 
             CameraPostPass() = default;
-            CameraPostPass(const CameraPostPass& another) : ratio(another.ratio) {}
+            CameraPostPass(const CameraPostPass& another) : ratio(another.ratio) 
+            {
+            }
             CameraPostPass(CameraPostPass&&) = default;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)

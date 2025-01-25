@@ -57,7 +57,7 @@ namespace editor::gui::edit_forms
                         context.not_append_types->add(sys);
 
             // 添加默认图形管线
-            context->active("Graphic::UnlitGraphicPipelineSystem");
+            context->active("Graphic::DefaultGraphicPipelineSystem");
 
             context->append("Animation::FrameAnimationSystem");
             context->append("Script::ScriptRuntimeSystem");

@@ -13,7 +13,9 @@ WO_API wo_api wojeapi_deltatime(wo_vm vm, wo_value args)
 {
     if (jeecs::ScriptRuntimeSystem::system_instance == nullptr)
     {
-        jeecs::debug::logerr("You can only get delta time in world with Script::ScriptRuntimeSystem.");
+        jeecs::debug::logerr(
+            "You can only get delta time in world with Script::ScriptRuntimeSystem.");
+
         return wo_ret_real(vm, 0.);
     }
 
@@ -116,8 +118,7 @@ void _jeecs_entry_register_core_systems(jeecs::typing::type_unregister_guard* gu
     jeecs::typing::type_info::register_type<jeecs::FrameAnimationSystem>(guard, "Animation::FrameAnimationSystem");
 
     jeecs::typing::type_info::register_type<jeecs::UserInterfaceGraphicPipelineSystem>(guard, "Graphic::UserInterfaceGraphicPipelineSystem");
-    jeecs::typing::type_info::register_type<jeecs::UnlitGraphicPipelineSystem>(guard, "Graphic::UnlitGraphicPipelineSystem");
-    jeecs::typing::type_info::register_type<jeecs::DeferLight2DGraphicPipelineSystem>(guard, "Graphic::DeferLight2DGraphicPipelineSystem");
+    jeecs::typing::type_info::register_type<jeecs::DefaultGraphicPipelineSystem>(guard, "Graphic::DefaultGraphicPipelineSystem");
 
     jeecs::typing::type_info::register_type<jeecs::ScriptRuntimeSystem>(guard, "Script::ScriptRuntimeSystem");
     jeecs::typing::type_info::register_type<jeecs::AudioUpdatingSystem>(guard, "Audio::AudioUpdatingSystem");
