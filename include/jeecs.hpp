@@ -9270,22 +9270,18 @@ namespace jeecs
         };
         struct ShadowBuffer
         {
-            size_t resolution_width = 1024;
-            size_t resolution_height = 768;
-
+            float resolution_ratio = 0.25f;
             basic::resource<graphic::framebuffer> buffer = nullptr;
 
             ShadowBuffer() = default;
             ShadowBuffer(const ShadowBuffer& another)
-                : resolution_width(another.resolution_width)
-                , resolution_height(another.resolution_width)
+                : resolution_ratio(another.resolution_ratio)
             {}
             ShadowBuffer(ShadowBuffer&&) = default;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(guard, &ShadowBuffer::resolution_width, "resolution_width");
-                typing::register_member(guard, &ShadowBuffer::resolution_height, "resolution_height");
+                typing::register_member(guard, &ShadowBuffer::resolution_ratio, "resolution_ratio");
             }
         };
         struct CameraPostPass
@@ -9293,15 +9289,15 @@ namespace jeecs
             basic::resource<graphic::framebuffer> post_rend_target = nullptr;
             basic::resource<jeecs::graphic::framebuffer> post_light_target = nullptr;
 
-            float ratio = 1.0f;
+            float light_rend_ratio = 0.5f;
 
             CameraPostPass() = default;
-            CameraPostPass(const CameraPostPass& another) : ratio(another.ratio) {}
+            CameraPostPass(const CameraPostPass& another) : light_rend_ratio(another.light_rend_ratio) {}
             CameraPostPass(CameraPostPass&&) = default;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(guard, &CameraPostPass::ratio, "ratio");
+                typing::register_member(guard, &CameraPostPass::light_rend_ratio, "light_rend_ratio");
             }
         };
         struct BlockShadow

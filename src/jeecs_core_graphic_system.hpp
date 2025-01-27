@@ -1584,17 +1584,22 @@ public func frag(_: v2f)
                             ? rendbuf->framebuffer.get()
                             : nullptr;
 
-                        size_t
-                            RENDAIMBUFFER_WIDTH =
-                            (size_t)llround(
+                        size_t RENDAIMBUFFER_WIDTH =
+                            std::max((size_t)1, (size_t)llround(
                                 (cameraviewport ? cameraviewport->viewport.z : 1.0f) *
-                                (rend_aim_buffer ? rend_aim_buffer->width() : WINDOWS_WIDTH)) *
-                            std::max(0.001f, std::min(light2dpostpass->ratio, 1.0f)),
-                            RENDAIMBUFFER_HEIGHT =
-                            (size_t)llround(
+                                (rend_aim_buffer ? rend_aim_buffer->width() : WINDOWS_WIDTH)));
+                        size_t RENDAIMBUFFER_HEIGHT =
+                            std::max((size_t)1, (size_t)llround(
                                 (cameraviewport ? cameraviewport->viewport.w : 1.0f) *
-                                (rend_aim_buffer ? rend_aim_buffer->height() : WINDOWS_HEIGHT)) *
-                            std::max(0.001f, std::min(light2dpostpass->ratio, 1.0f));
+                                (rend_aim_buffer ? rend_aim_buffer->height() : WINDOWS_HEIGHT)));
+                        
+                        size_t LIGHT_BUFFER_WIDTH = 
+                            std::max((size_t)1, (size_t)llround(
+                                RENDAIMBUFFER_WIDTH * std::max(0.f, std::min(light2dpostpass->light_rend_ratio, 1.0f))));
+
+                        size_t LIGHT_BUFFER_HEIGHT =
+                            std::max((size_t)1, (size_t)llround(
+                                RENDAIMBUFFER_HEIGHT * std::max(0.f, std::min(light2dpostpass->light_rend_ratio, 1.0f))));
 
                         bool need_update = light2dpostpass->post_rend_target == nullptr
                             || light2dpostpass->post_rend_target->width() != RENDAIMBUFFER_WIDTH
@@ -1616,7 +1621,7 @@ public func frag(_: v2f)
                                         jegl_texture::format::DEPTH,
                                     });
                             light2dpostpass->post_light_target
-                                = jeecs::graphic::framebuffer::create(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
+                                = jeecs::graphic::framebuffer::create(LIGHT_BUFFER_WIDTH, LIGHT_BUFFER_HEIGHT,
                                     {
                                         // 光渲染结果
                                         (jegl_texture::format)(jegl_texture::format::RGBA | jegl_texture::format::FLOAT16),
@@ -1656,16 +1661,24 @@ public func frag(_: v2f)
                     );
                     if (shadowbuffer != nullptr)
                     {
+                        size_t SHADOW_BUFFER_WIDTH =
+                            std::max((size_t)1, (size_t)llround(
+                                WINDOWS_WIDTH * std::max(0.f, std::min(shadowbuffer->resolution_ratio, 1.0f))));
+
+                        size_t SHADOW_BUFFER_HEIGHT =
+                            std::max((size_t)1, (size_t)llround(
+                                WINDOWS_HEIGHT * std::max(0.f, std::min(shadowbuffer->resolution_ratio, 1.0f))));
+
                         bool generate_new_framebuffer =
                             shadowbuffer->buffer == nullptr
-                            || shadowbuffer->buffer->width() != shadowbuffer->resolution_width
-                            || shadowbuffer->buffer->height() != shadowbuffer->resolution_height;
+                            || shadowbuffer->buffer->width() != SHADOW_BUFFER_WIDTH
+                            || shadowbuffer->buffer->height() != SHADOW_BUFFER_HEIGHT;
 
                         if (generate_new_framebuffer)
                         {
                             shadowbuffer->buffer = graphic::framebuffer::create(
-                                std::max((size_t)1, shadowbuffer->resolution_width),
-                                std::max((size_t)1, shadowbuffer->resolution_height),
+                                std::max((size_t)1, SHADOW_BUFFER_WIDTH),
+                                std::max((size_t)1, SHADOW_BUFFER_HEIGHT),
                                 {
                                     jegl_texture::format::RGBA,
                                     // Only store shadow value to R-pass
@@ -2520,9 +2533,19 @@ public func frag(_: v2f)
                                 light_color.w);
 
                             if (light2d.shadowbuffer != nullptr)
+                            {
+                                size_t SHADOW_BUFFER_WIDTH =
+                                    std::max((size_t)1, (size_t)llround(
+                                        WINDOWS_WIDTH * std::max(0.f, std::min(light2d.shadowbuffer->resolution_ratio, 1.0f))));
+
+                                size_t SHADOW_BUFFER_HEIGHT =
+                                    std::max((size_t)1, (size_t)llround(
+                                        WINDOWS_HEIGHT * std::max(0.f, std::min(light2d.shadowbuffer->resolution_ratio, 1.0f))));
+
                                 JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, light2d_resolution, float2,
-                                    (float)light2d.shadowbuffer->resolution_width,
-                                    (float)light2d.shadowbuffer->resolution_height);
+                                    (float)SHADOW_BUFFER_WIDTH,
+                                    (float)SHADOW_BUFFER_HEIGHT);
+                            }
                             else
                                 JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, light2d_resolution, float2,
                                     (float)1.f,
