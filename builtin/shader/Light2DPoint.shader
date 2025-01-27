@@ -38,25 +38,28 @@ public func vert(v: vin)
 }
 
 SHADER_FUNCTION!
-func multi_sampling_for_bias_shadow(shadow: texture2d, uv: float2)
+func multi_sampling_for_bias_shadow(
+    shadow  : texture2d, 
+    uv      : float2)
 {
     let mut shadow_factor = float::zero;
-    let bias = 1.;
 
-    let bias_weight = [
-        (-1., 1., 0.5),    (0., 1., 0.95),     (1., 1., 0.5),
-        (-1., 0., 0.95),    (0., 0., 1.),     (1., 0., 0.95),
-        (-1., -1., 0.5),   (0., -1., 0.95),    (1., -1., 0.5),
+    let bias = [
+        (0., 1.),
+        (-1., 0.),    
+        (0., 0.),     
+        (1., 0.),
+        (0., -1.),
     ];
 
-    let reso_inv = float2::one / je_light2d_resolutin;
-
-    for (let (x, y, weight) : bias_weight)
+    let bias_step = 0.5 * float2::one / je_light2d_resolution;
+    for (let (x, y) : bias)
     {
-        let shadow_weight = texture(shadow, uv + reso_inv * vec2(x, y) * bias)->x;
-        shadow_factor = max(shadow_factor, shadow_weight * weight);
+        shadow_factor = max(
+            shadow_factor,
+            texture(shadow, uv + bias_step * vec2(x, y))->x);
     }
-    return 1. - shadow_factor;
+    return shadow_factor;
 }
 
 SHADER_FUNCTION!
@@ -99,7 +102,7 @@ public func frag(vf: v2f)
     let uvdistance = clamp(length((vf.uv - float2::const(0.5, 0.5)) * 2.), 0., 1.);
     let fgdistance = distance(vposition, pixvpos);
 
-    let shadow_factor = multi_sampling_for_bias_shadow(Shadow, uv);
+    let shadow_factor = 1. - multi_sampling_for_bias_shadow(Shadow, uv);
     let decay = je_light2d_decay;
 
     let fade_factor = pow(1. - uvdistance, decay);

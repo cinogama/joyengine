@@ -3593,8 +3593,10 @@ VK_API_PLATFORM_API_LIST
             resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_tiling = shader_blob->get_built_in_location("JOYENGINE_TEXTURE_TILING");
             resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_offset = shader_blob->get_built_in_location("JOYENGINE_TEXTURE_OFFSET");
 
-            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_light2d_resolution = shader_blob->get_built_in_location("JOYENGINE_LIGHT2D_RESOLUTION");
-            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_light2d_decay = shader_blob->get_built_in_location("JOYENGINE_LIGHT2D_DECAY");
+            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_light2d_resolution = 
+                shader_blob->get_built_in_location("JOYENGINE_LIGHT2D_RESOLUTION");
+            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_light2d_decay =
+                shader_blob->get_built_in_location("JOYENGINE_LIGHT2D_DECAY");
 
             // ATTENTION: 注意，以下参数特殊shader可能挪作他用
             resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_local_scale = shader_blob->get_built_in_location("JOYENGINE_LOCAL_SCALE");

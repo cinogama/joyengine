@@ -1524,18 +1524,15 @@ public func uvtrans(uv: float2, tiling: float2, offset: float2)
 }
 )" R"(
 let _uvframebuf = custom_method:<float2>("JEBUILTIN_Uvframebuffer",
-@"
-vec2 JEBUILTIN_Uvframebuffer(vec2 v)
-{
-    return v;
-}
-"@,
-@"
-float2 JEBUILTIN_Uvframebuffer(float2 v)
-{
-    return float2(v.x, 1.0 - v.y);
-}
-"@);
+    @"vec2 JEBUILTIN_Uvframebuffer(vec2 v)
+    {
+        return v;
+    }"@,
+    @"float2 JEBUILTIN_Uvframebuffer(float2 v)
+    {
+        return float2(v.x, 1.0 - v.y);
+    }"@);
+
 public func uvframebuf(uv: float2)
 {
      return _uvframebuf(uv);

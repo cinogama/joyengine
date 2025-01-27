@@ -24,14 +24,21 @@ let JE_LIGHT2D_DEFER_0 = 4;
 
 let __linear_clamp = sampler2d::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
 
-public let je_light2d_resolutin = uniform("JOYENGINE_LIGHT2D_RESOLUTION", float2::one);
-public let je_light2d_decay = uniform("JOYENGINE_LIGHT2D_DECAY", float::one);
+public let je_light2d_resolution = 
+    uniform("JOYENGINE_LIGHT2D_RESOLUTION", float2::one);
+public let je_light2d_decay = 
+    uniform("JOYENGINE_LIGHT2D_DECAY", float::one);
 
-public let je_light2d_defer_albedo = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_Albedo", __linear_clamp, JE_LIGHT2D_DEFER_0 + 0);
-public let je_light2d_defer_self_luminescence = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_SelfLuminescence", __linear_clamp, JE_LIGHT2D_DEFER_0 + 1);
-public let je_light2d_defer_vspace_position = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_VSpacePosition", __linear_clamp, JE_LIGHT2D_DEFER_0 + 2);
-public let je_light2d_defer_vspace_normalize = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_VSpaceNormalize", __linear_clamp, JE_LIGHT2D_DEFER_0 + 3);
-public let je_light2d_defer_shadow = uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_Shadow", __linear_clamp, JE_LIGHT2D_DEFER_0 + 4);
+public let je_light2d_defer_albedo = 
+    uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_Albedo", __linear_clamp, JE_LIGHT2D_DEFER_0 + 0);
+public let je_light2d_defer_self_luminescence = 
+    uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_SelfLuminescence", __linear_clamp, JE_LIGHT2D_DEFER_0 + 1);
+public let je_light2d_defer_vspace_position = 
+    uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_VSpacePosition", __linear_clamp, JE_LIGHT2D_DEFER_0 + 2);
+public let je_light2d_defer_vspace_normalize = 
+    uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_VSpaceNormalize", __linear_clamp, JE_LIGHT2D_DEFER_0 + 3);
+public let je_light2d_defer_shadow = 
+    uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_Shadow", __linear_clamp, JE_LIGHT2D_DEFER_0 + 4);
 )";
 
 const char* shader_pbr_path = "je/shader/pbr.wo";
@@ -1602,6 +1609,8 @@ public func frag(_: v2f)
                                 RENDAIMBUFFER_HEIGHT * std::max(0.f, std::min(light2dpostpass->light_rend_ratio, 1.0f))));
 
                         bool need_update = light2dpostpass->post_rend_target == nullptr
+                            || light2dpostpass->post_light_target->width() != LIGHT_BUFFER_WIDTH
+                            || light2dpostpass->post_light_target->width() != LIGHT_BUFFER_HEIGHT
                             || light2dpostpass->post_rend_target->width() != RENDAIMBUFFER_WIDTH
                             || light2dpostpass->post_rend_target->height() != RENDAIMBUFFER_HEIGHT;
                         if (need_update && RENDAIMBUFFER_WIDTH > 0 && RENDAIMBUFFER_HEIGHT > 0)
@@ -2418,7 +2427,8 @@ public func frag(_: v2f)
                         && current_camera.light2DPostPass->post_light_target != nullptr);
 
                     // Rend Light result to target buffer.
-                    jegl_rendchain* light2d_light_effect_rend_chain = jegl_branch_new_chain(current_camera.branchPipeline,
+                    jegl_rendchain* light2d_light_effect_rend_chain = jegl_branch_new_chain(
+                        current_camera.branchPipeline,
                         current_camera.light2DPostPass->post_light_target->resouce(),
                         0, 0, 0, 0);
 
@@ -2485,7 +2495,8 @@ public func frag(_: v2f)
                         const jeecs::math::vec2
                             * _using_tiling = &default_tiling,
                             * _using_offset = &default_offset;
-                        jegl_rchain_bind_texture(light2d_light_effect_rend_chain, texture_group, 0, m_default_resources.default_texture->resouce());
+                        jegl_rchain_bind_texture(
+                            light2d_light_effect_rend_chain, texture_group, 0, m_default_resources.default_texture->resouce());
 
                         if (light2d.textures != nullptr)
                         {
@@ -2493,7 +2504,8 @@ public func frag(_: v2f)
                             _using_offset = &light2d.textures->offset;
 
                             for (auto& texture : light2d.textures->textures)
-                                jegl_rchain_bind_texture(light2d_light_effect_rend_chain, texture_group, texture.m_pass_id, texture.m_texture->resouce());
+                                jegl_rchain_bind_texture(
+                                    light2d_light_effect_rend_chain, texture_group, texture.m_pass_id, texture.m_texture->resouce());
                         }
 
                         for (auto& shader_pass : drawing_shaders)
@@ -2502,7 +2514,8 @@ public func frag(_: v2f)
                             if (!shader_pass->m_builtin)
                                 using_shader = &m_default_resources.default_shader;
 
-                            auto* rchain_draw_action = jegl_rchain_draw(light2d_light_effect_rend_chain, (*using_shader)->resouce(), drawing_shape->resouce(), texture_group);
+                            auto* rchain_draw_action = jegl_rchain_draw(
+                                light2d_light_effect_rend_chain, (*using_shader)->resouce(), drawing_shape->resouce(), texture_group);
                             auto* builtin_uniform = (*using_shader)->m_builtin;
 
                             JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, MAT4_MODEL);

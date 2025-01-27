@@ -41,7 +41,7 @@ SHADER_FUNCTION!
 func multi_sampling_for_bias_glowing_level1(tex: texture2d, uv : float2, bias: float)=> float3
 {
     let mut result = float3::zero;
-    let reso_inv = float2::one / je_light2d_resolutin;
+    let reso_inv = float2::one / je_light2d_resolution;
     for (let (x, y, weight) : bias_weight)
     {
         result = result + texture(tex, uv + reso_inv * vec2(x, y) * bias)->xyz * weight;
@@ -53,7 +53,7 @@ SHADER_FUNCTION!
 func multi_sampling_for_bias_glowing_level2(tex: texture2d, uv: float2, bias: float)=> float3
 {
     let mut result = float3::zero;
-    let reso_inv = float2::one / je_light2d_resolutin;
+    let reso_inv = float2::one / je_light2d_resolution;
     for (let (x, y, weight) : bias_weight)
     {
         result = result + multi_sampling_for_bias_glowing_level1(
