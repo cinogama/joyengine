@@ -9289,7 +9289,7 @@ namespace jeecs
             basic::resource<graphic::framebuffer> post_rend_target = nullptr;
             basic::resource<jeecs::graphic::framebuffer> post_light_target = nullptr;
 
-            float light_rend_ratio = 0.5f;
+            float light_rend_ratio = 0.25f;
 
             CameraPostPass() = default;
             CameraPostPass(const CameraPostPass& another) : light_rend_ratio(another.light_rend_ratio) {}
