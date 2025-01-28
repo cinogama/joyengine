@@ -9271,7 +9271,7 @@ namespace jeecs
         };
         struct ShadowBuffer
         {
-            float resolution_ratio = 0.25f;
+            float resolution_ratio = 0.5f;
             basic::resource<graphic::framebuffer> buffer = nullptr;
 
             ShadowBuffer() = default;

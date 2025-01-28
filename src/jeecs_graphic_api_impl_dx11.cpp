@@ -304,7 +304,7 @@ namespace jeecs::graphic::api::dx11
         ZeroMemory(&sd, sizeof(sd));
         sd.BufferDesc.Width = (UINT)config->m_width;
         sd.BufferDesc.Height = (UINT)config->m_height;
-        sd.BufferDesc.RefreshRate.Numerator = (UINT)config->m_fps;
+        sd.BufferDesc.RefreshRate.Numerator = (UINT)context->FPS;
         sd.BufferDesc.RefreshRate.Denominator = 1;
         sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
         sd.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
@@ -428,6 +428,7 @@ namespace jeecs::graphic::api::dx11
             if (jegui_shutdown_callback())
                 return jegl_graphic_api::update_action::STOP;
             /*fallthrough*/
+            [[fallthrough]];
         case basic_interface::update_result::PAUSE:
             return jegl_graphic_api::update_action::SKIP;
         case basic_interface::update_result::RESIZE:
@@ -435,6 +436,7 @@ namespace jeecs::graphic::api::dx11
                 context->m_interface->m_interface_width,
                 context->m_interface->m_interface_height);
             /*fallthrough*/
+            [[fallthrough]];
         case basic_interface::update_result::NORMAL:
             JERCHECK(context->m_dx_swapchain->Present(context->FPS == 0 ? 1 : 0, 0));
             return jegl_graphic_api::update_action::CONTINUE;

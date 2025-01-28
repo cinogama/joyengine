@@ -50,23 +50,10 @@ func multi_sampling_for_bias_glowing_level1(tex: texture2d, uv : float2, bias: f
 }
 
 SHADER_FUNCTION!
-func multi_sampling_for_bias_glowing_level2(tex: texture2d, uv: float2, bias: float)=> float3
-{
-    let mut result = float3::zero;
-    let reso_inv = float2::one / je_light2d_resolution;
-    for (let (x, y, weight) : bias_weight)
-    {
-        result = result + multi_sampling_for_bias_glowing_level1(
-            tex, uv + reso_inv * vec2(x, y) * bias, bias) * weight;
-    }
-    return result;
-}
-
-SHADER_FUNCTION!
-func multi_samping_glowing_bloom(tex: texture2d, uv : float2, bias : float)
+func multi_samping_light_glowing_bloom(tex: texture2d, uv : float2, bias : float)
 {
     let rgb = texture(tex, uv)->xyz;
-    let gos_rgb = multi_sampling_for_bias_glowing_level2(tex, uv, bias);
+    let gos_rgb = multi_sampling_for_bias_glowing_level1(tex, uv, bias);
     let gos_rgb_hdr = gos_rgb / (gos_rgb + float3::one);
     let gos_rgb_hdr_brightness =
         0.3 * gos_rgb_hdr->x
@@ -89,8 +76,8 @@ public func frag(vf: v2f)
     let albedo_color_rgb = pow(texture(Albedo, vf.uv)->xyz, float3::const(2.2, 2.2, 2.2));
 
     let glowing_color_rgb = 
-        multi_samping_glowing_bloom(Light, vf.uv, float::const(3.))
-        + multi_samping_glowing_bloom(SelfLumine, vf.uv, float::const(1.5))
+        multi_samping_light_glowing_bloom(Light, vf.uv, float::const(1.5))
+        + multi_samping_light_glowing_bloom(SelfLumine, vf.uv, float::const(1.5))
         + float3::const(0.03, 0.03, 0.03);
 
     let mixed_color_rgb = max(float3::zero, albedo_color_rgb * glowing_color_rgb);

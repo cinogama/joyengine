@@ -66,7 +66,7 @@ func transed_normal_tangent_map(normal_map: texture2d, vertex_info : v2f)
     );
 }
 
-let NearestSampler  = sampler2d::create(NEAREST, NEAREST, NEAREST, REPEAT, REPEAT);
+let NearestSampler  = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
 let Albedo          = uniform_texture:<texture2d>("Albedo", NearestSampler, 0);
 let Normalize       = uniform_texture:<texture2d>("Normalize", NearestSampler, 1);
 

@@ -30,7 +30,7 @@ public func vert(v: vin)
     };
 }
 
-let NearestSampler  = sampler2d::create(NEAREST, NEAREST, NEAREST, REPEAT, REPEAT);
+let NearestSampler  = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
 let Main            = uniform_texture:<texture2d>("Main", NearestSampler, 0);
 
 public func frag(vf: v2f)
