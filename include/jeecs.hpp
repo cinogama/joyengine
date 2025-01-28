@@ -3724,6 +3724,7 @@ namespace jeecs
         [[noreturn]] inline void logfatal(const char* format, ArgTs&& ... args)
         {
             je_log(JE_LOG_FATAL, format, args...);
+            je_clock_sleep_for(1.0);
             wo_fail(WO_FAIL_JE_FATAL_ERROR, format, args...);
         }
     }

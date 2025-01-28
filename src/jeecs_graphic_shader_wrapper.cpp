@@ -2331,17 +2331,28 @@ void _scan_used_uniforms_in_vals(
                 auto fnd = wrap->user_define_functions.find(val->m_opname + 1);
                 if (fnd != wrap->user_define_functions.end())
                 {
-                    if (in_vertex)
-                        fnd->second.m_used_in_vertex = true;
-                    else
-                        fnd->second.m_used_in_fragment = true;
+                    auto& func_info = fnd->second;
+                    assert(func_info.m_result != nullptr
+                        && func_info.m_result->out_values.size() == 1);
+
+                    if (in_vertex && !func_info.m_used_in_vertex)
+                    {
+                        func_info.m_used_in_vertex = true;
+                        _scan_used_uniforms_in_vals(
+                            wrap, func_info.m_result->out_values[0], true, sanned);
+                    }
+                    else if (!func_info.m_used_in_fragment)
+                    {
+                        func_info.m_used_in_fragment = true;
+                        _scan_used_uniforms_in_vals(
+                            wrap, func_info.m_result->out_values[0], false, sanned);
+                    }
                 }
             }
 
             for (size_t i = 0; i < val->m_opnums_count; ++i)
-            {
-                _scan_used_uniforms_in_vals(wrap, val->m_opnums[i], in_vertex, sanned);
-            }
+                _scan_used_uniforms_in_vals(
+                    wrap, val->m_opnums[i], in_vertex, sanned);
         }
     }
 }
@@ -2353,15 +2364,6 @@ void scan_used_uniforms_in_wrap(shader_wrapper* wrap)
         _scan_used_uniforms_in_vals(wrap, vout, true, &_scanned_val);
     for (auto* vout : wrap->fragment_out->out_values)
         _scan_used_uniforms_in_vals(wrap, vout, false, &_scanned_val);
-
-    for (auto& [_, func_info] : wrap->user_define_functions)
-    {
-        assert(func_info.m_result != nullptr && func_info.m_result->out_values.size() == 1);
-        if (func_info.m_used_in_vertex)
-            _scan_used_uniforms_in_vals(wrap, func_info.m_result->out_values[0], true, &_scanned_val);
-        if (func_info.m_used_in_fragment)
-            _scan_used_uniforms_in_vals(wrap, func_info.m_result->out_values[0], false, &_scanned_val);
-    }
 }
 
 #if 0
