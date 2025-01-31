@@ -1610,7 +1610,7 @@ public func frag(_: v2f)
 
                         bool need_update = light2dpostpass->post_rend_target == nullptr
                             || light2dpostpass->post_light_target->width() != LIGHT_BUFFER_WIDTH
-                            || light2dpostpass->post_light_target->width() != LIGHT_BUFFER_HEIGHT
+                            || light2dpostpass->post_light_target->height() != LIGHT_BUFFER_HEIGHT
                             || light2dpostpass->post_rend_target->width() != RENDAIMBUFFER_WIDTH
                             || light2dpostpass->post_rend_target->height() != RENDAIMBUFFER_HEIGHT;
                         if (need_update && RENDAIMBUFFER_WIDTH > 0 && RENDAIMBUFFER_HEIGHT > 0)
