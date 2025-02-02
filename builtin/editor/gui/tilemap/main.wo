@@ -1119,7 +1119,7 @@ namespace editor::gui::tilemap
                 let scaled_tile_size = self.m_scale * BASE_TILE_SIZE;
                 let (oldoffsetx, oldoffsety) = self.m_offset;
 
-                for (let (layer, tiles) : self.m_layerd_tiles)
+                for (let (layer, tiles) : self.m_layerd_tiles->unmapping->std::sort(\(layera, _), (layerb, _) = layera > layerb;))
                 {
                     for (let (x, ytiles): tiles)
                     {
