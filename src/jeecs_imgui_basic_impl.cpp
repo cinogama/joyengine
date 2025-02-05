@@ -10,6 +10,9 @@
 #include <imgui_stdlib.h>
 #include <imgui_node_editor.h>
 
+// Text editor support:
+#include <TextEditor.h>
+
 const char* gui_api_path = "je/gui.wo";
 const char* gui_api_src = { R"(
 // JoyEngineECS GUI API for woo.
@@ -742,6 +745,94 @@ R"(
 
     extern("libjoyecs", "je_gui_dummy")
     public func Dummy(sz: ImVec2)=> void;
+
+    using CodeEditorContext = gchandle
+    {
+	    public enum PaletteIndex
+	    {
+		    Default,
+		    Keyword,
+		    Number,
+		    String,
+		    CharLiteral,
+		    Punctuation,
+		    Preprocessor,
+		    Identifier,
+		    KnownIdentifier,
+		    PreprocIdentifier,
+		    Comment,
+		    MultiLineComment,
+		    Background,
+		    Cursor,
+		    Selection,
+		    ErrorMarker,
+		    Breakpoint,
+		    LineNumber,
+		    CurrentLineFill,
+		    CurrentLineFillInactive,
+		    CurrentLineEdge,
+		    Max
+	    };
+        using LanguageDefinition = gchandle
+        {
+            extern("libjoyecs", "je_gui_code_editor_language_definition_create")
+            public func create(name: string)=> LanguageDefinition;
+
+            extern("libjoyecs", "je_gui_code_editor_language_definition_add_keyword")
+            public func AddKeyword(
+                self: LanguageDefinition, keyword: string)=> void;
+
+            extern("libjoyecs", "je_gui_code_editor_language_definition_add_identifier")
+            public func AddIdentifier(
+                self: LanguageDefinition, 
+                ident: string, 
+                declare: string, 
+                row: int, 
+                col: int)=> void;
+
+            extern("libjoyecs", "je_gui_code_editor_language_definition_add_token_regex")
+            public func AddTokenRegex(
+                self: LanguageDefinition, 
+                regex: string, 
+                pidx: PaletteIndex)=> void;
+
+            extern("libjoyecs", "je_gui_code_editor_language_definition_set_mlcomment")
+            public func SetMultilineComment(
+                self: LanguageDefinition, begin: string, end: string)=> void;
+
+            extern("libjoyecs", "je_gui_code_editor_language_definition_set_slcomment")
+            public func SetSingleLineComment(
+                self: LanguageDefinition, text: string)=> void;
+
+            extern("libjoyecs", "je_gui_code_editor_language_definition_set_case_sensitive")
+            public func SetCaseSensitive(
+                self: LanguageDefinition, able: bool)=> void;
+
+            extern("libjoyecs", "je_gui_code_editor_language_definition_set_auto_indentation")
+            public func SetAutoIndentation(
+                self: LanguageDefinition, able: bool)=> void;
+
+            extern("libjoyecs", "je_gui_code_editor_language_definition_set_preproc_char")
+            public func SetPreprocChar(
+                self: LanguageDefinition, ch: cchar)=> void;
+        }
+
+        extern("libjoyecs", "je_gui_code_editor_create")
+            public func create()=> CodeEditorContext;
+
+        extern("libjoyecs", "je_gui_code_editor_get_text")
+            public func GetText(self: CodeEditorContext)=> string;
+        extern("libjoyecs", "je_gui_code_editor_set_text")
+            public func SetText(self: CodeEditorContext, text: string)=> void;
+
+        extern("libjoyecs", "je_gui_code_editor_set_language_definition")
+            public func SetLanguageDefinition(self: CodeEditorContext, ldef: LanguageDefinition)=> void;
+
+    }
+    extern("libjoyecs", "je_gui_code_editor_show")
+        public func CodeEditor(ctx: CodeEditorContext, label: string)=> void;
+    extern("libjoyecs", "je_gui_code_editor_show_size")
+        public func CodeEditorSize(ctx: CodeEditorContext, label: string, sz: ImVec2, board: bool)=> void;
 
     namespace node_editor
     {
@@ -2573,6 +2664,144 @@ WO_API wo_api je_gui_pop_style_var(wo_vm vm, wo_value args)
 WO_API wo_api je_gui_dummy(wo_vm vm, wo_value args)
 {
     ImGui::Dummy(val2vec2(args + 0));
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_code_editor_language_definition_create(wo_vm vm, wo_value args)
+{
+    TextEditor::LanguageDefinition* defs = new TextEditor::LanguageDefinition;
+    defs->mName = wo_string(args + 0);
+    return wo_ret_gchandle(vm, defs, nullptr,
+        [](void* p)
+        {
+            delete std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(p));
+        });
+}
+WO_API wo_api je_gui_code_editor_language_definition_add_keyword(wo_vm vm, wo_value args)
+{
+    TextEditor::LanguageDefinition* defs = 
+        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(wo_pointer(args + 0)));
+    
+    defs->mKeywords.insert(wo_string(args + 1));
+    return wo_ret_void(vm);
+}
+WO_API wo_api je_gui_code_editor_language_definition_add_identifier(wo_vm vm, wo_value args)
+{
+    TextEditor::LanguageDefinition* defs =
+        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(wo_pointer(args + 0)));
+
+    TextEditor::Identifier ident;
+    ident.mDeclaration = wo_string(args + 2);
+    ident.mLocation.mLine = (int)wo_int(args + 3);
+    ident.mLocation.mColumn = (int)wo_int(args + 4);
+
+    defs->mIdentifiers.insert(std::make_pair(wo_string(args + 1), ident));
+    return wo_ret_void(vm);
+}
+WO_API wo_api je_gui_code_editor_language_definition_add_token_regex(wo_vm vm, wo_value args)
+{
+    TextEditor::LanguageDefinition* defs =
+        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(wo_pointer(args + 0)));
+
+    defs->mTokenRegexStrings.push_back(
+        std::make_pair(wo_string(args + 1), (TextEditor::PaletteIndex)wo_int(args + 2)));
+
+    return wo_ret_void(vm);
+}
+WO_API wo_api je_gui_code_editor_language_definition_set_mlcomment(wo_vm vm, wo_value args)
+{
+    TextEditor::LanguageDefinition* defs =
+        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(wo_pointer(args + 0)));
+
+    defs->mCommentStart = wo_string(args + 1);
+    defs->mCommentEnd = wo_string(args + 2);
+
+    return wo_ret_void(vm);
+}
+WO_API wo_api je_gui_code_editor_language_definition_set_slcomment(wo_vm vm, wo_value args)
+{
+    TextEditor::LanguageDefinition* defs =
+        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(wo_pointer(args + 0)));
+
+    defs->mSingleLineComment = wo_string(args + 1);
+
+    return wo_ret_void(vm);
+}
+WO_API wo_api je_gui_code_editor_language_definition_set_case_sensitive(wo_vm vm, wo_value args)
+{
+    TextEditor::LanguageDefinition* defs =
+        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(wo_pointer(args + 0)));
+
+    defs->mCaseSensitive = wo_bool(args + 1);
+
+    return wo_ret_void(vm);
+}
+WO_API wo_api je_gui_code_editor_language_definition_set_auto_indentation(wo_vm vm, wo_value args)
+{
+    TextEditor::LanguageDefinition* defs =
+        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(wo_pointer(args + 0)));
+
+    defs->mAutoIndentation = wo_bool(args + 1);
+
+    return wo_ret_void(vm);
+}
+WO_API wo_api je_gui_code_editor_language_definition_set_preproc_char(wo_vm vm, wo_value args)
+{
+    TextEditor::LanguageDefinition* defs =
+        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(wo_pointer(args + 0)));
+
+    defs->mPreprocChar = (char)wo_char(args + 1);
+
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_code_editor_set_language_definition(wo_vm vm, wo_value args)
+{
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+    TextEditor::LanguageDefinition* defs =
+        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(wo_pointer(args + 1)));
+
+    text_editor->SetLanguageDefinition(*defs);
+    
+    return wo_ret_void(vm);
+}
+WO_API wo_api je_gui_code_editor_create(wo_vm vm, wo_value args)
+{
+    return wo_ret_gchandle(vm, new TextEditor(), nullptr,
+        [](void* p) 
+        {
+            delete std::launder(reinterpret_cast<TextEditor*>(p));
+        });
+}
+
+WO_API wo_api je_gui_code_editor_get_text(wo_vm vm, wo_value args)
+{
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+
+    return wo_ret_string(vm, text_editor->GetText().c_str());
+}
+
+WO_API wo_api je_gui_code_editor_set_text(wo_vm vm, wo_value args)
+{
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+
+    text_editor->SetText(wo_string(args + 1));
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_code_editor_show(wo_vm vm, wo_value args)
+{
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+    text_editor->Render(wo_string(args + 0));
+
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api je_gui_code_editor_show_size(wo_vm vm, wo_value args)
+{
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+    text_editor->Render(wo_string(args + 1), val2vec2(args + 2), wo_bool(args + 3));
+
     return wo_ret_void(vm);
 }
 

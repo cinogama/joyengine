@@ -35,6 +35,21 @@ WO_API wo_api je_gui_begintabitem_open(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_button(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_button_size(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_checkbox(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_code_editor_create(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_code_editor_get_text(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_code_editor_language_definition_add_identifier(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_code_editor_language_definition_add_keyword(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_code_editor_language_definition_add_token_regex(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_code_editor_language_definition_create(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_code_editor_language_definition_set_auto_indentation(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_code_editor_language_definition_set_case_sensitive(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_code_editor_language_definition_set_mlcomment(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_code_editor_language_definition_set_preproc_char(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_code_editor_language_definition_set_slcomment(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_code_editor_set_language_definition(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_code_editor_set_text(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_code_editor_show(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_code_editor_show_size(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_colorbutton(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_colorpicker4(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_combo(wo_vm vm, wo_value args);
@@ -505,6 +520,21 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"je_gui_button", (void*)&je_gui_button},
         wo_extern_lib_func_t{"je_gui_button_size", (void*)&je_gui_button_size},
         wo_extern_lib_func_t{"je_gui_checkbox", (void*)&je_gui_checkbox},
+        wo_extern_lib_func_t{"je_gui_code_editor_create", (void*)&je_gui_code_editor_create},
+        wo_extern_lib_func_t{"je_gui_code_editor_get_text", (void*)&je_gui_code_editor_get_text},
+        wo_extern_lib_func_t{"je_gui_code_editor_language_definition_add_identifier", (void*)&je_gui_code_editor_language_definition_add_identifier},
+        wo_extern_lib_func_t{"je_gui_code_editor_language_definition_add_keyword", (void*)&je_gui_code_editor_language_definition_add_keyword},
+        wo_extern_lib_func_t{"je_gui_code_editor_language_definition_add_token_regex", (void*)&je_gui_code_editor_language_definition_add_token_regex},
+        wo_extern_lib_func_t{"je_gui_code_editor_language_definition_create", (void*)&je_gui_code_editor_language_definition_create},
+        wo_extern_lib_func_t{"je_gui_code_editor_language_definition_set_auto_indentation", (void*)&je_gui_code_editor_language_definition_set_auto_indentation},
+        wo_extern_lib_func_t{"je_gui_code_editor_language_definition_set_case_sensitive", (void*)&je_gui_code_editor_language_definition_set_case_sensitive},
+        wo_extern_lib_func_t{"je_gui_code_editor_language_definition_set_mlcomment", (void*)&je_gui_code_editor_language_definition_set_mlcomment},
+        wo_extern_lib_func_t{"je_gui_code_editor_language_definition_set_preproc_char", (void*)&je_gui_code_editor_language_definition_set_preproc_char},
+        wo_extern_lib_func_t{"je_gui_code_editor_language_definition_set_slcomment", (void*)&je_gui_code_editor_language_definition_set_slcomment},
+        wo_extern_lib_func_t{"je_gui_code_editor_set_language_definition", (void*)&je_gui_code_editor_set_language_definition},
+        wo_extern_lib_func_t{"je_gui_code_editor_set_text", (void*)&je_gui_code_editor_set_text},
+        wo_extern_lib_func_t{"je_gui_code_editor_show", (void*)&je_gui_code_editor_show},
+        wo_extern_lib_func_t{"je_gui_code_editor_show_size", (void*)&je_gui_code_editor_show_size},
         wo_extern_lib_func_t{"je_gui_colorbutton", (void*)&je_gui_colorbutton},
         wo_extern_lib_func_t{"je_gui_colorpicker4", (void*)&je_gui_colorpicker4},
         wo_extern_lib_func_t{"je_gui_combo", (void*)&je_gui_combo},

@@ -14,9 +14,14 @@ include_directories("../3rd/glslang/glslang/Include")
 include_directories("../3rd/glslang/glslang/Public")
 include_directories("../3rd/spirv-cross")
 include_directories("../3rd/imgui-node-editor")
+include_directories("../3rd/ImGuiColorTextEdit")
 
 file(GLOB_RECURSE joyecs_srcs_cpp *.cpp)
 file(GLOB_RECURSE joyecs_srcs_hpp *.hpp)
+
+set(imgui_code_editor_srcs
+    "../3rd/ImGuiColorTextEdit/TextEditor.cpp"
+    "../3rd/ImGuiColorTextEdit/TextEditor.h")
 
 set(imgui_node_editor_srcs 
     "../3rd/imgui-node-editor/crude_json.cpp"
@@ -157,6 +162,7 @@ set (jeecs_core_sources
     ${joyecs_srcs_hpp} 
     ${imgui_srcs} 
     ${imgui_node_editor_srcs}
+    ${imgui_code_editor_srcs}
     "../include/jeecs.hpp")
 
 # Build engine shared/static library

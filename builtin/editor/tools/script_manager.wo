@@ -69,6 +69,6 @@ namespace editor::tools
         }
 
         _available_tool_scripts = 
-                    new_path_results as map<string, fsys::path_t>->unsafe::cast:<dict<string, fsys::path_t>>;
+            new_path_results as map<string, fsys::path_t>->unsafe::cast:<dict<string, fsys::path_t>>;
     }
 }

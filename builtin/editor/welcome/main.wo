@@ -127,11 +127,12 @@ are generated using Bison and comply with GPLv3 with special bison exception."@
                     Text("rcedit https://github.com/electron/rcedit");
 
                     Text("默认提供的字体:");
+
                     Text("HarmonyOS_Sans_SC_Regular");
                     TextDisabled("https://developer.harmonyos.com/cn/docs/design/des-guides/font-0000001157868583");
                     TextDisabled("Copyright 2021 Huawei Device Co., Ltd. All Rights Reserved.");
-                    TextDisabled("此字体可免费商用，但需标注字体版权信息。");
-                    TextDisabled("* 具体条款见字体目录内的 LICENSE.txt 文件");
+                    TextDisabled("此字体可免费商用。");
+                    TextDisabled("* 具体条款见字体目录内的对应 LICENSE.txt 文件");
 
                     Text("cino_ipix_12px");
                     TextDisabled("原始来源 https://purestudio.itch.io/ipix");

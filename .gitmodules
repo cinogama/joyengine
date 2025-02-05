@@ -50,3 +50,7 @@
 	path = 3rd/box2c
 	url = https://git.cinogama.net/cinogamaproject/joyengineecs/box2c.git
 	branch = main
+[submodule "3rd/ImGuiColorTextEdit"]
+	path = 3rd/ImGuiColorTextEdit
+	url = https://git.cinogama.net/cinogamaproject/joyengineecs/ImGuiColorTextEdit.git
+	branch = master

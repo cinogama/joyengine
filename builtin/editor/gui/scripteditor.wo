@@ -12,9 +12,72 @@ using je::gui;
 
 namespace editor::gui
 {
+    public let WOOLANG_LANGUAGE_DEFINITION = func(){
+
+        let def = CodeEditorContext::LanguageDefinition::create("woolang");
+        let keywords = [
+            "import",
+            "nil",
+            "true",
+            "false",
+            "while",
+            "for",
+            "if",
+            "else",
+            "let",
+            "mut",
+            "immut",
+            "func",
+            "return",
+            "using",
+            "alias",
+            "namespace",
+            "extern",
+            "public",
+            "private",
+            "protected",
+            "static",
+            "enum",
+            "as",
+            "is",
+            "typeof",
+            "break",
+            "continue",
+            "where",
+            "operator",
+            "union",
+            "match",
+            "struct",
+            "typeid",
+            "do"
+        ];
+        for (let k : keywords)
+            def->AddKeyword(k);
+
+        let regexs = [
+            (@"@?\"(\\.|[^\"])*\""@ + "@?", CodeEditorContext::PaletteIndex::String),
+            (@"\'[^\']\'"@, CodeEditorContext::PaletteIndex::String),
+            ("0[xX][0-9a-fA-F]+[uU]?[lL]?[lL]?[hH]?", CodeEditorContext::PaletteIndex::Number),
+            ("-?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?[fF]?", CodeEditorContext::PaletteIndex::Number),
+            ("-?[0-9]+[Uu]?[lL]?[lL]?[hH]?", CodeEditorContext::PaletteIndex::Number),
+            ("[a-zA-Z_][a-zA-Z0-9_]*\\!", CodeEditorContext::PaletteIndex::PreprocIdentifier),
+            ("[a-zA-Z_][a-zA-Z0-9_]*", CodeEditorContext::PaletteIndex::Identifier),
+            ("[\\[\\]\\{\\}\\!\\%\\^\\&\\*\\(\\)\\-\\+\\=\\|\\<\\>\\?\\/\\;\\,\\.\\:]", CodeEditorContext::PaletteIndex::Punctuation)
+        ];
+
+        for (let (r, i) : regexs)
+            def->AddTokenRegex(r, i);
+
+        def->SetMultilineComment("/*", "*/");
+        def->SetSingleLineComment("//");
+
+        return def;
+
+    }();
+
     using ScriptEditor = struct{
         m_title: string,
-        m_source: mut string,
+        m_source: CodeEditorContext,
         m_project: Project,
 
         m_history: vec<History>,
@@ -52,7 +115,7 @@ namespace editor::gui
         {
             let self = ScriptEditor{
                 m_title = title,
-                m_source = mut template_script,
+                m_source = CodeEditorContext::create(),
                 m_project = editorctx->get_project,
 
                 m_history = []mut,
@@ -63,6 +126,8 @@ namespace editor::gui
 
                 m_hook_callback = mut \_ = option::value(nil: dynamic);,
             };
+            self.m_source->SetLanguageDefinition(WOOLANG_LANGUAGE_DEFINITION);
+            self.m_source->SetText(template_script);
             launch(show, (self,));
             return self;
         }
@@ -72,7 +137,7 @@ namespace editor::gui
         }
         func restore_history(self: ScriptEditor, history: History)
         {
-            self.m_source = history.m_script;
+            self.m_source->SetText <| history.m_script;
             self.m_project->close_all_world();
             self.m_project->restore_all_world(history.m_data);
         }
@@ -87,7 +152,7 @@ namespace editor::gui
                         self.m_history_index != index)
                     {
                         self.m_current_edit_state = 
-                            new! History(self.m_project, self.m_source)->okay;
+                            new! History(self.m_project, self.m_source->GetText)->okay;
                     }
 
                     self.m_history_index = index;
@@ -135,7 +200,7 @@ namespace editor::gui
                         EndTooltip();
                     }
                     if (clicked)
-                        self.m_source = history.m_script;
+                        self.m_source->SetText <| history.m_script;
 
                     self->history_menu(index);
                 }
@@ -159,17 +224,13 @@ namespace editor::gui
                 err(msg)? jeapi::gui::form::errmsg("无法执行脚本", msg);
                 }
 
-            let (w, h) = GetContentRegionAvail();
-            do InputTextMultilineSize("##script", self.m_source, w, h)
-                ->> \txt = self.m_source = txt;
-                ;
-
+            CodeEditorSize(self.m_source, "##script", GetContentRegionAvail(), true);
             EndGroup();
         }
         func run_script(self: ScriptEditor)
         {
-            try! history = new! History(self.m_project, self.m_source);
-            try! vmm = vm::create(F"_jeditor_{JobID()}.wo", self.m_source: buffer);
+            try! history = new! History(self.m_project, self.m_source->GetText);
+            try! vmm = vm::create(F"_jeditor_{JobID()}.wo", self.m_source->GetText: buffer);
 
             assert(self.m_history->shrink(self.m_history_index));
             self.m_history->add(history);
