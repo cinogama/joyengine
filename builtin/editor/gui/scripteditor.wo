@@ -230,7 +230,7 @@ namespace editor::gui
                     self.m_source->Paste();
                 }
 
-                if (BeginMenu("快速构建"))
+                if (BeginMenu("快速代码"))
                 {
                     if (BeginMenu("调试"))
                     {
@@ -259,13 +259,73 @@ namespace editor::gui
 
                     Separator();
 
+                    if (BeginMenu("GUI"))
+                    {
+                        if (MenuItem("消息框"))
+                        {
+                            self.m_source->SetCursorPosition((self.m_source->GetCursorPosition.0, 0));
+                            _do_InsertText(
+                                "import builtin::editor::gui::form::msg;\n"
+                                + "jeapi::gui::form::msg(\"标题\", \"内容\");");
+                        }
+                        if (MenuItem("错误框"))
+                        {
+                            self.m_source->SetCursorPosition((self.m_source->GetCursorPosition.0, 0));
+                            _do_InsertText(
+                                "import builtin::editor::gui::form::msg;\n"
+                                + "jeapi::gui::form::errmsg(\"标题\", \"内容\");");
+                        }
+                        if (MenuItem("输入框 *"))
+                        {
+                            self.m_source->SetCursorPosition((self.m_source->GetCursorPosition.0, 0));
+                            _do_InsertText(
+                                "import builtin::editor::gui::form::input;\n"
+                                + "jeapi::gui::form::input(\"标题\", \"内容\", \"默认值\",\n"
+                                + "    func (content)\n"
+                                + "    {\n"
+                                + "        do content;\n"
+                                + "    }\n"
+                                + ");\n");
+                        }
+                        if (MenuItem("确认框 *"))
+                        {
+                            self.m_source->SetCursorPosition((self.m_source->GetCursorPosition.0, 0));
+                            _do_InsertText(
+                                "import builtin::editor::gui::form::ask;\n"
+                                + "jeapi::gui::form::ask(\"标题\", \"内容\",\n"
+                                + "    func (is_ok)\n"
+                                + "    {\n"
+                                + "        if (is_ok)\n"
+                                + "        {\n"
+                                + "            // 确认\n"
+                                + "        }\n"
+                                + "    }\n"
+                                + ");\n");
+                        }
+                        if (MenuItem("新窗体 *"))
+                        {
+                            self.m_source->SetCursorPosition((self.m_source->GetCursorPosition.0, 0));
+                            _do_InsertText(
+                                "import builtin::api::gui::form;\n"
+                                + "do show <| jeapi::gui::form::create(\"标题\", true /* 唯一窗体？ */,\n"
+                                + "    func (_)\n"
+                                + "    {\n"
+                                + "        je::gui::Text(\"Helloworld 新窗体\");\n"
+                                + "    }\n"
+                                + ");\n");
+                        }
+                        EndMenu();
+                    }
+
+                    Separator();
+
                     if (BeginMenu("全局上下文（Universe）"))
                     {
                         if (MenuItem("获取所有世界"))
                         {
                             _do_InsertText("->get_all_worlds()");
                         }
-                        if (MenuItem("遍历所有世界*"))
+                        if (MenuItem("遍历所有世界 *"))
                         {
                             self.m_source->SetCursorPosition((self.m_source->GetCursorPosition.0, 0));
                             _do_InsertText("for (let w : _->get_all_worlds())\n{\n    \n}\n");
@@ -278,28 +338,28 @@ namespace editor::gui
                         {
                             _do_InsertText("->get_all_entities([])");
                         }
-                        if (MenuItem("遍历所有实体*"))
+                        if (MenuItem("遍历所有实体 *"))
                         {
                             self.m_source->SetCursorPosition((self.m_source->GetCursorPosition.0, 0));
                             _do_InsertText("for (let e : _->get_all_entities([]))\n{\n    \n}\n");
                         }
-                        if (BeginMenu("筛选器：检查实体组件（ToWoo）"))
+                        if (MenuItem("筛选器：检查实体组件（ToWoo）"))
                         {
                             _do_InsertText(@"-> forall(\e = e->towoo::get_component:<_>->is_value;)"@);
                         }
-                        if (BeginMenu("添加实体"))
+                        if (MenuItem("添加实体"))
                         {
                             _do_InsertText(@"->add_entity([_])"@);
                         }
-                        if (BeginMenu("添加预设体"))
+                        if (MenuItem("添加预设体"))
                         {
                             _do_InsertText(@"->add_prefab([_])"@);
                         }
-                        if (BeginMenu("添加系统"))
+                        if (MenuItem("添加系统"))
                         {
                             _do_InsertText(@"->add_system(_)"@);
                         }
-                        if (BeginMenu("移除系统"))
+                        if (MenuItem("移除系统"))
                         {
                             _do_InsertText(@"->remove_system(_)"@);
                         }

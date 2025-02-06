@@ -6,6 +6,7 @@ import je::gui;
 
 import builtin::editor::gui::inputmgr;
 import builtin::api::gui::errmsg;
+import builtin::api::gui::form;
 
 using je::gui;
 using je::graphic;

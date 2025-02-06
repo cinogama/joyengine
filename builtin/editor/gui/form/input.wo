@@ -3,6 +3,7 @@
 
 import je::gui;
 import builtin::editor::gui::inputmgr;
+import builtin::api::gui::form;
 
 using je::gui;
 
