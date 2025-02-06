@@ -380,9 +380,8 @@ public let frag =
         {
             math::vec3 size = trans.local_scale;
 
-            const auto& light_shape = mesh != nullptr
-                ? mesh
-                : m_default_resources.default_shape_quad;
+            const auto& light_shape = 
+                mesh != nullptr ? mesh : m_default_resources.default_shape_quad;
 
             assert(light_shape->resouce() != nullptr);
 
@@ -397,9 +396,9 @@ public let frag =
 
             return size;
         }
-        math::vec3 get_entity_size(const Transform::Translation& trans, const Renderer::Shape& shape)
+        math::vec3 get_entity_size(const Transform::Translation& trans, const Renderer::Shape* shape_may_null)
         {
-            return get_entity_size(trans, shape.vertex);
+            return get_entity_size(trans, shape_may_null == nullptr ? nullptr : shape_may_null->vertex);
         }
     };
 
@@ -857,7 +856,7 @@ public let frag =
                         && rendentity.shape != nullptr);
 
                     const float entity_range = 0.5f *
-                        get_entity_size(*rendentity.translation, *rendentity.shape).length();
+                        get_entity_size(*rendentity.translation, rendentity.shape).length();
 
                     if (current_camera.frustumCulling != nullptr)
                     {
@@ -1940,7 +1939,7 @@ public func frag(_: v2f)
                     {
                         const float light_range = 0.5f *
                             (lightarch.range == nullptr
-                                ? get_entity_size(*lightarch.translation, *lightarch.shape).length()
+                                ? get_entity_size(*lightarch.translation, lightarch.shape).length()
                                 : get_entity_size(*lightarch.translation, lightarch.range->shape.m_light_mesh).length());
 
                         if (current_camera.frustumCulling != nullptr && lightarch.parallel == nullptr)
@@ -2002,7 +2001,7 @@ public func frag(_: v2f)
                                     : (int64_t)(blockarch.translation->world_position.y * 100.f);
 
                                 const float block_range = 0.5f *
-                                    get_entity_size(*blockarch.translation, *blockarch.shape).length();
+                                    get_entity_size(*blockarch.translation, blockarch.shape).length();
 
                                 const auto l2b_distance = (
                                     math::vec2(blockarch.translation->world_position) -
@@ -2344,7 +2343,7 @@ public func frag(_: v2f)
                         && rendentity.shape != nullptr);
 
                     const float entity_range = 0.5f *
-                        get_entity_size(*rendentity.translation, *rendentity.shape).length();
+                        get_entity_size(*rendentity.translation, rendentity.shape).length();
 
                     if (current_camera.frustumCulling != nullptr)
                     {
