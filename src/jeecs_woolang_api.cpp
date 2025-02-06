@@ -549,24 +549,51 @@ WO_API wo_api wojeapi_get_all_entities_from_world(wo_vm vm, wo_value args)
     wo_value s = wo_reserve_stack(vm, 2, &args);
 
     wo_value out_arr = s + 0;
+    wo_value elem = s + 1;
+
     wo_set_arr(s, vm, 0);
 
     void* world_instance = wo_pointer(args + 0);
+
+    auto required_components_len = wo_lengthof(args + 1);
+    std::vector<jeecs::typing::typeid_t> required_components(required_components_len);
+    
+    for (size_t i = 0; i < required_components_len; ++i)
+    {
+        wo_arr_get(elem, args + 1, i);
+
+        const jeecs::typing::type_info* t = (const jeecs::typing::type_info*)wo_pointer(elem);
+        required_components[i] = t->m_id;
+    }
 
     if (je_ecs_world_is_valid(world_instance))
     {
         auto entities = jedbg_get_all_entities_in_world(world_instance);
         auto entity_iter = entities;
 
-        wo_value elem = s + 1;
-
         while (*entity_iter)
         {
-            wo_set_gchandle(elem, vm, *(entity_iter++), nullptr,
-                [](void* entity_ptr) {
-                    jedbg_free_entity((jeecs::game_entity*)entity_ptr);
-                });
-            wo_arr_add(out_arr, elem);
+            auto* current_e = *(entity_iter++);
+
+            bool has_required = true;
+            for (auto& required_component : required_components)
+            {
+                if (nullptr == je_ecs_world_entity_get_component(current_e, required_component))
+                {
+                    jedbg_free_entity(current_e);
+                    has_required = false;
+                    break;
+                }
+            }
+
+            if (has_required)
+            {
+                wo_set_gchandle(elem, vm, current_e, nullptr,
+                    [](void* entity_ptr) {
+                        jedbg_free_entity((jeecs::game_entity*)entity_ptr);
+                    });
+                wo_arr_add(out_arr, elem);
+            }
         }
         je_mem_free(entities);
     }
@@ -3413,7 +3440,7 @@ R"(
         public func set_name(self: world, _name: string)=> void;
 
         extern("libjoyecs", "wojeapi_get_all_entities_from_world")
-        public func get_all_entities(self: world)=> array<entity>;
+        public func get_all_entities(self: world, components_require: array<typeinfo>)=> array<entity>;
 
         extern("libjoyecs", "wojeapi_get_all_systems_from_world")
         public func get_all_systems(self: world)=> array<typeinfo>;

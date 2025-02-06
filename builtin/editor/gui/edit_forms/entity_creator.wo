@@ -6,21 +6,18 @@ namespace editor::gui::edit_forms
 {
     public func get_debug_camera_root(w: je::world)
     {
-        return w->get_all_entities->forall(\e = 
-                e->get_component(je::typeinfo::load("Editor::EditorWalker")->unwrap)->is_value
-                && !e->get_component(je::typeinfo::load("Camera::RendToFramebuffer")->unwrap)->is_value
-            ;)
-            ->reduce(\l, _ = l;)
+        return w->get_all_entities([je::typeinfo::load("Editor::EditorWalker")->unwrap])
+            -> forall(\e = e->get_component(je::typeinfo::load("Camera::RendToFramebuffer")->unwrap)->is_none;)
+            -> reduce(\l, _ = l;)
             ;
         ;
     }
     public func get_debug_camera(w: je::world)
     {
-        return w->get_all_entities->forall(\e = 
-                e->get_component(je::typeinfo::load("Editor::EditorWalker")->unwrap)->is_value
-                && e->get_component(je::typeinfo::load("Camera::RendToFramebuffer")->unwrap)->is_value
-            ;)
-            ->reduce(\l, _ = l;)
+        return w->get_all_entities([
+            je::typeinfo::load("Editor::EditorWalker")->unwrap, 
+            je::typeinfo::load("Camera::RendToFramebuffer")->unwrap])
+            -> reduce(\l, _ = l;)
             ;
         ;
     }

@@ -263,7 +263,7 @@ namespace jeapi
         {
             // 检查所有世界中所有实体是否有非法的shader？
             // 返回所有shader非法的实体
-            return w->get_all_entities
+            return w->get_all_entities([])
                 -> forall(\e = has_bad_shader(e);)
                 ;
         }
@@ -405,9 +405,9 @@ namespace jeapi
             alias entity_info_t = dict<string, dynamic>;
 
             let entities_json_list = 
-                w->get_all_entities
+                w->get_all_entities([])
                     // 跳过编辑器上的不可见实体
-                    ->  forall(\e = !e->get_component(INVISABLE)->is_value;)
+                    ->  forall(\e = e->get_component(INVISABLE)->is_none;)
                     =>> \e = oe->is_value ? [oe->unwrap] | [] where oe = serialize::entity(e, need_euid);
                     ;
 

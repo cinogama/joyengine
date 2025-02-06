@@ -330,31 +330,34 @@ namespace editor
                 )));
             self.m_configs->set("JE_GUI_FONT",
                 new! IConfig(new! Config(
-                    ("@/resource/font/HarmonyOS_Sans_SC_Regular.ttf", 18),
+                    ("@/resource/font/HarmonyOS_Sans_SC_Regular.ttf", "@/resource/font/JetBrainsMono_Regular.ttf", 18),
                     func(config)
                     {
                         Text("GUI字体");
-                        let (font_path, font_size) = config;
+                        let (font_path, latin_font_path, font_size) = config;
 
+                        Text("中文字体");
                         let new_font_path = InputText("##fontpath", font_path)->or(font_path);
-                        SameLine();
+                        Text("西文字体");
+                        let new_latin_font_path = InputText("##latinfontpath", latin_font_path)->or(latin_font_path);
+                        Text("字体大小");
                         let new_font_size = InputInt("##fontsize", font_size)->or(font_size);
 
                         TextDisabled("* 重启后生效");
 
-                        if (font_path != new_font_path || font_size != new_font_size)
-                            return option::value((new_font_path, new_font_size));
+                        if (font_path != new_font_path || latin_font_path != new_latin_font_path || font_size != new_font_size)
+                            return option::value((new_font_path, new_latin_font_path, new_font_size));
                         return option::none;
                     },
-                    func(_,n){je::gui::set_font(option::value(n[0]), n[1]); return true;},
-                    \v = [v[0]: dynamic, v[1]: dynamic]->serialize->unwrap;,
+                    func(_,n){je::gui::set_font(option::value(n[0]), option::value(n[1]), n[2]); return true;},
+                    \v = [v[0]: dynamic, v[1]: dynamic, v[2]: dynamic]->serialize->unwrap;,
                     func (str){
                         let v = array::deserialize(str)->unwrap;
-                        return option::value((v[0] as string, v[1] as int));
+                        if (v->len == 3)
+                            return option::value((v[0] as string, v[1] as string, v[2] as int));
+                        return option::none;
                     },
-                    \dat = F"je::gui::set_font(option::value({font->enstring}), {size});"
-                        where (font, size) = dat
-                    ;,
+                    \(font, latin_font, size) = F"je::gui::set_font(option::value({font->enstring}), option::value({latin_font->enstring}), {size});";,
                 )));
             self.m_configs->set("JE_ENGINE_TIME_MAX_DELTATIME",
                 new! IConfig(new! Config(

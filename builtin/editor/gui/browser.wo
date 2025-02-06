@@ -1017,7 +1017,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
         return context->get_project->get_env->get_universe
             ->  get_all_worlds
             =>> \w: je::world = w
-                ->  get_all_entities
+                ->  get_all_entities([])
                 ->> dowhat
                 ;
             ->  reduce(\l, r = l && r;)

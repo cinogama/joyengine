@@ -18,21 +18,26 @@ namespace editor::gui::particalbaker
         m_frame_rate : mut real,    // Sec per frame
         m_repeat_round : mut int,
         m_frames_caches : mut array<je::graphic::texture>,
-        m_script : mut string,
+        m_script : CodeEditorContext,
         m_path : fsys::path_t,
     }
     {
         public func create(path: fsys::path_t)
         {
-            return ParticalContext{
+            let self = ParticalContext{
                 m_frame_count = mut 24,
                 m_frame_size = mut (64, 64),
                 m_frame_rate = mut 1./24.,
                 m_repeat_round = mut 1,
                 m_frames_caches = mut [],
-                m_script = mut DEFAULT_SOURCE,
+                m_script = CodeEditorContext::create(),
                 m_path = path,
             };
+
+            self.m_script->SetText(DEFAULT_SOURCE);
+            self.m_script->SetLanguageDefinition(WOOLANG_LANGUAGE_DEFINITION);
+
+            return self;
         }
         public func save(self: ParticalContext)
         {
@@ -43,7 +48,7 @@ namespace editor::gui::particalbaker
                     ["framesize"] = [self.m_frame_size[0], self.m_frame_size[1]]: dynamic,
                     ["framerate"] = self.m_frame_rate: dynamic,
                     ["repeatround"] = self.m_repeat_round: dynamic,
-                    ["script"] = self.m_script: dynamic,
+                    ["script"] = self.m_script->GetText: dynamic,
                 }: string,
             );
         }
@@ -51,17 +56,24 @@ namespace editor::gui::particalbaker
         {
             return fsys::readall(path)
                 =>> \dat = dict::deserialize(dat);
-                ->> \dat = ParticalContext{
-                        m_frame_count = mut fdata["framecount"] as int,
-                        m_frame_size = mut (fdata["framesize"] as array<dynamic>[0] as int, fdata["framesize"] as array<dynamic>[1] as int),
-                        m_frame_rate = mut fdata["framerate"] as real,
-                        m_repeat_round = mut fdata["repeatround"] as int,
-                        m_frames_caches = mut [],
-                        m_script = mut fdata["script"] as string,
-                        m_path = path,
+                ->> func(dat)
+                    {
+                        let fdata = dat->> \k, v = (k as string, v); as dict<string, dynamic>;
+                        let self = ParticalContext{
+                            m_frame_count = mut fdata["framecount"] as int,
+                            m_frame_size = mut (fdata["framesize"] as array<dynamic>[0] as int, fdata["framesize"] as array<dynamic>[1] as int),
+                            m_frame_rate = mut fdata["framerate"] as real,
+                            m_repeat_round = mut fdata["repeatround"] as int,
+                            m_frames_caches = mut [],
+                            m_script = CodeEditorContext::create(),
+                            m_path = path,
+                        };
+
+                        self.m_script->SetText <| fdata["script"] as string;
+                        self.m_script->SetLanguageDefinition(WOOLANG_LANGUAGE_DEFINITION);
+
+                        return self;
                     }
-                    where fdata = dat->> \k, v = (k as string, v); as dict<string, dynamic>
-                    ;
                 ;
         }
     }
@@ -89,8 +101,8 @@ using ParticalContext = struct{
     m_frame_rate : mut real,    // Sec per frame
     m_repeat_round : mut int,
     m_frames_caches : mut array<je::graphic::texture>,
-    m_script : mut string,
-    m_path : fsys::path_t,
+    m_script : void, // Not used
+    m_path : void, // Not used
 };
 
 let mut partical_context = nil->unsafe::cast:<ParticalContext>();
@@ -353,7 +365,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                         if (MenuItem("烘焙"))
                         {
                             match (new! vm("je/particalbacker/baker.wo", 
-                                partical_context.m_script: buffer))
+                                partical_context.m_script->GetText: buffer))
                             {
                             ok(vmm)?
                                 {
@@ -455,8 +467,10 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                 BeginGroup();
                 
                 let (avail_w, avail_h) = GetContentRegionAvail();
-                do InputTextMultilineSize("##source", partical_context.m_script, math::max(400., avail_w), avail_h)
-                    ->> \t = partical_context.m_script = t;;
+
+                SetWindowFontScale(1.2);
+                CodeEditorSize(partical_context.m_script, "##source", (math::max(400., avail_w), avail_h), true);
+                SetWindowFontScale(1.0);
 
                 EndGroup();
             }

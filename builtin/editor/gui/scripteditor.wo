@@ -16,40 +16,11 @@ namespace editor::gui
 
         let def = CodeEditorContext::LanguageDefinition::create("woolang");
         let keywords = [
-            "import",
-            "nil",
-            "true",
-            "false",
-            "while",
-            "for",
-            "if",
-            "else",
-            "let",
-            "mut",
-            "immut",
-            "func",
-            "return",
-            "using",
-            "alias",
-            "namespace",
-            "extern",
-            "public",
-            "private",
-            "protected",
-            "static",
-            "enum",
-            "as",
-            "is",
-            "typeof",
-            "break",
-            "continue",
-            "where",
-            "operator",
-            "union",
-            "match",
-            "struct",
-            "typeid",
-            "do"
+            "import", "nil", "true", "false", "while", "for", "if", "else",
+            "let", "mut", "immut", "func", "return", "using", "alias", "namespace",
+            "extern", "public", "private", "protected", "static", "enum", "as",
+            "is", "typeof", "break", "continue", "where", "operator", "union",
+            "match", "struct", "typeid", "do"
         ];
         for (let k : keywords)
             def->AddKeyword(k);
@@ -61,6 +32,7 @@ namespace editor::gui
             ("-?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?[fF]?", CodeEditorContext::PaletteIndex::Number),
             ("-?[0-9]+[Uu]?[lL]?[lL]?[hH]?", CodeEditorContext::PaletteIndex::Number),
             ("[a-zA-Z_][a-zA-Z0-9_]*\\!", CodeEditorContext::PaletteIndex::PreprocIdentifier),
+            ("(dynamic|nothing|void|int|real|handle|string|array|vec|dict|map|gchandle|option|result|cchar|bool|char)", CodeEditorContext::PaletteIndex::Type),
             ("[a-zA-Z_][a-zA-Z0-9_]*", CodeEditorContext::PaletteIndex::Identifier),
             ("[\\[\\]\\{\\}\\!\\%\\^\\&\\*\\(\\)\\-\\+\\=\\|\\<\\>\\?\\/\\;\\,\\.\\:]", CodeEditorContext::PaletteIndex::Punctuation)
         ];
@@ -179,6 +151,21 @@ namespace editor::gui
                 EndPopup();
             }
         }
+        func main_menu(self: ScriptEditor)
+        {
+            if (BeginMenuBar())
+            {
+                if (MenuItem("执行"))
+                {
+                    match (self->run_script)
+                    {
+                    ok(_)?;
+                    err(msg)? jeapi::gui::form::errmsg("无法执行脚本", msg);
+                    }
+                }
+                EndMenuBar();
+            }
+        }
         func history_list(self: ScriptEditor)
         {
             BeginGroup();
@@ -215,17 +202,175 @@ namespace editor::gui
         }
         func script_box(self: ScriptEditor)
         {
-            BeginGroup();
+            SetWindowFontScale(1.2);
+            CodeEditorSize(self.m_source, "##script", GetContentRegionAvail(), true);
+            SetWindowFontScale(1.0);
 
-            if (Button("执行"))
-                match (self->run_script)
+            if (BeginPopupContextItem())
+            {
+                if (MenuItemShortcutEnabled("复制", "Ctrl+C", true))
+                    self.m_source->Copy();
+                if (MenuItemShortcutEnabled("粘贴", "Ctrl+V", true))
+                    self.m_source->Paste();
+                if (MenuItemShortcutEnabled("剪切", "Ctrl+X", true))
+                    self.m_source->Cut();
+
+                Separator();
+
+                if (MenuItemShortcutEnabled("撤销", "Ctrl+Z", self.m_source->CanUndo))
+                    self.m_source->Undo();
+                if (MenuItemShortcutEnabled("重做", "Ctrl+Y", self.m_source->CanRedo))
+                    self.m_source->Redo();
+
+                Separator();
+
+                func _do_InsertText(text: string)
                 {
-                ok(_)?;
-                err(msg)? jeapi::gui::form::errmsg("无法执行脚本", msg);
+                    SetClipboardText(text);
+                    self.m_source->Paste();
                 }
 
-            CodeEditorSize(self.m_source, "##script", GetContentRegionAvail(), true);
-            EndGroup();
+                if (BeginMenu("快速构建"))
+                {
+                    if (BeginMenu("调试"))
+                    {
+                        if (MenuItem("log"))
+                        {
+                            _do_InsertText("je::log()");
+                        }
+                        if (MenuItem("loginfo"))
+                        {
+                            _do_InsertText("je::loginfo()");
+                        }
+                        if (MenuItem("logwarn"))
+                        {
+                            _do_InsertText("je::logwarn()");
+                        }
+                        if (MenuItem("logerr"))
+                        {
+                            _do_InsertText("je::logerr()");
+                        }
+                        if (MenuItem("logfatal"))
+                        {
+                            _do_InsertText("je::logfatal()");
+                        }
+                        EndMenu();
+                    }
+
+                    Separator();
+
+                    if (BeginMenu("全局上下文（Universe）"))
+                    {
+                        if (MenuItem("获取所有世界"))
+                        {
+                            _do_InsertText("->get_all_worlds()");
+                        }
+                        if (MenuItem("遍历所有世界*"))
+                        {
+                            self.m_source->SetCursorPosition((self.m_source->GetCursorPosition.0, 0));
+                            _do_InsertText("for (let w : _->get_all_worlds())\n{\n    \n}\n");
+                        }
+                        EndMenu();
+                    }
+                    if (BeginMenu("世界（World）"))
+                    {
+                        if (MenuItem("获取所有实体"))
+                        {
+                            _do_InsertText("->get_all_entities([])");
+                        }
+                        if (MenuItem("遍历所有实体*"))
+                        {
+                            self.m_source->SetCursorPosition((self.m_source->GetCursorPosition.0, 0));
+                            _do_InsertText("for (let e : _->get_all_entities([]))\n{\n    \n}\n");
+                        }
+                        if (BeginMenu("筛选器：检查实体组件（ToWoo）"))
+                        {
+                            _do_InsertText(@"-> forall(\e = e->towoo::get_component:<_>->is_value;)"@);
+                        }
+                        if (BeginMenu("添加实体"))
+                        {
+                            _do_InsertText(@"->add_entity([_])"@);
+                        }
+                        if (BeginMenu("添加预设体"))
+                        {
+                            _do_InsertText(@"->add_prefab([_])"@);
+                        }
+                        if (BeginMenu("添加系统"))
+                        {
+                            _do_InsertText(@"->add_system(_)"@);
+                        }
+                        if (BeginMenu("移除系统"))
+                        {
+                            _do_InsertText(@"->remove_system(_)"@);
+                        }
+                        EndMenu();
+                    }
+                    if (BeginMenu("实体（Entity）"))
+                    {
+                        if (MenuItem("获取编辑器器名称"))
+                        {
+                            _do_InsertText("->name()");
+                        }
+
+                        Separator();
+
+                        if (MenuItem("添加组件（ToWoo）"))
+                        {
+                            _do_InsertText("->towoo::add_component:<_>()");
+                        }
+                        if (MenuItem("获取组件（ToWoo）"))
+                        {
+                            _do_InsertText("->towoo::get_component:<_>()");
+                        }
+                        if (MenuItem("移除组件（ToWoo）"))
+                        {
+                            _do_InsertText("->towoo::remove_component:<_>()");
+                        }
+                        EndMenu();
+                    }
+                    if (BeginMenu("组件（Component）"))
+                    {
+                        let component_types = typeinfo::get_all_components_types();
+                        for (let name : component_types
+                            ->> \t = t->name;
+                            -> std::sort(\ln, rn = ln < rn;))
+                        {
+                            if (BeginMenu(name))
+                            {
+                                if (MenuItem("名称"))
+                                    _do_InsertText(name);
+                                if (MenuItem("类型"))
+                                    _do_InsertText(F"{name}::type::typeinfo");
+
+                                EndMenu();
+                            }
+                        }
+                        EndMenu();
+                    }
+                    if (BeginMenu("系统（System）"))
+                    {
+                        let system_types = typeinfo::get_all_systems_types();
+                        for (let name : system_types
+                            ->> \t = t->name;
+                            -> std::sort(\ln, rn = ln < rn;))
+                        {
+                            if (BeginMenu(name))
+                            {
+                                if (MenuItem("名称"))
+                                    _do_InsertText(name);
+                                if (MenuItem("类型"))
+                                    _do_InsertText(F"je::typeinfo::load({name->enstring})->unwrap");
+
+                                EndMenu();
+                            }
+                        }
+                        EndMenu();
+                    }
+                    EndMenu();
+                }
+
+                EndPopup();
+            }
         }
         func run_script(self: ScriptEditor)
         {
@@ -249,12 +394,14 @@ namespace editor::gui
             let mut exist = true;
 
             je::gui::SetNextWindowSizeConstraints((350., 200.), (3500., 2000.));
-            match (BeginOpen(
-                F"脚本-{self.m_title}##{JobID()}"))
+            match (BeginAttrOpen(
+                F"脚本-{self.m_title}##{JobID()}",
+                WindowsAttribute::ImGuiWindowFlags_MenuBar))
             {
             value(show)?
                 if (show)
                 {
+                    self->main_menu;
                     self->history_list;
                     SameLine();
                     self->script_box;

@@ -3203,13 +3203,17 @@ JE_API jegl_rendchain* jegl_branch_new_chain(
 /*
 jegui_set_font [基本接口]
 让ImGUI使用指定的路径和字体大小设置
-    * 若 path 是空指针，则使用默认字体
+    * 若 general_font_path 是空指针，则使用默认字体
+    * 若 general_font_path 非空，则针对拉丁字符集使用 latin_font_path 指示的字体
     * 仅在 jegui_init_basic 前调用生效
     * 此接口仅适合用于对接自定义渲染API时使用
 请参见：
     jegui_init_basic
 */
-JE_API void jegui_set_font(const char* path, size_t size);
+JE_API void jegui_set_font(
+    const char* general_font_path,
+    const char* latin_font_path,
+    size_t size);
 
 typedef uint64_t jegui_user_image_handle_t;
 typedef jegui_user_image_handle_t(*jegui_user_image_loader_t)(jegl_resource*);
@@ -3721,10 +3725,9 @@ namespace jeecs
         用于产生致命错误日志
         */
         template<typename ... ArgTs>
-        [[noreturn]] inline void logfatal(const char* format, ArgTs&& ... args)
+        inline void logfatal(const char* format, ArgTs&& ... args)
         {
             je_log(JE_LOG_FATAL, format, args...);
-            je_clock_sleep_for(1.0);
             wo_fail(WO_FAIL_JE_FATAL_ERROR, format, args...);
         }
     }

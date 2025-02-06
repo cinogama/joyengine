@@ -68,7 +68,7 @@ namespace jeapi::debug
 
         // 获取所有的世界，并从中获取所有的实体
         do universe->get_all_worlds
-            =>> \w = w->get_all_entities;
+            =>> \w = w->get_all_entities([]);
             ->> func(e)
             {
                 match (get_entity_editor_id(e))
@@ -168,7 +168,7 @@ namespace jeapi::debug
 
     public func get_all_entities_layer_from_world(world: je::world)
     {
-        return get_entity_and_childs(world->get_all_entities);
+        return get_entity_and_childs(world->get_all_entities([]));
     }
     public func find_entity_and_child_by_instance(world: je::world, e: je::entity)
     {

@@ -265,6 +265,7 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
 {
     // 你可以在此写点你喜欢的东西
     // 请注意，不允许在此处的脚本中关闭 world 或 universe
+    
 }
 "@;
                             new! ScriptEditor(context, DEFAULT_SCRIPT_SRC, "编辑器", true)

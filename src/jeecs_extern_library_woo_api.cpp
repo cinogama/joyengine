@@ -35,8 +35,13 @@ WO_API wo_api je_gui_begintabitem_open(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_button(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_button_size(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_checkbox(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_code_editor_copy(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_code_editor_create(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_code_editor_cut(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_code_editor_delete(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_code_editor_get_cursor_pos(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_code_editor_get_text(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_code_editor_insert_text(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_code_editor_language_definition_add_identifier(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_code_editor_language_definition_add_keyword(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_code_editor_language_definition_add_token_regex(wo_vm vm, wo_value args);
@@ -46,10 +51,16 @@ WO_API wo_api je_gui_code_editor_language_definition_set_case_sensitive(wo_vm vm
 WO_API wo_api je_gui_code_editor_language_definition_set_mlcomment(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_code_editor_language_definition_set_preproc_char(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_code_editor_language_definition_set_slcomment(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_code_editor_paste(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_code_editor_redo(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_code_editor_redoable(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_code_editor_set_cursor_pos(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_code_editor_set_language_definition(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_code_editor_set_text(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_code_editor_show(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_code_editor_show_size(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_code_editor_undo(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_code_editor_undoable(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_colorbutton(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_colorpicker4(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_combo(wo_vm vm, wo_value args);
@@ -206,6 +217,7 @@ WO_API wo_api je_gui_set_next_window_pos(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_set_next_window_size(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_set_next_window_size_constraints(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_set_tooltip(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_set_window_font_scale(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_stop_all_work(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_style_get_config_color(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_style_set_config_color(wo_vm vm, wo_value args);
@@ -520,8 +532,13 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"je_gui_button", (void*)&je_gui_button},
         wo_extern_lib_func_t{"je_gui_button_size", (void*)&je_gui_button_size},
         wo_extern_lib_func_t{"je_gui_checkbox", (void*)&je_gui_checkbox},
+        wo_extern_lib_func_t{"je_gui_code_editor_copy", (void*)&je_gui_code_editor_copy},
         wo_extern_lib_func_t{"je_gui_code_editor_create", (void*)&je_gui_code_editor_create},
+        wo_extern_lib_func_t{"je_gui_code_editor_cut", (void*)&je_gui_code_editor_cut},
+        wo_extern_lib_func_t{"je_gui_code_editor_delete", (void*)&je_gui_code_editor_delete},
+        wo_extern_lib_func_t{"je_gui_code_editor_get_cursor_pos", (void*)&je_gui_code_editor_get_cursor_pos},
         wo_extern_lib_func_t{"je_gui_code_editor_get_text", (void*)&je_gui_code_editor_get_text},
+        wo_extern_lib_func_t{"je_gui_code_editor_insert_text", (void*)&je_gui_code_editor_insert_text},
         wo_extern_lib_func_t{"je_gui_code_editor_language_definition_add_identifier", (void*)&je_gui_code_editor_language_definition_add_identifier},
         wo_extern_lib_func_t{"je_gui_code_editor_language_definition_add_keyword", (void*)&je_gui_code_editor_language_definition_add_keyword},
         wo_extern_lib_func_t{"je_gui_code_editor_language_definition_add_token_regex", (void*)&je_gui_code_editor_language_definition_add_token_regex},
@@ -531,10 +548,16 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"je_gui_code_editor_language_definition_set_mlcomment", (void*)&je_gui_code_editor_language_definition_set_mlcomment},
         wo_extern_lib_func_t{"je_gui_code_editor_language_definition_set_preproc_char", (void*)&je_gui_code_editor_language_definition_set_preproc_char},
         wo_extern_lib_func_t{"je_gui_code_editor_language_definition_set_slcomment", (void*)&je_gui_code_editor_language_definition_set_slcomment},
+        wo_extern_lib_func_t{"je_gui_code_editor_paste", (void*)&je_gui_code_editor_paste},
+        wo_extern_lib_func_t{"je_gui_code_editor_redo", (void*)&je_gui_code_editor_redo},
+        wo_extern_lib_func_t{"je_gui_code_editor_redoable", (void*)&je_gui_code_editor_redoable},
+        wo_extern_lib_func_t{"je_gui_code_editor_set_cursor_pos", (void*)&je_gui_code_editor_set_cursor_pos},
         wo_extern_lib_func_t{"je_gui_code_editor_set_language_definition", (void*)&je_gui_code_editor_set_language_definition},
         wo_extern_lib_func_t{"je_gui_code_editor_set_text", (void*)&je_gui_code_editor_set_text},
         wo_extern_lib_func_t{"je_gui_code_editor_show", (void*)&je_gui_code_editor_show},
         wo_extern_lib_func_t{"je_gui_code_editor_show_size", (void*)&je_gui_code_editor_show_size},
+        wo_extern_lib_func_t{"je_gui_code_editor_undo", (void*)&je_gui_code_editor_undo},
+        wo_extern_lib_func_t{"je_gui_code_editor_undoable", (void*)&je_gui_code_editor_undoable},
         wo_extern_lib_func_t{"je_gui_colorbutton", (void*)&je_gui_colorbutton},
         wo_extern_lib_func_t{"je_gui_colorpicker4", (void*)&je_gui_colorpicker4},
         wo_extern_lib_func_t{"je_gui_combo", (void*)&je_gui_combo},
@@ -691,6 +714,7 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"je_gui_set_next_window_size", (void*)&je_gui_set_next_window_size},
         wo_extern_lib_func_t{"je_gui_set_next_window_size_constraints", (void*)&je_gui_set_next_window_size_constraints},
         wo_extern_lib_func_t{"je_gui_set_tooltip", (void*)&je_gui_set_tooltip},
+        wo_extern_lib_func_t{"je_gui_set_window_font_scale", (void*)&je_gui_set_window_font_scale},
         wo_extern_lib_func_t{"je_gui_stop_all_work", (void*)&je_gui_stop_all_work},
         wo_extern_lib_func_t{"je_gui_style_get_config_color", (void*)&je_gui_style_get_config_color},
         wo_extern_lib_func_t{"je_gui_style_set_config_color", (void*)&je_gui_style_set_config_color},

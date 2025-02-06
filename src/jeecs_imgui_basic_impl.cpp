@@ -456,8 +456,7 @@ R"(
 
     extern("libjoyecs", "je_gui_pop_item_width")
     public func PopItemWidth()=> void;
-)"
-R"(
+)" R"(
     extern("libjoyecs", "je_gui_push_clip_rect")
     public func PushClipRect(from: ImVec2, to: ImVec2)=> void;
 
@@ -678,8 +677,7 @@ R"(
 
     extern("libjoyecs", "je_gui_style_set_config_color_light")
     public func SetStyleColorLight()=>void; 
-)"
-R"(
+)" R"(
     public enum DockNodeFlags
     {
         ImGuiDockNodeFlags_None                         = 0,
@@ -743,6 +741,9 @@ R"(
     extern("libjoyecs", "je_gui_pop_style_var")
     public func PopStyleVar(n: int)=> void;
 
+    extern("libjoyecs", "je_gui_set_window_font_scale")
+    public func SetWindowFontScale(factor: real)=> void;
+
     extern("libjoyecs", "je_gui_dummy")
     public func Dummy(sz: ImVec2)=> void;
 
@@ -759,6 +760,7 @@ R"(
 		    Preprocessor,
 		    Identifier,
 		    KnownIdentifier,
+            Type,
 		    PreprocIdentifier,
 		    Comment,
 		    MultiLineComment,
@@ -828,12 +830,38 @@ R"(
         extern("libjoyecs", "je_gui_code_editor_set_language_definition")
             public func SetLanguageDefinition(self: CodeEditorContext, ldef: LanguageDefinition)=> void;
 
+        extern("libjoyecs", "je_gui_code_editor_undoable")
+            public func CanUndo(self: CodeEditorContext)=> bool;
+        extern("libjoyecs", "je_gui_code_editor_redoable")
+            public func CanRedo(self: CodeEditorContext)=> bool;
+
+        extern("libjoyecs", "je_gui_code_editor_undo")
+            public func Undo(self: CodeEditorContext)=> void;
+        extern("libjoyecs", "je_gui_code_editor_redo")
+            public func Redo(self: CodeEditorContext)=> void;
+
+        extern("libjoyecs", "je_gui_code_editor_get_cursor_pos")
+            public func GetCursorPosition(self: CodeEditorContext)=> (int, int);
+        extern("libjoyecs", "je_gui_code_editor_set_cursor_pos")
+            public func SetCursorPosition(self: CodeEditorContext, pos: (int, int))=> void;
+    
+        extern("libjoyecs", "je_gui_code_editor_insert_text")
+            public func InsertText(self: CodeEditorContext, text: string)=> void;
+
+        extern("libjoyecs", "je_gui_code_editor_copy")
+            public func Copy(self: CodeEditorContext)=> void;
+        extern("libjoyecs", "je_gui_code_editor_cut")
+            public func Cut(self: CodeEditorContext)=> void;
+        extern("libjoyecs", "je_gui_code_editor_paste")
+            public func Paste(self: CodeEditorContext)=> void;
+        extern("libjoyecs", "je_gui_code_editor_delete")
+            public func Delete(self: CodeEditorContext)=> void;
     }
     extern("libjoyecs", "je_gui_code_editor_show")
         public func CodeEditor(ctx: CodeEditorContext, label: string)=> void;
     extern("libjoyecs", "je_gui_code_editor_show_size")
         public func CodeEditorSize(ctx: CodeEditorContext, label: string, sz: ImVec2, board: bool)=> void;
-
+)" R"(
     namespace node_editor
     {
         using EditorContext = gchandle
@@ -1028,17 +1056,8 @@ R"(
     extern("libjoyecs", "je_gui_unregister_exit_callback")
     public func unregister_exit_callback()=> void;
 
-    public func set_font(font: option<string>, size: int)
-    {
-        extern("libjoyecs", "je_gui_set_font")
-        func _set_font(...)=> void;
-
-        match (font)
-        {
-        value(fontpath)? _set_font(fontpath, size);
-        none? _set_font(size);
-        }
-    }
+    extern("libjoyecs", "je_gui_set_font")
+    public func set_font(font: option<string>, latin_font: option<string>, size: int)=> void;
 }
 
 )" };
@@ -1075,17 +1094,27 @@ struct _jegui_thread_local_context
 };
 thread_local _jegui_thread_local_context _je_gui_tls_ctx;
 
-
-wo_vm exit_callback_handler_vm = nullptr;
-wo_pin_value exit_callback_function = nullptr;
-
-std::optional<std::string> specify_font_path = std::nullopt;
-size_t specify_font_size = 18;
-
-void jegui_set_font(const char* path, size_t size)
+struct _jegui_static_context
 {
-    specify_font_path = path ? std::optional(path) : std::nullopt;
-    specify_font_size = size;
+    wo_vm _jegui_exit_callback_handler_vm = nullptr;
+    wo_pin_value _jegui_exit_callback_function = nullptr;
+    std::optional<std::string> _jegui_specify_font_path = std::nullopt;
+    std::optional<std::string> _jegui_specify_latin_font_path = std::nullopt;
+    size_t _jegui_specify_font_size = 18;
+};
+_jegui_static_context _je_gui_static_ctx;
+
+void jegui_set_font(
+    const char* general_font_path,
+    const char* latin_font_path,
+    size_t size)
+{
+    _je_gui_static_ctx._jegui_specify_font_path
+        = general_font_path ? std::optional(general_font_path) : std::nullopt;
+    _je_gui_static_ctx._jegui_specify_latin_font_path
+        = latin_font_path ? std::optional(latin_font_path) : std::nullopt;
+
+    _je_gui_static_ctx._jegui_specify_font_size = size;
 }
 
 WO_API wo_api je_gui_begin_tool_tip(wo_vm vm, wo_value args)
@@ -1325,7 +1354,7 @@ WO_API wo_api je_gui_begintabitem_open(wo_vm vm, wo_value args)
     bool open = true;
     bool display = ImGui::BeginTabItem(wo_string(args + 0), &open, (ImGuiTabBarFlags)wo_int(args + 1));
 
-    wo_value ret = s + 0;  
+    wo_value ret = s + 0;
     wo_value elem = s + 1;
 
     wo_set_struct(ret, vm, 2);
@@ -1644,9 +1673,9 @@ WO_API wo_api je_gui_set_tooltip(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_treenodeex(wo_vm vm, wo_value args)
 {
-    return wo_ret_bool(vm, 
+    return wo_ret_bool(vm,
         ImGui::TreeNodeEx(
-            wo_string(args + 0), 
+            wo_string(args + 0),
             (ImGuiTreeNodeFlags)wo_int(args + 1)));
 }
 
@@ -2237,8 +2266,8 @@ WO_API wo_api je_gui_input_int2_box(wo_vm vm, wo_value args)
 
     if (update)
     {
-        wo_value result = s + 0;  
-        wo_value elem = s + 1; 
+        wo_value result = s + 0;
+        wo_value elem = s + 1;
 
         wo_set_struct(result, vm, 2);
 
@@ -2532,7 +2561,7 @@ WO_API wo_api je_gui_get_input_state(wo_vm vm, wo_value args)
         fnd = _key_state_record.find(kcode);
     }
 
-    wo_value v = s + 0;  
+    wo_value v = s + 0;
     wo_value elem = s + 1;
 
     wo_set_struct(v, vm, 2);
@@ -2546,40 +2575,50 @@ WO_API wo_api je_gui_get_input_state(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_register_exit_callback(wo_vm vm, wo_value args)
 {
-    if (exit_callback_handler_vm != nullptr)
+    if (_je_gui_static_ctx._jegui_exit_callback_handler_vm != nullptr)
         return wo_ret_panic(vm, "Callback has been registered.");
 
-    assert(exit_callback_handler_vm == nullptr && exit_callback_function == nullptr);
+    assert(
+        _je_gui_static_ctx._jegui_exit_callback_handler_vm == nullptr 
+        && _je_gui_static_ctx._jegui_exit_callback_function == nullptr);
 
-    exit_callback_handler_vm = wo_borrow_vm(vm);
-    exit_callback_function = wo_create_pin_value();
-    
-    wo_pin_value_set(exit_callback_function, args + 0);
+    _je_gui_static_ctx._jegui_exit_callback_handler_vm = wo_borrow_vm(vm);
+    _je_gui_static_ctx._jegui_exit_callback_function = wo_create_pin_value();
+
+    wo_pin_value_set(_je_gui_static_ctx._jegui_exit_callback_function, args + 0);
 
     return wo_ret_void(vm);
 }
 WO_API wo_api je_gui_unregister_exit_callback(wo_vm vm, wo_value args)
 {
-    if (exit_callback_handler_vm == nullptr)
+    if (_je_gui_static_ctx._jegui_exit_callback_handler_vm == nullptr)
         return wo_ret_panic(vm, "Callback not found.");
 
-    wo_release_vm(exit_callback_handler_vm);
-    wo_close_pin_value(exit_callback_function);
+    wo_release_vm(_je_gui_static_ctx._jegui_exit_callback_handler_vm);
+    wo_close_pin_value(_je_gui_static_ctx._jegui_exit_callback_function);
 
-    exit_callback_handler_vm = nullptr;
-    exit_callback_function = nullptr;
+    _je_gui_static_ctx._jegui_exit_callback_handler_vm = nullptr;
+    _je_gui_static_ctx._jegui_exit_callback_function = nullptr;
 
     return wo_ret_void(vm);
 }
 
 WO_API wo_api je_gui_set_font(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
     size_t argc = (size_t)wo_argc(vm);
 
-    if (argc == 1)
-        jegui_set_font(nullptr, (size_t)wo_int(args + 0));
-    else
-        jegui_set_font(wo_string(args + 0), (size_t)wo_int(args + 1));
+    wo_value elem = s + 0;
+    const char* font_path = nullptr;
+    const char* latin_font_path = nullptr;
+
+    if (wo_option_get(elem, args + 0))
+        font_path = wo_string(elem);
+    
+    if (wo_option_get(elem, args + 1))
+        latin_font_path = wo_string(elem);
+
+    jegui_set_font(font_path, latin_font_path, (size_t)wo_int(args + 2));
 
     return wo_ret_void(vm);
 }
@@ -2660,7 +2699,11 @@ WO_API wo_api je_gui_pop_style_var(wo_vm vm, wo_value args)
     ImGui::PopStyleVar((int)wo_int(args + 0));
     return wo_ret_void(vm);
 }
-
+WO_API wo_api je_gui_set_window_font_scale(wo_vm vm, wo_value args)
+{
+    ImGui::SetWindowFontScale(wo_float(args + 0));
+    return wo_ret_void(vm);
+}
 WO_API wo_api je_gui_dummy(wo_vm vm, wo_value args)
 {
     ImGui::Dummy(val2vec2(args + 0));
@@ -2679,9 +2722,9 @@ WO_API wo_api je_gui_code_editor_language_definition_create(wo_vm vm, wo_value a
 }
 WO_API wo_api je_gui_code_editor_language_definition_add_keyword(wo_vm vm, wo_value args)
 {
-    TextEditor::LanguageDefinition* defs = 
+    TextEditor::LanguageDefinition* defs =
         std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(wo_pointer(args + 0)));
-    
+
     defs->mKeywords.insert(wo_string(args + 1));
     return wo_ret_void(vm);
 }
@@ -2762,13 +2805,110 @@ WO_API wo_api je_gui_code_editor_set_language_definition(wo_vm vm, wo_value args
         std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(wo_pointer(args + 1)));
 
     text_editor->SetLanguageDefinition(*defs);
-    
+
+    return wo_ret_void(vm);
+}
+WO_API wo_api je_gui_code_editor_undoable(wo_vm vm, wo_value args)
+{
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+    return wo_ret_bool(vm, text_editor->CanUndo());
+}
+WO_API wo_api je_gui_code_editor_redoable(wo_vm vm, wo_value args)
+{
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+    return wo_ret_bool(vm, text_editor->CanRedo());
+}
+WO_API wo_api je_gui_code_editor_undo(wo_vm vm, wo_value args)
+{
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+    text_editor->Undo();
+    return wo_ret_void(vm);
+}
+WO_API wo_api je_gui_code_editor_redo(wo_vm vm, wo_value args)
+{
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+    text_editor->Redo();
+    return wo_ret_void(vm);
+}
+WO_API wo_api je_gui_code_editor_get_cursor_pos(wo_vm vm, wo_value args)
+{
+    wo_value s = wo_reserve_stack(vm, 2, &args);
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+
+    wo_value result = s + 0;
+    wo_value elem = s + 1;
+
+    auto pos = text_editor->GetCursorPosition();
+
+    wo_set_struct(result, vm, 2);
+
+    wo_set_int(elem, pos.mLine);
+    wo_struct_set(result, 0, elem);
+
+    wo_set_int(elem, pos.mColumn);
+    wo_struct_set(result, 1, elem);
+
+    return wo_ret_val(vm, result);
+}
+WO_API wo_api je_gui_code_editor_set_cursor_pos(wo_vm vm, wo_value args)
+{
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+
+    wo_value elem = s + 0;
+
+    wo_struct_get(elem, args + 1, 0);
+    int line = (int)wo_int(elem);
+
+    wo_struct_get(elem, args + 1, 1);
+    int column = (int)wo_int(elem);
+
+    text_editor->SetCursorPosition(TextEditor::Coordinates(line, column));
+
+    return wo_ret_void(vm);
+}
+WO_API wo_api je_gui_code_editor_insert_text(wo_vm vm, wo_value args)
+{
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+    text_editor->InsertText(wo_string(args + 1));
+    return wo_ret_void(vm);
+}
+WO_API wo_api je_gui_code_editor_copy(wo_vm vm, wo_value args)
+{
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+    text_editor->Copy();
+
+    return wo_ret_void(vm);
+}
+WO_API wo_api je_gui_code_editor_cut(wo_vm vm, wo_value args)
+{
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+    text_editor->Cut();
+
+    return wo_ret_void(vm);
+}
+WO_API wo_api je_gui_code_editor_paste(wo_vm vm, wo_value args)
+{
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+    text_editor->Paste();
+
+    return wo_ret_void(vm);
+}
+WO_API wo_api je_gui_code_editor_delete(wo_vm vm, wo_value args)
+{
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+    text_editor->Delete();
+
     return wo_ret_void(vm);
 }
 WO_API wo_api je_gui_code_editor_create(wo_vm vm, wo_value args)
 {
-    return wo_ret_gchandle(vm, new TextEditor(), nullptr,
-        [](void* p) 
+    TextEditor* text_editor = new TextEditor();
+
+    text_editor->SetPalette(TextEditor::GetDarkPalette());
+
+    return wo_ret_gchandle(vm, text_editor, nullptr,
+        [](void* p)
         {
             delete std::launder(reinterpret_cast<TextEditor*>(p));
         });
@@ -2815,7 +2955,7 @@ WO_API wo_api je_gui_node_editor_context_create(wo_vm vm, wo_value args)
         [](void* p)
         {
             ax::NodeEditor::DestroyEditor(
-                    reinterpret_cast<ax::NodeEditor::EditorContext*>(p));
+                reinterpret_cast<ax::NodeEditor::EditorContext*>(p));
         });
 }
 
@@ -2961,7 +3101,7 @@ WO_API wo_api je_gui_node_editor_query_new_link(wo_vm vm, wo_value args)
     ax::NodeEditor::PinId start, end;
     if (ax::NodeEditor::QueryNewLink(&start, &end))
     {
-        wo_value v = s + 0; 
+        wo_value v = s + 0;
         wo_value elem = s + 1;
 
         wo_set_struct(v, vm, 2);
@@ -3040,7 +3180,7 @@ WO_API wo_api je_gui_node_editor_get_node_position(wo_vm vm, wo_value args)
 
     auto v2 = ax::NodeEditor::GetNodePosition((ax::NodeEditor::NodeId)wo_int(args + 0));
 
-    wo_value result = s + 0; 
+    wo_value result = s + 0;
     wo_value val = s + 1;
 
     wo_set_struct(result, vm, 2);
@@ -3065,14 +3205,14 @@ WO_API wo_api je_gui_node_editor_get_hovered_node(wo_vm vm, wo_value args)
     auto id = ax::NodeEditor::GetHoveredNode();
 
     if ((bool)id)
-        return wo_ret_option_int(vm, (wo_int_t)id.Get()); 
+        return wo_ret_option_int(vm, (wo_int_t)id.Get());
     return wo_ret_option_none(vm);
 }
 
 WO_API wo_api je_gui_node_editor_get_hovered_pin(wo_vm vm, wo_value args)
 {
     auto id = ax::NodeEditor::GetHoveredPin();
-    
+
     if ((bool)id)
         return wo_ret_option_int(vm, (wo_int_t)id.Get());
     return wo_ret_option_none(vm);
@@ -3081,7 +3221,7 @@ WO_API wo_api je_gui_node_editor_get_hovered_pin(wo_vm vm, wo_value args)
 WO_API wo_api je_gui_node_editor_get_hovered_link(wo_vm vm, wo_value args)
 {
     auto id = ax::NodeEditor::GetHoveredLink();
-    
+
     if ((bool)id)
         return wo_ret_option_int(vm, (wo_int_t)id.Get());
     return wo_ret_option_none(vm);
@@ -3089,7 +3229,7 @@ WO_API wo_api je_gui_node_editor_get_hovered_link(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_node_editor_is_node_selected(wo_vm vm, wo_value args)
 {
-    return wo_ret_bool(vm, 
+    return wo_ret_bool(vm,
         ax::NodeEditor::IsNodeSelected(
             (ax::NodeEditor::NodeId)wo_int(args + 0)));
 }
@@ -3099,8 +3239,8 @@ WO_API wo_api je_gui_node_editor_canvas_to_screen(wo_vm vm, wo_value args)
     wo_value s = wo_reserve_stack(vm, 2, &args);
 
     auto v2 = ax::NodeEditor::CanvasToScreen(val2vec2(args + 0));
-    
-    wo_value result = s + 0;  
+
+    wo_value result = s + 0;
     wo_value val = s + 1;
 
     wo_set_struct(result, vm, 2);
@@ -3198,7 +3338,7 @@ public func frag(vf: v2f)
 }
 )");
 
-    _je_gui_tls_ctx._jegui_imgui_config_path = 
+    _je_gui_tls_ctx._jegui_imgui_config_path =
         jeecs_file_get_host_path() + std::string("/builtin/imgui.ini.je4cache");
 
     _je_gui_tls_ctx._jegui_stop_work_flag = false;
@@ -3210,22 +3350,80 @@ public func frag(vf: v2f)
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     io.IniFilename = _je_gui_tls_ctx._jegui_imgui_config_path.c_str();
-   
-    auto* ttf_file = specify_font_path ? jeecs_file_open(specify_font_path.value().c_str()) : nullptr;
-    if (ttf_file == nullptr)
+
+    auto* general_ttf_file =
+        _je_gui_static_ctx._jegui_specify_font_path.has_value()
+        ? jeecs_file_open(_je_gui_static_ctx._jegui_specify_font_path.value().c_str())
+        : nullptr;
+    auto* latin_ttf_file =
+        _je_gui_static_ctx._jegui_specify_latin_font_path.has_value()
+        ? jeecs_file_open(_je_gui_static_ctx._jegui_specify_latin_font_path.value().c_str())
+        : nullptr;
+
+    if (general_ttf_file == nullptr)
         // Default font
-        ttf_file = jeecs_file_open("!/builtin/font/HarmonyOS_Sans_SC_Regular.ttf");
+        general_ttf_file = jeecs_file_open("!/builtin/font/HarmonyOS_Sans_SC_Regular.ttf");
 
-    if (ttf_file)
+    if (latin_ttf_file == nullptr)
+        // Default font
+        latin_ttf_file = jeecs_file_open("!/builtin/font/JetBrainsMono_Regular.ttf");
+
+    if (general_ttf_file)
     {
-        auto* file_buf = je_mem_alloc(ttf_file->m_file_length);
-        jeecs_file_read(file_buf, sizeof(char), ttf_file->m_file_length, ttf_file);
+        void* file_buf = je_mem_alloc(general_ttf_file->m_file_length);
+        jeecs_file_read(file_buf, sizeof(char), general_ttf_file->m_file_length, general_ttf_file);
 
-        io.Fonts->AddFontFromMemoryTTF(file_buf, (int)ttf_file->m_file_length, (float)specify_font_size, nullptr,
-            io.Fonts->GetGlyphRangesChineseFull());
+        void* latin_file_buf = nullptr;
+        if (latin_ttf_file != nullptr)
+        {
+            latin_file_buf = je_mem_alloc(latin_ttf_file->m_file_length);
+            jeecs_file_read(latin_file_buf, sizeof(char), latin_ttf_file->m_file_length, latin_ttf_file);
+        }
+
+        if (latin_file_buf != nullptr)
+        {
+            // Non latin characters
+            static const ImWchar ranges[] =
+            {
+                // 0x0020, 0x00FF, // Basic Latin + Latin Supplement
+                0x2000, 0x206F, // General Punctuation
+                0x3000, 0x30FF, // CJK Symbols and Punctuations, Hiragana, Katakana
+                0x31F0, 0x31FF, // Katakana Phonetic Extensions
+                0xFF00, 0xFFEF, // Half-width characters
+                0xFFFD, 0xFFFD, // Invalid
+                0x4e00, 0x9FAF, // CJK Ideograms
+                0,
+            };
+
+            io.Fonts->AddFontFromMemoryTTF(
+                latin_file_buf,
+                (int)latin_ttf_file->m_file_length,
+                (float)_je_gui_static_ctx._jegui_specify_font_size,
+                nullptr,
+                io.Fonts->GetGlyphRangesDefault());
+            
+            ImFontConfig merge_config;
+            merge_config.MergeMode = true;
+
+            io.Fonts->AddFontFromMemoryTTF(
+                file_buf,
+                (int)general_ttf_file->m_file_length,
+                (float)_je_gui_static_ctx._jegui_specify_font_size,
+                &merge_config,
+                ranges);
+
+            io.Fonts->Build();
+        }
+        else
+            io.Fonts->AddFontFromMemoryTTF(
+                file_buf,
+                (int)general_ttf_file->m_file_length,
+                (float)_je_gui_static_ctx._jegui_specify_font_size,
+                nullptr,
+                io.Fonts->GetGlyphRangesChineseFull());
 
         // je_mem_free(file_buf); // No need to free.
-        jeecs_file_close(ttf_file);
+        jeecs_file_close(general_ttf_file);
     }
 }
 
@@ -3327,13 +3525,13 @@ bool jegui_shutdown_callback()
     jeecs::debug::loginfo("Graphic interface has been requested to close.");
 #endif
 
-    if (exit_callback_handler_vm == nullptr)
+    if (_je_gui_static_ctx._jegui_exit_callback_handler_vm == nullptr)
         return true;
 
-    wo_value tmp = wo_register(exit_callback_handler_vm, WO_REG_T0);
+    wo_value tmp = wo_register(_je_gui_static_ctx._jegui_exit_callback_handler_vm, WO_REG_T0);
 
-    wo_pin_value_get(tmp, exit_callback_function);
-    auto result = wo_invoke_value(exit_callback_handler_vm, tmp, 0, nullptr, nullptr);
+    wo_pin_value_get(tmp, _je_gui_static_ctx._jegui_exit_callback_function);
+    auto result = wo_invoke_value(_je_gui_static_ctx._jegui_exit_callback_handler_vm, tmp, 0, nullptr, nullptr);
     if (result == nullptr)
         return false;
 
