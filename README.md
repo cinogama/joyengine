@@ -54,6 +54,10 @@ Thanks to [imgui](https://github.com/ocornut/imgui) for taking the pain out of w
 
 [Imgui Node Editor](https://github.com/thedmd/imgui-node-editor) is an interesting node editor based on imgui. Although I haven't fully figured out what to use it for, the engine provides some related interfaces, and according to my idea, the Wolkflow mechanism is implemented. Thank you to its author.
 
+[ImGuiColorTextEdit](https://github.com/BalazsJako/ImGuiColorTextEdit) 提供了代码编辑器的控件，感谢 @BalazsJako 提供了这个控件。
+
+[ImGuiColorTextEdit](https://github.com/BalazsJako/ImGuiColorTextEdit) provides the widget of the code editor, thanks to @BalazsJako for providing this widget.
+
 感谢 [box2d](https://box2d.org/)提供了良好的物理效果，这真的是个很棒的物理引擎，非常感谢。
 
 Thanks to [box2d](https://box2d.org/) for providing nice physical effects, This is really a great physics engine, thanks a lot.

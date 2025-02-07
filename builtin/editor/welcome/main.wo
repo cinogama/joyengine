@@ -65,6 +65,10 @@ namespace jeapi::welcome
                     TextDisabled("Copyright (c) 2019 Michał Cichoń.");
                     TextDisabled("Imgui-node-editor is licensed under the MIT License");
 
+                    Text("ImGuiColorTextEdit https://github.com/BalazsJako/ImGuiColorTextEdit");
+                    TextDisabled("Copyright (c) 2017 BalazsJako.");
+                    TextDisabled("Imgui-node-editor is licensed under the MIT License");
+
                     Text("Box2D https://box2d.org/");
                     TextDisabled("Copyright (c) 2019 Erin Catto.");
                     TextDisabled("Box2D is licensed under the MIT License");
@@ -128,17 +132,23 @@ are generated using Bison and comply with GPLv3 with special bison exception."@
 
                     Text("默认提供的字体:");
 
+                    Text("JetBrainsMono_Regular");
+                    TextDisabled("https://www.jetbrains.com/lp/mono/");
+                    TextDisabled("Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono).");
+                    TextDisabled("此字体被作为 UI 的默认西文（拉丁字符）字体。");
+                    TextDisabled("* 字体的具体条款见字体目录内的对应 LICENSE.txt 文件");
+
                     Text("HarmonyOS_Sans_SC_Regular");
                     TextDisabled("https://developer.harmonyos.com/cn/docs/design/des-guides/font-0000001157868583");
                     TextDisabled("Copyright 2021 Huawei Device Co., Ltd. All Rights Reserved.");
-                    TextDisabled("此字体可免费商用。");
-                    TextDisabled("* 具体条款见字体目录内的对应 LICENSE.txt 文件");
+                    TextDisabled("此字体被作为 UI 的默认中文（非拉丁字符）字体。");
+                    TextDisabled("* 字体的具体条款见字体目录内的对应 LICENSE.txt 文件");
 
                     Text("cino_ipix_12px");
                     TextDisabled("原始来源 https://purestudio.itch.io/ipix");
                     TextDisabled("修订版本 https://git.cinogama.net/cinogamaproject/cinoipixfont");
                     TextDisabled("Origin by: Copyright (c) 2019, zengsadi. Updated by Cinogama project. (C) 2021.");
-                    TextDisabled("此字体是公开领域字体，可免费商用，无需标注字体版权信息。");
+                    TextDisabled("* 此字体是公开领域字体。");
                     EndChild();
 
                     BeginGroup();
