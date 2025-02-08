@@ -1066,15 +1066,15 @@ void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
 {
     using namespace jeecs::graphic::api::gl3;
 
-    write_to_apis->init = gl_startup;
-    write_to_apis->pre_shutdown = gl_pre_shutdown;
-    write_to_apis->post_shutdown = gl_shutdown;
+    write_to_apis->interface_startup = gl_startup;
+    write_to_apis->interface_shutdown_before_resource_release = gl_pre_shutdown;
+    write_to_apis->interface_shutdown = gl_shutdown;
 
-    write_to_apis->pre_update = gl_pre_update;
-    write_to_apis->commit_update = gl_commit_update;
+    write_to_apis->update_frame_ready = gl_pre_update;
+    write_to_apis->update_draw_commit = gl_commit_update;
 
-    write_to_apis->create_blob = gl_create_resource_blob;
-    write_to_apis->close_blob = gl_close_resource_blob;
+    write_to_apis->create_resource_blob_cache = gl_create_resource_blob;
+    write_to_apis->close_resource_blob_cache = gl_close_resource_blob;
 
     write_to_apis->create_resource = gl_init_resource;
     write_to_apis->using_resource = gl_using_resource;
@@ -1086,8 +1086,8 @@ void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->draw_vertex = gl_draw_vertex_with_shader;
 
     write_to_apis->bind_framebuf = gl_set_rend_to_framebuffer;
-    write_to_apis->clear_color = gl_clear_framebuffer_color;
-    write_to_apis->clear_depth = gl_clear_framebuffer_depth;
+    write_to_apis->clear_frame_color = gl_clear_framebuffer_color;
+    write_to_apis->clear_frame_depth = gl_clear_framebuffer_depth;
 
     write_to_apis->set_uniform = gl_set_uniform;
 }

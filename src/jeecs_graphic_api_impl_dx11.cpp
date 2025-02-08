@@ -1631,15 +1631,15 @@ void jegl_using_dx11_apis(jegl_graphic_api* write_to_apis)
 {
     using namespace jeecs::graphic::api::dx11;
 
-    write_to_apis->init = dx11_startup;
-    write_to_apis->pre_shutdown = dx11_pre_shutdown;
-    write_to_apis->post_shutdown = dx11_shutdown;
+    write_to_apis->interface_startup = dx11_startup;
+    write_to_apis->interface_shutdown_before_resource_release = dx11_pre_shutdown;
+    write_to_apis->interface_shutdown = dx11_shutdown;
 
-    write_to_apis->pre_update = dx11_pre_update;
-    write_to_apis->commit_update = dx11_commit_update;
+    write_to_apis->update_frame_ready = dx11_pre_update;
+    write_to_apis->update_draw_commit = dx11_commit_update;
 
-    write_to_apis->create_blob = dx11_create_resource_blob;
-    write_to_apis->close_blob = dx11_close_resource_blob;
+    write_to_apis->create_resource_blob_cache = dx11_create_resource_blob;
+    write_to_apis->close_resource_blob_cache = dx11_close_resource_blob;
 
     write_to_apis->create_resource = dx11_init_resource;
     write_to_apis->using_resource = dx11_using_resource;
@@ -1651,8 +1651,8 @@ void jegl_using_dx11_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->draw_vertex = dx11_draw_vertex_with_shader;
 
     write_to_apis->bind_framebuf = dx11_set_rend_to_framebuffer;
-    write_to_apis->clear_color = dx11_clear_framebuffer_color;
-    write_to_apis->clear_depth = dx11_clear_framebuffer_depth;
+    write_to_apis->clear_frame_color = dx11_clear_framebuffer_color;
+    write_to_apis->clear_frame_depth = dx11_clear_framebuffer_depth;
 
     write_to_apis->set_uniform = dx11_set_uniform;
 }

@@ -2080,79 +2080,80 @@ struct jegl_graphic_api
     using set_uniform_func_t = void(*)(jegl_context::userdata_t, uint32_t, jegl_shader::uniform_type, const void*);
 
     /*
-    jegl_graphic_api::init [成员]
+    jegl_graphic_api::interface_startup [成员]
     图形接口在初始化或者被请求重新启动时调用，按照JoyEngine的约定，图形实现应当在此处创建窗口，并完成渲染所需
     的初始化工作。
         * 请求重新启动通常是因为需要变更图形设置、例如MSAA设置或窗口标题、帧率等，因此建议图形实现在处理重新启动
             时，应当保留可以保留的资源以节约开销；若不提供对此的优化支持，也可以直接忽略，按照默认的启停规则进行操作。
         * 当图形上下文被请求重新启动时，会再次调用此函数，此时第3个参数将被设置为true，否则为 false 。
     */
-    startup_func_t          init;
+    startup_func_t          interface_startup;
 
     /*
-    jegl_graphic_api::pre_shutdown [成员]
+    jegl_graphic_api::interface_shutdown_before_resource_release [成员]
     图形接口在被关闭或请求重新启动时调用，按照JoyEngine的约定，所有申请而暂未释放的图形资源将在调用此函数完成之后
-    执行释放，然后调用 post_shutdown；因此图形实现应当在此做好释放图形资源的准备，例如让渲染设备进入暂停状态。
+    执行释放，然后调用 interface_shutdown；因此图形实现应当在此做好释放图形资源的准备，例如让渲染设备进入暂停状态。
         * 请求重新启动通常是因为需要变更图形设置、例如MSAA设置或窗口标题、帧率等，因此建议图形实现在处理重新启动
             时，应当保留可以保留的资源以节约开销；若不提供对此的优化支持，也可以直接忽略，按照默认的启停规则进行操作。
-        * 当图形上下文被请求重新启动时，会再次调用此函数，此时第3个参数将被设置为true，否则为 false。
+        * 当图形上下文被请求重新启动时，第3个参数将被设置为true，否则为 false。
     请参见：
-        jegl_graphic_api::post_shutdown
+        jegl_graphic_api::interface_post_shutdown
     */
-    shutdown_func_t         pre_shutdown;
+    shutdown_func_t         interface_shutdown_before_resource_release;
 
     /*
-    jegl_graphic_api::post_shutdown [成员]
+    jegl_graphic_api::interface_shutdown [成员]
     图形接口在被关闭或请求重新启动时调用，按照JoyEngine的约定，图形接口应当在此函数中完成所有资源、设备和窗口的释放。
-        * 此接口将在图形接口被请求关闭之后，在完成调用pre_shutdown接口、进而释放全部未释放的图形资源，最后调用。
+        * 此接口将在图形接口被请求关闭之后，在完成调用interface_shutdown_before_resource_release接口、进而释放全部
+            未释放的图形资源，最后调用interface_shutdown。
         * 请求重新启动通常是因为需要变更图形设置、例如MSAA设置或窗口标题、帧率等，因此建议图形实现在处理重新启动
             时，应当保留可以保留的资源以节约开销；若不提供对此的优化支持，也可以直接忽略，按照默认的启停规则进行操作。
-        * 当图形上下文被请求重新启动时，会再次调用此函数，此时第3个参数将被设置为true，否则为 false。
+        * 当图形上下文被请求重新启动时，第3个参数将被设置为true，否则为 false。
     请参见：
-        jegl_graphic_api::pre_shutdown
+        jegl_graphic_api::interface_pre_shutdown
     */
-    shutdown_func_t         post_shutdown;
+    shutdown_func_t         interface_shutdown;
 
     /*
-    jegl_graphic_api::pre_update [成员]
-    图形接口在更新一帧画面的起始位置会调用的接口，图形实现应当在此接口的开头完成前一阵画面的交换以呈现在屏幕上（这样可
+    jegl_graphic_api::update_frame_ready [成员]
+    图形接口在更新一帧画面的起始位置会调用的接口，图形实现应当在此接口的开头完成前一帧画面的交换以呈现在屏幕上（这样可
     以获得最佳的画面流畅度），然后做好其他准备：正式的主要渲染任务会在此接口返回后开始。
-        * 接口若返回 update_action::STOP，则表示图形实现请求关闭渲染，主要渲染任务和commit_update将被跳过，并在帧同步
-            工作完成后进入图形线程的退出流程。
-        * 接口若返回 update_action::SKIP，则表示图形实现请求跳过本帧的渲染，主要渲染任务和commit_update将被跳过，但
-            **不会**进入图形线程的退出流程。
+        * 接口若返回 update_action::STOP，则表示图形实现请求关闭渲染，update_draw_commit将被跳过（并且不应执行任何渲染操作），
+            并在帧同步工作完成后进入图形线程的退出流程。
+        * 接口若返回 update_action::SKIP，则表示图形实现请求跳过本帧的渲染，update_draw_commit将被跳过（并且不应执行任何渲
+            染操作），但 **不会** 进入图形线程的退出流程。
     */
-    update_func_t           pre_update;
+    update_func_t           update_frame_ready;
 
     /*
-    jegl_graphic_api::commit_update [成员]
-    图形接口在完成主要渲染任务之后会调用的接口，图形实现应当在此接口中，将既存的提交任务提交到图形设备中（以最大化利用
+    jegl_graphic_api::update_draw_commit [成员]
+    图形接口在完成指示的渲染操作之后会调用的接口，图形实现应当在此接口中，将既存的提交任务提交到图形设备中（以最大化利用
     设备空闲），如果可以，渲染GUI的任务也应当在此处实现，并一并提交。
         * 接口若返回 update_action::STOP，则表示图形实现请求关闭渲染，在帧同步工作完成后进入图形线程的退出流程。
         * 接口若返回 update_action::SKIP，由于一帧的任务已经完成，因此事实上如同返回 update_action::CONTINUE，不会跳
             过任何任务。
     */
-    update_func_t           commit_update;
+    update_func_t           update_draw_commit;
 
     /*
-    jegl_graphic_api::create_blob [成员]
+    jegl_graphic_api::create_resource_blob_cache [成员]
     图形接口在创建资源之前会调用此接口以生成运行时缓存。该缓存将被传入create_resource用于加速资源的创建。
         * 一个常见的用途是，在创建着色器之前，先根据着色器的原始资源创建出预备的缓存，然后在create_resource中使用此缓存
             实例化真正的着色器实例。
-        * 若确实没有值得缓存的数据，可以返回nullptr，如果这么做，close_blob和create_resource时也将收到nullptr。
-        * 图形实现应当为缓存信息预备能够指示类型信息的字段，以便于close_blob时可以用正确的方法释放缓存。
+        * 若确实没有值得缓存的数据，可以返回nullptr，如果这么做，close_resource_blob_cache和create_resource时也将收到nullptr。
+        * 图形实现应当为缓存信息预备能够指示类型信息的字段，以便于close_resource_blob_cache时可以用正确的方法释放缓存。
     请参见：
-        jegl_graphic_api::close_blob
+        jegl_graphic_api::close_resource_blob_cache
         jegl_graphic_api::create_resource
     */
-    create_blob_func_t      create_blob;
+    create_blob_func_t      create_resource_blob_cache;
 
     /*
-    jegl_graphic_api::close_blob [成员]
+    jegl_graphic_api::close_resource_blob_cache [成员]
     释放一个图形实现的缓存，这通常是因为图形线程被请求关闭，或者引擎认为该缓存已经过时。
         * 图形实现应当检查缓存是否为nullptr，以及缓存的类型，然后再释放缓存。
     */
-    close_blob_func_t       close_blob;
+    close_blob_func_t       close_resource_blob_cache;
 
     /*
     jegl_graphic_api::create_resource [成员]
@@ -2182,7 +2183,8 @@ struct jegl_graphic_api
     /*
     jegl_graphic_api::bind_uniform_buffer [成员]
     绑定一个一致缓冲区到对应位置
-        * 一个提交链（RendChain）只会调用一次此接口，因此允许图形实现不必考虑一致缓冲区易变的情况。
+        * 约定：由于RendChain的延迟渲染特性，接口假定所有相同的 uniform_buffer 实例在一帧之内
+            不会发生数据改动。
     */
     bind_resource_func_t    bind_uniform_buffer;
 
@@ -2199,28 +2201,28 @@ struct jegl_graphic_api
     bind_resource_func_t    bind_shader;
 
     /*
-    jegl_graphic_api::draw_vertex [成员]
-    使用之前绑定的着色器和纹理，绘制给定的顶点模型。
-    */
-    draw_vertex_func_t      draw_vertex;
-
-    /*
     jegl_graphic_api::bind_framebuf [成员]
     设置渲染目标，若传入nullptr，则目标为屏幕空间。
     */
     bind_framebuf_func_t    bind_framebuf;
 
     /*
-    jegl_graphic_api::clear_color [成员]
-    以指定颜色清除渲染目标的所有颜色附件。
+    jegl_graphic_api::draw_vertex [成员]
+    使用之前绑定的着色器和纹理，绘制给定的顶点模型。
     */
-    clear_color_func_t      clear_color;
+    draw_vertex_func_t      draw_vertex;
 
     /*
-    jegl_graphic_api::clear_color [成员]
+    jegl_graphic_api::clear_frame_color [成员]
+    以指定颜色清除渲染目标的所有颜色附件。
+    */
+    clear_color_func_t      clear_frame_color;
+
+    /*
+    jegl_graphic_api::clear_frame_depth [成员]
     以`无穷远`清空渲染目标的深度附件。
     */
-    clear_depth_func_t      clear_depth;
+    clear_depth_func_t      clear_frame_depth;
 
     /*
     jegl_graphic_api::set_uniform [成员]

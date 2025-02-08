@@ -88,15 +88,15 @@ void jegl_using_none_apis(jegl_graphic_api* write_to_apis)
 {
     using namespace jeecs::graphic::api::none;
 
-    write_to_apis->init = startup;
-    write_to_apis->pre_shutdown = pre_shutdown;
-    write_to_apis->post_shutdown = shutdown;
+    write_to_apis->interface_startup = startup;
+    write_to_apis->interface_shutdown_before_resource_release = pre_shutdown;
+    write_to_apis->interface_shutdown = shutdown;
 
-    write_to_apis->pre_update = pre_update;
-    write_to_apis->commit_update = commit_update;
+    write_to_apis->update_frame_ready = pre_update;
+    write_to_apis->update_draw_commit = commit_update;
 
-    write_to_apis->create_blob = create_resource_blob;
-    write_to_apis->close_blob = close_resource_blob;
+    write_to_apis->create_resource_blob_cache = create_resource_blob;
+    write_to_apis->close_resource_blob_cache = close_resource_blob;
 
     write_to_apis->create_resource = create_resource;
     write_to_apis->using_resource = using_resource;
@@ -108,8 +108,8 @@ void jegl_using_none_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->draw_vertex = draw_vertex_with_shader;
 
     write_to_apis->bind_framebuf = bind_framebuffer;
-    write_to_apis->clear_color = clear_framebuffer_color;
-    write_to_apis->clear_depth = clear_framebuffer_depth;
+    write_to_apis->clear_frame_color = clear_framebuffer_color;
+    write_to_apis->clear_frame_depth = clear_framebuffer_depth;
 
     write_to_apis->set_uniform = set_uniform;
 }
