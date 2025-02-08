@@ -557,7 +557,7 @@ WO_API wo_api wojeapi_get_all_entities_from_world(wo_vm vm, wo_value args)
 
     auto required_components_len = wo_lengthof(args + 1);
     std::vector<jeecs::typing::typeid_t> required_components(required_components_len);
-
+    
     for (size_t i = 0; i < required_components_len; ++i)
     {
         wo_arr_get(elem, args + 1, i);
@@ -942,7 +942,7 @@ WO_API wo_api wojeapi_input_window_size(wo_vm vm, wo_value args)
 
     auto winsz = jeecs::input::windowsize();
 
-    wo_value result = s + 0;
+    wo_value result = s + 0; 
     wo_value elem = s + 1;
 
     wo_set_struct(result, vm, 2);
@@ -1137,7 +1137,7 @@ WO_API wo_api wojeapi_type_members(wo_vm vm, wo_value args)
 
     const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)wo_pointer(args + 0);
 
-    wo_value result = s + 0;
+    wo_value result = s + 0; 
     wo_value elem = s + 1;
     wo_value elem2 = s + 2;
 
@@ -1250,10 +1250,10 @@ WO_API wo_api wojeapi_texture_clip(wo_vm vm, wo_value args)
     return wo_ret_gchandle(vm,
         new jeecs::basic::resource<jeecs::graphic::texture>(
             jeecs::graphic::texture::clip(
-                *loaded_texture,
-                (size_t)wo_int(args + 1),
-                (size_t)wo_int(args + 2),
-                (size_t)wo_int(args + 3),
+                *loaded_texture, 
+                (size_t)wo_int(args + 1), 
+                (size_t)wo_int(args + 2), 
+                (size_t)wo_int(args + 3), 
                 (size_t)wo_int(args + 4))
         ), nullptr,
         [](void* ptr) {
@@ -1407,7 +1407,7 @@ WO_API wo_api wojeapi_font_load_char(wo_vm vm, wo_value args)
             m_baseline_offset_y: int,
         };
     */
-    wo_value result = s + 0;
+    wo_value result = s + 0; 
     wo_value elem = s + 1;
 
     wo_set_struct(result, vm, 8);
@@ -1532,7 +1532,7 @@ WO_API wo_api wojeapi_bind_texture_for_entity(wo_vm vm, wo_value args)
         if (wo_option_get(elem, args + 2))
         {
             textures->bind_texture(
-                (size_t)wo_int(args + 1),
+                (size_t)wo_int(args + 1), 
                 *(jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(elem));
         }
         else
@@ -1573,7 +1573,7 @@ WO_API wo_api wojeapi_get_shape_of_entity(wo_vm vm, wo_value args)
     if (jeecs::Renderer::Shape* shape = entity->get_component<jeecs::Renderer::Shape>())
     {
         if (shape->vertex != nullptr)
-            return wo_ret_option_pointer(vm,
+            return wo_ret_option_pointer(vm, 
                 new jeecs::basic::resource<jeecs::graphic::vertex>(shape->vertex));
     }
 
@@ -1634,9 +1634,9 @@ WO_API wo_api wojeapi_vertex_create(wo_vm vm, wo_value args)
     }
 
     auto loaded_vertex = jeecs::graphic::vertex::create(
-        vertex_type,
-        vertices.data(),
-        vertices.size() * sizeof(float),
+        vertex_type, 
+        vertices.data(), 
+        vertices.size() * sizeof(float), 
         indices,
         formats);
 
@@ -1717,6 +1717,7 @@ WO_API wo_api wojeapi_set_shaders_of_entity(wo_vm vm, wo_value args)
 WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args)
 {
     wo_value s = wo_reserve_stack(vm, 4, &args);
+
     /*
     extern("libjoyecs", "wojeapi_get_uniforms_from_shader")
                 func _get_uniforms_from_shader(
@@ -1727,86 +1728,84 @@ WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args)
     wo_value out_map = s + 0;
     wo_set_map(out_map, vm, 0);
 
+    auto* uniforms = (*shader)->resouce()->m_raw_shader_data->m_custom_uniforms;
     wo_value key = s + 1;
     wo_value val = s + 2;
     wo_value elem = s + 3;
-    auto* raw_shader_data = (*shader)->resouce()->m_raw_shader_data;
-    for (size_t i = 0; i < raw_shader_data->m_custom_uniforms_count; ++i)
+    while (uniforms)
     {
-        auto* current_uniform_variable = &raw_shader_data->m_custom_uniforms[i];
-
-        wo_set_string(key, vm, current_uniform_variable->m_name);
+        wo_set_string(key, vm, uniforms->m_name);
         wo_set_struct(val, vm, 2);
         wo_map_set(out_map, key, val);
 
-        if (current_uniform_variable->m_uniform_type >= jegl_shader::uniform_type::INT
-            && current_uniform_variable->m_uniform_type <= jegl_shader::uniform_type::TEXTURE)
-            wo_set_int(elem, current_uniform_variable->m_uniform_type);
+        if (uniforms->m_uniform_type >= jegl_shader::uniform_type::INT
+            && uniforms->m_uniform_type <= jegl_shader::uniform_type::TEXTURE)
+            wo_set_int(elem, uniforms->m_uniform_type);
         else
             // Others
             wo_set_int(elem, 1 + jegl_shader::uniform_type::TEXTURE);
 
         wo_struct_set(val, 0, elem);
 
-        switch (current_uniform_variable->m_uniform_type)
+        switch (uniforms->m_uniform_type)
         {
         case jegl_shader::uniform_type::INT:
         case jegl_shader::uniform_type::TEXTURE:
-            wo_set_int(elem, current_uniform_variable->ix); break;
+            wo_set_int(elem, uniforms->ix); break;
         case jegl_shader::uniform_type::INT2:
             wo_set_struct(elem, vm, 2);
-            wo_set_int(key, current_uniform_variable->ix);
+            wo_set_int(key, uniforms->ix);
             wo_struct_set(elem, 0, key);
-            wo_set_int(key, current_uniform_variable->iy);
+            wo_set_int(key, uniforms->iy);
             wo_struct_set(elem, 1, key);
             break;
         case jegl_shader::uniform_type::INT3:
             wo_set_struct(elem, vm, 3);
-            wo_set_int(key, current_uniform_variable->ix);
+            wo_set_int(key, uniforms->ix);
             wo_struct_set(elem, 0, key);
-            wo_set_int(key, current_uniform_variable->iy);
+            wo_set_int(key, uniforms->iy);
             wo_struct_set(elem, 1, key);
-            wo_set_int(key, current_uniform_variable->iz);
+            wo_set_int(key, uniforms->iz);
             wo_struct_set(elem, 2, key);
             break;
         case jegl_shader::uniform_type::INT4:
             wo_set_struct(elem, vm, 4);
-            wo_set_int(key, current_uniform_variable->ix);
+            wo_set_int(key, uniforms->ix);
             wo_struct_set(elem, 0, key);
-            wo_set_int(key, current_uniform_variable->iy);
+            wo_set_int(key, uniforms->iy);
             wo_struct_set(elem, 1, key);
-            wo_set_int(key, current_uniform_variable->iz);
+            wo_set_int(key, uniforms->iz);
             wo_struct_set(elem, 2, key);
-            wo_set_int(key, current_uniform_variable->iw);
+            wo_set_int(key, uniforms->iw);
             wo_struct_set(elem, 3, key);
             break;
         case jegl_shader::uniform_type::FLOAT:
-            wo_set_float(elem, current_uniform_variable->x); break;
+            wo_set_float(elem, uniforms->x); break;
         case jegl_shader::uniform_type::FLOAT2:
             wo_set_struct(elem, vm, 2);
-            wo_set_float(key, current_uniform_variable->x);
+            wo_set_float(key, uniforms->x);
             wo_struct_set(elem, 0, key);
-            wo_set_float(key, current_uniform_variable->y);
+            wo_set_float(key, uniforms->y);
             wo_struct_set(elem, 1, key);
             break;
         case jegl_shader::uniform_type::FLOAT3:
             wo_set_struct(elem, vm, 3);
-            wo_set_float(key, current_uniform_variable->x);
+            wo_set_float(key, uniforms->x);
             wo_struct_set(elem, 0, key);
-            wo_set_float(key, current_uniform_variable->y);
+            wo_set_float(key, uniforms->y);
             wo_struct_set(elem, 1, key);
-            wo_set_float(key, current_uniform_variable->z);
+            wo_set_float(key, uniforms->z);
             wo_struct_set(elem, 2, key);
             break;
         case jegl_shader::uniform_type::FLOAT4:
             wo_set_struct(elem, vm, 4);
-            wo_set_float(key, current_uniform_variable->x);
+            wo_set_float(key, uniforms->x);
             wo_struct_set(elem, 0, key);
-            wo_set_float(key, current_uniform_variable->y);
+            wo_set_float(key, uniforms->y);
             wo_struct_set(elem, 1, key);
-            wo_set_float(key, current_uniform_variable->z);
+            wo_set_float(key, uniforms->z);
             wo_struct_set(elem, 2, key);
-            wo_set_float(key, current_uniform_variable->w);
+            wo_set_float(key, uniforms->w);
             wo_struct_set(elem, 3, key);
             break;
         default:
@@ -1815,6 +1814,8 @@ WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args)
         }
 
         wo_struct_set(val, 1, elem);
+
+        uniforms = uniforms->m_next;
     }
 
     return wo_ret_val(vm, out_map);
@@ -1909,7 +1910,7 @@ WO_API wo_api wojeapi_texture_get_size(wo_vm vm, wo_value args)
     auto* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
     auto sz = texture->get()->size();
 
-    wo_value result = s + 0;
+    wo_value result = s + 0; 
     wo_value elem = s + 1;
 
     wo_set_struct(result, vm, 2);
@@ -1939,8 +1940,8 @@ WO_API wo_api wojeapi_get_entity_arch_information(wo_vm vm, wo_value args)
     size_t chunk_size = 0, entity_size = 0, entity_count = 0;
 
     jedbg_get_entity_arch_information(entity, &chunk_size, &entity_size, &entity_count);
-    wo_value result = s + 0;
-    wo_value elem = s + 1;
+    wo_value result = s + 0; 
+    wo_value elem = s + 1; 
 
     wo_set_struct(result, vm, 3);
 
@@ -2547,7 +2548,7 @@ WO_API wo_api wojeapi_dynamic_parser_edit(wo_vm vm, wo_value args)
 
         wo_set_val(_je_dynamic_parser_vm_s + 0, value);
         wo_set_string(_je_dynamic_parser_vm_s + 1, _je_dynamic_parser_vm, tag);
-
+        
         wo_value result = wo_invoke_rsfunc(
             _je_dynamic_parser_vm, parser->m_edit, 2, nullptr, &_je_dynamic_parser_vm_s);
 

@@ -2417,12 +2417,12 @@ void _debug_jegl_regenerate_glsl_from_spir_v(uint32_t* spir_v_code, size_t spir_
 }
 #endif
 
-jegl_shader::spir_v_code_t* _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, bool is_fragment, size_t* out_codelen)
+jegl_shader::spir_v_code_t* _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, bool is_fragment, size_t * out_codelen)
 {
     glslang_input_t hlsl_shader_input;
     hlsl_shader_input.language = glslang_source_t::GLSLANG_SOURCE_HLSL;
-    hlsl_shader_input.stage = is_fragment
-        ? glslang_stage_t::GLSLANG_STAGE_FRAGMENT
+    hlsl_shader_input.stage = is_fragment 
+        ? glslang_stage_t::GLSLANG_STAGE_FRAGMENT 
         : glslang_stage_t::GLSLANG_STAGE_VERTEX;
     hlsl_shader_input.client = glslang_client_t::GLSLANG_CLIENT_VULKAN;
     hlsl_shader_input.client_version = glslang_target_client_version_t::GLSLANG_TARGET_VULKAN_1_1;
@@ -2438,10 +2438,10 @@ jegl_shader::spir_v_code_t* _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, b
     hlsl_shader_input.resource = glslang_default_resource();
     hlsl_shader_input.callbacks = {};
     hlsl_shader_input.callbacks_ctx = nullptr;
-
+    
     glslang_program_t* program = glslang_program_create();
     glslang_shader_t* hlsl_shader = glslang_shader_create(&hlsl_shader_input);
-
+    
     glslang_shader_set_entry_point(hlsl_shader, is_fragment ? "fragment_main" : "vertex_main");
     glslang_shader_set_preamble(hlsl_shader, "#define GLSLANG_HLSL_TO_SPIRV 1");
 
@@ -2487,11 +2487,11 @@ jegl_shader::spir_v_code_t* _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, b
     auto spir_v_codes = glslang_program_SPIRV_get_ptr(program);
 
     *out_codelen = spir_v_code_len;
-    jegl_shader::spir_v_code_t* codes =
+    jegl_shader::spir_v_code_t* codes = 
         (jegl_shader::spir_v_code_t*)je_mem_alloc(
             spir_v_code_len * sizeof(jegl_shader::spir_v_code_t));
 
-    memcpy(codes, spir_v_codes,
+    memcpy(codes, spir_v_codes, 
         spir_v_code_len * sizeof(jegl_shader::spir_v_code_t));
 
     /*_debug_jegl_regenerate_hlsl_from_spir_v(spir_v_codes, spir_v_code_len);
@@ -2533,13 +2533,13 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
             _hlsl_generator.generate_fragment(shader_wrapper_ptr).c_str());
 
     // 将hlsl翻译到spir-v，不使用glsl的原因是JoyEngine使用的glsl版本是v330
-    write_to_shader->m_vertex_spirv_codes =
+    write_to_shader->m_vertex_spirv_codes=
         _jegl_parse_spir_v_from_hlsl(
-            write_to_shader->m_vertex_hlsl_src, false,
+            write_to_shader->m_vertex_hlsl_src, false, 
             &write_to_shader->m_vertex_spirv_count);
-    write_to_shader->m_fragment_spirv_codes =
+    write_to_shader->m_fragment_spirv_codes=
         _jegl_parse_spir_v_from_hlsl(
-            write_to_shader->m_fragment_hlsl_src, true,
+            write_to_shader->m_fragment_hlsl_src, true, 
             &write_to_shader->m_fragment_spirv_count);
 
     write_to_shader->m_vertex_in_count = shader_wrapper_ptr->vertex_in.size();
@@ -2562,19 +2562,16 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
 
     do
     {
-        write_to_shader->m_custom_uniforms_count = shader_wrapper_ptr->uniform_variables.size();
-        write_to_shader->m_custom_uniforms =
-            new jegl_shader::unifrom_variables[write_to_shader->m_custom_uniforms_count];
-
-        size_t i = 0;
+        jegl_shader::unifrom_variables** last = &write_to_shader->m_custom_uniforms;
         for (auto& [name, uniform_info] : shader_wrapper_ptr->uniform_variables)
         {
-            auto* current_uniform_variable = &write_to_shader->m_custom_uniforms[i++];
+            jegl_shader::unifrom_variables* variable = new jegl_shader::unifrom_variables();
+            variable->m_next = nullptr;
 
-            current_uniform_variable->m_name = jeecs::basic::make_new_string(name.c_str());
-            current_uniform_variable->m_uniform_type = uniform_info.m_type;
+            variable->m_name = jeecs::basic::make_new_string(name.c_str());
+            variable->m_uniform_type = uniform_info.m_type;
 
-            current_uniform_variable->m_index = jeecs::typing::INVALID_UINT32;
+            variable->m_index = jeecs::typing::INVALID_UINT32;
 
             auto utype = uniform_info.m_value->get_type();
             auto* init_val = (
@@ -2589,60 +2586,63 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
                 switch (utype)
                 {
                 case jegl_shader_value::type::FLOAT:
-                    current_uniform_variable->x = init_val->m_float; break;
+                    variable->x = init_val->m_float; break;
                 case jegl_shader_value::type::FLOAT2:
-                    current_uniform_variable->x = init_val->m_float2[0];
-                    current_uniform_variable->y = init_val->m_float2[1]; break;
+                    variable->x = init_val->m_float2[0];
+                    variable->y = init_val->m_float2[1]; break;
                 case jegl_shader_value::type::FLOAT3:
-                    current_uniform_variable->x = init_val->m_float3[0];
-                    current_uniform_variable->y = init_val->m_float3[1];
-                    current_uniform_variable->z = init_val->m_float3[2]; break;
+                    variable->x = init_val->m_float3[0];
+                    variable->y = init_val->m_float3[1];
+                    variable->z = init_val->m_float3[2]; break;
                 case jegl_shader_value::type::FLOAT4:
-                    current_uniform_variable->x = init_val->m_float4[0];
-                    current_uniform_variable->y = init_val->m_float4[1];
-                    current_uniform_variable->z = init_val->m_float4[2];
-                    current_uniform_variable->w = init_val->m_float4[3]; break;
+                    variable->x = init_val->m_float4[0];
+                    variable->y = init_val->m_float4[1];
+                    variable->z = init_val->m_float4[2];
+                    variable->w = init_val->m_float4[3]; break;
                 case jegl_shader_value::type::FLOAT4x4:
-                    memcpy(current_uniform_variable->mat4x4, init_val->m_float4x4, 4 * 4 * sizeof(float));
+                    memcpy(variable->mat4x4, init_val->m_float4x4, 4 * 4 * sizeof(float));
                     break;
                 case jegl_shader_value::type::INTEGER:
-                    current_uniform_variable->ix = init_val->m_integer; break;
+                    variable->ix = init_val->m_integer; break;
                 case jegl_shader_value::type::INTEGER2:
                 {
-                    current_uniform_variable->ix = init_val->m_integer2[0];
-                    current_uniform_variable->iy = init_val->m_integer2[1];
+                    variable->ix = init_val->m_integer2[0];
+                    variable->iy = init_val->m_integer2[1];
                     break;
                 }
                 case jegl_shader_value::type::INTEGER3:
                 {
-                    current_uniform_variable->ix = init_val->m_integer3[0];
-                    current_uniform_variable->iy = init_val->m_integer3[1];
-                    current_uniform_variable->iz = init_val->m_integer3[2];
+                    variable->ix = init_val->m_integer3[0];
+                    variable->iy = init_val->m_integer3[1];
+                    variable->iz = init_val->m_integer3[2];
                     break;
                 }
                 case jegl_shader_value::type::INTEGER4:
                 {
-                    current_uniform_variable->ix = init_val->m_integer4[0];
-                    current_uniform_variable->iy = init_val->m_integer4[1];
-                    current_uniform_variable->iz = init_val->m_integer4[2];
-                    current_uniform_variable->iw = init_val->m_integer4[3];
+                    variable->ix = init_val->m_integer4[0];
+                    variable->iy = init_val->m_integer4[1];
+                    variable->iz = init_val->m_integer4[2];
+                    variable->iw = init_val->m_integer4[3];
                     break;
                 }
                 case jegl_shader_value::type::TEXTURE2D:
                 case jegl_shader_value::type::TEXTURE2D_MS:
                 case jegl_shader_value::type::TEXTURE_CUBE:
-                    current_uniform_variable->ix = uniform_info.m_value->m_uniform_texture_channel; break;
+                    variable->ix = uniform_info.m_value->m_uniform_texture_channel; break;
                 default:
                     jeecs::debug::logerr("Unsupport uniform variable type."); break;
                 }
-                current_uniform_variable->m_updated = true;
+                variable->m_updated = true;
             }
             else
             {
-                static_assert(sizeof(current_uniform_variable->mat4x4) == 16 * sizeof(float));
-                memset(current_uniform_variable->mat4x4, 0, sizeof(current_uniform_variable->mat4x4));
-                current_uniform_variable->m_updated = false;
+                static_assert(sizeof(variable->mat4x4) == 16 * sizeof(float));
+                memset(variable->mat4x4, 0, sizeof(variable->mat4x4));
+                variable->m_updated = false;
             }
+
+            *last = variable;
+            last = &variable->m_next;
         }
     } while (false);
 
@@ -2698,11 +2698,16 @@ void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader)
 
     delete[]write_to_shader->m_vertex_in;
 
-    for (size_t i = 0; i < write_to_shader->m_custom_uniforms_count; ++i)
-        je_mem_free((void*)write_to_shader->m_custom_uniforms[i].m_name);
+    auto* uniform_variable_info = write_to_shader->m_custom_uniforms;
+    while (uniform_variable_info)
+    {
+        auto* current_uniform_variable = uniform_variable_info;
+        uniform_variable_info = uniform_variable_info->m_next;
 
-    delete[]write_to_shader->m_custom_uniforms;
+        je_mem_free((void*)current_uniform_variable->m_name);
 
+        delete current_uniform_variable;
+    }
     auto* uniform_block_info = write_to_shader->m_custom_uniform_blocks;
     while (uniform_block_info)
     {

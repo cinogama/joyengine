@@ -684,12 +684,11 @@ namespace jeecs::graphic::api::dx11
                 uint32_t last_elem_end_place = 0;
                 constexpr size_t DX11_ALLIGN_BASE = 16; // 128bit allign in dx11
 
-                for (size_t i = 0; i < resource->m_raw_shader_data->m_custom_uniforms_count; ++i)
+                auto* uniforms = resource->m_raw_shader_data->m_custom_uniforms;
+                while (uniforms != nullptr)
                 {
-                    auto* current_uniform_variable = &resource->m_raw_shader_data->m_custom_uniforms[i];
-
                     size_t unit_size = 0;
-                    switch (current_uniform_variable->m_uniform_type)
+                    switch (uniforms->m_uniform_type)
                     {
                     case jegl_shader::uniform_type::INT:
                     case jegl_shader::uniform_type::FLOAT:
@@ -722,9 +721,11 @@ namespace jeecs::graphic::api::dx11
                         if (last_elem_end_place + std::min((size_t)16, unit_size) > next_edge)
                             last_elem_end_place = next_edge;
 
-                        blob->m_ulocations[current_uniform_variable->m_name] = last_elem_end_place;
+                        blob->m_ulocations[uniforms->m_name] = last_elem_end_place;
+
                         last_elem_end_place += unit_size;
                     }
+                    uniforms = uniforms->m_next;
                 }
 
                 if (last_elem_end_place % DX11_ALLIGN_BASE != 0)
@@ -1013,11 +1014,11 @@ namespace jeecs::graphic::api::dx11
                 resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_local_scale = shader_blob->get_built_in_location("JOYENGINE_LOCAL_SCALE");
                 resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_color = shader_blob->get_built_in_location("JOYENGINE_MAIN_COLOR");
 
-                for (size_t i = 0; i < resource->m_raw_shader_data->m_custom_uniforms_count; ++i)
+                auto* uniforms = resource->m_raw_shader_data->m_custom_uniforms;
+                while (uniforms != nullptr)
                 {
-                    auto* current_uniform_variable = &resource->m_raw_shader_data->m_custom_uniforms[i];
-                    current_uniform_variable->m_index = 
-                        shader_blob->get_built_in_location(current_uniform_variable->m_name);
+                    uniforms->m_index = shader_blob->get_built_in_location(uniforms->m_name);
+                    uniforms = uniforms->m_next;
                 }
 
                 jedx11_shader_res->m_uniform_buffer_size = shader_blob->m_uniform_size;

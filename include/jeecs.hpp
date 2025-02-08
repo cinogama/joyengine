@@ -1871,6 +1871,8 @@ struct jegl_shader
             };
             float mat4x4[4][4];
         };
+
+        unifrom_variables* m_next;
     };
     struct uniform_blocks
     {
@@ -1951,10 +1953,7 @@ struct jegl_shader
     size_t m_vertex_in_count;
     vertex_in_variables* m_vertex_in;
 
-    size_t m_custom_uniforms_count;
     unifrom_variables* m_custom_uniforms;
-
-    // size_t m_custom_uniform_blocks_count;
     uniform_blocks* m_custom_uniform_blocks;
     builtin_uniform_location m_builtin_uniforms;
 
@@ -7481,195 +7480,195 @@ namespace jeecs
 
             void set_uniform(const std::string& name, int val)noexcept
             {
-                auto* raw_shader_data = resouce()->m_raw_shader_data;
-                for (size_t i = 0; i < raw_shader_data->m_custom_uniforms_count; ++i)
+                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                while (jegl_shad_uniforms)
                 {
-                    auto* current_custom_uniform = &raw_shader_data->m_custom_uniforms[i];
-                    if (current_custom_uniform->m_name == name)
+                    if (jegl_shad_uniforms->m_name == name)
                     {
-                        if (current_custom_uniform->m_uniform_type !=
+                        if (jegl_shad_uniforms->m_uniform_type !=
                             jegl_shader::uniform_type::INT)
                             debug::logerr("Trying set uniform('%s' = %d) to shader(%p), but current uniform type is not 'INT'.",
                                 name.c_str(), val, this);
                         else
                         {
-                            current_custom_uniform->ix = val;
-                            current_custom_uniform->m_updated = true;
+                            jegl_shad_uniforms->ix = val;
+                            jegl_shad_uniforms->m_updated = true;
                         }
                         return;
                     }
+                    jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
             }
             void set_uniform(const std::string& name, int x, int y)noexcept
             {
-                auto* raw_shader_data = resouce()->m_raw_shader_data;
-                for (size_t i = 0; i < raw_shader_data->m_custom_uniforms_count; ++i)
+                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                while (jegl_shad_uniforms)
                 {
-                    auto* current_custom_uniform = &raw_shader_data->m_custom_uniforms[i];
-                    if (current_custom_uniform->m_name == name)
+                    if (jegl_shad_uniforms->m_name == name)
                     {
-                        if (current_custom_uniform->m_uniform_type !=
+                        if (jegl_shad_uniforms->m_uniform_type !=
                             jegl_shader::uniform_type::INT)
                             debug::logerr("Trying set uniform('%s' = %d, %d) to shader(%p), but current uniform type is not 'INT2'."
                                 , name.c_str(), x, y, this);
                         else
                         {
-                            current_custom_uniform->ix = x;
-                            current_custom_uniform->iy = y;
-                            current_custom_uniform->m_updated = true;
+                            jegl_shad_uniforms->ix = x;
+                            jegl_shad_uniforms->iy = y;
+                            jegl_shad_uniforms->m_updated = true;
                         }
                         return;
                     }
+                    jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
             }
             void set_uniform(const std::string& name, int x, int y, int z)noexcept
             {
-                auto* raw_shader_data = resouce()->m_raw_shader_data;
-                for (size_t i = 0; i < raw_shader_data->m_custom_uniforms_count; ++i)
+                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                while (jegl_shad_uniforms)
                 {
-                    auto* current_custom_uniform = &raw_shader_data->m_custom_uniforms[i];
-                    if (current_custom_uniform->m_name == name)
+                    if (jegl_shad_uniforms->m_name == name)
                     {
-                        if (current_custom_uniform->m_uniform_type !=
+                        if (jegl_shad_uniforms->m_uniform_type !=
                             jegl_shader::uniform_type::INT)
                             debug::logerr("Trying set uniform('%s' = %d, %d, %d) to shader(%p), but current uniform type is not 'INT3'."
                                 , name.c_str(), x, y, z, this);
                         else
                         {
-                            current_custom_uniform->ix = x;
-                            current_custom_uniform->iy = y;
-                            current_custom_uniform->iz = z;
-                            current_custom_uniform->m_updated = true;
+                            jegl_shad_uniforms->ix = x;
+                            jegl_shad_uniforms->iy = y;
+                            jegl_shad_uniforms->iz = z;
+                            jegl_shad_uniforms->m_updated = true;
                         }
                         return;
                     }
+                    jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
             }
             void set_uniform(const std::string& name, int x, int y, int z, int w)noexcept
             {
-                auto* raw_shader_data = resouce()->m_raw_shader_data;
-                for (size_t i = 0; i < raw_shader_data->m_custom_uniforms_count; ++i)
+                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                while (jegl_shad_uniforms)
                 {
-                    auto* current_custom_uniform = &raw_shader_data->m_custom_uniforms[i];
-                    if (current_custom_uniform->m_name == name)
+                    if (jegl_shad_uniforms->m_name == name)
                     {
-                        if (current_custom_uniform->m_uniform_type !=
+                        if (jegl_shad_uniforms->m_uniform_type !=
                             jegl_shader::uniform_type::INT)
                             debug::logerr("Trying set uniform('%s' = %d, %d, %d, %d) to shader(%p), but current uniform type is not 'INT4'."
                                 , name.c_str(), x, y, z, w, this);
                         else
                         {
-                            current_custom_uniform->ix = x;
-                            current_custom_uniform->iy = y;
-                            current_custom_uniform->iz = z;
-                            current_custom_uniform->iw = w;
-                            current_custom_uniform->m_updated = true;
+                            jegl_shad_uniforms->ix = x;
+                            jegl_shad_uniforms->iy = y;
+                            jegl_shad_uniforms->iz = z;
+                            jegl_shad_uniforms->iw = w;
+                            jegl_shad_uniforms->m_updated = true;
                         }
                         return;
                     }
+                    jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
             }
             void set_uniform(const std::string& name, float val)noexcept
             {
-                auto* raw_shader_data = resouce()->m_raw_shader_data;
-                for (size_t i = 0; i < raw_shader_data->m_custom_uniforms_count; ++i)
+                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                while (jegl_shad_uniforms)
                 {
-                    auto* current_custom_uniform = &raw_shader_data->m_custom_uniforms[i];
-                    if (current_custom_uniform->m_name == name)
+                    if (jegl_shad_uniforms->m_name == name)
                     {
-                        if (current_custom_uniform->m_uniform_type !=
+                        if (jegl_shad_uniforms->m_uniform_type !=
                             jegl_shader::uniform_type::FLOAT)
                             debug::logerr("Trying set uniform('%s' = %f) to shader(%p), but current uniform type is not 'FLOAT'."
                                 , name.c_str(), val, this);
                         else
                         {
-                            current_custom_uniform->x = val;
-                            current_custom_uniform->m_updated = true;
+                            jegl_shad_uniforms->x = val;
+                            jegl_shad_uniforms->m_updated = true;
                         }
                         return;
                     }
+                    jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
             }
             void set_uniform(const std::string& name, const math::vec2& val)noexcept
             {
-                auto* raw_shader_data = resouce()->m_raw_shader_data;
-                for (size_t i = 0; i < raw_shader_data->m_custom_uniforms_count; ++i)
+                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                while (jegl_shad_uniforms)
                 {
-                    auto* current_custom_uniform = &raw_shader_data->m_custom_uniforms[i];
-                    if (current_custom_uniform->m_name == name)
+                    if (jegl_shad_uniforms->m_name == name)
                     {
-                        if (current_custom_uniform->m_uniform_type !=
+                        if (jegl_shad_uniforms->m_uniform_type !=
                             jegl_shader::uniform_type::FLOAT2)
                             debug::logerr("Trying set uniform('%s' = (%f, %f)) to shader(%p), but current uniform type is not 'FLOAT2'."
                                 , name.c_str(), val.x, val.y, this);
                         else
                         {
-                            current_custom_uniform->x = val.x;
-                            current_custom_uniform->y = val.y;
-                            current_custom_uniform->m_updated = true;
+                            jegl_shad_uniforms->x = val.x;
+                            jegl_shad_uniforms->y = val.y;
+                            jegl_shad_uniforms->m_updated = true;
                         }
                         return;
                     }
+                    jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
             }
             void set_uniform(const std::string& name, const math::vec3& val)noexcept
             {
-                auto* raw_shader_data = resouce()->m_raw_shader_data;
-                for (size_t i = 0; i < raw_shader_data->m_custom_uniforms_count; ++i)
+                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                while (jegl_shad_uniforms)
                 {
-                    auto* current_custom_uniform = &raw_shader_data->m_custom_uniforms[i];
-                    if (current_custom_uniform->m_name == name)
+                    if (jegl_shad_uniforms->m_name == name)
                     {
-                        if (current_custom_uniform->m_uniform_type !=
+                        if (jegl_shad_uniforms->m_uniform_type !=
                             jegl_shader::uniform_type::FLOAT3)
                             debug::logerr("Trying set uniform('%s' = (%f, %f, %f)) to shader(%p), but current uniform type is not 'FLOAT3'."
                                 , name.c_str(), val.x, val.y, val.z, this);
                         else
                         {
-                            current_custom_uniform->x = val.x;
-                            current_custom_uniform->y = val.y;
-                            current_custom_uniform->z = val.z;
-                            current_custom_uniform->m_updated = true;
+                            jegl_shad_uniforms->x = val.x;
+                            jegl_shad_uniforms->y = val.y;
+                            jegl_shad_uniforms->z = val.z;
+                            jegl_shad_uniforms->m_updated = true;
                         }
                         return;
                     }
+                    jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
             }
             void set_uniform(const std::string& name, const math::vec4& val)noexcept
             {
-                auto* raw_shader_data = resouce()->m_raw_shader_data;
-                for (size_t i = 0; i < raw_shader_data->m_custom_uniforms_count; ++i)
+                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                while (jegl_shad_uniforms)
                 {
-                    auto* current_custom_uniform = &raw_shader_data->m_custom_uniforms[i];
-                    if (current_custom_uniform->m_name == name)
+                    if (jegl_shad_uniforms->m_name == name)
                     {
-                        if (current_custom_uniform->m_uniform_type !=
+                        if (jegl_shad_uniforms->m_uniform_type !=
                             jegl_shader::uniform_type::FLOAT4)
                             debug::logerr("Trying set uniform('%s' = (%f, %f, %f, %f)) to shader(%p), but current uniform type is not 'FLOAT4'."
                                 , name.c_str(), val.x, val.y, val.z, val.w, this);
                         else
                         {
-                            current_custom_uniform->x = val.x;
-                            current_custom_uniform->y = val.y;
-                            current_custom_uniform->z = val.z;
-                            current_custom_uniform->w = val.w;
-                            current_custom_uniform->m_updated = true;
+                            jegl_shad_uniforms->x = val.x;
+                            jegl_shad_uniforms->y = val.y;
+                            jegl_shad_uniforms->z = val.z;
+                            jegl_shad_uniforms->w = val.w;
+                            jegl_shad_uniforms->m_updated = true;
                         }
                         return;
                     }
+                    jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
             }
 
             uint32_t get_uniform_location(const std::string& name)
             {
-                auto* raw_shader_data = resouce()->m_raw_shader_data;
-                for (size_t i = 0; i < raw_shader_data->m_custom_uniforms_count; ++i)
+                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                while (jegl_shad_uniforms)
                 {
-                    auto* current_custom_uniform = &raw_shader_data->m_custom_uniforms[i];
-                    if (current_custom_uniform->m_name == name)
+                    if (jegl_shad_uniforms->m_name == name)
                     {
-                        return current_custom_uniform->m_index;
+                        return jegl_shad_uniforms->m_index;
                     }
+                    jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
 
                 return typing::INVALID_UINT32;

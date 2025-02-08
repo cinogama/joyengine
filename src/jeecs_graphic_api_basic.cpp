@@ -925,7 +925,7 @@ void jegl_close_resource(jegl_resource* resource)
                 _jegl_free_vertex_bone_data(resource->m_raw_vertex_data->m_bones[bone_idx]);
 
             je_mem_free((void*)resource->m_raw_vertex_data->m_bones);
-
+            
             delete resource->m_raw_vertex_data;
             break;
         case jegl_resource::FRAMEBUF:
@@ -1066,14 +1066,17 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
     uint64_t custom_uniform_count;
     jeecs_file_read(&custom_uniform_count, sizeof(uint64_t), 1, cache_file);
 
-    _shader->m_custom_uniforms_count = (size_t)custom_uniform_count;
-    _shader->m_custom_uniforms =
-        new jegl_shader::unifrom_variables[_shader->m_custom_uniforms_count];
+    _shader->m_custom_uniforms = nullptr;
 
+    jegl_shader::unifrom_variables* last_create_variable = nullptr;
     for (uint64_t i = 0; i < custom_uniform_count; ++i)
     {
-        jegl_shader::unifrom_variables* current_variable =
-            &_shader->m_custom_uniforms[i];
+        jegl_shader::unifrom_variables* current_variable = new jegl_shader::unifrom_variables();
+        if (_shader->m_custom_uniforms == nullptr)
+            _shader->m_custom_uniforms = current_variable;
+
+        if (last_create_variable != nullptr)
+            last_create_variable->m_next = current_variable;
 
         // 4.1.1 read name
         uint64_t uniform_name_len;
@@ -1091,6 +1094,9 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
 
         current_variable->m_index = jeecs::typing::INVALID_UINT32;
         current_variable->m_updated = false;
+
+        last_create_variable = current_variable;
+        current_variable->m_next = nullptr;
     }
 
     // 4.2 read uniform block informs
@@ -1215,9 +1221,15 @@ void _jegl_create_shader_cache(jegl_resource* shader_resource, wo_integer_t virt
         jeecs_write_cache_file(&raw_shader_data->m_enable_to_shared, sizeof(bool), 1, cachefile);
 
         // 4. write shader custom variable & uniform block informs.
-        uint64_t count_for_uniform = (uint64_t)raw_shader_data->m_custom_uniforms_count;
+        uint64_t count_for_uniform = 0;
         uint64_t count_for_uniform_block = 0;
 
+        auto* custom_uniform = raw_shader_data->m_custom_uniforms;
+        while (custom_uniform)
+        {
+            ++count_for_uniform;
+            custom_uniform = custom_uniform->m_next;
+        }
         auto* custom_uniform_block = raw_shader_data->m_custom_uniform_blocks;
         while (custom_uniform_block)
         {
@@ -1227,21 +1239,22 @@ void _jegl_create_shader_cache(jegl_resource* shader_resource, wo_integer_t virt
 
         // 4.1 write shader custom variable
         jeecs_write_cache_file(&count_for_uniform, sizeof(uint64_t), 1, cachefile);
-        for (size_t i = 0; i < raw_shader_data->m_custom_uniforms_count; ++i)
+        custom_uniform = raw_shader_data->m_custom_uniforms;
+        while (custom_uniform)
         {
-            auto* current_custom_uniform = &raw_shader_data->m_custom_uniforms[i];
-
             // 4.1.1 write name
-            uint64_t uniform_name_len = (uint64_t)strlen(current_custom_uniform->m_name);
+            uint64_t uniform_name_len = (uint64_t)strlen(custom_uniform->m_name);
             jeecs_write_cache_file(&uniform_name_len, sizeof(uint64_t), 1, cachefile);
-            jeecs_write_cache_file(current_custom_uniform->m_name, sizeof(char), (size_t)uniform_name_len, cachefile);
+            jeecs_write_cache_file(custom_uniform->m_name, sizeof(char), (size_t)uniform_name_len, cachefile);
 
             // 4.1.2 write type
-            jeecs_write_cache_file(&current_custom_uniform->m_uniform_type, sizeof(jegl_shader::uniform_type), 1, cachefile);
+            jeecs_write_cache_file(&custom_uniform->m_uniform_type, sizeof(jegl_shader::uniform_type), 1, cachefile);
 
             // 4.1.3 write data
-            static_assert(sizeof(current_custom_uniform->mat4x4) == sizeof(float[4][4]));
-            jeecs_write_cache_file(&current_custom_uniform->mat4x4, sizeof(float[4][4]), 1, cachefile);
+            static_assert(sizeof(custom_uniform->mat4x4) == sizeof(float[4][4]));
+            jeecs_write_cache_file(&custom_uniform->mat4x4, sizeof(float[4][4]), 1, cachefile);
+
+            custom_uniform = custom_uniform->m_next;
         }
 
         // 4.2 write shader custom uniform block informs
@@ -1544,7 +1557,7 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
 
             for (size_t bone_idx = 0; bone_idx < mesh->mNumBones; ++bone_idx)
             {
-                jegl_vertex::bone_data* bone_data =
+                jegl_vertex::bone_data* bone_data = 
                     (jegl_vertex::bone_data*)je_mem_alloc(sizeof(jegl_vertex::bone_data));
 
                 assert(bone_data != nullptr);
@@ -1567,7 +1580,7 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
                 if (bone_id >= MAX_BONE_COUNT)
                     // Too many bones, skip to avoid overflow.
                     continue;
-
+                
                 auto* weights = mesh->mBones[bone_idx]->mWeights;
                 size_t numWeights = (size_t)mesh->mBones[bone_idx]->mNumWeights;
 
@@ -1579,7 +1592,7 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
                     size_t min_weight_index = 0;
                     for (size_t i = 1; i < 4; ++i)
                     {
-                        if (vertex.m_vertex[i] == -1
+                        if (vertex.m_vertex[i] == -1 
                             || abs(vertex.m_bone_weight[i]) < abs(vertex.m_bone_weight[min_weight_index]))
                             min_weight_index = i;
                     }
@@ -1619,13 +1632,13 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
     {
         vertex->m_path = jeecs::basic::make_new_string(path);
 
-        const jegl_vertex::bone_data** cbones =
+        const jegl_vertex::bone_data** cbones = 
             (const jegl_vertex::bone_data**)je_mem_alloc(
                 bones.size() * sizeof(const jegl_vertex::bone_data*));
 
         memcpy(
-            cbones,
-            bones.data(),
+            cbones, 
+            bones.data(), 
             bones.size() * sizeof(const jegl_vertex::bone_data*));
 
         vertex->m_raw_vertex_data->m_bones = cbones;
@@ -1643,9 +1656,9 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
 
 jegl_resource* jegl_create_vertex(
     jegl_vertex::type               type,
-    const void* datas,
+    const void*                     datas,
     size_t                          data_length,
-    const uint32_t* indexs,
+    const uint32_t*                 indexs,
     size_t                          index_count,
     const jegl_vertex::data_layout* format,
     size_t                          format_count)
@@ -1681,7 +1694,7 @@ jegl_resource* jegl_create_vertex(
     vertex->m_raw_vertex_data->m_bones = nullptr;
     vertex->m_raw_vertex_data->m_bone_count = 0;
 
-    void* data_buffer = (void*)je_mem_alloc(data_length);
+    void * data_buffer = (void*)je_mem_alloc(data_length);
     memcpy(data_buffer, datas, data_length);
     vertex->m_raw_vertex_data->m_vertexs = data_buffer;
     vertex->m_raw_vertex_data->m_vertex_length = data_length;
@@ -1828,47 +1841,48 @@ void jegl_bind_shader(jegl_resource* shader)
     bool need_init_uvar = jegl_using_resource(shader);
     _current_graphic_thread->m_apis->bind_shader(_current_graphic_thread->m_userdata, shader);
 
-    assert(shader->m_type == jegl_resource::SHADER
-        && shader->m_raw_shader_data != nullptr);
+    assert(shader->m_type == jegl_resource::SHADER);
 
-    for (size_t i = 0; i < shader->m_raw_shader_data->m_custom_uniforms_count; ++i)
+    auto uniform_vars = shader->m_raw_shader_data != nullptr
+        ? shader->m_raw_shader_data->m_custom_uniforms
+        : nullptr;
+
+    while (uniform_vars)
     {
-        auto* current_uniform_variable = &shader->m_raw_shader_data->m_custom_uniforms[i];
-
-        if (current_uniform_variable->m_index != jeecs::typing::INVALID_UINT32)
+        if (uniform_vars->m_index != jeecs::typing::INVALID_UINT32)
         {
-            if (current_uniform_variable->m_updated || need_init_uvar)
+            if (uniform_vars->m_updated || need_init_uvar)
             {
-                current_uniform_variable->m_updated = false;
-                switch (current_uniform_variable->m_uniform_type)
+                uniform_vars->m_updated = false;
+                switch (uniform_vars->m_uniform_type)
                 {
                 case jegl_shader::uniform_type::FLOAT:
-                    jegl_uniform_float(current_uniform_variable->m_index, current_uniform_variable->x);
+                    jegl_uniform_float(uniform_vars->m_index, uniform_vars->x);
                     break;
                 case jegl_shader::uniform_type::FLOAT2:
-                    jegl_uniform_float2(current_uniform_variable->m_index, current_uniform_variable->x, current_uniform_variable->y);
+                    jegl_uniform_float2(uniform_vars->m_index, uniform_vars->x, uniform_vars->y);
                     break;
                 case jegl_shader::uniform_type::FLOAT3:
-                    jegl_uniform_float3(current_uniform_variable->m_index, current_uniform_variable->x, current_uniform_variable->y, current_uniform_variable->z);
+                    jegl_uniform_float3(uniform_vars->m_index, uniform_vars->x, uniform_vars->y, uniform_vars->z);
                     break;
                 case jegl_shader::uniform_type::FLOAT4:
-                    jegl_uniform_float4(current_uniform_variable->m_index, current_uniform_variable->x, current_uniform_variable->y, current_uniform_variable->z, current_uniform_variable->w);
+                    jegl_uniform_float4(uniform_vars->m_index, uniform_vars->x, uniform_vars->y, uniform_vars->z, uniform_vars->w);
                     break;
                 case jegl_shader::uniform_type::FLOAT4X4:
-                    jegl_uniform_float4x4(current_uniform_variable->m_index, current_uniform_variable->mat4x4);
+                    jegl_uniform_float4x4(uniform_vars->m_index, uniform_vars->mat4x4);
                     break;
                 case jegl_shader::uniform_type::INT:
                 case jegl_shader::uniform_type::TEXTURE:
-                    jegl_uniform_int(current_uniform_variable->m_index, current_uniform_variable->ix);
+                    jegl_uniform_int(uniform_vars->m_index, uniform_vars->ix);
                     break;
                 case jegl_shader::uniform_type::INT2:
-                    jegl_uniform_int2(current_uniform_variable->m_index, current_uniform_variable->ix, current_uniform_variable->iy);
+                    jegl_uniform_int2(uniform_vars->m_index, uniform_vars->ix, uniform_vars->iy);
                     break;
                 case jegl_shader::uniform_type::INT3:
-                    jegl_uniform_int3(current_uniform_variable->m_index, current_uniform_variable->ix, current_uniform_variable->iy, current_uniform_variable->iz);
+                    jegl_uniform_int3(uniform_vars->m_index, uniform_vars->ix, uniform_vars->iy, uniform_vars->iz);
                     break;
                 case jegl_shader::uniform_type::INT4:
-                    jegl_uniform_int4(current_uniform_variable->m_index, current_uniform_variable->ix, current_uniform_variable->iy, current_uniform_variable->iz, current_uniform_variable->iw);
+                    jegl_uniform_int4(uniform_vars->m_index, uniform_vars->ix, uniform_vars->iy, uniform_vars->iz, uniform_vars->iw);
                     break;
                 default:
                     jeecs::debug::logerr("Unsupport uniform variable type."); break;
@@ -1876,6 +1890,7 @@ void jegl_bind_shader(jegl_resource* shader)
                 }
             }
         }
+        uniform_vars = uniform_vars->m_next;
     }
 }
 
@@ -1961,7 +1976,7 @@ void jegl_uniform_float(uint32_t location, float value)
 void jegl_uniform_float2(uint32_t location, float x, float y)
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
-    float value[] = { x,y };
+    float value[] = {x,y};
     _current_graphic_thread->m_apis->set_uniform(
         _current_graphic_thread->m_userdata, location, jegl_shader::FLOAT2, &value);
 }
@@ -1969,7 +1984,7 @@ void jegl_uniform_float2(uint32_t location, float x, float y)
 void jegl_uniform_float3(uint32_t location, float x, float y, float z)
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
-    float value[] = { x,y,z };
+    float value[] = {x,y,z};
     _current_graphic_thread->m_apis->set_uniform(
         _current_graphic_thread->m_userdata, location, jegl_shader::FLOAT3, &value);
 }
@@ -1977,7 +1992,7 @@ void jegl_uniform_float3(uint32_t location, float x, float y, float z)
 void jegl_uniform_float4(uint32_t location, float x, float y, float z, float w)
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
-    float value[] = { x,y,z,w };
+    float value[] = {x,y,z,w};
     _current_graphic_thread->m_apis->set_uniform(
         _current_graphic_thread->m_userdata, location, jegl_shader::FLOAT4, &value);
 }

@@ -476,11 +476,11 @@ namespace jeecs::graphic::api::gl3
                     builtin_uniforms.m_builtin_uniform_local_scale = gl_get_uniform_location(ctx, resource, "JOYENGINE_LOCAL_SCALE");
                     builtin_uniforms.m_builtin_uniform_color = gl_get_uniform_location(ctx, resource, "JOYENGINE_MAIN_COLOR");
 
-                    for (size_t i = 0; i < resource->m_raw_shader_data->m_custom_uniforms_count; ++i)
+                    auto* uniform_var = resource->m_raw_shader_data->m_custom_uniforms;
+                    while (uniform_var)
                     {
-                        auto* current_uniform_variable = &resource->m_raw_shader_data->m_custom_uniforms[i];
-                        current_uniform_variable->m_index = 
-                            gl_get_uniform_location(ctx, resource, current_uniform_variable->m_name);
+                        uniform_var->m_index = gl_get_uniform_location(ctx, resource, uniform_var->m_name);
+                        uniform_var = uniform_var->m_next;
                     }
 
                     auto* uniform_block = resource->m_raw_shader_data->m_custom_uniform_blocks;
