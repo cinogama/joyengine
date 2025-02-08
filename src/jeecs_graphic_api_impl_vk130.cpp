@@ -362,7 +362,7 @@ VK_API_PLATFORM_API_LIST
 
         // Vk的全局实例
         VkInstance          _vk_instance;
-        basic_interface*    _vk_jegl_interface;
+        basic_interface* _vk_jegl_interface;
 
         VkPhysicalDevice    _vk_device;
         uint32_t            _vk_device_queue_graphic_family_index;
@@ -868,7 +868,7 @@ VK_API_PLATFORM_API_LIST
         jevk11_framebuffer* _vk_current_swapchain_framebuffer;
         jevk11_framebuffer* _vk_current_target_framebuffer;
         VkCommandBuffer     _vk_current_command_buffer;
-        jevk11_shader*      _vk_current_binded_shader;
+        jevk11_shader* _vk_current_binded_shader;
         size_t              _vk_command_commit_round;
 
         VkSemaphore             _vk_last_command_buffer_semaphore;
@@ -1793,7 +1793,7 @@ VK_API_PLATFORM_API_LIST
             command_buffer_begin_info.sType = VkStructureType::VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
             command_buffer_begin_info.pNext = nullptr;
             // TODO: 我们的命令缓冲区稍后会设置为执行完毕后重用
-            command_buffer_begin_info.flags = VkCommandBufferUsageFlagBits::VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT; 
+            command_buffer_begin_info.flags = VkCommandBufferUsageFlagBits::VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
             command_buffer_begin_info.pInheritanceInfo = nullptr;
 
             if (VK_SUCCESS != vkBeginCommandBuffer(cmdbuf, &command_buffer_begin_info))
@@ -2105,26 +2105,26 @@ VK_API_PLATFORM_API_LIST
             shader_blob->m_vertex_input_binding_description.inputRate = VkVertexInputRate::VK_VERTEX_INPUT_RATE_VERTEX;
 
             shader_blob->m_vertex_input_state_create_info = {};
-            shader_blob->m_vertex_input_state_create_info.sType = 
+            shader_blob->m_vertex_input_state_create_info.sType =
                 VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
             shader_blob->m_vertex_input_state_create_info.pNext = nullptr;
             shader_blob->m_vertex_input_state_create_info.flags = 0;
             shader_blob->m_vertex_input_state_create_info.vertexBindingDescriptionCount = 1;
-            shader_blob->m_vertex_input_state_create_info.pVertexBindingDescriptions = 
+            shader_blob->m_vertex_input_state_create_info.pVertexBindingDescriptions =
                 &shader_blob->m_vertex_input_binding_description;
-            shader_blob->m_vertex_input_state_create_info.vertexAttributeDescriptionCount = 
+            shader_blob->m_vertex_input_state_create_info.vertexAttributeDescriptionCount =
                 (uint32_t)shader_blob->m_vertex_input_attribute_descriptions.size();
-            shader_blob->m_vertex_input_state_create_info.pVertexAttributeDescriptions = 
+            shader_blob->m_vertex_input_state_create_info.pVertexAttributeDescriptions =
                 shader_blob->m_vertex_input_attribute_descriptions.data();
 
             // TODO: 根据JoyEngine的绘制设计，此处需要允许动态调整或者创建多个图形管线以匹配不同的绘制需求
             //       这里暂时先挂个最常见的绘制图元模式
             shader_blob->m_input_assembly_state_create_info = {};
-            shader_blob->m_input_assembly_state_create_info.sType = 
+            shader_blob->m_input_assembly_state_create_info.sType =
                 VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
             shader_blob->m_input_assembly_state_create_info.pNext = nullptr;
             shader_blob->m_input_assembly_state_create_info.flags = 0;
-            shader_blob->m_input_assembly_state_create_info.topology = 
+            shader_blob->m_input_assembly_state_create_info.topology =
                 VkPrimitiveTopology::VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
             shader_blob->m_input_assembly_state_create_info.primitiveRestartEnable = VK_TRUE;
 
@@ -2141,7 +2141,7 @@ VK_API_PLATFORM_API_LIST
             shader_blob->m_scissor.extent = _vk_surface_capabilities.currentExtent;
 
             shader_blob->m_viewport_state_create_info = {};
-            shader_blob->m_viewport_state_create_info.sType = 
+            shader_blob->m_viewport_state_create_info.sType =
                 VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
             shader_blob->m_viewport_state_create_info.pNext = nullptr;
             shader_blob->m_viewport_state_create_info.flags = 0;
@@ -2151,13 +2151,13 @@ VK_API_PLATFORM_API_LIST
             shader_blob->m_viewport_state_create_info.pScissors = &shader_blob->m_scissor;
 
             shader_blob->m_rasterization_state_create_info = {};
-            shader_blob->m_rasterization_state_create_info.sType = 
+            shader_blob->m_rasterization_state_create_info.sType =
                 VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
             shader_blob->m_rasterization_state_create_info.pNext = nullptr;
             shader_blob->m_rasterization_state_create_info.flags = 0;
             shader_blob->m_rasterization_state_create_info.depthClampEnable = VK_FALSE;
             shader_blob->m_rasterization_state_create_info.rasterizerDiscardEnable = VK_FALSE;
-            shader_blob->m_rasterization_state_create_info.polygonMode = 
+            shader_blob->m_rasterization_state_create_info.polygonMode =
                 VkPolygonMode::VK_POLYGON_MODE_FILL;
 
             switch (resource->m_raw_shader_data->m_cull_mode)
@@ -2178,7 +2178,7 @@ VK_API_PLATFORM_API_LIST
             // TODO: 配置多重采样，不过JoyEngine的多重采样应该是配置在渲染目标上的，这里暂时不知道怎么处理比较合适
             //      先挂个默认的，并且也应该允许动态调整
             shader_blob->m_multi_sample_state_create_info = {};
-            shader_blob->m_multi_sample_state_create_info.sType = 
+            shader_blob->m_multi_sample_state_create_info.sType =
                 VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
             shader_blob->m_multi_sample_state_create_info.pNext = nullptr;
             shader_blob->m_multi_sample_state_create_info.flags = 0;
@@ -2191,7 +2191,7 @@ VK_API_PLATFORM_API_LIST
 
             // 深度缓冲区配置
             shader_blob->m_depth_stencil_state_create_info = {};
-            shader_blob->m_depth_stencil_state_create_info.sType = 
+            shader_blob->m_depth_stencil_state_create_info.sType =
                 VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
             shader_blob->m_depth_stencil_state_create_info.pNext = nullptr;
             shader_blob->m_depth_stencil_state_create_info.flags = 0;
@@ -2341,12 +2341,14 @@ VK_API_PLATFORM_API_LIST
             // 遍历Uniform，按照vulkan对于ubo的大小和对齐规则，计算实际偏移量；最后得到整个uniform的大小
             uint32_t last_elem_end_place = 0;
             size_t max_allign = 4;
-            auto* uniforms = resource->m_raw_shader_data->m_custom_uniforms;
-            while (uniforms != nullptr)
+
+            for (size_t i = 0; i < resource->m_raw_shader_data->m_custom_uniforms_count; ++i)
             {
+                auto* current_uniform_variable = &resource->m_raw_shader_data->m_custom_uniforms[i];
+
                 size_t unit_size = 0;
                 size_t allign_base = 0;
-                switch (uniforms->m_uniform_type)
+                switch (current_uniform_variable->m_uniform_type)
                 {
                 case jegl_shader::uniform_type::INT:
                 case jegl_shader::uniform_type::FLOAT:
@@ -2381,11 +2383,11 @@ VK_API_PLATFORM_API_LIST
                     max_allign = std::max(max_allign, allign_base);
 
                     last_elem_end_place = jeecs::basic::allign_size(last_elem_end_place, allign_base);
-                    shader_blob->m_ulocations[uniforms->m_name] = last_elem_end_place;
+                    shader_blob->m_ulocations[current_uniform_variable->m_name] = last_elem_end_place;
                     last_elem_end_place += unit_size;
                 }
-                uniforms = uniforms->m_next;
             }
+
             shader_blob->m_uniform_size = jeecs::basic::allign_size(last_elem_end_place, max_allign);
 
             // 动态配置~！
@@ -2394,7 +2396,7 @@ VK_API_PLATFORM_API_LIST
             shader_blob->m_dynamic_state_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
             shader_blob->m_dynamic_state_create_info.pNext = nullptr;
             shader_blob->m_dynamic_state_create_info.flags = 0;
-            shader_blob->m_dynamic_state_create_info.dynamicStateCount = 
+            shader_blob->m_dynamic_state_create_info.dynamicStateCount =
                 sizeof(jevk11_shader_blob::blob_data::m_dynamic_states) / sizeof(VkDynamicState);
             shader_blob->m_dynamic_state_create_info.pDynamicStates = jevk11_shader_blob::blob_data::m_dynamic_states;
 
@@ -2774,7 +2776,7 @@ VK_API_PLATFORM_API_LIST
                     && new_layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
                 {
                     barrier.srcAccessMask = 0;
-                    barrier.dstAccessMask = 
+                    barrier.dstAccessMask =
                         VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
                     source_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
@@ -2804,7 +2806,7 @@ VK_API_PLATFORM_API_LIST
                     source_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
                     destination_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
                 }
-                else if (old_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL 
+                else if (old_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
                     && new_layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
                 {
                     barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
@@ -2813,7 +2815,7 @@ VK_API_PLATFORM_API_LIST
                     source_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
                     destination_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
                 }
-                else if (old_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL 
+                else if (old_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
                     && new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
                 {
                     barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
@@ -2822,7 +2824,7 @@ VK_API_PLATFORM_API_LIST
                     source_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
                     destination_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
                 }
-                else if (old_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL 
+                else if (old_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
                     && new_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
                 {
                     barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
@@ -3046,7 +3048,7 @@ VK_API_PLATFORM_API_LIST
             submit_info.pNext = nullptr;
             // TODO: 未来应当支持等待多个信号量，例如延迟管线
             submit_info.waitSemaphoreCount = 1;
-            submit_info.pWaitSemaphores = &_vk_last_command_buffer_semaphore; 
+            submit_info.pWaitSemaphores = &_vk_last_command_buffer_semaphore;
             submit_info.pWaitDstStageMask = &_vk_wait_for_last_command_buffer_stage;
             submit_info.commandBufferCount = 1;
             submit_info.pCommandBuffers = &_vk_current_command_buffer;
@@ -3105,7 +3107,7 @@ VK_API_PLATFORM_API_LIST
 
             // 开始录制！
             _vk_last_command_buffer_semaphore = _vk_command_buffer_allocator->allocate_semaphore();
-            _vk_wait_for_last_command_buffer_stage = 
+            _vk_wait_for_last_command_buffer_stage =
                 VkPipelineStageFlagBits::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
             if (VkResult::VK_SUCCESS != vkAcquireNextImageKHR(
@@ -3622,11 +3624,11 @@ VK_API_PLATFORM_API_LIST
             resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_local_scale = shader_blob->get_built_in_location("JOYENGINE_LOCAL_SCALE");
             resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_color = shader_blob->get_built_in_location("JOYENGINE_MAIN_COLOR");
 
-            auto* uniforms = resource->m_raw_shader_data->m_custom_uniforms;
-            while (uniforms != nullptr)
+            for (size_t i = 0; i < resource->m_raw_shader_data->m_custom_uniforms_count; ++i)
             {
-                uniforms->m_index = shader_blob->get_built_in_location(uniforms->m_name);
-                uniforms = uniforms->m_next;
+                auto* current_uniform_variable = &resource->m_raw_shader_data->m_custom_uniforms[i];
+                current_uniform_variable->m_index = 
+                    shader_blob->get_built_in_location(current_uniform_variable->m_name);
             }
 
             break;
