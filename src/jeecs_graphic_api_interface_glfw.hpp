@@ -168,6 +168,9 @@ namespace jeecs::graphic
             {
             case jegl_interface_config::display_mode::BOARDLESS:
                 glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+
+                /*fallthrough*/
+                [[fallthrough]];
             case jegl_interface_config::display_mode::WINDOWED:
                 _m_windows = glfwCreateWindow(
                     (int)m_interface_width,
