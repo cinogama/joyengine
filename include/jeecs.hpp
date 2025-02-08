@@ -7673,6 +7673,20 @@ namespace jeecs
 
                 return typing::INVALID_UINT32;
             }
+            uint32_t* get_uniform_location_as_builtin(const std::string& name)
+            {
+                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                while (jegl_shad_uniforms)
+                {
+                    if (jegl_shad_uniforms->m_name == name)
+                    {
+                        return &jegl_shad_uniforms->m_index;
+                    }
+                    jegl_shad_uniforms = jegl_shad_uniforms->m_next;
+                }
+
+                return nullptr;
+            }
         };
 
         class vertex : public resource_basic
@@ -7691,14 +7705,14 @@ namespace jeecs
             }
             static basic::resource<vertex> create(
                 jegl_vertex::type type, 
-                const void*       pdatas, 
-                size_t            dlen,
-                const std::vector<uint32_t> idatas,
+                const void*       pdatas,
+                size_t            pdatalen,
+                const std::vector<uint32_t> idatas, // EBO Indexs
                 const std::vector<jegl_vertex::data_layout> fdatas)
             {
                 auto* res = jegl_create_vertex(
                     type, 
-                    pdatas, dlen, 
+                    pdatas, pdatalen,
                     idatas.data(), idatas.size(), 
                     fdatas.data(), fdatas.size());
 
