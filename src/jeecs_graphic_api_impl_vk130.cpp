@@ -275,8 +275,6 @@ VK_API_PLATFORM_API_LIST
         std::vector<jevk11_texture*>
             m_color_attachments;
         jevk11_texture* m_depth_attachment;
-        VkSemaphore     m_render_finished_semaphore;
-        // VkFence         m_render_finished_fence;
         VkFramebuffer   m_framebuffer;
 
         size_t          m_width;
@@ -855,7 +853,10 @@ VK_API_PLATFORM_API_LIST
         };
 
         descriptor_set_allocator* _vk_descriptor_set_allocator;
-        single_descriptor_set_allocator<VkDescriptorType::VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VkShaderStageFlagBits::VK_SHADER_STAGE_FRAGMENT_BIT>*
+        single_descriptor_set_allocator<
+            VkDescriptorType::VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            1,
+            VkShaderStageFlagBits::VK_SHADER_STAGE_FRAGMENT_BIT>*
             _vk_dear_imgui_descriptor_set_allocator;
 
         command_buffer_allocator* _vk_command_buffer_allocator;
@@ -1078,20 +1079,13 @@ VK_API_PLATFORM_API_LIST
             {
                 jeecs::debug::logfatal("Failed to create vk130 swapchain framebuffer.");
             }
-
-            result->m_render_finished_semaphore = create_semaphore();
-            // result->m_render_finished_fence = create_fence();
-
             return result;
         }
         void destroy_frame_buffer(jevk11_framebuffer* fb)
         {
-            destroy_semaphore(fb->m_render_finished_semaphore);
-            // destroy_fence(fb->m_render_finished_fence);
             vkDestroyRenderPass(_vk_logic_device, fb->m_rendpass, nullptr);
             vkDestroyFramebuffer(_vk_logic_device, fb->m_framebuffer, nullptr);
         }
-
         void destroy_swap_chain()
         {
             for (auto* fb : _vk_swapchain_framebuffer)
@@ -1108,8 +1102,6 @@ VK_API_PLATFORM_API_LIST
 
         void recreate_swap_chain_for_current_surface(size_t w, size_t h)
         {
-            vkDeviceWaitIdle(_vk_logic_device);
-
             // 在此处开始创建交换链
             vkGetPhysicalDeviceSurfaceCapabilitiesKHR(_vk_device, _vk_surface, &_vk_surface_capabilities);
 
@@ -1315,6 +1307,26 @@ VK_API_PLATFORM_API_LIST
                     depth_attachment,
                     VkImageLayout::VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
                 );
+            }
+
+            // 交换链重建，需要等待上一帧的命令缓冲区信号量完成。
+            if (_vk_last_command_buffer_semaphore != VK_NULL_HANDLE)
+            {
+                /*uint64_t waiting_semaphore_value = 1;
+                VkSemaphoreWaitInfo wait_info = {};
+                wait_info.sType = VkStructureType::VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO;
+                wait_info.pNext = nullptr;
+                wait_info.flags = 0;
+                wait_info.semaphoreCount = 1;
+                wait_info.pSemaphores = &_vk_last_command_buffer_semaphore;
+                wait_info.pValues = &waiting_semaphore_value;
+
+                if (vkWaitSemaphores(_vk_logic_device, &wait_info, UINT64_MAX) != VK_SUCCESS)
+                    jeecs::debug::logfatal("Failed to wait for last command buffer semaphore.");*/
+
+                // vkWaitForFences()
+
+                // TODO;
             }
         }
 
@@ -3082,13 +3094,12 @@ VK_API_PLATFORM_API_LIST
                 assert(_vk_current_swapchain_framebuffer ==
                     _vk_swapchain_framebuffer[_vk_presenting_swapchain_image_index]);
 
+                VkSwapchainKHR swapchains[] = { _vk_swapchain };
                 VkPresentInfoKHR present_info = {};
                 present_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
                 present_info.pNext = nullptr;
                 present_info.waitSemaphoreCount = 1;
                 present_info.pWaitSemaphores = &_vk_last_command_buffer_semaphore;
-
-                VkSwapchainKHR swapchains[] = { _vk_swapchain };
                 present_info.swapchainCount = 1;
                 present_info.pSwapchains = swapchains;
                 present_info.pImageIndices = &_vk_presenting_swapchain_image_index;
@@ -3104,7 +3115,8 @@ VK_API_PLATFORM_API_LIST
             }
 
             // 开始录制！
-            _vk_last_command_buffer_semaphore = _vk_command_buffer_allocator->allocate_semaphore();
+            _vk_last_command_buffer_semaphore = 
+                _vk_command_buffer_allocator->allocate_semaphore();
             _vk_wait_for_last_command_buffer_stage = 
                 VkPipelineStageFlagBits::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
@@ -3131,7 +3143,6 @@ VK_API_PLATFORM_API_LIST
         {
             assert(_vk_current_swapchain_framebuffer ==
                 _vk_swapchain_framebuffer[_vk_presenting_swapchain_image_index]);
-
 
             cmd_begin_frame_buffer(_vk_current_swapchain_framebuffer, 0, 0, 0, 0);
 
@@ -3540,6 +3551,8 @@ VK_API_PLATFORM_API_LIST
         case basic_interface::update_result::PAUSE:
             return jegl_graphic_api::update_action::SKIP;
         case basic_interface::update_result::RESIZE:
+            // Wait for device idle.
+            vkDeviceWaitIdle(context->_vk_logic_device);
             jegui_shutdown_vk130(true);
             context->recreate_swap_chain_for_current_surface(
                 context->_vk_jegl_interface->m_interface_width,
