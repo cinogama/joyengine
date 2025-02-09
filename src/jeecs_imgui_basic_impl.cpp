@@ -568,11 +568,11 @@ R"(
     public func GetWindowDrawList()=> DrawListT;
 
     extern("libjoyecs", "je_gui_imagebutton")
-    public func ImageButton(tex: je::graphic::texture)=> bool;
+    public func ImageButton(label: string, tex: je::graphic::texture)=> bool;
     extern("libjoyecs", "je_gui_imagebutton_scale")
-    public func ImageButtonScale(tex: je::graphic::texture, scale: real)=> bool;
+    public func ImageButtonScale(label: string, tex: je::graphic::texture, scale: real)=> bool;
     extern("libjoyecs", "je_gui_imagebutton_size")
-    public func ImageButtonSize(tex: je::graphic::texture, width: real, height: real)=> bool;
+    public func ImageButtonSize(label: string, tex: je::graphic::texture, width: real, height: real)=> bool;
 
     extern("libjoyecs", "je_gui_content_region_avail")
     public func GetContentRegionAvail()=> ImVec2;
@@ -2060,7 +2060,8 @@ WO_API wo_api je_gui_image_size_color(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args)
 {
-    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
+    wo_string_t label = wo_string(args + 0);
+    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 1);
 
     jegl_using_resource((*texture)->resouce());
 
@@ -2077,7 +2078,7 @@ WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args)
 
     auto* dlist = ImGui::GetWindowDrawList();
     dlist->AddCallback([](auto, auto) {_je_gui_tls_ctx._jegl_bind_shader_sampler_state(_je_gui_tls_ctx._jegl_rend_texture_shader->resouce()); }, nullptr);
-    result = ImGui::ImageButton((ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture((*texture)->resouce()),
+    result = ImGui::ImageButton(label, (ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture((*texture)->resouce()),
         ImVec2(
             (float)((*texture)->resouce())->m_raw_texture_data->m_width,
             (float)((*texture)->resouce())->m_raw_texture_data->m_height
@@ -2089,7 +2090,8 @@ WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args)
 }
 WO_API wo_api je_gui_imagebutton_scale(wo_vm vm, wo_value args)
 {
-    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
+    wo_string_t label = wo_string(args + 0);
+    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 1);
 
     jegl_using_resource((*texture)->resouce());
 
@@ -2106,10 +2108,10 @@ WO_API wo_api je_gui_imagebutton_scale(wo_vm vm, wo_value args)
 
     auto* dlist = ImGui::GetWindowDrawList();
     dlist->AddCallback([](auto, auto) {_je_gui_tls_ctx._jegl_bind_shader_sampler_state(_je_gui_tls_ctx._jegl_rend_texture_shader->resouce()); }, nullptr);
-    result = ImGui::ImageButton((ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture((*texture)->resouce()),
+    result = ImGui::ImageButton(label, (ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture((*texture)->resouce()),
         ImVec2(
-            ((*texture)->resouce())->m_raw_texture_data->m_width * wo_float(args + 1),
-            ((*texture)->resouce())->m_raw_texture_data->m_height * wo_float(args + 1)
+            ((*texture)->resouce())->m_raw_texture_data->m_width * wo_float(args + 2),
+            ((*texture)->resouce())->m_raw_texture_data->m_height * wo_float(args + 2)
         ), uvmin, uvmax);
 
     dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
@@ -2118,7 +2120,8 @@ WO_API wo_api je_gui_imagebutton_scale(wo_vm vm, wo_value args)
 }
 WO_API wo_api je_gui_imagebutton_size(wo_vm vm, wo_value args)
 {
-    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
+    wo_string_t label = wo_string(args + 0);
+    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 1);
 
     jegl_using_resource((*texture)->resouce());
 
@@ -2135,10 +2138,10 @@ WO_API wo_api je_gui_imagebutton_size(wo_vm vm, wo_value args)
 
     auto* dlist = ImGui::GetWindowDrawList();
     dlist->AddCallback([](auto, auto) {_je_gui_tls_ctx._jegl_bind_shader_sampler_state(_je_gui_tls_ctx._jegl_rend_texture_shader->resouce()); }, nullptr);
-    result = ImGui::ImageButton((ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture((*texture)->resouce()),
+    result = ImGui::ImageButton(label, (ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture((*texture)->resouce()),
         ImVec2(
-            wo_float(args + 1),
-            wo_float(args + 2)
+            wo_float(args + 2),
+            wo_float(args + 3)
         ), uvmin, uvmax);
 
     dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
@@ -3345,7 +3348,7 @@ public func frag(vf: v2f)
     ImGui::CreateContext();
 
     // Set style:
-    ImGui::StyleColorsLight();
+    // ImGui::StyleColorsLight();
 
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;

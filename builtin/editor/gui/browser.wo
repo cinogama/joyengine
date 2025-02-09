@@ -1432,9 +1432,8 @@ namespace $$MODULE_NAME$$
     func FileIcon(path: PathInfo, context: EditorContext)=> Action
     {
         BeginGroup();
-            PushIDStr(path.path->tostring);
-                let clicked = ImageButtonSize(get_file_icon_by_extern_name(path, context), 32., 32.);
-            PopID();
+            let clicked = ImageButtonSize(
+                F"##{path.path->tostring}#imagebutton", get_file_icon_by_extern_name(path, context), 32., 32.);
             let hovered = IsItemHovered();
             let right_click = IsItemClicked(ImGuiMouseButton::ImGuiMouseButton_Right);
             context_menu(option::value(path), context);

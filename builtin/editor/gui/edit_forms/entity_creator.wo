@@ -165,9 +165,7 @@ namespace editor::gui::edit_forms
     func show_component(typename: string, scopename: string, purename: string)
     {
         BeginGroup();
-        PushIDStr(typename);
-        let clicked = ImageButtonScale(icon_entity_image, 1.);
-        PopID();
+        let clicked = ImageButtonScale(F"##{typename}#button", icon_entity_image, 1.);
         if (BeginDragDropSource())
         {
             if (SetDragDropPayload("JEDITOR_COMPONENT_TYPE", typename))

@@ -15,10 +15,7 @@ namespace jeapi::gui::widget
         let mut clicked = false;
         BeginGroup();
         {
-            PushIDStr(text);
-            clicked = ImageButtonSize(img, size...);
-            PopID();
-
+            clicked = ImageButtonSize(F"##{text}##button", img, size...);
             do context_menu
                 ->> func(menufunc)
                 {

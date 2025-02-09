@@ -24,6 +24,7 @@
 
 #include <optional>
 #include <array>
+#include <list>
 
 #undef max
 #undef min
@@ -261,7 +262,7 @@ VK_API_PLATFORM_API_LIST
         size_t m_next_allocate_ubos_for_uniform_variable;
         size_t m_command_commit_round;
 
-        void* m_uniform_cpu_buffer;
+        void*               m_uniform_cpu_buffer;
         size_t              m_uniform_cpu_buffer_size;
         bool                m_uniform_cpu_buffer_updated;
 
@@ -360,7 +361,7 @@ VK_API_PLATFORM_API_LIST
 
         // Vk的全局实例
         VkInstance          _vk_instance;
-        basic_interface*    _vk_jegl_interface;
+        basic_interface* _vk_jegl_interface;
 
         VkPhysicalDevice    _vk_device;
         uint32_t            _vk_device_queue_graphic_family_index;
@@ -375,69 +376,160 @@ VK_API_PLATFORM_API_LIST
         VkPresentModeKHR            _vk_surface_present_mode;
         VkFormat                    _vk_depth_format;
 
-        VkSwapchainKHR                      _vk_swapchain;
-        std::vector<jevk11_framebuffer*>    _vk_swapchain_framebuffer;
-        std::vector<jevk11_texture*>        _vk_swapchain_textures_for_free;
+        enum descriptor_set_type : uint32_t
+        {
+            UNIFORM_VARIABLES = 0,
+            UNIFORM_BUFFER,
+            TEXTURE,
+            SAMPLER,
 
-        template<VkDescriptorType DESC_SET_TYPE, uint32_t MAX_BINDING, VkShaderStageFlags STAGE>
+            COUNT,
+            DEAR_IMGUI_TEXTURE = COUNT,
+            BEGIN = UNIFORM_VARIABLES,
+        };
+        VkDescriptorSetLayout _vk_global_descriptor_set_layouts[descriptor_set_type::COUNT + 1];
+
+        template <VkDescriptorType DESC_SET_TYPE, VkShaderStageFlags STAGE, size_t MAX_BINDING>
+        VkDescriptorSetLayout create_descriptor_set_layout()
+        {
+            VkDescriptorSetLayoutBinding ubo_layout_binding[MAX_BINDING] = {};
+            for (uint32_t i = 0; i < MAX_BINDING; ++i)
+            {
+                ubo_layout_binding[i].binding = i;
+                ubo_layout_binding[i].descriptorType = DESC_SET_TYPE;
+                ubo_layout_binding[i].descriptorCount = 1;
+                ubo_layout_binding[i].stageFlags = STAGE;
+                ubo_layout_binding[i].pImmutableSamplers = nullptr;
+            }
+
+            VkDescriptorSetLayoutCreateInfo ubo_layout_create_info = {};
+            ubo_layout_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+            ubo_layout_create_info.pNext = nullptr;
+            ubo_layout_create_info.flags = 0;
+            ubo_layout_create_info.bindingCount = MAX_BINDING;
+            ubo_layout_create_info.pBindings = ubo_layout_binding;
+
+            VkDescriptorSetLayout result_layout;
+            if (VK_SUCCESS != vkCreateDescriptorSetLayout(
+                _vk_logic_device,
+                &ubo_layout_create_info,
+                nullptr,
+                &result_layout))
+            {
+                jeecs::debug::logfatal("Failed to create vk130 uniform variables descriptor set layout.");
+                abort();
+            }
+            return result_layout;
+        }
+
+        void destroy_descriptor_set_layout(VkDescriptorSetLayout layout)
+        {
+            vkDestroyDescriptorSetLayout(_vk_logic_device, layout, nullptr);
+        }
+
+        struct swapchain_image_content
+        {
+            jegl_vk130_context* m_main_context;
+
+            jevk11_framebuffer* m_framebuffer;
+            jevk11_texture* m_textures_only_for_free[2];
+
+            std::list<VkCommandBuffer> m_using_command_buffers;
+            std::list<VkSemaphore> m_using_semaphores;
+            std::list<VkDescriptorSet> m_using_descriptor_sets[descriptor_set_type::COUNT + 1];
+
+            void use_command_buffer(VkCommandBuffer cmd_buffer)
+            {
+                m_using_command_buffers.push_back(cmd_buffer);
+            }
+            void use_semaphore(VkSemaphore semaphore)
+            {
+                m_using_semaphores.push_back(semaphore);
+            }
+
+            template<descriptor_set_type DESC_SET_TYPE>
+            void use_descriptor_set(VkDescriptorSet set)
+            {
+                m_using_descriptor_sets[DESC_SET_TYPE].push_back(set);
+            }
+
+            void release_using_resources()
+            {
+                m_main_context->_vk_command_buffer_allocator->flush_command_buffer_allocator(this);
+                m_main_context->_vk_descriptor_set_allocator->flush_descriptor_set_allocator(this);
+                m_main_context->_vk_dear_imgui_descriptor_set_allocator->flush_descriptor_set_allocator(this);
+            }
+
+            swapchain_image_content(
+                jegl_vk130_context* main_contant,
+                jevk11_framebuffer* framebuffer,
+                jevk11_texture* color_attachment,
+                jevk11_texture* depth_attachment)
+                : m_main_context(main_contant)
+                , m_framebuffer(framebuffer)
+                , m_textures_only_for_free{ color_attachment, depth_attachment }
+            {
+            }
+            jegl_vk130_context::swapchain_image_content::~swapchain_image_content()
+            {
+                m_main_context->destroy_frame_buffer(m_framebuffer);
+
+                for (auto* tex : m_textures_only_for_free)
+                    m_main_context->destroy_texture_instance(tex);
+
+                // Release using resources
+                release_using_resources();
+            }
+        };
+
+        template<descriptor_set_type DESC_SET_TYPE>
         struct single_descriptor_set_allocator
         {
-            VkDescriptorSetLayout          m_layout;
-            std::vector<VkDescriptorPool>  m_pools;
-            size_t                         m_next;
-            std::vector<VkDescriptorSet>   m_sets;
+            inline const static VkDescriptorType _desc_set_types[descriptor_set_type::COUNT + 1] = {
+                VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                VkDescriptorType::VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                VkDescriptorType::VK_DESCRIPTOR_TYPE_SAMPLER,
+                VkDescriptorType::VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
+            };
 
             jegl_vk130_context* m_context;
 
+            VkDescriptorSetLayout          m_layout;
+            std::list<VkDescriptorPool>    m_pools;
+            std::list<VkDescriptorSet>     m_free_sets;
+
+
             JECS_DISABLE_MOVE_AND_COPY(single_descriptor_set_allocator);
 
-            single_descriptor_set_allocator(jegl_vk130_context* ctx)
+            single_descriptor_set_allocator(jegl_vk130_context* ctx, VkDescriptorSetLayout layout)
                 : m_context(ctx)
+                , m_layout(layout)
             {
-                m_next = 0;
-
-                VkDescriptorSetLayoutBinding ubo_layout_binding[MAX_BINDING] = {};
-                for (uint32_t i = 0; i < MAX_BINDING; ++i)
-                {
-                    ubo_layout_binding[i].binding = i;
-                    ubo_layout_binding[i].descriptorType = DESC_SET_TYPE;
-                    ubo_layout_binding[i].descriptorCount = 1;
-                    ubo_layout_binding[i].stageFlags = STAGE;
-                    ubo_layout_binding[i].pImmutableSamplers = nullptr;
-                }
-
-                VkDescriptorSetLayoutCreateInfo ubo_layout_create_info = {};
-                ubo_layout_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-                ubo_layout_create_info.pNext = nullptr;
-                ubo_layout_create_info.flags = 0;
-                ubo_layout_create_info.bindingCount = MAX_BINDING;
-                ubo_layout_create_info.pBindings = ubo_layout_binding;
-
-                if (VK_SUCCESS != m_context->vkCreateDescriptorSetLayout(
-                    m_context->_vk_logic_device,
-                    &ubo_layout_create_info,
-                    nullptr,
-                    &m_layout))
-                {
-                    jeecs::debug::logfatal("Failed to create vk130 uniform variables descriptor set layout.");
-                }
             }
             ~single_descriptor_set_allocator()
             {
                 for (auto& pool : m_pools)
                     _vk_this_context->vkDestroyDescriptorPool(_vk_this_context->_vk_logic_device, pool, nullptr);
-
-                _vk_this_context->vkDestroyDescriptorSetLayout(_vk_this_context->_vk_logic_device, m_layout, nullptr);
             }
 
-            void flush_descriptor_set_allocator()
+            void flush_descriptor_set_allocator(swapchain_image_content* swapchain_image)
             {
-                m_next = 0;
+                for (auto* used_set : swapchain_image->m_using_descriptor_sets[DESC_SET_TYPE])
+                    m_free_sets.push_back(used_set);
+
+                swapchain_image->m_using_descriptor_sets[DESC_SET_TYPE].clear();
             }
-            VkDescriptorSet allocate_descriptor_set()
+            VkDescriptorSet allocate_descriptor_set(swapchain_image_content* swapchain_image)
             {
-                if (m_next < m_sets.size())
-                    return m_sets[m_next++];
+                if (!m_free_sets.empty())
+                {
+                    VkDescriptorSet result = m_free_sets.back();
+                    m_free_sets.pop_back();
+
+                    swapchain_image->use_descriptor_set<DESC_SET_TYPE>(result);
+                    return result;
+                }
 
                 VkDescriptorSet result;
                 for (;;)
@@ -456,8 +548,7 @@ VK_API_PLATFORM_API_LIST
 
                         if (VK_SUCCESS == alloc_result)
                         {
-                            m_sets.push_back(result);
-                            m_next++;
+                            swapchain_image->use_descriptor_set<DESC_SET_TYPE>(result);
                             return result;
                         }
                     }
@@ -465,7 +556,7 @@ VK_API_PLATFORM_API_LIST
                     VkDescriptorPool new_created_pool;
 
                     VkDescriptorPoolSize pool_sizes[1] = {};
-                    pool_sizes[0].type = DESC_SET_TYPE;
+                    pool_sizes[0].type = _desc_set_types[DESC_SET_TYPE];
                     pool_sizes[0].descriptorCount = 128;
 
                     VkDescriptorPoolCreateInfo pool_create_info = {};
@@ -495,25 +586,13 @@ VK_API_PLATFORM_API_LIST
 
             jegl_vk130_context* m_context;
 
-            enum DescriptorSetType : uint32_t
-            {
-                UNIFORM_VARIABLES = 0,
-                UNIFORM_BUFFER,
-                TEXTURE,
-                SAMPLER,
-
-                COUNT,
-                BEGIN = UNIFORM_VARIABLES,
-            };
-            VkDescriptorSetLayout m_vk_global_descriptor_set_layouts[DescriptorSetType::COUNT];
-
-            single_descriptor_set_allocator<VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VkShaderStageFlagBits::VK_SHADER_STAGE_ALL>
+            single_descriptor_set_allocator<descriptor_set_type::UNIFORM_VARIABLES>
                 m_vk_shader_uniform_variable_sets;
-            single_descriptor_set_allocator<VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, MAX_UBO_LAYOUT, VkShaderStageFlagBits::VK_SHADER_STAGE_ALL>
+            single_descriptor_set_allocator<descriptor_set_type::UNIFORM_BUFFER>
                 m_vk_shader_uniform_block_sets;
-            single_descriptor_set_allocator<VkDescriptorType::VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, MAX_TEXTURE_LAYOUT, VkShaderStageFlagBits::VK_SHADER_STAGE_ALL>
+            single_descriptor_set_allocator<descriptor_set_type::TEXTURE>
                 m_vk_shader_uniform_texture_sets;
-            single_descriptor_set_allocator<VkDescriptorType::VK_DESCRIPTOR_TYPE_SAMPLER, MAX_SAMPLER_LAYOUT, VkShaderStageFlagBits::VK_SHADER_STAGE_ALL>
+            single_descriptor_set_allocator<descriptor_set_type::SAMPLER>
                 m_vk_shader_uniform_sampler_sets;
 
             // Binding update context;
@@ -524,16 +603,16 @@ VK_API_PLATFORM_API_LIST
             VkPipelineLayout        m_binded_pipeline_layout;
 
             VkWriteDescriptorSet m_updated_writes_reusing[MAX_LAYOUT_COUNT];
-            VkDescriptorSet m_updated_sets[DescriptorSetType::COUNT];
+            VkDescriptorSet m_updated_sets[descriptor_set_type::COUNT];
 
-            void flush_descriptor_set_allocator()
+            void flush_descriptor_set_allocator(swapchain_image_content* swapchain_image)
             {
                 m_binded_pipeline_layout = VK_NULL_HANDLE;
 
-                m_vk_shader_uniform_variable_sets.flush_descriptor_set_allocator();
-                m_vk_shader_uniform_block_sets.flush_descriptor_set_allocator();
-                m_vk_shader_uniform_texture_sets.flush_descriptor_set_allocator();
-                m_vk_shader_uniform_sampler_sets.flush_descriptor_set_allocator();
+                m_vk_shader_uniform_variable_sets.flush_descriptor_set_allocator(swapchain_image);
+                m_vk_shader_uniform_block_sets.flush_descriptor_set_allocator(swapchain_image);
+                m_vk_shader_uniform_texture_sets.flush_descriptor_set_allocator(swapchain_image);
+                m_vk_shader_uniform_sampler_sets.flush_descriptor_set_allocator(swapchain_image);
 
                 m_binded_uvar.buffer = VK_NULL_HANDLE;
                 for (auto& ubos : m_binded_ubos)
@@ -552,7 +631,7 @@ VK_API_PLATFORM_API_LIST
                 if (m_binded_uvar.buffer != buffer)
                 {
                     m_binded_uvar.buffer = buffer;
-                    m_updated_sets[DescriptorSetType::UNIFORM_VARIABLES] = VK_NULL_HANDLE;
+                    m_updated_sets[descriptor_set_type::UNIFORM_VARIABLES] = VK_NULL_HANDLE;
                 }
             }
             void bind_uniform_buffer(uint32_t binding, VkBuffer buffer)
@@ -560,7 +639,7 @@ VK_API_PLATFORM_API_LIST
                 if (m_binded_ubos[binding].buffer != buffer)
                 {
                     m_binded_ubos[binding].buffer = buffer;
-                    m_updated_sets[DescriptorSetType::UNIFORM_BUFFER] = VK_NULL_HANDLE;
+                    m_updated_sets[descriptor_set_type::UNIFORM_BUFFER] = VK_NULL_HANDLE;
                 }
             }
             void bind_texture(uint32_t binding, VkImageView image_view)
@@ -568,7 +647,7 @@ VK_API_PLATFORM_API_LIST
                 if (m_binded_textures[binding].imageView != image_view)
                 {
                     m_binded_textures[binding].imageView = image_view;
-                    m_updated_sets[DescriptorSetType::TEXTURE] = VK_NULL_HANDLE;
+                    m_updated_sets[descriptor_set_type::TEXTURE] = VK_NULL_HANDLE;
                 }
             }
             void bind_sampler(uint32_t binding, VkSampler sampler)
@@ -576,22 +655,22 @@ VK_API_PLATFORM_API_LIST
                 if (m_binded_samplers[binding].sampler != sampler)
                 {
                     m_binded_samplers[binding].sampler = sampler;
-                    m_updated_sets[DescriptorSetType::SAMPLER] = VK_NULL_HANDLE;
+                    m_updated_sets[descriptor_set_type::SAMPLER] = VK_NULL_HANDLE;
                 }
             }
             void bind_pipeline_layout(VkPipelineLayout pipeline_layout)
             {
                 m_binded_pipeline_layout = pipeline_layout;
             }
-            void apply_binding_work()
+            void apply_binding_work(swapchain_image_content* swapchain_image)
             {
                 assert(m_binded_pipeline_layout != VK_NULL_HANDLE);
 
                 // 更新Uniform variables
-                if (VK_NULL_HANDLE == m_updated_sets[DescriptorSetType::UNIFORM_VARIABLES])
+                if (VK_NULL_HANDLE == m_updated_sets[descriptor_set_type::UNIFORM_VARIABLES])
                 {
-                    auto set = m_vk_shader_uniform_variable_sets.allocate_descriptor_set();
-                    m_updated_sets[DescriptorSetType::UNIFORM_VARIABLES] = set;
+                    auto set = m_vk_shader_uniform_variable_sets.allocate_descriptor_set(swapchain_image);
+                    m_updated_sets[descriptor_set_type::UNIFORM_VARIABLES] = set;
 
                     // Update layouts
                     m_updated_writes_reusing[0].dstBinding = 0;
@@ -607,56 +686,62 @@ VK_API_PLATFORM_API_LIST
                         nullptr);
                 }
                 // 更新Uniform buffer
-                if (VK_NULL_HANDLE == m_updated_sets[DescriptorSetType::UNIFORM_BUFFER])
+                if (VK_NULL_HANDLE == m_updated_sets[descriptor_set_type::UNIFORM_BUFFER])
                 {
-                    auto set = m_vk_shader_uniform_block_sets.allocate_descriptor_set();
-                    m_updated_sets[DescriptorSetType::UNIFORM_BUFFER] = set;
+                    auto set = m_vk_shader_uniform_block_sets.allocate_descriptor_set(swapchain_image);
+                    m_updated_sets[descriptor_set_type::UNIFORM_BUFFER] = set;
 
                     // Update layouts
+                    size_t update_count = 0;
                     for (size_t i = 0; i < MAX_UBO_LAYOUT; ++i)
                     {
-                        auto& write = m_updated_writes_reusing[i];
-                        write.dstBinding = (uint32_t)i;
-                        write.dstSet = set;
-                        write.descriptorType = VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-                        write.pBufferInfo = &m_binded_ubos[i];
+                        if (m_binded_ubos[i].buffer != VK_NULL_HANDLE)
+                        {
+                            auto& write = m_updated_writes_reusing[update_count++];
+                            write.dstBinding = (uint32_t)i;
+                            write.dstSet = set;
+                            write.descriptorType = VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+                            write.pBufferInfo = &m_binded_ubos[i];
+                        }
                     }
-
                     m_context->vkUpdateDescriptorSets(
                         m_context->_vk_logic_device,
-                        MAX_UBO_LAYOUT,
+                        update_count,
                         m_updated_writes_reusing,
                         0,
                         nullptr);
                 }
                 // 更新Texture
-                if (VK_NULL_HANDLE == m_updated_sets[DescriptorSetType::TEXTURE])
+                if (VK_NULL_HANDLE == m_updated_sets[descriptor_set_type::TEXTURE])
                 {
-                    auto set = m_vk_shader_uniform_texture_sets.allocate_descriptor_set();
-                    m_updated_sets[DescriptorSetType::TEXTURE] = set;
+                    auto set = m_vk_shader_uniform_texture_sets.allocate_descriptor_set(swapchain_image);
+                    m_updated_sets[descriptor_set_type::TEXTURE] = set;
 
                     // Update layouts
+                    size_t update_count = 0;
                     for (size_t i = 0; i < MAX_TEXTURE_LAYOUT; ++i)
                     {
-                        auto& write = m_updated_writes_reusing[i];
-                        write.dstBinding = (uint32_t)i;
-                        write.dstSet = set;
-                        write.descriptorType = VkDescriptorType::VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-                        write.pImageInfo = &m_binded_textures[i];
+                        if (m_binded_textures[i].imageView != VK_NULL_HANDLE)
+                        {
+                            auto& write = m_updated_writes_reusing[update_count++];
+                            write.dstBinding = (uint32_t)i;
+                            write.dstSet = set;
+                            write.descriptorType = VkDescriptorType::VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+                            write.pImageInfo = &m_binded_textures[i];
+                        }
                     }
-
                     m_context->vkUpdateDescriptorSets(
                         m_context->_vk_logic_device,
-                        MAX_TEXTURE_LAYOUT,
+                        update_count,
                         m_updated_writes_reusing,
                         0,
                         nullptr);
                 }
                 // 更新Sampler
-                if (VK_NULL_HANDLE == m_updated_sets[DescriptorSetType::SAMPLER])
+                if (VK_NULL_HANDLE == m_updated_sets[descriptor_set_type::SAMPLER])
                 {
-                    auto set = m_vk_shader_uniform_sampler_sets.allocate_descriptor_set();
-                    m_updated_sets[DescriptorSetType::SAMPLER] = set;
+                    auto set = m_vk_shader_uniform_sampler_sets.allocate_descriptor_set(swapchain_image);
+                    m_updated_sets[descriptor_set_type::SAMPLER] = set;
 
                     // Update layouts
                     size_t update_count = 0;
@@ -671,21 +756,19 @@ VK_API_PLATFORM_API_LIST
                             write.pImageInfo = &m_binded_samplers[i];
                         }
                     }
-
                     m_context->vkUpdateDescriptorSets(
                         m_context->_vk_logic_device,
-                        MAX_SAMPLER_LAYOUT,
+                        update_count,
                         m_updated_writes_reusing,
                         0,
                         nullptr);
                 }
-
                 m_context->vkCmdBindDescriptorSets(
                     m_context->_vk_current_command_buffer,
                     VkPipelineBindPoint::VK_PIPELINE_BIND_POINT_GRAPHICS,
                     m_binded_pipeline_layout,
                     0,
-                    DescriptorSetType::COUNT,
+                    descriptor_set_type::COUNT,
                     m_updated_sets,
                     0,
                     nullptr);
@@ -695,10 +778,14 @@ VK_API_PLATFORM_API_LIST
 
             descriptor_set_allocator(jegl_vk130_context* context)
                 : m_context(context)
-                , m_vk_shader_uniform_variable_sets(context)
-                , m_vk_shader_uniform_block_sets(context)
-                , m_vk_shader_uniform_texture_sets(context)
-                , m_vk_shader_uniform_sampler_sets(context)
+                , m_vk_shader_uniform_variable_sets(
+                    context, context->_vk_global_descriptor_set_layouts[descriptor_set_type::UNIFORM_VARIABLES])
+                , m_vk_shader_uniform_block_sets(
+                    context, context->_vk_global_descriptor_set_layouts[descriptor_set_type::UNIFORM_BUFFER])
+                , m_vk_shader_uniform_texture_sets(
+                    context, context->_vk_global_descriptor_set_layouts[descriptor_set_type::TEXTURE])
+                , m_vk_shader_uniform_sampler_sets(
+                    context, context->_vk_global_descriptor_set_layouts[descriptor_set_type::SAMPLER])
             {
                 static_assert(MAX_LAYOUT_COUNT >= MAX_SAMPLER_LAYOUT);
                 static_assert(MAX_LAYOUT_COUNT >= MAX_TEXTURE_LAYOUT);
@@ -744,24 +831,6 @@ VK_API_PLATFORM_API_LIST
                     samplers.imageView = VK_NULL_HANDLE;
                     samplers.sampler = VK_NULL_HANDLE;
                 }
-
-                flush_descriptor_set_allocator();
-
-                m_vk_global_descriptor_set_layouts[DescriptorSetType::UNIFORM_VARIABLES] =
-                    m_vk_shader_uniform_variable_sets.m_layout;
-
-                m_vk_global_descriptor_set_layouts[DescriptorSetType::UNIFORM_BUFFER] =
-                    m_vk_shader_uniform_block_sets.m_layout;
-
-                m_vk_global_descriptor_set_layouts[DescriptorSetType::TEXTURE] =
-                    m_vk_shader_uniform_texture_sets.m_layout;
-
-                m_vk_global_descriptor_set_layouts[DescriptorSetType::SAMPLER] =
-                    m_vk_shader_uniform_sampler_sets.m_layout;
-
-            }
-            ~descriptor_set_allocator()
-            {
             }
         };
         struct command_buffer_allocator
@@ -770,49 +839,64 @@ VK_API_PLATFORM_API_LIST
 
             VkCommandPool                   m_command_pool;
 
-            std::vector<VkCommandBuffer>    m_cmd_buffers;
-            size_t                          m_next_cmd_buffer;
+            std::list<VkCommandBuffer>    m_free_cmd_buffers;
+            std::list<VkSemaphore>        m_free_cmd_semaphores;
 
-            std::vector<VkSemaphore>        m_cmd_semaphores;
-            size_t                          m_next_cmd_semaphore;
-
-            VkSemaphore allocate_semaphore()
+            VkSemaphore allocate_semaphore(swapchain_image_content* swapchain_image_maynull)
             {
-                if (m_next_cmd_semaphore < m_cmd_semaphores.size())
-                    return m_cmd_semaphores[m_next_cmd_semaphore++];
+                VkSemaphore result;
+                if (!m_free_cmd_semaphores.empty())
+                {
+                    result = m_free_cmd_semaphores.back();
+                    m_free_cmd_semaphores.pop_back();
+                }
+                else
+                    result = m_context->create_semaphore();
 
-                VkSemaphore result = m_context->create_semaphore();
-                m_cmd_semaphores.push_back(result);
-                m_next_cmd_semaphore++;
+                if (swapchain_image_maynull != nullptr)
+                    swapchain_image_maynull->use_semaphore(result);
+
                 return result;
             }
-            VkCommandBuffer allocate_command_buffer()
+            VkCommandBuffer allocate_command_buffer(swapchain_image_content* swapchain_image_maynull)
             {
-                if (m_next_cmd_buffer < m_cmd_buffers.size())
-                    return m_cmd_buffers[m_next_cmd_buffer++];
-
-                VkCommandBufferAllocateInfo command_buffer_alloc_info = {};
-                command_buffer_alloc_info.sType = VkStructureType::VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-                command_buffer_alloc_info.pNext = nullptr;
-                command_buffer_alloc_info.commandPool = m_command_pool;
-                command_buffer_alloc_info.level = VkCommandBufferLevel::VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-                command_buffer_alloc_info.commandBufferCount = 1;
-
-                VkCommandBuffer result = nullptr;
-                if (m_context->vkAllocateCommandBuffers(m_context->_vk_logic_device, &command_buffer_alloc_info, &result) != VK_SUCCESS)
+                VkCommandBuffer result;
+                if (!m_free_cmd_buffers.empty())
                 {
-                    jeecs::debug::logfatal("Failed to allocate command buffers!");
+                    result = m_free_cmd_buffers.back();
+                    m_free_cmd_buffers.pop_back();
+                }
+                else
+                {
+                    VkCommandBufferAllocateInfo command_buffer_alloc_info = {};
+                    command_buffer_alloc_info.sType = VkStructureType::VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+                    command_buffer_alloc_info.pNext = nullptr;
+                    command_buffer_alloc_info.commandPool = m_command_pool;
+                    command_buffer_alloc_info.level = VkCommandBufferLevel::VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+                    command_buffer_alloc_info.commandBufferCount = 1;
+
+                    result = nullptr;
+                    if (m_context->vkAllocateCommandBuffers(m_context->_vk_logic_device, &command_buffer_alloc_info, &result) != VK_SUCCESS)
+                    {
+                        jeecs::debug::logfatal("Failed to allocate command buffers!");
+                    }
                 }
 
-                m_cmd_buffers.push_back(result);
-                m_next_cmd_buffer++;
+                if (swapchain_image_maynull != nullptr)
+                    swapchain_image_maynull->use_command_buffer(result);
                 return result;
             }
 
-            void flush_command_buffer_allocator()
+            void flush_command_buffer_allocator(swapchain_image_content* swapchain_image)
             {
-                m_next_cmd_buffer = 0;
-                m_next_cmd_semaphore = 0;
+                for (auto& cmd_buffer : swapchain_image->m_using_command_buffers)
+                    m_free_cmd_buffers.push_back(cmd_buffer);
+
+                for (auto& semaphore : swapchain_image->m_using_semaphores)
+                    m_free_cmd_semaphores.push_back(semaphore);
+
+                swapchain_image->m_using_command_buffers.clear();
+                swapchain_image->m_using_semaphores.clear();
             }
 
             JECS_DISABLE_MOVE_AND_COPY(command_buffer_allocator);
@@ -841,35 +925,34 @@ VK_API_PLATFORM_API_LIST
             }
             ~command_buffer_allocator()
             {
-                for (auto& cmd_buffer : m_cmd_buffers)
+                for (auto& cmd_buffer : m_free_cmd_buffers)
                     m_context->vkFreeCommandBuffers(m_context->_vk_logic_device, m_command_pool, 1, &cmd_buffer);
 
-                for (auto& semaphore : m_cmd_semaphores)
+                for (auto& semaphore : m_free_cmd_semaphores)
                     m_context->destroy_semaphore(semaphore);
 
                 m_context->vkDestroyCommandPool(m_context->_vk_logic_device, m_command_pool, nullptr);
             }
-
         };
 
         descriptor_set_allocator* _vk_descriptor_set_allocator;
-        single_descriptor_set_allocator<
-            VkDescriptorType::VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            1,
-            VkShaderStageFlagBits::VK_SHADER_STAGE_FRAGMENT_BIT>*
+        single_descriptor_set_allocator<descriptor_set_type::DEAR_IMGUI_TEXTURE>*
             _vk_dear_imgui_descriptor_set_allocator;
-
         command_buffer_allocator* _vk_command_buffer_allocator;
+
+        VkSwapchainKHR                      _vk_swapchain;
+        std::vector<swapchain_image_content*> _vk_swapchain_images;
 
         VkSampler _vk_dear_imgui_sampler;
         VkDescriptorPool _vk_dear_imgui_descriptor_pool;
 
         // Following is runtime vk states.
         uint32_t            _vk_presenting_swapchain_image_index;
-        jevk11_framebuffer* _vk_current_swapchain_framebuffer;
+        swapchain_image_content* _vk_current_swapchain_image_content;
+
         jevk11_framebuffer* _vk_current_target_framebuffer;
         VkCommandBuffer     _vk_current_command_buffer;
-        jevk11_shader*      _vk_current_binded_shader;
+        jevk11_shader* _vk_current_binded_shader;
         size_t              _vk_command_commit_round;
 
         VkSemaphore             _vk_last_command_buffer_semaphore;
@@ -878,7 +961,7 @@ VK_API_PLATFORM_API_LIST
         /////////////////////////////////////////////////////////////////////
         VkCommandBuffer begin_temp_command_buffer_records()
         {
-            VkCommandBuffer result = _vk_command_buffer_allocator->allocate_command_buffer();
+            VkCommandBuffer result = _vk_command_buffer_allocator->allocate_command_buffer(nullptr);
 
             VkCommandBufferBeginInfo command_buffer_begin_info = {};
             command_buffer_begin_info.sType = VkStructureType::VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -908,6 +991,8 @@ VK_API_PLATFORM_API_LIST
 
             vkQueueSubmit(_vk_logic_device_graphic_queue, 1, &submit_info, VK_NULL_HANDLE);
             vkQueueWaitIdle(_vk_logic_device_graphic_queue);
+
+            _vk_command_buffer_allocator->m_free_cmd_buffers.push_back(cmd_buffer);
         }
 
         VkSemaphore create_semaphore()
@@ -1088,14 +1173,10 @@ VK_API_PLATFORM_API_LIST
         }
         void destroy_swap_chain()
         {
-            for (auto* fb : _vk_swapchain_framebuffer)
-                destroy_frame_buffer(fb);
+            for (auto* image : _vk_swapchain_images)
+                delete image;
 
-            for (auto* tex : _vk_swapchain_textures_for_free)
-                destroy_texture_instance(tex);
-
-            _vk_swapchain_textures_for_free.clear();
-            _vk_swapchain_framebuffer.clear();
+            _vk_swapchain_images.clear();
 
             vkDestroySwapchainKHR(_vk_logic_device, _vk_swapchain, nullptr);
         }
@@ -1279,7 +1360,7 @@ VK_API_PLATFORM_API_LIST
             std::vector<VkImage> swapchain_images(swapchain_real_image_count);
             vkGetSwapchainImagesKHR(_vk_logic_device, _vk_swapchain, &swapchain_real_image_count, swapchain_images.data());
 
-            _vk_swapchain_framebuffer.resize(swapchain_real_image_count);
+            _vk_swapchain_images.resize(swapchain_real_image_count);
             for (uint32_t i = 0; i < swapchain_real_image_count; ++i)
             {
                 transition_image_layout(
@@ -1297,16 +1378,17 @@ VK_API_PLATFORM_API_LIST
                 jevk11_texture* depth_attachment = create_framebuf_texture(
                     (jegl_texture::format)(jegl_texture::format::DEPTH | jegl_texture::format::FRAMEBUF), w, h);
 
-                _vk_swapchain_textures_for_free.push_back(color_attachment);
-                _vk_swapchain_textures_for_free.push_back(depth_attachment);
-
-                _vk_swapchain_framebuffer[i] = create_frame_buffer(
+                auto* framebuffer = create_frame_buffer(
                     (size_t)used_extent.width,
                     (size_t)used_extent.height,
                     { color_attachment },
                     depth_attachment,
                     VkImageLayout::VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
                 );
+
+                _vk_swapchain_images.at(i) =
+                    new swapchain_image_content(
+                        this, framebuffer, color_attachment, depth_attachment);
             }
 
             // 交换链重建，需要等待上一帧的命令缓冲区信号量完成。
@@ -1324,9 +1406,9 @@ VK_API_PLATFORM_API_LIST
                 if (vkWaitSemaphores(_vk_logic_device, &wait_info, UINT64_MAX) != VK_SUCCESS)
                     jeecs::debug::logfatal("Failed to wait for last command buffer semaphore.");*/
 
-                // vkWaitForFences()
+                    // vkWaitForFences()
 
-                // TODO;
+                    // TODO;
             }
         }
 
@@ -1604,6 +1686,7 @@ VK_API_PLATFORM_API_LIST
                 VK_KHR_SWAPCHAIN_EXTENSION_NAME,
                 "VK_EXT_extended_dynamic_state3", // Emmm... Vulkan 真是令人讨厌……
                 "VK_EXT_robustness2",
+                VK_EXT_PRIMITIVE_TOPOLOGY_LIST_RESTART_EXTENSION_NAME,
             };
 
             size_t SKIP_DEVICE = 0;
@@ -1693,6 +1776,12 @@ VK_API_PLATFORM_API_LIST
             robustness2_features.robustImageAccess2 = VK_FALSE;
             robustness2_features.nullDescriptor = VK_TRUE;
 
+            VkPhysicalDevicePrimitiveTopologyListRestartFeaturesEXT topologyListRestartFeatures = {};
+            topologyListRestartFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRIMITIVE_TOPOLOGY_LIST_RESTART_FEATURES_EXT;
+            topologyListRestartFeatures.primitiveTopologyListRestart = VK_TRUE;
+
+            robustness2_features.pNext = &topologyListRestartFeatures;
+
             VkDeviceCreateInfo device_create_info = {};
             device_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
             device_create_info.pNext = &robustness2_features;
@@ -1717,12 +1806,37 @@ VK_API_PLATFORM_API_LIST
             assert(_vk_logic_device_graphic_queue != nullptr);
             assert(_vk_logic_device_present_queue != nullptr);
 
-            _vk_descriptor_set_allocator = new descriptor_set_allocator(this);
-            _vk_dear_imgui_descriptor_set_allocator =
-                new single_descriptor_set_allocator<
+            // 创建描述符集的布局信息
+            _vk_global_descriptor_set_layouts[descriptor_set_type::UNIFORM_VARIABLES] =
+                create_descriptor_set_layout<
+                VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                VkShaderStageFlagBits::VK_SHADER_STAGE_ALL, 1>();
+
+            _vk_global_descriptor_set_layouts[descriptor_set_type::UNIFORM_BUFFER] =
+                create_descriptor_set_layout<
+                VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                VkShaderStageFlagBits::VK_SHADER_STAGE_ALL, descriptor_set_allocator::MAX_UBO_LAYOUT>();
+
+            _vk_global_descriptor_set_layouts[descriptor_set_type::TEXTURE] =
+                create_descriptor_set_layout<
+                VkDescriptorType::VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                VkShaderStageFlagBits::VK_SHADER_STAGE_ALL, descriptor_set_allocator::MAX_TEXTURE_LAYOUT>();
+
+            _vk_global_descriptor_set_layouts[descriptor_set_type::SAMPLER] =
+                create_descriptor_set_layout<
+                VkDescriptorType::VK_DESCRIPTOR_TYPE_SAMPLER,
+                VkShaderStageFlagBits::VK_SHADER_STAGE_ALL, descriptor_set_allocator::MAX_SAMPLER_LAYOUT>();
+
+            _vk_global_descriptor_set_layouts[descriptor_set_type::DEAR_IMGUI_TEXTURE] =
+                create_descriptor_set_layout<
                 VkDescriptorType::VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                1, VkShaderStageFlagBits::VK_SHADER_STAGE_FRAGMENT_BIT>(this);
+                VkShaderStageFlagBits::VK_SHADER_STAGE_FRAGMENT_BIT, 1>();
+
+            _vk_descriptor_set_allocator = new descriptor_set_allocator(this);
             _vk_command_buffer_allocator = new command_buffer_allocator(this);
+            _vk_dear_imgui_descriptor_set_allocator =
+                new single_descriptor_set_allocator<descriptor_set_type::DEAR_IMGUI_TEXTURE>(
+                    this, _vk_global_descriptor_set_layouts[descriptor_set_type::DEAR_IMGUI_TEXTURE]);
 
             // 为imgui创建描述符集池
             VkDescriptorPoolSize pool_sizes[] =
@@ -1775,16 +1889,17 @@ VK_API_PLATFORM_API_LIST
         {
             jegui_shutdown_vk130(reboot);
 
+            destroy_swap_chain();
+
             delete _vk_dear_imgui_descriptor_set_allocator;
             delete _vk_descriptor_set_allocator;
             delete _vk_command_buffer_allocator;
 
-            destroy_swap_chain();
+            for (auto layout : _vk_global_descriptor_set_layouts)
+                destroy_descriptor_set_layout(layout);
 
             vkDestroySampler(_vk_logic_device, _vk_dear_imgui_sampler, nullptr);
-
             vkDestroyDescriptorPool(_vk_logic_device, _vk_dear_imgui_descriptor_pool, nullptr);
-
             vkDestroyDevice(_vk_logic_device, nullptr);
 #ifndef NDEBUG
             if (_vk_debug_manager != VK_NULL_HANDLE)
@@ -1805,7 +1920,7 @@ VK_API_PLATFORM_API_LIST
             command_buffer_begin_info.sType = VkStructureType::VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
             command_buffer_begin_info.pNext = nullptr;
             // TODO: 我们的命令缓冲区稍后会设置为执行完毕后重用
-            command_buffer_begin_info.flags = VkCommandBufferUsageFlagBits::VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT; 
+            command_buffer_begin_info.flags = VkCommandBufferUsageFlagBits::VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
             command_buffer_begin_info.pInheritanceInfo = nullptr;
 
             if (VK_SUCCESS != vkBeginCommandBuffer(cmdbuf, &command_buffer_begin_info))
@@ -2117,26 +2232,26 @@ VK_API_PLATFORM_API_LIST
             shader_blob->m_vertex_input_binding_description.inputRate = VkVertexInputRate::VK_VERTEX_INPUT_RATE_VERTEX;
 
             shader_blob->m_vertex_input_state_create_info = {};
-            shader_blob->m_vertex_input_state_create_info.sType = 
+            shader_blob->m_vertex_input_state_create_info.sType =
                 VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
             shader_blob->m_vertex_input_state_create_info.pNext = nullptr;
             shader_blob->m_vertex_input_state_create_info.flags = 0;
             shader_blob->m_vertex_input_state_create_info.vertexBindingDescriptionCount = 1;
-            shader_blob->m_vertex_input_state_create_info.pVertexBindingDescriptions = 
+            shader_blob->m_vertex_input_state_create_info.pVertexBindingDescriptions =
                 &shader_blob->m_vertex_input_binding_description;
-            shader_blob->m_vertex_input_state_create_info.vertexAttributeDescriptionCount = 
+            shader_blob->m_vertex_input_state_create_info.vertexAttributeDescriptionCount =
                 (uint32_t)shader_blob->m_vertex_input_attribute_descriptions.size();
-            shader_blob->m_vertex_input_state_create_info.pVertexAttributeDescriptions = 
+            shader_blob->m_vertex_input_state_create_info.pVertexAttributeDescriptions =
                 shader_blob->m_vertex_input_attribute_descriptions.data();
 
             // TODO: 根据JoyEngine的绘制设计，此处需要允许动态调整或者创建多个图形管线以匹配不同的绘制需求
             //       这里暂时先挂个最常见的绘制图元模式
             shader_blob->m_input_assembly_state_create_info = {};
-            shader_blob->m_input_assembly_state_create_info.sType = 
+            shader_blob->m_input_assembly_state_create_info.sType =
                 VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
             shader_blob->m_input_assembly_state_create_info.pNext = nullptr;
             shader_blob->m_input_assembly_state_create_info.flags = 0;
-            shader_blob->m_input_assembly_state_create_info.topology = 
+            shader_blob->m_input_assembly_state_create_info.topology =
                 VkPrimitiveTopology::VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
             shader_blob->m_input_assembly_state_create_info.primitiveRestartEnable = VK_TRUE;
 
@@ -2153,7 +2268,7 @@ VK_API_PLATFORM_API_LIST
             shader_blob->m_scissor.extent = _vk_surface_capabilities.currentExtent;
 
             shader_blob->m_viewport_state_create_info = {};
-            shader_blob->m_viewport_state_create_info.sType = 
+            shader_blob->m_viewport_state_create_info.sType =
                 VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
             shader_blob->m_viewport_state_create_info.pNext = nullptr;
             shader_blob->m_viewport_state_create_info.flags = 0;
@@ -2163,13 +2278,13 @@ VK_API_PLATFORM_API_LIST
             shader_blob->m_viewport_state_create_info.pScissors = &shader_blob->m_scissor;
 
             shader_blob->m_rasterization_state_create_info = {};
-            shader_blob->m_rasterization_state_create_info.sType = 
+            shader_blob->m_rasterization_state_create_info.sType =
                 VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
             shader_blob->m_rasterization_state_create_info.pNext = nullptr;
             shader_blob->m_rasterization_state_create_info.flags = 0;
             shader_blob->m_rasterization_state_create_info.depthClampEnable = VK_FALSE;
             shader_blob->m_rasterization_state_create_info.rasterizerDiscardEnable = VK_FALSE;
-            shader_blob->m_rasterization_state_create_info.polygonMode = 
+            shader_blob->m_rasterization_state_create_info.polygonMode =
                 VkPolygonMode::VK_POLYGON_MODE_FILL;
 
             switch (resource->m_raw_shader_data->m_cull_mode)
@@ -2190,7 +2305,7 @@ VK_API_PLATFORM_API_LIST
             // TODO: 配置多重采样，不过JoyEngine的多重采样应该是配置在渲染目标上的，这里暂时不知道怎么处理比较合适
             //      先挂个默认的，并且也应该允许动态调整
             shader_blob->m_multi_sample_state_create_info = {};
-            shader_blob->m_multi_sample_state_create_info.sType = 
+            shader_blob->m_multi_sample_state_create_info.sType =
                 VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
             shader_blob->m_multi_sample_state_create_info.pNext = nullptr;
             shader_blob->m_multi_sample_state_create_info.flags = 0;
@@ -2203,7 +2318,7 @@ VK_API_PLATFORM_API_LIST
 
             // 深度缓冲区配置
             shader_blob->m_depth_stencil_state_create_info = {};
-            shader_blob->m_depth_stencil_state_create_info.sType = 
+            shader_blob->m_depth_stencil_state_create_info.sType =
                 VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
             shader_blob->m_depth_stencil_state_create_info.pNext = nullptr;
             shader_blob->m_depth_stencil_state_create_info.flags = 0;
@@ -2406,7 +2521,7 @@ VK_API_PLATFORM_API_LIST
             shader_blob->m_dynamic_state_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
             shader_blob->m_dynamic_state_create_info.pNext = nullptr;
             shader_blob->m_dynamic_state_create_info.flags = 0;
-            shader_blob->m_dynamic_state_create_info.dynamicStateCount = 
+            shader_blob->m_dynamic_state_create_info.dynamicStateCount =
                 sizeof(jevk11_shader_blob::blob_data::m_dynamic_states) / sizeof(VkDynamicState);
             shader_blob->m_dynamic_state_create_info.pDynamicStates = jevk11_shader_blob::blob_data::m_dynamic_states;
 
@@ -2415,8 +2530,8 @@ VK_API_PLATFORM_API_LIST
             pipeline_layout_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
             pipeline_layout_create_info.pNext = nullptr;
             pipeline_layout_create_info.flags = 0;
-            pipeline_layout_create_info.setLayoutCount = (uint32_t)descriptor_set_allocator::DescriptorSetType::COUNT;
-            pipeline_layout_create_info.pSetLayouts = _vk_descriptor_set_allocator->m_vk_global_descriptor_set_layouts;
+            pipeline_layout_create_info.setLayoutCount = (uint32_t)descriptor_set_type::COUNT;
+            pipeline_layout_create_info.pSetLayouts = _vk_global_descriptor_set_layouts;
             pipeline_layout_create_info.pushConstantRangeCount = 0;
             pipeline_layout_create_info.pPushConstantRanges = nullptr;
 
@@ -2786,7 +2901,7 @@ VK_API_PLATFORM_API_LIST
                     && new_layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
                 {
                     barrier.srcAccessMask = 0;
-                    barrier.dstAccessMask = 
+                    barrier.dstAccessMask =
                         VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
                     source_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
@@ -2816,7 +2931,7 @@ VK_API_PLATFORM_API_LIST
                     source_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
                     destination_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
                 }
-                else if (old_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL 
+                else if (old_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
                     && new_layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
                 {
                     barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
@@ -2825,7 +2940,7 @@ VK_API_PLATFORM_API_LIST
                     source_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
                     destination_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
                 }
-                else if (old_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL 
+                else if (old_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
                     && new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
                 {
                     barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
@@ -2834,7 +2949,7 @@ VK_API_PLATFORM_API_LIST
                     source_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
                     destination_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
                 }
-                else if (old_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL 
+                else if (old_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
                     && new_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
                 {
                     barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
@@ -3058,12 +3173,13 @@ VK_API_PLATFORM_API_LIST
             submit_info.pNext = nullptr;
             // TODO: 未来应当支持等待多个信号量，例如延迟管线
             submit_info.waitSemaphoreCount = 1;
-            submit_info.pWaitSemaphores = &_vk_last_command_buffer_semaphore; 
+            submit_info.pWaitSemaphores = &_vk_last_command_buffer_semaphore;
             submit_info.pWaitDstStageMask = &_vk_wait_for_last_command_buffer_stage;
             submit_info.commandBufferCount = 1;
             submit_info.pCommandBuffers = &_vk_current_command_buffer;
 
-            auto new_semphore = _vk_command_buffer_allocator->allocate_semaphore();
+            auto new_semphore = _vk_command_buffer_allocator->allocate_semaphore(
+                _vk_current_swapchain_image_content);
 
             submit_info.signalSemaphoreCount = 1;
             submit_info.pSignalSemaphores = &new_semphore;
@@ -3073,9 +3189,10 @@ VK_API_PLATFORM_API_LIST
             {
                 jeecs::debug::logfatal("Failed to submit draw command buffer!");
             }
+            vkQueueWaitIdle(_vk_logic_device_graphic_queue);
 
             _vk_last_command_buffer_semaphore = new_semphore;
-            if (_vk_current_target_framebuffer == _vk_current_swapchain_framebuffer)
+            if (_vk_current_target_framebuffer == _vk_current_swapchain_image_content->m_framebuffer)
                 _vk_wait_for_last_command_buffer_stage =
                 VkPipelineStageFlagBits::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
             else
@@ -3085,14 +3202,14 @@ VK_API_PLATFORM_API_LIST
             _vk_current_target_framebuffer = nullptr;
             _vk_current_command_buffer = nullptr;
         }
-        void update()
+
+        void present()
         {
+            // Present last drawed frame. 
             if (_vk_presenting_swapchain_image_index != typing::INVALID_UINT32)
             {
-                vkQueueWaitIdle(_vk_logic_device_present_queue);
-
-                assert(_vk_current_swapchain_framebuffer ==
-                    _vk_swapchain_framebuffer[_vk_presenting_swapchain_image_index]);
+                assert(_vk_current_swapchain_image_content
+                    == _vk_swapchain_images[_vk_presenting_swapchain_image_index]);
 
                 VkSwapchainKHR swapchains[] = { _vk_swapchain };
                 VkPresentInfoKHR present_info = {};
@@ -3106,18 +3223,16 @@ VK_API_PLATFORM_API_LIST
                 present_info.pResults = nullptr;
 
                 vkQueuePresentKHR(_vk_logic_device_present_queue, &present_info);
-
-                _vk_dear_imgui_descriptor_set_allocator->flush_descriptor_set_allocator();
-                _vk_descriptor_set_allocator->flush_descriptor_set_allocator();
-                _vk_command_buffer_allocator->flush_command_buffer_allocator();
-
                 ++_vk_command_commit_round;
             }
+        }
 
+        void update()
+        {
             // 开始录制！
-            _vk_last_command_buffer_semaphore = 
-                _vk_command_buffer_allocator->allocate_semaphore();
-            _vk_wait_for_last_command_buffer_stage = 
+            _vk_last_command_buffer_semaphore =
+                _vk_command_buffer_allocator->allocate_semaphore(nullptr);
+            _vk_wait_for_last_command_buffer_stage =
                 VkPipelineStageFlagBits::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
             if (VkResult::VK_SUCCESS != vkAcquireNextImageKHR(
@@ -3131,20 +3246,24 @@ VK_API_PLATFORM_API_LIST
                 jeecs::debug::logfatal("Failed to acquire swap chain image.");
             }
 
-            _vk_current_swapchain_framebuffer =
-                _vk_swapchain_framebuffer[_vk_presenting_swapchain_image_index];
+            _vk_current_swapchain_image_content =
+                _vk_swapchain_images[_vk_presenting_swapchain_image_index];
+
+            _vk_current_swapchain_image_content->release_using_resources();
+
+            _vk_current_swapchain_image_content->use_semaphore(_vk_last_command_buffer_semaphore);
 
             assert(_vk_current_target_framebuffer == nullptr);
             assert(_vk_current_command_buffer == nullptr);
 
-            cmd_begin_frame_buffer(_vk_current_swapchain_framebuffer, 0, 0, 0, 0);
+            cmd_begin_frame_buffer(_vk_current_swapchain_image_content->m_framebuffer, 0, 0, 0, 0);
         }
         void late_update()
         {
-            assert(_vk_current_swapchain_framebuffer ==
-                _vk_swapchain_framebuffer[_vk_presenting_swapchain_image_index]);
+            assert(_vk_current_swapchain_image_content ==
+                _vk_swapchain_images[_vk_presenting_swapchain_image_index]);
 
-            cmd_begin_frame_buffer(_vk_current_swapchain_framebuffer, 0, 0, 0, 0);
+            cmd_begin_frame_buffer(_vk_current_swapchain_image_content->m_framebuffer, 0, 0, 0, 0);
 
             jegui_update_vk130(_vk_current_command_buffer);
 
@@ -3160,7 +3279,8 @@ VK_API_PLATFORM_API_LIST
             assert(_vk_current_command_buffer == nullptr);
 
             _vk_current_target_framebuffer = framebuf;
-            _vk_current_command_buffer = _vk_command_buffer_allocator->allocate_command_buffer();
+            _vk_current_command_buffer = _vk_command_buffer_allocator->allocate_command_buffer(
+                _vk_current_swapchain_image_content);
 
             begin_command_buffer_record(_vk_current_command_buffer);
 
@@ -3301,7 +3421,8 @@ VK_API_PLATFORM_API_LIST
                     _vk_current_binded_shader->get_last_usable_variable(this)->m_uniform_buffer);
             }
 
-            _vk_descriptor_set_allocator->apply_binding_work();
+            _vk_descriptor_set_allocator->apply_binding_work(
+                _vk_current_swapchain_image_content);
 
             vkCmdSetPrimitiveTopology(
                 _vk_current_command_buffer,
@@ -3342,8 +3463,8 @@ VK_API_PLATFORM_API_LIST
             init_info.PipelineCache = VK_NULL_HANDLE;
             init_info.DescriptorPool = _vk_dear_imgui_descriptor_pool;
             init_info.Allocator = nullptr;
-            init_info.MinImageCount = (uint32_t)_vk_swapchain_framebuffer.size();
-            init_info.ImageCount = (uint32_t)_vk_swapchain_framebuffer.size();
+            init_info.MinImageCount = (uint32_t)_vk_swapchain_images.size();
+            init_info.ImageCount = (uint32_t)_vk_swapchain_images.size();
             init_info.CheckVkResultFn = nullptr;
 
             auto cmdbuf = begin_temp_command_buffer_records();
@@ -3354,7 +3475,8 @@ VK_API_PLATFORM_API_LIST
                     auto vk11_texture = reinterpret_cast<jevk11_texture*>(res->m_handle.m_ptr);
                     auto desc_set = jegl_vk130_context::_vk_this_context
                         ->_vk_dear_imgui_descriptor_set_allocator
-                        ->allocate_descriptor_set();
+                        ->allocate_descriptor_set(
+                            jegl_vk130_context::_vk_this_context->_vk_current_swapchain_image_content);
 
                     // 更新set
                     VkWriteDescriptorSet write_desc_set = {};
@@ -3389,7 +3511,7 @@ VK_API_PLATFORM_API_LIST
                 },
                 _vk_jegl_interface->interface_handle(),
                 &init_info,
-                _vk_swapchain_framebuffer.front()->m_rendpass,
+                _vk_swapchain_images.front()->m_framebuffer->m_rendpass,
                 cmdbuf);
 
             end_temp_command_buffer_record(cmdbuf);
@@ -3551,6 +3673,9 @@ VK_API_PLATFORM_API_LIST
         case basic_interface::update_result::PAUSE:
             return jegl_graphic_api::update_action::SKIP;
         case basic_interface::update_result::RESIZE:
+            // Make present before swap chain recreation.
+            context->present();
+
             // Wait for device idle.
             vkDeviceWaitIdle(context->_vk_logic_device);
             jegui_shutdown_vk130(true);
@@ -3558,9 +3683,11 @@ VK_API_PLATFORM_API_LIST
                 context->_vk_jegl_interface->m_interface_width,
                 context->_vk_jegl_interface->m_interface_height);
             context->imgui_init();
-            /*fallthrough*/
-            [[fallthrough]];
+
+            context->update();
+            return jegl_graphic_api::update_action::CONTINUE;
         case basic_interface::update_result::NORMAL:
+            context->present();
             context->update();
             return jegl_graphic_api::update_action::CONTINUE;
         default:
@@ -3789,11 +3916,10 @@ VK_API_PLATFORM_API_LIST
 
         jevk11_framebuffer* target_framebuf;
         if (framebuf == nullptr)
-            target_framebuf = context->_vk_current_swapchain_framebuffer;
+            target_framebuf = context->_vk_current_swapchain_image_content->m_framebuffer;
         else
-        {
             target_framebuf = std::launder(reinterpret_cast<jevk11_framebuffer*>(framebuf->m_handle.m_ptr));
-        }
+
         context->cmd_begin_frame_buffer(target_framebuf, x, y, w, h);
     }
     void clear_framebuffer_color(jegl_context::userdata_t ctx, float color[4])
