@@ -3922,7 +3922,7 @@ namespace jeecs
             reference acquire()
             {
                 std::unique_lock g(m_singleton_mutex);
-                
+
                 if (0 == m_ref_count++)
                 {
                     // Create instance.
@@ -7704,16 +7704,16 @@ namespace jeecs
                 return nullptr;
             }
             static basic::resource<vertex> create(
-                jegl_vertex::type type, 
+                jegl_vertex::type type,
                 const void*       pdatas,
                 size_t            pdatalen,
                 const std::vector<uint32_t> idatas, // EBO Indexs
                 const std::vector<jegl_vertex::data_layout> fdatas)
             {
                 auto* res = jegl_create_vertex(
-                    type, 
+                    type,
                     pdatas, pdatalen,
-                    idatas.data(), idatas.size(), 
+                    idatas.data(), idatas.size(),
                     fdatas.data(), fdatas.size());
 
                 if (res != nullptr)
@@ -8684,7 +8684,7 @@ namespace jeecs
 
                 absoffset.x += w / 2.0f;
                 absoffset.y += h / 2.0f;
-                
+
                 ////////////////////////////////////
                 if (root_center & origin_center::left)
                     absoffset.x += -w / 2.0f;
@@ -8704,13 +8704,13 @@ namespace jeecs
                 }
                 if (elem_center & origin_center::right)
                 {
-                    absoffset.x += - abssize.x / 2.0f;
-                    center_offset.x = - abssize.x / 2.0f;
+                    absoffset.x += -abssize.x / 2.0f;
+                    center_offset.x = -abssize.x / 2.0f;
                 }
                 if (elem_center & origin_center::top)
                 {
                     absoffset.y += -abssize.y / 2.0f;
-                    center_offset.y = - abssize.y / 2.0f;
+                    center_offset.y = -abssize.y / 2.0f;
                 }
                 if (elem_center & origin_center::bottom)
                 {
@@ -8734,7 +8734,7 @@ namespace jeecs
                 math::vec2 absmouse = (mouse_view_pos + math::vec2(1.f, 1.f)) / 2.f * math::vec2(w, h);
                 get_layout(w, h, &absoffset, &abssize, nullptr);
 
-                const math::vec3 corrected_mouse_diff = 
+                const math::vec3 corrected_mouse_diff =
                     (math::quat::euler(0., 0., -rot_angle) * math::vec3(absmouse - absoffset));
 
                 const float absdiffx = abs(corrected_mouse_diff.x);
@@ -10095,7 +10095,95 @@ namespace jeecs
 
                 return minResult;
             }
-            intersect_result intersect_entity(const Transform::Translation& translation, const Renderer::Shape* entity_shape, float insRange = 0.0f) const
+            intersect_result intersect_mesh(
+                const basic::resource<graphic::vertex>& mesh,
+                const vec3& offset,
+                const quat& rotation,
+                const vec3& scale) const
+            {
+                jegl_vertex* raw_vertex_data = mesh->resouce()->m_raw_vertex_data;
+
+                intersect_result minResult = false;
+                minResult.distance = INFINITY;
+
+                switch (raw_vertex_data->m_type)
+                {
+                case jegl_vertex::type::TRIANGLES:
+                    for (size_t i = 0; i + 2 < raw_vertex_data->m_index_count; i += 3)
+                    {
+                        const float* point_0 =
+                            std::launder(reinterpret_cast<const float*>(
+                                (intptr_t)raw_vertex_data->m_vertexs
+                                + raw_vertex_data->m_data_size_per_point * i));
+                        const float* point_1 =
+                            std::launder(reinterpret_cast<const float*>(
+                                (intptr_t)raw_vertex_data->m_vertexs
+                                + raw_vertex_data->m_data_size_per_point * (i + 1)));
+                        const float* point_2 =
+                            std::launder(reinterpret_cast<const float*>(
+                                (intptr_t)raw_vertex_data->m_vertexs
+                                + raw_vertex_data->m_data_size_per_point * (i + 2)));
+
+                        vec3 triangle_point[3] = {
+                            {point_0[0], point_0[1], point_0[2]},
+                            {point_1[0], point_1[1], point_1[2]},
+                            {point_2[0], point_2[1], point_2[2]}
+                        };
+
+                        auto&& f = intersect_triangle(
+                            offset + rotation * triangle_point[0] * scale,
+                            offset + rotation * triangle_point[1] * scale,
+                            offset + rotation * triangle_point[2] * scale);
+
+                        if (f.intersected && f.distance < minResult.distance)
+                            minResult = f;
+                    }
+                    break;
+                case jegl_vertex::type::TRIANGLESTRIP:
+                {
+                    const float* point_0 =
+                        std::launder(reinterpret_cast<const float*>(
+                            (intptr_t)raw_vertex_data->m_vertexs));
+                    const float* point_1 =
+                        std::launder(reinterpret_cast<const float*>(
+                            (intptr_t)raw_vertex_data->m_vertexs + raw_vertex_data->m_data_size_per_point));
+
+                    vec3 triangle_point[3] = {
+                        {point_0[0], point_0[1], point_0[2]},
+                        {point_1[0], point_1[1], point_1[2]},
+                        {},
+                    };
+ 
+                    for (size_t i = 2; i < raw_vertex_data->m_index_count; ++i)
+                    {
+                        const float* point = std::launder(reinterpret_cast<const float*>(
+                            (intptr_t)raw_vertex_data->m_vertexs
+                            + raw_vertex_data->m_data_size_per_point * i));
+
+                        triangle_point[i % 3] = { point[0], point[1], point[2] };
+
+                        auto&& f = intersect_triangle(
+                            offset + rotation * triangle_point[0] * scale,
+                            offset + rotation * triangle_point[1] * scale,
+                            offset + rotation * triangle_point[2] * scale);
+
+                        if (f.intersected && f.distance < minResult.distance)
+                            minResult = f;
+                    }
+                    break;
+                }
+                default:
+                    // Support triangles only
+                    break;
+                }
+
+                return minResult;
+
+            }
+            intersect_result intersect_entity(
+                const Transform::Translation& translation, 
+                const Renderer::Shape* entity_shape,
+                bool consider_mesh = false) const
             {
                 vec3 entity_box_sz_max, entity_box_sz_min;
                 if (entity_shape && entity_shape->vertex != nullptr)
@@ -10126,7 +10214,6 @@ namespace jeecs
                 //rot and transform
                 for (int i = 0; i < 8; i++)
                     finalBoxPos[i] = mat4trans(translation.object2world, finalBoxPos[i]);
-
                 {
                     //front
                     {
@@ -10164,6 +10251,18 @@ namespace jeecs
                         if (f.intersected && f.distance < minResult.distance)
                             minResult = f;
                     }
+                }
+
+                if (minResult.intersected 
+                    && consider_mesh 
+                    && entity_shape != nullptr 
+                    && entity_shape->vertex != nullptr)
+                {
+                    return intersect_mesh(
+                        entity_shape->vertex, 
+                        translation.world_position, 
+                        translation.world_rotation, 
+                        translation.local_scale);
                 }
 
                 return minResult;
@@ -10264,7 +10363,7 @@ namespace jeecs
                     else
                         v->clear();
                 },
-                "fileresource_void", 
+                "fileresource_void",
                 "public using fileresource_void = struct{ public path: option<string> };");
 
             typing::register_script_parser<basic::fileresource<audio::buffer>>(
@@ -10288,8 +10387,8 @@ namespace jeecs
                         v->load(wo_string(result));
                     else
                         v->clear();
-                }, 
-                "fileresource_audio_buffer", 
+                },
+                "fileresource_audio_buffer",
                 "public using fileresource_audio_buffer = fileresource_void;");
 
             typing::register_script_parser<bool>(
