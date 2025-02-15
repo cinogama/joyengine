@@ -10183,7 +10183,7 @@ namespace jeecs
             intersect_result intersect_entity(
                 const Transform::Translation& translation, 
                 const Renderer::Shape* entity_shape,
-                bool consider_mesh = false) const
+                bool consider_mesh) const
             {
                 vec3 entity_box_sz_max, entity_box_sz_min;
                 if (entity_shape && entity_shape->vertex != nullptr)

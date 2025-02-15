@@ -1524,7 +1524,8 @@ WO_API wo_api wojeapi_towoo_ray_intersect_entity(wo_vm vm, wo_value args)
     auto result = ray->intersect_entity(
         wo_component<jeecs::Transform::Translation>(args + 1),
         wo_option_component<jeecs::Renderer::Shape>(args + 2),
-        wo_float(args + 3));
+        wo_bool(args + 3));
+
     if (result.intersected)
     {
         wo_set_vec3(s + 0, vm, result.place);
@@ -2275,7 +2276,11 @@ namespace je::towoo
         public func from(trans: Transform::Translation, proj: Camera::Projection, screen_pos: vec2, orth: bool)=> ray;
 
         extern("libjoyecs", "wojeapi_towoo_ray_intersect_entity")
-        public func intersect(self: ray, trans: Transform::Translation, shap: option<Renderer::Shape>, inrange: real)=> option<vec3>;
+        public func intersect(
+            self: ray, 
+            trans: Transform::Translation, 
+            shap: option<Renderer::Shape>,
+            consider_mesh: bool)=> option<vec3>;
 
         extern("libjoyecs", "wojeapi_towoo_ray_origin")
         public func origin(self: ray)=> vec3;

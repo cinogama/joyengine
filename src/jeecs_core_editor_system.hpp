@@ -389,7 +389,7 @@ namespace jeecs
 
             if (_inputs.l_buttom_pushed)
             {
-                auto result = _camera_ray.intersect_entity(trans, shape);
+                auto result = _camera_ray.intersect_entity(trans, shape, false);
 
                 if (result.intersected)
                     selected_list.insert(SelectedResult{ result.distance, entity });
@@ -767,7 +767,7 @@ public let frag =
             }
             else
             {
-                auto result = _camera_ray.intersect_entity(trans, shape);
+                auto result = _camera_ray.intersect_entity(trans, shape, false);
                 bool select_click = _inputs.l_buttom_pushed;
 
                 bool intersected = result.intersected;

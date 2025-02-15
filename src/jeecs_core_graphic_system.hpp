@@ -1078,7 +1078,8 @@ public func vert(v: vin)
     let shadow_scale_factor = je_color->w;
 
     let vpos = je_mv * vec4(v.vertex, 1.);
-    let shadow_vpos = normalize((vpos->xyz / vpos->w) - (light2d_vpos->xyz / light2d_vpos->w)) * shadow_scale_factor;
+    let vpos_light_diff = (vpos->xyz / vpos->w) - (light2d_vpos->xyz / light2d_vpos->w);
+    let shadow_vpos = vpos_light_diff / vpos_light_diff->z * shadow_scale_factor;
 
     let shadow_tiling_scale = je_local_scale->yz;
     let shadow_tiling_scale_apply_offset = 
