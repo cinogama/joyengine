@@ -5829,17 +5829,11 @@ namespace jeecs
         selector(game_system* game_sys)
             : m_system_instance(game_sys)
         {
-#ifndef NDEBUG
-            jeecs::debug::loginfo("New selector(%p) created.", this);
-#endif
         }
 
         ~selector()
         {
             m_dependence_caches.clear();
-#ifndef NDEBUG
-            jeecs::debug::loginfo("Selector(%p) closed.", this);
-#endif
         }
 
         inline void select_begin(game_world w)

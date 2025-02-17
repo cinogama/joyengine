@@ -1078,15 +1078,18 @@ public func vert(v: vin)
     let shadow_scale_factor = je_color->w;
 
     let vpos = je_mv * vec4(v.vertex, 1.);
-    let vlight_diff = (vpos->xyz / vpos->w) - (light2d_vpos->xyz / light2d_vpos->w);
-    let shadow_vpos = vlight_diff / (1. + vlight_diff->z) * shadow_scale_factor;
+    let vpos_light_diff = vpos->xyz / vpos->w - light2d_vpos->xyz / light2d_vpos->w;
+    let vpos_light_diff_z_abs =  abs(vpos_light_diff->z);
+    let shadow_offset_xy_z_abs = vec3(
+        vpos_light_diff->xy / (1. + vpos_light_diff_z_abs) * shadow_scale_factor, 
+        vpos_light_diff_z_abs);
 
     let shadow_tiling_scale = je_local_scale->yz;
     let shadow_tiling_scale_apply_offset = 
         (float2::const(0.5, 0.5) - v.uv) * 2. * (float2::one - shadow_tiling_scale);
 
     return v2f{
-        pos = je_p * vec4((vpos->xyz / vpos->w) + shadow_vpos, 1.),
+        pos = je_p * vec4((vpos->xyz / vpos->w) + shadow_offset_xy_z_abs, 1.),
         uv = uvtrans(v.uv, je_tiling, je_offset) + shadow_tiling_scale_apply_offset,
     };
 }
