@@ -25,8 +25,8 @@ func copy_all_licenses()
             for (let p : subpath_of_3rd)
             {
                 if (isfile(p) && (
-                    filename(p)->lower->find("license") != -1
-                    || filename(p)->lower->find("copying") != -1))
+                    filename(p)->lower->find("license")->is_value
+                    || filename(p)->lower->find("copying")->is_value))
                 {
                     let relpath = p->tostring()->sub(third_party_located_path->tostring->len);
 
