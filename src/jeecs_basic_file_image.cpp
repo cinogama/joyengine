@@ -50,10 +50,8 @@ struct fimg_data
 {
     fimg_image_head fimg_head;
 
-
     std::string path;
     std::map<std::string, fimg_img_index> file_map;
-
 };
 using fimg_img = fimg_data;
 

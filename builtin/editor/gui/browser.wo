@@ -15,7 +15,7 @@ namespace editor::gui
     func _wrap_path(path: string)
     {
         // 根据不同平台，如果路径包含空白分割字符或需要在shell里转义的字符什么的，这里包一下
-        if (path->find(" ") != -1 || path->find("\t") != -1)
+        if (path->find(" ")->is_value || path->find("\t")->is_value)
             return F"\"{path}\"";
         return path;
     }
@@ -36,7 +36,7 @@ namespace editor::gui
             return;
         }
 
-        let create_context = (mut default_name, mut "Helloworld", mut 0, mut 16);
+        let create_context = (mut default_name, mut "Helloworld", mut option::none: option<int>, mut 16);
         launch(func(){
             let mut open = true;
             je::gui::SetNextWindowSizeConstraints((350., 200.), (350., 200.));
@@ -49,7 +49,7 @@ namespace editor::gui
 
                 Text("字体");
                 SameLine();
-                do Combo("##fontname", fonts, create_context[2])->>\id = create_context[2] = id;;
+                create_context[2] = Combo("##fontname", fonts, create_context[2]);
                 SameLine();
                 do InputInt("##fontsize", create_context[3])->>func(new_size){
                     if (new_size > 0)
@@ -60,9 +60,9 @@ namespace editor::gui
                 create_context[1] = InputTextMultilineSize("##imagetext", create_context[1], w, h - 30.)
                     ->or(create_context[1]);
 
-                if (Button("创建"))
+                if (create_context[2]->is_value && Button("创建"))
                 {
-                    match (je::graphic::font::load(fonts[create_context[2]], create_context[3]))
+                    match (je::graphic::font::load(fonts[create_context[2]->unwrap], create_context[3]))
                     {
                     value(font_instance)?
                         {
@@ -84,7 +84,7 @@ namespace editor::gui
                             }
                         }
                     none?
-                        jeapi::gui::form::errmsg("失败", F"无法打开纹理：{fonts[create_context[2]]}");
+                        jeapi::gui::form::errmsg("失败", F"无法打开字体：{fonts[create_context[2]->unwrap]}");
                     } 
                 }
                 SameLine();
@@ -188,7 +188,7 @@ namespace editor::gui
             = je::graphic::texture::load(option::none, F"!/builtin/icon/File.png")->unwrap;
 
         let mut icon = FILE_TYPE_ICONS->get(_path.externname);
-        if (IMAGE_FILE_EXTERN_NAMES->find(_path.externname) != -1)
+        if (IMAGE_FILE_EXTERN_NAMES->find(_path.externname)->is_value)
         {
             if (!cached_image_file_mip_map->contain(_path.path))
             {
@@ -243,7 +243,7 @@ namespace editor::gui
             
             if (editor_need_hiding_file)
             {
-                return HIDING_FILE_TYPE->find(self.externname) != -1
+                return HIDING_FILE_TYPE->find(self.externname)->is_value
                     || self.name->begin_with(".");
             }
             return false;
@@ -1051,7 +1051,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
     func file_item_menu(path: PathInfo, context: EditorContext)
     {
         let NOT_MODIFIABLE_FILES = [".je4project", ".je4module"];
-        let is_modifiable_file = NOT_MODIFIABLE_FILES->find(path.externname) == -1;
+        let is_modifiable_file = NOT_MODIFIABLE_FILES->find(path.externname)->is_none;
 
         if (path.externname == ".shader")
         {
@@ -1119,7 +1119,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
                             jeapi::gui::form::ask("确认移除组件？", F"是否从模块{fsys::filename(path.path)}中移除组件{s}?",
                                 func(sure: bool){
                                     if (!sure) return;
-                                    do components->remove(components->find(s));
+                                    do components->find(s)->> \idx = components->remove(idx);;
                                     do fsys::remove(file_path)->unwrap;
                                 });
                         EndPopup();
@@ -1140,7 +1140,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
                                 func(sure: bool){
                                     if (!sure) return;
 
-                                    do systems->remove(systems->find(s));
+                                    do systems->find(s)->> \idx = systems->remove(idx);;
                                     do fsys::remove(path.path/"systems"/F"{s}.hpp")->unwrap;
                                     do fsys::remove(file_path)->unwrap;
                                 });
@@ -1164,7 +1164,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
                                         jeapi::gui::form::input("创建新系统", F"为模块{fsys::filename(path.path)}创建系统", "NewSystem",
                                             func(name: string)
                                             {
-                                                if (systems->find(name) != -1)
+                                                if (systems->find(name)->is_value)
                                                 {
                                                     jeapi::gui::form::errmsg("创建系统失败", F"模块{fsys::filename(path.path)}已经存在一个同名系统");
                                                     return;
@@ -1254,7 +1254,7 @@ namespace $$MODULE_NAME$$
                                         jeapi::gui::form::input("创建新组件", F"为模块{fsys::filename(path.path)}创建组件", "NewComponent",
                                             func(name: string)
                                             {
-                                                if (components->find(name) != -1)
+                                                if (components->find(name)->is_value)
                                                 {
                                                     jeapi::gui::form::errmsg("创建组件失败", F"模块{fsys::filename(path.path)}已经存在一个同名组件");
                                                     return;
@@ -1344,7 +1344,7 @@ namespace $$MODULE_NAME$$
             }
             Separator();
         }    
-        else if (IMAGE_FILE_EXTERN_NAMES->find(path.externname) != -1)
+        else if (IMAGE_FILE_EXTERN_NAMES->find(path.externname)->is_value)
         {
             // 是图片，在这里编辑图片的采用方法等数据
             if (MenuItem(F"更新此纹理"))
@@ -1542,7 +1542,7 @@ namespace $$MODULE_NAME$$
                         {
                             BeginTooltip();
                             Text(fsys::filename(item.path));
-                            if (IMAGE_FILE_EXTERN_NAMES->find(item.externname) != -1)
+                            if (IMAGE_FILE_EXTERN_NAMES->find(item.externname)->is_value)
                             {
                                 let tex = get_file_icon_by_extern_name(item, context);
                                 let (w, h) = tex->size;

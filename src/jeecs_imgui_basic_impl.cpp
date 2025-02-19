@@ -434,7 +434,7 @@ R"(
     public func InputTextMultilineSize(label:string, buffer: string, width:real, height:real)=> option<string>;
 
     extern("libjoyecs", "je_gui_combo")
-    public func Combo(label:string, items: array<string>, select_item: int)=> option<int>;
+    public func Combo(label:string, items: array<string>, select_item: option<int>)=> option<int>;
 
     extern("libjoyecs", "je_gui_end_menu")
     public func EndMenu()=> void;
@@ -2513,7 +2513,11 @@ WO_API wo_api je_gui_combo(wo_vm vm, wo_value args)
         wo_arr_get(elem, args + 1, i);
         combo_items.push_back(wo_string(elem));
     }
-    int current_item = (int)wo_int(args + 2);
+
+    int current_item = -1;
+    if (wo_option_get(elem, args + 2))
+        current_item = (int)wo_int(elem);
+
     auto updated = ImGui::Combo(wo_string(args + 0), &current_item, combo_items.data(), (int)combo_items.size());
 
     if (updated)

@@ -117,10 +117,12 @@ namespace editor::gui::edit_forms
             match(je::typeinfo::load(type_name))
             {
                 value(type)?
-                    if (context.not_append_types->find(type) == -1)
+                    if (context.not_append_types->find(type)->is_none)
                     {
                         context.not_append_types->add(type);
-                        do context.has_append_types->remove(context.has_append_types->find(type));
+                        do context.has_append_types->find(type)
+                            ->> \idx = context.has_append_types->remove(idx);
+                            ;
                     }
                 none?
                     je::logfatal("Cannot find component type named: ", type_name);
@@ -132,10 +134,12 @@ namespace editor::gui::edit_forms
             match(je::typeinfo::load(type_name))
             {
                 value(type)?
-                    if (context.has_append_types->find(type) == -1)
+                    if (context.has_append_types->find(type)->is_none)
                     {
                         context.has_append_types->add(type);
-                        do context.not_append_types->remove(context.not_append_types->find(type));
+                        do context.not_append_types->find(type)
+                            ->> \idx = context.not_append_types->remove(idx);
+                            ;
                     }
                 none?
                     je::logfatal("Cannot find component type named: ", type_name);
@@ -155,11 +159,13 @@ namespace editor::gui::edit_forms
 
     func _get_entity_name_and_scope(typename: string)
     {
-        let rfnd = typename->rfind(":");
-        if (rfnd == -1)
+        match (typename->rfind(":"))
+        {
+        value(idx)?
+            return (typename->sub(idx + 1), typename->sub_len(0, idx - 1));
+        none?
             return (typename, "");
-        else
-            return (typename->sub(rfnd + 1), typename->sub_len(0, rfnd - 1));
+        }
     }
 
     func show_component(typename: string, scopename: string, purename: string)

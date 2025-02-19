@@ -326,7 +326,7 @@ namespace jeapi::gui
                 try! outpin = self.outputpins->get(b);
 
                 // 检查成环的思路是，检查输出节点b是否作为输入节点a的输入节点
-                if (self->_collect_depend_nodes(inputnode)->find(outpin.nodeid) != -1)
+                if (self->_collect_depend_nodes(inputnode)->find(outpin.nodeid)->is_value)
                     return_value! true;
 
                 return_value! false;
@@ -770,7 +770,9 @@ namespace jeapi::gui
                             match (self.outputpins->get(bid))
                             {
                             value(outpin)?
-                                do outpin.linked_pins->remove(outpin.linked_pins->find(aid));
+                                do outpin.linked_pins->find(aid)
+                                    ->> \idx = outpin.linked_pins->remove(idx);
+                                    ;
                             none?;
                             }
                         }
@@ -848,8 +850,8 @@ namespace jeapi::gui
                 {
                 Node(info)?
                     if (isinput 
-                        ? info.output_types->find(typename) != -1
-                        | info.input_types->find(typename) != -1)
+                        ? info.output_types->find(typename)->is_value
+                        | info.input_types->find(typename)->is_value)
                         result->set(name, item);
                 Dict(subd)?
                     {
@@ -915,7 +917,7 @@ namespace jeapi::gui
         }
         func __collect_input_way_nodes(self: node_editor, node: _Node, out: vec<_Node>)
         {
-            if (out->find(node) == -1)
+            if (out->find(node)->is_none)
             {
                 for (let inpin : node.inputs)
                 {

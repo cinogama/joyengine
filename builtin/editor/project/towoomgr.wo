@@ -29,10 +29,13 @@ namespace editor
         }
         public func pure_component_or_system_name(name: string)
         {
-            let idx = name->find(".");
-            if (idx == -1)
+            match (name->find("."))
+            {
+            value(idx)?
+                return name->sub_len(0, idx);
+            none?
                 return name;
-            return name->sub_len(0, idx);
+            }
         }
         func fetch_file(self: ToWooContext, type: string)
         {

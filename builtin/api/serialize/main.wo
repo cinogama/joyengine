@@ -346,7 +346,7 @@ namespace jeapi
                             ["components"] = m: dynamic,
                             // 如果纹理是内置的，也就是说这个纹理实际上没有路径，那么跳过它
                             ["textures"] = saving_entity->get_entity_texture_passes
-                                =>> \k, v = used_texture_id_pass->find(k) != -1 && v->is_value 
+                                =>> \k, v = used_texture_id_pass->find(k)->is_value && v->is_value 
                                     ? {[k] = v->unwrap} 
                                     | {}
                                     ; 

@@ -113,11 +113,15 @@ namespace editor::gui::edit_forms
             match(je::typeinfo::load(type_name))
             {
             value(type)?
-                if (self.has_active_types->find(type) == -1)
+                if (self.has_active_types->find(type)->is_none)
                 {
                     self.has_active_types->add(type);
-                    do self.not_append_types->remove(self.not_append_types->find(type));
-                    do self.has_append_types->remove(self.has_append_types->find(type));
+                    do self.not_append_types->find(type)
+                        ->> \idx = self.not_append_types->remove(idx);
+                        ;
+                    do self.has_append_types->find(type)
+                        ->> \idx = self.has_append_types->remove(idx);
+                        ;
                 }
             none?
                 je::logfatal("没有找到系统: ", type_name);
@@ -129,11 +133,15 @@ namespace editor::gui::edit_forms
             match(je::typeinfo::load(type_name))
             {
             value(type)?
-                if (self.not_append_types->find(type) == -1)
+                if (self.not_append_types->find(type)->is_none)
                 {
                     self.not_append_types->add(type);
-                    do self.has_append_types->remove(self.has_append_types->find(type));
-                    do self.has_active_types->remove(self.has_active_types->find(type));
+                    do self.has_append_types->find(type)
+                        ->> \idx = self.has_append_types->remove(idx);
+                        ;
+                    do self.has_active_types->find(type)
+                        ->> \idx = self.has_active_types->remove(idx);
+                        ;
                 }
             none?
                 je::logfatal("没有找到系统: ", type_name);
@@ -145,11 +153,15 @@ namespace editor::gui::edit_forms
             match(je::typeinfo::load(type_name))
             {
             value(type)?
-                if (self.has_append_types->find(type) == -1)
+                if (self.has_append_types->find(type)->is_none)
                 {
                     self.has_append_types->add(type);
-                    do self.not_append_types->remove(self.not_append_types->find(type));
-                    do self.has_active_types->remove(self.has_active_types->find(type));
+                    do self.not_append_types->find(type)
+                        ->> \idx = self.not_append_types->remove(idx);
+                        ;
+                    do self.has_active_types->find(type)
+                        ->> \idx = self.has_active_types->remove(idx);
+                        ;
                 }
             none?
                 je::logfatal("没有找到系统: ", type_name);
@@ -328,13 +340,13 @@ namespace editor::gui::edit_forms
 
                             // 当前世界中还没有这个系统，立即添加
                             do world_context.has_active_types
-                                ->forall(\t: je::typeinfo=active_systems->find(t) == -1;)
+                                ->forall(\t: je::typeinfo=active_systems->find(t)->is_none;)
                                 ->map(\t: je::typeinfo=world->add_system(t););
 
                             // 系统被移除
                             do active_systems
-                                ->forall(\t: je::typeinfo = world_context.not_append_types->find(t) != -1 
-                                                        || world_context.has_append_types->find(t) != -1;)
+                                ->forall(\t: je::typeinfo = world_context.not_append_types->find(t)->is_value 
+                                                        || world_context.has_append_types->find(t)->is_value;)
                                 ->map(\t: je::typeinfo=world->remove_system(t););
                             world->set_name(world_context.name);
                         }

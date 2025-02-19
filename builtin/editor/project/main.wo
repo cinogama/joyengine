@@ -838,7 +838,7 @@ namespace editor
                     let loc = self->get_vfile_export_path();
                     for (let (name, content) : je::woolang::get_all_internal_scripts())
                     {
-                        if (name->find(":") != -1 || name->find("@") != -1 || name->find("!") != -1)
+                        if (name->find(":")->is_value || name->find("@")->is_value || name->find("!")->is_value)
                             continue;
 
                         let path = loc / name;
@@ -1167,7 +1167,9 @@ namespace editor
                     self->get_editing_world->>\rw = rw == world;->or(false);
                
                 // NOTE: 必须在切换完成之后才能从世界列表中移除世界，否则无法正确获取编辑中的世界
-                do self.m_worlds->remove(self.m_worlds->find(w));
+                do self.m_worlds->find(w)
+                    ->> \idx = self.m_worlds->remove(idx);
+                    ;
 
                 // 如果还有世界，那么选择第一个作为编辑中世界顶替
                 self.m_worlds->get(0)

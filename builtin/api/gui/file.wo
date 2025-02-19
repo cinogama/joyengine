@@ -47,7 +47,7 @@ namespace jeapi::gui::widget
     {
         using je::gui;
 
-        let fnd = name->find("##");
+        let fnd = name->find("##")->or(-1);
 
         Text(fnd == -1 ? name | name->sub_len(0, fnd));
         SameLine();

@@ -15,7 +15,11 @@ namespace jeapi::loader
     {
         func _get_located_path(path: string)
         {
-            return path->sub_len(0, path->rfind("/") + 1);
+            match (path->rfind("/"))
+            {
+            value(idx)? return path->sub_len(0, idx + 1);
+            none? return "";
+            }
         }
 
         using chunk = struct{
@@ -178,7 +182,7 @@ namespace jeapi::loader
 
         public func create(path: string)
         {
-            let parent_path = path->sub_len(0, path->rfind("/") + 1);
+            let parent_path = _get_located_path(path);
             match (file::readall(path)=>>\dat = dat->dict::deserialize;)
             {
             value(dat)?
