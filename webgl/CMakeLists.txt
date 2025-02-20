@@ -37,9 +37,18 @@ target_link_libraries(joyengineecs4w
         PRIVATE woolang)
 
 # Use wasm64
+file(GLOB PRELOAD_FILES 
+        RELATIVE 
+        "${CMAKE_CURRENT_SOURCE_DIR}/preloads"
+        "${CMAKE_CURRENT_SOURCE_DIR}/preloads/*")
+set(PRELOAD_FLAGS "")
 
+foreach(file ${PRELOAD_FILES})
+    set(PRELOAD_FLAGS 
+    "${PRELOAD_FLAGS} --preload-file preloads/${file}@/${file}")
+endforeach()
 
 set_target_properties(joyengineecs4w PROPERTIES
         SUFFIX ".html"
         OUTPUT_NAME "index"
-        LINK_FLAGS "-s WASM=1 -s USE_PTHREADS=1 -s SHARED_MEMORY=1 -s PTHREAD_POOL_SIZE=16 -s USE_WEBGL2=1 -s USE_GLFW=3 -s ALLOW_MEMORY_GROWTH -s STACK_SIZE=4194304")
+        LINK_FLAGS "-s WASM=1 -s USE_PTHREADS=1 -s SHARED_MEMORY=1 -s PTHREAD_POOL_SIZE=16 -s USE_WEBGL2=1 -s USE_GLFW=3 -s ALLOW_MEMORY_GROWTH -s STACK_SIZE=4194304 ${PRELOAD_FLAGS}")
