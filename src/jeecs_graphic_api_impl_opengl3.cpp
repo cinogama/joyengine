@@ -2,7 +2,8 @@
 #include "jeecs.hpp"
 
 #if defined(JE_ENABLE_GL330_GAPI) \
- || defined(JE_ENABLE_GLES300_GAPI)
+ || defined(JE_ENABLE_GLES300_GAPI) \
+ || defined(JE_ENABLE_WEBGL20_GAPI)
 
 #include "jeecs_imgui_backend_api.hpp"
 
@@ -12,6 +13,8 @@
 #   else
 #       include <GLES3/gl3.h>
 #   endif
+#elif defined(JE_ENABLE_WEBGL20_GAPI)
+#   include <GLES3/gl3.h>
 #else
 #   include <GL/glew.h>
 #endif

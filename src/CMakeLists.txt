@@ -65,7 +65,7 @@ set(imgui_srcs
 
 # JoyEngine Graphic API support list.
 # OpenGL 3.3 & OpenGLES 3.2
-if (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES300_GAPI)
+if (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES300_GAPI OR JE4_ENABLE_WEBGL20_GAPI)
     if (JE4_ENABLE_OPENGL330_GAPI)
         target_compile_definitions(joyengine_core_configs INTERFACE -DJE_ENABLE_GL330_GAPI)
 
@@ -77,8 +77,7 @@ if (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES300_GAPI)
         endif()
         
         list(APPEND jeecs_graphic_libs glew_s)
-        
-    else()
+    elseif (JE4_ENABLE_OPENGLES300_GAPI)
         target_compile_definitions(joyengine_core_configs INTERFACE -DJE_ENABLE_GLES300_GAPI)
         target_compile_definitions(joyengine_core_configs INTERFACE -DIMGUI_IMPL_OPENGL_ES3)
 
@@ -94,7 +93,9 @@ if (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES300_GAPI)
             endif()
             list(APPEND jeecs_graphic_libs EGL)
         endif()
-
+    else()
+        target_compile_definitions(joyengine_core_configs INTERFACE -DJE_ENABLE_WEBGL20_GAPI)
+        target_compile_definitions(joyengine_core_configs INTERFACE -DIMGUI_IMPL_OPENGL_ES3)
     endif()
 
     list(APPEND imgui_srcs
@@ -137,6 +138,7 @@ endif()
 if (JE4_ENABLE_OPENGL330_GAPI OR 
     JE4_ENABLE_OPENGLES300_GAPI OR 
     JE4_ENABLE_VULKAN130_GAPI OR
+    JE4_ENABLE_WEBGL20_GAPI OR
     JE4_ENABLE_DX11_GAPI)
 
     if (ANDROID)
@@ -144,13 +146,17 @@ if (JE4_ENABLE_OPENGL330_GAPI OR
             "../3rd/imgui/backends/imgui_impl_android.cpp"
             "../3rd/imgui/backends/imgui_impl_android.h")
     else()
-        include_directories("../3rd/glfw/include")
+        # Use built-in glfw3 for webgl target.
+        if (NOT JE4_ENABLE_WEBGL20_GAPI)
+            include_directories("../3rd/glfw/include")
     
-        if (NOT WIN32)
-            target_compile_options(glfw PRIVATE -fPIC)
-        endif()
+            if (NOT WIN32)
+                target_compile_options(glfw PRIVATE -fPIC)
+            endif()
 
-        list(APPEND jeecs_graphic_libs glfw)
+            list(APPEND jeecs_graphic_libs glfw)
+        endif()
+        
         list(APPEND imgui_srcs
             "../3rd/imgui/backends/imgui_impl_glfw.cpp"
             "../3rd/imgui/backends/imgui_impl_glfw.h")

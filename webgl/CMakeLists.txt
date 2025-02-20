@@ -38,4 +38,4 @@ target_link_libraries(joyengineecs4w
 set_target_properties(joyengineecs4w PROPERTIES
         SUFFIX ".html"
         OUTPUT_NAME "index"
-        LINK_FLAGS "-s WASM=1")
+        LINK_FLAGS "-s WASM=1 -s USE_WEBGL2=1 -s USE_GLFW=3")
