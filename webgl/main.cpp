@@ -43,8 +43,6 @@ int main(int argc, char** argv)
 {
     je_init(argc, argv);
 
-    je_finish();
-
     // 创建全局上下文，并在当前上下文上以默认配置创建统一图形接口
     game_universe u = game_universe::create_universe();
     jegl_register_sync_thread_callback([](jegl_context* gthread, void* pgthread) {}, nullptr);

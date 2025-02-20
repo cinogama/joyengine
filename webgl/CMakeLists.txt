@@ -18,8 +18,10 @@ set(JE4_ENABLE_METAL_GAPI               OFF CACHE BOOL "Disable Metal on WebGL" 
 set(JE4_WASM_TARGET                     ON CACHE BOOL "Enable WASM target" FORCE)
 
 set(WO_SUPPORT_ASMJIT                   OFF CACHE BOOL "Disable JIT on WebGL" FORCE)
-set(WO_DISABLE_DYNAMIC_LIB_LOADING      ON CACHE BOOL "Disable dynamic lib loading" FORCE)
+set(WO_DISABLE_FUNCTION_FOR_WASM        ON CACHE BOOL "Disable dynamic lib loading" FORCE)
 set(BOX2D_AVX2                          OFF CACHE BOOL "Disable avx2 for box2d." FORCE)
+
+add_compile_options(-pthread)
 
 # Searches for a package provided by the game activity dependency
 set(JE4WEBGL_PATH "./../")
@@ -34,8 +36,9 @@ target_link_libraries(joyengineecs4w
         PUBLIC joyecs
         PRIVATE woolang)
 
-# -s WASM=1 -o index.html
+# Use wasm64
+
 set_target_properties(joyengineecs4w PROPERTIES
         SUFFIX ".html"
         OUTPUT_NAME "index"
-        LINK_FLAGS "-s WASM=1 -s USE_WEBGL2=1 -s USE_GLFW=3")
+        LINK_FLAGS "-s WASM=1 -s USE_PTHREADS=1 -s SHARED_MEMORY=1 -s PTHREAD_POOL_SIZE=16 -s USE_WEBGL2=1 -s USE_GLFW=3 -s ALLOW_MEMORY_GROWTH -s STACK_SIZE=4194304")

@@ -1,6 +1,6 @@
 set emcmake_path=emcmake
 
-call "%emcmake_path%" cmake .
+call "%emcmake_path%" cmake . -DCMAKE_BUILD_TYPE=DEBUG
 @REM Check if cmake failed
 if %errorlevel% neq 0 exit /b %errorlevel%
 
