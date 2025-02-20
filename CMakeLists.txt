@@ -107,6 +107,9 @@ endif()
 if (JE4_ENABLE_OPENGLES300_GAPI AND WIN32)
     list(APPEND JE4_BUILD_SCRIPT_CMDS "-gles-win32")
 endif()
+if (JE4_ENABLE_WEBGL20_GAPI)
+    list(APPEND JE4_BUILD_SCRIPT_CMDS "-webgl")
+endif()
 
 ##############################################################################
 # Execute build work script.

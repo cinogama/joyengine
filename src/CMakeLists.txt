@@ -146,10 +146,10 @@ if (JE4_ENABLE_OPENGL330_GAPI OR
             "../3rd/imgui/backends/imgui_impl_android.cpp"
             "../3rd/imgui/backends/imgui_impl_android.h")
     else()
-        # Use built-in glfw3 for webgl target.
+        include_directories("../3rd/glfw/include")
+
         if (NOT JE4_ENABLE_WEBGL20_GAPI)
-            include_directories("../3rd/glfw/include")
-    
+            # Use built-in glfw3 for webgl target, so we don't need to build glfw3.
             if (NOT WIN32)
                 target_compile_options(glfw PRIVATE -fPIC)
             endif()
