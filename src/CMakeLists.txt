@@ -7,7 +7,6 @@ include_directories("../3rd/imgui")
 include_directories("../3rd/imgui/backends")
 include_directories("../3rd/imgui/misc/cpp")
 include_directories("../3rd/box2c/include")
-include_directories("../3rd/openal-soft/include")
 include_directories("../3rd/assimp/include")
 include_directories("../3rd/vulkan/include")
 include_directories("../3rd/glslang/glslang/Include")
@@ -15,6 +14,7 @@ include_directories("../3rd/glslang/glslang/Public")
 include_directories("../3rd/spirv-cross")
 include_directories("../3rd/imgui-node-editor")
 include_directories("../3rd/ImGuiColorTextEdit")
+include_directories("../3rd/openal-soft/include")
 
 file(GLOB_RECURSE joyecs_srcs_cpp *.cpp)
 file(GLOB_RECURSE joyecs_srcs_hpp *.hpp)
@@ -203,9 +203,17 @@ target_link_libraries(joyecs
     PRIVATE ${JE4_STATIC_LINKED_PKG_AND_MODULE_LIST}
     PRIVATE woolang
     PRIVATE box2d 
-    PRIVATE OpenAL 
     PRIVATE assimp 
     PRIVATE glslang
     PRIVATE SPIRV 
     # PRIVATE spirv-cross-c
     PRIVATE glslang-default-resource-limits)
+
+if (JE4_WASM_TARGET)
+    # Use emscripten openal for wasm target.
+    # https://emscripten.org/docs/porting/Audio.html 
+    target_link_libraries(joyecs PRIVATE openal)
+else()
+    target_link_libraries(joyecs PRIVATE OpenAL)
+endif()
+

@@ -14,6 +14,7 @@ set(JE4_BUILD_SHARED_CORE               OFF CACHE BOOL "Disable static engine co
 set(JE4_ENABLE_DX11_GAPI                OFF CACHE BOOL "Disable DX11 on Android" FORCE)
 set(JE4_ENABLE_OPENGL330_GAPI           OFF CACHE BOOL "Disable OpenGL 3.3 on Android" FORCE)
 set(JE4_ENABLE_OPENGLES300_GAPI         ON CACHE BOOL "Enable OpenGLES 3.0 on Android" FORCE)
+set(JE4_ENABLE_WEBGL20_GAPI             OFF CACHE BOOL "Disable WebGL 2.0 on Android" FORCE)
 set(JE4_ENABLE_VULKAN130_GAPI           OFF CACHE BOOL "Disable Vulkan1.3 on Android" FORCE)
 set(JE4_ENABLE_METAL_GAPI               OFF CACHE BOOL "Disable Metal on Android" FORCE)
 
