@@ -15,7 +15,10 @@ set(JE4_ENABLE_WEBGL20_GAPI             ON CACHE BOOL "Disable WebGL 2.0 on WebG
 set(JE4_ENABLE_VULKAN130_GAPI           OFF CACHE BOOL "Disable Vulkan1.3 on WebGL" FORCE)
 set(JE4_ENABLE_METAL_GAPI               OFF CACHE BOOL "Disable Metal on WebGL" FORCE)
 
+set(JE4_WASM_TARGET                     ON CACHE BOOL "Enable WASM target" FORCE)
+
 set(WO_SUPPORT_ASMJIT                   OFF CACHE BOOL "Disable JIT on WebGL" FORCE)
+set(WO_DISABLE_DYNAMIC_LIB_LOADING      ON CACHE BOOL "Disable dynamic lib loading" FORCE)
 set(BOX2D_AVX2                          OFF CACHE BOOL "Disable avx2 for box2d." FORCE)
 
 # Searches for a package provided by the game activity dependency
@@ -31,5 +34,8 @@ target_link_libraries(joyengineecs4w
         PUBLIC joyecs
         PRIVATE woolang)
 
-target_compile_options(joyengineecs4w
-    PRIVATE -s WASM=1 -o index.html)
+# -s WASM=1 -o index.html
+set_target_properties(joyengineecs4w PROPERTIES
+        SUFFIX ".html"
+        OUTPUT_NAME "index"
+        LINK_FLAGS "-s WASM=1")

@@ -192,6 +192,15 @@ if (JE4_STATIC_LINK_MODULE_AND_PKGS)
 
         if (EXISTS "${pkg_fullpath}/CMakeLists.txt")
             message(STATUS "Woolang package named: ${pkg_name} found!")
+
+            if (JE4_WASM_TARGET AND (
+                ("${pkg_name}" STREQUAL "socket")
+                OR ("${pkg_name}" STREQUAL "process")
+            ))
+                message(STATUS "Woolang package named: ${pkg_name} is not supported on WASM target.")
+                continue()
+            endif()
+            
             add_subdirectory("${pkg_fullpath}")
 
             if (TARGET ${pkg_name})

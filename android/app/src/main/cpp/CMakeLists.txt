@@ -18,7 +18,10 @@ set(JE4_ENABLE_WEBGL20_GAPI             OFF CACHE BOOL "Disable WebGL 2.0 on And
 set(JE4_ENABLE_VULKAN130_GAPI           OFF CACHE BOOL "Disable Vulkan1.3 on Android" FORCE)
 set(JE4_ENABLE_METAL_GAPI               OFF CACHE BOOL "Disable Metal on Android" FORCE)
 
+set(JE4_WASM_TARGET                     OFF CACHE BOOL "Disable WASM target" FORCE)
+
 set(WO_SUPPORT_ASMJIT                   OFF CACHE BOOL "Disable JIT on Android" FORCE)
+set(WO_DISABLE_DYNAMIC_LIB_LOADING      ON CACHE BOOL "Disable dynamic lib loading" FORCE)
 set(BOX2D_AVX2                          OFF CACHE BOOL "Disable avx2 for box2d." FORCE)
 
 # Searches for a package provided by the game activity dependency
