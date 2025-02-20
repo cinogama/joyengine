@@ -9,21 +9,40 @@
 #include "jeecs.hpp"
 
 #include <cmath>
+#include <optional>
 
 using namespace jeecs;
 
+std::optional<game_universe> u;
 basic::resource<graphic::vertex> g_vertex;
 basic::resource<graphic::shader> g_shader;
+basic::resource<graphic::uniformbuffer> g_ubo;
 
+graphic_uhost* g_uhost = nullptr;
 jegl_context* g_gthread = nullptr;
 rendchain_branch* g_branch = nullptr;
 uint32_t* g_factor_uniform_location = nullptr;
 
+bool g_interface = false;
+
 void webgl_rend_job_callback()
 {
+    if (! g_interface)
+    {
+        g_interface = true;
+
+        // 初始化图形接口
+        jegl_sync_init(g_gthread, false);
+
+        // 循环图形更新，直到图形接口退出
+        g_factor_uniform_location = 
+            g_shader->get_uniform_location_as_builtin("factor");
+    }
+
     jegl_branch_new_frame(g_branch, 0);
 
     auto* rchain = jegl_branch_new_chain(g_branch, nullptr, 0, 0, 0, 0);
+    jegl_rchain_bind_uniform_buffer(rchain, g_ubo->resouce());
 
     const float clearcolor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
     jegl_rchain_clear_color_buffer(rchain, clearcolor);
@@ -36,7 +55,19 @@ void webgl_rend_job_callback()
         (float)(sin(je_clock_time()) + 1.) / 2.f);
 
     if (jegl_sync_update(g_gthread) != jegl_sync_state::JEGL_SYNC_COMPLETE)
+    {
+        // 离开循环之后，关闭branch，然后再宣告图形接口工作结束
+        // NOTE: Branch 被要求在 uhost 释放之前释放，而 uhost 释放会等待
+        //       图形线程完成结束，因此此处为了保证正确释放资源，需要在
+        //       jegl_sync_shutdown 之前调用 jegl_uhost_free_branch
+        jegl_uhost_free_branch(g_uhost, g_branch);
+        jegl_sync_shutdown(g_gthread, false);
+
+        game_universe::destroy_universe(u.value());
+
+        je_finish();
         exit(0);
+    }
 }
 
 int main(int argc, char** argv)
@@ -44,7 +75,7 @@ int main(int argc, char** argv)
     je_init(argc, argv);
 
     // 创建全局上下文，并在当前上下文上以默认配置创建统一图形接口
-    game_universe u = game_universe::create_universe();
+    u = game_universe::create_universe();
     jegl_register_sync_thread_callback([](jegl_context* gthread, void* pgthread) {}, nullptr);
 
     jegl_interface_config config;
@@ -58,8 +89,8 @@ int main(int argc, char** argv)
     config.m_userdata = nullptr;
 
     jegl_set_host_graphic_api(jegl_using_opengl3_apis);
-    jeecs::graphic_uhost* uhost = jegl_uhost_get_or_create_for_universe(u.handle(), &config);
-    jegl_context* g_gthread = jegl_uhost_get_context(uhost);
+    g_uhost = jegl_uhost_get_or_create_for_universe(u.value().handle(), &config);
+    g_gthread = jegl_uhost_get_context(g_uhost);
 
     assert(g_gthread != nullptr);
 
@@ -102,26 +133,10 @@ public func frag(_: v2f) {
 } 
 )" }
     );
-
-    g_branch = jegl_uhost_alloc_branch(uhost);
-
-    // 初始化图形接口
-    jegl_sync_init(g_gthread, false);
-
-    // 循环图形更新，直到图形接口退出
-    g_factor_uniform_location = 
-        g_shader->get_uniform_location_as_builtin("factor");
+    g_ubo = graphic::uniformbuffer::create(0, 3 * 16 * 4 + 4 * 4);
+    
+    g_branch = jegl_uhost_alloc_branch(g_uhost);
 
     emscripten_set_main_loop(webgl_rend_job_callback, 0, 1);
-
-    // 离开循环之后，关闭branch，然后再宣告图形接口工作结束
-    // NOTE: Branch 被要求在 uhost 释放之前释放，而 uhost 释放会等待
-    //       图形线程完成结束，因此此处为了保证正确释放资源，需要在
-    //       jegl_sync_shutdown 之前调用 jegl_uhost_free_branch
-    jegl_uhost_free_branch(uhost, g_branch);
-    jegl_sync_shutdown(g_gthread, false);
-
-    game_universe::destroy_universe(u);
-
-    je_finish();
+    return 0;
 }

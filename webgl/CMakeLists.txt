@@ -38,6 +38,7 @@ target_link_libraries(joyengineecs4w
 
 # Use wasm64
 
+
 set_target_properties(joyengineecs4w PROPERTIES
         SUFFIX ".html"
         OUTPUT_NAME "index"
