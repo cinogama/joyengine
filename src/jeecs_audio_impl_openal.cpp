@@ -1,10 +1,10 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
-#include <al.h>
-#include <alc.h>
+#include <AL/al.h>
+#include <AL/alc.h>
 
-#include <alext.h>
+#include <AL/alext.h>
 
 #include <unordered_set>
 #include <vector>

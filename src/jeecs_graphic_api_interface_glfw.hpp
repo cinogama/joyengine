@@ -192,6 +192,7 @@ namespace jeecs::graphic
                 break;
             }
 
+#ifndef JE_ENABLE_WEBGL20_GAPI
             const char* reason;
             auto err_code = glfwGetError(&reason);
             if (err_code != GLFW_NO_ERROR)
@@ -201,6 +202,7 @@ namespace jeecs::graphic
                 je_clock_sleep_for(1.);
                 abort();
             }
+#endif
 
             // Try load icon from @/icon.png or !/builtin/icon/icon.png.
             // Do nothing if both not exist.

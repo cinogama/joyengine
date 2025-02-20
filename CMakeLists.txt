@@ -23,19 +23,28 @@ option(JE4_BUILD_SHARED_CORE                "Build shared engine core library." 
 option(JE4_ENABLE_DX11_GAPI         "Enable DX11 Graphic api"           OFF)
 option(JE4_ENABLE_OPENGL330_GAPI    "Enable OpenGL 3.3 Graphic API"     OFF)
 option(JE4_ENABLE_OPENGLES300_GAPI  "Enable OpenGLES 3.0 Graphic API"   OFF)
+option(JE4_ENABLE_WEBGL20_GAPI      "Enable WebGL 2.0 Graphic API"      OFF)
 option(JE4_ENABLE_VULKAN130_GAPI    "Enable Vulkan 1.3 Graphic API"     OFF)
 option(JE4_ENABLE_METAL_GAPI        "Enable Metal Graphic API"          OFF)
 
+option(JE4_WASM_TARGET              "Build JoyEngine for WASM platform" OFF)
+
 ##############################################################################
 
-# Cannot use gles & gl at same time because of ImGUI cannot use two lib at same time.
-if (JE4_ENABLE_OPENGL330_GAPI AND JE4_ENABLE_OPENGLES300_GAPI)
-    message(FATAL_ERROR "Cannot use OpenGL3.3 and OpenGLES3.0 at same time.")
+# Cannot use gles, gl or webgl at same time because of ImGUI cannot use two lib at same time.
+if ((JE4_ENABLE_OPENGL330_GAPI AND (JE4_ENABLE_OPENGLES300_GAPI OR JE4_ENABLE_WEBGL20_GAPI))
+    OR (JE4_ENABLE_OPENGLES300_GAPI AND (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_WEBGL20_GAPI))
+    OR (JE4_ENABLE_WEBGL20_GAPI AND (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES300_GAPI)))
+    
+    message(FATAL_ERROR "Cannot use OpenGL3.3, OpenGLES3.0 or WebGL2.0 at same time.")
 endif()
 
-# openal-soft will be compiled to dynamic-libs
-set(BUILD_SHARED_LIBS ON CACHE BOOL "Build shared opengal-soft" FORCE)
-add_subdirectory("3rd/openal-soft")
+
+if (NOT JE4_WASM_TARGET)
+    # openal-soft will be compiled to dynamic-libs to following LGPL license.
+    set(BUILD_SHARED_LIBS ON CACHE BOOL "Build shared opengal-soft" FORCE)
+    add_subdirectory("3rd/openal-soft")
+endif()
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static box2d 3.0" FORCE)
 add_subdirectory("3rd/box2c")
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static assimp" FORCE)
@@ -97,6 +106,9 @@ if (JE4_STATIC_LINK_MODULE_AND_PKGS)
 endif()
 if (JE4_ENABLE_OPENGLES300_GAPI AND WIN32)
     list(APPEND JE4_BUILD_SCRIPT_CMDS "-gles-win32")
+endif()
+if (JE4_ENABLE_WEBGL20_GAPI)
+    list(APPEND JE4_BUILD_SCRIPT_CMDS "-webgl")
 endif()
 
 ##############################################################################
@@ -183,6 +195,15 @@ if (JE4_STATIC_LINK_MODULE_AND_PKGS)
 
         if (EXISTS "${pkg_fullpath}/CMakeLists.txt")
             message(STATUS "Woolang package named: ${pkg_name} found!")
+
+            if (JE4_WASM_TARGET AND (
+                ("${pkg_name}" STREQUAL "socket")
+                OR ("${pkg_name}" STREQUAL "process")
+            ))
+                message(STATUS "Woolang package named: ${pkg_name} is not supported on WASM target.")
+                continue()
+            endif()
+            
             add_subdirectory("${pkg_fullpath}")
 
             if (TARGET ${pkg_name})

@@ -1,0 +1,94 @@
+#include <emscripten/html5.h>
+
+/*
+ * JoyECS
+ * -----------------------------------
+ * JoyECS is a interesting ecs-impl.
+ *
+ */
+#include "jeecs.hpp"
+
+#include <cmath>
+#include <optional>
+
+using namespace jeecs;
+
+class je_webgl_surface_context
+{
+    typing::type_unregister_guard *_je_type_guard = nullptr;
+    jegl_context *_jegl_graphic_thread = nullptr;
+    bool _jegl_inited = false;
+
+    static void _jegl_webgl_sync_thread_created(
+        jegl_context *gl_context, void *context)
+    {
+        je_webgl_surface_context *surface_context =
+            std::launder(reinterpret_cast<je_webgl_surface_context *>(context));
+
+        surface_context->_jegl_graphic_thread = gl_context;
+    }
+
+public:
+    je_webgl_surface_context()
+    {
+        je_init(0, nullptr);
+
+        _je_type_guard = new typing::type_unregister_guard();
+        entry::module_entry(_je_type_guard);
+
+        jeecs_file_update_default_fimg("");
+
+        jeecs::debug::loginfo("WebGL application started!");
+
+        jegl_register_sync_thread_callback(
+            _jegl_webgl_sync_thread_created, this);
+
+        // Execute script entry in another thread.
+        std::thread(je_main_script_entry).detach();
+    }
+
+    ~je_webgl_surface_context()
+    {
+        jegl_sync_shutdown(_jegl_graphic_thread, false);
+
+        entry::module_leave(_je_type_guard);
+        je_finish();
+    }
+
+    bool update_frame()
+    {
+        if (!_jegl_inited)
+        {
+            if (_jegl_graphic_thread != nullptr)
+            {
+                _jegl_inited = true;
+                jegl_sync_init(_jegl_graphic_thread, false);
+            }
+        }
+        else if (jegl_sync_state::JEGL_SYNC_COMPLETE != jegl_sync_update(_jegl_graphic_thread))
+            return false;
+
+        return true;
+    }
+};
+
+je_webgl_surface_context* g_surface_context = nullptr;
+
+void
+webgl_rend_job_callback()
+{
+    if (g_surface_context == nullptr)
+    g_surface_context = new je_webgl_surface_context();
+
+    if (!g_surface_context->update_frame())
+    {
+        delete g_surface_context;
+        exit(0);
+    }
+}
+
+int main(int argc, char **argv)
+{
+    emscripten_set_main_loop(webgl_rend_job_callback, 0, 1);
+    return 0;
+}

@@ -7,7 +7,6 @@ include_directories("../3rd/imgui")
 include_directories("../3rd/imgui/backends")
 include_directories("../3rd/imgui/misc/cpp")
 include_directories("../3rd/box2c/include")
-include_directories("../3rd/openal-soft/include")
 include_directories("../3rd/assimp/include")
 include_directories("../3rd/vulkan/include")
 include_directories("../3rd/glslang/glslang/Include")
@@ -15,6 +14,7 @@ include_directories("../3rd/glslang/glslang/Public")
 include_directories("../3rd/spirv-cross")
 include_directories("../3rd/imgui-node-editor")
 include_directories("../3rd/ImGuiColorTextEdit")
+include_directories("../3rd/openal-soft/include")
 
 file(GLOB_RECURSE joyecs_srcs_cpp *.cpp)
 file(GLOB_RECURSE joyecs_srcs_hpp *.hpp)
@@ -65,7 +65,7 @@ set(imgui_srcs
 
 # JoyEngine Graphic API support list.
 # OpenGL 3.3 & OpenGLES 3.2
-if (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES300_GAPI)
+if (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES300_GAPI OR JE4_ENABLE_WEBGL20_GAPI)
     if (JE4_ENABLE_OPENGL330_GAPI)
         target_compile_definitions(joyengine_core_configs INTERFACE -DJE_ENABLE_GL330_GAPI)
 
@@ -77,8 +77,7 @@ if (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES300_GAPI)
         endif()
         
         list(APPEND jeecs_graphic_libs glew_s)
-        
-    else()
+    elseif (JE4_ENABLE_OPENGLES300_GAPI)
         target_compile_definitions(joyengine_core_configs INTERFACE -DJE_ENABLE_GLES300_GAPI)
         target_compile_definitions(joyengine_core_configs INTERFACE -DIMGUI_IMPL_OPENGL_ES3)
 
@@ -94,7 +93,9 @@ if (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES300_GAPI)
             endif()
             list(APPEND jeecs_graphic_libs EGL)
         endif()
-
+    else()
+        target_compile_definitions(joyengine_core_configs INTERFACE -DJE_ENABLE_WEBGL20_GAPI)
+        target_compile_definitions(joyengine_core_configs INTERFACE -DIMGUI_IMPL_OPENGL_ES3)
     endif()
 
     list(APPEND imgui_srcs
@@ -137,6 +138,7 @@ endif()
 if (JE4_ENABLE_OPENGL330_GAPI OR 
     JE4_ENABLE_OPENGLES300_GAPI OR 
     JE4_ENABLE_VULKAN130_GAPI OR
+    JE4_ENABLE_WEBGL20_GAPI OR
     JE4_ENABLE_DX11_GAPI)
 
     if (ANDROID)
@@ -145,12 +147,16 @@ if (JE4_ENABLE_OPENGL330_GAPI OR
             "../3rd/imgui/backends/imgui_impl_android.h")
     else()
         include_directories("../3rd/glfw/include")
-    
-        if (NOT WIN32)
-            target_compile_options(glfw PRIVATE -fPIC)
-        endif()
 
-        list(APPEND jeecs_graphic_libs glfw)
+        if (NOT JE4_ENABLE_WEBGL20_GAPI)
+            # Use built-in glfw3 for webgl target, so we don't need to build glfw3.
+            if (NOT WIN32)
+                target_compile_options(glfw PRIVATE -fPIC)
+            endif()
+
+            list(APPEND jeecs_graphic_libs glfw)
+        endif()
+        
         list(APPEND imgui_srcs
             "../3rd/imgui/backends/imgui_impl_glfw.cpp"
             "../3rd/imgui/backends/imgui_impl_glfw.h")
@@ -203,9 +209,17 @@ target_link_libraries(joyecs
     PRIVATE ${JE4_STATIC_LINKED_PKG_AND_MODULE_LIST}
     PRIVATE woolang
     PRIVATE box2d 
-    PRIVATE OpenAL 
     PRIVATE assimp 
     PRIVATE glslang
     PRIVATE SPIRV 
     # PRIVATE spirv-cross-c
     PRIVATE glslang-default-resource-limits)
+
+if (JE4_WASM_TARGET)
+    # Use emscripten openal for wasm target.
+    # https://emscripten.org/docs/porting/Audio.html 
+    target_link_libraries(joyecs PRIVATE openal)
+else()
+    target_link_libraries(joyecs PRIVATE OpenAL)
+endif()
+

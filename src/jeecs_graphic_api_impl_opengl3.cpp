@@ -2,7 +2,8 @@
 #include "jeecs.hpp"
 
 #if defined(JE_ENABLE_GL330_GAPI) \
- || defined(JE_ENABLE_GLES300_GAPI)
+ || defined(JE_ENABLE_GLES300_GAPI) \
+ || defined(JE_ENABLE_WEBGL20_GAPI)
 
 #include "jeecs_imgui_backend_api.hpp"
 
@@ -12,6 +13,9 @@
 #   else
 #       include <GLES3/gl3.h>
 #   endif
+#elif defined(JE_ENABLE_WEBGL20_GAPI)
+#   include <emscripten/html5.h>
+#   include <GLES3/gl3.h>
 #else
 #   include <GL/glew.h>
 #endif
@@ -119,6 +123,20 @@ namespace jeecs::graphic::api::gl3
 #   endif
 #endif
         glEnable(GL_DEPTH_TEST);
+
+#ifdef JE_ENABLE_WEBGL20_GAPI
+        // Get current context by emscripten_webgl_get_current_context
+
+        //EMSCRIPTEN_WEBGL_CONTEXT_HANDLE webgl_context = 
+        //    emscripten_webgl_get_current_context();
+
+        //if (!emscripten_webgl_enable_extension(
+        //    webgl_context, "WEBGL_depth_texture"))
+        //{
+        //    jeecs::debug::logfatal("Failed to enable WEBGL_depth_texture.");
+        //    abort();
+        //}
+#endif
 
         jegui_init_gl330(
             [](auto* res) {return (uint64_t)res->m_handle.m_uint1; },
@@ -535,21 +553,33 @@ namespace jeecs::graphic::api::gl3
                 {
                     for (auto way : jegl_texture_cube_map_ways)
                     {
-                        glTexImage2D(way, 0, GL_DEPTH_COMPONENT,
+                        glTexImage2D(way, 0, 
+#if defined(JE_ENABLE_WEBGL20_GAPI)
+                            GL_DEPTH_COMPONENT24,
+#else
+                            GL_DEPTH_COMPONENT,
+#endif
                             (GLsizei)resource->m_raw_texture_data->m_width,
                             (GLsizei)resource->m_raw_texture_data->m_height,
                             0,
-                            GL_DEPTH_COMPONENT, GL_UNSIGNED_INT,
+                            GL_DEPTH_COMPONENT,
+                            GL_UNSIGNED_INT,
                             NULL
                         );
                     }
                 }
                 else
-                    glTexImage2D(gl_texture_type, 0, GL_DEPTH_COMPONENT,
+                    glTexImage2D(gl_texture_type, 0,
+#if defined(JE_ENABLE_WEBGL20_GAPI)
+                        GL_DEPTH_COMPONENT24,
+#else
+                        GL_DEPTH_COMPONENT,
+#endif
                         (GLsizei)resource->m_raw_texture_data->m_width,
                         (GLsizei)resource->m_raw_texture_data->m_height,
                         0,
-                        GL_DEPTH_COMPONENT, GL_UNSIGNED_INT,
+                        GL_DEPTH_COMPONENT, 
+                        GL_UNSIGNED_INT,
                         NULL
                     );
             }
