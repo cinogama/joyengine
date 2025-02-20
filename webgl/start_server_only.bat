@@ -1,1 +1,3 @@
-start python server.py
+cd build
+python ../server.py
+cd ..

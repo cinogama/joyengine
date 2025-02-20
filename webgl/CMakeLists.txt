@@ -45,7 +45,7 @@ set(PRELOAD_FLAGS "")
 
 foreach(file ${PRELOAD_FILES})
     set(PRELOAD_FLAGS 
-    "${PRELOAD_FLAGS} --preload-file preloads/${file}@/${file}")
+    "${PRELOAD_FLAGS} --preload-file \"${CMAKE_CURRENT_SOURCE_DIR}/preloads/${file}\"@/${file}")
 endforeach()
 
 set_target_properties(joyengineecs4w PROPERTIES

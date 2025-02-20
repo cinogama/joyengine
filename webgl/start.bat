@@ -1,4 +1,4 @@
-call start_server_only.bat
+start start_server_only.bat
 
 @REM Wait 2s by ping
 ping 127.0.0.1 -n 2 > nul

@@ -5,15 +5,13 @@ import ssl
 
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
-ENABLE_HTTPS = os.environ.get('ENABLE_HTTPS', False)
+ENABLE_HTTPS = os.environ.get('ENABLE_HTTPS', True)
 PORT = int(os.environ.get('PORT', 8000))
-
 
 class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
     def end_headers(self):
         self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
         self.send_header("Cross-Origin-Opener-Policy", "same-origin")
-
         super().end_headers()
 
 
@@ -26,5 +24,5 @@ if __name__ == '__main__':
                 certfile="example.crt", keyfile="example.key")
             httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
 
-        print(f"serve at {'https' if ENABLE_HTTPS else 'http'}://0.0.0.0:{PORT}")
+        print(f"server at {'https' if ENABLE_HTTPS else 'http'}://0.0.0.0:{PORT}")
         httpd.serve_forever()
