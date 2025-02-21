@@ -5,7 +5,7 @@ import ssl
 
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
-ENABLE_HTTPS = os.environ.get('ENABLE_HTTPS', True)
+ENABLE_HTTPS = os.environ.get('ENABLE_HTTPS', False)
 PORT = int(os.environ.get('PORT', 8000))
 
 class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
