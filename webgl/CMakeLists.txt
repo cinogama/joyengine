@@ -50,5 +50,4 @@ endforeach()
 
 set_target_properties(joyengineecs4w PROPERTIES
         SUFFIX ".html"
-        OUTPUT_NAME "index"
         LINK_FLAGS "-s WASM=1 -s USE_PTHREADS=1 -s SHARED_MEMORY=1 -s PTHREAD_POOL_SIZE=16 -s USE_WEBGL2=1 -s USE_GLFW=3 -s ALLOW_MEMORY_GROWTH -s STACK_SIZE=4194304 ${PRELOAD_FLAGS}")
