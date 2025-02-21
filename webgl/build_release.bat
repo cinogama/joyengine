@@ -7,6 +7,7 @@ if not exist build (
     copy template\index.html build\index.html
     
     @REM Copy ../builtin/icon/* to ./build/icon/
+    mkdir build\icon
     xcopy /s /e /y ..\builtin\icon build\icon
 )
 cd build
