@@ -144,8 +144,7 @@
         };
         Module.setStatus('Downloading...');
         window.onerror = (event) => {
-            // TODO: do not warn on ok events like simulating an infinite loop or exitStatus
-            Module.setStatus('Exception thrown, see JavaScript console');
+            alert('Exception thrown, see JavaScript console:\n  ' + event);
             Module.setStatus = (text) => {
                 if (text) console.error('[post-exception status] ' + text);
             };

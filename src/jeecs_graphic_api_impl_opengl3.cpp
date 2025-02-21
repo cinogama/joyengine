@@ -147,7 +147,7 @@ namespace jeecs::graphic::api::gl3
                     for (size_t i = 0; i < res->m_raw_shader_data->m_sampler_count; ++i)
                     {
                         auto& sampler = res->m_raw_shader_data->m_sampler_methods[i];
-                        for (size_t id = 0; id < sampler.m_pass_id_count; ++id)
+                        for (size_t id = 0; id < (size_t)sampler.m_pass_id_count; ++id)
                         {
                             glActiveTexture(GL_TEXTURE0 + sampler.m_pass_ids[id]);
                             switch (sampler.m_mag)
@@ -903,7 +903,7 @@ namespace jeecs::graphic::api::gl3
             for (size_t i = 0; i < resource->m_raw_shader_data->m_sampler_count; ++i)
             {
                 auto& sampler = resource->m_raw_shader_data->m_sampler_methods[i];
-                for (size_t id = 0; id < sampler.m_pass_id_count; ++id)
+                for (size_t id = 0; id < (size_t)sampler.m_pass_id_count; ++id)
                 {
                     glActiveTexture(GL_TEXTURE0 + sampler.m_pass_ids[id]);
                     switch (sampler.m_mag)

@@ -23,6 +23,19 @@ set(BOX2D_AVX2                          OFF CACHE BOOL "Disable avx2 for box2d."
 
 add_compile_options(-pthread)
 
+# WASM64 is not supported well, so we use WASM32 as default.
+if (OFF)
+        add_compile_options(-m64)
+        add_definitions(-DWO_PLATFORM_64)
+        add_definitions(-DJE_PLATFORM_M64)
+        set(JE4WEBGL_MEMORY64 1)
+else()
+        add_compile_options(-m32)
+        add_definitions(-DWO_PLATFORM_32)
+        add_definitions(-DJE_PLATFORM_M32)
+        set(JE4WEBGL_MEMORY64 0)
+endif()
+
 # Searches for a package provided by the game activity dependency
 set(JE4WEBGL_PATH "./../")
 add_subdirectory(${JE4WEBGL_PATH} joyengineecs.out)
@@ -50,4 +63,15 @@ endforeach()
 
 set_target_properties(joyengineecs4w PROPERTIES
         SUFFIX ".html"
-        LINK_FLAGS "-s WASM=1 -s USE_PTHREADS=1 -s SHARED_MEMORY=1 -s PTHREAD_POOL_SIZE=16 -s USE_WEBGL2=1 -s USE_GLFW=3 -s ALLOW_MEMORY_GROWTH -s STACK_SIZE=4194304 ${PRELOAD_FLAGS}")
+        LINK_FLAGS 
+        "-s WASM=1 \
+        -s MEMORY64=${JE4WEBGL_MEMORY64} \
+        -s USE_PTHREADS=1 \
+        -s SHARED_MEMORY=1 \
+        -s PTHREAD_POOL_SIZE=16 \
+        -s USE_WEBGL2=1 \
+        -s USE_GLFW=3 \
+        -s ALLOW_MEMORY_GROWTH \
+        -s STACK_SIZE=1048576 \
+        -s WASM_BIGINT=1 \
+        ${PRELOAD_FLAGS}")

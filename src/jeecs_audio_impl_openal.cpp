@@ -294,7 +294,8 @@ jeal_device** _jeal_update_refetch_devices(size_t* out_len)
             _jeal_all_devices.push_back(current_device);
         }
         else
-            jeecs::debug::logwarn("Audio device: '%s' disconnected, skip.");
+            jeecs::debug::logwarn(
+                "Audio device: '%s' disconnected, skip.", current_device_name);
 
         current_device_name += strlen(current_device_name) + 1;
     }

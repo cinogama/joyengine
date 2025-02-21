@@ -93,6 +93,9 @@
 #		define JE_PLATFORM_M64
 #else
 #		define JE_PLATFORM_UNKNOWN
+#   if not defined(JE_PLATFORM_M32) and not defined(JE_PLATFORM_M64)
+#       error "Unknown platform, you must specify platform manually."
+#   endif
 #endif
 
 // [用语]
@@ -1808,16 +1811,14 @@ struct jegl_shader
         fliter_mode m_mip;
         wrap_mode   m_uwrap;
         wrap_mode   m_vwrap;
-
         uint32_t    m_sampler_id;   // Used for DX11 & HLSL generation
-
-        size_t      m_pass_id_count;
-        uint32_t* m_pass_ids;     // Used for GL3 & GLSL generation
+        uint64_t    m_pass_id_count;
+        uint32_t*   m_pass_ids;     // Used for GL3 & GLSL generation
     };
 #ifdef JE_PLATFORM_M64
-    static_assert(sizeof(sampler_method) == 24 + 16);
+    static_assert(sizeof(sampler_method) == 24 + 8 + 8);
 #else
-    static_assert(sizeof(sampler_method) == 24 + 8);
+    static_assert(sizeof(sampler_method) == 24 + 8 + 4 + 4 /*gap*/);
 #endif
 
     enum uniform_type
@@ -1963,7 +1964,7 @@ struct jegl_shader
     blend_method        m_blend_src_mode, m_blend_dst_mode;
     cull_mode           m_cull_mode;
 
-    sampler_method* m_sampler_methods;
+    sampler_method*     m_sampler_methods;
     size_t              m_sampler_count;
 };
 

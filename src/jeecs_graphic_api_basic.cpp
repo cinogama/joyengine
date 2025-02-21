@@ -1154,12 +1154,10 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
         jeecs_file_read(&sampler.m_uwrap, sizeof(jegl_shader::wrap_mode), 1, cache_file);
         jeecs_file_read(&sampler.m_vwrap, sizeof(jegl_shader::wrap_mode), 1, cache_file);
         jeecs_file_read(&sampler.m_sampler_id, sizeof(uint32_t), 1, cache_file);
+        jeecs_file_read(&sampler.m_pass_id_count, sizeof(uint64_t), 1, cache_file);
 
-        uint64_t pass_id_count;
-        jeecs_file_read(&pass_id_count, sizeof(uint64_t), 1, cache_file);
-        sampler.m_pass_id_count = (size_t)pass_id_count;
-        sampler.m_pass_ids = new uint32_t[sampler.m_pass_id_count];
-        jeecs_file_read(sampler.m_pass_ids, sizeof(uint32_t), sampler.m_pass_id_count, cache_file);
+        sampler.m_pass_ids = new uint32_t[(size_t)sampler.m_pass_id_count];
+        jeecs_file_read(sampler.m_pass_ids, sizeof(uint32_t), (size_t)sampler.m_pass_id_count, cache_file);
     }
 
     jeecs_file_close(cache_file);
@@ -1292,10 +1290,8 @@ void _jegl_create_shader_cache(jegl_resource* shader_resource, wo_integer_t virt
             jeecs_write_cache_file(&sampler.m_uwrap, sizeof(jegl_shader::wrap_mode), 1, cachefile);
             jeecs_write_cache_file(&sampler.m_vwrap, sizeof(jegl_shader::wrap_mode), 1, cachefile);
             jeecs_write_cache_file(&sampler.m_sampler_id, sizeof(uint32_t), 1, cachefile);
-
-            uint64_t sampler_count = (uint64_t)sampler.m_pass_id_count;
-            jeecs_write_cache_file(&sampler_count, sizeof(uint64_t), 1, cachefile);
-            jeecs_write_cache_file(sampler.m_pass_ids, sizeof(uint32_t), sampler.m_pass_id_count, cachefile);
+            jeecs_write_cache_file(&sampler.m_pass_id_count, sizeof(uint64_t), 1, cachefile);
+            jeecs_write_cache_file(sampler.m_pass_ids, sizeof(uint32_t), (size_t)sampler.m_pass_id_count, cachefile);
         }
 
         jeecs_close_cache_file(cachefile);

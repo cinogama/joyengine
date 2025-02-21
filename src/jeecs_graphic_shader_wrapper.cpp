@@ -2676,12 +2676,16 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
         sampler_methods[i].m_vwrap = sampler->m_vwrap;
 
         sampler_methods[i].m_sampler_id = sampler->m_sampler_id;
-        sampler_methods[i].m_pass_id_count = sampler->m_binded_texture_passid.size();
+        sampler_methods[i].m_pass_id_count = (uint64_t)sampler->m_binded_texture_passid.size();
         auto* passids = new uint32_t[sampler->m_binded_texture_passid.size()];
 
         static_assert(std::is_same<decltype(sampler_methods[i].m_pass_ids), uint32_t*>::value);
 
-        memcpy(passids, sampler->m_binded_texture_passid.data(), sampler_methods[i].m_pass_id_count * sizeof(uint32_t));
+        memcpy(
+            passids, 
+            sampler->m_binded_texture_passid.data(), 
+            (size_t)sampler_methods[i].m_pass_id_count * sizeof(uint32_t));
+
         sampler_methods[i].m_pass_ids = passids;
     }
     write_to_shader->m_sampler_methods = sampler_methods;
