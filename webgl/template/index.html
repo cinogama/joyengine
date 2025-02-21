@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en-us">
+<html>
 
 <head>
     <meta charset="utf-8">
@@ -28,8 +28,12 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh; /* Ensure it takes the full viewport height */
-            margin: 0 auto; /* Center horizontally */
+            width: 100%;
+            height: 100vh;
+            /* Full viewport height */
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
 
         /* the canvas *must not* have any border or padding, or mouse coords will be wrong */
@@ -37,25 +41,43 @@
             border: 0px none;
             background-color: black;
         }
-
-        #progress {
-            height: 20px;
-            width: 300px;
-        }
     </style>
 </head>
 
 <body>
-    <div class="joyengineecs">
-        <progress value="0" max="100" id="progress" hidden=1></progress>
-    </div>
-
     <div class="joyengineecs_border">
         <canvas class="joyengineecs" id="canvas" oncontextmenu="event.preventDefault()" tabindex=-1></canvas>
+        <img src="/icon/cinoicon_light.png" alt="Cino Icon"
+            style="position: absolute; bottom: 10px; left: 10px; transform: translateX(0) scale(0.1); transform-origin: left bottom;">
+
+        <img src="/icon/Joy.gif" alt="Icon"
+            style="position: absolute; bottom: 10px; left: 120px; transform: translateX(0) scale(0.4); transform-origin: left bottom;">
+
+        <div style="position: absolute; bottom: 10px; left: 200px; color: black; font-size: 16px;">
+            (C)Cinogama project 2025. Powered by JoyEngine 4 WebGL 2.0.</div>
+
+        <div id="progressBarContainer"
+            style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 50%; height: 5px; background-color: #105a5a;">
+            <div id="progressBar" style="width: 0%; height: 100%; background-color: #00ffff;"></div>
+        </div>
     </div>
-    
+
+    <script>
+        function setProgress(progress) {
+            var progressBar = document.getElementById('progressBar');
+            progressBar.style.width = progress + '%';
+        }
+        function getProgress() {
+            var progressBar = document.getElementById('progressBar');
+            return parseInt(progressBar.style.width);
+        }
+        function setProgressAlpha(alpha) {
+            var progressBarContainer = document.getElementById('progressBarContainer');
+            progressBarContainer.style.opacity = alpha;
+        }
+    </script>
+
     <script type='text/javascript'>
-        var progressElement = document.getElementById('progress');
 
         var Module = {
             print: (function () {
@@ -84,24 +106,40 @@
                 if (text === Module.setStatus.last.text) return;
                 var m = text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
                 var now = Date.now();
-                if (m && now - Module.setStatus.last.time < 30) return; // if this is a progress update, skip it if too soon
+                if (m && now - Module.setStatus.last.time < 30)
+                    // if this is a progress update, skip it if too soon
+                    return;
                 Module.setStatus.last.time = now;
                 Module.setStatus.last.text = text;
                 if (m) {
-                    text = m[1];
-                    progressElement.value = parseInt(m[2]) * 100;
-                    progressElement.max = parseInt(m[4]) * 100;
-                    progressElement.hidden = false;
+                    // text = m[1];
+                    // progressElement.value = parseInt(m[2]) * 100;
+                    // progressElement.max = parseInt(m[4]) * 100;
+                    setProgressAlpha(1);
+                    setProgress(parseInt(m[2]) * 100 / parseInt(m[4]));
                 } else {
-                    progressElement.value = null;
-                    progressElement.max = null;
-                    progressElement.hidden = true;
+                    setProgress(100);
+
+                    setProgressAlpha(1);
+                    setTimeout(() => {
+                        let alpha = 1;
+                        const fadeOutInterval = setInterval(() => {
+                            alpha -= 0.05;
+                            setProgressAlpha(alpha);
+
+                            if (getProgress() != 100 ||  alpha <= 0) {
+                                clearInterval(fadeOutInterval);
+                            }
+                        }, 30);
+                    }, 500);
                 }
             },
             totalDependencies: 0,
             monitorRunDependencies: (left) => {
                 this.totalDependencies = Math.max(this.totalDependencies, left);
-                Module.setStatus(left ? 'Preparing... (' + (this.totalDependencies - left) + '/' + this.totalDependencies + ')' : 'All downloads complete.');
+                Module.setStatus(left
+                    ? 'Preparing... (' + (this.totalDependencies - left) + '/' + this.totalDependencies + ')'
+                    : 'All downloads complete.');
             }
         };
         Module.setStatus('Downloading...');
