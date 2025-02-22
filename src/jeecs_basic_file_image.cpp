@@ -602,7 +602,7 @@ jeecs_file* jeecs_file_open(const char* path)
 
         return jefhandle;
     }
-    else if (path[0] == '@' && _je_runtime_file_image != nullptr)
+    else if ((path[0] == '@' || path[0] == '!') && _je_runtime_file_image != nullptr)
     {
         auto* img_file = fimg_open_file(_je_runtime_file_image, path);
         if (img_file != nullptr)

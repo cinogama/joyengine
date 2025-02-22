@@ -139,12 +139,39 @@ namespace editor::gui::edit_forms
         config.m_pack_output_log->add("正在删除 .export 目录");
         do fsys::remove(normalized_path/".export")->unwrap;
 
-        // 2. 遍历所有目录，记录下所有文件的原始路径和最终路径
+        config.m_pack_output_log->add("开始整理打包文件……");
+
+        // 1.2 创建路径，准备打包
+        let export_path = normalized_path/".export";
+        do fsys::mkdir(export_path);
+        let fimg = new! je::editor::fimage_packer(export_path->tostring, config.m_image_size * 1024 * 1024);
+     
+        // 2.1 遍历可执行文件所在路径，记录下所有文件的原始路径和最终路径
+        let exe_located_path = fsys::parent(fsys::normalize(std::args()[0]));
+        match (fsys::allsubpath(exe_located_path / "builtin"))
+        {
+        ok(subpaths)?
+            {
+                for (let path : subpaths)
+                {
+                    // 将引擎内置的着色器缓存打包进镜像
+                    if (path->fsys::isfile() 
+                        && path->tostring->lower->end_with(".shader.je4cache"))
+                    {
+                        let relpath = fsys::relative(path, exe_located_path)->unwrap();
+                        assert(fimg->pack(path->tostring, "!/" + relpath));
+                    }
+                }
+            }
+        err(errdat)?
+            return err(errdat);
+        }
+        
+        // 2.2. 遍历所有目录，记录下所有文件的原始路径和最终路径
         match (fsys::allsubpath(normalized_path))
         {
         ok(subpaths)?
             {
-                config.m_pack_output_log->add("开始整理打包文件……");
                 let bind_wrap_path = func(subpath: fsys::path_t){
                     return (subpath, proj->make_path_normalize(subpath));
                 };
@@ -189,11 +216,6 @@ namespace editor::gui::edit_forms
                                     std::platform::runtime_type::RELEASE)->unwrap)); // 必须有
                                 ;
 
-                            // 1.2 创建路径，准备打包
-                            let export_path = normalized_path/".export";
-                            do fsys::mkdir(export_path);
-                            let fimg = new! je::editor::fimage_packer(export_path->tostring, config.m_image_size * 1024 * 1024);
-     
                             let copy_origin = func(opath: fsys::path_t, ppath: string)
                             {
                                 assert(ppath[0] == '@');
@@ -203,7 +225,7 @@ namespace editor::gui::edit_forms
                                 return fsys::copy(opath, target_ppath);
                             };
 
-                            // 1.3 开始打包
+                            // 1.2 开始打包
                             do fsys::mkdir(export_path/"builtin");
                             do fsys::writeall(export_path/"builtin"/".keepme", "");
 
@@ -242,7 +264,7 @@ namespace editor::gui::edit_forms
                                 }
                             }
 
-                            // 1.4 将引擎本体移动至打包目录
+                            // 1.3 将引擎本体移动至打包目录
                             config.m_pack_output_log->add(F"正在复制引擎运行时");
                             do fsys::copy(fsys::normalize(std::args()[0]), export_path/F"{proj->get_name}.exe")->unwrap;
 
@@ -269,7 +291,7 @@ namespace editor::gui::edit_forms
                                 ;
                             do fsys::copy(fsys::normalize(F"{std::host_path()}/OpenAL32.dll"), export_path / "OpenAL32.dll")->unwrap;
                             
-                            // 1.5 将启动脚本编译后打入镜像
+                            // 1.4 将启动脚本编译后打入镜像
                             config.m_pack_output_log->add(F"正在打包启动脚本");
                             let boot_up_script = @"
                                 import je;
@@ -350,7 +372,7 @@ namespace editor::gui::edit_forms
                                     je::unload_module(libhandle);                               
                             "@;
 
-                            // 1.5.1 生成加载动态库相关代码
+                            // 1.4.1 生成加载动态库相关代码
                             config.m_pack_output_log->add(F"正在生成装载动态库的脚本");
                             let mut dylib_loader = "";
                             for (let (minstance, (_, ppath)) : dll_module_path)
@@ -370,7 +392,7 @@ namespace editor::gui::edit_forms
                                     + "\n";
                             }
 
-                            // 1.5.2 加载ToWoo类型
+                            // 1.4.2 加载ToWoo类型
                             let loading_towoo_components = proj->get_all_towoo_scripts_name_and_path
                                 ->  forall(\_, paths = fsys::filename(paths[0])->lower->end_with(".jecomponent.wo");)
                                 ->  unmapping
@@ -390,7 +412,7 @@ namespace editor::gui::edit_forms
                                 ->  reduce(\l, r = l + r;)
                                 ->  or("");
 
-                            // 1.5.3 应用项目设置
+                            // 1.4.3 应用项目设置
                             config.m_pack_output_log->add(F"正在生成应用项目设置的脚本");
                             let mut proj_config = "";
                             for (let (_, pconfig) : proj->get_configs)
@@ -398,7 +420,7 @@ namespace editor::gui::edit_forms
                                 proj_config += pconfig->apply + "\n";
                             }
 
-                            // 1.5.4 加载和序列化世界
+                            // 1.4.4 加载和序列化世界
                             config.m_pack_output_log->add(F"正在生成加载世界的脚本");
                             let mut load_world_instance = "";
                             for (let startup_world_path : config.m_start_up_worlds)
@@ -406,7 +428,7 @@ namespace editor::gui::edit_forms
                                 load_world_instance += F"LOAD_WORLD({startup_world_path->enstring});\n";
                             }
   
-                            // 1.5.5 加载入口脚本
+                            // 1.4.5 加载入口脚本
                             let load_entry_script = "";
 
                             let final_boot_script = boot_up_script
