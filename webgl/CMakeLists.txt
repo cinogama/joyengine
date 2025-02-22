@@ -61,12 +61,6 @@ foreach(file ${PRELOAD_FILES})
     "${JE4_PRELOAD_FLAGS} --preload-file \"${CMAKE_CURRENT_SOURCE_DIR}/preloads/${file}\"@/${file}")
 endforeach()
 
-if (OFF)
-        set(JE4_DEBUG_FLAGS "-g4 -s ASSERTIONS=1 -s SAFE_HEAP=1")
-else()
-        set(JE4_DEBUG_FLAGS "")
-endif()
-
 set_target_properties(joyengineecs4w PROPERTIES
         SUFFIX ".html"
         LINK_FLAGS 
@@ -86,5 +80,4 @@ set_target_properties(joyengineecs4w PROPERTIES
         -s MIN_SAFARI_VERSION=150000 \
         -s MIN_CHROME_VERSION=130 \
         -s MIN_FIREFOX_VERSION=130 \
-        ${JE4_DEBUG_FLAGS} \
         ${JE4_PRELOAD_FLAGS}")
