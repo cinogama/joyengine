@@ -2524,6 +2524,17 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
         = jeecs::basic::make_new_string(
             _glsl_generator.generate_fragment(shader_wrapper_ptr).c_str());
 
+    // 将hlsl翻译到spir-v，不使用glsl的原因是JoyEngine使用的glsl版本是v330
+#if JE_ENABLE_WEBGL20_GAPI
+    // Disable hlsl to spir-v because a align access bug? in wasm.
+    write_to_shader->m_vertex_hlsl_src = nullptr;
+    write_to_shader->m_fragment_hlsl_src = nullptr;
+
+    write_to_shader->m_vertex_spirv_codes = nullptr;
+    write_to_shader->m_fragment_spirv_codes = nullptr;
+    write_to_shader->m_vertex_spirv_count = 0;
+    write_to_shader->m_fragment_spirv_count = 0;
+#else
     jeecs::shader_generator::hlsl_generator _hlsl_generator;
     write_to_shader->m_vertex_hlsl_src
         = jeecs::basic::make_new_string(
@@ -2532,15 +2543,15 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
         = jeecs::basic::make_new_string(
             _hlsl_generator.generate_fragment(shader_wrapper_ptr).c_str());
 
-    // 将hlsl翻译到spir-v，不使用glsl的原因是JoyEngine使用的glsl版本是v330
-    write_to_shader->m_vertex_spirv_codes=
+    write_to_shader->m_vertex_spirv_codes =
         _jegl_parse_spir_v_from_hlsl(
             write_to_shader->m_vertex_hlsl_src, false, 
             &write_to_shader->m_vertex_spirv_count);
-    write_to_shader->m_fragment_spirv_codes=
+    write_to_shader->m_fragment_spirv_codes =
         _jegl_parse_spir_v_from_hlsl(
             write_to_shader->m_fragment_hlsl_src, true, 
             &write_to_shader->m_fragment_spirv_count);
+#endif
 
     write_to_shader->m_vertex_in_count = shader_wrapper_ptr->vertex_in.size();
     write_to_shader->m_vertex_in = new jegl_shader::vertex_in_variables[write_to_shader->m_vertex_in_count];
@@ -2695,10 +2706,16 @@ void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader)
 {
     je_mem_free((void*)write_to_shader->m_vertex_glsl_src);
     je_mem_free((void*)write_to_shader->m_fragment_glsl_src);
-    je_mem_free((void*)write_to_shader->m_vertex_hlsl_src);
-    je_mem_free((void*)write_to_shader->m_fragment_hlsl_src);
-    je_mem_free((void*)write_to_shader->m_vertex_spirv_codes);
-    je_mem_free((void*)write_to_shader->m_fragment_spirv_codes);
+
+    if (write_to_shader->m_vertex_hlsl_src)
+        je_mem_free((void*)write_to_shader->m_vertex_hlsl_src);
+    if (write_to_shader->m_fragment_hlsl_src)
+        je_mem_free((void*)write_to_shader->m_fragment_hlsl_src);
+
+    if (write_to_shader->m_vertex_spirv_codes != nullptr)
+        je_mem_free((void*)write_to_shader->m_vertex_spirv_codes);
+    if (write_to_shader->m_fragment_spirv_codes != nullptr)
+        je_mem_free((void*)write_to_shader->m_fragment_spirv_codes);
 
     delete[]write_to_shader->m_vertex_in;
 

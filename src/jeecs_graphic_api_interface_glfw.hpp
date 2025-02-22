@@ -143,7 +143,17 @@ namespace jeecs::graphic
 
         virtual void create_interface(jegl_context* thread, const jegl_interface_config* config) override
         {
+            auto display_mode = config->m_display_mode;
             auto* primary_monitor = glfwGetPrimaryMonitor();
+
+#if JE_ENABLE_WEBGL20_GAPI
+            m_interface_width = config->m_width;
+            m_interface_height = config->m_height;
+
+            display_mode = jegl_interface_config::display_mode::WINDOWED;
+
+            assert(config->m_width != 0 && config->m_height != 0);
+#else
             auto* primary_monitor_video_mode = glfwGetVideoMode(primary_monitor);
 
             m_interface_width = config->m_width == 0
@@ -158,13 +168,14 @@ namespace jeecs::graphic
                 config->m_fps == 0
                 ? primary_monitor_video_mode->refreshRate
                 : (int)config->m_fps);
+#endif
             glfwWindowHint(GLFW_RESIZABLE, config->m_enable_resize ? GLFW_TRUE : GLFW_FALSE);
             glfwWindowHint(GLFW_SAMPLES, (int)config->m_msaa);
 
             je_io_update_windowsize(
                 (int)m_interface_width, (int)m_interface_height);
 
-            switch (config->m_display_mode)
+            switch (display_mode)
             {
             case jegl_interface_config::display_mode::BOARDLESS:
                 glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
@@ -192,7 +203,9 @@ namespace jeecs::graphic
                 break;
             }
 
-#ifndef JE_ENABLE_WEBGL20_GAPI
+#if JE_ENABLE_WEBGL20_GAPI
+            // Do nothing.
+#else
             const char* reason;
             auto err_code = glfwGetError(&reason);
             if (err_code != GLFW_NO_ERROR)
@@ -240,9 +253,13 @@ namespace jeecs::graphic
             glfwSetKeyCallback(_m_windows, glfw_callback_keyboard_stage_changed);
             glfwSetWindowUserPointer(_m_windows, this);
 
+#if JE_ENABLE_WEBGL20_GAPI
+            // Donot sync for webgl.
+#else
             if (config->m_fps == 0)
                 glfwSwapInterval(1);
             else
+#endif
                 glfwSwapInterval(0);
         }
         virtual void swap_for_opengl() override
@@ -298,7 +315,7 @@ namespace jeecs::graphic
         HWND win32_handle() const
         {
             return glfwGetWin32Window(_m_windows);
-        }       
+        }
 #endif
     };
 }

@@ -54,12 +54,18 @@ file(GLOB PRELOAD_FILES
         RELATIVE 
         "${CMAKE_CURRENT_SOURCE_DIR}/preloads"
         "${CMAKE_CURRENT_SOURCE_DIR}/preloads/*")
-set(PRELOAD_FLAGS "")
+set(JE4_PRELOAD_FLAGS "")
 
 foreach(file ${PRELOAD_FILES})
-    set(PRELOAD_FLAGS 
-    "${PRELOAD_FLAGS} --preload-file \"${CMAKE_CURRENT_SOURCE_DIR}/preloads/${file}\"@/${file}")
+    set(JE4_PRELOAD_FLAGS 
+    "${JE4_PRELOAD_FLAGS} --preload-file \"${CMAKE_CURRENT_SOURCE_DIR}/preloads/${file}\"@/${file}")
 endforeach()
+
+if (OFF)
+        set(JE4_DEBUG_FLAGS "-g4 -s ASSERTIONS=1 -s SAFE_HEAP=1")
+else()
+        set(JE4_DEBUG_FLAGS "")
+endif()
 
 set_target_properties(joyengineecs4w PROPERTIES
         SUFFIX ".html"
@@ -68,10 +74,17 @@ set_target_properties(joyengineecs4w PROPERTIES
         -s MEMORY64=${JE4WEBGL_MEMORY64} \
         -s USE_PTHREADS=1 \
         -s SHARED_MEMORY=1 \
+        -s INITIAL_MEMORY=33554432 \
         -s PTHREAD_POOL_SIZE=16 \
+        -s PTHREAD_POOL_SIZE_STRICT=0 \
         -s USE_WEBGL2=1 \
         -s USE_GLFW=3 \
-        -s ALLOW_MEMORY_GROWTH \
-        -s STACK_SIZE=1048576 \
+        -s ALLOW_MEMORY_GROWTH=1 \
+        -s STACK_SIZE=16777216 \
+        -s DEFAULT_PTHREAD_STACK_SIZE=16777216 \
         -s WASM_BIGINT=1 \
-        ${PRELOAD_FLAGS}")
+        -s MIN_SAFARI_VERSION=150000 \
+        -s MIN_CHROME_VERSION=130 \
+        -s MIN_FIREFOX_VERSION=130 \
+        ${JE4_DEBUG_FLAGS} \
+        ${JE4_PRELOAD_FLAGS}")

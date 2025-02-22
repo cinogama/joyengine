@@ -219,6 +219,7 @@ if (JE4_WASM_TARGET)
     # Use emscripten openal for wasm target.
     # https://emscripten.org/docs/porting/Audio.html 
     target_link_libraries(joyecs PRIVATE openal)
+    target_compile_definitions(joyecs PRIVATE -DJE4_WASM_TARGET)
 else()
     target_link_libraries(joyecs PRIVATE OpenAL)
 endif()
