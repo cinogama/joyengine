@@ -81,7 +81,7 @@
         </div>
     </div>
 
-    <script>
+    <script type='text/javascript'>
         function setProgress(progress) {
             var progressBar = document.getElementById('progressBar');
             progressBar.style.width = progress + '%';
@@ -94,9 +94,16 @@
             var progressBarContainer = document.getElementById('progressBarContainer');
             progressBarContainer.style.opacity = alpha;
         }
-    </script>
 
-    <script type='text/javascript'>
+        function adjustHeight() {
+            const content = document.querySelector('div.joyengineecs_border');
+            const viewportHeight = window.innerHeight;
+            content.style.height = `${viewportHeight - 45}px`;
+        }
+
+        // Adjust height on initial load and on window resize
+        window.addEventListener('load', adjustHeight);
+        window.addEventListener('resize', adjustHeight);
 
         var Module = {
             print: (function () {
