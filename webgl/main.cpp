@@ -15,6 +15,9 @@ using namespace jeecs;
 
 class je_webgl_surface_context
 {
+    int canvas_width = 0;
+    int canvas_height = 0;
+
     typing::type_unregister_guard *_je_type_guard = nullptr;
     jegl_context *_jegl_graphic_thread = nullptr;
     bool _jegl_inited = false;
@@ -65,25 +68,46 @@ public:
                 jegl_sync_init(_jegl_graphic_thread, false);
             }
         }
-        else if (jegl_sync_state::JEGL_SYNC_COMPLETE != jegl_sync_update(_jegl_graphic_thread))
-            return false;
+        else
+        {
+            if (jegl_sync_state::JEGL_SYNC_COMPLETE != jegl_sync_update(_jegl_graphic_thread))
+                return false;
+
+            double width, height;
+            if (EMSCRIPTEN_RESULT_SUCCESS == emscripten_get_element_css_size("#canvas", &width, &height))
+            {
+                int rwidth = static_cast<int>(std::round(width));
+                int rheight = static_cast<int>(std::round(height));
+
+                if (canvas_width != rwidth || canvas_height != rheight)
+                {
+                    canvas_width = rwidth;
+                    canvas_height = rheight;
+
+                    if (width > 0 && height > 0)
+                    {
+                        // debug::loginfo("Canvas size changed: %d, %d", rwidth, rheight);
+                        je_io_set_windowsize(rwidth, rheight);
+                    }
+                }
+            }
+        }
 
         return true;
     }
 };
 
-je_webgl_surface_context* g_surface_context = nullptr;
+je_webgl_surface_context *g_surface_context = nullptr;
 
-void
-webgl_rend_job_callback()
+void webgl_rend_job_callback()
 {
     if (g_surface_context == nullptr)
-    g_surface_context = new je_webgl_surface_context();
+        g_surface_context = new je_webgl_surface_context();
 
     if (!g_surface_context->update_frame())
     {
         delete g_surface_context;
-        exit(0);
+        emscripten_cancel_main_loop();
     }
 }
 

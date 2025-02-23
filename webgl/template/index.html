@@ -7,6 +7,7 @@
     <title>JoyEngineECS(JoyEngine 4 WebGL2.0)</title>
     <style>
         body {
+            background-color: black;
             font-family: arial;
             margin: 0;
             padding: none;
@@ -25,12 +26,13 @@
 
         div.joyengineecs_border {
             border: 1px solid black;
+            background-color: black;
             display: flex;
             justify-content: center;
             align-items: center;
             width: 100%;
-            height: 100vh;
-            /* Full viewport height */
+            height: calc(100vh - 45px);
+            /* Subtract the height of the bottom bar */
             margin: 0;
             padding: 0;
             box-sizing: border-box;
@@ -38,8 +40,25 @@
 
         /* the canvas *must not* have any border or padding, or mouse coords will be wrong */
         canvas.joyengineecs {
+            width: 100%;
+            height: 100%;
             border: 0px none;
             background-color: black;
+        }
+
+        div.bottom_bar {
+            width: 100%;
+            height: 45px;
+            background-color: white;
+            display: flex;
+            align-items: center;
+            padding-left: 10px;
+            box-sizing: border-box;
+            position: relative;
+            border-top-left-radius: 10px;
+            /* Rounded top-left corner */
+            border-top-right-radius: 10px;
+            /* Rounded top-right corner */
         }
     </style>
 </head>
@@ -47,18 +66,18 @@
 <body>
     <div class="joyengineecs_border">
         <canvas class="joyengineecs" id="canvas" oncontextmenu="event.preventDefault()" tabindex=-1></canvas>
-        <img src="./icon/cinoicon_light.png" alt="Cino Icon"
-            style="position: absolute; bottom: 10px; left: 10px; transform: translateX(0) scale(0.1); transform-origin: left bottom;">
-
-        <img src="./icon/Joy.gif" alt="Icon"
-            style="position: absolute; bottom: 10px; left: 120px; transform: translateX(0) scale(0.4); transform-origin: left bottom;">
-
-        <div style="position: absolute; bottom: 10px; left: 200px; color: black; font-size: 16px;">
-            (C)Cinogama project 2025. Powered by JoyEngine 4 WebGL 2.0.</div>
-
         <div id="progressBarContainer"
             style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 50%; height: 5px; background-color: #105a5a;">
             <div id="progressBar" style="width: 0%; height: 100%; background-color: #00ffff;"></div>
+        </div>
+    </div>
+    <div class="bottom_bar">
+        <div style="display: flex; align-items: center;">
+            <img src="./icon/cinoicon_light.png" alt="Cino Icon" style="height: 28px; margin-right: 10px; margin-top: 2px;">
+            <img src="./icon/Joy.gif" alt="Icon" style="height: 32px; margin-right: 10px; margin-top: -2px;">
+        </div>
+        <div style="color: black; font-size: 16px;">
+            (C)Cinogama project 2025. Powered by JoyEngine 4 WebGL 2.0.
         </div>
     </div>
 
@@ -102,19 +121,18 @@
                 return canvas;
             })(),
             setStatus: (text) => {
+                console.log('status: ' + text);
+
                 Module.setStatus.last ??= { time: Date.now(), text: '' };
                 if (text === Module.setStatus.last.text) return;
                 var m = text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
                 var now = Date.now();
                 if (m && now - Module.setStatus.last.time < 30)
-                    // if this is a progress update, skip it if too soon
                     return;
+
                 Module.setStatus.last.time = now;
                 Module.setStatus.last.text = text;
                 if (m) {
-                    // text = m[1];
-                    // progressElement.value = parseInt(m[2]) * 100;
-                    // progressElement.max = parseInt(m[4]) * 100;
                     setProgressAlpha(1);
                     setProgress(parseInt(m[2]) * 100 / parseInt(m[4]));
                 } else {
@@ -127,7 +145,7 @@
                             alpha -= 0.05;
                             setProgressAlpha(alpha);
 
-                            if (getProgress() != 100 ||  alpha <= 0) {
+                            if (getProgress() != 100 || alpha <= 0) {
                                 clearInterval(fadeOutInterval);
                             }
                         }, 30);
@@ -142,7 +160,7 @@
                     : 'All downloads complete.');
             }
         };
-        
+
         Module.setStatus('Downloading...');
         window.onerror = (event) => {
             alert('Exception thrown, see JavaScript console:\n  ' + event);
