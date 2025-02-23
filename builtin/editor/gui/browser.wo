@@ -49,7 +49,10 @@ namespace editor::gui
 
                 Text("字体");
                 SameLine();
-                create_context[2] = Combo("##fontname", fonts, create_context[2]);
+                do Combo("##fontname", fonts, create_context[2])
+                    ->> \new_idx = create_context[2] = option::value(new_idx);
+                    ;
+
                 SameLine();
                 do InputInt("##fontsize", create_context[3])->>func(new_size){
                     if (new_size > 0)

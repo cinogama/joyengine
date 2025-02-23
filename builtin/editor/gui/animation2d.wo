@@ -684,19 +684,20 @@ namespace editor::gui::animation2d
                                                     }
 
                                                     let members = 
-                                                        selecting_member_id->get
+                                                        selecting_id->get
                                                         =>> \idx = all_components->get(idx);
                                                         ->> \t = t->get_members_info;
                                                         ->  or([]);
 
                                                     SameLine();
 
-                                                    selecting_member_id->set <|
-                                                        Combo(
-                                                            "成员", 
-                                                            members->>\nametype = nametype[0] + ": " + nametype[1]->name;, 
-                                                            selecting_member_id->get);
-
+                                                    do Combo(
+                                                        "成员", 
+                                                        members->>\nametype = nametype[0] + ": " + nametype[1]->name;, 
+                                                        selecting_member_id->get)
+                                                        ->> \new_idx = selecting_member_id->set(option::value(new_idx));
+                                                        ;
+     
                                                     do CheckBox("偏移模式", offset_mode->get)->>\nv = offset_mode->set(nv);;
                                                     do CheckBox("插值模式", lerp_mode->get)->>\nv = lerp_mode->set(nv);;
 
@@ -895,8 +896,10 @@ namespace editor::gui::animation2d
                                             value(show)?
                                                 if (show)
                                                 {
-                                                    uniform_type_selected->set <|
-                                                        Combo("类型", uniform_types->>\namevalue = namevalue[0];, uniform_type_selected->get);
+
+                                                    do Combo("类型", uniform_types->>\namevalue = namevalue[0];, uniform_type_selected->get)
+                                                        ->> \new_idx = uniform_type_selected->set(option::value(new_idx));
+                                                        ;
 
                                                     SameLine();
 

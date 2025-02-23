@@ -234,7 +234,7 @@ using std;
 
 public func launcher(total_frame: int)
 {
-    for (let i : range::create(0, total_frame - 1))
+    for (let mut i = 0; i < total_frame; i += 1)
         launch(i, 1);
 }
 
