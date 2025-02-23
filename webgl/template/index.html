@@ -4,6 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>JoyEngineECS(JoyEngine 4 WebGL2.0)</title>
     <style>
         body {
@@ -31,7 +32,7 @@
             justify-content: center;
             align-items: center;
             width: 100%;
-            height: calc(100vh - 45px);
+            height: 100vh;
             /* Subtract the height of the bottom bar */
             margin: 0;
             padding: 0;
@@ -46,7 +47,7 @@
             background-color: black;
         }
 
-        div.bottom_bar {
+        div.top_bar {
             width: 100%;
             height: 45px;
             background-color: white;
@@ -54,11 +55,32 @@
             align-items: center;
             padding-left: 10px;
             box-sizing: border-box;
-            position: relative;
-            border-top-left-radius: 10px;
-            /* Rounded top-left corner */
-            border-top-right-radius: 10px;
-            /* Rounded top-right corner */
+            position: fixed;
+            /* Changed to fixed positioning */
+            top: 0;
+            /* Positioned at the bottom of the viewport */
+            left: 0;
+            border-bottom-left-radius: 10px;
+            border-bottom-right-radius: 10px;
+            z-index: 1000;
+            /* Ensure it stays on top of other content */
+        }
+
+        div.switch_top_bar {
+            position: fixed;
+            top: 45px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 50px;
+            height: 15px;
+            background-color: rgba(255, 255, 255, 0.5);
+            border-bottom-left-radius: 10px;
+            border-bottom-right-radius: 10px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1001;
         }
     </style>
 </head>
@@ -71,17 +93,51 @@
             <div id="progressBar" style="width: 0%; height: 100%; background-color: #00ffff;"></div>
         </div>
     </div>
-    <div class="bottom_bar">
+
+    <div class="switch_top_bar" onclick="toggleBottomBar()"></div>
+    <div class="top_bar">
         <div style="display: flex; align-items: center;">
-            <img src="./icon/cinoicon_light.png" alt="Cino Icon" style="height: 28px; margin-right: 10px; margin-top: 2px;">
+            <img src="./icon/cinoicon_light.png" alt="Cino Icon"
+                style="height: 28px; margin-right: 10px; margin-top: 2px;">
             <img src="./icon/Joy.gif" alt="Icon" style="height: 32px; margin-right: 10px; margin-top: -2px;">
         </div>
-        <div style="color: black; font-size: 16px;">
+        <div style="color: black; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
             (C)Cinogama project 2025. Powered by JoyEngine 4 WebGL 2.0.
+        </div>
+        <div style="margin-left: auto; margin-right: 10px;">
+            <div id="toggleNavButton"
+                style="width: 40px; height: 40px; background-color: #3d9eec; border-radius: 5px; cursor: pointer;"
+                onclick="toggleFullScreenState()">
+                <img id="fullscreenIcon" src="./fullscreen.svg" alt="Fullscreen Icon" style="width: 100%; height: 100%;">
+            </div>
         </div>
     </div>
 
     <script type='text/javascript'>
+        function hideBottomBar() {
+            document.querySelector('.top_bar').style.display = 'none';
+
+            const switchBottomBar = document.querySelector('.switch_top_bar');
+            switchBottomBar.style.top = '0';
+        }
+        function showBottomBar() {
+            document.querySelector('.top_bar').style.display = 'flex';
+
+            const switchBottomBar = document.querySelector('.switch_top_bar');
+            switchBottomBar.style.top = ''; // 恢复默认值
+        }
+
+        function toggleBottomBar() {
+            const bottomBar = document.querySelector('.top_bar');
+            const isHidden = bottomBar.style.display === 'none';
+
+            if (isHidden) {
+                showBottomBar();
+            } else {
+                hideBottomBar();
+            }
+        }
+
         function setProgress(progress) {
             var progressBar = document.getElementById('progressBar');
             progressBar.style.width = progress + '%';
@@ -97,8 +153,7 @@
 
         function adjustHeight() {
             const content = document.querySelector('div.joyengineecs_border');
-            const viewportHeight = window.innerHeight;
-            content.style.height = `${viewportHeight - 45}px`;
+            content.style.height = `${window.innerHeight}px`;
         }
 
         // Adjust height on initial load and on window resize
@@ -175,6 +230,11 @@
                 if (text) console.error('[post-exception status] ' + text);
             };
         };
+
+        function toggleFullScreenState() {
+            Module.requestFullscreen(false, true);
+        }
+
     </script>
     <script async type="text/javascript" src="joyengineecs4w.js"></script>
 </body>
