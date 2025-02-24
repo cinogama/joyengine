@@ -10,6 +10,7 @@
 
 #include <cmath>
 #include <optional>
+#include <cassert>
 
 using namespace jeecs;
 
@@ -35,10 +36,12 @@ public:
     je_webgl_surface_context()
     {
         je_init(0, nullptr);
+        jeecs::debug::loginfo("WebGL application started!");
 
         // Update engine paths settings.
-        jeecs_file_set_host_path("");
-        jeecs_file_set_runtime_path("");
+        jeecs_file_set_host_path("/.je4");
+        jeecs_file_set_runtime_path("/.je4");
+        jeecs_file_update_default_fimg("");
 
         _je_type_guard = new typing::type_unregister_guard();
         entry::module_entry(_je_type_guard);
@@ -55,6 +58,8 @@ public:
         jegl_sync_shutdown(_jegl_graphic_thread, false);
 
         entry::module_leave(_je_type_guard);
+
+        jeecs::debug::loginfo("WebGL application shutdown!");
         je_finish();
     }
 
@@ -101,28 +106,57 @@ je_webgl_surface_context *g_surface_context = nullptr;
 
 void webgl_rend_job_callback()
 {
-    if (g_surface_context == nullptr)
-        
+    if (g_surface_context != nullptr)
+    {
+        if (!g_surface_context->update_frame())
+            // Surface has been requested to close, stop the main loop.
+            emscripten_cancel_main_loop();
+    }
+}
 
-    if (!g_surface_context->update_frame())
-        // Surface has been requested to close, stop the main loop.
-        emscripten_cancel_main_loop();
+extern "C"
+{
+    void EMSCRIPTEN_KEEPALIVE _je4_js_callback_prepare_surface_context()
+    {
+        assert(g_surface_context == nullptr);
+        g_surface_context = new je_webgl_surface_context();
+    }
 }
 
 int main(int argc, char **argv)
 {
     // Mount idbfs to /builtin
     EM_ASM(
-        if (!FS.analyzePath('/builtin').exists) {
-            FS.mkdir('/builtin');
-        }
-        FS.mount(IDBFS, {}, '/');
-    );
+        if (!FS.analyzePath('/.je4').exists) {
+            FS.mkdir('/.je4');
+        } FS.mount(IDBFS,
+                   {
+                       autoPersist : true
+                   },
+                   '/.je4');
 
-    g_surface_context = new je_webgl_surface_context();
-    {
-        emscripten_set_main_loop(webgl_rend_job_callback, 0, 1);
-    }
-    delete g_surface_context;
+        FS.syncfs(true, function(err) {
+            if (err != null) {
+                console.error("Failed to sync filesystem: " + err);
+                alert("Failed to sync IDBFS.");
+            }
+            else
+            {
+                // Invoke _je4_js_callback_prepare_surface_context
+                const start_context = 
+                    Module.cwrap(
+                        "_je4_js_callback_prepare_surface_context",
+                        null, 
+                        []);
+
+                // Start the context.
+                start_context();
+                
+            } }););
+
+    emscripten_set_main_loop(webgl_rend_job_callback, 0, 1);
+    if (g_surface_context != nullptr)
+        delete g_surface_context;
+
     return 0;
 }

@@ -47,7 +47,7 @@ add_executable(joyengineecs4w main.cpp)
 target_link_libraries(joyengineecs4w
         # JoyEngine core
         PUBLIC joyecs
-        PRIVATE woolang)
+        PRIVATE woolang idbfs.js)
 
 # Use wasm64
 file(GLOB PRELOAD_FILES 
@@ -74,10 +74,11 @@ set_target_properties(joyengineecs4w PROPERTIES
         -s USE_WEBGL2=1 \
         -s USE_GLFW=3 \
         -s ALLOW_MEMORY_GROWTH=1 \
-        -s STACK_SIZE=16777216 \
-        -s DEFAULT_PTHREAD_STACK_SIZE=16777216 \
+        -s STACK_SIZE=1048576 \
+        -s DEFAULT_PTHREAD_STACK_SIZE=1048576 \
         -s WASM_BIGINT=1 \
         -s MIN_SAFARI_VERSION=150000 \
         -s MIN_CHROME_VERSION=130 \
         -s MIN_FIREFOX_VERSION=130 \
+        -s EXPORTED_RUNTIME_METHODS=[\"cwrap\"] \
         ${JE4_PRELOAD_FLAGS}")
