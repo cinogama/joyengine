@@ -129,11 +129,17 @@ int main(int argc, char **argv)
     EM_ASM(
         if (!FS.analyzePath('/.je4').exists) {
             FS.mkdir('/.je4');
-        } FS.mount(IDBFS,
-                   {
-                       autoPersist : true
-                   },
-                   '/.je4');
+        }
+        if (!FS.analyzePath('/.je4/builtin').exists) {
+            FS.mkdir('/.je4/builtin');
+        }
+
+        FS.mount(
+            IDBFS,
+            {
+                autoPersist : true
+            },
+            '/.je4');
 
         FS.syncfs(true, function(err) {
             if (err != null) {
