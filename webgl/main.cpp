@@ -36,12 +36,12 @@ public:
     {
         je_init(0, nullptr);
 
+        // Update engine paths settings.
+        jeecs_file_set_host_path("");
+        jeecs_file_set_runtime_path("");
+
         _je_type_guard = new typing::type_unregister_guard();
         entry::module_entry(_je_type_guard);
-
-        jeecs_file_update_default_fimg("");
-
-        jeecs::debug::loginfo("WebGL application started!");
 
         jegl_register_sync_thread_callback(
             _jegl_webgl_sync_thread_created, this);
@@ -102,17 +102,27 @@ je_webgl_surface_context *g_surface_context = nullptr;
 void webgl_rend_job_callback()
 {
     if (g_surface_context == nullptr)
-        g_surface_context = new je_webgl_surface_context();
+        
 
     if (!g_surface_context->update_frame())
-    {
-        delete g_surface_context;
+        // Surface has been requested to close, stop the main loop.
         emscripten_cancel_main_loop();
-    }
 }
 
 int main(int argc, char **argv)
 {
-    emscripten_set_main_loop(webgl_rend_job_callback, 0, 1);
+    // Mount idbfs to /builtin
+    EM_ASM(
+        if (!FS.analyzePath('/builtin').exists) {
+            FS.mkdir('/builtin');
+        }
+        FS.mount(IDBFS, {}, '/');
+    );
+
+    g_surface_context = new je_webgl_surface_context();
+    {
+        emscripten_set_main_loop(webgl_rend_job_callback, 0, 1);
+    }
+    delete g_surface_context;
     return 0;
 }

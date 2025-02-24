@@ -147,6 +147,33 @@ WO_API wo_api wojeapi_read_file_all(wo_vm vm, wo_value args)
     return wo_ret_option_none(vm);
 }
 
+WO_API wo_api wojeapi_file_cache_write_all(wo_vm vm, wo_value args)
+{
+    // public func saveall(path: string, content : string) = > bool;
+    if (auto* cache = jeecs_create_cache_file(wo_string(args + 0), 0, 1))
+    {
+        auto data_length = wo_str_bytelen(args + 1);
+        if (data_length == jeecs_write_cache_file(wo_string(args + 1), sizeof(char), data_length, cache))
+            return wo_ret_bool(vm, true);
+    }
+    return wo_ret_bool(vm, false);
+}
+WO_API wo_api wojeapi_file_cache_read_all(wo_vm vm, wo_value args)
+{
+    // public func readall(path: string) = > option<string>;
+    if (auto* cache = jeecs_load_cache_file(wo_string(args + 0), 0, -1))
+    {
+        std::vector<char> readed_buf(cache->m_file_length);
+        auto readed_len = jeecs_file_read(readed_buf.data(), sizeof(char), cache->m_file_length, cache);
+        readed_buf.resize(readed_len);
+
+        jeecs_file_close(cache);
+
+        return wo_ret_option_raw_string(vm, readed_buf.data(), readed_buf.size());
+    }
+    return wo_ret_option_none(vm);
+}
+
 WO_API wo_api wojeapi_mark_shared_glresource_outdated(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm, jegl_mark_shared_resources_outdated(wo_string(args + 0)));
@@ -2987,6 +3014,13 @@ namespace je
     {
         extern("libjoyecs", "wojeapi_read_file_all", slow)
         public func readall(path: string)=> option<string>;
+        namespace cache
+        {
+            extern("libjoyecs", "wojeapi_file_cache_write_all", slow)
+            public func saveall(path: string, content: string)=> bool;
+            extern("libjoyecs", "wojeapi_file_cache_read_all", slow)
+            public func readall(path: string)=> option<string>;
+        }
     }
 
     extern("libjoyecs", "wojeapi_log")

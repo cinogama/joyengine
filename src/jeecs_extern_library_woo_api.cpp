@@ -311,6 +311,8 @@ WO_API wo_api wojeapi_dynamic_parser_update_type(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_editor_register_panic_hook(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_entity_get_prefab_path(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_entity_set_prefab_path(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_file_cache_read_all(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_file_cache_write_all(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_find_entity_with_chunk_info(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_finish_fimg_packer(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_font_load_char(wo_vm vm, wo_value args);
@@ -808,6 +810,8 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"wojeapi_editor_register_panic_hook", (void*)&wojeapi_editor_register_panic_hook},
         wo_extern_lib_func_t{"wojeapi_entity_get_prefab_path", (void*)&wojeapi_entity_get_prefab_path},
         wo_extern_lib_func_t{"wojeapi_entity_set_prefab_path", (void*)&wojeapi_entity_set_prefab_path},
+        wo_extern_lib_func_t{"wojeapi_file_cache_read_all", (void*)&wojeapi_file_cache_read_all},
+        wo_extern_lib_func_t{"wojeapi_file_cache_write_all", (void*)&wojeapi_file_cache_write_all},
         wo_extern_lib_func_t{"wojeapi_find_entity_with_chunk_info", (void*)&wojeapi_find_entity_with_chunk_info},
         wo_extern_lib_func_t{"wojeapi_finish_fimg_packer", (void*)&wojeapi_finish_fimg_packer},
         wo_extern_lib_func_t{"wojeapi_font_load_char", (void*)&wojeapi_font_load_char},
