@@ -17,6 +17,7 @@ set(JE4_ENABLE_METAL_GAPI               OFF CACHE BOOL "Disable Metal on WebGL" 
 
 set(JE4_WASM_TARGET                     ON CACHE BOOL "Enable WASM target" FORCE)
 
+set(WO_DISABLE_COMPILER                 ON CACHE BOOL "Disable compiler on WebGL to reduce size" FORCE)
 set(WO_SUPPORT_ASMJIT                   OFF CACHE BOOL "Disable JIT on WebGL" FORCE)
 set(WO_DISABLE_FUNCTION_FOR_WASM        ON CACHE BOOL "Disable dynamic lib loading" FORCE)
 set(BOX2D_AVX2                          OFF CACHE BOOL "Disable avx2 for box2d." FORCE)
@@ -78,7 +79,7 @@ set_target_properties(joyengineecs4w PROPERTIES
         -s DEFAULT_PTHREAD_STACK_SIZE=1048576 \
         -s WASM_BIGINT=1 \
         -s MIN_SAFARI_VERSION=150000 \
-        -s MIN_CHROME_VERSION=130 \
-        -s MIN_FIREFOX_VERSION=130 \
+        -s MIN_CHROME_VERSION=85 \
+        -s MIN_FIREFOX_VERSION=79 \
         -s EXPORTED_RUNTIME_METHODS=[\"cwrap\"] \
         ${JE4_PRELOAD_FLAGS}")
