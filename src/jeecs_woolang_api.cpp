@@ -153,7 +153,11 @@ WO_API wo_api wojeapi_file_cache_write_all(wo_vm vm, wo_value args)
     if (auto* cache = jeecs_create_cache_file(wo_string(args + 0), 0, 1))
     {
         auto data_length = wo_str_bytelen(args + 1);
-        if (data_length == jeecs_write_cache_file(wo_string(args + 1), sizeof(char), data_length, cache))
+        auto written_len = jeecs_write_cache_file(wo_string(args + 1), sizeof(char), data_length, cache);
+
+        jeecs_close_cache_file(cache);
+
+        if (data_length == written_len)
             return wo_ret_bool(vm, true);
     }
     return wo_ret_bool(vm, false);
