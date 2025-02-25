@@ -211,7 +211,7 @@ target_link_libraries(joyecs PRIVATE
     box2d 
     assimp)
 
-if (JE4_ENABLE_GLSLANG_SPIRV_COMPILER)
+if (JE4_ENABLE_VULKAN130_GAPI OR (NOT JE4_BUILD_FOR_RUNTIME_TARGET_ONLY))
     target_link_libraries(joyecs PRIVATE 
     glslang
     SPIRV 
