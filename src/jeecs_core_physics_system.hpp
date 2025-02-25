@@ -811,7 +811,8 @@ namespace je::physics2d::config
     let mut result = F"let {group_name} = je::physics2d::config::CollideGroupInfo::create();";
     for (let (typename, mode) : types)
     {
-        result += F"{group_name}->add_filter_components({typename}::id, je::physics2d::config::CollideGroupInfo::Requirement::{mode});";
+        result += F"{group_name}->add_filter_components({
+            typename}::type::typeinfo, je::physics2d::config::CollideGroupInfo::Requirement::{mode});";
     }
     return result;
 }
