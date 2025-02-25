@@ -16,6 +16,12 @@ option(JE4_COPYING_BUILTIN_FILES            "Copy builtin files to build."      
 option(JE4_STATIC_LINK_MODULE_AND_PKGS      "Static link packages into engine."     ON)
 option(JE4_BUILD_SHARED_CORE                "Build shared engine core library."     ON)
 
+# Enabled JE4_BUILD_FOR_RUNTIME_TARGET_ONLY, compiler will discard unused library, 
+# and some features will be disabled.
+# for example, if you only use OpenGL, the shader of dx11 and vulkan will 
+# NOT be generated and loaded, it can reduce the size of the final binary.
+option(JE4_BUILD_FOR_RUNTIME_TARGET_ONLY    "Build for runtime target only." OFF)
+
 option(JE4_ENABLE_DX11_GAPI         "Enable DX11 Graphic api"           OFF)
 option(JE4_ENABLE_OPENGL330_GAPI    "Enable OpenGL 3.3 Graphic API"     OFF)
 option(JE4_ENABLE_OPENGLES300_GAPI  "Enable OpenGLES 3.0 Graphic API"   OFF)
@@ -59,6 +65,10 @@ if ((JE4_ENABLE_OPENGL330_GAPI AND (JE4_ENABLE_OPENGLES300_GAPI OR JE4_ENABLE_WE
     message(FATAL_ERROR "Cannot use OpenGL3.3, OpenGLES3.0 or WebGL2.0 at same time.")
 endif()
 
+if (JE4_BUILD_FOR_RUNTIME_TARGET_ONLY)
+    target_compile_definitions(joyengine_configs INTERFACE -DJE4_BUILD_FOR_RUNTIME_TARGET_ONLY)
+endif()
+
 if (JE4_SPECIFY_OPENAL_LIB_NAME STREQUAL "")
     # openal-soft will be compiled to dynamic-libs to following LGPL license.
     set(BUILD_SHARED_LIBS ON CACHE BOOL "Build shared opengal-soft" FORCE)
@@ -68,8 +78,12 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static box2d 3.0" FORCE)
 add_subdirectory("3rd/box2c")
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static assimp" FORCE)
 add_subdirectory("3rd/assimp")
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glslangc" FORCE)
-add_subdirectory("3rd/glslang")
+
+if (JE4_ENABLE_VULKAN130_GAPI OR (NOT JE4_BUILD_FOR_RUNTIME_TARGET_ONLY))
+    target_compile_definitions(joyengine_core_macro INTERFACE -DJE4_ENABLE_GLSLANG_SPIRV_COMPILER)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glslangc" FORCE)
+    add_subdirectory("3rd/glslang")
+endif()
 # NOTE: Donot need spirv-cross. we will not generate hlsl/glsl/msl from spir-v.
 # set(SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS ON CACHE BOOL "Build static spirv-cross" FORCE)
 # set(SPIRV_CROSS_SHARED OFF CACHE BOOL "Build static spirv-cross" FORCE)
@@ -281,7 +295,7 @@ if (JE4_COPYING_BUILTIN_FILES)
     add_dependencies(COPY_RCEDIT32_FILES COPY_RCEDIT64_FILES)
     add_dependencies(jedriver COPY_RCEDIT32_FILES)
 endif()
-target_link_libraries(jedriver 
-    PRIVATE joyengine_configs
-    PRIVATE joyecs
-    PRIVATE woolang)
+target_link_libraries(jedriver PRIVATE 
+    joyengine_configs
+    joyecs
+    woolang)

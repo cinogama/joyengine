@@ -201,19 +201,23 @@ if (NOT WIN32)
     target_compile_options (box2d PRIVATE -fPIC)
 endif()
 
-target_link_libraries(joyecs 
-    PRIVATE joyengine_configs
-    PRIVATE joyengine_core_configs
-    PRIVATE ${jeecs_system_libs}
-    PRIVATE ${jeecs_graphic_libs}
-    PRIVATE ${JE4_STATIC_LINKED_PKG_AND_MODULE_LIST}
-    PRIVATE woolang
-    PRIVATE box2d 
-    PRIVATE assimp 
-    PRIVATE glslang
-    PRIVATE SPIRV 
-    # PRIVATE spirv-cross-c
-    PRIVATE glslang-default-resource-limits)
+target_link_libraries(joyecs PRIVATE 
+    joyengine_configs
+    joyengine_core_configs
+    ${jeecs_system_libs}
+    ${jeecs_graphic_libs}
+    ${JE4_STATIC_LINKED_PKG_AND_MODULE_LIST}
+    woolang
+    box2d 
+    assimp)
+
+if (JE4_ENABLE_GLSLANG_SPIRV_COMPILER)
+    target_link_libraries(joyecs PRIVATE 
+    glslang
+    SPIRV 
+    # spirv-cross-c
+    glslang-default-resource-limits)
+endif()
 
 if (JE4_SPECIFY_OPENAL_LIB_NAME STREQUAL "")
     target_link_libraries(joyecs PRIVATE OpenAL)

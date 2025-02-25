@@ -8,6 +8,8 @@ set(JE4_COPYING_BUILTIN_FILES           OFF CACHE BOOL "Disable copy builtin fil
 set(JE4_STATIC_LINK_MODULE_AND_PKGS     ON  CACHE BOOL "Enable static link packages on WebGL" FORCE)
 set(JE4_BUILD_SHARED_CORE               OFF CACHE BOOL "Disable static engine core on WebGL" FORCE)
 
+set(JE4_BUILD_FOR_RUNTIME_TARGET_ONLY   ON  CACHE BOOL "Disable method and library on WebGL" FORCE)
+
 set(JE4_ENABLE_DX11_GAPI                OFF CACHE BOOL "Disable DX11 on WebGL" FORCE)
 set(JE4_ENABLE_OPENGL330_GAPI           OFF CACHE BOOL "Disable OpenGL 3.3 on WebGL" FORCE)
 set(JE4_ENABLE_OPENGLES300_GAPI         OFF CACHE BOOL "Enable OpenGLES 3.0 on WebGL" FORCE)
@@ -40,6 +42,11 @@ endif()
 # Searches for a package provided by the game activity dependency
 set(JE4WEBGL_PATH "./../")
 add_subdirectory(${JE4WEBGL_PATH} joyengineecs.out)
+
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/output")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/output")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/output")
+set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/output")
 
 include_directories("${JE4WEBGL_PATH}/include")
 include_directories("${JE4WEBGL_PATH}/3rd/woolang/include")

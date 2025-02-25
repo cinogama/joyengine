@@ -5527,7 +5527,7 @@ namespace jeecs
             je_ecs_clear_dependence_archinfos(this);
         }
 
-        void update(const game_world& aim_world)noexcept
+        void update(const game_world& aim_world) noexcept
         {
             assert(aim_world.handle() != nullptr);
 
