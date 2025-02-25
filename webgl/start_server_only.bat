@@ -1,3 +1,3 @@
-cd build
+cd output
 python ../server.py
 cd ..

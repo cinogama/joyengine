@@ -18,8 +18,8 @@ option(JE4_BUILD_SHARED_CORE                "Build shared engine core library." 
 
 # Enabled JE4_BUILD_FOR_RUNTIME_TARGET_ONLY, compiler will discard unused library, 
 # and some features will be disabled.
-# for example, if you only use OpenGL, the shader of dx11 and vulkan will 
-# NOT be generated and loaded, it can reduce the size of the final binary.
+# for example, if you only use OpenGL, the hlsl and spir-v will NOT be generated 
+# and NOR loaded, it can reduce the size of the final binary.
 option(JE4_BUILD_FOR_RUNTIME_TARGET_ONLY    "Build for runtime target only." OFF)
 
 option(JE4_ENABLE_DX11_GAPI         "Enable DX11 Graphic api"           OFF)

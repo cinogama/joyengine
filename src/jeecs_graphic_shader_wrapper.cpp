@@ -2539,7 +2539,7 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
         fragment_spirv_src_len;
 
     // 1. Read generated source
-#ifdef JE_ENABLE_HLSL_CACHE_LOADING
+#ifdef JE_ENABLE_GLSL_CACHE_LOADING
     jeecs_file_read(&vertex_glsl_src_len, sizeof(uint64_t), 1, cache_file);
 
     _shader->m_vertex_glsl_src = (const char*)je_mem_alloc((size_t)vertex_glsl_src_len + 1);
@@ -3137,9 +3137,13 @@ void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader)
 
 void jegl_shader_generator_init()
 {
+#if defined(JE_ENABLE_SPIRV_GENERATION)
     glslang_initialize_process();
+#endif
 }
 void jegl_shader_generator_shutdown()
 {
+#if defined(JE_ENABLE_SPIRV_GENERATION)
     glslang_finalize_process();
+#endif
 }
