@@ -8,11 +8,11 @@
 #include "jeecs_imgui_backend_api.hpp"
 
 #ifdef JE_ENABLE_GLES300_GAPI
-#   ifdef __APPLE__
-#       include <OpenGLES/ES3/gl.h>
-#   else
+//#   ifdef __APPLE__
+//#       include <OpenGLES/ES3/gl.h>
+//#   else
 #       include <GLES3/gl3.h>
-#   endif
+//#   endif
 #elif defined(JE_ENABLE_WEBGL20_GAPI)
 #   include <emscripten/html5.h>
 #   include <GLES3/gl3.h>

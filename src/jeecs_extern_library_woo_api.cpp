@@ -329,6 +329,7 @@ WO_API wo_api wojeapi_get_all_worlds_in_universe(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_get_bad_shader_list_of_entity(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_get_component_from_entity(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_get_components_member(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_current_platform(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_get_editing_coord_mode(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_get_editing_entity_uid(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_get_editing_mover_mode(wo_vm vm, wo_value args);
@@ -828,6 +829,7 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"wojeapi_get_bad_shader_list_of_entity", (void*)&wojeapi_get_bad_shader_list_of_entity},
         wo_extern_lib_func_t{"wojeapi_get_component_from_entity", (void*)&wojeapi_get_component_from_entity},
         wo_extern_lib_func_t{"wojeapi_get_components_member", (void*)&wojeapi_get_components_member},
+        wo_extern_lib_func_t{"wojeapi_get_current_platform", (void*)&wojeapi_get_current_platform},
         wo_extern_lib_func_t{"wojeapi_get_editing_coord_mode", (void*)&wojeapi_get_editing_coord_mode},
         wo_extern_lib_func_t{"wojeapi_get_editing_entity_uid", (void*)&wojeapi_get_editing_entity_uid},
         wo_extern_lib_func_t{"wojeapi_get_editing_mover_mode", (void*)&wojeapi_get_editing_mover_mode},

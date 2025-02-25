@@ -4,10 +4,6 @@ cmake_minimum_required (VERSION 3.16)
 
 project ("JoyECS")
 
-if(MSVC) 
-    add_compile_options("/source-charset:utf-8")
-endif()
-
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build")
@@ -27,9 +23,33 @@ option(JE4_ENABLE_WEBGL20_GAPI      "Enable WebGL 2.0 Graphic API"      OFF)
 option(JE4_ENABLE_VULKAN130_GAPI    "Enable Vulkan 1.3 Graphic API"     OFF)
 option(JE4_ENABLE_METAL_GAPI        "Enable Metal Graphic API"          OFF)
 
-option(JE4_WASM_TARGET              "Build JoyEngine for WASM platform" OFF)
+set(JE4_SPECIFY_OPENAL_LIB_NAME "" CACHE STRING "Specified openal library name, if empty-string, use openal-soft")
+set(JE4_IGNORED_WOOLANG_PKG_LIST "" CACHE STRING "Woolang package in this list will be ignored")
 
 ##############################################################################
+
+add_library(joyengine_core_macro INTERFACE)
+if (JE4_BUILD_SHARED_CORE)
+    target_compile_definitions(joyengine_core_macro INTERFACE -DWO_SHARED_LIB)
+else()
+    target_compile_definitions(joyengine_core_macro INTERFACE -DWO_STATIC_LIB)
+endif()
+
+add_library(joyengine_configs INTERFACE)
+target_link_libraries(joyengine_configs INTERFACE joyengine_core_macro)
+target_compile_features(joyengine_configs INTERFACE cxx_std_17)
+if(MSVC) 
+    target_compile_options(joyengine_configs INTERFACE "/source-charset:utf-8")
+else()
+    target_compile_options(joyengine_configs INTERFACE -fno-exceptions)
+endif()
+
+##############################################################################
+
+if(MSVC)
+    # Set char set to UTF-8 for 3rd party libraries.
+    add_compile_options("/source-charset:utf-8")
+endif()
 
 # Cannot use gles, gl or webgl at same time because of ImGUI cannot use two lib at same time.
 if ((JE4_ENABLE_OPENGL330_GAPI AND (JE4_ENABLE_OPENGLES300_GAPI OR JE4_ENABLE_WEBGL20_GAPI))
@@ -39,8 +59,7 @@ if ((JE4_ENABLE_OPENGL330_GAPI AND (JE4_ENABLE_OPENGLES300_GAPI OR JE4_ENABLE_WE
     message(FATAL_ERROR "Cannot use OpenGL3.3, OpenGLES3.0 or WebGL2.0 at same time.")
 endif()
 
-
-if (NOT JE4_WASM_TARGET)
+if (JE4_SPECIFY_OPENAL_LIB_NAME STREQUAL "")
     # openal-soft will be compiled to dynamic-libs to following LGPL license.
     set(BUILD_SHARED_LIBS ON CACHE BOOL "Build shared opengal-soft" FORCE)
     add_subdirectory("3rd/openal-soft")
@@ -143,22 +162,6 @@ if (JE4_COPYING_BUILTIN_FILES)
     endif()
 endif()
 
-add_library(joyengine_core_macro INTERFACE)
-if (JE4_BUILD_SHARED_CORE)
-    target_compile_definitions(joyengine_core_macro INTERFACE -DWO_SHARED_LIB)
-else()
-    target_compile_definitions(joyengine_core_macro INTERFACE -DWO_STATIC_LIB)
-endif()
-
-add_library(joyengine_configs INTERFACE)
-target_link_libraries(joyengine_configs INTERFACE joyengine_core_macro)
-target_compile_features(joyengine_configs INTERFACE cxx_std_17)
-if(MSVC) 
-    target_compile_options(joyengine_configs INTERFACE "/source-charset:utf-8")
-else()
-    target_compile_options(joyengine_configs INTERFACE -fno-exceptions)
-endif()
-
 ##############################################################################
 
 include_directories("include")
@@ -196,11 +199,9 @@ if (JE4_STATIC_LINK_MODULE_AND_PKGS)
         if (EXISTS "${pkg_fullpath}/CMakeLists.txt")
             message(STATUS "Woolang package named: ${pkg_name} found!")
 
-            if (JE4_WASM_TARGET AND (
-                ("${pkg_name}" STREQUAL "socket")
-                OR ("${pkg_name}" STREQUAL "process")
-            ))
-                message(STATUS "Woolang package named: ${pkg_name} is not supported on WASM target.")
+            list (FIND JE4_IGNORED_WOOLANG_PKG_LIST ${pkg_name} find_index)
+            if (find_index GREATER -1)
+                message(STATUS "Woolang package named: ${pkg_name} is skipped.")
                 continue()
             endif()
             

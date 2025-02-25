@@ -7,7 +7,7 @@
 
 #include <GLFW/glfw3.h>
 
-#if defined(JE_OS_WINDOWS) && defined(JE_ENABLE_DX11_GAPI)
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS && defined(JE_ENABLE_DX11_GAPI)
 #   define GLFW_EXPOSE_NATIVE_WIN32 1
 #endif
 #include <GLFW/glfw3native.h>
@@ -119,7 +119,7 @@ namespace jeecs::graphic
                 glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
                 glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
                 glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-#ifdef JE_OS_WINDOWS
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
                 // ATTENTION: Windows等平台上，运行opengles的时候，环境要求EGL
                 //          但是opengles的支持仅限于移动端设备和Windows借助ARMEMU
                 //          所以这里只针对Windows做了处理
@@ -146,7 +146,7 @@ namespace jeecs::graphic
             auto display_mode = config->m_display_mode;
             auto* primary_monitor = glfwGetPrimaryMonitor();
 
-#if JE_ENABLE_WEBGL20_GAPI
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WEBGL
             m_interface_width = config->m_width;
             m_interface_height = config->m_height;
 
@@ -203,7 +203,7 @@ namespace jeecs::graphic
                 break;
             }
 
-#if JE_ENABLE_WEBGL20_GAPI
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WEBGL
             // Do nothing.
 #else
             const char* reason;
@@ -253,7 +253,7 @@ namespace jeecs::graphic
             glfwSetKeyCallback(_m_windows, glfw_callback_keyboard_stage_changed);
             glfwSetWindowUserPointer(_m_windows, this);
 
-#if JE_ENABLE_WEBGL20_GAPI
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WEBGL
             // Donot sync for webgl.
 #else
             if (config->m_fps == 0)
@@ -311,7 +311,7 @@ namespace jeecs::graphic
             return _m_windows;
         }
 
-#if defined(JE_OS_WINDOWS) && defined(JE_ENABLE_DX11_GAPI)
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS && defined(JE_ENABLE_DX11_GAPI)
         HWND win32_handle() const
         {
             return glfwGetWin32Window(_m_windows);

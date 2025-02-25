@@ -2525,8 +2525,7 @@ void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_sha
             _glsl_generator.generate_fragment(shader_wrapper_ptr).c_str());
 
     // 将hlsl翻译到spir-v，不使用glsl的原因是JoyEngine使用的glsl版本是v330
-#if JE_ENABLE_WEBGL20_GAPI
-    // Disable hlsl to spir-v because a align access bug? in wasm.
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WEBGL
     write_to_shader->m_vertex_hlsl_src = nullptr;
     write_to_shader->m_fragment_hlsl_src = nullptr;
 

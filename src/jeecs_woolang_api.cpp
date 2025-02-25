@@ -107,6 +107,11 @@ WO_API wo_api wojeapi_abort_all_thread(wo_vm vm, wo_value args)
     return wo_ret_void(vm);
 }
 
+WO_API wo_api wojeapi_get_current_platform(wo_vm vm, wo_value args)
+{
+    return wo_ret_int(vm, JE4_CURRENT_PLATFORM);
+}
+
 WO_API wo_api wojeapi_generate_uid(wo_vm vm, wo_value args)
 {
     wo_value result = wo_reserve_stack(vm, 1, &args);
@@ -2905,6 +2910,16 @@ import woo::std;
 
 namespace je
 {
+    public enum platform
+    {
+        WINDOWS = 1,
+        LINUX = 2,
+        ANDROID = 3,
+        WEBGL = 4,
+    }
+    extern("libjoyecs", "wojeapi_get_current_platform")
+    public func get_current_platform()=> platform;
+
     namespace towoo
     {
         extern("libjoyecs", "wojeapi_towoo_update_api", slow)

@@ -4,8 +4,8 @@
 #include <chrono>
 #include <thread>
 
-#ifdef JE_OS_WINDOWS
-#include <Windows.h>
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
+#   include <Windows.h>
 #endif
 
 auto _start_time = std::chrono::steady_clock::now();
@@ -46,7 +46,7 @@ void je_clock_sleep_for(double time)
     using namespace std;
     auto current_time_point = je_clock_time();
 
-#ifdef JE_OS_WINDOWS
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
     // 这里将时钟精度上调到最大限度，这样可以让画面更加稳定
     // 不过这么做也会导致功耗上升（根据手册）并影响CPU的频率和节能
     // https://learn.microsoft.com/zh-cn/windows/win32/api/timeapi/nf-timeapi-timebeginperiod
@@ -58,7 +58,7 @@ void je_clock_sleep_for(double time)
     while (je_clock_time() < current_time_point + time)
         std::this_thread::yield();
 
-#ifdef JE_OS_WINDOWS
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
     _result = timeEndPeriod(1);
     assert(_result == TIMERR_NOERROR);
 #endif

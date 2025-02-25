@@ -8,7 +8,7 @@
 #   include <imgui_impl_vulkan.h>
 
 #   ifdef JE_GL_USE_EGL_INSTEAD_GLFW
-#       ifdef JE_OS_ANDROID
+#       if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
 #           include "imgui_impl_android.h"
 #           include <jni.h>
 #           include <game-activity/native_app_glue/android_native_app_glue.h>
@@ -110,7 +110,7 @@ void jegui_init_vk130(
 {
     jegui_init_basic(true, get_img_res, apply_shader_sampler);
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
-#   ifdef JE_OS_ANDROID
+#   if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
     jegui_android_init((struct android_app*)window_handle);
 #   else
 #       error Unsupport platform.
@@ -126,7 +126,7 @@ void jegui_init_vk130(
 void jegui_update_vk130(VkCommandBuffer cmdbuf)
 {
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
-#   ifdef JE_OS_ANDROID
+#   if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
     ImGuiIO& io = ImGui::GetIO();
 
     jegui_android_PollUnicodeChars();
@@ -145,7 +145,7 @@ void jegui_update_vk130(VkCommandBuffer cmdbuf)
 
     ImGui_ImplVulkan_NewFrame();
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
-#   ifdef JE_OS_ANDROID
+#   if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
     ImGui_ImplAndroid_NewFrame();
 #   else
 #       error Unsupport platform.
@@ -162,7 +162,7 @@ void jegui_shutdown_vk130(bool reboot)
     jegui_shutdown_basic(reboot);
     ImGui_ImplVulkan_Shutdown();
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
-#   ifdef JE_OS_ANDROID
+#   if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
     ImGui_ImplAndroid_Shutdown();
     // _je_tg_android_app->onInputEvent = nullptr;
     _je_tg_android_app = nullptr;

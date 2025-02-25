@@ -25,7 +25,7 @@ void jegui_win32_append_unicode16_char(wchar_t wch);
     || defined(JE_ENABLE_GLES300_GAPI)\
     || defined(JE_ENABLE_WEBGL20_GAPI)
 
-#   if defined(JE_OS_ANDROID) && defined(JE_ENABLE_GLES300_GAPI)
+#   if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID && defined(JE_ENABLE_GLES300_GAPI)
 #       define JE_GL_USE_EGL_INSTEAD_GLFW
 #   endif 
 

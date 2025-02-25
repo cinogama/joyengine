@@ -215,12 +215,11 @@ target_link_libraries(joyecs
     # PRIVATE spirv-cross-c
     PRIVATE glslang-default-resource-limits)
 
-if (JE4_WASM_TARGET)
-    # Use emscripten openal for wasm target.
-    # https://emscripten.org/docs/porting/Audio.html 
-    target_link_libraries(joyecs PRIVATE openal)
-    target_compile_definitions(joyecs PRIVATE -DJE4_WASM_TARGET)
-else()
+if (JE4_SPECIFY_OPENAL_LIB_NAME STREQUAL "")
     target_link_libraries(joyecs PRIVATE OpenAL)
+else()
+    # Use specify openal for some target.
+    # E.G. WASM: https://emscripten.org/docs/porting/Audio.html 
+    target_link_libraries(joyecs PRIVATE ${JE4_SPECIFY_OPENAL_LIB_NAME})
 endif()
 

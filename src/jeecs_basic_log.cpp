@@ -5,7 +5,7 @@
 #include <cstdio>
 #include <cstdarg>
 
-#ifdef _WIN32
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
 #   include <Windows.h>
 #endif
 

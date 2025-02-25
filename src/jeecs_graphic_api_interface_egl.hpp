@@ -22,7 +22,7 @@ namespace jeecs::graphic
             EGLNativeWindowType m_window;
         };
 
-#   ifdef JE_OS_ANDROID
+#   if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
         struct _jegl_window_android_app
         {
             void* m_android_app;
@@ -83,7 +83,7 @@ namespace jeecs::graphic
 
             assert(thread->_m_sync_callback_arg != nullptr);
 
-#   ifdef JE_OS_ANDROID
+#   if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
             auto* data = (_jegl_window_android_app*)thread->_m_sync_callback_arg;
             m_context.m_window = (EGLNativeWindowType)data->m_android_window;
             m_app = (struct android_app*)data->m_android_app;
@@ -158,7 +158,7 @@ namespace jeecs::graphic
 
         virtual void* interface_handle() const override
         {
-#ifdef JE_OS_ANDROID
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
             return m_app;
 #else
             return nullptr;

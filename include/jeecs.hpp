@@ -69,34 +69,29 @@
 #   define JE_API JE_IMPORT_OR_EXPORT
 #endif
 
-#ifdef _WIN32
-#		define JE_OS_WINDOWS
-#elif defined(__ANDROID__)
-#		define JE_OS_ANDROID
-#elif defined(__linux__)
-#		define JE_OS_LINUX
-#else
-#		define JE_OS_UNKNOWN
+// Supported platform list
+#define JE4_PLATFORM_WINDOWS    1
+#define JE4_PLATFORM_LINUX      2
+#define JE4_PLATFORM_ANDROID    3
+#define JE4_PLATFORM_WEBGL      4
+
+#ifndef JE4_CURRENT_PLATFORM
+#   if defined(_WIN32)
+#       define JE4_CURRENT_PLATFORM JE4_PLATFORM_WINDOWS
+#   elif defined(__ANDROID__)
+#       define JE4_CURRENT_PLATFORM JE4_PLATFORM_ANDROID
+#   elif defined(__linux__)
+#       define JE4_CURRENT_PLATFORM JE4_PLATFORM_LINUX
+#   else
+#		error Unsupported platform.
+#   endif
+#elif JE4_CURRENT_PLATFORM != JE4_PLATFORM_WINDOWS && \
+      JE4_CURRENT_PLATFORM != JE4_PLATFORM_LINUX && \
+      JE4_CURRENT_PLATFORM != JE4_PLATFORM_ANDROID && \
+      JE4_CURRENT_PLATFORM != JE4_PLATFORM_WEBGL
+#   error JE4_CURRENT_PLATFORM must be one of JE4_PLATFORM_WINDOWS, JE4_PLATFORM_LINUX, JE4_PLATFORM_ANDROID, JE4_PLATFORM_WEBGL
 #endif
 
-#if defined(_X86_)||defined(__i386) || defined(_M_IX86)
-#		define JE_PLATFORM_X86
-#		define JE_PLATFORM_M32
-#elif defined(__x86_64) || defined(_M_AMD64)
-#		define JE_PLATFORM_X64
-#		define JE_PLATFORM_M64
-#elif defined(__arm) || defined(_M_ARM)
-#		define JE_PLATFORM_ARM
-#		define JE_PLATFORM_M32
-#elif defined(__aarch64__) || defined(_M_ARM64)
-#		define JE_PLATFORM_ARM64
-#		define JE_PLATFORM_M64
-#else
-#		define JE_PLATFORM_UNKNOWN
-#   if not defined(JE_PLATFORM_M32) and not defined(JE_PLATFORM_M64)
-#       error "Unknown platform, you must specify platform manually."
-#   endif
-#endif
 
 // [用语]
 // 此处定义引擎自定义使用的关键字/保留字
@@ -1815,11 +1810,6 @@ struct jegl_shader
         uint64_t    m_pass_id_count;
         uint32_t*   m_pass_ids;     // Used for GL3 & GLSL generation
     };
-#ifdef JE_PLATFORM_M64
-    static_assert(sizeof(sampler_method) == 24 + 8 + 8);
-#else
-    static_assert(sizeof(sampler_method) == 24 + 8 + 4 + 4 /*gap*/);
-#endif
 
     enum uniform_type
     {

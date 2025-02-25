@@ -16,7 +16,7 @@
 #   define DEBUG_ARCH_LOG_WARN(...) jeecs::debug::logwarn( __VA_ARGS__ )
 #endif
 
-#if defined(__cpp_lib_execution) && defined(NDEBUG) && !defined(JE4_WASM_TARGET)
+#if defined(__cpp_lib_execution) && defined(NDEBUG) && JE4_CURRENT_PLATFORM != JE4_PLATFORM_WEBGL
 #   define ParallelForeach(...) std::for_each( std::execution::par_unseq, __VA_ARGS__ )
 #else
 #   define ParallelForeach std::for_each

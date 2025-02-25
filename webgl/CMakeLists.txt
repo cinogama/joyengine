@@ -5,8 +5,8 @@ project("joyengineecs4w")
 # Setting for JoyEngineECS 4 Webgl.
 set(JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD OFF CACHE BOOL "Disable install baozi on WebGL" FORCE)
 set(JE4_COPYING_BUILTIN_FILES           OFF CACHE BOOL "Disable copy builtin files on WebGL" FORCE)
-set(JE4_STATIC_LINK_MODULE_AND_PKGS     ON  CACHE BOOL "Enable static link packages on WebGL." FORCE)
-set(JE4_BUILD_SHARED_CORE               OFF CACHE BOOL "Disable static engine core and WebGL on Android." FORCE)
+set(JE4_STATIC_LINK_MODULE_AND_PKGS     ON  CACHE BOOL "Enable static link packages on WebGL" FORCE)
+set(JE4_BUILD_SHARED_CORE               OFF CACHE BOOL "Disable static engine core on WebGL" FORCE)
 
 set(JE4_ENABLE_DX11_GAPI                OFF CACHE BOOL "Disable DX11 on WebGL" FORCE)
 set(JE4_ENABLE_OPENGL330_GAPI           OFF CACHE BOOL "Disable OpenGL 3.3 on WebGL" FORCE)
@@ -15,25 +15,25 @@ set(JE4_ENABLE_WEBGL20_GAPI             ON CACHE BOOL "Disable WebGL 2.0 on WebG
 set(JE4_ENABLE_VULKAN130_GAPI           OFF CACHE BOOL "Disable Vulkan1.3 on WebGL" FORCE)
 set(JE4_ENABLE_METAL_GAPI               OFF CACHE BOOL "Disable Metal on WebGL" FORCE)
 
-set(JE4_WASM_TARGET                     ON CACHE BOOL "Enable WASM target" FORCE)
-
 set(WO_DISABLE_COMPILER                 ON CACHE BOOL "Disable compiler on WebGL to reduce size" FORCE)
 set(WO_SUPPORT_ASMJIT                   OFF CACHE BOOL "Disable JIT on WebGL" FORCE)
 set(WO_DISABLE_FUNCTION_FOR_WASM        ON CACHE BOOL "Disable dynamic lib loading" FORCE)
-set(BOX2D_AVX2                          OFF CACHE BOOL "Disable avx2 for box2d." FORCE)
+set(BOX2D_AVX2                          OFF CACHE BOOL "Disable avx2 for box2d" FORCE)
+
+set(JE4_IGNORED_WOOLANG_PKG_LIST        "process;socket" CACHE STRING "Ignore process and socket for WASM" FORCE)
+set(JE4_SPECIFY_OPENAL_LIB_NAME         "openal" CACHE STRING "Specify openal lib name" FORCE)
 
 add_compile_options(-pthread)
+add_definitions(-DJE4_CURRENT_PLATFORM=JE4_PLATFORM_WEBGL)
 
 # WASM64 is not supported well, so we use WASM32 as default.
 if (OFF)
         add_compile_options(-m64)
         add_definitions(-DWO_PLATFORM_64)
-        add_definitions(-DJE_PLATFORM_M64)
         set(JE4WEBGL_MEMORY64 1)
 else()
         add_compile_options(-m32)
         add_definitions(-DWO_PLATFORM_32)
-        add_definitions(-DJE_PLATFORM_M32)
         set(JE4WEBGL_MEMORY64 0)
 endif()
 
@@ -68,16 +68,16 @@ set_target_properties(joyengineecs4w PROPERTIES
         "-s WASM=1 \
         -s MEMORY64=${JE4WEBGL_MEMORY64} \
         -s USE_PTHREADS=1 \
-        -s SHARED_MEMORY=1 \
-        -s INITIAL_MEMORY=33554432 \
-        -s PTHREAD_POOL_SIZE=16 \
-        -s PTHREAD_POOL_SIZE_STRICT=0 \
         -s USE_WEBGL2=1 \
         -s USE_GLFW=3 \
+        -s WASM_BIGINT=1 \
+        -s SHARED_MEMORY=1 \
+        -s INITIAL_MEMORY=33554432 \
         -s ALLOW_MEMORY_GROWTH=1 \
         -s STACK_SIZE=1048576 \
         -s DEFAULT_PTHREAD_STACK_SIZE=1048576 \
-        -s WASM_BIGINT=1 \
+        -s PTHREAD_POOL_SIZE=16 \
+        -s PTHREAD_POOL_SIZE_STRICT=0 \
         -s MIN_SAFARI_VERSION=150000 \
         -s MIN_CHROME_VERSION=85 \
         -s MIN_FIREFOX_VERSION=79 \

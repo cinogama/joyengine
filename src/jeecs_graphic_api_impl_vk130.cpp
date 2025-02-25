@@ -6,11 +6,11 @@
 #include "jeecs_imgui_backend_api.hpp"
 #include <vulkan/vulkan.h>
 
-#if defined(JE_OS_WINDOWS)
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
 #   include <vulkan/vulkan_win32.h>
-#elif defined(JE_OS_ANDROID)
+#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
 #   include <vulkan/vulkan_android.h>
-#elif defined(JE_OS_LINUX)
+#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_LINUX
 #   include <vulkan/vulkan_xlib.h>
 #else
 #   error Unsupport platform.
@@ -31,17 +31,17 @@
 
 namespace jeecs::graphic::api::vk130
 {
-#if defined(JE_OS_WINDOWS)
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
 
 #   define VK_API_PLATFORM_API_LIST \
 VK_API_DECL(vkCreateWin32SurfaceKHR)
 
-#elif defined(JE_OS_ANDROID)
+#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
 
 #   define VK_API_PLATFORM_API_LIST \
 VK_API_DECL(vkCreateAndroidSurfaceKHR)
 
-#elif defined(JE_OS_LINUX)
+#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_LINUX
 
 #   define VK_API_PLATFORM_API_LIST \
 VK_API_DECL(vkCreateXlibSurfaceKHR)
@@ -306,7 +306,7 @@ VK_API_PLATFORM_API_LIST
 
             vklibrary_instance_proxy()
             {
-#ifdef JE_OS_WINDOWS
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
                 _instance = wo_load_lib("je/graphiclib/vulkan-1", "vulkan-1.dll", nullptr, false);
 #else
                 _instance = wo_load_lib("je/graphiclib/vulkan", "libvulkan.so.1", nullptr, false);
@@ -1619,10 +1619,9 @@ VK_API_PLATFORM_API_LIST
                 }
             }
 
-
             // 创建Surface，并且绑定窗口句柄
 #if 0
-#   if defined(JE_OS_WINDOWS)
+#   if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
             VkWin32SurfaceCreateInfoKHR surface_create_info = {};
             surface_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
             surface_create_info.pNext = nullptr;
@@ -1635,7 +1634,7 @@ VK_API_PLATFORM_API_LIST
             {
                 jeecs::debug::logfatal("Failed to create vk130 win32 surface.");
             }
-#   elif defined(JE_OS_ANDROID)
+#   elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
             VkAndroidSurfaceCreateInfoKHR surface_create_info = {};
             surface_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
             surface_create_info.pNext = nullptr;
@@ -1648,7 +1647,7 @@ VK_API_PLATFORM_API_LIST
                 jeecs::debug::logfatal("Failed to create vk130 android surface.");
             }
 
-#   elif defined(JE_OS_LINUX)
+#   elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_LINUX
             VkXlibSurfaceCreateInfoKHR surface_create_info = {};
             surface_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
             surface_create_info.pNext = nullptr;
