@@ -1730,7 +1730,6 @@ struct jegl_texture
     size_t          m_width;
     size_t          m_height;
     format          m_format;
-    bool            m_modified;
 };
 
 /*
@@ -1980,7 +1979,7 @@ struct jegl_uniform_buffer
 {
     size_t      m_buffer_binding_place;
     size_t      m_buffer_size;
-    uint8_t* m_buffer;
+    uint8_t*    m_buffer;
 
     // Used for marking update range;
     size_t      m_update_begin_offset;
@@ -2016,6 +2015,7 @@ struct jegl_resource
     };
 
     type            m_type;
+    bool            m_modified;
     jegl_context* m_graphic_thread;
     jeecs::typing::version_t
         m_graphic_thread_version;
@@ -3209,19 +3209,21 @@ JE_API void jegui_set_font(
     size_t size);
 
 typedef uint64_t jegui_user_image_handle_t;
-typedef jegui_user_image_handle_t(*jegui_user_image_loader_t)(jegl_resource*);
-typedef void(*jegui_user_sampler_loader_t)(jegl_resource*);
+typedef jegui_user_image_handle_t(*jegui_user_image_loader_t)(jegl_context::userdata_t, jegl_resource*);
+typedef void(*jegui_user_sampler_loader_t)(jegl_context::userdata_t, jegl_resource*);
 
 /*
 jegui_init_basic [基本接口]
 初始化ImGUI
-    * 参数1 用于指示是否需要反转帧纹理，部分图形库的内置字节序与预计的是相反的，这种情况
+    * 参数1 是一个指向引擎图形上下文的指针
+    * 参数2 用于指示是否需要反转帧纹理，部分图形库的内置字节序与预计的是相反的，这种情况
         需要手动反转
-    * 参数2 是一个回调函数指针，用于获取一个纹理对应的底层图形库句柄以供ImGUI使用
-    * 参数3 是一个回调函数指针，用于应用一个指定着色器指定的采样设置
+    * 参数3 是一个回调函数指针，用于获取一个纹理对应的底层图形库句柄以供ImGUI使用
+    * 参数4 是一个回调函数指针，用于应用一个指定着色器指定的采样设置
     * 此接口仅适合用于对接自定义渲染API时使用
 */
 JE_API void jegui_init_basic(
+    jegl_context::userdata_t gl_context,
     bool need_flip_frame_buf,
     jegui_user_image_loader_t get_img_res,
     jegui_user_sampler_loader_t apply_shader_sampler);
@@ -7323,23 +7325,22 @@ namespace jeecs
 
             class pixel
             {
-                jegl_texture* _m_texture;
+                jegl_resource* _m_texture;
                 jegl_texture::pixel_data_t* _m_pixel;
             public:
                 pixel(jegl_resource* _texture, size_t x, size_t y) noexcept
-                    : _m_texture(_texture->m_raw_texture_data)
+                    : _m_texture(_texture)
                 {
                     assert(_texture->m_type == jegl_resource::type::TEXTURE);
                     assert(sizeof(jegl_texture::pixel_data_t) == 1);
 
                     auto color_depth =
-                        _m_texture->m_format & jegl_texture::format::COLOR_DEPTH_MASK;
+                        _m_texture->m_raw_texture_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK;
 
-                    if (x < _m_texture->m_width && y < _m_texture->m_height)
-                        _m_pixel =
-                        _m_texture->m_pixels
-                        + y * _m_texture->m_width * color_depth
-                        + x * color_depth;
+                    if (x < _m_texture->m_raw_texture_data->m_width && y < _m_texture->m_raw_texture_data->m_height)
+                        _m_pixel = _m_texture->m_raw_texture_data->m_pixels
+                            + y * _m_texture->m_raw_texture_data->m_width * color_depth
+                            + x * color_depth;
                     else
                         _m_pixel = nullptr;
                 }
@@ -7347,7 +7348,7 @@ namespace jeecs
                 {
                     if (_m_pixel == nullptr)
                         return {};
-                    switch (_m_texture->m_format)
+                    switch (_m_texture->m_raw_texture_data->m_format)
                     {
                     case jegl_texture::format::MONO:
                         return math::vec4{
@@ -7370,7 +7371,7 @@ namespace jeecs
                     if (_m_pixel == nullptr)
                         return;
                     _m_texture->m_modified = true;
-                    switch (_m_texture->m_format)
+                    switch (_m_texture->m_raw_texture_data->m_format)
                     {
                     case jegl_texture::format::MONO:
                         _m_pixel[0] = math::clamp(
@@ -10138,7 +10139,7 @@ namespace jeecs
                         {point_1[0], point_1[1], point_1[2]},
                         {},
                     };
- 
+
                     for (size_t i = 2; i < raw_vertex_data->m_index_count; ++i)
                     {
                         const float* point = std::launder(reinterpret_cast<const float*>(
@@ -10166,7 +10167,7 @@ namespace jeecs
 
             }
             intersect_result intersect_entity(
-                const Transform::Translation& translation, 
+                const Transform::Translation& translation,
                 const Renderer::Shape* entity_shape,
                 bool consider_mesh) const
             {
@@ -10238,15 +10239,15 @@ namespace jeecs
                     }
                 }
 
-                if (minResult.intersected 
-                    && consider_mesh 
-                    && entity_shape != nullptr 
+                if (minResult.intersected
+                    && consider_mesh
+                    && entity_shape != nullptr
                     && entity_shape->vertex != nullptr)
                 {
                     return intersect_mesh(
-                        entity_shape->vertex, 
-                        translation.world_position, 
-                        translation.world_rotation, 
+                        entity_shape->vertex,
+                        translation.world_position,
+                        translation.world_rotation,
                         translation.local_scale);
                 }
 

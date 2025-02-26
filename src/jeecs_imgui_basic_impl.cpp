@@ -1081,6 +1081,7 @@ jeecs::basic::atomic_list<gui_wo_job_coroutine> _wo_new_job_list;
 
 struct _jegui_thread_local_context
 {
+    jegl_context::userdata_t _jegl_user_data = nullptr;
     bool _jegui_stop_work_flag = false;
     bool _jegui_need_flip_frambuf = false;
 
@@ -1509,8 +1510,22 @@ WO_API wo_api je_gui_draw_list_add_image(wo_vm vm, wo_value args)
         uvmin = ImVec2(0.0f, 0.0f);
         uvmax = ImVec2(1.0f, 1.0f);
     }
-    dlist->AddCallback([](auto, auto) {_je_gui_tls_ctx._jegl_bind_shader_sampler_state(_je_gui_tls_ctx._jegl_rend_texture_shader->resouce()); }, nullptr);
-    dlist->AddImage((ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture((*texture)->resouce()), val2vec2(args + 1), val2vec2(args + 2), uvmin, uvmax, val2color32(args + 4));
+    dlist->AddCallback(
+        [](auto, auto) {
+            _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
+                _je_gui_tls_ctx._jegl_user_data,
+                _je_gui_tls_ctx._jegl_rend_texture_shader->resouce());
+        },
+        nullptr);
+    dlist->AddImage(
+        (ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture(
+            _je_gui_tls_ctx._jegl_user_data,
+            (*texture)->resouce()),
+        val2vec2(args + 1),
+        val2vec2(args + 2),
+        uvmin,
+        uvmax,
+        val2color32(args + 4));
     dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
     return wo_ret_void(vm);
 }
@@ -1964,12 +1979,22 @@ WO_API wo_api je_gui_image(wo_vm vm, wo_value args)
     }
 
     auto* dlist = ImGui::GetWindowDrawList();
-    dlist->AddCallback([](auto, auto) {_je_gui_tls_ctx._jegl_bind_shader_sampler_state(_je_gui_tls_ctx._jegl_rend_texture_shader->resouce()); }, nullptr);
-    ImGui::Image((ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture((*texture)->resouce()),
+    dlist->AddCallback([](auto, auto) {
+        _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
+            _je_gui_tls_ctx._jegl_user_data,
+            _je_gui_tls_ctx._jegl_rend_texture_shader->resouce());
+        },
+        nullptr);
+    ImGui::Image(
+        (ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture(
+            _je_gui_tls_ctx._jegl_user_data,
+            (*texture)->resouce()),
         ImVec2(
             (float)((*texture)->resouce())->m_raw_texture_data->m_width,
             (float)((*texture)->resouce())->m_raw_texture_data->m_height
-        ), uvmin, uvmax);
+        ),
+        uvmin,
+        uvmax);
 
     dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
 
@@ -1991,12 +2016,20 @@ WO_API wo_api je_gui_image_scale(wo_vm vm, wo_value args)
     }
 
     auto* dlist = ImGui::GetWindowDrawList();
-    dlist->AddCallback([](auto, auto) {_je_gui_tls_ctx._jegl_bind_shader_sampler_state(_je_gui_tls_ctx._jegl_rend_texture_shader->resouce()); }, nullptr);
-    ImGui::Image((ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture((*texture)->resouce()),
+    dlist->AddCallback([](auto, auto) {
+        _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
+            _je_gui_tls_ctx._jegl_user_data,
+            _je_gui_tls_ctx._jegl_rend_texture_shader->resouce());},
+        nullptr);
+    ImGui::Image((ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture(
+        _je_gui_tls_ctx._jegl_user_data, 
+        (*texture)->resouce()),
         ImVec2(
             ((*texture)->resouce())->m_raw_texture_data->m_width * wo_float(args + 1),
             ((*texture)->resouce())->m_raw_texture_data->m_height * wo_float(args + 1)
-        ), uvmin, uvmax);
+        ), 
+        uvmin, 
+        uvmax);
 
     dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
 
@@ -2018,12 +2051,21 @@ WO_API wo_api je_gui_image_size(wo_vm vm, wo_value args)
     }
 
     auto* dlist = ImGui::GetWindowDrawList();
-    dlist->AddCallback([](auto, auto) {_je_gui_tls_ctx._jegl_bind_shader_sampler_state(_je_gui_tls_ctx._jegl_rend_texture_shader->resouce()); }, nullptr);
-    ImGui::Image((ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture((*texture)->resouce()),
+    dlist->AddCallback([](auto, auto) {
+        _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
+            _je_gui_tls_ctx._jegl_user_data,
+            _je_gui_tls_ctx._jegl_rend_texture_shader->resouce());
+        },
+        nullptr);
+    ImGui::Image((ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture(
+        _je_gui_tls_ctx._jegl_user_data,
+        (*texture)->resouce()),
         ImVec2(
             wo_float(args + 1),
             wo_float(args + 2)
-        ), uvmin, uvmax);
+        ),
+        uvmin,
+        uvmax);
 
     dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
 
@@ -2046,12 +2088,22 @@ WO_API wo_api je_gui_image_size_color(wo_vm vm, wo_value args)
     }
 
     auto* dlist = ImGui::GetWindowDrawList();
-    dlist->AddCallback([](auto, auto) {_je_gui_tls_ctx._jegl_bind_shader_sampler_state(_je_gui_tls_ctx._jegl_rend_texture_shader->resouce()); }, nullptr);
-    ImGui::Image((ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture((*texture)->resouce()),
+    dlist->AddCallback([](auto, auto) {
+        _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
+            _je_gui_tls_ctx._jegl_user_data,
+            _je_gui_tls_ctx._jegl_rend_texture_shader->resouce());
+        },
+        nullptr);
+    ImGui::Image((ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture(
+        _je_gui_tls_ctx._jegl_user_data,
+        (*texture)->resouce()),
         ImVec2(
             wo_float(args + 1),
             wo_float(args + 2)
-        ), uvmin, uvmax, val2colorf4(args + 3));
+        ),
+        uvmin, 
+        uvmax, 
+        val2colorf4(args + 3));
 
     dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
 
@@ -2077,12 +2129,23 @@ WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args)
     bool result = false;
 
     auto* dlist = ImGui::GetWindowDrawList();
-    dlist->AddCallback([](auto, auto) {_je_gui_tls_ctx._jegl_bind_shader_sampler_state(_je_gui_tls_ctx._jegl_rend_texture_shader->resouce()); }, nullptr);
-    result = ImGui::ImageButton(label, (ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture((*texture)->resouce()),
+    dlist->AddCallback([](auto, auto) {
+        _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
+            _je_gui_tls_ctx._jegl_user_data, 
+            _je_gui_tls_ctx._jegl_rend_texture_shader->resouce()); 
+        }, 
+        nullptr);
+    result = ImGui::ImageButton(
+        label, 
+        (ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture(
+            _je_gui_tls_ctx._jegl_user_data, 
+            (*texture)->resouce()),
         ImVec2(
             (float)((*texture)->resouce())->m_raw_texture_data->m_width,
             (float)((*texture)->resouce())->m_raw_texture_data->m_height
-        ), uvmin, uvmax);
+        ), 
+        uvmin, 
+        uvmax);
 
     dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
 
@@ -2107,8 +2170,17 @@ WO_API wo_api je_gui_imagebutton_scale(wo_vm vm, wo_value args)
     bool result = false;
 
     auto* dlist = ImGui::GetWindowDrawList();
-    dlist->AddCallback([](auto, auto) {_je_gui_tls_ctx._jegl_bind_shader_sampler_state(_je_gui_tls_ctx._jegl_rend_texture_shader->resouce()); }, nullptr);
-    result = ImGui::ImageButton(label, (ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture((*texture)->resouce()),
+    dlist->AddCallback([](auto, auto) {
+        _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
+            _je_gui_tls_ctx._jegl_user_data, 
+            _je_gui_tls_ctx._jegl_rend_texture_shader->resouce());
+        }, 
+        nullptr);
+    result = ImGui::ImageButton(
+        label,
+        (ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture(
+            _je_gui_tls_ctx._jegl_user_data,
+            (*texture)->resouce()),
         ImVec2(
             ((*texture)->resouce())->m_raw_texture_data->m_width * wo_float(args + 2),
             ((*texture)->resouce())->m_raw_texture_data->m_height * wo_float(args + 2)
@@ -2137,12 +2209,23 @@ WO_API wo_api je_gui_imagebutton_size(wo_vm vm, wo_value args)
     bool result = false;
 
     auto* dlist = ImGui::GetWindowDrawList();
-    dlist->AddCallback([](auto, auto) {_je_gui_tls_ctx._jegl_bind_shader_sampler_state(_je_gui_tls_ctx._jegl_rend_texture_shader->resouce()); }, nullptr);
-    result = ImGui::ImageButton(label, (ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture((*texture)->resouce()),
+    dlist->AddCallback([](auto, auto) {
+        _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
+            _je_gui_tls_ctx._jegl_user_data,
+            _je_gui_tls_ctx._jegl_rend_texture_shader->resouce()); 
+        },
+        nullptr);
+    result = ImGui::ImageButton(
+        label, 
+        (ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture(
+        _je_gui_tls_ctx._jegl_user_data, 
+        (*texture)->resouce()),
         ImVec2(
             wo_float(args + 2),
             wo_float(args + 3)
-        ), uvmin, uvmax);
+        ),
+        uvmin,
+        uvmax);
 
     dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
 
@@ -2586,7 +2669,7 @@ WO_API wo_api je_gui_register_exit_callback(wo_vm vm, wo_value args)
         return wo_ret_panic(vm, "Callback has been registered.");
 
     assert(
-        _je_gui_static_ctx._jegui_exit_callback_handler_vm == nullptr 
+        _je_gui_static_ctx._jegui_exit_callback_handler_vm == nullptr
         && _je_gui_static_ctx._jegui_exit_callback_function == nullptr);
 
     _je_gui_static_ctx._jegui_exit_callback_handler_vm = wo_borrow_vm(vm);
@@ -2621,7 +2704,7 @@ WO_API wo_api je_gui_set_font(wo_vm vm, wo_value args)
 
     if (wo_option_get(elem, args + 0))
         font_path = wo_string(elem);
-    
+
     if (wo_option_get(elem, args + 1))
         latin_font_path = wo_string(elem);
 
@@ -3296,10 +3379,12 @@ WO_API wo_api je_gui_node_editor_resume(wo_vm vm, wo_value args)
 ////////////////////////////////////////////////////////////////////////////////////////////
 
 void jegui_init_basic(
+    jegl_context::userdata_t gl_context,
     bool need_flip_frame_buf,
     jegui_user_image_loader_t get_img_res,
     jegui_user_sampler_loader_t apply_shader_sampler)
 {
+    _je_gui_tls_ctx._jegl_user_data = gl_context;
     _je_gui_tls_ctx._jegui_need_flip_frambuf = need_flip_frame_buf;
     _je_gui_tls_ctx._jegl_get_native_texture = get_img_res;
     _je_gui_tls_ctx._jegl_bind_shader_sampler_state = apply_shader_sampler;
@@ -3408,7 +3493,7 @@ public func frag(vf: v2f)
                 (float)_je_gui_static_ctx._jegui_specify_font_size,
                 nullptr,
                 io.Fonts->GetGlyphRangesDefault());
-            
+
             ImFontConfig merge_config;
             merge_config.MergeMode = true;
 

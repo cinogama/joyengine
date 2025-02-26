@@ -101,14 +101,18 @@ int jegui_android_PollUnicodeChars()
 #   endif
 
 void jegui_init_vk130(
+    jegl_context::userdata_t ctx,
     jegui_user_image_loader_t get_img_res,
     jegui_user_sampler_loader_t apply_shader_sampler,
     void* window_handle,
     ImGui_ImplVulkan_InitInfo* vkinfo,
     VkRenderPass pass,
-    VkCommandBuffer cmdbuf)
+    VkCommandBuffer cmdbuf,
+    PFN_vkVoidFunction(*loader_func)(const char* function_name, void* user_data),
+    void* user_data)
 {
-    jegui_init_basic(true, get_img_res, apply_shader_sampler);
+    jegui_init_basic(ctx, true, get_img_res, apply_shader_sampler);
+    ImGui_ImplVulkan_LoadFunctions(loader_func, user_data);
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
 #   if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
     jegui_android_init((struct android_app*)window_handle);

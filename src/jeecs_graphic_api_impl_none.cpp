@@ -12,8 +12,14 @@ namespace jeecs::graphic::api::none
             jeecs::debug::log("Graphic thread (None) start!");
 
         jegui_init_none(
-            [](auto* res) {return (uint64_t)nullptr; },
-            [](auto* res){});
+            nullptr,
+            [](jegl_context::userdata_t ctx, jegl_resource* res) 
+            {
+                return (uint64_t)nullptr; 
+            },
+            [](jegl_context::userdata_t ctx, jegl_resource* res)
+            {
+            });
 
         return nullptr;
     }

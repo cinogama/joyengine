@@ -122,7 +122,9 @@ endif()
 
 # Vulkan 1.1
 if (JE4_ENABLE_VULKAN130_GAPI)
-    target_compile_definitions(joyengine_core_configs INTERFACE -DJE_ENABLE_VK130_GAPI)
+    target_compile_definitions(joyengine_core_configs INTERFACE
+        -DJE_ENABLE_VK130_GAPI 
+        -DIMGUI_IMPL_VULKAN_NO_PROTOTYPES)
 
     list(APPEND imgui_srcs
         "../3rd/imgui/backends/imgui_impl_vulkan.cpp"

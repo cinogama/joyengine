@@ -9,6 +9,7 @@
 #include <Windows.h>
 
 void jegui_init_dx11(
+    jegl_context::userdata_t ctx,
     jegui_user_image_loader_t get_img_res,
     jegui_user_sampler_loader_t apply_shader_sampler,
     void* window_handle,
@@ -30,6 +31,7 @@ void jegui_win32_append_unicode16_char(wchar_t wch);
 #   endif 
 
 void jegui_init_gl330(
+    jegl_context::userdata_t ctx,
     jegui_user_image_loader_t get_img_res,
     jegui_user_sampler_loader_t apply_shader_sampler,
     void* window_handle,
@@ -42,18 +44,22 @@ void jegui_shutdown_gl330(bool reboot);
 #   include <imgui_impl_vulkan.h>
 
 void jegui_init_vk130(
+    jegl_context::userdata_t ctx,
     jegui_user_image_loader_t get_img_res,
     jegui_user_sampler_loader_t apply_shader_sampler,
     void* window_handle,
     ImGui_ImplVulkan_InitInfo* vkinfo,
     VkRenderPass pass,
-    VkCommandBuffer cmdbuf);
+    VkCommandBuffer cmdbuf,
+    PFN_vkVoidFunction(*loader_func)(const char* function_name, void* user_data), 
+    void* user_data);
 void jegui_update_vk130(VkCommandBuffer cmdbuf);
 void jegui_shutdown_vk130(bool reboot);
 
 #endif
 
 void jegui_init_none(
+    jegl_context::userdata_t ctx,
     jegui_user_image_loader_t get_img_res,
     jegui_user_sampler_loader_t apply_shader_sampler);
 void jegui_update_none();

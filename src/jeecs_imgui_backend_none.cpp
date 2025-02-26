@@ -6,10 +6,11 @@
 #include <imgui.h>
 
 void jegui_init_none(
+    jegl_context::userdata_t ctx,
     jegui_user_image_loader_t get_img_res,
     jegui_user_sampler_loader_t apply_shader_sampler)
 {
-    jegui_init_basic(false, get_img_res, apply_shader_sampler);
+    jegui_init_basic(ctx, false, get_img_res, apply_shader_sampler);
     ImGuiIO& io = ImGui::GetIO();
 
     unsigned char* tex_pixels = nullptr;

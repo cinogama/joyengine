@@ -997,7 +997,6 @@ jegl_resource* jegl_create_texture(size_t width, size_t height, jegl_texture::fo
     texture->m_raw_texture_data->m_width = width;
     texture->m_raw_texture_data->m_height = height;
     texture->m_raw_texture_data->m_format = format;
-    texture->m_raw_texture_data->m_modified = false;
 
     return texture;
 }
@@ -1154,7 +1153,6 @@ jegl_resource* jegl_load_texture(jegl_context* context, const char* path)
         texture->m_raw_texture_data->m_width = (size_t)w;
         texture->m_raw_texture_data->m_height = (size_t)h;
         texture->m_raw_texture_data->m_format = jegl_texture::RGBA;
-        texture->m_raw_texture_data->m_modified = false;
 
         return jegl_try_update_shared_resource(context, texture);
     }
@@ -1519,6 +1517,8 @@ void jegl_update_uniformbuf(jegl_resource* uniformbuf, const void* buf, size_t u
 
     if (update_length != 0)
     {
+        uniformbuf->m_modified = true;
+
         memcpy(uniformbuf->m_raw_uniformbuf_data->m_buffer + update_offset, buf, update_length);
         if (uniformbuf->m_raw_uniformbuf_data->m_update_length != 0)
         {

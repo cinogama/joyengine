@@ -10,6 +10,7 @@
 #   include <imgui_impl_dx11.h>
 
 void jegui_init_dx11(
+    jegl_context::userdata_t ctx,
     jegui_user_image_loader_t get_img_res,
     jegui_user_sampler_loader_t apply_shader_sampler,
     void* window_handle,
@@ -17,7 +18,7 @@ void jegui_init_dx11(
     void* d11context,
     bool reboot)
 {
-    jegui_init_basic(true, get_img_res, apply_shader_sampler);
+    jegui_init_basic(ctx, true, get_img_res, apply_shader_sampler);
     ImGui_ImplGlfw_InitForOther((GLFWwindow*)window_handle, true);
     ImGui_ImplDX11_Init(
         (ID3D11Device*)d11device,

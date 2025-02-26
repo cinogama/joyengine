@@ -30,7 +30,66 @@
 // OpenGL version.
 namespace jeecs::graphic::api::gl3
 {
-    using jegl_gl3_context = basic_interface;
+    // using jegl_gl3_context = basic_interface;
+    struct jegl_gl3_context
+    {
+        basic_interface* m_interface;
+
+        GLint m_last_active_pass_id = 0;
+        GLuint m_binded_texture_passes[128] = {};
+        GLenum m_binded_texture_passes_type[128] = {};
+
+        JECS_DISABLE_MOVE_AND_COPY(jegl_gl3_context);
+
+        jegl_gl3_context(jegl_context* gthread, const jegl_interface_config* config, bool reboot)
+        {
+            m_interface =
+#ifdef JE_GL_USE_EGL_INSTEAD_GLFW
+                new egl();
+#else
+                new glfw(reboot
+                    ? glfw::HOLD
+#   ifdef JE_ENABLE_GL330_GAPI
+                    : glfw::OPENGL330
+#   else
+                    : glfw::OPENGLES300
+#   endif
+                );
+#endif
+        }
+        ~jegl_gl3_context()
+        {
+            delete m_interface;
+        }
+
+        void bind_texture_pass_impl(GLint pass, GLenum type, GLuint texture)
+        {
+            assert(pass < 128);
+            if (m_binded_texture_passes[pass] != texture
+                || m_binded_texture_passes_type[pass] != texture)
+            {
+                glActiveTexture(GL_TEXTURE0 + pass);
+                glBindTexture(type, texture);
+                m_binded_texture_passes[pass] = texture;
+                m_binded_texture_passes_type[pass] = type;
+            }
+        }
+        bool get_last_binded_texture_and_type(GLuint* out_texture, GLenum* out_type)
+        {
+            if (m_binded_texture_passes_type[m_last_active_pass_id] != 0)
+            {
+                *out_texture = m_binded_texture_passes[m_last_active_pass_id];
+                *out_type = m_binded_texture_passes_type[m_last_active_pass_id];
+
+                return true;
+            }
+            return false;
+        }
+        void bind_texture_to_last_pass(GLuint texture, GLenum type)
+        {
+            bind_texture_pass_impl(m_last_active_pass_id, type, texture);
+        }
+    };
 
     /////////////////////////////////////////////////////////////////////////////////////
 
@@ -86,27 +145,14 @@ namespace jeecs::graphic::api::gl3
 #endif
     jegl_context::userdata_t gl_startup(jegl_context* gthread, const jegl_interface_config* config, bool reboot)
     {
-        jegl_gl3_context* context = nullptr;
+        jegl_gl3_context* context = new jegl_gl3_context(gthread, config, reboot);
 
         if (!reboot)
         {
             jeecs::debug::log("Graphic thread (OpenGL3) start!");
         }
-        context =
-#ifdef JE_GL_USE_EGL_INSTEAD_GLFW
-            new egl();
-#else
-            new glfw(reboot
-                ? glfw::HOLD
-#   ifdef JE_ENABLE_GL330_GAPI
-                : glfw::OPENGL330
-#   else
-                : glfw::OPENGLES300
-#   endif
-            );
-#endif
 
-        context->create_interface(gthread, config);
+        context->m_interface->create_interface(gthread, config);
 
 #if !defined(JE_GL_USE_EGL_INSTEAD_GLFW) && defined(JE_ENABLE_GL330_GAPI)
         if (auto glew_init_result = glewInit(); glew_init_result != GLEW_OK)
@@ -139,8 +185,11 @@ namespace jeecs::graphic::api::gl3
 #endif
 
         jegui_init_gl330(
-            [](auto* res) {return (uint64_t)res->m_handle.m_uint1; },
-            [](auto* res)
+            context,
+            [](jegl_context::userdata_t ctx, jegl_resource* res) {
+                return (uint64_t)res->m_handle.m_uint1;
+            },
+            [](jegl_context::userdata_t ctx, jegl_resource* res)
             {
                 if (res->m_raw_shader_data != nullptr)
                 {
@@ -192,8 +241,8 @@ namespace jeecs::graphic::api::gl3
                     }
                 }
             },
-            context->interface_handle(),
-                reboot);
+            context->m_interface->interface_handle(),
+            reboot);
 
         return context;
     }
@@ -201,9 +250,9 @@ namespace jeecs::graphic::api::gl3
     jegl_graphic_api::update_action gl_pre_update(jegl_context::userdata_t ctx)
     {
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
-        context->swap_for_opengl();
-        
-        switch (context->update())
+        context->m_interface->swap_for_opengl();
+
+        switch (context->m_interface->update())
         {
         case basic_interface::update_result::CLOSE:
             if (jegui_shutdown_callback())
@@ -224,7 +273,7 @@ namespace jeecs::graphic::api::gl3
         jegui_update_gl330();
 
         // 将绘制命令异步地提交给GPU
-        glFlush();        
+        glFlush();
 
         return jegl_graphic_api::update_action::CONTINUE;
     }
@@ -240,8 +289,7 @@ namespace jeecs::graphic::api::gl3
 
         jegui_shutdown_gl330(reboot);
 
-        context->shutdown(reboot);
-
+        context->m_interface->shutdown(reboot);
         delete context;
     }
 
@@ -262,25 +310,25 @@ namespace jeecs::graphic::api::gl3
         {
         case jegl_shader::INT:
         {
-            glUniform1i((GLint)location, *reinterpret_cast<const int*>(val)); 
+            glUniform1i((GLint)location, *reinterpret_cast<const int*>(val));
             break;
         }
         case jegl_shader::INT2:
         {
-            const int * vptr = reinterpret_cast<const int*>(val);
-            glUniform2i((GLint)location, vptr[0], vptr[1]); 
+            const int* vptr = reinterpret_cast<const int*>(val);
+            glUniform2i((GLint)location, vptr[0], vptr[1]);
             break;
         }
         case jegl_shader::INT3:
         {
             const int* vptr = reinterpret_cast<const int*>(val);
-            glUniform3i((GLint)location, vptr[0], vptr[1], vptr[2]); 
+            glUniform3i((GLint)location, vptr[0], vptr[1], vptr[2]);
             break;
         }
         case jegl_shader::INT4:
         {
             const int* vptr = reinterpret_cast<const int*>(val);
-            glUniform4i((GLint)location, vptr[0], vptr[1], vptr[2], vptr[3]); 
+            glUniform4i((GLint)location, vptr[0], vptr[1], vptr[2], vptr[3]);
             break;
         }
         case jegl_shader::FLOAT:
@@ -306,7 +354,7 @@ namespace jeecs::graphic::api::gl3
             glUniform4f((GLint)location, vptr[0], vptr[1], vptr[2], vptr[3]);
             break;
         }
-        case jegl_shader::FLOAT4X4:   
+        case jegl_shader::FLOAT4X4:
         {
             glUniformMatrix4fv((GLint)location, 1, false, reinterpret_cast<const float*>(val));
             break;
@@ -442,6 +490,7 @@ namespace jeecs::graphic::api::gl3
 
     void gl_init_resource(jegl_context::userdata_t ctx, jegl_resource_blob blob, jegl_resource* resource)
     {
+        jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
         assert(resource->m_custom_resource != nullptr);
 
         switch (resource->m_type)
@@ -485,9 +534,9 @@ namespace jeecs::graphic::api::gl3
                     builtin_uniforms.m_builtin_uniform_tiling = gl_get_uniform_location(ctx, resource, "JOYENGINE_TEXTURE_TILING");
                     builtin_uniforms.m_builtin_uniform_offset = gl_get_uniform_location(ctx, resource, "JOYENGINE_TEXTURE_OFFSET");
 
-                    builtin_uniforms.m_builtin_uniform_light2d_resolution = 
+                    builtin_uniforms.m_builtin_uniform_light2d_resolution =
                         gl_get_uniform_location(ctx, resource, "JOYENGINE_LIGHT2D_RESOLUTION");
-                    builtin_uniforms.m_builtin_uniform_light2d_decay = 
+                    builtin_uniforms.m_builtin_uniform_light2d_decay =
                         gl_get_uniform_location(ctx, resource, "JOYENGINE_LIGHT2D_DECAY");
 
                     // ATTENTION: 注意，以下参数特殊shader可能挪作他用
@@ -526,6 +575,11 @@ namespace jeecs::graphic::api::gl3
 
             auto gl_texture_type = GL_TEXTURE_2D;
 
+            GLenum last_texture_type;
+            GLuint last_texture;
+            bool need_restore_texture_state =
+                context->get_last_binded_texture_and_type(&last_texture, &last_texture_type);
+
             glBindTexture(gl_texture_type, texture);
 
             assert(GL_TEXTURE_2D == gl_texture_type);
@@ -553,7 +607,7 @@ namespace jeecs::graphic::api::gl3
                 {
                     for (auto way : jegl_texture_cube_map_ways)
                     {
-                        glTexImage2D(way, 0, 
+                        glTexImage2D(way, 0,
 #if defined(JE_ENABLE_WEBGL20_GAPI)
                             GL_DEPTH_COMPONENT24,
 #else
@@ -578,7 +632,7 @@ namespace jeecs::graphic::api::gl3
                         (GLsizei)resource->m_raw_texture_data->m_width,
                         (GLsizei)resource->m_raw_texture_data->m_height,
                         0,
-                        GL_DEPTH_COMPONENT, 
+                        GL_DEPTH_COMPONENT,
                         GL_UNSIGNED_INT,
                         NULL
                     );
@@ -625,6 +679,14 @@ namespace jeecs::graphic::api::gl3
             resource->m_handle.m_uint1 = texture;
             resource->m_handle.m_uint2 = (uint32_t)resource->m_raw_texture_data->m_format;
             static_assert(std::is_same<decltype(resource->m_handle.m_uint2), uint32_t>::value);
+
+            if (need_restore_texture_state)
+            {
+                context->bind_texture_to_last_pass(
+                    last_texture_type,
+                    last_texture);
+            }
+
             break;
         }
         case jegl_resource::type::VERTEX:
@@ -652,7 +714,7 @@ namespace jeecs::graphic::api::gl3
             {
                 size_t format_size;
                 GLenum format_type;
-                
+
                 glEnableVertexAttribArray(i);
 
                 switch (resource->m_raw_vertex_data->m_formats[i].m_type)
@@ -953,20 +1015,45 @@ namespace jeecs::graphic::api::gl3
 
     void gl_using_resource(jegl_context::userdata_t ctx, jegl_resource* resource)
     {
+        jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
         switch (resource->m_type)
         {
         case jegl_resource::type::SHADER:
             break;
         case jegl_resource::type::TEXTURE:
-            if (resource->m_raw_texture_data != nullptr)
+            if (resource->m_modified)
             {
-                if (resource->m_raw_texture_data->m_modified)
+                if (resource->m_raw_texture_data != nullptr)
                 {
-                    resource->m_raw_texture_data->m_modified = false;
-                    // Modified, free current resource id, reload one.
-                    gl_close_resource(ctx, resource);
-                    resource->m_handle.m_uint1 = 0;
-                    gl_init_resource(ctx, nullptr, resource);
+                    resource->m_modified = false;
+
+                    GLenum last_texture_type;
+                    GLuint last_texture;
+                    bool need_restore_texture_state =
+                        context->get_last_binded_texture_and_type(&last_texture, &last_texture_type);
+
+                    // Update texture's pixels, only normal pixel data will be updated.
+                    glBindTexture(GL_TEXTURE_2D, (GLuint)resource->m_handle.m_uint1);
+
+                    // Textures FORMAT & SIZE will not be changed.
+                    bool is_16bit = 0 != (resource->m_raw_texture_data->m_format & jegl_texture::format::FLOAT16);
+                    glTexImage2D(
+                        GL_TEXTURE_2D,
+                        0,
+                        GL_RGBA,
+                        (GLsizei)resource->m_raw_texture_data->m_width,
+                        (GLsizei)resource->m_raw_texture_data->m_height,
+                        0,
+                        GL_RGBA,
+                        is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
+                        resource->m_raw_texture_data->m_pixels);
+
+                    if (need_restore_texture_state)
+                    {
+                        context->bind_texture_to_last_pass(
+                            last_texture_type,
+                            last_texture);
+                    }
                 }
             }
             break;
@@ -983,8 +1070,9 @@ namespace jeecs::graphic::api::gl3
                 glBindBufferRange(GL_UNIFORM_BUFFER, (GLuint)resource->m_raw_uniformbuf_data->m_buffer_binding_place,
                     (GLuint)resource->m_handle.m_uint1, 0, resource->m_raw_uniformbuf_data->m_buffer_size);
 
-                if (resource->m_raw_uniformbuf_data->m_update_length != 0)
+                if (resource->m_modified)
                 {
+                    assert(resource->m_raw_uniformbuf_data->m_update_length != 0);
                     glBufferSubData(GL_UNIFORM_BUFFER,
                         resource->m_raw_uniformbuf_data->m_update_begin_offset,
                         resource->m_raw_uniformbuf_data->m_update_length,
@@ -1044,13 +1132,16 @@ namespace jeecs::graphic::api::gl3
             (GLuint)uniformbuf->m_handle.m_uint1, 0, uniformbuf->m_raw_uniformbuf_data->m_buffer_size);
     }
 
-    void gl_bind_texture(jegl_context::userdata_t, jegl_resource* texture, size_t pass)
+    void gl_bind_texture(jegl_context::userdata_t ctx, jegl_resource* texture, size_t pass)
     {
-        glActiveTexture(GL_TEXTURE0 + (GLint)pass);
+        jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
+
         if (0 != ((jegl_texture::format)texture->m_handle.m_uint2 & jegl_texture::format::CUBE))
-            glBindTexture(GL_TEXTURE_CUBE_MAP, texture->m_handle.m_uint1);
+            context->bind_texture_pass_impl(
+                (GLint)pass, GL_TEXTURE_CUBE_MAP, (GLuint)texture->m_handle.m_uint1);
         else
-            glBindTexture(GL_TEXTURE_2D, texture->m_handle.m_uint1);
+            context->bind_texture_pass_impl(
+                (GLint)pass, GL_TEXTURE_2D, (GLuint)texture->m_handle.m_uint1);
     }
 
     void gl_draw_vertex_with_shader(jegl_context::userdata_t, jegl_resource* vert)
@@ -1074,9 +1165,13 @@ namespace jeecs::graphic::api::gl3
 
         auto* framw_buffer_raw = framebuffer != nullptr ? framebuffer->m_raw_framebuf_data : nullptr;
         if (w == 0)
-            w = framw_buffer_raw != nullptr ? framebuffer->m_raw_framebuf_data->m_width : context->m_interface_width;
+            w = framw_buffer_raw != nullptr
+            ? framebuffer->m_raw_framebuf_data->m_width
+            : context->m_interface->m_interface_width;
         if (h == 0)
-            h = framw_buffer_raw != nullptr ? framebuffer->m_raw_framebuf_data->m_height : context->m_interface_height;
+            h = framw_buffer_raw != nullptr
+            ? framebuffer->m_raw_framebuf_data->m_height
+            : context->m_interface->m_interface_height;
         glViewport((GLint)x, (GLint)y, (GLsizei)w, (GLsizei)h);
     }
     void gl_clear_framebuffer_color(jegl_context::userdata_t, float color[4])
