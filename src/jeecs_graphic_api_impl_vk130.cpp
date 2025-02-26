@@ -3158,9 +3158,6 @@ VK_API_PLATFORM_API_LIST
                 raw_uniformbuf_data->m_buffer + raw_uniformbuf_data->m_update_begin_offset,
                 raw_uniformbuf_data->m_update_begin_offset,
                 raw_uniformbuf_data->m_buffer_size);
-
-            resource->m_raw_uniformbuf_data->m_update_begin_offset = 0;
-            resource->m_raw_uniformbuf_data->m_update_length = 0;
         }
 
         /////////////////////////////////////////////////////
@@ -3853,7 +3850,10 @@ VK_API_PLATFORM_API_LIST
             break;
         case jegl_resource::type::UNIFORMBUF:
             if (resource->m_modified)
+            {
+                resource->m_modified = false;
                 context->update_uniform_buffer(resource);
+            }
             break;
         default:
             break;

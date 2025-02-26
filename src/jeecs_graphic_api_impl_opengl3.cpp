@@ -1072,14 +1072,13 @@ namespace jeecs::graphic::api::gl3
 
                 if (resource->m_modified)
                 {
+                    resource->m_modified = false;
+
                     assert(resource->m_raw_uniformbuf_data->m_update_length != 0);
                     glBufferSubData(GL_UNIFORM_BUFFER,
                         resource->m_raw_uniformbuf_data->m_update_begin_offset,
                         resource->m_raw_uniformbuf_data->m_update_length,
                         resource->m_raw_uniformbuf_data->m_buffer + resource->m_raw_uniformbuf_data->m_update_begin_offset);
-
-                    resource->m_raw_uniformbuf_data->m_update_begin_offset = 0;
-                    resource->m_raw_uniformbuf_data->m_update_length = 0;
                 }
             }
             break;

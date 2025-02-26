@@ -1392,7 +1392,8 @@ namespace jeecs::graphic::api::dx11
                     {
                         // This texture is immutable, we need to recreate it as dynamic
                         jedx11_modifiable_texture* modifiable_texture_instance =
-                            static_cast<jedx11_modifiable_texture*>(texture_instance);
+                            static_cast<jedx11_modifiable_texture*>(dx11_create_texture_instance(
+                                context, resource, true /* Regenerate it as dynamic */));
 
                         modifiable_texture_instance->m_obsoluted_texture = texture_instance;
                         resource->m_handle.m_ptr = modifiable_texture_instance;
@@ -1408,20 +1409,20 @@ namespace jeecs::graphic::api::dx11
         {
             if (resource->m_modified)
             {
+                resource->m_modified = false;
+
                 auto* uniformbuf_instance = std::launder(reinterpret_cast<jedx11_uniformbuf*>(resource->m_handle.m_ptr));
                 assert(resource->m_raw_uniformbuf_data != nullptr && resource->m_raw_uniformbuf_data->m_update_length != 0);
                 D3D11_MAPPED_SUBRESOURCE mappedData;
                 JERCHECK(context->m_dx_context->Map(
                     uniformbuf_instance->m_uniformbuf.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
 
-                memcpy((void*)((intptr_t)mappedData.pData + resource->m_raw_uniformbuf_data->m_update_begin_offset),
-                    resource->m_raw_uniformbuf_data->m_buffer + resource->m_raw_uniformbuf_data->m_update_begin_offset,
-                    resource->m_raw_uniformbuf_data->m_update_length);
+                // DX11 Donot support partial update, update all.
+                memcpy((void*)((intptr_t)mappedData.pData),
+                    resource->m_raw_uniformbuf_data->m_buffer,
+                    resource->m_raw_uniformbuf_data->m_buffer_size);
 
                 context->m_dx_context->Unmap(uniformbuf_instance->m_uniformbuf.Get(), 0);
-
-                resource->m_raw_uniformbuf_data->m_update_begin_offset = 0;
-                resource->m_raw_uniformbuf_data->m_update_length = 0;
             }
             break;
         }

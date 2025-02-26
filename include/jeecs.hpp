@@ -1688,16 +1688,16 @@ struct jegl_context
 
     void*/*std::promise<void>*/ _m_promise;
     frame_job_t                 _m_frame_rend_work;
-    void* _m_frame_rend_work_arg;
-    void* _m_sync_callback_arg;
+    void*                       _m_frame_rend_work_arg;
+    void*                       _m_sync_callback_arg;
 
-    jegl_context_notifier* _m_thread_notifier;
-    void* _m_interface_handle;
+    jegl_context_notifier*      _m_thread_notifier;
+    void*                       _m_interface_handle;
 
-    void* m_universe_instance;
+    void*                       m_universe_instance;
     jeecs::typing::version_t    m_version;
     jegl_interface_config       m_config;
-    jegl_graphic_api* m_apis;
+    jegl_graphic_api*           m_apis;
     void*/*std::atomic_bool*/   m_stop_update;
     userdata_t                  m_userdata;
 };
@@ -1730,6 +1730,12 @@ struct jegl_texture
     size_t          m_width;
     size_t          m_height;
     format          m_format;
+
+    // Partical texture data update
+    size_t          m_modified_min_x;
+    size_t          m_modified_min_y;
+    size_t          m_modified_max_x;
+    size_t          m_modified_max_y;
 };
 
 /*
@@ -1965,7 +1971,7 @@ struct jegl_frame_buffer
 {
     // In fact, attachment_t is jeecs::basic::resource<jeecs::graphic::texture>
     typedef struct attachment_t attachment_t;
-    attachment_t* m_output_attachments;
+    attachment_t*   m_output_attachments;
     size_t          m_attachment_count;
     size_t          m_width;
     size_t          m_height;
@@ -2015,16 +2021,18 @@ struct jegl_resource
     };
 
     type            m_type;
-    bool            m_modified;
-    jegl_context* m_graphic_thread;
-    jeecs::typing::version_t
-        m_graphic_thread_version;
 
-    void* m_binding_count;
+    // ATTENTION: modify cannot happend while resource is using.
+    bool            m_modified;
+    jegl_context*   m_graphic_thread;
+    jeecs::typing::version_t
+                    m_graphic_thread_version;
+
+    void*           m_binding_count;
     resource_handle m_handle;
 
-    const char* m_path;
-    void* m_raw_ref_count;
+    const char*     m_path;
+    void*           m_raw_ref_count;
     union
     {
         jegl_custom_resource_t m_custom_resource;
@@ -7325,11 +7333,15 @@ namespace jeecs
 
             class pixel
             {
-                jegl_resource* _m_texture;
-                jegl_texture::pixel_data_t* _m_pixel;
+                jegl_resource*      _m_texture;
+                jegl_texture::pixel_data_t* 
+                                    _m_pixel;
+                size_t              _m_x, _m_y;
             public:
                 pixel(jegl_resource* _texture, size_t x, size_t y) noexcept
                     : _m_texture(_texture)
+                    , _m_x(x)
+                    , _m_y(y)
                 {
                     assert(_texture->m_type == jegl_resource::type::TEXTURE);
                     assert(sizeof(jegl_texture::pixel_data_t) == 1);
@@ -7370,8 +7382,35 @@ namespace jeecs
                 {
                     if (_m_pixel == nullptr)
                         return;
-                    _m_texture->m_modified = true;
-                    switch (_m_texture->m_raw_texture_data->m_format)
+
+                    auto* raw_texture_data = _m_texture->m_raw_texture_data;
+                    
+                    if (!_m_texture->m_modified)
+                    {
+                        // Set texture modified flag & range.
+                        raw_texture_data->m_modified_max_x = _m_x;
+                        raw_texture_data->m_modified_max_y = _m_y;
+                        raw_texture_data->m_modified_min_x = _m_x;
+                        raw_texture_data->m_modified_min_y = _m_y;
+
+                        _m_texture->m_modified = true;
+                    }
+                    else
+                    {
+                        // Update texture updating range.
+
+                        if (_m_x < raw_texture_data->m_modified_min_x)
+                            raw_texture_data->m_modified_min_x = _m_x;
+                        else if (_m_x > raw_texture_data->m_modified_max_x)
+                            raw_texture_data->m_modified_max_x = _m_x;
+
+                        if (_m_y < raw_texture_data->m_modified_min_y)
+                            raw_texture_data->m_modified_min_y = _m_y;
+                        else if (_m_y > raw_texture_data->m_modified_max_y)
+                            raw_texture_data->m_modified_max_y = _m_y;
+                    }
+
+                    switch (raw_texture_data->m_format)
                     {
                     case jegl_texture::format::MONO:
                         _m_pixel[0] = math::clamp(
