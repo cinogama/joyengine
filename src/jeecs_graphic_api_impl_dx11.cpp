@@ -67,12 +67,10 @@ namespace jeecs::graphic::api::dx11
         jegl_dx11_context::MSWRLComPtr<ID3D11Texture2D> m_texture;
         jegl_dx11_context::MSWRLComPtr<ID3D11ShaderResourceView> m_texture_view;
     };
-    struct jedx11_modifiable_texture: public jedx11_texture
+    struct jedx11_modifiable_texture : public jedx11_texture
     {
-        jegl_dx11_context::MSWRLComPtr<ID3D11Texture2D> m_obslate_texture;
-        jegl_dx11_context::MSWRLComPtr<ID3D11ShaderResourceView> m_obslate_texture_view;
-    }
-
+        jedx11_texture* m_obsoluted_texture;
+    };
     struct jedx11_shader
     {
         jegl_dx11_context::MSWRLComPtr<ID3D11InputLayout> m_vao; // WTF?
@@ -1393,10 +1391,11 @@ namespace jeecs::graphic::api::dx11
                     else
                     {
                         // This texture is immutable, we need to recreate it as dynamic
-                        dx11_close_resource(ctx, resource);
-                        TODO;
-                        resource->m_handle.m_ptr = dx11_create_texture_instance(
-                            context, resource, true /* Regenerate it as dynamic */);
+                        jedx11_modifiable_texture* modifiable_texture_instance =
+                            static_cast<jedx11_modifiable_texture*>(texture_instance);
+
+                        modifiable_texture_instance->m_obsoluted_texture = texture_instance;
+                        resource->m_handle.m_ptr = modifiable_texture_instance;
                     }
                 }
             }
@@ -1447,8 +1446,21 @@ namespace jeecs::graphic::api::dx11
             break;
         }
         case jegl_resource::type::TEXTURE:
-            delete std::launder(reinterpret_cast<jedx11_texture*>(resource->m_handle.m_ptr));
+        {
+            jedx11_texture* texture_instance =
+                std::launder(reinterpret_cast<jedx11_texture*>(resource->m_handle.m_ptr));
+
+            if (texture_instance->m_modifiable_texture_buffer)
+            {
+                auto* dynamic_texture_instance = static_cast<jedx11_modifiable_texture*>(texture_instance);
+                delete dynamic_texture_instance->m_obsoluted_texture;
+                delete dynamic_texture_instance;
+            }
+            else
+                delete texture_instance;
+
             break;
+        }
         case jegl_resource::type::VERTEX:
             delete std::launder(reinterpret_cast<jedx11_vertex*>(resource->m_handle.m_ptr));
             break;
