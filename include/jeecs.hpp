@@ -2021,8 +2021,6 @@ struct jegl_resource
     };
 
     type            m_type;
-
-    // ATTENTION: modify cannot happend while resource is using.
     bool            m_modified;
     jegl_context*   m_graphic_thread;
     jeecs::typing::version_t
@@ -7413,28 +7411,13 @@ namespace jeecs
                     switch (raw_texture_data->m_format)
                     {
                     case jegl_texture::format::MONO:
-                        _m_pixel[0] = math::clamp(
-                            (jegl_texture::pixel_data_t)round(value.x * 255.0f),
-                            (jegl_texture::pixel_data_t)0,
-                            (jegl_texture::pixel_data_t)255);
+                        _m_pixel[0] = (jegl_texture::pixel_data_t)round(math::clamp(value.x, 0.f, 1.f) * 255.0f);
                         break;
                     case jegl_texture::format::RGBA:
-                        _m_pixel[0] = math::clamp(
-                            (jegl_texture::pixel_data_t)round(value.x * 255.0f),
-                            (jegl_texture::pixel_data_t)0,
-                            (jegl_texture::pixel_data_t)255);
-                        _m_pixel[1] = math::clamp(
-                            (jegl_texture::pixel_data_t)round(value.y * 255.0f),
-                            (jegl_texture::pixel_data_t)0,
-                            (jegl_texture::pixel_data_t)255);
-                        _m_pixel[2] = math::clamp(
-                            (jegl_texture::pixel_data_t)round(value.z * 255.0f),
-                            (jegl_texture::pixel_data_t)0,
-                            (jegl_texture::pixel_data_t)255);
-                        _m_pixel[3] = math::clamp(
-                            (jegl_texture::pixel_data_t)round(value.w * 255.0f),
-                            (jegl_texture::pixel_data_t)0,
-                            (jegl_texture::pixel_data_t)255);
+                        _m_pixel[0] = (jegl_texture::pixel_data_t)round(math::clamp(value.x, 0.f, 1.f) * 255.0f);
+                        _m_pixel[1] = (jegl_texture::pixel_data_t)round(math::clamp(value.y, 0.f, 1.f) * 255.0f);
+                        _m_pixel[2] = (jegl_texture::pixel_data_t)round(math::clamp(value.z, 0.f, 1.f) * 255.0f);
+                        _m_pixel[3] = (jegl_texture::pixel_data_t)round(math::clamp(value.w, 0.f, 1.f) * 255.0f);
                         break;
                     default:
                         assert(0); break;

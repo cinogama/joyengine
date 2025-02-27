@@ -1,24 +1,22 @@
 import je::editor::graphic;
 import pkg::math;
 
-let mut texture_width = 0;
-let mut texture_height = 0;
+let mut center_y = 0.;
+let mut height = 0.;
 
-public func entry(t: je::graphic::texture)
-{
-    let (w, h) = t->size();
-    
-    texture_width = w;
-    texture_height = h;
-    
+public func entry(_: je::graphic::texture, lbpos: (int, int), range: (int, int))
+{    
+    height = range.1: real;
+    center_y = lbpos.1: real + height / 2.;
+
     return true;
 }
 
 public func pixel(_: je::graphic::texture, _: int, y: int)
     => (real, real, real, real)
 {
-    let yf = (y: real + 0.5) / texture_height: real;
-    let xgray = math::sqrt(0.25 - math::pow(yf - 0.5, 2.0));
+    let yf = (y: real - center_y + 0.5) / height: real;
+    let xgray = math::sqrt(0.25 - math::pow(yf, 2.0));
 
     return (xgray, xgray, xgray, 1.0);
 }

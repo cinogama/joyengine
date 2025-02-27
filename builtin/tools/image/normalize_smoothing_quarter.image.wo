@@ -1,7 +1,7 @@
 import je::editor::graphic;
 import pkg::math;
 
-public func entry(_: je::graphic::texture)
+public func entry(_: je::graphic::texture, _: (int, int), _: (int, int))
 {
     return true;
 }

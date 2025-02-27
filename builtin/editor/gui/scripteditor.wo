@@ -206,7 +206,7 @@ namespace editor::gui
             CodeEditorSize(self.m_source, "##script", GetContentRegionAvail(), true);
             SetWindowFontScale(1.0);
 
-            if (BeginPopupContextItem())
+            if (BeginPopupContextItemLabel("##script"))
             {
                 if (MenuItemShortcutEnabled("复制", "Ctrl+C", true))
                     self.m_source->Copy();

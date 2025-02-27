@@ -1,0 +1,37 @@
+import je::editor::graphic;
+import pkg::math;
+
+public func entry(_: je::graphic::texture, _/*lbpos*/: (int, int), _/*range*/: (int, int))
+    => bool
+{
+    return true;
+}
+
+let bias_weight = [
+    (-1, 1, 0.094742),    (0, 1, 0.118318),     (1, 1, 0.094742),
+    (-1, 0, 0.118318),    (0, 0, 0.147761),     (1, 0, 0.118318),
+    (-1, -1, 0.094742),   (0, -1, 0.118318),    (1, -1, 0.094742),
+];
+
+func wraptex(t: je::graphic::texture, x: int, y: int)
+{
+    let (w, h) = t->size();
+    return tex(t, math::max(0, math::min(w-1, x)), math::max(0, math::min(h-1, y)));
+}
+
+public func pixel(t: je::graphic::texture, x: int, y: int)
+    => (real, real, real, real)
+{
+    let mut r = 0., mut g = 0., mut b = 0., mut a = 0.;
+
+    for (let (dx, dy, weight) : bias_weight)
+    {
+        let (tr, tg, tb, ta) = wraptex(t, x + dx, y + dy);
+        r += tr * weight;
+        g += tg * weight;
+        b += tb * weight;
+        a += ta * weight;
+    }
+
+    return (r, g, b, a);
+}

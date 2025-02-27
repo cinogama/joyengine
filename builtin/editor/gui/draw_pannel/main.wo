@@ -175,21 +175,16 @@ namespace editor::gui::drawpannel
             ("无", \=new! IDrawtool((): tools::Nothing);),
             ("钢笔", \=new! IDrawtool(new! tools::Pen());),
             ("直线", \=new! IDrawtool(new! tools::Line());),
-            ("矩形", \=new! IDrawtool(new! tools::Rect());),
+            ("线框", \=new! IDrawtool(new! tools::Rect());),
+            ("矩形", \=new! IDrawtool(new! tools::FilledRect());),
+            ("圆框", \=new! IDrawtool(new! tools::Circle());),
+            ("圆", \=new! IDrawtool(new! tools::FilledCircle());),
             ("填充", \=new! IDrawtool((): tools::Fill);),
             // ("划区", \=new! IDrawtool(new! tools::MagicRange());),
         ]mut;
 
-        for (let name : get_all_scripts_name())
-        {
-            match (open_image_effect_host(name))
-            {
-            ok(host)?
-                result->add((name, \=new! IDrawtool(new! tools::MagicRange(host));));
-            err(info)?
-                je::logwarn(info);
-            }
-        }
+        for (let name : get_all_scripts_name()->std::sort(\l, r = l < r;))
+            result->add((name, \=new! IDrawtool(new! tools::MagicRange(open_image_effect_host(name)));));
 
         return result->unsafe::cast:<ToolsSetArray>;
     }
@@ -368,7 +363,8 @@ namespace editor::gui::drawpannel
 @"// 图像处理脚本
 import je::editor::graphic;
 
-public func entry(_: je::graphic::texture)
+public func entry(_: je::graphic::texture, _/*lbpos*/: (int, int), _/*range*/: (int, int))
+    => bool
 {
     return true;
 }
@@ -377,7 +373,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
     => (real, real, real, real)
 {
     let (r, g, b, a) = tex(t, x, y);
-    return (r, g ,b ,a);
+    return (r, g, b, a);
 }
 "@;
                                             new! ScriptEditor(context, DEFAULT_SCRIPT_SRC, "图像效果", false)

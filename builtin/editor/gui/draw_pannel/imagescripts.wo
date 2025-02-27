@@ -24,7 +24,7 @@ public func tex(t: je::graphic::texture, x: int, y: int)
 
 extern func main(target_texture: je::graphic::texture, lbpos: (int, int), range: (int, int))
 {
-    if (!entry(target_texture))
+    if (!entry(target_texture, lbpos, range))
         return;
 
     let (rw, rh) = range;

@@ -1,6 +1,6 @@
 import je::editor::graphic;
 
-public func entry(_: je::graphic::texture)
+public func entry(_: je::graphic::texture, _: (int, int), _: (int, int))
 {
     return true;
 }

@@ -1,0 +1,20 @@
+import je::editor::graphic;
+
+public func entry(_: je::graphic::texture, _/*lbpos*/: (int, int), _/*range*/: (int, int))
+    => bool
+{
+    return true;
+}
+
+public func pixel(t: je::graphic::texture, x: int, y: int)
+    => (real, real, real, real)
+{
+    let (r, g, b, a) = tex(t, x, y);
+
+    let v = std::rand(-0.05, 0.05);
+    return (
+        r + v, 
+        g + v,
+        b + v,
+        a);
+}
