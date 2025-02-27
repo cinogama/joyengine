@@ -7,6 +7,9 @@ namespace editor::gui::drawpannel::tools
 {
     public using Nothing = ()
     {
+        public func close(_: Nothing)
+        {
+        }
         public func OnMouseDown(self: Nothing, target: graphic::texture, color: color4_t, pos: (int, int))
         {
             do self;
@@ -106,6 +109,9 @@ namespace editor::gui::drawpannel::tools
         m_last_draw_pos: mut (int, int),
     }
     {
+        public func close(_: Pen)
+        {
+        }
         public func create()
         {
             return Pen{m_last_draw_pos = mut (-1, -1)};
@@ -135,6 +141,9 @@ namespace editor::gui::drawpannel::tools
         m_last_pos: mut (int, int),
     }
     {
+        public func close(_: Line)
+        {
+        }
         public func create()
         {
             return Line{
@@ -152,8 +161,6 @@ namespace editor::gui::drawpannel::tools
         }
         public func OnMouseHold(self: Line, target: graphic::texture, color: color4_t, pos: (int, int))
         {
-            // 如果新点不等于旧点，那么画条线过去！
-            // 窝窝头偷大懒
             if (self.m_last_pos[0] != pos[0] || self.m_last_pos[1] != pos[1])
             {
                 self.m_snapshot->unwrap->restore();
@@ -172,6 +179,9 @@ namespace editor::gui::drawpannel::tools
         m_last_pos: mut (int, int),
     }
     {
+        public func close(_: Rect)
+        {
+        }
         public func create()
         {
             return Rect{
@@ -189,8 +199,6 @@ namespace editor::gui::drawpannel::tools
         }
         public func OnMouseHold(self: Rect, target: graphic::texture, color: color4_t, pos: (int, int))
         {
-            // 如果新点不等于旧点，那么画条线过去！
-            // 窝窝头偷大懒
             if (self.m_last_pos[0] != pos[0] || self.m_last_pos[1] != pos[1])
             {
                 self.m_snapshot->unwrap->restore();
@@ -209,6 +217,9 @@ namespace editor::gui::drawpannel::tools
     }
     public using Fill = ()
     {
+        public func close(_: Fill)
+        {
+        }
         public func OnMouseDown(_: Fill, _: graphic::texture, _: color4_t, _: (int, int))
         {
         }
@@ -252,10 +263,74 @@ namespace editor::gui::drawpannel::tools
 
                 }
             }
-            
         }
         public func OnMouseUp(_: Fill, _: graphic::texture, _: color4_t, _: (int, int))
         {
+        }
+    }
+    public using MagicRange = struct{
+        m_snapshot: mut option<TextureSnapshot>,
+        m_first_pos: mut (int, int),
+        m_last_pos: mut (int, int),
+
+        m_magic_scripts: ApplyScriptHost,
+    }
+    {
+        public func close(self: MagicRange)
+        {
+            do self.m_magic_scripts->close();
+        }
+        public func create(host: ApplyScriptHost)
+        {
+            return MagicRange{
+                m_snapshot = mut option::none,
+                m_first_pos = mut (-1, -1),
+                m_last_pos = mut (-1, -1),
+
+                m_magic_scripts = host,
+            };
+        }
+
+        func get_standard_range_by_two_pos(pos1: (int, int), pos2: (int, int))
+        {
+            let lbpos = (math::min(pos1.0, pos2.0), math::min(pos1.1, pos2.1));
+            let range = (
+                math::abs(pos1.0 - pos2.0) + 1,
+                math::abs(pos1.1 - pos2.1) + 1);
+
+            return (lbpos, range);
+        }
+
+        public func OnMouseDown(self: MagicRange, target: graphic::texture, _: color4_t, pos: (int, int))
+        {
+            self.m_snapshot = option::value(new! TextureSnapshot(target));
+            self.m_first_pos = pos;
+            self.m_last_pos = pos;
+
+            match (self.m_magic_scripts->apply(target, get_standard_range_by_two_pos(self.m_first_pos, self.m_last_pos)...))
+            {
+            ok(_)?;
+            err(info)?
+                je::logwarn(info);
+            }
+        }
+        public func OnMouseHold(self: MagicRange, target: graphic::texture, _: color4_t, pos: (int, int))
+        {
+            if (self.m_last_pos[0] != pos[0] || self.m_last_pos[1] != pos[1])
+            {
+                self.m_snapshot->unwrap->restore();
+                self.m_last_pos = pos;
+                match (self.m_magic_scripts->apply(target, get_standard_range_by_two_pos(self.m_first_pos, self.m_last_pos)...))
+                {
+                ok(_)?;
+                err(info)?
+                    je::logwarn(info);
+                }
+            }
+        }
+        public func OnMouseUp(self: MagicRange, _: graphic::texture, _: color4_t, _: (int, int))
+        {
+            self.m_snapshot = option::none;
         }
     }
 }

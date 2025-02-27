@@ -126,6 +126,7 @@ namespace editor::gui::drawpannel
         offset_x:   mut real,
         offset_y:   mut real,
 
+        tools: ToolsSetArray,
         drawtoolname: mut string,
         drawtool:   mut IDrawtool,
 
@@ -137,6 +138,8 @@ namespace editor::gui::drawpannel
 
         edited_textures: map<graphic::texture, (int/*texture pass id*/, HistoryManager)>,
         openform: mut bool,
+
+        block_size: (mut int, mut int),
     }
     {
         func update_edit_textures_history(self: DrawContextT, passid: int, oldtex: graphic::texture, newtex: graphic::texture)
@@ -159,18 +162,37 @@ namespace editor::gui::drawpannel
 
     interface! IDrawtool
     {
+        public func close(self: IDrawtool)=> void;
         public func OnMouseDown(self: IDrawtool, tex: graphic::texture, col: color4_t, pos: (int, int))=> void;
         public func OnMouseHold(self: IDrawtool, tex: graphic::texture, col: color4_t, pos: (int, int))=> void;
         public func OnMouseUp(self: IDrawtool, tex: graphic::texture, col: color4_t, pos: (int, int))=> void;
     }
 
-    let all_draw_tools = [
-        ("无", \=new! IDrawtool((): tools::Nothing);),
-        ("钢笔", \=new! IDrawtool(new! tools::Pen());),
-        ("直线", \=new! IDrawtool(new! tools::Line());),
-        ("矩形", \=new! IDrawtool(new! tools::Rect());),
-        ("填充", \=new! IDrawtool((): tools::Fill);),
-    ];
+    alias ToolsSetArray = array<(string, ()=> IDrawtool)>;
+    func create_all_draw_tools()=> ToolsSetArray
+    {
+        let result = [
+            ("无", \=new! IDrawtool((): tools::Nothing);),
+            ("钢笔", \=new! IDrawtool(new! tools::Pen());),
+            ("直线", \=new! IDrawtool(new! tools::Line());),
+            ("矩形", \=new! IDrawtool(new! tools::Rect());),
+            ("填充", \=new! IDrawtool((): tools::Fill);),
+            // ("划区", \=new! IDrawtool(new! tools::MagicRange());),
+        ]mut;
+
+        for (let name : get_all_scripts_name())
+        {
+            match (open_image_effect_host(name))
+            {
+            ok(host)?
+                result->add((name, \=new! IDrawtool(new! tools::MagicRange(host));));
+            err(info)?
+                je::logwarn(info);
+            }
+        }
+
+        return result->unsafe::cast:<ToolsSetArray>;
+    }
 
     func edittexture(
         context: EditorContext, 
@@ -325,7 +347,7 @@ namespace editor::gui::drawpannel
                                         {
                                             if (MenuItem(name))
                                             {
-                                                match (apply_script(name, [texture]))
+                                                match (apply_script(name, texture, (0, 0), texture->size))
                                                 {
                                                 err(msg)?
                                                     jeapi::gui::form::errmsg("失败", F"图像处理过程报告了一个错误: {msg}");
@@ -397,14 +419,37 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                                     ->> \c = draw_context.subcolor = c;;
                                 EndPopup();
                             }
-
+                            Text(F"网格块大小");
+                            if (BeginChildSize("##block_size_block", 100., 40.))
+                            {
+                                do InputInt2("##block_size", draw_context.block_size...)
+                                    ->> func((x, y))
+                                        {
+                                            if (x > 0)
+                                                draw_context.block_size.0 = x; 
+                                            if (y > 0)
+                                                draw_context.block_size.1 = y;
+                                        }
+                                    ; 
+                            }
+                            EndChild();
                             Text(F"当前工具: \n {draw_context.drawtoolname}");
-                            for (let (name, tool_create_method) : all_draw_tools)
+                            for (let (name, tool_create_method) : draw_context.tools)
                             {
                                 if (ButtonSize(name, (100., 0.)))
                                 {
+                                    // Close old tool.
+                                    draw_context.drawtool->close();
                                     draw_context.drawtool = tool_create_method();
                                     draw_context.drawtoolname = name;
+                                }
+
+                                // Mouse hover hint
+                                if (IsItemHovered())
+                                {
+                                    BeginTooltip();
+                                    Text(name);
+                                    EndTooltip();
                                 }
                             }
                             EndGroup();
@@ -447,20 +492,31 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                                 (255, 255, 255, 255));
                                 
                             // OK 如果缩放大于5，就顺手画一下网格
-                            if (draw_context.scale >= 5.)
+                            for (let mut xoffset = 0; xoffset <= tex_width; xoffset += 1)
                             {
-                                for (let mut yoffset = 0.; yoffset <= tex_height:real * draw_context.scale; yoffset += draw_context.scale)
+                                let block_high_light = xoffset % draw_context.block_size[0] == 0;
+                                if (draw_context.scale >= 5. || block_high_light)
+                                {
+                                    let real_xoffset = xoffset: real * draw_context.scale;
                                     drawlist->AddLine(
-                                        (lux + draw_context.offset_x, luy + draw_context.offset_y + yoffset), 
-                                        (lux + draw_context.offset_x + tex_width:real * draw_context.scale, luy + draw_context.offset_y + yoffset), 
-                                        (0, 0, 0, 20),
-                                        1.0);
-                                for (let mut xoffset = 0.; xoffset <= tex_width:real * draw_context.scale; xoffset += draw_context.scale)
+                                        (lux + draw_context.offset_x + real_xoffset, luy + draw_context.offset_y), 
+                                        (lux + draw_context.offset_x + real_xoffset, luy + draw_context.offset_y + tex_height:real * draw_context.scale), 
+                                        block_high_light ? (0, 0, 0, 40) | (0, 0, 0, 20),
+                                        block_high_light ? 2.0 | 1.0);
+                                }
+                            }
+                            for (let mut yoffset = 0; yoffset <= tex_height; yoffset += 1)
+                            {
+                                let block_high_light = yoffset % draw_context.block_size[1] == 0;
+                                if (draw_context.scale >= 5. || block_high_light)
+                                {
+                                    let real_yoffset = yoffset: real * draw_context.scale;
                                     drawlist->AddLine(
-                                        (lux + draw_context.offset_x + xoffset, luy + draw_context.offset_y), 
-                                        (lux + draw_context.offset_x + xoffset, luy + draw_context.offset_y + tex_height:real * draw_context.scale), 
-                                        (0, 0, 0, 20),
-                                        1.0);
+                                        (lux + draw_context.offset_x, luy + draw_context.offset_y + real_yoffset), 
+                                        (lux + draw_context.offset_x + tex_width:real * draw_context.scale, luy + draw_context.offset_y + real_yoffset), 
+                                        block_high_light ? (0, 0, 0, 40) | (0, 0, 0, 20),
+                                        block_high_light ? 2.0 | 1.0);
+                                }
                             }
 
                             // 获取鼠标所在的像素位置，高亮这一块儿
@@ -601,7 +657,14 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                 });
             }
         }
-        return draw_context.openform;
+        if (!draw_context.openform)
+        {
+            // Close tool
+            draw_context.drawtool->close();
+
+            return false;
+        }
+        return true;
     }
 
     func create_and_copy_texture(t: je::graphic::texture)
@@ -621,6 +684,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
     }
     public func drawimg(context: EditorContext, t: graphic::texture)
     {
+        let tools = create_all_draw_tools();
         launch(edittexture, (
             context,
             option::none,
@@ -629,8 +693,10 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                 scale = mut 10.,
                 offset_x = mut 0.,
                 offset_y = mut 0.,
-                drawtool = mut all_draw_tools[0][1](),
-                drawtoolname = mut all_draw_tools[0][0],
+
+                tools = tools,
+                drawtool = mut tools[0][1](),
+                drawtoolname = mut tools[0][0],
 
                 mousedown = mut false,
 
@@ -640,6 +706,8 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
 
                 edited_textures = {[t] = (0, new! HistoryManager(t))}mut,
                 openform = mut true,
+
+                block_size = (mut 16, mut 16),
             }
         ));
     }
@@ -713,6 +781,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                 where tex = textures->get(id)-> or_do(create_and_copy_0pass_texture)
                 ;
             ;
+        let tools = create_all_draw_tools();
         launch(edittexture, (
             context,
             jeapi::debug::get_entity_editor_id(e),
@@ -721,8 +790,10 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                 scale = mut 10.,
                 offset_x = mut 0.,
                 offset_y = mut 0.,
-                drawtool = mut all_draw_tools[0][1](),
-                drawtoolname = mut all_draw_tools[0][0],
+
+                tools = tools,
+                drawtool = mut tools[0][1](),
+                drawtoolname = mut tools[0][0],
 
                 mousedown = mut false,
 
@@ -736,6 +807,8 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                     ->  to_map
                     ,
                 openform = mut true,
+
+                block_size = (mut 16, mut 16),
             }
         ));
     }

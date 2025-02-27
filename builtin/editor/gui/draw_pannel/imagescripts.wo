@@ -1,5 +1,6 @@
 // 这里用于管理图像效果处理脚本
 import pkg::vm;
+
 import pkg::fsys;
 import pkg::worst;
 import pkg::try;
@@ -21,27 +22,22 @@ public func tex(t: je::graphic::texture, x: int, y: int)
 // pixel: (tex, int, int)=> (real, real, real, real)
 // entry: (tex)=> bool
 
-extern func main(target_texture: je::graphic::texture)
+extern func main(target_texture: je::graphic::texture, lbpos: (int, int), range: (int, int))
 {
     if (!entry(target_texture))
         return;
 
-    let (w, h) = target_texture->size();
-    let result_pixels = []mut: vec<(real, real, real, real)>;
+    let (rw, rh) = range;
+    let (lx, ly) = lbpos;
+    let result_pixels = array::create(rw * rh, mut (0.,0.,0.,0.));
 
-    for (let mut y = 0; y < h; y += 1)
-    {
-        for (let mut x = 0; x < w; x += 1)
-        {
-            result_pixels->add(pixel(target_texture, x, y));
-        }
-    }
+    for (let mut y = 0; y < rh; y += 1)
+        for (let mut x = 0; x < rw; x += 1)
+            result_pixels[y * rw + x] = pixel(target_texture, x + lx, y + ly);
 
-    for (let mut i = 0; i < result_pixels->len; i += 1)
-    {
-        let x = i % w, y = i / w;
-        target_texture->pix((x, y))->set_color(result_pixels[i]);
-    }
+    for (let mut y = 0; y < rh; y += 1)
+        for (let mut x = 0; x < rw; x += 1)
+            target_texture->pix((x + lx, y + ly))->set_color(result_pixels[y * rw + x]);
 }
 "@, false);
 
@@ -51,31 +47,51 @@ extern func main(target_texture: je::graphic::texture)
     {
         return image_effect_scripts->unmapping->>\name_vm = name_vm[0];;
     }
-    public func apply_script(name: string, ts: array<je::graphic::texture>)
+    
+    using ApplyScriptHost = struct{vmm: vm}
     {
-        match (image_effect_scripts->get(name))
+        func create(path: fsys::path_t)
         {
-        value(p)?
-        {
-            try! vmm =  vm::load(p->tostring);
+            try! vmm = vm::load(path->tostring);
             do vmm->jit;
 
-            if (!vmm->run->is_value)
-                return result::err(F"脚本 {name} 执行失败");
+            try! _ = vmm->run()
+                -> ok_or(F"脚本 {path->tostring} 执行失败")
+                ;
 
-            for (let t : ts)
-            {
-                if (!vmm->invoke("main", [t: dynamic])->is_value)
-                    return result::err(F"脚本 {name} 执行失败");
-            }
-            
-            do vmm->close();
+            return_ok! ApplyScriptHost{vmm = vmm};
+        }
+        public func close(self: ApplyScriptHost)
+        {
+            return self.vmm->close();
+        }
+        public func apply(self: ApplyScriptHost, ts: je::graphic::texture, lbpos: (int, int), range: (int, int))
+        {
+            try! _ = self.vmm->invoke("main", [ts: dynamic, lbpos: dynamic, range: dynamic])
+                -> ok_or("脚本执行失败")
+                ;
+            return_ok!;
+        }
+    }
 
-            return result::ok(do nil);
-        }
-        none?
-            return result::err(F"未找到名为 {name} 的图像处理脚本");
-        }
+    public func open_image_effect_host(name: string)
+    {
+        try! path = image_effect_scripts->get(name)
+            -> ok_or(F"未找到名为 {name} 的图像处理脚本")
+            ;
+
+        return ApplyScriptHost::create(path);
+    }
+
+    public func apply_script(name: string, ts: je::graphic::texture, lbpos: (int, int), range: (int, int))
+    {
+        try! host = open_image_effect_host(name);
+        do host-> std::use(func(host)
+        {
+            do host->apply(ts, lbpos, range);
+        });
+
+        return_ok!;
     }
     public func update_and_get_scripts(proj: Project)
     {
@@ -91,19 +107,6 @@ extern func main(target_texture: je::graphic::texture)
                 continue;
 
             r->set(fsys::purename(path), path);
-
-            // match (vm::load(path->tostring))
-            // {
-            // ok(vmm)?
-            //     {
-            //         do vmm->jit;
-            //         assert(vmm->run->is_value);
-            //         let name = vmm->invoke("name", [])->unwrap as string;
-            //         r->set(name == ""? fsys::purename(path) | name, vmm);
-            //     }
-            // err(msg)?
-            //     je::logerr(F"加载脚本 {path} 失败：{msg}");
-            // }
         }
 
         image_effect_scripts = r->unsafe::asdict;
