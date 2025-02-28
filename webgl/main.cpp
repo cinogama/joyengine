@@ -241,7 +241,6 @@ int main(int argc, char **argv)
                     }
                     return null;
                 }
-
                 function update_touch_pos(updateTouches, isDown)
                 {
                     const rect = canvas.getBoundingClientRect();
@@ -251,25 +250,11 @@ int main(int argc, char **argv)
                         const x = touch.clientX - rect.left;
                         const y = touch.clientY - rect.top;
 
-                        if (isDown)
+                        const touch_id = isDown ? get_or_take_a_free_point(id) : release_a_point(id);
+                        if (touch_id !== null)
                         {
-                            // Check if has touch id, if not, assign a new id.
-                            const touch_id = get_or_take_a_free_point(id);
-                            if (touch_id !== null)
-                            {
-                                _je4_je_io_update_mousepos(touch_id, x, y);
-                                _je4_je_io_update_mouse_state(touch_id, MOUSE_LEFT, true);
-                            }
-                        }
-                        else
-                        {
-                            // Check if has touch id, if has, release it.
-                            const touch_id = release_a_point(id);
-                            if (touch_id !== null)
-                            {
-                                _je4_je_io_update_mousepos(touch_id, x, y);
-                                _je4_je_io_update_mouse_state(touch_id, MOUSE_LEFT, false);
-                            }
+                            _je4_je_io_update_mousepos(touch_id, x, y);
+                            _je4_je_io_update_mouse_state(touch_id, MOUSE_LEFT, isDown);
                         }
                     }
                 }
