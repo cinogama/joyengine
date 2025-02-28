@@ -247,15 +247,17 @@ namespace jeecs::graphic
 
             glfwMakeContextCurrent(_m_windows);
             glfwSetWindowSizeCallback(_m_windows, glfw_callback_windows_size_changed);
-            glfwSetCursorPosCallback(_m_windows, glfw_callback_mouse_pos_changed);
-            glfwSetMouseButtonCallback(_m_windows, glfw_callback_mouse_key_clicked);
-            glfwSetScrollCallback(_m_windows, glfw_callback_mouse_scroll_changed);
             glfwSetKeyCallback(_m_windows, glfw_callback_keyboard_stage_changed);
             glfwSetWindowUserPointer(_m_windows, this);
 
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WEBGL
-            // Donot sync for webgl.
+            // Donot sync for webgl, and donot process mouse event.
+            // We will process mouse event in javascript(WebGL).
 #else
+            glfwSetCursorPosCallback(_m_windows, glfw_callback_mouse_pos_changed);
+            glfwSetMouseButtonCallback(_m_windows, glfw_callback_mouse_key_clicked);
+            glfwSetScrollCallback(_m_windows, glfw_callback_mouse_scroll_changed);
+
             if (config->m_fps == 0)
                 glfwSwapInterval(1);
             else

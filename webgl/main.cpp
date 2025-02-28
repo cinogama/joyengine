@@ -90,14 +90,10 @@ public:
                     canvas_height = rheight;
 
                     if (width > 0 && height > 0)
-                    {
-                        // debug::loginfo("Canvas size changed: %d, %d", rwidth, rheight);
                         je_io_set_windowsize(rwidth, rheight);
-                    }
                 }
             }
         }
-
         return true;
     }
 };
@@ -116,10 +112,23 @@ void webgl_rend_job_callback()
 
 extern "C"
 {
-    void EMSCRIPTEN_KEEPALIVE _je4_js_callback_prepare_surface_context()
+    void EMSCRIPTEN_KEEPALIVE 
+        _je4_js_callback_prepare_surface_context()
     {
         assert(g_surface_context == nullptr);
         g_surface_context = new je_webgl_surface_context();
+    }
+    void EMSCRIPTEN_KEEPALIVE 
+        _je4_je_io_update_mousepos(size_t group, int x, int y)
+    {
+        je_io_update_mousepos(group, x, y);
+    }
+    void EMSCRIPTEN_KEEPALIVE 
+        _je4_je_io_update_mouse_state(
+            size_t group, int /*jeecs::input::mousecode*/ key, bool keydown)
+    {
+        je_io_update_mouse_state(
+            group, (jeecs::input::mousecode)key, keydown);
     }
 }
 
@@ -127,6 +136,21 @@ int main(int argc, char **argv)
 {
     // Mount idbfs to /builtin
     EM_ASM(
+        const MOUSE_LEFT = 0;
+        const MOUSE_MIDDLE = 1;
+        const MOUSE_RIGHT = 2;
+
+        // void _je4_js_callback_prepare_surface_context()
+        const _je4_js_callback_prepare_surface_context = 
+            Module.cwrap("_je4_js_callback_prepare_surface_context", null, []);
+
+        // void _je4_je_io_update_mousepos(size_t group, int x, int y)
+        // void _je4_je_io_update_mouse_state(size_t group, int /*jeecs::input::mousecode*/ key, bool keydown)
+        const _je4_je_io_update_mousepos =
+            Module.cwrap('_je4_je_io_update_mousepos', null, ['number', 'number', 'number']);
+        const _je4_je_io_update_mouse_state =
+            Module.cwrap('_je4_je_io_update_mouse_state', null, ['number', 'number', 'number']);
+
         if (!FS.analyzePath('/.je4').exists) {
             FS.mkdir('/.je4');
         }
@@ -148,16 +172,122 @@ int main(int argc, char **argv)
             }
             else
             {
-                // Invoke _je4_js_callback_prepare_surface_context
-                const start_context = 
-                    Module.cwrap(
-                        "_je4_js_callback_prepare_surface_context",
-                        null, 
-                        []);
+                //////////////////////////// User Input ////////////////////////////
+                // Mouse move event
+                canvas.addEventListener('mousemove', function (event) {
+                    const rect = canvas.getBoundingClientRect();
+                    const x = event.clientX - rect.left;
+                    const y = event.clientY - rect.top;
+                    _je4_je_io_update_mousepos(0, x, y);
+                });
+
+                function convert_mouse_button_code(code)
+                {
+                    switch (code) {
+                        case 0:
+                            return MOUSE_LEFT;
+                        case 1:
+                            return MOUSE_MIDDLE;
+                        case 2:
+                            return MOUSE_RIGHT;
+                        default:
+                            return null;
+                    }
+                }
+                // Mouse down event
+                canvas.addEventListener('mousedown', function (event) {
+                    const je_button_code = convert_mouse_button_code(event.button);
+                    if (je_button_code !== null)
+                        _je4_je_io_update_mouse_state(0, je_button_code, true);
+                });
+
+                // Mouse up event
+                canvas.addEventListener('mouseup', function (event) {
+                    const je_button_code = convert_mouse_button_code(event.button);
+                    if (je_button_code !== null)
+                        _je4_je_io_update_mouse_state(0, je_button_code, false);
+                });
+
+                // Touch event for mobile devices
+                const free_touch_point_ids = Array(16).fill(false /* In used? */);
+                const recored_touch_points = new Map();
+
+                function get_or_take_a_free_point(identifier)
+                {
+                    const existed_id = recored_touch_points.get(identifier);
+                    if (existed_id !== undefined)
+                        return existed_id;
+
+                    for (let i = 0; i < free_touch_point_ids.length; i++)
+                    {
+                        if (!free_touch_point_ids[i])
+                        {
+                            free_touch_point_ids[i] = true;
+                            recored_touch_points.set(identifier, i);
+                            return i;
+                        }
+                    }
+                    return null;
+                }
+                function release_a_point(identifier)
+                {
+                    const existed_id = recored_touch_points.get(identifier);
+                    if (existed_id !== undefined)
+                    {
+                        free_touch_point_ids[existed_id] = false;
+                        recored_touch_points.delete(identifier);
+
+                        return existed_id;
+                    }
+                    return null;
+                }
+
+                function update_touch_pos(updateTouches, isDown)
+                {
+                    const rect = canvas.getBoundingClientRect();
+                    for (const touch of updateTouches)
+                    {
+                        const id = touch.identifier;
+                        const x = touch.clientX - rect.left;
+                        const y = touch.clientY - rect.top;
+
+                        if (isDown)
+                        {
+                            // Check if has touch id, if not, assign a new id.
+                            const touch_id = get_or_take_a_free_point(id);
+                            if (touch_id !== null)
+                            {
+                                _je4_je_io_update_mousepos(touch_id, x, y);
+                                _je4_je_io_update_mouse_state(touch_id, MOUSE_LEFT, true);
+                            }
+                        }
+                        else
+                        {
+                            // Check if has touch id, if has, release it.
+                            const touch_id = release_a_point(id);
+                            if (touch_id !== null)
+                            {
+                                _je4_je_io_update_mousepos(touch_id, x, y);
+                                _je4_je_io_update_mouse_state(touch_id, MOUSE_LEFT, false);
+                            }
+                        }
+                    }
+                }
+                canvas.addEventListener('touchstart', function (event) {
+                    update_touch_pos(event.changedTouches, true);
+                });
+                canvas.addEventListener('touchmove', function (event) {
+                    update_touch_pos(event.changedTouches, true);
+                });
+                canvas.addEventListener('touchend', function (event) {
+                    update_touch_pos(event.changedTouches, false);
+                });
+                canvas.addEventListener('touchcancel', function (event) {
+                    update_touch_pos(event.changedTouches, false);
+                });
 
                 // Start the context.
-                start_context();
-                
+                _je4_js_callback_prepare_surface_context();
             } }););
 
     emscripten_set_main_loop(webgl_rend_job_callback, 0, 1);

@@ -22,11 +22,11 @@ bool jegui_win32_proc_handler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 void jegui_win32_append_unicode16_char(wchar_t wch);
 #endif
 
-#if defined(JE_ENABLE_GL330_GAPI) \
+#if defined(JE_ENABLE_GL330_GAPI)\
     || defined(JE_ENABLE_GLES300_GAPI)\
     || defined(JE_ENABLE_WEBGL20_GAPI)
 
-#   if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID && defined(JE_ENABLE_GLES300_GAPI)
+#   if defined(JE_ENABLE_GLES300_GAPI) && JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
 #       define JE_GL_USE_EGL_INSTEAD_GLFW
 #   endif 
 
