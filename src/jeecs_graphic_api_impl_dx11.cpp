@@ -1262,7 +1262,7 @@ namespace jeecs::graphic::api::dx11
             for (size_t i = 0; i < resource->m_raw_framebuf_data->m_attachment_count; ++i)
             {
                 auto& attachment = attachments[i];
-                if (0 == (attachment->resouce()->m_raw_texture_data->m_format & jegl_texture::format::DEPTH))
+                if (0 == (attachment->resource()->m_raw_texture_data->m_format & jegl_texture::format::DEPTH))
                     ++color_attachment_count;
             }
 
@@ -1272,8 +1272,8 @@ namespace jeecs::graphic::api::dx11
             for (size_t i = 0; i < resource->m_raw_framebuf_data->m_attachment_count; ++i)
             {
                 auto& attachment = attachments[i];
-                jegl_using_resource(attachment->resouce());
-                if (0 != (attachment->resouce()->m_raw_texture_data->m_format & jegl_texture::format::DEPTH))
+                jegl_using_resource(attachment->resource());
+                if (0 != (attachment->resource()->m_raw_texture_data->m_format & jegl_texture::format::DEPTH))
                 {
                     if (jedx11_framebuffer_res->m_depth_view.Get() == nullptr)
                     {
@@ -1284,7 +1284,7 @@ namespace jeecs::graphic::api::dx11
                         depth_view_describe.Flags = 0;
 
                         JERCHECK(context->m_dx_device->CreateDepthStencilView(
-                            std::launder(reinterpret_cast<jedx11_texture*>(attachment->resouce()->m_handle.m_ptr))->m_texture.Get(),
+                            std::launder(reinterpret_cast<jedx11_texture*>(attachment->resource()->m_handle.m_ptr))->m_texture.Get(),
                             &depth_view_describe,
                             jedx11_framebuffer_res->m_depth_view.GetAddressOf()));
 
@@ -1296,7 +1296,7 @@ namespace jeecs::graphic::api::dx11
                 else
                 {
                     JERCHECK(context->m_dx_device->CreateRenderTargetView(
-                        std::launder(reinterpret_cast<jedx11_texture*>(attachment->resouce()->m_handle.m_ptr))->m_texture.Get(),
+                        std::launder(reinterpret_cast<jedx11_texture*>(attachment->resource()->m_handle.m_ptr))->m_texture.Get(),
                         nullptr, jedx11_framebuffer_res->m_rend_views[color_attachment_count].GetAddressOf()));
 
                     JEDX11_TRACE_DEBUG_NAME(jedx11_framebuffer_res->m_rend_views[color_attachment_count], "Framebuffer_Color");

@@ -396,18 +396,16 @@ namespace editor::gui::edit_forms
                             let loading_towoo_components = proj->get_all_towoo_scripts_name_and_path
                                 ->  forall(\_, paths = fsys::filename(paths[0])->lower->end_with(".jecomponent.wo");)
                                 ->  unmapping
-                                ->> \pathnameandpath = F"LOADED_TOWOO_COMPONENT_TYPES->add(je::towoo::update_component({
+                                ->> \(name, (_, path)) = F"LOADED_TOWOO_COMPONENT_TYPES->add(je::towoo::update_component({
                                         name->enstring}, {path->enstring})->unwrap);\n"
-                                        where (name, (_, path)) = pathnameandpath
                                     ;
                                 ->  reduce(\l, r = l + r;)
                                 ->  or("");
                             let loading_towoo_systems = proj->get_all_towoo_scripts_name_and_path
                                 ->  forall(\_, paths = fsys::filename(paths[0])->lower->end_with(".jesystem.wo");)
                                 ->  unmapping
-                                ->> \pathnameandpath = F"LOADED_TOWOO_SYSTEM_TYPES->add(je::towoo::update_system({
+                                ->> \(name, (_, path)) = F"LOADED_TOWOO_SYSTEM_TYPES->add(je::towoo::update_system({
                                         name->enstring}, {path->enstring})->unwrap);\n"
-                                        where (name, (_, path)) = pathnameandpath
                                     ;
                                 ->  reduce(\l, r = l + r;)
                                 ->  or("");
@@ -443,7 +441,9 @@ namespace editor::gui::edit_forms
                                 ->replace("$APPLY_TITLE$", F"je::editor::set_window_title({proj->get_name->enstring});");
 
                             let (start_up_script_binary, start_up_script_binary_sz) = 
-                                new! vm("@/builtin/main.wo", final_boot_script: buffer)->unwrap->save_binary(saving_woolang_pdi);
+                                new! vm("@/builtin/main.wo", final_boot_script: buffer)
+                                    ->unwrap
+                                    ->save_binary(saving_woolang_pdi);
 
                             assert(fimg->pack_buffer(start_up_script_binary->ptr, start_up_script_binary_sz, "@/builtin/main.wo"));
 

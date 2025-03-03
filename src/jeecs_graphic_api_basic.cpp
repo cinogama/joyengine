@@ -166,10 +166,10 @@ namespace Assimp
 #include <stack>
 #include <queue>
 
-struct _jegl_destroy_resouce
+struct _jegl_destroy_resource
 {
     jegl_resource* m_destroy_resource;
-    _jegl_destroy_resouce* last;
+    _jegl_destroy_resource* last;
 };
 
 struct jegl_context_notifier
@@ -205,7 +205,7 @@ struct jegl_context_notifier
     //      线程内部，不会发生并发访问。
     std::unordered_map<std::string, cached_resource_blob> _m_cached_resource_blobs;
 
-    jeecs::basic::atomic_list<_jegl_destroy_resouce> _m_closing_resources;
+    jeecs::basic::atomic_list<_jegl_destroy_resource> _m_closing_resources;
 };
 
 thread_local jegl_context* _current_graphic_thread = nullptr;
@@ -409,7 +409,7 @@ void jegl_sync_init(jegl_context* thread, bool isreboot)
 
 jegl_sync_state jegl_sync_update(jegl_context* thread)
 {
-    std::unordered_map<_jegl_destroy_resouce*, bool> _waiting_to_free_resource;
+    std::unordered_map<_jegl_destroy_resource*, bool> _waiting_to_free_resource;
 
     if (thread->_m_thread_notifier->m_graphic_terminate_flag.test_and_set())
     {
@@ -747,7 +747,7 @@ bool jegl_mark_shared_resources_outdated(const char* path)
 
 bool jegl_using_resource(jegl_resource* resource)
 {
-    bool need_init_resouce = false;
+    bool need_init_resource = false;
 
     if (!_current_graphic_thread)
     {
@@ -757,7 +757,7 @@ bool jegl_using_resource(jegl_resource* resource)
 
     if (!resource->m_graphic_thread)
     {
-        need_init_resouce = true;
+        need_init_resource = true;
         resource->m_graphic_thread = _current_graphic_thread;
         resource->m_graphic_thread_version = _current_graphic_thread->m_version;
     }
@@ -768,15 +768,15 @@ bool jegl_using_resource(jegl_resource* resource)
     }
     if (resource->m_graphic_thread_version != _current_graphic_thread->m_version)
     {
-        need_init_resouce = true;
+        need_init_resource = true;
         resource->m_graphic_thread_version = _current_graphic_thread->m_version;
     }
 
     // If resource is died, ignore it.
     if (resource->m_custom_resource == nullptr)
-        need_init_resouce = false;
+        need_init_resource = false;
 
-    if (need_init_resouce)
+    if (need_init_resource)
     {
         jegl_resource_blob resource_blob = nullptr;
 
@@ -837,7 +837,7 @@ bool jegl_using_resource(jegl_resource* resource)
     _current_graphic_thread->m_apis->using_resource(
         _current_graphic_thread->m_userdata, resource);
 
-    return need_init_resouce;
+    return need_init_resource;
 }
 
 void _jegl_free_resource_instance(jegl_resource* resource)
@@ -848,7 +848,7 @@ void _jegl_free_resource_instance(jegl_resource* resource)
     assert(resource->m_raw_ref_count == nullptr);
 
     // Send this resource to destroing list;
-    auto* del_res = new _jegl_destroy_resouce;
+    auto* del_res = new _jegl_destroy_resource;
     del_res->m_destroy_resource = resource;
 
     std::shared_lock sg1(_jegl_alive_glthread_list_mx);

@@ -164,7 +164,7 @@ namespace jeecs_impl
             const jeecs::typing::type_info* _membertype,
             const char* _member_name,
             const char* _woovalue_type_may_null,
-            wo_value    _woovalue_init_may_null,
+            wo_value _woovalue_init_may_null,
             ptrdiff_t _member_offset) noexcept
         {
             if (_classtype->m_member_types == nullptr)

@@ -331,8 +331,13 @@ namespace jeapi
                     ->> \tc = (t->name, collect_members)
                         where 
                             collect_members = c->get_members()
-                                ->> \name_type_addr_pair = (name, towoo::unsafe::dynamic_parser::saving(type, addr)->or("<?>"))
-                                    where (name, type, addr) = name_type_addr_pair
+                                ->> \(name, type, addr) = (
+                                        name, 
+                                        towoo::unsafe::dynamic_parser::saving(type, addr)
+                                            ->or_do(func(){
+                                                logerr(F"Unable to save '{name}' of '{t->name}'.");
+                                                return "<?>";
+                                            }))
                                     ;
                                 ->  mapping,
                                 (t, c) = tc;
@@ -552,15 +557,16 @@ namespace jeapi
 
             // 开始应用数据
             do component_types_dat
-                ->> \cdata = compmaynotfound
+                ->> \(ctype, dat) = compmaynotfound
                         ->> \comp = comp->get_members
-                            ->> \name_type_addr_pair = dat->get(mname)
-                                ->> \mdat = towoo::unsafe::dynamic_parser::restoring(mtype, mvalue, mdat as string);
-                                where (mname, mtype, mvalue) = name_type_addr_pair
+                            ->> \(mname, mtype, mvalue) = dat->get(mname)
+                                ->> func(mdat){
+                                    if (!towoo::unsafe::dynamic_parser::restoring(mtype, mvalue, mdat as string))
+                                        logerr(F"Unable to restore '{mname}' of '{ctype->name}'.");
+                                    }
                                 ;
                             ;
                     where compmaynotfound = entity_instance->get_component(ctype)
-                        , (ctype, dat) = cdata
                     ;
                 ;
             // 考虑一下异步加载？

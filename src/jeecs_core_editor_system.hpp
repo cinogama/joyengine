@@ -114,6 +114,124 @@ namespace jeecs
         };
     }
 
+    struct GizmoResources
+    {
+        basic::resource<graphic::texture> m_camera_icon;
+        basic::resource<graphic::texture> m_point_or_shape_light2d_icon;
+
+        basic::resource<graphic::shader> m_gizmo_shader;
+        basic::resource<graphic::vertex> m_gizmo_vertex;
+
+        JECS_DISABLE_MOVE_AND_COPY(GizmoResources);
+
+        GizmoResources()
+        {
+            static const uint8_t _camera_icon_pixels[8][8] = {
+               { 0, 0, 0, 0, 0, 0, 0, 0, },
+               { 0, 1, 1, 1, 1, 0, 1, 0, },
+               { 0, 1, 0, 0, 1, 1, 1, 0, },
+               { 0, 1, 0, 0, 1, 0, 1, 0, },
+               { 0, 1, 0, 0, 1, 1, 1, 0, },
+               { 0, 1, 1, 1, 1, 0, 1, 0, },
+               { 0, 0, 0, 0, 0, 0, 0, 0, },
+            };
+            static const uint8_t _point_light_icon_pixels[8][8] = {
+              { 0, 0, 0, 0, 0, 0, 0, 0, },
+              { 0, 0, 0, 1, 1, 0, 0, 0, },
+              { 0, 1, 1, 0, 1, 1, 1, 0, },
+              { 0, 1, 0, 0, 1, 0, 1, 0, },
+              { 0, 1, 0, 0, 1, 1, 1, 0, },
+              { 0, 1, 1, 1, 1, 0, 1, 0, },
+              { 0, 0, 0, 0, 0, 0, 0, 0, },
+            };
+
+            m_camera_icon = graphic::texture::create(8, 8, jegl_texture::format::RGBA);
+            for (size_t ix = 0; ix < 8; ++ix)
+            {
+                for (size_t iy = 0; iy < 8; ++iy)
+                {
+                    if (_camera_icon_pixels[iy][ix] == 0)
+                        m_camera_icon->pix(ix, iy).set({ 0.f, 0.f, 0.f, 0.f });
+                    else
+                        m_camera_icon->pix(ix, iy).set({ 1.f, 1.f, 1.f, 0.8f });
+                }
+            }
+            m_point_or_shape_light2d_icon = graphic::texture::create(8, 8, jegl_texture::format::RGBA);
+            for (size_t ix = 0; ix < 8; ++ix)
+            {
+                for (size_t iy = 0; iy < 8; ++iy)
+                {
+                    if (_point_light_icon_pixels[iy][ix] == 0)
+                        m_point_or_shape_light2d_icon->pix(ix, iy).set({ 0.f, 0.f, 0.f, 0.f });
+                    else
+                        m_point_or_shape_light2d_icon->pix(ix, iy).set({ 1.f, 1.f, 1.f, 0.8f });
+                }
+            }
+
+            m_gizmo_shader = graphic::shader::create("!/builtin/gizmo.shader",
+                { R"(
+import je::shader;
+
+SHARED  (true);
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
+CULL    (NONE);
+
+VAO_STRUCT! vin {
+    vertex : float3,
+    uv : float2,
+};
+
+using v2f = struct {
+    pos : float4,
+    uv : float2,
+};
+
+using fout = struct {
+    color : float4,
+    self_lum: float4,
+};
+
+public let vert = 
+    \v: vin = v2f { 
+        pos = je_mvp * vec4(v.vertex, 1.0),
+        uv = v.uv 
+    }
+    ;
+;
+
+let NearestSampler  = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
+let Main            = uniform_texture:<texture2d>("Main", NearestSampler, 0);
+public let frag = 
+    \vf: v2f = fout{ 
+        color = texture_color,
+        self_lum = vec4(texture_color->xyz, 1.0),
+    }
+    where texture_color = alphatest(je_color * texture(Main, vf.uv))
+    ;
+;
+)" });
+            float gizmo_vertex_data[] = {
+                -0.5f, 0.5f, 0.0f,      0.0f, 1.0f,
+                -0.5f, -0.5f, 0.0f,     0.0f, 0.0f,
+                0.5f, 0.5f, 0.0f,       1.0f, 1.0f,
+                0.5f, -0.5f, 0.0f,      1.0f, 0.0f,
+            };
+            m_gizmo_vertex = graphic::vertex::create(
+                jegl_vertex::type::TRIANGLESTRIP,
+                gizmo_vertex_data,
+                sizeof(gizmo_vertex_data),
+                {
+                    0, 1, 2, 3
+                },
+                {
+                    {jegl_vertex::data_type::FLOAT32, 3},
+                    {jegl_vertex::data_type::FLOAT32, 2},
+                });
+        }
+    };
+
     struct DefaultEditorSystem : public game_system
     {
         inline static bool _editor_enabled = true;
@@ -124,6 +242,10 @@ namespace jeecs
             global,
             local
         };
+
+        graphic_uhost* _graphic_uhost;
+        rendchain_branch* _gizmo_draw_branch;
+        GizmoResources _gizmo_resources;
 
         Editor::EntityMover::mover_mode _mode = Editor::EntityMover::mover_mode::selection;
         coord_mode _coord = coord_mode::global;
@@ -187,6 +309,9 @@ namespace jeecs
         DefaultEditorSystem(game_world w)
             : game_system(w)
         {
+            _graphic_uhost = jegl_uhost_get_or_create_for_universe(w.get_universe().handle(), nullptr);
+            _gizmo_draw_branch = jegl_uhost_alloc_branch(_graphic_uhost);
+
             const float axis_x_data[] = {
                 -1.f, 0.f, 0.f,       0.25f, 0.f, 0.f,
                 1.f, 0.f, 0.f,       1.f,   0.f, 0.f
@@ -235,43 +360,47 @@ namespace jeecs
             circ_y = _create_circle_vertex({ 0.f, 1.f, 0.f });
             circ_z = _create_circle_vertex({ 0.f, 0.f, 1.f });
 
-            circ_x->resouce()->m_raw_vertex_data->m_y_min += -0.2f;
-            circ_x->resouce()->m_raw_vertex_data->m_y_max += 0.2f;
-            circ_x->resouce()->m_raw_vertex_data->m_z_min += -0.2f;
-            circ_x->resouce()->m_raw_vertex_data->m_z_max += 0.2f;
+            circ_x->resource()->m_raw_vertex_data->m_y_min += -0.2f;
+            circ_x->resource()->m_raw_vertex_data->m_y_max += 0.2f;
+            circ_x->resource()->m_raw_vertex_data->m_z_min += -0.2f;
+            circ_x->resource()->m_raw_vertex_data->m_z_max += 0.2f;
 
-            circ_y->resouce()->m_raw_vertex_data->m_x_min += -0.2f;
-            circ_y->resouce()->m_raw_vertex_data->m_x_max += 0.2f;
-            circ_y->resouce()->m_raw_vertex_data->m_z_min += -0.2f;
-            circ_y->resouce()->m_raw_vertex_data->m_z_max += 0.2f;
+            circ_y->resource()->m_raw_vertex_data->m_x_min += -0.2f;
+            circ_y->resource()->m_raw_vertex_data->m_x_max += 0.2f;
+            circ_y->resource()->m_raw_vertex_data->m_z_min += -0.2f;
+            circ_y->resource()->m_raw_vertex_data->m_z_max += 0.2f;
 
-            circ_z->resouce()->m_raw_vertex_data->m_x_min += -0.2f;
-            circ_z->resouce()->m_raw_vertex_data->m_x_max += 0.2f;
-            circ_z->resouce()->m_raw_vertex_data->m_y_min += -0.2f;
-            circ_z->resouce()->m_raw_vertex_data->m_y_max += 0.2f;
+            circ_z->resource()->m_raw_vertex_data->m_x_min += -0.2f;
+            circ_z->resource()->m_raw_vertex_data->m_x_max += 0.2f;
+            circ_z->resource()->m_raw_vertex_data->m_y_min += -0.2f;
+            circ_z->resource()->m_raw_vertex_data->m_y_max += 0.2f;
 
-            circ_x->resouce()->m_raw_vertex_data->m_x_min
-                = circ_y->resouce()->m_raw_vertex_data->m_y_min
-                = circ_z->resouce()->m_raw_vertex_data->m_z_min
-                = axis_x->resouce()->m_raw_vertex_data->m_y_min
-                = axis_x->resouce()->m_raw_vertex_data->m_z_min
-                = axis_y->resouce()->m_raw_vertex_data->m_x_min
-                = axis_y->resouce()->m_raw_vertex_data->m_z_min
-                = axis_z->resouce()->m_raw_vertex_data->m_x_min
-                = axis_z->resouce()->m_raw_vertex_data->m_y_min
+            circ_x->resource()->m_raw_vertex_data->m_x_min
+                = circ_y->resource()->m_raw_vertex_data->m_y_min
+                = circ_z->resource()->m_raw_vertex_data->m_z_min
+                = axis_x->resource()->m_raw_vertex_data->m_y_min
+                = axis_x->resource()->m_raw_vertex_data->m_z_min
+                = axis_y->resource()->m_raw_vertex_data->m_x_min
+                = axis_y->resource()->m_raw_vertex_data->m_z_min
+                = axis_z->resource()->m_raw_vertex_data->m_x_min
+                = axis_z->resource()->m_raw_vertex_data->m_y_min
                 = -0.2f;
 
-            circ_x->resouce()->m_raw_vertex_data->m_x_max
-                = circ_y->resouce()->m_raw_vertex_data->m_y_max
-                = circ_z->resouce()->m_raw_vertex_data->m_z_max
-                = axis_x->resouce()->m_raw_vertex_data->m_y_max
-                = axis_x->resouce()->m_raw_vertex_data->m_z_max
-                = axis_y->resouce()->m_raw_vertex_data->m_x_max
-                = axis_y->resouce()->m_raw_vertex_data->m_z_max
-                = axis_z->resouce()->m_raw_vertex_data->m_x_max
-                = axis_z->resouce()->m_raw_vertex_data->m_y_max
+            circ_x->resource()->m_raw_vertex_data->m_x_max
+                = circ_y->resource()->m_raw_vertex_data->m_y_max
+                = circ_z->resource()->m_raw_vertex_data->m_z_max
+                = axis_x->resource()->m_raw_vertex_data->m_y_max
+                = axis_x->resource()->m_raw_vertex_data->m_z_max
+                = axis_y->resource()->m_raw_vertex_data->m_x_max
+                = axis_y->resource()->m_raw_vertex_data->m_z_max
+                = axis_z->resource()->m_raw_vertex_data->m_x_max
+                = axis_z->resource()->m_raw_vertex_data->m_y_max
                 = 0.2f;
 
+        }
+        ~DefaultEditorSystem()
+        {
+            jegl_uhost_free_branch(_graphic_uhost, _gizmo_draw_branch);
         }
 
         struct SelectedResult
@@ -348,40 +477,6 @@ namespace jeecs
                 advise_lock_mouse = false;
         }
 
-        void CameraWalker(
-            Transform::LocalRotation& rotation,
-            Camera::Projection& proj,
-            Transform::Translation& trans,
-            Camera::OrthoProjection* o2d)
-        {
-            if (!_editor_enabled)
-                return;
-
-            using namespace input;
-            using namespace math;
-
-            auto mouse_position = _inputs.uniform_mouse_pos;
-
-            if ((_camera_is_in_o2d_mode = o2d != nullptr))
-            {
-                o2d->scale = o2d->scale * pow(2.0f, (float)_inputs.wheel_delta_count);
-                rotation.rot = quat();
-            }
-
-            _camera_ray = math::ray(trans, proj, mouse_position, _camera_is_in_o2d_mode);
-            _camera_porjection = &proj;
-            _camera_ortho_porjection = o2d;
-
-            if (_drag_viewing && _inputs.r_buttom)
-            {
-                if (!_camera_is_in_o2d_mode)
-                    rotation.rot = rotation.rot * quat(30.f * -mouse_position.y, 0, 0);
-
-                _camera_rot = trans.world_rotation;
-                _camera_pos = trans.world_position;
-            }
-        }
-
         void SelectEntity(game_entity entity, Transform::Translation& trans, Renderer::Shape* shape)
         {
             if (!_editor_enabled)
@@ -442,9 +537,9 @@ namespace jeecs
                 indices.push_back((uint32_t)indices.size());
             }
             return graphic::vertex::create(
-                jegl_vertex::type::LINESTRIP, 
-                points.data(), 
-                points.size() * sizeof(float), 
+                jegl_vertex::type::LINESTRIP,
+                points.data(),
+                points.size() * sizeof(float),
                 indices,
                 {
                     {jegl_vertex::data_type::FLOAT32, 3},
@@ -510,18 +605,19 @@ using fout = struct {
 };
         
 public let vert = 
-    \v: vin = v2f { pos = je_mvp * vertex_pos, 
-                    color = v.color } 
-        where vertex_pos = vec4(v.vertex, 1.)
+    \v: vin = v2f { 
+        pos = je_mvp * vec4(v.vertex, 1.), 
+        color = v.color 
+    } 
     ;
 ;
 public let frag = 
     \f: v2f = fout{ 
         color = vec4(show_color, 1.),
         self_lum = vec4(show_color * 100., 1.),
-        }
-        where show_color = lerp(f.color, float3::const(1., 1., 1.), ratio)
-            , ratio = step(float::const(0.5), je_color->x)
+    }
+    where show_color = lerp(f.color, float3::const(1., 1., 1.), ratio)
+        , ratio = step(float::const(0.5), je_color->x)
     ;
 ;
         )" });
@@ -547,7 +643,12 @@ using fout = struct {
     self_lum: float4,
 };
         
-public let vert = \v: vin = v2f{ pos = je_mvp * vec4(v.vertex, 1.) };;
+public let vert = 
+    \v: vin = v2f{ 
+        pos = je_mvp * vec4(v.vertex, 1.) 
+    }
+    ;
+;
 public let frag = 
     \_: v2f = fout{ 
         color = float4::const(0.5, 1., 0.5, 1.),
@@ -864,9 +965,163 @@ public let frag =
             selector.except<Camera::Projection>();
             selector.exec(&DefaultEditorSystem::MoveWalker);
 
+            struct EditorGizmoContext
+            {
+                basic::resource<graphic::framebuffer> m_framebuffer;
+                Transform::Translation* m_translation;
+                Camera::Projection* m_projection;
+            };
+            std::optional<EditorGizmoContext> enable_draw_gizmo_at_framebuf = std::nullopt;
+
             // Move walker(camera)
             selector.contain<Editor::EditorWalker>();
-            selector.exec(&DefaultEditorSystem::CameraWalker);
+            selector.exec([this, &enable_draw_gizmo_at_framebuf](
+                Transform::LocalRotation& rotation,
+                Camera::Projection& proj,
+                Transform::Translation& trans,
+                Camera::RendToFramebuffer& r2b,
+                Camera::OrthoProjection* o2d)
+                {
+                    if (r2b.framebuffer != nullptr && proj.default_uniform_buffer != nullptr)
+                    {
+                        enable_draw_gizmo_at_framebuf = EditorGizmoContext{
+                            r2b.framebuffer,
+                            &trans,
+                            &proj,
+                        };
+                    }
+
+                    if (!_editor_enabled)
+                        return;
+
+                    using namespace input;
+                    using namespace math;
+
+                    auto mouse_position = _inputs.uniform_mouse_pos;
+
+                    if ((_camera_is_in_o2d_mode = o2d != nullptr))
+                    {
+                        o2d->scale = o2d->scale * pow(2.0f, (float)_inputs.wheel_delta_count);
+                        rotation.rot = quat();
+                    }
+
+                    _camera_ray = math::ray(trans, proj, mouse_position, _camera_is_in_o2d_mode);
+                    _camera_porjection = &proj;
+                    _camera_ortho_porjection = o2d;
+
+                    if (_drag_viewing && _inputs.r_buttom)
+                    {
+                        if (!_camera_is_in_o2d_mode)
+                            rotation.rot = rotation.rot * quat(30.f * -mouse_position.y, 0, 0);
+
+                        _camera_rot = trans.world_rotation;
+                        _camera_pos = trans.world_position;
+                    }
+                });
+
+            /////////////////////////////////////////////////////////////////////////
+            // Prepare for gizmo drawing.
+            jegl_rendchain* gizmo_rchain = nullptr;
+            float MAT4_GIZMO_M[4][4] = {};
+            float MAT4_GIZMO_MV[4][4] = {};
+            float MAT4_GIZMO_MVP[4][4] = {};
+
+            if (enable_draw_gizmo_at_framebuf.has_value())
+            {
+                auto& gizmo_context = enable_draw_gizmo_at_framebuf.value();
+
+                jegl_branch_new_frame(_gizmo_draw_branch, graphic::EDITOR_GIZMO_BRANCH_QUEUE);
+                gizmo_rchain = jegl_branch_new_chain(
+                    _gizmo_draw_branch,
+                    gizmo_context.m_framebuffer->resource(),
+                    0,
+                    0,
+                    0,
+                    0);
+
+                jegl_rchain_bind_uniform_buffer(
+                    gizmo_rchain,
+                    gizmo_context.m_projection->default_uniform_buffer->resource());
+            }
+
+#define JE_CHECK_NEED_AND_SET_UNIFORM(ACTION, UNIFORM, ITEM, TYPE, ...) \
+do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
+    jegl_rchain_set_builtin_uniform_##TYPE(ACTION, &UNIFORM->m_builtin_uniform_##ITEM, __VA_ARGS__);}while(0)
+
+            auto draw_easy_gizmo_impl = [&](Transform::Translation& trans, jegl_rchain_texture_group_idx_t group)
+                {
+                    if (enable_draw_gizmo_at_framebuf.has_value())
+                    {
+                        auto& gizmo_context = enable_draw_gizmo_at_framebuf.value();
+                        auto draw_action = jegl_rchain_draw(
+                            gizmo_rchain,
+                            _gizmo_resources.m_gizmo_shader->resource(),
+                            _gizmo_resources.m_gizmo_vertex->resource(),
+                            group);
+
+                        auto* builtin_uniform = _gizmo_resources.m_gizmo_shader->m_builtin;
+
+                        MAT4_GIZMO_MV[0][0] = MAT4_GIZMO_MV[1][1] = MAT4_GIZMO_MV[2][2] = MAT4_GIZMO_MV[3][3] = 1.0f;
+                        MAT4_GIZMO_MV[3][0] = trans.world_position.x;
+                        MAT4_GIZMO_MV[3][1] = trans.world_position.y;
+                        MAT4_GIZMO_MV[3][2] = trans.world_position.z;
+
+                        gizmo_context.m_translation->world_rotation.create_matrix(MAT4_GIZMO_MVP);
+                        math::mat4xmat4(MAT4_GIZMO_M, MAT4_GIZMO_MV, MAT4_GIZMO_MVP);
+
+                        math::mat4xmat4(MAT4_GIZMO_MVP, gizmo_context.m_projection->view_projection, MAT4_GIZMO_M);
+                        math::mat4xmat4(MAT4_GIZMO_MV, gizmo_context.m_projection->view, MAT4_GIZMO_M);
+
+                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, m, float4x4, MAT4_GIZMO_M);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, mvp, float4x4, MAT4_GIZMO_MVP);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, mv, float4x4, MAT4_GIZMO_MV);
+
+                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, local_scale, float3,
+                            trans.local_scale.x,
+                            trans.local_scale.y,
+                            trans.local_scale.z);
+
+                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, tiling, float2, 1.0f, 1.0f);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, offset, float2, 0.0f, 0.0f);
+
+                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, color, float4,
+                            1.0f, 1.0f, 1.0f, 1.0f);
+                    }
+                };
+
+            auto camera_gizmo_texture_group = jegl_rchain_allocate_texture_group(gizmo_rchain);
+            auto point_light_gizmo_texture_group = jegl_rchain_allocate_texture_group(gizmo_rchain);
+            jegl_rchain_bind_texture(
+                gizmo_rchain,
+                camera_gizmo_texture_group,
+                0,
+                _gizmo_resources.m_camera_icon->resource());
+            jegl_rchain_bind_texture(
+                gizmo_rchain,
+                point_light_gizmo_texture_group,
+                0,
+                _gizmo_resources.m_point_or_shape_light2d_icon->resource());
+
+            selector.except<Editor::Invisable>();
+            selector.anyof<Camera::OrthoProjection, Camera::PerspectiveProjection>();
+            selector.contain<Camera::Projection>();
+            selector.exec([&draw_easy_gizmo_impl, &camera_gizmo_texture_group](
+                Transform::Translation& trans)
+                {
+                    draw_easy_gizmo_impl(trans, camera_gizmo_texture_group);
+                });
+
+            selector.except<Editor::Invisable>();
+            selector.anyof<Light2D::Point, Light2D::Range>();
+            selector.exec([&draw_easy_gizmo_impl, &point_light_gizmo_texture_group](
+                Transform::Translation& trans)
+                {
+                    draw_easy_gizmo_impl(trans, point_light_gizmo_texture_group);
+                });
+
+#undef JE_CHECK_NEED_AND_SET_UNIFORM
+            // Draw gizmo end.
+            /////////////////////////////////////////////////////////////////////////
 
             // Select entity
             selector.except<Editor::Invisable>();
@@ -902,9 +1157,9 @@ public let frag =
                                 eshape->vertex == nullptr
                                 ? jeecs::math::vec3(1.0f, 1.0f, 0.0f)
                                 : jeecs::math::vec3(
-                                    eshape->vertex->resouce()->m_raw_vertex_data->m_x_max - eshape->vertex->resouce()->m_raw_vertex_data->m_x_min,
-                                    eshape->vertex->resouce()->m_raw_vertex_data->m_y_max - eshape->vertex->resouce()->m_raw_vertex_data->m_y_min,
-                                    eshape->vertex->resouce()->m_raw_vertex_data->m_z_max - eshape->vertex->resouce()->m_raw_vertex_data->m_z_min
+                                    eshape->vertex->resource()->m_raw_vertex_data->m_x_max - eshape->vertex->resource()->m_raw_vertex_data->m_x_min,
+                                    eshape->vertex->resource()->m_raw_vertex_data->m_y_max - eshape->vertex->resource()->m_raw_vertex_data->m_y_min,
+                                    eshape->vertex->resource()->m_raw_vertex_data->m_z_max - eshape->vertex->resource()->m_raw_vertex_data->m_z_min
                                 ));
                     }
                     else
@@ -1164,9 +1419,9 @@ WO_API wo_api wojeapi_reload_texture_of_entity(wo_vm vm, wo_value args)
     {
         for (auto& texture_res : textures->textures)
         {
-            assert(texture_res.m_texture != nullptr && texture_res.m_texture->resouce() != nullptr);
+            assert(texture_res.m_texture != nullptr && texture_res.m_texture->resource() != nullptr);
 
-            const char* existed_texture_path = texture_res.m_texture->resouce()->m_path;
+            const char* existed_texture_path = texture_res.m_texture->resource()->m_path;
 
             if (existed_texture_path != nullptr && old_texture_path == existed_texture_path)
                 texture_res.m_texture = newtexture;
@@ -1190,7 +1445,7 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
     auto bad_shader_generator = [](const std::string& path, const jeecs::basic::resource<jeecs::graphic::shader>& shader) {
         jeecs::Editor::BadShadersUniform::bad_shader_data bad_shader(path);
 
-        auto* uniform_var = shader->resouce()->m_raw_shader_data->m_custom_uniforms;
+        auto* uniform_var = shader->resource()->m_raw_shader_data->m_custom_uniforms;
         while (uniform_var != nullptr)
         {
             bad_shader.m_vars[uniform_var->m_name] = *uniform_var;
@@ -1201,16 +1456,16 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
     auto copy_shader_generator = [gcontext](
         jeecs::basic::resource<jeecs::graphic::shader>* newshader, auto oldshader)
         {
-            assert(newshader != nullptr && (*newshader)->resouce()->m_path != nullptr);
+            assert(newshader != nullptr && (*newshader)->resource()->m_path != nullptr);
 
             jeecs::basic::resource<jeecs::graphic::shader> new_shader_instance = *newshader;
-            *newshader = jeecs::graphic::shader::load(gcontext, new_shader_instance->resouce()->m_path);
+            *newshader = jeecs::graphic::shader::load(gcontext, new_shader_instance->resource()->m_path);
 
             const char builtin_uniform_varname[] = "JOYENGINE_";
 
             if constexpr (std::is_same<decltype(oldshader), jeecs::basic::resource<jeecs::graphic::shader>>::value)
             {
-                auto* uniform_var = oldshader->resouce()->m_raw_shader_data->m_custom_uniforms;
+                auto* uniform_var = oldshader->resource()->m_raw_shader_data->m_custom_uniforms;
                 while (uniform_var != nullptr)
                 {
                     if (strncmp(uniform_var->m_name, builtin_uniform_varname, sizeof(builtin_uniform_varname) - 1) != 0)
@@ -1283,7 +1538,7 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
             for (auto& shader : shaders->shaders)
             {
                 assert(shader != nullptr);
-                if (shader->resouce()->m_path != nullptr && old_shader_path == shader->resouce()->m_path)
+                if (shader->resource()->m_path != nullptr && old_shader_path == shader->resource()->m_path)
                 {
                     need_update = true;
                     break;
@@ -1297,7 +1552,7 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
                 if (ok_or_bad_shader.is_ok())
                 {
                     auto& ok_shader = ok_or_bad_shader.get_ok();
-                    if (ok_shader->resouce()->m_path != nullptr && old_shader_path == ok_shader->resouce()->m_path)
+                    if (ok_shader->resource()->m_path != nullptr && old_shader_path == ok_shader->resource()->m_path)
                     {
                         need_update = true;
                         break;
@@ -1333,7 +1588,7 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
                     assert(shader != nullptr);
 
                     // 1.1.1.1 If shader is old one, move the data to BadShadersUniform, or move shader directly 
-                    if (shader->resouce()->m_path != nullptr && old_shader_path == shader->resouce()->m_path)
+                    if (shader->resource()->m_path != nullptr && old_shader_path == shader->resource()->m_path)
                         bad_uniforms->stored_uniforms.emplace_back(bad_shader_generator(new_shader_path, shader));
                     else
                         bad_uniforms->stored_uniforms.emplace_back(shader);
@@ -1347,7 +1602,7 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
                     if (ok_or_bad_shader.is_ok())
                     {
                         auto& ok_shader = ok_or_bad_shader.get_ok();
-                        if (ok_shader->resouce()->m_path != nullptr && old_shader_path == ok_shader->resouce()->m_path)
+                        if (ok_shader->resource()->m_path != nullptr && old_shader_path == ok_shader->resource()->m_path)
                             ok_or_bad_shader = bad_shader_generator(new_shader_path, ok_shader);
                     }
                 }
@@ -1364,7 +1619,7 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
                 for (auto& shader : shaders->shaders)
                 {
                     assert(shader != nullptr);
-                    if (shader->resouce()->m_path != nullptr && old_shader_path == shader->resouce()->m_path)
+                    if (shader->resource()->m_path != nullptr && old_shader_path == shader->resource()->m_path)
                         shader = copy_shader_generator(&new_shader, shader);
                 }
             }
@@ -1375,7 +1630,7 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
                     if (ok_or_bad_shader.is_ok())
                     {
                         auto& ok_shader = ok_or_bad_shader.get_ok();
-                        if (ok_shader->resouce()->m_path != nullptr && old_shader_path == ok_shader->resouce()->m_path)
+                        if (ok_shader->resource()->m_path != nullptr && old_shader_path == ok_shader->resource()->m_path)
                             ok_or_bad_shader = copy_shader_generator(&new_shader, ok_shader);
                     }
                     else if (ok_or_bad_shader.get_bad().m_path == old_shader_path)

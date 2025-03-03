@@ -909,7 +909,7 @@ WO_API wo_api wojeapi_towoo_update_component_data(wo_vm vm, wo_value args)
             towoo_component_tinfo,
             memberinfo.m_type,
             memberinfo.m_name.c_str(),
-            wooval != nullptr ? wooval->m_wooval_type.c_str() : "",
+            wooval != nullptr ? wooval->m_wooval_type.c_str() : nullptr,
             wooval != nullptr ? wooval->m_wooval_val : nullptr,
             memberinfo.m_offset);
     }

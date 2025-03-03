@@ -473,7 +473,10 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                                     draw_context.scale = 1.;
                             }
                             else if (!draw_context.mousedown)
+                            {
                                 enable_draw = false;
+                                do _delta_wheel(); // 在这里更新记录到的滚轮计数，消除掉在绘制区域之外的滚轮计数
+                            }
 
                             let (p0, p1) = GetItemRect();
                             let (lux, luy) = p0;

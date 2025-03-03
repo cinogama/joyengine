@@ -599,9 +599,11 @@ namespace editor::gui::tilemap
         // 以下部分是绘制区域的数据
         m_drawing_layer: mut int,
         m_focus_on_drawing_layer: mut bool,
-        m_offset: mut(real, real),
+        m_offset: mut(real, real), // 未经过缩放的原始偏移
         m_scale: mut real,
         m_layerd_tiles: map<int, map<int, map<int, Tile>>>,
+
+        m_show_grid: mut bool,
     }
     {
         func create(context: EditorContext, mapdata: dict<string, dynamic>)
@@ -617,6 +619,8 @@ namespace editor::gui::tilemap
                 m_offset = mut(0., 0.),
                 m_scale = mut 1.,
                 m_layerd_tiles = {}mut,
+
+                m_show_grid = mut true,
             };
 
             // 读取旧有的TileMapSet
@@ -1117,7 +1121,9 @@ namespace editor::gui::tilemap
                 // scale = 1. 的情况下，一个Tile的大小是这么大
                 let BASE_TILE_SIZE = 50.;
                 let scaled_tile_size = self.m_scale * BASE_TILE_SIZE;
-                let (oldoffsetx, oldoffsety) = self.m_offset;
+                let (oldorigin_offsetx, oldorigin_offsety) = (self.m_offset.0, self.m_offset.1);
+                let (oldoffsetx, oldoffsety) = 
+                    (oldorigin_offsetx * self.m_scale, oldorigin_offsety * self.m_scale);
 
                 for (let (layer, tiles) : self.m_layerd_tiles->unmapping->std::sort(\(layera, _), (layerb, _) = layera > layerb;))
                 {
@@ -1139,12 +1145,18 @@ namespace editor::gui::tilemap
                     }
                 }
 
-                if (self.m_scale >= 1.)
+                if (self.m_scale >= 1. && self.m_show_grid)
                 {
                     for (let mut ix = 0.; ix < draww; ix += scaled_tile_size)
-                        drawlist->AddLine((lux + ix + oldoffsetx % scaled_tile_size, luy), (lux + ix + oldoffsetx % scaled_tile_size, p1[1]), (127, 127, 127, 255), 2.);
+                        drawlist->AddLine(
+                            (lux + ix + oldoffsetx % scaled_tile_size, luy), 
+                            (lux + ix + oldoffsetx % scaled_tile_size, p1[1]), 
+                            (127, 127, 127, 127), 2.);
                     for (let mut iy = 0.; iy < drawh; iy += scaled_tile_size)
-                        drawlist->AddLine((lux, luy + iy + oldoffsety % scaled_tile_size), (p1[0], luy + iy + oldoffsety % scaled_tile_size), (127, 127, 127, 255), 2.);
+                        drawlist->AddLine(
+                            (lux, luy + iy + oldoffsety % scaled_tile_size), 
+                            (p1[0], luy + iy + oldoffsety % scaled_tile_size), 
+                            (127, 127, 127, 127), 2.);
                 }
 
                 // 高亮鼠标所在的块儿
@@ -1156,6 +1168,8 @@ namespace editor::gui::tilemap
                     self.m_scale *= math::pow(2., (new_wheel_count - recored_wheel_count): real);
                     recored_wheel_count = new_wheel_count;
 
+                    let ctrl_down = input::keydown(keycode::L_CTRL);
+
                     let (mposx, mposy) = GetMousePos();
 
                     let (mpblockx, mpblocky) = (
@@ -1165,23 +1179,27 @@ namespace editor::gui::tilemap
 
                     let mut highlight_alpha = 100;
 
-                    if (input::mousedown(0, mousecode::LEFT))
+                    if (ctrl_down)
                     {
-                        if (input::keydown(keycode::L_CTRL))
-                        {
-                            highlight_alpha = 0;
+                        highlight_alpha = 0;
 
-                            let (mousedelta_x, mousedelta_y) = GetMouseDeltaPos();
-                            self.m_offset = (oldoffsetx + mousedelta_x, oldoffsety + mousedelta_y);
-                        }
-                        else
+                        // Move
+                        if (input::mousedown(0, mousecode::LEFT) 
+                            || input::mousedown(0, mousecode::RIGHT))
                         {
-                            highlight_alpha = 50;
-                            self->apply_draw_tile(mpblockx: int, mpblocky: int);
+                            let (mousedelta_x, mousedelta_y) = GetMouseDeltaPos();
+                            self.m_offset = 
+                                (oldorigin_offsetx + mousedelta_x, oldorigin_offsety + mousedelta_y);
                         }
+                    }
+                    else if (input::mousedown(0, mousecode::LEFT))
+                    {
+                        highlight_alpha = 50;
+                        self->apply_draw_tile(mpblockx: int, mpblocky: int);
                     }
                     else if (input::mousedown(0, mousecode::RIGHT))
                     {
+                        highlight_alpha = 50;
                         self->clear_draw_tile(mpblockx: int, mpblocky: int);
                     }
 
@@ -1687,7 +1705,7 @@ namespace editor::gui::tilemap
         let editctx = new! TileEditContext(context, mapdata);
         launch(func(){
             let mut open = true;
-            match (BeginAttrOpen(F"TileMap 编辑器 - {tilemap_file->tostring}", WindowsAttribute::ImGuiWindowFlags_MenuBar))
+            match (BeginAttrOpen(F"瓦片地图编辑器 - {tilemap_file->tostring}", WindowsAttribute::ImGuiWindowFlags_MenuBar))
             {
             value(show)?
                 if (show)
@@ -1696,12 +1714,33 @@ namespace editor::gui::tilemap
                     {
                         if (BeginMenu("编辑"))
                         {
-                            if (MenuItem("新建Tileset"))
+                            if (MenuItem("新建瓦片图集"))
                                 editctx->create_tilemap_form(option::none);
+
+                            Separator();
 
                             if (MenuItem("导出"))
                                 create_image_dialog(editctx, 
                                     fsys::parent(tilemap_file), fsys::purename(tilemap_file));
+
+                            EndMenu();
+                        }
+                        if (BeginMenu("视图"))
+                        {
+                            if (MenuItem("重置视图"))
+                            {
+                                editctx.m_offset = (0., 0.);
+                                editctx.m_scale = 1.;
+                            }
+
+                            Separator();
+
+                            match (MenuItemSelected("显示网格", editctx.m_show_grid))
+                            {
+                            value(new_result)?
+                                editctx.m_show_grid = new_result;
+                            none?;
+                            }
 
                             EndMenu();
                         }

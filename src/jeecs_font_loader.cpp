@@ -167,7 +167,7 @@ jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long chcode)
 
     if (font->m_updater != nullptr)
     {
-        auto* raw_texture_data = ch.m_texture->resouce()->m_raw_texture_data;
+        auto* raw_texture_data = ch.m_texture->resource()->m_raw_texture_data;
         font->m_updater(
             raw_texture_data->m_pixels,
             raw_texture_data->m_width,

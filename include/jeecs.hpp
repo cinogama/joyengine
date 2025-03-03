@@ -561,6 +561,12 @@ namespace jeecs
     namespace graphic
     {
         struct character;
+        /*
+        jeecs::graphic::EDITOR_GIZMO_BRANCH_QUEUE [常量]
+        用于指示默认的编辑器Gizmo 绘制集合的优先级，通常情况下没有特别的作用
+        */
+        inline constexpr int EDITOR_GIZMO_BRANCH_QUEUE = 50000;
+
     }
 }
 
@@ -4939,21 +4945,21 @@ namespace jeecs
         {
             struct member_info
             {
-                const type_info* m_class_type;
+                const type_info*    m_class_type;
 
-                const char* m_member_name;
+                const char*         m_member_name;
 
-                const char* m_woovalue_type_may_null;
+                const char*         m_woovalue_type_may_null;
                 wo_pin_value        m_woovalue_init_may_null;
 
-                const type_info* m_member_type;
+                const type_info*    m_member_type;
                 ptrdiff_t           m_member_offset;
 
-                member_info* m_next_member;
+                member_info*        m_next_member;
             };
 
-            size_t m_member_count;
-            member_info* m_members;
+            size_t                  m_member_count;
+            member_info*            m_members;
         };
 
         /*
@@ -4962,10 +4968,10 @@ namespace jeecs
         */
         struct typeinfo_script_parser
         {
-            parse_c2w_func_t m_script_parse_c2w;
-            parse_w2c_func_t m_script_parse_w2c;
-            const char* m_woolang_typename;
-            const char* m_woolang_typedecl;
+            parse_c2w_func_t        m_script_parse_c2w;
+            parse_w2c_func_t        m_script_parse_w2c;
+            const char*             m_woolang_typename;
+            const char*             m_woolang_typedecl;
         };
 
         /*
@@ -7239,22 +7245,22 @@ namespace jeecs
         {
             JECS_DISABLE_MOVE_AND_COPY(resource_basic);
 
-            jegl_resource* _m_resouce;
+            jegl_resource* _m_resource;
         protected:
             resource_basic(jegl_resource* res) noexcept
-                :_m_resouce(res)
+                :_m_resource(res)
             {
-                assert(_m_resouce != nullptr);
+                assert(_m_resource != nullptr);
             }
         public:
-            inline jegl_resource* resouce() const noexcept
+            inline jegl_resource* resource() const noexcept
             {
-                return _m_resouce;
+                return _m_resource;
             }
             ~resource_basic()
             {
-                assert(_m_resouce != nullptr);
-                jegl_close_resource(_m_resouce);
+                assert(_m_resource != nullptr);
+                jegl_close_resource(_m_resource);
             }
         };
 
@@ -7288,7 +7294,7 @@ namespace jeecs
                 const basic::resource<texture>& src, size_t x, size_t y, size_t w, size_t h)
             {
                 jegl_texture::format new_texture_format = (jegl_texture::format)(
-                    src->resouce()->m_raw_texture_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK);
+                    src->resource()->m_raw_texture_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK);
                 jegl_resource* res = jegl_create_texture(w, h, new_texture_format);
 
                 // Create texture must be successfully.
@@ -7309,11 +7315,11 @@ namespace jeecs
                     }
 #else
                     auto color_depth = (int)new_texture_format;
-                    auto* dst_pixels = new_texture->resouce()->m_raw_texture_data->m_pixels;
-                    auto* src_pixels = src->resouce()->m_raw_texture_data->m_pixels;
+                    auto* dst_pixels = new_texture->resource()->m_raw_texture_data->m_pixels;
+                    auto* src_pixels = src->resource()->m_raw_texture_data->m_pixels;
 
-                    size_t src_w = std::min(w, src->resouce()->m_raw_texture_data->m_width);
-                    size_t src_h = std::min(h, src->resouce()->m_raw_texture_data->m_height);
+                    size_t src_w = std::min(w, src->resource()->m_raw_texture_data->m_width);
+                    size_t src_h = std::min(h, src->resource()->m_raw_texture_data->m_height);
 
                     for (size_t iy = 0; iy < src_h; ++iy)
                     {
@@ -7383,29 +7389,32 @@ namespace jeecs
 
                     auto* raw_texture_data = _m_texture->m_raw_texture_data;
                     
-                    if (!_m_texture->m_modified)
+                    if (_m_texture->m_graphic_thread != nullptr)
                     {
-                        // Set texture modified flag & range.
-                        raw_texture_data->m_modified_max_x = _m_x;
-                        raw_texture_data->m_modified_max_y = _m_y;
-                        raw_texture_data->m_modified_min_x = _m_x;
-                        raw_texture_data->m_modified_min_y = _m_y;
-
-                        _m_texture->m_modified = true;
-                    }
-                    else
-                    {
-                        // Update texture updating range.
-
-                        if (_m_x < raw_texture_data->m_modified_min_x)
-                            raw_texture_data->m_modified_min_x = _m_x;
-                        else if (_m_x > raw_texture_data->m_modified_max_x)
+                        if (!_m_texture->m_modified)
+                        {
+                            // Set texture modified flag & range.
                             raw_texture_data->m_modified_max_x = _m_x;
-
-                        if (_m_y < raw_texture_data->m_modified_min_y)
-                            raw_texture_data->m_modified_min_y = _m_y;
-                        else if (_m_y > raw_texture_data->m_modified_max_y)
                             raw_texture_data->m_modified_max_y = _m_y;
+                            raw_texture_data->m_modified_min_x = _m_x;
+                            raw_texture_data->m_modified_min_y = _m_y;
+
+                            _m_texture->m_modified = true;
+                        }
+                        else
+                        {
+                            // Update texture updating range.
+
+                            if (_m_x < raw_texture_data->m_modified_min_x)
+                                raw_texture_data->m_modified_min_x = _m_x;
+                            else if (_m_x > raw_texture_data->m_modified_max_x)
+                                raw_texture_data->m_modified_max_x = _m_x;
+
+                            if (_m_y < raw_texture_data->m_modified_min_y)
+                                raw_texture_data->m_modified_min_y = _m_y;
+                            else if (_m_y > raw_texture_data->m_modified_max_y)
+                                raw_texture_data->m_modified_max_y = _m_y;
+                        }
                     }
 
                     switch (raw_texture_data->m_format)
@@ -7438,24 +7447,24 @@ namespace jeecs
             // pixel's x/y is from LEFT-BUTTOM to RIGHT/TOP
             pixel pix(size_t x, size_t y) const noexcept
             {
-                return pixel(resouce(), x, y);
+                return pixel(resource(), x, y);
             }
             inline size_t height() const noexcept
             {
-                assert(resouce()->m_raw_texture_data != nullptr);
-                return resouce()->m_raw_texture_data->m_height;
+                assert(resource()->m_raw_texture_data != nullptr);
+                return resource()->m_raw_texture_data->m_height;
             }
             inline size_t width() const noexcept
             {
-                assert(resouce()->m_raw_texture_data != nullptr);
-                return resouce()->m_raw_texture_data->m_width;
+                assert(resource()->m_raw_texture_data != nullptr);
+                return resource()->m_raw_texture_data->m_width;
             }
             inline math::ivec2 size() const noexcept
             {
-                assert(resouce()->m_raw_texture_data != nullptr);
+                assert(resource()->m_raw_texture_data != nullptr);
                 return math::ivec2(
-                    (int)resouce()->m_raw_texture_data->m_width,
-                    (int)resouce()->m_raw_texture_data->m_height);
+                    (int)resource()->m_raw_texture_data->m_width,
+                    (int)resource()->m_raw_texture_data->m_height);
             }
         };
 
@@ -7466,7 +7475,7 @@ namespace jeecs
                 : resource_basic(res)
                 , m_builtin(nullptr)
             {
-                m_builtin = &this->resouce()->m_raw_shader_data->m_builtin_uniforms;
+                m_builtin = &this->resource()->m_raw_shader_data->m_builtin_uniforms;
             }
         public:
             jegl_shader::builtin_uniform_location* m_builtin;
@@ -7488,7 +7497,7 @@ namespace jeecs
 
             void set_uniform(const std::string& name, int val)noexcept
             {
-                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
                 while (jegl_shad_uniforms)
                 {
                     if (jegl_shad_uniforms->m_name == name)
@@ -7509,7 +7518,7 @@ namespace jeecs
             }
             void set_uniform(const std::string& name, int x, int y)noexcept
             {
-                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
                 while (jegl_shad_uniforms)
                 {
                     if (jegl_shad_uniforms->m_name == name)
@@ -7531,7 +7540,7 @@ namespace jeecs
             }
             void set_uniform(const std::string& name, int x, int y, int z)noexcept
             {
-                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
                 while (jegl_shad_uniforms)
                 {
                     if (jegl_shad_uniforms->m_name == name)
@@ -7554,7 +7563,7 @@ namespace jeecs
             }
             void set_uniform(const std::string& name, int x, int y, int z, int w)noexcept
             {
-                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
                 while (jegl_shad_uniforms)
                 {
                     if (jegl_shad_uniforms->m_name == name)
@@ -7578,7 +7587,7 @@ namespace jeecs
             }
             void set_uniform(const std::string& name, float val)noexcept
             {
-                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
                 while (jegl_shad_uniforms)
                 {
                     if (jegl_shad_uniforms->m_name == name)
@@ -7599,7 +7608,7 @@ namespace jeecs
             }
             void set_uniform(const std::string& name, const math::vec2& val)noexcept
             {
-                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
                 while (jegl_shad_uniforms)
                 {
                     if (jegl_shad_uniforms->m_name == name)
@@ -7621,7 +7630,7 @@ namespace jeecs
             }
             void set_uniform(const std::string& name, const math::vec3& val)noexcept
             {
-                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
                 while (jegl_shad_uniforms)
                 {
                     if (jegl_shad_uniforms->m_name == name)
@@ -7644,7 +7653,7 @@ namespace jeecs
             }
             void set_uniform(const std::string& name, const math::vec4& val)noexcept
             {
-                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
                 while (jegl_shad_uniforms)
                 {
                     if (jegl_shad_uniforms->m_name == name)
@@ -7669,7 +7678,7 @@ namespace jeecs
 
             uint32_t get_uniform_location(const std::string& name)
             {
-                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
                 while (jegl_shad_uniforms)
                 {
                     if (jegl_shad_uniforms->m_name == name)
@@ -7683,7 +7692,7 @@ namespace jeecs
             }
             uint32_t* get_uniform_location_as_builtin(const std::string& name)
             {
-                auto* jegl_shad_uniforms = resouce()->m_raw_shader_data->m_custom_uniforms;
+                auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
                 while (jegl_shad_uniforms)
                 {
                     if (jegl_shad_uniforms->m_name == name)
@@ -7747,11 +7756,11 @@ namespace jeecs
 
             basic::resource<texture> get_attachment(size_t index) const
             {
-                if (index < resouce()->m_raw_framebuf_data->m_attachment_count)
+                if (index < resource()->m_raw_framebuf_data->m_attachment_count)
                 {
                     auto* attachments = std::launder(
                         reinterpret_cast<basic::resource<graphic::texture>*>(
-                            resouce()->m_raw_framebuf_data->m_output_attachments));
+                            resource()->m_raw_framebuf_data->m_output_attachments));
                     return attachments[index];
                 }
                 return nullptr;
@@ -7759,20 +7768,20 @@ namespace jeecs
 
             inline size_t height() const noexcept
             {
-                assert(resouce()->m_raw_framebuf_data != nullptr);
-                return resouce()->m_raw_framebuf_data->m_height;
+                assert(resource()->m_raw_framebuf_data != nullptr);
+                return resource()->m_raw_framebuf_data->m_height;
             }
             inline size_t width() const noexcept
             {
-                assert(resouce()->m_raw_framebuf_data != nullptr);
-                return resouce()->m_raw_framebuf_data->m_width;
+                assert(resource()->m_raw_framebuf_data != nullptr);
+                return resource()->m_raw_framebuf_data->m_width;
             }
             inline math::ivec2 size() const noexcept
             {
-                assert(resouce()->m_raw_framebuf_data != nullptr);
+                assert(resource()->m_raw_framebuf_data != nullptr);
                 return math::ivec2(
-                    (int)resouce()->m_raw_framebuf_data->m_width,
-                    (int)resouce()->m_raw_framebuf_data->m_height);
+                    (int)resource()->m_raw_framebuf_data->m_width,
+                    (int)resource()->m_raw_framebuf_data->m_height);
             }
         };
 
@@ -7781,7 +7790,7 @@ namespace jeecs
             explicit uniformbuffer(jegl_resource* res)
                 :resource_basic(res)
             {
-                assert(resouce() != nullptr);
+                assert(resource() != nullptr);
             }
         public:
             static basic::resource<uniformbuffer> create(size_t binding_place, size_t buffersize)
@@ -7791,10 +7800,9 @@ namespace jeecs
                     return new uniformbuffer(res);
                 return nullptr;
             }
-
             void update_buffer(size_t offset, size_t size, const void* datafrom) const noexcept
             {
-                jegl_update_uniformbuf(resouce(), datafrom, offset, size);
+                jegl_update_uniformbuf(resource(), datafrom, offset, size);
             }
         };
 
@@ -8140,7 +8148,7 @@ namespace jeecs
 
                 auto new_texture = texture::create(size_x, size_y, jegl_texture::format::RGBA);
                 assert(new_texture != nullptr);
-                std::memset(new_texture->resouce()->m_raw_texture_data->m_pixels, 0, size_x * size_y * 4);
+                std::memset(new_texture->resource()->m_raw_texture_data->m_pixels, 0, size_x * size_y * 4);
 
                 for (size_t ti = 0; ti < text.size(); ti++)
                 {
@@ -8569,9 +8577,9 @@ namespace jeecs
         {
             float object2world[4][4] = { };
 
-            math::vec3 world_position = { 0,0,0 };
+            math::vec3 world_position = { 0.0f, 0.0f, 0.0f };
             math::quat world_rotation;
-            math::vec3 local_scale = { 1,1,1 };
+            math::vec3 local_scale = { 1.0f, 1.0f, 1.0f };
 
             math::quat get_parent_rotation(const LocalRotation* local_rot) const noexcept
             {
@@ -8945,7 +8953,7 @@ namespace jeecs
             float inv_projection[4][4] = {};
 
             Projection() = default;
-            Projection(const Projection&) {/* Do nothing */ }
+            Projection(const Projection&) { /* Do nothing */ }
             Projection(Projection&&) = default;
         };
         struct OrthoProjection
@@ -10109,7 +10117,7 @@ namespace jeecs
                 const quat& rotation,
                 const vec3& scale) const
             {
-                jegl_vertex* raw_vertex_data = mesh->resouce()->m_raw_vertex_data;
+                jegl_vertex* raw_vertex_data = mesh->resource()->m_raw_vertex_data;
 
                 intersect_result minResult = false;
                 minResult.distance = INFINITY;
@@ -10194,17 +10202,26 @@ namespace jeecs
                 bool consider_mesh) const
             {
                 vec3 entity_box_sz_max, entity_box_sz_min;
-                if (entity_shape && entity_shape->vertex != nullptr)
+                if (entity_shape)
                 {
-                    auto* vertex_dat = entity_shape->vertex->resouce()->m_raw_vertex_data;
-                    entity_box_sz_max = vec3(vertex_dat->m_x_max, vertex_dat->m_y_max, vertex_dat->m_z_max);
-                    entity_box_sz_min = vec3(vertex_dat->m_x_min, vertex_dat->m_y_min, vertex_dat->m_z_min);
+                    if (entity_shape->vertex != nullptr)
+                    {
+                        auto* vertex_dat = entity_shape->vertex->resource()->m_raw_vertex_data;
+                        entity_box_sz_max = vec3(vertex_dat->m_x_max, vertex_dat->m_y_max, vertex_dat->m_z_max);
+                        entity_box_sz_min = vec3(vertex_dat->m_x_min, vertex_dat->m_y_min, vertex_dat->m_z_min);
+                    }
+                    else
+                    {
+                        // Default shape size
+                        entity_box_sz_max = vec3(0.5f, 0.5f, 0.f);
+                        entity_box_sz_min = vec3(-0.5f, -0.5f, 0.f);
+                    }
                 }
                 else
                 {
-                    // default shape size
-                    entity_box_sz_max = vec3(0.5f, 0.5f, 0.f);
-                    entity_box_sz_min = vec3(-0.5f, -0.5f, 0.f);
+                    // Treat as a box
+                    entity_box_sz_max = vec3(0.5f, 0.5f, 0.5f);
+                    entity_box_sz_min = vec3(-0.5f, -0.5f, -0.5f);
                 }
 
                 vec3 finalBoxPos[8];

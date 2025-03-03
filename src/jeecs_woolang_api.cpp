@@ -1300,7 +1300,7 @@ WO_API wo_api wojeapi_texture_clip(wo_vm vm, wo_value args)
 WO_API wo_api wojeapi_texture_bind_path(wo_vm vm, wo_value args)
 {
     auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
-    auto& path = (*loaded_texture)->resouce()->m_path;
+    auto& path = (*loaded_texture)->resource()->m_path;
     if (path != nullptr)
         je_mem_free((void*)path);
     path = jeecs::basic::make_new_string(wo_string(args + 1));
@@ -1317,7 +1317,7 @@ WO_API wo_api wojeapi_texture_get_pixel(wo_vm vm, wo_value args)
     size_t x = (size_t)wo_int(elem);
     wo_struct_get(elem, args + 1, 1);
     size_t y = (size_t)wo_int(elem);
-    auto* pix = new jeecs::graphic::texture::pixel((*loaded_texture)->resouce(), x, y);
+    auto* pix = new jeecs::graphic::texture::pixel((*loaded_texture)->resource(), x, y);
 
     return wo_ret_gchandle(vm, pix, args + 0, [](void* ptr)
         {
@@ -1329,7 +1329,7 @@ WO_API wo_api wojeapi_texture_take_snapshot(wo_vm vm, wo_value args)
 {
     auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
 
-    auto tex_raw = loaded_texture->get()->resouce()->m_raw_texture_data;
+    auto tex_raw = loaded_texture->get()->resource()->m_raw_texture_data;
     if (tex_raw->m_pixels)
     {
         auto memsz = tex_raw->m_width * tex_raw->m_height *
@@ -1349,7 +1349,7 @@ WO_API wo_api wojeapi_texture_restore_snapshot(wo_vm vm, wo_value args)
     auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
     auto* texture_buf = wo_pointer(args + 1);
 
-    auto tex_raw = loaded_texture->get()->resouce()->m_raw_texture_data;
+    auto tex_raw = loaded_texture->get()->resource()->m_raw_texture_data;
     if (tex_raw->m_pixels)
     {
         auto memsz = tex_raw->m_width * tex_raw->m_height *
@@ -1687,7 +1687,7 @@ WO_API wo_api wojeapi_vertex_path(wo_vm vm, wo_value args)
 {
     auto* loaded_vertex = (jeecs::basic::resource<jeecs::graphic::vertex>*)wo_pointer(args + 0);
 
-    if (auto path = (*loaded_vertex)->resouce()->m_path)
+    if (auto path = (*loaded_vertex)->resource()->m_path)
         return wo_ret_option_string(vm, path);
     return wo_ret_option_none(vm);
 }
@@ -1764,7 +1764,7 @@ WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args)
     wo_value out_map = s + 0;
     wo_set_map(out_map, vm, 0);
 
-    auto* uniforms = (*shader)->resouce()->m_raw_shader_data->m_custom_uniforms;
+    auto* uniforms = (*shader)->resource()->m_raw_shader_data->m_custom_uniforms;
     wo_value key = s + 1;
     wo_value val = s + 2;
     wo_value elem = s + 3;
@@ -1934,7 +1934,7 @@ WO_API wo_api wojeapi_shader_path(wo_vm vm, wo_value args)
 {
     auto* shader = (jeecs::basic::resource<jeecs::graphic::shader>*)wo_pointer(args + 0);
 
-    if (auto str = (*shader)->resouce()->m_path)
+    if (auto str = (*shader)->resource()->m_path)
         return wo_ret_string(vm, str);
     return wo_ret_string(vm, "< Built-in shader >");
 }
@@ -1963,7 +1963,7 @@ WO_API wo_api wojeapi_texture_path(wo_vm vm, wo_value args)
 {
     auto* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
 
-    if (auto str = (*texture)->resouce()->m_path)
+    if (auto str = (*texture)->resource()->m_path)
         return wo_ret_option_string(vm, str);
     return wo_ret_option_none(vm);
 }

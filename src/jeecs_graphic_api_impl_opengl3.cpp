@@ -774,7 +774,7 @@ namespace jeecs::graphic::api::gl3
 
             for (size_t i = 0; i < resource->m_raw_framebuf_data->m_attachment_count; ++i)
             {
-                jegl_resource* frame_texture = attachments[i]->resouce();
+                jegl_resource* frame_texture = attachments[i]->resource();
                 assert(nullptr != frame_texture && nullptr != frame_texture->m_raw_texture_data);
 
                 jegl_using_resource(frame_texture);

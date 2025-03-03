@@ -3798,10 +3798,10 @@ VK_API_PLATFORM_API_LIST
             for (size_t i = 0; i < resource->m_raw_framebuf_data->m_attachment_count; ++i)
             {
                 auto& attachment = attachments[i];
-                jegl_using_resource(attachment->resouce());
+                jegl_using_resource(attachment->resource());
 
-                auto* attach_texture_instance = std::launder(reinterpret_cast<jevk11_texture*>(attachment->resouce()->m_handle.m_ptr));
-                if (0 != (attachment->resouce()->m_raw_texture_data->m_format & jegl_texture::format::DEPTH))
+                auto* attach_texture_instance = std::launder(reinterpret_cast<jevk11_texture*>(attachment->resource()->m_handle.m_ptr));
+                if (0 != (attachment->resource()->m_raw_texture_data->m_format & jegl_texture::format::DEPTH))
                     depth_attachment = attach_texture_instance;
                 else
                     color_attachments.push_back(attach_texture_instance);
