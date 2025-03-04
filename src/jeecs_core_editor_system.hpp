@@ -176,9 +176,12 @@ namespace jeecs
         basic::resource<graphic::texture> m_point_or_shape_light2d_icon;
         basic::resource<graphic::texture> m_parallel_light2d_icon;
 
+        basic::resource<graphic::texture> m_selecting_default_texture;
+
         basic::resource<graphic::shader> m_gizmo_shader;
         basic::resource<graphic::shader> m_gizmo_camera_visual_cone_shader;
         basic::resource<graphic::shader> m_gizmo_physics2d_collider_shader;
+        basic::resource<graphic::shader> m_gizmo_selecting_item_highlight_shader;
 
         basic::resource<graphic::vertex> m_gizmo_vertex;
         basic::resource<graphic::vertex> m_gizmo_camera_visual_cone_vertex;
@@ -233,6 +236,9 @@ namespace jeecs
             if (m_parallel_light2d_icon == nullptr)
                 m_parallel_light2d_icon = create_texture_for_unexist_gizmo_icon();
 
+            m_selecting_default_texture = graphic::texture::create(1, 1, jegl_texture::format::RGBA);
+            m_selecting_default_texture->pix(0, 0).set({ 1.f, 1.f, 1.f, 1.f });
+
             m_gizmo_shader = graphic::shader::create("!/builtin/gizmo.shader",
                 { R"(
 import je::shader;
@@ -280,7 +286,7 @@ import je::shader;
 SHARED  (true);
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
-BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
+BLEND   (SRC_ALPHA, ONE);
 CULL    (NONE);
 
 VAO_STRUCT! vin {
@@ -315,7 +321,7 @@ import je::shader;
 SHARED  (true);
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
-BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
+BLEND   (SRC_ALPHA, ONE);
 CULL    (NONE);
 
 VAO_STRUCT! vin {
@@ -342,6 +348,53 @@ public let frag =
     ;
 ;
 )" });
+            m_gizmo_selecting_item_highlight_shader = graphic::shader::create("!/builtin/gizmo_selecting_item_highlight.shader",
+                { R"(
+import je::shader;
+
+SHARED  (true);
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (SRC_ALPHA, ONE);
+CULL    (NONE);
+
+VAO_STRUCT! vin {
+    vertex  : float3,
+    uv      : float2,
+};
+
+using v2f = struct {
+    pos     : float4,
+    uv      : float2,
+};
+
+using fout = struct {
+    color       : float4,
+    self_lum    : float4,
+};
+
+public func vert(v: vin)
+{
+    return v2f{
+        pos = je_mvp * vec4(v.vertex, 1.),
+        uv = uvtrans(v.uv, je_tiling, je_offset),
+    };
+}
+
+let NearestSampler  = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
+let Main            = uniform_texture:<texture2d>("Main", NearestSampler, 0);
+
+public func frag(vf: v2f)
+{
+    let final_color = 
+        vec4(1.0, 0.7, 0., abs(sin(je_time->x * 2.)) * 0.5 * alphatest(texture(Main, vf.uv))->w);
+
+    return fout{
+        color = final_color,
+        self_lum = float4::zero,
+    };
+}
+)" });
 
             float gizmo_vertex_data[] = {
                 -0.5f, 0.5f, 0.0f,      0.0f, 1.0f,
@@ -361,41 +414,41 @@ public let frag =
                     {jegl_vertex::data_type::FLOAT32, 2},
                 });
 
-            float gizmo_camera_visual_cone_vertex_data[] = {
-                -1.0f, -1.0f, -1.0f,
-                1.0f, -1.0f, -1.0f,
-                1.0f, 1.0f, -1.0f,
-                -1.0f, 1.0f, -1.0f,
-                -1.0f, -1.0f, 1.0f,
-                1.0f, -1.0f, 1.0f,
-                1.0f, 1.0f, 1.0f,
-                -1.0f, 1.0f, 1.0f,
-            };
-            m_gizmo_camera_visual_cone_vertex =
-                graphic::vertex::create(jegl_vertex::type::LINESTRIP,
-                    gizmo_camera_visual_cone_vertex_data,
-                    sizeof(gizmo_camera_visual_cone_vertex_data),
-                    {
-                        0, 1, 2, 3, 0, 4, 5, 6, 7, 4, 5, 1, 2, 6, 7, 3
-                    },
+                float gizmo_camera_visual_cone_vertex_data[] = {
+                    -1.0f, -1.0f, -1.0f,
+                    1.0f, -1.0f, -1.0f,
+                    1.0f, 1.0f, -1.0f,
+                    -1.0f, 1.0f, -1.0f,
+                    -1.0f, -1.0f, 1.0f,
+                    1.0f, -1.0f, 1.0f,
+                    1.0f, 1.0f, 1.0f,
+                    -1.0f, 1.0f, 1.0f,
+                };
+                m_gizmo_camera_visual_cone_vertex =
+                    graphic::vertex::create(jegl_vertex::type::LINESTRIP,
+                        gizmo_camera_visual_cone_vertex_data,
+                        sizeof(gizmo_camera_visual_cone_vertex_data),
+                        {
+                            0, 1, 2, 3, 0, 4, 5, 6, 7, 4, 5, 1, 2, 6, 7, 3
+                        },
                     {
                         {jegl_vertex::data_type::FLOAT32, 3},
                     });
 
-            m_gizmo_physics2d_collider_box_vertex = graphic::vertex::create(
-                jegl_vertex::type::LINESTRIP,
-                gizmo_vertex_data,
-                sizeof(gizmo_vertex_data),
-                {
-                    0, 1, 3, 2, 0
-                },
+                    m_gizmo_physics2d_collider_box_vertex = graphic::vertex::create(
+                        jegl_vertex::type::LINESTRIP,
+                        gizmo_vertex_data,
+                        sizeof(gizmo_vertex_data),
+                        {
+                            0, 1, 3, 2, 0
+                        },
                 {
                     {jegl_vertex::data_type::FLOAT32, 3},
                     {jegl_vertex::data_type::FLOAT32, 2},
                 });
 
-            m_gizmo_physics2d_collider_circle_vertex =
-                _create_circle_vertex({ 0.f, 0.f, 1.f });
+                m_gizmo_physics2d_collider_circle_vertex =
+                    _create_circle_vertex({ 0.f, 0.f, 1.f });
         }
     };
 
@@ -498,75 +551,77 @@ public let frag =
                     {jegl_vertex::data_type::FLOAT32, 3},
                 });
 
-            const float axis_y_data[] = {
-                0.f, -1.f, 0.f,       0.f, 0.25f, 0.f,
-                0.f, 1.f, 0.f,        0.f, 1.f, 0.f,
-            };
-            axis_y = graphic::vertex::create(jegl_vertex::type::LINES,
-                axis_y_data,
-                sizeof(axis_y_data),
-                {
-                    0, 1
-                },
-                {
-                    {jegl_vertex::data_type::FLOAT32, 3},
-                    {jegl_vertex::data_type::FLOAT32, 3},
-                });
-
-            const float axis_z_data[] = {
-                0.f, 0.f, -1.f,       0.f, 0.f, 0.25f,
-                0.f, 0.f,  1.f,       0.f, 0.f, 1.f
-            };
-            axis_z = graphic::vertex::create(jegl_vertex::type::LINES,
-                axis_z_data,
-                sizeof(axis_z_data),
-                {
-                    0, 1
-                },
+                const float axis_y_data[] = {
+                    0.f, -1.f, 0.f,       0.f, 0.25f, 0.f,
+                    0.f, 1.f, 0.f,        0.f, 1.f, 0.f,
+                };
+                axis_y = graphic::vertex::create(jegl_vertex::type::LINES,
+                    axis_y_data,
+                    sizeof(axis_y_data),
+                    {
+                        0, 1
+                    },
                 {
                     {jegl_vertex::data_type::FLOAT32, 3},
                     {jegl_vertex::data_type::FLOAT32, 3},
                 });
-            circ_x = GizmoResources::_create_circle_vertex({ 1.f, 0.f, 0.f });
-            circ_y = GizmoResources::_create_circle_vertex({ 0.f, 1.f, 0.f });
-            circ_z = GizmoResources::_create_circle_vertex({ 0.f, 0.f, 1.f });
 
-            circ_x->resource()->m_raw_vertex_data->m_y_min += -0.2f;
-            circ_x->resource()->m_raw_vertex_data->m_y_max += 0.2f;
-            circ_x->resource()->m_raw_vertex_data->m_z_min += -0.2f;
-            circ_x->resource()->m_raw_vertex_data->m_z_max += 0.2f;
+                const float axis_z_data[] = {
+                    0.f, 0.f, -1.f,       0.f, 0.f, 0.25f,
+                    0.f, 0.f,  1.f,       0.f, 0.f, 1.f
+                };
+                axis_z = graphic::vertex::create(jegl_vertex::type::LINES,
+                    axis_z_data,
+                    sizeof(axis_z_data),
+                    {
+                        0, 1
+                    },
+                {
+                    {jegl_vertex::data_type::FLOAT32, 3},
+                    {jegl_vertex::data_type::FLOAT32, 3},
+                });
+                circ_x = GizmoResources::_create_circle_vertex({ 1.f, 0.f, 0.f });
+                circ_y = GizmoResources::_create_circle_vertex({ 0.f, 1.f, 0.f });
+                circ_z = GizmoResources::_create_circle_vertex({ 0.f, 0.f, 1.f });
 
-            circ_y->resource()->m_raw_vertex_data->m_x_min += -0.2f;
-            circ_y->resource()->m_raw_vertex_data->m_x_max += 0.2f;
-            circ_y->resource()->m_raw_vertex_data->m_z_min += -0.2f;
-            circ_y->resource()->m_raw_vertex_data->m_z_max += 0.2f;
+                const float selector_size = 0.1f;
 
-            circ_z->resource()->m_raw_vertex_data->m_x_min += -0.2f;
-            circ_z->resource()->m_raw_vertex_data->m_x_max += 0.2f;
-            circ_z->resource()->m_raw_vertex_data->m_y_min += -0.2f;
-            circ_z->resource()->m_raw_vertex_data->m_y_max += 0.2f;
+                circ_x->resource()->m_raw_vertex_data->m_y_min += -selector_size;
+                circ_x->resource()->m_raw_vertex_data->m_y_max += selector_size;
+                circ_x->resource()->m_raw_vertex_data->m_z_min += -selector_size;
+                circ_x->resource()->m_raw_vertex_data->m_z_max += selector_size;
 
-            circ_x->resource()->m_raw_vertex_data->m_x_min
-                = circ_y->resource()->m_raw_vertex_data->m_y_min
-                = circ_z->resource()->m_raw_vertex_data->m_z_min
-                = axis_x->resource()->m_raw_vertex_data->m_y_min
-                = axis_x->resource()->m_raw_vertex_data->m_z_min
-                = axis_y->resource()->m_raw_vertex_data->m_x_min
-                = axis_y->resource()->m_raw_vertex_data->m_z_min
-                = axis_z->resource()->m_raw_vertex_data->m_x_min
-                = axis_z->resource()->m_raw_vertex_data->m_y_min
-                = -0.2f;
+                circ_y->resource()->m_raw_vertex_data->m_x_min += -selector_size;
+                circ_y->resource()->m_raw_vertex_data->m_x_max += selector_size;
+                circ_y->resource()->m_raw_vertex_data->m_z_min += -selector_size;
+                circ_y->resource()->m_raw_vertex_data->m_z_max += selector_size;
 
-            circ_x->resource()->m_raw_vertex_data->m_x_max
-                = circ_y->resource()->m_raw_vertex_data->m_y_max
-                = circ_z->resource()->m_raw_vertex_data->m_z_max
-                = axis_x->resource()->m_raw_vertex_data->m_y_max
-                = axis_x->resource()->m_raw_vertex_data->m_z_max
-                = axis_y->resource()->m_raw_vertex_data->m_x_max
-                = axis_y->resource()->m_raw_vertex_data->m_z_max
-                = axis_z->resource()->m_raw_vertex_data->m_x_max
-                = axis_z->resource()->m_raw_vertex_data->m_y_max
-                = 0.2f;
+                circ_z->resource()->m_raw_vertex_data->m_x_min += -selector_size;
+                circ_z->resource()->m_raw_vertex_data->m_x_max += selector_size;
+                circ_z->resource()->m_raw_vertex_data->m_y_min += -selector_size;
+                circ_z->resource()->m_raw_vertex_data->m_y_max += selector_size;
+
+                circ_x->resource()->m_raw_vertex_data->m_x_min
+                    = circ_y->resource()->m_raw_vertex_data->m_y_min
+                    = circ_z->resource()->m_raw_vertex_data->m_z_min
+                    = axis_x->resource()->m_raw_vertex_data->m_y_min
+                    = axis_x->resource()->m_raw_vertex_data->m_z_min
+                    = axis_y->resource()->m_raw_vertex_data->m_x_min
+                    = axis_y->resource()->m_raw_vertex_data->m_z_min
+                    = axis_z->resource()->m_raw_vertex_data->m_x_min
+                    = axis_z->resource()->m_raw_vertex_data->m_y_min
+                    = -selector_size;
+
+                circ_x->resource()->m_raw_vertex_data->m_x_max
+                    = circ_y->resource()->m_raw_vertex_data->m_y_max
+                    = circ_z->resource()->m_raw_vertex_data->m_z_max
+                    = axis_x->resource()->m_raw_vertex_data->m_y_max
+                    = axis_x->resource()->m_raw_vertex_data->m_z_max
+                    = axis_y->resource()->m_raw_vertex_data->m_x_max
+                    = axis_y->resource()->m_raw_vertex_data->m_z_max
+                    = axis_z->resource()->m_raw_vertex_data->m_x_max
+                    = axis_z->resource()->m_raw_vertex_data->m_y_max
+                    = selector_size;
 
         }
         ~DefaultEditorSystem()
@@ -697,9 +752,9 @@ public let frag =
                             {jegl_vertex::data_type::FLOAT32, 3},
                         });
 
-                basic::resource<graphic::shader>
-                    axis_shader = graphic::shader::create("!/builtin/mover_axis.shader",
-                        { R"(
+                        basic::resource<graphic::shader>
+                            axis_shader = graphic::shader::create("!/builtin/mover_axis.shader",
+                                { R"(
 import je::shader;
         
 SHARED  (true);
@@ -738,9 +793,9 @@ public let frag =
     ;
 ;
         )" });
-                basic::resource<graphic::shader>
-                    select_box_shader = graphic::shader::create("!/builtin/select_box.shader",
-                        { R"(
+                        basic::resource<graphic::shader>
+                            select_box_shader = graphic::shader::create("!/builtin/select_box.shader",
+                                { R"(
 import je::shader;
         
 SHARED  (true);
@@ -775,85 +830,85 @@ public let frag =
 ;
         )" });
 
-                game_world current_world = mover_entity.game_world();
-                game_entity axis_x_e = current_world.add_entity<
-                    Transform::LocalPosition,
-                    Transform::LocalScale,
-                    Transform::LocalToParent,
-                    Transform::Translation,
-                    Renderer::Shaders,
-                    Renderer::Shape,
-                    Renderer::Rendqueue,
-                    Renderer::Color,
-                    Editor::Invisable,
-                    Editor::EntityMover
-                >();
-                game_entity axis_y_e = current_world.add_entity<
-                    Transform::LocalPosition,
-                    Transform::LocalScale,
-                    Transform::LocalToParent,
-                    Transform::Translation,
-                    Renderer::Shaders,
-                    Renderer::Shape,
-                    Renderer::Rendqueue,
-                    Renderer::Color,
-                    Editor::Invisable,
-                    Editor::EntityMover
-                >();
-                game_entity axis_z_e = current_world.add_entity<
-                    Transform::LocalPosition,
-                    Transform::LocalScale,
-                    Transform::LocalToParent,
-                    Transform::Translation,
-                    Renderer::Shaders,
-                    Renderer::Shape,
-                    Renderer::Rendqueue,
-                    Renderer::Color,
-                    Editor::Invisable,
-                    Editor::EntityMover
-                >();
+                        game_world current_world = mover_entity.game_world();
+                        game_entity axis_x_e = current_world.add_entity<
+                            Transform::LocalPosition,
+                            Transform::LocalScale,
+                            Transform::LocalToParent,
+                            Transform::Translation,
+                            Renderer::Shaders,
+                            Renderer::Shape,
+                            Renderer::Rendqueue,
+                            Renderer::Color,
+                            Editor::Invisable,
+                            Editor::EntityMover
+                        >();
+                        game_entity axis_y_e = current_world.add_entity<
+                            Transform::LocalPosition,
+                            Transform::LocalScale,
+                            Transform::LocalToParent,
+                            Transform::Translation,
+                            Renderer::Shaders,
+                            Renderer::Shape,
+                            Renderer::Rendqueue,
+                            Renderer::Color,
+                            Editor::Invisable,
+                            Editor::EntityMover
+                        >();
+                        game_entity axis_z_e = current_world.add_entity<
+                            Transform::LocalPosition,
+                            Transform::LocalScale,
+                            Transform::LocalToParent,
+                            Transform::Translation,
+                            Renderer::Shaders,
+                            Renderer::Shape,
+                            Renderer::Rendqueue,
+                            Renderer::Color,
+                            Editor::Invisable,
+                            Editor::EntityMover
+                        >();
 
-                game_entity select_box = current_world.add_entity<
-                    Transform::LocalRotation,
-                    Transform::LocalPosition,
-                    Transform::LocalScale,
-                    Transform::LocalToParent,
-                    Transform::Translation,
-                    Renderer::Shaders,
-                    Renderer::Shape,
-                    Renderer::Rendqueue,
-                    Editor::Invisable,
-                    Editor::EntitySelectBox
-                >();
+                        game_entity select_box = current_world.add_entity<
+                            Transform::LocalRotation,
+                            Transform::LocalPosition,
+                            Transform::LocalScale,
+                            Transform::LocalToParent,
+                            Transform::Translation,
+                            Renderer::Shaders,
+                            Renderer::Shape,
+                            Renderer::Rendqueue,
+                            Editor::Invisable,
+                            Editor::EntitySelectBox
+                        >();
 
-                axis_x_e.get_component<Renderer::Shaders>()->shaders.push_back(axis_shader);
-                axis_y_e.get_component<Renderer::Shaders>()->shaders.push_back(axis_shader);
-                axis_z_e.get_component<Renderer::Shaders>()->shaders.push_back(axis_shader);
-                select_box.get_component<Renderer::Shaders>()->shaders.push_back(select_box_shader);
+                        axis_x_e.get_component<Renderer::Shaders>()->shaders.push_back(axis_shader);
+                        axis_y_e.get_component<Renderer::Shaders>()->shaders.push_back(axis_shader);
+                        axis_z_e.get_component<Renderer::Shaders>()->shaders.push_back(axis_shader);
+                        select_box.get_component<Renderer::Shaders>()->shaders.push_back(select_box_shader);
 
-                axis_x_e.get_component<Editor::EntityMover>()->axis = math::vec3(1.f, 0, 0);
-                axis_y_e.get_component<Editor::EntityMover>()->axis = math::vec3(0, 1.f, 0);
-                axis_z_e.get_component<Editor::EntityMover>()->axis = math::vec3(0, 0, 1.f);
+                        axis_x_e.get_component<Editor::EntityMover>()->axis = math::vec3(1.f, 0, 0);
+                        axis_y_e.get_component<Editor::EntityMover>()->axis = math::vec3(0, 1.f, 0);
+                        axis_z_e.get_component<Editor::EntityMover>()->axis = math::vec3(0, 0, 1.f);
 
-                axis_x_e.get_component<Renderer::Shape>()->vertex = axis_x;
-                axis_y_e.get_component<Renderer::Shape>()->vertex = axis_y;
-                axis_z_e.get_component<Renderer::Shape>()->vertex = axis_z;
-                select_box.get_component<Renderer::Shape>()->vertex = select_box_vert;
+                        axis_x_e.get_component<Renderer::Shape>()->vertex = axis_x;
+                        axis_y_e.get_component<Renderer::Shape>()->vertex = axis_y;
+                        axis_z_e.get_component<Renderer::Shape>()->vertex = axis_z;
+                        select_box.get_component<Renderer::Shape>()->vertex = select_box_vert;
 
-                select_box.get_component<Renderer::Rendqueue>()->rend_queue =
-                    axis_x_e.get_component<Renderer::Rendqueue>()->rend_queue =
-                    axis_y_e.get_component<Renderer::Rendqueue>()->rend_queue =
-                    axis_z_e.get_component<Renderer::Rendqueue>()->rend_queue = 100000;
+                        select_box.get_component<Renderer::Rendqueue>()->rend_queue =
+                            axis_x_e.get_component<Renderer::Rendqueue>()->rend_queue =
+                            axis_y_e.get_component<Renderer::Rendqueue>()->rend_queue =
+                            axis_z_e.get_component<Renderer::Rendqueue>()->rend_queue = 100000;
 
-                axis_x_e.get_component<Transform::LocalPosition>()->pos = math::vec3(1.f, 0, 0);
-                axis_y_e.get_component<Transform::LocalPosition>()->pos = math::vec3(0, 1.f, 0);
-                axis_z_e.get_component<Transform::LocalPosition>()->pos = math::vec3(0, 0, 1.f);
+                        axis_x_e.get_component<Transform::LocalPosition>()->pos = math::vec3(1.f, 0, 0);
+                        axis_y_e.get_component<Transform::LocalPosition>()->pos = math::vec3(0, 1.f, 0);
+                        axis_z_e.get_component<Transform::LocalPosition>()->pos = math::vec3(0, 0, 1.f);
 
-                select_box.get_component<Transform::LocalToParent>()->parent_uid =
-                    axis_x_e.get_component<Transform::LocalToParent>()->parent_uid =
-                    axis_y_e.get_component<Transform::LocalToParent>()->parent_uid =
-                    axis_z_e.get_component<Transform::LocalToParent>()->parent_uid =
-                    anchor.uid;
+                        select_box.get_component<Transform::LocalToParent>()->parent_uid =
+                            axis_x_e.get_component<Transform::LocalToParent>()->parent_uid =
+                            axis_y_e.get_component<Transform::LocalToParent>()->parent_uid =
+                            axis_z_e.get_component<Transform::LocalToParent>()->parent_uid =
+                            anchor.uid;
             }
             if (const game_entity* current = _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr)
             {
@@ -1195,7 +1250,7 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                         MAT4_GIZMO_MV[3][2] = postion.z;
 
                         rotation.create_matrix(MAT4_GIZMO_MVP);
-                        math::mat4xmat4(MAT4_GIZMO_M, MAT4_GIZMO_MVP, MAT4_GIZMO_MV);
+                        math::mat4xmat4(MAT4_GIZMO_M, MAT4_GIZMO_MV, MAT4_GIZMO_MVP);
 
                         math::mat4xmat4(MAT4_GIZMO_MVP, gizmo_context.m_projection->view_projection, MAT4_GIZMO_M);
                         math::mat4xmat4(MAT4_GIZMO_MV, gizmo_context.m_projection->view, MAT4_GIZMO_M);
@@ -1402,6 +1457,68 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                     }
                 });
 
+            // Assure gizmo_rchain exists.
+            if (enable_draw_gizmo_at_framebuf.has_value())
+            {
+                if (_inputs.selected_entity.has_value())
+                {
+                    auto& selected_entity = _inputs.selected_entity.value();
+                    auto* translation = selected_entity.get_component<Transform::Translation>();
+                    auto* shape = selected_entity.get_component<Renderer::Shape>();
+                    auto* textures = selected_entity.get_component<Renderer::Textures>();
+
+                    if (translation != nullptr
+                        && shape != nullptr
+                        && selected_entity.get_component<Renderer::Shaders>() != nullptr
+                        && selected_entity.get_component<Light2D::Point>() == nullptr
+                        && selected_entity.get_component<Light2D::Range>() == nullptr
+                        && selected_entity.get_component<Light2D::Parallel>() == nullptr)
+                    {
+                        jegl_rchain_texture_group_idx_t group =
+                            jegl_rchain_allocate_texture_group(gizmo_rchain);
+
+                        bool binded = false;
+                        if (textures != nullptr)
+                        {
+                            auto binded_in_zero = textures->get_texture(0);
+                            if (binded_in_zero != nullptr)
+                            {
+                                binded = true;
+                                jegl_rchain_bind_texture(
+                                    gizmo_rchain,
+                                    group,
+                                    0,
+                                    binded_in_zero->resource());
+                            }
+                        }
+
+                        if (!binded)
+                            jegl_rchain_bind_texture(
+                                gizmo_rchain,
+                                group,
+                                0,
+                                _gizmo_resources.m_selecting_default_texture->resource());
+
+                        auto* draw_action = easy_draw_impl(
+                            translation->world_position,
+                            translation->world_rotation,
+                            translation->local_scale,
+                            _gizmo_resources.m_gizmo_selecting_item_highlight_shader->resource(),
+                            shape->vertex != nullptr ? shape->vertex->resource() : _gizmo_resources.m_gizmo_vertex->resource(),
+                            group);
+
+                        if (textures != nullptr)
+                        {
+                            auto* builtin_uniform = _gizmo_resources.m_gizmo_selecting_item_highlight_shader->m_builtin;
+
+                            JE_CHECK_NEED_AND_SET_UNIFORM(
+                                draw_action, builtin_uniform, tiling, float2, textures->tiling.x, textures->tiling.y);
+                            JE_CHECK_NEED_AND_SET_UNIFORM(
+                                draw_action, builtin_uniform, offset, float2, textures->offset.x, textures->offset.y);
+                        }
+                    }
+                }
+            }
 #undef JE_CHECK_NEED_AND_SET_UNIFORM
             // Draw gizmo end.
             /////////////////////////////////////////////////////////////////////////
