@@ -290,7 +290,7 @@ namespace jeecs
                         ;
                     float final_offset_rotation =
                         translation.world_rotation.euler_angle().z +
-                        (rotoffset != nullptr ? rotoffset->offset : 0.f);
+                        (rotoffset != nullptr ? rotoffset->angle : 0.f);
 
                     math::vec3 final_offset_position =
                         math::quat::euler(0.f, 0.f, final_offset_rotation) * offset_position;
@@ -593,7 +593,7 @@ namespace jeecs
                                 : math::vec3(0.f, 0.f, 0.f)
                                 ;
                             float final_offset_rotation = b2Body_GetAngle(rigidbody_instance) * math::RAD2DEG - (
-                                rotoffset != nullptr ? rotoffset->offset : 0.f);
+                                rotoffset != nullptr ? rotoffset->angle : 0.f);
 
                             math::vec3 final_offset_position =
                                 math::quat::euler(0.f, 0.f, final_offset_rotation) * offset_position;

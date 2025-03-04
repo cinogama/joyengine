@@ -1765,10 +1765,10 @@ struct jegl_vertex
 
     struct data_layout
     {
-        data_type m_type;
-        size_t m_count;
+        data_type   m_type;
+        size_t      m_count;
     };
-    
+
     struct bone_data
     {
         const char* m_name;
@@ -1784,7 +1784,7 @@ struct jegl_vertex
     size_t          m_vertex_length;
     const uint32_t* m_indexs;
     size_t          m_index_count;
-    const data_layout*    
+    const data_layout*
                     m_formats;
     size_t          m_format_count;
     size_t          m_data_size_per_point;
@@ -1946,18 +1946,18 @@ struct jegl_shader
     const char* m_vertex_hlsl_src;
     const char* m_fragment_hlsl_src;
 
-    size_t m_vertex_spirv_count;
-    const spir_v_code_t* m_vertex_spirv_codes;
+    size_t                      m_vertex_spirv_count;
+    const spir_v_code_t*        m_vertex_spirv_codes;
 
-    size_t m_fragment_spirv_count;
-    const spir_v_code_t* m_fragment_spirv_codes;
+    size_t                      m_fragment_spirv_count;
+    const spir_v_code_t*        m_fragment_spirv_codes;
 
-    size_t m_vertex_in_count;
-    vertex_in_variables* m_vertex_in;
+    size_t                      m_vertex_in_count;
+    vertex_in_variables*        m_vertex_in;
 
-    unifrom_variables* m_custom_uniforms;
-    uniform_blocks* m_custom_uniform_blocks;
-    builtin_uniform_location m_builtin_uniforms;
+    unifrom_variables*          m_custom_uniforms;
+    uniform_blocks*             m_custom_uniform_blocks;
+    builtin_uniform_location    m_builtin_uniforms;
 
     bool                m_enable_to_shared;
     depth_test_method   m_depth_test;
@@ -1991,7 +1991,7 @@ struct jegl_uniform_buffer
 {
     size_t      m_buffer_binding_place;
     size_t      m_buffer_size;
-    uint8_t*    m_buffer;
+    uint8_t* m_buffer;
 
     // Used for marking update range;
     size_t      m_update_begin_offset;
@@ -2028,15 +2028,15 @@ struct jegl_resource
 
     type            m_type;
     bool            m_modified;
-    jegl_context*   m_graphic_thread;
+    jegl_context* m_graphic_thread;
     jeecs::typing::version_t
-                    m_graphic_thread_version;
+        m_graphic_thread_version;
 
-    void*           m_binding_count;
+    void* m_binding_count;
     resource_handle m_handle;
 
-    const char*     m_path;
-    void*           m_raw_ref_count;
+    const char* m_path;
+    void* m_raw_ref_count;
     union
     {
         jegl_custom_resource_t m_custom_resource;
@@ -3799,9 +3799,9 @@ namespace jeecs
         template<typename T>
         class singleton
         {
-            std::shared_mutex  
-                        m_singleton_mutex;
-            T*          m_instance;
+            std::shared_mutex
+                m_singleton_mutex;
+            T* m_instance;
             size_t      m_ref_count;
 
             JECS_DISABLE_MOVE_AND_COPY(singleton);
@@ -3820,8 +3820,8 @@ namespace jeecs
 
             class reference
             {
-                singleton*  m_singleton;
-                T*          m_instance;
+                singleton* m_singleton;
+                T* m_instance;
 
             public:
                 reference(singleton* s, T* inst)
@@ -4945,21 +4945,21 @@ namespace jeecs
         {
             struct member_info
             {
-                const type_info*    m_class_type;
+                const type_info* m_class_type;
 
-                const char*         m_member_name;
+                const char* m_member_name;
 
-                const char*         m_woovalue_type_may_null;
+                const char* m_woovalue_type_may_null;
                 wo_pin_value        m_woovalue_init_may_null;
 
-                const type_info*    m_member_type;
+                const type_info* m_member_type;
                 ptrdiff_t           m_member_offset;
 
-                member_info*        m_next_member;
+                member_info* m_next_member;
             };
 
             size_t                  m_member_count;
-            member_info*            m_members;
+            member_info* m_members;
         };
 
         /*
@@ -4970,8 +4970,8 @@ namespace jeecs
         {
             parse_c2w_func_t        m_script_parse_c2w;
             parse_w2c_func_t        m_script_parse_w2c;
-            const char*             m_woolang_typename;
-            const char*             m_woolang_typedecl;
+            const char* m_woolang_typename;
+            const char* m_woolang_typedecl;
         };
 
         /*
@@ -7337,9 +7337,9 @@ namespace jeecs
 
             class pixel
             {
-                jegl_resource*      _m_texture;
-                jegl_texture::pixel_data_t* 
-                                    _m_pixel;
+                jegl_resource* _m_texture;
+                jegl_texture::pixel_data_t*
+                    _m_pixel;
                 size_t              _m_x, _m_y;
             public:
                 pixel(jegl_resource* _texture, size_t x, size_t y) noexcept
@@ -7355,8 +7355,8 @@ namespace jeecs
 
                     if (x < _m_texture->m_raw_texture_data->m_width && y < _m_texture->m_raw_texture_data->m_height)
                         _m_pixel = _m_texture->m_raw_texture_data->m_pixels
-                            + y * _m_texture->m_raw_texture_data->m_width * color_depth
-                            + x * color_depth;
+                        + y * _m_texture->m_raw_texture_data->m_width * color_depth
+                        + x * color_depth;
                     else
                         _m_pixel = nullptr;
                 }
@@ -7388,7 +7388,7 @@ namespace jeecs
                         return;
 
                     auto* raw_texture_data = _m_texture->m_raw_texture_data;
-                    
+
                     if (_m_texture->m_graphic_thread != nullptr)
                     {
                         if (!_m_texture->m_modified)
@@ -7722,7 +7722,7 @@ namespace jeecs
             }
             static basic::resource<vertex> create(
                 jegl_vertex::type type,
-                const void*       pdatas,
+                const void* pdatas,
                 size_t            pdatalen,
                 const std::vector<uint32_t> idatas, // EBO Indexs
                 const std::vector<jegl_vertex::data_layout> fdatas)
@@ -8653,12 +8653,12 @@ namespace jeecs
         {
             enum origin_center : uint8_t
             {
-                center  = 0,
+                center = 0,
 
-                left    = 1 << 0,
-                right   = 1 << 1,
-                top     = 1 << 2,
-                bottom  = 1 << 3,
+                left = 1 << 0,
+                right = 1 << 1,
+                top = 1 << 2,
+                bottom = 1 << 3,
             };
 
             origin_center elem_center = origin_center::center;
@@ -9117,10 +9117,10 @@ namespace jeecs
             };
             struct Rotation
             {
-                float offset = 0.f;
+                float angle = 0.f;
                 static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
                 {
-                    typing::register_member(guard, &Rotation::offset, "offset");
+                    typing::register_member(guard, &Rotation::angle, "angle");
                 }
             };
             struct Scale
@@ -10040,7 +10040,7 @@ namespace jeecs
                     return inresult;
                 return intersect_triangle(v0, v3, v2);
             }
-            intersect_result intersect_box(const vec3& size, const vec3& centerpos, const quat& rotation) const
+            intersect_result intersect_box(const vec3& offset, const vec3& size, const quat& rotation) const
             {
                 /*
                         4----------5
@@ -10068,46 +10068,44 @@ namespace jeecs
 
                 //rot and transform
                 for (int i = 0; i < 8; i++)
-                    finalBoxPos[i] = (rotation * finalBoxPos[i]) + centerpos;
-                {
-                    //front
-                    {
-                        auto&& f = intersect_rectangle(finalBoxPos[0], finalBoxPos[1], finalBoxPos[3], finalBoxPos[2]);
-                        if (f.intersected && f.distance < minResult.distance)
-                            minResult = f;
-                    }
-                    //back
-                    {
-                        auto&& f = intersect_rectangle(finalBoxPos[4], finalBoxPos[5], finalBoxPos[7], finalBoxPos[6]);
-                        if (f.intersected && f.distance < minResult.distance)
-                            minResult = f;
-                    }
-                    //left
-                    {
-                        auto&& f = intersect_rectangle(finalBoxPos[0], finalBoxPos[2], finalBoxPos[6], finalBoxPos[4]);
-                        if (f.intersected && f.distance < minResult.distance)
-                            minResult = f;
-                    }
-                    //right
-                    {
-                        auto&& f = intersect_rectangle(finalBoxPos[1], finalBoxPos[3], finalBoxPos[7], finalBoxPos[5]);
-                        if (f.intersected && f.distance < minResult.distance)
-                            minResult = f;
-                    }
-                    //top
-                    {
-                        auto&& f = intersect_rectangle(finalBoxPos[0], finalBoxPos[1], finalBoxPos[5], finalBoxPos[4]);
-                        if (f.intersected && f.distance < minResult.distance)
-                            minResult = f;
-                    }
-                    //bottom
-                    {
-                        auto&& f = intersect_rectangle(finalBoxPos[2], finalBoxPos[3], finalBoxPos[7], finalBoxPos[6]);
-                        if (f.intersected && f.distance < minResult.distance)
-                            minResult = f;
-                    }
-                }
+                    finalBoxPos[i] = (rotation * finalBoxPos[i]) + offset;
 
+                //front
+                {
+                    auto&& f = intersect_rectangle(finalBoxPos[0], finalBoxPos[1], finalBoxPos[3], finalBoxPos[2]);
+                    if (f.intersected && f.distance < minResult.distance)
+                        minResult = f;
+                }
+                //back
+                {
+                    auto&& f = intersect_rectangle(finalBoxPos[4], finalBoxPos[5], finalBoxPos[7], finalBoxPos[6]);
+                    if (f.intersected && f.distance < minResult.distance)
+                        minResult = f;
+                }
+                //left
+                {
+                    auto&& f = intersect_rectangle(finalBoxPos[0], finalBoxPos[2], finalBoxPos[6], finalBoxPos[4]);
+                    if (f.intersected && f.distance < minResult.distance)
+                        minResult = f;
+                }
+                //right
+                {
+                    auto&& f = intersect_rectangle(finalBoxPos[1], finalBoxPos[3], finalBoxPos[7], finalBoxPos[5]);
+                    if (f.intersected && f.distance < minResult.distance)
+                        minResult = f;
+                }
+                //top
+                {
+                    auto&& f = intersect_rectangle(finalBoxPos[0], finalBoxPos[1], finalBoxPos[5], finalBoxPos[4]);
+                    if (f.intersected && f.distance < minResult.distance)
+                        minResult = f;
+                }
+                //bottom
+                {
+                    auto&& f = intersect_rectangle(finalBoxPos[2], finalBoxPos[3], finalBoxPos[7], finalBoxPos[6]);
+                    if (f.intersected && f.distance < minResult.distance)
+                        minResult = f;
+                }
 
                 return minResult;
             }
@@ -10196,95 +10194,54 @@ namespace jeecs
                 return minResult;
 
             }
+
             intersect_result intersect_entity(
                 const Transform::Translation& translation,
-                const Renderer::Shape* entity_shape,
+                const Renderer::Shape* entity_shape_may_null,
                 bool consider_mesh) const
             {
-                vec3 entity_box_sz_max, entity_box_sz_min;
-                if (entity_shape)
+                vec3 entity_box_center, entity_box_size;
+                if (entity_shape_may_null)
                 {
-                    if (entity_shape->vertex != nullptr)
+                    if (entity_shape_may_null->vertex != nullptr)
                     {
-                        auto* vertex_dat = entity_shape->vertex->resource()->m_raw_vertex_data;
-                        entity_box_sz_max = vec3(vertex_dat->m_x_max, vertex_dat->m_y_max, vertex_dat->m_z_max);
-                        entity_box_sz_min = vec3(vertex_dat->m_x_min, vertex_dat->m_y_min, vertex_dat->m_z_min);
+                        auto* vertex_dat = entity_shape_may_null->vertex->resource()->m_raw_vertex_data;
+                        entity_box_center = vec3(
+                            (vertex_dat->m_x_max + vertex_dat->m_x_min) / 2.0f,
+                            (vertex_dat->m_y_max + vertex_dat->m_y_min) / 2.0f,
+                            (vertex_dat->m_z_max + vertex_dat->m_z_min) / 2.0f);
+                        entity_box_size = vec3(
+                            vertex_dat->m_x_max - vertex_dat->m_x_min,
+                            vertex_dat->m_y_max - vertex_dat->m_y_min,
+                            vertex_dat->m_z_max - vertex_dat->m_z_min);
                     }
                     else
                     {
                         // Default shape size
-                        entity_box_sz_max = vec3(0.5f, 0.5f, 0.f);
-                        entity_box_sz_min = vec3(-0.5f, -0.5f, 0.f);
+                        entity_box_center = vec3(0.f, 0.f, 0.f);
+                        entity_box_size = vec3(1.f, 1.f, 0.f);
                     }
                 }
                 else
                 {
                     // Treat as a box
-                    entity_box_sz_max = vec3(0.5f, 0.5f, 0.5f);
-                    entity_box_sz_min = vec3(-0.5f, -0.5f, -0.5f);
+                    entity_box_center = vec3(0.f, 0.f, 0.f);
+                    entity_box_size = vec3(1.f, 1.f, 1.f);
                 }
 
-                vec3 finalBoxPos[8];
-                intersect_result minResult = false;
-                minResult.distance = INFINITY;
-
-                //pos
-                finalBoxPos[1].x = finalBoxPos[3].x = finalBoxPos[5].x = finalBoxPos[7].x = entity_box_sz_max.x;
-                finalBoxPos[0].x = finalBoxPos[2].x = finalBoxPos[4].x = finalBoxPos[6].x = entity_box_sz_min.x;
-                finalBoxPos[0].y = finalBoxPos[1].y = finalBoxPos[4].y = finalBoxPos[5].y = entity_box_sz_max.y;
-                finalBoxPos[2].y = finalBoxPos[3].y = finalBoxPos[6].y = finalBoxPos[7].y = entity_box_sz_min.y;
-                finalBoxPos[4].z = finalBoxPos[5].z = finalBoxPos[6].z = finalBoxPos[7].z = entity_box_sz_max.z;
-                finalBoxPos[0].z = finalBoxPos[1].z = finalBoxPos[2].z = finalBoxPos[3].z = entity_box_sz_min.z;
-
-                //rot and transform
-                for (int i = 0; i < 8; i++)
-                    finalBoxPos[i] = mat4trans(translation.object2world, finalBoxPos[i]);
-                {
-                    //front
-                    {
-                        auto&& f = intersect_rectangle(finalBoxPos[0], finalBoxPos[1], finalBoxPos[3], finalBoxPos[2]);
-                        if (f.intersected && f.distance < minResult.distance)
-                            minResult = f;
-                    }
-                    //back
-                    {
-                        auto&& f = intersect_rectangle(finalBoxPos[4], finalBoxPos[5], finalBoxPos[7], finalBoxPos[6]);
-                        if (f.intersected && f.distance < minResult.distance)
-                            minResult = f;
-                    }
-                    //left
-                    {
-                        auto&& f = intersect_rectangle(finalBoxPos[0], finalBoxPos[2], finalBoxPos[6], finalBoxPos[4]);
-                        if (f.intersected && f.distance < minResult.distance)
-                            minResult = f;
-                    }
-                    //right
-                    {
-                        auto&& f = intersect_rectangle(finalBoxPos[1], finalBoxPos[3], finalBoxPos[7], finalBoxPos[5]);
-                        if (f.intersected && f.distance < minResult.distance)
-                            minResult = f;
-                    }
-                    //top
-                    {
-                        auto&& f = intersect_rectangle(finalBoxPos[0], finalBoxPos[1], finalBoxPos[5], finalBoxPos[4]);
-                        if (f.intersected && f.distance < minResult.distance)
-                            minResult = f;
-                    }
-                    //buttom
-                    {
-                        auto&& f = intersect_rectangle(finalBoxPos[2], finalBoxPos[3], finalBoxPos[7], finalBoxPos[6]);
-                        if (f.intersected && f.distance < minResult.distance)
-                            minResult = f;
-                    }
-                }
+                intersect_result minResult =
+                    intersect_box(
+                        entity_box_center + translation.world_position,
+                        translation.local_scale * entity_box_size,
+                        translation.world_rotation);
 
                 if (minResult.intersected
                     && consider_mesh
-                    && entity_shape != nullptr
-                    && entity_shape->vertex != nullptr)
+                    && entity_shape_may_null != nullptr
+                    && entity_shape_may_null->vertex != nullptr)
                 {
                     return intersect_mesh(
-                        entity_shape->vertex,
+                        entity_shape_may_null->vertex,
                         translation.world_position,
                         translation.world_rotation,
                         translation.local_scale);
