@@ -332,6 +332,7 @@ WO_API wo_api wojeapi_get_components_member(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_get_current_platform(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_get_editing_coord_mode(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_get_editing_entity_uid(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_get_editing_gizmo_mode(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_get_editing_mover_mode(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_get_entity_anchor_uuid(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_get_entity_arch_information(wo_vm vm, wo_value args);
@@ -379,6 +380,7 @@ WO_API wo_api wojeapi_script_type_name(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_set_able_world(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_set_editing_coord_mode(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_set_editing_entity_uid(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_set_editing_gizmo_mode(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_set_editing_mover_mode(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_set_entity_name(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_set_parent(wo_vm vm, wo_value args);
@@ -832,6 +834,7 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"wojeapi_get_current_platform", (void*)&wojeapi_get_current_platform},
         wo_extern_lib_func_t{"wojeapi_get_editing_coord_mode", (void*)&wojeapi_get_editing_coord_mode},
         wo_extern_lib_func_t{"wojeapi_get_editing_entity_uid", (void*)&wojeapi_get_editing_entity_uid},
+        wo_extern_lib_func_t{"wojeapi_get_editing_gizmo_mode", (void*)&wojeapi_get_editing_gizmo_mode},
         wo_extern_lib_func_t{"wojeapi_get_editing_mover_mode", (void*)&wojeapi_get_editing_mover_mode},
         wo_extern_lib_func_t{"wojeapi_get_entity_anchor_uuid", (void*)&wojeapi_get_entity_anchor_uuid},
         wo_extern_lib_func_t{"wojeapi_get_entity_arch_information", (void*)&wojeapi_get_entity_arch_information},
@@ -879,6 +882,7 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"wojeapi_set_able_world", (void*)&wojeapi_set_able_world},
         wo_extern_lib_func_t{"wojeapi_set_editing_coord_mode", (void*)&wojeapi_set_editing_coord_mode},
         wo_extern_lib_func_t{"wojeapi_set_editing_entity_uid", (void*)&wojeapi_set_editing_entity_uid},
+        wo_extern_lib_func_t{"wojeapi_set_editing_gizmo_mode", (void*)&wojeapi_set_editing_gizmo_mode},
         wo_extern_lib_func_t{"wojeapi_set_editing_mover_mode", (void*)&wojeapi_set_editing_mover_mode},
         wo_extern_lib_func_t{"wojeapi_set_entity_name", (void*)&wojeapi_set_entity_name},
         wo_extern_lib_func_t{"wojeapi_set_parent", (void*)&wojeapi_set_parent},

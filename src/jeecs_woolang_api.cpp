@@ -2879,11 +2879,11 @@ namespace je
 
         public enum mover_mode
         {
-            nospecify,
-            selection,
-            movement,
-            rotation,
-            scale,
+            NOSPECIFY,
+            SELECTION,
+            MOVEMENT,
+            ROTATION,
+            SCALE,
         }
         extern("libjoyecs", "wojeapi_get_editing_mover_mode")
         public func get_editing_mover_mode(w: je::world)=> mover_mode;
@@ -2893,13 +2893,30 @@ namespace je
 
         public enum coord_mode
         {
-            global,
-            local
+            GLOBAL,
+            LOCAL
         }
         extern("libjoyecs", "wojeapi_get_editing_coord_mode")
         public func get_editing_coord_mode(w: je::world)=> coord_mode;
         extern("libjoyecs", "wojeapi_set_editing_coord_mode")
         public func set_editing_coord_mode(w: je::world, a: coord_mode)=> void;
+
+        public enum gizmo_mode
+        {
+            NONE                = 0,
+
+            CAMERA              = 0b0000'0001,
+            CAMERA_VISUAL_CONE  = 0b0000'0010,
+            LIGHT2D             = 0b0000'0100,
+            PHYSICS2D_COLLIDER  = 0b0000'1000,
+            SELECTING_HIGHLIGHT = 0b0001'0000,
+
+            ALL                 = 0x7FFFFFFF,
+        };
+        extern("libjoyecs", "wojeapi_get_editing_gizmo_mode")
+        public func get_editing_gizmo_mode(w: je::world)=> gizmo_mode;
+        extern("libjoyecs", "wojeapi_set_editing_gizmo_mode")
+        public func set_editing_gizmo_mode(w: je::world, a: gizmo_mode)=> void;
     }
 }
 )";

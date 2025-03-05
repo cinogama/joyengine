@@ -32,13 +32,13 @@ namespace jeecs
         {
             enum mover_mode
             {
-                nospecify,
-                selection,
-                movement,
-                rotation,
-                scale,
+                NOSPECIFY,
+                SELECTION,
+                MOVEMENT,
+                ROTATION,
+                SCALE,
             };
-            mover_mode mode = mover_mode::nospecify;
+            mover_mode mode = mover_mode::NOSPECIFY;
 
             // Editor will create a entity with EntityMoverRoot,
             // and DefaultEditorSystem should handle this entity hand create 3 mover for x,y,z axis
@@ -459,8 +459,20 @@ public func frag(vf: v2f)
 
         enum coord_mode
         {
-            global,
-            local
+            GLOBAL,
+            LOCAL
+        };
+        enum gizmo_mode
+        {
+            NONE                = 0,
+
+            CAMERA              = 0b0000'0001,
+            CAMERA_VISUAL_CONE  = 0b0000'0010,
+            LIGHT2D             = 0b0000'0100,
+            PHYSICS2D_COLLIDER  = 0b0000'1000,
+            SELECTING_HIGHLIGHT = 0b0001'0000,
+
+            ALL                 = 0x7FFFFFFF,
         };
 
         graphic_uhost* _graphic_uhost;
@@ -470,8 +482,9 @@ public func frag(vf: v2f)
         // to make sure init seq.
         GizmoResources _gizmo_resources;
 
-        Editor::EntityMover::mover_mode _mode = Editor::EntityMover::mover_mode::selection;
-        coord_mode _coord = coord_mode::global;
+        Editor::EntityMover::mover_mode _mode = Editor::EntityMover::mover_mode::SELECTION;
+        coord_mode _coord = coord_mode::GLOBAL;
+        int _gizmo_mask = gizmo_mode::ALL;
 
         basic::resource<graphic::vertex> axis_x;
         basic::resource<graphic::vertex> axis_y;
@@ -916,7 +929,7 @@ public let frag =
                 {
                     position.pos = trans->world_position;
 
-                    if (_coord == coord_mode::local || _mode == Editor::EntityMover::mover_mode::scale)
+                    if (_coord == coord_mode::LOCAL || _mode == Editor::EntityMover::mover_mode::SCALE)
                         rotation.rot = trans->world_rotation;
                     else
                         rotation.rot = math::quat();
@@ -935,23 +948,23 @@ public let frag =
             if (mover.mode != _mode || _inputs.l_tab)
             {
                 if (_inputs.l_tab)
-                    mover.mode = jeecs::Editor::EntityMover::selection;
+                    mover.mode = jeecs::Editor::EntityMover::SELECTION;
                 else
                     mover.mode = _mode;
                 switch (mover.mode)
                 {
-                case jeecs::Editor::EntityMover::selection:
+                case jeecs::Editor::EntityMover::SELECTION:
                     scale.scale = { 0.f, 0.f, 0.f };
                     break;
-                case jeecs::Editor::EntityMover::rotation:
+                case jeecs::Editor::EntityMover::ROTATION:
                     if (mover.axis.x != 0.f) shape->vertex = circ_x;
                     else if (mover.axis.y != 0.f) shape->vertex = circ_y;
                     else shape->vertex = circ_z;
                     posi.pos = { 0.f, 0.f, 0.f };
                     scale.scale = { 1.f, 1.f, 1.f };
                     break;
-                case jeecs::Editor::EntityMover::movement:
-                case jeecs::Editor::EntityMover::scale:
+                case jeecs::Editor::EntityMover::MOVEMENT:
+                case jeecs::Editor::EntityMover::SCALE:
                     if (mover.axis.x != 0.f) shape->vertex = axis_x;
                     else if (mover.axis.y != 0.f) shape->vertex = axis_y;
                     else shape->vertex = axis_z;
@@ -962,11 +975,11 @@ public let frag =
                     break;
                 }
 
-                if (mover.mode != jeecs::Editor::EntityMover::rotation)
+                if (mover.mode != jeecs::Editor::EntityMover::ROTATION)
                     posi.pos = mover.axis;
 
             }
-            if (mover.mode == Editor::EntityMover::selection)
+            if (mover.mode == Editor::EntityMover::SELECTION)
                 return;
 
             if (!_editor_enabled)
@@ -1018,18 +1031,18 @@ public let frag =
                         ? (_camera_pos - trans.world_position).length()
                         : 5.0f / _camera_ortho_porjection->scale;
 
-                    if (mover.mode == Editor::EntityMover::mover_mode::movement && editing_pos_may_null)
+                    if (mover.mode == Editor::EntityMover::mover_mode::MOVEMENT && editing_pos_may_null)
                     {
                         editing_trans->set_global_position(
                             editing_trans->world_position + diff.dot(screen_axis) * (trans.world_rotation * (mover.axis * distance * factor)),
                             editing_pos_may_null,
                             editing_rot_may_null);
                     }
-                    else if (mover.mode == Editor::EntityMover::mover_mode::scale && editing_scale_may_null)
+                    else if (mover.mode == Editor::EntityMover::mover_mode::SCALE && editing_scale_may_null)
                     {
                         editing_scale_may_null->scale += diff.dot(screen_axis) * (mover.axis * distance * factor);
                     }
-                    else if (mover.mode == Editor::EntityMover::mover_mode::rotation && editing_rot_may_null)
+                    else if (mover.mode == Editor::EntityMover::mover_mode::ROTATION && editing_rot_may_null)
                     {
                         auto euler = trans.world_rotation * mover.axis * (diff.x + diff.y) * factor * 20.0f;
                         editing_rot_may_null->rot = math::quat(euler.x, euler.y, euler.z) * editing_rot_may_null->rot;
@@ -1044,7 +1057,7 @@ public let frag =
                 bool select_click = _inputs.l_buttom_pushed;
 
                 bool intersected = result.intersected;
-                if (intersected && mover.mode == Editor::EntityMover::mover_mode::rotation)
+                if (intersected && mover.mode == Editor::EntityMover::mover_mode::ROTATION)
                 {
                     float distance =
                         _camera_ortho_porjection == nullptr
@@ -1081,7 +1094,7 @@ public let frag =
                         : 1.0f / _camera_ortho_porjection->scale;
                     scale.scale = math::vec3(distance, distance, distance);
 
-                    if (_mode != Editor::EntityMover::mover_mode::rotation)
+                    if (_mode != Editor::EntityMover::mover_mode::ROTATION)
                         posi.pos = mover.axis * distance;
                 }
             }
@@ -1321,10 +1334,14 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
             selector.anyof<Camera::OrthoProjection, Camera::PerspectiveProjection>();
             selector.exec([&](game_entity e, Transform::Translation& trans, Camera::Projection& proj)
                 {
-                    SelectEntity(e, trans, nullptr);
-                    draw_easy_gizmo_impl(trans, camera_gizmo_texture_group, false);
+                    if (_gizmo_mask & gizmo_mode::CAMERA)
+                    {
+                        SelectEntity(e, trans, nullptr);
+                        draw_easy_gizmo_impl(trans, camera_gizmo_texture_group, false);
+                    }
 
-                    if (this->_inputs.selected_entity.has_value()
+                    if (_gizmo_mask & gizmo_mode::CAMERA_VISUAL_CONE
+                        && this->_inputs.selected_entity.has_value()
                         && e == this->_inputs.selected_entity.value())
                     {
                         auto* draw_action = easy_draw_impl(
@@ -1353,16 +1370,22 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
             selector.anyof<Light2D::Point, Light2D::Range>();
             selector.exec([&](game_entity e, Transform::Translation& trans)
                 {
-                    SelectEntity(e, trans, nullptr);
-                    draw_easy_gizmo_impl(trans, point_light_gizmo_texture_group, false);
+                    if (_gizmo_mask & gizmo_mode::LIGHT2D)
+                    {
+                        SelectEntity(e, trans, nullptr);
+                        draw_easy_gizmo_impl(trans, point_light_gizmo_texture_group, false);
+                    }
                 });
 
             selector.except<Editor::Invisable>();
             selector.contain<Light2D::Parallel>();
             selector.exec([&](game_entity e, Transform::Translation& trans)
                 {
-                    SelectEntity(e, trans, nullptr);
-                    draw_easy_gizmo_impl(trans, parallel_light_gizmo_texture_group, true);
+                    if (_gizmo_mask & gizmo_mode::LIGHT2D)
+                    {
+                        SelectEntity(e, trans, nullptr);
+                        draw_easy_gizmo_impl(trans, parallel_light_gizmo_texture_group, true);
+                    }
                 });
 
             selector.except<Editor::Invisable>();
@@ -1379,81 +1402,84 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                 Physics2D::Collider::Capsule* capsule,
                 Physics2D::Collider::Circle* circle)
                 {
-                    auto* builtin_uniform = _gizmo_resources.m_gizmo_physics2d_collider_shader->m_builtin;
-
-                    auto final_world_position = trans.world_position;
-                    if (ppos != nullptr)
-                        final_world_position += math::vec3(ppos->offset);
-
-                    auto final_world_rotation = trans.world_rotation;
-                    if (prot != nullptr)
-                        final_world_rotation = final_world_rotation * math::quat::euler(0.f, 0.f, prot->angle);
-
-                    auto final_local_scale = trans.local_scale;
-                    if (pscale != nullptr)
-                        // We don't care about z of sacle.
-                        final_local_scale = final_local_scale * math::vec3(pscale->scale);
-
-                    if (box != nullptr)
-                        easy_draw_impl(
-                            final_world_position,
-                            final_world_rotation,
-                            final_local_scale,
-                            _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
-                            _gizmo_resources.m_gizmo_physics2d_collider_box_vertex->resource(),
-                            SIZE_MAX);
-                    else if (circle != nullptr)
+                    if (_gizmo_mask & gizmo_mode::PHYSICS2D_COLLIDER)
                     {
-                        // m_gizmo_physics2d_collider_circle_vertex's R is 1.0f, so we need to scale it.
-                        final_local_scale.x = std::max(final_local_scale.x, final_local_scale.y) / 2.0f;
-                        final_local_scale.y = final_local_scale.x;
+                        auto* builtin_uniform = _gizmo_resources.m_gizmo_physics2d_collider_shader->m_builtin;
 
-                        easy_draw_impl(
-                            final_world_position,
-                            final_world_rotation,
-                            final_local_scale,
-                            _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
-                            _gizmo_resources.m_gizmo_physics2d_collider_circle_vertex->resource(),
-                            SIZE_MAX);
-                    }
-                    else if (capsule != nullptr)
-                    {
-                        // We need to draw 2 circles and 1 box.
-                        auto circle_r = abs(final_local_scale.x / 2.0f);
-                        auto circle_offset = std::max(abs(final_local_scale.y) / 2.0f - abs(circle_r), 0.f);
+                        auto final_world_position = trans.world_position;
+                        if (ppos != nullptr)
+                            final_world_position += math::vec3(ppos->offset);
 
-                        auto circle_position1 = final_world_position + final_world_rotation * math::vec3(0.f, circle_offset, 0.f);
-                        auto circle_position2 = final_world_position + final_world_rotation * math::vec3(0.f, -circle_offset, 0.f);
-                        auto circle_scale = math::vec3(circle_r, circle_r, circle_r);
+                        auto final_world_rotation = trans.world_rotation;
+                        if (prot != nullptr)
+                            final_world_rotation = final_world_rotation * math::quat::euler(0.f, 0.f, prot->angle);
 
-                        auto box_scale = math::vec3(
-                            final_local_scale.x,
-                            circle_offset * 2.0f,
-                            final_local_scale.z);
+                        auto final_local_scale = trans.local_scale;
+                        if (pscale != nullptr)
+                            // We don't care about z of sacle.
+                            final_local_scale = final_local_scale * math::vec3(pscale->scale);
 
-                        easy_draw_impl(
-                            circle_position1,
-                            final_world_rotation,
-                            circle_scale,
-                            _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
-                            _gizmo_resources.m_gizmo_physics2d_collider_circle_vertex->resource(),
-                            SIZE_MAX);
+                        if (box != nullptr)
+                            easy_draw_impl(
+                                final_world_position,
+                                final_world_rotation,
+                                final_local_scale,
+                                _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
+                                _gizmo_resources.m_gizmo_physics2d_collider_box_vertex->resource(),
+                                SIZE_MAX);
+                        else if (circle != nullptr)
+                        {
+                            // m_gizmo_physics2d_collider_circle_vertex's R is 1.0f, so we need to scale it.
+                            final_local_scale.x = std::max(final_local_scale.x, final_local_scale.y) / 2.0f;
+                            final_local_scale.y = final_local_scale.x;
 
-                        easy_draw_impl(
-                            circle_position2,
-                            final_world_rotation,
-                            circle_scale,
-                            _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
-                            _gizmo_resources.m_gizmo_physics2d_collider_circle_vertex->resource(),
-                            SIZE_MAX);
+                            easy_draw_impl(
+                                final_world_position,
+                                final_world_rotation,
+                                final_local_scale,
+                                _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
+                                _gizmo_resources.m_gizmo_physics2d_collider_circle_vertex->resource(),
+                                SIZE_MAX);
+                        }
+                        else if (capsule != nullptr)
+                        {
+                            // We need to draw 2 circles and 1 box.
+                            auto circle_r = abs(final_local_scale.x / 2.0f);
+                            auto circle_offset = std::max(abs(final_local_scale.y) / 2.0f - abs(circle_r), 0.f);
 
-                        easy_draw_impl(
-                            final_world_position,
-                            final_world_rotation,
-                            box_scale,
-                            _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
-                            _gizmo_resources.m_gizmo_physics2d_collider_box_vertex->resource(),
-                            SIZE_MAX);
+                            auto circle_position1 = final_world_position + final_world_rotation * math::vec3(0.f, circle_offset, 0.f);
+                            auto circle_position2 = final_world_position + final_world_rotation * math::vec3(0.f, -circle_offset, 0.f);
+                            auto circle_scale = math::vec3(circle_r, circle_r, circle_r);
+
+                            auto box_scale = math::vec3(
+                                final_local_scale.x,
+                                circle_offset * 2.0f,
+                                final_local_scale.z);
+
+                            easy_draw_impl(
+                                circle_position1,
+                                final_world_rotation,
+                                circle_scale,
+                                _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
+                                _gizmo_resources.m_gizmo_physics2d_collider_circle_vertex->resource(),
+                                SIZE_MAX);
+
+                            easy_draw_impl(
+                                circle_position2,
+                                final_world_rotation,
+                                circle_scale,
+                                _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
+                                _gizmo_resources.m_gizmo_physics2d_collider_circle_vertex->resource(),
+                                SIZE_MAX);
+
+                            easy_draw_impl(
+                                final_world_position,
+                                final_world_rotation,
+                                box_scale,
+                                _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
+                                _gizmo_resources.m_gizmo_physics2d_collider_box_vertex->resource(),
+                                SIZE_MAX);
+                        }
                     }
                 });
 
@@ -1462,63 +1488,67 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
             {
                 if (_inputs.selected_entity.has_value())
                 {
-                    auto& selected_entity = _inputs.selected_entity.value();
-                    auto* translation = selected_entity.get_component<Transform::Translation>();
-                    auto* shape = selected_entity.get_component<Renderer::Shape>();
-                    auto* textures = selected_entity.get_component<Renderer::Textures>();
-
-                    if (translation != nullptr
-                        && shape != nullptr
-                        && selected_entity.get_component<Renderer::Shaders>() != nullptr
-                        && selected_entity.get_component<Light2D::Point>() == nullptr
-                        && selected_entity.get_component<Light2D::Range>() == nullptr
-                        && selected_entity.get_component<Light2D::Parallel>() == nullptr)
+                    if (_gizmo_mask & gizmo_mode::SELECTING_HIGHLIGHT)
                     {
-                        jegl_rchain_texture_group_idx_t group =
-                            jegl_rchain_allocate_texture_group(gizmo_rchain);
+                        auto& selected_entity = _inputs.selected_entity.value();
+                        auto* translation = selected_entity.get_component<Transform::Translation>();
+                        auto* shape = selected_entity.get_component<Renderer::Shape>();
+                        auto* textures = selected_entity.get_component<Renderer::Textures>();
 
-                        bool binded = false;
-                        if (textures != nullptr)
+                        if (translation != nullptr
+                            && shape != nullptr
+                            && selected_entity.get_component<Renderer::Shaders>() != nullptr
+                            && selected_entity.get_component<Light2D::Point>() == nullptr
+                            && selected_entity.get_component<Light2D::Range>() == nullptr
+                            && selected_entity.get_component<Light2D::Parallel>() == nullptr)
                         {
-                            auto binded_in_zero = textures->get_texture(0);
-                            if (binded_in_zero != nullptr)
+                            jegl_rchain_texture_group_idx_t group =
+                                jegl_rchain_allocate_texture_group(gizmo_rchain);
+
+                            bool binded = false;
+                            if (textures != nullptr)
                             {
-                                binded = true;
+                                auto binded_in_zero = textures->get_texture(0);
+                                if (binded_in_zero != nullptr)
+                                {
+                                    binded = true;
+                                    jegl_rchain_bind_texture(
+                                        gizmo_rchain,
+                                        group,
+                                        0,
+                                        binded_in_zero->resource());
+                                }
+                            }
+
+                            if (!binded)
                                 jegl_rchain_bind_texture(
                                     gizmo_rchain,
                                     group,
                                     0,
-                                    binded_in_zero->resource());
+                                    _gizmo_resources.m_selecting_default_texture->resource());
+
+                            auto* draw_action = easy_draw_impl(
+                                translation->world_position,
+                                translation->world_rotation,
+                                translation->local_scale,
+                                _gizmo_resources.m_gizmo_selecting_item_highlight_shader->resource(),
+                                shape->vertex != nullptr ? shape->vertex->resource() : _gizmo_resources.m_gizmo_vertex->resource(),
+                                group);
+
+                            if (textures != nullptr)
+                            {
+                                auto* builtin_uniform = _gizmo_resources.m_gizmo_selecting_item_highlight_shader->m_builtin;
+
+                                JE_CHECK_NEED_AND_SET_UNIFORM(
+                                    draw_action, builtin_uniform, tiling, float2, textures->tiling.x, textures->tiling.y);
+                                JE_CHECK_NEED_AND_SET_UNIFORM(
+                                    draw_action, builtin_uniform, offset, float2, textures->offset.x, textures->offset.y);
                             }
-                        }
-
-                        if (!binded)
-                            jegl_rchain_bind_texture(
-                                gizmo_rchain,
-                                group,
-                                0,
-                                _gizmo_resources.m_selecting_default_texture->resource());
-
-                        auto* draw_action = easy_draw_impl(
-                            translation->world_position,
-                            translation->world_rotation,
-                            translation->local_scale,
-                            _gizmo_resources.m_gizmo_selecting_item_highlight_shader->resource(),
-                            shape->vertex != nullptr ? shape->vertex->resource() : _gizmo_resources.m_gizmo_vertex->resource(),
-                            group);
-
-                        if (textures != nullptr)
-                        {
-                            auto* builtin_uniform = _gizmo_resources.m_gizmo_selecting_item_highlight_shader->m_builtin;
-
-                            JE_CHECK_NEED_AND_SET_UNIFORM(
-                                draw_action, builtin_uniform, tiling, float2, textures->tiling.x, textures->tiling.y);
-                            JE_CHECK_NEED_AND_SET_UNIFORM(
-                                draw_action, builtin_uniform, offset, float2, textures->offset.x, textures->offset.y);
                         }
                     }
                 }
             }
+
 #undef JE_CHECK_NEED_AND_SET_UNIFORM
             // Draw gizmo end.
             /////////////////////////////////////////////////////////////////////////
@@ -1545,7 +1575,7 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                         if (etrans != nullptr)
                         {
                             localScale.scale = etrans->local_scale;
-                            if (_coord != coord_mode::local && _mode != Editor::EntityMover::mover_mode::scale)
+                            if (_coord != coord_mode::LOCAL && _mode != Editor::EntityMover::mover_mode::SCALE)
                                 localRotation.rot = etrans->world_rotation;
                         }
 
@@ -2098,7 +2128,7 @@ WO_API wo_api wojeapi_get_editing_mover_mode(wo_vm vm, wo_value args)
     jeecs::game_world world(wo_pointer(args + 0));
     jeecs::DefaultEditorSystem* sys = world.get_system<jeecs::DefaultEditorSystem>();
     if (sys == nullptr)
-        return wo_ret_int(vm, (wo_integer_t)jeecs::Editor::EntityMover::mover_mode::nospecify);
+        return wo_ret_int(vm, (wo_integer_t)jeecs::Editor::EntityMover::mover_mode::NOSPECIFY);
     return wo_ret_int(vm, (wo_integer_t)sys->_mode);
 }
 WO_API wo_api wojeapi_set_editing_mover_mode(wo_vm vm, wo_value args)
@@ -2115,7 +2145,7 @@ WO_API wo_api wojeapi_get_editing_coord_mode(wo_vm vm, wo_value args)
     jeecs::game_world world(wo_pointer(args + 0));
     jeecs::DefaultEditorSystem* sys = world.get_system<jeecs::DefaultEditorSystem>();
     if (sys == nullptr)
-        return wo_ret_int(vm, (wo_integer_t)jeecs::DefaultEditorSystem::coord_mode::global);
+        return wo_ret_int(vm, (wo_integer_t)jeecs::DefaultEditorSystem::coord_mode::GLOBAL);
     return wo_ret_int(vm, (wo_integer_t)sys->_coord);
 }
 WO_API wo_api wojeapi_set_editing_coord_mode(wo_vm vm, wo_value args)
@@ -2124,6 +2154,23 @@ WO_API wo_api wojeapi_set_editing_coord_mode(wo_vm vm, wo_value args)
     jeecs::DefaultEditorSystem* sys = world.get_system<jeecs::DefaultEditorSystem>();
     if (sys != nullptr)
         sys->_coord = (jeecs::DefaultEditorSystem::coord_mode)wo_int(args + 1);
+
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_get_editing_gizmo_mode(wo_vm vm, wo_value args)
+{
+    jeecs::game_world world(wo_pointer(args + 0));
+    jeecs::DefaultEditorSystem* sys = world.get_system<jeecs::DefaultEditorSystem>();
+    if (sys == nullptr)
+        return wo_ret_int(vm, (wo_integer_t)jeecs::DefaultEditorSystem::gizmo_mode::NONE);
+    return wo_ret_int(vm, (wo_integer_t)sys->_gizmo_mask);
+}
+WO_API wo_api wojeapi_set_editing_gizmo_mode(wo_vm vm, wo_value args)
+{
+    jeecs::game_world world(wo_pointer(args + 0));
+    jeecs::DefaultEditorSystem* sys = world.get_system<jeecs::DefaultEditorSystem>();
+    if (sys != nullptr)
+        sys->_gizmo_mask = (int)wo_int(args + 1);
 
     return wo_ret_void(vm);
 }
