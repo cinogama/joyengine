@@ -90,7 +90,7 @@ public:
                     canvas_height = rheight;
 
                     if (width > 0 && height > 0)
-                        je_io_set_windowsize(rwidth, rheight);
+                        je_io_set_window_size(rwidth, rheight);
                 }
             }
         }
@@ -121,7 +121,7 @@ extern "C"
     void EMSCRIPTEN_KEEPALIVE 
         _je4_je_io_update_mousepos(size_t group, int x, int y)
     {
-        je_io_update_mousepos(group, x, y);
+        je_io_update_mouse_pos(group, x, y);
     }
     void EMSCRIPTEN_KEEPALIVE 
         _je4_je_io_update_mouse_state(

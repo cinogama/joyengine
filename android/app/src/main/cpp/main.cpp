@@ -418,7 +418,7 @@ extern "C" {
             case AMOTION_EVENT_ACTION_POINTER_DOWN:
                 je_io_update_mouse_state(
                     pointer.id, jeecs::input::mousecode::LEFT, true);
-                je_io_update_mousepos(pointer.id, x, y);
+                je_io_update_mouse_pos(pointer.id, x, y);
                 break;
 
             case AMOTION_EVENT_ACTION_CANCEL:
@@ -429,7 +429,7 @@ extern "C" {
             case AMOTION_EVENT_ACTION_POINTER_UP:
                 je_io_update_mouse_state(
                     pointer.id, jeecs::input::mousecode::LEFT, false);
-                je_io_update_mousepos(pointer.id, x, y);
+                je_io_update_mouse_pos(pointer.id, x, y);
                 break;
 
             case AMOTION_EVENT_ACTION_MOVE:
@@ -440,7 +440,7 @@ extern "C" {
                     pointer = motionEvent.pointers[index];
                     x = GameActivityPointerAxes_getX(&pointer);
                     y = GameActivityPointerAxes_getY(&pointer);
-                    je_io_update_mousepos(pointer.id, x, y);
+                    je_io_update_mouse_pos(pointer.id, x, y);
                 }
                 break;
             default:

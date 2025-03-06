@@ -38,13 +38,13 @@ namespace jeecs::graphic
             context->m_interface_width = (size_t)x;
             context->m_interface_height = (size_t)y;
 
-            je_io_update_windowsize(x, y);
+            je_io_update_window_size(x, y);
 
             context->_m_window_resized = true;
         }
         static void glfw_callback_mouse_pos_changed(GLFWwindow* fw, double x, double y)
         {
-            je_io_update_mousepos(0, (int)x, (int)y);
+            je_io_update_mouse_pos(0, (int)x, (int)y);
         }
         static void glfw_callback_mouse_key_clicked(GLFWwindow* fw, int key, int state, int mod)
         {
@@ -157,9 +157,130 @@ namespace jeecs::graphic
                 break;
             }
 
-            je_io_update_keystate(keycode, stage != 0);
+            je_io_update_key_state(keycode, stage != 0);
         }
+        
+        class glfw_gamepad_management
+        {
+            std::unordered_map<int, je_io_gamepad_handle_t> _connected_gamepads;
+            std::atomic<glfw*> _gamepad_manage_glfw_context = {};
 
+        public:
+            void detach(glfw* host)
+            {
+                auto* manager = _gamepad_manage_glfw_context.load();
+                if (manager == host)
+                {
+                    glfwSetJoystickCallback(nullptr);
+                }
+            }
+            void update(glfw* host)
+            {
+                auto* manager = _gamepad_manage_glfw_context.load();
+                if (manager == nullptr)
+                {
+                    // Init it.
+                    if (_gamepad_manage_glfw_context.compare_exchange_weak(manager, host))
+                    {
+                        // Success!
+                        for (auto id = GLFW_JOYSTICK_1; id <= GLFW_JOYSTICK_LAST; ++id)
+                        {
+                            if (glfwJoystickPresent(id))
+                            {
+                                if (_connected_gamepads.find(id) == _connected_gamepads.end())
+                                    connect(id);
+                            }
+                            else if (_connected_gamepads.find(id) != _connected_gamepads.end())
+                                disconnect(id);
+                        }
+                        glfwSetJoystickCallback(glfw_callback_gamepad_connect_or_disconnect);
+                    }
+                }
+                else if (manager == host)
+                {
+                    // Fetch gamepad state, update them.
+                    for (auto& [jid, vgamepad] : _connected_gamepads)
+                    {
+                        GLFWgamepadstate state;
+                        if (glfwGetGamepadState(jid, &state))
+                        {
+                            je_io_gamepad_update_stick(
+                                vgamepad, 
+                                input::joystickcode::L, 
+                                state.axes[GLFW_GAMEPAD_AXIS_LEFT_X],
+                                state.axes[GLFW_GAMEPAD_AXIS_LEFT_Y]);
+                            je_io_gamepad_update_stick(
+                                vgamepad,
+                                input::joystickcode::R,
+                                state.axes[GLFW_GAMEPAD_AXIS_RIGHT_X],
+                                state.axes[GLFW_GAMEPAD_AXIS_RIGHT_Y]);
+                            je_io_gamepad_update_stick(
+                                vgamepad,
+                                input::joystickcode::LT,
+                                state.axes[GLFW_GAMEPAD_AXIS_LEFT_TRIGGER],
+                                0.f);
+                            je_io_gamepad_update_stick(
+                                vgamepad,
+                                input::joystickcode::RT,
+                                state.axes[GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER],
+                                0.f);
+
+                            const static input::gamepadcode GLFW_2_JE_VGP_BUTTON_MAPPING[] = {
+                                input::gamepadcode::A,   // GLFW_GAMEPAD_BUTTON_A
+                                input::gamepadcode::B,   // GLFW_GAMEPAD_BUTTON_B
+                                input::gamepadcode::X,   // GLFW_GAMEPAD_BUTTON_X
+                                input::gamepadcode::Y,   // GLFW_GAMEPAD_BUTTON_Y
+                                input::gamepadcode::LB,  // GLFW_GAMEPAD_BUTTON_LEFT_BUMPER
+                                input::gamepadcode::RB,  // GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER
+                                input::gamepadcode::SELECT,// GLFW_GAMEPAD_BUTTON_BACK
+                                input::gamepadcode::START,// GLFW_GAMEPAD_BUTTON_START
+                                input::gamepadcode::GUIDE,// GLFW_GAMEPAD_BUTTON_GUIDE
+                                input::gamepadcode::LS,  // GLFW_GAMEPAD_BUTTON_LEFT_THUMB
+                                input::gamepadcode::RS,  // GLFW_GAMEPAD_BUTTON_RIGHT_THUMB
+                                input::gamepadcode::UP,   // GLFW_GAMEPAD_BUTTON_DPAD_UP
+                                input::gamepadcode::RIGHT,// GLFW_GAMEPAD_BUTTON_DPAD_RIGHT
+                                input::gamepadcode::DOWN, // GLFW_GAMEPAD_BUTTON_DPAD_DOWN
+                                input::gamepadcode::LEFT, // GLFW_GAMEPAD_BUTTON_DPAD_LEFT
+                            };
+                            
+                            static_assert(
+                                sizeof(GLFW_2_JE_VGP_BUTTON_MAPPING) == 
+                                (GLFW_GAMEPAD_BUTTON_LAST + 1) * sizeof(input::gamepadcode));
+
+                            for (auto glfw_bid = GLFW_GAMEPAD_BUTTON_A;
+                                glfw_bid <= GLFW_GAMEPAD_BUTTON_LAST;
+                                ++glfw_bid)
+                            {
+                                je_io_gamepad_update_button_state(
+                                    vgamepad, GLFW_2_JE_VGP_BUTTON_MAPPING[glfw_bid], state.buttons[glfw_bid]);
+                            }
+                        }
+                    }
+                }
+            }
+            void connect(int id)
+            {
+                assert(_connected_gamepads.find(id) == _connected_gamepads.end());
+                _connected_gamepads[id] = je_io_create_gamepad();
+            }
+            void disconnect(int id)
+            {
+                auto fnd = _connected_gamepads.find(id);
+                assert(fnd != _connected_gamepads.end());
+
+                je_io_close_gamepad(fnd->second);
+                _connected_gamepads.erase(fnd);
+            }
+        };
+        inline static glfw_gamepad_management _gamepad_manager;
+        
+        static void glfw_callback_gamepad_connect_or_disconnect(int jid, int event)
+        {
+            if (event == GLFW_CONNECTED)
+                _gamepad_manager.connect(jid);
+            else if (event == GLFW_DISCONNECTED)
+                _gamepad_manager.disconnect(jid);
+        }
     public:
         glfw(interface_type type)
         {
@@ -206,6 +327,10 @@ namespace jeecs::graphic
             glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
 #endif
         }
+        ~glfw()
+        {
+            _gamepad_manager.detach(this);
+        }
 
         virtual void create_interface(jegl_context* thread, const jegl_interface_config* config) override
         {
@@ -238,7 +363,7 @@ namespace jeecs::graphic
             glfwWindowHint(GLFW_RESIZABLE, config->m_enable_resize ? GLFW_TRUE : GLFW_FALSE);
             glfwWindowHint(GLFW_SAMPLES, (int)config->m_msaa);
 
-            je_io_update_windowsize(
+            je_io_update_window_size(
                 (int)m_interface_width, (int)m_interface_height);
 
             switch (display_mode)
@@ -341,14 +466,15 @@ namespace jeecs::graphic
                 glfwSetCursorPos(_m_windows, mouse_lock_x, mouse_lock_y);
 
             int window_width, window_height;
-            if (je_io_fetch_update_windowsize(&window_width, &window_height))
+            if (je_io_fetch_update_window_size(&window_width, &window_height))
                 glfwSetWindowSize(_m_windows, window_width, window_height);
 
             const char* title;
-            if (je_io_fetch_update_windowtitle(&title))
+            if (je_io_fetch_update_window_title(&title))
                 glfwSetWindowTitle(_m_windows, title);
 
             glfwPollEvents();
+            _gamepad_manager.update(this);
 
             if (glfwWindowShouldClose(_m_windows) == GLFW_TRUE)
             {

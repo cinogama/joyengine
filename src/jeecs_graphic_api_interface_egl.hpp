@@ -135,7 +135,7 @@ namespace jeecs::graphic
                 m_interface_width = (size_t)width;
                 m_interface_height = (size_t)height;
 
-                je_io_update_windowsize((int)width, (int)height);
+                je_io_update_window_size((int)width, (int)height);
 
                 _window_size_resized = true;
             }

@@ -131,7 +131,7 @@ namespace jeecs::graphic::api::dx11
 
     void dx11_callback_windows_size_changed(jegl_dx11_context* context, size_t w, size_t h)
     {
-        je_io_update_windowsize((int)w, (int)h);
+        je_io_update_window_size((int)w, (int)h);
         if (context->m_dx_context_finished == false)
             return;
 

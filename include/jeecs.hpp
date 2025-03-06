@@ -528,8 +528,6 @@ namespace jeecs
     namespace input
     {
         constexpr size_t MAX_MOUSE_GROUP_COUNT = 16;
-        constexpr size_t MAX_GAMEPAD_COUNT = 4;
-        constexpr size_t MAX_JOYSTICK_COUNT_PER_GAMEPAD = 2;
 
         enum class mousecode : uint8_t
         {
@@ -609,7 +607,7 @@ namespace jeecs
 
             _COUNT, //
         };
-        enum class gamepadcode: uint16_t
+        enum class gamepadcode: uint8_t
         {
             UP,
             DOWN,
@@ -621,8 +619,8 @@ namespace jeecs
             X,
             Y,
 
-            LT,
-            RT,
+            // LT,
+            // RT,
             LB,
             RB,
             LS,
@@ -631,6 +629,15 @@ namespace jeecs
             SELECT,
             START,
             GUIDE,
+
+            _COUNT, //
+        };
+        enum class joystickcode: uint8_t
+        {
+            L,
+            R,
+            LT, // Use x value only.
+            RT, // Use x value only.
 
             _COUNT, //
         };
@@ -3345,17 +3352,17 @@ jegui_shutdown_callback [基本接口]
 JE_API bool jegui_shutdown_callback(void);
 
 /*
-je_io_update_keystate [基本接口]
+je_io_update_key_state [基本接口]
 更新指定键的状态信息
 */
-JE_API void je_io_update_keystate(jeecs::input::keycode keycode, bool keydown);
+JE_API void je_io_update_key_state(jeecs::input::keycode keycode, bool keydown);
 
 /*
-je_io_update_mousepos [基本接口]
+je_io_update_mouse_pos [基本接口]
 更新鼠标（或触摸位置点）的坐标
     * 此操作`不会`影响光标的实际位置
 */
-JE_API void je_io_update_mousepos(size_t group, int x, int y);
+JE_API void je_io_update_mouse_pos(size_t group, int x, int y);
 
 /*
 je_io_update_mouse_state [基本接口]
@@ -3364,11 +3371,11 @@ je_io_update_mouse_state [基本接口]
 JE_API void je_io_update_mouse_state(size_t group, jeecs::input::mousecode key, bool keydown);
 
 /*
-je_io_update_windowsize [基本接口]
+je_io_update_window_size [基本接口]
 更新窗口大小
     * 此操作`不会`影响窗口的实际大小
 */
-JE_API void je_io_update_windowsize(int x, int y);
+JE_API void je_io_update_window_size(int x, int y);
 
 /*
 je_io_update_wheel [基本接口]
@@ -3377,10 +3384,10 @@ je_io_update_wheel [基本接口]
 JE_API void je_io_update_wheel(size_t group, float x, float y);
 
 /*
-je_io_get_keydown [基本接口]
+je_io_get_key_down [基本接口]
 获取指定的按键是否被按下
 */
-JE_API bool je_io_get_keydown(jeecs::input::keycode keycode);
+JE_API bool je_io_get_key_down(jeecs::input::keycode keycode);
 
 /*
 je_io_get_mouse_pos [基本接口]
@@ -3395,10 +3402,10 @@ je_io_get_mouse_state [基本接口]
 JE_API bool je_io_get_mouse_state(size_t group, jeecs::input::mousecode key);
 
 /*
-je_io_get_windowsize [基本接口]
+je_io_get_window_size [基本接口]
 获取窗口的大小
 */
-JE_API void je_io_get_windowsize(int* out_x, int* out_y);
+JE_API void je_io_get_window_size(int* out_x, int* out_y);
 
 /*
 je_io_get_wheel [基本接口]
@@ -3419,28 +3426,46 @@ je_io_get_lock_mouse [基本接口]
 JE_API bool je_io_get_lock_mouse(int* out_x, int* out_y);
 
 /*
-je_io_set_windowsize [基本接口]
+je_io_set_window_size [基本接口]
 请求对窗口大小进行调整
 */
-JE_API void je_io_set_windowsize(int x, int y);
+JE_API void je_io_set_window_size(int x, int y);
 
 /*
-je_io_fetch_update_windowsize [基本接口]
+je_io_fetch_update_window_size [基本接口]
 获取当前窗口大小是否应该调整及调整的大小
 */
-JE_API bool je_io_fetch_update_windowsize(int* out_x, int* out_y);
+JE_API bool je_io_fetch_update_window_size(int* out_x, int* out_y);
 
 /*
-je_io_set_windowtitle [基本接口]
+je_io_set_window_title [基本接口]
 请求对窗口标题进行调整
 */
-JE_API void je_io_set_windowtitle(const char* title);
+JE_API void je_io_set_window_title(const char* title);
 
 /*
-je_io_fetch_update_windowtitle [基本接口]
+je_io_fetch_update_window_title [基本接口]
 获取当前是否需要对窗口标题进行调整及调整之后的内容
 */
-JE_API bool je_io_fetch_update_windowtitle(const char** out_title);
+JE_API bool je_io_fetch_update_window_title(const char** out_title);
+
+typedef struct _je_gamepad_state* je_io_gamepad_handle_t;
+
+JE_API je_io_gamepad_handle_t je_io_create_gamepad();
+JE_API void je_io_close_gamepad(je_io_gamepad_handle_t gamepad);
+
+JE_API size_t je_io_gamepad_get_count();
+JE_API je_io_gamepad_handle_t je_io_gamepad_get(size_t idx);
+
+JE_API bool je_io_gamepad_get_button_down(
+    je_io_gamepad_handle_t gamepad, jeecs::input::gamepadcode code);
+JE_API void je_io_gamepad_update_button_state(
+    je_io_gamepad_handle_t gamepad, jeecs::input::gamepadcode code, bool down);
+
+JE_API void je_io_gamepad_get_stick(
+    je_io_gamepad_handle_t gamepad, jeecs::input::joystickcode stickid, float* out_x, float* out_y);
+JE_API void je_io_gamepad_update_stick(
+    je_io_gamepad_handle_t gamepad, jeecs::input::joystickcode stickid, float x, float y);
 
 // Library / Module loader
 
@@ -10595,7 +10620,7 @@ namespace UserInterface::Origin
     {
         inline bool keydown(keycode key)
         {
-            return je_io_get_keydown(key);
+            return je_io_get_key_down(key);
         }
         inline bool mousedown(size_t group, mousecode key)
         {
@@ -10617,13 +10642,13 @@ namespace UserInterface::Origin
         {
             int x, y, w, h;
             je_io_get_mouse_pos(group, &x, &y);
-            je_io_get_windowsize(&w, &h);
+            je_io_get_window_size(&w, &h);
             return { ((float)x / (float)w - 0.5f) * 2.0f, ((float)y / (float)h - 0.5f) * -2.0f };
         }
         inline math::ivec2 windowsize()
         {
             int x, y;
-            je_io_get_windowsize(&x, &y);
+            je_io_get_window_size(&x, &y);
             return { x, y };
         }
 

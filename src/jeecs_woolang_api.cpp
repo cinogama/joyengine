@@ -1031,13 +1031,13 @@ WO_API wo_api wojeapi_input_mouse_view_pos(wo_vm vm, wo_value args)
 
 WO_API wo_api wojeapi_input_update_window_size(wo_vm vm, wo_value args)
 {
-    je_io_set_windowsize((int)wo_int(args + 0), (int)wo_int(args + 1));
+    je_io_set_window_size((int)wo_int(args + 0), (int)wo_int(args + 1));
     return wo_ret_void(vm);
 }
 
 WO_API wo_api wojeapi_input_update_window_title(wo_vm vm, wo_value args)
 {
-    je_io_set_windowtitle(wo_string(args + 0));
+    je_io_set_window_title(wo_string(args + 0));
     return wo_ret_void(vm);
 }
 
