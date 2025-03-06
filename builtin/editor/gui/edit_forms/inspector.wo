@@ -240,6 +240,7 @@ namespace editor::gui::edit_forms
                                                                                     jeapi::gui::form::errmsg("失败", F"更新预设体失败，无法写入：{p}");
                                                                                 }
                                                                                 context->get_project->restore_all_world(dat);
+                                                                                prefab_data_cache::reset(p);
                                                                                 return false;
                                                                             }, ());
                                                                     }
@@ -286,6 +287,21 @@ namespace editor::gui::edit_forms
                                             ->add((ctype, component));
                                 }
 
+                                match (components_data)
+                                {
+                                value(components_data_dict)?
+                                    for (let (prefab_component_name, _) : components_data_dict)
+                                    {
+                                        if (cur_e->editor::get_components->find_if(\t, _ = t->name == prefab_component_name;)->is_none)
+                                        {
+                                            PushStyleColor(ImGuiCol::ImGuiCol_Text, (200, 0, 0, 255));
+                                            Text(F"<预设体中的 {prefab_component_name} 被移除>");
+                                            PopStyleColor(1);
+                                        }
+                                    }
+                                none?;
+                                }
+                                        
                                 for (let (groupname, components): grouped_components->unmapping->std::sort(\l, r = l.0 < r.0;))
                                 {
                                     if (!get_is_albe_to_display_debug_entity() && groupname == "Editor")
@@ -428,22 +444,6 @@ namespace editor::gui::edit_forms
                                             }
                                         }
                                         
-                                        match (components_data)
-                                        {
-                                        value(components_data_dict)?
-                                            for (let (prefab_component_name, _) : components_data_dict)
-                                            {
-                                                if (components->find_if(\(t, _) = t->name != prefab_component_name;)->is_none)
-                                                {
-                                                    PushStyleColor(ImGuiCol::ImGuiCol_Text, (200, 0, 0, 255));
-                                                    Text(F"<组件 {prefab_component_name} 被移除>");
-                                                    PopStyleColor(1);
-                                                }
-                                            }
-                                        none?;
-                                        }
-                                        
-
                                         EndGroup();
                                         TreePop();
                                     }
