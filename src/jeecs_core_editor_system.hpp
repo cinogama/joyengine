@@ -1235,7 +1235,7 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                 const math::vec3& scale,
                 jegl_resource* shader,
                 jegl_resource* vertex,
-                jegl_rchain_texture_group_idx_t group)
+                jegl_rchain_texture_group_idx_t group)-> jegl_rendchain_rend_action*
                 {
                     if (enable_draw_gizmo_at_framebuf.has_value())
                     {
@@ -1275,6 +1275,7 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 
                         return draw_action;
                     }
+                    return nullptr;
                 };
             auto draw_easy_gizmo_impl = [&](Transform::Translation& trans, jegl_rchain_texture_group_idx_t group, bool rotation)
                 {
@@ -1525,7 +1526,7 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                 shape->vertex != nullptr ? shape->vertex->resource() : _gizmo_resources.m_gizmo_vertex->resource(),
                                 group);
 
-                            if (textures != nullptr)
+                            if (draw_action != nullptr && textures != nullptr)
                             {
                                 auto* builtin_uniform = _gizmo_resources.m_gizmo_selecting_item_highlight_shader->m_builtin;
 

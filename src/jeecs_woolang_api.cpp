@@ -3074,28 +3074,78 @@ namespace je
 
     public enum mousecode
     {
-        LEFT, MID, RIGHT,
+        LEFT, 
+        MID,
+        RIGHT,
 
-        CUSTOM_0 = 32,
-
-        _COUNT = 64,
+        CUSTOM_0 = 16,
+        CUSTOM_1,
+        CUSTOM_2,
+        CUSTOM_3,
+        CUSTOM_4,
+        CUSTOM_5,
+        CUSTOM_6,
+        CUSTOM_7,
+        CUSTOM_8,
     };
 
     public enum keycode
     {
         UNKNOWN = 0,
 
-        A = 65, B, C, D, E, F, G, H, I, J, K, L,
+        APOSTROPHE = '\'': int,
+        COMMA = ',': int,
+        MINUS = '-': int,
+        PERIOD = '.': int,
+        SLASH = '/': int,
+
+        A = 'A': int, B, C, D, E, F, G, H, I, J, K, L,
         M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
-        _1 = 49, _2, _3, _4, _5, _6, _7, _8, _9,
-        _0, _ = 32,
+        _1 = '1': int, _2, _3, _4, _5, _6, _7, _8, _9,
+        _0, 
+        _ = ' ': int,
 
-        L_SHIFT = 256, L_CTRL, L_ALT, TAB, ENTER,
-        ESC, BACKSPACE,
+        SEMICOLON = ';': int,
+        EQUAL = '=': int,
+        LEFT_BRACKET = '[': int,
+        BACKSLASH = '\\': int,
+        RIGHT_BRACKET = ']': int,
+        GRAVE_ACCENT = '`': int,
 
-        CUSTOM_0 = 512,
+        L_SHIFT = 128,
+        R_SHIFT,
+        L_CTRL,
+        R_CTRL,
+        L_ALT,
+        R_ALT,
+        TAB,
+        ENTER,
+        ESC,
+        BACKSPACE,
 
-        _COUNT = 1024,
+        NP_0, NP_1, NP_2, NP_3, NP_4,
+        NP_5, NP_6, NP_7, NP_8, NP_9,
+        NP_DECIMAL,
+        NP_DIVIDE,
+        NP_MULTIPLY,
+        NP_SUBTRACT,
+        NP_ADD,
+        NP_ENTER,
+
+        UP, DOWN, LEFT, RIGHT,
+
+        F1, F2, F3, F4, F5, F6, F7, F8,
+        F9, F10, F11, F12, F13, F14, F15, F16,
+
+        CUSTOM_0 = 256,
+        CUSTOM_1,
+        CUSTOM_2,
+        CUSTOM_3,
+        CUSTOM_4,
+        CUSTOM_5,
+        CUSTOM_6,
+        CUSTOM_7,
+        CUSTOM_8,
     };
 
     namespace input

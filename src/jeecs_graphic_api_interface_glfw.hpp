@@ -48,18 +48,20 @@ namespace jeecs::graphic
         }
         static void glfw_callback_mouse_key_clicked(GLFWwindow* fw, int key, int state, int mod)
         {
+            jeecs::input::mousecode keycode;
             switch (key)
             {
             case GLFW_MOUSE_BUTTON_LEFT:
-                je_io_update_mouse_state(0, jeecs::input::mousecode::LEFT, state); break;
+                keycode = jeecs::input::mousecode::LEFT; break;
             case GLFW_MOUSE_BUTTON_MIDDLE:
-                je_io_update_mouse_state(0, jeecs::input::mousecode::MID, state); break;
+                keycode = jeecs::input::mousecode::MID; break;
             case GLFW_MOUSE_BUTTON_RIGHT:
-                je_io_update_mouse_state(0, jeecs::input::mousecode::RIGHT, state); break;
+                keycode = jeecs::input::mousecode::RIGHT; break;
             default:
                 // do nothing.
-                break;
+                return;
             }
+            je_io_update_mouse_state(0, keycode, state != 0);
         }
         static void glfw_callback_mouse_scroll_changed(GLFWwindow* fw, double xoffset, double yoffset)
         {
@@ -69,29 +71,93 @@ namespace jeecs::graphic
         }
         static void glfw_callback_keyboard_stage_changed(GLFWwindow* fw, int key, int w, int stage, int v)
         {
-            assert(GLFW_KEY_A == 'A');
-            assert(GLFW_KEY_0 == '0');
+            static_assert(GLFW_KEY_A == 'A');
+            static_assert(GLFW_KEY_0 == '0');
+
+            jeecs::input::keycode keycode;
+
             switch (key)
             {
             case GLFW_KEY_LEFT_SHIFT:
-                je_io_update_keystate(jeecs::input::keycode::L_SHIFT, stage); break;
+                keycode = jeecs::input::keycode::L_SHIFT; break;
+            case GLFW_KEY_RIGHT_SHIFT:
+                keycode = jeecs::input::keycode::R_SHIFT; break;
             case GLFW_KEY_LEFT_ALT:
-                je_io_update_keystate(jeecs::input::keycode::L_ALT, stage); break;
+                keycode = jeecs::input::keycode::L_ALT; break;
+            case GLFW_KEY_RIGHT_ALT:
+                keycode = jeecs::input::keycode::R_ALT; break;
             case GLFW_KEY_LEFT_CONTROL:
-                je_io_update_keystate(jeecs::input::keycode::L_CTRL, stage); break;
+                keycode = jeecs::input::keycode::L_CTRL; break;
+            case GLFW_KEY_RIGHT_CONTROL:
+                keycode = jeecs::input::keycode::R_CTRL; break;
             case GLFW_KEY_TAB:
-                je_io_update_keystate(jeecs::input::keycode::TAB, stage); break;
+                keycode = jeecs::input::keycode::TAB; break;
             case GLFW_KEY_ENTER:
-            case GLFW_KEY_KP_ENTER:
-                je_io_update_keystate(jeecs::input::keycode::ENTER, stage); break;
+                keycode = jeecs::input::keycode::ENTER; break;
             case GLFW_KEY_ESCAPE:
-                je_io_update_keystate(jeecs::input::keycode::ESC, stage); break;
+                keycode = jeecs::input::keycode::ESC; break;
             case GLFW_KEY_BACKSPACE:
-                je_io_update_keystate(jeecs::input::keycode::BACKSPACE, stage); break;
+                keycode = jeecs::input::keycode::BACKSPACE; break;
+            case GLFW_KEY_KP_0:
+            case GLFW_KEY_KP_1:
+            case GLFW_KEY_KP_2:
+            case GLFW_KEY_KP_3:
+            case GLFW_KEY_KP_4:
+            case GLFW_KEY_KP_5:
+            case GLFW_KEY_KP_6:
+            case GLFW_KEY_KP_7:
+            case GLFW_KEY_KP_8:
+            case GLFW_KEY_KP_9:
+                keycode = (jeecs::input::keycode)(
+                    (uint16_t)jeecs::input::keycode::NP_0 + (key - GLFW_KEY_KP_0));
+                break;
+            case GLFW_KEY_KP_ADD:
+                keycode = jeecs::input::keycode::NP_ADD; break;
+            case GLFW_KEY_KP_SUBTRACT:
+                keycode = jeecs::input::keycode::NP_SUBTRACT; break;
+            case GLFW_KEY_KP_MULTIPLY:
+                keycode = jeecs::input::keycode::NP_MULTIPLY; break;
+            case GLFW_KEY_KP_DIVIDE:
+                keycode = jeecs::input::keycode::NP_DIVIDE; break;
+            case GLFW_KEY_KP_DECIMAL:
+                keycode = jeecs::input::keycode::NP_DECIMAL; break;
+            case GLFW_KEY_KP_ENTER:
+                keycode = jeecs::input::keycode::NP_ENTER; break;
+            case GLFW_KEY_UP:
+                keycode = jeecs::input::keycode::UP; break;
+            case GLFW_KEY_DOWN:
+                keycode = jeecs::input::keycode::DOWN; break;
+            case GLFW_KEY_LEFT:
+                keycode = jeecs::input::keycode::LEFT; break;
+            case GLFW_KEY_RIGHT:
+                keycode = jeecs::input::keycode::RIGHT; break;
+            case GLFW_KEY_F1:
+            case GLFW_KEY_F2:
+            case GLFW_KEY_F3:
+            case GLFW_KEY_F4:
+            case GLFW_KEY_F5:
+            case GLFW_KEY_F6:
+            case GLFW_KEY_F7:
+            case GLFW_KEY_F8:
+            case GLFW_KEY_F9:
+            case GLFW_KEY_F10:
+            case GLFW_KEY_F11:
+            case GLFW_KEY_F12:
+            case GLFW_KEY_F13:
+            case GLFW_KEY_F14:
+            case GLFW_KEY_F15:
+            case GLFW_KEY_F16:
+                keycode = (jeecs::input::keycode)(
+                    (uint16_t)jeecs::input::keycode::F1 + (key - GLFW_KEY_F1));
             default:
-                je_io_update_keystate((jeecs::input::keycode)key, stage); break;
+                if (key >= 0 && key <= 127)
+                    keycode = (jeecs::input::keycode)key;
+                else
+                    return;
+                break;
             }
 
+            je_io_update_keystate(keycode, stage != 0);
         }
 
     public:
@@ -263,7 +329,7 @@ namespace jeecs::graphic
             else
 #endif
                 glfwSwapInterval(0);
-        }
+    }
         virtual void swap_for_opengl() override
         {
             glfwSwapBuffers(_m_windows);
@@ -319,5 +385,5 @@ namespace jeecs::graphic
             return glfwGetWin32Window(_m_windows);
         }
 #endif
-    };
-}
+};
+    }

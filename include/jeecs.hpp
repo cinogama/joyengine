@@ -528,29 +528,111 @@ namespace jeecs
     namespace input
     {
         constexpr size_t MAX_MOUSE_GROUP_COUNT = 16;
-        enum class mousecode
+        constexpr size_t MAX_GAMEPAD_COUNT = 4;
+        constexpr size_t MAX_JOYSTICK_COUNT_PER_GAMEPAD = 2;
+
+        enum class mousecode : uint8_t
         {
-            LEFT, MID, RIGHT,
+            LEFT,
+            MID,
+            RIGHT,
 
-            CUSTOM_0 = 32,
+            CUSTOM_0 = 16,
+            CUSTOM_1,
+            CUSTOM_2,
+            CUSTOM_3,
+            CUSTOM_4,
+            CUSTOM_5,
+            CUSTOM_6,
+            CUSTOM_7,
+            CUSTOM_8,
 
-            _COUNT = 64,
+            _COUNT, //
         };
-        enum class keycode
+        enum class keycode : uint16_t
         {
             UNKNOWN = 0,
+
+            APOSTROPHE = '\'',
+            COMMA = ',',
+            MINUS = '-',
+            PERIOD = '.',
+            SLASH = '/',
 
             A = 'A', B, C, D, E, F, G, H, I, J, K, L,
             M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
             _1 = '1', _2, _3, _4, _5, _6, _7, _8, _9,
-            _0, _ = ' ',
+            _0, 
+            _ = ' ',
 
-            L_SHIFT = 256, L_CTRL, L_ALT, TAB, ENTER,
-            ESC, BACKSPACE,
+            SEMICOLON = ';',
+            EQUAL = '=',
+            LEFT_BRACKET = '[',
+            BACKSLASH = '\\',
+            RIGHT_BRACKET = ']',
+            GRAVE_ACCENT = '`',
 
-            CUSTOM_0 = 512,
+            L_SHIFT = 128,
+            R_SHIFT,
+            L_CTRL,
+            R_CTRL,
+            L_ALT,
+            R_ALT,
+            TAB,
+            ENTER,
+            ESC,
+            BACKSPACE,
 
-            _COUNT = 1024,
+            NP_0, NP_1, NP_2, NP_3, NP_4,
+            NP_5, NP_6, NP_7, NP_8, NP_9,
+            NP_DECIMAL,
+            NP_DIVIDE,
+            NP_MULTIPLY,
+            NP_SUBTRACT,
+            NP_ADD,
+            NP_ENTER,
+
+            UP, DOWN, LEFT, RIGHT,
+
+            F1, F2, F3, F4, F5, F6, F7, F8,
+            F9, F10, F11, F12, F13, F14, F15, F16,
+
+            CUSTOM_0 = 256,
+            CUSTOM_1,
+            CUSTOM_2,
+            CUSTOM_3,
+            CUSTOM_4,
+            CUSTOM_5,
+            CUSTOM_6,
+            CUSTOM_7,
+            CUSTOM_8,
+
+            _COUNT, //
+        };
+        enum class gamepadcode: uint16_t
+        {
+            UP,
+            DOWN,
+            LEFT,
+            RIGHT,
+
+            A,
+            B,
+            X,
+            Y,
+
+            LT,
+            RT,
+            LB,
+            RB,
+            LS,
+            RS,
+
+            SELECT,
+            START,
+            GUIDE,
+
+            _COUNT, //
         };
     }
 
@@ -1676,8 +1758,8 @@ struct jegl_interface_config
     // 不限制帧率请设置为 SIZE_MAX
     size_t          m_fps;
 
-    const char*     m_title;
-    void*           m_userdata;
+    const char* m_title;
+    void* m_userdata;
 };
 
 struct jegl_context_notifier;
@@ -1694,16 +1776,16 @@ struct jegl_context
 
     void*/*std::promise<void>*/ _m_promise;
     frame_job_t                 _m_frame_rend_work;
-    void*                       _m_frame_rend_work_arg;
-    void*                       _m_sync_callback_arg;
+    void* _m_frame_rend_work_arg;
+    void* _m_sync_callback_arg;
 
-    jegl_context_notifier*      _m_thread_notifier;
-    void*                       _m_interface_handle;
+    jegl_context_notifier* _m_thread_notifier;
+    void* _m_interface_handle;
 
-    void*                       m_universe_instance;
+    void* m_universe_instance;
     jeecs::typing::version_t    m_version;
     jegl_interface_config       m_config;
-    jegl_graphic_api*           m_apis;
+    jegl_graphic_api* m_apis;
     void*/*std::atomic_bool*/   m_stop_update;
     userdata_t                  m_userdata;
 };
@@ -1732,7 +1814,7 @@ struct jegl_texture
     // NOTE:
     // * Pixel data is storage from LEFT/BUTTOM to RIGHT/TOP
     // * If texture's m_pixels is nullptr, only create a texture in pipeline.
-    pixel_data_t*   m_pixels;
+    pixel_data_t* m_pixels;
     size_t          m_width;
     size_t          m_height;
     format          m_format;
@@ -1777,20 +1859,20 @@ struct jegl_vertex
     };
 
     float           m_x_min, m_x_max,
-                    m_y_min, m_y_max,
-                    m_z_min, m_z_max;
+        m_y_min, m_y_max,
+        m_z_min, m_z_max;
 
-    const void*     m_vertexs;
+    const void* m_vertexs;
     size_t          m_vertex_length;
     const uint32_t* m_indexs;
     size_t          m_index_count;
     const data_layout*
-                    m_formats;
+        m_formats;
     size_t          m_format_count;
     size_t          m_data_size_per_point;
     type            m_type;
     const bone_data**
-                    m_bones;
+        m_bones;
     size_t          m_bone_count;
 };
 
@@ -1819,7 +1901,7 @@ struct jegl_shader
         wrap_mode   m_vwrap;
         uint32_t    m_sampler_id;   // Used for DX11 & HLSL generation
         uint64_t    m_pass_id_count;
-        uint32_t*   m_pass_ids;     // Used for GL3 & GLSL generation
+        uint32_t* m_pass_ids;     // Used for GL3 & GLSL generation
     };
 
     enum uniform_type
@@ -1947,16 +2029,16 @@ struct jegl_shader
     const char* m_fragment_hlsl_src;
 
     size_t                      m_vertex_spirv_count;
-    const spir_v_code_t*        m_vertex_spirv_codes;
+    const spir_v_code_t* m_vertex_spirv_codes;
 
     size_t                      m_fragment_spirv_count;
-    const spir_v_code_t*        m_fragment_spirv_codes;
+    const spir_v_code_t* m_fragment_spirv_codes;
 
     size_t                      m_vertex_in_count;
-    vertex_in_variables*        m_vertex_in;
+    vertex_in_variables* m_vertex_in;
 
-    unifrom_variables*          m_custom_uniforms;
-    uniform_blocks*             m_custom_uniform_blocks;
+    unifrom_variables* m_custom_uniforms;
+    uniform_blocks* m_custom_uniform_blocks;
     builtin_uniform_location    m_builtin_uniforms;
 
     bool                m_enable_to_shared;
@@ -1965,7 +2047,7 @@ struct jegl_shader
     blend_method        m_blend_src_mode, m_blend_dst_mode;
     cull_mode           m_cull_mode;
 
-    sampler_method*     m_sampler_methods;
+    sampler_method* m_sampler_methods;
     size_t              m_sampler_count;
 };
 
@@ -1977,7 +2059,7 @@ struct jegl_frame_buffer
 {
     // In fact, attachment_t is jeecs::basic::resource<jeecs::graphic::texture>
     typedef struct attachment_t attachment_t;
-    attachment_t*   m_output_attachments;
+    attachment_t* m_output_attachments;
     size_t          m_attachment_count;
     size_t          m_width;
     size_t          m_height;
@@ -2420,9 +2502,9 @@ jegl_create_vertex [基本接口]
 */
 JE_API jegl_resource* jegl_create_vertex(
     jegl_vertex::type               type,
-    const void*                     datas,
+    const void* datas,
     size_t                          data_length,
-    const uint32_t*                 indexs,
+    const uint32_t* indexs,
     size_t                          index_count,
     const jegl_vertex::data_layout* format,
     size_t                          format_count);
@@ -7268,8 +7350,8 @@ namespace jeecs
         }
         inline void transform(
             float(*out_result)[4],
-            const math::vec3& position, 
-            const math::quat& rotation, 
+            const math::vec3& position,
+            const math::quat& rotation,
             const math::vec3& scale)
         {
             transform((float*)out_result, position, rotation, scale);
@@ -7348,8 +7430,8 @@ namespace jeecs
                         {
                             new_texture->pix(ix, iy).set(
                                 src->pix(ix + x, iy + y).get());
-                        }
-                    }
+            }
+        }
 #else
                     auto color_depth = (int)new_texture_format;
                     auto* dst_pixels = new_texture->resource()->m_raw_texture_data->m_pixels;
@@ -7368,9 +7450,9 @@ namespace jeecs
 #endif
 
                     return new_texture;
-                }
+    }
                 return nullptr;
-            }
+}
 
             class pixel
             {

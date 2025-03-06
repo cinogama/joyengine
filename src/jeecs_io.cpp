@@ -1,36 +1,50 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
+#include <optional>
+
 namespace jeecs::input
 {
-    struct _je_mouse_state
+    struct _je_basic_io_state
     {
-        bool    _key_states[(size_t)mousecode::_COUNT];
-        int     _pos_x;
-        int     _pos_y;
-        float   _wheel_x;
-        float   _wheel_y;
-    };
+        struct _je_mouse_state
+        {
+            bool    _key_states[(size_t)mousecode::_COUNT];
+            int     _pos_x;
+            int     _pos_y;
+            float   _wheel_x;
+            float   _wheel_y;
+        };
+        struct _je_gamepad_state
+        {
+            bool    _key_states[(size_t)gamepadcode::_COUNT];
+            math::vec2
+                    _stick_states[MAX_JOYSTICK_COUNT_PER_GAMEPAD];
+        };
 
-    struct _je_io_state
-    {
         bool    _key_states[(size_t)keycode::_COUNT];
-        _je_mouse_state     _mouses[MAX_MOUSE_GROUP_COUNT];
+
+        _je_mouse_state _mouses[MAX_MOUSE_GROUP_COUNT];
+        _je_gamepad_state _gamepads[MAX_GAMEPAD_COUNT];
+
         int     _windows_width;
         int     _windows_height;
 
         bool    _shoudle_lock_mouse;
-        int     _mouse_lock_place_x, _mouse_lock_place_y;
+        int     _mouse_lock_place_x, 
+                _mouse_lock_place_y;
 
         bool    _should_update_windowsize;
-        int     _new_windows_width, _new_windows_height;
+        int     _new_windows_width, 
+                _new_windows_height;
 
-        bool            _should_update_windowtitle;
-        std::string     _new_windowtitle;
+        bool    _should_update_windowtitle;
+        std::string     
+                _new_windowtitle;
     };
 }
 
-jeecs::input::_je_io_state _state = {};
+jeecs::input::_je_basic_io_state _state = {};
 
 void je_io_update_keystate(jeecs::input::keycode keycode, bool keydown)
 {
