@@ -9,6 +9,7 @@ import builtin::editor::gui::edit_forms::export_project;
 import builtin::editor::gui::inputmgr;
 import builtin::editor::gui::style;
 import builtin::editor::gui::scripteditor;
+import builtin::editor::main;
 
 using je::gui;
 using jeapi::gui::style;

@@ -7237,6 +7237,43 @@ namespace jeecs
 
             return math::vec4(result[0], result[1], result[2], result[3]);
         }
+
+        inline void transform(
+            float* out_result,
+            const math::vec3& position,
+            const math::quat& rotation,
+            const math::vec3& scale)
+        {
+            float temp_mat_trans[4][4] = {};
+            temp_mat_trans[0][0] =
+                temp_mat_trans[1][1] =
+                temp_mat_trans[2][2] =
+                temp_mat_trans[3][3] = 1.0f;
+            temp_mat_trans[3][0] = position.x;
+            temp_mat_trans[3][1] = position.y;
+            temp_mat_trans[3][2] = position.z;
+
+            float temp_mat_rotation[4][4];
+            rotation.create_matrix(temp_mat_rotation);
+
+            float tmp_rot_trans_mat[4][4];
+            math::mat4xmat4(tmp_rot_trans_mat, temp_mat_trans, temp_mat_rotation);
+
+            float temp_mat_scale[4][4] = {};
+            temp_mat_scale[0][0] = scale.x;
+            temp_mat_scale[1][1] = scale.y;
+            temp_mat_scale[2][2] = scale.z;
+            temp_mat_scale[3][3] = 1.0f;
+            math::mat4xmat4(out_result, (const float*)tmp_rot_trans_mat, (const float*)temp_mat_scale);
+        }
+        inline void transform(
+            float(*out_result)[4],
+            const math::vec3& position, 
+            const math::quat& rotation, 
+            const math::vec3& scale)
+        {
+            transform((float*)out_result, position, rotation, scale);
+        }
     }
 
     namespace graphic

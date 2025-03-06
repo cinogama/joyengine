@@ -4,11 +4,14 @@ import je::gui;
 import pkg::image;
 import pkg::fsys;
 import pkg::iterator;
+import pkg::interface;
+import pkg::makenew;
 
 import tools;
 import imagescripts;
 
 import builtin::editor::gui::inputmgr;
+import builtin::editor::environment::main;
 
 using je;
 using je::gui;

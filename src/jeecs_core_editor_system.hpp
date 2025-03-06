@@ -1253,17 +1253,7 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 
                         auto* builtin_uniform = &shader->m_raw_shader_data->m_builtin_uniforms;
 
-                        MAT4_GIZMO_MV[0][0] = scale.x;
-                        MAT4_GIZMO_MV[1][1] = scale.y;
-                        MAT4_GIZMO_MV[2][2] = scale.z;
-                        MAT4_GIZMO_MV[3][3] = 1.0f;
-
-                        MAT4_GIZMO_MV[3][0] = postion.x;
-                        MAT4_GIZMO_MV[3][1] = postion.y;
-                        MAT4_GIZMO_MV[3][2] = postion.z;
-
-                        rotation.create_matrix(MAT4_GIZMO_MVP);
-                        math::mat4xmat4(MAT4_GIZMO_M, MAT4_GIZMO_MV, MAT4_GIZMO_MVP);
+                        math::transform(MAT4_GIZMO_M, postion, rotation, scale);
 
                         math::mat4xmat4(MAT4_GIZMO_MVP, gizmo_context.m_projection->view_projection, MAT4_GIZMO_M);
                         math::mat4xmat4(MAT4_GIZMO_MV, gizmo_context.m_projection->view, MAT4_GIZMO_M);

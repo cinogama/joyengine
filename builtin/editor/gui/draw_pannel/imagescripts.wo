@@ -5,6 +5,8 @@ import pkg::fsys;
 import pkg::worst;
 import pkg::try;
 
+import builtin::editor::project::main;
+
 namespace editor::gui::drawpannel
 {
     // 此处注册一个虚拟文件，作为图像处理函数的工具库

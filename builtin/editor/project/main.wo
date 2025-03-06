@@ -15,6 +15,7 @@ import builtin::editor::cpp::main;
 import builtin::editor::tools::script_manager;
 import builtin::editor::gui::draw_pannel::main;
 import builtin::editor::project::towoomgr;
+import builtin::editor::gui::edit_forms;
 
 import je::towoo;
 

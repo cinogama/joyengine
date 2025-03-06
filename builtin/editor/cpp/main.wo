@@ -10,7 +10,9 @@ import pkg::process;
 import pkg::fsys;
 import pkg::thread;
 import pkg::try;
+import pkg::makenew;
 
+import builtin::editor::project::main;
 import builtin::editor::tools::varify;
 
 using je::gui;

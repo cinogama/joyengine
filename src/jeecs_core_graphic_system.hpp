@@ -246,6 +246,7 @@ public let frag =
         {
             float mat_inv_rotation[4][4];
             translation.world_rotation.create_inv_matrix(mat_inv_rotation);
+
             float mat_inv_position[4][4] = {};
             mat_inv_position[0][0] = mat_inv_position[1][1] = mat_inv_position[2][2] = mat_inv_position[3][3] = 1.0f;
             mat_inv_position[3][0] = -translation.world_position.x;

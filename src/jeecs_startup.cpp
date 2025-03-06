@@ -349,7 +349,8 @@ bool je_main_script_entry()
     {
         // Cache loaded, skip,
     }
-    else if ((vmm = _jewo_open_file_to_compile_vm("@/builtin/editor/main.wo")) != nullptr)
+    else if ((vmm = _jewo_open_file_to_compile_vm(
+        (std::string(jeecs_file_get_host_path()) + "/builtin/editor/main.wo").c_str())) != nullptr)
     {
         size_t binary_length;
         void* buffer = wo_dump_binary(vmm, true, &binary_length);

@@ -224,27 +224,11 @@ namespace jeecs
             selector.exec(
                 [](Translation& trans)
                 {
-                    float temp_mat_trans[4][4] = {};
-                    temp_mat_trans[0][0] =
-                        temp_mat_trans[1][1] =
-                        temp_mat_trans[2][2] =
-                        temp_mat_trans[3][3] = 1.0f;
-                    temp_mat_trans[3][0] = trans.world_position.x;
-                    temp_mat_trans[3][1] = trans.world_position.y;
-                    temp_mat_trans[3][2] = trans.world_position.z;
-
-                    float temp_mat_rotation[4][4];
-                    trans.world_rotation.create_matrix(temp_mat_rotation);
-
-                    float tmp_rot_trans_mat[4][4];
-                    math::mat4xmat4(tmp_rot_trans_mat, temp_mat_trans, temp_mat_rotation);
-
-                    float temp_mat_scale[4][4] = {};
-                    temp_mat_scale[0][0] = trans.local_scale.x;
-                    temp_mat_scale[1][1] = trans.local_scale.y;
-                    temp_mat_scale[2][2] = trans.local_scale.z;
-                    temp_mat_scale[3][3] = 1.0f;
-                    math::mat4xmat4(trans.object2world, tmp_rot_trans_mat, temp_mat_scale);
+                    math::transform(
+                        trans.object2world,
+                        trans.world_position,
+                        trans.world_rotation,
+                        trans.local_scale);
                 });
         }
     };

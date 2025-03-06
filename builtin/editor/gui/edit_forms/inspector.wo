@@ -2,11 +2,15 @@
 // 用于显示和编辑选选中实体的组件
 
 import je::gui;
+
+import pkg::try;
+
 import builtin::api::gui::file;
 import builtin::editor::gui::form::input;
 import builtin::editor::gui::form::ask;
 import builtin::editor::gui::type_edit_widget_mgr;
 import builtin::editor::gui::context_menu;
+import builtin::editor::gui::main;
 
 using je::gui;
 
@@ -147,6 +151,22 @@ namespace editor::gui::edit_forms
         return shader_operation;
     }
 
+    namespace prefab_data_cache
+    {
+        let cached_prefab_data = {}mut: map<string, option<dict<string, dynamic>>>;
+        public func fetch_or_update(path: string)
+        {
+            return cached_prefab_data->get_or_set_do(path, func()
+                {
+                    return jeapi::prefab_manager::load_prefab(path);
+                });
+        }
+        public func reset(path: string)
+        {
+            do cached_prefab_data->remove(path);
+        }
+    }
+
     public func show_inspector(context: EditorContext, open: std::mutable<bool>)
     {
         context->dosth_at_editing_entity(func(current_entity_may_none){
@@ -185,12 +205,19 @@ namespace editor::gui::edit_forms
                                 Text(F"区块/实体体积: {chunk_size}/{entity_size}={entity_count}");
 
                                 let prefab = cur_e->towoo::get_component:<Editor::Prefab>;
+                                let mut components_data = option::none: option<dict<string, dict<string, string>>>;
+
                                 if (prefab->is_value)
                                 {
+                                    let p = prefab->unwrap.path->get;
+                                    components_data = prefab_data_cache::fetch_or_update(p)
+                                        =>> \d = d->get("components");
+                                        =>> \d = d->trycast:<dict<string, dict<string, string>>>;
+                                        ;
+
                                     let prefab_menu = func(){
                                         if (MenuItem("更新到预设"))
                                         {
-                                            let p = prefab->unwrap.path->get;
                                             jeapi::gui::form::ask("更新预设体？", F"是否确认覆盖并应用全部'{p}'的预设体？",
                                                 func (op)
                                                 {
@@ -280,7 +307,8 @@ namespace editor::gui::edit_forms
                                         for (let (ctype, component) : components)
                                         {
                                             // 嘿，我知道这个长长的东西很诡异，但是这个的功能只是把类型名的开头去掉，剩下的部分中间用"::"连接拼起来
-                                            if (TreeNodeEx(ctype->name->split("::")->sub(1)->reduce(\l, r= l + "::" + r;)->or_do(\=ctype->name;),
+                                            let component_name = ctype->name;
+                                            if (TreeNodeEx(component_name->split("::")->sub(1)->reduce(\l, r= l + "::" + r;)->or_do(\= component_name;),
                                                 tree_attrib + TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen))
                                             {
                                                 jeapi::gui::context_menu(func(){
@@ -318,6 +346,18 @@ namespace editor::gui::edit_forms
                                                 });
 
                                                 Separator();
+
+                                                let component_data = components_data
+                                                    =>> \d = d->get(component_name);
+                                                    ;
+
+                                                if (component_data->is_none)
+                                                {
+                                                    PushStyleColor(ImGuiCol::ImGuiCol_Text, (0, 200, 0, 255));
+                                                    Text("<预设体不包含这个组件>");
+                                                    PopStyleColor(1);
+                                                }
+
                                                 for (let (mname, mtype, mvalue): component->get_members)
                                                 {
                                                     do InvisibleButton(F"##{mname}$PADDING", (2., 1.));
@@ -325,6 +365,55 @@ namespace editor::gui::edit_forms
                                                     BeginGroup();
 
                                                     TextDisabled(mname);
+
+                                                    match (component_data
+                                                        =>> \d = d->get(mname);)
+                                                    {
+                                                    value(this_component_prefab_data)?
+                                                    {
+                                                        // let component_data = prefab_data_dict->;
+                                                        match (je::towoo::unsafe::dynamic_parser::saving(mtype, mvalue))
+                                                        {
+                                                        value(real_data)?
+                                                        {
+                                                            if (real_data != this_component_prefab_data)
+                                                            {
+                                                                SameLine();
+
+                                                                let id = F"##prefab_modified_sign_{component_name}{mname}";
+                                                                PushIDStr(id);
+                                                                
+                                                                PushStyleColor(ImGuiCol::ImGuiCol_Text, (200, 0, 0, 255));
+                                                                Text("（有变动）");
+                                                                PopStyleColor(1);
+                                                                
+                                                                if (IsItemHovered())
+                                                                {
+                                                                    BeginTooltip();
+                                                                    TextDisabled("预设体的值为：");
+                                                                    TextDisabled("  " + real_data);
+                                                                    EndTooltip();
+                                                                }
+
+                                                                PopID();
+
+                                                                if (BeginPopupContextItemLabel(id))
+                                                                {
+                                                                    if (MenuItem("恢复到预设"))
+                                                                    {
+                                                                        do je::towoo::unsafe::dynamic_parser::restoring(
+                                                                                mtype, mvalue, this_component_prefab_data);   
+                                                                    }
+
+                                                                    EndPopup();
+                                                                }                                                               
+                                                            }
+                                                        }
+                                                        none?;
+                                                        }
+                                                    }
+                                                    none?;
+                                                    }
             
                                                     if (!je::towoo::unsafe::dynamic_parser::edit(
                                                         mtype, mvalue, mname + "##" + current_entity_chunk_info))
@@ -339,6 +428,22 @@ namespace editor::gui::edit_forms
                                             }
                                         }
                                         
+                                        match (components_data)
+                                        {
+                                        value(components_data_dict)?
+                                            for (let (prefab_component_name, _) : components_data_dict)
+                                            {
+                                                if (components->find_if(\(t, _) = t->name != prefab_component_name;)->is_none)
+                                                {
+                                                    PushStyleColor(ImGuiCol::ImGuiCol_Text, (200, 0, 0, 255));
+                                                    Text(F"<组件 {prefab_component_name} 被移除>");
+                                                    PopStyleColor(1);
+                                                }
+                                            }
+                                        none?;
+                                        }
+                                        
+
                                         EndGroup();
                                         TreePop();
                                     }
