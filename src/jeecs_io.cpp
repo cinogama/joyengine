@@ -202,7 +202,6 @@ je_io_gamepad_handle_t je_io_create_gamepad(const char* name_may_null)
         }
     } while (0);
 
-    jeecs::debug::loginfo("Gamepad virtual device: %p created.", gamepad);
     gamepad->_enabled = true;
 
     if (name_may_null != nullptr)
@@ -225,6 +224,7 @@ je_io_gamepad_handle_t je_io_create_gamepad(const char* name_may_null)
         stick._deadzone = 0.f;
     }
 
+    jeecs::debug::loginfo("Gamepad device: '%s'(%p) created.", gamepad->_name.c_str(), gamepad);
     return gamepad;
 }
 void je_io_close_gamepad(je_io_gamepad_handle_t gamepad)
@@ -234,9 +234,11 @@ void je_io_close_gamepad(je_io_gamepad_handle_t gamepad)
         jeecs::debug::logerr("Gamepad: `%p` is already closed.", gamepad);
         return;
     }
+    
+    jeecs::debug::loginfo("Gamepad virtual device: '%s'(%p) closed.",
+        gamepad->_name.c_str(), gamepad);
 
     gamepad->_enabled = false;
-    jeecs::debug::loginfo("Gamepad virtual device: %p closed.", gamepad);
 
     std::lock_guard g(_state._gamepads_mx);
     _state._gamepads_free_slot.push(gamepad);
