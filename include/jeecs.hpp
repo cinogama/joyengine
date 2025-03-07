@@ -103,7 +103,7 @@
 #define JEParseToScriptType     JEParseToScriptType
 
 #define PreUpdate           PreUpdate       // * 用户预更新，
-#define StateUpdate         StateUpdate     // 用于将初始状态给予各个组件 (Animation)
+#define StateUpdate         StateUpdate     // 用于将初始状态给予各个组件 (Animation KeyboardVirtualGamepad)
 #define Update              Update          // * 用户更新
 #define TransformUpdate     TransformUpdate // 用于更新物体的变换和关系 (Transform)
 #define PhysicsUpdate       PhysicsUpdate   // 用于物理引擎的状态更新 (PhysicsUpdate)
@@ -3449,23 +3449,113 @@ je_io_fetch_update_window_title [基本接口]
 */
 JE_API bool je_io_fetch_update_window_title(const char** out_title);
 
+/*
+je_io_gamepad_handle_t [类型]
+指示虚拟手柄实例
+*/
 typedef struct _je_gamepad_state* je_io_gamepad_handle_t;
 
-JE_API je_io_gamepad_handle_t je_io_create_gamepad();
+/*
+je_io_create_gamepad [基本接口]
+创建一个虚拟手柄实例
+    * name 用于以可读形式分辨不同的控制器设备，如果为 nullptr，则分配一个默认的名称
+*/
+JE_API je_io_gamepad_handle_t je_io_create_gamepad(const char* name_may_null);
+/*
+je_io_close_gamepad [基本接口]
+关闭一个虚拟手柄实例
+*/
 JE_API void je_io_close_gamepad(je_io_gamepad_handle_t gamepad);
 
-JE_API size_t je_io_gamepad_get_count();
-JE_API je_io_gamepad_handle_t je_io_gamepad_get(size_t idx);
+/*
+je_io_gamepad_name [基本接口]
+获取指定虚拟手柄的名称
+    * 名称在创建时指定，用于以可读形式分辨不同的控制器设备
+参见：
+    je_io_create_gamepad
+*/
+JE_API const char* je_io_gamepad_name(je_io_gamepad_handle_t gamepad);
 
+/*
+je_io_gamepad_get [基本接口]
+获取所有虚拟手柄的句柄
+    * count 用于指示传入的out_gamepads可容纳的最大数量，如果实际手柄数量大于count，
+        则只返回前count个句柄；如果实际手柄数量小于count，则返回实际数量。
+    * 作为特例，当 count 为 0 时，out_gamepads 可以为 nullptr，此时函数返回实际手柄数量。
+*/
+JE_API size_t je_io_gamepad_get(size_t count, je_io_gamepad_handle_t* out_gamepads);
+
+/*
+je_io_gamepad_check_present [基本接口]
+检查指定的虚拟手柄，其对应的实际设备是否存在
+    * 虚拟手柄和输入设备的对应关系通过 je_io_create_gamepad 构建，
+        其不一定是实际的物理游戏手柄；例如，可以将键盘按键的按动情况
+        映射到虚拟手柄上。当 je_io_close_gamepad 调用时，虚拟手柄实例
+        会被销毁，此时 je_io_gamepad_check_present 返回 false。
+参见：
+    je_io_create_gamepad
+    je_io_close_gamepad
+*/
+JE_API bool je_io_gamepad_check_present(je_io_gamepad_handle_t gamepad);
+/*
+je_io_gamepad_get_button_down [基本接口]
+获取指定虚拟手柄的指定按键是否被按下
+    * code 是一个枚举值，用于指示按键的类型
+    * 若指定的按键不存在，则始终返回 false
+    * 如果手柄已经被断开（je_io_close_gamepad），调用此接口依然是合法的，但返回值始终是 false
+参见：
+    je_io_close_gamepad
+*/
 JE_API bool je_io_gamepad_get_button_down(
     je_io_gamepad_handle_t gamepad, jeecs::input::gamepadcode code);
+/*
+je_io_gamepad_update_button_state [基本接口]
+更新指定的虚拟手柄按键状态，可以被 je_io_gamepad_get_button_down 获取
+    * code 是一个枚举值，用于指示按键的类型
+    * 不允许对已经断开（je_io_close_gamepad）的手柄进行此操作
+    * 如果输入坐标的模长大于1，坐标将被归一化
+参见：
+    je_io_gamepad_get_button_down
+    je_io_close_gamepad
+*/
 JE_API void je_io_gamepad_update_button_state(
     je_io_gamepad_handle_t gamepad, jeecs::input::gamepadcode code, bool down);
 
+/*
+je_io_gamepad_get_stick [基本接口]
+获取指定虚拟手柄的指定摇杆的坐标
+    * stickid 是一个枚举值，用于指示摇杆的类型
+    * out_x 和 out_y 用于接收摇杆的坐标，坐标的模长取值范围是 [0, 1]
+    * 如果手柄已经被断开（je_io_close_gamepad），调用此接口依然是合法的，但获取到的坐标都将是 0
+    * 获取扳机键（LT, RT）时，请使用 x 值，y 值始终为 0
+参见：
+    je_io_close_gamepad
+*/
 JE_API void je_io_gamepad_get_stick(
     je_io_gamepad_handle_t gamepad, jeecs::input::joystickcode stickid, float* out_x, float* out_y);
+/*
+je_io_gamepad_update_stick [基本接口]
+更新指定虚拟手柄的指定摇杆的坐标
+    * stickid 是一个枚举值，用于指示摇杆的类型
+    * x 和 y 是摇杆的坐标，应当确保坐标的模长不大于1
+    * 不允许对已经断开（je_io_close_gamepad）的手柄进行此操作
+    * 获取扳机键（LT, RT）时，请使用 x 值，并保持y 值始终为 0
+    * 当摇杆向上拨动时，y 值应当为正数；当摇杆向右拨动时，x 值应当为正数；
+    * 当扳机键按下时，x 值应当为正数
+参见：
+    je_io_close_gamepad
+*/
 JE_API void je_io_gamepad_update_stick(
     je_io_gamepad_handle_t gamepad, jeecs::input::joystickcode stickid, float x, float y);
+
+/*
+je_io_gamepad_stick_set_deadzone [基本接口]
+设置指定虚拟手柄的指定摇杆的死区
+    * stickid 是一个枚举值，用于指示摇杆的类型
+    * 当设置摇杆的坐标（je_io_gamepad_update_stick）时，如果坐标的模长小于死区，则坐标将被视为0
+*/
+JE_API void je_io_gamepad_stick_set_deadzone(
+    je_io_gamepad_handle_t gamepad, jeecs::input::joystickcode stickid, float deadzone);
 
 // Library / Module loader
 
@@ -9958,7 +10048,6 @@ namespace jeecs
             }
         };
     }
-
     namespace Audio
     {
         struct Source
@@ -10395,7 +10484,6 @@ namespace jeecs
             }
         };
     }
-
     namespace entry
     {
         inline void module_entry(jeecs::typing::type_unregister_guard* guard)
@@ -10615,7 +10703,6 @@ namespace UserInterface::Origin
             guard->unregister_all_types();
         }
     }
-
     namespace input
     {
         inline bool keydown(keycode key)

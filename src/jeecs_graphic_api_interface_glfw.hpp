@@ -163,9 +163,21 @@ namespace jeecs::graphic
         class glfw_gamepad_management
         {
             std::unordered_map<int, je_io_gamepad_handle_t> _connected_gamepads;
-            std::atomic<glfw*> _gamepad_manage_glfw_context = {};
+            std::atomic<glfw*> _gamepad_manage_glfw_context;
 
+            JECS_DISABLE_MOVE_AND_COPY(glfw_gamepad_management);
         public:
+            glfw_gamepad_management()
+                : _connected_gamepads{}
+                , _gamepad_manage_glfw_context{}
+            {
+            }
+            ~glfw_gamepad_management()
+            {
+                for (auto& [_, vgamepad] : _connected_gamepads)
+                    je_io_close_gamepad(vgamepad);
+            }
+
             void detach(glfw* host)
             {
                 auto* manager = _gamepad_manage_glfw_context.load();
@@ -208,12 +220,12 @@ namespace jeecs::graphic
                                 vgamepad, 
                                 input::joystickcode::L, 
                                 state.axes[GLFW_GAMEPAD_AXIS_LEFT_X],
-                                state.axes[GLFW_GAMEPAD_AXIS_LEFT_Y]);
+                                -state.axes[GLFW_GAMEPAD_AXIS_LEFT_Y]);
                             je_io_gamepad_update_stick(
                                 vgamepad,
                                 input::joystickcode::R,
                                 state.axes[GLFW_GAMEPAD_AXIS_RIGHT_X],
-                                state.axes[GLFW_GAMEPAD_AXIS_RIGHT_Y]);
+                                -state.axes[GLFW_GAMEPAD_AXIS_RIGHT_Y]);
                             je_io_gamepad_update_stick(
                                 vgamepad,
                                 input::joystickcode::LT,
@@ -261,7 +273,7 @@ namespace jeecs::graphic
             void connect(int id)
             {
                 assert(_connected_gamepads.find(id) == _connected_gamepads.end());
-                _connected_gamepads[id] = je_io_create_gamepad();
+                _connected_gamepads[id] = je_io_create_gamepad(glfwGetGamepadName(id));
             }
             void disconnect(int id)
             {

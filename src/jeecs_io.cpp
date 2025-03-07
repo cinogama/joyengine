@@ -16,10 +16,17 @@ struct _je_mouse_state
 };
 struct _je_gamepad_state
 {
-    bool        _enabled;
-    bool        _key_states[(uint8_t)jeecs::input::gamepadcode::_COUNT];
-    jeecs::math::vec2  
-                _stick_states[(uint8_t)jeecs::input::joystickcode::_COUNT];
+    bool            _enabled;
+    std::string     _name;
+
+    bool            _key_states[(uint8_t)jeecs::input::gamepadcode::_COUNT];
+
+    struct __je_gamepad_stick_state
+    {
+        jeecs::math::vec2 _position;
+        float             _deadzone;
+    };
+    __je_gamepad_stick_state _stick_states[(uint8_t)jeecs::input::joystickcode::_COUNT];
 };
 
 struct _je_basic_io_state
@@ -177,7 +184,7 @@ void je_io_update_mouse_state(size_t group, jeecs::input::mousecode key, bool ke
         _state._mouses[group]._key_states[(size_t)key] = keydown;
 }
 
-je_io_gamepad_handle_t je_io_create_gamepad()
+je_io_gamepad_handle_t je_io_create_gamepad(const char* name_may_null)
 {
     std::lock_guard g(_state._gamepads_mx);
     
@@ -198,6 +205,26 @@ je_io_gamepad_handle_t je_io_create_gamepad()
     jeecs::debug::loginfo("Gamepad virtual device: %p created.", gamepad);
     gamepad->_enabled = true;
 
+    if (name_may_null != nullptr)
+        gamepad->_name = name_may_null;
+    else
+    {
+        char name[48];
+        sprintf(name, "Default virtual gamepad %p", gamepad);
+
+        gamepad->_name = name;
+    }
+
+    for (size_t i = 0; i < (uint8_t)jeecs::input::gamepadcode::_COUNT; ++i)
+        gamepad->_key_states[i] = false;
+
+    for (size_t i = 0; i < (uint8_t)jeecs::input::joystickcode::_COUNT; ++i)
+    {
+        auto& stick = gamepad->_stick_states[i];
+        stick._position = jeecs::math::vec2();
+        stick._deadzone = 0.f;
+    }
+
     return gamepad;
 }
 void je_io_close_gamepad(je_io_gamepad_handle_t gamepad)
@@ -214,24 +241,31 @@ void je_io_close_gamepad(je_io_gamepad_handle_t gamepad)
     std::lock_guard g(_state._gamepads_mx);
     _state._gamepads_free_slot.push(gamepad);
 }
-
-size_t je_io_gamepad_get_count()
+const char* je_io_gamepad_name(je_io_gamepad_handle_t gamepad)
 {
-    std::shared_lock g(_state._gamepads_mx);
-    return _state._gamepads.size();
+    return gamepad->_name.c_str();
 }
-je_io_gamepad_handle_t je_io_gamepad_get(size_t idx)
+size_t je_io_gamepad_get(size_t count, je_io_gamepad_handle_t* out_gamepads)
 {
     std::shared_lock g(_state._gamepads_mx);
-    if (idx < _state._gamepads.size())
+    
+    if (count == 0)
+        return _state._gamepads.size();
+
+    auto fetch_count = std::min(count, _state._gamepads.size());
+    auto iter = _state._gamepads.begin();
+
+    for (size_t i = 0; i < fetch_count; ++i)
     {
-        auto it = _state._gamepads.begin();
-        std::advance(it, idx);
-        return &(*it);
+        out_gamepads[i] = &(*iter);
+        ++iter;
     }
-    return nullptr;
+    return fetch_count;
 }
-
+bool je_io_gamepad_check_present(je_io_gamepad_handle_t gamepad)
+{
+    return gamepad->_enabled;
+}
 bool je_io_gamepad_get_button_down(
     je_io_gamepad_handle_t gamepad, jeecs::input::gamepadcode code)
 {
@@ -260,9 +294,9 @@ void je_io_gamepad_get_stick(
         *out_y = 0.f;
         return;
     }
-    auto& position = gamepad->_stick_states[(uint8_t)stickid];
-    *out_x = position.x;
-    *out_y = position.y;
+    auto& stick = gamepad->_stick_states[(uint8_t)stickid];
+    *out_x = stick._position.x;
+    *out_y = stick._position.y;
 }
 void je_io_gamepad_update_stick(
     je_io_gamepad_handle_t gamepad, jeecs::input::joystickcode stickid, float x, float y)
@@ -272,5 +306,23 @@ void je_io_gamepad_update_stick(
         jeecs::debug::logerr("Cannot update for closed gamepad: %p.", gamepad);
         return;
     }
-    gamepad->_stick_states[(uint8_t)stickid] = jeecs::math::vec2(x, y).unit();
+    jeecs::math::vec2 stick_position(x, y);
+    auto& stick = gamepad->_stick_states[(uint8_t)stickid];
+
+    auto length = stick_position.length();
+    if (stick_position.length() < stick._deadzone)
+        stick_position = jeecs::math::vec2(0.f, 0.f);
+    else
+        stick._position = stick_position / std::max(length, 1.f);
+}
+
+void je_io_gamepad_stick_set_deadzone(
+    je_io_gamepad_handle_t gamepad, jeecs::input::joystickcode stickid, float deadzone)
+{
+    if (!gamepad->_enabled)
+    {
+        jeecs::debug::logerr("Cannot update for closed gamepad: %p.", gamepad);
+        return;
+    }
+    gamepad->_stick_states[(uint8_t)stickid]._deadzone = deadzone;
 }
