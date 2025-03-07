@@ -160,6 +160,9 @@ namespace jeecs::graphic
             je_io_update_key_state(keycode, stage != 0);
         }
         
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WEBGL
+        // No gamepad support for webgl.
+#else
         class glfw_gamepad_management
         {
             std::unordered_map<int, je_io_gamepad_handle_t> _connected_gamepads;
@@ -293,6 +296,7 @@ namespace jeecs::graphic
             else if (event == GLFW_DISCONNECTED)
                 _gamepad_manager.disconnect(jid);
         }
+#endif
     public:
         glfw(interface_type type)
         {
@@ -341,7 +345,11 @@ namespace jeecs::graphic
         }
         ~glfw()
         {
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WEBGL
+            // Do nothing.
+#else
             _gamepad_manager.detach(this);
+#endif
         }
 
         virtual void create_interface(jegl_context* thread, const jegl_interface_config* config) override
@@ -486,7 +494,12 @@ namespace jeecs::graphic
                 glfwSetWindowTitle(_m_windows, title);
 
             glfwPollEvents();
+
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WEBGL
+            // Do nothing.
+#else
             _gamepad_manager.update(this);
+#endif
 
             if (glfwWindowShouldClose(_m_windows) == GLFW_TRUE)
             {
