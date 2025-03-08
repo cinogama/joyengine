@@ -327,7 +327,7 @@ WO_API wo_api wojeapi_apply_camera_framebuf_setting(wo_vm vm, wo_value args)
                 jegl_texture::format::RGBA,
                 jegl_texture::format::DEPTH,
             }
-        );
+            );
     }
     else
         jeecs::debug::logfatal("No RendToFramebuffer in specify entity when 'wojeapi_apply_camera_framebuf_setting'.");
@@ -593,7 +593,7 @@ WO_API wo_api wojeapi_get_all_entities_from_world(wo_vm vm, wo_value args)
 
     auto required_components_len = wo_lengthof(args + 1);
     std::vector<jeecs::typing::typeid_t> required_components(required_components_len);
-    
+
     for (size_t i = 0; i < required_components_len; ++i)
     {
         wo_arr_get(elem, args + 1, i);
@@ -978,7 +978,7 @@ WO_API wo_api wojeapi_input_window_size(wo_vm vm, wo_value args)
 
     auto winsz = jeecs::input::windowsize();
 
-    wo_value result = s + 0; 
+    wo_value result = s + 0;
     wo_value elem = s + 1;
 
     wo_set_struct(result, vm, 2);
@@ -1028,6 +1028,85 @@ WO_API wo_api wojeapi_input_mouse_view_pos(wo_vm vm, wo_value args)
 
     return wo_ret_val(vm, result);
 }
+
+WO_API wo_api wojeapi_input_gamepad_button(wo_vm vm, wo_value args)
+{
+    jeecs::input::gamepad* gamepad =
+        (jeecs::input::gamepad*)wo_pointer(args + 0);
+    jeecs::input::gamepadcode kcode =
+        (jeecs::input::gamepadcode)wo_int(args + 1);
+
+    return wo_ret_bool(vm, gamepad->button(kcode));
+}
+WO_API wo_api wojeapi_input_gamepad_axis(wo_vm vm, wo_value args)
+{
+    wo_value s = wo_reserve_stack(vm, 2, &args);
+
+    jeecs::input::gamepad* gamepad =
+        (jeecs::input::gamepad*)wo_pointer(args + 0);
+    jeecs::input::joystickcode kcode =
+        (jeecs::input::joystickcode)wo_int(args + 1);
+
+    auto axis = gamepad->stick(kcode);
+
+    wo_value result = s + 0;
+    wo_value elem = s + 1;
+
+    wo_set_struct(result, vm, 2);
+    wo_set_float(elem, axis.x);
+    wo_struct_set(result, 0, elem);
+    wo_set_float(elem, axis.y);
+    wo_struct_set(result, 1, elem);
+
+    return wo_ret_val(vm, result);
+}
+WO_API wo_api wojeapi_input_gamepad_actived(wo_vm vm, wo_value args)
+{
+    jeecs::input::gamepad* gamepad =
+        (jeecs::input::gamepad*)wo_pointer(args + 0); 
+
+    jeecs::typing::ms_stamp_t actived;
+    if (gamepad->actived(&actived))
+        return wo_ret_option_int(vm, actived);
+
+    return wo_ret_option_none(vm);
+}
+WO_API wo_api wojeapi_input_gamepad_get_all(wo_vm vm, wo_value args)
+{
+    wo_value s = wo_reserve_stack(vm, 2, &args);
+
+    auto gamepads = jeecs::input::gamepad::all();
+
+    wo_value result = s + 0;
+    wo_value elem = s + 1;
+
+    wo_set_arr(result, vm, 0);
+    for (auto& gamepad : gamepads)
+    {
+        wo_set_gchandle(elem, vm, new jeecs::input::gamepad(gamepad), nullptr,
+            [](void* p)
+            {
+                delete (jeecs::input::gamepad*)p;
+            });
+        wo_arr_add(result, elem);
+    }
+
+    return wo_ret_val(vm, result);
+}
+WO_API wo_api wojeapi_input_gamepad_last(wo_vm vm, wo_value args)
+{
+    auto gamepad = jeecs::input::gamepad::last();
+    if (gamepad.has_value())
+    {
+        return wo_ret_option_gchandle(vm, new jeecs::input::gamepad(gamepad.value()), nullptr,
+            [](void* p)
+            {
+                delete (jeecs::input::gamepad*)p;
+            });
+    }
+    return wo_ret_option_none(vm);
+}
+
 
 WO_API wo_api wojeapi_input_update_window_size(wo_vm vm, wo_value args)
 {
@@ -1173,7 +1252,7 @@ WO_API wo_api wojeapi_type_members(wo_vm vm, wo_value args)
 
     const jeecs::typing::type_info* type = (const jeecs::typing::type_info*)wo_pointer(args + 0);
 
-    wo_value result = s + 0; 
+    wo_value result = s + 0;
     wo_value elem = s + 1;
     wo_value elem2 = s + 2;
 
@@ -1286,10 +1365,10 @@ WO_API wo_api wojeapi_texture_clip(wo_vm vm, wo_value args)
     return wo_ret_gchandle(vm,
         new jeecs::basic::resource<jeecs::graphic::texture>(
             jeecs::graphic::texture::clip(
-                *loaded_texture, 
-                (size_t)wo_int(args + 1), 
-                (size_t)wo_int(args + 2), 
-                (size_t)wo_int(args + 3), 
+                *loaded_texture,
+                (size_t)wo_int(args + 1),
+                (size_t)wo_int(args + 2),
+                (size_t)wo_int(args + 3),
                 (size_t)wo_int(args + 4))
         ), nullptr,
         [](void* ptr) {
@@ -1443,7 +1522,7 @@ WO_API wo_api wojeapi_font_load_char(wo_vm vm, wo_value args)
             m_baseline_offset_y: int,
         };
     */
-    wo_value result = s + 0; 
+    wo_value result = s + 0;
     wo_value elem = s + 1;
 
     wo_set_struct(result, vm, 8);
@@ -1568,7 +1647,7 @@ WO_API wo_api wojeapi_bind_texture_for_entity(wo_vm vm, wo_value args)
         if (wo_option_get(elem, args + 2))
         {
             textures->bind_texture(
-                (size_t)wo_int(args + 1), 
+                (size_t)wo_int(args + 1),
                 *(jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(elem));
         }
         else
@@ -1609,7 +1688,7 @@ WO_API wo_api wojeapi_get_shape_of_entity(wo_vm vm, wo_value args)
     if (jeecs::Renderer::Shape* shape = entity->get_component<jeecs::Renderer::Shape>())
     {
         if (shape->vertex != nullptr)
-            return wo_ret_option_pointer(vm, 
+            return wo_ret_option_pointer(vm,
                 new jeecs::basic::resource<jeecs::graphic::vertex>(shape->vertex));
     }
 
@@ -1670,9 +1749,9 @@ WO_API wo_api wojeapi_vertex_create(wo_vm vm, wo_value args)
     }
 
     auto loaded_vertex = jeecs::graphic::vertex::create(
-        vertex_type, 
-        vertices.data(), 
-        vertices.size() * sizeof(float), 
+        vertex_type,
+        vertices.data(),
+        vertices.size() * sizeof(float),
         indices,
         formats);
 
@@ -1946,7 +2025,7 @@ WO_API wo_api wojeapi_texture_get_size(wo_vm vm, wo_value args)
     auto* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
     auto sz = texture->get()->size();
 
-    wo_value result = s + 0; 
+    wo_value result = s + 0;
     wo_value elem = s + 1;
 
     wo_set_struct(result, vm, 2);
@@ -1976,8 +2055,8 @@ WO_API wo_api wojeapi_get_entity_arch_information(wo_vm vm, wo_value args)
     size_t chunk_size = 0, entity_size = 0, entity_count = 0;
 
     jedbg_get_entity_arch_information(entity, &chunk_size, &entity_size, &entity_count);
-    wo_value result = s + 0; 
-    wo_value elem = s + 1; 
+    wo_value result = s + 0;
+    wo_value elem = s + 1;
 
     wo_set_struct(result, vm, 3);
 
@@ -2584,7 +2663,7 @@ WO_API wo_api wojeapi_dynamic_parser_edit(wo_vm vm, wo_value args)
 
         wo_set_val(_je_dynamic_parser_vm_s + 0, value);
         wo_set_string(_je_dynamic_parser_vm_s + 1, _je_dynamic_parser_vm, tag);
-        
+
         wo_value result = wo_invoke_rsfunc(
             _je_dynamic_parser_vm, parser->m_edit, 2, nullptr, &_je_dynamic_parser_vm_s);
 
@@ -3147,7 +3226,41 @@ namespace je
         CUSTOM_7,
         CUSTOM_8,
     };
+    public enum gamepadcode
+    {
+        UP,
+        DOWN,
+        LEFT,
+        RIGHT,
 
+        A,
+        B,
+        X,
+        Y,
+
+        // LT,
+        // RT,
+        LB,
+        RB,
+        LS,
+        RS,
+
+        SELECT,
+        START,
+        GUIDE,
+
+        _COUNT, //
+    };
+    public enum joystickcode
+    {
+        L,
+        R,
+        LT, // Use x value only.
+        RT, // Use x value only.
+
+        _COUNT, //
+    };
+)" R"(
     namespace input
     {
         extern("libjoyecs", "wojeapi_wheel_count")
@@ -3167,6 +3280,25 @@ namespace je
 
         extern("libjoyecs", "wojeapi_input_mouse_view_pos")
         public func mouseviewpos(group: int)=> (real, real);
+
+        public using gamepad = gchandle
+        {
+            extern("libjoyecs", "wojeapi_input_gamepad_button")
+            public func button(self: gamepad, kcode: gamepadcode)=> bool;
+
+            extern("libjoyecs", "wojeapi_input_gamepad_axis")
+            public func axis(self: gamepad, kcode: gamepadcode)=> (real, real);
+
+            extern("libjoyecs", "wojeapi_input_gamepad_actived")
+            public func actived(self: gamepad)=> option<int>;
+
+            //
+            extern("libjoyecs", "wojeapi_input_gamepad_get_all")
+            public func get_all()=> array<gamepad>;
+        
+            extern("libjoyecs", "wojeapi_input_gamepad_last")
+            public func last()=> option<gamepad>;
+        }
     }
 
     public using typeinfo = handle
@@ -3393,8 +3525,7 @@ namespace je
             extern("libjoyecs", "wojeapi_font_string_texture", slow)
             public func load_string(self: font, str: string)=> texture;
         }
-)"
-R"(
+)" R"(
         public using shader = gchandle
         {
             extern("libjoyecs", "wojeapi_shader_open", slow)

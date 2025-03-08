@@ -41,6 +41,7 @@
 #include <sstream>
 #include <climits>
 #include <initializer_list>
+#include <optional>
 #ifdef __cpp_lib_execution
 #include <execution>
 #endif
@@ -103,7 +104,7 @@
 #define JEParseToScriptType     JEParseToScriptType
 
 #define PreUpdate           PreUpdate       // * 用户预更新，
-#define StateUpdate         StateUpdate     // 用于将初始状态给予各个组件 (Animation KeyboardVirtualGamepad)
+#define StateUpdate         StateUpdate     // 用于将初始状态给予各个组件 (Animation VirtualGamepadInput)
 #define Update              Update          // * 用户更新
 #define TransformUpdate     TransformUpdate // 用于更新物体的变换和关系 (Transform)
 #define PhysicsUpdate       PhysicsUpdate   // 用于物理引擎的状态更新 (PhysicsUpdate)
@@ -1765,8 +1766,8 @@ struct jegl_interface_config
     // 不限制帧率请设置为 SIZE_MAX
     size_t          m_fps;
 
-    const char* m_title;
-    void* m_userdata;
+    const char*     m_title;
+    void*           m_userdata;
 };
 
 struct jegl_context_notifier;
@@ -1783,16 +1784,16 @@ struct jegl_context
 
     void*/*std::promise<void>*/ _m_promise;
     frame_job_t                 _m_frame_rend_work;
-    void* _m_frame_rend_work_arg;
-    void* _m_sync_callback_arg;
+    void*                       _m_frame_rend_work_arg;
+    void*                       _m_sync_callback_arg;
 
-    jegl_context_notifier* _m_thread_notifier;
-    void* _m_interface_handle;
+    jegl_context_notifier*      _m_thread_notifier;
+    void*                       _m_interface_handle;
 
-    void* m_universe_instance;
+    void*                       m_universe_instance;
     jeecs::typing::version_t    m_version;
     jegl_interface_config       m_config;
-    jegl_graphic_api* m_apis;
+    jegl_graphic_api*           m_apis;
     void*/*std::atomic_bool*/   m_stop_update;
     userdata_t                  m_userdata;
 };
@@ -1819,9 +1820,9 @@ struct jegl_texture
     };
 
     // NOTE:
-    // * Pixel data is storage from LEFT/BUTTOM to RIGHT/TOP
+    // * Pixel data is storage from LEFT/BOTTOM to RIGHT/TOP
     // * If texture's m_pixels is nullptr, only create a texture in pipeline.
-    pixel_data_t* m_pixels;
+    pixel_data_t*   m_pixels;
     size_t          m_width;
     size_t          m_height;
     format          m_format;
@@ -1866,20 +1867,20 @@ struct jegl_vertex
     };
 
     float           m_x_min, m_x_max,
-        m_y_min, m_y_max,
-        m_z_min, m_z_max;
+                    m_y_min, m_y_max,
+                    m_z_min, m_z_max;
 
-    const void* m_vertexs;
+    const void*     m_vertexs;
     size_t          m_vertex_length;
     const uint32_t* m_indexs;
     size_t          m_index_count;
     const data_layout*
-        m_formats;
+                    m_formats;
     size_t          m_format_count;
     size_t          m_data_size_per_point;
     type            m_type;
     const bone_data**
-        m_bones;
+                    m_bones;
     size_t          m_bone_count;
 };
 
@@ -1908,7 +1909,7 @@ struct jegl_shader
         wrap_mode   m_vwrap;
         uint32_t    m_sampler_id;   // Used for DX11 & HLSL generation
         uint64_t    m_pass_id_count;
-        uint32_t* m_pass_ids;     // Used for GL3 & GLSL generation
+        uint32_t*   m_pass_ids;     // Used for GL3 & GLSL generation
     };
 
     enum uniform_type
@@ -1946,10 +1947,10 @@ struct jegl_shader
     };
     struct unifrom_variables
     {
-        const char* m_name;
-        uint32_t    m_index;
-        uniform_type m_uniform_type;
-        bool        m_updated;
+        const char*     m_name;
+        uint32_t        m_index;
+        uniform_type    m_uniform_type;
+        bool            m_updated;
         union
         {
             struct
@@ -2036,16 +2037,16 @@ struct jegl_shader
     const char* m_fragment_hlsl_src;
 
     size_t                      m_vertex_spirv_count;
-    const spir_v_code_t* m_vertex_spirv_codes;
+    const spir_v_code_t*        m_vertex_spirv_codes;
 
     size_t                      m_fragment_spirv_count;
-    const spir_v_code_t* m_fragment_spirv_codes;
+    const spir_v_code_t*        m_fragment_spirv_codes;
 
     size_t                      m_vertex_in_count;
-    vertex_in_variables* m_vertex_in;
+    vertex_in_variables*        m_vertex_in;
 
-    unifrom_variables* m_custom_uniforms;
-    uniform_blocks* m_custom_uniform_blocks;
+    unifrom_variables*          m_custom_uniforms;
+    uniform_blocks*             m_custom_uniform_blocks;
     builtin_uniform_location    m_builtin_uniforms;
 
     bool                m_enable_to_shared;
@@ -2054,7 +2055,7 @@ struct jegl_shader
     blend_method        m_blend_src_mode, m_blend_dst_mode;
     cull_mode           m_cull_mode;
 
-    sampler_method* m_sampler_methods;
+    sampler_method*     m_sampler_methods;
     size_t              m_sampler_count;
 };
 
@@ -2066,7 +2067,7 @@ struct jegl_frame_buffer
 {
     // In fact, attachment_t is jeecs::basic::resource<jeecs::graphic::texture>
     typedef struct attachment_t attachment_t;
-    attachment_t* m_output_attachments;
+    attachment_t*   m_output_attachments;
     size_t          m_attachment_count;
     size_t          m_width;
     size_t          m_height;
@@ -2080,7 +2081,7 @@ struct jegl_uniform_buffer
 {
     size_t      m_buffer_binding_place;
     size_t      m_buffer_size;
-    uint8_t* m_buffer;
+    uint8_t*    m_buffer;
 
     // Used for marking update range;
     size_t      m_update_begin_offset;
@@ -2106,8 +2107,8 @@ struct jegl_resource
     };
     union resource_handle
     {
-        void* m_ptr;
-        size_t m_hdl;
+        void*   m_ptr;
+        size_t  m_hdl;
         struct
         {
             uint32_t m_uint1;
@@ -2117,23 +2118,23 @@ struct jegl_resource
 
     type            m_type;
     bool            m_modified;
-    jegl_context* m_graphic_thread;
+    jegl_context*   m_graphic_thread;
     jeecs::typing::version_t
-        m_graphic_thread_version;
+                    m_graphic_thread_version;
 
-    void* m_binding_count;
+    void*           m_binding_count;
     resource_handle m_handle;
 
-    const char* m_path;
-    void* m_raw_ref_count;
+    const char*     m_path;
+    void*           m_raw_ref_count;
     union
     {
-        jegl_custom_resource_t m_custom_resource;
-        jegl_texture* m_raw_texture_data;
-        jegl_vertex* m_raw_vertex_data;
-        jegl_shader* m_raw_shader_data;
-        jegl_frame_buffer* m_raw_framebuf_data;
-        jegl_uniform_buffer* m_raw_uniformbuf_data;
+        jegl_custom_resource_t  m_custom_resource;
+        jegl_texture*           m_raw_texture_data;
+        jegl_vertex*            m_raw_vertex_data;
+        jegl_shader*            m_raw_shader_data;
+        jegl_frame_buffer*      m_raw_framebuf_data;
+        jegl_uniform_buffer*    m_raw_uniformbuf_data;
     };
 };
 
@@ -3458,9 +3459,11 @@ typedef struct _je_gamepad_state* je_io_gamepad_handle_t;
 /*
 je_io_create_gamepad [基本接口]
 创建一个虚拟手柄实例
-    * name 用于以可读形式分辨不同的控制器设备，如果为 nullptr，则分配一个默认的名称
+    * name 可用于以可读形式分辨不同的控制器设备，如果为 nullptr，则分配一个默认的名称
+    * guid 可用于区分不同的物理设备，如果为nullptr，则由引擎生成。
 */
-JE_API je_io_gamepad_handle_t je_io_create_gamepad(const char* name_may_null);
+JE_API je_io_gamepad_handle_t je_io_create_gamepad(
+    const char* name_may_null, const char* guid_may_null);
 /*
 je_io_close_gamepad [基本接口]
 关闭一个虚拟手柄实例
@@ -3475,7 +3478,14 @@ je_io_gamepad_name [基本接口]
     je_io_create_gamepad
 */
 JE_API const char* je_io_gamepad_name(je_io_gamepad_handle_t gamepad);
-
+/*
+je_io_gamepad_guid [基本接口]
+获取指定虚拟手柄的GUID
+    * GUID在创建时指定，用于区分不同的物理设备
+参见：
+    je_io_create_gamepad
+*/
+JE_API const char* je_io_gamepad_guid(je_io_gamepad_handle_t gamepad);
 /*
 je_io_gamepad_get [基本接口]
 获取所有虚拟手柄的句柄
@@ -3486,17 +3496,21 @@ je_io_gamepad_get [基本接口]
 JE_API size_t je_io_gamepad_get(size_t count, je_io_gamepad_handle_t* out_gamepads);
 
 /*
-je_io_gamepad_check_present [基本接口]
+je_io_gamepad_is_active [基本接口]
 检查指定的虚拟手柄，其对应的实际设备是否存在
     * 虚拟手柄和输入设备的对应关系通过 je_io_create_gamepad 构建，
         其不一定是实际的物理游戏手柄；例如，可以将键盘按键的按动情况
         映射到虚拟手柄上。当 je_io_close_gamepad 调用时，虚拟手柄实例
-        会被销毁，此时 je_io_gamepad_check_present 返回 false。
+        会被销毁，此时 je_io_gamepad_is_active 返回 false。
+    * 如果 out_last_pushed_time_may_null 不为 nullptr，则将返回手柄的最后
+        操作时间。
 参见：
     je_io_create_gamepad
     je_io_close_gamepad
 */
-JE_API bool je_io_gamepad_check_present(je_io_gamepad_handle_t gamepad);
+JE_API bool je_io_gamepad_is_active(
+    je_io_gamepad_handle_t gamepad, 
+    jeecs::typing::ms_stamp_t* out_last_pushed_time_may_null);
 /*
 je_io_gamepad_get_button_down [基本接口]
 获取指定虚拟手柄的指定按键是否被按下
@@ -3876,7 +3890,11 @@ namespace jeecs
 #define JECS_DISABLE_MOVE_AND_COPY(TYPE) \
     JECS_DISABLE_MOVE_AND_COPY_CONSTRUCTOR(TYPE);\
     JECS_DISABLE_MOVE_AND_COPY_OPERATOR(TYPE)
-
+    
+#define JECS_DEFAULT_CONSTRUCTOR(TYPE) \
+    TYPE() = default;\
+    TYPE(const TYPE &) = default;\
+    TYPE(TYPE &&) = default;
 
     /*
     jeecs::debug [命名空间]
@@ -7678,7 +7696,7 @@ namespace jeecs
                 }
             };
 
-            // pixel's x/y is from LEFT-BUTTOM to RIGHT/TOP
+            // pixel's x/y is from LEFT-BOTTOM to RIGHT/TOP
             pixel pix(size_t x, size_t y) const noexcept
             {
                 return pixel(resource(), x, y);
@@ -8781,6 +8799,9 @@ namespace jeecs
 
         struct LocalRotation
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(LocalRotation);
+            JECS_DEFAULT_CONSTRUCTOR(LocalRotation);
+
             math::quat rot;
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
@@ -8790,6 +8811,9 @@ namespace jeecs
 
         struct LocalPosition
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(LocalPosition);
+            JECS_DEFAULT_CONSTRUCTOR(LocalPosition);
+
             math::vec3 pos;
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
@@ -8799,6 +8823,9 @@ namespace jeecs
 
         struct LocalScale
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(LocalScale);
+            JECS_DEFAULT_CONSTRUCTOR(LocalScale);
+
             math::vec3 scale = { 1.0f, 1.0f, 1.0f };
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
@@ -8809,6 +8836,9 @@ namespace jeecs
 
         struct Translation
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Translation);
+            JECS_DEFAULT_CONSTRUCTOR(Translation);
+
             float object2world[4][4] = { };
 
             math::vec3 world_position = { 0.0f, 0.0f, 0.0f };
@@ -8844,6 +8874,8 @@ namespace jeecs
 
         struct Anchor
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Anchor);
+
             typing::uid_t uid = typing::uid_t::generate();
 
             Anchor() = default;
@@ -8858,6 +8890,9 @@ namespace jeecs
 
         struct LocalToParent
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(LocalToParent);
+            JECS_DEFAULT_CONSTRUCTOR(LocalToParent);
+
             math::vec3 pos;
             math::vec3 scale;
             math::quat rot;
@@ -8872,6 +8907,9 @@ namespace jeecs
 
         struct LocalToWorld
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(LocalToWorld);
+            JECS_DEFAULT_CONSTRUCTOR(LocalToWorld);
+
             math::vec3 pos;
             math::vec3 scale;
             math::quat rot;
@@ -8885,6 +8923,9 @@ namespace jeecs
     {
         struct Origin
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Origin);
+            JECS_DEFAULT_CONSTRUCTOR(Origin);
+
             enum origin_center : uint8_t
             {
                 center = 0,
@@ -9000,6 +9041,9 @@ namespace jeecs
         };
         struct Absolute
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Absolute);
+            JECS_DEFAULT_CONSTRUCTOR(Absolute);
+
             math::vec2 size = { 0.0f, 0.0f };
             math::vec2 offset = { 0.0f, 0.0f };
 
@@ -9011,6 +9055,9 @@ namespace jeecs
         };
         struct Relatively
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Relatively);
+            JECS_DEFAULT_CONSTRUCTOR(Relatively);
+
             jeecs::math::vec2 location = {};
             jeecs::math::vec2 scale = { 0.0f, 0.0f };
             bool use_vertical_ratio = false;
@@ -9024,6 +9071,9 @@ namespace jeecs
         };
         struct Rotation
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Rotation);
+            JECS_DEFAULT_CONSTRUCTOR(Rotation);
+
             float angle = 0.0f;
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
@@ -9053,6 +9103,9 @@ namespace jeecs
         */
         struct Rendqueue
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Rendqueue);
+            JECS_DEFAULT_CONSTRUCTOR(Rendqueue);
+
             int rend_queue = 0;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
@@ -9063,11 +9116,17 @@ namespace jeecs
 
         struct Shape
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Shape);
+            JECS_DEFAULT_CONSTRUCTOR(Shape);
+
             basic::resource<graphic::vertex> vertex;
         };
 
         struct Shaders
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Shaders);
+            JECS_DEFAULT_CONSTRUCTOR(Shaders);
+
             // NOTE: shaders should not be nullptr!
             basic::vector<basic::resource<graphic::shader>> shaders;
 
@@ -9081,6 +9140,9 @@ namespace jeecs
 
         struct Textures
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Textures);
+            JECS_DEFAULT_CONSTRUCTOR(Textures);
+
             // NOTE: textures should not be nullptr!
             struct texture_with_passid
             {
@@ -9134,6 +9196,9 @@ namespace jeecs
 
         struct Color
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Color);
+            JECS_DEFAULT_CONSTRUCTOR(Color);
+
             math::vec4 color = math::vec4(1.0f, 1.0f, 1.0f, 1.0f);
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
@@ -9146,6 +9211,9 @@ namespace jeecs
     {
         struct Clip
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Clip);
+            JECS_DEFAULT_CONSTRUCTOR(Clip);
+
             float znear = 0.3f;
             float zfar = 1000.0f;
 
@@ -9157,6 +9225,9 @@ namespace jeecs
         };
         struct FrustumCulling
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(FrustumCulling);
+            JECS_DEFAULT_CONSTRUCTOR(FrustumCulling);
+
             float frustum_plane_distance[6] = {};
             math::vec3 frustum_plane_normals[6] = {};
 
@@ -9177,6 +9248,8 @@ namespace jeecs
         };
         struct Projection
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Projection);
+
             jeecs::basic::resource<jeecs::graphic::uniformbuffer>
                 default_uniform_buffer = jeecs::graphic::uniformbuffer::create(
                     0, sizeof(graphic::BasePipelineInterface::default_uniform_buffer_data_t));
@@ -9192,6 +9265,9 @@ namespace jeecs
         };
         struct OrthoProjection
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(OrthoProjection);
+            JECS_DEFAULT_CONSTRUCTOR(OrthoProjection);
+
             float scale = 1.0f;
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
@@ -9200,6 +9276,9 @@ namespace jeecs
         };
         struct PerspectiveProjection
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(PerspectiveProjection);
+            JECS_DEFAULT_CONSTRUCTOR(PerspectiveProjection);
+
             float angle = 75.0f;
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
@@ -9208,6 +9287,9 @@ namespace jeecs
         };
         struct Viewport
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Viewport);
+            JECS_DEFAULT_CONSTRUCTOR(Viewport);
+
             math::vec4 viewport = math::vec4(0, 0, 1, 1);
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
@@ -9216,6 +9298,9 @@ namespace jeecs
         };
         struct Clear
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Clear);
+            JECS_DEFAULT_CONSTRUCTOR(Clear);
+
             math::vec4 color = math::vec4(0.f, 0.f, 0.f, 1.f);
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
@@ -9224,21 +9309,19 @@ namespace jeecs
         };
         struct RendToFramebuffer
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(RendToFramebuffer);
+            JECS_DEFAULT_CONSTRUCTOR(RendToFramebuffer);
+
             basic::resource<graphic::framebuffer> framebuffer = nullptr;
-        };
-        struct Fog
-        {
-            math::vec4 color = math::vec4(1.f, 1.f, 1.f, 1.f);
-            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
-            {
-                typing::register_member(guard, &Fog::color, "color");
-            }
         };
     }
     namespace Physics2D
     {
         struct World
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(World);
+            JECS_DEFAULT_CONSTRUCTOR(World);
+
             size_t      layerid = 0;
             math::vec2  gravity = math::vec2(0.f, -9.8f);
             bool        sleepable = true;
@@ -9260,6 +9343,8 @@ namespace jeecs
 
         struct Rigidbody
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Rigidbody);
+
             using rigidbody_id_t = uint64_t;
             constexpr static rigidbody_id_t null_rigidbody = 0;
 
@@ -9288,6 +9373,9 @@ namespace jeecs
         };
         struct Mass
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Mass);
+            JECS_DEFAULT_CONSTRUCTOR(Mass);
+
             float density = 1.f;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
@@ -9297,6 +9385,9 @@ namespace jeecs
         };
         struct Friction
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Friction);
+            JECS_DEFAULT_CONSTRUCTOR(Friction);
+
             float value = 1.f;
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
@@ -9305,6 +9396,9 @@ namespace jeecs
         };
         struct Restitution
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Restitution);
+            JECS_DEFAULT_CONSTRUCTOR(Restitution);
+
             float value = 1.f;
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
@@ -9313,6 +9407,9 @@ namespace jeecs
         };
         struct Kinematics
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Kinematics);
+            JECS_DEFAULT_CONSTRUCTOR(Kinematics);
+
             math::vec2 linear_velocity = {};
             float angular_velocity = 0.f;
             float linear_damping = 0.f;
@@ -9337,12 +9434,16 @@ namespace jeecs
         };
         struct Bullet
         {
-
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Bullet);
+            JECS_DEFAULT_CONSTRUCTOR(Bullet);
         };
         namespace Transform
         {
             struct Position
             {
+                JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Position);
+                JECS_DEFAULT_CONSTRUCTOR(Position);
+
                 math::vec2 offset = { 0.f, 0.f };
                 static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
                 {
@@ -9351,6 +9452,9 @@ namespace jeecs
             };
             struct Rotation
             {
+                JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Rotation);
+                JECS_DEFAULT_CONSTRUCTOR(Rotation);
+
                 float angle = 0.f;
                 static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
                 {
@@ -9359,6 +9463,9 @@ namespace jeecs
             };
             struct Scale
             {
+                JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Scale);
+                JECS_DEFAULT_CONSTRUCTOR(Scale);
+
                 math::vec2 scale = { 1.f, 1.f };
                 static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
                 {
@@ -9373,26 +9480,50 @@ namespace jeecs
 
             struct Box
             {
+                JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Box);
+
                 shape_id_t native_shape = null_shape;
+
+                Box() = default;
+                Box(Box&&) = default;
+                Box(const Box&) {};
             };
             struct Circle
             {
+                JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Circle);
+
                 shape_id_t native_shape = null_shape;
+
+                Circle() = default;
+                Circle(Circle&&) = default;
+                Circle(const Circle&) {};
             };
             struct Capsule
             {
+                JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Capsule);
+
                 shape_id_t native_shape = null_shape;
+
+                Capsule() = default;
+                Capsule(Capsule&&) = default;
+                Capsule(const Capsule&) {};
             };
         }
 
         struct CollisionResult
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(CollisionResult);
+
             struct collide_result
             {
                 math::vec2 position;
                 math::vec2 normalize;
             };
             basic::map<Rigidbody*, collide_result> results;
+
+            CollisionResult() = default;
+            CollisionResult(CollisionResult&&) {};
+            CollisionResult(const CollisionResult&) {};
 
             const collide_result* check(Rigidbody* rigidbody) const
             {
@@ -9407,10 +9538,14 @@ namespace jeecs
     {
         struct TopDown
         {
-
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(TopDown);
+            JECS_DEFAULT_CONSTRUCTOR(TopDown);
         };
         struct Gain
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Gain);
+            JECS_DEFAULT_CONSTRUCTOR(Gain);
+
             float gain = 1.0f;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
@@ -9420,6 +9555,9 @@ namespace jeecs
         };
         struct Range
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Range);
+            JECS_DEFAULT_CONSTRUCTOR(Range);
+
             struct light_shape
             {
                 size_t                      m_point_count;
@@ -9527,6 +9665,9 @@ namespace jeecs
         };
         struct Point
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Point);
+            JECS_DEFAULT_CONSTRUCTOR(Point);
+
             float decay = 1.0f;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
@@ -9536,10 +9677,13 @@ namespace jeecs
         };
         struct Parallel
         {
-
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Parallel);
+            JECS_DEFAULT_CONSTRUCTOR(Parallel);
         };
         struct ShadowBuffer
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(ShadowBuffer);
+
             float resolution_ratio = 0.5f;
             basic::resource<graphic::framebuffer> buffer = nullptr;
 
@@ -9556,6 +9700,8 @@ namespace jeecs
         };
         struct CameraPostPass
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(CameraPostPass);
+
             basic::resource<graphic::framebuffer> post_rend_target = nullptr;
             basic::resource<jeecs::graphic::framebuffer> post_light_target = nullptr;
 
@@ -9572,6 +9718,9 @@ namespace jeecs
         };
         struct BlockShadow
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(BlockShadow);
+            JECS_DEFAULT_CONSTRUCTOR(BlockShadow);
+
             struct block_mesh
             {
                 basic::vector<math::vec2> m_block_points = {
@@ -9643,6 +9792,9 @@ namespace jeecs
         };
         struct ShapeShadow
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(ShapeShadow);
+            JECS_DEFAULT_CONSTRUCTOR(ShapeShadow);
+
             float factor = 1.0f;
             float distance = 1.0f;
             math::vec2 tiling_scale = math::vec2(1.f, 1.f);
@@ -9658,6 +9810,9 @@ namespace jeecs
         };
         struct SpriteShadow
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(SpriteShadow);
+            JECS_DEFAULT_CONSTRUCTOR(SpriteShadow);
+
             float factor = 1.0f;
             float distance = 1.0f;
 
@@ -9670,6 +9825,9 @@ namespace jeecs
         };
         struct SelfShadow
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(SelfShadow);
+            JECS_DEFAULT_CONSTRUCTOR(SelfShadow);
+
             float factor = 1.0f;
             bool auto_disable = true;
 
@@ -9684,6 +9842,9 @@ namespace jeecs
     {
         struct FrameAnimation
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(FrameAnimation);
+            JECS_DEFAULT_CONSTRUCTOR(FrameAnimation);
+
             struct animation_list
             {
                 struct frame_data
@@ -10052,6 +10213,8 @@ namespace jeecs
     {
         struct Source
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Source);
+
             basic::resource<audio::source> source;
 
             float pitch;
@@ -10091,6 +10254,9 @@ namespace jeecs
         };
         struct Listener
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Listener);
+            JECS_DEFAULT_CONSTRUCTOR(Listener);
+
             float volume = 1.0f;
 
             math::vec3 last_position = {};
@@ -10102,6 +10268,9 @@ namespace jeecs
         };
         struct Playing
         {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Playing);
+            JECS_DEFAULT_CONSTRUCTOR(Playing);
+
             basic::fileresource<audio::buffer> buffer;
             bool is_playing = false;
 
@@ -10118,6 +10287,61 @@ namespace jeecs
                 typing::register_member(guard, &Playing::buffer, "buffer");
                 typing::register_member(guard, &Playing::play, "play");
                 typing::register_member(guard, &Playing::loop, "loop");
+            }
+        };
+    }
+    namespace Input
+    {
+        struct VirtualGamepad
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(VirtualGamepad);
+
+            je_io_gamepad_handle_t gamepad;
+
+            basic::map<input::keycode, input::gamepadcode> keymap;
+            input::keycode left_stick_up_left_down_right[4];
+
+            VirtualGamepad()
+                : gamepad(je_io_create_gamepad(nullptr, nullptr))
+                , left_stick_up_left_down_right{ 
+                    input::keycode::W, 
+                    input::keycode::A, 
+                    input::keycode::S, 
+                    input::keycode::D }
+            {
+                keymap[input::keycode::UP] = input::gamepadcode::UP;
+                keymap[input::keycode::DOWN] = input::gamepadcode::DOWN;
+                keymap[input::keycode::LEFT] = input::gamepadcode::LEFT;
+                keymap[input::keycode::RIGHT] = input::gamepadcode::RIGHT;
+
+                keymap[input::keycode::ENTER] = input::gamepadcode::START;
+                keymap[input::keycode::ESC] = input::gamepadcode::SELECT;
+            }
+            VirtualGamepad(const VirtualGamepad& another)
+                : gamepad(je_io_create_gamepad(nullptr, nullptr))
+                , keymap(another.keymap)
+                , left_stick_up_left_down_right{
+                    another.left_stick_up_left_down_right[0],
+                    another.left_stick_up_left_down_right[1],
+                    another.left_stick_up_left_down_right[2],
+                    another.left_stick_up_left_down_right[3] }
+            {
+            }
+            VirtualGamepad(VirtualGamepad&& another)
+                : gamepad(another.gamepad)
+                , keymap(std::move(another.keymap))
+                , left_stick_up_left_down_right{
+                    another.left_stick_up_left_down_right[0],
+                    another.left_stick_up_left_down_right[1],
+                    another.left_stick_up_left_down_right[2],
+                    another.left_stick_up_left_down_right[3] }
+            {
+                another.gamepad = nullptr;
+            }
+            ~VirtualGamepad()
+            {
+                if (gamepad != nullptr)
+                    je_io_close_gamepad(gamepad);
             }
         };
     }
@@ -10552,6 +10776,8 @@ namespace jeecs
             type_info::register_type<Audio::Listener>(guard, "Audio::Listener");
             type_info::register_type<Audio::Playing>(guard, "Audio::Playing");
 
+            type_info::register_type<Input::VirtualGamepad>(guard, "Input::VirtualGamepad");
+
             // 1. register basic types
             type_info::register_type<math::ivec2>(guard, nullptr);
 
@@ -10792,10 +11018,91 @@ namespace UserInterface::Origin
         static void first_down(...);
         static void double_click(...);// just for fool ide
 
+        class gamepad
+        {
+            je_io_gamepad_handle_t m_gamepad_handle;
+        public:
+            gamepad(je_io_gamepad_handle_t gamepad_handle)
+                : m_gamepad_handle(gamepad_handle)
+            {
+            }
+            gamepad(const gamepad&) = default;
+            gamepad(gamepad&&) = default;
+            gamepad& operator = (const gamepad&) = default;
+            gamepad& operator = (gamepad&&) = default;
+            ~gamepad() = default;
+
+            bool button(gamepadcode button) const
+            {
+                return je_io_gamepad_get_button_down(m_gamepad_handle, button);
+            }
+            math::vec2 stick(joystickcode stick) const
+            {
+                float x, y;
+                je_io_gamepad_get_stick(m_gamepad_handle, stick, &x, &y);
+                return { x, y };
+            }
+            bool actived(typing::ms_stamp_t* out_last_update_time_may_null) const
+            {
+                return je_io_gamepad_is_active(
+                    m_gamepad_handle, out_last_update_time_may_null);
+            }
+        private:
+            static std::vector<je_io_gamepad_handle_t> _get_all_handle()
+            {
+                size_t current_gamepad_count = je_io_gamepad_get(0, nullptr);
+                std::vector<je_io_gamepad_handle_t> gamepad_handles(current_gamepad_count);
+
+                je_io_gamepad_get(current_gamepad_count, gamepad_handles.data());
+                return gamepad_handles;
+            }
+        public:
+            static std::vector<gamepad> all()
+            {
+                auto gamepad_handles = _get_all_handle();
+
+                std::vector<gamepad> gamepads;
+                gamepads.reserve(gamepad_handles.size());
+
+                for (auto& handle : gamepad_handles)
+                {
+                    gamepads.emplace_back(handle);
+                }
+                return gamepads;
+            }
+            static std::optional<gamepad> last()
+            {
+                auto gamepad_handles = _get_all_handle();
+                
+                typing::ms_stamp_t last_update_time = 0;
+                size_t last_index = SIZE_MAX;
+
+                const size_t size = gamepad_handles.size();
+                const je_io_gamepad_handle_t* data = gamepad_handles.data();
+
+                for (size_t i = 0; i < size; ++i)
+                {
+                    typing::ms_stamp_t cur_time;
+                    if (je_io_gamepad_is_active(data[i], &cur_time))
+                    {
+                        if (cur_time > last_update_time)
+                        {
+                            last_update_time = cur_time;
+                            last_index = i;
+                        }
+                    }
+                }
+
+                if (last_index != SIZE_MAX)
+                    return gamepad(gamepad_handles[last_index]);
+                
+                return std::nullopt;
+            }
+        };
+
 #define is_up _isUp<jeecs::basic::hash_compile_time(__FILE__),__LINE__>
 #define first_down _firstDown<jeecs::basic::hash_compile_time(__FILE__),__LINE__>
 #define double_click _doubleClick<jeecs::basic::hash_compile_time(__FILE__),__LINE__>
     }
 }
-
 #endif

@@ -367,7 +367,7 @@ namespace editor::gui::edit_forms
                                                     =>> \d = d->get(component_name);
                                                     ;
 
-                                                if (component_data->is_none)
+                                                if (components_data->is_value && component_data->is_none)
                                                 {
                                                     PushStyleColor(ImGuiCol::ImGuiCol_Text, (0, 200, 0, 255));
                                                     Text("<预设体不包含这个组件>");

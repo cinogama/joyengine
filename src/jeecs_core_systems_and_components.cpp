@@ -8,6 +8,7 @@
 #include "jeecs_core_physics_system.hpp"
 #include "jeecs_core_script_system.hpp"
 #include "jeecs_core_audio_system.hpp"
+#include "jeecs_core_input_system.hpp"
 
 WO_API wo_api wojeapi_deltatime(wo_vm vm, wo_value args)
 {
@@ -121,4 +122,5 @@ void _jeecs_entry_register_core_systems(jeecs::typing::type_unregister_guard* gu
 
     jeecs::typing::type_info::register_type<jeecs::ScriptRuntimeSystem>(guard, "Script::ScriptRuntimeSystem");
     jeecs::typing::type_info::register_type<jeecs::AudioUpdatingSystem>(guard, "Audio::AudioUpdatingSystem");
+    jeecs::typing::type_info::register_type<jeecs::VirtualGamepadInputSystem>(guard, "Input::VirtualGamepadInputSystem");
 }

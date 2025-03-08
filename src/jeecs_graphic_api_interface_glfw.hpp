@@ -187,6 +187,7 @@ namespace jeecs::graphic
                 if (manager == host)
                 {
                     glfwSetJoystickCallback(nullptr);
+                    _gamepad_manage_glfw_context.store(nullptr);
                 }
             }
             void update(glfw* host)
@@ -276,7 +277,8 @@ namespace jeecs::graphic
             void connect(int id)
             {
                 assert(_connected_gamepads.find(id) == _connected_gamepads.end());
-                _connected_gamepads[id] = je_io_create_gamepad(glfwGetGamepadName(id));
+                _connected_gamepads[id] = je_io_create_gamepad(
+                    glfwGetGamepadName(id), glfwGetJoystickGUID(id));
             }
             void disconnect(int id)
             {
@@ -341,14 +343,6 @@ namespace jeecs::graphic
             }
 #ifndef NDEBUG
             glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
-#endif
-        }
-        ~glfw()
-        {
-#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WEBGL
-            // Do nothing.
-#else
-            _gamepad_manager.detach(this);
 #endif
         }
 
@@ -421,7 +415,7 @@ namespace jeecs::graphic
             auto err_code = glfwGetError(&reason);
             if (err_code != GLFW_NO_ERROR)
             {
-                jeecs::debug::logfatal("Opengl3 glfw reports an error(%d): %s.",
+                jeecs::debug::logfatal("Glfw reports an error(%d): %s.",
                     err_code, reason);
                 je_clock_sleep_for(1.);
                 abort();
@@ -522,7 +516,14 @@ namespace jeecs::graphic
         {
             glfwDestroyWindow(_m_windows);
             if (!reboot)
+            {
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WEBGL
+                // Do nothing.
+#else
+                _gamepad_manager.detach(this);
+#endif
                 glfwTerminate();
+            }
         }
 
         virtual void* interface_handle() const override

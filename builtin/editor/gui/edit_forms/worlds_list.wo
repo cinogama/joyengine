@@ -7,6 +7,7 @@ import builtin::editor::gui::form::ask;
 
 import builtin::editor::gui::edit_forms::world_creator;
 import builtin::api::serialize::main;
+import builtin::editor::gui::main;
 
 using je::gui;
 
@@ -62,6 +63,10 @@ namespace editor::gui::edit_forms
                                     {
                                         std::panic("TODO, 选中的世界居然不存在嗝");
                                     }
+                                if (MenuItemEnabled("系统设置", !is_debugging))
+                                {
+
+                                }
                                 if (MenuItemEnabled("重命名世界", !is_debugging))
                                 {
                                     jeapi::gui::form::input(

@@ -516,13 +516,13 @@ public func frag(vf: v2f)
             bool l_ctrl = false;
             bool l_shift = false;
 
-            bool l_buttom = false;
-            bool r_buttom = false;
+            bool l_button = false;
+            bool r_button = false;
 
-            bool l_buttom_click = false;
-            bool l_buttom_pushed = false;
-            bool r_buttom_click = false;
-            bool r_buttom_pushed = false;
+            bool l_button_click = false;
+            bool l_button_pushed = false;
+            bool r_button_click = false;
+            bool r_button_pushed = false;
 
             float delta_time = 0.0f;
 
@@ -667,13 +667,13 @@ public func frag(vf: v2f)
             using namespace input;
             using namespace math;
 
-            if (_inputs.r_buttom_pushed)
+            if (_inputs.r_button_pushed)
             {
                 _begin_drag = _inputs.uniform_mouse_pos;
                 _drag_viewing = false;
             }
 
-            if (_inputs.r_buttom)
+            if (_inputs.r_button)
             {
                 float move_speed = 5.0f;
                 if (_inputs.l_ctrl)
@@ -721,7 +721,7 @@ public func frag(vf: v2f)
             if (!_editor_enabled)
                 return;
 
-            if (_inputs.l_buttom_pushed)
+            if (_inputs.l_button_pushed)
             {
                 auto result = shape == nullptr
                     ? _camera_ray.intersect_box(trans.world_position, math::vec3(1.f, 1.f, 1.f), trans.world_rotation)
@@ -999,10 +999,10 @@ public let frag =
                 ? editing_entity->get_component<Transform::LocalScale>()
                 : nullptr;
 
-            if (_inputs.r_buttom || !_inputs.l_buttom || nullptr == editing_trans)
+            if (_inputs.r_button || !_inputs.l_button || nullptr == editing_trans)
                 _grab_axis_translation = nullptr;
 
-            if (_grab_axis_translation && _inputs.l_buttom && editing_trans)
+            if (_grab_axis_translation && _inputs.l_button && editing_trans)
             {
                 if (_grab_axis_translation == &trans && _camera_porjection)
                 {
@@ -1054,7 +1054,7 @@ public let frag =
             else
             {
                 auto result = _camera_ray.intersect_entity(trans, shape, false);
-                bool select_click = _inputs.l_buttom_pushed;
+                bool select_click = _inputs.l_button_pushed;
 
                 bool intersected = result.intersected;
                 if (intersected && mover.mode == Editor::EntityMover::mover_mode::ROTATION)
@@ -1077,7 +1077,7 @@ public let frag =
                         _grab_axis_translation = &trans;
                         _grab_last_pos = _inputs.uniform_mouse_pos;
                     }
-                    if (!_inputs.l_buttom)
+                    if (!_inputs.l_button)
                         color.color.x = 1.0f;
                 }
                 else
@@ -1113,12 +1113,12 @@ public let frag =
             _inputs.l_tab = input::keydown(input::keycode::TAB);
             _inputs.l_ctrl = input::keydown(input::keycode::L_CTRL);
             _inputs.l_shift = input::keydown(input::keycode::L_SHIFT);
-            _inputs.l_buttom = input::mousedown(0, input::mousecode::LEFT);
-            _inputs.r_buttom = input::mousedown(0, input::mousecode::RIGHT);
-            _inputs.l_buttom_click = input::is_up(_inputs.l_buttom);
-            _inputs.l_buttom_pushed = input::first_down(_inputs.l_buttom);
-            _inputs.r_buttom_click = input::is_up(_inputs.r_buttom);
-            _inputs.r_buttom_pushed = input::first_down(_inputs.r_buttom);
+            _inputs.l_button = input::mousedown(0, input::mousecode::LEFT);
+            _inputs.r_button = input::mousedown(0, input::mousecode::RIGHT);
+            _inputs.l_button_click = input::is_up(_inputs.l_button);
+            _inputs.l_button_pushed = input::first_down(_inputs.l_button);
+            _inputs.r_button_click = input::is_up(_inputs.r_button);
+            _inputs.r_button_pushed = input::first_down(_inputs.r_button);
             _inputs.selected_entity = std::nullopt;
             _inputs.delta_time = deltatime();
 
@@ -1194,7 +1194,7 @@ public let frag =
                     _camera_porjection = &proj;
                     _camera_ortho_porjection = o2d;
 
-                    if (_drag_viewing && _inputs.r_buttom)
+                    if (_drag_viewing && _inputs.r_button)
                     {
                         if (!_camera_is_in_o2d_mode)
                             rotation.rot = rotation.rot * quat(30.f * -mouse_position.y, 0, 0);
@@ -1639,7 +1639,7 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                     else
                         _set_editing_entity(selected_list.begin()->entity);
                 }
-                else if (_inputs.l_buttom_pushed)
+                else if (_inputs.l_button_pushed)
                     jedbg_set_editing_entity_uid(0);
             }
 

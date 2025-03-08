@@ -421,7 +421,7 @@ namespace jeapi
                     ->> \st = st->name;
                     ->  forall(\n = !n->begin_with("Editor::");)
                     ;
-
+                    
             return result::ok({
                 ["name"] = w->name: dynamic,
                 ["entities"] = entities_json_list: dynamic,
