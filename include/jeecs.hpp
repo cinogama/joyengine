@@ -9876,23 +9876,23 @@ namespace jeecs
                         data_value(const data_value& val)noexcept
                         {
                             m_type = val.m_type;
-                            memcpy(&m_value, &val.m_value, sizeof(value));
+                            m_value = val.m_value;
                         }
                         data_value(data_value&& val)noexcept
                         {
                             m_type = val.m_type;
-                            memcpy(&m_value, &val.m_value, sizeof(value));
+                            m_value = val.m_value;
                         }
                         data_value& operator = (const data_value& val)noexcept
                         {
                             m_type = val.m_type;
-                            memcpy(&m_value, &val.m_value, sizeof(value));
+                            m_value = val.m_value;
                             return *this;
                         }
                         data_value& operator = (data_value&& val)noexcept
                         {
                             m_type = val.m_type;
-                            memcpy(&m_value, &val.m_value, sizeof(value));
+                            m_value = val.m_value;
                             return *this;
                         }
                     };
@@ -10490,8 +10490,6 @@ namespace jeecs
 
                 */
 
-
-
                 auto&& inresult = intersect_triangle(v0, v1, v2);
                 if (inresult.intersected)
                     return inresult;
@@ -10862,6 +10860,31 @@ namespace jeecs
                 "uint32", "public alias uint32 = int;");
             typing::register_script_parser<uint64_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
                 "uint64", "public alias uint64 = int;");
+
+            if constexpr (!std::is_same_v<size_t, uint32_t> && !std::is_same_v<size_t, uint64_t>)
+            {
+                // In webgl, size_t is a individual type, not a alias of uint32_t or uint64_t.
+                static_assert(!std::is_signed_v<size_t>);
+                if constexpr (sizeof(size_t) == sizeof(uint32_t))
+                {
+                    typing::register_script_parser<size_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
+                        "uint32", "");
+                }
+                else if constexpr (sizeof(size_t) == sizeof(uint64_t))
+                {
+                    typing::register_script_parser<size_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
+                        "uint64", "");
+                }
+                else
+                {
+                    // Unknown size_t type? assert and support it if found.
+                    static_assert(sizeof(size_t) == sizeof(uint64_t) 
+                        || sizeof(size_t) == sizeof(uint32_t));
+                }
+            }
+
+            typing::register_script_parser<size_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
+                "size_t", "public alias size_t = int;");
 
             typing::register_script_parser<float>(
                 guard,
