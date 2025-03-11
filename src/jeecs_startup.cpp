@@ -58,7 +58,7 @@ void je_extern_lib_module_finish();
 
 void _jewo_clear_singletons();
 
-wo_fail_handler _je_global_old_panic_handler = nullptr;
+wo_fail_handler_t _je_global_old_panic_handler = nullptr;
 wo_vm _je_global_panic_hooker = nullptr;
 wo_pin_value _je_global_panic_hook_function;
 

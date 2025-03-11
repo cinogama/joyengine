@@ -122,6 +122,12 @@ WO_API wo_api wo_libimage_set_pix_to_image(wo_vm vm, wo_value args);
 
 WO_API wo_api crashhandler_init(wo_vm vm, wo_value args);
 
+WO_API wo_api regex_create(wo_vm vm, wo_value args);
+WO_API wo_api regex_match(wo_vm vm, wo_value args);
+WO_API wo_api regex_replace(wo_vm vm, wo_value args);
+WO_API wo_api regex_search(wo_vm vm, wo_value args);
+WO_API wo_api regex_search_next(wo_vm vm, wo_value args);
+
 WO_API wo_api file_is_same_file(wo_vm vm, wo_value args);
 WO_API wo_api file_readall(wo_vm vm, wo_value args);
 WO_API wo_api file_writeall(wo_vm vm, wo_value args);
@@ -149,11 +155,38 @@ WO_API wo_api filesys_tmppath(wo_vm vm, wo_value args);
 WO_API wo_api filesys_walker_next(wo_vm vm, wo_value args);
 WO_API wo_api filesys_workpath(wo_vm vm, wo_value args);
 
-WO_API wo_api regex_create(wo_vm vm, wo_value args);
-WO_API wo_api regex_match(wo_vm vm, wo_value args);
-WO_API wo_api regex_replace(wo_vm vm, wo_value args);
-WO_API wo_api regex_search(wo_vm vm, wo_value args);
-WO_API wo_api regex_search_next(wo_vm vm, wo_value args);
+WO_API wo_api thread_concurrency_count(wo_vm vm, wo_value args);
+WO_API wo_api thread_create(wo_vm vm, wo_value args);
+WO_API wo_api thread_mutex_create(wo_vm vm, wo_value args);
+WO_API wo_api thread_mutex_lock(wo_vm vm, wo_value args);
+WO_API wo_api thread_mutex_trylock(wo_vm vm, wo_value args);
+WO_API wo_api thread_mutex_unlock(wo_vm vm, wo_value args);
+WO_API wo_api thread_recursive_mutex_create(wo_vm vm, wo_value args);
+WO_API wo_api thread_recursive_mutex_lock(wo_vm vm, wo_value args);
+WO_API wo_api thread_recursive_mutex_trylock(wo_vm vm, wo_value args);
+WO_API wo_api thread_recursive_mutex_unlock(wo_vm vm, wo_value args);
+WO_API wo_api thread_rw_mutex_create(wo_vm vm, wo_value args);
+WO_API wo_api thread_rw_mutex_lock(wo_vm vm, wo_value args);
+WO_API wo_api thread_rw_mutex_lock_read(wo_vm vm, wo_value args);
+WO_API wo_api thread_rw_mutex_trylock(wo_vm vm, wo_value args);
+WO_API wo_api thread_rw_mutex_trylock_read(wo_vm vm, wo_value args);
+WO_API wo_api thread_rw_mutex_unlock(wo_vm vm, wo_value args);
+WO_API wo_api thread_rw_mutex_unlock_read(wo_vm vm, wo_value args);
+WO_API wo_api thread_wait(wo_vm vm, wo_value args);
+
+WO_API wo_api list_add(wo_vm vm, wo_value args);
+WO_API wo_api list_add_front(wo_vm vm, wo_value args);
+WO_API wo_api list_clear(wo_vm vm, wo_value args);
+WO_API wo_api list_create(wo_vm vm, wo_value args);
+WO_API wo_api list_empty(wo_vm vm, wo_value args);
+WO_API wo_api list_erase(wo_vm vm, wo_value args);
+WO_API wo_api list_insert(wo_vm vm, wo_value args);
+WO_API wo_api list_iter(wo_vm vm, wo_value args);
+WO_API wo_api list_iterator_next(wo_vm vm, wo_value args);
+WO_API wo_api list_len(wo_vm vm, wo_value args);
+WO_API wo_api list_pop_back(wo_vm vm, wo_value args);
+WO_API wo_api list_pop_front(wo_vm vm, wo_value args);
+WO_API wo_api list_set(wo_vm vm, wo_value args);
 
 WO_API wo_api math_acos(wo_vm vm, wo_value args);
 WO_API wo_api math_acosh(wo_vm vm, wo_value args);
@@ -228,25 +261,6 @@ WO_API wo_api socket_udp_sendto_buffer_ipv4(wo_vm vm, wo_value args);
 WO_API wo_api socket_udp_sendto_buffer_ipv6(wo_vm vm, wo_value args);
 WO_API wo_api socket_udp_sendto_ipv4(wo_vm vm, wo_value args);
 WO_API wo_api socket_udp_sendto_ipv6(wo_vm vm, wo_value args);
-
-WO_API wo_api thread_concurrency_count(wo_vm vm, wo_value args);
-WO_API wo_api thread_create(wo_vm vm, wo_value args);
-WO_API wo_api thread_mutex_create(wo_vm vm, wo_value args);
-WO_API wo_api thread_mutex_lock(wo_vm vm, wo_value args);
-WO_API wo_api thread_mutex_trylock(wo_vm vm, wo_value args);
-WO_API wo_api thread_mutex_unlock(wo_vm vm, wo_value args);
-WO_API wo_api thread_recursive_mutex_create(wo_vm vm, wo_value args);
-WO_API wo_api thread_recursive_mutex_lock(wo_vm vm, wo_value args);
-WO_API wo_api thread_recursive_mutex_trylock(wo_vm vm, wo_value args);
-WO_API wo_api thread_recursive_mutex_unlock(wo_vm vm, wo_value args);
-WO_API wo_api thread_rw_mutex_create(wo_vm vm, wo_value args);
-WO_API wo_api thread_rw_mutex_lock(wo_vm vm, wo_value args);
-WO_API wo_api thread_rw_mutex_lock_read(wo_vm vm, wo_value args);
-WO_API wo_api thread_rw_mutex_trylock(wo_vm vm, wo_value args);
-WO_API wo_api thread_rw_mutex_trylock_read(wo_vm vm, wo_value args);
-WO_API wo_api thread_rw_mutex_unlock(wo_vm vm, wo_value args);
-WO_API wo_api thread_rw_mutex_unlock_read(wo_vm vm, wo_value args);
-WO_API wo_api thread_wait(wo_vm vm, wo_value args);
 
 WO_API wo_api vm_create(wo_vm vm, wo_value args);
 WO_API wo_api vm_create_virtual_script(wo_vm vm, wo_value args);
@@ -412,6 +426,17 @@ void je_extern_lib_3rd_pkgs_init()
     _je_3rd_pkg_lib_handle.push_back(
         wo_fake_lib("libcrashhandler", libcrashhandler_fs, nullptr));
 
+    wo_extern_lib_func_t libregex_fs[] = {
+        wo_extern_lib_func_t{"regex_create", (void*)&regex_create},
+        wo_extern_lib_func_t{"regex_match", (void*)&regex_match},
+        wo_extern_lib_func_t{"regex_replace", (void*)&regex_replace},
+        wo_extern_lib_func_t{"regex_search", (void*)&regex_search},
+        wo_extern_lib_func_t{"regex_search_next", (void*)&regex_search_next},
+        WO_EXTERN_LIB_FUNC_END,
+    };
+    _je_3rd_pkg_lib_handle.push_back(
+        wo_fake_lib("libregex", libregex_fs, nullptr));
+
     wo_extern_lib_func_t libfsys_fs[] = {
         wo_extern_lib_func_t{"file_is_same_file", (void*)&file_is_same_file},
         wo_extern_lib_func_t{"file_readall", (void*)&file_readall},
@@ -444,16 +469,48 @@ void je_extern_lib_3rd_pkgs_init()
     _je_3rd_pkg_lib_handle.push_back(
         wo_fake_lib("libfsys", libfsys_fs, nullptr));
 
-    wo_extern_lib_func_t libregex_fs[] = {
-        wo_extern_lib_func_t{"regex_create", (void*)&regex_create},
-        wo_extern_lib_func_t{"regex_match", (void*)&regex_match},
-        wo_extern_lib_func_t{"regex_replace", (void*)&regex_replace},
-        wo_extern_lib_func_t{"regex_search", (void*)&regex_search},
-        wo_extern_lib_func_t{"regex_search_next", (void*)&regex_search_next},
+    wo_extern_lib_func_t libthread_fs[] = {
+        wo_extern_lib_func_t{"thread_concurrency_count", (void*)&thread_concurrency_count},
+        wo_extern_lib_func_t{"thread_create", (void*)&thread_create},
+        wo_extern_lib_func_t{"thread_mutex_create", (void*)&thread_mutex_create},
+        wo_extern_lib_func_t{"thread_mutex_lock", (void*)&thread_mutex_lock},
+        wo_extern_lib_func_t{"thread_mutex_trylock", (void*)&thread_mutex_trylock},
+        wo_extern_lib_func_t{"thread_mutex_unlock", (void*)&thread_mutex_unlock},
+        wo_extern_lib_func_t{"thread_recursive_mutex_create", (void*)&thread_recursive_mutex_create},
+        wo_extern_lib_func_t{"thread_recursive_mutex_lock", (void*)&thread_recursive_mutex_lock},
+        wo_extern_lib_func_t{"thread_recursive_mutex_trylock", (void*)&thread_recursive_mutex_trylock},
+        wo_extern_lib_func_t{"thread_recursive_mutex_unlock", (void*)&thread_recursive_mutex_unlock},
+        wo_extern_lib_func_t{"thread_rw_mutex_create", (void*)&thread_rw_mutex_create},
+        wo_extern_lib_func_t{"thread_rw_mutex_lock", (void*)&thread_rw_mutex_lock},
+        wo_extern_lib_func_t{"thread_rw_mutex_lock_read", (void*)&thread_rw_mutex_lock_read},
+        wo_extern_lib_func_t{"thread_rw_mutex_trylock", (void*)&thread_rw_mutex_trylock},
+        wo_extern_lib_func_t{"thread_rw_mutex_trylock_read", (void*)&thread_rw_mutex_trylock_read},
+        wo_extern_lib_func_t{"thread_rw_mutex_unlock", (void*)&thread_rw_mutex_unlock},
+        wo_extern_lib_func_t{"thread_rw_mutex_unlock_read", (void*)&thread_rw_mutex_unlock_read},
+        wo_extern_lib_func_t{"thread_wait", (void*)&thread_wait},
         WO_EXTERN_LIB_FUNC_END,
     };
     _je_3rd_pkg_lib_handle.push_back(
-        wo_fake_lib("libregex", libregex_fs, nullptr));
+        wo_fake_lib("libthread", libthread_fs, nullptr));
+
+    wo_extern_lib_func_t liblist_fs[] = {
+        wo_extern_lib_func_t{"list_add", (void*)&list_add},
+        wo_extern_lib_func_t{"list_add_front", (void*)&list_add_front},
+        wo_extern_lib_func_t{"list_clear", (void*)&list_clear},
+        wo_extern_lib_func_t{"list_create", (void*)&list_create},
+        wo_extern_lib_func_t{"list_empty", (void*)&list_empty},
+        wo_extern_lib_func_t{"list_erase", (void*)&list_erase},
+        wo_extern_lib_func_t{"list_insert", (void*)&list_insert},
+        wo_extern_lib_func_t{"list_iter", (void*)&list_iter},
+        wo_extern_lib_func_t{"list_iterator_next", (void*)&list_iterator_next},
+        wo_extern_lib_func_t{"list_len", (void*)&list_len},
+        wo_extern_lib_func_t{"list_pop_back", (void*)&list_pop_back},
+        wo_extern_lib_func_t{"list_pop_front", (void*)&list_pop_front},
+        wo_extern_lib_func_t{"list_set", (void*)&list_set},
+        WO_EXTERN_LIB_FUNC_END,
+    };
+    _je_3rd_pkg_lib_handle.push_back(
+        wo_fake_lib("liblist", liblist_fs, nullptr));
 
     wo_extern_lib_func_t libmath_fs[] = {
         wo_extern_lib_func_t{"math_acos", (void*)&math_acos},
@@ -540,30 +597,6 @@ void je_extern_lib_3rd_pkgs_init()
     };
     _je_3rd_pkg_lib_handle.push_back(
         wo_fake_lib("libsocket", libsocket_fs, nullptr));
-
-    wo_extern_lib_func_t libthread_fs[] = {
-        wo_extern_lib_func_t{"thread_concurrency_count", (void*)&thread_concurrency_count},
-        wo_extern_lib_func_t{"thread_create", (void*)&thread_create},
-        wo_extern_lib_func_t{"thread_mutex_create", (void*)&thread_mutex_create},
-        wo_extern_lib_func_t{"thread_mutex_lock", (void*)&thread_mutex_lock},
-        wo_extern_lib_func_t{"thread_mutex_trylock", (void*)&thread_mutex_trylock},
-        wo_extern_lib_func_t{"thread_mutex_unlock", (void*)&thread_mutex_unlock},
-        wo_extern_lib_func_t{"thread_recursive_mutex_create", (void*)&thread_recursive_mutex_create},
-        wo_extern_lib_func_t{"thread_recursive_mutex_lock", (void*)&thread_recursive_mutex_lock},
-        wo_extern_lib_func_t{"thread_recursive_mutex_trylock", (void*)&thread_recursive_mutex_trylock},
-        wo_extern_lib_func_t{"thread_recursive_mutex_unlock", (void*)&thread_recursive_mutex_unlock},
-        wo_extern_lib_func_t{"thread_rw_mutex_create", (void*)&thread_rw_mutex_create},
-        wo_extern_lib_func_t{"thread_rw_mutex_lock", (void*)&thread_rw_mutex_lock},
-        wo_extern_lib_func_t{"thread_rw_mutex_lock_read", (void*)&thread_rw_mutex_lock_read},
-        wo_extern_lib_func_t{"thread_rw_mutex_trylock", (void*)&thread_rw_mutex_trylock},
-        wo_extern_lib_func_t{"thread_rw_mutex_trylock_read", (void*)&thread_rw_mutex_trylock_read},
-        wo_extern_lib_func_t{"thread_rw_mutex_unlock", (void*)&thread_rw_mutex_unlock},
-        wo_extern_lib_func_t{"thread_rw_mutex_unlock_read", (void*)&thread_rw_mutex_unlock_read},
-        wo_extern_lib_func_t{"thread_wait", (void*)&thread_wait},
-        WO_EXTERN_LIB_FUNC_END,
-    };
-    _je_3rd_pkg_lib_handle.push_back(
-        wo_fake_lib("libthread", libthread_fs, nullptr));
 
     wo_extern_lib_func_t libvm_fs[] = {
         wo_extern_lib_func_t{"vm_create", (void*)&vm_create},

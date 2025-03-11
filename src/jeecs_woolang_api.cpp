@@ -2523,7 +2523,7 @@ std::optional<std::string> _je_dynamic_parser_update_all(const char* path)
     {
         free(content);
 
-        std::string result = wo_get_compile_error(newvm, wo_inform_style::WO_DEFAULT);
+        std::string result = wo_get_compile_error(newvm, WO_DEFAULT);
         wo_close_vm(newvm);
 
         return std::optional(result);
