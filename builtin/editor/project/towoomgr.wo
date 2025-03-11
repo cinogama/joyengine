@@ -16,7 +16,7 @@ namespace editor
     using ToWooContext = struct
     {
         m_project_path: path_t,
-        m_loaded_towoo: mut dict<path_t, (int, je::typeinfo)>,
+        m_loaded_towoo: mut dict<path_t, (fsys::unix1970_time_t, je::typeinfo)>,
         m_bad_towoo_script: vec<path_t>,
 
         m_removing_component: map<string, je::typeinfo>,
@@ -39,15 +39,15 @@ namespace editor
         }
         func fetch_file(self: ToWooContext, type: string)
         {
-            let fetched_scripts = {}mut: map<path_t, int>;
+            let fetched_scripts = {}mut: map<path_t, fsys::unix1970_time_t>;
             let _repeat_checker = {}mut: map<string, path_t>;
             for (let p : allsubpath(self.m_project_path)->or([]))
             {
                 if (isfile(p) && filename(p)->lower->end_with(type))
                 {
-                    match (editor::crc64file(p->tostring))
+                    match (lastwrite(p))
                     {
-                    value(crc64_code)?
+                    ok(last_modify_time)?
                     {
                         let file_purename = pure_component_or_system_name(purename(p));
                         if (_repeat_checker->contain(file_purename))
@@ -60,16 +60,16 @@ namespace editor
                         else
                         {
                             _repeat_checker->set(file_purename, p);
-                            fetched_scripts->set(p, crc64_code);
+                            fetched_scripts->set(p, last_modify_time);
                         }
                     }
-                    none?;
+                    err(_)?;
                     }
                 }
             }
             return fetched_scripts;
         }
-        func update_system(self: ToWooContext, new_scripts: map<path_t, (int, je::typeinfo)>, fullupdate: bool)
+        func update_system(self: ToWooContext, new_scripts: map<path_t, (fsys::unix1970_time_t, je::typeinfo)>, fullupdate: bool)
         {
             let fetched_scripts = self->fetch_file(".jesystem.wo");
             for (let (p, (c, t)) : self.m_loaded_towoo)
@@ -91,7 +91,7 @@ namespace editor
             }
             return fetched_scripts;
         }
-        func update_component(self: ToWooContext, new_scripts: map<path_t, (int, je::typeinfo)>, fullupdate: bool)
+        func update_component(self: ToWooContext, new_scripts: map<path_t, (unix1970_time_t, je::typeinfo)>, fullupdate: bool)
         {
             let fetched_scripts = self->fetch_file(".jecomponent.wo");
             for (let (p, (c, t)) : self.m_loaded_towoo)
@@ -115,7 +115,7 @@ namespace editor
         }
         public func update(self: ToWooContext, force: bool)
         {
-            let new_scripts = {}mut: map<path_t, (int, je::typeinfo)>;
+            let new_scripts = {}mut: map<path_t, (unix1970_time_t, je::typeinfo)>;
 
             let fetched_components = self->update_component(new_scripts, force);
             let fetched_system = self->update_system(new_scripts, force);
@@ -157,8 +157,8 @@ namespace editor
                     }
                 }
             }
-            self.m_loaded_towoo = new_scripts as map<path_t, (int, je::typeinfo)>
-                ->unsafe::cast :<dict<path_t, (int, je::typeinfo)>>();
+            self.m_loaded_towoo = new_scripts as map<path_t, (unix1970_time_t, je::typeinfo)>
+                ->unsafe::cast :<dict<path_t, (unix1970_time_t, je::typeinfo)>>();
         }
         public func fast_check_for_update(self: ToWooContext)
         {
@@ -166,12 +166,12 @@ namespace editor
             {
                 if (isfile(p))
                 {
-                    match (editor::crc64file(p->tostring))
+                    match (lastwrite(p))
                     {
-                    value(crc64_code)?
-                        if (crc64_code != c)
+                    ok(last_modify_time)?
+                        if (last_modify_time != c)
                             return true;
-                    none?;
+                    err(_)?;
                     }
                 }
             }
@@ -179,18 +179,18 @@ namespace editor
         }
         public func check_for_update(self: ToWooContext)
         {
-            let fetched_scripts = {}mut: map<path_t, int>;
+            let fetched_scripts = {}mut: map<path_t, unix1970_time_t>;
             for (let p : allsubpath(self.m_project_path)->or([]))
             {
                 if (isfile(p) && (
                     filename(p)->lower->end_with(".jesystem.wo")
                     || filename(p)->lower->end_with(".jecomponent.wo")))
                 {
-                    match (editor::crc64file(p->tostring))
+                    match (lastwrite(p))
                     {
-                    value(crc64_code)?
-                        fetched_scripts->set(p, crc64_code);
-                    none?;
+                    ok(last_modify_time)?
+                        fetched_scripts->set(p, last_modify_time);
+                    err(_)?;
                     }
                 }
             }

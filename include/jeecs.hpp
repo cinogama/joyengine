@@ -9876,23 +9876,23 @@ namespace jeecs
                         data_value(const data_value& val)noexcept
                         {
                             m_type = val.m_type;
-                            m_value = val.m_value;
+                            memcpy((void*)&m_value, &val.m_value, sizeof(value));
                         }
                         data_value(data_value&& val)noexcept
                         {
                             m_type = val.m_type;
-                            m_value = val.m_value;
+                            memcpy((void*)&m_value, &val.m_value, sizeof(value));
                         }
                         data_value& operator = (const data_value& val)noexcept
                         {
                             m_type = val.m_type;
-                            m_value = val.m_value;
+                            memcpy((void*)&m_value, &val.m_value, sizeof(value));
                             return *this;
                         }
                         data_value& operator = (data_value&& val)noexcept
                         {
                             m_type = val.m_type;
-                            m_value = val.m_value;
+                            memcpy(&m_value, &val.m_value, sizeof(value));
                             return *this;
                         }
                     };

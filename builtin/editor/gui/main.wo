@@ -225,7 +225,7 @@ namespace editor::gui
             m_editing_entity_euid = mut option::none,
             m_fix_update_jobs = []mut,
             m_editor_form_controlor = {}mut,
-            m_towoo_system_update_timer = new! Timer(1.),
+            m_towoo_system_update_timer = new! Timer(5.),
         };
 
         // 开启主菜单
