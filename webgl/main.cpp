@@ -119,16 +119,16 @@ extern "C"
         g_surface_context = new je_webgl_surface_context();
     }
     void EMSCRIPTEN_KEEPALIVE 
-        _je4_je_io_update_mousepos(size_t group, int x, int y)
+        _je4_je_io_update_mousepos(int group, int x, int y)
     {
-        je_io_update_mouse_pos(group, x, y);
+        je_io_update_mouse_pos((size_t)group, x, y);
     }
     void EMSCRIPTEN_KEEPALIVE 
         _je4_je_io_update_mouse_state(
-            size_t group, int /*jeecs::input::mousecode*/ key, bool keydown)
+            int group, int /*jeecs::input::mousecode*/ key, bool keydown)
     {
         je_io_update_mouse_state(
-            group, (jeecs::input::mousecode)key, keydown);
+            (size_t)group, (jeecs::input::mousecode)key, keydown);
     }
 }
 

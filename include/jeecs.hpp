@@ -9892,25 +9892,26 @@ namespace jeecs
                         data_value& operator = (data_value&& val)noexcept
                         {
                             m_type = val.m_type;
-                            memcpy(&m_value, &val.m_value, sizeof(value));
+                            memcpy((void*)&m_value, &val.m_value, sizeof(value));
                             return *this;
                         }
                     };
                     struct component_data
                     {
-                        const jeecs::typing::type_info* m_component_type;
+                        const jeecs::typing::type_info* 
+                                            m_component_type;
                         const jeecs::typing::typeinfo_member::member_info*
-                            m_member_info;
-                        data_value                          m_member_value;
-                        bool                                m_offset_mode;
+                                            m_member_info;
+                        data_value          m_member_value;
+                        bool                m_offset_mode;
 
-                        void* m_member_addr_cache;
-                        jeecs::game_entity                  m_entity_cache;
+                        void*               m_member_addr_cache;
+                        jeecs::game_entity  m_entity_cache;
                     };
                     struct uniform_data
                     {
-                        basic::string                   m_uniform_name;
-                        data_value                      m_uniform_value;
+                        basic::string   m_uniform_name;
+                        data_value      m_uniform_value;
                     };
 
                     float                         m_frame_time;

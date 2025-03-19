@@ -77,7 +77,6 @@ set_target_properties(joyengineecs4w PROPERTIES
         -s USE_PTHREADS=1 \
         -s USE_WEBGL2=1 \
         -s USE_GLFW=3 \
-        -s WASM_BIGINT=1 \
         -s SHARED_MEMORY=1 \
         -s INITIAL_MEMORY=33554432 \
         -s ALLOW_MEMORY_GROWTH=1 \
@@ -85,7 +84,7 @@ set_target_properties(joyengineecs4w PROPERTIES
         -s DEFAULT_PTHREAD_STACK_SIZE=1048576 \
         -s PTHREAD_POOL_SIZE=16 \
         -s PTHREAD_POOL_SIZE_STRICT=0 \
-        -s MIN_SAFARI_VERSION=150000 \
+        -s MIN_SAFARI_VERSION=140100 \
         -s MIN_CHROME_VERSION=85 \
         -s MIN_FIREFOX_VERSION=79 \
         -s EXPORTED_RUNTIME_METHODS=[\"cwrap\"] \
