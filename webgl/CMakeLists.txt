@@ -84,7 +84,7 @@ set_target_properties(joyengineecs4w PROPERTIES
         -s DEFAULT_PTHREAD_STACK_SIZE=1048576 \
         -s PTHREAD_POOL_SIZE=16 \
         -s PTHREAD_POOL_SIZE_STRICT=0 \
-        -s MIN_SAFARI_VERSION=140100 \
+        -s MIN_SAFARI_VERSION=150000 \
         -s MIN_CHROME_VERSION=85 \
         -s MIN_FIREFOX_VERSION=79 \
         -s EXPORTED_RUNTIME_METHODS=[\"cwrap\"] \
