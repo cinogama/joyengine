@@ -210,11 +210,11 @@ wo_integer_t crc64_of_source_and_api()
 
     const char* crc64_src = R"(
 import woo::std;
+import je::internal;
 import pkg::fsys;
-import je::editor;
 
 using std;
-using je::editor;
+using je::internal;
 
 func main()
 {
