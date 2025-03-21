@@ -448,8 +448,6 @@ WO_API wo_api wojeapi_towoo_math_quat_slerp(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_towoo_math_sin(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_towoo_math_sqrt(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_towoo_math_tan(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_member_get(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_towoo_member_set(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_towoo_physics2d_collisionresult_all(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_towoo_physics2d_collisionresult_check(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_towoo_ray_create(wo_vm vm, wo_value args);
@@ -955,8 +953,6 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"wojeapi_towoo_math_sin", (void*)&wojeapi_towoo_math_sin},
         wo_extern_lib_func_t{"wojeapi_towoo_math_sqrt", (void*)&wojeapi_towoo_math_sqrt},
         wo_extern_lib_func_t{"wojeapi_towoo_math_tan", (void*)&wojeapi_towoo_math_tan},
-        wo_extern_lib_func_t{"wojeapi_towoo_member_get", (void*)&wojeapi_towoo_member_get},
-        wo_extern_lib_func_t{"wojeapi_towoo_member_set", (void*)&wojeapi_towoo_member_set},
         wo_extern_lib_func_t{"wojeapi_towoo_physics2d_collisionresult_all", (void*)&wojeapi_towoo_physics2d_collisionresult_all},
         wo_extern_lib_func_t{"wojeapi_towoo_physics2d_collisionresult_check", (void*)&wojeapi_towoo_physics2d_collisionresult_check},
         wo_extern_lib_func_t{"wojeapi_towoo_ray_create", (void*)&wojeapi_towoo_ray_create},

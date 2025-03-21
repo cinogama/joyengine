@@ -1,0 +1,119 @@
+// (C)Cinogama. 
+import je;
+import je::towoo::types;
+
+namespace je::towoo::component
+{
+    extern("libjoyecs", "wojeapi_towoo_update_component_data")
+    func update_component_declare(
+        name: string, members: vec<(string, typeinfo, option<(string, dynamic)>)>)=> typeinfo;
+
+    let registered_member_infoms = []mut: vec<(string, typeinfo, option<(string, dynamic)>)>;
+    public func register_member<TInfo>(name: string, typename_and_init_val: option<(string, dynamic)>)
+    {
+       registered_member_infoms->add((name, typeof:<TInfo>::typeinfo, typename_and_init_val));
+    }
+}
+
+extern func _init_towoo_component(name: string)
+{
+    return je::towoo::component::update_component_declare(
+        name,
+        je::towoo::component::registered_member_infoms);
+}
+
+#macro component
+{
+    /*
+    component!
+    {
+        member_name: type,
+    }
+    */
+
+    if (lexer->next != "{")
+    {
+        lexer->error("Unexpected token, here should be '{'.");
+        return "";
+    }
+
+    let decls = []mut: vec<(string, string, option<string>)>;
+    for (;;)
+    {
+        let name = lexer->next;
+        if (name == "")
+            lexer->error("Unexpected EOF.");
+        else if (name == ",")
+            continue;
+        else if (name == "}")
+            break;
+        
+        if (lexer->next != ":")
+        {
+            lexer->error("Unexpected token, here should be ':'.");
+            return "";
+        }
+        let mut type = "";
+        let mut is_woolang_val = false;
+
+        if (lexer->peek == "woolang")
+        {
+            do lexer->next;
+            is_woolang_val = true;
+        }
+
+        let mut depth = 0;        
+
+        for (;;)
+        {
+            let ty = lexer->peek;
+
+            if (ty == "<" || ty == "(" || ty == "[" || ty == "{")
+                depth += 1;
+            else if (ty == ">" || ty == "\x29" || ty == "]" || ty == "}")
+                depth -= 1;
+
+            if (depth <= 0 && (ty == "," || ty == "}" || ty == "=" || ty == ""))
+                break;
+            type += lexer->next + " ";
+        }
+
+        let mut woolang_val_init = "";
+        if (is_woolang_val)
+        {
+            if (lexer->next != "=")
+            {
+                lexer->error("Unexpected token, here should be '='.");
+                return "";
+            }
+            
+            for (;;)
+            {
+                let ty = lexer->peek;
+
+                if (ty == "<" || ty == "(" || ty == "[" || ty == "{")
+                    depth += 1;
+                else if (ty == ">" || ty == "\x29" || ty == "]" || ty == "}")
+                    depth -= 1;
+
+                if (depth <= 0 && (ty == "," || ty == "}" || ty == "=" || ty == ""))
+                    break;
+                woolang_val_init += lexer->next + " ";
+            }
+        }
+
+        decls->add((name, type, is_woolang_val ? option::value(woolang_val_init) | option::none));
+    }
+    let mut result = ";";
+    for (let (name, type, wooval) : decls)
+    {
+        match (wooval)
+        {
+        value(val_init_expr)?
+            result += F"je::towoo::component::register_member:<dynamic::type>({name->enstring}, option::value(({type->enstring}, {val_init_expr} as {type}: dynamic)));";
+        none?
+            result += F"je::towoo::component::register_member:<{type}::type>({name->enstring}, option::none);";
+        }
+    }
+    return result;
+}

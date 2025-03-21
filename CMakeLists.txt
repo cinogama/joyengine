@@ -152,6 +152,8 @@ execute_process(
 
 if (JE4_COPYING_BUILTIN_FILES)
     if(${CMAKE_HOST_SYSTEM_NAME} MATCHES "Windows")
+        add_custom_target(COPY_INTERNAL_SCRIPTS 
+            COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}\\je\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\\je\\\" /Y /S /I /D)
         add_custom_target(COPY_BUILTIN_FILES 
             COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}\\builtin\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\\builtin\\\" /Y /S /I /D)
         add_custom_target(COPY_ENGINE_FILES 
@@ -163,6 +165,8 @@ if (JE4_COPYING_BUILTIN_FILES)
         add_custom_target(COPY_RCEDIT32_FILES 
             COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}\\3rd\\rcedit-x86.exe\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\\builtin\" /Y /I /D)
     else()
+        add_custom_target(COPY_INTERNAL_SCRIPTS 
+            COMMAND cp \"${CMAKE_CURRENT_SOURCE_DIR}/je\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/je\" -r)
         add_custom_target(COPY_BUILTIN_FILES 
             COMMAND cp \"${CMAKE_CURRENT_SOURCE_DIR}/builtin\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/builtin\" -r)
         add_custom_target(COPY_ENGINE_FILES 
@@ -289,6 +293,7 @@ else()
 endif()
 
 if (JE4_COPYING_BUILTIN_FILES)
+    add_dependencies(COPY_BUILTIN_FILES COPY_INTERNAL_SCRIPTS)
     add_dependencies(COPY_ENGINE_FILES COPY_BUILTIN_FILES)
     add_dependencies(COPY_WOOLANG_FILES COPY_ENGINE_FILES)
     add_dependencies(COPY_RCEDIT64_FILES COPY_WOOLANG_FILES)
