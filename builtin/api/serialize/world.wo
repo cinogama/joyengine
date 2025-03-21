@@ -1,5 +1,5 @@
 import woo::std;
 
 import je;
-import je::editor;
+import je::internal;
 import je::towoo;

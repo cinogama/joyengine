@@ -1,5 +1,63 @@
 import woo::std;
 
 import je;
-import je::editor;
+import je::internal;
 import je::towoo;
+
+import pkg::worst;
+
+using je;
+
+namespace je::api::serialize
+{
+    using EntityState = struct{
+        m_name: string,
+        m_is_editor: bool,
+        m_components: dict<string, dict<string, string>>,
+    }
+    {
+        public func dump(e: entity)
+        {
+            let mut is_editor = false;
+            let components_data = {}mut: map<string, dict<string, string>>;
+
+            // e->internal::get_entity_uid;
+            for (let (ctype, cdata) : e->internal::get_components)
+            {
+                let component_data = {}mut: map<string, string>;
+
+                if (ctype == Editor::Invisable::type::typeinfo)
+                    // Is invisiable
+                    is_editor = true;
+
+                // Walk through the members of the component
+                for (let (member_name, member_type, member_addr) : cdata->get_members)
+                {
+                    if (is_none <| towoo::unsafe::dynamic_parser::saving(member_type, member_addr)
+                        ->> \saved_member = component_data->set(member_name, saved_member);)
+                    {
+                        logwarn(f"Failed to serialize member named '{member_name}' of component '{ctype->name}'");
+                    }
+                }
+
+                // Store~
+                components_data->set(ctype->name, component_data->unsafe::asdict);
+            }
+
+            return EntityState{
+                m_name = e->internal::name,
+                m_is_editor = is_editor,
+                m_components = components_data->unsafe::asdict,
+            };
+        }
+        public func restore(self: EntityState, at_world: world)
+        {
+            let typed_components = 
+                self.m_components;
+            //{}mut: map<typeinfo, dict<string, string>>;
+
+
+            // at_world->add_entity(self.m_components.);
+        }
+    }
+}
