@@ -1,4 +1,628 @@
 import woo::std;
-import je;
+import pkg::crashhandler;
 
-je::log("Hello, world!");
+import woo::debug;
+
+import pkg::fsys;
+import pkg::interface;
+import pkg::makenew;
+import pkg::iterator;
+
+import je;
+import je::internal;
+
+import builtin::api::gui::iconbutton;
+import builtin::api::gui::panic;
+
+import builtin::editor::welcome::main;
+import builtin::editor::gui::form::msg;
+import builtin::editor::gui::form::input;
+import builtin::editor::environment::main;
+import builtin::editor::project::main;
+import builtin::editor::gui::main;
+
+jeapi::welcome::display_copyright_msg();
+
+// Debug.
+crashhandler::init();
+je::internal::register_panic_hook(jeapi::gui::form::panic);
+
+using je::gui;
+
+let mut action_after_guide_form_closed = \ = result::ok(\=do nil;); as ()=>result<()=>void, string>;
+
+using Path = struct {
+    name: string,       // 仅用于显示
+    path: fsys::path_t,
+    childs: mut option<array<Path>>,
+}
+{
+    func _get_available_root_paths()
+    {
+        // NOTE: 这里只考虑Windows的A-Z盘符，什么AA AB AC，就算windows未来支持也给爷滚
+        let arr = ["/"]mut;
+
+        if (std::platform::os == std::platform::os_type::WIN32)
+        {
+            for (let mut ch = "A"->getch(0); ch <= "Z"->getch(0); ch += 1: char)
+                arr->add([ch]->str + ":/");
+        }
+
+        return arr
+            ->  unsafe::cast:<array<string>>
+            ->> \pname = fsys::normalize(pname);
+            ->  forall(\path = fsys::isdir(path);)
+            ->> \rootpath = Path
+                {
+                    name = rootpath->tostring(),
+                    path = rootpath,
+                    childs = mut option::none
+                }
+                ;
+            ;
+    }
+    func childs(path: Path, update: bool)
+    {
+        if (update || !path.childs->is_value)
+        {
+            let arr = 
+                fsys::subpath(path.path)
+                    ->  unwrap
+                    ->  forall(\child_path = fsys::isdir(child_path);)
+                    ->> \child_path = Path
+                        {
+                            name = fsys::filename(child_path),
+                            path = child_path,
+                            childs = mut option::none
+                        }
+                        ;
+            ;
+            path.childs = option::value(arr);            
+        }
+
+        return path.childs->unwrap;
+    }
+    func show(path: Path)=> option<fsys::path_t>
+    {
+        static let mut selected_path = option::none: option<fsys::path_t>;
+
+        let show_child = TreeNodeEx(path.name, 
+                TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
+                + selected_path
+                    ->map(\p = p->tostring == path.path->tostring;)
+                    ->or(false)
+                    ->\b: bool = 
+                        b   ? TreeNodeAttribute::ImGuiTreeNodeFlags_Selected
+                            | TreeNodeAttribute::ImGuiTreeNodeFlags_None;);
+
+        if (IsItemClickedLeft() && !IsItemToggledOpen())
+            selected_path = option::value(path.path);
+
+        if (show_child)
+        {
+            for (let child_path : path->childs(false))
+                match(child_path->show())
+                {
+                value(result)?
+                    selected_path = value(result);
+                none?
+                    ;
+                }
+
+            TreePop();
+        }
+        return selected_path;
+    }
+    func show_all()
+    {
+        static let roots = _get_available_root_paths();
+
+        return roots
+            =>> \path = r->is_value ? [r->unwrap] | [] where r = path->show();
+            ->  get(0)
+            =>> \p = fsys::isdir(p) ? option::value(p) | option::none;
+            ;
+    }
+}
+
+func open_path_to_do_sth(action_after_choice: (option<fsys::path_t>)=>void)
+{
+    let mut open = true;
+    match (BeginAttrOpen("加载或新建项目", 
+        WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
+    {
+    value(show)?
+        if (show)
+        {
+            let (cur_width, _) = GetContentRegionAvail();
+            Text("请选择项目文件所在的目录：");
+
+            do BeginChildSize("SelectPathToCreateProject", 0., 300.);
+            let select_path_to_create = Path::show_all();
+            EndChild();
+
+            if (ButtonSize("确认", (cur_width, 0.) ))
+            {
+                open = false;
+                action_after_choice(select_path_to_create);
+            }
+            if (ButtonSize("取消", (cur_width, 0.) ))
+                open = false;
+        }
+    none?
+        open = false;
+    }
+
+    End();
+    return open;
+}
+
+func read_editor_data()
+{
+    return fsys::readall(fsys::normalize(std::host_path()) / "builtin" / "editor.dat.je4cache")
+        =>> \dat = dict::deserialize(dat);
+        ->  or({})
+        ;
+}
+
+func apply_editor_data_when_start_up_project(dat: dict<dynamic, dynamic>)
+{
+    let form_size = dat
+        ->  get_or("form_size": dynamic, [1344, 768]: dynamic) as array<dynamic>
+        ->> \d = d as int;
+        ;
+    je::internal::set_window_size(form_size[0], form_size[1]);
+}
+func save_editor_data_after_exit(dat: dict<dynamic, dynamic>, proj_name: string, proj_path: fsys::path_t)
+{
+    let (win_w, win_h) = je::input::windowsize();
+    let project_histories = dat->get_or("history": dynamic, []: dynamic) as array<dynamic>->unsafe::cast:< array<array<string>> >;
+    
+    let newdat = dat->to_map();
+    newdat->set("form_size": dynamic, [win_w, win_h]: dynamic);
+    newdat->set("history": dynamic, project_histories
+        ->forall(\record = record[1] != proj_path->tostring;)
+        ->inlay(0, [proj_name, proj_path->tostring]): dynamic);
+
+    assert(
+        fsys::writeall(fsys::normalize(std::host_path()) / "builtin" / "editor.dat.je4cache", newdat->serialize->unwrap)
+    );
+
+    assert(fsys::setworkpath(fsys::normalize(std::host_path())));
+}
+
+func my_ask_for_get_yes_no_cancel_result(
+    p: editor::Project,
+    okevent: (int)=> void)
+{
+    // What a bull shit!
+    
+    using je::gui;
+    using jeapi::gui;
+
+    p->try_update_towoo(false);
+
+    launch(func()
+    {
+        let mut open = true;
+        match (BeginAttrOpen(F"退出？##{JobID()}", 
+            WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
+        {
+        value(show)?
+            if (show)
+            {
+                if (p->is_debugging)
+                {
+                    TextDisabled("正在编辑模式中，请先退出编辑状态");
+                }
+                else
+                {
+                    Text("即将退出编辑器，是否保存当前项目？");
+                    let missing_comps = p->get_towoo_context->get_removing_components;
+                    let missing_syss = p->get_towoo_context->get_removing_systems;
+                    if (!missing_comps->empty || !missing_syss->empty)
+                    {
+                        Separator();
+
+                        PushStyleColor(ImGuiCol::ImGuiCol_Text, (200, 125, 40, 255));
+                        Text("警告！");
+                        PopStyleColor(1);
+                        Text("以下组件和系统处于丢失状态：");
+
+                        if (!missing_comps->empty)
+                        {
+                            Text("组件：");
+                            PushStyleColor(ImGuiCol::ImGuiCol_Text, (20, 125, 175, 255));
+                            for (let c: missing_comps)
+                                Text(c);
+                            PopStyleColor(1);
+                        }
+                        if (!missing_syss->empty)
+                        {
+                            Text("系统：");
+                            PushStyleColor(ImGuiCol::ImGuiCol_Text, (175, 125, 20, 255));
+                            for (let s: missing_syss)
+                                Text(s);
+                            PopStyleColor(1);
+                        }
+                        Text("下次载入将丢失以上组件或系统");
+                        Separator();
+                    }
+
+                    if (Button("是") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ENTER)))
+                    {
+                        okevent(1);
+                        open = false;
+                    }
+                    SameLine();
+                    if (Button("否") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ESC)))
+                    {
+                        okevent(0);
+                        open = false;
+                    }
+                    SameLine();
+                    if (Button("取消") || (IsWindowFocused() && inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::BACKSPACE])))
+                    {
+                        okevent(-1);
+                        open = false;
+                    }
+                }
+            }
+        none?
+            {
+                okevent(-1);
+                open = false;
+            }
+        }
+
+        End();
+
+        return open;
+
+    }, ());
+}
+
+public func ask_for_saving_proj_when_exit(p: editor::Project)
+{
+    static let mut shown = false;
+
+    if (shown == false)
+    {
+        shown = true;
+        my_ask_for_get_yes_no_cancel_result(p,
+            func(op)
+            {
+                shown = false;
+                if (op == 1)
+                {
+                    if (!p->save_project())
+                    {
+                        // 发生了一些事情，没有保存成功，弹框并且不退出
+                        jeapi::gui::form::errmsg("失败", "项目保存未能完成");
+                        return;
+                    }
+                }
+
+                if (op != -1)
+                    p->close();
+            }
+        );
+    }
+    return false;
+}
+
+func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict<dynamic, dynamic>, f: std::mutable<bool>)
+{
+    // 确保目录存在
+    if (! fsys::exist(path))
+        return jeapi::gui::form::errmsg("失败", F"创建项目失败，不存在的目录{path}");
+
+    jeapi::gui::form::input("新项目命名", F"将在{path}创建新项目", "NewProject", 
+        func(projname)
+        {
+            // 再次确保文件存在
+            if (! fsys::exist(path))
+                return do jeapi::gui::form::errmsg("失败", F"创建项目失败，不存在的目录{path}");
+
+            let project_path = path / projname;
+            match (fsys::mkdir(project_path))
+            {
+            err(errno)?
+                return do jeapi::gui::form::errmsg("失败", F"创建项目失败，无法创建目录{project_path} ({errno})");
+            ok(regular_path)?
+                {
+                    // OK, 关闭当前universe，关闭编辑器导航窗口，创建项目并保存到
+                    u->close();
+                    f->set(false);
+                    
+                    je::internal::set_runtime_path(project_path->tostring);
+
+                    action_after_guide_form_closed = 
+                        func(){
+                            try! p = editor::Project::create(projname, regular_path);
+                            
+                            apply_editor_data_when_start_up_project(editordat);
+                            assert(p->save_project());
+
+                            // 在此处创建资源目录，包含一些基本的资源和未来自动创建的资源
+                            do fsys::mkdir(p->get_path/"resource");
+                            do fsys::mkdir(p->get_path/"resource"/"texture");
+                            do fsys::mkdir(p->get_path/"resource"/"workflow");
+                            do fsys::mkdir(p->get_path/"resource"/"workflow"/"node");
+                            do fsys::mkdir(p->get_path/"resource"/"workflow"/"type");
+                            do fsys::mkdir(p->get_path/"resource"/"workflow"/"producer");
+                            do fsys::writeall(p->get_path/"resource"/"workflow"/"node"/".gitkeepme", "");
+                            do fsys::writeall(p->get_path/"resource"/"workflow"/"type"/".gitkeepme", "");
+                            do fsys::writeall(p->get_path/"resource"/"workflow"/"producer"/".gitkeepme", "");
+
+                            do fsys::writeall(p->get_path/"resource"/"texture"/"readme.md", 
+@"# Texture 目录
+---
+此目录用于保存引擎自动生成的图像资源
+"@);
+                            do fsys::copy(
+                                fsys::normalize(F"{std::host_path()}/builtin/shader"), 
+                                fsys::normalize(F"{p->get_path}/resource/shader"));
+                            do fsys::copy(
+                                fsys::normalize(F"{std::host_path()}/builtin/font"), 
+                                fsys::normalize(F"{p->get_path}/resource/font"));
+                            do fsys::copy(
+                                fsys::normalize(F"{std::host_path()}/builtin/script/editor.wo"),
+                                fsys::normalize(F"{p->get_path}"));
+                            do fsys::writeall(p->get_path / ".gitignore", 
+@"# JoyEngine ECS git ignore config.
+
+# Ignore temporary files.
+/.vscode/*
+/.export/*
+/.temporary/*
+
+# Ignore pkg files.
+/pkg/*
+
+# Ignore crash dump files.
+/*.dmp
+
+# Ignore editor data files.
+/project.je4project.je4lock
+
+# Ignore cache files.
+*.je4cache
+"@);
+                            do fsys::writeall(p->get_path / ".gitattributes", 
+@"# JoyEngine ECS
+
+project.je4project text eol=lf
+*.je4world text eol=lf
+*.je4entity text eol=lf
+*.je4workflow text eol=lf
+*.je4tilemap text eol=lf
+*.je4tileset text eol=lf
+*.je4partical text eol=lf
+*.je4chunk text eol=lf
+*.je4chunklist text eol=lf
+"@);
+                            match (je::towoo::unsafe::dynamic_parser::update_all("@/editor.wo"))
+                            {
+                            ok(_)?;
+                            err(msg)?
+                                {
+                                    p->close();
+                                    return err(msg);
+                                }
+                            }
+
+                            je::gui::register_exit_callback(\=ask_for_saving_proj_when_exit(p););
+                            editor::gui::edit_project(p);
+                            save_editor_data_after_exit(editordat, p->get_name, p->get_path);
+                            je::gui::unregister_exit_callback();
+
+                            return result::ok(\=p->get_towoo_context_for_exit->close;);
+                        }
+                    ;
+                }
+            }
+        });
+}
+
+func open_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict<dynamic, dynamic>, f: std::mutable<bool>)
+{
+    let proj_path = path/"project.je4project";
+
+    // 确保目录存在
+    if (! fsys::exist(proj_path))
+        return jeapi::gui::form::errmsg("失败", F"加载项目失败，找不到项目文件{proj_path}");
+    
+    match (fsys::readall(proj_path)=>> \d = dict::deserialize(d)->> \d = d->> \k,v = (k as string, v);;;)
+    {
+    value(dat)?
+        {
+            // OK, 关闭当前universe，关闭编辑器导航窗口，打开项目
+            u->close();
+            f->set(false);
+
+            je::internal::set_runtime_path(path->tostring());
+
+            action_after_guide_form_closed = 
+                func()
+                {
+                    try! p = editor::Project::load(path, dat);
+
+                    apply_editor_data_when_start_up_project(editordat);
+
+                    je::gui::register_exit_callback(\=ask_for_saving_proj_when_exit(p););
+                    editor::gui::edit_project(p);
+                    save_editor_data_after_exit(editordat, p->get_name, p->get_path);
+                    je::gui::unregister_exit_callback();
+
+                    return result::ok(\=p->get_towoo_context_for_exit->close;);
+                }
+            ;
+        }
+    none?
+        return do jeapi::gui::form::errmsg("失败", F"打开项目失败，找不到或无效的项目文件");
+    }
+
+}
+
+for (;;)
+{
+    let create_project_icon = je::graphic::texture::load(option::none, F"!/builtin/icon/Create.png")->unwrap;
+    let load_project_icon = je::graphic::texture::load(option::none, F"!/builtin/icon/Load.png")->unwrap;
+    let exit_editor_icon = je::graphic::texture::load(option::none, F"!/builtin/icon/Exit.png")->unwrap;
+    
+    action_after_guide_form_closed = \ = result::ok(\=do nil;);;
+
+    let u = new! editor::Environment();
+    {
+        let editor_configs = read_editor_data();
+        let historys = editor_configs->get_or("history": dynamic, []: dynamic) as array<dynamic>->unsafe::cast:< vec<array<string>> >;
+
+        je::internal::init_graphic_pipeline(u->get_universe());
+
+        if (std::platform::os != std::platform::os_type::WIN32 || 
+            editor::CxxProject::is_builder_ready())
+        {
+            launch(func(){
+                let open = new! std::mutable(true);
+
+                if (BeginAttr("JoyEngineECS 项目导航", 
+                    WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
+                    + WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus
+                    + WindowsAttribute::ImGuiWindowFlags_NoDocking
+                    + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
+                {
+                    Text("欢迎使用JoyEngine，请选择一项以开始");
+
+                    Separator();
+
+                    if (jeapi::gui::widget::IconButton(create_project_icon, "创建新项目", (64., 64.), option::none))
+                    {
+                        launch(open_path_to_do_sth, (\p: option<fsys::path_t> = do p->> \path = create_project_at(path, u, editor_configs, open);;,));
+                    }
+                    if (jeapi::gui::widget::IconButton(load_project_icon, "加载一个项目", (64., 64.), option::none))
+                    {
+                        launch(open_path_to_do_sth, (\p: option<fsys::path_t> = do p->> \path = open_project_at(path, u, editor_configs, open);;,));
+                    }
+
+                    TextDisabled("历史项目");
+                    do BeginChildSize("##history", 0., 100.);
+
+                    for (let (index, dat) : historys->iter |> iterator::enumerate)
+                    {
+                        let context_menu_func = func()
+                        {
+                            if (MenuItem("加载此项目"))
+                                open_project_at(fsys::normalize(dat[1]), u, editor_configs, open);
+                            if (MenuItem("打开项目所在路径"))
+                                do std::shell(F"explorer \"{fsys::normalize(dat[1])->tostring->replace("/", "\\")}\"");
+                            Separator();
+                            if (MenuItem("从历史记录中移除"))
+                            {
+                                jeapi::gui::form::ask("确认移除？", F"确认要将项目{dat[0]} ({dat[1]})\n从历史记录中移除吗？",
+                                    func(check)
+                                    {
+                                        if (check)
+                                        {
+                                            match (historys->get(index))
+                                            {
+                                            value(removing_data)?
+                                                if (removing_data[0] == dat[0] && removing_data[1] == dat[1])
+                                                {
+                                                    do historys->remove(index);
+                                                    assert(
+                                                        fsys::writeall(fsys::normalize(std::host_path())/ "builtin" / "editor.dat.je4cache", editor_configs->serialize->unwrap)
+                                                    );
+                                                }
+                                            none?;
+                                            }
+                                        }
+                                    });
+                            }
+                        };
+                        if (jeapi::gui::widget::IconButton(load_project_icon, F"{dat[0]} ({dat[1]})", (16., 16.), option::value(context_menu_func)))
+                            open_project_at(fsys::normalize(dat[1]), u, editor_configs, open);
+                    }
+
+                    EndChild();
+
+                    if (jeapi::gui::widget::IconButton(exit_editor_icon, "退出编辑器", (64., 64.), option::none))
+                    {
+                        u->close();
+                        open->set(false);
+                    }
+
+                    Separator();
+                    TextDisabled("(C)Cinogama project. 2022.");
+                }
+                End();
+
+                return open->get();
+            }, ());
+        }
+        else
+        {
+            launch(func(){
+                if (BeginAttr("JoyEngineECS 项目导航", 
+                    WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
+                    + WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus
+                    + WindowsAttribute::ImGuiWindowFlags_NoDocking
+                    + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
+                {
+                    Text("启动引擎时发现项目所需使用的构建工具未准备就绪");
+                    Text("* 项目中的C++模块需要使用构建工具进行编译");
+                    Separator();
+                    Text("请确认以下事项已经完成，然后重启编辑器");
+
+                    let shine_text = func(text: string)
+                    {
+                        if ((std::time() * 2.): int % 2 == 0)
+                            Text(text);
+                        else
+                            TextDisabled(text);
+                    };
+                    shine_text("请特别关注‘注意’部分的内容");
+
+                    do BeginChildSize("##history", 600., 300.);
+                    Text("1. 请确认已经安装CMake 3.16或以上版本");
+                    Text("2. 请找到CMake的 cmake.exe 所在路径");
+                    TextDisabled("  * 以安装在C盘的为例，cmake.exe所在路径可能为:");
+                    TextDisabled("    "); SameLine();
+                    do InputText("(仅供参考)", @"C:\Program Files\cmake-3.16.3-rc3-windows-x86_64\bin"@);
+                    Text("3. 请设置环境变量 `CMAKE` 指向此路径");
+
+                    Separator();
+                    Text("注意：");
+                    Text("* 请确保上述所有路径中不包含多字节字符（包括但不限于中文、全角符号等）");
+                    EndChild();
+                    
+                    Separator();
+                    TextDisabled("(C)Cinogama project. 2022.");
+                }
+                End();
+
+                return true;
+            }, ());
+        }
+
+        u->wait();
+        // 这个有点操蛋，到时候看一下怎么处理
+        do u->get_universe->close();
+    }
+
+    match (action_after_guide_form_closed())
+    {
+    ok(act)?
+    {
+        act();;
+        break;
+    }
+    err(msg)? 
+        {
+            je::logerr(F"无法打开指定项目：{msg}");
+            jeapi::gui::form::msg("打开项目失败", F"无法打开指定项目：{msg}");
+        }
+    }
+}

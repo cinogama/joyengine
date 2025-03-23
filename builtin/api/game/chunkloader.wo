@@ -1,0 +1,258 @@
+import je;
+
+import pkg::worst;
+import pkg::try;
+
+import builtin::api::serialize::main;
+
+using je;
+
+namespace jeapi::loader
+{
+    using chunkloader = struct{
+        m_chunks: dict<int, dict<int, chunk>>,
+    }
+    {
+        func _get_located_path(path: string)
+        {
+            match (path->rfind("/"))
+            {
+            value(idx)? return path->sub_len(0, idx + 1);
+            none? return "";
+            }
+        }
+
+        using chunk = struct{
+            m_cached_layers: dict<int, layer>,
+        }
+        {
+            union load_state
+            {
+                wait,
+                loaded(je::entity),
+                failed,
+            }
+
+            using layer = struct{
+                m_layer: int,
+                m_size: int,
+                m_walkable: array<bool>,
+                m_path: string,
+                m_state: mut load_state,
+            }
+            {
+                alias InstanceEntityCallbackT = (layer)=> option<entity>;
+
+                func create(chunk_layer_path: string, layer: int)
+                {
+                    match (file::readall(chunk_layer_path)
+                        =>> \dat = dat->dict::deserialize;)
+                    {
+                    value(dat)?
+                    {
+                        try! sz = dat->get("size": dynamic)=>> \v = v->trycast:<int>;;
+                        try! tex = dat->get("texture": dynamic)=>> \v = v->trycast:<string>;;
+                        try! wkable = dat->get("walkable": dynamic)
+                            =>> \v = v->trycast:<array<dynamic>>;
+                            ->> \v = v
+                                ->> \e = e->or(false);
+                                ;
+                            ;
+
+                        let parent_path = _get_located_path(chunk_layer_path);
+
+                        return value(layer{
+                            m_layer = layer,
+                            m_size = sz,
+                            m_path = parent_path + tex,
+                            m_state = mut load_state::wait,
+                            m_walkable = wkable,
+                        });
+                    }
+                    none? return none;
+                    }
+                }
+                func close(self: layer)
+                {
+                    self->unload;
+                }
+                
+                func instance(self: layer, callback: InstanceEntityCallbackT)
+                {
+                    match (self.m_state)
+                    {
+                    wait?
+                    {
+                        match (callback(self))
+                        {
+                        value(e)?
+                            self.m_state = load_state::loaded(e);
+                        none?
+                            self.m_state = load_state::failed;
+                        }
+                    }
+                    _?;
+                    }
+                }
+                func unload(self: layer)
+                {
+                    match (self.m_state)
+                    {
+                    loaded(e)?
+                    {
+                        self.m_state = load_state::wait;
+                        e->close();
+                    }
+                    _?;
+                    }
+                }
+
+                public func get_layer_id(self: layer)
+                {
+                    return self.m_layer;
+                }
+                public func get_size(self: layer)
+                {
+                    return self.m_size;
+                }
+                public func get_walkable(self: layer, x: int, y: int)
+                {
+                    return self.m_walkable->get(x + y * self.m_size);
+                }
+                public func get_path(self: layer)
+                {
+                    return self.m_path;
+                }
+            }
+
+            func create(chunk_path: string)
+            {
+                match (file::readall(chunk_path)
+                    =>> \dat = dat->dict::deserialize;
+                    =>> \dat = dat->get("layers": dynamic);
+                    =>> \dat = dat->trycast:<dict<dynamic, dynamic>>;)
+                {
+                value(dat)?
+                {
+                    let parent_path = _get_located_path(chunk_path);
+                    let result = {}mut: map<int, layer>;
+
+                    for (let (layer_id, layer_path) : dat)
+                    {
+                        do try!
+                        {
+                            try! id = layer_id->trycast:<int>;
+                            try! path = layer_path->trycast:<string>;
+
+                            try! layer = layer::create(parent_path + path, id);
+
+                            result->set(id, layer);
+
+                            return option::value(do nil);
+                        };
+                    }
+
+                    return option::value(
+                        chunk{
+                            m_cached_layers = result->unsafe::asdict,
+                        });
+                    
+                }
+                none?
+                    return none;
+                }
+            }
+            func close(self: chunk)
+            {
+                for (let (_, l) : self.m_cached_layers)
+                    l->close();
+            }
+
+            func instance(self: chunk, callback: layer::InstanceEntityCallbackT)
+            {
+                for (let (_, l) : self.m_cached_layers)
+                    l->instance(callback);
+            }
+            func unload(self: chunk)
+            {
+                for (let (_, l) : self.m_cached_layers)
+                    l->unload();
+            }
+        }
+
+        public func create(path: string)
+        {
+            let parent_path = _get_located_path(path);
+            match (file::readall(path)=>>\dat = dat->dict::deserialize;)
+            {
+            value(dat)?
+            {
+                let result = {}mut: map<int, dict<int, chunk>>;
+
+                return try!
+                    {
+                        for (let (dx, dv) : dat)
+                        {
+                            try! x = dx->trycast:<int>;
+                            try! v = dv->trycast:<dict<dynamic, dynamic>>;
+
+                            let chunk_line = {}mut: map<int, chunk>;
+
+                            for (let (dy, cpath) : v)
+                            {
+                                do try!
+                                {
+                                    try! y = dy->trycast:<int>;
+                                    try! path = cpath->trycast:<string>;
+                                    try! newchunk = chunk::create(parent_path + path);
+
+                                    chunk_line->set(y, newchunk);
+
+                                    return option::value(do nil);
+                                };
+                            }
+
+                            result->set(x, chunk_line->unsafe::asdict);
+                        }
+
+                        return option::value(
+                            chunkloader{
+                                m_chunks = result->unsafe::asdict,
+                            });
+
+                    }
+                    catch!
+                    {
+                        for (let (_, cs) : result)
+                            for (let (_, c) : cs)
+                                c->close();
+                    };
+            }
+            none?
+                return option::none;
+            }
+        }
+        public func close(self: chunkloader)
+        {
+            for (let (_, cs) : self.m_chunks)
+                for (let (_, c) : cs)
+                    c->close;
+        }
+        public func get_chunk(self: chunkloader, x: int, y: int)
+        {
+            return self.m_chunks->get(x)=>> \ys = ys->get(y);;
+        }
+        public func get_chunks(self: chunkloader)
+        {
+            return self.m_chunks;
+        }
+        public func load_chunk(_: chunkloader, chunk: chunk, callback: chunk::layer::InstanceEntityCallbackT)
+        {
+            chunk->instance(callback);
+        }
+        public func unload_chunk(_: chunkloader, chunk: chunk)
+        {
+            chunk->unload();
+        }
+    }
+}

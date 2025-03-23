@@ -1,0 +1,332 @@
+// gui.main_menu
+// 用于显示编辑器的主菜单栏
+import je::gui;
+
+import builtin::editor::gui::main;
+import builtin::editor::gui::tilemap::main;
+import builtin::editor::dbg::main;
+import builtin::editor::gui::edit_forms::export_project;
+import builtin::editor::gui::inputmgr;
+import builtin::editor::gui::style;
+import builtin::editor::gui::scripteditor;
+import builtin::editor::main;
+
+using je::gui;
+using jeapi::gui::style;
+using jeapi::gui::form;
+using je::gui::ImGuiCol;
+
+namespace editor::gui
+{
+    public let config_name_describe = {
+        [ImGuiCol_Text]                   = ("文本", "没有此配置项的描述"),,
+        [ImGuiCol_TextDisabled]           = ("失效文本", "没有此配置项的描述"),,
+        [ImGuiCol_WindowBg]               = ("窗体背景", "没有此配置项的描述"),,
+        [ImGuiCol_ChildBg]                = ("子窗体背景", "没有此配置项的描述"),,
+        [ImGuiCol_PopupBg]                = ("弹出菜单背景", "没有此配置项的描述"),,
+        [ImGuiCol_Border]                 = ("边框", "没有此配置项的描述"),,
+        [ImGuiCol_BorderShadow]           = ("边框阴影", "没有此配置项的描述"),,
+        [ImGuiCol_FrameBg]                = ("ImGuiCol_FrameBg", "没有此配置项的描述"),,
+        [ImGuiCol_FrameBgHovered]         = ("ImGuiCol_FrameBgHovered", "没有此配置项的描述"),,
+        [ImGuiCol_FrameBgActive]          = ("ImGuiCol_FrameBgActive", "没有此配置项的描述"),,
+        [ImGuiCol_TitleBg]                = ("窗口标题", "没有此配置项的描述"),,
+        [ImGuiCol_TitleBgActive]          = ("激活窗口标题", "没有此配置项的描述"),,
+        [ImGuiCol_TitleBgCollapsed]       = ("折叠窗口标题", "没有此配置项的描述"),,
+        [ImGuiCol_MenuBarBg]              = ("窗体主菜单栏", "没有此配置项的描述"),,
+        [ImGuiCol_ScrollbarBg]            = ("滚动条", "没有此配置项的描述"),,
+        [ImGuiCol_ScrollbarGrab]          = ("滚动条把手", "没有此配置项的描述"),,
+        [ImGuiCol_ScrollbarGrabHovered]   = ("鼠标悬浮的滚动条把手", "没有此配置项的描述"),,
+        [ImGuiCol_ScrollbarGrabActive]    = ("使用中的滚动条把手", "没有此配置项的描述"),,
+        [ImGuiCol_CheckMark]              = ("CheckBox打钩标记", "没有此配置项的描述"),,
+        [ImGuiCol_SliderGrab]             = ("滑块把手", "没有此配置项的描述"),,
+        [ImGuiCol_SliderGrabActive]       = ("使用中的滑块把手", "没有此配置项的描述"),,
+        [ImGuiCol_Button]                 = ("按钮", "没有此配置项的描述"),,
+        [ImGuiCol_ButtonHovered]          = ("鼠标悬浮的按钮", "没有此配置项的描述"),,
+        [ImGuiCol_ButtonActive]           = ("使用中的按钮", "没有此配置项的描述"),,
+        [ImGuiCol_Header]                 = ("ImGuiCol_Header", "没有此配置项的描述"),,
+        [ImGuiCol_HeaderHovered]          = ("ImGuiCol_HeaderHovered", "没有此配置项的描述"),,
+        [ImGuiCol_HeaderActive]           = ("ImGuiCol_HeaderActive", "没有此配置项的描述"),,
+        [ImGuiCol_Separator]              = ("分割线", "没有此配置项的描述"),,
+        [ImGuiCol_SeparatorHovered]       = ("鼠标悬浮的分割线", "没有此配置项的描述"),,
+        [ImGuiCol_SeparatorActive]        = ("使用中的分割线", "没有此配置项的描述"),,
+        [ImGuiCol_ResizeGrip]             = ("窗口大小调整把手", "没有此配置项的描述"),,
+        [ImGuiCol_ResizeGripHovered]      = ("鼠标悬浮的窗口大小调整把手", "没有此配置项的描述"),,
+        [ImGuiCol_ResizeGripActive]       = ("使用中的窗口大小调整把手", "没有此配置项的描述"),,
+        [ImGuiCol_Tab]                    = ("选项卡", "没有此配置项的描述"),,
+        [ImGuiCol_TabHovered]             = ("鼠标悬浮的选项卡", "没有此配置项的描述"),,
+        [ImGuiCol_TabActive]              = ("选中的选项卡", "没有此配置项的描述"),,
+        [ImGuiCol_TabUnfocused]           = ("ImGuiCol_TabUnfocused", "没有此配置项的描述"),,
+        [ImGuiCol_TabUnfocusedActive]     = ("ImGuiCol_TabUnfocusedActive", "没有此配置项的描述"),,
+        [ImGuiCol_PlotLines]              = ("ImGuiCol_PlotLines", "没有此配置项的描述"),,
+        [ImGuiCol_PlotLinesHovered]       = ("ImGuiCol_PlotLinesHovered", "没有此配置项的描述"),,
+        [ImGuiCol_PlotHistogram]          = ("ImGuiCol_PlotHistogram", "没有此配置项的描述"),,
+        [ImGuiCol_PlotHistogramHovered]   = ("ImGuiCol_PlotHistogramHovered", "没有此配置项的描述"),,
+        [ImGuiCol_TableHeaderBg]          = ("ImGuiCol_TableHeaderBg", "没有此配置项的描述"),,
+        [ImGuiCol_TableBorderStrong]      = ("ImGuiCol_TableBorderStrong", "没有此配置项的描述"),,
+        [ImGuiCol_TableBorderLight]       = ("ImGuiCol_TableBorderLight", "没有此配置项的描述"),,
+        [ImGuiCol_TableRowBg]             = ("ImGuiCol_TableRowBg", "没有此配置项的描述"),,
+        [ImGuiCol_TableRowBgAlt]          = ("ImGuiCol_TableRowBgAlt", "没有此配置项的描述"),,
+        [ImGuiCol_TextSelectedBg]         = ("ImGuiCol_TextSelectedBg", "没有此配置项的描述"),,
+        [ImGuiCol_DragDropTarget]         = ("拖放目标", "没有此配置项的描述"),,
+        [ImGuiCol_NavHighlight]           = ("ImGuiCol_NavHighlight", "没有此配置项的描述"),,
+        [ImGuiCol_NavWindowingHighlight]  = ("ImGuiCol_NavWindowingHighlight", "没有此配置项的描述"),,
+        [ImGuiCol_NavWindowingDimBg]      = ("ImGuiCol_NavWindowingDimBg", "没有此配置项的描述"),,
+        [ImGuiCol_ModalWindowDimBg]       = ("ImGuiCol_ModalWindowDimBg", "没有此配置项的描述"),,
+    };
+
+    // NOTE: 实际上这部分应该写在独立的文件里，但是懒，先放这儿吧
+    func style_editor(context: EditorContext)
+    {
+        let origin_style = dump_current_style_color();
+        let formopen = new! std::mutable(true);
+        launch(func()
+            {
+                SetNextWindowSizeConstraints((700., 550.), (700., 550.));
+                match (BeginOpen(F"样式编辑器"))
+                {
+                value(show_val)?
+                    {
+                        if (show_val)
+                        {
+                            if (Button("使用默认暗色配置")) SetStyleColorDark();
+                            SameLine();
+                            if (Button("使用默认亮色配置")) SetStyleColorLight();
+                            SameLine();
+                            if (Button("使用默认经典配置")) SetStyleColorClassic();
+                            
+                            Separator();
+                            
+                            for (let (item, (name, desc)) : config_name_describe)
+                            {
+                                let col = GetStyleColor(item);
+                                Text(name); SameLine();
+                                if (ColorButton(F"##main_color{item}", col))
+                                    OpenPopup(F"ColorPicker##{item}");
+                                if (BeginPopup(F"ColorPicker##{item}"))
+                                {
+                                    do ColorPicker4(F"##main_color_picker{item}", col)
+                                        ->> \c = SetStyleColor(item, c);;
+                                    EndPopup();
+                                }
+
+                                TextDisabled(desc);
+                                Separator();
+                            }
+                        }
+                    }
+                none?
+                    ask("是否保存配色", "即将关闭，是否保存编辑器样式和颜色配置文件？", 
+                        func(check)
+                        {
+                            formopen->set(false);
+                            if (check)
+                            {
+                                if (! fsys::writeall(context->get_project->get_path / "editor.je4style",
+                                    dump_current_style_color(): string))
+                                    errmsg("保存样式失败", "无法写入文件：'" + (context->get_project->get_path / "editor.je4style")->tostring + "'");
+                            }
+                            else
+                                restore_config(origin_style);
+                        });
+                }
+
+                End();
+                return formopen->get;
+            }, 
+            ());
+    }
+
+    private func _save_world(context: EditorContext)
+    {
+        let proj = context->get_project;
+        if (proj->get_editing_world->>\w = proj->save_world(w);->or(false) == false)
+        {
+            jeapi::gui::form::errmsg("错误", "保存当前世界失败"); 
+        }
+    }
+    private func _save_project(context: EditorContext)
+    {
+        let proj = context->get_project;
+        if (proj->save_project())
+            jeapi::gui::form::msg("完成", "项目和所有编辑中的世界已经保存");
+        else
+            jeapi::gui::form::errmsg("失败", "项目保存未能完成");
+    }
+
+    let mut display_debug_entity = false;
+    public func get_is_albe_to_display_debug_entity()
+    {
+        return display_debug_entity;
+    }
+    public func set_is_albe_to_display_debug_entity(opt: bool)
+    {
+        display_debug_entity = opt;
+    }
+
+    public func show_main_menu(context: EditorContext)
+    {
+        context->launch_editor_form(func(){
+            context->update_api();
+
+            if (jeapi::gui::inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::L_SHIFT, je::keycode::O]))
+                context->hide_all_editor_form();
+            else if (jeapi::gui::inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::O]))
+                context->show_all_editor_form();
+
+            if (!context->get_project->is_debugging)
+            {
+                if (BeginMainMenuBar())
+                {
+                    if (BeginMenu("JoyEngine"))
+                    {
+                        if (MenuItem("编辑器样式"))
+                        {
+                            style_editor(context);
+                        }
+                        Separator();
+                        if (MenuItem("退出编辑器"))
+                            do ask_for_saving_proj_when_exit(context->get_project);
+
+                        EndMenu();
+                    }
+                    if (BeginMenu("文件"))
+                    {
+                        if (MenuItem("保存当前世界"))
+                            _save_world(context);
+
+                        EndMenu();
+                    }
+                    if (BeginMenu("项目"))
+                    {
+                        if (MenuItemShortcut("保存项目", "Ctrl + S"))
+                            _save_project(context);
+
+                        if (MenuItem("项目设置"))
+                        {
+                            context->launch_editor_form(func(){
+                                je::gui::SetNextWindowSizeConstraints((500., 300.), (500., 600.));
+                                let mut open = true;
+                                match (BeginOpen("项目设置"))
+                                {
+                                value(show_val)?
+                                    if (show_val)
+                                    {
+                                        for (let (_, iconfig) : context->get_project->get_configs)
+                                        {
+                                            do iconfig->edit();
+                                            Separator();
+                                        }
+                                    }
+                                none?
+                                    open = false;
+                                }
+                                End();
+                                return open;
+                            }, ());
+                        }
+                        Separator();
+                        if (MenuItem("导出"))
+                        {
+                            edit_forms::show_export_project(context);
+                        }
+                        EndMenu();
+                    }
+                    if (BeginMenu("工具"))
+                    {
+                        let scripts = tools::get_available_tool_scripts();
+                        if (scripts->empty())
+                            do MenuItemEnabled("空", false);
+                        else
+                            for (let script_name : scripts)
+                                if (MenuItem(script_name))
+                                {
+                                    match (tools::run_tool_script(context, script_name, context->get_project))
+                                    {
+                                    err(msg_val)?
+                                        jeapi::gui::form::errmsg("失败", F"运行脚本失败：{msg_val}");
+                                    ok(_)?;
+                                    }
+                                }
+                        Separator();
+                        if (MenuItem("重新获取脚本"))
+                            tools::update_tool_scripts(context->get_project);
+
+                        if (MenuItem("脚本编辑器..."))
+                        {
+                            let DEFAULT_SCRIPT_SRC = 
+@"// 编辑器脚本
+import woo::std;
+import je;
+import je::towoo;
+
+using std;
+using je;
+
+extern func main(_: universe, _: option<world>, _: option<entity>)
+{
+    // 你可以在此写点你喜欢的东西
+    // 请注意，不允许在此处的脚本中关闭 world 或 universe
+    
+}
+"@;
+                            new! ScriptEditor(context, DEFAULT_SCRIPT_SRC, "编辑器", true)
+                                ->set_callback(func(vmm)
+                                {
+                                    let proj = context->get_project;
+
+                                    let invoke_entry = func(opentity: option<je::entity>)
+                                    {
+                                        if (!vmm->invoke("main", [
+                                                proj->get_env->get_universe as je::universe: dynamic,
+                                                proj->get_editing_world as option<je::world>: dynamic,
+                                                opentity: dynamic,
+                                            ])->is_value)
+                                        {
+                                            jeapi::gui::form::errmsg("错误", "脚本运行时发生错误");
+                                        }
+                                    };
+
+                                    match (context->get_editing_entity)
+                                    {
+                                    value(euid)?
+                                        euid->dosth(invoke_entry);
+                                    none? 
+                                        invoke_entry(none);
+                                    }
+                                    return option::value(nil: dynamic);
+                                });
+                        }
+                            
+                        EndMenu();
+                    }
+                    if (BeginMenu("帮助"))
+                    {
+                        if (MenuItem("关于"))
+                            jeapi::welcome::show_about();
+                        Separator();
+                        do MenuItemSelected("显示隐藏实体及组件", get_is_albe_to_display_debug_entity())
+                            ->> \select = set_is_albe_to_display_debug_entity(select);
+                            ;
+                        EndMenu();
+                    }
+                    if (context->get_project->is_in_safe_mode)
+                    {
+                        let show_red = std::time(): int % 2 == 0;
+                        
+                        if (show_red)
+                            PushStyleColor(ImGuiCol::ImGuiCol_Text, (255, 0, 0, 255));
+
+                        do MenuItem("* 处于安全模式中");
+
+                        if (show_red)
+                            PopStyleColor(1);
+                    }
+                    EndMainMenuBar();
+                }
+
+                if (jeapi::gui::inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::S]))
+                    _save_project(context);
+            }
+        }, ());
+    }
+}

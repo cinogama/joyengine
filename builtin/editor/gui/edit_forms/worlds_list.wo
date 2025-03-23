@@ -1,0 +1,133 @@
+// gui.edit_forms.worlds_list
+// 用于显示和编辑项目中的世界
+
+import je::gui;
+import builtin::editor::gui::form::input;
+import builtin::editor::gui::form::ask;
+
+import builtin::editor::gui::edit_forms::world_creator;
+import builtin::api::serialize::main;
+import builtin::editor::gui::main;
+
+using je::gui;
+
+namespace editor::gui::edit_forms
+{
+    public func show_worlds_list(context: EditorContext, open: std::mutable<bool>)
+    {
+        // 世界编辑窗口
+        if (open->get)
+        {
+            je::gui::SetNextWindowSizeConstraints((200., 300.), (200., 5000.));
+            open->set(true);
+
+            match (BeginAttrOpen("世界列表##jeeditor", WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus))
+            {
+            value(show)?
+                if (show)
+                {
+                    let (avail_width, avail_height) = GetContentRegionAvail();
+                    if (BeginListBox("##", avail_width, avail_height))
+                    {
+                        let editing_world = context->get_project->get_editing_world;
+                        let is_debugging = context->get_project->is_debugging;
+                        for (let world : context->get_project->get_env->get_universe->get_all_worlds)
+                        {
+                            let current_world_is_editing = editing_world->>\w = w == world;->or(false);
+                            let is_selected = SelectableSelected(F"{world->name}##{world as je::world: handle}", 
+                                current_world_is_editing);
+                            let is_hovered = IsItemHovered();
+                            if (is_selected)
+                            {
+                                // 更换渲染中的世界
+                                do context->get_project->reset_editing_world(world)->unwrap;
+                            }
+                            if (is_hovered)
+                            {
+                                BeginTooltip();
+                                Text(world->name);
+                                match (context->get_project->get_world_path(world))
+                                {
+                                value(p)? Text(p->tostring);
+                                none?;
+                                }
+                                Text(context->get_project->get_world_remark(world)->or("(无)"));
+                                EndTooltip();
+                            }
+                            if (BeginPopupContextItem())
+                            {
+                                if (MenuItemEnabled("编辑", !is_debugging))
+                                    if (! WorldContext::edit(context->get_project(), world)
+                                        ->> \wcontext = launch(show_world_creator, (context, wcontext));
+                                        ->  is_value)
+                                    {
+                                        std::panic("TODO, 选中的世界居然不存在嗝");
+                                    }
+                                if (MenuItemEnabled("系统设置", !is_debugging))
+                                {
+
+                                }
+                                if (MenuItemEnabled("重命名世界", !is_debugging))
+                                {
+                                    jeapi::gui::form::input(
+                                        "重命名", 
+                                        "请输入世界的新名称", 
+                                        world->name, 
+                                        func(newname){
+                                            if (context->get_project->validate_world_or_warning(world))
+                                            {
+                                                world->set_name(newname);
+                                            }
+                                        });
+                                }
+                                if (MenuItemEnabled("编辑注释", !is_debugging))
+                                {
+                                    jeapi::gui::form::multiinput(
+                                        "编辑世界注释", 
+                                        F"请输入世界'{world->name}'的注释说明", 
+                                        context->get_project->get_world_remark(world)->or("(无)"), 
+                                        func(newremark){
+                                            if (!context->get_project->set_world_remark(world, newremark))
+                                                jeapi::gui::form::errmsg("失败", "在项目中没有找到世界");
+                                        });
+                                }
+                                if (MenuItemEnabled("关闭", !is_debugging))
+                                {
+                                    jeapi::gui::form::ask(
+                                        "确认？", 
+                                        "即将关闭世界，是否保存世界的变动？",
+                                        func(save_world)
+                                        {
+                                            if (context->get_project->validate_world_or_warning(world))
+                                            {
+                                                if (save_world)
+                                                {
+                                                    if (false == context->get_project->save_world(world))
+                                                    {
+                                                        // 保存失败，终止关闭流程：
+                                                        jeapi::gui::form::errmsg("关闭世界失败", "因未知原因，保存世界失败，操作已取消");
+                                                        return;
+                                                    }
+                                                }
+
+                                                do context->get_project->destroy_world(world)
+                                                    -> error
+                                                    ->> \errinfo = jeapi::gui::form::errmsg("关闭世界失败", errinfo);
+                                                    ;
+                                            }
+                                        });
+                                }
+                                EndPopup();
+                            }
+                        }
+                        EndListBox();
+                    }
+                }
+            none?
+                open->set(false);
+            }
+
+            End();
+        }
+    }
+}

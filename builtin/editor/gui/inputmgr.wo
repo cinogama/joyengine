@@ -1,0 +1,32 @@
+import je;
+import je::gui;
+
+namespace jeapi::gui::inputmgr
+{
+    public func keydown(key: je::keycode)
+    {
+        let (_, curframe) = je::gui::input::keystate(key);
+        return curframe;
+    }
+
+    private func keydown_at_last_frame(key: je::keycode)
+    {
+        let (lastframe, _) = je::gui::input::keystate(key);
+        return lastframe;
+    }
+
+    public func keypush(key: je::keycode)
+    {
+        return keydown_at_last_frame(key)
+            && !keydown(key);
+    }
+
+    public func keyspush(keys: array<je::keycode>)
+    {
+        if (keys->>keydown_at_last_frame->reduce(\l, r = l && r;)->or(false))
+        {
+            return !keys->>keydown->reduce(\l, r = l && r;)->or(true);
+        }
+        return false;
+    }
+}

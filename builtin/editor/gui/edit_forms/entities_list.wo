@@ -1,0 +1,556 @@
+// gui.edit_forms.entities_list
+// 用于显示和编辑当前编辑世界中的实体
+
+import je::gui;
+
+import pkg::math;
+import builtin::editor::gui::form::input;
+import builtin::editor::gui::form::ask;
+import builtin::editor::gui::form::msg;
+import builtin::editor::dbg::main;
+
+import builtin::editor::gui::edit_forms::entity_creator;
+import builtin::editor::gui::draw_pannel::main;
+import builtin::api::serialize::main;
+
+using je::gui;
+
+namespace editor::gui::edit_forms
+{
+    func _is_ancestor(cur: jeapi::debug::EntityChilds, checking: jeapi::debug::EntityChilds)=> bool
+    {
+        for (let child: cur.childs)
+        {
+            if (child.uid == checking.uid)
+                return true;
+            if (child->_is_ancestor(checking))
+                return true;
+        }
+        return false;
+    }
+    func _set_parent(child: jeapi::debug::EntityChilds, parent: jeapi::debug::EntityChilds)
+    {
+        static let LocalToParent = je::typeinfo::load("Transform::LocalToParent")->unwrap(),
+                   LocalToWorld  = je::typeinfo::load("Transform::LocalToWorld")->unwrap();
+
+        if (child->_is_ancestor(parent))
+        {
+            // 如果正在设置的子实体是父实体的祖先节点，需要先调整顺序
+            /*
+            ?       ? --- P
+            |       |
+            C   =>  C
+            |  
+            P
+            */
+            // 如果子实体此时有父节点，那么就将目标父节点挂载子节点上，否则就把目标父节点设置为L2W
+            do child.e->internal::get_parent_anchor_uid()
+                 ->> \uid = parent.e->internal::set_parent_with_uid(uid, true);
+                 -> or_do(func(){
+                    if (parent.e->get_component(LocalToParent)->is_value())
+                        parent.e->remove_component(LocalToParent);
+                    if (!parent.e->get_component(LocalToWorld)->is_value())
+                        do parent.e->add_component(LocalToWorld);
+                    return true;
+                 });
+        }
+        do child.e->internal::set_parent(parent.e, true);
+    }
+    public func fast_create_entity(context: EditorContext, w: je::world, name: string, cs: array<string>)
+    {
+        if (!context->get_project->validate_world_or_warning(w))
+        {
+            jeapi::gui::form::errmsg("失败", "无法创建实体，世界不存在。");
+            return option::none;
+        }
+        let e = w->add_entity(cs->>\tname = je::typeinfo::load(tname)->unwrap;);
+        e->internal::set_name(name);
+
+        set_new_created_entity_pos(w, e);
+
+        return option::value(e);
+    }
+    public func entity_edit_context_menu(context: EditorContext, w: je::world, euid: option<jeapi::debug::Eeid>)=> void
+    {
+        let has_editing_entity = euid->is_value;
+        if (MenuItem("创建实体"))
+            launch(show_entity_creator, (context, new! EntityContext()));
+        if (BeginMenu("快速创建实体"))
+        {
+            if (MenuItem("基本渲染实体"))
+            {
+                do fast_create_entity(context, w, "默认物体", [
+                    "Transform::LocalPosition",
+                    "Transform::LocalRotation",
+                    "Transform::LocalScale",
+                    "Transform::LocalToWorld",
+                    "Transform::Translation",
+                    "Renderer::Shape",
+                    "Renderer::Shaders",
+                    "Renderer::Textures",
+                ]);
+            }
+            if (MenuItem("基本UI"))
+            {
+                do fast_create_entity(context, w, "默认UI", [
+                    "Transform::LocalToWorld",
+                    "Transform::Translation",
+                    "Renderer::Shape",
+                    "Renderer::Shaders",
+                    "Renderer::Textures",
+                    "UserInterface::Origin",
+                    "UserInterface::Absolute",
+                    "UserInterface::Relatively",
+                    "Transform::LocalToWorld",
+                    "Transform::Translation",
+                ]);
+            }
+            if (MenuItem("带2D阴影的基本渲染实体"))
+            {
+                do fast_create_entity(context, w, "默认2D阴影物体", [
+                    "Transform::LocalPosition",
+                    "Transform::LocalRotation",
+                    "Transform::LocalScale",
+                    "Transform::LocalToWorld",
+                    "Transform::Translation",
+                    "Renderer::Shape",
+                    "Renderer::Shaders",
+                    "Renderer::Textures",
+                    "Light2D::BlockShadow",
+                    "Light2D::SelfShadow",
+                    "Light2D::ShapeShadow",
+                ]);
+            }
+            Separator();
+            if (MenuItem("手动绘制的实体"))
+            {
+                using _EntityConfig = struct{
+                    name: mut string,
+                    width: mut real,
+                    height: mut real,
+                    x_pixel_count: mut int,
+                    y_pixel_count: mut int,            
+                };
+                let ctx = _EntityConfig{
+                    name = mut "绘制实体",
+                    width = mut 1.0,
+                    height = mut 1.0,
+                    x_pixel_count = mut 16,
+                    y_pixel_count = mut 16,
+                };
+                launch(func(){
+                    let mut open = true;
+                    match (BeginAttrOpen("创建绘制对象", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
+                    {
+                    value(show)?
+                        if (show)
+                        {
+                            Text("名称：");
+                            SameLine();
+                            do InputText("##name", ctx.name)->>\name = ctx.name = name;;
+                            Text("尺寸：");
+                            Text("x:");
+                            SameLine();
+                            do InputFloatFormat("##x", ctx.width, "%.6f")->>func(vf){
+                                if (vf <= 0.) return;
+                                ctx.width = vf;
+                                ctx.x_pixel_count = math::round(vf * 16.0);
+                            };
+                            SameLine();
+                            Text("y:");
+                            SameLine();
+                            do InputFloatFormat("##y", ctx.height, "%.6f")->>func(vf){
+                                if (vf <= 0.) return;
+                                ctx.height = vf;
+                                ctx.y_pixel_count = math::round(vf * 16.0);
+                            };
+
+                            Text("px:");
+                            SameLine();
+                            do InputInt("##px", ctx.x_pixel_count)->>func(vi){
+                                if (vi <= 0) return;
+                                ctx.x_pixel_count = vi;
+                                ctx.y_pixel_count = math::round(vi: real / ctx.width  * ctx.height);
+                            };
+                            SameLine();
+                            Text("py:");
+                            SameLine();
+                            do InputInt("##py", ctx.y_pixel_count)->>\vi = vi <= 0 ? (ctx.y_pixel_count = vi) | nil: void;;
+
+                            if (Button("创建"))
+                            {
+                                open = false;
+                                let e = fast_create_entity(context, w, ctx.name, [
+                                    "Transform::LocalPosition",
+                                    "Transform::LocalRotation",
+                                    "Transform::LocalScale",
+                                    "Transform::LocalToWorld",
+                                    "Transform::Translation",
+                                    "Renderer::Shape",
+                                    "Renderer::Shaders",
+                                    "Renderer::Textures",
+                                ]);
+                                match (e)
+                                {
+                                none?;
+                                value(einst)?
+                                    {
+                                        match (einst->towoo::get_component:<Transform::LocalScale>())
+                                        {
+                                        value(lscale)?
+                                            lscale.scale->set((ctx.width, ctx.height, 1.): vec3);
+                                        none?;
+                                        }
+
+                                        let tex = new! je::graphic::texture(ctx.x_pixel_count, ctx.y_pixel_count);
+                                        einst->bind_texture(0, option::value(tex));
+
+                                        let default_shader_path = "@/resource/shader/Unlit.shader";
+                                        do je::graphic::shader::load(einst->get_world->get_universe->option::value, default_shader_path)
+                                            ->> \s = einst->set_shaders([s]);
+                                            ->  or_do(\ = jeapi::gui::form::errmsg("加载默认着色器失败", F"无法加载'{default_shader_path}'作为默认着色器，跳过");)
+                                            ;
+                                        
+                                        drawpannel::drawedit(context, einst);
+                                    }
+                                }
+                            }
+                            SameLine();
+                            if (Button("取消"))
+                                open = false;
+                        }
+                    none?
+                        open = false;
+                    }
+                    End();
+
+                    return open;
+                }, ());
+            }
+            Separator();
+            if (MenuItem("2D光源（点）"))
+            {
+                do fast_create_entity(context, w, "2D点光源", [
+                    "Transform::LocalPosition",
+                    "Transform::LocalRotation",
+                    "Transform::LocalScale",
+                    "Transform::LocalToWorld",
+                    "Transform::Translation",
+                    "Renderer::Shape",
+                    "Renderer::Shaders",
+                    "Renderer::Textures",
+                    "Renderer::Color",
+                    "Light2D::Point",
+                    "Light2D::Gain",
+                    "Light2D::ShadowBuffer",
+                ])->>func(e)
+                    {
+                        // 设置默认的光照着色器
+                        let default_shader_path = "@/resource/shader/Light2DPoint.shader";
+                        do je::graphic::shader::load(e->get_world->get_universe->option::value, default_shader_path)
+                            ->> \s = e->set_shaders([s]);
+                            ->  or_do(\ = jeapi::gui::form::errmsg("加载默认着色器失败", F"无法加载'{default_shader_path}'作为默认着色器，跳过");)
+                            ;
+                    };
+            }
+            if (MenuItem("2D光源（范围）"))
+            {
+                do fast_create_entity(context, w, "2D范围光源", [
+                    "Transform::LocalPosition",
+                    "Transform::LocalRotation",
+                    "Transform::LocalScale",
+                    "Transform::LocalToWorld",
+                    "Transform::Translation",
+                    "Renderer::Shape",
+                    "Renderer::Shaders",
+                    "Renderer::Textures",
+                    "Renderer::Color",
+                    "Light2D::Range",
+                    "Light2D::Gain",
+                    "Light2D::ShadowBuffer",
+                ])->>func(e)
+                    {
+                        // 设置默认的光照着色器
+                        let default_shader_path = "@/resource/shader/Light2DRange.shader";
+                        do je::graphic::shader::load(e->get_world->get_universe->option::value, default_shader_path)
+                            ->> \s = e->set_shaders([s]);
+                            ->  or_do(\ = jeapi::gui::form::errmsg("加载默认着色器失败", F"无法加载'{default_shader_path}'作为默认着色器，跳过");)
+                            ;
+                    };
+            }
+            if (MenuItem("2D光源（平行）"))
+            {
+                do fast_create_entity(context, w, "2D平行光源", [
+                    "Transform::LocalPosition",
+                    "Transform::LocalRotation",
+                    "Transform::LocalScale",
+                    "Transform::LocalToWorld",
+                    "Transform::Translation",
+                    "Renderer::Shape",
+                    "Renderer::Shaders",
+                    "Renderer::Textures",
+                    "Renderer::Color",
+                    "Light2D::Parallel",
+                    "Light2D::Gain",
+                    "Light2D::ShadowBuffer",
+                ])->>func(e)
+                    {
+                        // 设置默认的光照着色器
+                        let default_shader_path = "@/resource/shader/Light2DParallel.shader";
+                        do je::graphic::shader::load(e->get_world->get_universe->option::value, default_shader_path)
+                            ->> \s = e->set_shaders([s]);
+                            ->  or_do(\ = jeapi::gui::form::errmsg("加载默认着色器失败", F"无法加载'{default_shader_path}'作为默认着色器，跳过");)
+                            ;
+                    };
+            }
+            Separator();
+            if (MenuItem("摄像机（透视）"))
+            {
+                do fast_create_entity(context, w, "摄像机", [
+                    "Transform::LocalPosition",
+                    "Transform::LocalRotation",
+                    "Transform::LocalScale",
+                    "Transform::LocalToWorld",
+                    "Transform::Translation",
+                    "Camera::Clip",
+                    "Camera::FrustumCulling",
+                    "Camera::Projection",
+                    "Camera::PerspectiveProjection",
+                    "Camera::Viewport",
+                ]);
+            }
+            if (MenuItem("摄像机（平行）"))
+            {
+                do fast_create_entity(context, w, "摄像机", [
+                    "Transform::LocalPosition",
+                    "Transform::LocalRotation",
+                    "Transform::LocalScale",
+                    "Transform::LocalToWorld",
+                    "Transform::Translation",
+                    "Camera::Clip",
+                    "Camera::FrustumCulling",
+                    "Camera::Projection",
+                    "Camera::OrthoProjection",
+                    "Camera::Viewport",
+                ]);
+            }
+            Separator();
+            if (MenuItem("物理层级配置"))
+            {
+                do fast_create_entity(context, w, "物理层级配置", [
+                    "Physics2D::World",
+                ]);
+            }
+
+            EndMenu();
+        }
+        Separator();
+        
+        if (MenuItemEnabled("复制", has_editing_entity))
+        {
+            do euid
+                ->> \uid = uid->justdo(func(e){
+                        match (jeapi::serialize::entity(e, false)->>\dat = dat as dict<string, dynamic>: string;)
+                        {
+                        value(json)?
+                            SetClipboardText(json);
+                        none?
+                            jeapi::gui::form::errmsg("失败", "无法复制当前实体");
+                        }
+                    })
+                    ;
+                ;
+            
+        }
+        if (MenuItem("粘贴"))
+        {
+            do dict::deserialize(GetClipboardText())
+                ->> \d = jeapi::deserialize::entity(w, d->>\k,v = (k: string, v);, true)
+                    ->> func(e)
+                    {
+                        // 如果成功创建实体，在此重置实体的 Transform::Anchor 组件（如果有的话）
+                        static let Anchor = je::typeinfo::load("Transform::Anchor")->unwrap;
+                        if (e->get_component(Anchor)->is_value)
+                        {
+                            e->remove_component(Anchor);
+                            do e->add_component(Anchor);
+                        }
+                    }
+                    ;
+                ;
+        }
+        Separator();
+        if (MenuItemEnabled("编辑", has_editing_entity))
+        {
+            do euid
+                ->> \uid = launch(
+                    show_entity_creator, (context, EntityContext::edit(uid)));
+                ;
+        }
+        if (MenuItemEnabled("绘制", has_editing_entity))
+        {
+            do euid
+                ->> \uid = uid->justdo(\e = drawpannel::drawedit(context, e););
+                ;
+        }
+        if (MenuItemEnabled("重命名", has_editing_entity && !context->get_project->is_debugging))
+        {
+            do euid
+                ->> \uid = uid->justdo(func(e){
+                    jeapi::gui::form::input(
+                        "重命名", 
+                        "请输入实体的新名称", 
+                        e->internal::name, 
+                        func(newname){
+                            uid->justdo(\e = e->internal::set_name(newname););
+                        });
+                    })
+                    ;
+                ;
+        }
+        Separator();
+        if (MenuItemEnabled("销毁", has_editing_entity))
+        {
+            do euid
+                ->> \uid = uid->justdo(func(e){
+                    jeapi::gui::form::ask(
+                        "确认？", 
+                        F"即将销毁实体{e->internal::name}\n是否同时销毁其全部子实体？", 
+                        func(close_child_entity){
+                            let edata = jeapi::debug::find_entity_and_child_by_instance(w, e);
+                            func close_entity_impl(e, close_all)=> void
+                            {
+                                e.uid->justdo(\e = e->close(););
+                                if (close_all)
+                                    for (let ce : e.childs)
+                                        close_entity_impl(ce, close_all);
+                            }
+                            match (edata)
+                            {
+                            value(edat)?
+                                close_entity_impl(edat, close_child_entity);
+                            none?
+                                jeapi::gui::form::errmsg("删除失败", "找不到实体信息");
+                            } 
+                        });
+                    })
+                    ;
+                ;
+        }
+    }
+    func display_entity_and_child_tree(context: EditorContext, w: je::world, e: jeapi::debug::EntityChilds)=> void
+    {
+        let treenode_attribute = 
+            (e.childs->empty 
+                ? TreeNodeAttribute::ImGuiTreeNodeFlags_Leaf
+                | TreeNodeAttribute::ImGuiTreeNodeFlags_None)
+            + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow
+            + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
+            + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
+            // 如果当前实体被选中，那么高亮
+            + (context->get_editing_entity()->>\eeid = eeid == e.uid;->or(false) 
+                ? TreeNodeAttribute::ImGuiTreeNodeFlags_Selected
+                | TreeNodeAttribute::ImGuiTreeNodeFlags_None);
+            ;
+
+        static let 
+            Invisable = je::typeinfo::load("Editor::Invisable")->unwrap;
+
+        if (!get_is_albe_to_display_debug_entity() && e.e->get_component(Invisable)->is_value)
+            // 不可见实体，不准看！
+            return;
+
+        let is_variant_or_prefab = e.e->towoo::get_component:<Editor::Prefab>->is_value;
+
+        if (is_variant_or_prefab)
+            PushStyleColor(ImGuiCol::ImGuiCol_Text, (75, 100, 213, 255));
+
+        let showchild = TreeNodeEx(F"{e.e->internal::name}##{e.e->chunkinfo}", 
+            treenode_attribute);
+
+        if (is_variant_or_prefab)
+            PopStyleColor(1);
+
+        if (BeginDragDropSource())
+        {
+            do SetDragDropPayload("JEDITOR_ENTITY_INSTANCE", e.uid as jeapi::debug::Eeid: string);
+                Text(F"实体: {e.e->internal::name()}");
+            EndDragDropSource();
+        }
+        if(BeginDragDropTarget())
+        {
+            match (AcceptDragDropPayload("JEDITOR_ENTITY_INSTANCE"))
+            {
+            value(drag_uid)?
+                if (drag_uid as string: handle: jeapi::debug::Eeid != e.uid)
+                {
+                    // 自己拖到自己身上肯定就寄了，只处理不同的实体。
+                    drag_uid as string: handle: jeapi::debug::Eeid->justdo(
+                        \c = do jeapi::debug::find_entity_and_child_by_instance(w, c)->>\ce = _set_parent(ce, e);;
+                    );
+                }
+            none?
+                ;
+            }
+            EndDragDropTarget();
+        }
+
+        jeapi::gui::context_menu(\=entity_edit_context_menu(context, w, option::value(e.uid)););
+
+        if (IsItemClickedLeft() && !IsItemToggledOpen())
+            context->set_editing_entity(option::value(e.e));
+
+        if (showchild)
+        {
+            do e.childs->>\ce = display_entity_and_child_tree(context, w, ce);;
+            TreePop();
+        }
+    }
+    public func show_entities_list(context: EditorContext, open: std::mutable<bool>)
+    {
+        if (open->get)
+        {
+            je::gui::SetNextWindowSizeConstraints((200., 300.), (200., 5000.));
+            open->set(true);
+
+            match (BeginAttrOpen("实体列表##jeeditor",
+                WindowsAttribute::ImGuiWindowFlags_MenuBar
+                + WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus))
+            {
+            value(show)?
+                if (show)
+                {
+                    if (BeginMenuBar())
+                    {
+                        if (MenuItem("创建新实体"))
+                            launch(show_entity_creator, (context, new! EntityContext()));
+            
+                        EndMenuBar();
+                    }
+                    
+                    match (context->get_project->get_editing_world)
+                    {
+                    value(current_editing_world)?
+                    {
+                        if (BeginPopupContextWindowLabel("EntityMenu"))
+                        {
+                            entity_edit_context_menu(context, current_editing_world, option::none);
+                            EndPopup();
+                        }    
+
+                        do jeapi::debug::get_all_entities_layer_from_world(current_editing_world)
+                            ->> \ec = display_entity_and_child_tree(context, current_editing_world, ec);
+                            ;
+                    }
+                    none?
+                        Text("没有正在编辑中的世界");
+                    }
+                }
+            none?
+                open->set(false);
+            }
+
+            End();
+        }
+    }
+}

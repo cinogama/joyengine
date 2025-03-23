@@ -1,0 +1,386 @@
+import pkg::fsys;
+import pkg::try;
+import pkg::iterator;
+import pkg::worst;
+import pkg::math;
+
+import builtin::api::gui::form;
+import builtin::api::gui::errmsg;
+
+import builtin::editor::gui::main;
+import builtin::editor::gui::form::ask;
+import builtin::editor::project::main;
+
+using fsys;
+using iterator;
+using je;
+using je::gui;
+
+namespace editor::gui
+{
+    func is_identify_char(c: char)=> bool
+    {
+        return c->is_alnum || c == '_';
+    }
+
+    using RefactorAskContent = struct{
+        m_editor_context: EditorContext,
+
+        m_old_path: fsys::path_t,
+        m_target_path: fsys::path_t,
+
+        m_replacing_aim: array<(string, string)>,
+        m_next_replacing_aim: mut int,
+
+        m_contents: array<(fsys::path_t, ReplacingContent)>,
+    }
+    {
+        using ReplacingContent = struct{
+            m_able_to_update: bool,
+            m_updated: mut bool,
+            m_content: mut string,
+            m_replacing_place: mut array<(string, string, int)>,
+        }
+        {
+            public func create(path: fsys::path_t, content: string)
+            {
+                return ReplacingContent{
+                    m_able_to_update = extension(path)->lower != ".je4animation",
+                    m_updated = mut false,
+                    m_content = mut content,
+                    m_replacing_place = mut [],
+                };
+            }
+            public func ready_to_update(self: ReplacingContent, old: string, new: string)
+            {
+                do new;
+
+                let mut place = 0;
+                let all_find_place = []mut: vec<int>;
+
+                for (;;)
+                {
+                    match (self.m_content->find_from(old, place))
+                    {
+                    none?
+                        break;
+                    value (find_place)?
+                    {
+                        place = find_place + old->len;
+
+                        if (find_place > 0 && self.m_content[find_place - 1]->is_identify_char)
+                            continue;
+                        if (place < self.m_content->len && self.m_content[place]->is_identify_char)
+                            continue;
+
+                        all_find_place->add(find_place);
+                    }
+                    }
+                }
+
+                self.m_replacing_place = all_find_place->unsafe::asarray
+                    ->> \idx = (
+                            self.m_content->sub_len(idx - pre_print_len, pre_print_len)->replace_blank, 
+                            self.m_content->sub_len(idx + old->len, 30)->replace_blank,
+                            idx
+                            )
+                        where pre_print_len = math::min(idx, 30)
+                            , replace_blank = \s: string = s->chars->>\c = c->is_space ? ' ' | c;->str;
+                        ;
+                    ;
+            }
+            public func apply_update(self: ReplacingContent, old: string, new: string)
+            {
+                if (self.m_able_to_update == false)
+                    return;
+
+                self.m_updated = true;
+
+                let mut result = "";
+                let mut begin_place = 0;
+
+                for (let (_, _, idx) : self.m_replacing_place)
+                {
+                    result += self.m_content->sub_len(begin_place, idx - begin_place);
+                    result += new;
+                    begin_place = idx + old->len;
+                }
+                result += self.m_content->sub(begin_place);
+
+                self.m_content = result;
+            }
+        }
+
+        public func create(context: EditorContext, old_path: fsys::path_t, target_path: fsys::path_t)
+        {
+            let old_normalize_path = context->get_project->make_path_normalize(old_path);
+            let old_pure_name = fsys::purename(old_path);
+            let old_file_name = fsys::filename(old_path);
+
+            let old_pure_pure_name =
+                old_pure_name->find(".")
+                    ->> \idx = old_pure_name->sub_len(0, idx);
+                    -> or("")
+                    ;
+
+            let target_normalize_path = context->get_project->make_path_normalize(target_path);
+            let target_pure_name = fsys::purename(target_path);
+            let target_file_name = fsys::filename(target_path);
+
+            let target_pure_pure_name = 
+                target_pure_name->find(".")
+                    ->> \idx = target_pure_name->sub_len(0, idx);
+                    -> or("")
+                ;
+
+            if (old_normalize_path == "" || old_pure_name == "" || old_file_name == "")
+                throw! "无效路径";
+
+            let focus_file_type = [
+                ".wo",
+                ".h",
+                ".hpp",
+                ".c",
+                ".cpp",
+                ".je4world",
+                ".je4entity",
+                ".shader",
+                ".je4animation", // 无法更新这个文件，但是得给警告
+            ];
+
+            // 扫描指定文件类型，查找上述字符串的引用关系
+            let all_file_need_tobe_update = 
+                allsubpath(fsys::workpath())
+                    -> or([])
+                    -> iter
+                    |> filter(\p = focus_file_type->find(extension(p)->lower)->is_value;)
+                    |> filter(\p = isfile(p);)
+                    |> filter_map(\p = readall(p)->>\content = (p, ReplacingContent::create(p, content));;)
+                    |> collect;
+
+            return_ok! RefactorAskContent{
+                m_editor_context = context,
+                m_old_path = old_path,
+                m_target_path = target_path,
+                m_replacing_aim = [
+                    (old_normalize_path, target_normalize_path),
+                    (old_pure_name, target_pure_name),
+                    (old_file_name, target_file_name),
+                    (old_pure_pure_name, target_pure_pure_name),
+                ]-> forall(\a = a.0 != a.1;),
+                m_next_replacing_aim = mut 0,
+                m_contents = all_file_need_tobe_update,
+            };
+        }
+
+        public func prepare_update(self: RefactorAskContent)
+        {
+            if (self.m_next_replacing_aim < self.m_replacing_aim->len)
+            {
+                let (old, new) = self.m_replacing_aim[self.m_next_replacing_aim];
+                for (let (_, content) : self.m_contents)
+                {
+                    content->ready_to_update(old, new);
+                }
+                self.m_next_replacing_aim += 1;
+                return true;
+            }
+            return false;
+        }
+
+        public func apply(self: RefactorAskContent)
+        {
+            // 1. 保存所有文件
+            for (let (path, content) : self.m_contents)
+            {
+                if (content.m_updated)
+                {
+                    if (content.m_able_to_update)
+                    {
+                        if (! writeall(path, content.m_content))
+                            jeapi::gui::errmsg("保存失败", F"保存文件 `{path->tostring()}` 失败");
+                    }
+                    else
+                        jeapi::gui::errmsg("无法修改动画文件", F"文件 `{path->tostring()}` 是一个动画文件，无法通过重构工具修改，请手动更新");
+                }
+            }
+
+            // 2. 移动目标文件(重命名)
+            do try!
+            {
+                return fsys::move(self.m_old_path, self.m_target_path);
+            }
+            catch! e
+            {
+                jeapi::gui::errmsg("重命名/移动失败", F"重命名文件 `{self.m_old_path->tostring()}` 为 `{self.m_target_path->tostring()}` 失败：{e}");
+            };
+
+            // 3. 刷新browser
+            force_update();
+
+            // 4. 更新towoo
+            self.m_editor_context->get_project
+                ->update_towoo_after_dump_and_close(false);
+        }
+    }
+
+    public func refactor(context: EditorContext, old_path: fsys::path_t, target_path: fsys::path_t)
+    {
+        if (fsys::exist(target_path))
+        {
+            jeapi::gui::errmsg("目标文件已存在", F"文件 `{target_path->tostring()}` 已存在，请先删除或移动目标文件");
+            return_ok!;
+        }
+
+        try! content = RefactorAskContent::create(context, old_path, target_path);
+        let raise_final_check = func(need_raise_world_list: bool){
+            jeapi::gui::form::ask("重构准备完成", "即将应用所有选定重构，是否确认继续重命名/移动？", 
+                func(ok){
+                    if (ok)
+                        content->apply();
+                    
+                    launch(func(){
+                        if (need_raise_world_list)
+                        {
+                            std::yield();
+
+                            // 5. 重新拉起world list
+                            context->get_project->load_worlds_from_list();
+                        }
+                        return false;
+                    }, ());
+                });
+        };
+
+        if (! content->prepare_update())
+        {
+            raise_final_check(false);
+            return_ok!;
+        }
+
+        let all_world_saved_and_closed = std::mutable::create(false);
+        let checked_files = {}mut: ::map<RefactorAskContent::ReplacingContent, void>;
+
+        let load_world_list_after_form_closed = std::mutable::create(false);
+        let select_all = std::mutable::create(true);
+
+        let f = jeapi::gui::form::create("重构中……", true, 
+            func(this_form){
+                Text("重命名或移动操作可能影响其他文件");
+                Separator();
+
+                if (false == all_world_saved_and_closed->get)
+                {
+                    Text("点击确认保存项目，然后开始重构");
+
+                    Separator();
+
+                    if (Button("确认保存项目"))
+                    {
+                        if (context->get_project->save_project())
+                        {
+                            context->get_project->close_all_world();
+                            all_world_saved_and_closed->set(true);
+                            load_world_list_after_form_closed->set(true);
+                        }
+                    }
+                    return;
+                }
+
+                let cur_step = content.m_next_replacing_aim - 1;
+                Text(F"请在下列文件中选择需要应用的修改({cur_step + 1}/{content.m_replacing_aim->len})");
+                
+                Separator();
+
+                let (old, new) = content.m_replacing_aim[cur_step];
+                
+                if (Button("全选"))
+                    select_all->set(true);
+
+                SameLine();
+                
+                if (Button("全不选"))
+                    checked_files->clear;
+
+                SameLine();
+                TextDisabled(F"更新 `{old}` => `{new}`");
+
+                Separator();
+
+                let mut has_any_file_to_update = false;
+                if (BeginChildSize("scrolling", 700., 300.))
+                {
+                    for (let (path, replace_content) : content.m_contents)
+                    {
+                        if (replace_content.m_replacing_place->empty)
+                            continue;
+                        
+                        if (select_all->get)
+                            checked_files->set(replace_content, do nil);
+
+                        has_any_file_to_update = true;
+
+                        match (CheckBox(F"{path->tostring()}", checked_files->contain(replace_content)))
+                        {
+                        value(checked)?
+                            if (checked)
+                                checked_files->set(replace_content, do nil);
+                            else
+                                do checked_files->remove(replace_content);
+                        none?;
+                        }
+
+                        if (IsItemHovered())
+                        {
+                            BeginTooltip();
+                            TextDisabled(path->tostring());
+                            for (let (pre, post, _) : replace_content.m_replacing_place)
+                            {
+                                TextDisabled("...");
+                                
+                                TextDisabled(pre);
+                                SameLine();
+                                Text(old);
+                                SameLine();
+                                TextDisabled(post);
+                            }
+                            EndTooltip();
+                        }
+                    }
+                    select_all->set(false);
+                }
+                EndChild();
+
+                if (Button("应用修改") || !has_any_file_to_update)
+                {
+                    select_all->set(true);
+
+                    if (has_any_file_to_update)
+                    {
+                        for (let (replace_content, _) : checked_files)
+                        {
+                            replace_content->apply_update(old, new);
+                        }
+                    }
+
+                    if (!content->prepare_update())
+                    {
+                        // All done...
+                        load_world_list_after_form_closed->set(false);
+
+                        raise_final_check(true);
+                        this_form->close;
+                    }
+                }
+
+            });
+        do f->show();
+        f->set_callback_close(func(){
+            if (load_world_list_after_form_closed->get)
+                context->get_project->load_worlds_from_list();
+            return true;
+        });
+        
+        return_ok!;
+    }
+}

@@ -1,0 +1,77 @@
+import woo::std;
+import je::gui;
+
+using je::gui;
+
+namespace jeapi::gui::form
+{
+    public func panic(
+        native_src: string,
+        native_lineno: int,
+        native_funcname: string,
+        native_errorno: int,
+        reason: string, 
+        trace: string)
+    {
+        let boom_icon = je::graphic::texture::create(7, 7);
+        
+        for (let mut ix = 0; ix < 7; ix += 1)
+            for (let mut iy = 0; iy < 7; iy += 1)
+                boom_icon->pix((ix, iy))->set_color((0.8, 0.75, 0., 1.));
+
+        let black_color = (0.1, 0.1, 0.1, 1.);
+        boom_icon->pix((3, 5))->set_color(black_color);
+        boom_icon->pix((3, 4))->set_color(black_color);
+        boom_icon->pix((3, 3))->set_color(black_color);
+        boom_icon->pix((3, 1))->set_color(black_color);
+
+        // let nothing_color = (0., 0., 0., 0.);
+        // boom_icon->pix((0, 0))->set_color(nothing_color);
+        // boom_icon->pix((0, 6))->set_color(nothing_color);
+        // boom_icon->pix((6, 0))->set_color(nothing_color);
+        // boom_icon->pix((6, 6))->set_color(nothing_color);
+
+        let f = form::create(F"Woolang 致命错误", false,
+            func(f)
+            {
+                BeginGroup();
+                ImageScale(boom_icon, 7.);
+                EndGroup();
+                SameLine();
+                BeginGroup();
+                Text("在运行过程中发生了 Woolang Panic!");
+                SameLine();
+                TextDisabled("(?)");
+                if (IsItemHovered())
+                {
+                    BeginTooltip();
+                    Text("什么是 Woolang Panic?");
+                    TextDisabled("Woolang Panic 是Woolang脚本异常处理机制的一部分");
+                    TextDisabled("当一些难以恢复的错误发生时（例如尝试越界访问数组）");
+                    TextDisabled("此机制将被触发，用于呈现错误内容并终止运行");
+                    Separator();
+                    TextDisabled("可以通过检查调用堆栈信息和错误信息，及时排除故障");
+                    EndTooltip();
+                }
+                Text("对应的Woolang虚拟机已经被终止，错误详情见以下信息：");
+                EndGroup();
+                Separator();
+
+                TextDisabled("于模块：");
+                Text(F"    {native_src}: {native_lineno}");
+                Text(F"    {native_funcname}");
+                TextDisabled("描述：");
+                Text(F"    {native_errorno->to_hex}: {reason}");
+                TextDisabled("调用堆栈：");
+
+                let (w, _) = GetContentRegionAvail();
+                do InputTextMultilineSize("##trace", trace, w, 160.);
+                
+                if (Button("确认"))
+                    f->close();
+            });
+        
+        f->set_closeable(false);
+        do f->show();
+    }
+}

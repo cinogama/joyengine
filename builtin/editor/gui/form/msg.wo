@@ -1,0 +1,32 @@
+// gui.form.msg
+// 信息窗口
+
+import je;
+import je::gui;
+
+import builtin::editor::gui::inputmgr;
+import builtin::api::gui::errmsg;
+import builtin::api::gui::form;
+
+using je::gui;
+using je::graphic;
+
+namespace jeapi::gui::form
+{
+    public func msg(
+        title: string, 
+        text: string)
+    {
+        do form::create(F"{title}", false,
+            func(f)
+            {
+                Text(text);
+                if (Button("确认") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ENTER)))
+                    f->close();
+            })
+            -> show
+            ;
+    }
+
+    public let errmsg = jeapi::gui::errmsg;
+}

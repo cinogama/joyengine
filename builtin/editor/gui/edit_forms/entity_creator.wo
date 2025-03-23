@@ -1,0 +1,527 @@
+import je;
+import je::gui;
+import je::towoo;
+
+import builtin::editor::project::main;
+
+using je::gui;
+
+namespace editor::gui::edit_forms
+{
+    public func get_debug_camera_root(w: je::world)
+    {
+        return w->get_all_entities([je::typeinfo::load("Editor::EditorWalker")->unwrap])
+            -> forall(\e = e->get_component(je::typeinfo::load("Camera::RendToFramebuffer")->unwrap)->is_none;)
+            -> reduce(\l, _ = l;)
+            ;
+        ;
+    }
+    public func get_debug_camera(w: je::world)
+    {
+        return w->get_all_entities([
+            je::typeinfo::load("Editor::EditorWalker")->unwrap, 
+            je::typeinfo::load("Camera::RendToFramebuffer")->unwrap])
+            -> reduce(\l, _ = l;)
+            ;
+        ;
+    }
+    public func set_new_created_entity_pos(w: je::world, e: je::entity)
+    {
+        match (get_debug_camera(w))
+        {
+        value(ce)?
+            {
+                let ep = e->towoo::get_component:<Transform::LocalPosition>();
+                let ct = ce->towoo::get_component:<Transform::Translation>();
+
+                let target_pos = ct
+                    ->> \cti = cti->get_global_pos + camera_rot * (0., 0., 1.): vec3
+                        where camera_rot = cti->get_global_rot
+                        ;
+                    ->  or((0., 0., 0.): vec3)
+                    ;
+                do ep->>\epi = epi.pos->set(target_pos);;
+            }
+        none?;
+        }
+    }
+
+    let icon_entity_image = je::graphic::texture::load(option::none, F"!/builtin/icon/Component.png")->unwrap;
+    using EntityContext = struct {
+        name  : mut string,
+        edit_entity      : option<jeapi::debug::Eeid>,
+        has_append_types : vec<je::typeinfo>,
+        not_append_types : vec<je::typeinfo>,
+        tversion         : int,
+
+        ori_append_types : vec<je::typeinfo>,
+    }
+    {
+        public func create()
+        {
+            let context = EntityContext{
+                name = mut "新实体",
+                edit_entity = option::none,
+                has_append_types = []mut,
+                not_append_types = je::typeinfo::get_all_components_types()->to_vec,
+                tversion = je::typeinfo::get_unregister_count(),
+
+                ori_append_types = []mut,
+            };
+    
+            let comps = []mut: typeof(context.not_append_types);
+            context.not_append_types->swap(comps);
+    
+            // 不显示所有编辑器组件
+            for (let comp : comps)
+                if (!comp->name->begin_with("Editor::"))
+                    context.not_append_types->add(comp);
+    
+            return context;
+        }
+        public func edit(entity: jeapi::debug::Eeid)
+        {
+            let context = EntityContext{
+                name = mut "PENDING",
+                edit_entity = option::value(entity),
+                has_append_types = []mut,
+                not_append_types = je::typeinfo::get_all_components_types()->to_vec,
+                tversion = je::typeinfo::get_unregister_count(),
+
+                ori_append_types = []mut,
+            };
+
+            entity->justdo(func(e){
+                context.name = e->internal::name;
+                let comps = []mut: typeof(context.not_append_types);
+                context.not_append_types->swap(comps);
+        
+                // 不显示所有编辑器组件
+                for (let comp : comps)
+                    if (!comp->name()->begin_with("Editor::"))
+                        context.not_append_types->add(comp);
+        
+                // 把当前已有的组件处理一下
+                let all_comps = context.not_append_types->dup();
+                for (let comp : all_comps)
+                {
+                    if (e->get_component(comp)->is_value)
+                    {
+                        context->add_components(comp->name);
+                        context.ori_append_types->add(comp);
+                    }
+                }
+            });
+
+            return context;
+        }
+
+        func remove_components(context: EntityContext, type_name: string)
+        {
+            match(je::typeinfo::load(type_name))
+            {
+                value(type)?
+                    if (context.not_append_types->find(type)->is_none)
+                    {
+                        context.not_append_types->add(type);
+                        do context.has_append_types->find(type)
+                            ->> \idx = context.has_append_types->remove(idx);
+                            ;
+                    }
+                none?
+                    je::logfatal("Cannot find component type named: ", type_name);
+            }
+            
+        }
+        func add_components(context: EntityContext, type_name: string)
+        {
+            match(je::typeinfo::load(type_name))
+            {
+                value(type)?
+                    if (context.has_append_types->find(type)->is_none)
+                    {
+                        context.has_append_types->add(type);
+                        do context.not_append_types->find(type)
+                            ->> \idx = context.not_append_types->remove(idx);
+                            ;
+                    }
+                none?
+                    je::logfatal("Cannot find component type named: ", type_name);
+            }
+        }
+
+        func reset_context_cur_components(context: EntityContext)
+        {
+            for (let append_component : context.has_append_types)
+                context.not_append_types->add(append_component);
+            context.has_append_types->clear();
+
+            for (let origin_component : context.ori_append_types)
+                context->add_components(origin_component->name);
+        }
+    }
+
+    func _get_entity_name_and_scope(typename: string)
+    {
+        match (typename->rfind(":"))
+        {
+        value(idx)?
+            return (typename->sub(idx + 1), typename->sub_len(0, idx - 1));
+        none?
+            return (typename, "");
+        }
+    }
+
+    func show_component(typename: string, scopename: string, purename: string)
+    {
+        BeginGroup();
+        let clicked = ImageButtonScale(F"##{typename}#button", icon_entity_image, 1.);
+        if (BeginDragDropSource())
+        {
+            if (SetDragDropPayload("JEDITOR_COMPONENT_TYPE", typename))
+                Text("Component: ");
+                SameLine();
+                TextDisabled(scopename);
+                SameLine();
+                Text(purename);
+
+            EndDragDropSource();
+        } 
+        SameLine();
+        Text(purename);
+        EndGroup();
+
+        return clicked;
+    }
+
+    func show_components(typenames: array<string>)
+    {
+        let scoped_type = {}mut: map<string, vec<(string, string, string)>>;
+
+        do typenames
+            ->> \n = _get_entity_name_and_scope(n)...
+                ->  \pname, pscope = scoped_type->get_or_set(pscope, []mut)->add((n, pscope, pname));
+                ;
+            ;
+
+        let mut clicked_component = option::none: option<string>;
+        for (let (pscope, pnameinfos): scoped_type->unmapping->std::sort(\a, b = a.0 < b.0;))
+        {
+            let tree_attrib = TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
+
+            PushStyleColor(ImGuiCol::ImGuiCol_Text, (50, 150, 100, 255));
+            let show_group = TreeNodeEx(pscope == "" ? "<无>" | pscope, tree_attrib);
+            PopStyleColor(1);
+
+            if (show_group)
+            {
+                for (let pnameinfo: pnameinfos)
+                {
+                    do InvisibleButton(F"##{pscope}$PADDING", (2., 1.));
+                    SameLine();
+                    if (show_component(pnameinfo...))
+                        clicked_component = option::value(pnameinfo[0]);
+                }
+                TreePop();
+            }
+        }
+        return clicked_component;
+    }
+
+    func show_append_components(context: EntityContext, width: real)
+    {
+        using je::gui;
+        do BeginChildSize("append_components", width, 0.);
+        Text("已添加组件");
+        do show_components(context.has_append_types->>\t = t->name;->unsafe::cast:<array<string>>)
+            ->> \typename = context->add_components(typename);
+            ;
+        EndChild();
+
+        if(BeginDragDropTarget())
+        {
+            match (AcceptDragDropPayload("JEDITOR_COMPONENT_TYPE"))
+            {
+            value(data)?
+                // 有组件被拖动至此
+                context->add_components(data);
+            none?
+                ;
+            }
+            EndDragDropTarget();
+        }
+    }
+
+    func show_usable_components(context: EntityContext, width: real)
+    {
+        using je::gui;
+        do BeginChildSize("usable_components", width, 0.);
+        Text("可用组件");
+        do show_components(context.not_append_types->>\t = t->name;->unsafe::cast:<array<string>>)
+            ->> \typename = context->remove_components(typename);
+            ;
+        EndChild();
+
+        if(BeginDragDropTarget())
+        {
+            match (AcceptDragDropPayload("JEDITOR_COMPONENT_TYPE"))
+            {
+            value(data)?
+                // 有组件被拖动至此
+                context->remove_components(data);
+            none?
+                ;
+            }
+            EndDragDropTarget();
+        }
+    }
+
+    func entity_creator_menu(context: EntityContext)
+    {
+        let mut create_entity = false;
+
+        if (BeginMenuBar())
+        {
+            let menu_button_text = context.edit_entity->is_value ? "应用" | "创建";
+
+            if (MenuItemEnabled(menu_button_text, context.name != "" 
+                            && !context.has_append_types->empty))
+            {
+                // TODO: 实例化实体，至少要有一个组件
+                create_entity = true;
+            }
+            if (BeginMenu("常用组件集合"))
+            {
+                if (MenuItem("移除全部组件"))
+                    context->reset_context_cur_components();
+
+                Separator();
+
+                if (BeginMenu("变换（Transform）"))
+                {
+                    if (MenuItem("一般变换"))
+                    {
+                        context->add_components("Transform::LocalPosition");
+                        context->add_components("Transform::LocalRotation");
+                        context->add_components("Transform::LocalScale");
+                        context->add_components("Transform::LocalToWorld");
+                        context->add_components("Transform::Translation");
+                    }
+                    if (MenuItem("UI变换"))
+                    {
+                        context->add_components("UserInterface::Origin");
+                        context->add_components("UserInterface::Absolute");
+                        context->add_components("UserInterface::Relatively");
+                        context->add_components("Transform::Translation");
+                    }
+                    EndMenu();
+                }
+               
+                if (MenuItem("基本渲染（Renderer）"))
+                {
+                    context->add_components("Renderer::Shape");
+                    context->add_components("Renderer::Shaders");
+                    context->add_components("Renderer::Textures");
+                }
+
+                if (BeginMenu("2D光照（Light2D）"))
+                {
+                    if (MenuItem("点光源"))
+                    {
+                        context->add_components("Light2D::Point");
+                        context->add_components("Light2D::Gain");
+                        context->add_components("Light2D::ShadowBuffer");
+                    }
+                    if (MenuItem("范围光源"))
+                    {
+                        context->add_components("Light2D::Range");
+                        context->add_components("Light2D::Gain");
+                        context->add_components("Light2D::ShadowBuffer");
+                    }
+                    if (MenuItem("平行光源"))
+                    {
+                        context->add_components("Light2D::Parallel");
+                        context->add_components("Light2D::Gain");
+                        context->add_components("Light2D::ShadowBuffer");
+                    }
+                    EndMenu();
+                }
+
+                if (BeginMenu("2D阴影（Shadow2D）"))
+                {
+                     if (MenuItem("常用组合"))
+                    {
+                        context->add_components("Light2D::ShapeShadow");
+                        context->add_components("Light2D::BlockShadow");
+                        context->add_components("Light2D::SelfShadow");
+                    }
+                    if (MenuItem("形状"))
+                    {
+                        context->add_components("Light2D::ShapeShadow");
+                    }
+                    if (MenuItem("块投射"))
+                    {
+                        context->add_components("Light2D::BlockShadow");
+                    }
+                    if (MenuItem("精灵图（俯视角）"))
+                    {
+                        context->add_components("Light2D::SpriteShadow");
+                    }
+                    if (MenuItem("自身"))
+                    {
+                        context->add_components("Light2D::SelfShadow");
+                    }
+                    EndMenu();
+                }
+                
+                if (BeginMenu("摄像机（Camera）"))
+                {
+                    if (MenuItem("透视投影"))
+                    {
+                        context->add_components("Camera::Clip");
+                        context->add_components("Camera::Projection");
+                        context->add_components("Camera::PerspectiveProjection");
+                        context->add_components("Camera::Viewport");
+                        context->add_components("Camera::FrustumCulling");
+                    }
+                    if (MenuItem("平行投影"))
+                    {
+                        context->add_components("Camera::Clip");
+                        context->add_components("Camera::Projection");
+                        context->add_components("Camera::OrthoProjection");
+                        context->add_components("Camera::Viewport");
+                        context->add_components("Camera::FrustumCulling");
+                    }
+                    if (MenuItem("仅UI投影"))
+                    {
+                        context->add_components("Camera::Projection");
+                    }
+
+                    if (MenuItem("2D光照后处理流程"))
+                    {
+                        context->add_components("Light2D::CameraPostPass");
+                        context->add_components("Renderer::Shaders");
+                    }
+                    EndMenu();
+                }
+
+                if (BeginMenu("2D物理（Physics2D）"))
+                {
+                    if (MenuItem("静态"))
+                    {
+                        context->add_components("Physics2D::Rigidbody");
+                        context->add_components("Physics2D::Collider::Box");
+                        context->add_components("Physics2D::Friction");
+                    }
+                    if (MenuItem("动力学"))
+                    {
+                        context->add_components("Physics2D::Rigidbody");
+                        context->add_components("Physics2D::Collider::Box");
+                        context->add_components("Physics2D::Friction");
+                        context->add_components("Physics2D::Kinematics");
+                        context->add_components("Physics2D::Mass");
+                    }
+                    if (MenuItem("高速动力学"))
+                    {
+                        context->add_components("Physics2D::Rigidbody");
+                        context->add_components("Physics2D::Collider::Box");
+                        context->add_components("Physics2D::Friction");
+                        context->add_components("Physics2D::Kinematics");
+                        context->add_components("Physics2D::Mass");
+                        context->add_components("Physics2D::Bullet");
+                    }
+                    if (MenuItem("弹性"))
+                    {
+                        context->add_components("Physics2D::Restitution");
+                    }
+                    Separator();
+                    if (MenuItem("世界配置"))
+                    {
+                        context->add_components("Physics2D::World");
+                    }
+                    EndMenu();
+                }
+
+                EndMenu();
+            }
+
+            EndMenuBar();
+        }
+
+        return create_entity;
+    }
+
+    public func show_entity_creator(context: EditorContext, entity_context: EntityContext)
+    {
+        if (entity_context.tversion != je::typeinfo::get_unregister_count())
+        {
+            jeapi::gui::form::errmsg("提示", "由于注册的类型发生变化，世界系统编辑窗口已经关闭");
+            return false;
+        }
+
+        je::gui::SetNextWindowSizeConstraints((500., 300.), (2000., 1000.));
+        let mut open = true;
+        match (BeginAttrOpen(entity_context.edit_entity->is_value 
+            ? F"编辑实体##{JobID()}"
+            | F"创建新实体##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar))
+        {
+        value(show)?
+            if (show)
+            {
+                if (entity_creator_menu(entity_context))
+                {
+                    match (entity_context.edit_entity)
+                    {
+                    value(eeid)?
+                        {
+                            eeid->justdo(func(e){
+                                // 0. 获取准备新增的组件
+                                let add_components = entity_context.has_append_types->forall(
+                                    \type: je::typeinfo = !e->get_component(type)->is_value;);
+                                // 1. 获取即将移除的组件
+                                let removing_components = entity_context.not_append_types->forall(
+                                        \type: je::typeinfo = e->get_component(type)->is_value;);
+
+                                do add_components->map(\t: je::typeinfo = e->add_component(t););
+                                do removing_components->map(\t: je::typeinfo = e->remove_component(t););
+
+                                e->internal::set_name(entity_context.name);
+                            });
+                            open = false;
+                        }
+                    none?
+                        match (context->get_project->get_editing_world)
+                        {
+                        value(w)?
+                            {
+                                let e = w->add_entity(entity_context.has_append_types->to_array);
+                                e->internal::set_name(entity_context.name);
+
+                                set_new_created_entity_pos(w, e);
+                                open = false;
+                            }
+                        none? jeapi::gui::form::errmsg("失败", F"操作无法完成，没有正在编辑中的世界");
+                        }
+                    }
+                }
+
+                do InputText("名称", entity_context.name)
+                    ->> \newtext = entity_context.name = newtext;
+                    ;
+                
+                let (available_width, _) = GetContentRegionAvail();
+
+                show_append_components(entity_context, available_width / 2.);
+                SameLine();
+                show_usable_components(entity_context, available_width / 2.);
+            }
+        none?
+            open = false;
+        }
+
+        End();
+        return open;
+    }
+}

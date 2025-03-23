@@ -1,4 +1,4 @@
-import je::editor::graphic;
+import je::internal::graphic;
 import pkg::math;
 
 public func entry(_: je::graphic::texture, _/*lbpos*/: (int, int), _/*range*/: (int, int))

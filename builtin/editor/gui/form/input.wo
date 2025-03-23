@@ -1,0 +1,74 @@
+// gui.form.input
+// 输入窗口
+
+import je::gui;
+import builtin::editor::gui::inputmgr;
+import builtin::api::gui::form;
+
+using je::gui;
+
+namespace jeapi::gui::form
+{
+    public func input(
+        title: string, 
+        text: string, 
+        defaultval: string, 
+        okevent: (string)=> void)
+    {
+        let inputval = std::mutable::create(defaultval);
+
+        do form::create(F"{title}", false,
+            func(f)
+            {
+                Text(text);
+                do InputText("##", inputval->get)
+                    ->> \val = inputval->set(val);
+                    ;
+                SameLine();
+                if (Button("还原"))
+                    inputval->set(defaultval);
+
+                if (Button("确定") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ENTER)))
+                {
+                    okevent(inputval->get);
+                    f->close();
+                }
+                SameLine();
+                if (Button("取消") || (IsWindowFocused() && inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::BACKSPACE])))
+                    f->close();
+            })
+            -> show
+            ;
+    }
+    public func multiinput(
+        title: string, 
+        text: string, 
+        defaultval: string, 
+        okevent: (string)=> void)
+    {
+        let inputval = std::mutable::create(defaultval);
+
+        do form::create(F"{title}", false,
+            func(f)
+            {
+                Text(text);
+                do InputTextMultilineSize("##", inputval->get, 400., 200.)
+                    ->> \val = inputval->set(val);
+                    ;
+                SameLine();
+                if (Button("还原"))
+                    inputval->set(defaultval);
+
+                if (Button("确定") || (IsWindowFocused() && inputmgr::keyspush([je::keycode::L_SHIFT, je::keycode::ENTER])))
+                {
+                    okevent(inputval->get);
+                    f->close();
+                }
+                SameLine();
+                if (Button("取消") || (IsWindowFocused() && inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::BACKSPACE])))
+                    f->close();
+            })
+            -> show
+            ;
+    }
+}

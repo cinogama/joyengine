@@ -1,0 +1,1193 @@
+// project.main
+// 用于储存编辑中的项目信息
+
+import je;
+import je::gui;
+
+import pkg::try;
+import pkg::worst;
+import config;
+
+import builtin::editor::environment::main;
+import builtin::editor::gui::form::msg;
+import builtin::editor::gui::form::ask;
+import builtin::editor::cpp::main;
+import builtin::editor::tools::script_manager;
+import builtin::editor::gui::draw_pannel::main;
+import builtin::editor::project::towoomgr;
+import builtin::editor::gui::edit_forms;
+
+import je::towoo;
+
+namespace editor
+{
+    let DEFAULT_EDITOR_SYSTEM_NAME = "Editor::DefaultEditorSystem";
+
+    using ProjectWorld = struct{
+        m_world_instance: je::world,
+        m_world_path: fsys::path_t,
+        m_runtime_systems: mut array<je::typeinfo>,
+        m_remark_note: mut string,
+    };
+
+    using DebugContext = struct {
+        // 想了半天，还是把调试状态摆在这里维护
+        m_project: Project,
+        m_dumped_editing_worlds: array<(dict<string, dynamic>, fsys::path_t)>,
+    };
+
+    using Project = struct{
+        m_logger: handle,
+
+        m_name: string,             // 项目的名称，不能更改
+        m_path: fsys::path_t,    // 项目所在的目录
+        m_env: Environment,         // 项目环境
+        m_configs: map<string, Project::IConfig>, // 配置信息，是的，这是个map，意味着开发者理论上可以自己加点配置项目
+        m_worlds: vec<ProjectWorld>,
+        m_modules: map<fsys::path_t, CxxProject>, 
+        m_editing_world: mut option<je::world>,
+        m_debug_context: mut option<DebugContext>,
+        m_proj_file_lock: mut option<process::flock>,
+        m_towoo_context: ToWooContext,
+
+        m_world_has_been_dumped: mut bool,
+        m_enable_update_towoo: mut bool,
+
+        // 如果进入安全模式，则不允许保存世界
+        m_safe_mode: mut bool,
+    }
+    {
+        func entry_safe_mode(self: Project)
+        {
+            if (self.m_safe_mode == false)
+            {
+                self.m_safe_mode = true;
+                jeapi::gui::form::errmsg("安全模式", "项目进入安全模式，保存世界的操作将不被允许");
+            }
+        }
+        public func is_in_safe_mode(self: Project)
+        {
+            return self.m_safe_mode;
+        }
+
+        public func get_name(self: Project)
+        {
+            return self.m_name;
+        }
+        public func get_path(self: Project)
+        {
+            return self.m_path;
+        }
+        public func make_path_normalize(self: Project, path: fsys::path_t)
+        {
+            let npath = path->tostring;
+            if (npath->begin_with(self.m_path->tostring + "/"))
+            {
+                return "@" + npath->sub(self.m_path->tostring->len);
+            }
+            return npath;
+        }
+        public func parse_path_normalize(self: Project, path: string)
+        {
+            if (path->begin_with("@"))
+                return fsys::normalize(self.m_path->tostring + path->sub(1));
+            return fsys::normalize(path);
+        }
+        public func is_debugging(self: Project)
+        {
+            return self.m_debug_context->is_value;
+        }
+        public func create_dump(self: Project, dumpped: array<(dict<string, dynamic>, fsys::path_t)>)
+        {
+            do fsys::mkdir(self.m_path / ".temporary" / "jeeditor");
+            if (! dumpped->>\kv = [kv[0]: dynamic, kv[1]->tostring: dynamic];->serialize
+                ->> \dat = fsys::writeall(self.m_path / ".temporary" / "jeeditor" / "debugcontext.dump", dat);
+                ->  or(false))
+            {
+                jeapi::gui::form::errmsg("警告", "调试上下文创建失败，这可能导致崩溃无法恢复上次调试状态");
+                je::logwarn("调试上下文创建失败，这可能导致崩溃无法恢复上次调试状态");
+            }
+        }
+        public func restore_dump(self: Project)
+        {
+            match (fsys::readall(self.m_path / ".temporary" / "jeeditor" / "debugcontext.dump")=>> \dat = dat->array::deserialize;)
+            {
+            value(dat)?
+                jeapi::gui::form::ask("是否恢复", "检查到上次引擎在调试过程中意外退出，是否恢复之前的编辑器状态？",
+                    func(opt)
+                    {
+                        if (opt)
+                        {
+                            self->close_all_world();
+                            self->restore_all_world(dat
+                                ->>\wdat = (
+                                    wdat_pair[0] as dict<dynamic, dynamic>->>\k, v = (k as string, v);, 
+                                    fsys::normalize(wdat_pair[1]: string)
+                                    )
+                                    where wdat_pair = wdat as array<dynamic>;
+                            );
+                        }
+                    });
+            none?;
+            }
+        }
+        public func clear_dump(self: Project)
+        {
+            do fsys::remove(self.m_path / ".temporary" / "jeeditor" / "debugcontext.dump");
+        }
+        public func stop_debug(self: Project)
+        {
+            if (! self->is_debugging)
+                return result::err("未在调试中");
+
+            assert (self.m_worlds->empty);
+
+            je::thread::unsafe::abort_all();
+
+            // 关闭所有世界~~
+            do self->get_env->get_universe->get_all_worlds
+                ->> \w = w->close();
+                ;
+
+            // 暂停更新ToWoo，过两帧再恢复
+            self.m_enable_update_towoo = false;
+
+            // 关闭调试上下文，保证恢复上下文时project已经不再处于debug状态
+            let dumped_worlds = self.m_debug_context->unwrap.m_dumped_editing_worlds;
+            self.m_debug_context = option::none;
+            
+            // 恢复所有世界！
+            self->restore_all_world(dumped_worlds);
+
+            self->clear_dump();
+
+            je::gui::launch(func(){
+                std::yield();
+                self.m_enable_update_towoo = true;
+
+                return false;
+            }, ());
+
+            return result::ok(do nil);
+        }
+
+        public func start_debug(self: Project)
+        {
+            if (self->is_debugging)
+                return result::err("已经在调试中，不可重复调试");
+
+            // 调试开始之前再清除单例
+            je::singleton::unsafe::clear_all();
+
+            try! dumpped = self->dump_and_close_all_world();
+
+            let context = DebugContext {
+                    m_project = self,
+                    m_dumped_editing_worlds = dumpped,
+                };
+
+            self->create_dump(dumpped);
+
+            // OK 接下来在当前世界上创建游戏世界，至于在哪个世界渲染……emm
+            for (let (wdat, _) : context.m_dumped_editing_worlds)
+            {
+                let wdat_map = wdat->to_map();
+                let syss = wdat_map->get_or("runtime_systems", []: dynamic) as array<dynamic>->connect(
+                    wdat_map->get_or("systems", []: dynamic) as array<dynamic>
+                );
+                wdat_map->set("systems", syss: dynamic);
+                jeapi::deserialize::world(self->get_env->get_universe, wdat_map->unsafe::cast:< typeof(wdat)>, true)
+                    -> set_able(true);
+            }
+            self.m_debug_context = option::value(context);
+
+            return result::ok(context);
+        }
+
+        public func get_module(self: Project, name: fsys::path_t)
+        {
+            return self.m_modules->get(name);
+        }
+        public func get_all_modules(self: Project)
+        {
+            return self.m_modules;
+        }
+        public func dump_all_world(self: Project)
+        {
+            let dump_dats = self.m_worlds->to_array
+                =>> \pw = dat->is_value 
+                    ? [(dat->unwrap->apply("is_editing", self->get_editing_world
+                        ->> \ew = ew == pw.m_world_instance;
+                        ->  or(false) as bool: dynamic), 
+                        pw.m_world_path)] 
+                    | [] 
+                    where dat = self->serialize_world(pw.m_world_instance, true)
+                    ;
+                ;
+            
+            if (dump_dats->len != self.m_worlds->len)
+                return result::err("有世界序列化失败"); 
+
+            return result::ok(dump_dats);
+        }
+        public func close_all_world(self: Project)
+        {
+            // OK 关闭全部现存世界
+            do self.m_worlds->to_array->> \pw = self->destroy_world(pw.m_world_instance)->unwrap();;
+        }
+        public func dump_and_close_all_world(self: Project)
+        {
+            if (self.m_world_has_been_dumped)
+                return result::err("当前世界的上下文状态已经被转储，不应当重复进行此操作");
+
+            self.m_world_has_been_dumped = true;
+
+            try! dats = self->dump_all_world();
+            do self->close_all_world();
+            return result::ok(dats);
+        }
+        public func restore_all_world(self: Project, dats: array<(dict<string, dynamic>, fsys::path_t)>)
+        {
+            // 正在恢复所有世界，为了确保不弄串，此处要确保阻止 dump_and_close_all_world
+            self.m_world_has_been_dumped = true;
+
+            je::towoo::unsafe::dynamic_parser::update_type();
+            do dats->>\dat = self->deserialize_world(dat...);;
+
+            match (je::towoo::unsafe::dynamic_parser::update_all("@/editor.wo"))
+            {
+            ok(_)?;
+            err(msg)?
+                {
+                    let errmsg = F"更新类型管理器失败：{msg}";
+                    jeapi::gui::form::errmsg("错误", errmsg);
+                    je::logerr(errmsg);
+                }
+            }
+            
+            // 等待一帧，直到所有实体被确切地创建完毕
+            je::gui::launch(func(){self.m_world_has_been_dumped = false; return false;}, ());
+        }
+        func _create_default_configs(self: Project, env: Environment)
+        {
+            using je;
+            using je::gui;
+
+            self.m_configs->set("JE_PROJECT_EDITOR_SYSTEM", 
+                new! IConfig(new! Config(
+                    typeinfo::load(DEFAULT_EDITOR_SYSTEM_NAME)->unwrap,
+                    func(origin_editor_system)
+                    {
+                        let USABLE_EDITOR_SYSTEMS = typeinfo::get_all_systems_types()
+                                ->  forall(\t = t->name->begin_with("Editor::"););
+                        let USABLE_EDITOR_SYSTEM_NAMES =  USABLE_EDITOR_SYSTEMS
+                                ->> \t = t->name;;
+
+                        let result = Combo("编辑系统", 
+                            USABLE_EDITOR_SYSTEM_NAMES, 
+                            USABLE_EDITOR_SYSTEM_NAMES->find(origin_editor_system->name))
+                            =>> \index = USABLE_EDITOR_SYSTEMS->get(index);;
+                        TextDisabled("* 重启后生效");
+                        return result;
+                    },
+                    \_,_ = true;,
+                    \val = val->name;,
+                    \str = typeinfo::load(str);,
+                    \_ = "// Editor-system is not needed when export.";,
+                )));
+            self.m_configs->set("JE_PROJECT_DESCRIBE",
+                new! IConfig(new! Config(
+                    "新项目，你可以在这里编辑项目的描述文本",
+                    func(origin_text)
+                    {
+                        Text("项目描述");
+                        return InputTextMultilineSize("##项目描述", origin_text, 400., 200.);
+                    },
+                    \_,_ = true;,
+                    \val = val;,
+                    \str = option::value(str);,
+                    \_ = "// Describe is not needed when export.";,
+                )));
+            self.m_configs->set("JE_ENGINE_TIME_SLEEP_SUPPRESSION",
+                new! IConfig(new! Config(
+                    do nil,
+                    func(_)
+                    {
+                        Text("引擎提前唤醒间隔");
+                        let result = InputFloatFormat("##引擎提前唤醒间隔", je::internal::get_sleep_suppression(), "%.6f");
+                        do result->>\suppression=je::internal::set_sleep_suppression(suppression);;
+                        TextDisabled("适当提高此值可以增加执行间隔和帧数的稳定性");
+                        return result->>\_=do nil;;
+                    },
+                    \_,_ = true;,
+                    \_ = je::internal::get_sleep_suppression(): string;,
+                    func (str){
+                        je::internal::set_sleep_suppression(str: real);
+                        return option::value(do nil);
+                    },
+                    \_ = F"je::internal::set_sleep_suppression({supp});"
+                        where supp = je::internal::get_sleep_suppression()
+                    ;,
+                )));
+            self.m_configs->set("JE_GUI_FONT",
+                new! IConfig(new! Config(
+                    ("@/resource/font/HarmonyOS_Sans_SC_Regular.ttf", "@/resource/font/JetBrainsMono_Regular.ttf", 18),
+                    func(config)
+                    {
+                        Text("GUI字体");
+                        let (font_path, latin_font_path, font_size) = config;
+
+                        Text("中文字体");
+                        let new_font_path = InputText("##fontpath", font_path)->or(font_path);
+                        Text("西文字体");
+                        let new_latin_font_path = InputText("##latinfontpath", latin_font_path)->or(latin_font_path);
+                        Text("字体大小");
+                        let new_font_size = InputInt("##fontsize", font_size)->or(font_size);
+
+                        TextDisabled("* 重启后生效");
+
+                        if (font_path != new_font_path || latin_font_path != new_latin_font_path || font_size != new_font_size)
+                            return option::value((new_font_path, new_latin_font_path, new_font_size));
+                        return option::none;
+                    },
+                    func(_,n){je::gui::set_font(option::value(n[0]), option::value(n[1]), n[2]); return true;},
+                    \v = [v[0]: dynamic, v[1]: dynamic, v[2]: dynamic]->serialize->unwrap;,
+                    func (str){
+                        let v = array::deserialize(str)->unwrap;
+                        if (v->len == 3)
+                            return option::value((v[0] as string, v[1] as string, v[2] as int));
+                        return option::none;
+                    },
+                    \(font, latin_font, size) = F"je::gui::set_font(option::value({font->enstring}), option::value({latin_font->enstring}), {size});";,
+                )));
+            self.m_configs->set("JE_ENGINE_TIME_MAX_DELTATIME",
+                new! IConfig(new! Config(
+                    do nil,
+                    func(_)
+                    {
+                        Text("最大差分时间");
+                        let result = InputFloatFormat("##最大差分时间", env->get_universe->get_max_deltatime(), "%.6f");
+                        do result->>\val= val > 0. ? env->get_universe->set_max_deltatime(val) | nil: void;;
+                        TextDisabled("DeltaTime相关函数将不会返回大于此值的差分时间");
+                        TextDisabled("* 保证大于 0.0");
+                        return result->>\_=do nil;;
+                    },
+                    \_,_ = true;,
+                    \_ = env->get_universe->get_max_deltatime(): string;,
+                    func (str){
+                        env->get_universe->set_max_deltatime(str: real);
+                        return option::value(do nil);
+                    },
+                    \_ = F"RUNTIME_UNIVERSE->set_max_deltatime({supp});"
+                        where supp = env->get_universe->get_max_deltatime()
+                    ;,
+                )));
+            self.m_configs->set("JE_EDITOR_GENERATE_VFILE_FOR_WOOLY",
+                new! IConfig(new! Config(
+                    false,
+                    func(config)
+                    {
+                        Text("为Wooly提供支持");
+                        let result = CheckBox("##export_vfile_for_wooly", config);
+                        TextDisabled("* Wooly是用于Woolang的VSCode插件");
+
+                        return result;
+                    },
+                    func(oldval, newval){
+                        if (newval && !oldval)
+                        {
+                            do fsys::mkdir(self.m_path / ".vscode");
+                            let vsc_config_path = self.m_path / ".vscode" / "settings.json";
+
+                            let dat = fsys::readall(vsc_config_path)=>>\dat = dat->map::deserialize;->or({}mut);
+
+                            dat->set("wooly.enable": dynamic, true: dynamic);
+                            dat->set("wooly.scanroots": dynamic, [
+                                    fsys::normalize(std::host_path())->tostring,
+                                    self.m_path->tostring,
+                                    self->get_vfile_export_path->tostring,
+                                ]: dynamic);
+
+                            if (!fsys::writeall(vsc_config_path, dat->serialize->unwrap))
+                            {
+                                jeapi::gui::form::errmsg("错误", "无法写入VSCode配置文件");
+                                return false;
+                            }                            
+                        }
+                        return true;
+                    },
+                    \config = config: string;,
+                    \config = option::value(config: bool);,
+                    \_="// Supporting for wooly is unnecessary for exported project.";,                    
+                )));
+        }
+        func try_lock_this_project(self: Project)
+        {
+            match (self.m_proj_file_lock)
+            {
+            value(flock)?
+                return flock->trylock();
+            none?
+                {
+                    let projfile = self.m_path / "project.je4project.je4lock";
+                    // 不可以锁定目录
+                    if (fsys::isdir(projfile) == true)
+                        return false;
+                    let flock = new! process::flock(projfile->tostring);
+                    let result = flock->>\fl = fl->trylock();->or(false);
+                    if (result)
+                    {
+                        self.m_proj_file_lock = flock;
+                        return true;
+                    }
+                    return false;
+                }
+            }
+        }
+        func unlock_this_project(self: Project)
+        {
+            match (self.m_proj_file_lock)
+            {
+            value(flock)? flock->unlock();
+            none? je::logerr("未找到项目的文件锁，可能是未能创建或打开文件，请检查权限");
+            }
+        }
+
+        public func create(name: string, path: fsys::path_t)
+        {
+            let env = new! Environment();
+            
+            assert(fsys::setworkpath(path));
+
+            let proj = Project{
+                m_logger = je::internal::hooklog(),
+
+                m_name = name,
+                m_path = path,
+                m_env = env,
+                m_configs = {}mut,
+                m_worlds = []mut,
+                m_modules = {}mut,
+                m_debug_context = mut option::none,
+                m_editing_world = mut option::none,
+                m_proj_file_lock = mut option::none,
+                m_towoo_context = new! ToWooContext(path),
+
+                m_world_has_been_dumped = mut false,
+                m_enable_update_towoo = mut true,
+
+                m_safe_mode = mut false,
+            };
+
+            proj->_create_default_configs(env);
+
+            if (proj->try_lock_this_project() == false)
+            {
+                proj->close();
+                return result::err("锁定项目失败，请检查相同项目是否已经重复打开");
+            }
+
+            tools::update_tool_scripts(proj);
+            gui::drawpannel::update_and_get_scripts(proj);
+
+            return result::ok(proj);
+        }
+        public func active_module(self: Project, module: CxxProject)
+        {
+            assert (std::is_same(self.m_modules->get_or_set(module.path, module), module));
+        }
+        public func deactive_module(self: Project, module: CxxProject)
+        {
+            assert (std::is_same(self.m_modules->get_or(module.path, module), module));
+            if (self.m_modules->remove(module.path))
+            {
+                module->close();
+                return true;
+            }
+            return false;
+        }
+        public func update_towoo_after_dump_and_close(self: Project, force: bool)
+        {
+            self.m_towoo_context->update(force);
+            self->update_vfile_for_wooly();
+        }
+        public func update_towoo(self: Project, force: bool)
+        {
+            match (self->dump_and_close_all_world())
+            {
+            ok(dat)?
+                {
+                    je::gui::launch(func()
+                        {
+                            self->update_towoo_after_dump_and_close(force);
+                            self->restore_all_world(dat);
+                            return false;
+                        }, ());
+                }
+            err(msg)?
+                jeapi::gui::form::errmsg("失败", F"更新ToWoo失败: {msg}");
+            }
+        }
+        public func try_update_towoo(self: Project, fast: bool)
+        {
+            // 无法愉快处理在调试状态下的情况，简单忽略之
+            // TODO: 做平？
+            if (self->is_debugging || self.m_enable_update_towoo == false)
+                return;
+    
+            if (fast
+                ? self.m_towoo_context->fast_check_for_update 
+                | self.m_towoo_context->check_for_update)
+            {
+                self->update_towoo(false);
+            }
+        }
+
+        public func get_all_towoo_scripts_name_and_path(self: Project)
+        {
+            return self.m_towoo_context->get_loaded_towoo
+                ->> \v = (
+                        ToWooContext::pure_component_or_system_name(fsys::purename(v[0])),
+                        (v[0], self->make_path_normalize(v[0]))
+                        )
+                    ;
+                ->  mapping
+                ;
+        }
+        public func get_towoo_context(self: Project)
+        {
+            return self.m_towoo_context;
+        }
+
+        public func load_worlds_from_list(self: Project)
+        {
+            match (fsys::readall(self.m_path / ".temporary" / "jeeditor" / "world.list")=>> \dat = dat->dict::deserialize;)
+            {
+            value(dat)?
+                for (let (wpath, isediting) : dat)
+                {
+                    match (self->load_world(self.m_path / wpath as string))
+                    {
+                    ok(w)?
+                        if (isediting as bool) do self->reset_editing_world(w);
+                    err(info)?
+                        jeapi::gui::form::errmsg("失败", F"无法加载世界 '{wpath as string}': {info}");
+                    }
+                }
+            none?;
+            }
+        }
+        public func load(path: fsys::path_t, dat: dict<string, dynamic>)
+        {
+            try! self = create(dat["name"] as string, path);
+
+            // 先加载配置！这非常重要！
+            for (let (name, val) : dat["configs"] as dict<dynamic, dynamic>->> \k, v = (k as string, v as string);)
+            {
+                if (! self.m_configs->get(name)->> \config = config->parse(val);->or(false))
+                    je::logerr(F"选项 {name} = {val} 未在项目中找到或设置失败");
+            }
+
+            // TODO: 加载失败和二进制文件怎么git还需考虑一下
+            for (let module_name : dat->get("modules")
+                =>> \p = p->trycast:<array<string>>();
+                ->> \p = p->iter; 
+                -> iterator::iter_option)
+            {
+                let module_path = path / module_name;
+                match (CxxProject::load(module_path, self))
+                {
+                ok(m)?
+                    self->active_module(m);
+                err(msg)?
+                    {
+                        self->entry_safe_mode();
+                        jeapi::gui::form::errmsg("加载失败", F"无法加载 '{module_path->tostring}'：{msg}");
+                    }
+                }
+            }
+
+            self->update_towoo_after_dump_and_close(false);
+            je::gui::launch(func(){
+                std::yield();
+                std::yield();
+                std::yield();
+
+                if (self.m_towoo_context->has_bad_scripts)
+                {
+                    self->entry_safe_mode();
+                    jeapi::gui::form::errmsg("加载失败", "初始化时 ToWoo 有编译失败未解决");
+                }
+                return false;
+            }, ());
+
+            match (je::towoo::unsafe::dynamic_parser::update_all("@/editor.wo"))
+            {
+            ok(_)?;
+            err(msg)?
+                {
+                    self->close();
+                    return err(msg);
+                }
+            }
+
+            self->load_worlds_from_list;
+
+            // 设置style必须等到gui开起来，这里设置，可能图形库尚未启动，就炸了
+            // launch出去自动执行
+            je::gui::launch(func()
+                {
+                    do je::file::readall("@/editor.je4style")
+                        =>> \style_dat = style_dat->dict::deserialize;
+                        ->> \style_dat = style_dat
+                            ->> \k, v = (k as int: je::gui::ImGuiCol, v as array<dynamic>->>\e = e: real;);
+                            ;
+                        ->> \style_dat = jeapi::gui::style::restore_config(style_dat);
+                        ;
+                    return false;
+                }, ());
+
+            self->restore_dump();
+
+            return result::ok(self);
+        }
+        public func save_project(self: Project)
+        {
+            let bad_list = self.m_towoo_context->get_bad_scripts
+                ->> \p = p->tostring;
+                ->  reduce(\l, r = l + "\n" + r;);
+
+            match (bad_list)
+            {
+            value(badlist)?
+                {
+                    jeapi::gui::form::errmsg("失败", "ToWoo 有编译失败未解决：\n" + badlist);
+                    je::logwarn("ToWoo 有编译失败未解决：\n" + badlist);
+                    return false;
+                }
+            none?;
+            }
+
+            let dat = {
+                ["name"] = self.m_name: dynamic,
+                ["configs"] = self.m_configs->> \k, v = (k, v->tostring());: dynamic,
+                ["modules"] = self.m_modules->unmapping->>\kv = kv[0]->tostring->sub(self.m_path->tostring->len);: dynamic,
+            };
+
+            // 编辑中的世界保存到 .temporary 目录内
+            do fsys::mkdir(self.m_path / ".temporary" / "jeeditor");
+
+            if (! self.m_worlds
+                ->> \pw = (
+                        pw.m_world_path->tostring->sub(self.m_path->tostring->len), 
+                        self->get_editing_world->>\w = w == pw.m_world_instance;->or(false))
+                    ;
+                ->  mapping
+                ->  serialize
+                ->> \dat = fsys::writeall(self.m_path / ".temporary" / "jeeditor" / "world.list", dat);
+                ->  or(false))
+            {
+                jeapi::gui::form::errmsg("失败", "保存编辑中的世界列表失败");
+                je::logwarn("保存编辑中的世界列表失败");
+                return false;
+            }
+
+            // 顺手保存所有世界
+            let failed_saving_worlds = self.m_worlds
+                ->  to_array
+                =>> \pw = saving_success ?  [] | [pw]
+                    where saving_success = self->save_world(pw.m_world_instance)
+                    ;
+                ;
+                
+            if (failed_saving_worlds->empty == false)
+            {
+                let failed_file_list = failed_saving_worlds
+                    ->> \pw = pw.m_world_path->tostring;
+                    ->  reduce(\l, r = l + "\n" + r;)
+                    ->  unwrap;
+
+                jeapi::gui::form::errmsg("错误", F"项目中的一些世界保存失败:\n{failed_file_list}\n项目保存未能完成");
+                return false;
+            }
+            else if (!fsys::writeall(self.m_path/"project.je4project", dat as dict<string, dynamic>: string))
+            {
+                jeapi::gui::form::errmsg("错误", F"保存项目文件失败");
+                return false;
+            }
+
+            self->clear_dump();
+            return true;
+        }
+        public func close(self: Project)
+        {  
+            // 关闭env, 稍后释放模块
+            self.m_env->close;
+            self->unlock_this_project();
+
+            je::towoo::unsafe::dynamic_parser::clear();
+
+            // 关闭log回调
+            je::internal::unhooklog(self.m_logger);
+        }
+        public func get_towoo_context_for_exit(self: Project)
+        {
+            return self.m_towoo_context;
+        }
+        public func free_modules_after_close(self: Project)
+        {
+            for (let (_, m) : self.m_modules)
+                m->close;
+        }
+        public func wait(self: Project)
+        {
+            self.m_env->wait;
+        }
+        public func get_env(self: Project)
+        {
+            return self.m_env;
+        }
+
+        func get_project_world(self: Project, world: je::world)
+        {
+            return self.m_worlds
+                -> forall(\pw = pw.m_world_instance == world;)
+                -> get(0);
+        }
+        func is_project_world(self: Project, world: je::world)
+        {
+            return self->get_project_world(world)->is_value;
+        }
+        public func get_editing_world(self: Project)
+        {
+            return self.m_editing_world;
+        }
+        public func validate_world_or_warning(self: Project, world: je::world)
+        {
+            if (self->is_project_world(world))
+                return true;
+                
+            jeapi::gui::form::errmsg("错误", "请求的世界不存在"); 
+            return false;
+        }
+        public func get_worlds_runtime_systems(self: Project, world: je::world)
+        {
+            return self->get_project_world(world)->>\pw = pw.m_runtime_systems;;
+        }
+        public func set_worlds_runtime_systems(self: Project, world: je::world, syss: array<je::typeinfo>)
+        {
+            return self->get_project_world(world)->>\pw = pw.m_runtime_systems = syss;->is_value;
+        }
+        public func reset_editing_world(self: Project, world: je::world)=> result<void, string>
+        {
+            if (self->is_project_world(world) || self->is_debugging)
+            {
+                // 将编辑器系统从旧编辑世界中移除，这里要求新编辑世界必须属于项目
+                let editing_world = self->get_editing_world();
+
+                match (editing_world)
+                {
+                value(last_edit_world)?
+                {
+                    if (last_edit_world == world)
+                        return result::ok(do nil); // 新老世界相同，跳过更新
+
+                    if (last_edit_world->internal::is_valid)
+                        last_edit_world->remove_system(self->get_config_editor_system);
+                }
+                none?;
+                }
+
+                if (self->is_debugging == false)
+                    do world->add_system(self->get_config_editor_system);
+
+                self.m_editing_world = option::value(world);
+                return result::ok(do nil);
+            }
+            return result::err("给定的世界不属于当前项目");
+        }
+
+        public func get_configs(self: Project)
+        {
+            return self.m_configs;
+        }
+
+        public func get_config(self: Project, config_name: string)
+        {
+            return self.m_configs->get(config_name);
+        }
+
+        public func get_config_editor_system(self: Project)
+        {
+            return self->get_config("JE_PROJECT_EDITOR_SYSTEM")
+                ->> \config = config->tostring;
+                ->  or(DEFAULT_EDITOR_SYSTEM_NAME)
+                ->  je::typeinfo::load
+                ->  unwrap;
+        }
+        public func get_vfile_export_path(self: Project)
+        {
+            return self.m_path / ".temporary" / "jeeditor" / "virtual";
+        }
+        public func update_vfile_for_wooly(self: Project)
+        {
+            do try!
+            {
+                try! conf = self->get_config("JE_EDITOR_GENERATE_VFILE_FOR_WOOLY");
+                if (conf->tostring: bool)
+                {
+                    let loc = self->get_vfile_export_path();
+                    for (let (name, content) : je::woolang::get_all_internal_scripts())
+                    {
+                        if (name->find(":")->is_value || name->find("@")->is_value || name->find("!")->is_value)
+                            continue;
+
+                        let path = loc / name;
+                        do fsys::mkdir(fsys::parent(path));
+
+                        if (! fsys::writeall(path, content))
+                            jeapi::gui::form::errmsg("错误", F"无法写入虚拟文件 '{path->tostring}'");
+                    }
+                }
+                return_value!;
+            };
+        }
+
+        public func get_all_worlds(self: Project)
+        {
+            return self.m_worlds->>\pw = pw.m_world_instance;;
+        }
+        func append_world_to_list(self: Project, world: ProjectWorld)
+        {
+            self.m_worlds->add(world);
+
+            // 世界编辑器已经做平了这一块
+            // do world.m_world_instance->add_system(
+            //     je::typeinfo::load("Translation::TranslationUpdatingSystem")->unwrap);
+
+            // 创建默认世界之后，自动顺便创建调试使用的摄像机
+            let camera_walker = world.m_world_instance->add_entity([
+                // Transform 族组件
+                Transform::LocalPosition::type::typeinfo,
+                Transform::LocalRotation::type::typeinfo,
+                Transform::LocalToWorld::type::typeinfo,
+                Transform::Translation::type::typeinfo,
+                Transform::Anchor::type::typeinfo,
+                // Editor 族组件
+                Editor::Invisable::type::typeinfo,
+                Editor::EditorWalker::type::typeinfo,
+            ]);
+            // 摄像机，同时负责x轴旋转
+            let editor_camera = world.m_world_instance->add_entity([
+                // Transform 族组件
+                Transform::LocalRotation::type::typeinfo,
+                Transform::LocalToParent::type::typeinfo,
+                Transform::Translation::type::typeinfo,
+                // Editor 族组件
+                Editor::Invisable::type::typeinfo,
+                Editor::EditorWalker::type::typeinfo,
+                // Camera 族组件
+                Camera::PerspectiveProjection::type::typeinfo,
+                Camera::Projection::type::typeinfo,
+                Camera::FrustumCulling::type::typeinfo,
+                Camera::RendToFramebuffer::type::typeinfo,
+                Camera::Clear::type::typeinfo,
+            ]);
+            editor_camera->je::internal::apply_camera_framebuf_setting(320, 240);
+            do editor_camera->internal::set_parent(camera_walker, true);
+    
+            // 移动器，这里只创建根实体，具体的轴由编辑器系统生成
+            do world.m_world_instance->add_entity([
+                // Transform 族组件
+                Transform::LocalPosition::type::typeinfo,
+                Transform::LocalRotation::type::typeinfo,
+                Transform::LocalScale::type::typeinfo,
+                Transform::Anchor::type::typeinfo,
+                Transform::Translation::type::typeinfo,
+                Transform::LocalToWorld::type::typeinfo,
+                // Editor 族组件
+                Editor::Invisable::type::typeinfo,
+                Editor::EntityMoverRoot::type::typeinfo,
+            ]);
+
+            return world.m_world_instance;
+        }
+        public func create_new_world(self: Project, new_world_file_path: fsys::path_t)
+        {          
+            return self->append_world_to_list(
+                ProjectWorld 
+                {
+                    m_world_instance = self.m_env->create_world,
+                    m_world_path = new_world_file_path,
+                    m_runtime_systems = mut [],
+                    m_remark_note = mut "",
+                });
+        }
+        public func get_world_path(self: Project, w: je::world)
+        {
+            return self->get_project_world(w)->> \pw = pw.m_world_path;;
+        }
+        public func get_world_remark(self: Project, w: je::world)
+        {
+            return self->get_project_world(w)->> \pw = pw.m_remark_note;;
+        }
+        public func set_world_remark(self: Project, w: je::world, remark: string)
+        {
+            return self->get_project_world(w)->> \pw = pw.m_remark_note = remark;->is_value;
+        }
+        public func serialize_entity(_: Project, e: je::entity)
+        {
+            return jeapi::serialize::entity(e, false);
+        }
+        public func get_debug_camera_info(_: Project, w: je::world)
+        {
+            let debug_camera_root_trans = gui::edit_forms::get_debug_camera_root(w)
+                =>> \e = e->towoo::get_component :<Transform::Translation>;
+                ;
+            let debug_camera = gui::edit_forms::get_debug_camera(w);
+            let debug_camera_rot = debug_camera
+                =>> \e = e->towoo::get_component :<Transform::LocalRotation>;
+                ->> \r = r.rot->get;
+                ;
+
+            match (debug_camera_root_trans)
+            {
+            value(trans)?
+                {
+                    let pos = trans->get_global_pos;
+                    let rot = trans->get_global_rot;
+
+                    let crot = debug_camera_rot->or(quat::ident);
+
+                    let debug_camera_info = {
+                        ["root_position"] = [pos[0], pos[1], pos[2]]: dynamic,
+                        ["root_rotation"] = [rot[0], rot[1], rot[2], rot[3]]: dynamic,
+                        ["camera_rotation"] = [crot[0], crot[1], crot[2], crot[3]]: dynamic,
+                        ["camera_in_2d_mode"] = debug_camera
+                            =>> \e = e->towoo::get_component :<Camera::OrthoProjection>;
+                            ->  is_value: dynamic,
+                        ["camera_in_2d_light"] = debug_camera
+                            =>> \e = e->towoo::get_component :<Light2D::CameraPostPass>;
+                            ->  is_value: dynamic,
+                    };
+                    return option::value(debug_camera_info);
+                }
+            none? return none;
+            }
+        }
+        public func set_debug_camera_info(_: Project, w: je::world, cameradat: dict<string, dynamic>)
+        {
+            try! camera_root = gui::edit_forms::get_debug_camera_root(w);
+            try! camera = gui::edit_forms::get_debug_camera(w);
+
+            let root_translation = camera_root->towoo::get_component :<Transform::Translation>->unwrap;
+            let root_local_position = camera_root->towoo::get_component :<Transform::LocalPosition>->unwrap;
+            let root_local_rotation = camera_root->towoo::get_component :<Transform::LocalRotation>->unwrap;
+
+            let camera_local_rotation = camera->towoo::get_component :<Transform::LocalRotation>->unwrap;
+
+            let rpos = cameradat->get_or("root_position", [0., 0., 0.]: dynamic) as array<dynamic>->>\e = e as real;;
+            root_translation->set_global_pos(
+                (rpos[0], rpos[1], rpos[2]): vec3, 
+                option::value(root_local_position), 
+                option::value(root_local_rotation));
+
+            let rrot = cameradat->get_or("root_rotation", [0., 0., 0., 1.]: dynamic) as array<dynamic>->>\e = e as real;;
+            root_translation->set_global_rot(
+                (rrot[0], rrot[1], rrot[2], rrot[3]): quat, 
+                option::value(root_local_rotation));
+
+            let crot = cameradat->get_or("camera_rotation", [0., 0., 0., 1.]: dynamic) as array<dynamic>->>\e = e as real;;
+            camera_local_rotation.rot->set((crot[0], crot[1], crot[2], crot[3]): quat);
+
+            if (cameradat->get_or("camera_in_2d_mode", false: dynamic) as bool)
+            {
+                gui::edit_forms::update_camera_2d3d_mode(camera, true);
+            }
+            if (cameradat->get_or("camera_in_2d_light", false: dynamic) as bool)
+            {
+                gui::edit_forms::update_camera_2dlight_mode(camera, true);
+            }
+
+            return_value!;
+        }
+        public func serialize_world(self: Project, w: je::world, contain_debug_camera: bool)
+        {
+            return self->get_project_world(w)
+                =>> \pw = jeapi::serialize::world(w, true)->okay
+                    ->> func (dat)
+                        {
+                            let mdat = dat->to_map;
+                            mdat->set("entities", dat["entities"] as array<dynamic>
+                                ->  std::sort(
+                                        \l, r = 
+                                            (l as dict<dynamic, dynamic>->get_or("euid": dynamic, 0H: dynamic) as int) 
+                                            < 
+                                            (r as dict<dynamic, dynamic>->get_or("euid": dynamic, 0H: dynamic) as int)
+                                        ;
+                                    )
+                                ->> \edat = edat as dict<dynamic, dynamic>->erase("euid": dynamic);
+                                : dynamic);
+                            mdat->set("systems", dat["systems"] as array<dynamic>->std::sort(
+                                    \l, r = (l as string) < (r as string);
+                                ): dynamic);
+
+                            if (contain_debug_camera)
+                            {
+                                do self->get_debug_camera_info(w)
+                                    ->> \debug_camera_info = mdat->set("debug_camera", debug_camera_info: dynamic);
+                                    ;
+                            }
+                            return mdat->unsafe::cast :<typeof(dat)>;
+                        }
+                    ->> \dat = dat->apply("runtime_systems", pw.m_runtime_systems->>\t=t->name; as array<string>: dynamic);
+                    ->> \dat = dat->apply("remark", pw.m_remark_note as string: dynamic);
+                    ;
+                ;
+        }
+        public func deserialize_world(self: Project, dat: dict<string, dynamic>, file_path: fsys::path_t)
+        {
+            let w = self->append_world_to_list(
+                ProjectWorld 
+                {
+                    m_world_instance = self.m_env->load_world(dat),
+                    m_world_path = file_path,
+                    m_runtime_systems = 
+                        mut dat->get_or("runtime_systems", []: dynamic) as array<dynamic>
+                            =>> \elem = systype->is_value ? [systype->unwrap] | []
+                                where systype = je::typeinfo::load(elem as string);,
+                    m_remark_note = mut dat->get_or("remark", "": dynamic) as string,
+                });
+
+            if (dat->get_or("is_editing", false: dynamic) as bool)
+                do self->reset_editing_world(w);
+
+            match (dat->get("debug_camera"))
+            {
+            value(dat)?
+                je::gui::launch(
+                    func()
+                    {
+                        let cameradat = dat as dict<dynamic, dynamic>
+                            ->> \k, v = (k as string, v);
+                            ;
+
+                        for (;;)
+                        {
+                            std::yield();
+
+                            // NOTE: 世界刚创建出来，第一帧无法获取到摄像机，需要等待若干帧
+                            if (self->set_debug_camera_info(w, cameradat)->is_value)
+                                break;
+                        }
+                        return false;
+                    }, ());
+            none?;
+            }
+            return w;
+        }
+
+        public func try_load_all_camera_debug_info_map(self: Project)
+        {
+            let debug_camera_map_path = self.m_path / ".temporary" / "jeeditor" / "world_debug_camera.list";
+            try! data = fsys::readall(debug_camera_map_path)=>> \dat = dat->dict::deserialize;;
+
+            return_value! data
+                ->> \k, v = (k->or(""), v->or({}: dict<dynamic, dynamic>)->>\k, v = (k->or(""), v););
+                ;
+        }
+        public func try_fetch_camera_debug_info_map(self: Project, p: fsys::path_t)
+        {
+            return self->try_load_all_camera_debug_info_map()=>> \m = m->get(self->make_path_normalize(p));;
+        }
+        public func try_update_camera_debug_info_map(self: Project, p: fsys::path_t, dat: dict<string, dynamic>)
+        {
+            let debug_camera_map_path = self.m_path / ".temporary" / "jeeditor" / "world_debug_camera.list";
+            let old_dat = self->try_load_all_camera_debug_info_map()->or({})->to_map;
+
+            old_dat->set(self->make_path_normalize(p), dat);
+            return fsys::writeall(debug_camera_map_path, old_dat->serialize->unwrap);
+        }
+        public func save_world(self: Project, w: je::world)
+        {
+            if (self.m_safe_mode)
+            {
+                jeapi::gui::form::errmsg("错误", "安全模式下无法保存世界");
+                return false;
+            }
+
+            return self->get_project_world(w)
+                =>> func(pw)
+                { 
+                    do self->get_debug_camera_info(w)
+                        ->> \info = self->try_update_camera_debug_info_map(pw.m_world_path, info);
+                        ;
+
+                    return self->serialize_world(pw.m_world_instance, false)
+                        ->> \dat = fsys::writeall(pw.m_world_path, dat as dict<string, dynamic>: string);
+                    ;
+                }
+                ->  or(false);
+        }
+        public func load_world(self: Project, file_path: fsys::path_t)
+        {
+            // 不允许重复加载相同路径的世界
+            if (self.m_worlds->forall(\pworld = pworld.m_world_path == file_path;)->empty)
+            {
+                match (fsys::readall(file_path)
+                    =>> \dat = dict::deserialize(dat)
+                        ->> \d = d
+                            ->> \k, v = (k as string, v);
+                            ;
+                        ->> \d = d->apply(
+                                "debug_camera", 
+                                self->try_fetch_camera_debug_info_map(file_path)->or({}): dynamic
+                            )
+                            ;
+                        ;
+                    ->> \dat = self->deserialize_world(dat, file_path);)
+                {
+                value(w)?
+                    return result::ok(w);
+                none?
+                    return result::err("序列化世界失败");
+                }
+            }
+            return result::err("相同世界已存在");
+        }
+
+        public func destroy_world(self: Project, world: je::world)=> result<void, string>
+        {
+            // 使用create_new_world创建的世界，务必使用destroy_world销毁，不应该close
+            match (self->get_project_world(world))
+            {
+            value(w)?
+            {
+                // 如果当前编辑中的世界就是待删除的世界，那么需要更新新的编辑世界
+                let need_update_new_editing_world = 
+                    self->get_editing_world->>\rw = rw == world;->or(false);
+               
+                // NOTE: 必须在切换完成之后才能从世界列表中移除世界，否则无法正确获取编辑中的世界
+                do self.m_worlds->find(w)
+                    ->> \idx = self.m_worlds->remove(idx);
+                    ;
+
+                // 如果还有世界，那么选择第一个作为编辑中世界顶替
+                self.m_worlds->get(0)
+                    ->> \w = need_update_new_editing_world 
+                        ? self->reset_editing_world(w.m_world_instance)->unwrap
+                        | nil: void
+                        ; // 必须成功
+                    ->  or_do(\ = self.m_editing_world = option::none;)
+                    ;
+
+                world->close;
+                
+                return result::ok(do nil);
+            }
+            none?
+                return result::err("期待销毁的世界不存在");
+            }
+        }
+    }
+}

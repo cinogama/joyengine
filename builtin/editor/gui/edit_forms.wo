@@ -1,0 +1,35 @@
+// gui.edit_forms
+// 用于显示和编辑的窗口们
+
+import builtin::editor::gui::main;
+import builtin::editor::gui::edit_forms::worlds_list;
+import builtin::editor::gui::edit_forms::entities_list;
+import builtin::editor::gui::edit_forms::inspector;
+import builtin::editor::gui::edit_forms::viewport;
+import builtin::editor::gui::browser;
+
+namespace editor::gui
+{
+    public func show_edit_forms(context: EditorContext)
+    {
+        let open_worlds_list = context->register_editor_form_controlor("世界列表")->unwrap;
+        let open_entities_list = context->register_editor_form_controlor("实体列表")->unwrap;
+        let open_inspector = context->register_editor_form_controlor("检视面板")->unwrap;
+        let open_viewport = context->register_editor_form_controlor("视口")->unwrap;
+        let open_browser = context->register_editor_form_controlor("资源浏览器")->unwrap;
+        let open_logger = context->register_editor_form_controlor("日志查看器")->unwrap;
+
+        context->fixed_launch_editor_form(edit_forms::show_worlds_list, (context, open_worlds_list));
+        context->fixed_launch_editor_form(edit_forms::show_entities_list, (context, open_entities_list));
+        context->fixed_launch_editor_form(edit_forms::show_inspector, (context, open_inspector));
+        context->fixed_launch_editor_form(edit_forms::show_viewport, (context, open_viewport));
+        context->fixed_launch_editor_form(show_browser, (context, open_browser));
+        context->fixed_launch_editor_form(show_logger, (context, open_logger));
+
+        jeapi::gui::widget::register_click_file_callback(func(path){
+            let p = fsys::parent(context->get_project->parse_path_normalize(path));
+            if (fsys::isdir(p))
+                set_current_work_path(p);
+        });
+    }
+}

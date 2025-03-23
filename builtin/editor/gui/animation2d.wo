@@ -1,0 +1,1262 @@
+import pkg::buffer;
+import pkg::try;
+import pkg::iterator;
+
+namespace editor::gui::animation2d
+{
+    enum DataValueType
+    {
+        INT,
+        FLOAT,
+        VEC2,
+        VEC3,
+        VEC4,
+        QUAT4,
+    }
+    union DataValue
+    {
+        INT(int),
+        FLOAT(real),
+        VEC2((real, real)),
+        VEC3((real, real, real)),
+        VEC4((real, real, real, real)),
+        QUAT4((real, real, real)),
+    }
+    namespace DataValue
+    {
+        func tostring(self: DataValue)
+        {
+            match (self)
+            {
+            INT(i)? return i: string;
+            FLOAT(r)? return r: string;
+            VEC2((x, y))? return F"({x}, {y})";
+            VEC3((x, y, z))? return F"({x}, {y}, {z})";
+            VEC4((x, y, z, w))? return F"({x}, {y}, {z}, {w})";
+            QUAT4((x, y, z))? return F"({x}, {y}, {z})";
+            }
+        }
+    }
+
+    using FrameComponentData = struct{
+        m_component_name: string,
+        m_member_name: string,
+        m_offset_mode: mut bool,
+        m_value: mut DataValue,
+    }
+    {
+        func tostring(self: FrameComponentData)
+        {
+            if (self.m_offset_mode)
+                return F"{self.m_component_name}.{self.m_member_name}+={self.m_value->tostring}";
+            else
+                return F"{self.m_component_name}.{self.m_member_name}={self.m_value->tostring}";
+        }
+        func dup(self: FrameComponentData)
+        {
+            return FrameComponentData{
+                m_component_name = self.m_component_name,
+                m_member_name = self.m_member_name,
+                m_value = mut self.m_value,
+                m_offset_mode = mut self.m_offset_mode,
+            };
+        }
+    }
+    using FrameUniformData = struct{
+        m_uniform_name: string,
+        m_value: mut DataValue,
+    }
+    {
+        func tostring(self: FrameUniformData)
+        {
+            return F"{self.m_uniform_name}={self.m_value->tostring}";
+        }
+        func dup(self: FrameUniformData)
+        {
+            return FrameUniformData{
+                m_uniform_name = self.m_uniform_name,
+                m_value = mut self.m_value,
+            };
+        }
+    }
+    using Animation2dFrameData = struct{
+        m_component_dats: vec<FrameComponentData>,
+        m_uniform_dats: vec<FrameUniformData>,
+        m_time: mut real,
+    }
+    {
+        func dup(self: Animation2dFrameData)
+        {
+            return Animation2dFrameData{
+                m_time = mut self.m_time,
+                m_component_dats = self.m_component_dats->dup()->>\v = v->dup;,
+                m_uniform_dats = self.m_uniform_dats->dup()->>\v = v->dup;,
+            };
+        }
+    }
+    using AnimationActionData = struct{
+        m_frames: vec<Animation2dFrameData>,
+    }
+    {
+        func dup(self: AnimationActionData)
+        {
+            return AnimationActionData{
+                m_frames = self.m_frames->> \afd = afd->dup();,
+            };
+        }
+    }
+    union SelectedComponentOrUniformData
+    {
+        ComponentIndex(int),
+        UniformIndex(int),
+        None,
+    }
+    namespace SelectedComponentOrUniformData
+    {
+        func is_selected_component_idx(self: SelectedComponentOrUniformData, id: int)
+        {
+            match (self)
+            {
+            ComponentIndex(idx)? return idx == id;
+            _? return false;
+            }
+        }
+        func is_selected_uniform_idx(self: SelectedComponentOrUniformData, id: int)
+        {
+            match (self)
+            {
+            UniformIndex(idx)? return idx == id;
+            _? return false;
+            }
+        }
+    }
+
+    func lerp(a, b, deg: real)
+        where std::type_traits::is_same :<typeof(a),typeof(b)>
+            , a is int
+            || a is real
+            || a is (real, real)
+            || a is (real, real, real)
+            || a is (real, real, real, real)
+        ;
+    {
+        if (a is int)
+            return math::round(a: real + (b: real - a: real) * deg);
+        else if (a is real)
+            return a + (b - a) * deg;
+        else if (a is (real, real))
+            return (lerp(a[0], b[0], deg), lerp(a[1], b[1], deg));
+        else if (a is (real, real, real))
+            return (lerp(a[0], b[0], deg), lerp(a[1], b[1], deg), lerp(a[2], b[2], deg));
+        else if (a is (real, real, real, real))
+            return (lerp(a[0], b[0], deg), lerp(a[1], b[1], deg), lerp(a[2], b[2], deg), lerp(a[3], b[3], deg));
+        else
+            std::panic("你是故意来找茬的吧？");
+    }
+    func lerp_data_value(a, b, deg: real)
+    {
+        match (a)
+        {
+        INT(v)? return INT(lerp(v, b->unsafe::cast :<(void, int)>()[1], deg));
+        FLOAT(v)? return FLOAT(lerp(v, b->unsafe::cast :<(void, real)>()[1], deg));
+        VEC2(v)? return VEC2(lerp(v, b->unsafe::cast :<(void, (real, real))>()[1], deg));
+        VEC3(v)? return VEC3(lerp(v, b->unsafe::cast :<(void, (real, real, real))>()[1], deg));
+        VEC4(v)? return VEC4(lerp(v, b->unsafe::cast :<(void, (real, real, real, real))>()[1], deg));
+        QUAT4(v)? return QUAT4(lerp(v, b->unsafe::cast :<(void, (real, real, real))>()[1], deg));
+        }
+    }
+
+
+    public using AnimationContext = struct{
+        m_animations: map<string, AnimationActionData>,
+        m_path: fsys::path_t,
+
+        // 下面这些是编辑中状态信息
+        m_selected_action_name: mut string,
+        m_selected_frame: mut int,
+        m_selected_c_or_u_data: mut SelectedComponentOrUniformData,
+    }
+    {
+        public func create(path: fsys::path_t)
+        {
+            return AnimationContext{
+                    m_animations = {}mut, 
+                    m_path = path, 
+                    m_selected_action_name = mut "",
+                    m_selected_frame = mut -1,
+                    m_selected_c_or_u_data = mut SelectedComponentOrUniformData::None,
+                };
+        }
+        public func open(path: fsys::path_t)
+        {
+            try! bufdata = buffer::builder::fromfile(path->tostring, 0, -1);
+
+            let self = AnimationContext{
+                m_animations = {}mut,
+                m_path = path,
+                m_selected_action_name = mut "",
+                m_selected_frame = mut -1,
+                m_selected_c_or_u_data = mut SelectedComponentOrUniformData::None,
+            };
+
+            func read_typed_value(bufdata: buffer::builder)
+            {
+                let value_type = bufdata->readui8(): DataValueType;
+                if (value_type == DataValueType::INT)
+                    return DataValue::INT(bufdata->readi32());
+                else if (value_type == DataValueType::FLOAT)
+                    return DataValue::FLOAT(bufdata->readf32());
+                else if (value_type == DataValueType::VEC2)
+                {
+                    let x = bufdata->readf32();
+                    let y = bufdata->readf32();
+                    
+                    return DataValue::VEC2((x, y));
+                }
+                else if (value_type == DataValueType::VEC3)
+                {
+                    let x = bufdata->readf32();
+                    let y = bufdata->readf32();
+                    let z = bufdata->readf32();
+
+                    return DataValue::VEC3((x, y, z));
+                }
+                else if (value_type == DataValueType::VEC4)
+                {
+                    let x = bufdata->readf32();
+                    let y = bufdata->readf32();
+                    let z = bufdata->readf32();
+                    let w = bufdata->readf32();
+                    
+                    return DataValue::VEC4((x, y, z, w));
+                }
+                else if (value_type == DataValueType::QUAT4)
+                {
+                    let x = bufdata->readf32();
+                    let y = bufdata->readf32();
+                    let z = bufdata->readf32();
+                    let w = bufdata->readf32();
+                    
+                    return DataValue::QUAT4((x, y, z, w):quat->euler_angle: (real, real, real));
+                }
+                std::panic(F"Unknown type: {value_type}");
+            }
+
+            // 0. 读取魔数
+            if (bufdata->readui32 != 0xA213A710)
+                return result::err(0: buffer::builder::errno_t);
+
+            // 1. 读取动作数量
+            let animation_count = bufdata->readi64;
+            for (let mut i = 0; i < animation_count; i += 1)
+            {
+                // 2. 读取当前动作的帧数量和名称
+                let frame_count = bufdata->readi64;
+                let frame_name_len = bufdata->readi64;
+                let frame_name = bufdata->readbuffer(frame_name_len) as buffer: string;
+
+                let frames = AnimationActionData{m_frames = []mut};
+                self.m_animations->set(frame_name, frames);
+
+                for (let mut j = 0; j < frame_count; j += 1)
+                {
+                    // 3. 读取一帧的持续时间，以及组件数据和一致变量数据
+                    let time = bufdata->readf32();
+                    
+                    let frame_data = Animation2dFrameData{
+                        m_time = mut time,
+                        m_component_dats = []mut,
+                        m_uniform_dats = []mut,
+                    };
+
+                    let component_data_count = bufdata->readi64();
+                    for (let mut k = 0; k < component_data_count; k += 1)
+                    {
+                        // 4. 读取帧组件数据
+                        let component_name_len = bufdata->readi64();
+                        let component_name = bufdata->readbuffer(component_name_len) as buffer: string;
+
+                        let member_name_len = bufdata->readi64();
+                        let member_name = bufdata->readbuffer(member_name_len) as buffer: string;
+
+                        let offset_mode = bufdata->readui8() != 0;
+
+                        let value = read_typed_value(bufdata);
+                        
+                        frame_data.m_component_dats->add(FrameComponentData{
+                            m_component_name = component_name,
+                            m_member_name = member_name,
+                            m_offset_mode = mut offset_mode,
+                            m_value = mut value,
+                        });
+                    }
+
+                    let uniform_data_count = bufdata->readi64();
+                    for (let mut k = 0; k < uniform_data_count; k += 1)
+                    {
+                        // 5. 读取一致变量数据
+                        let uniform_name_len = bufdata->readi64();
+                        let uniform_name = bufdata->readbuffer(uniform_name_len) as buffer: string;
+
+                        let value = read_typed_value(bufdata);
+
+                        frame_data.m_uniform_dats->add(FrameUniformData{
+                            m_uniform_name = uniform_name,
+                            m_value = mut value,
+                        });
+                    }
+
+                    frames.m_frames->add(frame_data);
+                }
+            }
+            // OK
+
+            return result::ok(self);
+        }
+        public func save(self: AnimationContext)
+        {
+            // 1. 保存动作数量
+            let mut result = buffer::createui32(0xA213A710);
+
+            result = result->appendi64(self.m_animations->len);
+
+            for (let (action_name, action_data) : self.m_animations)
+            {
+                // 2. 保存当前动作的帧数量和名称
+                result = result
+                    ->appendi64(action_data.m_frames->len)
+                    ->appendi64(action_name->byte_len)
+                    + action_name as string : buffer;
+
+                for (let frame: action_data.m_frames)
+                {
+                    // 3. 保存一帧的持续时间，以及组件数据和一致变量数据
+                    result = result->appendf32(frame.m_time);
+
+                    result = result->appendi64(frame.m_component_dats->len);
+                    for (let cdata : frame.m_component_dats)
+                    {
+                        result = result->appendi64(cdata.m_component_name->byte_len)
+                            + cdata.m_component_name as string: buffer;
+                        result = result->appendi64(cdata.m_member_name->byte_len)
+                            + cdata.m_member_name as string: buffer;
+                        result = result->appendui8(cdata.m_offset_mode? 1 | 0);
+                        match (cdata.m_value)
+                        {
+                        INT(n)?
+                            {
+                                result = result->appendui8(DataValueType::INT : int);
+                                result = result->appendi32(n);
+                            }
+                        FLOAT(x)?
+                            {
+                                result = result->appendui8(DataValueType::FLOAT : int);
+                                result = result->appendf32(x);
+                            }
+                        VEC2((x, y))?
+                            {
+                                result = result->appendui8(DataValueType::VEC2 : int);
+                                result = result->appendf32(x);
+                                result = result->appendf32(y);
+                            }
+                        VEC3((x, y, z))?
+                            {
+                                result = result->appendui8(DataValueType::VEC3 : int);
+                                result = result->appendf32(x);
+                                result = result->appendf32(y);
+                                result = result->appendf32(z);
+                            }
+                        VEC4((x, y, z, w))?
+                            {
+                                result = result->appendui8(DataValueType::VEC4 : int);
+                                result = result->appendf32(x);
+                                result = result->appendf32(y);
+                                result = result->appendf32(z);
+                                result = result->appendf32(w);
+                            }
+                        QUAT4((ex, ey, ez))?
+                            {
+                                let (x, y, z, w) = quat::euler(ex, ey, ez);
+
+                                result = result->appendui8(DataValueType::QUAT4 : int);
+                                result = result->appendf32(x);
+                                result = result->appendf32(y);
+                                result = result->appendf32(z);
+                                result = result->appendf32(w);
+                            }
+                        }
+                    }
+
+                    result = result->appendi64(frame.m_uniform_dats->len);
+                    for (let udata : frame.m_uniform_dats)
+                    {
+                        result = result->appendi64(udata.m_uniform_name->byte_len)
+                            + udata.m_uniform_name as string: buffer;
+
+                        match (udata.m_value)
+                        {
+                        INT(n)?
+                            {
+                                result = result->appendui8(DataValueType::INT : int);
+                                result = result->appendi32(n);
+                            }
+                        FLOAT(x)?
+                            {
+                                result = result->appendui8(DataValueType::FLOAT : int);
+                                result = result->appendf32(x);
+                            }
+                        VEC2((x, y))?
+                            {
+                                result = result->appendui8(DataValueType::VEC2 : int);
+                                result = result->appendf32(x);
+                                result = result->appendf32(y);
+                            }
+                        VEC3((x, y, z))?
+                            {
+                                result = result->appendui8(DataValueType::VEC3 : int);
+                                result = result->appendf32(x);
+                                result = result->appendf32(y);
+                                result = result->appendf32(z);
+                            }
+                        VEC4((x, y, z, w))?
+                            {
+                                result = result->appendui8(DataValueType::VEC4 : int);
+                                result = result->appendf32(x);
+                                result = result->appendf32(y);
+                                result = result->appendf32(z);
+                                result = result->appendf32(w);
+                            }
+                        QUAT4((ex, ey, ez))?
+                            {
+                                let (x, y, z, w) = quat::euler(ex, ey, ez);
+
+                                result = result->appendui8(DataValueType::QUAT4 : int);
+                                result = result->appendf32(x);
+                                result = result->appendf32(y);
+                                result = result->appendf32(z);
+                                result = result->appendf32(w);
+                            }
+                        }
+                    }
+                }
+
+            }
+            // save 函数结束
+            return fsys::writeall(self.m_path, result as buffer: string);
+        }
+        public func fast_create_for_partical(self: AnimationContext, x: int, y: int, fcount: int, ftime: real)
+        {
+            let mut f = fcount;
+
+            let animation_datas = AnimationActionData{m_frames = []mut};
+            self.m_animations->set("play", animation_datas);
+
+            纵向循环@
+            for (let mut j = y - 1; j >= 0; j -= 1)
+            {
+                for (let mut i = 0; i < x; i += 1)
+                {
+                    if (f == 0)
+                        break 纵向循环;
+                    
+                    f -= 1;
+                    let framedat = Animation2dFrameData{
+                        m_time = mut ftime,
+                        m_component_dats = [
+                            FrameComponentData{
+                                m_component_name = "Renderer::Textures",
+                                m_member_name = "offset",
+                                m_value = mut DataValue::VEC2((i: real, j: real)),
+                                m_offset_mode = mut false,
+                            },
+                            FrameComponentData{
+                                m_component_name = "Renderer::Textures",
+                                m_member_name = "tiling",
+                                m_value = mut DataValue::VEC2((1. / x: real, 1. / y: real)),
+                                m_offset_mode = mut false,
+                            },
+                        ]mut,
+                        m_uniform_dats = []mut,
+                    };
+                    animation_datas.m_frames->add(framedat);
+                }
+            }
+        }
+    }
+    func _animation_edit_form(_: EditorContext, animation_context: AnimationContext, openform: std::mutable<bool>)
+    {
+        using je::gui;
+
+        let mut open = true;
+        match (BeginAttrOpen(F"2D帧动画编辑器 {animation_context.m_path}", 
+            WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
+            + WindowsAttribute::ImGuiWindowFlags_MenuBar))
+        {
+        value(show)?
+            if (show)
+            {
+                if (BeginMenuBar())
+                {
+                    if (BeginMenu("编辑"))
+                    {
+                        if (MenuItem("新建动画"))
+                        {
+                            jeapi::gui::form::input("新建动画", "请输入动画名称", "NewAction", 
+                                func(name)
+                                {
+                                    if (animation_context.m_animations->contain(name))
+                                        jeapi::gui::form::errmsg("无法创建动画", F"名为{name}的动画已经存在");
+                                    if (name == "")
+                                        jeapi::gui::form::errmsg("无法创建动画", "动画名不能为空");
+
+                                    animation_context.m_animations->set(name, AnimationActionData{m_frames = []mut});
+                                });
+                        }
+                        Separator();
+                        if (MenuItem("保存"))
+                        {
+                            if (animation_context->save())
+                                jeapi::gui::form::msg("保存动画成功", F"动画已经保存到{animation_context.m_path}");
+                            else
+                                jeapi::gui::form::msg("保存动画失败", F"发生了一些错误，动画未能成功保存");
+                        }
+                        EndMenu();
+                    }
+                    EndMenuBar();
+                }
+
+                BeginGroup();
+                Text("动画");
+                if (BeginListBox("##action_list", 200., 600.))
+                {
+                    for (let (action_name, action_data) : animation_context.m_animations)
+                    {
+                        if (SelectableSelected(action_name, 
+                            animation_context.m_selected_action_name == action_name))
+                            animation_context.m_selected_action_name = action_name;
+
+                        if (BeginPopupContextItem())
+                        {
+                            animation_context.m_selected_action_name = action_name;
+                            if (MenuItem("复制此动画"))
+                            {
+                                launch(func(){
+                                    animation_context.m_animations->set(action_name + "_复制", action_data->dup());
+                                    return false;
+                                }, ());
+                            }
+                            if (MenuItem("新建帧"))
+                            {
+                                action_data.m_frames->add(Animation2dFrameData{
+                                    m_time = mut 0.1,
+                                    m_component_dats = []mut,
+                                    m_uniform_dats = []mut,
+                                });
+                            }
+                            if (MenuItem("新建若干帧"))
+                            {
+                                launch(func(framecount: std::mutable<int>, frametime: std::mutable<real>)
+                                {
+                                    let mut open = true;
+                                    match (BeginAttrOpen(F"新建若干帧##{JobID()}", 
+                                        WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
+                                    {
+                                    value(show)?
+                                        if (show)
+                                        {
+                                            Text("帧数量");
+                                            SameLine();
+                                            do InputInt("##framecount", framecount->get)->>\nt = nt > 0 ? framecount->set(nt) | nil: void;;
+
+                                            Text("帧时间");
+                                            SameLine();
+                                            do InputFloatFormat("##frametime", frametime->get, "%.6f")->>\nt = nt >= 0. ? frametime->set(nt) | nil: void;;
+
+                                            if (Button("创建"))
+                                            {
+                                                for (let mut i = 0; i < framecount->get; i += 1)
+                                                {
+                                                    action_data.m_frames->add(Animation2dFrameData{
+                                                        m_time = mut frametime->get,
+                                                        m_component_dats = []mut,
+                                                        m_uniform_dats = []mut,
+                                                    });
+                                                }
+
+                                                open = false;
+                                            }
+                                        }
+                                    none?
+                                        open = false;
+                                    }
+                                    End();
+                                    return open;
+                                }, (new! std::mutable(2), new! std::mutable(0.1)));
+                            }
+                            if (MenuItem("重命名"))
+                            {
+                                jeapi::gui::form::input("重命名动画", "请输入动画的新名称", action_name, 
+                                    func(newname)
+                                    {
+                                        if (newname != action_name)
+                                        {
+                                            if (animation_context.m_animations->contain(newname))
+                                                jeapi::gui::form::errmsg("无法创建动画", F"名为{newname}的动画已经存在");
+                                            if (newname == "")
+                                                jeapi::gui::form::errmsg("无法创建动画", "动画名不能为空");
+
+                                            assert(animation_context.m_animations->remove(action_name));
+                                            animation_context.m_animations->set(newname, action_data);
+                                        }
+                                    });
+                            }
+                            if (MenuItem("删除"))
+                            {
+                                jeapi::gui::form::ask("是否删除动画", F"确认要删除动画{action_name}吗？", 
+                                    func(ok)
+                                    {
+                                        if (ok)
+                                            do animation_context.m_animations->remove(action_name);
+                                    });
+                            }
+                            EndPopup();
+                        }
+                    }
+                    EndListBox();
+                }
+                EndGroup();
+                SameLine();
+
+                BeginGroup();
+                Text("帧");
+
+                let selected_animation = animation_context.m_animations->get(animation_context.m_selected_action_name);
+
+                if (BeginListBox("##frame_list", 50., 600.))
+                {
+                    match (selected_animation)
+                    {
+                    value(animation)?
+                        {
+                            for (let (i, frame_data) : animation.m_frames->iter |> iterator::enumerate)
+                            {
+                                if (SelectableSelected(i: string, animation_context.m_selected_frame == i))
+                                    animation_context.m_selected_frame = i;
+
+                                if (BeginPopupContextItem())
+                                {
+                                    if (MenuItem("新建组件数据"))
+                                    {
+                                        let all_components = je::typeinfo::get_all_components_types()
+                                            -> forall(\t = ! t->name()->begin_with("Editor::");)
+                                            -> std::sort(\at, bt = at->name() < bt->name();)
+                                            ;
+
+                                        let selecting_id = new! std::mutable(option::none: option<int>);
+                                        let selecting_member_id = new! std::mutable(option::none: option<int>);
+                                        let editing_value = new! std::mutable(DataValue::INT(0));
+                                        let editing_value_type = new! std::mutable(je::typeinfo::int);
+                                        let offset_mode = new! std::mutable(false);
+                                        let for_all_frame = new! std::mutable(false);
+
+                                        let lerp_mode = new! std::mutable(false);
+                                        let lerp_by_ftime_mode = new! std::mutable(true);
+                                        let lerp_frame_count = new! std::mutable(1);
+                                        let lerp_end_value = new! std::mutable(DataValue::INT(1));
+
+                                        launch(func(){
+                                            let mut open = true;
+                                            match (BeginAttrOpen(F"添加组件数据 {animation_context.m_path}##{JobID()}", 
+                                                WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
+                                            {
+                                            value(show)?
+                                                if (show)
+                                                {
+                                                    match (Combo("组件", all_components->>\t = t->name();, selecting_id->get))
+                                                    {
+                                                    value(idx)?
+                                                        {
+                                                            selecting_id->set(option::value(idx));
+                                                            selecting_member_id->set(option::none);
+                                                        }
+                                                    none?
+                                                        ;
+                                                    }
+
+                                                    let members = 
+                                                        selecting_id->get
+                                                        =>> \idx = all_components->get(idx);
+                                                        ->> \t = t->get_members_info;
+                                                        ->  or([]);
+
+                                                    SameLine();
+
+                                                    do Combo(
+                                                        "成员", 
+                                                        members->>\nametype = nametype[0] + ": " + nametype[1]->name;, 
+                                                        selecting_member_id->get)
+                                                        ->> \new_idx = selecting_member_id->set(option::value(new_idx));
+                                                        ;
+     
+                                                    do CheckBox("偏移模式", offset_mode->get)->>\nv = offset_mode->set(nv);;
+                                                    do CheckBox("插值模式", lerp_mode->get)->>\nv = lerp_mode->set(nv);;
+
+                                                    if (lerp_mode->get == false)
+                                                    {
+                                                        do CheckBox("为所有帧添加", for_all_frame->get)->>\nv = for_all_frame->set(nv);;
+                                                    }
+                                                    else
+                                                    {
+                                                        do InputInt("作用帧数", lerp_frame_count->get)->>\nv = (nv >= 0 && nv <= animation.m_frames->len - i) ? lerp_frame_count->set(nv) | (nil: void);;
+                                                        TextDisabled(F"* 取值范围 0 ~ {animation.m_frames->len - i}");
+
+                                                        do CheckBox("以帧时间作为插值系数", lerp_by_ftime_mode->get)->>\nv = lerp_by_ftime_mode->set(nv);;
+                                                        TextDisabled("* 若取消此项，则以帧数作为插值系数");
+                                                    }
+
+                                                    Separator();
+
+                                                    match (selecting_member_id->get=>> \idx = members->get(idx);)
+                                                    {
+                                                    value((member_name, member_type))?
+                                                        if (member_type != je::typeinfo::int &&
+                                                            member_type != je::typeinfo::float &&
+                                                            member_type != je::typeinfo::float2 &&
+                                                            member_type != je::typeinfo::float3 &&
+                                                            member_type != je::typeinfo::float4 &&
+                                                            member_type != je::typeinfo::quat)
+                                                            TextDisabled(F"不能作为动画控制值，需要为int、float、vec2、vec3、vec4或quat，但是这里是{member_type->name}");
+                                                        else 
+                                                        {
+                                                            if (editing_value_type->get != member_type)
+                                                            {
+                                                                editing_value_type->set(member_type);
+
+                                                                if (member_type == je::typeinfo::int)
+                                                                {
+                                                                    editing_value->set(DataValue::INT(0));
+                                                                    lerp_end_value->set(DataValue::INT(1));
+                                                                }
+                                                                else if (member_type == je::typeinfo::float)
+                                                                {
+                                                                    editing_value->set(DataValue::FLOAT(0.));
+                                                                    lerp_end_value->set(DataValue::FLOAT(1.));
+                                                                }
+                                                                else if (member_type == je::typeinfo::float2)
+                                                                {
+                                                                    editing_value->set(DataValue::VEC2((0., 0.)));
+                                                                    lerp_end_value->set(DataValue::VEC2((1., 1.)));
+                                                                }
+                                                                else if (member_type == je::typeinfo::float3)
+                                                                {
+                                                                    editing_value->set(DataValue::VEC3((0., 0., 0.)));
+                                                                    lerp_end_value->set(DataValue::VEC3((1., 1., 1.)));
+                                                                }
+                                                                else if (member_type == je::typeinfo::float4)
+                                                                {
+                                                                    editing_value->set(DataValue::VEC4((0., 0., 0., 0.)));
+                                                                    lerp_end_value->set(DataValue::VEC4((1., 1., 1., 1.)));
+                                                                }
+                                                                else if (member_type == je::typeinfo::quat)
+                                                                {
+                                                                    editing_value->set(DataValue::QUAT4((0., 0., 0.)));
+                                                                    lerp_end_value->set(DataValue::QUAT4((360., 360., 360.)));
+                                                                }
+                                                            }
+                                                            
+                                                            match (editing_value->get)
+                                                            {
+                                                            INT(n)?
+                                                                do InputInt("值", n)->>\nv = editing_value->set(INT(nv));;
+                                                            FLOAT(x)?
+                                                                do InputFloat("值", x)->>\nv = editing_value->set(FLOAT(nv));;
+                                                            VEC2((x, y))?
+                                                                do InputFloat2("值", x, y)->>\nv = editing_value->set(VEC2(nv));;
+                                                            VEC3((x, y, z))?
+                                                                do InputFloat3("值", x, y, z)->>\nv = editing_value->set(VEC3(nv));;
+                                                            VEC4((x, y, z, w))?
+                                                                do InputFloat4("值", x, y, z, w)->>\nv = editing_value->set(VEC4(nv));;
+                                                            QUAT4((x, y, z))?
+                                                                do InputFloat3("值", x, y, z)->>\nv = editing_value->set(QUAT4(nv));;
+                                                            }
+
+                                                            if (lerp_mode->get)
+                                                            {
+                                                                match (lerp_end_value->get)
+                                                                {
+                                                                INT(n)?
+                                                                    do InputInt("插值目标", n)->>\nv = lerp_end_value->set(INT(nv));;
+                                                                FLOAT(x)?
+                                                                    do InputFloat("插值目标", x)->>\nv = lerp_end_value->set(FLOAT(nv));;
+                                                                VEC2((x, y))?
+                                                                    do InputFloat2("插值目标", x, y)->>\nv = lerp_end_value->set(VEC2(nv));;
+                                                                VEC3((x, y, z))?
+                                                                    do InputFloat3("插值目标", x, y, z)->>\nv = lerp_end_value->set(VEC3(nv));;
+                                                                VEC4((x, y, z, w))?
+                                                                    do InputFloat4("插值目标", x, y, z, w)->>\nv = lerp_end_value->set(VEC4(nv));;
+                                                                QUAT4((x, y, z))?
+                                                                    do InputFloat3("插值目标", x, y, z)->>\nv = lerp_end_value->set(QUAT4(nv));;
+                                                                }
+                                                            }
+
+                                                            if (selecting_id->get->is_value && Button("创建"))
+                                                            {
+                                                                if (lerp_mode->get)
+                                                                {
+                                                                    let mut total_frame_time = 0.;
+                                                                    if (lerp_by_ftime_mode->get)
+                                                                    {
+                                                                        for (let mut fidx = 0; fidx < lerp_frame_count->get - 1; fidx += 1)
+                                                                        {
+                                                                            let frameid = fidx + i;
+                                                                            total_frame_time += animation.m_frames[frameid].m_time;
+                                                                        }
+                                                                    }
+                                                                    
+                                                                    let mut deltaed_time = 0.;
+                                                                    for (let mut fidx = 0; fidx < lerp_frame_count->get - 1; fidx += 1)
+                                                                    {
+                                                                        let frameid = fidx + i;
+                                                                        let frame = animation.m_frames[frameid];
+
+                                                                        frame.m_component_dats->add(FrameComponentData{
+                                                                            m_component_name = all_components[selecting_id->get->unwrap]->name(),
+                                                                            m_member_name = member_name,
+                                                                            m_value = mut lerp_data_value(editing_value->get, lerp_end_value->get, 
+                                                                                total_frame_time == 0.
+                                                                                    ? fidx: real / (lerp_frame_count->get - 1): real
+                                                                                    | deltaed_time / total_frame_time),
+                                                                            m_offset_mode = mut offset_mode->get,
+                                                                        });
+
+                                                                        deltaed_time += frame.m_time;
+                                                                    }
+                                                                    animation.m_frames[i + lerp_frame_count->get - 1].m_component_dats->add(FrameComponentData{
+                                                                        m_component_name = all_components[selecting_id->get->unwrap]->name(),
+                                                                        m_member_name = member_name,
+                                                                        m_value = mut lerp_end_value->get,
+                                                                        m_offset_mode = mut offset_mode->get,
+                                                                    });
+
+                                                                }
+                                                                else if (for_all_frame->get)
+                                                                    for (let per_frame_data : animation.m_frames)
+                                                                        per_frame_data.m_component_dats->add(FrameComponentData{
+                                                                            m_component_name = all_components[selecting_id->get->unwrap]->name(),
+                                                                            m_member_name = member_name,
+                                                                            m_value = mut editing_value->get,
+                                                                            m_offset_mode = mut offset_mode->get,
+                                                                        });
+                                                                else
+                                                                    frame_data.m_component_dats->add(FrameComponentData{
+                                                                        m_component_name = all_components[selecting_id->get->unwrap]->name(),
+                                                                        m_member_name = member_name,
+                                                                        m_value = mut editing_value->get,
+                                                                        m_offset_mode = mut offset_mode->get,
+                                                                    });
+
+                                                                open = false;
+                                                            }
+                                                        }
+                                                    none?
+                                                        TextDisabled("请选择组件和成员名");
+                                                    }
+
+                                                }
+                                            none?
+                                                open = false;
+                                            }
+
+                                            End();
+                                            return open;
+                                        }, ());
+                                    }
+                                    if (MenuItem("新建着色器变量数据"))
+                                    {
+                                        let uniform_name = new! std::mutable("");
+                                        let uniform_type_selected = new! std::mutable(option::none: option<int>);
+                                        let uniform_types = [
+                                            ("int", mut DataValue::INT(0), mut DataValue::INT(1)),
+                                            ("float", mut DataValue::FLOAT(0.), mut DataValue::FLOAT(1.)),
+                                            ("vec2", mut DataValue::VEC2((0., 0.)), mut DataValue::VEC2((1., 1.))),
+                                            ("vec3", mut DataValue::VEC3((0., 0., 0.)), mut DataValue::VEC3((1., 1., 1.))),
+                                            ("vec4", mut DataValue::VEC4((0., 0., 0., 0.)), mut DataValue::VEC4((1., 1., 1., 1.))),
+                                        ];
+                                        let for_all_frame = new! std::mutable(false);
+
+                                        let lerp_mode = new! std::mutable(false);
+                                        let lerp_by_ftime_mode = new! std::mutable(true);
+                                        let lerp_frame_count = new! std::mutable(1);
+
+                                        launch(func(){
+                                            let mut open = true;
+                                            match (BeginAttrOpen(F"添加着色器变量数据 {animation_context.m_path}##{JobID()}", 
+                                                WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
+                                            {
+                                            value(show)?
+                                                if (show)
+                                                {
+
+                                                    do Combo("类型", uniform_types->>\namevalue = namevalue[0];, uniform_type_selected->get)
+                                                        ->> \new_idx = uniform_type_selected->set(option::value(new_idx));
+                                                        ;
+
+                                                    SameLine();
+
+                                                    do InputText("变量名", uniform_name->get())
+                                                        ->> \nname = uniform_name->set(nname);
+                                                        ;
+
+                                                    do CheckBox("插值模式", lerp_mode->get)->>\nv = lerp_mode->set(nv);;
+                                                    if (lerp_mode->get == false)
+                                                    {
+                                                        do CheckBox("为所有帧添加", for_all_frame->get)->>\nv = for_all_frame->set(nv);;
+                                                    }
+                                                    else
+                                                    {
+                                                        do InputInt("作用帧数", lerp_frame_count->get)->>\nv = (nv >= 0 && nv <= animation.m_frames->len - i) ? lerp_frame_count->set(nv) | (nil: void);;
+                                                        TextDisabled(F"* 取值范围 0 ~ {animation.m_frames->len - i}");
+
+                                                        do CheckBox("以帧时间作为插值系数", lerp_by_ftime_mode->get)->>\nv = lerp_by_ftime_mode->set(nv);;
+                                                        TextDisabled("* 若取消此项，则以帧数作为插值系数");
+                                                    }
+
+                                                    Separator();
+
+                                                    match (uniform_type_selected->get)
+                                                    {
+                                                    value(idx)?
+                                                    {
+                                                        match (uniform_types[idx][1])
+                                                        {
+                                                        INT(n)?
+                                                            do InputInt("值", n)->>\nv = uniform_types[idx][1] = INT(nv);;
+                                                        FLOAT(x)?
+                                                            do InputFloat("值", x)->>\nv = uniform_types[idx][1] = FLOAT(nv);;
+                                                        VEC2((x, y))?
+                                                            do InputFloat2("值", x, y)->>\nv = uniform_types[idx][1] = VEC2(nv);;
+                                                        VEC3((x, y, z))?
+                                                            do InputFloat3("值", x, y, z)->>\nv = uniform_types[idx][1] = VEC3(nv);;
+                                                        VEC4((x, y, z, w))?
+                                                            do InputFloat4("值", x, y, z, w)->>\nv = uniform_types[idx][1] = VEC4(nv);;
+                                                        QUAT4((x, y, z))?
+                                                            do InputFloat3("值", x, y, z)->>\nv = uniform_types[idx][1] = QUAT4(nv);;
+                                                        }
+
+                                                        if (lerp_mode->get)
+                                                        {
+                                                            match (uniform_types[idx][2])
+                                                            {
+                                                            INT(n)?
+                                                                do InputInt("插值目标", n)->>\nv = uniform_types[idx][2] = INT(nv);;
+                                                            FLOAT(x)?
+                                                                do InputFloat("插值目标", x)->>\nv = uniform_types[idx][2] = FLOAT(nv);;
+                                                            VEC2((x, y))?
+                                                                do InputFloat2("插值目标", x, y)->>\nv = uniform_types[idx][2] = VEC2(nv);;
+                                                            VEC3((x, y, z))?
+                                                                do InputFloat3("插值目标", x, y, z)->>\nv = uniform_types[idx][2] = VEC3(nv);;
+                                                            VEC4((x, y, z, w))?
+                                                                do InputFloat4("插值目标", x, y, z, w)->>\nv = uniform_types[idx][2] = VEC4(nv);;
+                                                            QUAT4((x, y, z))?
+                                                                do InputFloat3("插值目标", x, y, z)->>\nv = uniform_types[idx][2] = QUAT4(nv);;
+                                                            }
+                                                        }
+                                                    }
+                                                    none?
+                                                        TextDisabled("请选择类型");
+                                                    }
+
+                                                    if (uniform_name->get == "")
+                                                        TextDisabled("变量名不能为空");
+                                                    else if (uniform_type_selected->get->is_value && Button("创建"))
+                                                    {
+                                                        let uniform_type_idx = uniform_type_selected->get->unwrap;
+                                                        if (lerp_mode->get)
+                                                        {
+                                                            let mut total_frame_time = 0.;
+                                                            if (lerp_by_ftime_mode->get)
+                                                            {
+                                                                for (let mut fidx = 0; fidx < lerp_frame_count->get - 1; fidx += 1)
+                                                                {
+                                                                    let frameid = fidx + i;
+                                                                    total_frame_time += animation.m_frames[frameid].m_time;
+                                                                }
+                                                            }
+                                                            
+                                                            let mut deltaed_time = 0.;
+                                                            let editing_value = uniform_types[uniform_type_idx][1];
+                                                            let lerp_end_value = uniform_types[uniform_type_idx][2];
+                                                            for (let mut fidx = 0; fidx < lerp_frame_count->get - 1; fidx += 1)
+                                                            {
+                                                                let frameid = fidx + i;
+                                                                let frame = animation.m_frames[frameid];
+
+                                                                frame.m_uniform_dats->add(FrameUniformData{
+                                                                    m_uniform_name = uniform_name->get,
+                                                                    m_value = mut lerp_data_value(editing_value, lerp_end_value, 
+                                                                        total_frame_time == 0.
+                                                                            ? fidx: real / (lerp_frame_count->get - 1): real
+                                                                            | deltaed_time / total_frame_time),
+                                                                });
+
+                                                                deltaed_time += frame.m_time;
+                                                            }
+                                                            animation.m_frames[i + lerp_frame_count->get - 1].m_uniform_dats->add(FrameUniformData{
+                                                                m_uniform_name = uniform_name->get,
+                                                                m_value = mut lerp_end_value,
+                                                            });
+                                                        }
+                                                        else if (for_all_frame->get)
+                                                            for (let per_frame_data : animation.m_frames)
+                                                                per_frame_data.m_uniform_dats->add(FrameUniformData{
+                                                                    m_uniform_name = uniform_name->get,
+                                                                    m_value = mut uniform_types[uniform_type_idx][1],
+                                                                });
+                                                        else
+                                                            frame_data.m_uniform_dats->add(FrameUniformData{
+                                                                m_uniform_name = uniform_name->get,
+                                                                m_value = mut uniform_types[uniform_type_idx][1],
+                                                            });
+
+                                                        open = false;
+                                                    }
+                                                }
+                                            none?
+                                                open = false;
+                                            }
+                                            End();
+                                            return open;
+                                        }, ());
+                                    }
+                                    Separator();
+                                    if (MenuItem("复制并插入到下一帧"))
+                                    {
+                                        launch(func(){
+                                            // 迭代过程中不能修改，所以把插入帧的操作拉到外边去
+                                            do animation.m_frames->insert(i + 1, frame_data->dup());
+                                            return false;
+                                        }, ());
+                                    }
+                                    if (MenuItem("复制并插入到最后一帧"))
+                                    {
+                                        launch(func(){
+                                            // 迭代过程中不能修改，所以把插入帧的操作拉到外边去
+                                            do animation.m_frames->add(frame_data->dup());
+                                            return false;
+                                        }, ());
+                                    }
+                                    Separator();
+                                    if (MenuItemEnabled("上移", i > 0))
+                                    {
+                                        launch(func(){
+                                            // 迭代过程中不能修改，所以把插入帧的操作拉到外边去
+                                            do animation.m_frames->remove(i);
+                                            do animation.m_frames->insert(i - 1, frame_data);
+                                            return false;
+                                        }, ());
+                                    }
+                                    if (MenuItemEnabled("下移", i + 1 < animation.m_frames->len))
+                                    {
+                                        launch(func(){
+                                            // 迭代过程中不能修改，所以把插入帧的操作拉到外边去
+                                            do animation.m_frames->remove(i);
+                                            do animation.m_frames->insert(i + 1, frame_data);
+                                            return false;
+                                        }, ());
+                                    }
+                                    Separator();
+                                    if (MenuItem("删除帧"))
+                                    {
+                                        jeapi::gui::form::ask("是否删除帧", F"确认要删除帧{i}吗？", 
+                                            func(ok)
+                                            {
+                                                if (ok)
+                                                    do animation.m_frames->remove(i);
+                                            });
+                                    }
+                                    EndPopup();
+                                }
+                            }
+                        }
+                    none?;
+                    }
+                    EndListBox();
+                }
+                EndGroup();
+                SameLine();
+
+                let selected_frame = selected_animation=>>\a = a.m_frames->get(animation_context.m_selected_frame);;
+                BeginGroup();
+                    Text("帧时间");
+                    SameLine();
+                    do InputFloatFormat("##frame_time", selected_frame->>\f = f.m_time;->or(0.), "%.6f")
+                        ->> \nv = selected_frame
+                            ->> \f = f.m_time = nv;
+                            ;
+                        ;
+
+                    BeginGroup();
+                        Text("组件数据");
+                        if (BeginListBox("##component_data", 400., 400.))
+                        {
+                            match (selected_frame)
+                            {
+                            value(f)?
+                                for (let (cindex, cdata): f.m_component_dats->iter |> iterator::enumerate)
+                                {
+                                    if (SelectableSelected(cdata->tostring(), 
+                                        animation_context.m_selected_c_or_u_data->is_selected_component_idx(cindex)))
+                                        animation_context.m_selected_c_or_u_data = SelectedComponentOrUniformData::ComponentIndex(cindex);
+                                    if (BeginPopupContextItem())
+                                    {
+                                        if (MenuItem("删除"))
+                                        {
+                                            jeapi::gui::form::ask("是否删除组件数据", F"是否要删除全部的{cdata->tostring}吗？\n选择是，删除动画中的所有该组件成员的值\n选择否，仅删除当前项", 
+                                            func(ok)
+                                            {
+                                                if (ok)
+                                                {
+                                                    for (let fm : selected_animation->unwrap.m_frames)
+                                                        fm.m_component_dats->swap(
+                                                            fm.m_component_dats->forall(
+                                                                \dcdata = dcdata.m_component_name != cdata.m_component_name
+                                                                    || dcdata.m_member_name != cdata.m_member_name
+                                                                ;)
+                                                        );
+                                                }
+                                                else
+                                                    do f.m_component_dats->remove(cindex);
+                                            });
+                                        }
+                                        EndPopup();
+                                    }
+                                }
+                            none?;
+                            }
+                            EndListBox();
+                        }
+
+                    EndGroup();
+                    SameLine();
+                    BeginGroup();
+                        Text("着色器变量");
+                        if (BeginListBox("##uniform_data", 400., 400.))
+                        {
+                            match (selected_frame)
+                            {
+                            value(f)?
+                                for (let (uindex, udata): f.m_uniform_dats->iter |> iterator::enumerate)
+                                {
+                                    if (SelectableSelected(udata->tostring(), 
+                                        animation_context.m_selected_c_or_u_data->is_selected_uniform_idx(uindex)))
+                                        animation_context.m_selected_c_or_u_data = SelectedComponentOrUniformData::UniformIndex(uindex);
+                                    if (BeginPopupContextItem())
+                                    {
+                                        if (MenuItem("删除"))
+                                        {
+                                            jeapi::gui::form::ask("是否删除着色器变量数据", F"确认要删除全部的{udata->tostring}吗？\n选择是，删除动画中的所有该变量的值\n选择否，仅删除当前项", 
+                                            func(ok)
+                                            {
+                                                if (ok)
+                                                    for (let fm : selected_animation->unwrap.m_frames)
+                                                        fm.m_uniform_dats->swap(
+                                                            fm.m_uniform_dats->forall(
+                                                                \dudata = dudata.m_uniform_name != udata.m_uniform_name
+                                                                ;)
+                                                        );
+                                                else
+                                                    do f.m_uniform_dats->remove(uindex);
+                                            });
+                                        }
+                                        EndPopup();
+                                    }
+                                }
+                            none?;
+                            }
+                            EndListBox();
+                        }
+                    EndGroup();
+
+                    match (animation_context.m_selected_c_or_u_data)
+                    {
+                    ComponentIndex(id)?
+                        match (selected_frame=>>\f = f.m_component_dats->get(id);)
+                        {
+                        none?
+                            animation_context.m_selected_c_or_u_data = None;
+                        value(cdata)?
+                            {
+                                match (cdata.m_value)
+                                {
+                                INT(n)?
+                                    do InputInt("值", n)->>\nv = cdata.m_value = INT(nv);;
+                                FLOAT(x)?
+                                    do InputFloat("值", x)->>\nv = cdata.m_value = FLOAT(nv);;
+                                VEC2((x, y))?
+                                    do InputFloat2("值", x, y)->>\nv = cdata.m_value = VEC2(nv);;
+                                VEC3((x, y, z))?
+                                    do InputFloat3("值", x, y, z)->>\nv = cdata.m_value = VEC3(nv);;
+                                VEC4((x, y, z, w))?
+                                    do InputFloat4("值", x, y, z, w)->>\nv = cdata.m_value = VEC4(nv);;
+                                QUAT4((x, y, z))?
+                                    do InputFloat3("值", x, y, z)->>\nv = cdata.m_value = QUAT4(nv);;
+                                }
+                                do CheckBox("偏移模式", cdata.m_offset_mode)->>\nv = cdata.m_offset_mode = nv;;
+                            }
+                        }
+                    UniformIndex(id)?
+                        match (selected_frame=>>\f = f.m_uniform_dats->get(id);)
+                        {
+                        none?
+                            animation_context.m_selected_c_or_u_data = None;
+                        value(udata)?
+                            match (udata.m_value)
+                            {
+                            INT(n)?
+                                do InputInt("值", n)->>\nv = udata.m_value = INT(nv);;
+                            FLOAT(x)?
+                                do InputFloat("值", x)->>\nv = udata.m_value = FLOAT(nv);;
+                            VEC2((x, y))?
+                                do InputFloat2("值", x, y)->>\nv = udata.m_value = VEC2(nv);;
+                            VEC3((x, y, z))?
+                                do InputFloat3("值", x, y, z)->>\nv = udata.m_value = VEC3(nv);;
+                            VEC4((x, y, z, w))?
+                                do InputFloat4("值", x, y, z, w)->>\nv = udata.m_value = VEC4(nv);;
+                            QUAT4((x, y, z))?
+                                do InputFloat3("值", x, y, z)->>\nv = udata.m_value = QUAT4(nv);;
+                            }
+                        }
+                    None?
+                        TextDisabled("选择组件成员或着色器变量以编辑");
+                    }
+
+                EndGroup();
+            }
+        none?
+            open = false;
+        }
+        if (! open)
+        {
+            jeapi::gui::form::ask("是否保存动画", F"是否将动画保存到{animation_context.m_path}",
+                func(ok)
+                {
+                    openform->set(false);
+                    if (!ok)
+                        return;
+                        
+                    if (! animation_context->save())
+                    {
+                        jeapi::gui::form::msg("动画保存失败", F"动画未能保存到{animation_context.m_path}");
+                        openform->set(true);
+                    }
+                });
+        }
+        End();
+
+        return openform->get;
+    }
+    public func show(context: EditorContext, animation_context: AnimationContext)
+    {
+        je::gui::launch(_animation_edit_form, (context, animation_context, new! std::mutable(true)));
+    }
+}

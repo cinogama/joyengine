@@ -1,0 +1,49 @@
+// environment.main
+// 用于管理和维持引擎当前的上下文（也就是Universe环境）
+import je;
+import je::internal;
+
+import pkg::makenew;
+import builtin::api::serialize::main;
+
+namespace editor
+{
+    public using Environment = struct{ 
+        m_universe: je::universe, 
+    }
+    {
+        public func create()
+        {
+            return Environment{
+                m_universe = new! je::universe(),
+            };
+        }
+        public func close(self: Environment)
+        {
+            je::gui::unsafe::shutdown();
+            self.m_universe->stop;
+        }
+        public func wait(self: Environment)
+        {
+            je::internal::init_graphic_pipeline(self.m_universe);
+            self.m_universe->wait;
+        }
+        public func create_world(self: Environment)
+        {
+            let w = self.m_universe->je::world::create;
+            w->set_able(true);
+            return w;
+        }
+        public func load_world(self: Environment, dat: dict<string, dynamic>)
+        {
+            let w = self.m_universe->jeapi::deserialize::world(dat, true);
+            w->set_able(true);
+
+            return w;
+        }
+        public func get_universe(self: Environment)
+        {
+            return self.m_universe;
+        }
+    }
+}

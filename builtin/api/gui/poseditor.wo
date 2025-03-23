@@ -1,0 +1,183 @@
+import je;
+import je::gui;
+
+import pkg::iterator;
+
+using je;
+using je::gui;
+
+namespace jeapi::gui::widget
+{
+    public func poseditor(
+        tag: string,
+        size: real, 
+        poses_group: array<array<(real, real)>>,
+        adsorption_accuracy: real,
+        line_liner: (array<array<(real, real)>>, int)=> array<((real, real), (real, real))> 
+    )
+        => option<array<array<(real, real)>>>
+    {
+        static let mut scale = 1.0;
+        static let mut offset_x = 0.0, mut offset_y = 0.0;
+
+        let drawlist = GetWindowDrawList();
+        do InvisibleButton("##draw_shape##{tag}", (size, size));
+
+        let is_hovered_on_zone = IsItemHovered();
+
+        let (p0, p1) = GetItemRect();
+
+        let position_ratio = size / 2. * scale;
+        let centerx = p0.0 + size / 2. + offset_x, centery = p0.1 + size / 2. + offset_y;
+
+        PushClipRect(p0, p1);
+
+        drawlist->AddRectFilled(p0, p1, (75, 75, 75, 255));
+
+        // 绘制横纵坐标轴
+        drawlist->AddLine((centerx, p0.1), (centerx, p1.1), (0, 0, 0, 255), 1.);
+        drawlist->AddLine((p0.0, centery), (p1.0, centery), (0, 0, 0, 255), 1.);
+
+        // 绘制边框
+        drawlist->AddRect(
+            (-0.5 * position_ratio + centerx, -0.5 * position_ratio + centery), 
+            (0.5 * position_ratio + centerx, 0.5 * position_ratio + centery), 
+            (255, 0, 0, 255),
+            1.);
+
+        // 因为鼠标只有一个，此处直接把上下文放在静态生命周期变量上
+        static let mut moving_point_context = option::none: option<struct{
+            moving_job_tag: string,
+            moving_group_index: int,
+            moving_point_index: int,
+        }>;
+
+        let mouse_down = IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Left);
+        if (! mouse_down)
+            moving_point_context = option::none;
+
+        // 绘制坐标点
+        let mut has_hovered_point = false;
+        let new_position_groups = []mut: vec<array<(real, real)>>;
+        let mut updated = false;
+
+        for (let mut group_index = 0; group_index < poses_group->len; group_index += 1)
+        {
+            for (let (p0, p1) : line_liner(poses_group, group_index))
+            {
+                // 画线!
+                let (x0, y0) = p0; 
+                let (x1, y1) = p1;
+                drawlist->AddLine(
+                    (x0 * position_ratio + centerx, centery - y0 * position_ratio),
+                    (x1 * position_ratio + centerx, centery - y1 * position_ratio),
+                    (127, (255. * (1.0 - group_index: real / poses_group->len: real)): int, 127, 255),
+                    1.);
+            }
+        }
+
+        for (let (group_index, poses): poses_group->iter |> iterator::enumerate)
+        {
+            let new_position = []mut: vec<(real, real)>;
+            let group_color_depth_ratio = 1.0 - group_index: real / poses_group->len: real;
+
+            for (let (index, (x, y)) : poses->iter |> iterator::enumerate)
+            {
+                let pos = (x * position_ratio + centerx, centery - y * position_ratio);
+                
+                // 如果鼠标悬在上面，则显示红色
+                let hovered = has_hovered_point == false && 
+                    IsMouseHoveringRect((pos.0 - 5., pos.1 - 5.), (pos.0 + 5., pos.1 + 5.));
+                
+                if (hovered)
+                {
+                    has_hovered_point = true;
+                    // 显示实际坐标
+                    BeginTooltip();
+                    Text(F"x: {x}, y: {y}");
+                    EndTooltip();
+                }
+
+                let color_depth = (255. * (1.0 - index: real / poses->len: real)): int;
+                let color = hovered
+                    ? (255, 0, 0, 255)
+                    | (color_depth, color_depth, (color_depth: real * group_color_depth_ratio): int, 255);
+
+                drawlist->AddCircleFilled(pos, 5., color);
+
+                match (moving_point_context)
+                {
+                value(context)?
+                    {
+                        if (context.moving_job_tag == tag 
+                            && context.moving_group_index == group_index
+                            && context.moving_point_index == index)
+                        {
+                            // 正在移动这个点
+                            updated = true;
+
+                            // 考虑adsorption_accuracy的情况下移动
+                            let adsorption_accuracy_align = func(v: real)
+                            {
+                                if (je::input::keydown(je::keycode::L_CTRL))
+                                    return v;
+
+                                return (v / adsorption_accuracy + 0.5): int: real * adsorption_accuracy;
+                            };
+
+                            let new_pos = (GetMousePos().0 - centerx, centery - GetMousePos().1);
+                            new_position->add(
+                                (
+                                    adsorption_accuracy_align(new_pos.0 / position_ratio), 
+                                    adsorption_accuracy_align(new_pos.1 / position_ratio)
+                                ));
+                        }
+                        else
+                        {
+                            new_position->add((x, y));
+                        }
+                    }
+                none?
+                    if (mouse_down && hovered)
+                    {
+                        // 开始移动这个点
+                        moving_point_context = option::value(struct{
+                            moving_job_tag = tag,
+                            moving_group_index = group_index,
+                            moving_point_index = index,
+                        });
+
+                        new_position->add((x, y));
+                    }
+                }
+            }
+
+            new_position_groups->add(new_position as vec<(real, real)>
+                ->unsafe::cast:<array<(real, real)>>);
+        }
+
+        if (is_hovered_on_zone && has_hovered_point == false && moving_point_context->is_value() == false)
+        {
+            // 如果没有悬停在任何点上，并且鼠标按下，则认为是在拖动整个视图
+            if (mouse_down)
+            {
+                let (x, y) = GetMouseDeltaPos();
+                offset_x += x;
+                offset_y += y;
+            }
+        }
+
+        PopClipRect();
+
+        match (DragFloat("视图缩放##view_scale##{tag}", scale, 0.05, 0.1, 10.))
+        {
+        value(v)? scale = v;
+        none?;
+        }
+
+        return updated 
+            ? option::value(new_position_groups as vec<array<(real, real)>>
+                ->unsafe::cast:<array<array<(real, real)>>>)
+            | option::none;
+    }
+}
