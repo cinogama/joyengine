@@ -364,7 +364,7 @@ namespace editor::gui::drawpannel
                                         {
                                             let DEFAULT_SCRIPT_SRC = 
 @"// 图像处理脚本
-import je::editor::graphic;
+import je::internal::graphic;
 
 public func entry(_: je::graphic::texture, _/*lbpos*/: (int, int), _/*range*/: (int, int))
     => bool

@@ -3,7 +3,7 @@
 import woo::std;
 import je;
 import je::gui;
-import je::editor;
+import je::internal;
 
 import pkg::try;
 import pkg::fsys;
@@ -16,7 +16,7 @@ using math;
 
 using je;
 using je::gui;
-using je::editor;
+using je::internal;
 
 namespace editor::gui::tilemap
 {

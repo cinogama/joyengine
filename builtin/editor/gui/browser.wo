@@ -963,7 +963,8 @@ using $NEW_PRODUCER_NAME$ = struct{}
     {
         // 给定一个路径，计算整个路径的全部crc
         using fsys;
-        using je::editor;
+        using je::internal;
+
         let normalized_path = path;
         let pure_path = 
             \p: string = p->begin_with(normalized_path->tostring()) 
@@ -1032,9 +1033,9 @@ using $NEW_PRODUCER_NAME$ = struct{}
         // 从universe中获取所有world，更新world中所有实体
         let wrapped_path = context->get_project->make_path_normalize(fsys::normalize(path));
 
-        do je::editor::mark_shared_glresource_outdated(wrapped_path);
+        do je::internal::mark_shared_glresource_outdated(wrapped_path);
         if (!for_all_entity_in_universe_do(context,
-            \e: je::entity = e->editor::graphic::try_reload_shaders(wrapped_path, wrapped_path);
+            \e: je::entity = e->internal::graphic::try_reload_shaders(wrapped_path, wrapped_path);
         ))
         {
             jeapi::gui::form::errmsg("更新着色器失败", "更新着色器过程中发生了错误，请检查");
@@ -1043,9 +1044,9 @@ using $NEW_PRODUCER_NAME$ = struct{}
     public func update_texture(context: EditorContext, wrapped_path: string)
     {
         // 从universe中获取所有world，更新world中所有实体
-        do je::editor::mark_shared_glresource_outdated(wrapped_path);
+        do je::internal::mark_shared_glresource_outdated(wrapped_path);
         if (!for_all_entity_in_universe_do(context,
-            \e: je::entity = e->editor::graphic::try_reload_textures(wrapped_path, wrapped_path);
+            \e: je::entity = e->internal::graphic::try_reload_textures(wrapped_path, wrapped_path);
         ))
         {
             jeapi::gui::form::errmsg("更新纹理失败", "更新纹理过程中发生了错误，请检查");
@@ -1571,7 +1572,7 @@ namespace $$MODULE_NAME$$
                         {
                         value(entity_json)?
                             {
-                                let filepath = fsys::normalize(current_work_path) / (e->editor::name + ".je4entity");
+                                let filepath = fsys::normalize(current_work_path) / (e->internal::name + ".je4entity");
                                 let prefab_data = e->towoo::get_component:<Editor::Prefab>;
                                 if (fsys::exist(filepath))
                                 {
@@ -1615,7 +1616,7 @@ namespace $$MODULE_NAME$$
                                 }
                             }
                         none?
-                            jeapi::gui::form::errmsg("失败", F"无法序列化实体{e->editor::name}");
+                            jeapi::gui::form::errmsg("失败", F"无法序列化实体{e->internal::name}");
                         }
                     });
                 }
@@ -1689,8 +1690,8 @@ namespace $$MODULE_NAME$$
     }
 
     using LogHook = struct{
-        m_logs: vec<(je::editor::loglevel, string)>,
-        m_display_setting: dict<je::editor::loglevel, (string, mut bool, option<(int, int, int, int)>, mut int)>,
+        m_logs: vec<(je::internal::loglevel, string)>,
+        m_display_setting: dict<je::internal::loglevel, (string, mut bool, option<(int, int, int, int)>, mut int)>,
     }
     {
         func create()
@@ -1698,11 +1699,11 @@ namespace $$MODULE_NAME$$
             return LogHook{
                 m_logs = []mut,
                 m_display_setting = {
-                    [je::editor::loglevel::NORMAL] = ("普通", mut true, option::none: option<(int, int, int, int)>, mut 0),
-                    [je::editor::loglevel::INFO] = ("信息", mut true, option::value((0,255,127,255)), mut 0),
-                    [je::editor::loglevel::WARNING] = ("警告", mut true, option::value((200,200,0,255)), mut 0),
-                    [je::editor::loglevel::ERROR] = ("错误", mut true, option::value((200,0,0,200)), mut 0),
-                    [je::editor::loglevel::FATAL] = ("致命", mut true, option::value((200,0,200,255)), mut 0),
+                    [je::internal::loglevel::NORMAL] = ("普通", mut true, option::none: option<(int, int, int, int)>, mut 0),
+                    [je::internal::loglevel::INFO] = ("信息", mut true, option::value((0,255,127,255)), mut 0),
+                    [je::internal::loglevel::WARNING] = ("警告", mut true, option::value((200,200,0,255)), mut 0),
+                    [je::internal::loglevel::ERROR] = ("错误", mut true, option::value((200,0,0,200)), mut 0),
+                    [je::internal::loglevel::FATAL] = ("致命", mut true, option::value((200,0,200,255)), mut 0),
                 },
             };
         }

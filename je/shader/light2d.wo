@@ -1,0 +1,21 @@
+import je::shader;
+
+let JE_LIGHT2D_DEFER_0 = 4;
+
+let __linear_clamp = sampler2d::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
+
+public let je_light2d_resolution = 
+    uniform("JOYENGINE_LIGHT2D_RESOLUTION", float2::one);
+public let je_light2d_decay = 
+    uniform("JOYENGINE_LIGHT2D_DECAY", float::one);
+
+public let je_light2d_defer_albedo = 
+    uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_Albedo", __linear_clamp, JE_LIGHT2D_DEFER_0 + 0);
+public let je_light2d_defer_self_luminescence = 
+    uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_SelfLuminescence", __linear_clamp, JE_LIGHT2D_DEFER_0 + 1);
+public let je_light2d_defer_vspace_position = 
+    uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_VSpacePosition", __linear_clamp, JE_LIGHT2D_DEFER_0 + 2);
+public let je_light2d_defer_vspace_normalize = 
+    uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_VSpaceNormalize", __linear_clamp, JE_LIGHT2D_DEFER_0 + 3);
+public let je_light2d_defer_shadow = 
+    uniform_texture:<texture2d>("JOYENGINE_LIGHT2D_Shadow", __linear_clamp, JE_LIGHT2D_DEFER_0 + 4);

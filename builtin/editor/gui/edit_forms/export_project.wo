@@ -1,3 +1,13 @@
+import je;
+import je::gui;
+import je::internal;
+
+import pkg::makenew;
+import pkg::fsys;
+import pkg::vm;
+
+import builtin::editor::project::main;
+
 using je::gui;
 
 namespace editor::gui::edit_forms
@@ -7,7 +17,7 @@ namespace editor::gui::edit_forms
         SKIP,       // 跳过此文件
         ORIGIN,     // 原样复制到打包路径
         PACK,       // 打包
-        ACTION((pack_config, je::editor::fimage_packer)=>array<(string, string)>),
+        ACTION((pack_config, je::internal::fimage_packer)=>array<(string, string)>),
     }
     using pack_config = struct {
         m_pack_dll_into_image: bool,        // 将C++模块打包进镜像文件中？如果为true，则在运行时释放出动态库，否则原样复制
@@ -144,7 +154,7 @@ namespace editor::gui::edit_forms
         // 1.2 创建路径，准备打包
         let export_path = normalized_path/".export";
         do fsys::mkdir(export_path);
-        let fimg = new! je::editor::fimage_packer(export_path->tostring, config.m_image_size * 1024 * 1024);
+        let fimg = new! je::internal::fimage_packer(export_path->tostring, config.m_image_size * 1024 * 1024);
      
         // 2.1 遍历可执行文件所在路径，记录下所有文件的原始路径和最终路径
         let exe_located_path = fsys::parent(fsys::normalize(std::args()[0]));
@@ -296,14 +306,14 @@ namespace editor::gui::edit_forms
                             let boot_up_script = @"
                                 import je;
                                 import je::gui;
-                                import je::editor;
+                                import je::internal;
                                 
                                 import woo::std;
                                 
                                 import builtin::api::gui::panic;
                                 import builtin::api::serialize::main;
 
-                                je::editor::register_panic_hook(jeapi::gui::form::panic);
+                                je::internal::register_panic_hook(jeapi::gui::form::panic);
 
                                 let LOADED_WORLDS_MAPPING = {}mut: map<string, je::world>;
                                 func LOAD_WORLD(path: string)
@@ -437,8 +447,8 @@ namespace editor::gui::edit_forms
                                 ->replace("$LOAD_WORLD_INSTANCE$", load_world_instance)
                                 ->replace("$IMPORT_RUNTIME_SCRIPT_MAY_NOT_EXIST$", load_entry_script)
                                 ->replace("$LOAD_TYPE_LOADER$", "match (je::towoo::unsafe::dynamic_parser::update_all(\"@/editor.wo\")){ok(_)?;err(msg)?je::logerr(msg);}")
-                                ->replace("$APPLY_RESOLUTION$", F"je::editor::set_window_size({config.m_resolution[0]}, {config.m_resolution[1]});")
-                                ->replace("$APPLY_TITLE$", F"je::editor::set_window_title({proj->get_name->enstring});");
+                                ->replace("$APPLY_RESOLUTION$", F"je::internal::set_window_size({config.m_resolution[0]}, {config.m_resolution[1]});")
+                                ->replace("$APPLY_TITLE$", F"je::internal::set_window_title({proj->get_name->enstring});");
 
                             let (start_up_script_binary, start_up_script_binary_sz) = 
                                 new! vm("@/builtin/main.wo", final_boot_script: buffer)

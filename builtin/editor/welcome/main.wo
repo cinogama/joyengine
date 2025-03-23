@@ -2,7 +2,7 @@
 // 嗯，大憨批程序，就是一个用来显示欢迎信息的小实例
 
 import je;
-import je::editor;
+import je::internal;
 import je::gui;
 
 using je::gui;
@@ -39,7 +39,7 @@ namespace jeapi::welcome
             value(show)?
                 if (show)
                 {
-                    Text(je::editor::build_version());
+                    Text(je::internal::build_version());
                     Separator();
 
                     Text("第三方组件及开源许可");
@@ -204,8 +204,8 @@ are generated using Bison and comply with GPLv3 with special bison exception."@
             ;
         }
 
-        je::log(F"{je::editor::build_version()} (C)Cinogama project. 2022.");
-        je::log(F"Powered by {je::editor::woolang_version()}, (C)Cinogama project. 2021.");
-        je::log(F"You are using the engine build from commit: {je::editor::build_commit()}");
+        je::log(F"{je::internal::build_version()} (C)Cinogama project. 2022.");
+        je::log(F"Powered by {je::internal::woolang_version()}, (C)Cinogama project. 2021.");
+        je::log(F"You are using the engine build from commit: {je::internal::build_commit()}");
     }
 }

@@ -432,7 +432,7 @@ endif()
                                         || file_extension == ".h")
                                     {
                                         let wpath = self.project->make_path_normalize(path);
-                                        let crc64 = je::editor::crc64file(path->tostring());
+                                        let crc64 = je::internal::crc64file(path->tostring());
                                         varified_file += 1;
 
                                         if (! srclist->get(wpath)->>\crc = crc == crc64->or(0);->or(false))
@@ -464,7 +464,7 @@ endif()
                         || file_extension == ".h")
                     {
                         let wpath = self.project->make_path_normalize(path);
-                        let crc64 = je::editor::crc64file(path->tostring());
+                        let crc64 = je::internal::crc64file(path->tostring());
 
                         source_code_versions->set(wpath, crc64->or(0));
                     }

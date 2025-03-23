@@ -314,19 +314,19 @@ namespace editor
                     func(_)
                     {
                         Text("引擎提前唤醒间隔");
-                        let result = InputFloatFormat("##引擎提前唤醒间隔", je::editor::get_sleep_suppression(), "%.6f");
-                        do result->>\suppression=je::editor::set_sleep_suppression(suppression);;
+                        let result = InputFloatFormat("##引擎提前唤醒间隔", je::internal::get_sleep_suppression(), "%.6f");
+                        do result->>\suppression=je::internal::set_sleep_suppression(suppression);;
                         TextDisabled("适当提高此值可以增加执行间隔和帧数的稳定性");
                         return result->>\_=do nil;;
                     },
                     \_,_ = true;,
-                    \_ = je::editor::get_sleep_suppression(): string;,
+                    \_ = je::internal::get_sleep_suppression(): string;,
                     func (str){
-                        je::editor::set_sleep_suppression(str: real);
+                        je::internal::set_sleep_suppression(str: real);
                         return option::value(do nil);
                     },
-                    \_ = F"je::editor::set_sleep_suppression({supp});"
-                        where supp = je::editor::get_sleep_suppression()
+                    \_ = F"je::internal::set_sleep_suppression({supp});"
+                        where supp = je::internal::get_sleep_suppression()
                     ;,
                 )));
             self.m_configs->set("JE_GUI_FONT",
@@ -460,7 +460,7 @@ namespace editor
             assert(fsys::setworkpath(path));
 
             let proj = Project{
-                m_logger = je::editor::hooklog(),
+                m_logger = je::internal::hooklog(),
 
                 m_name = name,
                 m_path = path,
@@ -728,7 +728,7 @@ namespace editor
             je::towoo::unsafe::dynamic_parser::clear();
 
             // 关闭log回调
-            je::editor::unhooklog(self.m_logger);
+            je::internal::unhooklog(self.m_logger);
         }
         public func get_towoo_context_for_exit(self: Project)
         {
@@ -792,7 +792,7 @@ namespace editor
                     if (last_edit_world == world)
                         return result::ok(do nil); // 新老世界相同，跳过更新
 
-                    if (last_edit_world->editor::is_valid)
+                    if (last_edit_world->internal::is_valid)
                         last_edit_world->remove_system(self->get_config_editor_system);
                 }
                 none?;
@@ -893,8 +893,8 @@ namespace editor
                 Camera::RendToFramebuffer::type::typeinfo,
                 Camera::Clear::type::typeinfo,
             ]);
-            editor_camera->je::editor::apply_camera_framebuf_setting(320, 240);
-            do editor_camera->editor::set_parent(camera_walker, true);
+            editor_camera->je::internal::apply_camera_framebuf_setting(320, 240);
+            do editor_camera->internal::set_parent(camera_walker, true);
     
             // 移动器，这里只创建根实体，具体的轴由编辑器系统生成
             do world.m_world_instance->add_entity([

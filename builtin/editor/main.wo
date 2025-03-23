@@ -9,7 +9,7 @@ import pkg::makenew;
 import pkg::iterator;
 
 import je;
-import je::editor;
+import je::internal;
 
 import builtin::api::gui::iconbutton;
 import builtin::api::gui::panic;
@@ -25,7 +25,7 @@ jeapi::welcome::display_copyright_msg();
 
 // Debug.
 crashhandler::init();
-je::editor::register_panic_hook(jeapi::gui::form::panic);
+je::internal::register_panic_hook(jeapi::gui::form::panic);
 
 using je::gui;
 
@@ -173,7 +173,7 @@ func apply_editor_data_when_start_up_project(dat: dict<dynamic, dynamic>)
         ->  get_or("form_size": dynamic, [1344, 768]: dynamic) as array<dynamic>
         ->> \d = d as int;
         ;
-    je::editor::set_window_size(form_size[0], form_size[1]);
+    je::internal::set_window_size(form_size[0], form_size[1]);
 }
 func save_editor_data_after_exit(dat: dict<dynamic, dynamic>, proj_name: string, proj_path: fsys::path_t)
 {
@@ -337,7 +337,7 @@ func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: di
                     u->close();
                     f->set(false);
                     
-                    je::editor::set_runtime_path(project_path->tostring);
+                    je::internal::set_runtime_path(project_path->tostring);
 
                     action_after_guide_form_closed = 
                         func(){
@@ -443,7 +443,7 @@ func open_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict
             u->close();
             f->set(false);
 
-            je::editor::set_runtime_path(path->tostring());
+            je::internal::set_runtime_path(path->tostring());
 
             action_after_guide_form_closed = 
                 func()
@@ -480,7 +480,7 @@ for (;;)
         let editor_configs = read_editor_data();
         let historys = editor_configs->get_or("history": dynamic, []: dynamic) as array<dynamic>->unsafe::cast:< vec<array<string>> >;
 
-        je::editor::init_graphic_pipeline(u->get_universe());
+        je::internal::init_graphic_pipeline(u->get_universe());
 
         if (std::platform::os != std::platform::os_type::WIN32 || 
             editor::CxxProject::is_builder_ready())

@@ -1,6 +1,7 @@
 // environment.main
 // 用于管理和维持引擎当前的上下文（也就是Universe环境）
 import je;
+import je::internal;
 
 import pkg::makenew;
 import builtin::api::serialize::main;
@@ -24,7 +25,7 @@ namespace editor
         }
         public func wait(self: Environment)
         {
-            je::editor::init_graphic_pipeline(self.m_universe);
+            je::internal::init_graphic_pipeline(self.m_universe);
             self.m_universe->wait;
         }
         public func create_world(self: Environment)

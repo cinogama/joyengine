@@ -44,8 +44,8 @@ namespace editor::gui::edit_forms
             P
             */
             // 如果子实体此时有父节点，那么就将目标父节点挂载子节点上，否则就把目标父节点设置为L2W
-            do child.e->editor::get_parent_anchor_uid()
-                 ->> \uid = parent.e->editor::set_parent_with_uid(uid, true);
+            do child.e->internal::get_parent_anchor_uid()
+                 ->> \uid = parent.e->internal::set_parent_with_uid(uid, true);
                  -> or_do(func(){
                     if (parent.e->get_component(LocalToParent)->is_value())
                         parent.e->remove_component(LocalToParent);
@@ -54,7 +54,7 @@ namespace editor::gui::edit_forms
                     return true;
                  });
         }
-        do child.e->editor::set_parent(parent.e, true);
+        do child.e->internal::set_parent(parent.e, true);
     }
     public func fast_create_entity(context: EditorContext, w: je::world, name: string, cs: array<string>)
     {
@@ -64,7 +64,7 @@ namespace editor::gui::edit_forms
             return option::none;
         }
         let e = w->add_entity(cs->>\tname = je::typeinfo::load(tname)->unwrap;);
-        e->editor::set_name(name);
+        e->internal::set_name(name);
 
         set_new_created_entity_pos(w, e);
 
@@ -400,9 +400,9 @@ namespace editor::gui::edit_forms
                     jeapi::gui::form::input(
                         "重命名", 
                         "请输入实体的新名称", 
-                        e->editor::name, 
+                        e->internal::name, 
                         func(newname){
-                            uid->justdo(\e = e->editor::set_name(newname););
+                            uid->justdo(\e = e->internal::set_name(newname););
                         });
                     })
                     ;
@@ -415,7 +415,7 @@ namespace editor::gui::edit_forms
                 ->> \uid = uid->justdo(func(e){
                     jeapi::gui::form::ask(
                         "确认？", 
-                        F"即将销毁实体{e->editor::name}\n是否同时销毁其全部子实体？", 
+                        F"即将销毁实体{e->internal::name}\n是否同时销毁其全部子实体？", 
                         func(close_child_entity){
                             let edata = jeapi::debug::find_entity_and_child_by_instance(w, e);
                             func close_entity_impl(e, close_all)=> void
@@ -465,7 +465,7 @@ namespace editor::gui::edit_forms
         if (is_variant_or_prefab)
             PushStyleColor(ImGuiCol::ImGuiCol_Text, (75, 100, 213, 255));
 
-        let showchild = TreeNodeEx(F"{e.e->editor::name}##{e.e->chunkinfo}", 
+        let showchild = TreeNodeEx(F"{e.e->internal::name}##{e.e->chunkinfo}", 
             treenode_attribute);
 
         if (is_variant_or_prefab)
@@ -474,7 +474,7 @@ namespace editor::gui::edit_forms
         if (BeginDragDropSource())
         {
             do SetDragDropPayload("JEDITOR_ENTITY_INSTANCE", e.uid as jeapi::debug::Eeid: string);
-                Text(F"实体: {e.e->editor::name()}");
+                Text(F"实体: {e.e->internal::name()}");
             EndDragDropSource();
         }
         if(BeginDragDropTarget())

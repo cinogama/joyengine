@@ -2,23 +2,24 @@
 // debug相关API，通常是些不怎么安全合适的接口函数
 
 import je;
+import je::internal;
 import builtin::editor::gui::form::msg;
 
 namespace jeapi::debug
 {
-    public using Eeid = je::entity::editor::euid_t
+    public using Eeid = je::entity::internal::euid_t
     {
         namespace editor
         {
             public func select(self: option<Eeid>)
             {
                 // 这个类型转换确实很屑，嘻嘻嘻……
-                je::entity::editor::set_editing_uid(self->>\v=v as Eeid: handle: je::entity::editor::euid_t;);
+                je::entity::internal::set_editing_uid(self->>\v=v as Eeid: handle: je::entity::internal::euid_t;);
             }
             public func editing()
             {
                 // 这个类型转换还是很屑，嘻嘻嘻……
-                return je::entity::editor::get_editing_uid()->>\v=v as je::entity::editor::euid_t: handle: Eeid;;
+                return je::entity::internal::get_editing_uid()->>\v=v as je::entity::internal::euid_t: handle: Eeid;;
             }
         }
         public func dosth(self: Eeid, f: (option<je::entity>)=>void)
@@ -45,7 +46,7 @@ namespace jeapi::debug
 
     public func get_entity_editor_id(entity: je::entity)=> option<Eeid>
     {
-        return entity->editor::get_entity_uid->>\eid = eid: handle: Eeid;;
+        return entity->internal::get_entity_uid->>\eid = eid: handle: Eeid;;
     }
     
     alias OperationCallback = (option<je::entity>)=>void;
@@ -114,7 +115,7 @@ namespace jeapi::debug
                     };
                     
                     // 将当前实体塞进anchored_entity，用于保证所有实体都能找到妈妈（bushi
-                    match (e->editor::get_anchor_uid)
+                    match (e->internal::get_anchor_uid)
                     {
                     value(uid)?
                         anchored_entity->set(uid, ech);
@@ -122,7 +123,7 @@ namespace jeapi::debug
                     }
 
                     // 获取当前实体的“父实体”，如果没有则将当前实体塞进root_entity
-                    match (e->editor::get_parent_anchor_uid)
+                    match (e->internal::get_parent_anchor_uid)
                     {
                     none?
                         root_entity->add(ech);
@@ -149,7 +150,7 @@ namespace jeapi::debug
         // OK 所有实体过了一遍了，处理待定集的实体
         for (let pending_ech : pending_entity)
         {
-            match (anchored_entity->get(pending_ech.e->editor::get_parent_anchor_uid->unwrap))
+            match (anchored_entity->get(pending_ech.e->internal::get_parent_anchor_uid->unwrap))
             {
             value(parentech)?
                 parentech.childs as array<EntityChilds>

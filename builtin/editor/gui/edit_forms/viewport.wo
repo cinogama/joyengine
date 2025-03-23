@@ -125,63 +125,63 @@ namespace editor::gui::edit_forms
                                 !debug_camera_entity->unwrap->towoo::get_component :<Light2D::CameraPostPass>->is_value);
                         }
                         static let MOVER_MODE = {
-                            [je::editor::mover_mode::NOSPECIFY] = "未指定",
-                            [je::editor::mover_mode::SELECTION] = "仅选中",
-                            [je::editor::mover_mode::MOVEMENT] = "移动",
-                            [je::editor::mover_mode::ROTATION] = "旋转",
-                            [je::editor::mover_mode::SCALE] = "缩放",
+                            [je::internal::mover_mode::NOSPECIFY] = "未指定",
+                            [je::internal::mover_mode::SELECTION] = "仅选中",
+                            [je::internal::mover_mode::MOVEMENT] = "移动",
+                            [je::internal::mover_mode::ROTATION] = "旋转",
+                            [je::internal::mover_mode::SCALE] = "缩放",
                             };
                         static let COORD_MODE = {
-                            [je::editor::coord_mode::GLOBAL] = "全局坐标系",
-                            [je::editor::coord_mode::LOCAL] = "局部坐标系",
+                            [je::internal::coord_mode::GLOBAL] = "全局坐标系",
+                            [je::internal::coord_mode::LOCAL] = "局部坐标系",
                             };
 
-                        let mut mover_mode = debug_world->>\w = je::editor::get_editing_mover_mode(w);->or(je::editor::mover_mode::SELECTION);
-                        let mut coord_mode = debug_world->>\w = je::editor::get_editing_coord_mode(w);->or(je::editor::coord_mode::GLOBAL);
+                        let mut mover_mode = debug_world->>\w = je::internal::get_editing_mover_mode(w);->or(je::internal::mover_mode::SELECTION);
+                        let mut coord_mode = debug_world->>\w = je::internal::get_editing_coord_mode(w);->or(je::internal::coord_mode::GLOBAL);
 
                         if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::C]))
-                            mover_mode = je::editor::mover_mode::SELECTION;
+                            mover_mode = je::internal::mover_mode::SELECTION;
                         else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::T]))
-                            mover_mode = je::editor::mover_mode::MOVEMENT;
+                            mover_mode = je::internal::mover_mode::MOVEMENT;
                         else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::R]))
-                            mover_mode = je::editor::mover_mode::ROTATION;
+                            mover_mode = je::internal::mover_mode::ROTATION;
                         else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::S]))
-                            mover_mode = je::editor::mover_mode::SCALE;
+                            mover_mode = je::internal::mover_mode::SCALE;
                         else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::G]))
-                            coord_mode = je::editor::coord_mode::GLOBAL;
+                            coord_mode = je::internal::coord_mode::GLOBAL;
                         else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::L]))
-                            coord_mode = je::editor::coord_mode::LOCAL;
+                            coord_mode = je::internal::coord_mode::LOCAL;
                         else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB]))
                         {
                             static let mut last_click_time = 0.;
                             if (std::time() - last_click_time <= 0.2)
                             {
-                                if ((mover_mode +:= 1: je::editor::mover_mode) > je::editor::mover_mode::SCALE)
-                                    mover_mode = je::editor::mover_mode::SELECTION;
+                                if ((mover_mode +:= 1: je::internal::mover_mode) > je::internal::mover_mode::SCALE)
+                                    mover_mode = je::internal::mover_mode::SELECTION;
                             }
                             last_click_time = std::time();
                         }
 
                         if (BeginMenuEnabled(F"{MOVER_MODE[mover_mode]}|{COORD_MODE[coord_mode]}", debug_camera_entity->is_value))
                         {   
-                            if (MenuItemShortcutSelectedEnabled("仅选中", "Tab + C", mover_mode == je::editor::mover_mode::SELECTION, debug_camera_entity->is_value)->is_value)
-                                mover_mode = je::editor::mover_mode::SELECTION;
-                            if (MenuItemShortcutSelectedEnabled("移动", "Tab + T", mover_mode == je::editor::mover_mode::MOVEMENT, debug_camera_entity->is_value)->is_value)
-                                mover_mode = je::editor::mover_mode::MOVEMENT;
-                            if (MenuItemShortcutSelectedEnabled("旋转", "Tab + R", mover_mode == je::editor::mover_mode::ROTATION, debug_camera_entity->is_value)->is_value)
-                                mover_mode = je::editor::mover_mode::ROTATION;
-                            if (MenuItemShortcutSelectedEnabled("缩放", "Tab + S", mover_mode == je::editor::mover_mode::SCALE, debug_camera_entity->is_value)->is_value)
-                                mover_mode = je::editor::mover_mode::SCALE;
+                            if (MenuItemShortcutSelectedEnabled("仅选中", "Tab + C", mover_mode == je::internal::mover_mode::SELECTION, debug_camera_entity->is_value)->is_value)
+                                mover_mode = je::internal::mover_mode::SELECTION;
+                            if (MenuItemShortcutSelectedEnabled("移动", "Tab + T", mover_mode == je::internal::mover_mode::MOVEMENT, debug_camera_entity->is_value)->is_value)
+                                mover_mode = je::internal::mover_mode::MOVEMENT;
+                            if (MenuItemShortcutSelectedEnabled("旋转", "Tab + R", mover_mode == je::internal::mover_mode::ROTATION, debug_camera_entity->is_value)->is_value)
+                                mover_mode = je::internal::mover_mode::ROTATION;
+                            if (MenuItemShortcutSelectedEnabled("缩放", "Tab + S", mover_mode == je::internal::mover_mode::SCALE, debug_camera_entity->is_value)->is_value)
+                                mover_mode = je::internal::mover_mode::SCALE;
                             Separator();
-                            if (MenuItemShortcutSelectedEnabled("全局坐标系", "Tab + G", coord_mode == je::editor::coord_mode::GLOBAL, debug_camera_entity->is_value)->is_value)
-                                coord_mode = je::editor::coord_mode::GLOBAL;
-                            if (MenuItemShortcutSelectedEnabled("局部坐标系", "Tab + L", coord_mode == je::editor::coord_mode::LOCAL, debug_camera_entity->is_value)->is_value)
-                                coord_mode = je::editor::coord_mode::LOCAL;
+                            if (MenuItemShortcutSelectedEnabled("全局坐标系", "Tab + G", coord_mode == je::internal::coord_mode::GLOBAL, debug_camera_entity->is_value)->is_value)
+                                coord_mode = je::internal::coord_mode::GLOBAL;
+                            if (MenuItemShortcutSelectedEnabled("局部坐标系", "Tab + L", coord_mode == je::internal::coord_mode::LOCAL, debug_camera_entity->is_value)->is_value)
+                                coord_mode = je::internal::coord_mode::LOCAL;
                             Separator();
                             if (MenuItem("重置视口摄像机"))
                             {
-                                mover_mode = je::editor::mover_mode::SELECTION;
-                                coord_mode = je::editor::coord_mode::GLOBAL;
+                                mover_mode = je::internal::mover_mode::SELECTION;
+                                coord_mode = je::internal::coord_mode::GLOBAL;
 
                                 func reset_entity_trans(e)
                                 {
@@ -201,8 +201,8 @@ namespace editor::gui::edit_forms
 
                         if (BeginMenuEnabled("GIZMO", debug_camera_entity->is_value))
                         {
-                            let mut gizmo = std::mutable::create(debug_world->>\w = je::editor::get_editing_gizmo_mode(w);->or(je::editor::gizmo_mode::ALL): int);
-                            let update_gizmo_option = func(item: je::editor::gizmo_mode, able: bool)
+                            let mut gizmo = std::mutable::create(debug_world->>\w = je::internal::get_editing_gizmo_mode(w);->or(je::internal::gizmo_mode::ALL): int);
+                            let update_gizmo_option = func(item: je::internal::gizmo_mode, able: bool)
                                 {
                                     if (able)
                                         gizmo->set(gizmo->get->bor(item: int));
@@ -210,30 +210,30 @@ namespace editor::gui::edit_forms
                                         gizmo->set(gizmo->get->band(item: int->bnot));
                                 };
 
-                            do MenuItemSelected("摄像机", 0 != gizmo->get->band(je::editor::gizmo_mode::CAMERA: int))
-                                ->> \selected = update_gizmo_option(je::editor::gizmo_mode::CAMERA, selected);
+                            do MenuItemSelected("摄像机", 0 != gizmo->get->band(je::internal::gizmo_mode::CAMERA: int))
+                                ->> \selected = update_gizmo_option(je::internal::gizmo_mode::CAMERA, selected);
                                 ;    
-                            do MenuItemSelected("视椎体", 0 != gizmo->get->band(je::editor::gizmo_mode::CAMERA_VISUAL_CONE: int))
-                                ->> \selected = update_gizmo_option(je::editor::gizmo_mode::CAMERA_VISUAL_CONE, selected);
+                            do MenuItemSelected("视椎体", 0 != gizmo->get->band(je::internal::gizmo_mode::CAMERA_VISUAL_CONE: int))
+                                ->> \selected = update_gizmo_option(je::internal::gizmo_mode::CAMERA_VISUAL_CONE, selected);
                                 ;
-                            do MenuItemSelected("2D光源", 0 != gizmo->get->band(je::editor::gizmo_mode::LIGHT2D: int))
-                                ->> \selected = update_gizmo_option(je::editor::gizmo_mode::LIGHT2D, selected);
+                            do MenuItemSelected("2D光源", 0 != gizmo->get->band(je::internal::gizmo_mode::LIGHT2D: int))
+                                ->> \selected = update_gizmo_option(je::internal::gizmo_mode::LIGHT2D, selected);
                                 ;
-                            do MenuItemSelected("2D碰撞体", 0 != gizmo->get->band(je::editor::gizmo_mode::PHYSICS2D_COLLIDER: int))
-                                ->> \selected = update_gizmo_option(je::editor::gizmo_mode::PHYSICS2D_COLLIDER, selected);
+                            do MenuItemSelected("2D碰撞体", 0 != gizmo->get->band(je::internal::gizmo_mode::PHYSICS2D_COLLIDER: int))
+                                ->> \selected = update_gizmo_option(je::internal::gizmo_mode::PHYSICS2D_COLLIDER, selected);
                                 ;
-                            do MenuItemSelected("高亮选中", 0 != gizmo->get->band(je::editor::gizmo_mode::SELECTING_HIGHLIGHT: int))
-                                ->> \selected = update_gizmo_option(je::editor::gizmo_mode::SELECTING_HIGHLIGHT, selected);
+                            do MenuItemSelected("高亮选中", 0 != gizmo->get->band(je::internal::gizmo_mode::SELECTING_HIGHLIGHT: int))
+                                ->> \selected = update_gizmo_option(je::internal::gizmo_mode::SELECTING_HIGHLIGHT, selected);
                                 ;
                                
                             Separator();
 
                             if (MenuItem("全选"))
-                                gizmo->set(je::editor::gizmo_mode::ALL: int);
+                                gizmo->set(je::internal::gizmo_mode::ALL: int);
                             if (MenuItem("全不选"))
-                                gizmo->set(je::editor::gizmo_mode::NONE: int);
+                                gizmo->set(je::internal::gizmo_mode::NONE: int);
 
-                            do debug_world->>\w = je::editor::set_editing_gizmo_mode(w, gizmo->get: je::editor::gizmo_mode);;
+                            do debug_world->>\w = je::internal::set_editing_gizmo_mode(w, gizmo->get: je::internal::gizmo_mode);;
                             EndMenu();
                         }
 
@@ -309,8 +309,8 @@ namespace editor::gui::edit_forms
                         do debug_world->>
                             func(w)
                             {
-                                je::editor::set_editing_mover_mode(w, mover_mode);
-                                je::editor::set_editing_coord_mode(w, coord_mode);
+                                je::internal::set_editing_mover_mode(w, mover_mode);
+                                je::internal::set_editing_coord_mode(w, coord_mode);
                             };
 
                         EndMenuBar();
@@ -322,7 +322,7 @@ namespace editor::gui::edit_forms
                         {
                             let (available_width, available_height) = GetContentRegionAvail();
                             let mut need_update_frame = false;
-                            match (je::editor::get_framebuf_texture(camera_entity, 0))
+                            match (je::internal::get_framebuf_texture(camera_entity, 0))
                             {
                             value(frametex)?
                                 {
@@ -345,8 +345,8 @@ namespace editor::gui::edit_forms
                                         let uniform_mpos_x = 2. * ((offsetx:int - itemw:int/2):real / itemw), 
                                             uniform_mpos_y = -2. * ((offsety:int - itemh:int/2):real / itemh);
 
-                                        je::editor::enable_editor_system(true);
-                                        je::editor::update_editor_mouse_pos(
+                                        je::internal::enable_editor_system(true);
+                                        je::internal::update_editor_mouse_pos(
                                             uniform_mpos_x, 
                                             uniform_mpos_y, 
                                             wx:int + lupx:int + (itemw:int/2), 
@@ -372,7 +372,7 @@ namespace editor::gui::edit_forms
                                     else
                                     {
                                         windows_moveable = true;
-                                        je::editor::enable_editor_system(false);
+                                        je::internal::enable_editor_system(false);
                                     }
 
                                     if (frame_tex_width != available_width: int || frame_tex_height != available_height: int)
@@ -385,7 +385,7 @@ namespace editor::gui::edit_forms
                             if (need_update_frame)
                             {
                                 if (available_width: int > 0 && available_height: int > 0)
-                                    camera_entity->je::editor::apply_camera_framebuf_setting(
+                                    camera_entity->je::internal::apply_camera_framebuf_setting(
                                         available_width: int, available_height: int);
                             }
 

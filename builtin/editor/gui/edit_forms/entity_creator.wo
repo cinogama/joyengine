@@ -1,4 +1,8 @@
+import je;
 import je::gui;
+import je::towoo;
+
+import builtin::editor::project::main;
 
 using je::gui;
 
@@ -88,7 +92,7 @@ namespace editor::gui::edit_forms
             };
 
             entity->justdo(func(e){
-                context.name = e->editor::name;
+                context.name = e->internal::name;
                 let comps = []mut: typeof(context.not_append_types);
                 context.not_append_types->swap(comps);
         
@@ -483,7 +487,7 @@ namespace editor::gui::edit_forms
                                 do add_components->map(\t: je::typeinfo = e->add_component(t););
                                 do removing_components->map(\t: je::typeinfo = e->remove_component(t););
 
-                                e->editor::set_name(entity_context.name);
+                                e->internal::set_name(entity_context.name);
                             });
                             open = false;
                         }
@@ -493,7 +497,7 @@ namespace editor::gui::edit_forms
                         value(w)?
                             {
                                 let e = w->add_entity(entity_context.has_append_types->to_array);
-                                e->editor::set_name(entity_context.name);
+                                e->internal::set_name(entity_context.name);
 
                                 set_new_created_entity_pos(w, e);
                                 open = false;

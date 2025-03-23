@@ -9,36 +9,6 @@ const char* commit_sha_from_cicd =
 
 #include <list>
 
-extern const char* shader_wrapper_path;
-extern const char* shader_wrapper_src;
-
-extern const char* shader_light2d_path;
-extern const char* shader_light2d_src;
-
-extern const char* shader_pbr_path;
-extern const char* shader_pbr_src;
-
-extern const char* gui_api_path;
-extern const char* gui_api_src;
-
-extern const char* jeecs_woolang_api_path;
-extern const char* jeecs_woolang_api_src;
-
-extern const char* jeecs_woolang_editor_api_path;
-extern const char* jeecs_woolang_editor_api_src;
-
-extern const char* jeecs_towoo_system_path;
-extern const char* jeecs_towoo_system_src;
-
-extern const char* jeecs_towoo_component_path;
-extern const char* jeecs_towoo_component_src;
-
-extern const char* jeecs_towoo_path;
-extern const char* jeecs_towoo_src;
-
-extern const char* jeecs_physics2d_config_path;
-extern const char* jeecs_physics2d_config_src;
-
 void jeal_init();
 void je_log_init();
 void jegl_shader_generator_init();
@@ -226,16 +196,6 @@ void je_init(int argc, char** argv)
     je_extern_lib_3rd_pkgs_init();
     je_extern_lib_module_init();
 
-    wo_virtual_source(jeecs_physics2d_config_path, jeecs_physics2d_config_src, false);
-    wo_virtual_source(jeecs_towoo_path, jeecs_towoo_src, false);
-    wo_virtual_source(jeecs_towoo_component_path, jeecs_towoo_component_src, false);
-    wo_virtual_source(jeecs_towoo_system_path, jeecs_towoo_system_src, false);
-    wo_virtual_source(jeecs_woolang_editor_api_path, jeecs_woolang_editor_api_src, false);
-    wo_virtual_source(jeecs_woolang_api_path, jeecs_woolang_api_src, false);
-    wo_virtual_source(shader_wrapper_path, shader_wrapper_src, false);
-    wo_virtual_source(shader_light2d_path, shader_light2d_src, false);
-    wo_virtual_source(shader_pbr_path, shader_pbr_src, false);
-    wo_virtual_source(gui_api_path, gui_api_src, false);
     jeal_init();
 
     assert(_je_unregister_guard == nullptr);
@@ -250,11 +210,11 @@ wo_integer_t crc64_of_source_and_api()
 
     const char* crc64_src = R"(
 import woo::std;
+import je::internal;
 import pkg::fsys;
-import je::editor;
 
 using std;
-using je::editor;
+using je::internal;
 
 func main()
 {

@@ -1,5 +1,5 @@
 import je;
-import je::editor;
+import je::internal;
 
 namespace jeapi::varify
 {
@@ -9,7 +9,7 @@ namespace jeapi::varify
         woolang_version: string,
     }
     {
-        using je::editor;
+        using je::internal;
 
         public func current()
         {

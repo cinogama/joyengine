@@ -1,4 +1,4 @@
-import je::editor::graphic;
+import je::internal::graphic;
 import pkg::math;
 
 let mut center_y = 0.;

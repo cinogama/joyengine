@@ -2,7 +2,7 @@
 // 负责提供序列化和反序列化实体、世界的功能
 
 import je;
-import je::editor;
+import je::internal;
 
 import pkg::iterator;
 
@@ -57,7 +57,7 @@ namespace jeapi
         }
         public func update_prefab(e: je::entity)
         {
-            match (e->editor::get_prefab_path)
+            match (e->internal::get_prefab_path)
             {
             value(path)?
                 {
@@ -242,7 +242,7 @@ namespace jeapi
         }
         public func try_dump_prefab_dat(e: je::entity, dat: dict<string, dynamic>)
         {
-            match (e->editor::get_prefab_path)
+            match (e->internal::get_prefab_path)
             {
             value(prefab)?
                 return dump_prefab_dat(prefab, dat);
@@ -277,14 +277,13 @@ namespace jeapi
                 ;
         }
 
-        alias shader_inform = dict<string, array<dynamic>>;
+        alias ShaderUniformVariablesDictT = dict<string, array<dynamic>>;
         //                          uniform_name uniform_vals
-        func get_entity_shaders_informs(saving_entity: je::entity)=> array<array<dynamic>/*(string, shader_inform)*/>
+        func get_entity_shaders_informs(saving_entity: je::entity)=> array<(string, ShaderUniformVariablesDictT)>
         {
             // 获取实体绑定的shader和uniform信息, uniform 信息仅包括int/float/float2，3，4类型的信息
-            // {[shader_path] = shader_inform}
             return saving_entity-> get_shaders
-                ->> \shad = [shad->path: dynamic, shad_uniforms_dats(): dynamic]
+                ->> \shad = (shad->path, shad_uniforms_dats())
                     where shad_uniforms_dats = func()
                         {
                             let result = {}mut: map<string, array<dynamic>>;
@@ -323,7 +322,7 @@ namespace jeapi
         {
             return
                 saving_entity
-                    ->  editor::get_components_types()
+                    ->  internal::get_components_types()
                     ->  forall(\t = !t->name->begin_with("Editor::");)
                     =>> \t = component_instance->is_value ? [(t, component_instance->unwrap)] | []
                         where
@@ -347,7 +346,7 @@ namespace jeapi
                     ->  \m = m->empty? option::none | option::value(m);
                     ->> \m = 
                         {
-                            ["name"] = saving_entity->editor::name: dynamic, 
+                            ["name"] = saving_entity->internal::name: dynamic, 
                             ["components"] = m: dynamic,
                             // 如果纹理是内置的，也就是说这个纹理实际上没有路径，那么跳过它
                             ["textures"] = saving_entity->get_entity_texture_passes
@@ -356,7 +355,7 @@ namespace jeapi
                                     | {}
                                     ; 
                                 : dynamic,
-                            ["shaders"] = saving_entity->get_entity_shaders_informs: dynamic,
+                            ["shaders"] = saving_entity->get_entity_shaders_informs->>\(sname, sdata) = [sname: dynamic, sdata: dynamic];: dynamic,
                             ["shape"] = saving_entity->get_shape=>>\shape = shape->path;->or(""): dynamic,
                         }
                         where used_texture_id_pass = saving_entity->get_shaders()
@@ -387,8 +386,8 @@ namespace jeapi
                         ? dat->apply(
                             "euid", 
                             saving_entity
-                                ->editor::get_entity_uid
-                                ->or(0: handle: je::entity::editor::euid_t): handle: int: dynamic)
+                                ->internal::get_entity_uid
+                                ->or(0: handle: je::entity::internal::euid_t): handle: int: dynamic)
                         | dat
                         ;
                     ;
@@ -552,7 +551,7 @@ namespace jeapi
 
             if (in_editor && prefab_path->is_value)
             {
-                entity_instance->editor::set_prefab_path(prefab_path->unwrap);
+                entity_instance->internal::set_prefab_path(prefab_path->unwrap);
             }
 
             // 开始应用数据
@@ -587,7 +586,7 @@ namespace jeapi
                 {
                     for (let (path, uniform_vars) : dats)
                     {
-                        let badshad = entity_instance->editor::store_name_for_bad_shader_update(path);
+                        let badshad = entity_instance->internal::store_name_for_bad_shader_update(path);
 
                         for (let (uname, uval): uniform_vars)
                             restore_shader_of_entity(badshad, uname as string, uval as array<dynamic>);
@@ -618,7 +617,7 @@ namespace jeapi
             if (in_editor)
                 do entity_dat
                     ->  get("name")
-                    ->> \n = entity_instance->editor::set_name(n as string);;
+                    ->> \n = entity_instance->internal::set_name(n as string);;
 
             return option::value(entity_instance);
         }
