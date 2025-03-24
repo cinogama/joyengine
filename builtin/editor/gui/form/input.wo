@@ -1,7 +1,11 @@
 // gui.form.input
 // 输入窗口
 
+import woo::std;
+
+import je;
 import je::gui;
+
 import builtin::editor::gui::inputmgr;
 import builtin::api::gui::form;
 

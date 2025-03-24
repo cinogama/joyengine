@@ -1,6 +1,8 @@
 // api.dbg.main
 // debug相关API，通常是些不怎么安全合适的接口函数
 
+import woo::std;
+
 import je;
 import je::internal;
 import builtin::editor::gui::form::msg;

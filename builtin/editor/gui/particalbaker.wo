@@ -1,3 +1,21 @@
+import woo::std;
+
+import je;
+import je::gui;
+
+import pkg::fsys;
+import pkg::vm;
+import pkg::makenew;
+import pkg::image;
+import pkg::buffer;
+import pkg::math;
+import pkg::thread;
+
+import builtin::editor::gui::form::ask;
+import builtin::editor::gui::form::msg;
+import builtin::editor::gui::scripteditor;
+import builtin::editor::gui::animation2d;
+
 using je::gui;
 
 namespace editor::gui::particalbaker

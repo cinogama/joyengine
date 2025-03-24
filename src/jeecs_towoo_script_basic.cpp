@@ -440,6 +440,8 @@ void je_towoo_update_api()
     // 1. 获取所有的BasicType，为这些类型生成对应的Woolang类型
     std::string woolang_parsing_type_decl =
         R"(// (C)Cinogama project.
+import woo::std;
+
 import je;
 namespace je::towoo
 {
@@ -499,6 +501,8 @@ namespace je::towoo
 
     std::string woolang_component_type_decl =
         R"(// (C)Cinogama project.
+import woo::std;
+
 import je;
 import je::towoo::types;
 )";

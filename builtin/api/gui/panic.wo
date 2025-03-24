@@ -1,5 +1,9 @@
 import woo::std;
+
+import je;
 import je::gui;
+
+import builtin::api::gui::form;
 
 using je::gui;
 

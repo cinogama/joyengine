@@ -1,7 +1,9 @@
 // gui.form.ask
 // 询问窗口
 
+import je;
 import je::gui;
+
 import builtin::editor::gui::inputmgr;
 import builtin::api::gui::form;
 

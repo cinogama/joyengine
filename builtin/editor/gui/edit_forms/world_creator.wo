@@ -1,6 +1,13 @@
+import woo::std;
+
+import je;
 import je::gui;
+import je::internal;
+
+import pkg::worst;
 
 import builtin::editor::project::main;
+import builtin::editor::gui::form::msg;
 
 using je::gui;
 

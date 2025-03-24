@@ -1,6 +1,12 @@
 // gui.main_menu
 // 用于显示编辑器的主菜单栏
+import woo::std;
+
+import je;
 import je::gui;
+
+import pkg::fsys;
+import pkg::vm;
 
 import builtin::editor::gui::main;
 import builtin::editor::gui::tilemap::main;
@@ -10,6 +16,13 @@ import builtin::editor::gui::inputmgr;
 import builtin::editor::gui::style;
 import builtin::editor::gui::scripteditor;
 import builtin::editor::main;
+import builtin::editor::gui::form::ask;
+import builtin::editor::gui::form::msg;
+import builtin::editor::project::main;
+import builtin::editor::project::config;
+import builtin::editor::tools::script_manager;
+import builtin::editor::welcome::main;
+import builtin::editor::environment::main;
 
 using je::gui;
 using jeapi::gui::style;

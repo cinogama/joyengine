@@ -1,3 +1,8 @@
+import woo::std;
+
+import je;
+import je::gui;
+
 import pkg::fsys;
 import pkg::try;
 import pkg::iterator;

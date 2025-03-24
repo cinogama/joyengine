@@ -1,6 +1,7 @@
 // environment.main
 // 用于管理和维持引擎当前的上下文（也就是Universe环境）
 import je;
+import je::gui;
 import je::internal;
 
 import pkg::makenew;

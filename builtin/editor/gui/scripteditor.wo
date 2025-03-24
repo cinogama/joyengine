@@ -5,6 +5,15 @@ import je;
 import je::gui;
 
 import pkg::iterator;
+import pkg::try;
+import pkg::makenew;
+import pkg::vm;
+import pkg::worst;
+import pkg::buffer;
+
+import builtin::editor::project::main;
+import builtin::editor::gui::main;
+import builtin::editor::gui::form::msg;
 
 using std;
 using je;

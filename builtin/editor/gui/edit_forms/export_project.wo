@@ -1,3 +1,5 @@
+import woo::std;
+
 import je;
 import je::gui;
 import je::internal;
@@ -5,8 +7,14 @@ import je::internal;
 import pkg::makenew;
 import pkg::fsys;
 import pkg::vm;
+import pkg::process;
+import pkg::buffer;
+import pkg::thread;
 
 import builtin::editor::project::main;
+import builtin::editor::cpp::main;
+import builtin::editor::project::config;
+import builtin::editor::gui::main;
 
 using je::gui;
 

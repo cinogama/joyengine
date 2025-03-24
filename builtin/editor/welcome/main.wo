@@ -1,6 +1,8 @@
 // builtin.api.welcome.demo
 // 嗯，大憨批程序，就是一个用来显示欢迎信息的小实例
 
+import woo::std;
+
 import je;
 import je::internal;
 import je::gui;

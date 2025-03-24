@@ -1,4 +1,16 @@
+import woo::std;
+
+import je;
+import je::gui;
+
 import pkg::vm;
+import pkg::fsys;
+
+import builtin::editor::project::main;
+import builtin::editor::environment::main;
+import builtin::editor::gui::main;
+import builtin::editor::gui::form::msg;
+import builtin::editor::dbg::main;
 
 namespace editor::tools
 {

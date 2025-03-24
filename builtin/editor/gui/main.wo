@@ -1,9 +1,14 @@
 // gui.main
 // 用于启动和维持项目的编辑器界面
-import builtin::editor::project::main;
+import woo::std;
 
+import je::internal;
+
+import builtin::editor::project::main;
 import builtin::editor::gui::main_menu;
 import builtin::editor::gui::edit_forms;
+import builtin::editor::dbg::main;
+import builtin::editor::environment::main;
 
 namespace editor::gui
 {

@@ -9,6 +9,16 @@ import pkg::try;
 import pkg::fsys;
 import pkg::image;
 import pkg::iterator;
+import pkg::makenew;
+import pkg::worst;
+import pkg::math;
+
+import builtin::editor::gui::main;
+import builtin::editor::project::main;
+import builtin::editor::gui::form::msg;
+import builtin::editor::gui::form::input;
+import builtin::editor::gui::form::ask;
+import builtin::api::gui::file;
 
 using std;
 using int;

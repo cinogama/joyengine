@@ -4,15 +4,21 @@
 
 import woo::std;
 import woo::shell;
+
+import je;
 import je::gui;
+import je::internal;
 
 import pkg::process;
 import pkg::fsys;
 import pkg::thread;
 import pkg::try;
 import pkg::makenew;
+import pkg::iterator;
 
 import builtin::editor::project::main;
+import builtin::editor::gui::form::input;
+import builtin::editor::gui::form::msg;
 import builtin::editor::tools::varify;
 
 using je::gui;

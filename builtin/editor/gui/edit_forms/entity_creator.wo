@@ -1,8 +1,18 @@
+import woo::std;
+
 import je;
 import je::gui;
+import je::internal;
 import je::towoo;
+import je::towoo::types;
+import je::towoo::components;
+
+import pkg::worst;
 
 import builtin::editor::project::main;
+import builtin::editor::dbg::main;
+import builtin::editor::gui::form::msg;
+import builtin::editor::gui::main;
 
 using je::gui;
 

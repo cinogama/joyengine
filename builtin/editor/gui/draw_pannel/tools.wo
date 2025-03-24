@@ -1,5 +1,14 @@
+import woo::std;
+
+import je;
+
 import pkg::worst;
 import pkg::math;
+import pkg::makenew;
+
+import builtin::editor::gui::draw_pannel::main;
+import builtin::editor::gui::draw_pannel::imagescripts;
+import builtin::editor::gui::form::msg;
 
 using je;
 

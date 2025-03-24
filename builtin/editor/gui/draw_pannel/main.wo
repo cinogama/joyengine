@@ -1,17 +1,30 @@
+import woo::std;
+
 import je;
 import je::gui;
+import je::towoo;
+import je::towoo::components;
+import je::towoo::types;
 
 import pkg::image;
 import pkg::fsys;
 import pkg::iterator;
 import pkg::interface;
 import pkg::makenew;
+import pkg::math;
+import pkg::worst;
+import pkg::vm;
 
 import tools;
 import imagescripts;
 
 import builtin::editor::gui::inputmgr;
 import builtin::editor::environment::main;
+import builtin::editor::gui::form::ask;
+import builtin::editor::gui::form::msg;
+import builtin::editor::gui::main;
+import builtin::editor::gui::scripteditor;
+import builtin::editor::dbg::main;
 
 using je;
 using je::gui;

@@ -1,13 +1,22 @@
 // project.main
 // 用于储存编辑中的项目信息
+import woo::std;
 
 import je;
 import je::gui;
+import je::internal;
+import je::towoo::types;
+import je::towoo::components;
 
 import pkg::try;
 import pkg::worst;
+import pkg::fsys;
+import pkg::process;
+import pkg::iterator;
+
 import config;
 
+import builtin::api::serialize::main;
 import builtin::editor::environment::main;
 import builtin::editor::gui::form::msg;
 import builtin::editor::gui::form::ask;
@@ -16,6 +25,8 @@ import builtin::editor::tools::script_manager;
 import builtin::editor::gui::draw_pannel::main;
 import builtin::editor::project::towoomgr;
 import builtin::editor::gui::edit_forms;
+import builtin::editor::gui::edit_forms::viewport;
+import builtin::editor::gui::style;
 
 import je::towoo;
 

@@ -1,12 +1,15 @@
 // project.towoo
 // 用于储存编辑中的项目的ToWoo代码系统实例
+import woo::std;
 
 import je;
 import je::gui;
 
 import pkg::fsys;
+import pkg::worst;
 
 import builtin::editor::project::main;
+import builtin::editor::gui::form::msg;
 
 using je;
 using fsys;

@@ -1,6 +1,8 @@
 // api.serialize.main
 // 负责提供序列化和反序列化实体、世界的功能
 
+import woo::std;
+
 import je;
 import je::internal;
 

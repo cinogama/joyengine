@@ -1,6 +1,23 @@
+import woo::std;
+
+import je;
+import je::gui;
+import je::towoo::types;
+import je::towoo;
+
 import pkg::buffer;
 import pkg::try;
+import pkg::makenew;
+import pkg::fsys;
 import pkg::iterator;
+import pkg::math;
+import pkg::worst;
+
+import builtin::editor::environment::main;
+import builtin::editor::gui::main;
+import builtin::editor::gui::form::msg;
+import builtin::editor::gui::form::input;
+import builtin::editor::gui::form::ask;
 
 namespace editor::gui::animation2d
 {

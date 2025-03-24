@@ -4,6 +4,8 @@
 import je;
 import je::gui;
 
+import woo::std;
+
 using je;
 using je::gui;
 using je::graphic;

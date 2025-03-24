@@ -1,12 +1,34 @@
+import woo::std;
+import woo::shell;
+
+import je;
+import je::gui;
+import je::internal;
+import je::towoo;
+import je::towoo::components;
+import je::towoo::types;
+
 import pkg::image;
 import pkg::fsys;
+import pkg::worst;
+import pkg::thread;
 
-import woo::shell;
+import builtin::editor::project::main;
 import builtin::editor::cpp::main;
 import builtin::editor::gui::animation2d;
 import builtin::editor::gui::particalbaker;
 import builtin::editor::gui::workflow;
 import builtin::editor::gui::refactor;
+import builtin::editor::gui::form::msg;
+import builtin::editor::gui::form::input;
+import builtin::editor::gui::form::ask;
+import builtin::editor::gui::main;
+import builtin::editor::environment::main;
+import builtin::editor::dbg::main;
+import builtin::api::serialize::main;
+import builtin::editor::gui::tilemap::main;
+import builtin::editor::gui::edit_forms::world_creator;
+import builtin::editor::gui::draw_pannel::main;
 
 using je::gui;
 
