@@ -6,6 +6,7 @@ import je;
 import je::gui;
 import je::internal;
 import je::towoo;
+import je::towoo::components;
 import je::towoo::types;
 
 import pkg::fsys;

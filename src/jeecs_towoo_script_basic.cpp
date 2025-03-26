@@ -483,6 +483,7 @@ import je::towoo;
 import woo::std;
 
 import je;
+import je::towoo;
 import je::towoo::types;
 )";
     for (auto* typeinfo : all_registed_types)

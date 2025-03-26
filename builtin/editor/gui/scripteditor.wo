@@ -10,6 +10,7 @@ import pkg::makenew;
 import pkg::vm;
 import pkg::worst;
 import pkg::buffer;
+import pkg::fsys;
 
 import builtin::editor::project::main;
 import builtin::editor::gui::main;

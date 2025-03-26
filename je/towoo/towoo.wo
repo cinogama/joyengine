@@ -1,4 +1,7 @@
 // (C)Cinogama. 
+import woo::std;
+
+import je;
 import je::towoo::types;
 import je::towoo::components;
 

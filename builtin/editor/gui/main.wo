@@ -2,6 +2,7 @@
 // 用于启动和维持项目的编辑器界面
 import woo::std;
 
+import je;
 import je::internal;
 
 import builtin::editor::project::main;

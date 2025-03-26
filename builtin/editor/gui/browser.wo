@@ -492,8 +492,9 @@ je::log("Helloworld");
                 {
                     let default_empty_script = 
 @"import woo::std;
-import je::towoo::types;
+
 import je::towoo::component;
+import je::towoo::types;
 
 component!
 {
@@ -514,6 +515,7 @@ component!
 import je;
 import je::towoo;
 import je::towoo::types;
+import je::towoo::components;
 import je::towoo::system;
 
 using std;

@@ -1,6 +1,8 @@
 // 这里用于管理图像效果处理脚本
 import woo::std;
 
+import je;
+
 import pkg::vm;
 import pkg::fsys;
 import pkg::worst;

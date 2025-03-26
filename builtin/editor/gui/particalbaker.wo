@@ -11,6 +11,7 @@ import pkg::buffer;
 import pkg::math;
 import pkg::thread;
 
+import builtin::editor::gui::main;
 import builtin::editor::gui::form::ask;
 import builtin::editor::gui::form::msg;
 import builtin::editor::gui::scripteditor;
