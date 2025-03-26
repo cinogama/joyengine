@@ -11,6 +11,7 @@ import builtin::editor::gui::edit_forms::inspector;
 import builtin::editor::gui::edit_forms::viewport;
 import builtin::editor::gui::browser;
 import builtin::api::gui::file;
+import builtin::editor::project::main;
 
 namespace editor::gui
 {

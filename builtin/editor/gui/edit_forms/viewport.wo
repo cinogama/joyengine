@@ -22,6 +22,7 @@ import builtin::editor::project::towoomgr;
 import builtin::api::gui::file;
 import builtin::api::serialize::main;
 import builtin::editor::gui::browser;
+import builtin::editor::project::main;
 
 using je::gui;
 

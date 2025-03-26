@@ -5,6 +5,7 @@ import woo::std;
 import je;
 import je::gui;
 import je::internal;
+import je::towoo;
 import je::towoo::types;
 import je::towoo::components;
 
@@ -23,12 +24,12 @@ import builtin::editor::gui::form::ask;
 import builtin::editor::cpp::main;
 import builtin::editor::tools::script_manager;
 import builtin::editor::gui::draw_pannel::main;
+import builtin::editor::gui::draw_pannel::imagescripts;
 import builtin::editor::project::towoomgr;
 import builtin::editor::gui::edit_forms;
 import builtin::editor::gui::edit_forms::viewport;
 import builtin::editor::gui::style;
-
-import je::towoo;
+import builtin::editor::gui::edit_forms::entity_creator;
 
 namespace editor
 {

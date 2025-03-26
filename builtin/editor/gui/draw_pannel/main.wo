@@ -25,6 +25,7 @@ import builtin::editor::gui::form::msg;
 import builtin::editor::gui::main;
 import builtin::editor::gui::scripteditor;
 import builtin::editor::dbg::main;
+import builtin::editor::project::main;
 
 using je;
 using je::gui;

@@ -15,6 +15,7 @@ import builtin::api::gui::errmsg;
 import builtin::editor::gui::main;
 import builtin::editor::gui::form::ask;
 import builtin::editor::project::main;
+import builtin::editor::gui::browser;
 
 using fsys;
 using iterator;

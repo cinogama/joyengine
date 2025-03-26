@@ -170,6 +170,7 @@ build_win64_dx11_opengl_vk:
       - build/pkg/*
       - build/builtin/*
       - build/licenses/*
+      - build/je/*
   tags:
     - winserver22
 

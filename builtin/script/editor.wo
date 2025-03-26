@@ -2,10 +2,12 @@
 // (C)Cinogama. 2024. All rights reserved.
 // 这个脚本用于向编辑器提供各类型的编辑拓展
 // 此脚本如果存在错误，项目将无法被编辑器载入
+import woo::std;
 
 import je;
 import je::gui;
 import je::towoo;
+import je::towoo::types;
 
 import pkg::worst;
 import pkg::math;

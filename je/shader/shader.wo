@@ -816,7 +816,7 @@ namespace shader
         custom_methods: array<(string, (string, string))>,
         function_declear: array<shader_function>)=> shader_wrapper;
 
-    private extern func generate()
+    public func generate_impl<VoidT>()
     {
         let v_in = _JE_BUILT_VAO_STRUCT(vertex_in::create());
 
@@ -841,6 +841,12 @@ namespace shader
             registered_custom_methods->unmapping,
             shader_function::_generate_functions->to_array);
     }
+    private extern func generate()
+    {
+        // NOTE: import check will be ignored in template function.
+        //      we use this trick to avoid the compile error.
+        return generate_impl:<void>();
+    }
 }
 
 public func texture(tex:texture2d, uv:float2)=> float4
@@ -861,14 +867,14 @@ public func uvtrans(uv: float2, tiling: float2, offset: float2)
 }
 
 let _uvframebuf = custom_method:<float2>("JEBUILTIN_Uvframebuffer",
-    @"vec2 JEBUILTIN_Uvframebuffer(vec2 v)
-    {
-        return v;
-    }"@,
-    @"float2 JEBUILTIN_Uvframebuffer(float2 v)
-    {
-        return float2(v.x, 1.0 - v.y);
-    }"@);
+@"vec2 JEBUILTIN_Uvframebuffer(vec2 v)
+{
+    return v;
+}"@,
+@"float2 JEBUILTIN_Uvframebuffer(float2 v)
+{
+    return float2(v.x, 1.0 - v.y);
+}"@);
 
 public func uvframebuf(uv: float2)
 {
