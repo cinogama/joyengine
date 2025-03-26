@@ -438,12 +438,13 @@ WO_API wo_api wojeapi_towoo_member_set(wo_vm vm, wo_value args)
 void je_towoo_update_api()
 {
     // 1. 获取所有的BasicType，为这些类型生成对应的Woolang类型
+    // ATTENTION: woolang_parsing_type_decl 不能以任何方式导入 je/towoo/components，
+    //      因为towoo组件需要依赖此文件加载，而打包时，components已经被载入；这将导致
+    //      循环依赖，运行打包后的程序时，会出现自己未加载而需要取typeinfo失败的情况。
     std::string woolang_parsing_type_decl =
         R"(// (C)Cinogama project.
 import woo::std;
-
 import je;
-import je::towoo;
 )";
 
     std::unordered_set<std::string> generated_types;
