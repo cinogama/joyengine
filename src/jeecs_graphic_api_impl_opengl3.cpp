@@ -1218,6 +1218,6 @@ void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
 #else
 void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
 {
-    jeecs::debug::logfatal("GL330 not available.");
+    jeecs::debug::logfatal("GL3 not available.");
 }
 #endif

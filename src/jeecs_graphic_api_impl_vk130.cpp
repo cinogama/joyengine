@@ -229,9 +229,6 @@ VK_API_PLATFORM_API_LIST
     };
     struct jevk11_texture
     {
-        //VkBuffer m_vk_texture_buffer;
-        //VkDeviceMemory m_vk_texture_buffer_memory;
-
         VkImage m_vk_texture_image;
         VkDeviceMemory m_vk_texture_image_memory;
 
@@ -3096,8 +3093,7 @@ VK_API_PLATFORM_API_LIST
                 vkDestroyImage(_vk_logic_device, texture->m_vk_texture_image, nullptr);
             if (texture->m_vk_texture_image_memory != VK_NULL_HANDLE)
                 vkFreeMemory(_vk_logic_device, texture->m_vk_texture_image_memory, nullptr);
-            //vkDestroyBuffer(_vk_logic_device, texture->m_vk_texture_buffer, nullptr);
-            //vkFreeMemory(_vk_logic_device, texture->m_vk_texture_buffer_memory, nullptr);
+
             delete texture;
         }
 
