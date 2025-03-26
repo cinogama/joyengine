@@ -85,7 +85,7 @@ namespace jeecs::graphic::api::gl3
             }
             return false;
         }
-        void bind_texture_to_last_pass(GLuint texture, GLenum type)
+        void bind_texture_to_last_pass(GLenum type, GLuint texture)
         {
             bind_texture_pass_impl(m_last_active_pass_id, type, texture);
         }
