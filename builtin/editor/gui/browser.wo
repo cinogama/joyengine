@@ -491,7 +491,9 @@ je::log("Helloworld");
                 if (MenuItem("ToWoo Component 声明"))
                 {
                     let default_empty_script = 
-@"import je::towoo::component;
+@"import woo::std;
+import je::towoo::types;
+import je::towoo::component;
 
 component!
 {
@@ -511,7 +513,7 @@ component!
 @"import woo::std;
 import je;
 import je::towoo;
-
+import je::towoo::types;
 import je::towoo::system;
 
 using std;

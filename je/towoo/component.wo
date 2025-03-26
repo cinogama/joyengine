@@ -115,5 +115,6 @@ extern func _init_towoo_component(name: string)
             result += F"je::towoo::component::register_member:<{type}::type>({name->enstring}, option::none);";
         }
     }
+    std::println(result);
     return result;
 }
