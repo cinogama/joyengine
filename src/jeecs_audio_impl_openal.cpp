@@ -14,10 +14,15 @@ struct jeal_device
 {
     bool        m_alive;
     const char* m_device_name;
-    ALCdevice* m_openal_device;
+    ALCdevice*  m_openal_device;
 };
-struct jeal_capture_device : jeal_device
+struct jeal_capture_device
 {
+    bool        m_alive;
+    const char* m_device_name;
+    ALCdevice*  m_capturing_device;
+    bool        m_in_recording;
+    size_t      m_size_per_sample;
 };
 
 struct jeal_source
@@ -260,11 +265,18 @@ jeal_device** _jeal_update_refetch_devices(size_t* out_len)
     auto old_devices = _jeal_ctx._jeal_all_devices;
     _jeal_ctx._jeal_all_devices.clear();
 
+    for (auto* old_device : old_devices)
+    {
+        // 将所有旧设备标记为已经断开，等待后续检查
+        old_device->m_alive = false;
+    }
+
     // 如果支持枚举所有设备，就把枚举所有设备并全部打开
     const char* device_names = nullptr;
 
     // 枚举播放设备：
-    if (alcIsExtensionPresent(NULL, "ALC_ENUMERATE_ALL_EXT"))
+    auto enum_device_enabled = alcIsExtensionPresent(NULL, "ALC_ENUMERATE_ALL_EXT");
+    if (enum_device_enabled)
         device_names = alcGetString(NULL, ALC_ALL_DEVICES_SPECIFIER);
     else
         device_names = alcGetString(NULL, ALC_DEFAULT_DEVICE_SPECIFIER);
@@ -280,11 +292,15 @@ jeal_device** _jeal_update_refetch_devices(size_t* out_len)
             {
                 return 0 == strcmp(current_device_name, device->m_device_name);
             });
+
+        // 检查，如果这是一个新枚举产生的设备名，那么就打开这个设备
         if (fnd == old_devices.end())
         {
+        label_reconnect_device:
             auto* device_instance = alcOpenDevice(current_device_name);
 
             jeecs::debug::loginfo("Found audio device: %s.", current_device_name);
+
             if (device_instance == nullptr)
                 jeecs::debug::logerr("Failed to open device: '%s'.", current_device_name);
             else
@@ -295,24 +311,31 @@ jeal_device** _jeal_update_refetch_devices(size_t* out_len)
             }
         }
         else
+        {
+            // 这是一个已经存在的设备。
             current_device = *fnd;
 
-        static_assert(ALC_EXT_disconnect);
-
-        if (nullptr != current_device)
-        {
+            // 检查其是否曾经断开，然后重新链接上的。
             ALCint device_connected;
             alcGetIntegerv(current_device->m_openal_device, ALC_CONNECTED, 1, &device_connected);
 
-            if (device_connected != ALC_FALSE)
+            if (device_connected == ALC_FALSE)
             {
-                current_device->m_alive = true;
-                _jeal_ctx._jeal_all_devices.push_back(current_device);
+                // 之前创建的设备已经断开，需要重新创建
+                goto label_reconnect_device;
             }
-            else
-                jeecs::debug::logwarn(
-                    "Audio device: '%s' disconnected, skip.", current_device_name);
         }
+
+        if (current_device != nullptr)
+        {
+            // 将设备添加到设备列表中
+            current_device->m_alive = true;
+            _jeal_ctx._jeal_all_devices.push_back(current_device);
+        }
+
+        if (!enum_device_enabled)
+            break;
+
         current_device_name += strlen(current_device_name) + 1;
     }
 
@@ -348,7 +371,8 @@ jeal_capture_device** _jeal_update_refetch_capture_devices(size_t* out_len)
     const char* device_names = nullptr;
 
     // 枚举录音设备：
-    if (alcIsExtensionPresent(NULL, "ALC_ENUMERATE_ALL_EXT"))
+    auto enum_device_enabled = alcIsExtensionPresent(NULL, "ALC_ENUMERATE_ALL_EXT");
+    if (enum_device_enabled)
         device_names = alcGetString(NULL, ALC_CAPTURE_DEVICE_SPECIFIER);
     else
         device_names = alcGetString(NULL, ALC_CAPTURE_DEFAULT_DEVICE_SPECIFIER);
@@ -360,43 +384,41 @@ jeal_capture_device** _jeal_update_refetch_capture_devices(size_t* out_len)
         jeal_capture_device* current_device = nullptr;
 
         auto fnd = std::find_if(old_capture_devices.begin(), old_capture_devices.end(),
-            [current_device_name](jeal_device* device)
+            [current_device_name](jeal_capture_device* device)
             {
                 return 0 == strcmp(current_device_name, device->m_device_name);
             });
+
+        // 检查，如果这是一个新枚举产生的设备名，那么就直接创建实例
         if (fnd == old_capture_devices.end())
         {
-            auto* device_instance = alcCaptureOpenDevice(current_device_name, 44100, AL_FORMAT_MONO16, 44100);
+            jeecs::debug::loginfo("Found audio capture device: %s.", current_device_name);
 
-            jeecs::debug::loginfo("Found audio record device: %s.", current_device_name);
-            if (device_instance == nullptr)
-                jeecs::debug::logerr("Failed to open record device: '%s'.", current_device_name);
-            else
-            {
-                current_device = new jeal_capture_device;
-                current_device->m_device_name = jeecs::basic::make_new_string(current_device_name);
-                current_device->m_openal_device = device_instance;
-            }
+            current_device = new jeal_capture_device;
+            current_device->m_device_name = jeecs::basic::make_new_string(current_device_name);
         }
         else
+        {
+            // 设备已经存在，如果 m_capturing_device 非空，说明此设备此前正在录音
+            // 根据约定，所有录音设备在更新操作发生时都应该停止录音（即设备应该被假定失效）
             current_device = *fnd;
 
-        static_assert(ALC_EXT_disconnect);
-
-        if (nullptr != current_device)
-        {
-            ALCint device_connected;
-            alcGetIntegerv(current_device->m_openal_device, ALC_CONNECTED, 1, &device_connected);
-
-            if (device_connected != ALC_FALSE)
-            {
-                current_device->m_alive = true;
-                _jeal_ctx._jeal_all_capture_devices.push_back(current_device);
-            }
-            else
-                jeecs::debug::logwarn(
-                    "Audio record device: '%s' disconnected, skip.", current_device_name);
+            if (current_device->m_capturing_device)
+                alcCaptureCloseDevice(current_device->m_capturing_device);
         }
+
+        // Make sure the device is alive.
+        current_device->m_alive = true;
+
+        current_device->m_capturing_device = nullptr;
+        current_device->m_in_recording = false;
+        current_device->m_size_per_sample = 0;
+
+        _jeal_ctx._jeal_all_capture_devices.push_back(current_device);
+
+        if (!enum_device_enabled)
+            break;
+
         current_device_name += strlen(current_device_name) + 1;
     }
 
@@ -404,10 +426,10 @@ jeal_capture_device** _jeal_update_refetch_capture_devices(size_t* out_len)
     {
         if (closed_device->m_alive == false)
         {
-            assert(closed_device != nullptr);
-            alcCloseDevice(closed_device->m_openal_device);
+            if (closed_device->m_capturing_device != nullptr)
+                alcCaptureCloseDevice(closed_device->m_capturing_device);
 
-            jeecs::debug::loginfo("Audio record device: %s closed.", closed_device->m_device_name);
+            jeecs::debug::loginfo("Audio capture device: %s closed.", closed_device->m_device_name);
             je_mem_free((void*)closed_device->m_device_name);
 
             delete closed_device;
@@ -419,17 +441,6 @@ jeal_capture_device** _jeal_update_refetch_capture_devices(size_t* out_len)
 
     *out_len = _jeal_ctx._jeal_all_capture_devices.size();
     return _jeal_ctx._jeal_all_capture_devices.data();
-}
-void enum_all_record_device()
-{
-    const char* device_names = alcGetString(NULL, ALC_CAPTURE_DEVICE_SPECIFIER);
-    const char* current_device_name = device_names;
-
-    while (current_device_name && *current_device_name != 0)
-    {
-        jeecs::debug::loginfo("Found audio record device: %s.", current_device_name);
-        current_device_name += strlen(current_device_name) + 1;
-    }
 }
 
 jeal_device** jeal_get_all_devices(size_t* out_len)
@@ -462,7 +473,7 @@ jeal_device** jeal_get_all_devices(size_t* out_len)
     return result;
 }
 
-jeal_capture_device** jeal_get_all_capture_devices(size_t* out_len)
+jeal_capture_device** jeal_refetch_all_capture_devices(size_t* out_len)
 {
     std::lock_guard g0(_jeal_ctx._jeal_all_devices_mx);
     std::lock_guard g3(_jeal_ctx._jeal_context_mx);
@@ -479,7 +490,7 @@ void jeal_init()
         // Using first device as default.
         jeal_using_device(devices[0]);
 
-    (void)jeal_get_all_capture_devices(&device_count);
+    (void)jeal_refetch_all_capture_devices(&device_count);
 }
 
 void jeal_finish()
@@ -504,10 +515,28 @@ void jeal_finish()
 
         delete device;
     }
+    for (auto* device : _jeal_ctx._jeal_all_capture_devices)
+    {
+        if (device->m_capturing_device)
+            alcCaptureCloseDevice(device->m_capturing_device);
+
+        jeecs::debug::loginfo("Audio record device: %s closed.", device->m_device_name);
+        je_mem_free((void*)device->m_device_name);
+
+        delete device;
+    }
     _jeal_ctx._jeal_all_devices.clear();
 }
 
 const char* jeal_device_name(jeal_device* device)
+{
+    std::lock_guard g0(_jeal_ctx._jeal_all_devices_mx);
+
+    assert(device != nullptr);
+    return device->m_device_name;
+}
+
+const char* jeal_captuer_device_name(jeal_capture_device* device)
 {
     std::lock_guard g0(_jeal_ctx._jeal_all_devices_mx);
 
@@ -684,6 +713,8 @@ jeal_buffer* jeal_load_buffer_from_wav(const char* filename)
             audio_buffer->m_format = AL_FORMAT_MONO8;
         else if (wave_format.bitsPerSample == 16)
             audio_buffer->m_format = AL_FORMAT_MONO16;
+        else if (wave_format.bitsPerSample == 32)
+            audio_buffer->m_format = AL_FORMAT_MONO_FLOAT32;
     }
     else if (wave_format.numChannels == 2)
     {
@@ -691,6 +722,8 @@ jeal_buffer* jeal_load_buffer_from_wav(const char* filename)
             audio_buffer->m_format = AL_FORMAT_STEREO8;
         else if (wave_format.bitsPerSample == 16)
             audio_buffer->m_format = AL_FORMAT_STEREO16;
+        else if (wave_format.bitsPerSample == 32)
+            audio_buffer->m_format = AL_FORMAT_STEREO_FLOAT32;
     }
 
     std::lock_guard g1(_jeal_ctx._jeal_all_buffers_mx);
@@ -726,10 +759,14 @@ jeal_buffer* jeal_create_buffer(
         audio_buffer->m_format = AL_FORMAT_MONO8; break;
     case MONO16:
         audio_buffer->m_format = AL_FORMAT_MONO16; break;
+    case MONO32F:
+        audio_buffer->m_format = AL_FORMAT_MONO_FLOAT32; break;
     case STEREO8:
         audio_buffer->m_format = AL_FORMAT_STEREO8; break;
     case STEREO16:
         audio_buffer->m_format = AL_FORMAT_STEREO16; break;
+    case STEREO32F:
+        audio_buffer->m_format = AL_FORMAT_STEREO_FLOAT32; break;
     default:
         jeecs::debug::logerr("Bad audio buffer format: %d.", (int)format);
         break;

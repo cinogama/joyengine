@@ -3593,6 +3593,7 @@ JE_API void je_module_unload(wo_dylib_handle_t lib);
 
 // Audio
 struct jeal_device;
+struct jeal_capture_device;
 struct jeal_source;
 struct jeal_buffer;
 
@@ -3600,7 +3601,7 @@ struct jeal_buffer;
 jeal_state [类型]
 用于表示当前声源的播放状态，包括停止、播放中和暂停
 */
-enum class jeal_state
+enum jeal_state
 {
     STOPPED,
     PLAYING,
@@ -3608,20 +3609,85 @@ enum class jeal_state
 };
 
 /*
+jeal_format [类型]
+用于表示波形的格式
+*/
+enum jeal_format
+{
+    MONO8,
+    MONO16,
+    MONO32F,
+    STEREO8,
+    STEREO16,
+    STEREO32F,
+};
+
+/*
 jeal_get_all_devices [基本接口]
 获取所有可用设备
     * 若正在使用中的设备不复存在，那么会重新指定默认的设备
     * 枚举设备可能是一个耗时操作，因此请不要在性能敏感的地方频繁调用此函数
-    * 这不是线程安全函数，任何设备实例都可能在此函数调用后因为移除而失效
+    * 任何设备实例都可能在此函数调用后因为移除而失效，因此在调用此函数后，请不要持有/使用此前获取的设备实例
 */
 JE_API jeal_device** jeal_get_all_devices(size_t* out_len);
 
 /*
+jeal_refetch_all_capture_devices [基本接口]
+结束当前所有正在进行的录音操作，重新获取所有的录音设备
+    * 枚举设备可能是一个耗时操作，因此请不要在性能敏感的地方频繁调用此函数
+    * 任何设备实例都可能在此函数调用后因为移除而失效，因此在调用此函数后，请不要持有/使用此前获取的设备实例
+*/
+JE_API jeal_capture_device** jeal_refetch_all_capture_devices(size_t* out_len);
+
+/*
+jeal_capture_device_open [基本接口]
+使用指定的参数重新初始化录音设备，以便后续的录音操作
+    * 如果未能初始化成功，返回false
+    * 如果设备此前正在进行录音操作，此操作后需要重新开始录音
+*/
+JE_API bool jeal_capture_device_init(
+    jeal_capture_device* device,
+    size_t buffer_len,
+    size_t sample_rate,
+    jeal_format format);
+
+/*
+jeal_capture_device_start [基本接口]
+使指定的录音设备开始采样
+*/
+JE_API void jeal_capture_device_start(jeal_capture_device* device);
+
+/*
+jeal_capture_device_stop [基本接口]
+使指定的录音设备停止采样
+*/
+JE_API void jeal_capture_device_stop(jeal_capture_device* device);
+
+/*
+jeal_capture_device_sample [基本接口]
+获取设备的采样结果
+    * 如果未能成功获取，返回false
+    * 如果 out_buffer 为空，则只获取已有的采样大小（单位为字节）
+    * 给定的缓冲区大小应当始终为单个采样大小的整数倍
+*/
+JE_API bool jeal_capture_device_sample(
+    jeal_capture_device* device,
+    void* out_buffer,
+    size_t* in_out_max_buffer_len);
+
+/*
 jeal_device_name [基本接口]
 获取某个设备的名称
-    * 仅用于调试
+    * 仅用于调试或显示用途
 */
 JE_API const char* jeal_device_name(jeal_device* device);
+
+/*
+jeal_captuer_device_name [基本接口]
+获取某个设备的名称
+    * 仅用于调试或显示用途
+*/
+JE_API const char* jeal_captuer_device_name(jeal_capture_device* device);
 
 /*
 jeal_using_device [基本接口]
@@ -3635,14 +3701,6 @@ jeal_load_buffer_from_wav [基本接口]
 从wav文件加载一个波形
 */
 JE_API jeal_buffer* jeal_load_buffer_from_wav(const char* filename);
-
-enum jeal_format
-{
-    MONO8,
-    MONO16,
-    STEREO8,
-    STEREO16,
-};
 
 /*
 jeal_create_buffer [基本接口]
