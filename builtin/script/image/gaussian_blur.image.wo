@@ -1,5 +1,8 @@
-import je::internal::graphic;
+import je;
+import je::editor::graphic;
 import pkg::math;
+
+import woo::std;
 
 public func entry(_: je::graphic::texture, _/*lbpos*/: (int, int), _/*range*/: (int, int))
     => bool

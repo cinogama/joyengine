@@ -1,4 +1,6 @@
-import je::internal::graphic;
+import je;
+import je::editor::graphic;
+
 import pkg::math;
 
 public func entry(_: je::graphic::texture, _: (int, int), _: (int, int))
@@ -16,5 +18,5 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
     => (real, real, real, real)
 {
     let (onx, ony, onz, a) = tex(t, x, y);
-    return (onx, 1. - ony, onz, a);
+    return (1. - onx, ony, onz, a);
 }

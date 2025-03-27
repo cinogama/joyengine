@@ -1,4 +1,6 @@
-import je::internal::graphic;
+import je;
+import je::editor::graphic;
+
 import pkg::math;
 
 public func entry(_: je::graphic::texture, _: (int, int), _: (int, int))
@@ -15,26 +17,12 @@ func height(color: (real, real, real, real))
 public func pixel(t: je::graphic::texture, x: int, y: int)
     => (real, real, real, real)
 {
-    let (w, h) = t->size();
+    let (onx, ony, onz, a) = tex(t, x, y);
 
-    // X 方向, 
-    let dx = height(tex(t, x + 1, y)) - height(tex(t, x - 1, y));
-    // Y 方向
-    let dy = height(tex(t, x, y + 1)) - height(tex(t, x, y - 1));
-
-    // 开始求导！
-    let adx = 1.0 / w: real;
-    let ady = 0.;
-    let adz = dx;
-
-    let bdx = 0.;
-    let bdy = 1.0 / h: real;
-    let bdz = dy;
-
-    let nx = ady * bdz - adz * bdy;
-    let ny = adz * bdx - adx * bdz;
-    let nz = adx * bdy - ady * bdx;
-
+    let nx = (onx - 0.5) * 2.;
+    let ny = (ony - 0.5) * 2.;
+    let mut nz = onz - 0.5;
+    
     let len = math::sqrt(nx * nx + ny * ny + nz * nz);
     if (len != 0.)
     {
@@ -42,10 +30,11 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
             nx / len * 0.5 + 0.5,
             ny / len * 0.5 + 0.5,
             nz / len * 0.5 + 0.5,
-            1.0,
+            a,
         );
     }
     else
-        return (0., 0., 0., 1.0);
+        return (0., 0., 0., a);
+   
 
 }

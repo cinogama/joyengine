@@ -1,4 +1,5 @@
-import je::internal::graphic;
+import je;
+import je::editor::graphic;
 
 public func entry(_: je::graphic::texture, _: (int, int), _: (int, int))
 {

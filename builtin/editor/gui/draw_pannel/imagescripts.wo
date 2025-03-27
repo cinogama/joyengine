@@ -12,40 +12,6 @@ import builtin::editor::project::main;
 
 namespace editor::gui::drawpannel
 {
-    // 此处注册一个虚拟文件，作为图像处理函数的工具库
-    do vm::create_virtual_script("je/editor/graphic.wo", @"
-// (C)Cinogama project.
-
-import je;
-
-public func tex(t: je::graphic::texture, x: int, y: int)
-{
-    return t->pix((x, y))->get_color();
-}
-
-// 需要两个函数:
-// pixel: (tex, int, int)=> (real, real, real, real)
-// entry: (tex)=> bool
-
-extern func main(target_texture: je::graphic::texture, lbpos: (int, int), range: (int, int))
-{
-    if (!entry(target_texture, lbpos, range))
-        return;
-
-    let (rw, rh) = range;
-    let (lx, ly) = lbpos;
-    let result_pixels = array::create(rw * rh, mut (0.,0.,0.,0.));
-
-    for (let mut y = 0; y < rh; y += 1)
-        for (let mut x = 0; x < rw; x += 1)
-            result_pixels[y * rw + x] = pixel(target_texture, x + lx, y + ly);
-
-    for (let mut y = 0; y < rh; y += 1)
-        for (let mut x = 0; x < rw; x += 1)
-            target_texture->pix((x + lx, y + ly))->set_color(result_pixels[y * rw + x]);
-}
-"@, false);
-
     let mut image_effect_scripts = {}: dict<string, fsys::path_t>;
 
     public func get_all_scripts_name()

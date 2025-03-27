@@ -144,7 +144,7 @@ namespace editor::gui::drawpannel
         offset_y:   mut real,
 
         tools: ToolsSetArray,
-        drawtoolname: mut string,
+        drawtoolindex: mut int,
         drawtool:   mut IDrawtool,
 
         mousedown:  mut bool,
@@ -378,7 +378,8 @@ namespace editor::gui::drawpannel
                                         {
                                             let DEFAULT_SCRIPT_SRC = 
 @"// 图像处理脚本
-import je::internal::graphic;
+import je;
+import je::editor::graphic;
 
 public func entry(_: je::graphic::texture, _/*lbpos*/: (int, int), _/*range*/: (int, int))
     => bool
@@ -433,7 +434,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                                 EndPopup();
                             }
                             Text(F"网格块大小");
-                            if (BeginChildSize("##block_size_block", 100., 40.))
+                            if (BeginChildSize("##block_size_block", 150., 40.))
                             {
                                 do InputInt2("##block_size", draw_context.block_size...)
                                     ->> func((x, y))
@@ -446,25 +447,29 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                                     ; 
                             }
                             EndChild();
-                            Text(F"当前工具: \n {draw_context.drawtoolname}");
-                            for (let (name, tool_create_method) : draw_context.tools)
+
+                            if (BeginChildSize("##tool_block", 150., 0.))
                             {
-                                if (ButtonSize(name, (100., 0.)))
+                                Text("绘制工具");
+                                let sorted_tools = draw_context.tools-> std::sort(\(lname, _), (rname, _) = lname < rname;);
+                                
+                                match (Combo(
+                                    "##draw_tool", 
+                                    sorted_tools->> \(name, _) = name;, 
+                                    option::value <| draw_context.drawtoolindex))
                                 {
-                                    // Close old tool.
+                                value(index)?
+                                {
                                     draw_context.drawtool->close();
-                                    draw_context.drawtool = tool_create_method();
-                                    draw_context.drawtoolname = name;
+                                    draw_context.drawtool = sorted_tools[index].1();
+                                    draw_context.drawtoolindex = index;
+                                }
+                                none?;
                                 }
 
-                                // Mouse hover hint
-                                if (IsItemHovered())
-                                {
-                                    BeginTooltip();
-                                    Text(name);
-                                    EndTooltip();
-                                }
+                                EndChild();
                             }
+
                             EndGroup();
 
                             SameLine();
@@ -712,7 +717,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
 
                 tools = tools,
                 drawtool = mut tools[0][1](),
-                drawtoolname = mut tools[0][0],
+                drawtoolindex = mut 0,
 
                 mousedown = mut false,
 
@@ -809,7 +814,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
 
                 tools = tools,
                 drawtool = mut tools[0][1](),
-                drawtoolname = mut tools[0][0],
+                drawtoolindex = mut 0,
 
                 mousedown = mut false,
 
