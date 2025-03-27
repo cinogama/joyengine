@@ -16,6 +16,10 @@ struct jeal_device
     const char* m_device_name;
     ALCdevice* m_openal_device;
 };
+struct jeal_capture_device : jeal_device
+{
+};
+
 struct jeal_source
 {
     ALuint m_openal_source;
@@ -34,20 +38,27 @@ struct jeal_buffer
     ALenum m_format;
 };
 
-std::shared_mutex _jeal_context_mx;
+struct _jeal_static_context
+{
+    std::shared_mutex _jeal_context_mx;
 
-std::mutex _jeal_all_devices_mx;
-jeal_device* _jeal_current_device = nullptr;
-std::vector<jeal_device*> _jeal_all_devices;
+    std::mutex _jeal_all_devices_mx;
 
-std::mutex _jeal_all_sources_mx;
-std::unordered_set<jeal_source*> _jeal_all_sources;
+    jeal_device* _jeal_current_device = nullptr;
 
-std::mutex _jeal_all_buffers_mx;
-std::unordered_set<jeal_buffer*> _jeal_all_buffers;
+    std::vector<jeal_device*> _jeal_all_devices;
+    std::vector<jeal_capture_device*> _jeal_all_capture_devices;
 
-std::atomic<float> _jeal_listener_gain = 1.0f;
-std::atomic<float> _jeal_global_volume_gain = 1.0f;
+    std::mutex _jeal_all_sources_mx;
+    std::unordered_set<jeal_source*> _jeal_all_sources;
+
+    std::mutex _jeal_all_buffers_mx;
+    std::unordered_set<jeal_buffer*> _jeal_all_buffers;
+
+    std::atomic<float> _jeal_listener_gain = 1.0f;
+    std::atomic<float> _jeal_global_volume_gain = 1.0f;
+};
+_jeal_static_context _jeal_ctx;
 
 void _jeal_update_buffer_instance(jeal_buffer* buffer)
 {
@@ -88,14 +99,14 @@ struct _jeal_global_context
 
 bool _jeal_shutdown_current_device()
 {
-    _jeal_current_device = nullptr;
+    _jeal_ctx._jeal_current_device = nullptr;
     ALCcontext* current_context = alcGetCurrentContext();
     if (current_context != nullptr)
     {
-        for (auto* src : _jeal_all_sources)
+        for (auto* src : _jeal_ctx._jeal_all_sources)
             alDeleteSources(1, &src->m_openal_source);
 
-        for (auto* buf : _jeal_all_buffers)
+        for (auto* buf : _jeal_ctx._jeal_all_buffers)
             alDeleteBuffers(1, &buf->m_openal_buffer);
 
         if (AL_FALSE == alcMakeContextCurrent(nullptr))
@@ -120,7 +131,7 @@ bool _jeal_startup_specify_device(jeal_device* device)
         return false;
     }
     jeecs::debug::loginfo("Audio device: %s, has been enabled.", device->m_device_name);
-    _jeal_current_device = device;
+    _jeal_ctx._jeal_current_device = device;
     return true;
 }
 void _jeal_store_current_context(_jeal_global_context* out_context)
@@ -142,7 +153,7 @@ void _jeal_store_current_context(_jeal_global_context* out_context)
             &out_context->listener_information.m_volume);
 
         // 遍历所有 source，获取相关信息，在创建新的上下文之后恢复
-        for (auto* source : _jeal_all_sources)
+        for (auto* source : _jeal_ctx._jeal_all_sources)
         {
             _jeal_global_context::source_restoring_information src_info;
             src_info.m_source = source;
@@ -192,7 +203,7 @@ void _jeal_store_current_context(_jeal_global_context* out_context)
 void _jeal_restore_context(const _jeal_global_context* context)
 {
     // OK, Restore buffer, listener and source.
-    for (auto* buffer : _jeal_all_buffers)
+    for (auto* buffer : _jeal_ctx._jeal_all_buffers)
         _jeal_update_buffer_instance(buffer);
 
     alListener3f(AL_POSITION,
@@ -246,12 +257,13 @@ void _jeal_restore_context(const _jeal_global_context* context)
 }
 jeal_device** _jeal_update_refetch_devices(size_t* out_len)
 {
-    auto old_devices = _jeal_all_devices;
-    _jeal_all_devices.clear();
+    auto old_devices = _jeal_ctx._jeal_all_devices;
+    _jeal_ctx._jeal_all_devices.clear();
 
     // 如果支持枚举所有设备，就把枚举所有设备并全部打开
     const char* device_names = nullptr;
 
+    // 枚举播放设备：
     if (alcIsExtensionPresent(NULL, "ALC_ENUMERATE_ALL_EXT"))
         device_names = alcGetString(NULL, ALC_ALL_DEVICES_SPECIFIER);
     else
@@ -272,35 +284,39 @@ jeal_device** _jeal_update_refetch_devices(size_t* out_len)
         {
             auto* device_instance = alcOpenDevice(current_device_name);
 
-            current_device = new jeal_device;
-            current_device->m_device_name = jeecs::basic::make_new_string(current_device_name);
-            current_device->m_openal_device = device_instance;
-
             jeecs::debug::loginfo("Found audio device: %s.", current_device_name);
-            if (current_device->m_openal_device == nullptr)
+            if (device_instance == nullptr)
                 jeecs::debug::logerr("Failed to open device: '%s'.", current_device_name);
+            else
+            {
+                current_device = new jeal_device;
+                current_device->m_device_name = jeecs::basic::make_new_string(current_device_name);
+                current_device->m_openal_device = device_instance;
+            }
         }
         else
             current_device = *fnd;
 
         static_assert(ALC_EXT_disconnect);
 
-        ALCint device_connected;
-        alcGetIntegerv(current_device->m_openal_device, ALC_CONNECTED, 1, &device_connected);
-
-        if (device_connected != ALC_FALSE)
+        if (nullptr != current_device)
         {
-            current_device->m_alive = true;
-            _jeal_all_devices.push_back(current_device);
-        }
-        else
-            jeecs::debug::logwarn(
-                "Audio device: '%s' disconnected, skip.", current_device_name);
+            ALCint device_connected;
+            alcGetIntegerv(current_device->m_openal_device, ALC_CONNECTED, 1, &device_connected);
 
+            if (device_connected != ALC_FALSE)
+            {
+                current_device->m_alive = true;
+                _jeal_ctx._jeal_all_devices.push_back(current_device);
+            }
+            else
+                jeecs::debug::logwarn(
+                    "Audio device: '%s' disconnected, skip.", current_device_name);
+        }
         current_device_name += strlen(current_device_name) + 1;
     }
 
-    if (_jeal_current_device != nullptr && _jeal_current_device->m_alive == false)
+    if (_jeal_ctx._jeal_current_device != nullptr && _jeal_ctx._jeal_current_device->m_alive == false)
         _jeal_shutdown_current_device();
 
     for (auto* closed_device : old_devices)
@@ -317,32 +333,124 @@ jeal_device** _jeal_update_refetch_devices(size_t* out_len)
         }
     }
 
-    if (_jeal_all_devices.size() == 0)
-        jeecs::debug::logerr("No audio device found.");
+    if (_jeal_ctx._jeal_all_devices.size() == 0)
+        jeecs::debug::logwarn("No audio device found.");
 
-    *out_len = _jeal_all_devices.size();
-    return _jeal_all_devices.data();
+    *out_len = _jeal_ctx._jeal_all_devices.size();
+    return _jeal_ctx._jeal_all_devices.data();
+}
+jeal_capture_device** _jeal_update_refetch_capture_devices(size_t* out_len)
+{
+    auto old_capture_devices = _jeal_ctx._jeal_all_capture_devices;
+    _jeal_ctx._jeal_all_capture_devices.clear();
+
+    // 如果支持枚举所有设备，就把枚举所有设备并全部打开
+    const char* device_names = nullptr;
+
+    // 枚举录音设备：
+    if (alcIsExtensionPresent(NULL, "ALC_ENUMERATE_ALL_EXT"))
+        device_names = alcGetString(NULL, ALC_CAPTURE_DEVICE_SPECIFIER);
+    else
+        device_names = alcGetString(NULL, ALC_CAPTURE_DEFAULT_DEVICE_SPECIFIER);
+
+    const char* current_device_name = device_names;
+
+    while (current_device_name && *current_device_name != 0)
+    {
+        jeal_capture_device* current_device = nullptr;
+
+        auto fnd = std::find_if(old_capture_devices.begin(), old_capture_devices.end(),
+            [current_device_name](jeal_device* device)
+            {
+                return 0 == strcmp(current_device_name, device->m_device_name);
+            });
+        if (fnd == old_capture_devices.end())
+        {
+            auto* device_instance = alcCaptureOpenDevice(current_device_name, 44100, AL_FORMAT_MONO16, 44100);
+
+            jeecs::debug::loginfo("Found audio record device: %s.", current_device_name);
+            if (device_instance == nullptr)
+                jeecs::debug::logerr("Failed to open record device: '%s'.", current_device_name);
+            else
+            {
+                current_device = new jeal_capture_device;
+                current_device->m_device_name = jeecs::basic::make_new_string(current_device_name);
+                current_device->m_openal_device = device_instance;
+            }
+        }
+        else
+            current_device = *fnd;
+
+        static_assert(ALC_EXT_disconnect);
+
+        if (nullptr != current_device)
+        {
+            ALCint device_connected;
+            alcGetIntegerv(current_device->m_openal_device, ALC_CONNECTED, 1, &device_connected);
+
+            if (device_connected != ALC_FALSE)
+            {
+                current_device->m_alive = true;
+                _jeal_ctx._jeal_all_capture_devices.push_back(current_device);
+            }
+            else
+                jeecs::debug::logwarn(
+                    "Audio record device: '%s' disconnected, skip.", current_device_name);
+        }
+        current_device_name += strlen(current_device_name) + 1;
+    }
+
+    for (auto* closed_device : old_capture_devices)
+    {
+        if (closed_device->m_alive == false)
+        {
+            assert(closed_device != nullptr);
+            alcCloseDevice(closed_device->m_openal_device);
+
+            jeecs::debug::loginfo("Audio record device: %s closed.", closed_device->m_device_name);
+            je_mem_free((void*)closed_device->m_device_name);
+
+            delete closed_device;
+        }
+    }
+
+    if (_jeal_ctx._jeal_all_capture_devices.size() == 0)
+        jeecs::debug::logwarn("No audio capture device found.");
+
+    *out_len = _jeal_ctx._jeal_all_capture_devices.size();
+    return _jeal_ctx._jeal_all_capture_devices.data();
+}
+void enum_all_record_device()
+{
+    const char* device_names = alcGetString(NULL, ALC_CAPTURE_DEVICE_SPECIFIER);
+    const char* current_device_name = device_names;
+
+    while (current_device_name && *current_device_name != 0)
+    {
+        jeecs::debug::loginfo("Found audio record device: %s.", current_device_name);
+        current_device_name += strlen(current_device_name) + 1;
+    }
 }
 
 jeal_device** jeal_get_all_devices(size_t* out_len)
 {
-    std::lock_guard g0(_jeal_all_devices_mx);
-    std::lock_guard g3(_jeal_context_mx);
+    std::lock_guard g0(_jeal_ctx._jeal_all_devices_mx);
+    std::lock_guard g3(_jeal_ctx._jeal_context_mx);
 
     _jeal_global_context context;
 
     bool need_try_restart_device = false;
-    if (_jeal_current_device != nullptr)
+    if (_jeal_ctx._jeal_current_device != nullptr)
     {
         _jeal_store_current_context(&context);
         need_try_restart_device = true;
     }
 
     // NOTE: 若当前设备在枚举过程中寄了，那么当前设备会被 _jeal_update_refetch_devices
-    //       负责关闭，同时_jeal_current_device被置为nullptr
+    //       负责关闭，同时_jeal_ctx._jeal_current_device被置为nullptr
     jeal_device** result = _jeal_update_refetch_devices(out_len);
 
-    if (need_try_restart_device && _jeal_current_device == nullptr)
+    if (need_try_restart_device && _jeal_ctx._jeal_current_device == nullptr)
     {
         // 之前的设备寄了，但是设备已经指定，从列表里捞一个
         if (*out_len != 0)
@@ -354,6 +462,15 @@ jeal_device** jeal_get_all_devices(size_t* out_len)
     return result;
 }
 
+jeal_capture_device** jeal_get_all_capture_devices(size_t* out_len)
+{
+    std::lock_guard g0(_jeal_ctx._jeal_all_devices_mx);
+    std::lock_guard g3(_jeal_ctx._jeal_context_mx);
+
+    jeal_capture_device** result = _jeal_update_refetch_capture_devices(out_len);
+    return result;
+}
+
 void jeal_init()
 {
     size_t device_count = 0;
@@ -361,21 +478,23 @@ void jeal_init()
     if (device_count != 0)
         // Using first device as default.
         jeal_using_device(devices[0]);
+
+    (void)jeal_get_all_capture_devices(&device_count);
 }
 
 void jeal_finish()
 {
     // 在此检查是否有尚未关闭的声源和声音缓存，按照规矩，此处应该全部清退干净
-    std::lock_guard g0(_jeal_all_devices_mx);
-    std::lock_guard g1(_jeal_all_sources_mx);
-    std::lock_guard g2(_jeal_all_buffers_mx);
-    std::lock_guard g3(_jeal_context_mx);
+    std::lock_guard g0(_jeal_ctx._jeal_all_devices_mx);
+    std::lock_guard g1(_jeal_ctx._jeal_all_sources_mx);
+    std::lock_guard g2(_jeal_ctx._jeal_all_buffers_mx);
+    std::lock_guard g3(_jeal_ctx._jeal_context_mx);
 
-    assert(_jeal_all_sources.empty());
-    assert(_jeal_all_buffers.empty());
+    assert(_jeal_ctx._jeal_all_sources.empty());
+    assert(_jeal_ctx._jeal_all_buffers.empty());
 
     _jeal_shutdown_current_device();
-    for (auto* device : _jeal_all_devices)
+    for (auto* device : _jeal_ctx._jeal_all_devices)
     {
         assert(device != nullptr);
         alcCloseDevice(device->m_openal_device);
@@ -385,12 +504,12 @@ void jeal_finish()
 
         delete device;
     }
-    _jeal_all_devices.clear();
+    _jeal_ctx._jeal_all_devices.clear();
 }
 
 const char* jeal_device_name(jeal_device* device)
 {
-    std::lock_guard g0(_jeal_all_devices_mx);
+    std::lock_guard g0(_jeal_ctx._jeal_all_devices_mx);
 
     assert(device != nullptr);
     return device->m_device_name;
@@ -398,19 +517,19 @@ const char* jeal_device_name(jeal_device* device)
 
 bool jeal_using_device(jeal_device* device)
 {
-    std::lock_guard g0(_jeal_all_devices_mx);
-    std::lock_guard g1(_jeal_all_sources_mx);
-    std::lock_guard g2(_jeal_all_buffers_mx);
+    std::lock_guard g0(_jeal_ctx._jeal_all_devices_mx);
+    std::lock_guard g1(_jeal_ctx._jeal_all_sources_mx);
+    std::lock_guard g2(_jeal_ctx._jeal_all_buffers_mx);
 
-    auto fnd = std::find(_jeal_all_devices.begin(), _jeal_all_devices.end(), device);
-    if (fnd == _jeal_all_devices.end())
+    auto fnd = std::find(_jeal_ctx._jeal_all_devices.begin(), _jeal_ctx._jeal_all_devices.end(), device);
+    if (fnd == _jeal_ctx._jeal_all_devices.end())
     {
         jeecs::debug::logerr("Trying to use invalid device: %p", device);
         return false;
     }
-    if (device != _jeal_current_device)
+    if (device != _jeal_ctx._jeal_current_device)
     {
-        std::lock_guard g3(_jeal_context_mx);
+        std::lock_guard g3(_jeal_ctx._jeal_context_mx);
 
         _jeal_global_context context;
         _jeal_store_current_context(&context);
@@ -425,10 +544,10 @@ jeal_source* jeal_open_source()
 {
     jeal_source* audio_source = new jeal_source;
 
-    std::lock_guard g1(_jeal_all_sources_mx);
-    std::shared_lock g3(_jeal_context_mx);
+    std::lock_guard g1(_jeal_ctx._jeal_all_sources_mx);
+    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
 
-    _jeal_all_sources.insert(audio_source);
+    _jeal_ctx._jeal_all_sources.insert(audio_source);
 
     _jeal_update_source(audio_source);
     audio_source->m_last_played_buffer = nullptr;
@@ -438,10 +557,10 @@ jeal_source* jeal_open_source()
 
 void jeal_close_source(jeal_source* source)
 {
-    std::lock_guard g1(_jeal_all_sources_mx);
-    std::shared_lock g3(_jeal_context_mx);
+    std::lock_guard g1(_jeal_ctx._jeal_all_sources_mx);
+    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
     {
-        _jeal_all_sources.erase(source);
+        _jeal_ctx._jeal_all_sources.erase(source);
     }
     alDeleteSources(1, &source->m_openal_source);
     delete source;
@@ -574,10 +693,10 @@ jeal_buffer* jeal_load_buffer_from_wav(const char* filename)
             audio_buffer->m_format = AL_FORMAT_STEREO16;
     }
 
-    std::lock_guard g1(_jeal_all_buffers_mx);
-    std::shared_lock g3(_jeal_context_mx);
+    std::lock_guard g1(_jeal_ctx._jeal_all_buffers_mx);
+    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
 
-    _jeal_all_buffers.insert(audio_buffer);
+    _jeal_ctx._jeal_all_buffers.insert(audio_buffer);
 
     _jeal_update_buffer_instance(audio_buffer);
 
@@ -616,10 +735,10 @@ jeal_buffer* jeal_create_buffer(
         break;
     }
 
-    std::lock_guard g1(_jeal_all_buffers_mx);
-    std::shared_lock g3(_jeal_context_mx);
+    std::lock_guard g1(_jeal_ctx._jeal_all_buffers_mx);
+    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
 
-    _jeal_all_buffers.insert(audio_buffer);
+    _jeal_ctx._jeal_all_buffers.insert(audio_buffer);
 
     _jeal_update_buffer_instance(audio_buffer);
 
@@ -628,10 +747,10 @@ jeal_buffer* jeal_create_buffer(
 
 void jeal_close_buffer(jeal_buffer* buffer)
 {
-    std::lock_guard g1(_jeal_all_buffers_mx);
-    std::shared_lock g3(_jeal_context_mx);
+    std::lock_guard g1(_jeal_ctx._jeal_all_buffers_mx);
+    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
     {
-        _jeal_all_buffers.erase(buffer);
+        _jeal_ctx._jeal_all_buffers.erase(buffer);
     }
     alDeleteBuffers(1, &buffer->m_openal_buffer);
     free((void*)buffer->m_data);
@@ -650,7 +769,7 @@ size_t jeal_buffer_byte_rate(jeal_buffer* buffer)
 
 void jeal_source_set_buffer(jeal_source* source, jeal_buffer* buffer)
 {
-    std::shared_lock g3(_jeal_context_mx);
+    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
 
     source->m_last_played_buffer = buffer;
     alSourcei(source->m_openal_source, AL_BUFFER, buffer->m_openal_buffer);
@@ -658,48 +777,48 @@ void jeal_source_set_buffer(jeal_source* source, jeal_buffer* buffer)
 
 void jeal_source_loop(jeal_source* source, bool loop)
 {
-    std::shared_lock g3(_jeal_context_mx);
+    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
 
     alSourcei(source->m_openal_source, AL_LOOPING, loop ? 1 : 0);
 }
 
 void jeal_source_play(jeal_source* source)
 {
-    std::shared_lock g3(_jeal_context_mx);
+    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
 
     alSourcePlay(source->m_openal_source);
 }
 
 void jeal_source_pause(jeal_source* source)
 {
-    std::shared_lock g3(_jeal_context_mx);
+    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
 
     alSourcePause(source->m_openal_source);
 }
 
 void jeal_source_stop(jeal_source* source)
 {
-    std::shared_lock g3(_jeal_context_mx);
+    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
 
     alSourceStop(source->m_openal_source);
 }
 
 void jeal_source_position(jeal_source* source, float x, float y, float z)
 {
-    std::shared_lock g3(_jeal_context_mx);
+    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
 
     alSource3f(source->m_openal_source, AL_POSITION, x, y, z);
 }
 void jeal_source_velocity(jeal_source* source, float x, float y, float z)
 {
-    std::shared_lock g3(_jeal_context_mx);
+    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
 
     alSource3f(source->m_openal_source, AL_VELOCITY, x, y, z);
 }
 
 size_t jeal_source_get_byte_offset(jeal_source* source)
 {
-    std::shared_lock g3(_jeal_context_mx);
+    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
 
     ALint byte_offset;
     alGetSourcei(source->m_openal_source, AL_BYTE_OFFSET, &byte_offset);
@@ -708,28 +827,28 @@ size_t jeal_source_get_byte_offset(jeal_source* source)
 
 void jeal_source_set_byte_offset(jeal_source* source, size_t byteoffset)
 {
-    std::shared_lock g3(_jeal_context_mx);
+    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
 
     alSourcei(source->m_openal_source, AL_BYTE_OFFSET, (ALint)byteoffset);
 }
 
 void jeal_source_pitch(jeal_source* source, float playspeed)
 {
-    std::shared_lock g3(_jeal_context_mx);
+    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
 
     alSourcef(source->m_openal_source, AL_PITCH, playspeed);
 }
 
 void jeal_source_volume(jeal_source* source, float volume)
 {
-    std::shared_lock g3(_jeal_context_mx);
+    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
 
     alSourcef(source->m_openal_source, AL_GAIN, volume);
 }
 
 jeal_state jeal_source_get_state(jeal_source* source)
 {
-    std::shared_lock g3(_jeal_context_mx);
+    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
 
     ALint state;
     alGetSourcei(source->m_openal_source, AL_SOURCE_STATE, &state);
@@ -748,21 +867,21 @@ jeal_state jeal_source_get_state(jeal_source* source)
 
 void jeal_listener_position(float x, float y, float z)
 {
-    std::shared_lock g3(_jeal_context_mx);
+    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
 
     alListener3f(AL_POSITION, x, y, z);
 }
 
 void jeal_listener_velocity(float x, float y, float z)
 {
-    std::shared_lock g3(_jeal_context_mx);
+    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
 
     alListener3f(AL_VELOCITY, x, y, z);
 }
 
 void jeal_listener_direction(float yaw, float pitch, float roll)
 {
-    std::shared_lock g3(_jeal_context_mx);
+    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
 
     jeecs::math::quat rot(yaw, pitch, roll);
     jeecs::math::vec3 facing = rot * jeecs::math::vec3(0.0f, 0.0f, -1.0f);
@@ -778,28 +897,28 @@ void jeal_listener_direction(float yaw, float pitch, float roll)
 
 void jeal_listener_volume(float volume)
 {
-    std::shared_lock g3(_jeal_context_mx);
+    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
 
-    _jeal_listener_gain.store(volume);
+    _jeal_ctx._jeal_listener_gain.store(volume);
 
     float global_gain;
     do
     {
-        global_gain = _jeal_global_volume_gain.load();
-        alListenerf(AL_GAIN, _jeal_listener_gain.load() * global_gain);
-    } while (_jeal_global_volume_gain.load() != global_gain);
+        global_gain = _jeal_ctx._jeal_global_volume_gain.load();
+        alListenerf(AL_GAIN, _jeal_ctx._jeal_listener_gain.load() * global_gain);
+    } while (_jeal_ctx._jeal_global_volume_gain.load() != global_gain);
 }
 
 void jeal_global_volume(float volume)
 {
-    std::shared_lock g3(_jeal_context_mx);
+    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
 
-    _jeal_global_volume_gain.store(volume);
+    _jeal_ctx._jeal_global_volume_gain.store(volume);
 
     float listener_gain;
     do
     {
-        listener_gain = _jeal_listener_gain.load();
-        alListenerf(AL_GAIN, _jeal_global_volume_gain.load() * listener_gain);
-    } while (_jeal_listener_gain.load() != listener_gain);
+        listener_gain = _jeal_ctx._jeal_listener_gain.load();
+        alListenerf(AL_GAIN, _jeal_ctx._jeal_global_volume_gain.load() * listener_gain);
+    } while (_jeal_ctx._jeal_listener_gain.load() != listener_gain);
 }
