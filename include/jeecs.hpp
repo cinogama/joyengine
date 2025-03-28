@@ -3671,12 +3671,14 @@ jeal_capture_device_sample [基本接口]
     * 如果未能成功获取，返回 false，否则返回 true
     * 给定的缓冲区大小应当始终为单个采样帧大小的整数倍
     * 如果 buffer_len 为 0，则此时 out_buffer 可以为 nullptr
+    * out_sampled_len 用于获取本次采样获取到的缓冲区大小（单位为字节）
     * out_remaining_len 用于获取在本次采样后，缓冲区内剩余的采样大小（单位为字节）
 */
 JE_API bool jeal_capture_device_sample(
     jeal_capture_device* device,
     void* out_buffer,
     size_t buffer_len,
+    size_t* out_sampled_len,
     size_t* out_remaining_len);
 
 /*
@@ -8702,7 +8704,6 @@ namespace jeecs
                 const void* data,
                 size_t length,
                 size_t samplerate,
-                size_t byterate,
                 jeal_format format)
             {
                 auto* buf = jeal_create_buffer(data, length, samplerate, format);

@@ -580,6 +580,7 @@ bool jeal_capture_device_sample(
     jeal_capture_device* device,
     void* out_buffer,
     size_t buffer_len,
+    size_t* out_sampled_len,
     size_t* out_remaining_len)
 {
     if (device->m_capturing_device == nullptr)
@@ -599,13 +600,14 @@ bool jeal_capture_device_sample(
     ALCint samples_available;
     alcGetIntegerv(device->m_capturing_device, ALC_CAPTURE_SAMPLES, 1, &samples_available);
     
-    *out_remaining_len = samples_available * device->m_size_per_sample;
-    size_t write_buffer_out_len = std::min(buffer_len, *out_remaining_len);
-
-    if (write_buffer_out_len == 0)
+    const size_t available_sample_len = (size_t)samples_available * device->m_size_per_sample;
+    *out_sampled_len = std::min(buffer_len, available_sample_len);
+    *out_remaining_len = available_sample_len - *out_sampled_len;
+    
+    if (*out_sampled_len == 0)
         return true;
 
-    alcCaptureSamples(device->m_capturing_device, out_buffer, write_buffer_out_len / device->m_size_per_sample);
+    alcCaptureSamples(device->m_capturing_device, out_buffer, *out_sampled_len / device->m_size_per_sample);
     auto device_error = alcGetError(device->m_capturing_device);
     if (device_error != AL_NO_ERROR)
     {
@@ -614,7 +616,6 @@ bool jeal_capture_device_sample(
             device->m_device_name, (int)device_error);
         return false;
     }
-    *out_remaining_len -= write_buffer_out_len;
 
     return true;
 }
@@ -625,8 +626,6 @@ void jeal_init()
     if (device_count != 0)
         // Using first device as default.
         jeal_using_device(devices[0]);
-
-    (void)jeal_refetch_all_capture_devices(&device_count);
 }
 
 void jeal_finish()
