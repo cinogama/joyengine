@@ -14,14 +14,13 @@ struct jeal_device
 {
     bool        m_alive;
     const char* m_device_name;
-    ALCdevice*  m_openal_device;
+    ALCdevice* m_openal_device;
 };
 struct jeal_capture_device
 {
     bool        m_alive;
     const char* m_device_name;
-    ALCdevice*  m_capturing_device;
-    bool        m_in_recording;
+    ALCdevice* m_capturing_device;
     size_t      m_size_per_sample;
 };
 
@@ -38,7 +37,7 @@ struct jeal_buffer
     ALuint m_openal_buffer;
     const void* m_data;
     ALsizei m_size;
-    ALsizei m_frequency;
+    ALsizei m_sample_rate;
     ALsizei m_byterate;
     ALenum m_format;
 };
@@ -75,7 +74,7 @@ void _jeal_update_buffer_instance(jeal_buffer* buffer)
         buffer->m_format,
         buffer->m_data,
         buffer->m_size,
-        buffer->m_frequency);
+        buffer->m_sample_rate);
 }
 void _jeal_update_source(jeal_source* source)
 {
@@ -188,12 +187,12 @@ void _jeal_store_current_context(_jeal_global_context* out_context)
             switch (state)
             {
             case AL_PLAYING:
-                src_info.m_state = jeal_state::PLAYING; break;
+                src_info.m_state = jeal_state::JE_AUDIO_STATE_PLAYING; break;
             case AL_PAUSED:
-                src_info.m_state = jeal_state::PAUSED; break;
+                src_info.m_state = jeal_state::JE_AUDIO_STATE_PAUSED; break;
             default:
                 assert(state == AL_INITIAL || state == AL_STOPPED);
-                src_info.m_state = jeal_state::STOPPED; break;
+                src_info.m_state = jeal_state::JE_AUDIO_STATE_STOPPED; break;
             }
             src_info.m_playing_buffer = source->m_last_played_buffer;
 
@@ -246,14 +245,14 @@ void _jeal_restore_context(const _jeal_global_context* context)
         alSourcef(src_info.m_source->m_openal_source, AL_GAIN, src_info.m_volume);
         alSourcei(src_info.m_source->m_openal_source, AL_LOOPING, src_info.m_loop != 0 ? 1 : 0);
 
-        if (src_info.m_state != jeal_state::STOPPED)
+        if (src_info.m_state != jeal_state::JE_AUDIO_STATE_STOPPED)
         {
             assert(src_info.m_playing_buffer != nullptr);
 
             alSourcei(src_info.m_source->m_openal_source, AL_BUFFER, src_info.m_playing_buffer->m_openal_buffer);
             alSourcei(src_info.m_source->m_openal_source, AL_BYTE_OFFSET, (ALint)src_info.m_offset);
 
-            if (src_info.m_state == jeal_state::PAUSED)
+            if (src_info.m_state == jeal_state::JE_AUDIO_STATE_PAUSED)
                 alSourcePause(src_info.m_source->m_openal_source);
             else
                 alSourcePlay(src_info.m_source->m_openal_source);
@@ -411,7 +410,6 @@ jeal_capture_device** _jeal_update_refetch_capture_devices(size_t* out_len)
         current_device->m_alive = true;
 
         current_device->m_capturing_device = nullptr;
-        current_device->m_in_recording = false;
         current_device->m_size_per_sample = 0;
 
         _jeal_ctx._jeal_all_capture_devices.push_back(current_device);
@@ -482,6 +480,144 @@ jeal_capture_device** jeal_refetch_all_capture_devices(size_t* out_len)
     return result;
 }
 
+ALenum _jeal_engine_format_to_al_format(jeal_format format, size_t* out_byte_per_sample)
+{
+    switch (format)
+    {
+    case JE_AUDIO_FORMAT_MONO8:
+        *out_byte_per_sample = 1;
+        return AL_FORMAT_MONO8;
+    case JE_AUDIO_FORMAT_MONO16:
+        *out_byte_per_sample = 2;
+        return AL_FORMAT_MONO16;
+    case JE_AUDIO_FORMAT_MONO32F:
+        *out_byte_per_sample = 4;
+        return AL_FORMAT_MONO_FLOAT32;
+    case JE_AUDIO_FORMAT_STEREO8:
+        *out_byte_per_sample = 2;
+        return AL_FORMAT_STEREO8;
+    case JE_AUDIO_FORMAT_STEREO16:
+        *out_byte_per_sample = 4;
+        return AL_FORMAT_STEREO16;
+    case JE_AUDIO_FORMAT_STEREO32F:
+        *out_byte_per_sample = 8;
+        return AL_FORMAT_STEREO_FLOAT32;
+    default:
+        *out_byte_per_sample = 0;
+        return AL_NONE;
+    }
+}
+size_t jeal_capture_device_open(
+    jeal_capture_device* device,
+    size_t buffer_len,
+    size_t sample_rate,
+    jeal_format format)
+{
+    size_t byte_per_sample;
+    auto al_format = _jeal_engine_format_to_al_format(format, &byte_per_sample);
+    if (al_format == AL_NONE)
+    {
+        jeecs::debug::logerr("Bad audio buffer format: %d.", (int)format);
+        return 0;
+    }
+    if (buffer_len % byte_per_sample)
+    {
+        jeecs::debug::logerr("Buffer length is not aligned.");
+        return 0;
+    }
+
+    std::lock_guard g3(_jeal_ctx._jeal_context_mx);
+
+    if (device->m_capturing_device)
+    {
+        // 捕获设备已经开启，关掉它
+        if (AL_FALSE == alcCaptureCloseDevice(device->m_capturing_device))
+        {
+            // Some error happend.
+            jeecs::debug::logerr("Failed to restart capture device `%s`: %d.",
+                device->m_device_name, (int)alcGetError(device->m_capturing_device));
+            return 0;
+        }
+
+        device->m_capturing_device = nullptr;
+    }
+
+    device->m_capturing_device = alcCaptureOpenDevice(
+        device->m_device_name,
+        sample_rate,
+        al_format,
+        buffer_len);
+    if (device->m_capturing_device == nullptr)
+    {
+        jeecs::debug::logerr("Failed to open capture device `%s`.", device->m_device_name);
+        return 0;
+    }
+    return (device->m_size_per_sample = byte_per_sample);
+}
+void jeal_capture_device_start(jeal_capture_device* device)
+{
+    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
+
+    if (device->m_capturing_device == nullptr)
+    {
+        jeecs::debug::logerr("Capture device `%s` is not opened.", device->m_device_name);
+        return;
+    }
+    alcCaptureStart(device->m_capturing_device);
+}
+void jeal_capture_device_stop(jeal_capture_device* device)
+{
+    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
+
+    if (device->m_capturing_device == nullptr)
+    {
+        jeecs::debug::logerr("Capture device `%s` is not opened.", device->m_device_name);
+        return;
+    }
+    alcCaptureStop(device->m_capturing_device);
+}
+bool jeal_capture_device_sample(
+    jeal_capture_device* device,
+    void* out_buffer,
+    size_t buffer_len,
+    size_t* out_remaining_len)
+{
+    if (device->m_capturing_device == nullptr)
+    {
+        jeecs::debug::logerr("Capture device `%s` is not opened.", device->m_device_name);
+        return false;
+    }
+
+    if (buffer_len % device->m_size_per_sample != 0)
+    {
+        jeecs::debug::logerr("Buffer length is not aligned.");
+        return false;
+    }
+
+    std::lock_guard g3(_jeal_ctx._jeal_context_mx);
+
+    ALCint samples_available;
+    alcGetIntegerv(device->m_capturing_device, ALC_CAPTURE_SAMPLES, 1, &samples_available);
+    
+    *out_remaining_len = samples_available * device->m_size_per_sample;
+    size_t write_buffer_out_len = std::min(buffer_len, *out_remaining_len);
+
+    if (write_buffer_out_len == 0)
+        return true;
+
+    alcCaptureSamples(device->m_capturing_device, out_buffer, write_buffer_out_len / device->m_size_per_sample);
+    auto device_error = alcGetError(device->m_capturing_device);
+    if (device_error != AL_NO_ERROR)
+    {
+        // Some error happend.
+        jeecs::debug::logerr("Failed to capture samples from device `%s`: %d.", 
+            device->m_device_name, (int)device_error);
+        return false;
+    }
+    *out_remaining_len -= write_buffer_out_len;
+
+    return true;
+}
 void jeal_init()
 {
     size_t device_count = 0;
@@ -696,12 +832,23 @@ jeal_buffer* jeal_load_buffer_from_wav(const char* filename)
 
     jeecs_file_close(wav_file);
 
+    if ((wave_format.byteRate !=
+        wave_format.numChannels * wave_format.bitsPerSample * wave_format.sampleRate / 8)
+        ||
+        (wave_format.blockAlign !=
+            wave_format.numChannels * wave_format.bitsPerSample / 8))
+    {
+        jeecs::debug::logerr("Invalid wav file: '%s', bad data format.", filename);
+        free(data);
+        return nullptr;
+    }
+
     //Now we set the variables that we passed in with the
     //data from the structs
     jeal_buffer* audio_buffer = new jeal_buffer;
     audio_buffer->m_data = data;
     audio_buffer->m_size = wave_data.subChunk2Size;
-    audio_buffer->m_frequency = wave_format.sampleRate;
+    audio_buffer->m_sample_rate = wave_format.sampleRate;
     audio_buffer->m_byterate = wave_format.byteRate;
     audio_buffer->m_format = AL_NONE;
 
@@ -739,10 +886,23 @@ jeal_buffer* jeal_load_buffer_from_wav(const char* filename)
 jeal_buffer* jeal_create_buffer(
     const void* buffer_data,
     size_t buffer_data_len,
-    size_t frequency,
-    size_t byterate,
+    size_t sample_rate,
     jeal_format format)
 {
+    size_t byte_per_sample;
+    auto al_format = _jeal_engine_format_to_al_format(format, &byte_per_sample);
+    if (al_format == AL_NONE)
+    {
+        jeecs::debug::logerr("Bad audio buffer format: %d.", (int)format);
+        return nullptr;
+    }
+
+    if (buffer_data_len % byte_per_sample != 0)
+    {
+        jeecs::debug::logerr("Audio buffer size is not aligned.");
+        return nullptr;
+    }
+
     jeal_buffer* audio_buffer = new jeal_buffer;
 
     void* copy_buffer_data = malloc(buffer_data_len);
@@ -750,27 +910,9 @@ jeal_buffer* jeal_create_buffer(
 
     audio_buffer->m_data = copy_buffer_data;
     audio_buffer->m_size = buffer_data_len;
-    audio_buffer->m_frequency = frequency;
-    audio_buffer->m_byterate = byterate;
-
-    switch (format)
-    {
-    case MONO8:
-        audio_buffer->m_format = AL_FORMAT_MONO8; break;
-    case MONO16:
-        audio_buffer->m_format = AL_FORMAT_MONO16; break;
-    case MONO32F:
-        audio_buffer->m_format = AL_FORMAT_MONO_FLOAT32; break;
-    case STEREO8:
-        audio_buffer->m_format = AL_FORMAT_STEREO8; break;
-    case STEREO16:
-        audio_buffer->m_format = AL_FORMAT_STEREO16; break;
-    case STEREO32F:
-        audio_buffer->m_format = AL_FORMAT_STEREO_FLOAT32; break;
-    default:
-        jeecs::debug::logerr("Bad audio buffer format: %d.", (int)format);
-        break;
-    }
+    audio_buffer->m_sample_rate = sample_rate;
+    audio_buffer->m_format = al_format;
+    audio_buffer->m_byterate = byte_per_sample * audio_buffer->m_sample_rate;
 
     std::lock_guard g1(_jeal_ctx._jeal_all_buffers_mx);
     std::shared_lock g3(_jeal_ctx._jeal_context_mx);
@@ -893,12 +1035,12 @@ jeal_state jeal_source_get_state(jeal_source* source)
     switch (state)
     {
     case AL_PLAYING:
-        return jeal_state::PLAYING;
+        return jeal_state::JE_AUDIO_STATE_PLAYING;
     case AL_PAUSED:
-        return jeal_state::PAUSED;
+        return jeal_state::JE_AUDIO_STATE_PAUSED;
     default:
         assert(state == AL_INITIAL || state == AL_STOPPED);
-        return jeal_state::STOPPED;
+        return jeal_state::JE_AUDIO_STATE_STOPPED;
     }
 }
 

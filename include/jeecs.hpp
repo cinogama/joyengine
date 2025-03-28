@@ -3603,9 +3603,9 @@ jeal_state [类型]
 */
 enum jeal_state
 {
-    STOPPED,
-    PLAYING,
-    PAUSED,
+    JE_AUDIO_STATE_STOPPED,
+    JE_AUDIO_STATE_PLAYING,
+    JE_AUDIO_STATE_PAUSED,
 };
 
 /*
@@ -3614,12 +3614,12 @@ jeal_format [类型]
 */
 enum jeal_format
 {
-    MONO8,
-    MONO16,
-    MONO32F,
-    STEREO8,
-    STEREO16,
-    STEREO32F,
+    JE_AUDIO_FORMAT_MONO8,
+    JE_AUDIO_FORMAT_MONO16,
+    JE_AUDIO_FORMAT_MONO32F,
+    JE_AUDIO_FORMAT_STEREO8,
+    JE_AUDIO_FORMAT_STEREO16,
+    JE_AUDIO_FORMAT_STEREO32F,
 };
 
 /*
@@ -3642,10 +3642,11 @@ JE_API jeal_capture_device** jeal_refetch_all_capture_devices(size_t* out_len);
 /*
 jeal_capture_device_open [基本接口]
 使用指定的参数重新初始化录音设备，以便后续的录音操作
-    * 如果未能初始化成功，返回false
+    * 如果未能初始化成功，返回0，否则返回单个采样所需的字节数
     * 如果设备此前正在进行录音操作，此操作后需要重新开始录音
+    * 给定的缓冲区大小应当始终为单个采样大小的整数倍
 */
-JE_API bool jeal_capture_device_init(
+JE_API size_t jeal_capture_device_open(
     jeal_capture_device* device,
     size_t buffer_len,
     size_t sample_rate,
@@ -3654,6 +3655,7 @@ JE_API bool jeal_capture_device_init(
 /*
 jeal_capture_device_start [基本接口]
 使指定的录音设备开始采样
+    * 开始采样的设备需要先通过 jeal_capture_device_open 初始化
 */
 JE_API void jeal_capture_device_start(jeal_capture_device* device);
 
@@ -3666,14 +3668,16 @@ JE_API void jeal_capture_device_stop(jeal_capture_device* device);
 /*
 jeal_capture_device_sample [基本接口]
 获取设备的采样结果
-    * 如果未能成功获取，返回false
-    * 如果 out_buffer 为空，则只获取已有的采样大小（单位为字节）
-    * 给定的缓冲区大小应当始终为单个采样大小的整数倍
+    * 如果未能成功获取，返回 false，否则返回 true
+    * 给定的缓冲区大小应当始终为单个采样帧大小的整数倍
+    * 如果 buffer_len 为 0，则此时 out_buffer 可以为 nullptr
+    * out_remaining_len 用于获取在本次采样后，缓冲区内剩余的采样大小（单位为字节）
 */
 JE_API bool jeal_capture_device_sample(
     jeal_capture_device* device,
     void* out_buffer,
-    size_t* in_out_max_buffer_len);
+    size_t buffer_len,
+    size_t* out_remaining_len);
 
 /*
 jeal_device_name [基本接口]
@@ -3709,8 +3713,7 @@ jeal_create_buffer [基本接口]
 JE_API jeal_buffer* jeal_create_buffer(
     const void* buffer_data,
     size_t buffer_data_len,
-    size_t frequency,
-    size_t byterate,
+    size_t sample_rate,
     jeal_format format);
 
 /*
@@ -8698,11 +8701,11 @@ namespace jeecs
             inline static basic::resource<buffer> create(
                 const void* data,
                 size_t length,
-                size_t freq,
+                size_t samplerate,
                 size_t byterate,
                 jeal_format format)
             {
-                auto* buf = jeal_create_buffer(data, length, freq, byterate, format);
+                auto* buf = jeal_create_buffer(data, length, samplerate, format);
                 if (buf != nullptr)
                     return new buffer(buf);
                 return nullptr;

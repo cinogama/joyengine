@@ -48,7 +48,7 @@ namespace jeecs
                     {
                         playing.is_playing = false;
                         playing.play = false;
-                        if (source.source->get_state() != jeal_state::STOPPED)
+                        if (source.source->get_state() != jeal_state::JE_AUDIO_STATE_STOPPED)
                             source.source->stop();
                     }
                     else
@@ -56,19 +56,19 @@ namespace jeecs
                         source.source->set_playing_buffer(playing.buffer.get_resource());
                         source.source->set_loop(playing.loop);
 
-                        if (playing.is_playing && source.source->get_state() == jeal_state::STOPPED)
+                        if (playing.is_playing && source.source->get_state() == jeal_state::JE_AUDIO_STATE_STOPPED)
                         {
                             playing.is_playing = false;
                             playing.play = false;
                         }
                         else
                         {
-                            if (source.source->get_state() != jeal_state::STOPPED)
+                            if (source.source->get_state() != jeal_state::JE_AUDIO_STATE_STOPPED)
                                 playing.is_playing = true;
 
-                            if (playing.play && source.source->get_state() != jeal_state::PLAYING)
+                            if (playing.play && source.source->get_state() != jeal_state::JE_AUDIO_STATE_PLAYING)
                                 source.source->play();
-                            else if (!playing.play && source.source->get_state() == jeal_state::PLAYING)
+                            else if (!playing.play && source.source->get_state() == jeal_state::JE_AUDIO_STATE_PLAYING)
                                 source.source->pause();
                         }
                     }
