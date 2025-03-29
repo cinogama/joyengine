@@ -97,157 +97,12 @@ namespace editor::gui::particalbaker
         }
     }
 
-    let PARTICALBAKER = 
-@"// Partical baker
-// (C)Cinogama project.
-
-import woo::std;
-import pkg::math;
-import je;
-
-using _EditorContext = struct{
-    m_last_update_time: mut real,
-    m_frame_index: mut int,
-    m_enable_bake: mut bool, 
-    
-    m_target_launch_count: mut int,
-    m_solved_launch_count: mut int,
-};
-
-using ParticalContext = struct{
-    m_frame_count : mut int,
-    m_frame_size : mut (int, int),
-    m_frame_rate : mut real,    // Sec per frame
-    m_repeat_round : mut int,
-    m_frames_caches : mut array<je::graphic::texture>,
-    m_script : void, // Not used
-    m_path : void, // Not used
-};
-
-let mut partical_context = nil->unsafe::cast:<ParticalContext>();
-let mut baking_cache = []: array<je::graphic::texture>;
-let baking_launch_record = []mut: vec<(int, int)>;
-
-public func u2p(upos: (real, real))=> (real, real)
-{
-    let (w, h) = partical_context.m_frame_size;
-    let (px, py) = upos;
-    return (px / 2. * w: real, py / 2. * h: real);
-}
-public func p2u(upos: (real, real))=> (real, real)
-{
-    let (w, h) = partical_context.m_frame_size;
-    let (ipx, ipy) = upos;
-    return (ipx / w: real * 2.0, ipy / h: real * 2.0);
-}
-public func clamp(v: real)
-{
-    if (v < 0.) return 0.;
-    else if (v > 1.) return 1.;
-    return v;
-}
-
-func draw(mut frame: int, pos: (real, real), color: (real, real, real, real))
-{
-    let fcount = partical_context.m_frame_count;
-    while (frame < 0)
-        frame += fcount;
-
-    let (w, h) = partical_context.m_frame_size;
-    let (ipx, ipy) = pos...
-        -> \px, py = (px + 1., py + 1.);
-        -> u2p...
-        -> \px, py = (math::round(px), math::round(py));
-        ;
-
-    if (ipx >= 0 && ipx < w && ipy >= 0 && ipy < h)
-    {
-        let pix = baking_cache[frame % fcount]->pix((ipx, ipy));
-        let (or, og, ob, oa) = pix->get_color();
-        let (r, g, b, a) = color;
-        let cr = clamp(r), cg = clamp(g), cb = clamp(b), ca = clamp(a);
-
-        // Mix
-        pix->set_color((
-            or * (1. - ca) + cr * ca,
-            og * (1. - ca) + cg * ca,
-            ob * (1. - ca) + cb * ca,
-            oa * (1. - ca) + ca * ca,
-        ));
-    }
-}
-public func deltatime()
-{
-    return partical_context.m_frame_rate;
-}
-public func pixelsize()
-{
-    let (w, h) = partical_context.m_frame_size;
-    return (1. / w: real, 1./ h: real);
-}
-public func launch(frame_place: int, partical_count: int)
-{
-    baking_launch_record->add((frame_place, partical_count));
-}
-func _launch(frame_place: int, partical_count: int)
-{
-    for (let mut i = 0; i < partical_count; i += 1)
-    {
-        let user_data = perparticle(frame_place);
-        for (let mut f = 0; f < partical_context.m_frame_count * partical_context.m_repeat_round; f += 1)
-        {
-            let fid = f + frame_place;
-            let poses = position(fid, user_data) as array<(real, real)>;
-            let col = color(fid, user_data) as (real, real, real, real);
-
-            // Apply!
-            for (let pos : poses)
-                draw(fid, pos, col);
-        }
-    }
-}
-extern public func _start_baking(context: ParticalContext, econtext: _EditorContext)
-{
-    partical_context = context;
-
-    for (let mut i = 0; i < partical_context.m_frame_count; i += 1)
-    {
-        using je::graphic;
-
-        let new_tex_cache = texture::create(partical_context.m_frame_size...);
-        baking_cache->unsafe::cast:<vec<texture>>->add(new_tex_cache);
-    }
-        
-
-    assert(baking_cache->len == partical_context.m_frame_count);
-
-    context.m_frames_caches = baking_cache;
-    launcher(partical_context.m_frame_count);
-    
-    econtext.m_target_launch_count = baking_launch_record->len;
-    for (let mut i = 0; i < baking_launch_record->len; i += 1)
-    {
-        _launch(baking_launch_record[i]...);
-        econtext.m_target_launch_count = baking_launch_record->len;
-        econtext.m_solved_launch_count = i + 1;
-
-        if (econtext.m_enable_bake)
-            break;
-    }
-
-    // Make sure ok, force update all texture.
-    for (let t : baking_cache)
-        t->pix((0, 0))->set_color(t->pix((0, 0))->get_color());
-}
-"@;
-    do vm::create_virtual_script("je/particalbacker.wo", PARTICALBAKER, false);
-
     let DEFAULT_SOURCE = 
 @"// Particalbaker Script
 
 import woo::std;
 import pkg::worst;
-import je::particalbacker;
+import je::editor::particalbaker;
 
 using std;
 
@@ -316,7 +171,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
 
         econtext.m_first_show = false;
 
-        match (BeginAttrOpen(F"粒子动画烘焙器 {partical_context.m_path}", 
+        match (BeginAttrOpen(F"粒子动画烘焙器 {partical_context.m_path->tostring}", 
             attrib + WindowsAttribute::ImGuiWindowFlags_MenuBar))
         {
         value(show)?
@@ -329,7 +184,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                         if (MenuItem("保存"))
                         {
                             if (!partical_context->save())
-                                jeapi::gui::form::errmsg("动画保存失败", F"动画未能保存到{partical_context.m_path}");
+                                jeapi::gui::form::errmsg("动画保存失败", F"动画未能保存到{partical_context.m_path->tostring}");
                         }
                         if (MenuItem("导出"))
                         {
@@ -383,7 +238,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                     {
                         if (MenuItem("烘焙"))
                         {
-                            match (new! vm("je/particalbacker/baker.wo", 
+                            match (new! vm(partical_context.m_path->tostring + " : script.wo", 
                                 partical_context.m_script->GetText: buffer))
                             {
                             ok(vmm)?
@@ -499,7 +354,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
 
         if (! open)
         {
-            jeapi::gui::form::ask("是否保存粒子动画", F"是否将粒子配置保存到{partical_context.m_path}",
+            jeapi::gui::form::ask("是否保存粒子动画", F"是否将粒子配置保存到{partical_context.m_path->tostring}",
                 func(ok)
                 {
                     openform->set(false);
@@ -508,7 +363,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                         
                     if (! partical_context->save())
                     {
-                        jeapi::gui::form::errmsg("动画保存失败", F"动画未能保存到{partical_context.m_path}");
+                        jeapi::gui::form::errmsg("动画保存失败", F"动画未能保存到{partical_context.m_path->tostring}");
                         openform->set(true);
                     }
                 });
