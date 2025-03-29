@@ -387,7 +387,7 @@ let Main            = uniform_texture:<texture2d>("Main", NearestSampler, 0);
 public func frag(vf: v2f)
 {
     let final_color = 
-        vec4(1.0, 0.7, 0., abs(sin(je_time->x * 2.)) * 0.5 * alphatest(texture(Main, vf.uv))->w);
+        vec4(0.1, 0.1, 0.5, abs(sin(je_time->x * 2.)) * 0.5 * alphatest(texture(Main, vf.uv))->w);
 
     return fout{
         color = final_color,
