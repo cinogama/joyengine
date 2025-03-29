@@ -283,7 +283,7 @@ namespace je
             public func button(self: gamepad, kcode: gamepadcode)=> bool;
 
             extern("libjoyecs", "wojeapi_input_gamepad_axis")
-            public func axis(self: gamepad, kcode: gamepadcode)=> (real, real);
+            public func axis(self: gamepad, kcode: joystickcode)=> (real, real);
 
             extern("libjoyecs", "wojeapi_input_gamepad_actived")
             public func actived(self: gamepad)=> option<int>;
