@@ -1057,17 +1057,15 @@ void jeal_listener_velocity(float x, float y, float z)
     alListener3f(AL_VELOCITY, x, y, z);
 }
 
-void jeal_listener_direction(float yaw, float pitch, float roll)
+void jeal_listener_direction(
+    float face_x, float face_y, float face_z,
+    float top_x, float top_y, float top_z)
 {
     std::shared_lock g3(_jeal_ctx._jeal_context_mx);
 
-    jeecs::math::quat rot(yaw, pitch, roll);
-    jeecs::math::vec3 facing = rot * jeecs::math::vec3(0.0f, 0.0f, -1.0f);
-    jeecs::math::vec3 topping = rot * jeecs::math::vec3(0.0f, 1.0f, 0.0f);
-
     float orientation[] = {
-       facing.x, facing.y, facing.z,
-       topping.x, topping.y, topping.z,
+       face_x, face_y, -face_z,
+       top_x, top_y, -top_z,
     };
 
     alListenerfv(AL_ORIENTATION, orientation);

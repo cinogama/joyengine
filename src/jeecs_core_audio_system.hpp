@@ -23,7 +23,8 @@ namespace jeecs
             selector.exec([this](Audio::Listener& listener, Transform::Translation& trans)
                 {
                     audio::listener::set_position(trans.world_position);
-                    audio::listener::set_direction(trans.world_rotation);
+                    audio::listener::set_direction(
+                        trans.world_rotation * listener.face, trans.world_rotation * listener.up);
                     audio::listener::set_volume(listener.volume);
 
                     auto velocity = (trans.world_position - listener.last_position) / std::max(deltatime(), 0.0001f);

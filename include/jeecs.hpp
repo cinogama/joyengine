@@ -3839,9 +3839,10 @@ JE_API void             jeal_listener_velocity(float x, float y, float z);
 
 /*
 jeal_listener_direction [基本接口]
-设置当前监听者的旋转方向，接收欧拉角，默认面朝z轴正方向，头顶方向为y轴正方向
+设置当前监听者的面朝方向和头顶方向，两个方向应该正交且为单位向量
 */
-JE_API void             jeal_listener_direction(float yaw, float pitch, float roll);
+JE_API void             jeal_listener_direction(
+    float face_x, float face_y, float face_z, float top_x, float top_y, float top_z);
 
 /*
 jeal_listener_volume [基本接口]
@@ -8825,10 +8826,10 @@ namespace jeecs
             {
                 jeal_listener_velocity(pos.x, pos.y, pos.z);
             }
-            inline static void set_direction(const math::quat& rot)
+            inline static void set_direction(const math::vec3& face_dir, const math::vec3& top_dir)
             {
-                math::vec3 euler = rot.euler_angle();
-                jeal_listener_direction(euler.x, euler.y, euler.z);
+                jeal_listener_direction(
+                    face_dir.x, face_dir.y, face_dir.z, top_dir.x, top_dir.y, top_dir.z);
             }
             inline static void set_volume(float volume)
             {
@@ -10321,12 +10322,16 @@ namespace jeecs
             JECS_DEFAULT_CONSTRUCTOR(Listener);
 
             float volume = 1.0f;
+            math::vec3 face = { 0,0,1 };
+            math::vec3 up = { 0,1,0 };
 
             math::vec3 last_position = {};
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &Listener::volume, "volume");
+                typing::register_member(guard, &Listener::face, "face");
+                typing::register_member(guard, &Listener::up, "up");
             }
         };
         struct Playing

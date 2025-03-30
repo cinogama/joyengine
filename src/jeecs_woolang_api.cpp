@@ -2188,8 +2188,9 @@ WO_API wo_api wojeapi_audio_listener_set_position(wo_vm vm, wo_value args)
 }
 WO_API wo_api wojeapi_audio_listener_set_direction(wo_vm vm, wo_value args)
 {
-    jeecs::math::quat rot(wo_float(args + 0), wo_float(args + 1), wo_float(args + 2));
-    jeecs::audio::listener::set_direction(rot);
+    jeecs::audio::listener::set_direction(
+        jeecs::math::vec3(wo_float(args + 0), wo_float(args + 1), wo_float(args + 2)),
+        jeecs::math::vec3(wo_float(args + 3), wo_float(args + 4), wo_float(args + 5)));
     return wo_ret_void(vm);
 }
 WO_API wo_api wojeapi_audio_listener_set_velocity(wo_vm vm, wo_value args)

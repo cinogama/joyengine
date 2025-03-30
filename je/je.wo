@@ -434,7 +434,8 @@ namespace je
             public func set_position(x: real, y: real, z: real)=> void;
 
             extern("libjoyecs", "wojeapi_audio_listener_set_direction")
-            public func set_direction(x: real, y: real, z: real)=> void;
+            public func set_direction(
+                face_x: real, face_y: real, face_z: real, up_x: real, up_y: real, up_z: real)=> void;
 
             extern("libjoyecs", "wojeapi_audio_listener_set_velocity")
             public func set_velocity(x: real, y: real, z: real)=> void;
