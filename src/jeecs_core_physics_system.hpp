@@ -433,15 +433,15 @@ namespace jeecs
                                     &shape_define,
                                     &capsule);
                                 capsulecollider->native_shape = JE_B2JShape(created_shape_id);
-
-                                // Set address of rigidbody for storing collision result.
-                                b2Shape_SetUserData(created_shape_id, &rigidbody);
                             }
                             else
                             {
                                 // Cannot be here.
                                 abort();
                             }
+
+                            // Set address of rigidbody for storing collision result.
+                            b2Shape_SetUserData(created_shape_id, &rigidbody);
 
                             if (old_shape_count != 0)
                                 b2DestroyShape(old_shape_id);
@@ -632,8 +632,8 @@ namespace jeecs
                                 contacts.data(),
                                 (int)contacts.size());
 
-                            assert((size_t)contact_count == contacts.size());
-                            (void)contact_count;
+                            assert((size_t)contact_count <= contacts.size());
+                            contacts.resize((size_t)contact_count);
 
                             for (const auto& contact : contacts)
                             {

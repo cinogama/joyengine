@@ -1136,8 +1136,7 @@ WO_API wo_api wojeapi_towoo_physics2d_collisionresult_all(wo_vm vm, wo_value arg
 
     for (auto& [rigidbody, result] : collisionResult.results)
     {
-        jeecs::towoo::ToWooBaseSystem::create_component_struct(
-            key, vm, rigidbody, jeecs::typing::type_info::of<jeecs::Physics2D::Rigidbody>());
+        wo_set_pointer(key, rigidbody);
         wo_set_struct(val, vm, 2);
 
         wo_map_set(c, key, val);

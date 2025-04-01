@@ -474,7 +474,7 @@ namespace Physics2D
         using collide_result = struct{position: vec2, normalize: vec2};
 
         extern("libjoyecs", "wojeapi_towoo_physics2d_collisionresult_all")
-            public func all(self: CollisionResult)=> dict<Rigidbody, collide_result>;
+            public func all(self: CollisionResult)=> dict<handle /* Rigidbody::__addr */, collide_result>;
 
         extern("libjoyecs", "wojeapi_towoo_physics2d_collisionresult_check")
             public func check(self: CollisionResult, another: Rigidbody)=> option<collide_result>;
