@@ -47,7 +47,7 @@ struct _jeal_static_context
     std::mutex _jeal_all_devices_mx;
 
     jeal_device* _jeal_current_device = nullptr;
-    bool _jeal_efx_enabled;
+    ALCint _jeal_efx_enabled_sends_for_each_source;
 
     std::vector<jeal_device*> _jeal_all_devices;
     std::vector<jeal_capture_device*> _jeal_all_capture_devices;
@@ -134,15 +134,32 @@ bool _jeal_startup_specify_device(jeal_device* device)
         return false;
     }
     jeecs::debug::loginfo("Audio device: %s, has been enabled.", device->m_device_name);
-    _jeal_ctx._jeal_current_device = device;
-    _jeal_ctx._jeal_efx_enabled = 
-        alcIsExtensionPresent(device->m_openal_device, ALC_EXT_EFX_NAME) != 0;
 
-    if (!_jeal_ctx._jeal_efx_enabled)
+    if (alcIsExtensionPresent(device->m_openal_device, ALC_EXT_EFX_NAME))
+    {
+        alcGetIntegerv(
+            device->m_openal_device,
+            ALC_MAX_AUXILIARY_SENDS,
+            1,
+            &_jeal_ctx._jeal_efx_enabled_sends_for_each_source);
+    }
+    else
+        _jeal_ctx._jeal_efx_enabled_sends_for_each_source = 0;
+
+    if (_jeal_ctx._jeal_efx_enabled_sends_for_each_source == 0)
         jeecs::debug::logwarn(
-            "Audio device: %s, does not support EFX.", 
+            "Audio device: %s, does not support EFX.",
             device->m_device_name);
-    
+    else
+    {
+        jeecs::debug::loginfo(
+            "Audio device: %s, support EFX with max %d sends for each source.",
+            device->m_device_name, 
+            (int)_jeal_ctx._jeal_efx_enabled_sends_for_each_source);
+    }
+
+    _jeal_ctx._jeal_current_device = device;
+
     return true;
 }
 void _jeal_store_current_context(_jeal_global_context* out_context)
