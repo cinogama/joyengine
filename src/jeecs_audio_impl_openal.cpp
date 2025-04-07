@@ -3,7 +3,6 @@
 
 #include <AL/al.h>
 #include <AL/alc.h>
-
 #include <AL/alext.h>
 
 #include <unordered_set>
@@ -45,10 +44,10 @@ struct jeal_buffer
 struct _jeal_static_context
 {
     std::shared_mutex _jeal_context_mx;
-
     std::mutex _jeal_all_devices_mx;
 
     jeal_device* _jeal_current_device = nullptr;
+    bool _jeal_efx_enabled;
 
     std::vector<jeal_device*> _jeal_all_devices;
     std::vector<jeal_capture_device*> _jeal_all_capture_devices;
@@ -136,6 +135,11 @@ bool _jeal_startup_specify_device(jeal_device* device)
     }
     jeecs::debug::loginfo("Audio device: %s, has been enabled.", device->m_device_name);
     _jeal_ctx._jeal_current_device = device;
+    _jeal_ctx._jeal_efx_enabled = alcIsExtensionPresent(device->m_openal_device, "ALC_EXT_EFX") != 0;
+
+    if (!_jeal_ctx._jeal_efx_enabled)
+        jeecs::debug::logwarn("Audio device: %s, does not support EFX.", device->m_device_name);
+    
     return true;
 }
 void _jeal_store_current_context(_jeal_global_context* out_context)
@@ -338,7 +342,8 @@ jeal_device** _jeal_update_refetch_devices(size_t* out_len)
         current_device_name += strlen(current_device_name) + 1;
     }
 
-    if (_jeal_ctx._jeal_current_device != nullptr && _jeal_ctx._jeal_current_device->m_alive == false)
+    if (_jeal_ctx._jeal_current_device != nullptr 
+        && _jeal_ctx._jeal_current_device->m_alive == false)
         _jeal_shutdown_current_device();
 
     for (auto* closed_device : old_devices)
