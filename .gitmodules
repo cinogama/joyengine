@@ -21,7 +21,7 @@
 [submodule "3rd/openal-soft"]
     path = 3rd/openal-soft
     url = https://git.cinogama.net/cinogamaproject/joyengineecs/openal-soft.git
-    branch = v1.23.1
+    tag = 1.24.3
 [submodule "3rd/opengles_env_w64"]
     path = 3rd/opengles_env_w64
     url = https://git.cinogama.net/cinogamaproject/joyengineecs/opengles_emulator_win64.git

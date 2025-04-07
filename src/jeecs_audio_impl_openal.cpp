@@ -135,10 +135,13 @@ bool _jeal_startup_specify_device(jeal_device* device)
     }
     jeecs::debug::loginfo("Audio device: %s, has been enabled.", device->m_device_name);
     _jeal_ctx._jeal_current_device = device;
-    _jeal_ctx._jeal_efx_enabled = alcIsExtensionPresent(device->m_openal_device, "ALC_EXT_EFX") != 0;
+    _jeal_ctx._jeal_efx_enabled = 
+        alcIsExtensionPresent(device->m_openal_device, ALC_EXT_EFX_NAME) != 0;
 
     if (!_jeal_ctx._jeal_efx_enabled)
-        jeecs::debug::logwarn("Audio device: %s, does not support EFX.", device->m_device_name);
+        jeecs::debug::logwarn(
+            "Audio device: %s, does not support EFX.", 
+            device->m_device_name);
     
     return true;
 }
