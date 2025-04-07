@@ -52,11 +52,6 @@ endif()
 
 ##############################################################################
 
-if(MSVC)
-    # Set char set to UTF-8 for 3rd party libraries.
-    add_compile_options("/source-charset:utf-8")
-endif()
-
 # Cannot use gles, gl or webgl at same time because of ImGUI cannot use two lib at same time.
 if ((JE4_ENABLE_OPENGL330_GAPI AND (JE4_ENABLE_OPENGLES300_GAPI OR JE4_ENABLE_WEBGL20_GAPI))
     OR (JE4_ENABLE_OPENGLES300_GAPI AND (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_WEBGL20_GAPI))
@@ -76,6 +71,11 @@ if (JE4_SPECIFY_OPENAL_LIB_NAME STREQUAL "")
 endif()
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static box2d 3.0" FORCE)
 add_subdirectory("3rd/box2c")
+
+if(MSVC)
+    # Set char set to UTF-8 for assimp.
+    add_compile_options("/source-charset:utf-8")
+endif()
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static assimp" FORCE)
 add_subdirectory("3rd/assimp")
 
