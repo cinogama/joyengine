@@ -3597,6 +3597,250 @@ struct jeal_capture_device;
 struct jeal_source;
 struct jeal_buffer;
 
+struct jeal_effect_slot;
+
+/*
+jeal_effect_reverb [类型]
+混响效果
+模拟声音在封闭空间（如房间、大厅）中的反射效果，增加空间感。
+*/
+struct jeal_effect_reverb
+{
+    float m_density;            // 密度, 默认值为 1.0，范围 [0.0, 1.0]
+    float m_diffusion;          // 扩散度, 默认值为 1.0，范围 [0.0, 1.0]
+    float m_gain;               // 增益, 默认值为 0.32，范围 [0.0, 1.0]
+    float m_gain_hf;            // 高频增益, 默认值为 0.89，范围 [0.0, 1.0]
+    float m_decay_time;         // 衰减时间, 默认值为 1.49，范围 [0.1, 20.0]
+    float m_decay_hf_ratio;     // 高频衰减比率, 默认值为 0.83，范围 [0.1, 2.0]
+    float m_reflections_gain;   // 反射增益, 默认值为 0.05，范围 [0.0, 3.16]
+    float m_reflections_delay;  // 反射延迟, 默认值为 0.007，范围 [0.0, 0.3]
+    float m_late_reverb_gain;   // 后混响增益, 默认值为 1.26，范围 [0.0, 10.0]
+    float m_late_reverb_delay;  // 后混响延迟, 默认值为 0.011，范围 [0.0, 0.1]   
+    float m_air_absorption_hf;  // 高频吸收, 默认值为 0.994，范围 [0.892, 1.0]
+    float m_room_rolloff_factor;// 房间衰减因子, 默认值为 0.0，范围 [0.0, 10.0]
+    bool m_decay_hf_limiter;    // 高频衰减限制器, 默认值为 false
+};
+
+/*
+jeal_effect_chorus [类型]
+合唱效果
+通过轻微延迟和音高变化复制原始声音，产生多个声部同时发声的合唱效果。
+*/
+struct jeal_effect_chorus
+{
+    enum wavefrom
+    {
+        SINUSOID = 0,
+        TRIANGLE = 1,
+    };
+
+    wavefrom m_waveform;    // 波形类型，默认值为 SINUSOID
+    int m_phase;            // 相位，默认值为 90，范围 [-180, 180]
+    float m_rate;           // 速率，默认值为 1.1，范围 [0.0, 10.0]
+    float m_depth;          // 深度，默认值为 0.1，范围 [0.0, 1.0]
+    float m_feedback;       // 反馈，默认值为 0.25，范围 [-1.0, 1.0]
+    float m_delay;          // 延迟，默认值为 0.16，范围 [0.0, 0.016]
+};
+
+/*
+jeal_effect_distortion [类型]
+失真效果
+故意扭曲音频波形，常见于电吉他等乐器，制造粗糙或过载的音色。
+*/
+struct jeal_effect_distortion
+{
+    float m_edge;                   // 边缘，默认值为 0.2，范围 [0.0, 1.0]
+    float m_gain;                   // 增益，默认值为 0.05，范围 [0.01, 1.0]
+    float m_lowpass_cutoff;         // 低通截止频率，默认值为 8000.0，范围 [80.0, 24000.0]
+    float m_equalizer_center_freq;  // 均衡器中心频率，默认值为 3600.0，范围 [80.0, 24000.0]
+    float m_equalizer_bandwidth;    // 均衡器带宽，默认值为 3600.0，范围 [80.0, 24000.0]
+};
+
+/*
+jeal_effect_echo [类型]
+回声效果
+模拟声音在远处反射后延迟返回的效果（如山谷中的回声）。
+*/
+struct jeal_effect_echo
+{
+    float m_delay;          // 延迟时间，默认值为 0.1，范围 [0.0, 0.207]
+    float m_lrdelay;        // 左声道延迟，默认值为 0.1，范围 [0.0, 0.404]
+    float m_damping;        // 阻尼，默认值为 0.5，范围 [0.0, 0.99]
+    float m_feedback;       // 反馈，默认值为 0.5，范围 [0.0, 1.0]
+    float m_spread;         // 扩散，默认值为 -1.0，范围 [-1.0, 1.0]
+};
+
+/*
+jeal_effect_flanger [类型]
+镶边效果
+通过混合延迟时间变化的原始信号，产生类似“喷气机”或太空感的波动音效
+*/
+struct jeal_effect_flanger
+{
+    typedef jeal_effect_chorus::wavefrom wavefrom;
+
+    wavefrom m_waveform;    // 波形类型，默认值为 TRIANGLE
+    int m_phase;            // 相位，默认值为 0，范围 [-180, 180]
+    float m_rate;           // 速率，默认值为 0.27，范围 [0.0, 10.0]
+    float m_depth;          // 深度，默认值为 1.0，范围 [0.0, 1.0]
+    float m_feedback;       // 反馈，默认值为 -0.5，范围 [-1.0, 1.0]
+    float m_delay;          // 延迟，默认值为 0.002，范围 [0.0, 0.004]
+};
+
+/*
+jeal_effect_frequency_shifter [类型]
+移频器
+改变输入信号的频率，用于创造科幻或非自然的声音效果。
+*/
+struct jeal_effect_frequency_shifter
+{
+    enum direction
+    {
+        DOWN = 0,
+        UP = 1,
+        OFF = 2,
+    };
+
+    float m_frequency;              // 频率，默认值为 0.0，范围 [0.0, 24000.0]
+    direction m_left_direction;     // 左声道方向，默认值为 DOWN
+    direction m_right_direction;    // 右声道方向，默认值为 DOWN
+};
+
+/*
+jeal_effect_vocal_morpher [类型]
+人声变声器
+调制人声的某些频段，实现机器人声、电话音效等特殊变声效果。
+*/
+struct jeal_effect_vocal_morpher
+{
+    enum phoneme
+    {
+        A = 0, E, I, O, U,
+        AA, AE, AH, AO, 
+        EH, ER, IH, IY, 
+        UH, UW,
+        B, D, F, G, J, K, L, M, N, P, R, S, T, V, Z,
+    };
+
+    enum wavefrom
+    {
+        SINUSOID = 0,
+        TRIANGLE = 1,
+        SAWTOOTH = 2,
+    };
+
+    phoneme m_phonemea;             // 元音a，默认值为 A
+    int m_phonemea_coarse_tuning;   // 元音a粗调，默认值为 0，范围 [-24, 24]
+    phoneme m_phonemeb;             // 元音b，默认值为 ER
+    int m_phonemeb_coarse_tuning;   // 元音b粗调，默认值为 0，范围 [-24, 24]
+    wavefrom m_waveform;            // 波形类型，默认值为 SINUSOID
+    float m_rate;                   // 速率，默认值为 1.41，范围 [0.0, 10.0]
+};
+
+/*
+jeal_effect_pitch_shifter [类型]
+移调器
+实时调整音高（如升高或降低音调），不改变播放速度。
+*/
+struct jeal_effect_pitch_shifter
+{
+    int m_coarse_tune;        // 粗调，默认值为 12，范围 [-12, 12]
+    int m_fine_tune;          // 细调，默认值为 0，范围 [-50, 50]
+};
+
+/*
+jeal_effect_ring_modulator [类型]
+环形调制器
+用输入信号与载波频率混合，产生金属感或机器人般的音效。
+*/
+struct jeal_effect_ring_modulator
+{
+    enum wavefrom
+    {
+        SINUSOID = 0,
+        SAWTOOTH = 1,
+        SQUARE = 2,
+    };
+
+    float m_frequency;              // 频率，默认值为 440.0，范围 [0.0, 8000.0]
+    float m_highpass_cutoff;        // 高通截止频率，默认值为 800.0，范围 [0.0, 24000.0]
+    wavefrom m_waveform;            // 波形类型，默认值为 SINUSOID
+};
+
+/*
+jeal_effect_autowah [类型]
+自动哇音效果
+根据输入音量动态调整滤波器频率，产生“哇哇”声（常用于吉他）。
+*/
+struct jeal_effect_autowah
+{
+    float m_attack_time;         // 攻击时间，默认值为 0.06，范围 [0.0001, 1.0]
+    float m_release_time;        // 释放时间，默认值为 0.06，范围 [0.0001, 1.0]
+    float m_resonance;           // 共鸣，默认值为 1000.0，范围 [2.0, 1000]
+    float m_peak_gain;           // 峰值增益，默认值为 11.22，范围 [0.00003, 31621.0]
+};
+
+/*
+jeal_effect_compressor [类型]
+压缩器
+减小音频的动态范围，使安静部分更响亮、响亮部分更柔和，平衡音量。
+*/
+struct jeal_effect_compressor
+{
+    bool m_enabled;          // 是否启用，默认值为 true
+};
+
+/*
+jeal_effect_equalizer [类型]
+均衡器
+调整音频频率响应，增强或削弱特定频段的音量，改善音质。
+*/
+struct jeal_effect_equalizer
+{
+    float m_low_gain;       // 低频增益，默认值为 1.0，范围 [0.126, 7.943]
+    float m_low_cutoff;     // 低频截止频率，默认值为 200.0，范围 [50.0, 800.0]
+    float m_mid1_gain;      // 中频1增益，默认值为 1.0，范围 [0.126, 7.943]
+    float m_mid1_center;    // 中频1中心频率，默认值为 500.0，范围 [200.0, 3000.0]
+    float m_mid1_width;     // 中频1带宽，默认值为 1.0，范围 [0.01, 1.0]
+    float m_mid2_gain;      // 中频2增益，默认值为 1.0，范围 [0.126, 7.943]
+    float m_mid2_center;    // 中频2中心频率，默认值为 3000.0，范围 [1000.0, 8000.0]
+    float m_mid2_width;     // 中频2带宽，默认值为 1.0，范围 [0.01, 1.0]
+    float m_high_gain;      // 高频增益，默认值为 1.0，范围 [0.126, 7.943]
+    float m_high_cutoff;    // 高频截止频率，默认值为 6000.0，范围 [4000.0, 160000.0]
+};
+
+/*
+jeal_effect_eaxreverb [类型]
+拓展EAX混响效果
+扩展的混响效果，支持更复杂的环境模拟（如洞穴、水下），需兼容EAX的硬件支持。
+*/
+struct jeal_effect_eaxreverb
+{
+    float m_density;            // 密度，默认值为 1.0，范围 [0.0, 1.0]
+    float m_diffusion;          // 扩散度，默认值为 1.0，范围 [0.0, 1.0]
+    float m_gain;               // 增益，默认值为 0.32，范围 [0.0, 1.0]
+    float m_gain_hf;            // 高频增益，默认值为 0.89，范围 [0.0, 1.0]
+    float m_gaim_lf;            // 低频增益，默认值为 0.0，范围 [0.0, 1.0]
+    float m_decay_time;         // 衰减时间，默认值为 1.49，范围 [0.1, 20.0]
+    float m_decay_hf_ratio;     // 高频衰减比率，默认值为 0.83，范围 [0.1, 2.0]
+    float m_decay_lf_ratio;     // 低频衰减比率，默认值为 1.0，范围 [0.1, 2.0]
+    float m_reflections_gain;   // 反射增益，默认值为 0.05，范围 [0.0, 3.16]
+    float m_reflections_delay;  // 反射延迟，默认值为 0.007，范围 [0.0, 0.3]
+    float m_reflections_pan_xyz[3]; // 反射声道位置，默认值为 {0.0, 0.0, 0.0}
+    float m_late_reverb_gain;   // 后混响增益，默认值为 1.26，范围 [0.0, 10.0]
+    float m_late_reverb_delay;  // 后混响延迟，默认值为 0.011，范围 [0.0, 0.1]
+    float m_late_reverb_pan_xyz[3]; // 后混响声道位置，默认值为 {0.0, 0.0, 0.0}
+    float m_echo_time;          // 回声时间，默认值为 0.25，范围 [0.075, 0.25]
+    float m_echo_depth;         // 回声深度，默认值为 0.0，范围 [0.0, 1.0]
+    float m_modulation_time;    // 调制时间，默认值为 0.25，范围 [0.04, 4.0]
+    float m_modulation_depth;  // 调制深度，默认值为 0.0，范围 [0.0, 1.0]
+    float m_air_absorption_hf;  // 高频吸收，默认值为 0.994，范围 [0.892, 1.0]
+    float m_hf_reference;      // 高频反射，默认值为 5000.0，范围 [1000.0, 20000.0]
+    float m_lf_reference;      // 低频反射，默认值为 250.0，范围 [20.0, 1000.0]
+    float m_room_rolloff_factor;// 房间衰减因子，默认值为 0.0，范围 [0.0, 10.0]
+    bool m_decay_hf_limiter;    // 高频衰减限制器，默认值为 true
+};
+
 /*
 jeal_state [类型]
 用于表示当前声源的播放状态，包括停止、播放中和暂停
@@ -3721,6 +3965,7 @@ JE_API jeal_buffer* jeal_create_buffer(
 /*
 jeal_close_buffer [基本接口]
 关闭一个波形
+    * 关闭波形前，应当先停止所有正在播放此波形的音源。
 */
 JE_API void             jeal_close_buffer(jeal_buffer* buffer);
 
@@ -3741,7 +3986,7 @@ JE_API size_t           jeal_buffer_byte_rate(jeal_buffer* buffer);
 jeal_open_source [基本接口]
 创建一个声源
 */
-JE_API jeal_source* jeal_open_source();
+JE_API jeal_source*     jeal_open_source();
 
 /*
 jeal_close_source [基本接口]
@@ -3854,6 +4099,80 @@ jeal_listener_volume [基本接口]
 JE_API void             jeal_listener_volume(float volume);
 
 /*
+jeal_create_effect_slot [基本接口]
+创建一个效果槽
+    * 效果槽是一个用于存放效果的容器，效果槽可以被添加到声源上
+    * 一个效果槽可以被添加到多个声源上
+    * 一个声源亦可附加多个效果槽，但通常会受到平台限制，单个声源只能附加 1-4 个效果槽
+*/
+JE_API jeal_effect_slot* jeal_create_effect_slot();
+
+/*
+jeal_effect_slot_close [基本接口]
+关闭一个效果槽
+    * 关闭效果槽时应当先解除其与声源的绑定
+*/
+JE_API void jeal_effect_slot_close(jeal_effect_slot* slot);
+
+/*
+jeal_effect_slot_gain [基本接口]
+设置效果槽的增益（权重）
+    * 增益值范围是 [0.0, 1.0]
+    * 默认值是 1.0
+*/
+JE_API void jeal_effect_slot_gain(jeal_effect_slot* slot, float gain);
+
+/*
+jeal_effect_slot_bind [基本接口]
+绑定一个效果到效果槽
+    * 效果传入 nullptr 表示解除绑定
+*/
+JE_API void jeal_effect_slot_bind(
+    jeal_effect_slot* slot, void* /* jeal_effect_.. */ effect_may_null);
+
+/*
+jeal_source_bind_effect_slot [基本接口]
+绑定一个效果槽到声源的处理流水线上
+    * 设备对单个声源的效果槽数量有限制，通常是 1-4 个
+    * 如果指示的通道超过了设备的限制，返回false
+    * 效果槽传入 nullptr 表示解除绑定
+*/
+JE_API bool jeal_source_bind_effect_slot(
+    jeal_source* source, jeal_effect_slot* slot_may_null, size_t pass);
+
+/*
+jeal_create_effect_... [基本接口]
+创建一个音频效果实例
+*/
+JE_API jeal_effect_reverb* jeal_create_effect_reverb();
+JE_API jeal_effect_chorus* jeal_create_effect_chorus();
+JE_API jeal_effect_distortion* jeal_create_effect_distortion();
+JE_API jeal_effect_echo* jeal_create_effect_echo();
+JE_API jeal_effect_flanger* jeal_create_effect_flanger();
+JE_API jeal_effect_frequency_shifter* jeal_create_effect_frequency_shifter();
+JE_API jeal_effect_vocal_morpher* jeal_create_effect_vocal_morpher();
+JE_API jeal_effect_pitch_shifter* jeal_create_effect_pitch_shifter();
+JE_API jeal_effect_ring_modulator* jeal_create_effect_ring_modulator();
+JE_API jeal_effect_autowah* jeal_create_effect_autowah();
+JE_API jeal_effect_compressor* jeal_create_effect_compressor();
+JE_API jeal_effect_equalizer* jeal_create_effect_equalizer();
+JE_API jeal_effect_eaxreverb* jeal_create_effect_eaxreverb();
+
+/*
+jeal_effect_close [基本接口]
+关闭一个音频效果实例
+    * 关闭效果实例前，应当先解除其与效果槽的绑定。
+*/
+JE_API void jeal_effect_close(void* /* jeal_effect_.. */ effect);
+
+/*
+jeal_effect_update [基本接口]
+更新一个音频效果实例
+    * 在更新了效果的参数后，调用此函数来更新效果实例。
+*/
+JE_API void jeal_effect_update(void* /* jeal_effect_.. */ effect);
+
+/*
 jeal_global_volume_scale [基本接口]
 设置全局声音播放系数，默认是 1.0，与jeal_listener_volume设置的值相乘之后
 得到最终的音量大小
@@ -3870,7 +4189,7 @@ JE_API void             jeal_global_volume(float volume);
 je_main_script_entry [基本接口]
 运行入口脚本
     * 阻塞直到入口脚本运行完毕
-    * 若 include_editor_script = true，则尝试带缓存地加载 @/builtin/editor/main.wo
+    * 尝试带缓存地加载 @/builtin/editor/main.wo
     * 如果未能加载 @/builtin/editor/main.wo，则尝试 @/builtin/main.wo
 */
 JE_API bool             je_main_script_entry();

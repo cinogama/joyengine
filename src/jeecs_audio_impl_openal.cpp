@@ -23,6 +23,12 @@ struct jeal_capture_device
     size_t      m_size_per_sample;
 };
 
+struct jeal_effect
+{
+    ALenum m_effect_kind;
+    ALuint m_effect_instance;
+};
+
 struct jeal_source
 {
     ALuint m_openal_source;
@@ -58,10 +64,18 @@ struct _jeal_static_context
     std::mutex _jeal_all_buffers_mx;
     std::unordered_set<jeal_buffer*> _jeal_all_buffers;
 
+    std::mutex _jeal_all_effects_mx;
+    std::unordered_map<void*, jeal_effect*> _jeal_all_effects;
+
     std::atomic<float> _jeal_listener_gain = 1.0f;
     std::atomic<float> _jeal_global_volume_gain = 1.0f;
 };
 _jeal_static_context _jeal_ctx;
+
+LPALGENEFFECTS impl_alGenEffects = nullptr;
+LPALDELETEEFFECTS impl_alDeleteEffects = nullptr;
+
+////////////////////////////////////////////////////////
 
 void _jeal_update_buffer_instance(jeal_buffer* buffer)
 {
@@ -74,6 +88,32 @@ void _jeal_update_buffer_instance(jeal_buffer* buffer)
         buffer->m_data,
         buffer->m_size,
         buffer->m_sample_rate);
+}
+void _jeal_create_effect_instance(void* instance, ALenum effect_type)
+{
+    jeal_effect* effect = nullptr;
+    if (_jeal_ctx._jeal_efx_enabled_sends_for_each_source > 0)
+    {
+        effect = new jeal_effect();
+
+        effect->m_effect_kind = AL_EFFECT_REVERB;
+        impl_alGenEffects(1, &effect->m_effect_instance);
+    }
+    _jeal_ctx._jeal_all_effects.insert(std::make_pair(instance, effect));
+}
+
+void _jeal_update_effect_instance(void* effect)
+{
+    // TODO;
+    auto& instance = _jeal_ctx._jeal_all_effects[effect];
+
+    if (instance == nullptr)
+        _jeal_create_effect_instance(FUCK TYPE IS MISSING TODO);
+
+    if (_jeal_ctx._jeal_efx_enabled_sends_for_each_source != 0)
+    {
+       
+    }
 }
 void _jeal_update_source(jeal_source* source)
 {
@@ -95,10 +135,30 @@ struct _jeal_global_context
         ALint m_loop;
     };
     source_restoring_information listener_information = {};
-    float listener_orientation[6] = { 0.0f,0.0f,1.0f, 0.0f,1.0f,0.0f };
+    float listener_orientation[6] = { 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f };
 
     std::vector<source_restoring_information> sources_information;
 };
+
+void _jeal_effect_drop(void* effect)
+{
+    auto fnd = _jeal_ctx._jeal_all_effects.find(effect);
+    if (fnd == _jeal_ctx._jeal_all_effects.end())
+    {
+        jeecs::debug::logfatal("Trying to close invalid effect: %p", effect);
+        return;
+    }
+
+    if (_jeal_ctx._jeal_efx_enabled_sends_for_each_source != 0)
+    {
+        assert(fnd->second != nullptr);
+
+        impl_alDeleteEffects(1, &fnd->second->m_effect_instance);
+        delete fnd->second;
+
+        fnd->second = nullptr;
+    }
+}
 
 bool _jeal_shutdown_current_device()
 {
@@ -112,6 +172,9 @@ bool _jeal_shutdown_current_device()
         for (auto* buf : _jeal_ctx._jeal_all_buffers)
             alDeleteBuffers(1, &buf->m_openal_buffer);
 
+        for (auto& [effect, instance] : _jeal_ctx._jeal_all_effects)
+            _jeal_effect_drop(effect);
+        
         if (AL_FALSE == alcMakeContextCurrent(nullptr))
             jeecs::debug::logerr("Failed to clear current context.");
         alcDestroyContext(current_context);
@@ -154,8 +217,19 @@ bool _jeal_startup_specify_device(jeal_device* device)
     {
         jeecs::debug::loginfo(
             "Audio device: %s, support EFX with max %d sends for each source.",
-            device->m_device_name, 
+            device->m_device_name,
             (int)_jeal_ctx._jeal_efx_enabled_sends_for_each_source);
+
+#define JEAL_LOAD_FUNC(name) \
+        impl_##name = (decltype(impl_##name))alcGetProcAddress(device->m_openal_device, #name); \
+        if (impl_##name == nullptr) \
+        { \
+            jeecs::debug::logfatal("Failed to load al function: %s.", #name); \
+            return false; \
+        }
+
+        JEAL_LOAD_FUNC(alGenEffects);
+        JEAL_LOAD_FUNC(alDeleteEffects);
     }
 
     _jeal_ctx._jeal_current_device = device;
@@ -233,6 +307,9 @@ void _jeal_restore_context(const _jeal_global_context* context)
     // OK, Restore buffer, listener and source.
     for (auto* buffer : _jeal_ctx._jeal_all_buffers)
         _jeal_update_buffer_instance(buffer);
+
+    for (auto& [effect, _] : _jeal_ctx._jeal_all_effects)
+        _jeal_update_effect_instance(effect);
 
     alListener3f(AL_POSITION,
         context->listener_information.m_position.x,
@@ -362,7 +439,7 @@ jeal_device** _jeal_update_refetch_devices(size_t* out_len)
         current_device_name += strlen(current_device_name) + 1;
     }
 
-    if (_jeal_ctx._jeal_current_device != nullptr 
+    if (_jeal_ctx._jeal_current_device != nullptr
         && _jeal_ctx._jeal_current_device->m_alive == false)
         _jeal_shutdown_current_device();
 
@@ -469,7 +546,7 @@ jeal_capture_device** _jeal_update_refetch_capture_devices(size_t* out_len)
 jeal_device** jeal_get_all_devices(size_t* out_len)
 {
     std::lock_guard g0(_jeal_ctx._jeal_all_devices_mx);
-    std::lock_guard g3(_jeal_ctx._jeal_context_mx);
+    std::lock_guard g9(_jeal_ctx._jeal_context_mx);
 
     _jeal_global_context context;
 
@@ -499,7 +576,7 @@ jeal_device** jeal_get_all_devices(size_t* out_len)
 jeal_capture_device** jeal_refetch_all_capture_devices(size_t* out_len)
 {
     std::lock_guard g0(_jeal_ctx._jeal_all_devices_mx);
-    std::lock_guard g3(_jeal_ctx._jeal_context_mx);
+    std::lock_guard g9(_jeal_ctx._jeal_context_mx);
 
     jeal_capture_device** result = _jeal_update_refetch_capture_devices(out_len);
     return result;
@@ -551,7 +628,7 @@ size_t jeal_capture_device_open(
         return 0;
     }
 
-    std::lock_guard g3(_jeal_ctx._jeal_context_mx);
+    std::lock_guard g9(_jeal_ctx._jeal_context_mx);
 
     if (device->m_capturing_device)
     {
@@ -581,7 +658,7 @@ size_t jeal_capture_device_open(
 }
 void jeal_capture_device_start(jeal_capture_device* device)
 {
-    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
 
     if (device->m_capturing_device == nullptr)
     {
@@ -592,7 +669,7 @@ void jeal_capture_device_start(jeal_capture_device* device)
 }
 void jeal_capture_device_stop(jeal_capture_device* device)
 {
-    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
 
     if (device->m_capturing_device == nullptr)
     {
@@ -620,15 +697,15 @@ bool jeal_capture_device_sample(
         return false;
     }
 
-    std::lock_guard g3(_jeal_ctx._jeal_context_mx);
+    std::lock_guard g9(_jeal_ctx._jeal_context_mx);
 
     ALCint samples_available;
     alcGetIntegerv(device->m_capturing_device, ALC_CAPTURE_SAMPLES, 1, &samples_available);
-    
+
     const size_t available_sample_len = (size_t)samples_available * device->m_size_per_sample;
     *out_sampled_len = std::min(buffer_len, available_sample_len);
     *out_remaining_len = available_sample_len - *out_sampled_len;
-    
+
     if (*out_sampled_len == 0)
         return true;
 
@@ -637,7 +714,7 @@ bool jeal_capture_device_sample(
     if (device_error != AL_NO_ERROR)
     {
         // Some error happend.
-        jeecs::debug::logerr("Failed to capture samples from device `%s`: %d.", 
+        jeecs::debug::logerr("Failed to capture samples from device `%s`: %d.",
             device->m_device_name, (int)device_error);
         return false;
     }
@@ -659,12 +736,26 @@ void jeal_finish()
     std::lock_guard g0(_jeal_ctx._jeal_all_devices_mx);
     std::lock_guard g1(_jeal_ctx._jeal_all_sources_mx);
     std::lock_guard g2(_jeal_ctx._jeal_all_buffers_mx);
-    std::lock_guard g3(_jeal_ctx._jeal_context_mx);
+    std::lock_guard g9(_jeal_ctx._jeal_context_mx);
 
     assert(_jeal_ctx._jeal_all_sources.empty());
     assert(_jeal_ctx._jeal_all_buffers.empty());
 
     _jeal_shutdown_current_device();
+    for (auto* source : _jeal_ctx._jeal_all_sources)
+    {
+        delete source;
+    }
+    for (auto* buffer : _jeal_ctx._jeal_all_buffers)
+    {
+        delete buffer;
+    }
+    for (auto& [effect, instance] : _jeal_ctx._jeal_all_effects)
+    {
+        assert(instance == nullptr);
+
+        free(effect);
+    }
     for (auto* device : _jeal_ctx._jeal_all_devices)
     {
         assert(device != nullptr);
@@ -718,7 +809,7 @@ bool jeal_using_device(jeal_device* device)
     }
     if (device != _jeal_ctx._jeal_current_device)
     {
-        std::lock_guard g3(_jeal_ctx._jeal_context_mx);
+        std::lock_guard g9(_jeal_ctx._jeal_context_mx);
 
         _jeal_global_context context;
         _jeal_store_current_context(&context);
@@ -734,7 +825,7 @@ jeal_source* jeal_open_source()
     jeal_source* audio_source = new jeal_source;
 
     std::lock_guard g1(_jeal_ctx._jeal_all_sources_mx);
-    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
 
     _jeal_ctx._jeal_all_sources.insert(audio_source);
 
@@ -747,7 +838,7 @@ jeal_source* jeal_open_source()
 void jeal_close_source(jeal_source* source)
 {
     std::lock_guard g1(_jeal_ctx._jeal_all_sources_mx);
-    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
     {
         _jeal_ctx._jeal_all_sources.erase(source);
     }
@@ -898,7 +989,7 @@ jeal_buffer* jeal_load_buffer_from_wav(const char* filename)
     }
 
     std::lock_guard g1(_jeal_ctx._jeal_all_buffers_mx);
-    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
 
     _jeal_ctx._jeal_all_buffers.insert(audio_buffer);
 
@@ -939,7 +1030,7 @@ jeal_buffer* jeal_create_buffer(
     audio_buffer->m_byterate = byte_per_sample * audio_buffer->m_sample_rate;
 
     std::lock_guard g1(_jeal_ctx._jeal_all_buffers_mx);
-    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
 
     _jeal_ctx._jeal_all_buffers.insert(audio_buffer);
 
@@ -951,7 +1042,7 @@ jeal_buffer* jeal_create_buffer(
 void jeal_close_buffer(jeal_buffer* buffer)
 {
     std::lock_guard g1(_jeal_ctx._jeal_all_buffers_mx);
-    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
     {
         _jeal_ctx._jeal_all_buffers.erase(buffer);
     }
@@ -972,7 +1063,7 @@ size_t jeal_buffer_byte_rate(jeal_buffer* buffer)
 
 void jeal_source_set_buffer(jeal_source* source, jeal_buffer* buffer)
 {
-    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
 
     source->m_last_played_buffer = buffer;
     alSourcei(source->m_openal_source, AL_BUFFER, buffer->m_openal_buffer);
@@ -980,48 +1071,48 @@ void jeal_source_set_buffer(jeal_source* source, jeal_buffer* buffer)
 
 void jeal_source_loop(jeal_source* source, bool loop)
 {
-    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
 
     alSourcei(source->m_openal_source, AL_LOOPING, loop ? 1 : 0);
 }
 
 void jeal_source_play(jeal_source* source)
 {
-    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
 
     alSourcePlay(source->m_openal_source);
 }
 
 void jeal_source_pause(jeal_source* source)
 {
-    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
 
     alSourcePause(source->m_openal_source);
 }
 
 void jeal_source_stop(jeal_source* source)
 {
-    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
 
     alSourceStop(source->m_openal_source);
 }
 
 void jeal_source_position(jeal_source* source, float x, float y, float z)
 {
-    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
 
-    alSource3f(source->m_openal_source, AL_POSITION, x, y, z);
+    alSource3f(source->m_openal_source, AL_POSITION, x, y, -z);
 }
 void jeal_source_velocity(jeal_source* source, float x, float y, float z)
 {
-    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
 
-    alSource3f(source->m_openal_source, AL_VELOCITY, x, y, z);
+    alSource3f(source->m_openal_source, AL_VELOCITY, x, y, -z);
 }
 
 size_t jeal_source_get_byte_offset(jeal_source* source)
 {
-    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
 
     ALint byte_offset;
     alGetSourcei(source->m_openal_source, AL_BYTE_OFFSET, &byte_offset);
@@ -1030,28 +1121,28 @@ size_t jeal_source_get_byte_offset(jeal_source* source)
 
 void jeal_source_set_byte_offset(jeal_source* source, size_t byteoffset)
 {
-    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
 
     alSourcei(source->m_openal_source, AL_BYTE_OFFSET, (ALint)byteoffset);
 }
 
 void jeal_source_pitch(jeal_source* source, float playspeed)
 {
-    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
 
     alSourcef(source->m_openal_source, AL_PITCH, playspeed);
 }
 
 void jeal_source_volume(jeal_source* source, float volume)
 {
-    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
 
     alSourcef(source->m_openal_source, AL_GAIN, volume);
 }
 
 jeal_state jeal_source_get_state(jeal_source* source)
 {
-    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
 
     ALint state;
     alGetSourcei(source->m_openal_source, AL_SOURCE_STATE, &state);
@@ -1070,23 +1161,23 @@ jeal_state jeal_source_get_state(jeal_source* source)
 
 void jeal_listener_position(float x, float y, float z)
 {
-    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
 
-    alListener3f(AL_POSITION, x, y, z);
+    alListener3f(AL_POSITION, x, y, -z);
 }
 
 void jeal_listener_velocity(float x, float y, float z)
 {
-    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
 
-    alListener3f(AL_VELOCITY, x, y, z);
+    alListener3f(AL_VELOCITY, x, y, -z);
 }
 
 void jeal_listener_direction(
     float face_x, float face_y, float face_z,
     float top_x, float top_y, float top_z)
 {
-    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
 
     float orientation[] = {
        face_x, face_y, -face_z,
@@ -1098,7 +1189,7 @@ void jeal_listener_direction(
 
 void jeal_listener_volume(float volume)
 {
-    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
 
     _jeal_ctx._jeal_listener_gain.store(volume);
 
@@ -1112,7 +1203,7 @@ void jeal_listener_volume(float volume)
 
 void jeal_global_volume(float volume)
 {
-    std::shared_lock g3(_jeal_ctx._jeal_context_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
 
     _jeal_ctx._jeal_global_volume_gain.store(volume);
 
@@ -1122,4 +1213,44 @@ void jeal_global_volume(float volume)
         listener_gain = _jeal_ctx._jeal_listener_gain.load();
         alListenerf(AL_GAIN, _jeal_ctx._jeal_global_volume_gain.load() * listener_gain);
     } while (_jeal_ctx._jeal_listener_gain.load() != listener_gain);
+}
+
+void jeal_effect_close(void* effect)
+{
+    std::lock_guard g3(_jeal_ctx._jeal_all_effects_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
+
+    _jeal_effect_drop(effect);
+
+    assert(_jeal_ctx._jeal_all_effects[effect] == nullptr);
+
+    free(effect);
+    _jeal_ctx._jeal_all_effects.erase(effect);
+}
+
+jeal_effect_reverb* jeal_create_effect_reverb()
+{
+    jeal_effect_reverb* instance = (jeal_effect_reverb*)malloc(sizeof(jeal_effect_reverb));
+    assert(instance != nullptr);
+
+    instance->m_density = AL_REVERB_DEFAULT_DENSITY;
+    instance->m_diffusion = AL_REVERB_DEFAULT_DIFFUSION;
+    instance->m_gain = AL_REVERB_DEFAULT_GAIN;
+    instance->m_gain_hf = AL_REVERB_DEFAULT_GAINHF;
+    instance->m_decay_time = AL_REVERB_DEFAULT_DECAY_TIME;
+    instance->m_decay_hf_ratio = AL_REVERB_DEFAULT_DECAY_HFRATIO;
+    instance->m_reflections_gain = AL_REVERB_DEFAULT_REFLECTIONS_GAIN;
+    instance->m_reflections_delay = AL_REVERB_DEFAULT_REFLECTIONS_DELAY;
+    instance->m_late_reverb_gain = AL_REVERB_DEFAULT_LATE_REVERB_GAIN;
+    instance->m_late_reverb_delay = AL_REVERB_DEFAULT_LATE_REVERB_DELAY;
+    instance->m_air_absorption_hf = AL_REVERB_DEFAULT_AIR_ABSORPTION_GAINHF;
+    instance->m_room_rolloff_factor = AL_REVERB_DEFAULT_ROOM_ROLLOFF_FACTOR;
+    instance->m_decay_hf_limiter = (bool)AL_REVERB_DEFAULT_DECAY_HFLIMIT;
+
+    std::lock_guard g3(_jeal_ctx._jeal_all_effects_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
+
+    _jeal_create_effect_instance(instance, AL_EFFECT_REVERB);
+
+    return instance;
 }
