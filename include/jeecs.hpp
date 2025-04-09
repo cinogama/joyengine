@@ -3616,9 +3616,9 @@ struct jeal_effect_reverb
     float m_reflections_delay;  // 反射延迟, 默认值为 0.007，范围 [0.0, 0.3]
     float m_late_reverb_gain;   // 后混响增益, 默认值为 1.26，范围 [0.0, 10.0]
     float m_late_reverb_delay;  // 后混响延迟, 默认值为 0.011，范围 [0.0, 0.1]   
-    float m_air_absorption_hf;  // 高频吸收, 默认值为 0.994，范围 [0.892, 1.0]
+    float m_air_absorption_gain_hf;  // 高频吸收, 默认值为 0.994，范围 [0.892, 1.0]
     float m_room_rolloff_factor;// 房间衰减因子, 默认值为 0.0，范围 [0.0, 10.0]
-    bool m_decay_hf_limiter;    // 高频衰减限制器, 默认值为 false
+    bool m_decay_hf_limit;    // 高频衰减限制器, 默认值为 false
 };
 
 /*

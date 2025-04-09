@@ -26,6 +26,8 @@ struct jeal_capture_device
 struct jeal_effect
 {
     ALenum m_effect_kind;
+
+    bool m_effect_instance_exist;
     ALuint m_effect_instance;
 };
 
@@ -55,6 +57,12 @@ struct _jeal_static_context
     jeal_device* _jeal_current_device = nullptr;
     ALCint _jeal_efx_enabled_sends_for_each_source;
 
+    LPALGENEFFECTS impl_alGenEffects = nullptr;
+    LPALDELETEEFFECTS impl_alDeleteEffects = nullptr;
+    LPALEFFECTI impl_alEffecti = nullptr;
+    LPALEFFECTF impl_alEffectf = nullptr;
+    LPALEFFECTFV impl_alEffectfv = nullptr;
+
     std::vector<jeal_device*> _jeal_all_devices;
     std::vector<jeal_capture_device*> _jeal_all_capture_devices;
 
@@ -65,15 +73,13 @@ struct _jeal_static_context
     std::unordered_set<jeal_buffer*> _jeal_all_buffers;
 
     std::mutex _jeal_all_effects_mx;
-    std::unordered_map<void*, jeal_effect*> _jeal_all_effects;
+    std::unordered_map<void*, jeal_effect> _jeal_all_effects;
 
     std::atomic<float> _jeal_listener_gain = 1.0f;
     std::atomic<float> _jeal_global_volume_gain = 1.0f;
 };
 _jeal_static_context _jeal_ctx;
 
-LPALGENEFFECTS impl_alGenEffects = nullptr;
-LPALDELETEEFFECTS impl_alDeleteEffects = nullptr;
 
 ////////////////////////////////////////////////////////
 
@@ -91,28 +97,56 @@ void _jeal_update_buffer_instance(jeal_buffer* buffer)
 }
 void _jeal_create_effect_instance(void* instance, ALenum effect_type)
 {
-    jeal_effect* effect = nullptr;
+    auto& effect = _jeal_ctx._jeal_all_effects[instance];
     if (_jeal_ctx._jeal_efx_enabled_sends_for_each_source > 0)
     {
-        effect = new jeal_effect();
+        effect.m_effect_kind = AL_EFFECT_REVERB;
 
-        effect->m_effect_kind = AL_EFFECT_REVERB;
-        impl_alGenEffects(1, &effect->m_effect_instance);
+        _jeal_ctx.impl_alGenEffects(1, &effect.m_effect_instance);
+        if (effect.m_effect_instance == 0)
+        {
+            jeecs::debug::logfatal("Failed to create effect instance.");
+            return;
+        }
+
+        _jeal_ctx.impl_alEffecti(effect.m_effect_instance, AL_EFFECT_TYPE, effect.m_effect_kind);
+
+        effect.m_effect_instance_exist = true;
     }
-    _jeal_ctx._jeal_all_effects.insert(std::make_pair(instance, effect));
 }
 
-void _jeal_update_effect_instance(void* effect)
+void _jeal_update_effect_instance(void* instance, jeal_effect* effect)
 {
-    // TODO;
-    auto& instance = _jeal_ctx._jeal_all_effects[effect];
-
-    if (instance == nullptr)
-        _jeal_create_effect_instance(FUCK TYPE IS MISSING TODO);
-
     if (_jeal_ctx._jeal_efx_enabled_sends_for_each_source != 0)
     {
-       
+        assert(effect->m_effect_instance_exist);
+        switch (effect->m_effect_kind)
+        {
+        case AL_EFFECT_REVERB:
+        {
+            const jeal_effect_reverb* instance_data = 
+                reinterpret_cast<jeal_effect_reverb*>(instance);
+
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_REVERB_DENSITY, instance_data->m_density);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_REVERB_DIFFUSION, instance_data->m_diffusion);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_REVERB_GAIN, instance_data->m_gain);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_REVERB_GAINHF, instance_data->m_gain_hf);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_REVERB_DECAY_TIME, instance_data->m_decay_time);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_REVERB_DECAY_HFRATIO, instance_data->m_decay_hf_ratio);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_REVERB_REFLECTIONS_GAIN, instance_data->m_reflections_gain);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_REVERB_REFLECTIONS_DELAY, instance_data->m_reflections_delay);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_REVERB_LATE_REVERB_GAIN, instance_data->m_late_reverb_gain);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_REVERB_LATE_REVERB_DELAY, instance_data->m_late_reverb_delay);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_REVERB_AIR_ABSORPTION_GAINHF, instance_data->m_air_absorption_gain_hf);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_REVERB_ROOM_ROLLOFF_FACTOR, instance_data->m_room_rolloff_factor);
+            _jeal_ctx.impl_alEffecti(effect->m_effect_instance, AL_REVERB_DECAY_HFLIMIT, instance_data->m_decay_hf_limit ? AL_TRUE : AL_FALSE);
+
+            break;
+        }
+        default:
+            jeecs::debug::logfatal("Unknown audio effect: %d when trying to update.",
+                (int)effect->m_effect_kind);
+        }
     }
 }
 void _jeal_update_source(jeal_source* source)
@@ -140,23 +174,22 @@ struct _jeal_global_context
     std::vector<source_restoring_information> sources_information;
 };
 
-void _jeal_effect_drop(void* effect)
+void _jeal_effect_drop(void* instance)
 {
-    auto fnd = _jeal_ctx._jeal_all_effects.find(effect);
+    auto fnd = _jeal_ctx._jeal_all_effects.find(instance);
     if (fnd == _jeal_ctx._jeal_all_effects.end())
     {
-        jeecs::debug::logfatal("Trying to close invalid effect: %p", effect);
+        jeecs::debug::logfatal("Trying to close invalid effect: %p", instance);
         return;
     }
 
     if (_jeal_ctx._jeal_efx_enabled_sends_for_each_source != 0)
     {
-        assert(fnd->second != nullptr);
+        auto& effect = fnd->second;
+        assert(effect.m_effect_instance_exist);
 
-        impl_alDeleteEffects(1, &fnd->second->m_effect_instance);
-        delete fnd->second;
-
-        fnd->second = nullptr;
+        _jeal_ctx.impl_alDeleteEffects(1, &effect.m_effect_instance);
+        effect.m_effect_instance_exist = false;
     }
 }
 
@@ -172,8 +205,8 @@ bool _jeal_shutdown_current_device()
         for (auto* buf : _jeal_ctx._jeal_all_buffers)
             alDeleteBuffers(1, &buf->m_openal_buffer);
 
-        for (auto& [effect, instance] : _jeal_ctx._jeal_all_effects)
-            _jeal_effect_drop(effect);
+        for (auto& [instance, effect] : _jeal_ctx._jeal_all_effects)
+            _jeal_effect_drop(instance);
         
         if (AL_FALSE == alcMakeContextCurrent(nullptr))
             jeecs::debug::logerr("Failed to clear current context.");
@@ -221,8 +254,8 @@ bool _jeal_startup_specify_device(jeal_device* device)
             (int)_jeal_ctx._jeal_efx_enabled_sends_for_each_source);
 
 #define JEAL_LOAD_FUNC(name) \
-        impl_##name = (decltype(impl_##name))alcGetProcAddress(device->m_openal_device, #name); \
-        if (impl_##name == nullptr) \
+        _jeal_ctx.impl_##name = (decltype(_jeal_ctx.impl_##name))alcGetProcAddress(device->m_openal_device, #name); \
+        if (_jeal_ctx.impl_##name == nullptr) \
         { \
             jeecs::debug::logfatal("Failed to load al function: %s.", #name); \
             return false; \
@@ -230,6 +263,9 @@ bool _jeal_startup_specify_device(jeal_device* device)
 
         JEAL_LOAD_FUNC(alGenEffects);
         JEAL_LOAD_FUNC(alDeleteEffects);
+        JEAL_LOAD_FUNC(alEffecti);
+        JEAL_LOAD_FUNC(alEffectf);
+        JEAL_LOAD_FUNC(alEffectfv);
     }
 
     _jeal_ctx._jeal_current_device = device;
@@ -308,8 +344,13 @@ void _jeal_restore_context(const _jeal_global_context* context)
     for (auto* buffer : _jeal_ctx._jeal_all_buffers)
         _jeal_update_buffer_instance(buffer);
 
-    for (auto& [effect, _] : _jeal_ctx._jeal_all_effects)
-        _jeal_update_effect_instance(effect);
+    for (auto& [instance, effect] : _jeal_ctx._jeal_all_effects)
+    {
+        if (!effect.m_effect_instance_exist)
+            _jeal_create_effect_instance(instance, effect.m_effect_kind);
+
+        _jeal_update_effect_instance(instance, &effect);
+    }
 
     alListener3f(AL_POSITION,
         context->listener_information.m_position.x,
@@ -1243,9 +1284,9 @@ jeal_effect_reverb* jeal_create_effect_reverb()
     instance->m_reflections_delay = AL_REVERB_DEFAULT_REFLECTIONS_DELAY;
     instance->m_late_reverb_gain = AL_REVERB_DEFAULT_LATE_REVERB_GAIN;
     instance->m_late_reverb_delay = AL_REVERB_DEFAULT_LATE_REVERB_DELAY;
-    instance->m_air_absorption_hf = AL_REVERB_DEFAULT_AIR_ABSORPTION_GAINHF;
+    instance->m_air_absorption_gain_hf = AL_REVERB_DEFAULT_AIR_ABSORPTION_GAINHF;
     instance->m_room_rolloff_factor = AL_REVERB_DEFAULT_ROOM_ROLLOFF_FACTOR;
-    instance->m_decay_hf_limiter = (bool)AL_REVERB_DEFAULT_DECAY_HFLIMIT;
+    instance->m_decay_hf_limit = (bool)AL_REVERB_DEFAULT_DECAY_HFLIMIT;
 
     std::lock_guard g3(_jeal_ctx._jeal_all_effects_mx);
     std::shared_lock g9(_jeal_ctx._jeal_context_mx);
@@ -1254,3 +1295,19 @@ jeal_effect_reverb* jeal_create_effect_reverb()
 
     return instance;
 }
+
+void jeal_effect_update(void* effect)
+{
+    std::lock_guard g3(_jeal_ctx._jeal_all_effects_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
+
+    auto fnd = _jeal_ctx._jeal_all_effects.find(effect);
+    if (fnd == _jeal_ctx._jeal_all_effects.end())
+    {
+        jeecs::debug::logerr("Effect instance not found.");
+        return;
+    }
+
+    _jeal_update_effect_instance(effect, &fnd->second);
+}
+
