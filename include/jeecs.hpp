@@ -3664,7 +3664,7 @@ jeal_effect_echo [类型]
 struct jeal_effect_echo
 {
     float m_delay;          // 延迟时间，默认值为 0.1，范围 [0.0, 0.207]
-    float m_lrdelay;        // 左声道延迟，默认值为 0.1，范围 [0.0, 0.404]
+    float m_lr_delay;       // 左声道延迟，默认值为 0.1，范围 [0.0, 0.404]
     float m_damping;        // 阻尼，默认值为 0.5，范围 [0.0, 0.99]
     float m_feedback;       // 反馈，默认值为 0.5，范围 [0.0, 1.0]
     float m_spread;         // 扩散，默认值为 -1.0，范围 [-1.0, 1.0]
@@ -4127,17 +4127,17 @@ jeal_effect_slot_bind [基本接口]
 绑定一个效果到效果槽
     * 效果传入 nullptr 表示解除绑定
 */
-JE_API void jeal_effect_slot_bind(
+JE_API void jeal_effect_slot_set_effect(
     jeal_effect_slot* slot, void* /* jeal_effect_.. */ effect_may_null);
 
 /*
 jeal_source_bind_effect_slot [基本接口]
 绑定一个效果槽到声源的处理流水线上
     * 设备对单个声源的效果槽数量有限制，通常是 1-4 个
-    * 如果指示的通道超过了设备的限制，返回false
+    * 如果指示的通道超过了设备的限制，将不会生效
     * 效果槽传入 nullptr 表示解除绑定
 */
-JE_API bool jeal_source_bind_effect_slot(
+JE_API void jeal_source_bind_effect_slot(
     jeal_source* source, jeal_effect_slot* slot_may_null, size_t pass);
 
 /*

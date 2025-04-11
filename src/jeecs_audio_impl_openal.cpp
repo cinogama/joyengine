@@ -9,6 +9,8 @@
 #include <vector>
 #include <mutex>
 
+constexpr ALCint JEAL_MAX_SOURCE_BINDING_EFFECT_SLOT_COUNT = 8;
+
 struct jeal_device
 {
     bool        m_alive;
@@ -31,6 +33,14 @@ struct jeal_effect
     ALuint m_effect_instance;
 };
 
+struct jeal_effect_slot
+{
+    void* m_binded_effect_may_null;
+
+    ALfloat m_gain;
+    ALuint m_effect_slot_instance;
+};
+
 struct jeal_source
 {
     ALuint m_openal_source;
@@ -38,6 +48,7 @@ struct jeal_source
     // 当前源最后播放的 buffer，不过需要注意，
     // 如果source的状态处于stopped，那么这个地方的buffer就应该被视为无效的
     jeal_buffer* m_last_played_buffer;
+    jeal_effect_slot* m_binded_effect_slots_may_null[JEAL_MAX_SOURCE_BINDING_EFFECT_SLOT_COUNT];
 };
 struct jeal_buffer
 {
@@ -62,6 +73,10 @@ struct _jeal_static_context
     LPALEFFECTI impl_alEffecti = nullptr;
     LPALEFFECTF impl_alEffectf = nullptr;
     LPALEFFECTFV impl_alEffectfv = nullptr;
+    LPALGENAUXILIARYEFFECTSLOTS impl_alGenAuxiliaryEffectSlots = nullptr;
+    LPALDELETEAUXILIARYEFFECTSLOTS impl_alDeleteAuxiliaryEffectSlots = nullptr;
+    LPALAUXILIARYEFFECTSLOTI impl_alAuxiliaryEffectSloti = nullptr;
+    LPALAUXILIARYEFFECTSLOTF impl_alAuxiliaryEffectSlotf = nullptr;
 
     std::vector<jeal_device*> _jeal_all_devices;
     std::vector<jeal_capture_device*> _jeal_all_capture_devices;
@@ -74,6 +89,9 @@ struct _jeal_static_context
 
     std::mutex _jeal_all_effects_mx;
     std::unordered_map<void*, jeal_effect> _jeal_all_effects;
+
+    std::mutex _jeal_all_effect_slots_mx;
+    std::unordered_set<jeal_effect_slot*> _jeal_all_effect_slots;
 
     std::atomic<float> _jeal_listener_gain = 1.0f;
     std::atomic<float> _jeal_global_volume_gain = 1.0f;
@@ -98,18 +116,15 @@ void _jeal_update_buffer_instance(jeal_buffer* buffer)
 void _jeal_create_effect_instance(void* instance, ALenum effect_type)
 {
     auto& effect = _jeal_ctx._jeal_all_effects[instance];
-    if (_jeal_ctx._jeal_efx_enabled_sends_for_each_source > 0)
+    if (_jeal_ctx._jeal_efx_enabled_sends_for_each_source != 0)
     {
         effect.m_effect_kind = AL_EFFECT_REVERB;
 
         _jeal_ctx.impl_alGenEffects(1, &effect.m_effect_instance);
-        if (effect.m_effect_instance == 0)
-        {
-            jeecs::debug::logfatal("Failed to create effect instance.");
-            return;
-        }
-
-        _jeal_ctx.impl_alEffecti(effect.m_effect_instance, AL_EFFECT_TYPE, effect.m_effect_kind);
+        _jeal_ctx.impl_alEffecti(
+            effect.m_effect_instance,
+            AL_EFFECT_TYPE,
+            effect.m_effect_kind);
 
         effect.m_effect_instance_exist = true;
     }
@@ -124,7 +139,7 @@ void _jeal_update_effect_instance(void* instance, jeal_effect* effect)
         {
         case AL_EFFECT_REVERB:
         {
-            const jeal_effect_reverb* instance_data = 
+            const jeal_effect_reverb* instance_data =
                 reinterpret_cast<jeal_effect_reverb*>(instance);
 
             _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_REVERB_DENSITY, instance_data->m_density);
@@ -143,15 +158,115 @@ void _jeal_update_effect_instance(void* instance, jeal_effect* effect)
 
             break;
         }
+        case AL_EFFECT_CHORUS:
+        {
+            const jeal_effect_chorus* instance_data =
+                reinterpret_cast<jeal_effect_chorus*>(instance);
+
+            _jeal_ctx.impl_alEffecti(effect->m_effect_instance, AL_CHORUS_WAVEFORM, (ALint)instance_data->m_waveform);
+            _jeal_ctx.impl_alEffecti(effect->m_effect_instance, AL_CHORUS_PHASE, instance_data->m_phase);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_CHORUS_RATE, instance_data->m_rate);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_CHORUS_DEPTH, instance_data->m_depth);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_CHORUS_FEEDBACK, instance_data->m_feedback);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_CHORUS_DELAY, instance_data->m_delay);
+
+            break;
+        }
+        case AL_EFFECT_DISTORTION:
+        {
+            const jeal_effect_distortion* instance_data =
+                reinterpret_cast<jeal_effect_distortion*>(instance);
+
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_DISTORTION_EDGE, instance_data->m_edge);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_DISTORTION_GAIN, instance_data->m_gain);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_DISTORTION_LOWPASS_CUTOFF, instance_data->m_lowpass_cutoff);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_DISTORTION_EQCENTER, instance_data->m_equalizer_center_freq);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_DISTORTION_EQBANDWIDTH, instance_data->m_equalizer_bandwidth);
+
+            break;
+        }
+        case AL_EFFECT_ECHO:
+        {
+            const jeal_effect_echo* instance_data =
+                reinterpret_cast<jeal_effect_echo*>(instance);
+
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_ECHO_DELAY, instance_data->m_delay);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_ECHO_LRDELAY, instance_data->m_lr_delay);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_ECHO_DAMPING, instance_data->m_damping);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_ECHO_FEEDBACK, instance_data->m_feedback);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_ECHO_SPREAD, instance_data->m_spread);
+
+            break;
+        }
+        case AL_EFFECT_FLANGER:
+        {
+            const jeal_effect_flanger* instance_data =
+                reinterpret_cast<jeal_effect_flanger*>(instance);
+
+            _jeal_ctx.impl_alEffecti(effect->m_effect_instance, AL_FLANGER_WAVEFORM, (ALint)instance_data->m_waveform);
+            _jeal_ctx.impl_alEffecti(effect->m_effect_instance, AL_FLANGER_PHASE, instance_data->m_phase);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_FLANGER_RATE, instance_data->m_rate);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_FLANGER_DEPTH, instance_data->m_depth);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_FLANGER_FEEDBACK, instance_data->m_feedback);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_FLANGER_DELAY, instance_data->m_delay);
+
+            break;
+        }
+        case AL_EFFECT_FREQUENCY_SHIFTER:
+        {
+            const jeal_effect_frequency_shifter* instance_data =
+                reinterpret_cast<jeal_effect_frequency_shifter*>(instance);
+
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_FREQUENCY_SHIFTER_FREQUENCY, instance_data->m_frequency);
+            _jeal_ctx.impl_alEffecti(effect->m_effect_instance, AL_FREQUENCY_SHIFTER_LEFT_DIRECTION, (ALint)instance_data->m_left_direction);
+            _jeal_ctx.impl_alEffecti(effect->m_effect_instance, AL_FREQUENCY_SHIFTER_RIGHT_DIRECTION, (ALint)instance_data->m_right_direction);
+
+            break;
+        }
         default:
             jeecs::debug::logfatal("Unknown audio effect: %d when trying to update.",
                 (int)effect->m_effect_kind);
         }
     }
 }
+
+void _jeal_source_bind_effect_slot(
+    jeal_source* source, jeal_effect_slot* slot_may_null, size_t pass)
+{
+    if (pass < JEAL_MAX_SOURCE_BINDING_EFFECT_SLOT_COUNT)
+    {
+        source->m_binded_effect_slots_may_null[pass] = slot_may_null;
+        if (pass < _jeal_ctx._jeal_efx_enabled_sends_for_each_source)
+        {
+            alSource3i(
+                source->m_openal_source,
+                AL_AUXILIARY_SEND_FILTER,
+                slot_may_null == nullptr ? AL_EFFECTSLOT_NULL : slot_may_null->m_effect_slot_instance,
+                (ALint)pass,
+                AL_FILTER_NULL);
+        }
+    }
+}
+
 void _jeal_update_source(jeal_source* source)
 {
     alGenSources(1, &source->m_openal_source);
+
+    for (size_t i = 0; i < JEAL_MAX_SOURCE_BINDING_EFFECT_SLOT_COUNT; i++)
+    {
+        auto& effect_slot = source->m_binded_effect_slots_may_null[i];
+        // 此处需要检查 effect_slot 是否依然有效；因为slot可能在未解除绑定的情况下被删除
+        if (effect_slot == nullptr
+            || _jeal_ctx._jeal_all_effect_slots.find(effect_slot) != _jeal_ctx._jeal_all_effect_slots.end())
+        {
+            _jeal_source_bind_effect_slot(source, effect_slot, i);
+        }
+        else
+        {
+            jeecs::debug::logwarn("Found invalid effect slot in source: %p.", source);
+            effect_slot = nullptr;
+        }
+    }
 }
 
 struct _jeal_global_context
@@ -176,16 +291,9 @@ struct _jeal_global_context
 
 void _jeal_effect_drop(void* instance)
 {
-    auto fnd = _jeal_ctx._jeal_all_effects.find(instance);
-    if (fnd == _jeal_ctx._jeal_all_effects.end())
-    {
-        jeecs::debug::logfatal("Trying to close invalid effect: %p", instance);
-        return;
-    }
-
     if (_jeal_ctx._jeal_efx_enabled_sends_for_each_source != 0)
     {
-        auto& effect = fnd->second;
+        auto& effect = _jeal_ctx._jeal_all_effects.at(instance);
         assert(effect.m_effect_instance_exist);
 
         _jeal_ctx.impl_alDeleteEffects(1, &effect.m_effect_instance);
@@ -205,9 +313,18 @@ bool _jeal_shutdown_current_device()
         for (auto* buf : _jeal_ctx._jeal_all_buffers)
             alDeleteBuffers(1, &buf->m_openal_buffer);
 
+        for (auto& effect_slot : _jeal_ctx._jeal_all_effect_slots)
+        {
+            if (_jeal_ctx._jeal_efx_enabled_sends_for_each_source != 0)
+            {
+                _jeal_ctx.impl_alDeleteAuxiliaryEffectSlots(
+                    1, &effect_slot->m_effect_slot_instance);
+            }
+        }
+
         for (auto& [instance, effect] : _jeal_ctx._jeal_all_effects)
             _jeal_effect_drop(instance);
-        
+
         if (AL_FALSE == alcMakeContextCurrent(nullptr))
             jeecs::debug::logerr("Failed to clear current context.");
         alcDestroyContext(current_context);
@@ -238,6 +355,10 @@ bool _jeal_startup_specify_device(jeal_device* device)
             ALC_MAX_AUXILIARY_SENDS,
             1,
             &_jeal_ctx._jeal_efx_enabled_sends_for_each_source);
+
+        _jeal_ctx._jeal_efx_enabled_sends_for_each_source = std::min(
+            _jeal_ctx._jeal_efx_enabled_sends_for_each_source,
+            JEAL_MAX_SOURCE_BINDING_EFFECT_SLOT_COUNT);
     }
     else
         _jeal_ctx._jeal_efx_enabled_sends_for_each_source = 0;
@@ -266,6 +387,10 @@ bool _jeal_startup_specify_device(jeal_device* device)
         JEAL_LOAD_FUNC(alEffecti);
         JEAL_LOAD_FUNC(alEffectf);
         JEAL_LOAD_FUNC(alEffectfv);
+        JEAL_LOAD_FUNC(alGenAuxiliaryEffectSlots);
+        JEAL_LOAD_FUNC(alDeleteAuxiliaryEffectSlots);
+        JEAL_LOAD_FUNC(alAuxiliaryEffectSloti);
+        JEAL_LOAD_FUNC(alAuxiliaryEffectSlotf);
     }
 
     _jeal_ctx._jeal_current_device = device;
@@ -338,6 +463,31 @@ void _jeal_store_current_context(_jeal_global_context* out_context)
         out_context->listener_information.m_volume = 1.0f;
     }
 }
+
+void _jeal_effect_slot_set_effect(jeal_effect_slot* slot, void* effect_may_null)
+{
+    slot->m_binded_effect_may_null = effect_may_null;
+
+    if (_jeal_ctx._jeal_efx_enabled_sends_for_each_source != 0)
+    {
+        if (effect_may_null != nullptr)
+        {
+            auto& effect = _jeal_ctx._jeal_all_effects.at(effect_may_null);
+            _jeal_ctx.impl_alAuxiliaryEffectSloti(
+                slot->m_effect_slot_instance,
+                AL_EFFECTSLOT_EFFECT,
+                effect.m_effect_instance);
+        }
+        else
+        {
+            _jeal_ctx.impl_alAuxiliaryEffectSloti(
+                slot->m_effect_slot_instance,
+                AL_EFFECTSLOT_EFFECT,
+                AL_EFFECTSLOT_NULL);
+        }
+    }
+}
+
 void _jeal_restore_context(const _jeal_global_context* context)
 {
     // OK, Restore buffer, listener and source.
@@ -350,6 +500,26 @@ void _jeal_restore_context(const _jeal_global_context* context)
             _jeal_create_effect_instance(instance, effect.m_effect_kind);
 
         _jeal_update_effect_instance(instance, &effect);
+    }
+
+    for (auto& effect_slot : _jeal_ctx._jeal_all_effect_slots)
+    {
+        if (_jeal_ctx._jeal_efx_enabled_sends_for_each_source != 0)
+        {
+            _jeal_ctx.impl_alGenAuxiliaryEffectSlots(
+                1, &effect_slot->m_effect_slot_instance);
+            _jeal_ctx.impl_alAuxiliaryEffectSlotf(
+                effect_slot->m_effect_slot_instance,
+                AL_EFFECTSLOT_GAIN,
+                effect_slot->m_gain);
+        }
+
+        // 此处需要检查 effect 是否依然有效；因为 effect 可能在未解除绑定的情况下被删除
+        if (effect_slot->m_binded_effect_may_null == nullptr
+            || _jeal_ctx._jeal_all_effects.end() != _jeal_ctx._jeal_all_effects.find(effect_slot->m_binded_effect_may_null))
+        {
+            _jeal_effect_slot_set_effect(effect_slot, effect_slot->m_binded_effect_may_null);
+        }
     }
 
     alListener3f(AL_POSITION,
@@ -794,8 +964,11 @@ void jeal_finish()
     for (auto& [effect, instance] : _jeal_ctx._jeal_all_effects)
     {
         assert(instance == nullptr);
-
         free(effect);
+    }
+    for (auto* effect_slot : _jeal_ctx._jeal_all_effect_slots)
+    {
+        delete effect_slot;
     }
     for (auto* device : _jeal_ctx._jeal_all_devices)
     {
@@ -870,8 +1043,11 @@ jeal_source* jeal_open_source()
 
     _jeal_ctx._jeal_all_sources.insert(audio_source);
 
-    _jeal_update_source(audio_source);
     audio_source->m_last_played_buffer = nullptr;
+    for (auto& effect_slot : audio_source->m_binded_effect_slots_may_null)
+        effect_slot = nullptr;
+
+    _jeal_update_source(audio_source);
 
     return audio_source;
 }
@@ -1295,19 +1471,177 @@ jeal_effect_reverb* jeal_create_effect_reverb()
 
     return instance;
 }
+jeal_effect_chorus* jeal_create_effect_chorus()
+{
+    jeal_effect_chorus* instance = (jeal_effect_chorus*)malloc(sizeof(jeal_effect_chorus));
+    assert(instance != nullptr);
+
+    instance->m_waveform = (jeal_effect_chorus::wavefrom)AL_CHORUS_DEFAULT_WAVEFORM;
+    instance->m_phase = AL_CHORUS_DEFAULT_PHASE;
+    instance->m_rate = AL_CHORUS_DEFAULT_RATE;
+    instance->m_depth = AL_CHORUS_DEFAULT_DEPTH;
+    instance->m_feedback = AL_CHORUS_DEFAULT_FEEDBACK;
+    instance->m_delay = AL_CHORUS_DEFAULT_DELAY;
+
+    std::lock_guard g3(_jeal_ctx._jeal_all_effects_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
+
+    _jeal_create_effect_instance(instance, AL_EFFECT_CHORUS);
+
+    return instance;
+}
+
+jeal_effect_distortion* jeal_create_effect_distortion()
+{
+    jeal_effect_distortion* instance = (jeal_effect_distortion*)malloc(sizeof(jeal_effect_distortion));
+    assert(instance != nullptr);
+
+    instance->m_edge = AL_DISTORTION_DEFAULT_EDGE;
+    instance->m_gain = AL_DISTORTION_DEFAULT_GAIN;
+    instance->m_lowpass_cutoff = AL_DISTORTION_DEFAULT_LOWPASS_CUTOFF;
+    instance->m_equalizer_center_freq = AL_DISTORTION_DEFAULT_EQCENTER;
+    instance->m_equalizer_bandwidth = AL_DISTORTION_DEFAULT_EQBANDWIDTH;
+
+    std::lock_guard g3(_jeal_ctx._jeal_all_effects_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
+
+    _jeal_create_effect_instance(instance, AL_EFFECT_DISTORTION);
+
+    return instance;
+}
+
+jeal_effect_echo* jeal_create_effect_echo()
+{
+    jeal_effect_echo* instance = (jeal_effect_echo*)malloc(sizeof(jeal_effect_echo));
+    assert(instance != nullptr);
+
+    instance->m_delay = AL_ECHO_DEFAULT_DELAY;
+    instance->m_lr_delay = AL_ECHO_DEFAULT_LRDELAY;
+    instance->m_damping = AL_ECHO_DEFAULT_DAMPING;
+    instance->m_feedback = AL_ECHO_DEFAULT_FEEDBACK;
+    instance->m_spread = AL_ECHO_DEFAULT_SPREAD;
+
+    std::lock_guard g3(_jeal_ctx._jeal_all_effects_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
+
+    _jeal_create_effect_instance(instance, AL_EFFECT_ECHO);
+
+    return instance;
+}
+
+jeal_effect_flanger* jeal_create_effect_flanger()
+{
+    jeal_effect_flanger* instance = (jeal_effect_flanger*)malloc(sizeof(jeal_effect_flanger));
+    assert(instance != nullptr);
+
+    instance->m_waveform = (jeal_effect_flanger::wavefrom)AL_FLANGER_DEFAULT_WAVEFORM;
+    instance->m_phase = AL_FLANGER_DEFAULT_PHASE;
+    instance->m_rate = AL_FLANGER_DEFAULT_RATE;
+    instance->m_depth = AL_FLANGER_DEFAULT_DEPTH;
+    instance->m_feedback = AL_FLANGER_DEFAULT_FEEDBACK;
+    instance->m_delay = AL_FLANGER_DEFAULT_DELAY;
+
+    std::lock_guard g3(_jeal_ctx._jeal_all_effects_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
+
+    _jeal_create_effect_instance(instance, AL_EFFECT_FLANGER);
+
+    return instance;
+}
+
+jeal_effect_frequency_shifter* jeal_create_effect_frequency_shifter()
+{
+    jeal_effect_frequency_shifter* instance = (jeal_effect_frequency_shifter*)malloc(sizeof(jeal_effect_frequency_shifter));
+    assert(instance != nullptr);
+
+    instance->m_frequency = AL_FREQUENCY_SHIFTER_DEFAULT_FREQUENCY;
+    instance->m_left_direction = 
+        (jeal_effect_frequency_shifter::direction)AL_FREQUENCY_SHIFTER_DEFAULT_LEFT_DIRECTION;
+    instance->m_right_direction = 
+        (jeal_effect_frequency_shifter::direction)AL_FREQUENCY_SHIFTER_DEFAULT_RIGHT_DIRECTION;
+
+    std::lock_guard g3(_jeal_ctx._jeal_all_effects_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
+
+    _jeal_create_effect_instance(instance, AL_EFFECT_FREQUENCY_SHIFTER);
+
+    return instance;
+}
 
 void jeal_effect_update(void* effect)
 {
     std::lock_guard g3(_jeal_ctx._jeal_all_effects_mx);
     std::shared_lock g9(_jeal_ctx._jeal_context_mx);
 
-    auto fnd = _jeal_ctx._jeal_all_effects.find(effect);
-    if (fnd == _jeal_ctx._jeal_all_effects.end())
-    {
-        jeecs::debug::logerr("Effect instance not found.");
-        return;
-    }
-
-    _jeal_update_effect_instance(effect, &fnd->second);
+    _jeal_update_effect_instance(effect, &_jeal_ctx._jeal_all_effects.at(effect));
 }
 
+jeal_effect_slot* jeal_create_effect_slot()
+{
+    jeal_effect_slot* slot = new jeal_effect_slot;
+
+    slot->m_binded_effect_may_null = nullptr;
+    slot->m_gain = 1.0f;
+
+    std::lock_guard g4(_jeal_ctx._jeal_all_effect_slots_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
+
+    if (_jeal_ctx._jeal_efx_enabled_sends_for_each_source != 0)
+    {
+        _jeal_ctx.impl_alGenAuxiliaryEffectSlots(
+            1, &slot->m_effect_slot_instance);
+        _jeal_ctx.impl_alAuxiliaryEffectSlotf(
+            slot->m_effect_slot_instance,
+            AL_EFFECTSLOT_GAIN,
+            slot->m_gain);
+    }
+
+    _jeal_ctx._jeal_all_effect_slots.insert(slot);
+    return slot;
+}
+
+void jeal_effect_slot_close(jeal_effect_slot* slot)
+{
+    std::lock_guard g4(_jeal_ctx._jeal_all_effect_slots_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
+
+    _jeal_ctx._jeal_all_effect_slots.erase(slot);
+    if (_jeal_ctx._jeal_efx_enabled_sends_for_each_source != 0)
+    {
+        _jeal_ctx.impl_alDeleteAuxiliaryEffectSlots(
+            1, &slot->m_effect_slot_instance);
+    }
+    delete slot;
+}
+
+void jeal_effect_slot_set_effect(jeal_effect_slot* slot, void* effect_may_null)
+{
+    std::lock_guard g3(_jeal_ctx._jeal_all_effects_mx);
+    std::lock_guard g4(_jeal_ctx._jeal_all_effect_slots_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
+
+    _jeal_effect_slot_set_effect(slot, effect_may_null);
+}
+
+void jeal_effect_slot_gain(jeal_effect_slot* slot, float gain)
+{
+    std::lock_guard g4(_jeal_ctx._jeal_all_effect_slots_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
+
+    slot->m_gain = gain;
+    if (_jeal_ctx._jeal_efx_enabled_sends_for_each_source != 0)
+    {
+        _jeal_ctx.impl_alAuxiliaryEffectSlotf(
+            slot->m_effect_slot_instance, AL_EFFECTSLOT_GAIN, gain);
+    }
+}
+
+void jeal_source_bind_effect_slot(
+    jeal_source* source, jeal_effect_slot* slot_may_null, size_t pass)
+{
+    std::lock_guard g1(_jeal_ctx._jeal_all_sources_mx);
+    std::lock_guard g4(_jeal_ctx._jeal_all_effect_slots_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
+
+    _jeal_source_bind_effect_slot(source, slot_may_null, pass);
+}
