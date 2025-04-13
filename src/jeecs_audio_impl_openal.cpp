@@ -118,7 +118,7 @@ void _jeal_create_effect_instance(void* instance, ALenum effect_type)
     auto& effect = _jeal_ctx._jeal_all_effects[instance];
     if (_jeal_ctx._jeal_efx_enabled_sends_for_each_source != 0)
     {
-        effect.m_effect_kind = AL_EFFECT_REVERB;
+        effect.m_effect_kind = effect_type;
 
         _jeal_ctx.impl_alGenEffects(1, &effect.m_effect_instance);
         _jeal_ctx.impl_alEffecti(
@@ -220,6 +220,123 @@ void _jeal_update_effect_instance(void* instance, jeal_effect* effect)
             _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_FREQUENCY_SHIFTER_FREQUENCY, instance_data->m_frequency);
             _jeal_ctx.impl_alEffecti(effect->m_effect_instance, AL_FREQUENCY_SHIFTER_LEFT_DIRECTION, (ALint)instance_data->m_left_direction);
             _jeal_ctx.impl_alEffecti(effect->m_effect_instance, AL_FREQUENCY_SHIFTER_RIGHT_DIRECTION, (ALint)instance_data->m_right_direction);
+
+            break;
+        }
+        case AL_EFFECT_VOCAL_MORPHER:
+        {
+            const jeal_effect_vocal_morpher* instance_data =
+                reinterpret_cast<jeal_effect_vocal_morpher*>(instance);
+
+            _jeal_ctx.impl_alEffecti(effect->m_effect_instance, AL_VOCAL_MORPHER_PHONEMEA, (ALint)instance_data->m_phoneme_a);
+            _jeal_ctx.impl_alEffecti(effect->m_effect_instance, AL_VOCAL_MORPHER_PHONEMEA_COARSE_TUNING, instance_data->m_phoneme_a_coarse_tuning);
+            _jeal_ctx.impl_alEffecti(effect->m_effect_instance, AL_VOCAL_MORPHER_PHONEMEB, (ALint)instance_data->m_phoneme_b);
+            _jeal_ctx.impl_alEffecti(effect->m_effect_instance, AL_VOCAL_MORPHER_PHONEMEB_COARSE_TUNING, instance_data->m_phoneme_b_coarse_tuning);
+            _jeal_ctx.impl_alEffecti(effect->m_effect_instance, AL_VOCAL_MORPHER_WAVEFORM, (ALint)instance_data->m_waveform);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_VOCAL_MORPHER_RATE, instance_data->m_rate);
+
+            break;
+        }
+        case AL_EFFECT_PITCH_SHIFTER:
+        {
+            const jeal_effect_pitch_shifter* instance_data =
+                reinterpret_cast<jeal_effect_pitch_shifter*>(instance);
+
+            _jeal_ctx.impl_alEffecti(effect->m_effect_instance, AL_PITCH_SHIFTER_COARSE_TUNE, instance_data->m_coarse_tune);
+            _jeal_ctx.impl_alEffecti(effect->m_effect_instance, AL_PITCH_SHIFTER_FINE_TUNE, instance_data->m_fine_tune);
+
+            break;
+        }
+        case AL_EFFECT_RING_MODULATOR:
+        {
+            const jeal_effect_ring_modulator* instance_data =
+                reinterpret_cast<jeal_effect_ring_modulator*>(instance);
+            
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_RING_MODULATOR_FREQUENCY, instance_data->m_frequency);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_RING_MODULATOR_HIGHPASS_CUTOFF, instance_data->m_highpass_cutoff);
+            _jeal_ctx.impl_alEffecti(effect->m_effect_instance, AL_RING_MODULATOR_WAVEFORM, (ALint)instance_data->m_waveform);
+
+            break;
+        }
+        case AL_EFFECT_AUTOWAH:
+        {
+            const jeal_effect_autowah* instance_data =
+                reinterpret_cast<jeal_effect_autowah*>(instance);
+            
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_AUTOWAH_ATTACK_TIME, instance_data->m_attack_time);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_AUTOWAH_RELEASE_TIME, instance_data->m_release_time);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_AUTOWAH_RESONANCE, instance_data->m_resonance);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_AUTOWAH_PEAK_GAIN, instance_data->m_peak_gain);
+
+            break;
+        }
+        case AL_EFFECT_COMPRESSOR:
+        {
+            const jeal_effect_compressor* instance_data =
+                reinterpret_cast<jeal_effect_compressor*>(instance);
+
+            _jeal_ctx.impl_alEffecti(effect->m_effect_instance, AL_COMPRESSOR_ONOFF,  instance_data->m_enabled ? AL_TRUE : AL_FALSE);
+         
+            break;
+        }
+        case AL_EFFECT_EQUALIZER:
+        {
+            const jeal_effect_equalizer* instance_data =
+                reinterpret_cast<jeal_effect_equalizer*>(instance);
+
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EQUALIZER_LOW_GAIN, instance_data->m_low_gain);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EQUALIZER_LOW_CUTOFF, instance_data->m_low_cutoff);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EQUALIZER_MID1_GAIN, instance_data->m_mid1_gain);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EQUALIZER_MID1_CENTER, instance_data->m_mid1_center);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EQUALIZER_MID1_WIDTH, instance_data->m_mid1_width);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EQUALIZER_MID2_GAIN, instance_data->m_mid2_gain);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EQUALIZER_MID2_CENTER, instance_data->m_mid2_center);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EQUALIZER_MID2_WIDTH, instance_data->m_mid2_width);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EQUALIZER_HIGH_GAIN, instance_data->m_high_gain);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EQUALIZER_HIGH_CUTOFF, instance_data->m_high_cutoff);
+
+            break;
+        }
+        case AL_EFFECT_EAXREVERB:
+        {
+            const jeal_effect_eaxreverb* instance_data =
+                reinterpret_cast<jeal_effect_eaxreverb*>(instance);
+
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EAXREVERB_DENSITY, instance_data->m_density);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EAXREVERB_DIFFUSION, instance_data->m_diffusion);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EAXREVERB_GAIN, instance_data->m_gain);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EAXREVERB_GAINHF, instance_data->m_gain_hf);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EAXREVERB_GAINLF, instance_data->m_gain_lf);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EAXREVERB_DECAY_TIME, instance_data->m_decay_time);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EAXREVERB_DECAY_HFRATIO, instance_data->m_decay_hf_ratio);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EAXREVERB_DECAY_LFRATIO, instance_data->m_decay_lf_ratio);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EAXREVERB_REFLECTIONS_GAIN, instance_data->m_reflections_gain);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EAXREVERB_REFLECTIONS_DELAY, instance_data->m_reflections_delay);
+
+            const float reflection_pan[3] = {
+                 instance_data->m_reflections_pan_xyz[0],
+                 instance_data->m_reflections_pan_xyz[1],
+                 -instance_data->m_reflections_pan_xyz[2],
+            };
+            _jeal_ctx.impl_alEffectfv(effect->m_effect_instance, AL_EAXREVERB_REFLECTIONS_PAN, reflection_pan);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EAXREVERB_LATE_REVERB_GAIN, instance_data->m_late_reverb_gain);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EAXREVERB_LATE_REVERB_DELAY, instance_data->m_late_reverb_delay);
+
+            const float reverb_pan[3] = {
+                instance_data->m_late_reverb_pan_xyz[0],
+                instance_data->m_late_reverb_pan_xyz[1],
+                -instance_data->m_late_reverb_pan_xyz[2],
+            };
+            _jeal_ctx.impl_alEffectfv(effect->m_effect_instance, AL_EAXREVERB_LATE_REVERB_PAN, reverb_pan);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EAXREVERB_ECHO_TIME, instance_data->m_echo_time);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EAXREVERB_ECHO_DEPTH, instance_data->m_echo_depth);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EAXREVERB_MODULATION_TIME, instance_data->m_modulation_time);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EAXREVERB_MODULATION_DEPTH, instance_data->m_modulation_depth);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EAXREVERB_AIR_ABSORPTION_GAINHF, instance_data->m_air_absorption_gain_hf);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EAXREVERB_HFREFERENCE, instance_data->m_hf_reference);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EAXREVERB_LFREFERENCE, instance_data->m_lf_reference);
+            _jeal_ctx.impl_alEffectf(effect->m_effect_instance, AL_EAXREVERB_ROOM_ROLLOFF_FACTOR, instance_data->m_room_rolloff_factor);
+            _jeal_ctx.impl_alEffecti(effect->m_effect_instance, AL_EAXREVERB_DECAY_HFLIMIT, instance_data->m_decay_hf_limiter ? AL_TRUE : AL_FALSE);
 
             break;
         }
@@ -963,7 +1080,7 @@ void jeal_finish()
     }
     for (auto& [effect, instance] : _jeal_ctx._jeal_all_effects)
     {
-        assert(instance == nullptr);
+        assert(!instance.m_effect_instance_exist);
         free(effect);
     }
     for (auto* effect_slot : _jeal_ctx._jeal_all_effect_slots)
@@ -1439,7 +1556,7 @@ void jeal_effect_close(void* effect)
 
     _jeal_effect_drop(effect);
 
-    assert(_jeal_ctx._jeal_all_effects[effect] == nullptr);
+    assert(!_jeal_ctx._jeal_all_effects[effect].m_effect_instance_exist);
 
     free(effect);
     _jeal_ctx._jeal_all_effects.erase(effect);
@@ -1565,6 +1682,143 @@ jeal_effect_frequency_shifter* jeal_create_effect_frequency_shifter()
 
     _jeal_create_effect_instance(instance, AL_EFFECT_FREQUENCY_SHIFTER);
 
+    return instance;
+}
+
+jeal_effect_vocal_morpher* jeal_create_effect_vocal_morpher()
+{
+    jeal_effect_vocal_morpher* instance = (jeal_effect_vocal_morpher*)malloc(sizeof(jeal_effect_vocal_morpher));
+    assert(instance != nullptr);
+
+    instance->m_phoneme_a = (jeal_effect_vocal_morpher::phoneme)AL_VOCAL_MORPHER_DEFAULT_PHONEMEA;
+    instance->m_phoneme_a_coarse_tuning = AL_VOCAL_MORPHER_DEFAULT_PHONEMEA_COARSE_TUNING;
+    instance->m_phoneme_b = (jeal_effect_vocal_morpher::phoneme)AL_VOCAL_MORPHER_DEFAULT_PHONEMEB;
+    instance->m_phoneme_b_coarse_tuning = AL_VOCAL_MORPHER_DEFAULT_PHONEMEB_COARSE_TUNING;
+    instance->m_waveform = (jeal_effect_vocal_morpher::wavefrom)AL_VOCAL_MORPHER_DEFAULT_WAVEFORM;
+    instance->m_rate = AL_VOCAL_MORPHER_DEFAULT_RATE;
+
+    std::lock_guard g3(_jeal_ctx._jeal_all_effects_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
+    _jeal_create_effect_instance(instance, AL_EFFECT_VOCAL_MORPHER);
+    return instance;
+}
+
+jeal_effect_pitch_shifter* jeal_create_effect_pitch_shifter()
+{
+    jeal_effect_pitch_shifter* instance = (jeal_effect_pitch_shifter*)malloc(sizeof(jeal_effect_pitch_shifter));
+    assert(instance != nullptr);
+
+    instance->m_coarse_tune = AL_PITCH_SHIFTER_DEFAULT_COARSE_TUNE;
+    instance->m_fine_tune = AL_PITCH_SHIFTER_DEFAULT_FINE_TUNE;
+    
+    std::lock_guard g3(_jeal_ctx._jeal_all_effects_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
+    _jeal_create_effect_instance(instance, AL_EFFECT_PITCH_SHIFTER);
+    return instance;
+}
+
+jeal_effect_ring_modulator* jeal_create_effect_ring_modulator()
+{
+    jeal_effect_ring_modulator* instance = (jeal_effect_ring_modulator*)malloc(sizeof(jeal_effect_ring_modulator));
+    assert(instance != nullptr);
+
+    instance->m_frequency = AL_RING_MODULATOR_DEFAULT_FREQUENCY;
+    instance->m_highpass_cutoff = AL_RING_MODULATOR_DEFAULT_HIGHPASS_CUTOFF;
+    instance->m_waveform = (jeal_effect_ring_modulator::wavefrom)AL_RING_MODULATOR_DEFAULT_WAVEFORM;
+
+    std::lock_guard g3(_jeal_ctx._jeal_all_effects_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
+    _jeal_create_effect_instance(instance, AL_EFFECT_RING_MODULATOR);
+    return instance;
+}
+
+jeal_effect_autowah* jeal_create_effect_autowah()
+{
+    jeal_effect_autowah* instance = (jeal_effect_autowah*)malloc(sizeof(jeal_effect_autowah));
+    assert(instance != nullptr);
+
+    instance->m_attack_time = AL_AUTOWAH_DEFAULT_ATTACK_TIME;
+    instance->m_release_time = AL_AUTOWAH_DEFAULT_RELEASE_TIME;
+    instance->m_resonance = AL_AUTOWAH_DEFAULT_RESONANCE;
+    instance->m_peak_gain = AL_AUTOWAH_DEFAULT_PEAK_GAIN;
+
+    std::lock_guard g3(_jeal_ctx._jeal_all_effects_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
+    _jeal_create_effect_instance(instance, AL_EFFECT_AUTOWAH);
+    return instance;
+}
+
+jeal_effect_compressor* jeal_create_effect_compressor()
+{
+    jeal_effect_compressor* instance = (jeal_effect_compressor*)malloc(sizeof(jeal_effect_compressor));
+    assert(instance != nullptr);
+
+    instance->m_enabled = AL_COMPRESSOR_DEFAULT_ONOFF;
+
+    std::lock_guard g3(_jeal_ctx._jeal_all_effects_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
+    _jeal_create_effect_instance(instance, AL_EFFECT_COMPRESSOR);
+    return instance;
+}
+
+jeal_effect_equalizer* jeal_create_effect_equalizer()
+{
+    jeal_effect_equalizer* instance = (jeal_effect_equalizer*)malloc(sizeof(jeal_effect_equalizer));
+    assert(instance != nullptr);
+
+    instance->m_low_gain = AL_EQUALIZER_DEFAULT_LOW_GAIN;
+    instance->m_low_cutoff = AL_EQUALIZER_DEFAULT_LOW_CUTOFF;
+    instance->m_mid1_gain = AL_EQUALIZER_DEFAULT_MID1_GAIN;
+    instance->m_mid1_center = AL_EQUALIZER_DEFAULT_MID1_CENTER;
+    instance->m_mid1_width = AL_EQUALIZER_DEFAULT_MID1_WIDTH;
+    instance->m_mid2_gain = AL_EQUALIZER_DEFAULT_MID2_GAIN;
+    instance->m_mid2_center = AL_EQUALIZER_DEFAULT_MID2_CENTER;
+    instance->m_mid2_width = AL_EQUALIZER_DEFAULT_MID2_WIDTH;
+    instance->m_high_gain = AL_EQUALIZER_DEFAULT_HIGH_GAIN;
+    instance->m_high_cutoff = AL_EQUALIZER_DEFAULT_HIGH_CUTOFF;
+
+    std::lock_guard g3(_jeal_ctx._jeal_all_effects_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
+    _jeal_create_effect_instance(instance, AL_EFFECT_EQUALIZER);
+    return instance;
+}
+
+jeal_effect_eaxreverb* jeal_create_effect_eaxreverb()
+{
+    jeal_effect_eaxreverb* instance = (jeal_effect_eaxreverb*)malloc(sizeof(jeal_effect_eaxreverb));
+    assert(instance != nullptr);
+
+    instance->m_density = AL_EAXREVERB_DEFAULT_DENSITY;
+    instance->m_diffusion = AL_EAXREVERB_DEFAULT_DIFFUSION;
+    instance->m_gain = AL_EAXREVERB_DEFAULT_GAIN;
+    instance->m_gain_hf = AL_EAXREVERB_DEFAULT_GAINHF;
+    instance->m_gain_lf = AL_EAXREVERB_DEFAULT_GAINLF;
+    instance->m_decay_time = AL_EAXREVERB_DEFAULT_DECAY_TIME;
+    instance->m_decay_hf_ratio = AL_EAXREVERB_DEFAULT_DECAY_HFRATIO;
+    instance->m_decay_lf_ratio = AL_EAXREVERB_DEFAULT_DECAY_LFRATIO;
+    instance->m_reflections_gain = AL_EAXREVERB_DEFAULT_REFLECTIONS_GAIN;
+    instance->m_reflections_delay = AL_EAXREVERB_DEFAULT_REFLECTIONS_DELAY;
+    instance->m_reflections_pan_xyz[0] = AL_EAXREVERB_DEFAULT_REFLECTIONS_PAN_XYZ;
+    instance->m_reflections_pan_xyz[1] = AL_EAXREVERB_DEFAULT_REFLECTIONS_PAN_XYZ;
+    instance->m_reflections_pan_xyz[2] = -AL_EAXREVERB_DEFAULT_REFLECTIONS_PAN_XYZ;
+    instance->m_late_reverb_gain = AL_EAXREVERB_DEFAULT_LATE_REVERB_GAIN;
+    instance->m_late_reverb_delay = AL_EAXREVERB_DEFAULT_LATE_REVERB_DELAY;
+    instance->m_late_reverb_pan_xyz[0] = AL_EAXREVERB_DEFAULT_LATE_REVERB_PAN_XYZ;
+    instance->m_late_reverb_pan_xyz[1] = AL_EAXREVERB_DEFAULT_LATE_REVERB_PAN_XYZ;
+    instance->m_late_reverb_pan_xyz[2] = -AL_EAXREVERB_DEFAULT_LATE_REVERB_PAN_XYZ;
+    instance->m_echo_time = AL_EAXREVERB_DEFAULT_ECHO_TIME;
+    instance->m_echo_depth = AL_EAXREVERB_DEFAULT_ECHO_DEPTH;
+    instance->m_modulation_time = AL_EAXREVERB_DEFAULT_MODULATION_TIME;
+    instance->m_modulation_depth = AL_EAXREVERB_DEFAULT_MODULATION_DEPTH;
+    instance->m_air_absorption_gain_hf = AL_EAXREVERB_DEFAULT_AIR_ABSORPTION_GAINHF;
+    instance->m_hf_reference = AL_EAXREVERB_DEFAULT_HFREFERENCE;
+    instance->m_lf_reference = AL_EAXREVERB_DEFAULT_LFREFERENCE;
+    instance->m_room_rolloff_factor = AL_EAXREVERB_DEFAULT_ROOM_ROLLOFF_FACTOR;
+    instance->m_decay_hf_limiter = (bool)AL_EAXREVERB_DEFAULT_DECAY_HFLIMIT;
+
+    std::lock_guard g3(_jeal_ctx._jeal_all_effects_mx);
+    std::shared_lock g9(_jeal_ctx._jeal_context_mx);
+    _jeal_create_effect_instance(instance, AL_EFFECT_EAXREVERB);
     return instance;
 }
 

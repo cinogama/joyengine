@@ -9,7 +9,7 @@
 #include "wo.h"
 
 #define JE_VERSION_WRAP(A, B, C) #A "." #B "." #C
-#define JE_CORE_VERSION JE_VERSION_WRAP(4, 8, 3)
+#define JE_CORE_VERSION JE_VERSION_WRAP(4, 8, 4)
 
 #define WO_FAIL_JE_FATAL_ERROR 0xD101
 #define WO_FAIL_JE_BAD_INIT_SHADER_VALUE 0xD102
@@ -375,11 +375,13 @@ namespace jeecs
 
         template<class F>
         struct function_traits<F&> : public function_traits < F >
-        {};
+        {
+        };
 
         template<class F>
         struct function_traits<F&&> : public function_traits < F >
-        {};
+        {
+        };
 
         template<size_t n, typename T, typename ... Ts>
         struct _variadic_type_indexer
@@ -561,7 +563,7 @@ namespace jeecs
             A = 'A', B, C, D, E, F, G, H, I, J, K, L,
             M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
             _1 = '1', _2, _3, _4, _5, _6, _7, _8, _9,
-            _0, 
+            _0,
             _ = ' ',
 
             SEMICOLON = ';',
@@ -608,7 +610,7 @@ namespace jeecs
 
             _COUNT, //
         };
-        enum class gamepadcode: uint8_t
+        enum class gamepadcode : uint8_t
         {
             UP,
             DOWN,
@@ -633,7 +635,7 @@ namespace jeecs
 
             _COUNT, //
         };
-        enum class joystickcode: uint8_t
+        enum class joystickcode : uint8_t
         {
             L,
             R,
@@ -1766,8 +1768,8 @@ struct jegl_interface_config
     // 不限制帧率请设置为 SIZE_MAX
     size_t          m_fps;
 
-    const char*     m_title;
-    void*           m_userdata;
+    const char* m_title;
+    void* m_userdata;
 };
 
 struct jegl_context_notifier;
@@ -1784,16 +1786,16 @@ struct jegl_context
 
     void*/*std::promise<void>*/ _m_promise;
     frame_job_t                 _m_frame_rend_work;
-    void*                       _m_frame_rend_work_arg;
-    void*                       _m_sync_callback_arg;
+    void* _m_frame_rend_work_arg;
+    void* _m_sync_callback_arg;
 
-    jegl_context_notifier*      _m_thread_notifier;
-    void*                       _m_interface_handle;
+    jegl_context_notifier* _m_thread_notifier;
+    void* _m_interface_handle;
 
-    void*                       m_universe_instance;
+    void* m_universe_instance;
     jeecs::typing::version_t    m_version;
     jegl_interface_config       m_config;
-    jegl_graphic_api*           m_apis;
+    jegl_graphic_api* m_apis;
     void*/*std::atomic_bool*/   m_stop_update;
     userdata_t                  m_userdata;
 };
@@ -1822,7 +1824,7 @@ struct jegl_texture
     // NOTE:
     // * Pixel data is storage from LEFT/BOTTOM to RIGHT/TOP
     // * If texture's m_pixels is nullptr, only create a texture in pipeline.
-    pixel_data_t*   m_pixels;
+    pixel_data_t* m_pixels;
     size_t          m_width;
     size_t          m_height;
     format          m_format;
@@ -1867,20 +1869,20 @@ struct jegl_vertex
     };
 
     float           m_x_min, m_x_max,
-                    m_y_min, m_y_max,
-                    m_z_min, m_z_max;
+        m_y_min, m_y_max,
+        m_z_min, m_z_max;
 
-    const void*     m_vertexs;
+    const void* m_vertexs;
     size_t          m_vertex_length;
     const uint32_t* m_indexs;
     size_t          m_index_count;
     const data_layout*
-                    m_formats;
+        m_formats;
     size_t          m_format_count;
     size_t          m_data_size_per_point;
     type            m_type;
     const bone_data**
-                    m_bones;
+        m_bones;
     size_t          m_bone_count;
 };
 
@@ -1909,7 +1911,7 @@ struct jegl_shader
         wrap_mode   m_vwrap;
         uint32_t    m_sampler_id;   // Used for DX11 & HLSL generation
         uint64_t    m_pass_id_count;
-        uint32_t*   m_pass_ids;     // Used for GL3 & GLSL generation
+        uint32_t* m_pass_ids;     // Used for GL3 & GLSL generation
     };
 
     enum uniform_type
@@ -1947,7 +1949,7 @@ struct jegl_shader
     };
     struct unifrom_variables
     {
-        const char*     m_name;
+        const char* m_name;
         uint32_t        m_index;
         uniform_type    m_uniform_type;
         bool            m_updated;
@@ -2037,16 +2039,16 @@ struct jegl_shader
     const char* m_fragment_hlsl_src;
 
     size_t                      m_vertex_spirv_count;
-    const spir_v_code_t*        m_vertex_spirv_codes;
+    const spir_v_code_t* m_vertex_spirv_codes;
 
     size_t                      m_fragment_spirv_count;
-    const spir_v_code_t*        m_fragment_spirv_codes;
+    const spir_v_code_t* m_fragment_spirv_codes;
 
     size_t                      m_vertex_in_count;
-    vertex_in_variables*        m_vertex_in;
+    vertex_in_variables* m_vertex_in;
 
-    unifrom_variables*          m_custom_uniforms;
-    uniform_blocks*             m_custom_uniform_blocks;
+    unifrom_variables* m_custom_uniforms;
+    uniform_blocks* m_custom_uniform_blocks;
     builtin_uniform_location    m_builtin_uniforms;
 
     bool                m_enable_to_shared;
@@ -2055,7 +2057,7 @@ struct jegl_shader
     blend_method        m_blend_src_mode, m_blend_dst_mode;
     cull_mode           m_cull_mode;
 
-    sampler_method*     m_sampler_methods;
+    sampler_method* m_sampler_methods;
     size_t              m_sampler_count;
 };
 
@@ -2067,7 +2069,7 @@ struct jegl_frame_buffer
 {
     // In fact, attachment_t is jeecs::basic::resource<jeecs::graphic::texture>
     typedef struct attachment_t attachment_t;
-    attachment_t*   m_output_attachments;
+    attachment_t* m_output_attachments;
     size_t          m_attachment_count;
     size_t          m_width;
     size_t          m_height;
@@ -2081,7 +2083,7 @@ struct jegl_uniform_buffer
 {
     size_t      m_buffer_binding_place;
     size_t      m_buffer_size;
-    uint8_t*    m_buffer;
+    uint8_t* m_buffer;
 
     // Used for marking update range;
     size_t      m_update_begin_offset;
@@ -2107,7 +2109,7 @@ struct jegl_resource
     };
     union resource_handle
     {
-        void*   m_ptr;
+        void* m_ptr;
         size_t  m_hdl;
         struct
         {
@@ -2118,23 +2120,23 @@ struct jegl_resource
 
     type            m_type;
     bool            m_modified;
-    jegl_context*   m_graphic_thread;
+    jegl_context* m_graphic_thread;
     jeecs::typing::version_t
-                    m_graphic_thread_version;
+        m_graphic_thread_version;
 
-    void*           m_binding_count;
+    void* m_binding_count;
     resource_handle m_handle;
 
-    const char*     m_path;
-    void*           m_raw_ref_count;
+    const char* m_path;
+    void* m_raw_ref_count;
     union
     {
         jegl_custom_resource_t  m_custom_resource;
-        jegl_texture*           m_raw_texture_data;
-        jegl_vertex*            m_raw_vertex_data;
-        jegl_shader*            m_raw_shader_data;
-        jegl_frame_buffer*      m_raw_framebuf_data;
-        jegl_uniform_buffer*    m_raw_uniformbuf_data;
+        jegl_texture* m_raw_texture_data;
+        jegl_vertex* m_raw_vertex_data;
+        jegl_shader* m_raw_shader_data;
+        jegl_frame_buffer* m_raw_framebuf_data;
+        jegl_uniform_buffer* m_raw_uniformbuf_data;
     };
 };
 
@@ -3509,7 +3511,7 @@ je_io_gamepad_is_active [基本接口]
     je_io_close_gamepad
 */
 JE_API bool je_io_gamepad_is_active(
-    je_io_gamepad_handle_t gamepad, 
+    je_io_gamepad_handle_t gamepad,
     jeecs::typing::ms_stamp_t* out_last_pushed_time_may_null);
 /*
 je_io_gamepad_get_button_down [基本接口]
@@ -3716,8 +3718,8 @@ struct jeal_effect_vocal_morpher
     enum phoneme
     {
         A = 0, E, I, O, U,
-        AA, AE, AH, AO, 
-        EH, ER, IH, IY, 
+        AA, AE, AH, AO,
+        EH, ER, IH, IY,
         UH, UW,
         B, D, F, G, J, K, L, M, N, P, R, S, T, V, Z,
     };
@@ -3729,10 +3731,10 @@ struct jeal_effect_vocal_morpher
         SAWTOOTH = 2,
     };
 
-    phoneme m_phonemea;             // 元音a，默认值为 A
-    int m_phonemea_coarse_tuning;   // 元音a粗调，默认值为 0，范围 [-24, 24]
-    phoneme m_phonemeb;             // 元音b，默认值为 ER
-    int m_phonemeb_coarse_tuning;   // 元音b粗调，默认值为 0，范围 [-24, 24]
+    phoneme m_phoneme_a;             // 元音a，默认值为 A
+    int m_phoneme_a_coarse_tuning;   // 元音a粗调，默认值为 0，范围 [-24, 24]
+    phoneme m_phoneme_b;             // 元音b，默认值为 ER
+    int m_phoneme_b_coarse_tuning;   // 元音b粗调，默认值为 0，范围 [-24, 24]
     wavefrom m_waveform;            // 波形类型，默认值为 SINUSOID
     float m_rate;                   // 速率，默认值为 1.41，范围 [0.0, 10.0]
 };
@@ -3820,7 +3822,7 @@ struct jeal_effect_eaxreverb
     float m_diffusion;          // 扩散度，默认值为 1.0，范围 [0.0, 1.0]
     float m_gain;               // 增益，默认值为 0.32，范围 [0.0, 1.0]
     float m_gain_hf;            // 高频增益，默认值为 0.89，范围 [0.0, 1.0]
-    float m_gaim_lf;            // 低频增益，默认值为 0.0，范围 [0.0, 1.0]
+    float m_gain_lf;            // 低频增益，默认值为 0.0，范围 [0.0, 1.0]
     float m_decay_time;         // 衰减时间，默认值为 1.49，范围 [0.1, 20.0]
     float m_decay_hf_ratio;     // 高频衰减比率，默认值为 0.83，范围 [0.1, 2.0]
     float m_decay_lf_ratio;     // 低频衰减比率，默认值为 1.0，范围 [0.1, 2.0]
@@ -3834,7 +3836,7 @@ struct jeal_effect_eaxreverb
     float m_echo_depth;         // 回声深度，默认值为 0.0，范围 [0.0, 1.0]
     float m_modulation_time;    // 调制时间，默认值为 0.25，范围 [0.04, 4.0]
     float m_modulation_depth;  // 调制深度，默认值为 0.0，范围 [0.0, 1.0]
-    float m_air_absorption_hf;  // 高频吸收，默认值为 0.994，范围 [0.892, 1.0]
+    float m_air_absorption_gain_hf;  // 高频吸收，默认值为 0.994，范围 [0.892, 1.0]
     float m_hf_reference;      // 高频反射，默认值为 5000.0，范围 [1000.0, 20000.0]
     float m_lf_reference;      // 低频反射，默认值为 250.0，范围 [20.0, 1000.0]
     float m_room_rolloff_factor;// 房间衰减因子，默认值为 0.0，范围 [0.0, 10.0]
@@ -3986,7 +3988,7 @@ JE_API size_t           jeal_buffer_byte_rate(jeal_buffer* buffer);
 jeal_open_source [基本接口]
 创建一个声源
 */
-JE_API jeal_source*     jeal_open_source();
+JE_API jeal_source* jeal_open_source();
 
 /*
 jeal_close_source [基本接口]
@@ -4273,7 +4275,7 @@ namespace jeecs
 #define JECS_DISABLE_MOVE_AND_COPY(TYPE) \
     JECS_DISABLE_MOVE_AND_COPY_CONSTRUCTOR(TYPE);\
     JECS_DISABLE_MOVE_AND_COPY_OPERATOR(TYPE)
-    
+
 #define JECS_DEFAULT_CONSTRUCTOR(TYPE) \
     TYPE() = default;\
     TYPE(const TYPE &) = default;\
@@ -6269,7 +6271,8 @@ namespace jeecs
 
         template<typename FT>
         struct _executor_extracting_agent : std::false_type
-        { };
+        {
+        };
 
         template<typename ComponentT, typename ... ArgTs>
         struct _const_type_index
@@ -6826,20 +6829,27 @@ namespace jeecs
         struct vec2 : public _basevec2
         {
             constexpr vec2(float _x = 0.f, float _y = 0.f) noexcept
-                :_basevec2(_x, _y) {}
+                :_basevec2(_x, _y) {
+            }
             constexpr vec2(const vec2& _v2)noexcept
-                :_basevec2(_v2.x, _v2.y) {}
+                :_basevec2(_v2.x, _v2.y) {
+            }
             constexpr vec2(vec2&& _v2)noexcept
-                :_basevec2(_v2.x, _v2.y) {}
+                :_basevec2(_v2.x, _v2.y) {
+            }
 
             constexpr vec2(const _basevec3& _v3)noexcept
-                :_basevec2(_v3.x, _v3.y) {}
+                :_basevec2(_v3.x, _v3.y) {
+            }
             constexpr vec2(_basevec3&& _v3)noexcept
-                :_basevec2(_v3.x, _v3.y) {}
+                :_basevec2(_v3.x, _v3.y) {
+            }
             constexpr vec2(const _basevec4& _v4)noexcept
-                :_basevec2(_v4.x, _v4.y) {}
+                :_basevec2(_v4.x, _v4.y) {
+            }
             constexpr vec2(_basevec4&& _v4)noexcept
-                :_basevec2(_v4.x, _v4.y) {}
+                :_basevec2(_v4.x, _v4.y) {
+            }
 
             // + - * / with another vec2
             inline constexpr vec2 operator + (const vec2& _v2) const noexcept
@@ -7136,20 +7146,27 @@ namespace jeecs
         struct vec3 :public _basevec3
         {
             constexpr vec3(float _x = 0.f, float _y = 0.f, float _z = 0.f)noexcept
-                :_basevec3(_x, _y, _z) {}
+                :_basevec3(_x, _y, _z) {
+            }
             constexpr vec3(const vec3& _v3)noexcept
-                :_basevec3(_v3.x, _v3.y, _v3.z) {}
+                :_basevec3(_v3.x, _v3.y, _v3.z) {
+            }
             constexpr vec3(vec3&& _v3)noexcept
-                :_basevec3(_v3.x, _v3.y, _v3.z) {}
+                :_basevec3(_v3.x, _v3.y, _v3.z) {
+            }
 
             constexpr vec3(const _basevec2& _v2)noexcept
-                :_basevec3(_v2.x, _v2.y, 0.f) {}
+                :_basevec3(_v2.x, _v2.y, 0.f) {
+            }
             constexpr vec3(_basevec2&& _v2)noexcept
-                :_basevec3(_v2.x, _v2.y, 0.f) {}
+                :_basevec3(_v2.x, _v2.y, 0.f) {
+            }
             constexpr vec3(const _basevec4& _v4)noexcept
-                :_basevec3(_v4.x, _v4.y, _v4.z) {}
+                :_basevec3(_v4.x, _v4.y, _v4.z) {
+            }
             constexpr vec3(_basevec4&& _v4)noexcept
-                :_basevec3(_v4.x, _v4.y, _v4.z) {}
+                :_basevec3(_v4.x, _v4.y, _v4.z) {
+            }
 
             // + - * / with another vec3
             inline constexpr vec3 operator + (const vec3& _v3) const noexcept
@@ -7318,20 +7335,27 @@ namespace jeecs
         struct vec4 :public _basevec4
         {
             constexpr vec4(float _x = 0.f, float _y = 0.f, float _z = 0.f, float _w = 0.f)noexcept
-                :_basevec4(_x, _y, _z, _w) {}
+                :_basevec4(_x, _y, _z, _w) {
+            }
             constexpr vec4(const vec4& _v4)noexcept
-                :_basevec4(_v4.x, _v4.y, _v4.z, _v4.w) {}
+                :_basevec4(_v4.x, _v4.y, _v4.z, _v4.w) {
+            }
             constexpr vec4(vec4&& _v4)noexcept
-                :_basevec4(_v4.x, _v4.y, _v4.z, _v4.w) {}
+                :_basevec4(_v4.x, _v4.y, _v4.z, _v4.w) {
+            }
 
             constexpr vec4(const _basevec2& _v2)noexcept
-                :_basevec4(_v2.x, _v2.y, 0.f, 0.f) {}
+                :_basevec4(_v2.x, _v2.y, 0.f, 0.f) {
+            }
             constexpr vec4(_basevec2&& _v2)noexcept
-                :_basevec4(_v2.x, _v2.y, 0.f, 0.f) {}
+                :_basevec4(_v2.x, _v2.y, 0.f, 0.f) {
+            }
             constexpr vec4(const _basevec3& _v3)noexcept
-                :_basevec4(_v3.x, _v3.y, _v3.z, 0.f) {}
+                :_basevec4(_v3.x, _v3.y, _v3.z, 0.f) {
+            }
             constexpr vec4(_basevec3&& _v3)noexcept
-                :_basevec4(_v3.x, _v3.y, _v3.z, 0.f) {}
+                :_basevec4(_v3.x, _v3.y, _v3.z, 0.f) {
+            }
 
             // + - * / with another vec4
             inline constexpr vec4 operator + (const vec4& _v4) const noexcept
@@ -7528,7 +7552,8 @@ namespace jeecs
                 : x(0.f)
                 , y(0.f)
                 , z(0.f)
-                , w(1.f) { }
+                , w(1.f) {
+            }
 
             quat(float yaw, float pitch, float roll) noexcept
             {
@@ -7946,8 +7971,8 @@ namespace jeecs
                         {
                             new_texture->pix(ix, iy).set(
                                 src->pix(ix + x, iy + y).get());
-            }
-        }
+                        }
+                    }
 #else
                     auto color_depth = (int)new_texture_format;
                     auto* dst_pixels = new_texture->resource()->m_raw_texture_data->m_pixels;
@@ -7966,9 +7991,9 @@ namespace jeecs
 #endif
 
                     return new_texture;
-    }
+                }
                 return nullptr;
-}
+            }
 
             class pixel
             {
@@ -9005,6 +9030,106 @@ namespace jeecs
 
     namespace audio
     {
+
+        template<typename T>
+        class effect
+        {
+            JECS_DISABLE_MOVE_AND_COPY(effect);
+
+            T* m_effect_instance;
+
+            explicit effect(T* instance)
+                : m_effect_instance(instance)
+            {
+                assert(m_effect_instance != nullptr);
+            }
+
+        public:
+            ~effect()
+            {
+                jeal_effect_close(m_effect_instance);
+            }
+
+            static basic::resource<effect<T>> create()
+            {
+                T* instance;
+                if constexpr (std::is_same_v<T, jeal_effect_reverb>)
+                    instance = jeal_create_effect_reverb();
+                else if constexpr (std::is_same_v<T, jeal_effect_chorus>)
+                    instance = jeal_create_effect_chorus();
+                else if constexpr (std::is_same_v<T, jeal_effect_distortion>)
+                    instance = jeal_create_effect_distortion();
+                else if constexpr (std::is_same_v<T, jeal_effect_echo>)
+                    instance = jeal_create_effect_echo();
+                else if constexpr (std::is_same_v<T, jeal_effect_flanger>)
+                    instance = jeal_create_effect_flanger();
+                else if constexpr (std::is_same_v<T, jeal_effect_frequency_shifter>)
+                    instance = jeal_create_effect_frequency_shifter();
+                else if constexpr (std::is_same_v<T, jeal_effect_vocal_morpher>)
+                    instance = jeal_create_effect_vocal_morpher();
+                else if constexpr (std::is_same_v<T, jeal_effect_pitch_shifter>)
+                    instance = jeal_create_effect_pitch_shifter();
+                else if constexpr (std::is_same_v<T, jeal_effect_ring_modulator>)
+                    instance = jeal_create_effect_ring_modulator();
+                else if constexpr (std::is_same_v<T, jeal_effect_autowah>)
+                    instance = jeal_create_effect_autowah();
+                else if constexpr (std::is_same_v<T, jeal_effect_compressor>)
+                    instance = jeal_create_effect_compressor();
+                else if constexpr (std::is_same_v<T, jeal_effect_equalizer>)
+                    instance = jeal_create_effect_equalizer();
+                else if constexpr (std::is_same_v<T, jeal_effect_eaxreverb>)
+                    instance = jeal_create_effect_eaxreverb();
+                else
+                    static_assert(
+                        std::is_void_v<T> && !std::is_void_v<T> /* false */,
+                        "Unsupported effect type");
+
+                return new effect<T>(instance);
+            }
+
+            void modify(const std::function<void(T*)>& modify_func)
+            {
+                modify_func(m_effect_instance);
+                jeal_effect_update(m_effect_instance);
+            }
+            void* handle() const
+            {
+                return m_effect_instance;
+            }
+        };
+
+        class effect_slot
+        {
+            JECS_DISABLE_MOVE_AND_COPY(effect_slot);
+            jeal_effect_slot* m_effect_slot;
+            effect_slot(jeal_effect_slot* effect_slot)
+                : m_effect_slot(effect_slot)
+            {
+                assert(m_effect_slot != nullptr);
+            }
+        public:
+            ~effect_slot()
+            {
+                jeal_effect_slot_close(m_effect_slot);
+            }
+            template<typename T>
+            void set_effect(const basic::resource<effect<T>>& effect)
+            {
+                jeal_effect_slot_set_effect(m_effect_slot, effect->handle());
+            }
+
+            static basic::resource<effect_slot> create()
+            {
+                auto* slot = jeal_create_effect_slot();
+                assert(slot != nullptr);
+                return new effect_slot(slot);
+            }
+            jeal_effect_slot* handle() const
+            {
+                return m_effect_slot;
+            }
+        };
+
         class buffer
         {
             JECS_DISABLE_MOVE_AND_COPY(buffer);
@@ -9132,6 +9257,10 @@ namespace jeecs
             void set_loop(bool looping)
             {
                 jeal_source_loop(_m_audio_source, looping);
+            }
+            void set_effect_slot(const basic::resource<effect_slot>& effect_slot, size_t pass)
+            {
+                jeal_source_bind_effect_slot(_m_audio_source, effect_slot->handle(), pass);
             }
         };
         class listener
@@ -10072,7 +10201,8 @@ namespace jeecs
             ShadowBuffer() = default;
             ShadowBuffer(const ShadowBuffer& another)
                 : resolution_ratio(another.resolution_ratio)
-            {}
+            {
+            }
             ShadowBuffer(ShadowBuffer&&) = default;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
@@ -10280,14 +10410,14 @@ namespace jeecs
                     };
                     struct component_data
                     {
-                        const jeecs::typing::type_info* 
-                                            m_component_type;
+                        const jeecs::typing::type_info*
+                            m_component_type;
                         const jeecs::typing::typeinfo_member::member_info*
-                                            m_member_info;
+                            m_member_info;
                         data_value          m_member_value;
                         bool                m_offset_mode;
 
-                        void*               m_member_addr_cache;
+                        void* m_member_addr_cache;
                         jeecs::game_entity  m_entity_cache;
                     };
                     struct uniform_data
@@ -10690,10 +10820,10 @@ namespace jeecs
 
             VirtualGamepad()
                 : gamepad(je_io_create_gamepad(nullptr, nullptr))
-                , left_stick_up_left_down_right{ 
-                    input::keycode::W, 
-                    input::keycode::A, 
-                    input::keycode::S, 
+                , left_stick_up_left_down_right{
+                    input::keycode::W,
+                    input::keycode::A,
+                    input::keycode::S,
                     input::keycode::D }
             {
                 keymap[input::keycode::UP] = input::gamepadcode::UP;
@@ -11265,7 +11395,7 @@ namespace jeecs
                 else
                 {
                     // Unknown size_t type? assert and support it if found.
-                    static_assert(sizeof(size_t) == sizeof(uint64_t) 
+                    static_assert(sizeof(size_t) == sizeof(uint64_t)
                         || sizeof(size_t) == sizeof(uint32_t));
                 }
             }
@@ -11483,7 +11613,7 @@ namespace UserInterface::Origin
             static std::optional<gamepad> last()
             {
                 auto gamepad_handles = _get_all_handle();
-                
+
                 typing::ms_stamp_t last_update_time = 0;
                 size_t last_index = SIZE_MAX;
 
@@ -11505,7 +11635,7 @@ namespace UserInterface::Origin
 
                 if (last_index != SIZE_MAX)
                     return gamepad(gamepad_handles[last_index]);
-                
+
                 return std::nullopt;
             }
         };

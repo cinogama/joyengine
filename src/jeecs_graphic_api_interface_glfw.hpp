@@ -21,6 +21,9 @@ namespace jeecs::graphic
         GLFWwindow* _m_windows;
         bool _m_window_resized;
 
+        inline static std::mutex _m_glfw_instance_mx;
+        inline static size_t _m_glfw_taking_count = 0;
+
     public:
         enum interface_type
         {
@@ -159,7 +162,7 @@ namespace jeecs::graphic
 
             je_io_update_key_state(keycode, stage != 0);
         }
-        
+
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WEBGL
         // No gamepad support for webgl.
 #else
@@ -221,8 +224,8 @@ namespace jeecs::graphic
                         if (glfwGetGamepadState(jid, &state))
                         {
                             je_io_gamepad_update_stick(
-                                vgamepad, 
-                                input::joystickcode::L, 
+                                vgamepad,
+                                input::joystickcode::L,
                                 state.axes[GLFW_GAMEPAD_AXIS_LEFT_X],
                                 -state.axes[GLFW_GAMEPAD_AXIS_LEFT_Y]);
                             je_io_gamepad_update_stick(
@@ -258,9 +261,9 @@ namespace jeecs::graphic
                                 input::gamepadcode::DOWN, // GLFW_GAMEPAD_BUTTON_DPAD_DOWN
                                 input::gamepadcode::LEFT, // GLFW_GAMEPAD_BUTTON_DPAD_LEFT
                             };
-                            
+
                             static_assert(
-                                sizeof(GLFW_2_JE_VGP_BUTTON_MAPPING) == 
+                                sizeof(GLFW_2_JE_VGP_BUTTON_MAPPING) ==
                                 (GLFW_GAMEPAD_BUTTON_LAST + 1) * sizeof(input::gamepadcode));
 
                             for (auto glfw_bid = GLFW_GAMEPAD_BUTTON_A;
@@ -290,7 +293,7 @@ namespace jeecs::graphic
             }
         };
         inline static glfw_gamepad_management _gamepad_manager;
-        
+
         static void glfw_callback_gamepad_connect_or_disconnect(int jid, int event)
         {
             if (event == GLFW_CONNECTED)
@@ -307,8 +310,14 @@ namespace jeecs::graphic
             if (type == interface_type::HOLD)
                 return;
 
-            if (!glfwInit())
-                jeecs::debug::logfatal("Failed to init glfw.");
+            do
+            {
+                std::lock_guard g1(_m_glfw_instance_mx);
+
+                if (0 == _m_glfw_taking_count++ && !glfwInit())
+                    jeecs::debug::logfatal("Failed to init glfw.");
+
+            } while (0);
 
             switch (type)
             {
@@ -468,7 +477,7 @@ namespace jeecs::graphic
             else
 #endif
                 glfwSwapInterval(0);
-    }
+        }
         virtual void swap_for_opengl() override
         {
             glfwSwapBuffers(_m_windows);
@@ -522,7 +531,15 @@ namespace jeecs::graphic
 #else
                 _gamepad_manager.detach(this);
 #endif
-                glfwTerminate();
+
+                do
+                {
+                    std::lock_guard g1(_m_glfw_instance_mx);
+
+                    if (0 == --_m_glfw_taking_count)
+                        glfwTerminate();
+
+                } while (0);
             }
         }
 
@@ -537,5 +554,5 @@ namespace jeecs::graphic
             return glfwGetWin32Window(_m_windows);
         }
 #endif
-};
-    }
+    };
+}
