@@ -50,6 +50,7 @@ struct jeal_source
     jeal_buffer* m_last_played_buffer;
     jeal_effect_slot* m_binded_effect_slots_may_null[JEAL_MAX_SOURCE_BINDING_EFFECT_SLOT_COUNT];
 };
+
 struct jeal_buffer
 {
     ALuint m_openal_buffer;
@@ -77,6 +78,10 @@ struct _jeal_static_context
     LPALDELETEAUXILIARYEFFECTSLOTS impl_alDeleteAuxiliaryEffectSlots = nullptr;
     LPALAUXILIARYEFFECTSLOTI impl_alAuxiliaryEffectSloti = nullptr;
     LPALAUXILIARYEFFECTSLOTF impl_alAuxiliaryEffectSlotf = nullptr;
+    LPALGENFILTERS impl_alGenFilters = nullptr;
+    LPALDELETEFILTERS impl_alDeleteFilters = nullptr;
+    LPALFILTERI impl_alFilteri = nullptr;
+    LPALFILTERF impl_alFilterf = nullptr;
 
     std::vector<jeal_device*> _jeal_all_devices;
     std::vector<jeal_capture_device*> _jeal_all_capture_devices;
@@ -508,6 +513,10 @@ bool _jeal_startup_specify_device(jeal_device* device)
         JEAL_LOAD_FUNC(alDeleteAuxiliaryEffectSlots);
         JEAL_LOAD_FUNC(alAuxiliaryEffectSloti);
         JEAL_LOAD_FUNC(alAuxiliaryEffectSlotf);
+        JEAL_LOAD_FUNC(alGenFilters);
+        JEAL_LOAD_FUNC(alDeleteFilters);
+        JEAL_LOAD_FUNC(alFilteri);
+        JEAL_LOAD_FUNC(alFilterf);
     }
 
     _jeal_ctx._jeal_current_device = device;
