@@ -3594,6 +3594,100 @@ je_module_unload [基本接口]
 JE_API void je_module_unload(wo_dylib_handle_t lib);
 
 // Audio
+struct jeal_native_play_device_instance;
+struct jeal_play_device
+{
+    jeal_native_play_device_instance*
+                m_device_instance;
+
+    const char* m_name;     // 设备名称
+    bool        m_active;   // 是否是当前使用的播放设备
+    int         m_max_auxiliary_sends; 
+                            // 最大辅助发送数量，如果等于0，则不支持
+};
+
+/*
+jeal_state [类型]
+用于表示当前声源的播放状态，包括停止、播放中和暂停
+*/
+enum jeal_state
+{
+    JE_AUDIO_STATE_STOPPED,
+    JE_AUDIO_STATE_PLAYING,
+    JE_AUDIO_STATE_PAUSED,
+};
+
+/*
+jeal_format [类型]
+用于表示波形的格式
+*/
+enum jeal_format
+{
+    JE_AUDIO_FORMAT_MONO8,
+    JE_AUDIO_FORMAT_MONO16,
+    JE_AUDIO_FORMAT_MONO32F,
+    JE_AUDIO_FORMAT_STEREO8,
+    JE_AUDIO_FORMAT_STEREO16,
+    JE_AUDIO_FORMAT_STEREO32F,
+};
+
+struct jeal_native_buffer_instance;
+struct jeal_buffer
+{
+    jeal_native_buffer_instance*
+                m_buffer_instance;
+
+    const void* m_data;
+    size_t      m_size;
+    size_t      m_sample_rate;
+    size_t      m_byte_rate;
+    jeal_format m_format;
+};
+
+struct jeal_native_source_instance;
+struct jeal_source
+{
+    jeal_native_source_instance*
+                m_source_instance;
+
+    float       m_gain;         // 音量增益
+    float       m_pitch;        // 播放速度
+    float       m_location[3];  // 声音位置
+    float       m_velocity[3];  // 声源自身速度（非播放速度）
+};
+
+struct jeal_listener
+{
+    float       m_gain;          // 音量增益
+    float       m_location[3];   // 监听器位置
+    float       m_velocity[3];   // 监听器自身速度（非播放速度）
+    float       m_orientation[3][2]; 
+                                 // 监听器朝向（前方向，顶方向）
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 struct jeal_device;
 struct jeal_capture_device;
 struct jeal_source;
@@ -3843,30 +3937,6 @@ struct jeal_effect_eaxreverb
     bool m_decay_hf_limiter;    // 高频衰减限制器，默认值为 true
 };
 
-/*
-jeal_state [类型]
-用于表示当前声源的播放状态，包括停止、播放中和暂停
-*/
-enum jeal_state
-{
-    JE_AUDIO_STATE_STOPPED,
-    JE_AUDIO_STATE_PLAYING,
-    JE_AUDIO_STATE_PAUSED,
-};
-
-/*
-jeal_format [类型]
-用于表示波形的格式
-*/
-enum jeal_format
-{
-    JE_AUDIO_FORMAT_MONO8,
-    JE_AUDIO_FORMAT_MONO16,
-    JE_AUDIO_FORMAT_MONO32F,
-    JE_AUDIO_FORMAT_STEREO8,
-    JE_AUDIO_FORMAT_STEREO16,
-    JE_AUDIO_FORMAT_STEREO32F,
-};
 
 /*
 jeal_get_all_devices [基本接口]
