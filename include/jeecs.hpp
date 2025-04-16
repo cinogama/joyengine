@@ -407,6 +407,19 @@ namespace jeecs
         class type_unregister_guard;
     }
 
+    /*
+    jeecs::audio [命名空间]
+    此处定义引擎音频相关的接口、常量等
+    */
+    namespace audio
+    {
+        /*
+        jeecs::audio::MAX_AUXILIARY_SENDS [常量]
+        用于指示引擎支持的最大辅助发送数量（不等于设备支持的实际发射数量）
+        */
+        constexpr static size_t MAX_AUXILIARY_SENDS = 8;
+    }
+
     class game_system;
     class game_world;
 
@@ -3598,12 +3611,12 @@ struct jeal_native_play_device_instance;
 struct jeal_play_device
 {
     jeal_native_play_device_instance*
-                m_device_instance;
+        m_device_instance;
 
     const char* m_name;     // 设备名称
     bool        m_active;   // 是否是当前使用的播放设备
-    int         m_max_auxiliary_sends; 
-                            // 最大辅助发送数量，如果等于0，则不支持
+    int         m_max_auxiliary_sends;
+    // 最大辅助发送数量，如果等于0，则不支持
 };
 
 /*
@@ -3635,11 +3648,14 @@ struct jeal_native_buffer_instance;
 struct jeal_buffer
 {
     jeal_native_buffer_instance*
-                m_buffer_instance;
+        m_buffer_instance;
+
+    size_t      m_references;   // 引用计数
 
     const void* m_data;
     size_t      m_size;
     size_t      m_sample_rate;
+    size_t      m_sample_size;
     size_t      m_byte_rate;
     jeal_format m_format;
 };
@@ -3648,8 +3664,9 @@ struct jeal_native_source_instance;
 struct jeal_source
 {
     jeal_native_source_instance*
-                m_source_instance;
+        m_source_instance;
 
+    bool        m_loop;         // 是否循环播放
     float       m_gain;         // 音量增益
     float       m_pitch;        // 播放速度
     float       m_location[3];  // 声音位置
@@ -3658,42 +3675,13 @@ struct jeal_source
 
 struct jeal_listener
 {
-    float       m_gain;          // 音量增益
+    float       m_gain;          // 音量增益，最终起效的是 m_gain * m_global_gain
+    float       m_global_gain;   // 全局增益，最终起效的是 m_gain * m_global_gain
     float       m_location[3];   // 监听器位置
     float       m_velocity[3];   // 监听器自身速度（非播放速度）
-    float       m_orientation[3][2]; 
-                                 // 监听器朝向（前方向，顶方向）
+    float       m_orientation[2][3];
+                                // 监听器朝向（前方向，顶方向）
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-struct jeal_device;
-struct jeal_capture_device;
-struct jeal_source;
-struct jeal_buffer;
-
-struct jeal_effect_slot;
 
 /*
 jeal_effect_reverb [类型]
@@ -3937,325 +3925,40 @@ struct jeal_effect_eaxreverb
     bool m_decay_hf_limiter;    // 高频衰减限制器，默认值为 true
 };
 
-
-/*
-jeal_get_all_devices [基本接口]
-获取所有可用设备
-    * 若正在使用中的设备不复存在，那么会重新指定默认的设备
-    * 枚举设备可能是一个耗时操作，因此请不要在性能敏感的地方频繁调用此函数
-    * 任何设备实例都可能在此函数调用后因为移除而失效，因此在调用此函数后，请不要持有/使用此前获取的设备实例
-*/
-JE_API jeal_device** jeal_get_all_devices(size_t* out_len);
-
-/*
-jeal_refetch_all_capture_devices [基本接口]
-结束当前所有正在进行的录音操作，重新获取所有的录音设备
-    * 枚举设备可能是一个耗时操作，因此请不要在性能敏感的地方频繁调用此函数
-    * 任何设备实例都可能在此函数调用后因为移除而失效，因此在调用此函数后，请不要持有/使用此前获取的设备实例
-*/
-JE_API jeal_capture_device** jeal_refetch_all_capture_devices(size_t* out_len);
-
-/*
-jeal_capture_device_open [基本接口]
-使用指定的参数重新初始化录音设备，以便后续的录音操作
-    * 如果未能初始化成功，返回0，否则返回单个采样所需的字节数
-    * 如果设备此前正在进行录音操作，此操作后需要重新开始录音
-    * 给定的缓冲区大小应当始终为单个采样大小的整数倍
-*/
-JE_API size_t jeal_capture_device_open(
-    jeal_capture_device* device,
-    size_t buffer_len,
-    size_t sample_rate,
-    jeal_format format);
-
-/*
-jeal_capture_device_start [基本接口]
-使指定的录音设备开始采样
-    * 开始采样的设备需要先通过 jeal_capture_device_open 初始化
-*/
-JE_API void jeal_capture_device_start(jeal_capture_device* device);
-
-/*
-jeal_capture_device_stop [基本接口]
-使指定的录音设备停止采样
-*/
-JE_API void jeal_capture_device_stop(jeal_capture_device* device);
-
-/*
-jeal_capture_device_sample [基本接口]
-获取设备的采样结果
-    * 如果未能成功获取，返回 false，否则返回 true
-    * 给定的缓冲区大小应当始终为单个采样帧大小的整数倍
-    * 如果 buffer_len 为 0，则此时 out_buffer 可以为 nullptr
-    * out_sampled_len 用于获取本次采样获取到的缓冲区大小（单位为字节）
-    * out_remaining_len 用于获取在本次采样后，缓冲区内剩余的采样大小（单位为字节）
-*/
-JE_API bool jeal_capture_device_sample(
-    jeal_capture_device* device,
-    void* out_buffer,
-    size_t buffer_len,
-    size_t* out_sampled_len,
-    size_t* out_remaining_len);
-
-/*
-jeal_device_name [基本接口]
-获取某个设备的名称
-    * 仅用于调试或显示用途
-*/
-JE_API const char* jeal_device_name(jeal_device* device);
-
-/*
-jeal_captuer_device_name [基本接口]
-获取某个设备的名称
-    * 仅用于调试或显示用途
-*/
-JE_API const char* jeal_captuer_device_name(jeal_capture_device* device);
-
-/*
-jeal_using_device [基本接口]
-指定声音库使用某个设备
-    * 若指定的设备不在设备列表中，则返回false
-*/
-JE_API bool             jeal_using_device(jeal_device* device);
-
-/*
-jeal_load_buffer_from_wav [基本接口]
-从wav文件加载一个波形
-*/
-JE_API jeal_buffer* jeal_load_buffer_from_wav(const char* filename);
-
-/*
-jeal_create_buffer [基本接口]
-从指定的波形数据创建波形对象
-*/
-JE_API jeal_buffer* jeal_create_buffer(
-    const void* buffer_data,
+JE_API const jeal_buffer* jeal_create_buffer(
+    const void* data,
     size_t buffer_data_len,
     size_t sample_rate,
     jeal_format format);
 
-/*
-jeal_close_buffer [基本接口]
-关闭一个波形
-    * 关闭波形前，应当先停止所有正在播放此波形的音源。
-*/
-JE_API void             jeal_close_buffer(jeal_buffer* buffer);
+JE_API const jeal_buffer* jeal_load_buffer_wav(const char* path);
 
-/*
-jeal_buffer_byte_size [基本接口]
-获取一个波形的长度，单位是字节
-*/
-JE_API size_t           jeal_buffer_byte_size(jeal_buffer* buffer);
+JE_API void jeal_close_buffer(const jeal_buffer* buffer);
 
-/*
-jeal_buffer_byte_size [基本接口]
-获取一个波形的速率，单位是比特率
-    * 波形长度除以比特率即可得到波形的持续时间
-*/
-JE_API size_t           jeal_buffer_byte_rate(jeal_buffer* buffer);
+JE_API jeal_source* jeal_create_source();
 
-/*
-jeal_open_source [基本接口]
-创建一个声源
-*/
-JE_API jeal_source* jeal_open_source();
+JE_API void jeal_update_source(jeal_source* source);
 
-/*
-jeal_close_source [基本接口]
-关闭一个声源
-*/
-JE_API void             jeal_close_source(jeal_source* source);
+JE_API void jeal_close_source(jeal_source* source);
 
-/*
-jeal_source_set_buffer [基本接口]
-向声源指定一个波形，注意：
-    * 更换波形之前，需要调用jeal_source_stop终止当前声源的播放操作
-请参见：
-    jeal_source_stop
-*/
-JE_API void             jeal_source_set_buffer(jeal_source* source, jeal_buffer* buffer);
+JE_API void jeal_set_source_buffer(jeal_source* source, const jeal_buffer* buffer);
 
-/*
-jeal_source_loop [基本接口]
-向声源指定是否需要循环播放
-*/
-JE_API void             jeal_source_loop(jeal_source* source, bool loop);
+JE_API void jeal_play_source(jeal_source* source);
 
-/*
-jeal_source_play [基本接口]
-让声源开始或继续播放
-*/
-JE_API void             jeal_source_play(jeal_source* source);
+JE_API void jeal_pause_source(jeal_source* source);
 
-/*
-jeal_source_pause [基本接口]
-暂停当前声源的播放
-*/
-JE_API void             jeal_source_pause(jeal_source* source);
+JE_API void jeal_stop_source(jeal_source* source);
 
-/*
-jeal_source_stop [基本接口]
-停止当前声源的播放
-*/
-JE_API void             jeal_source_stop(jeal_source* source);
+JE_API jeal_state jeal_get_source_play_state(jeal_source* source);
 
-/*
-jeal_source_position [基本接口]
-设置当前声源的位置
-*/
-JE_API void             jeal_source_position(jeal_source* source, float x, float y, float z);
+JE_API size_t jeal_get_source_play_process(jeal_source* source);
 
-/*
-jeal_source_position [基本接口]
-设置当前声源的速度
-    * 此处的速度用于处理多普勒效应，并非是播放速率
-*/
-JE_API void             jeal_source_velocity(jeal_source* source, float x, float y, float z);
+JE_API void jeal_set_source_play_process(jeal_source* source, size_t offset);
 
-/*
-jeal_source_get_byte_offset [基本接口]
-获取当前声源播放到波形的偏移量
-*/
-JE_API size_t           jeal_source_get_byte_offset(jeal_source* source);
+JE_API jeal_listener* jeal_get_listener();
 
-/*
-jeal_source_get_byte_offset [基本接口]
-设置当前声源播放到波形的偏移量
-*/
-JE_API void             jeal_source_set_byte_offset(jeal_source* source, size_t byteoffset);
+JE_API void jeal_update_listener();
 
-/*
-jeal_source_pitch [基本接口]
-调整声源的播放速度，默认值是 1.0
-*/
-JE_API void             jeal_source_pitch(jeal_source* source, float playspeed);
-
-/*
-jeal_source_volume [基本接口]
-调整声源的播放音量，默认值是 1.0
-*/
-JE_API void             jeal_source_volume(jeal_source* source, float volume);
-
-/*
-jeal_source_get_state [基本接口]
-获取当前的声源处于的状态（已停止，播放中或暂停中？）
-*/
-JE_API jeal_state       jeal_source_get_state(jeal_source* source);
-
-/*
-jeal_listener_position [基本接口]
-设置当前监听者的位置
-*/
-JE_API void             jeal_listener_position(float x, float y, float z);
-
-/*
-jeal_listener_position [基本接口]
-设置当前监听者的速度
-*/
-JE_API void             jeal_listener_velocity(float x, float y, float z);
-
-/*
-jeal_listener_direction [基本接口]
-设置当前监听者的面朝方向和头顶方向，两个方向应该正交且为单位向量
-*/
-JE_API void             jeal_listener_direction(
-    float face_x, float face_y, float face_z, float top_x, float top_y, float top_z);
-
-/*
-jeal_listener_volume [基本接口]
-设置当前全局声音的播放音量，默认是 1.0，与jeal_global_volume_scale设置的值相乘之后
-得到最终的音量大小
-请参考：
-    jeal_global_volume_scale
-*/
-JE_API void             jeal_listener_volume(float volume);
-
-/*
-jeal_create_effect_slot [基本接口]
-创建一个效果槽
-    * 效果槽是一个用于存放效果的容器，效果槽可以被添加到声源上
-    * 一个效果槽可以被添加到多个声源上
-    * 一个声源亦可附加多个效果槽，但通常会受到平台限制，单个声源只能附加 1-4 个效果槽
-*/
-JE_API jeal_effect_slot* jeal_create_effect_slot();
-
-/*
-jeal_effect_slot_close [基本接口]
-关闭一个效果槽
-    * 关闭效果槽时应当先解除其与声源的绑定
-*/
-JE_API void jeal_effect_slot_close(jeal_effect_slot* slot);
-
-/*
-jeal_effect_slot_gain [基本接口]
-设置效果槽的增益（权重）
-    * 增益值范围是 [0.0, 1.0]
-    * 默认值是 1.0
-*/
-JE_API void jeal_effect_slot_gain(jeal_effect_slot* slot, float gain);
-
-/*
-jeal_effect_slot_bind [基本接口]
-绑定一个效果到效果槽
-    * 效果传入 nullptr 表示解除绑定
-*/
-JE_API void jeal_effect_slot_set_effect(
-    jeal_effect_slot* slot, void* /* jeal_effect_.. */ effect_may_null);
-
-/*
-jeal_source_bind_effect_slot [基本接口]
-绑定一个效果槽到声源的处理流水线上
-    * 设备对单个声源的效果槽数量有限制，通常是 1-4 个
-    * 如果指示的通道超过了设备的限制，将不会生效
-    * 效果槽传入 nullptr 表示解除绑定
-*/
-JE_API void jeal_source_bind_effect_slot(
-    jeal_source* source, jeal_effect_slot* slot_may_null, size_t pass);
-
-/*
-jeal_create_effect_... [基本接口]
-创建一个音频效果实例
-*/
-JE_API jeal_effect_reverb* jeal_create_effect_reverb();
-JE_API jeal_effect_chorus* jeal_create_effect_chorus();
-JE_API jeal_effect_distortion* jeal_create_effect_distortion();
-JE_API jeal_effect_echo* jeal_create_effect_echo();
-JE_API jeal_effect_flanger* jeal_create_effect_flanger();
-JE_API jeal_effect_frequency_shifter* jeal_create_effect_frequency_shifter();
-JE_API jeal_effect_vocal_morpher* jeal_create_effect_vocal_morpher();
-JE_API jeal_effect_pitch_shifter* jeal_create_effect_pitch_shifter();
-JE_API jeal_effect_ring_modulator* jeal_create_effect_ring_modulator();
-JE_API jeal_effect_autowah* jeal_create_effect_autowah();
-JE_API jeal_effect_compressor* jeal_create_effect_compressor();
-JE_API jeal_effect_equalizer* jeal_create_effect_equalizer();
-JE_API jeal_effect_eaxreverb* jeal_create_effect_eaxreverb();
-
-/*
-jeal_effect_close [基本接口]
-关闭一个音频效果实例
-    * 关闭效果实例前，应当先解除其与效果槽的绑定。
-*/
-JE_API void jeal_effect_close(void* /* jeal_effect_.. */ effect);
-
-/*
-jeal_effect_update [基本接口]
-更新一个音频效果实例
-    * 在更新了效果的参数后，调用此函数来更新效果实例。
-*/
-JE_API void jeal_effect_update(void* /* jeal_effect_.. */ effect);
-
-/*
-jeal_global_volume_scale [基本接口]
-设置全局声音播放系数，默认是 1.0，与jeal_listener_volume设置的值相乘之后
-得到最终的音量大小
-    * 此接口仅应用于因平台本身原因（典型例子是安卓平台切换到后台）等情况
-    时，实现暂停播放音乐的效果；
-    * 仅限于平台兼容工作中使用，一般情况下请`不要`使用此接口调整全局音量，
-    避免与平台实现冲突
-请参考：
-    jeal_listener_volume
-*/
-JE_API void             jeal_global_volume(float volume);
 
 /*
 je_main_script_entry [基本接口]
@@ -9100,112 +8803,12 @@ namespace jeecs
 
     namespace audio
     {
-
-        template<typename T>
-        class effect
-        {
-            JECS_DISABLE_MOVE_AND_COPY(effect);
-
-            T* m_effect_instance;
-
-            explicit effect(T* instance)
-                : m_effect_instance(instance)
-            {
-                assert(m_effect_instance != nullptr);
-            }
-
-        public:
-            ~effect()
-            {
-                jeal_effect_close(m_effect_instance);
-            }
-
-            static basic::resource<effect<T>> create()
-            {
-                T* instance;
-                if constexpr (std::is_same_v<T, jeal_effect_reverb>)
-                    instance = jeal_create_effect_reverb();
-                else if constexpr (std::is_same_v<T, jeal_effect_chorus>)
-                    instance = jeal_create_effect_chorus();
-                else if constexpr (std::is_same_v<T, jeal_effect_distortion>)
-                    instance = jeal_create_effect_distortion();
-                else if constexpr (std::is_same_v<T, jeal_effect_echo>)
-                    instance = jeal_create_effect_echo();
-                else if constexpr (std::is_same_v<T, jeal_effect_flanger>)
-                    instance = jeal_create_effect_flanger();
-                else if constexpr (std::is_same_v<T, jeal_effect_frequency_shifter>)
-                    instance = jeal_create_effect_frequency_shifter();
-                else if constexpr (std::is_same_v<T, jeal_effect_vocal_morpher>)
-                    instance = jeal_create_effect_vocal_morpher();
-                else if constexpr (std::is_same_v<T, jeal_effect_pitch_shifter>)
-                    instance = jeal_create_effect_pitch_shifter();
-                else if constexpr (std::is_same_v<T, jeal_effect_ring_modulator>)
-                    instance = jeal_create_effect_ring_modulator();
-                else if constexpr (std::is_same_v<T, jeal_effect_autowah>)
-                    instance = jeal_create_effect_autowah();
-                else if constexpr (std::is_same_v<T, jeal_effect_compressor>)
-                    instance = jeal_create_effect_compressor();
-                else if constexpr (std::is_same_v<T, jeal_effect_equalizer>)
-                    instance = jeal_create_effect_equalizer();
-                else if constexpr (std::is_same_v<T, jeal_effect_eaxreverb>)
-                    instance = jeal_create_effect_eaxreverb();
-                else
-                    static_assert(
-                        std::is_void_v<T> && !std::is_void_v<T> /* false */,
-                        "Unsupported effect type");
-
-                return new effect<T>(instance);
-            }
-
-            void modify(const std::function<void(T*)>& modify_func)
-            {
-                modify_func(m_effect_instance);
-                jeal_effect_update(m_effect_instance);
-            }
-            void* handle() const
-            {
-                return m_effect_instance;
-            }
-        };
-
-        class effect_slot
-        {
-            JECS_DISABLE_MOVE_AND_COPY(effect_slot);
-            jeal_effect_slot* m_effect_slot;
-            effect_slot(jeal_effect_slot* effect_slot)
-                : m_effect_slot(effect_slot)
-            {
-                assert(m_effect_slot != nullptr);
-            }
-        public:
-            ~effect_slot()
-            {
-                jeal_effect_slot_close(m_effect_slot);
-            }
-            template<typename T>
-            void set_effect(const basic::resource<effect<T>>& effect)
-            {
-                jeal_effect_slot_set_effect(m_effect_slot, effect->handle());
-            }
-
-            static basic::resource<effect_slot> create()
-            {
-                auto* slot = jeal_create_effect_slot();
-                assert(slot != nullptr);
-                return new effect_slot(slot);
-            }
-            jeal_effect_slot* handle() const
-            {
-                return m_effect_slot;
-            }
-        };
-
         class buffer
         {
             JECS_DISABLE_MOVE_AND_COPY(buffer);
 
-            jeal_buffer* _m_audio_buffer;
-            buffer(jeal_buffer* audio_buffer)
+            const jeal_buffer* _m_audio_buffer;
+            buffer(const jeal_buffer* audio_buffer)
                 : _m_audio_buffer(audio_buffer)
             {
                 assert(_m_audio_buffer != nullptr);
@@ -9228,20 +8831,12 @@ namespace jeecs
             }
             inline static basic::resource<buffer> load(const std::string& path)
             {
-                auto* buf = jeal_load_buffer_from_wav(path.c_str());
+                auto* buf = jeal_load_buffer_wav(path.c_str());
                 if (buf != nullptr)
                     return new buffer(buf);
                 return nullptr;
             }
-            inline size_t get_byte_rate()const
-            {
-                return jeal_buffer_byte_rate(_m_audio_buffer);
-            }
-            inline size_t get_byte_size()const
-            {
-                return jeal_buffer_byte_size(_m_audio_buffer);
-            }
-            jeal_buffer* handle()const
+            const jeal_buffer* handle()const
             {
                 return _m_audio_buffer;
             }
@@ -9251,11 +8846,9 @@ namespace jeecs
             JECS_DISABLE_MOVE_AND_COPY(source);
 
             jeal_source* _m_audio_source;
-            basic::resource<buffer> _m_playing_buffer;
 
             source(jeal_source* audio_source)
                 : _m_audio_source(audio_source)
-                , _m_playing_buffer(nullptr)
             {
                 assert(_m_audio_source != nullptr);
             }
@@ -9267,22 +8860,15 @@ namespace jeecs
             }
             inline jeal_state get_state() const
             {
-                return jeal_source_get_state(_m_audio_source);
+                return jeal_get_source_play_state(_m_audio_source);
             }
             inline static basic::resource<source> create()
             {
-                auto* src = jeal_open_source();
-                assert(src != nullptr);
-                return new source(src);
+                return new source(jeal_create_source());
             }
             inline void set_playing_buffer(const basic::resource<buffer>& buffer)
             {
-                if (_m_playing_buffer != buffer)
-                {
-                    _m_playing_buffer = buffer;
-                    stop();
-                    jeal_source_set_buffer(_m_audio_source, buffer->handle());
-                }
+                jeal_set_source_buffer(_m_audio_source, buffer->handle());
             }
             jeal_source* handle()const
             {
@@ -9290,68 +8876,41 @@ namespace jeecs
             }
             void play()
             {
-                jeal_source_play(_m_audio_source);
+                jeal_play_source(_m_audio_source);
             }
             void pause()
             {
-                jeal_source_pause(_m_audio_source);
+                jeal_pause_source(_m_audio_source);
             }
             void stop()
             {
-                jeal_source_stop(_m_audio_source);
+                jeal_stop_source(_m_audio_source);
             }
             size_t get_playing_offset() const
             {
-                return jeal_source_get_byte_offset(_m_audio_source);
+                return jeal_get_source_play_process(_m_audio_source);
             }
             void set_playing_offset(size_t offset)
             {
-                jeal_source_set_byte_offset(_m_audio_source, offset);
+                jeal_set_source_play_process(_m_audio_source, offset);
             }
-            void set_pitch(float patch)
+            void update(const std::function<void(jeal_source*)>& func)
             {
-                jeal_source_pitch(_m_audio_source, patch);
-            }
-            void set_volume(float patch)
-            {
-                jeal_source_volume(_m_audio_source, patch);
-            }
-            void set_position(const math::vec3& pos)
-            {
-                jeal_source_position(_m_audio_source, pos.x, pos.y, pos.z);
-            }
-            void set_velocity(const math::vec3& vlo)
-            {
-                jeal_source_velocity(_m_audio_source, vlo.x, vlo.y, vlo.z);
-            }
-            void set_loop(bool looping)
-            {
-                jeal_source_loop(_m_audio_source, looping);
-            }
-            void set_effect_slot(const basic::resource<effect_slot>& effect_slot, size_t pass)
-            {
-                jeal_source_bind_effect_slot(_m_audio_source, effect_slot->handle(), pass);
+                func(handle());
+                jeal_update_source(_m_audio_source);
             }
         };
         class listener
         {
         public:
-            inline static void set_position(const math::vec3& pos)
+            static jeal_listener* handle()
             {
-                jeal_listener_position(pos.x, pos.y, pos.z);
+                return jeal_get_listener();
             }
-            inline static void set_velocity(const math::vec3& pos)
+            static void update(const std::function<void(jeal_listener*)>& func)
             {
-                jeal_listener_velocity(pos.x, pos.y, pos.z);
-            }
-            inline static void set_direction(const math::vec3& face_dir, const math::vec3& top_dir)
-            {
-                jeal_listener_direction(
-                    face_dir.x, face_dir.y, face_dir.z, top_dir.x, top_dir.y, top_dir.z);
-            }
-            inline static void set_volume(float volume)
-            {
-                jeal_listener_volume(volume);
+                func(jeal_get_listener());
+                jeal_update_listener();
             }
         };
     }
