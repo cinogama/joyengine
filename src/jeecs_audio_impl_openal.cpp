@@ -15,6 +15,12 @@
 struct jeal_native_effect_instance
 {
     ALuint m_effect_id;
+
+    struct dump_data_t
+    {
+
+    };
+    std::optional<dump_data_t> m_dump;
 };
 struct alignas(8) jeal_effect_head
 {
@@ -38,14 +44,19 @@ static_assert(sizeof(jeal_effect_head) % alignof(jeal_effect_equalizer) == 0);
 static_assert(sizeof(jeal_effect_head) % alignof(jeal_effect_eaxreverb) == 0);
 
 #define JE_EFFECT_HEAD(v) (jeal_effect_head*)(reinterpret_cast<intptr_t>(v) - sizeof(jeal_effect_head))
+#define JE_EFFECT_DATA(t, v) (t*)(reinterpret_cast<intptr_t>(v) + sizeof(jeal_effect_head))
 
 namespace jeecs
 {
     class AudioContextHelpler
     {
     public:
-        static void buffer_increase_ref(const jeal_buffer* buffer);
-        static void buffer_decrease_ref(const jeal_buffer* buffer);
+        static void increase_ref(const jeal_buffer* buffer);
+        static void decrease_ref(const jeal_buffer* buffer);
+        static void increase_ref(jeal_effect_head* effect);
+        static void decrease_ref(jeal_effect_head* effect);
+        static void increase_ref(jeal_effect_slot* effect_slot);
+        static void decrease_ref(jeal_effect_slot* effect_slot);
 
         static void effect_init_default(jeal_effect_head* head, jeal_effect_reverb* reverb);
         static void effect_init_default(jeal_effect_head* head, jeal_effect_chorus* chorus);
@@ -61,37 +72,52 @@ namespace jeecs
         static void effect_init_default(jeal_effect_head* head, jeal_effect_equalizer* equalizer);
         static void effect_init_default(jeal_effect_head* head, jeal_effect_eaxreverb* eaxreverb);
 
-        class BufferHolder
+        template<typename T>
+        class Holder
         {
-            JECS_DISABLE_MOVE_AND_COPY(BufferHolder);
+            JECS_DISABLE_MOVE_AND_COPY(Holder);
 
-            std::optional<const jeal_buffer*> m_buffer;
+            std::optional<T*> m_res;
         public:
-            BufferHolder() = default;
-            ~BufferHolder()
+            Holder() = default;
+            ~Holder()
             {
-                if (m_buffer.has_value())
-                    buffer_decrease_ref(m_buffer.value());
+                if (m_res.has_value())
+                    decrease_ref(m_res.value());
             }
 
             bool has_value() const
             {
-                return m_buffer.has_value();
+                return m_res.has_value();
             }
-            const jeal_buffer* value() const
+            T* value() const
             {
-                return m_buffer.value();
+                return m_res.value();
             }
 
-            void set_buffer(const jeal_buffer* buffer)
+            void set_res(T* res)
             {
-                assert(buffer != nullptr);
-                AudioContextHelpler::buffer_increase_ref(buffer);
+                assert(res != nullptr);
+                increase_ref(res);
 
-                if (m_buffer.has_value())
-                    buffer_decrease_ref(m_buffer.value());
+                if (m_res.has_value())
+                    decrease_ref(m_res.value());
 
-                m_buffer = buffer;
+                m_res = res;
+            }
+            void set_res_may_null(T* res)
+            {
+                if (res != nullptr)
+                    set_res(res);
+                else
+                    reset();
+            }
+            void reset()
+            {
+                if (m_res.has_value())
+                    decrease_ref(m_res.value());
+
+                m_res.reset();
             }
         };
     };
@@ -100,11 +126,18 @@ namespace jeecs
 struct jeal_native_buffer_instance
 {
     ALuint m_buffer_id;
+
+    struct dump_data_t
+    {
+
+    };
+    std::optional<dump_data_t> m_dump;
 };
 struct jeal_native_source_instance
 {
     ALuint m_source_id;
-    jeecs::AudioContextHelpler::BufferHolder m_playing_buffer;
+    jeecs::AudioContextHelpler::Holder<const jeal_buffer> m_playing_buffer;
+    jeecs::AudioContextHelpler::Holder<jeal_effect_slot> m_playing_effect_slot[jeecs::audio::MAX_AUXILIARY_SENDS];
 
     // Dump data:
     struct dump_data_t
@@ -114,7 +147,17 @@ struct jeal_native_source_instance
     };
     std::optional<dump_data_t> m_dump;
 };
+struct jeal_native_effect_slot_instance
+{
+    ALuint m_effect_slot_id;
+    jeecs::AudioContextHelpler::Holder<jeal_effect_head> m_binding_effect;
 
+    struct dump_data_t
+    {
+
+    };
+    std::optional<dump_data_t> m_dump;
+};
 
 namespace jeecs
 {
@@ -135,11 +178,10 @@ namespace jeecs
         std::unordered_set<jeal_buffer*> m_buffers;
         std::mutex m_effects_mx;       // g3
         std::unordered_set<jeal_effect_head*> m_effects;
+        std::mutex m_effect_slots_mx;  // g4
+        std::unordered_set<jeal_effect_slot*> m_effect_slots;
 
         jeal_listener m_listener;
-
-        constexpr static ALCint M_ENGINE_ALC_MAX_AUXILIARY_SENDS =
-            audio::MAX_AUXILIARY_SENDS;
 
         struct OpenALEfx
         {
@@ -198,6 +240,8 @@ namespace jeecs
                 m_sources_dump;
             std::unordered_map<jeal_effect_head*, jeal_native_effect_instance*>
                 m_effects_dump;
+            std::unordered_map<jeal_effect_slot*, jeal_native_effect_slot_instance*>
+                m_effect_slots_dump;
         };
         std::optional<jeal_play_device_states_dump> m_play_state_dump = std::nullopt;
 
@@ -217,14 +261,6 @@ namespace jeecs
             assert(m_current_play_device.has_value());
 
             auto& states = m_play_state_dump.emplace();
-
-            for (auto* buffer : m_buffers)
-            {
-                assert(buffer->m_buffer_instance != nullptr);
-
-                // NOTE: Buffer 没有什么特别需要转储的状态，此处只保留 native instance 的实例
-                states.m_buffers_dump[buffer] = shutdown_buffer_native_instance(buffer);
-            }
 
             for (auto* source : m_sources)
             {
@@ -260,6 +296,39 @@ namespace jeecs
 
                 states.m_sources_dump[source] = shutdown_source_native_instance(source);
             }
+
+            for (auto* buffer : m_buffers)
+            {
+                // NOTE: 转储时，设备必然存在，所以instance也必然存在，下同
+                assert(buffer->m_buffer_instance != nullptr);
+
+                auto& dump = buffer->m_buffer_instance->m_dump.emplace();
+                (void)dump;
+
+                // NOTE: Buffer 没有什么特别需要转储的状态，此处只保留 native instance 的实例
+                states.m_buffers_dump[buffer] = shutdown_buffer_native_instance(buffer);
+            }
+
+            for (auto* effect_slot : m_effect_slots)
+            {
+                assert(effect_slot->m_effect_slot_instance != nullptr);
+
+                auto& dump = effect_slot->m_effect_slot_instance->m_dump.emplace();
+                (void)dump;
+
+                states.m_effect_slots_dump[effect_slot] =
+                    shutdown_effect_slot_native_instance(effect_slot);
+            }
+
+            for (auto* effect : m_effects)
+            {
+                assert(effect->m_effect_instance != nullptr);
+
+                auto& dump = effect->m_effect_instance->m_dump.emplace();
+                (void)dump;
+
+                states.m_effects_dump[effect] = shutdown_effect_native_instance(effect);
+            }
         }
         void restore_playing_states()
         {
@@ -267,6 +336,62 @@ namespace jeecs
             assert(m_current_play_device.has_value());
 
             auto& states = m_play_state_dump.value();
+
+            for (auto* effect : m_effects)
+            {
+                auto fnd = states.m_effects_dump.find(effect);
+                if (fnd != states.m_effects_dump.end())
+                {
+                    // 有之前留下的转储信息，更新之
+                    assert(effect->m_effect_instance == nullptr);
+
+                    effect->m_effect_instance = fnd->second;
+                    if (m_alext_efx.has_value())
+                        m_alext_efx.value().alGenEffects(1, &effect->m_effect_instance->m_effect_id);
+
+                    fnd->second = nullptr; // 置空，后续需要清理无主的转储信息，避免错误释放
+                }
+                // else
+                    // ; // 这是一个新的 effect 实例，在转储期间被创建出来的。
+
+                update_effect_lockfree(effect);
+            }
+            for (auto& [_, effect_instance] : states.m_effects_dump)
+            {
+                // 释放无主的 effect 转储实例
+                if (effect_instance != nullptr)
+                    delete effect_instance;
+            }
+
+            /////////
+
+            for (auto* effect_slot : m_effect_slots)
+            {
+                auto fnd = states.m_effect_slots_dump.find(effect_slot);
+                if (fnd != states.m_effect_slots_dump.end())
+                {
+                    // 有之前留下的转储信息，更新之
+                    assert(effect_slot->m_effect_slot_instance == nullptr);
+
+                    effect_slot->m_effect_slot_instance = fnd->second;
+                    if (m_alext_efx.has_value())
+                        m_alext_efx.value().alGenAuxiliaryEffectSlots(1, &effect_slot->m_effect_slot_instance->m_effect_slot_id);
+
+                    fnd->second = nullptr; // 置空，后续需要清理无主的转储信息，避免错误释放
+                }
+                // else
+                    // ; // 这是一个新的 effect slot 实例，在转储期间被创建出来的。
+
+                update_effect_slot_lockfree(effect_slot);
+            }
+            for (auto& [_, effect_slot_instance] : states.m_effect_slots_dump)
+            {
+                // 释放无主的 effect slot 转储实例
+                if (effect_slot_instance != nullptr)
+                    delete effect_slot_instance;
+            }
+
+            /////////
 
             for (auto* buffer : m_buffers)
             {
@@ -277,6 +402,8 @@ namespace jeecs
                     assert(buffer->m_buffer_instance == nullptr);
 
                     buffer->m_buffer_instance = fnd->second;
+                    alGenBuffers(1, &buffer->m_buffer_instance->m_buffer_id);
+
                     fnd->second = nullptr; // 置空，后续需要清理无主的转储信息，避免错误释放
                 }
                 // else
@@ -284,6 +411,14 @@ namespace jeecs
 
                 update_buffer_lockfree(buffer);
             }
+            for (auto& [_, buffer_instance] : states.m_buffers_dump)
+            {
+                // 释放无主的 buffer 转储实例
+                if (buffer_instance != nullptr)
+                    delete buffer_instance;
+            }
+
+            /////////
 
             for (auto* source : m_sources)
             {
@@ -294,6 +429,8 @@ namespace jeecs
                     assert(source->m_source_instance == nullptr);
 
                     source->m_source_instance = fnd->second;
+                    alGenSources(1, &source->m_source_instance->m_source_id);
+
                     fnd->second = nullptr; // 置空，后续需要清理无主的转储信息，避免错误释放
                 }
                 // else
@@ -301,12 +438,11 @@ namespace jeecs
 
                 update_source_lockfree(source);
             }
-
-            for (auto& [_, buffer_instance] : states.m_buffers_dump)
+            for (auto& [_, source_instance] : states.m_sources_dump)
             {
-                // 释放无主的 buffer 转储实例
-                if (buffer_instance != nullptr)
-                    delete buffer_instance;
+                // 释放无主的 source 转储实例
+                if (source_instance != nullptr)
+                    delete source_instance;
             }
 
             m_play_state_dump.reset();
@@ -491,7 +627,7 @@ namespace jeecs
 
                             new_device.m_max_auxiliary_sends = std::min(
                                 device_max_auxiliary_sends,
-                                M_ENGINE_ALC_MAX_AUXILIARY_SENDS);
+                                (ALCint)audio::MAX_AUXILIARY_SENDS);
                         }
 
                         new_device.m_device_instance = AL_JE_DEVICE(device_instance);
@@ -514,7 +650,7 @@ namespace jeecs
                 debug::logwarn("No play devices found.");
         }
 
-        ALenum je_al_format(jeal_format format, size_t* out_byte_per_sample)
+        static ALenum je_al_format(jeal_format format, size_t* out_byte_per_sample)
         {
             switch (format)
             {
@@ -553,15 +689,22 @@ namespace jeecs
             }
 
             if (buffer->m_buffer_instance == nullptr)
+            {
                 buffer->m_buffer_instance = new jeal_native_buffer_instance;
+                alGenBuffers(1, &buffer->m_buffer_instance->m_buffer_id);
+            }
 
-            alGenBuffers(1, &buffer->m_buffer_instance->m_buffer_id);
-            alBufferData(
-                buffer->m_buffer_instance->m_buffer_id,
-                je_al_format(buffer->m_format, nullptr),
-                buffer->m_data,
-                buffer->m_size,
-                buffer->m_sample_rate);
+            if (buffer->m_buffer_instance->m_dump.has_value())
+            {
+                alBufferData(
+                    buffer->m_buffer_instance->m_buffer_id,
+                    je_al_format(buffer->m_format, nullptr),
+                    buffer->m_data,
+                    buffer->m_size,
+                    buffer->m_sample_rate);
+
+                buffer->m_buffer_instance->m_dump.reset();
+            }
         }
         const jeal_buffer* instance_buffer(
             const void* new_allocated_buffer_data,
@@ -596,7 +739,6 @@ namespace jeecs
             audio_buffer->m_byte_rate = byte_per_sample * audio_buffer->m_sample_rate;
 
             m_buffers.emplace(audio_buffer);
-
             update_buffer_lockfree(audio_buffer);
 
             return audio_buffer;
@@ -616,7 +758,6 @@ namespace jeecs
         void shutdown_buffer(jeal_buffer* buffer)
         {
             assert(buffer != nullptr);
-            assert(buffer->m_buffer_instance != nullptr);
 
             jeal_buffer* rw_buffer = const_cast<jeal_buffer*>(buffer);
             auto* native_instance = shutdown_buffer_native_instance(rw_buffer);
@@ -655,11 +796,12 @@ namespace jeecs
             if (source->m_source_instance == nullptr)
             {
                 source->m_source_instance = new jeal_native_source_instance;
+                alGenSources(1, &source->m_source_instance->m_source_id);
+
                 assert(!source->m_source_instance->m_playing_buffer.has_value());
                 assert(!source->m_source_instance->m_dump.has_value());
             }
 
-            alGenSources(1, &source->m_source_instance->m_source_id);
             alSourcei(source->m_source_instance->m_source_id, AL_LOOPING, source->m_loop ? AL_TRUE : AL_FALSE);
             alSourcef(source->m_source_instance->m_source_id, AL_GAIN, source->m_gain);
             alSourcef(source->m_source_instance->m_source_id, AL_PITCH, source->m_pitch);
@@ -700,6 +842,20 @@ namespace jeecs
                     }
                 }
 
+                const size_t max_auxiliary_sends = m_current_play_device.value()->m_max_auxiliary_sends;
+                for (size_t i = 0; i < max_auxiliary_sends; i += 1)
+                {
+                    auto& binded_effect_slot = source->m_source_instance->m_playing_effect_slot[i];
+
+                    alSource3i(source->m_source_instance->m_source_id,
+                        AL_AUXILIARY_SEND_FILTER,
+                        (ALint)i,
+                        binded_effect_slot.has_value()
+                        ? binded_effect_slot.value()->m_effect_slot_instance->m_effect_slot_id
+                        : AL_EFFECTSLOT_NULL,
+                        AL_FILTER_NULL);
+                }
+
                 source->m_source_instance->m_dump.reset();
             }
         }
@@ -718,7 +874,6 @@ namespace jeecs
         void shutdown_source(jeal_source* source)
         {
             assert(source != nullptr);
-            assert(source->m_source_instance != nullptr);
 
             auto* native_instance = shutdown_source_native_instance(source);
             if (native_instance == nullptr && m_play_state_dump.has_value())
@@ -776,18 +931,489 @@ namespace jeecs
 
             return new_dump_for_no_device_context_source;
         }
+
+        jeal_native_effect_slot_instance* require_dump_for_no_device_context_effect_slot(
+            jeal_effect_slot* slot)
+        {
+            assert(slot != nullptr);
+
+            if (!m_play_state_dump.has_value())
+                m_play_state_dump.emplace();
+
+            auto& dump = m_play_state_dump.value();
+
+            auto fnd = dump.m_effect_slots_dump.find(slot);
+            if (fnd != dump.m_effect_slots_dump.end())
+            {
+                // 此 source 已经存在于转储中
+                return fnd->second;
+            }
+
+            jeal_native_effect_slot_instance* new_dump_for_no_device_context_effect_slot =
+                new jeal_native_effect_slot_instance;
+
+            auto& effect_slot_dump = new_dump_for_no_device_context_effect_slot->m_dump.emplace();
+            (void)effect_slot_dump;
+
+            // NOTE: 只有完全没有设备的情况下才需要 require_dump_for_no_device_context_effect_slot，此时
+            //      源 ID 已经可有可无，此处不需要设置
+            new_dump_for_no_device_context_effect_slot->m_effect_slot_id = 0;
+
+            dump.m_effect_slots_dump.insert(
+                std::make_pair(
+                    slot, new_dump_for_no_device_context_effect_slot));
+
+            return new_dump_for_no_device_context_effect_slot;
+        }
+
         void close_buffer_lockfree(const jeal_buffer* buffer)
         {
             auto* rw_buffer = const_cast<jeal_buffer*>(buffer);
-
-            assert(0 == rw_buffer->m_buffer_instance);
-            // Remove from the set.
 
             m_buffers.erase(rw_buffer);
             shutdown_buffer(rw_buffer);
         }
 
+        void update_effect_lockfree(jeal_effect_head* effect)
+        {
+            if (!m_current_play_device.has_value())
+            {
+                // 此时应该没有任何可用设备
+                assert(effect->m_effect_instance == nullptr);
+                return;
+            }
+
+            auto* efx = m_alext_efx.has_value() ? &m_alext_efx.value() : nullptr;
+
+            if (effect->m_effect_instance == nullptr)
+            {
+                effect->m_effect_instance = new jeal_native_effect_instance;
+                if (efx != nullptr)
+                    efx->alGenEffects(1, &effect->m_effect_instance->m_effect_id);
+            }
+
+            if (efx != nullptr)
+            {
+                ALuint effect_id = effect->m_effect_instance->m_effect_id;
+
+                efx->alEffecti(effect_id, AL_EFFECT_TYPE, effect->m_effect_kind);
+
+                switch (effect->m_effect_kind)
+                {
+                case AL_EFFECT_REVERB:
+                {
+                    const jeal_effect_reverb* instance_data = JE_EFFECT_DATA(jeal_effect_reverb, effect);
+
+                    efx->alEffectf(effect_id, AL_REVERB_DENSITY, instance_data->m_density);
+                    efx->alEffectf(effect_id, AL_REVERB_DIFFUSION, instance_data->m_diffusion);
+                    efx->alEffectf(effect_id, AL_REVERB_GAIN, instance_data->m_gain);
+                    efx->alEffectf(effect_id, AL_REVERB_GAINHF, instance_data->m_gain_hf);
+                    efx->alEffectf(effect_id, AL_REVERB_DECAY_TIME, instance_data->m_decay_time);
+                    efx->alEffectf(effect_id, AL_REVERB_DECAY_HFRATIO, instance_data->m_decay_hf_ratio);
+                    efx->alEffectf(effect_id, AL_REVERB_REFLECTIONS_GAIN, instance_data->m_reflections_gain);
+                    efx->alEffectf(effect_id, AL_REVERB_REFLECTIONS_DELAY, instance_data->m_reflections_delay);
+                    efx->alEffectf(effect_id, AL_REVERB_LATE_REVERB_GAIN, instance_data->m_late_reverb_gain);
+                    efx->alEffectf(effect_id, AL_REVERB_LATE_REVERB_DELAY, instance_data->m_late_reverb_delay);
+                    efx->alEffectf(effect_id, AL_REVERB_AIR_ABSORPTION_GAINHF, instance_data->m_air_absorption_gain_hf);
+                    efx->alEffectf(effect_id, AL_REVERB_ROOM_ROLLOFF_FACTOR, instance_data->m_room_rolloff_factor);
+                    efx->alEffecti(effect_id, AL_REVERB_DECAY_HFLIMIT, instance_data->m_decay_hf_limit ? AL_TRUE : AL_FALSE);
+
+                    break;
+                }
+                case AL_EFFECT_CHORUS:
+                {
+                    const jeal_effect_chorus* instance_data = JE_EFFECT_DATA(jeal_effect_chorus, effect);
+
+                    efx->alEffecti(effect_id, AL_CHORUS_WAVEFORM, (ALint)instance_data->m_waveform);
+                    efx->alEffecti(effect_id, AL_CHORUS_PHASE, instance_data->m_phase);
+                    efx->alEffectf(effect_id, AL_CHORUS_RATE, instance_data->m_rate);
+                    efx->alEffectf(effect_id, AL_CHORUS_DEPTH, instance_data->m_depth);
+                    efx->alEffectf(effect_id, AL_CHORUS_FEEDBACK, instance_data->m_feedback);
+                    efx->alEffectf(effect_id, AL_CHORUS_DELAY, instance_data->m_delay);
+
+                    break;
+                }
+                case AL_EFFECT_DISTORTION:
+                {
+                    const jeal_effect_distortion* instance_data = JE_EFFECT_DATA(jeal_effect_distortion, effect);
+
+                    efx->alEffectf(effect_id, AL_DISTORTION_EDGE, instance_data->m_edge);
+                    efx->alEffectf(effect_id, AL_DISTORTION_GAIN, instance_data->m_gain);
+                    efx->alEffectf(effect_id, AL_DISTORTION_LOWPASS_CUTOFF, instance_data->m_lowpass_cutoff);
+                    efx->alEffectf(effect_id, AL_DISTORTION_EQCENTER, instance_data->m_equalizer_center_freq);
+                    efx->alEffectf(effect_id, AL_DISTORTION_EQBANDWIDTH, instance_data->m_equalizer_bandwidth);
+
+                    break;
+                }
+                case AL_EFFECT_ECHO:
+                {
+                    const jeal_effect_echo* instance_data = JE_EFFECT_DATA(jeal_effect_echo, effect);
+
+                    efx->alEffectf(effect_id, AL_ECHO_DELAY, instance_data->m_delay);
+                    efx->alEffectf(effect_id, AL_ECHO_LRDELAY, instance_data->m_lr_delay);
+                    efx->alEffectf(effect_id, AL_ECHO_DAMPING, instance_data->m_damping);
+                    efx->alEffectf(effect_id, AL_ECHO_FEEDBACK, instance_data->m_feedback);
+                    efx->alEffectf(effect_id, AL_ECHO_SPREAD, instance_data->m_spread);
+
+                    break;
+                }
+                case AL_EFFECT_FLANGER:
+                {
+                    const jeal_effect_flanger* instance_data = JE_EFFECT_DATA(jeal_effect_flanger, effect);
+
+                    efx->alEffecti(effect_id, AL_FLANGER_WAVEFORM, (ALint)instance_data->m_waveform);
+                    efx->alEffecti(effect_id, AL_FLANGER_PHASE, instance_data->m_phase);
+                    efx->alEffectf(effect_id, AL_FLANGER_RATE, instance_data->m_rate);
+                    efx->alEffectf(effect_id, AL_FLANGER_DEPTH, instance_data->m_depth);
+                    efx->alEffectf(effect_id, AL_FLANGER_FEEDBACK, instance_data->m_feedback);
+                    efx->alEffectf(effect_id, AL_FLANGER_DELAY, instance_data->m_delay);
+
+                    break;
+                }
+                case AL_EFFECT_FREQUENCY_SHIFTER:
+                {
+                    const jeal_effect_frequency_shifter* instance_data = JE_EFFECT_DATA(jeal_effect_frequency_shifter, effect);
+
+                    efx->alEffectf(effect_id, AL_FREQUENCY_SHIFTER_FREQUENCY, instance_data->m_frequency);
+                    efx->alEffecti(effect_id, AL_FREQUENCY_SHIFTER_LEFT_DIRECTION, (ALint)instance_data->m_left_direction);
+                    efx->alEffecti(effect_id, AL_FREQUENCY_SHIFTER_RIGHT_DIRECTION, (ALint)instance_data->m_right_direction);
+
+                    break;
+                }
+                case AL_EFFECT_VOCAL_MORPHER:
+                {
+                    const jeal_effect_vocal_morpher* instance_data = JE_EFFECT_DATA(jeal_effect_vocal_morpher, effect);
+
+                    efx->alEffecti(effect_id, AL_VOCAL_MORPHER_PHONEMEA, (ALint)instance_data->m_phoneme_a);
+                    efx->alEffecti(effect_id, AL_VOCAL_MORPHER_PHONEMEA_COARSE_TUNING, instance_data->m_phoneme_a_coarse_tuning);
+                    efx->alEffecti(effect_id, AL_VOCAL_MORPHER_PHONEMEB, (ALint)instance_data->m_phoneme_b);
+                    efx->alEffecti(effect_id, AL_VOCAL_MORPHER_PHONEMEB_COARSE_TUNING, instance_data->m_phoneme_b_coarse_tuning);
+                    efx->alEffecti(effect_id, AL_VOCAL_MORPHER_WAVEFORM, (ALint)instance_data->m_waveform);
+                    efx->alEffectf(effect_id, AL_VOCAL_MORPHER_RATE, instance_data->m_rate);
+
+                    break;
+                }
+                case AL_EFFECT_PITCH_SHIFTER:
+                {
+                    const jeal_effect_pitch_shifter* instance_data = JE_EFFECT_DATA(jeal_effect_pitch_shifter, effect);
+
+                    efx->alEffecti(effect_id, AL_PITCH_SHIFTER_COARSE_TUNE, instance_data->m_coarse_tune);
+                    efx->alEffecti(effect_id, AL_PITCH_SHIFTER_FINE_TUNE, instance_data->m_fine_tune);
+
+                    break;
+                }
+                case AL_EFFECT_RING_MODULATOR:
+                {
+                    const jeal_effect_ring_modulator* instance_data = JE_EFFECT_DATA(jeal_effect_ring_modulator, effect);
+
+                    efx->alEffectf(effect_id, AL_RING_MODULATOR_FREQUENCY, instance_data->m_frequency);
+                    efx->alEffectf(effect_id, AL_RING_MODULATOR_HIGHPASS_CUTOFF, instance_data->m_highpass_cutoff);
+                    efx->alEffecti(effect_id, AL_RING_MODULATOR_WAVEFORM, (ALint)instance_data->m_waveform);
+
+                    break;
+                }
+                case AL_EFFECT_AUTOWAH:
+                {
+                    const jeal_effect_autowah* instance_data = JE_EFFECT_DATA(jeal_effect_autowah, effect);
+
+                    efx->alEffectf(effect_id, AL_AUTOWAH_ATTACK_TIME, instance_data->m_attack_time);
+                    efx->alEffectf(effect_id, AL_AUTOWAH_RELEASE_TIME, instance_data->m_release_time);
+                    efx->alEffectf(effect_id, AL_AUTOWAH_RESONANCE, instance_data->m_resonance);
+                    efx->alEffectf(effect_id, AL_AUTOWAH_PEAK_GAIN, instance_data->m_peak_gain);
+
+                    break;
+                }
+                case AL_EFFECT_COMPRESSOR:
+                {
+                    const jeal_effect_compressor* instance_data = JE_EFFECT_DATA(jeal_effect_compressor, effect);
+
+                    efx->alEffecti(effect_id, AL_COMPRESSOR_ONOFF, instance_data->m_enabled ? AL_TRUE : AL_FALSE);
+
+                    break;
+                }
+                case AL_EFFECT_EQUALIZER:
+                {
+                    const jeal_effect_equalizer* instance_data = JE_EFFECT_DATA(jeal_effect_equalizer, effect);
+
+                    efx->alEffectf(effect_id, AL_EQUALIZER_LOW_GAIN, instance_data->m_low_gain);
+                    efx->alEffectf(effect_id, AL_EQUALIZER_LOW_CUTOFF, instance_data->m_low_cutoff);
+                    efx->alEffectf(effect_id, AL_EQUALIZER_MID1_GAIN, instance_data->m_mid1_gain);
+                    efx->alEffectf(effect_id, AL_EQUALIZER_MID1_CENTER, instance_data->m_mid1_center);
+                    efx->alEffectf(effect_id, AL_EQUALIZER_MID1_WIDTH, instance_data->m_mid1_width);
+                    efx->alEffectf(effect_id, AL_EQUALIZER_MID2_GAIN, instance_data->m_mid2_gain);
+                    efx->alEffectf(effect_id, AL_EQUALIZER_MID2_CENTER, instance_data->m_mid2_center);
+                    efx->alEffectf(effect_id, AL_EQUALIZER_MID2_WIDTH, instance_data->m_mid2_width);
+                    efx->alEffectf(effect_id, AL_EQUALIZER_HIGH_GAIN, instance_data->m_high_gain);
+                    efx->alEffectf(effect_id, AL_EQUALIZER_HIGH_CUTOFF, instance_data->m_high_cutoff);
+
+                    break;
+                }
+                case AL_EFFECT_EAXREVERB:
+                {
+                    const jeal_effect_eaxreverb* instance_data = JE_EFFECT_DATA(jeal_effect_eaxreverb, effect);
+
+                    efx->alEffectf(effect_id, AL_EAXREVERB_DENSITY, instance_data->m_density);
+                    efx->alEffectf(effect_id, AL_EAXREVERB_DIFFUSION, instance_data->m_diffusion);
+                    efx->alEffectf(effect_id, AL_EAXREVERB_GAIN, instance_data->m_gain);
+                    efx->alEffectf(effect_id, AL_EAXREVERB_GAINHF, instance_data->m_gain_hf);
+                    efx->alEffectf(effect_id, AL_EAXREVERB_GAINLF, instance_data->m_gain_lf);
+                    efx->alEffectf(effect_id, AL_EAXREVERB_DECAY_TIME, instance_data->m_decay_time);
+                    efx->alEffectf(effect_id, AL_EAXREVERB_DECAY_HFRATIO, instance_data->m_decay_hf_ratio);
+                    efx->alEffectf(effect_id, AL_EAXREVERB_DECAY_LFRATIO, instance_data->m_decay_lf_ratio);
+                    efx->alEffectf(effect_id, AL_EAXREVERB_REFLECTIONS_GAIN, instance_data->m_reflections_gain);
+                    efx->alEffectf(effect_id, AL_EAXREVERB_REFLECTIONS_DELAY, instance_data->m_reflections_delay);
+
+                    const float reflection_pan[3] = {
+                         instance_data->m_reflections_pan_xyz[0],
+                         instance_data->m_reflections_pan_xyz[1],
+                         -instance_data->m_reflections_pan_xyz[2],
+                    };
+                    efx->alEffectfv(effect_id, AL_EAXREVERB_REFLECTIONS_PAN, reflection_pan);
+                    efx->alEffectf(effect_id, AL_EAXREVERB_LATE_REVERB_GAIN, instance_data->m_late_reverb_gain);
+                    efx->alEffectf(effect_id, AL_EAXREVERB_LATE_REVERB_DELAY, instance_data->m_late_reverb_delay);
+
+                    const float reverb_pan[3] = {
+                        instance_data->m_late_reverb_pan_xyz[0],
+                        instance_data->m_late_reverb_pan_xyz[1],
+                        -instance_data->m_late_reverb_pan_xyz[2],
+                    };
+                    efx->alEffectfv(effect_id, AL_EAXREVERB_LATE_REVERB_PAN, reverb_pan);
+                    efx->alEffectf(effect_id, AL_EAXREVERB_ECHO_TIME, instance_data->m_echo_time);
+                    efx->alEffectf(effect_id, AL_EAXREVERB_ECHO_DEPTH, instance_data->m_echo_depth);
+                    efx->alEffectf(effect_id, AL_EAXREVERB_MODULATION_TIME, instance_data->m_modulation_time);
+                    efx->alEffectf(effect_id, AL_EAXREVERB_MODULATION_DEPTH, instance_data->m_modulation_depth);
+                    efx->alEffectf(effect_id, AL_EAXREVERB_AIR_ABSORPTION_GAINHF, instance_data->m_air_absorption_gain_hf);
+                    efx->alEffectf(effect_id, AL_EAXREVERB_HFREFERENCE, instance_data->m_hf_reference);
+                    efx->alEffectf(effect_id, AL_EAXREVERB_LFREFERENCE, instance_data->m_lf_reference);
+                    efx->alEffectf(effect_id, AL_EAXREVERB_ROOM_ROLLOFF_FACTOR, instance_data->m_room_rolloff_factor);
+                    efx->alEffecti(effect_id, AL_EAXREVERB_DECAY_HFLIMIT, instance_data->m_decay_hf_limiter ? AL_TRUE : AL_FALSE);
+
+                    break;
+                }
+                default:
+                    jeecs::debug::logfatal("Unknown audio effect: %d when trying to update.",
+                        (int)effect->m_effect_kind);
+                }
+            }
+
+            if (effect->m_effect_instance->m_dump.has_value())
+            {
+                // Nothing todo.
+
+                effect->m_effect_instance->m_dump.reset();
+            }
+        }
+        jeal_native_effect_instance* shutdown_effect_native_instance(jeal_effect_head* effect)
+        {
+            if (effect->m_effect_instance != nullptr)
+            {
+                auto* instance = effect->m_effect_instance;
+
+                if (m_alext_efx.has_value())
+                    m_alext_efx.value().alDeleteEffects(1, &instance->m_effect_id);
+
+                effect->m_effect_instance = nullptr;
+                return instance;
+            }
+            return nullptr;
+        }
+        void shutdown_effect(jeal_effect_head* effect)
+        {
+            assert(effect != nullptr);
+
+            auto* native_instance = shutdown_effect_native_instance(effect);
+            if (native_instance == nullptr && m_play_state_dump.has_value())
+            {
+                // ATTENTION: 没有 native instance，说明此时可能是在转储期间销毁，
+                //  需要从转储中删除此 effect
+
+                // NOTE: 实例可能不存在于转储中，因为此实例可能是在转储之后创建的
+                auto& dump = m_play_state_dump.value().m_effects_dump;
+                auto fnd = dump.find(effect);
+                if (fnd != dump.end())
+                {
+                    delete fnd->second;
+                    dump.erase(fnd);
+                }
+            }
+            else
+                delete native_instance;
+
+            free(effect);
+        }
+        void close_effect_lockfree(jeal_effect_head* effect)
+        {
+            m_effects.erase(effect);
+            shutdown_effect(effect);
+        }
+
+        void update_effect_slot_lockfree(jeal_effect_slot* slot)
+        {
+            if (!m_current_play_device.has_value())
+            {
+                // 此时应该没有任何可用设备
+                assert(slot->m_effect_slot_instance == nullptr);
+                return;
+            }
+
+            auto* efx = m_alext_efx.has_value() ? &m_alext_efx.value() : nullptr;
+
+            if (slot->m_effect_slot_instance == nullptr)
+            {
+                slot->m_effect_slot_instance = new jeal_native_effect_slot_instance;
+                if (efx != nullptr)
+                    efx->alGenAuxiliaryEffectSlots(1, &slot->m_effect_slot_instance->m_effect_slot_id);
+            }
+
+            ALuint slot_id = slot->m_effect_slot_instance->m_effect_slot_id;
+
+            if (slot->m_effect_slot_instance->m_dump.has_value())
+            {
+                if (efx != nullptr)
+                {
+                    if (slot->m_effect_slot_instance->m_binding_effect.has_value())
+                    {
+                        jeal_effect_head* effect = slot->m_effect_slot_instance->m_binding_effect.value();
+                        efx->alAuxiliaryEffectSloti(
+                            slot_id, AL_EFFECTSLOT_EFFECT, effect->m_effect_instance->m_effect_id);
+                    }
+                    else
+                        efx->alAuxiliaryEffectSloti(
+                            slot_id, AL_EFFECTSLOT_EFFECT, AL_EFFECT_NULL);
+                }
+                slot->m_effect_slot_instance->m_dump.reset();
+            }
+
+            if (efx != nullptr)
+            {
+                efx->alAuxiliaryEffectSlotf(
+                    slot_id,
+                    AL_EFFECTSLOT_GAIN,
+                    slot->m_gain);
+            }
+        }
+        jeal_native_effect_slot_instance* shutdown_effect_slot_native_instance(jeal_effect_slot* slot)
+        {
+            if (slot->m_effect_slot_instance != nullptr)
+            {
+                auto* instance = slot->m_effect_slot_instance;
+
+                if (m_alext_efx.has_value())
+                    m_alext_efx.value().alDeleteAuxiliaryEffectSlots(
+                        1, &instance->m_effect_slot_id);
+
+                slot->m_effect_slot_instance = nullptr;
+                return instance;
+            }
+            return nullptr;
+        }
+        void shutdown_effect_slot(jeal_effect_slot* slot)
+        {
+            assert(slot != nullptr);
+
+            auto* native_instance = shutdown_effect_slot_native_instance(slot);
+            if (native_instance == nullptr && m_play_state_dump.has_value())
+            {
+                // ATTENTION: 没有 native instance，说明此时可能是在转储期间销毁，
+                //  需要从转储中删除此 effect slot
+
+                // NOTE: 实例可能不存在于转储中，因为此实例可能是在转储之后创建的
+                auto& dump = m_play_state_dump.value().m_effect_slots_dump;
+                auto fnd = dump.find(slot);
+                if (fnd != dump.end())
+                {
+                    delete fnd->second;
+                    dump.erase(fnd);
+                }
+            }
+            else
+                delete native_instance;
+
+            delete slot;
+        }
+        void close_effect_slot_lockfree(jeal_effect_slot* slot)
+        {
+            m_effect_slots.erase(slot);
+            shutdown_effect_slot(slot);
+        }
     public:
+        jeal_effect_slot* create_effect_slot()
+        {
+            jeal_effect_slot* slot = new jeal_effect_slot;
+
+            slot->m_effect_slot_instance = nullptr;
+            slot->m_references = 1;
+            slot->m_gain = 1.0f;
+
+            std::lock_guard g4(m_effect_slots_mx); // g4
+            std::shared_lock g0(m_context_mx); // g0
+
+            m_effect_slots.emplace(slot);
+            update_effect_slot_lockfree(slot);
+
+            return slot;
+        }
+        void update_effect_slot(jeal_effect_slot* slot)
+        {
+            std::lock_guard g4(m_effect_slots_mx); // g4
+            std::shared_lock g0(m_context_mx); // g0
+
+            update_effect_slot_lockfree(slot);
+        }
+        void close_effect_slot(jeal_effect_slot* slot)
+        {
+            std::lock_guard g4(m_effect_slots_mx); // g4
+            std::shared_lock g0(m_context_mx); // g0
+
+            AudioContextHelpler::decrease_ref(slot);
+        }
+        void set_slot_effect(jeal_effect_slot* slot, jeal_effect_head* effect_may_null)
+        {
+            std::lock_guard g4(m_effect_slots_mx); // g4
+            std::lock_guard g3(m_effects_mx); // g3
+
+            for (;;)
+            {
+                if (slot->m_effect_slot_instance != nullptr)
+                {
+                    std::shared_lock g0(m_context_mx); // g0
+                    if (slot->m_effect_slot_instance == nullptr)
+                        // 锁上上下文锁后发现，此时实例已经被转储，重新执行检查
+                        continue;
+
+                    assert(effect_may_null == nullptr
+                        || effect_may_null->m_effect_instance != nullptr);
+
+                    slot->m_effect_slot_instance->m_binding_effect.set_res_may_null(effect_may_null);
+
+                    if (m_alext_efx.has_value())
+                    {
+                        ALuint slot_id = slot->m_effect_slot_instance->m_effect_slot_id;
+
+                        if (effect_may_null != nullptr)
+                            m_alext_efx.value().alAuxiliaryEffectSloti(
+                                slot_id, AL_EFFECTSLOT_EFFECT, effect_may_null->m_effect_instance->m_effect_id);
+                        else
+                            m_alext_efx.value().alAuxiliaryEffectSloti(
+                                slot_id, AL_EFFECTSLOT_EFFECT, AL_EFFECT_NULL);
+                    }
+                }
+                else
+                {
+                    std::lock_guard g0(m_context_mx); // g0
+                    if (slot->m_effect_slot_instance != nullptr)
+                        // 锁上上下文锁后发现，此时实例已经被转储，重新执行检查
+                        continue;
+
+                    // 此时没有设备，但状态需要装填到转储中
+                    auto* dump_instance = require_dump_for_no_device_context_effect_slot(slot);
+
+                    dump_instance->m_binding_effect.set_res_may_null(effect_may_null);
+                }
+                break;
+            }
+        }
+
         template<typename T>
         T* create_effect()
         {
@@ -801,7 +1427,29 @@ namespace jeecs
 
             AudioContextHelpler::effect_init_default(head, effect);
 
+            std::lock_guard g3(m_effects_mx); // g3
+            std::shared_lock g0(m_context_mx); // g0
+
+            m_effects.emplace(head);
+            update_effect_lockfree(source);
+
             return effect;
+        }
+        template<typename T>
+        void update_effect(T* effect_data)
+        {
+            std::lock_guard g3(m_effects_mx); // g3
+            std::shared_lock g0(m_context_mx); // g0
+
+            update_effect_lockfree(JE_EFFECT_HEAD(effect_data));
+        }
+        template<typename T>
+        void close_effect(T* effect_data)
+        {
+            std::lock_guard g3(m_effects_mx); // g3
+            std::shared_lock g0(m_context_mx); // g0
+
+            AudioContextHelpler::decrease_ref(JE_EFFECT_HEAD(effect_data));
         }
 
         const jeal_buffer* create_buffer(
@@ -996,7 +1644,7 @@ namespace jeecs
             std::lock_guard g2(m_buffers_mx); // g2
             std::shared_lock g0(m_context_mx); // g0
 
-            AudioContextHelpler::buffer_decrease_ref(buffer);
+            AudioContextHelpler::decrease_ref(buffer);
         }
 
         jeal_source* create_source()
@@ -1024,7 +1672,9 @@ namespace jeecs
         }
         void close_source(jeal_source* source)
         {
-            // NOTE: 此处锁定 g2 是因为源在关闭时，需要修改/关闭buffer的引用计数
+            // NOTE: 此处锁定 g2-g4 是因为源在关闭时，需要修改/关闭引用计数
+            std::lock_guard g4(m_effect_slots_mx); // g4
+            std::lock_guard g3(m_effects_mx); // g3
             std::lock_guard g2(m_buffers_mx); // g2
             std::lock_guard g1(m_sources_mx); // g1
             std::shared_lock g0(m_context_mx); // g0
@@ -1042,6 +1692,54 @@ namespace jeecs
             std::shared_lock g0(m_context_mx); // g0
 
             update_source_lockfree(source);
+        }
+        void set_source_effect_slot(jeal_source* source, jeal_effect_slot* slot_may_null, size_t slot_idx)
+        {
+            assert(source != nullptr);
+            assert(slot_idx < audio::MAX_AUXILIARY_SENDS);
+
+            std::lock_guard g4(m_effect_slots_mx); // g4
+            std::lock_guard g1(m_sources_mx); // g1
+
+            for (;;)
+            {
+                if (source->m_source_instance != nullptr)
+                {
+                    std::shared_lock g0(m_context_mx); // g0
+                    if (source->m_source_instance == nullptr)
+                        // 锁上上下文锁后发现，此时实例已经被转储，重新执行检查
+                        continue;
+
+                    assert(slot_may_null->m_effect_slot_instance != nullptr);
+
+                    source->m_source_instance->
+                        m_playing_effect_slot[slot_idx].set_res_may_null(slot_may_null);
+
+                    if (m_alext_efx.has_value())
+                    {
+                        alSource3i(source->m_source_instance->m_source_id,
+                            AL_AUXILIARY_SEND_FILTER,
+                            slot_idx,
+                            slot_may_null != nullptr
+                            ? slot_may_null->m_effect_slot_instance->m_effect_slot_id
+                            : AL_EFFECTSLOT_NULL,
+                            AL_FILTER_NULL);
+                    }
+                }
+                else
+                {
+                    std::lock_guard g0(m_context_mx); // g0
+                    if (source->m_source_instance != nullptr)
+                        // 锁上上下文锁后发现，此时实例转储已经被恢复，重新执行检查
+                        continue;
+
+                    auto* dump_instance = require_dump_for_no_device_context_source(source);
+                    dump_instance->
+                        m_playing_effect_slot[slot_idx].set_res_may_null(slot_may_null);
+                }
+
+                break;
+            }
         }
         void set_source_buffer(jeal_source* source, const jeal_buffer* buffer)
         {
@@ -1062,7 +1760,7 @@ namespace jeecs
 
                     assert(buffer->m_buffer_instance != nullptr);
 
-                    source->m_source_instance->m_playing_buffer.set_buffer(buffer);
+                    source->m_source_instance->m_playing_buffer.set_res(buffer);
 
                     ALenum play_state;
                     alGetSourcei(
@@ -1090,7 +1788,7 @@ namespace jeecs
                     auto* dump_instance = require_dump_for_no_device_context_source(source);
                     auto& dump = dump_instance->m_dump.value();
 
-                    dump_instance->m_playing_buffer.set_buffer(buffer);
+                    dump_instance->m_playing_buffer.set_res(buffer);
                     dump.m_play_state = jeal_state::JE_AUDIO_STATE_STOPPED;
                     dump.m_play_process = 0;
                 }
@@ -1098,7 +1796,6 @@ namespace jeecs
                 break;
             }
         }
-
         void play_source(jeal_source* source)
         {
             std::lock_guard g2(m_buffers_mx); // g2
@@ -1212,7 +1909,6 @@ namespace jeecs
                 break;
             }
         }
-
         jeal_state get_source_play_state(jeal_source* source)
         {
             std::lock_guard g2(m_buffers_mx); // g2
@@ -1310,7 +2006,6 @@ namespace jeecs
                 break;
             }
         }
-
         void set_source_play_process(jeal_source* source, size_t offset)
         {
             auto align_offset =
@@ -1394,7 +2089,6 @@ namespace jeecs
                 alListenerfv(AL_ORIENTATION, orientation);
             }
         }
-
         jeal_listener* get_listener()
         {
             return &m_listener;
@@ -1424,18 +2118,24 @@ namespace jeecs
 
             for (auto* source : m_sources)
                 shutdown_source(source);
+
+            for (auto* effect : m_effects)
+                shutdown_effect(effect);
+
+            for (auto* slot : m_effect_slots)
+                shutdown_effect_slot(slot);
         }
     };
 
     static AudioContext* g_engine_audio_context = nullptr;
 
-    void AudioContextHelpler::buffer_increase_ref(const jeal_buffer* buffer)
+    void AudioContextHelpler::increase_ref(const jeal_buffer* buffer)
     {
         auto* rw_buffer = const_cast<jeal_buffer*>(buffer);
 
         ++rw_buffer->m_references;
     }
-    void AudioContextHelpler::buffer_decrease_ref(const jeal_buffer* buffer)
+    void AudioContextHelpler::decrease_ref(const jeal_buffer* buffer)
     {
         auto* rw_buffer = const_cast<jeal_buffer*>(buffer);
 
@@ -1443,6 +2143,32 @@ namespace jeecs
         {
             // Remove from the set.
             g_engine_audio_context->close_buffer_lockfree(rw_buffer);
+        }
+    }
+
+    void AudioContextHelpler::increase_ref(jeal_effect_head* effect)
+    {
+        ++effect->m_references;
+    }
+    void AudioContextHelpler::decrease_ref(jeal_effect_head* effect)
+    {
+        if (0 == --effect->m_references)
+        {
+            // Remove from the set.
+            g_engine_audio_context->close_effect_lockfree(effect);
+        }
+    }
+
+    void AudioContextHelpler::increase_ref(jeal_effect_slot* slot)
+    {
+        ++slot->m_references;
+    }
+    void AudioContextHelpler::decrease_ref(jeal_effect_slot* slot)
+    {
+        if (0 == --slot->m_references)
+        {
+            // Remove from the set.
+            g_engine_audio_context->close_effect_slot_lockfree(slot);
         }
     }
 
@@ -1545,7 +2271,7 @@ namespace jeecs
     void AudioContextHelpler::effect_init_default(jeal_effect_head* head, jeal_effect_autowah* wah)
     {
         head->m_effect_kind = AL_EFFECT_AUTOWAH;
-        
+
         wah->m_attack_time = AL_AUTOWAH_DEFAULT_ATTACK_TIME;
         wah->m_release_time = AL_AUTOWAH_DEFAULT_RELEASE_TIME;
         wah->m_resonance = AL_AUTOWAH_DEFAULT_RESONANCE;
@@ -1554,13 +2280,13 @@ namespace jeecs
     void AudioContextHelpler::effect_init_default(jeal_effect_head* head, jeal_effect_compressor* compressor)
     {
         head->m_effect_kind = AL_EFFECT_COMPRESSOR;
-       
+
         compressor->m_enabled = AL_COMPRESSOR_DEFAULT_ONOFF != AL_FALSE;
     }
     void AudioContextHelpler::effect_init_default(jeal_effect_head* head, jeal_effect_equalizer* equalizer)
     {
         head->m_effect_kind = AL_EFFECT_EQUALIZER;
-       
+
         equalizer->m_low_gain = AL_EQUALIZER_DEFAULT_LOW_GAIN;
         equalizer->m_low_cutoff = AL_EQUALIZER_DEFAULT_LOW_CUTOFF;
         equalizer->m_mid1_gain = AL_EQUALIZER_DEFAULT_MID1_GAIN;
@@ -1575,7 +2301,7 @@ namespace jeecs
     void AudioContextHelpler::effect_init_default(jeal_effect_head* head, jeal_effect_eaxreverb* eaxreverb)
     {
         head->m_effect_kind = AL_EFFECT_EAXREVERB;
-        
+
         eaxreverb->m_density = AL_EAXREVERB_DEFAULT_DENSITY;
         eaxreverb->m_diffusion = AL_EAXREVERB_DEFAULT_DIFFUSION;
         eaxreverb->m_gain = AL_EAXREVERB_DEFAULT_GAIN;
@@ -1617,7 +2343,6 @@ void jeal_finish()
     delete jeecs::g_engine_audio_context;
     jeecs::g_engine_audio_context = nullptr;
 }
-
 const jeal_buffer* jeal_create_buffer(
     const void* data,
     size_t buffer_data_len,
@@ -1629,101 +2354,122 @@ const jeal_buffer* jeal_create_buffer(
     return jeecs::g_engine_audio_context->create_buffer(
         data, buffer_data_len, sample_rate, format);
 }
-
 const jeal_buffer* jeal_load_buffer_wav(const char* path)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->load_buffer_wav(path);
 }
-
 void jeal_close_buffer(const jeal_buffer* buffer)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->close_buffer(buffer);
 }
-
 jeal_source* jeal_create_source()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->create_source();
 }
-
 void jeal_update_source(jeal_source* source)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->update_source(source);
 }
-
 void jeal_close_source(jeal_source* source)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->close_source(source);
 }
-
 void jeal_set_source_buffer(jeal_source* source, const jeal_buffer* buffer)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->set_source_buffer(source, buffer);
 }
+void jeal_set_source_effect_slot(
+    jeal_source* source,
+    jeal_effect_slot* slot_may_null,
+    size_t slot_idx)
+{
+    assert(jeecs::g_engine_audio_context != nullptr);
 
+    jeecs::g_engine_audio_context->set_source_effect_slot(source, slot_may_null, slot_idx);
+}
 void jeal_play_source(jeal_source* source)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->play_source(source);
 }
-
 void jeal_pause_source(jeal_source* source)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->pause_source(source);
 }
-
 void jeal_stop_source(jeal_source* source)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->stop_source(source);
 }
-
 jeal_state jeal_get_source_play_state(jeal_source* source)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->get_source_play_state(source);
 }
-
 size_t jeal_get_source_play_process(jeal_source* source)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->get_source_play_process(source);
 }
-
 void jeal_set_source_play_process(jeal_source* source, size_t offset)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->set_source_play_process(source, offset);
 }
-
 jeal_listener* jeal_get_listener()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->get_listener();
 }
-
 void jeal_update_listener()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->update_listener();
 }
+jeal_effect_slot* jeal_create_effect_slot()
+{
+    assert(jeecs::g_engine_audio_context != nullptr);
+
+    return jeecs::g_engine_audio_context->create_effect_slot();
+}
+void jeal_effect_slot_bind(jeal_effect_slot* slot, void* effect_may_null)
+{
+    assert(jeecs::g_engine_audio_context != nullptr);
+
+    jeecs::g_engine_audio_context->set_slot_effect(
+        slot, effect_may_null != nullptr ? JE_EFFECT_HEAD(effect_may_null) : nullptr);
+}
+void jeal_close_effect_slot(jeal_effect_slot* slot)
+{
+    assert(jeecs::g_engine_audio_context != nullptr);
+
+    jeecs::g_engine_audio_context->close_effect_slot(slot);
+}
+void jeal_update_effect_slot(jeal_effect_slot* slot)
+{
+    assert(jeecs::g_engine_audio_context != nullptr);
+
+    jeecs::g_engine_audio_context->update_effect_slot(slot);
+}
+

@@ -3683,6 +3683,17 @@ struct jeal_listener
                                 // 监听器朝向（前方向，顶方向）
 };
 
+struct jeal_native_effect_slot_instance;
+struct jeal_effect_slot
+{
+    jeal_native_effect_slot_instance*
+        m_effect_slot_instance;
+
+    size_t m_references;   // 引用计数
+
+    float m_gain;               // 增益，默认值为 1.0，范围 [0.0, 1.0]
+};
+
 /*
 jeal_effect_reverb [类型]
 混响效果
@@ -3943,6 +3954,8 @@ JE_API void jeal_close_source(jeal_source* source);
 
 JE_API void jeal_set_source_buffer(jeal_source* source, const jeal_buffer* buffer);
 
+JE_API void jeal_set_source_effect_slot(jeal_source* source, jeal_effect_slot* slot_may_null, size_t slot_idx);
+
 JE_API void jeal_play_source(jeal_source* source);
 
 JE_API void jeal_pause_source(jeal_source* source);
@@ -3958,6 +3971,14 @@ JE_API void jeal_set_source_play_process(jeal_source* source, size_t offset);
 JE_API jeal_listener* jeal_get_listener();
 
 JE_API void jeal_update_listener();
+
+JE_API jeal_effect_slot* jeal_create_effect_slot();
+
+JE_API void jeal_effect_slot_bind(jeal_effect_slot* slot, void* effect_may_null);
+
+JE_API void jeal_close_effect_slot(jeal_effect_slot* slot);
+
+JE_API void jeal_update_effect_slot(jeal_effect_slot* slot);
 
 
 /*
