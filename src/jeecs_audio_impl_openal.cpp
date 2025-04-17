@@ -1462,7 +1462,7 @@ namespace jeecs
         reverb->m_late_reverb_delay = AL_REVERB_DEFAULT_LATE_REVERB_DELAY;
         reverb->m_air_absorption_gain_hf = AL_REVERB_DEFAULT_AIR_ABSORPTION_GAINHF;
         reverb->m_room_rolloff_factor = AL_REVERB_DEFAULT_ROOM_ROLLOFF_FACTOR;
-        reverb->m_decay_hf_limit = (bool)AL_REVERB_DEFAULT_DECAY_HFLIMIT;
+        reverb->m_decay_hf_limit = AL_REVERB_DEFAULT_DECAY_HFLIMIT != AL_FALSE;
     }
     void AudioContextHelpler::effect_init_default(jeal_effect_head* head, jeal_effect_chorus* chorus)
     {
@@ -1527,12 +1527,83 @@ namespace jeecs
         morpher->m_waveform = (jeal_effect_vocal_morpher::wavefrom)AL_VOCAL_MORPHER_DEFAULT_WAVEFORM;
         morpher->m_rate = AL_VOCAL_MORPHER_DEFAULT_RATE;
     }
-    void AudioContextHelpler::effect_init_default(jeal_effect_head* head, jeal_effect_pitch_shifter* shifter);
-    void AudioContextHelpler::effect_init_default(jeal_effect_head* head, jeal_effect_ring_modulator* modulator);
-    void AudioContextHelpler::effect_init_default(jeal_effect_head* head, jeal_effect_autowah* wah);
-    void AudioContextHelpler::effect_init_default(jeal_effect_head* head, jeal_effect_compressor* compressor);
-    void AudioContextHelpler::effect_init_default(jeal_effect_head* head, jeal_effect_equalizer* equalizer);
-    void AudioContextHelpler::effect_init_default(jeal_effect_head* head, jeal_effect_eaxreverb* eaxreverb);
+    void AudioContextHelpler::effect_init_default(jeal_effect_head* head, jeal_effect_pitch_shifter* shifter)
+    {
+        head->m_effect_kind = AL_EFFECT_PITCH_SHIFTER;
+
+        shifter->m_coarse_tune = AL_PITCH_SHIFTER_DEFAULT_COARSE_TUNE;
+        shifter->m_fine_tune = AL_PITCH_SHIFTER_DEFAULT_FINE_TUNE;
+    }
+    void AudioContextHelpler::effect_init_default(jeal_effect_head* head, jeal_effect_ring_modulator* modulator)
+    {
+        head->m_effect_kind = AL_EFFECT_RING_MODULATOR;
+
+        modulator->m_frequency = AL_RING_MODULATOR_DEFAULT_FREQUENCY;
+        modulator->m_highpass_cutoff = AL_RING_MODULATOR_DEFAULT_HIGHPASS_CUTOFF;
+        modulator->m_waveform = (jeal_effect_ring_modulator::wavefrom)AL_RING_MODULATOR_DEFAULT_WAVEFORM;
+    }
+    void AudioContextHelpler::effect_init_default(jeal_effect_head* head, jeal_effect_autowah* wah)
+    {
+        head->m_effect_kind = AL_EFFECT_AUTOWAH;
+        
+        wah->m_attack_time = AL_AUTOWAH_DEFAULT_ATTACK_TIME;
+        wah->m_release_time = AL_AUTOWAH_DEFAULT_RELEASE_TIME;
+        wah->m_resonance = AL_AUTOWAH_DEFAULT_RESONANCE;
+        wah->m_peak_gain = AL_AUTOWAH_DEFAULT_PEAK_GAIN;
+    }
+    void AudioContextHelpler::effect_init_default(jeal_effect_head* head, jeal_effect_compressor* compressor)
+    {
+        head->m_effect_kind = AL_EFFECT_COMPRESSOR;
+       
+        compressor->m_enabled = AL_COMPRESSOR_DEFAULT_ONOFF != AL_FALSE;
+    }
+    void AudioContextHelpler::effect_init_default(jeal_effect_head* head, jeal_effect_equalizer* equalizer)
+    {
+        head->m_effect_kind = AL_EFFECT_EQUALIZER;
+       
+        equalizer->m_low_gain = AL_EQUALIZER_DEFAULT_LOW_GAIN;
+        equalizer->m_low_cutoff = AL_EQUALIZER_DEFAULT_LOW_CUTOFF;
+        equalizer->m_mid1_gain = AL_EQUALIZER_DEFAULT_MID1_GAIN;
+        equalizer->m_mid1_center = AL_EQUALIZER_DEFAULT_MID1_CENTER;
+        equalizer->m_mid1_width = AL_EQUALIZER_DEFAULT_MID1_WIDTH;
+        equalizer->m_mid2_gain = AL_EQUALIZER_DEFAULT_MID2_GAIN;
+        equalizer->m_mid2_center = AL_EQUALIZER_DEFAULT_MID2_CENTER;
+        equalizer->m_mid2_width = AL_EQUALIZER_DEFAULT_MID2_WIDTH;
+        equalizer->m_high_gain = AL_EQUALIZER_DEFAULT_HIGH_GAIN;
+        equalizer->m_high_cutoff = AL_EQUALIZER_DEFAULT_HIGH_CUTOFF;
+    }
+    void AudioContextHelpler::effect_init_default(jeal_effect_head* head, jeal_effect_eaxreverb* eaxreverb)
+    {
+        head->m_effect_kind = AL_EFFECT_EAXREVERB;
+        
+        eaxreverb->m_density = AL_EAXREVERB_DEFAULT_DENSITY;
+        eaxreverb->m_diffusion = AL_EAXREVERB_DEFAULT_DIFFUSION;
+        eaxreverb->m_gain = AL_EAXREVERB_DEFAULT_GAIN;
+        eaxreverb->m_gain_hf = AL_EAXREVERB_DEFAULT_GAINHF;
+        eaxreverb->m_gain_lf = AL_EAXREVERB_DEFAULT_GAINLF;
+        eaxreverb->m_decay_time = AL_EAXREVERB_DEFAULT_DECAY_TIME;
+        eaxreverb->m_decay_hf_ratio = AL_EAXREVERB_DEFAULT_DECAY_HFRATIO;
+        eaxreverb->m_decay_lf_ratio = AL_EAXREVERB_DEFAULT_DECAY_LFRATIO;
+        eaxreverb->m_reflections_gain = AL_EAXREVERB_DEFAULT_REFLECTIONS_GAIN;
+        eaxreverb->m_reflections_delay = AL_EAXREVERB_DEFAULT_REFLECTIONS_DELAY;
+        eaxreverb->m_reflections_pan_xyz[0] = AL_EAXREVERB_DEFAULT_REFLECTIONS_PAN_XYZ;
+        eaxreverb->m_reflections_pan_xyz[1] = AL_EAXREVERB_DEFAULT_REFLECTIONS_PAN_XYZ;
+        eaxreverb->m_reflections_pan_xyz[2] = -AL_EAXREVERB_DEFAULT_REFLECTIONS_PAN_XYZ;
+        eaxreverb->m_late_reverb_gain = AL_EAXREVERB_DEFAULT_LATE_REVERB_GAIN;
+        eaxreverb->m_late_reverb_delay = AL_EAXREVERB_DEFAULT_LATE_REVERB_DELAY;
+        eaxreverb->m_late_reverb_pan_xyz[0] = AL_EAXREVERB_DEFAULT_LATE_REVERB_PAN_XYZ;
+        eaxreverb->m_late_reverb_pan_xyz[1] = AL_EAXREVERB_DEFAULT_LATE_REVERB_PAN_XYZ;
+        eaxreverb->m_late_reverb_pan_xyz[2] = -AL_EAXREVERB_DEFAULT_LATE_REVERB_PAN_XYZ;
+        eaxreverb->m_echo_time = AL_EAXREVERB_DEFAULT_ECHO_TIME;
+        eaxreverb->m_echo_depth = AL_EAXREVERB_DEFAULT_ECHO_DEPTH;
+        eaxreverb->m_modulation_time = AL_EAXREVERB_DEFAULT_MODULATION_TIME;
+        eaxreverb->m_modulation_depth = AL_EAXREVERB_DEFAULT_MODULATION_DEPTH;
+        eaxreverb->m_air_absorption_gain_hf = AL_EAXREVERB_DEFAULT_AIR_ABSORPTION_GAINHF;
+        eaxreverb->m_hf_reference = AL_EAXREVERB_DEFAULT_HFREFERENCE;
+        eaxreverb->m_lf_reference = AL_EAXREVERB_DEFAULT_LFREFERENCE;
+        eaxreverb->m_room_rolloff_factor = AL_EAXREVERB_DEFAULT_ROOM_ROLLOFF_FACTOR;
+        eaxreverb->m_decay_hf_limiter = AL_EAXREVERB_DEFAULT_DECAY_HFLIMIT != AL_FALSE;
+    }
 }
 
 void jeal_init()
