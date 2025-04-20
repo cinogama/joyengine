@@ -366,14 +366,77 @@ namespace je
     }
     namespace audio
     {
+        public enum format
+        {
+            MONO8,
+            MONO16,
+            MONO32F,
+            STEREO8,
+            STEREO16,
+            STEREO32F,
+        }
+
         using buffer = gchandle
         {
+            using buffer_data_t = struct{
+                size: int,
+                sample_rate: int,
+                sample_size: int,
+                byte_rate: int,
+                format: audio::format,
+            };
+
+            public func close(self: buffer)=> bool
+            {
+                return self: gchandle->close();
+            }
+
+            extern("libjoyecs", "wojeapi_audio_buffer_load_wav")
+            public func load(path: string)=> option<buffer>;
+
+            extern("libjoyecs", "wojeapi_audio_buffer_info")
+            public func info(self: buffer)=> buffer_data_t;
         }
         using source = gchandle
         {
+            using source_data_t = struct{
+                loop: mut bool,
+                gain: mut real,
+                pitch: mut real,
+                location: mut(real, real, real),
+                velocity: mut(real, real, real),
+            };
+
+            extern("libjoyecs", "wojeapi_audio_source_create")
+            public func create()=> source;
+
+            public func close(self: source)=> bool
+            {
+                return self: gchandle->close();
+            }
+            
+            extern("libjoyecs", "wojeapi_audio_source_info")
+            public func info(self: source)=> source_data_t;
+
+            extern("libjoyecs", "wojeapi_audio_source_update")
+            public func update(self: source, f: (source_data_t)=> void)=> void;
         }
         namespace listener
         {
+            using listener_data_t = struct{
+                gaim: mut real,
+                global_gaim: mut real,
+                location: mut (real, real, real),
+                velocity: mut (real, real, real),
+                forward: mut (real, real, real),
+                upward: mut (real, real, real),
+            };
+
+            extern("libjoyecs", "wojeapi_audio_listener_info")
+            public func info()=> listener_data_t;
+
+            extern("libjoyecs", "wojeapi_audio_listener_update")
+            public func update(f: (listener_data_t)=> void)=> void;
         }
     }
     namespace graphic

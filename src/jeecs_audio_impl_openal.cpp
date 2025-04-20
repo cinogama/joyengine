@@ -245,7 +245,7 @@ namespace jeecs
         };
         std::optional<jeal_play_device_states_dump> m_play_state_dump = std::nullopt;
 
-        static bool check_device_connected(jeal_native_play_device_instance* device)
+        static bool check_device_instance_connected(jeal_native_play_device_instance* device)
         {
             ALCint device_connected;
             alcGetIntegerv(reinterpret_cast<ALCdevice*>(device), ALC_CONNECTED, 1, &device_connected);
@@ -591,7 +591,7 @@ namespace jeecs
 
                     // 检查旧设备是否仍然链接，如果是，则此次枚举到的就是旧设备
                     auto& old_connected_device = *fnd;
-                    if (check_device_connected(old_connected_device.m_device_instance))
+                    if (check_device_instance_connected(old_connected_device.m_device_instance))
                     {
                         // 这是旧设备，迁移到新设备列表中
                         new_opened_devices.emplace_back(old_connected_device);
@@ -2120,6 +2120,15 @@ namespace jeecs
 
             active_using_device(const_cast<jeal_play_device*>(device));
         }
+        bool check_device_connected(const jeal_play_device* device)
+        {
+            std::lock_guard g0(m_context_mx); // g0
+
+            if (device->m_device_instance != nullptr)
+                return check_device_instance_connected(device->m_device_instance);
+
+            return false;
+        }
 
         AudioContext()
             : m_current_play_device(std::nullopt)
@@ -2613,4 +2622,11 @@ void jeal_using_device(const jeal_play_device* device)
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->using_specify_device(device);
+}
+
+bool jeal_check_device_connected(const jeal_play_device* device)
+{
+    assert(jeecs::g_engine_audio_context != nullptr);
+
+    return jeecs::g_engine_audio_context->check_device_connected(device);
 }

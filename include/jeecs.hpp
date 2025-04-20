@@ -4002,6 +4002,7 @@ JE_API const jeal_play_device* jeal_refetch_devices(size_t* out_device_count);
 
 JE_API void jeal_using_device(const jeal_play_device* device);
 
+JE_API bool jeal_check_device_connected(const jeal_play_device* device);
 /*
 je_main_script_entry [基本接口]
 运行入口脚本
