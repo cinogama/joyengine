@@ -35,12 +35,12 @@ namespace jeecs
                             auto face = trans.world_rotation * listener.face;
                             auto up = trans.world_rotation * listener.up;
 
-                            listener_data->m_orientation[0][0] = face.x;
-                            listener_data->m_orientation[0][1] = face.y;
-                            listener_data->m_orientation[0][2] = face.z;
-                            listener_data->m_orientation[1][0] = up.x;
-                            listener_data->m_orientation[1][1] = up.y;
-                            listener_data->m_orientation[1][2] = up.z;
+                            listener_data->m_forward[0] = face.x;
+                            listener_data->m_forward[1] = face.y;
+                            listener_data->m_forward[2] = face.z;
+                            listener_data->m_upward[0] = up.x;
+                            listener_data->m_upward[1] = up.y;
+                            listener_data->m_upward[2] = up.z;
 
                             listener_data->m_gain = listener.volume;
 

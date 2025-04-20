@@ -170,7 +170,7 @@ namespace jeecs
         std::shared_mutex m_context_mx; // g0
 
         std::vector<jeal_play_device> m_enumed_play_devices;
-        std::optional<jeal_play_device*> m_current_play_device = std::nullopt;
+        std::optional<jeal_play_device*> m_current_play_device;
 
         std::mutex m_sources_mx;       // g1
         std::unordered_set<jeal_source*> m_sources;
@@ -507,9 +507,9 @@ namespace jeecs
             }
 
             // 设备及上下文创建完成，恢复播放状态（如果有）
+            m_current_play_device.emplace(device);
             try_restore_playing_states();
             device->m_active = true;
-            m_current_play_device.emplace(device);
         }
 
         void update_enumed_play_devices(std::vector<jeal_play_device>&& new_opened_devices)
@@ -552,6 +552,10 @@ namespace jeecs
                     // 重新创建一个默认设备
                     active_using_device(&m_enumed_play_devices.front());
                 }
+                else
+                    // m_current_play_device 储存的是交换前的 m_enumed_play_devices 地址
+                    // 需要在此恢复回来。
+                    m_current_play_device = &*fnd;
             }
         }
         void refetch_and_update_enumed_play_devices()
@@ -573,7 +577,10 @@ namespace jeecs
                     m_enumed_play_devices.end(),
                     [current_device_name](jeal_play_device& device)
                     {
-                        return strcmp(device.m_name, current_device_name) == 0;
+                        if (device.m_name != nullptr)
+                            return strcmp(device.m_name, current_device_name) == 0;
+
+                        return false;
                     });
 
                 if (fnd != m_enumed_play_devices.end())
@@ -644,6 +651,7 @@ namespace jeecs
                 current_device_name += strlen(current_device_name) + 1;
             }
 
+            m_current_play_device.reset();
             update_enumed_play_devices(std::move(new_opened_devices));
 
             if (m_enumed_play_devices.empty())
@@ -694,15 +702,15 @@ namespace jeecs
                 alGenBuffers(1, &buffer->m_buffer_instance->m_buffer_id);
             }
 
+            alBufferData(
+                buffer->m_buffer_instance->m_buffer_id,
+                je_al_format(buffer->m_format, nullptr),
+                buffer->m_data,
+                buffer->m_size,
+                buffer->m_sample_rate);
+
             if (buffer->m_buffer_instance->m_dump.has_value())
             {
-                alBufferData(
-                    buffer->m_buffer_instance->m_buffer_id,
-                    je_al_format(buffer->m_format, nullptr),
-                    buffer->m_data,
-                    buffer->m_size,
-                    buffer->m_sample_rate);
-
                 buffer->m_buffer_instance->m_dump.reset();
             }
         }
@@ -847,12 +855,14 @@ namespace jeecs
                 {
                     auto& binded_effect_slot = source->m_source_instance->m_playing_effect_slot[i];
 
+                    ALint slot_id = AL_EFFECTSLOT_NULL;
+                    if (binded_effect_slot.has_value())
+                        slot_id = binded_effect_slot.value()->m_effect_slot_instance->m_effect_slot_id;
+
                     alSource3i(source->m_source_instance->m_source_id,
                         AL_AUXILIARY_SEND_FILTER,
+                        slot_id,
                         (ALint)i,
-                        binded_effect_slot.has_value()
-                        ? binded_effect_slot.value()->m_effect_slot_instance->m_effect_slot_id
-                        : AL_EFFECTSLOT_NULL,
                         AL_FILTER_NULL);
                 }
 
@@ -1267,29 +1277,28 @@ namespace jeecs
 
             ALuint slot_id = slot->m_effect_slot_instance->m_effect_slot_id;
 
-            if (slot->m_effect_slot_instance->m_dump.has_value())
-            {
-                if (efx != nullptr)
-                {
-                    if (slot->m_effect_slot_instance->m_binding_effect.has_value())
-                    {
-                        jeal_effect_head* effect = slot->m_effect_slot_instance->m_binding_effect.value();
-                        efx->alAuxiliaryEffectSloti(
-                            slot_id, AL_EFFECTSLOT_EFFECT, effect->m_effect_instance->m_effect_id);
-                    }
-                    else
-                        efx->alAuxiliaryEffectSloti(
-                            slot_id, AL_EFFECTSLOT_EFFECT, AL_EFFECT_NULL);
-                }
-                slot->m_effect_slot_instance->m_dump.reset();
-            }
-
             if (efx != nullptr)
             {
+                if (slot->m_effect_slot_instance->m_binding_effect.has_value())
+                {
+                    jeal_effect_head* effect = slot->m_effect_slot_instance->m_binding_effect.value();
+                    efx->alAuxiliaryEffectSloti(
+                        slot_id, AL_EFFECTSLOT_EFFECT, effect->m_effect_instance->m_effect_id);
+                }
+                else
+                    efx->alAuxiliaryEffectSloti(
+                        slot_id, AL_EFFECTSLOT_EFFECT, AL_EFFECT_NULL);
+
                 efx->alAuxiliaryEffectSlotf(
                     slot_id,
                     AL_EFFECTSLOT_GAIN,
                     slot->m_gain);
+            }
+
+            if (slot->m_effect_slot_instance->m_dump.has_value())
+            {
+                // Do nothing.
+                slot->m_effect_slot_instance->m_dump.reset();
             }
         }
         jeal_native_effect_slot_instance* shutdown_effect_slot_native_instance(jeal_effect_slot* slot)
@@ -1417,10 +1426,10 @@ namespace jeecs
         template<typename T>
         T* create_effect()
         {
-            intptr_t buf = (intptr_t)malloc(sizeof(jeal_effect_head) + sizeof(T));
+            void* buf = malloc(sizeof(jeal_effect_head) + sizeof(T));
 
             jeal_effect_head* head = reinterpret_cast<jeal_effect_head*>(buf);
-            T* effect = reinterpret_cast<T*>(buf + sizeof(jeal_effect_head));
+            T* effect = JE_EFFECT_DATA(T, buf);
 
             head->m_effect_instance = nullptr;
             head->m_references = 1;
@@ -1431,20 +1440,19 @@ namespace jeecs
             std::shared_lock g0(m_context_mx); // g0
 
             m_effects.emplace(head);
-            update_effect_lockfree(source);
+            update_effect_lockfree(head);
 
             return effect;
         }
-        template<typename T>
-        void update_effect(T* effect_data)
+        void update_effect(void* effect_data)
         {
             std::lock_guard g3(m_effects_mx); // g3
             std::shared_lock g0(m_context_mx); // g0
 
             update_effect_lockfree(JE_EFFECT_HEAD(effect_data));
         }
-        template<typename T>
-        void close_effect(T* effect_data)
+
+        void close_effect(void* effect_data)
         {
             std::lock_guard g3(m_effects_mx); // g3
             std::shared_lock g0(m_context_mx); // g0
@@ -1717,12 +1725,14 @@ namespace jeecs
 
                     if (m_alext_efx.has_value())
                     {
+                        ALint slot_id = AL_EFFECTSLOT_NULL;
+                        if (slot_may_null != nullptr)
+                            slot_id = slot_may_null->m_effect_slot_instance->m_effect_slot_id;
+
                         alSource3i(source->m_source_instance->m_source_id,
                             AL_AUXILIARY_SEND_FILTER,
+                            slot_id,
                             slot_idx,
-                            slot_may_null != nullptr
-                            ? slot_may_null->m_effect_slot_instance->m_effect_slot_id
-                            : AL_EFFECTSLOT_NULL,
                             AL_FILTER_NULL);
                     }
                 }
@@ -2079,12 +2089,12 @@ namespace jeecs
                     -m_listener.m_velocity[2]);
 
                 float orientation[6] = {
-                    m_listener.m_orientation[0][0],
-                    m_listener.m_orientation[0][1],
-                    m_listener.m_orientation[0][2],
-                    m_listener.m_orientation[1][0],
-                    m_listener.m_orientation[1][1],
-                    m_listener.m_orientation[1][2],
+                    m_listener.m_forward[0],
+                    m_listener.m_forward[1],
+                    -m_listener.m_forward[2],
+                    m_listener.m_upward[0],
+                    m_listener.m_upward[1],
+                    -m_listener.m_upward[2],
                 };
                 alListenerfv(AL_ORIENTATION, orientation);
             }
@@ -2094,7 +2104,25 @@ namespace jeecs
             return &m_listener;
         }
 
+        const std::vector<jeal_play_device>& refetch_devices()
+        {
+            std::lock_guard g0(m_context_mx); // g0
+
+            refetch_and_update_enumed_play_devices();
+            return m_enumed_play_devices;
+        }
+        void using_specify_device(const jeal_play_device* device)
+        {
+            std::lock_guard g0(m_context_mx); // g0
+
+            if (m_current_play_device.has_value())
+                deactive_using_device(m_current_play_device.value());
+
+            active_using_device(const_cast<jeal_play_device*>(device));
+        }
+
         AudioContext()
+            : m_current_play_device(std::nullopt)
         {
             m_listener.m_gain = 1.0f;
             m_listener.m_global_gain = 1.0f;
@@ -2104,6 +2132,12 @@ namespace jeecs
             m_listener.m_velocity[0] = 0.0f;
             m_listener.m_velocity[1] = 0.0f;
             m_listener.m_velocity[2] = 0.0f;
+            m_listener.m_forward[0] = 0.0f;
+            m_listener.m_forward[1] = 0.0f;
+            m_listener.m_forward[2] = 1.0f;
+            m_listener.m_upward[0] = 0.0f;
+            m_listener.m_upward[1] = 1.0f;
+            m_listener.m_upward[2] = 0.0f;
 
             refetch_and_update_enumed_play_devices();
 
@@ -2473,3 +2507,110 @@ void jeal_update_effect_slot(jeal_effect_slot* slot)
     jeecs::g_engine_audio_context->update_effect_slot(slot);
 }
 
+jeal_effect_reverb* jeal_create_effect_reverb()
+{
+    assert(jeecs::g_engine_audio_context != nullptr);
+
+    return jeecs::g_engine_audio_context->create_effect<jeal_effect_reverb>();
+}
+jeal_effect_chorus* jeal_create_effect_chorus()
+{
+    assert(jeecs::g_engine_audio_context != nullptr);
+
+    return jeecs::g_engine_audio_context->create_effect<jeal_effect_chorus>();
+}
+jeal_effect_distortion* jeal_create_effect_distortion()
+{
+    assert(jeecs::g_engine_audio_context != nullptr);
+
+    return jeecs::g_engine_audio_context->create_effect<jeal_effect_distortion>();
+}
+jeal_effect_echo* jeal_create_effect_echo()
+{
+    assert(jeecs::g_engine_audio_context != nullptr);
+
+    return jeecs::g_engine_audio_context->create_effect<jeal_effect_echo>();
+}
+jeal_effect_flanger* jeal_create_effect_flanger()
+{
+    assert(jeecs::g_engine_audio_context != nullptr);
+
+    return jeecs::g_engine_audio_context->create_effect<jeal_effect_flanger>();
+}
+jeal_effect_frequency_shifter* jeal_create_effect_frequency_shifter()
+{
+    assert(jeecs::g_engine_audio_context != nullptr);
+
+    return jeecs::g_engine_audio_context->create_effect<jeal_effect_frequency_shifter>();
+}
+jeal_effect_vocal_morpher* jeal_create_effect_vocal_morpher()
+{
+    assert(jeecs::g_engine_audio_context != nullptr);
+
+    return jeecs::g_engine_audio_context->create_effect<jeal_effect_vocal_morpher>();
+}
+jeal_effect_pitch_shifter* jeal_create_effect_pitch_shifter()
+{
+    assert(jeecs::g_engine_audio_context != nullptr);
+
+    return jeecs::g_engine_audio_context->create_effect<jeal_effect_pitch_shifter>();
+}
+jeal_effect_ring_modulator* jeal_create_effect_ring_modulator()
+{
+    assert(jeecs::g_engine_audio_context != nullptr);
+
+    return jeecs::g_engine_audio_context->create_effect<jeal_effect_ring_modulator>();
+}
+jeal_effect_autowah* jeal_create_effect_ring_autowah()
+{
+    assert(jeecs::g_engine_audio_context != nullptr);
+
+    return jeecs::g_engine_audio_context->create_effect<jeal_effect_autowah>();
+}
+jeal_effect_compressor* jeal_create_effect_compressor()
+{
+    assert(jeecs::g_engine_audio_context != nullptr);
+
+    return jeecs::g_engine_audio_context->create_effect<jeal_effect_compressor>();
+}
+jeal_effect_equalizer* jeal_create_effect_equalizer()
+{
+    assert(jeecs::g_engine_audio_context != nullptr);
+
+    return jeecs::g_engine_audio_context->create_effect<jeal_effect_equalizer>();
+}
+jeal_effect_eaxreverb* jeal_create_effect_eaxreverb()
+{
+    assert(jeecs::g_engine_audio_context != nullptr);
+
+    return jeecs::g_engine_audio_context->create_effect<jeal_effect_eaxreverb>();
+}
+void jeal_close_effect(void* effect)
+{
+    assert(jeecs::g_engine_audio_context != nullptr);
+
+    jeecs::g_engine_audio_context->close_effect(effect);
+}
+void jeal_update_effect(void* effect)
+{
+    assert(jeecs::g_engine_audio_context != nullptr);
+
+    jeecs::g_engine_audio_context->update_effect(effect);
+}
+
+const jeal_play_device* jeal_refetch_devices(size_t* out_device_count)
+{
+    assert(jeecs::g_engine_audio_context != nullptr);
+
+    auto& devices = jeecs::g_engine_audio_context->refetch_devices();
+    *out_device_count = devices.size();
+
+    return devices.data();
+}
+
+void jeal_using_device(const jeal_play_device* device)
+{
+    assert(jeecs::g_engine_audio_context != nullptr);
+
+    jeecs::g_engine_audio_context->using_specify_device(device);
+}

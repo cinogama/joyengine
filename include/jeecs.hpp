@@ -3679,8 +3679,8 @@ struct jeal_listener
     float       m_global_gain;   // 全局增益，最终起效的是 m_gain * m_global_gain
     float       m_location[3];   // 监听器位置
     float       m_velocity[3];   // 监听器自身速度（非播放速度）
-    float       m_orientation[2][3];
-                                // 监听器朝向（前方向，顶方向）
+    float       m_forward[3];    // 监听器朝向（前方向）
+    float       m_upward[3];     // 监听器朝向（顶方向）
 };
 
 struct jeal_native_effect_slot_instance;
@@ -3980,6 +3980,27 @@ JE_API void jeal_close_effect_slot(jeal_effect_slot* slot);
 
 JE_API void jeal_update_effect_slot(jeal_effect_slot* slot);
 
+JE_API jeal_effect_reverb* jeal_create_effect_reverb();
+JE_API jeal_effect_chorus* jeal_create_effect_chorus();
+JE_API jeal_effect_distortion* jeal_create_effect_distortion();
+JE_API jeal_effect_echo* jeal_create_effect_echo();
+JE_API jeal_effect_flanger* jeal_create_effect_flanger();
+JE_API jeal_effect_frequency_shifter* jeal_create_effect_frequency_shifter();
+JE_API jeal_effect_vocal_morpher* jeal_create_effect_vocal_morpher();
+JE_API jeal_effect_pitch_shifter* jeal_create_effect_pitch_shifter();
+JE_API jeal_effect_ring_modulator* jeal_create_effect_ring_modulator();
+JE_API jeal_effect_autowah* jeal_create_effect_ring_autowah();
+JE_API jeal_effect_compressor* jeal_create_effect_compressor();
+JE_API jeal_effect_equalizer* jeal_create_effect_equalizer();
+JE_API jeal_effect_eaxreverb* jeal_create_effect_eaxreverb();
+
+JE_API void jeal_close_effect(void* effect);
+
+JE_API void jeal_update_effect(void* effect);
+
+JE_API const jeal_play_device* jeal_refetch_devices(size_t* out_device_count);
+
+JE_API void jeal_using_device(const jeal_play_device* device);
 
 /*
 je_main_script_entry [基本接口]
@@ -8824,6 +8845,107 @@ namespace jeecs
 
     namespace audio
     {
+        template<typename T>
+        class effect
+        {
+            JECS_DISABLE_MOVE_AND_COPY(effect);
+
+            T* m_effect;
+
+            effect(T* effect)
+                : m_effect(effect)
+            {
+                assert(m_effect != nullptr);
+            }
+        public:
+            ~effect()
+            {
+                jeal_close_effect(m_effect);
+            }
+
+            static basic::resource<effect<T>> create()
+            {
+                T* instance;
+                if constexpr (std::is_same_v<T, jeal_effect_reverb>)
+                    instance = jeal_create_effect_reverb();
+                else if constexpr (std::is_same_v<T, jeal_effect_chorus>)
+                    instance = jeal_create_effect_chorus();
+                else if constexpr (std::is_same_v<T, jeal_effect_distortion>)
+                    instance = jeal_create_effect_distortion();
+                else if constexpr (std::is_same_v<T, jeal_effect_echo>)
+                    instance = jeal_create_effect_echo();
+                else if constexpr (std::is_same_v<T, jeal_effect_flanger>)
+                    instance = jeal_create_effect_flanger();
+                else if constexpr (std::is_same_v<T, jeal_effect_frequency_shifter>)
+                    instance = jeal_create_effect_frequency_shifter();
+                else if constexpr (std::is_same_v<T, jeal_effect_vocal_morpher>)
+                    instance = jeal_create_effect_vocal_morpher();
+                else if constexpr (std::is_same_v<T, jeal_effect_pitch_shifter>)
+                    instance = jeal_create_effect_pitch_shifter();
+                else if constexpr (std::is_same_v<T, jeal_effect_ring_modulator>)
+                    instance = jeal_create_effect_ring_modulator();
+                else if constexpr (std::is_same_v<T, jeal_effect_autowah>)
+                    instance = jeal_create_effect_autowah();
+                else if constexpr (std::is_same_v<T, jeal_effect_compressor>)
+                    instance = jeal_create_effect_compressor();
+                else if constexpr (std::is_same_v<T, jeal_effect_equalizer>)
+                    instance = jeal_create_effect_equalizer();
+                else if constexpr (std::is_same_v<T, jeal_effect_eaxreverb>)
+                    instance = jeal_create_effect_eaxreverb();
+                else
+                    static_assert(
+                        std::is_void_v<T> && !std::is_void_v<T> /* false */,
+                        "Unsupported effect type");
+
+                return new effect<T>(instance);
+            }
+
+            T* handle()const
+            {
+                return m_effect;
+            }
+            void update(const std::function<void(T*)>& func)
+            {
+                func(m_effect);
+                jeal_update_effect(m_effect);
+            }
+        };
+        class effect_slot
+        {
+            JECS_DISABLE_MOVE_AND_COPY(effect_slot);
+            jeal_effect_slot* m_effect_slot;
+            effect_slot(jeal_effect_slot* effect_slot)
+                : m_effect_slot(effect_slot)
+            {
+                assert(m_effect_slot != nullptr);
+            }
+        public:
+            ~effect_slot()
+            {
+                jeal_close_effect_slot(m_effect_slot);
+            }
+            template<typename T>
+            void bind_effect(const basic::resource<effect<T>>& effect)
+            {
+                jeal_effect_slot_bind(m_effect_slot, effect->handle());
+            }
+
+            static basic::resource<effect_slot> create()
+            {
+                auto* slot = jeal_create_effect_slot();
+                assert(slot != nullptr);
+                return new effect_slot(slot);
+            }
+            jeal_effect_slot* handle() const
+            {
+                return m_effect_slot;
+            }
+            void update(const std::function<void(jeal_effect_slot*)>& func)
+            {
+                func(m_effect_slot);
+                jeal_update_effect_slot(m_effect_slot);
+            }
+        };
         class buffer
         {
             JECS_DISABLE_MOVE_AND_COPY(buffer);
@@ -8917,8 +9039,13 @@ namespace jeecs
             }
             void update(const std::function<void(jeal_source*)>& func)
             {
-                func(handle());
+                func(_m_audio_source);
                 jeal_update_source(_m_audio_source);
+            }
+            void bind_effect_slot(const basic::resource<effect_slot>& slot, size_t pass)
+            {
+                if (pass < MAX_AUXILIARY_SENDS)
+                    jeal_set_source_effect_slot(_m_audio_source, slot->handle(), pass);
             }
         };
         class listener
