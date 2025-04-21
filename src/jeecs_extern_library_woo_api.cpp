@@ -267,6 +267,20 @@ WO_API wo_api wojeapi_add_prefab_to_world_with_components(wo_vm vm, wo_value arg
 WO_API wo_api wojeapi_add_system_to_world(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_apply_camera_framebuf_setting(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_apply_singleton(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_buffer_info(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_buffer_load(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_listener_info(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_listener_update(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_source_create(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_source_get_offset(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_source_get_state(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_source_info(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_source_pause(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_source_play(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_source_set_buffer(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_source_set_offset(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_source_stop(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_audio_source_update(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_bind_texture_for_entity(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_build_commit(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_build_version(wo_vm vm, wo_value args);
@@ -754,6 +768,20 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"wojeapi_add_system_to_world", (void*)&wojeapi_add_system_to_world},
         wo_extern_lib_func_t{"wojeapi_apply_camera_framebuf_setting", (void*)&wojeapi_apply_camera_framebuf_setting},
         wo_extern_lib_func_t{"wojeapi_apply_singleton", (void*)&wojeapi_apply_singleton},
+        wo_extern_lib_func_t{"wojeapi_audio_buffer_info", (void*)&wojeapi_audio_buffer_info},
+        wo_extern_lib_func_t{"wojeapi_audio_buffer_load", (void*)&wojeapi_audio_buffer_load},
+        wo_extern_lib_func_t{"wojeapi_audio_listener_info", (void*)&wojeapi_audio_listener_info},
+        wo_extern_lib_func_t{"wojeapi_audio_listener_update", (void*)&wojeapi_audio_listener_update},
+        wo_extern_lib_func_t{"wojeapi_audio_source_create", (void*)&wojeapi_audio_source_create},
+        wo_extern_lib_func_t{"wojeapi_audio_source_get_offset", (void*)&wojeapi_audio_source_get_offset},
+        wo_extern_lib_func_t{"wojeapi_audio_source_get_state", (void*)&wojeapi_audio_source_get_state},
+        wo_extern_lib_func_t{"wojeapi_audio_source_info", (void*)&wojeapi_audio_source_info},
+        wo_extern_lib_func_t{"wojeapi_audio_source_pause", (void*)&wojeapi_audio_source_pause},
+        wo_extern_lib_func_t{"wojeapi_audio_source_play", (void*)&wojeapi_audio_source_play},
+        wo_extern_lib_func_t{"wojeapi_audio_source_set_buffer", (void*)&wojeapi_audio_source_set_buffer},
+        wo_extern_lib_func_t{"wojeapi_audio_source_set_offset", (void*)&wojeapi_audio_source_set_offset},
+        wo_extern_lib_func_t{"wojeapi_audio_source_stop", (void*)&wojeapi_audio_source_stop},
+        wo_extern_lib_func_t{"wojeapi_audio_source_update", (void*)&wojeapi_audio_source_update},
         wo_extern_lib_func_t{"wojeapi_bind_texture_for_entity", (void*)&wojeapi_bind_texture_for_entity},
         wo_extern_lib_func_t{"wojeapi_build_commit", (void*)&wojeapi_build_commit},
         wo_extern_lib_func_t{"wojeapi_build_version", (void*)&wojeapi_build_version},

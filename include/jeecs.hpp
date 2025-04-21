@@ -3723,13 +3723,13 @@ jeal_effect_chorus [类型]
 */
 struct jeal_effect_chorus
 {
-    enum wavefrom
+    enum waveform
     {
         SINUSOID = 0,
         TRIANGLE = 1,
     };
 
-    wavefrom m_waveform;    // 波形类型，默认值为 SINUSOID
+    waveform m_waveform;    // 波形类型，默认值为 SINUSOID
     int m_phase;            // 相位，默认值为 90，范围 [-180, 180]
     float m_rate;           // 速率，默认值为 1.1，范围 [0.0, 10.0]
     float m_depth;          // 深度，默认值为 0.1，范围 [0.0, 1.0]
@@ -3772,9 +3772,9 @@ jeal_effect_flanger [类型]
 */
 struct jeal_effect_flanger
 {
-    typedef jeal_effect_chorus::wavefrom wavefrom;
+    typedef jeal_effect_chorus::waveform waveform;
 
-    wavefrom m_waveform;    // 波形类型，默认值为 TRIANGLE
+    waveform m_waveform;    // 波形类型，默认值为 TRIANGLE
     int m_phase;            // 相位，默认值为 0，范围 [-180, 180]
     float m_rate;           // 速率，默认值为 0.27，范围 [0.0, 10.0]
     float m_depth;          // 深度，默认值为 1.0，范围 [0.0, 1.0]
@@ -3817,7 +3817,7 @@ struct jeal_effect_vocal_morpher
         B, D, F, G, J, K, L, M, N, P, R, S, T, V, Z,
     };
 
-    enum wavefrom
+    enum waveform
     {
         SINUSOID = 0,
         TRIANGLE = 1,
@@ -3828,7 +3828,7 @@ struct jeal_effect_vocal_morpher
     int m_phoneme_a_coarse_tuning;   // 元音a粗调，默认值为 0，范围 [-24, 24]
     phoneme m_phoneme_b;             // 元音b，默认值为 ER
     int m_phoneme_b_coarse_tuning;   // 元音b粗调，默认值为 0，范围 [-24, 24]
-    wavefrom m_waveform;            // 波形类型，默认值为 SINUSOID
+    waveform m_waveform;            // 波形类型，默认值为 SINUSOID
     float m_rate;                   // 速率，默认值为 1.41，范围 [0.0, 10.0]
 };
 
@@ -3850,7 +3850,7 @@ jeal_effect_ring_modulator [类型]
 */
 struct jeal_effect_ring_modulator
 {
-    enum wavefrom
+    enum waveform
     {
         SINUSOID = 0,
         SAWTOOTH = 1,
@@ -3859,7 +3859,7 @@ struct jeal_effect_ring_modulator
 
     float m_frequency;              // 频率，默认值为 440.0，范围 [0.0, 8000.0]
     float m_highpass_cutoff;        // 高通截止频率，默认值为 800.0，范围 [0.0, 24000.0]
-    wavefrom m_waveform;            // 波形类型，默认值为 SINUSOID
+    waveform m_waveform;            // 波形类型，默认值为 SINUSOID
 };
 
 /*
@@ -3933,25 +3933,71 @@ struct jeal_effect_eaxreverb
     float m_hf_reference;      // 高频反射，默认值为 5000.0，范围 [1000.0, 20000.0]
     float m_lf_reference;      // 低频反射，默认值为 250.0，范围 [20.0, 1000.0]
     float m_room_rolloff_factor;// 房间衰减因子，默认值为 0.0，范围 [0.0, 10.0]
-    bool m_decay_hf_limiter;    // 高频衰减限制器，默认值为 true
+    bool m_decay_hf_limit;    // 高频衰减限制器，默认值为 true
 };
 
+/*
+jeal_create_buffer [基本接口]
+创建一个音频缓冲区
+    * data 是音频数据的指针
+    * buffer_data_len 是音频数据的长度（字节数）
+    * sample_rate 是采样率（Hz）
+    * format 是音频格式
+    返回值是一个指向音频缓冲区的指针
+    使用完毕后需要调用 jeal_close_buffer 释放资源
+参见：
+    jeal_close_buffer
+*/
 JE_API const jeal_buffer* jeal_create_buffer(
     const void* data,
     size_t buffer_data_len,
     size_t sample_rate,
     jeal_format format);
 
+/*
+jeal_load_buffer_wav [基本接口]
+加载一个WAV格式的音频文件
+    * path 是音频文件的路径
+    * 返回值是一个指向音频缓冲区的指针
+    使用完毕后需要调用 jeal_close_buffer 释放资源
+    如果加载失败，返回值为 nullptr
+参见：
+    jeal_close_buffer
+*/
 JE_API const jeal_buffer* jeal_load_buffer_wav(const char* path);
 
+/*
+jeal_close_buffer [基本接口]
+释放一个音频缓冲区
+*/
 JE_API void jeal_close_buffer(const jeal_buffer* buffer);
 
+/*
+jeal_create_source [基本接口]
+创建一个音频源
+    使用完毕后需要调用 jeal_close_source 释放资源
+参见：
+    jeal_close_source
+*/
 JE_API jeal_source* jeal_create_source();
 
+/*
+jeal_update_source [基本接口]
+将对 jeal_source 的参数修改应用到实际的音频源上
+*/
 JE_API void jeal_update_source(jeal_source* source);
 
+/*
+jeal_close_source [基本接口]
+释放一个音频源
+*/
 JE_API void jeal_close_source(jeal_source* source);
 
+/*
+jeal_set_source_buffer [基本接口]
+设置音频源的播放音频
+    只有音源设置有音频时，其他的播放等动作才会生效
+*/
 JE_API void jeal_set_source_buffer(jeal_source* source, const jeal_buffer* buffer);
 
 JE_API void jeal_set_source_effect_slot(jeal_source* source, jeal_effect_slot* slot_may_null, size_t slot_idx);
@@ -3989,7 +4035,7 @@ JE_API jeal_effect_frequency_shifter* jeal_create_effect_frequency_shifter();
 JE_API jeal_effect_vocal_morpher* jeal_create_effect_vocal_morpher();
 JE_API jeal_effect_pitch_shifter* jeal_create_effect_pitch_shifter();
 JE_API jeal_effect_ring_modulator* jeal_create_effect_ring_modulator();
-JE_API jeal_effect_autowah* jeal_create_effect_ring_autowah();
+JE_API jeal_effect_autowah* jeal_create_effect_autowah();
 JE_API jeal_effect_compressor* jeal_create_effect_compressor();
 JE_API jeal_effect_equalizer* jeal_create_effect_equalizer();
 JE_API jeal_effect_eaxreverb* jeal_create_effect_eaxreverb();

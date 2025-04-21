@@ -1196,7 +1196,7 @@ namespace jeecs
                     efx->alEffectf(effect_id, AL_EAXREVERB_HFREFERENCE, instance_data->m_hf_reference);
                     efx->alEffectf(effect_id, AL_EAXREVERB_LFREFERENCE, instance_data->m_lf_reference);
                     efx->alEffectf(effect_id, AL_EAXREVERB_ROOM_ROLLOFF_FACTOR, instance_data->m_room_rolloff_factor);
-                    efx->alEffecti(effect_id, AL_EAXREVERB_DECAY_HFLIMIT, instance_data->m_decay_hf_limiter ? AL_TRUE : AL_FALSE);
+                    efx->alEffecti(effect_id, AL_EAXREVERB_DECAY_HFLIMIT, instance_data->m_decay_hf_limit ? AL_TRUE : AL_FALSE);
 
                     break;
                 }
@@ -2237,7 +2237,7 @@ namespace jeecs
     {
         head->m_effect_kind = AL_EFFECT_CHORUS;
 
-        chorus->m_waveform = (jeal_effect_chorus::wavefrom)AL_CHORUS_DEFAULT_WAVEFORM;
+        chorus->m_waveform = (jeal_effect_chorus::waveform)AL_CHORUS_DEFAULT_WAVEFORM;
         chorus->m_phase = AL_CHORUS_DEFAULT_PHASE;
         chorus->m_rate = AL_CHORUS_DEFAULT_RATE;
         chorus->m_depth = AL_CHORUS_DEFAULT_DEPTH;
@@ -2268,7 +2268,7 @@ namespace jeecs
     {
         head->m_effect_kind = AL_EFFECT_FLANGER;
 
-        flanger->m_waveform = (jeal_effect_flanger::wavefrom)AL_FLANGER_DEFAULT_WAVEFORM;
+        flanger->m_waveform = (jeal_effect_flanger::waveform)AL_FLANGER_DEFAULT_WAVEFORM;
         flanger->m_phase = AL_FLANGER_DEFAULT_PHASE;
         flanger->m_rate = AL_FLANGER_DEFAULT_RATE;
         flanger->m_depth = AL_FLANGER_DEFAULT_DEPTH;
@@ -2293,7 +2293,7 @@ namespace jeecs
         morpher->m_phoneme_a_coarse_tuning = AL_VOCAL_MORPHER_DEFAULT_PHONEMEA_COARSE_TUNING;
         morpher->m_phoneme_b = (jeal_effect_vocal_morpher::phoneme)AL_VOCAL_MORPHER_DEFAULT_PHONEMEB;
         morpher->m_phoneme_b_coarse_tuning = AL_VOCAL_MORPHER_DEFAULT_PHONEMEB_COARSE_TUNING;
-        morpher->m_waveform = (jeal_effect_vocal_morpher::wavefrom)AL_VOCAL_MORPHER_DEFAULT_WAVEFORM;
+        morpher->m_waveform = (jeal_effect_vocal_morpher::waveform)AL_VOCAL_MORPHER_DEFAULT_WAVEFORM;
         morpher->m_rate = AL_VOCAL_MORPHER_DEFAULT_RATE;
     }
     void AudioContextHelpler::effect_init_default(jeal_effect_head* head, jeal_effect_pitch_shifter* shifter)
@@ -2309,7 +2309,7 @@ namespace jeecs
 
         modulator->m_frequency = AL_RING_MODULATOR_DEFAULT_FREQUENCY;
         modulator->m_highpass_cutoff = AL_RING_MODULATOR_DEFAULT_HIGHPASS_CUTOFF;
-        modulator->m_waveform = (jeal_effect_ring_modulator::wavefrom)AL_RING_MODULATOR_DEFAULT_WAVEFORM;
+        modulator->m_waveform = (jeal_effect_ring_modulator::waveform)AL_RING_MODULATOR_DEFAULT_WAVEFORM;
     }
     void AudioContextHelpler::effect_init_default(jeal_effect_head* head, jeal_effect_autowah* wah)
     {
@@ -2371,7 +2371,7 @@ namespace jeecs
         eaxreverb->m_hf_reference = AL_EAXREVERB_DEFAULT_HFREFERENCE;
         eaxreverb->m_lf_reference = AL_EAXREVERB_DEFAULT_LFREFERENCE;
         eaxreverb->m_room_rolloff_factor = AL_EAXREVERB_DEFAULT_ROOM_ROLLOFF_FACTOR;
-        eaxreverb->m_decay_hf_limiter = AL_EAXREVERB_DEFAULT_DECAY_HFLIMIT != AL_FALSE;
+        eaxreverb->m_decay_hf_limit = AL_EAXREVERB_DEFAULT_DECAY_HFLIMIT != AL_FALSE;
     }
 }
 
@@ -2570,7 +2570,7 @@ jeal_effect_ring_modulator* jeal_create_effect_ring_modulator()
 
     return jeecs::g_engine_audio_context->create_effect<jeal_effect_ring_modulator>();
 }
-jeal_effect_autowah* jeal_create_effect_ring_autowah()
+jeal_effect_autowah* jeal_create_effect_autowah()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
