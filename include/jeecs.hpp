@@ -4000,32 +4000,98 @@ jeal_set_source_buffer [基本接口]
 */
 JE_API void jeal_set_source_buffer(jeal_source* source, const jeal_buffer* buffer);
 
+/*
+jeal_set_source_effect_slot [基本接口]
+设置音频源的效果槽
+    slot_idx 必须小于 jeecs::audio::MAX_AUXILIARY_SENDS
+*/
 JE_API void jeal_set_source_effect_slot(jeal_source* source, jeal_effect_slot* slot_may_null, size_t slot_idx);
 
+/*
+jeal_play_source [基本接口]
+播放音频源
+    如果音频源已经在播放或者音频源没有设置音频，则不会有任何效果
+    如果音频源在此前被暂停，则继续播放
+    如果音频源被停止，则从音频的起始位置开始播放
+*/
 JE_API void jeal_play_source(jeal_source* source);
 
+/*
+jeal_pause_source [基本接口]
+暂停音频源的播放
+*/
 JE_API void jeal_pause_source(jeal_source* source);
 
+/*
+jeal_stop_source [基本接口]
+停止音频源的播放
+*/
 JE_API void jeal_stop_source(jeal_source* source);
 
+/*
+jeal_get_source_play_state [基本接口]
+获取当前音频源的状态（是否播放、暂停或停止）
+*/
 JE_API jeal_state jeal_get_source_play_state(jeal_source* source);
 
+/*
+jeal_get_source_play_process [基本接口]
+获取当前音频源的播放位置，单位是字节
+*/
 JE_API size_t jeal_get_source_play_process(jeal_source* source);
 
+/*
+jeal_set_source_play_process [基本接口]
+设置音频源的播放进度，单位是字节
+    注意，设置的偏移量应当是目标播放音频的采样大小的整数倍；
+    如果未对齐，会被强制对齐。
+*/
 JE_API void jeal_set_source_play_process(jeal_source* source, size_t offset);
 
+/*
+jeal_get_listener [基本接口]
+获取监听者的实例
+*/
 JE_API jeal_listener* jeal_get_listener();
 
+/*
+jeal_update_listener [基本接口]
+将对 jeal_listener 的参数修改应用到实际的监听者上
+*/
 JE_API void jeal_update_listener();
 
+/*
+jeal_create_effect_slot [基本接口]
+创建一个效果槽
+    * 效果槽是一个用于存放效果的容器，效果槽可以被添加到声源上
+    * 一个效果槽可以被添加到多个声源上
+    * 一个声源亦可附加多个效果槽，但通常会受到平台限制，单个声源只能附加 1-4 个效果槽
+*/
 JE_API jeal_effect_slot* jeal_create_effect_slot();
 
+/*
+jeal_effect_slot_bind [基本接口]
+绑定一个效果到效果槽
+    * 效果传入 nullptr 表示解除绑定
+*/
 JE_API void jeal_effect_slot_bind(jeal_effect_slot* slot, void* effect_may_null);
 
+/*
+jeal_effect_slot_close [基本接口]
+关闭一个效果槽
+*/
 JE_API void jeal_close_effect_slot(jeal_effect_slot* slot);
 
+/*
+jeal_update_effect_slot [基本接口]
+将对 jeal_effect_slot 的参数修改应用到实际的效果槽上
+*/
 JE_API void jeal_update_effect_slot(jeal_effect_slot* slot);
 
+/*
+jeal_create_effect_... [基本接口]
+创建一个音频效果实例
+*/
 JE_API jeal_effect_reverb* jeal_create_effect_reverb();
 JE_API jeal_effect_chorus* jeal_create_effect_chorus();
 JE_API jeal_effect_distortion* jeal_create_effect_distortion();
@@ -4040,15 +4106,41 @@ JE_API jeal_effect_compressor* jeal_create_effect_compressor();
 JE_API jeal_effect_equalizer* jeal_create_effect_equalizer();
 JE_API jeal_effect_eaxreverb* jeal_create_effect_eaxreverb();
 
+/*
+jeal_close_effect [基本接口]
+关闭一个音频效果实例
+*/
 JE_API void jeal_close_effect(void* effect);
 
+/*
+jeal_update_effect [基本接口]
+将对 jeal_effect 的参数修改应用到实际的效果上
+    需要注意，对效果的更新不会应用到已经绑定的效果槽和音频源上，
+    需要通过 jeal_effect_slot_bind 重新绑定
+参见：
+    jeal_effect_slot_bind
+*/
 JE_API void jeal_update_effect(void* effect);
 
+/*
+jeal_refetch_devices [基本接口]
+获取当前已链接的所有音频设备
+    此前获取的所有设备的指针/引用都将失效，因此需要明确设备指针的所有者
+*/
 JE_API const jeal_play_device* jeal_refetch_devices(size_t* out_device_count);
 
+/*
+jeal_using_device [基本接口]
+指示当前使用的设备
+*/
 JE_API void jeal_using_device(const jeal_play_device* device);
 
+/*
+jeal_check_device_connected [基本接口]
+检查设备是否链接
+*/
 JE_API bool jeal_check_device_connected(const jeal_play_device* device);
+
 /*
 je_main_script_entry [基本接口]
 运行入口脚本
