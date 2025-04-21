@@ -366,79 +366,284 @@ namespace je
     }
     namespace audio
     {
+        using effect<EffectT> = gchandle
+        {
+            using reverb = struct{
+                density: mut real,
+                diffusion: mut real,
+                gain: mut real,
+                gain_hf: mut real,
+                decay_time: mut real,
+                decay_hf_ratio: mut real,
+                reflections_gain: mut real,
+                reflections_delay: mut real,
+                late_reverb_gain: mut real,
+                late_reverb_delay: mut real,
+                air_absorption_gain_hf: mut real,
+                room_rolloff_factor: mut real,
+                decay_hf_limit: mut bool,
+            };
+            using chorus = struct{
+                waveform: mut waveform,
+                phase: mut int,
+                rate: mut real,
+                depth: mut real,
+                feedback: mut real,
+                delay: mut real,
+            }
+            {
+                public enum waveform
+                {
+                    SINUSOID = 0,
+                    TRIANGLE = 1,
+                }
+            }
+            using distortion = struct{
+                edge: mut real,
+                gain: mut real,
+                lowpass_cutoff: mut real,
+                equalizer_center_freq: mut real,
+                equalizer_bandwidth: mut real,                
+            };
+            using echo = struct{
+                delay: mut real,
+                lr_delay: mut real,
+                damping: mut real,
+                feedback: mut real,
+                spread: mut real,
+            };
+            using flanger = struct{
+                waveform: mut waveform,
+                phase: mut int,
+                rate: mut real,
+                depth: mut real,
+                feedback: mut real,
+                delay: mut real,
+            }
+            {
+                public enum waveform
+                {
+                    SINUSOID = 0,
+                    TRIANGLE = 1,
+                }
+            }
+            using frequency_shifter = struct{
+                frequency: mut real,
+                left_direction: mut direction,
+                right_direction: mut direction,
+            }
+            {
+                public enum direction
+                {
+                    DOWN = 0,
+                    UP = 1,
+                    OFF = 2,
+                }
+            }
+            using vocal_morpher = struct{
+                phoneme_a: mut phoneme,
+                phoneme_a_coarse_tuning: mut int,
+                phoneme_b: mut phoneme,
+                phoneme_b_coarse_tuning: mut int,
+                waveform: mut waveform,
+                rate: mut real,
+            }
+            {
+                public enum phoneme
+                {
+                    A = 0, E, I, O, U,
+                    AA, AE, AH, AO,
+                    EH, ER, IH, IY,
+                    UH, UW,
+                    B, D, F, G, J, K, L, M, N, P, R, S, T, V, Z,
+                }
+                public enum waveform
+                {
+                    SINUSOID = 0,
+                    TRIANGLE = 1,
+                    SAWTOOTH = 2,
+                }
+            }
+            using pitch_shifter = struct{
+                coarse_tune: mut int,
+                fine_tune: mut int,
+            };
+            using ring_modulator = struct{
+                frequency: mut real,
+                highpass_cutoff: mut real,
+                waveform: mut waveform,
+            }
+            {
+                public enum waveform
+                {
+                    SINUSOID = 0,
+                    SAWTOOTH = 1,
+                    SQUARE = 2,
+                }
+            }
+            using autowah = struct{
+                attack_time: mut real,
+                release_time: mut real,
+                resonance: mut real,
+                peak_gain: mut real,
+            };
+            using compressor = struct{
+                enable: mut bool,
+            };
+            using equalizer = struct{
+                low_gain: mut real,
+                low_cutoff: mut real,
+                mid1_gain: mut real,
+                mid1_center: mut real,
+                mid1_width: mut real,
+                mid2_gain: mut real,
+                mid2_center: mut real,
+                mid2_width: mut real,
+                high_gain: mut real,
+                high_cutoff: mut real,
+            };
+            using eaxreverb = struct{
+                density: mut real,
+                diffusion: mut real,
+                gain: mut real,
+                gain_hf: mut real,
+                gain_lf: mut real,
+                decay_time: mut real,
+                decay_hf_ratio: mut real,
+                decay_lf_ratio: mut real,
+                reflections_gain: mut real,
+                reflections_delay: mut real,
+                reflections_pan: mut (real, real, real),
+                late_reverb_gain: mut real,
+                late_reverb_delay: mut real,
+                late_reverb_pan: mut (real, real, real),
+                echo_time: mut real,
+                echo_depth: mut real,
+                modulation_time: mut real,
+                modulation_depth: mut real,
+                air_absorption_gain_hf: mut real,
+                hf_reference: mut real,
+                lf_reference: mut real,
+                room_rolloff_factor: mut real,
+                decay_hf_limit: mut bool,
+            };
+        }
+
+        using effect_slot = gchandle
+        {
+
+        }
+
         using buffer = gchandle
         {
+            public enum format
+            {
+                MONO8,
+                MONO16,
+                MONO32F,
+                STEREO8,
+                STEREO16,
+                STEREO32F,
+            }
+
+            using buffer_data_t = struct{
+                size: int,
+                sample_rate: int,
+                sample_size: int,
+                byte_rate: int,
+                format: format,
+            };
+
+            public func close(self: buffer)=> bool
+            {
+                return self: gchandle->close();
+            }
+
             extern("libjoyecs", "wojeapi_audio_buffer_load")
             public func load(path: string)=> option<buffer>;
 
-            extern("libjoyecs", "wojeapi_audio_buffer_byte_size")
-            public func get_byte_size(self: buffer)=> int;
-
-            extern("libjoyecs", "wojeapi_audio_buffer_byte_rate")
-            public func get_byte_rate(self: buffer)=> int;
+            extern("libjoyecs", "wojeapi_audio_buffer_info")
+            public func info(self: buffer)=> buffer_data_t;
         }
         using source = gchandle
         {
-            enum state
+            public enum state
             {
                 STOPPED,
                 PLAYING,
                 PAUSED,
             }
+            using source_data_t = struct{
+                loop: mut bool,
+                gain: mut real,
+                pitch: mut real,
+                location: mut(real, real, real),
+                velocity: mut(real, real, real),
+            };
 
             extern("libjoyecs", "wojeapi_audio_source_create")
             public func create()=> source;
 
-            extern("libjoyecs", "wojeapi_audio_source_get_state")
-            public func get_state(self: source)=> state;
+            public func close(self: source)=> bool
+            {
+                return self: gchandle->close();
+            }
+            
+            extern("libjoyecs", "wojeapi_audio_source_info")
+            public func info(self: source)=> source_data_t;
 
-            extern("libjoyecs", "wojeapi_audio_source_set_playing_buffer")
-            public func set_playing_buffer(self: source, buf: buffer)=> void;
+            public func update(self: source, f: (source_data_t)=> void)=> void
+            {
+                extern("libjoyecs", "wojeapi_audio_source_update")
+                func _update(self: source)=> void;
+
+                f(self->info());
+                _update(self);
+            }
 
             extern("libjoyecs", "wojeapi_audio_source_play")
             public func play(self: source)=> void;
 
-            extern("libjoyecs", "wojeapi_audio_source_pause")
-            public func pause(self: source)=> void;
-
             extern("libjoyecs", "wojeapi_audio_source_stop")
             public func stop(self: source)=> void;
 
-            extern("libjoyecs", "wojeapi_audio_source_get_playing_offset")
-            public func get_playing_offset(self: source)=> int;
+            extern("libjoyecs", "wojeapi_audio_source_pause")
+            public func pause(self: source)=> void;
 
-            extern("libjoyecs", "wojeapi_audio_source_set_playing_offset")
-            public func set_playing_offset(self: source, offset: int)=> void;
+            extern("libjoyecs", "wojeapi_audio_source_set_buffer")
+            public func set_buffer(self: source, buffer: buffer)=> void;
 
-            extern("libjoyecs", "wojeapi_audio_source_set_pitch")
-            public func set_pitch(self: source, pitch: real)=> void;
+            extern("libjoyecs", "wojeapi_audio_source_get_state")
+            public func get_state(self: source)=> state;
 
-            extern("libjoyecs", "wojeapi_audio_source_set_volume")
-            public func set_volume(self: source, volume: real)=> void;
+            extern("libjoyecs", "wojeapi_audio_source_get_offset")
+            public func get_offset(self: source)=> int;
 
-            extern("libjoyecs", "wojeapi_audio_source_set_position")
-            public func set_position(self: source, x: real, y: real, z: real)=> void;
-
-            extern("libjoyecs", "wojeapi_audio_source_set_velocity")
-            public func set_velocity(self: source, x: real, y: real, z: real)=> void;
-
-            extern("libjoyecs", "wojeapi_audio_source_set_loop")
-            public func set_loop(self: source, loop: bool)=> void;
+            extern("libjoyecs", "wojeapi_audio_source_set_offset")
+            public func set_offset(self: source, offset: int)=> void;           
         }
         namespace listener
         {
-            extern("libjoyecs", "wojeapi_audio_listener_set_volume")
-            public func set_volume(volume: real)=> void;
+            using listener_data_t = struct{
+                gain: mut real,
+                global_gain: mut real,
+                location: mut (real, real, real),
+                velocity: mut (real, real, real),
+                forward: mut (real, real, real),
+                upward: mut (real, real, real),
+            };
 
-            extern("libjoyecs", "wojeapi_audio_listener_set_position")
-            public func set_position(x: real, y: real, z: real)=> void;
+            extern("libjoyecs", "wojeapi_audio_listener_info")
+            public func info()=> listener_data_t;
 
-            extern("libjoyecs", "wojeapi_audio_listener_set_direction")
-            public func set_direction(
-                face_x: real, face_y: real, face_z: real, up_x: real, up_y: real, up_z: real)=> void;
+            public func update(f: (listener_data_t)=> void)=> void
+            {
+                extern("libjoyecs", "wojeapi_audio_listener_update")
+                func _update()=> void;
 
-            extern("libjoyecs", "wojeapi_audio_listener_set_velocity")
-            public func set_velocity(x: real, y: real, z: real)=> void;
+                f(info());
+                _update();
+            }
         }
     }
     namespace graphic

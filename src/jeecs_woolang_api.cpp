@@ -327,7 +327,7 @@ WO_API wo_api wojeapi_apply_camera_framebuf_setting(wo_vm vm, wo_value args)
                 jegl_texture::format::RGBA,
                 jegl_texture::format::DEPTH,
             }
-            );
+        );
     }
     else
         jeecs::debug::logfatal("No RendToFramebuffer in specify entity when 'wojeapi_apply_camera_framebuf_setting'.");
@@ -1063,7 +1063,7 @@ WO_API wo_api wojeapi_input_gamepad_axis(wo_vm vm, wo_value args)
 WO_API wo_api wojeapi_input_gamepad_actived(wo_vm vm, wo_value args)
 {
     jeecs::input::gamepad* gamepad =
-        (jeecs::input::gamepad*)wo_pointer(args + 0); 
+        (jeecs::input::gamepad*)wo_pointer(args + 0);
 
     jeecs::typing::ms_stamp_t actived;
     if (gamepad->actived(&actived))
@@ -2070,135 +2070,6 @@ WO_API wo_api wojeapi_get_entity_arch_information(wo_vm vm, wo_value args)
     return wo_ret_val(vm, result);
 }
 
-WO_API wo_api wojeapi_audio_buffer_load(wo_vm vm, wo_value args)
-{
-    auto audiobuf = jeecs::audio::buffer::load(wo_string(args + 0));
-    if (audiobuf)
-        return wo_ret_option_gchandle(vm,
-            new jeecs::basic::resource<jeecs::audio::buffer>(audiobuf), nullptr,
-            [](void* ptr)
-            {
-                delete std::launder(reinterpret_cast<jeecs::basic::resource<jeecs::audio::buffer>*>(ptr));
-            });
-    return wo_ret_option_none(vm);
-}
-WO_API wo_api wojeapi_audio_buffer_byte_size(wo_vm vm, wo_value args)
-{
-    jeecs::basic::resource<jeecs::audio::buffer>* buf = (jeecs::basic::resource<jeecs::audio::buffer>*)wo_pointer(args + 0);
-    return wo_ret_int(vm, (wo_integer_t)buf->get()->get_byte_size());
-}
-WO_API wo_api wojeapi_audio_buffer_byte_rate(wo_vm vm, wo_value args)
-{
-    jeecs::basic::resource<jeecs::audio::buffer>* buf = (jeecs::basic::resource<jeecs::audio::buffer>*)wo_pointer(args + 0);
-    return wo_ret_int(vm, (wo_integer_t)buf->get()->get_byte_rate());
-}
-
-WO_API wo_api wojeapi_audio_source_create(wo_vm vm, wo_value args)
-{
-    auto audiosrc = jeecs::audio::source::create();
-    assert(audiosrc != nullptr);
-    return wo_ret_option_gchandle(vm,
-        new jeecs::basic::resource<jeecs::audio::source>(audiosrc), nullptr,
-        [](void* ptr)
-        {
-            delete std::launder(reinterpret_cast<jeecs::basic::resource<jeecs::audio::buffer>*>(ptr));
-        });
-}
-WO_API wo_api wojeapi_audio_source_get_state(wo_vm vm, wo_value args)
-{
-    jeecs::basic::resource<jeecs::audio::source>* src = (jeecs::basic::resource<jeecs::audio::source>*)wo_pointer(args + 0);
-    return wo_ret_int(vm, (wo_integer_t)src->get()->get_state());
-}
-WO_API wo_api wojeapi_audio_source_set_playing_buffer(wo_vm vm, wo_value args)
-{
-    jeecs::basic::resource<jeecs::audio::source>* src = (jeecs::basic::resource<jeecs::audio::source>*)wo_pointer(args + 0);
-    jeecs::basic::resource<jeecs::audio::buffer>* buf = (jeecs::basic::resource<jeecs::audio::buffer>*)wo_pointer(args + 1);
-    src->get()->set_playing_buffer(*buf);
-    return wo_ret_void(vm);
-}
-WO_API wo_api wojeapi_audio_source_play(wo_vm vm, wo_value args)
-{
-    jeecs::basic::resource<jeecs::audio::source>* src = (jeecs::basic::resource<jeecs::audio::source>*)wo_pointer(args + 0);
-    src->get()->play();
-    return wo_ret_void(vm);
-}
-WO_API wo_api wojeapi_audio_source_pause(wo_vm vm, wo_value args)
-{
-    jeecs::basic::resource<jeecs::audio::source>* src = (jeecs::basic::resource<jeecs::audio::source>*)wo_pointer(args + 0);
-    src->get()->pause();
-    return wo_ret_void(vm);
-}
-WO_API wo_api wojeapi_audio_source_stop(wo_vm vm, wo_value args)
-{
-    jeecs::basic::resource<jeecs::audio::source>* src = (jeecs::basic::resource<jeecs::audio::source>*)wo_pointer(args + 0);
-    src->get()->stop();
-    return wo_ret_void(vm);
-}
-WO_API wo_api wojeapi_audio_source_get_playing_offset(wo_vm vm, wo_value args)
-{
-    jeecs::basic::resource<jeecs::audio::source>* src = (jeecs::basic::resource<jeecs::audio::source>*)wo_pointer(args + 0);
-    return wo_ret_int(vm, (wo_integer_t)src->get()->get_playing_offset());
-}
-WO_API wo_api wojeapi_audio_source_set_playing_offset(wo_vm vm, wo_value args)
-{
-    jeecs::basic::resource<jeecs::audio::source>* src = (jeecs::basic::resource<jeecs::audio::source>*)wo_pointer(args + 0);
-    src->get()->set_playing_offset((size_t)wo_int(args + 1));
-    return wo_ret_void(vm);
-}
-WO_API wo_api wojeapi_audio_source_set_pitch(wo_vm vm, wo_value args)
-{
-    jeecs::basic::resource<jeecs::audio::source>* src = (jeecs::basic::resource<jeecs::audio::source>*)wo_pointer(args + 0);
-    src->get()->set_pitch(wo_float(args + 1));
-    return wo_ret_void(vm);
-}
-WO_API wo_api wojeapi_audio_source_set_volume(wo_vm vm, wo_value args)
-{
-    jeecs::basic::resource<jeecs::audio::source>* src = (jeecs::basic::resource<jeecs::audio::source>*)wo_pointer(args + 0);
-    src->get()->set_volume(wo_float(args + 1));
-    return wo_ret_void(vm);
-}
-WO_API wo_api wojeapi_audio_source_set_position(wo_vm vm, wo_value args)
-{
-    jeecs::basic::resource<jeecs::audio::source>* src = (jeecs::basic::resource<jeecs::audio::source>*)wo_pointer(args + 0);
-    src->get()->set_position(jeecs::math::vec3(wo_float(args + 1), wo_float(args + 2), wo_float(args + 3)));
-    return wo_ret_void(vm);
-}
-WO_API wo_api wojeapi_audio_source_set_velocity(wo_vm vm, wo_value args)
-{
-    jeecs::basic::resource<jeecs::audio::source>* src = (jeecs::basic::resource<jeecs::audio::source>*)wo_pointer(args + 0);
-    src->get()->set_velocity(jeecs::math::vec3(wo_float(args + 1), wo_float(args + 2), wo_float(args + 3)));
-    return wo_ret_void(vm);
-}
-WO_API wo_api wojeapi_audio_source_set_loop(wo_vm vm, wo_value args)
-{
-    jeecs::basic::resource<jeecs::audio::source>* src = (jeecs::basic::resource<jeecs::audio::source>*)wo_pointer(args + 0);
-    src->get()->set_loop(wo_bool(args + 1));
-    return wo_ret_void(vm);
-}
-
-WO_API wo_api wojeapi_audio_listener_set_volume(wo_vm vm, wo_value args)
-{
-    jeecs::audio::listener::set_volume(wo_float(args + 0));
-    return wo_ret_void(vm);
-}
-WO_API wo_api wojeapi_audio_listener_set_position(wo_vm vm, wo_value args)
-{
-    jeecs::audio::listener::set_position(jeecs::math::vec3(wo_float(args + 0), wo_float(args + 1), wo_float(args + 2)));
-    return wo_ret_void(vm);
-}
-WO_API wo_api wojeapi_audio_listener_set_direction(wo_vm vm, wo_value args)
-{
-    jeecs::audio::listener::set_direction(
-        jeecs::math::vec3(wo_float(args + 0), wo_float(args + 1), wo_float(args + 2)),
-        jeecs::math::vec3(wo_float(args + 3), wo_float(args + 4), wo_float(args + 5)));
-    return wo_ret_void(vm);
-}
-WO_API wo_api wojeapi_audio_listener_set_velocity(wo_vm vm, wo_value args)
-{
-    jeecs::audio::listener::set_velocity(jeecs::math::vec3(wo_float(args + 0), wo_float(args + 1), wo_float(args + 2)));
-    return wo_ret_void(vm);
-}
-
 WO_API wo_api wojeapi_towoo_register_system(wo_vm vm, wo_value args)
 {
     const jeecs::typing::type_info* result =
@@ -2679,4 +2550,231 @@ WO_API wo_api wojeapi_dynamic_parser_edit(wo_vm vm, wo_value args)
         }
     }
     return wo_ret_bool(vm, WO_FALSE);
+}
+
+WO_API wo_api wojeapi_audio_buffer_load(wo_vm vm, wo_value args)
+{
+    auto buffer = jeecs::audio::buffer::load(wo_string(args + 0));
+    if (buffer)
+    {
+        return wo_ret_option_gchandle(
+            vm,
+            new jeecs::basic::resource<jeecs::audio::buffer>(std::move(buffer)),
+            nullptr,
+            [](void* p)
+            {
+                delete reinterpret_cast<jeecs::basic::resource<jeecs::audio::buffer>*>(p);
+            });
+    }
+    return wo_ret_option_none(vm);
+}
+WO_API wo_api wojeapi_audio_buffer_info(wo_vm vm, wo_value args)
+{
+    wo_value stacks = wo_reserve_stack(vm, 2, &args);
+    wo_value result = stacks + 0;
+    wo_value elem = stacks + 1;
+
+    jeecs::basic::resource<jeecs::audio::buffer>* buffer =
+        reinterpret_cast<jeecs::basic::resource<jeecs::audio::buffer>*>(wo_pointer(args + 0));
+
+    wo_set_struct(result, vm, 5);
+    auto* buffer_instance = (*buffer)->handle();
+
+    wo_set_int(elem, (wo_int_t)buffer_instance->m_size);
+    wo_struct_set(result, 0, elem);
+
+    wo_set_int(elem, (wo_int_t)buffer_instance->m_sample_rate);
+    wo_struct_set(result, 1, elem);
+
+    wo_set_int(elem, (wo_int_t)buffer_instance->m_sample_size);
+    wo_struct_set(result, 2, elem);
+
+    wo_set_int(elem, (wo_int_t)buffer_instance->m_byte_rate);
+    wo_struct_set(result, 3, elem);
+
+    wo_set_int(elem, (wo_int_t)buffer_instance->m_format);
+    wo_struct_set(result, 4, elem);
+
+    return wo_ret_val(vm, result);
+}
+
+WO_API wo_api wojeapi_audio_source_create(wo_vm vm, wo_value args)
+{
+    return wo_ret_gchandle(
+        vm,
+        new jeecs::basic::resource<jeecs::audio::source>(jeecs::audio::source::create()),
+        nullptr,
+        [](void* p)
+        {
+            delete reinterpret_cast<jeecs::basic::resource<jeecs::audio::source>*>(p);
+        });
+}
+WO_API wo_api wojeapi_audio_source_info(wo_vm vm, wo_value args)
+{
+    wo_value stacks = wo_reserve_stack(vm, 3, &args);
+    wo_value result = stacks + 0;
+    wo_value elem = stacks + 1;
+    wo_value elem2 = stacks + 2;
+
+    jeecs::basic::resource<jeecs::audio::source>* source =
+        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source>*>(wo_pointer(args + 0));
+
+    wo_set_struct(result, vm, 5);
+
+    auto* source_instance = (*source)->handle();
+
+    wo_set_bool(elem, source_instance->m_loop);
+    wo_struct_set(result, 0, elem);
+
+    wo_set_float(elem, source_instance->m_gain);
+    wo_struct_set(result, 1, elem);
+
+    wo_set_float(elem, source_instance->m_pitch);
+    wo_struct_set(result, 2, elem);
+
+    wo_set_struct(elem, vm, 3);
+    for (uint16_t i = 0; i < 3; ++i)
+    {
+        wo_set_float(elem2, source_instance->m_location[i]);
+        wo_struct_set(elem, i, elem2);
+    }
+    wo_struct_set(result, 3, elem);
+
+    wo_set_struct(elem, vm, 3);
+    for (uint16_t i = 0; i < 3; ++i)
+    {
+        wo_set_float(elem2, source_instance->m_velocity[i]);
+        wo_struct_set(elem, i, elem2);
+    }
+    wo_struct_set(result, 4, elem);
+
+    return wo_ret_val(vm, result);
+}
+WO_API wo_api wojeapi_audio_source_update(wo_vm vm, wo_value args)
+{
+    jeecs::basic::resource<jeecs::audio::source>* source =
+        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source>*>(wo_pointer(args + 0));
+
+    jeal_update_source((*source)->handle());
+
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_audio_source_play(wo_vm vm, wo_value args)
+{
+    jeecs::basic::resource<jeecs::audio::source>* source =
+        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source>*>(wo_pointer(args + 0));
+
+    (*source)->play();
+
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_audio_source_stop(wo_vm vm, wo_value args)
+{
+    jeecs::basic::resource<jeecs::audio::source>* source =
+        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source>*>(wo_pointer(args + 0));
+
+    (*source)->stop();
+
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_audio_source_pause(wo_vm vm, wo_value args)
+{
+    jeecs::basic::resource<jeecs::audio::source>* source =
+        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source>*>(wo_pointer(args + 0));
+
+    (*source)->pause();
+
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_audio_source_set_buffer(wo_vm vm, wo_value args)
+{
+    jeecs::basic::resource<jeecs::audio::source>* source =
+        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source>*>(wo_pointer(args + 0));
+    jeecs::basic::resource<jeecs::audio::buffer>* buffer =
+        reinterpret_cast<jeecs::basic::resource<jeecs::audio::buffer>*>(wo_pointer(args + 1));
+
+    (*source)->set_playing_buffer(*buffer);
+
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_audio_source_get_state(wo_vm vm, wo_value args)
+{
+    jeecs::basic::resource<jeecs::audio::source>* source =
+        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source>*>(wo_pointer(args + 0));
+
+    return wo_ret_int(vm, (wo_integer_t)(*source)->get_state());
+}
+WO_API wo_api wojeapi_audio_source_get_offset(wo_vm vm, wo_value args)
+{
+    jeecs::basic::resource<jeecs::audio::source>* source =
+        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source>*>(wo_pointer(args + 0));
+
+    return wo_ret_int(vm, (wo_integer_t)(*source)->get_playing_offset());
+}
+WO_API wo_api wojeapi_audio_source_set_offset(wo_vm vm, wo_value args)
+{
+    jeecs::basic::resource<jeecs::audio::source>* source =
+        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source>*>(wo_pointer(args + 0));
+
+    (*source)->set_playing_offset((size_t)wo_int(args + 1));
+
+    return wo_ret_void(vm);
+}
+
+WO_API wo_api wojeapi_audio_listener_info(wo_vm vm, wo_value args)
+{
+    wo_value stacks = wo_reserve_stack(vm, 3, &args);
+    wo_value result = stacks + 0;
+    wo_value elem = stacks + 1;
+    wo_value elem2 = stacks + 2;
+
+    auto* listener_instance = jeal_get_listener();
+
+    wo_set_struct(result, vm, 6);
+
+    wo_set_float(elem, listener_instance->m_gain);
+    wo_struct_set(result, 0, elem);
+
+    wo_set_float(elem, listener_instance->m_global_gain);
+    wo_struct_set(result, 1, elem);
+
+    wo_set_struct(elem, vm, 3);
+    for (uint16_t i = 0; i < 3; ++i)
+    {
+        wo_set_float(elem2, listener_instance->m_location[i]);
+        wo_struct_set(elem, i, elem2);
+    }
+    wo_struct_set(result, 2, elem);
+
+    wo_set_struct(elem, vm, 3);
+    for (uint16_t i = 0; i < 3; ++i)
+    {
+        wo_set_float(elem2, listener_instance->m_velocity[i]);
+        wo_struct_set(elem, i, elem2);
+    }
+    wo_struct_set(result, 3, elem);
+
+    wo_set_struct(elem, vm, 3);
+    for (uint16_t i = 0; i < 3; ++i)
+    {
+        wo_set_float(elem2, listener_instance->m_forward[i]);
+        wo_struct_set(elem, i, elem2);
+    }
+    wo_struct_set(result, 4, elem);
+
+    wo_set_struct(elem, vm, 3);
+    for (uint16_t i = 0; i < 3; ++i)
+    {
+        wo_set_float(elem2, listener_instance->m_upward[i]);
+        wo_struct_set(elem, i, elem2);
+    }
+    wo_struct_set(result, 5, elem);
+
+    return wo_ret_val(vm, result);
+}
+WO_API wo_api wojeapi_audio_listener_update(wo_vm vm, wo_value args)
+{
+    jeal_update_listener();
+
+    return wo_ret_void(vm);
 }
