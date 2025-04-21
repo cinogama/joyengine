@@ -179,18 +179,18 @@ namespace jeecs
 
         struct type_info;
 
-        using module_entry_t = void(*)(wo_dylib_handle_t);
-        using module_leave_t = void(*)(void);
+        using module_entry_t = void (*)(wo_dylib_handle_t);
+        using module_leave_t = void (*)(void);
 
-        using construct_func_t = void(*)(void*, void*, const jeecs::typing::type_info*);
-        using destruct_func_t = void(*)(void*);
-        using copy_construct_func_t = void(*)(void*, const void*);
-        using move_construct_func_t = void(*)(void*, void*);
+        using construct_func_t = void (*)(void*, void*, const jeecs::typing::type_info*);
+        using destruct_func_t = void (*)(void*);
+        using copy_construct_func_t = void (*)(void*, const void*);
+        using move_construct_func_t = void (*)(void*, void*);
 
-        using update_func_t = void(*)(void*);
+        using update_func_t = void (*)(void*);
 
-        using parse_c2w_func_t = void(*)(const void*, wo_vm, wo_value);
-        using parse_w2c_func_t = void(*)(void*, wo_vm, wo_value);
+        using parse_c2w_func_t = void (*)(const void*, wo_vm, wo_value);
+        using parse_w2c_func_t = void (*)(void*, wo_vm, wo_value);
 
         using entity_id_in_chunk_t = size_t;
         using version_t = size_t;
@@ -224,12 +224,12 @@ namespace jeecs
 
             static uuid generate() noexcept;
 
-            inline bool operator == (const uuid& uid) const noexcept
+            inline bool operator==(const uuid& uid) const noexcept
             {
                 return a == uid.a && b == uid.b;
             }
 
-            inline bool operator != (const uuid& uid) const noexcept
+            inline bool operator!=(const uuid& uid) const noexcept
             {
                 return !(this->operator==(uid));
             }
@@ -252,7 +252,8 @@ namespace jeecs
             void JEParseToScriptType(wo_vm vm, wo_value v) const
             {
                 wo_set_string_fmt(v, vm, "%016llX-%016llX",
-                    (unsigned long long)a, (unsigned long long)b);
+                    (unsigned long long)a,
+                    (unsigned long long)b);
             }
         };
 
@@ -274,27 +275,22 @@ namespace jeecs
 
         using debug_eid_t = uint64_t;
 
-        template<typename T>
+        template <typename T>
         struct _origin_type
         {
-            template<typename U>
+            template <typename U>
             using _origin_t =
                 typename std::remove_cv<
                 typename std::remove_reference<
-                typename std::remove_pointer<U>::type
-                >::type
-                >::type;
+                typename std::remove_pointer<U>::type>::type>::type;
 
             static auto _type_selector() // -> T*
             {
                 if constexpr (
-                    std::is_reference<T>::value
-                    || std::is_pointer<T>::value
-                    || std::is_const<T>::value
-                    || std::is_volatile<T>::value)
+                    std::is_reference<T>::value || std::is_pointer<T>::value || std::is_const<T>::value || std::is_volatile<T>::value)
                     return _origin_type<_origin_t<T>>::_type_selector();
                 else
-                    return (T*) nullptr;
+                    return (T*)nullptr;
             }
 
             using type = typename std::remove_pointer<decltype(_type_selector())>::type;
@@ -304,10 +300,10 @@ namespace jeecs
         jeecs::typing::origin_t<T> [泛型类型别名]
         等效于指定类型T去除 const volatile reference 和 pointer之后的原始类型
         */
-        template<typename T>
+        template <typename T>
         using origin_t = typename _origin_type<T>::type;
 
-        template<class F>
+        template <class F>
         struct function_traits
         {
         private:
@@ -328,13 +324,13 @@ namespace jeecs
             };
         };
 
-        template<class R, class... Args>
-        struct function_traits<R(*)(Args...)> : public function_traits < R(Args...) >
+        template <class R, class... Args>
+        struct function_traits<R(*)(Args...)> : public function_traits<R(Args...)>
         {
         };
 
-        template<class R, class... Args>
-        struct function_traits < R(Args...) >
+        template <class R, class... Args>
+        struct function_traits<R(Args...)>
         {
             using return_type = R;
             using flat_func_t = R(Args...);
@@ -348,42 +344,40 @@ namespace jeecs
                 static_assert(N < arity, "error: invalid parameter index.");
                 using type = typename std::tuple_element<N, std::tuple<Args...>>::type;
             };
-
-
         };
 
         // member function pointer
-        template<class C, class R, class... Args>
-        struct function_traits<R(C::*)(Args...)> : public function_traits < R(Args...) >
+        template <class C, class R, class... Args>
+        struct function_traits<R(C::*)(Args...)> : public function_traits<R(Args...)>
         {
             using this_t = C;
         };
 
         // const member function pointer
-        template<class C, class R, class... Args>
-        struct function_traits<R(C::*)(Args...) const> : public function_traits < R(Args...) >
+        template <class C, class R, class... Args>
+        struct function_traits<R(C::*)(Args...) const> : public function_traits<R(Args...)>
         {
             using this_t = C;
         };
 
         // member object pointer
-        template<class C, class R>
-        struct function_traits<R(C::*)> : public function_traits < R(void) >
+        template <class C, class R>
+        struct function_traits<R(C::*)> : public function_traits<R(void)>
         {
             using this_t = C;
         };
 
-        template<class F>
-        struct function_traits<F&> : public function_traits < F >
+        template <class F>
+        struct function_traits<F&> : public function_traits<F>
         {
         };
 
-        template<class F>
-        struct function_traits<F&&> : public function_traits < F >
+        template <class F>
+        struct function_traits<F&&> : public function_traits<F>
         {
         };
 
-        template<size_t n, typename T, typename ... Ts>
+        template <size_t n, typename T, typename... Ts>
         struct _variadic_type_indexer
         {
             static auto _type_selector() // -> T*
@@ -391,7 +385,7 @@ namespace jeecs
                 if constexpr (n != 0)
                     return _variadic_type_indexer<n - 1, Ts...>::_type_selector();
                 else
-                    return (T*) nullptr;
+                    return (T*)nullptr;
             }
 
             using type = typename std::remove_pointer<decltype(_type_selector())>::type;
@@ -401,7 +395,7 @@ namespace jeecs
         jeecs::typing::index_types_t<n, Ts...> [泛型类型别名]
         获取给定类型序列Ts，等效于其中第n个类型
         */
-        template<size_t n, typename ... Ts>
+        template <size_t n, typename... Ts>
         using index_types_t = typename _variadic_type_indexer<n, Ts...>::type;
 
         class type_unregister_guard;
@@ -448,20 +442,20 @@ namespace jeecs
     {
         enum class entity_stat : uint8_t
         {
-            UNAVAILABLE = 0,// Entity is destroied or just not ready,
-            READY,          // Entity is OK, and just work as normal.
-            PREFAB,         // Current entity is prefab, cannot be selected from arch-system and cannot 
+            UNAVAILABLE = 0, // Entity is destroied or just not ready,
+            READY,           // Entity is OK, and just work as normal.
+            PREFAB,          // Current entity is prefab, cannot be selected from arch-system and cannot
         };
 
         struct meta
         {
-            jeecs::typing::version_t        m_version;
+            jeecs::typing::version_t m_version;
             jeecs::game_entity::entity_stat m_stat;
         };
 
         void* _m_in_chunk;
-        jeecs::typing::entity_id_in_chunk_t   _m_id;
-        jeecs::typing::version_t              _m_version;
+        jeecs::typing::entity_id_in_chunk_t _m_id;
+        jeecs::typing::version_t _m_version;
 
         inline game_entity& _set_arch_chunk_info(
             void* chunk,
@@ -481,7 +475,7 @@ namespace jeecs
         若实体失效或实体不存在指定组件，则返回nullptr
         否则返回指定类型组件的地址
         */
-        template<typename T>
+        template <typename T>
         inline T* get_component() const noexcept;
 
         /*
@@ -494,7 +488,7 @@ namespace jeecs
                 1. 如果实体此前已有存在的组件，则替换之
                 2. 如果实体此前不存在此组件，则更新实体，旧的实体索引将失效
         */
-        template<typename T>
+        template <typename T>
         inline T* add_component() const noexcept;
 
         /*
@@ -505,7 +499,7 @@ namespace jeecs
                 1. 如果实体此前已经存在此组件，那么更新实体，旧的实体索引将失效
                 2. 如果实体此前不存在此组件，那么无事发生
         */
-        template<typename T>
+        template <typename T>
         inline void remove_component() const noexcept;
 
         /*
@@ -521,13 +515,13 @@ namespace jeecs
         */
         inline void close() const noexcept;
 
-        inline bool operator == (const game_entity& e) const noexcept
+        inline bool operator==(const game_entity& e) const noexcept
         {
             return _m_in_chunk == e._m_in_chunk &&
                 _m_id == e._m_id &&
                 _m_version == e._m_version;
         }
-        inline bool operator != (const game_entity& e) const noexcept
+        inline bool operator!=(const game_entity& e) const noexcept
         {
             return _m_in_chunk != e._m_in_chunk ||
                 _m_id != e._m_id ||
@@ -573,9 +567,41 @@ namespace jeecs
             PERIOD = '.',
             SLASH = '/',
 
-            A = 'A', B, C, D, E, F, G, H, I, J, K, L,
-            M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
-            _1 = '1', _2, _3, _4, _5, _6, _7, _8, _9,
+            A = 'A',
+            B,
+            C,
+            D,
+            E,
+            F,
+            G,
+            H,
+            I,
+            J,
+            K,
+            L,
+            M,
+            N,
+            O,
+            P,
+            Q,
+            R,
+            S,
+            T,
+            U,
+            V,
+            W,
+            X,
+            Y,
+            Z,
+            _1 = '1',
+            _2,
+            _3,
+            _4,
+            _5,
+            _6,
+            _7,
+            _8,
+            _9,
             _0,
             _ = ' ',
 
@@ -597,8 +623,16 @@ namespace jeecs
             ESC,
             BACKSPACE,
 
-            NP_0, NP_1, NP_2, NP_3, NP_4,
-            NP_5, NP_6, NP_7, NP_8, NP_9,
+            NP_0,
+            NP_1,
+            NP_2,
+            NP_3,
+            NP_4,
+            NP_5,
+            NP_6,
+            NP_7,
+            NP_8,
+            NP_9,
             NP_DECIMAL,
             NP_DIVIDE,
             NP_MULTIPLY,
@@ -606,10 +640,27 @@ namespace jeecs
             NP_ADD,
             NP_ENTER,
 
-            UP, DOWN, LEFT, RIGHT,
+            UP,
+            DOWN,
+            LEFT,
+            RIGHT,
 
-            F1, F2, F3, F4, F5, F6, F7, F8,
-            F9, F10, F11, F12, F13, F14, F15, F16,
+            F1,
+            F2,
+            F3,
+            F4,
+            F5,
+            F6,
+            F7,
+            F8,
+            F9,
+            F10,
+            F11,
+            F12,
+            F13,
+            F14,
+            F15,
+            F16,
 
             CUSTOM_0 = 256,
             CUSTOM_1,
@@ -677,10 +728,10 @@ namespace jeecs
 
 namespace std
 {
-    template<>
+    template <>
     struct hash<jeecs::typing::uid_t>
     {
-        inline constexpr size_t operator() (const jeecs::typing::uid_t& uid) const noexcept
+        inline constexpr size_t operator()(const jeecs::typing::uid_t& uid) const noexcept
         {
             if constexpr (sizeof(size_t) == 8)
                 return uid.b ^ uid.a;
@@ -689,10 +740,10 @@ namespace std
         }
     };
 
-    template<>
+    template <>
     struct equal_to<jeecs::typing::uid_t>
     {
-        inline constexpr size_t operator() (const jeecs::typing::uid_t& a, const jeecs::typing::uid_t& b) const noexcept
+        inline constexpr size_t operator()(const jeecs::typing::uid_t& a, const jeecs::typing::uid_t& b) const noexcept
         {
             return a.a == b.a && a.b == b.b;
         }
@@ -785,7 +836,7 @@ JE_LOG_FATAL [宏常量]
 je_log_register_callback [基本接口]
 用于注册一个日志发生时的回调函数，返回注册句柄。
 */
-JE_API size_t je_log_register_callback(void(*func)(int level, const char* msg, void* custom), void* custom);
+JE_API size_t je_log_register_callback(void (*func)(int level, const char* msg, void* custom), void* custom);
 
 /*
 je_log_unregister_callback [基本接口]
@@ -817,14 +868,14 @@ je_typing_register [基本接口]
 */
 JE_API const jeecs::typing::type_info* je_typing_register(
     const char* _name,
-    jeecs::typing::typehash_t   _hash,
-    size_t                      _size,
-    size_t                      _align,
-    je_typing_class             _typecls,
-    jeecs::typing::construct_func_t         _constructor,
-    jeecs::typing::destruct_func_t          _destructor,
-    jeecs::typing::copy_construct_func_t    _copy_constructor,
-    jeecs::typing::move_construct_func_t    _move_constructor);
+    jeecs::typing::typehash_t _hash,
+    size_t _size,
+    size_t _align,
+    je_typing_class _typecls,
+    jeecs::typing::construct_func_t _constructor,
+    jeecs::typing::destruct_func_t _destructor,
+    jeecs::typing::copy_construct_func_t _copy_constructor,
+    jeecs::typing::move_construct_func_t _move_constructor);
 
 /*
 je_typing_reset [基本接口]
@@ -833,12 +884,12 @@ je_typing_reset [基本接口]
 */
 JE_API void je_typing_reset(
     const jeecs::typing::type_info* _tinfo,
-    size_t                                  _size,
-    size_t                                  _align,
-    jeecs::typing::construct_func_t         _constructor,
-    jeecs::typing::destruct_func_t          _destructor,
-    jeecs::typing::copy_construct_func_t    _copy_constructor,
-    jeecs::typing::move_construct_func_t    _move_constructor);
+    size_t _size,
+    size_t _align,
+    jeecs::typing::construct_func_t _constructor,
+    jeecs::typing::destruct_func_t _destructor,
+    jeecs::typing::copy_construct_func_t _copy_constructor,
+    jeecs::typing::move_construct_func_t _move_constructor);
 
 /*
 je_typing_get_info_by_id [基本接口]
@@ -893,8 +944,8 @@ JE_API void je_register_member(
     const jeecs::typing::type_info* _membertype,
     const char* _member_name,
     const char* _woovalue_type_may_null,
-    wo_value                        _woovalue_init_may_null,
-    ptrdiff_t                       _member_offset);
+    wo_value _woovalue_init_may_null,
+    ptrdiff_t _member_offset);
 
 /*
 je_register_script_parser [基本接口]
@@ -1021,11 +1072,11 @@ je_ecs_universe_register_exit_callback [基本接口]
 */
 JE_API void je_ecs_universe_register_exit_callback(
     void* universe,
-    void(*callback)(void*),
+    void (*callback)(void*),
     void* arg);
 
-typedef void(*je_job_for_worlds_t)(void* /*world*/, void* /*custom_data*/);
-typedef void(*je_job_call_once_t)(void* /*custom_data*/);
+typedef void (*je_job_for_worlds_t)(void* /*world*/, void* /*custom_data*/);
+typedef void (*je_job_call_once_t)(void* /*custom_data*/);
 
 /*
 je_ecs_universe_register_pre_for_worlds_job [基本接口]
@@ -1035,7 +1086,7 @@ JE_API void je_ecs_universe_register_pre_for_worlds_job(
     void* universe,
     je_job_for_worlds_t job,
     void* data,
-    void(*freefunc)(void*));
+    void (*freefunc)(void*));
 
 /*
 je_ecs_universe_register_pre_for_worlds_job [基本接口]
@@ -1045,7 +1096,7 @@ JE_API void je_ecs_universe_register_pre_call_once_job(
     void* universe,
     je_job_call_once_t job,
     void* data,
-    void(*freefunc)(void*));
+    void (*freefunc)(void*));
 
 /*
 je_ecs_universe_register_for_worlds_job [基本接口]
@@ -1055,7 +1106,7 @@ JE_API void je_ecs_universe_register_for_worlds_job(
     void* universe,
     je_job_for_worlds_t job,
     void* data,
-    void(*freefunc)(void*));
+    void (*freefunc)(void*));
 
 /*
 je_ecs_universe_register_call_once_job [基本接口]
@@ -1065,7 +1116,7 @@ JE_API void je_ecs_universe_register_call_once_job(
     void* universe,
     je_job_call_once_t job,
     void* data,
-    void(*freefunc)(void*));
+    void (*freefunc)(void*));
 
 /*
 je_ecs_universe_register_after_for_worlds_job [基本接口]
@@ -1075,7 +1126,7 @@ JE_API void je_ecs_universe_register_after_for_worlds_job(
     void* universe,
     je_job_for_worlds_t job,
     void* data,
-    void(*freefunc)(void*));
+    void (*freefunc)(void*));
 
 /*
 je_ecs_universe_register_after_call_once_job [基本接口]
@@ -1085,7 +1136,7 @@ JE_API void je_ecs_universe_register_after_call_once_job(
     void* universe,
     je_job_call_once_t job,
     void* data,
-    void(*freefunc)(void*));
+    void (*freefunc)(void*));
 
 /*
 je_ecs_universe_unregister_pre_for_worlds_job [基本接口]
@@ -1550,7 +1601,7 @@ jeecs_file_set_host_path [基本接口]
     不能使用这些路径（出于需要创建缓存文件或需要读取镜像等资源文件）
     使用此接口可以使得引擎内置机制使用指定的路径
 */
-JE_API void        jeecs_file_set_host_path(const char* path);
+JE_API void jeecs_file_set_host_path(const char* path);
 
 /*
 jeecs_file_set_runtime_path [基本接口]
@@ -1560,7 +1611,7 @@ jeecs_file_set_runtime_path [基本接口]
 请参考：
     jeecs_file_update_default_fimg
 */
-JE_API void        jeecs_file_set_runtime_path(const char* path);
+JE_API void jeecs_file_set_runtime_path(const char* path);
 
 /*
 * jeecs_file_update_default_fimg [基本接口]
@@ -1569,7 +1620,7 @@ JE_API void        jeecs_file_set_runtime_path(const char* path);
     * 无论打开是否成功，之前打开的默认镜像都将被关闭
     * 若 path == nullptr，则仅关闭旧的镜像
 */
-JE_API void         jeecs_file_update_default_fimg(const char* path);
+JE_API void jeecs_file_update_default_fimg(const char* path);
 
 /*
 jeecs_file_get_host_path [基本接口]
@@ -1618,13 +1669,13 @@ JE_API jeecs_file* jeecs_file_open(const char* path);
 jeecs_file_close [基本接口]
 关闭一个文件
 */
-JE_API void        jeecs_file_close(jeecs_file* file);
+JE_API void jeecs_file_close(jeecs_file* file);
 
 /*
 jeecs_file_read [基本接口]
 从文件中读取若干个指定大小的元素，返回成功读取的元素数量
 */
-JE_API size_t      jeecs_file_read(
+JE_API size_t jeecs_file_read(
     void* out_buffer,
     size_t elem_size,
     size_t count,
@@ -1758,28 +1809,28 @@ struct jegl_interface_config
         ABSOLUTE,
     };
 
-    display_mode    m_display_mode;
+    display_mode m_display_mode;
     resolution_mode m_resolution_mode;
 
-    bool            m_enable_resize;
+    bool m_enable_resize;
 
     // 若MSAA值为0，则说明关闭超采样抗锯齿
     //  * MSAA配置应该是2的整数次幂
     //  * 最终能否使用取决于图形库
-    size_t          m_msaa;
+    size_t m_msaa;
 
     // 启动时的窗口大小
-    size_t          m_width;
-    size_t          m_height;
+    size_t m_width;
+    size_t m_height;
 
     // 启动时的分辨率，若m_resolution_mode是ABSOLUTE
     // 则此处的值是绝对值，否则是实际窗口大小的缩放比例
-    size_t          m_reso_x;
-    size_t          m_reso_y;
+    size_t m_reso_x;
+    size_t m_reso_y;
 
     // 限制帧数，若指定为0，则启用垂直同步
     // 不限制帧率请设置为 SIZE_MAX
-    size_t          m_fps;
+    size_t m_fps;
 
     const char* m_title;
     void* m_userdata;
@@ -1795,10 +1846,10 @@ jegl_context [类型]
 struct jegl_context
 {
     using userdata_t = void*;
-    using frame_job_t = void(*)(jegl_context*, void*);
+    using frame_job_t = void (*)(jegl_context*, void*);
 
-    void*/*std::promise<void>*/ _m_promise;
-    frame_job_t                 _m_frame_rend_work;
+    void* /*std::promise<void>*/ _m_promise;
+    frame_job_t _m_frame_rend_work;
     void* _m_frame_rend_work_arg;
     void* _m_sync_callback_arg;
 
@@ -1806,11 +1857,11 @@ struct jegl_context
     void* _m_interface_handle;
 
     void* m_universe_instance;
-    jeecs::typing::version_t    m_version;
-    jegl_interface_config       m_config;
+    jeecs::typing::version_t m_version;
+    jegl_interface_config m_config;
     jegl_graphic_api* m_apis;
-    void*/*std::atomic_bool*/   m_stop_update;
-    userdata_t                  m_userdata;
+    void* /*std::atomic_bool*/ m_stop_update;
+    userdata_t m_userdata;
 };
 
 /*
@@ -1838,15 +1889,15 @@ struct jegl_texture
     // * Pixel data is storage from LEFT/BOTTOM to RIGHT/TOP
     // * If texture's m_pixels is nullptr, only create a texture in pipeline.
     pixel_data_t* m_pixels;
-    size_t          m_width;
-    size_t          m_height;
-    format          m_format;
+    size_t m_width;
+    size_t m_height;
+    format m_format;
 
     // Partical texture data update
-    size_t          m_modified_min_x;
-    size_t          m_modified_min_y;
-    size_t          m_modified_max_x;
-    size_t          m_modified_max_y;
+    size_t m_modified_min_x;
+    size_t m_modified_min_y;
+    size_t m_modified_max_x;
+    size_t m_modified_max_y;
 };
 
 /*
@@ -1870,33 +1921,33 @@ struct jegl_vertex
 
     struct data_layout
     {
-        data_type   m_type;
-        size_t      m_count;
+        data_type m_type;
+        size_t m_count;
     };
 
     struct bone_data
     {
         const char* m_name;
-        size_t      m_index;
-        float       m_m2b_trans[4][4];
+        size_t m_index;
+        float m_m2b_trans[4][4];
     };
 
-    float           m_x_min, m_x_max,
+    float m_x_min, m_x_max,
         m_y_min, m_y_max,
         m_z_min, m_z_max;
 
     const void* m_vertexs;
-    size_t          m_vertex_length;
+    size_t m_vertex_length;
     const uint32_t* m_indexs;
-    size_t          m_index_count;
+    size_t m_index_count;
     const data_layout*
         m_formats;
-    size_t          m_format_count;
-    size_t          m_data_size_per_point;
-    type            m_type;
+    size_t m_format_count;
+    size_t m_data_size_per_point;
+    type m_type;
     const bone_data**
         m_bones;
-    size_t          m_bone_count;
+    size_t m_bone_count;
 };
 
 /*
@@ -1920,11 +1971,11 @@ struct jegl_shader
         fliter_mode m_min;
         fliter_mode m_mag;
         fliter_mode m_mip;
-        wrap_mode   m_uwrap;
-        wrap_mode   m_vwrap;
-        uint32_t    m_sampler_id;   // Used for DX11 & HLSL generation
-        uint64_t    m_pass_id_count;
-        uint32_t* m_pass_ids;     // Used for GL3 & GLSL generation
+        wrap_mode m_uwrap;
+        wrap_mode m_vwrap;
+        uint32_t m_sampler_id; // Used for DX11 & HLSL generation
+        uint64_t m_pass_id_count;
+        uint32_t* m_pass_ids; // Used for GL3 & GLSL generation
     };
 
     enum uniform_type
@@ -1963,9 +2014,9 @@ struct jegl_shader
     struct unifrom_variables
     {
         const char* m_name;
-        uint32_t        m_index;
-        uniform_type    m_uniform_type;
-        bool            m_updated;
+        uint32_t m_index;
+        uniform_type m_uniform_type;
+        bool m_updated;
         union
         {
             struct
@@ -1984,7 +2035,7 @@ struct jegl_shader
     struct uniform_blocks
     {
         const char* m_name;
-        uint32_t    m_specify_binding_place;
+        uint32_t m_specify_binding_place;
 
         uniform_blocks* m_next;
     };
@@ -1995,7 +2046,7 @@ struct jegl_shader
 
         OFF,
         NEVER,
-        LESS,       /* DEFAULT */
+        LESS, /* DEFAULT */
         EQUAL,
         LESS_EQUAL,
         GREATER,
@@ -2008,13 +2059,13 @@ struct jegl_shader
         INVALID = -1,
 
         DISABLE,
-        ENABLE,     /* DEFAULT */
+        ENABLE, /* DEFAULT */
     };
     enum class blend_method : int8_t
     {
         INVALID = -1,
 
-        ZERO,       /* DEFAULT SRC = ONE, DST = ZERO (DISABLE BLEND.) */
+        ZERO, /* DEFAULT SRC = ONE, DST = ZERO (DISABLE BLEND.) */
         ONE,
 
         SRC_COLOR,
@@ -2029,17 +2080,17 @@ struct jegl_shader
         ONE_MINUS_DST_ALPHA,
         ONE_MINUS_DST_COLOR,
 
-        //CONST_COLOR,
-        //ONE_MINUS_CONST_COLOR,
+        // CONST_COLOR,
+        // ONE_MINUS_CONST_COLOR,
 
-        //CONST_ALPHA,
-        //ONE_MINUS_CONST_ALPHA,
+        // CONST_ALPHA,
+        // ONE_MINUS_CONST_ALPHA,
     };
     enum class cull_mode : int8_t
     {
         INVALID = -1,
 
-        NONE,       /* DEFAULT */
+        NONE, /* DEFAULT */
         FRONT,
         BACK,
     };
@@ -2051,27 +2102,27 @@ struct jegl_shader
     const char* m_vertex_hlsl_src;
     const char* m_fragment_hlsl_src;
 
-    size_t                      m_vertex_spirv_count;
+    size_t m_vertex_spirv_count;
     const spir_v_code_t* m_vertex_spirv_codes;
 
-    size_t                      m_fragment_spirv_count;
+    size_t m_fragment_spirv_count;
     const spir_v_code_t* m_fragment_spirv_codes;
 
-    size_t                      m_vertex_in_count;
+    size_t m_vertex_in_count;
     vertex_in_variables* m_vertex_in;
 
     unifrom_variables* m_custom_uniforms;
     uniform_blocks* m_custom_uniform_blocks;
-    builtin_uniform_location    m_builtin_uniforms;
+    builtin_uniform_location m_builtin_uniforms;
 
-    bool                m_enable_to_shared;
-    depth_test_method   m_depth_test;
-    depth_mask_method   m_depth_mask;
-    blend_method        m_blend_src_mode, m_blend_dst_mode;
-    cull_mode           m_cull_mode;
+    bool m_enable_to_shared;
+    depth_test_method m_depth_test;
+    depth_mask_method m_depth_mask;
+    blend_method m_blend_src_mode, m_blend_dst_mode;
+    cull_mode m_cull_mode;
 
     sampler_method* m_sampler_methods;
-    size_t              m_sampler_count;
+    size_t m_sampler_count;
 };
 
 /*
@@ -2083,9 +2134,9 @@ struct jegl_frame_buffer
     // In fact, attachment_t is jeecs::basic::resource<jeecs::graphic::texture>
     typedef struct attachment_t attachment_t;
     attachment_t* m_output_attachments;
-    size_t          m_attachment_count;
-    size_t          m_width;
-    size_t          m_height;
+    size_t m_attachment_count;
+    size_t m_width;
+    size_t m_height;
 };
 
 /*
@@ -2094,13 +2145,13 @@ jegl_uniform_buffer [类型]
 */
 struct jegl_uniform_buffer
 {
-    size_t      m_buffer_binding_place;
-    size_t      m_buffer_size;
+    size_t m_buffer_binding_place;
+    size_t m_buffer_size;
     uint8_t* m_buffer;
 
     // Used for marking update range;
-    size_t      m_update_begin_offset;
-    size_t      m_update_length;
+    size_t m_update_begin_offset;
+    size_t m_update_length;
 };
 
 using jegl_resource_blob = void*;
@@ -2114,16 +2165,16 @@ struct jegl_resource
     using jegl_custom_resource_t = void*;
     enum type : uint8_t
     {
-        VERTEX,         // Mesh
-        TEXTURE,        // Texture
-        SHADER,         // Shader
-        FRAMEBUF,       // Framebuffer
-        UNIFORMBUF,     // UniformBlock
+        VERTEX,     // Mesh
+        TEXTURE,    // Texture
+        SHADER,     // Shader
+        FRAMEBUF,   // Framebuffer
+        UNIFORMBUF, // UniformBlock
     };
     union resource_handle
     {
         void* m_ptr;
-        size_t  m_hdl;
+        size_t m_hdl;
         struct
         {
             uint32_t m_uint1;
@@ -2131,8 +2182,8 @@ struct jegl_resource
         };
     };
 
-    type            m_type;
-    bool            m_modified;
+    type m_type;
+    bool m_modified;
     jegl_context* m_graphic_thread;
     jeecs::typing::version_t
         m_graphic_thread_version;
@@ -2144,7 +2195,7 @@ struct jegl_resource
     void* m_raw_ref_count;
     union
     {
-        jegl_custom_resource_t  m_custom_resource;
+        jegl_custom_resource_t m_custom_resource;
         jegl_texture* m_raw_texture_data;
         jegl_vertex* m_raw_vertex_data;
         jegl_shader* m_raw_shader_data;
@@ -2167,25 +2218,25 @@ struct jegl_graphic_api
     };
 
     using startup_func_t = jegl_context::userdata_t(*)(jegl_context*, const jegl_interface_config*, bool);
-    using shutdown_func_t = void(*)(jegl_context*, jegl_context::userdata_t, bool);
+    using shutdown_func_t = void (*)(jegl_context*, jegl_context::userdata_t, bool);
 
     using update_func_t = update_action(*)(jegl_context::userdata_t);
 
     using create_blob_func_t = jegl_resource_blob(*)(jegl_context::userdata_t, jegl_resource*);
-    using close_blob_func_t = void(*)(jegl_context::userdata_t, jegl_resource_blob);
+    using close_blob_func_t = void (*)(jegl_context::userdata_t, jegl_resource_blob);
 
-    using create_resource_func_t = void(*)(jegl_context::userdata_t, jegl_resource_blob, jegl_resource*);
-    using using_resource_func_t = void(*)(jegl_context::userdata_t, jegl_resource*);
-    using close_resource_func_t = void(*)(jegl_context::userdata_t, jegl_resource*);
+    using create_resource_func_t = void (*)(jegl_context::userdata_t, jegl_resource_blob, jegl_resource*);
+    using using_resource_func_t = void (*)(jegl_context::userdata_t, jegl_resource*);
+    using close_resource_func_t = void (*)(jegl_context::userdata_t, jegl_resource*);
 
-    using bind_resource_func_t = void(*)(jegl_context::userdata_t, jegl_resource*);
-    using draw_vertex_func_t = void(*)(jegl_context::userdata_t, jegl_resource*);
-    using bind_texture_func_t = void(*)(jegl_context::userdata_t, jegl_resource*, size_t);
+    using bind_resource_func_t = void (*)(jegl_context::userdata_t, jegl_resource*);
+    using draw_vertex_func_t = void (*)(jegl_context::userdata_t, jegl_resource*);
+    using bind_texture_func_t = void (*)(jegl_context::userdata_t, jegl_resource*, size_t);
 
-    using bind_framebuf_func_t = void(*)(jegl_context::userdata_t, jegl_resource*, size_t, size_t, size_t, size_t);
-    using clear_color_func_t = void(*)(jegl_context::userdata_t, float[4]);
-    using clear_depth_func_t = void(*)(jegl_context::userdata_t);
-    using set_uniform_func_t = void(*)(jegl_context::userdata_t, uint32_t, jegl_shader::uniform_type, const void*);
+    using bind_framebuf_func_t = void (*)(jegl_context::userdata_t, jegl_resource*, size_t, size_t, size_t, size_t);
+    using clear_color_func_t = void (*)(jegl_context::userdata_t, float[4]);
+    using clear_depth_func_t = void (*)(jegl_context::userdata_t);
+    using set_uniform_func_t = void (*)(jegl_context::userdata_t, uint32_t, jegl_shader::uniform_type, const void*);
 
     /*
     jegl_graphic_api::interface_startup [成员]
@@ -2195,7 +2246,7 @@ struct jegl_graphic_api
             时，应当保留可以保留的资源以节约开销；若不提供对此的优化支持，也可以直接忽略，按照默认的启停规则进行操作。
         * 当图形上下文被请求重新启动时，会再次调用此函数，此时第3个参数将被设置为true，否则为 false 。
     */
-    startup_func_t          interface_startup;
+    startup_func_t interface_startup;
 
     /*
     jegl_graphic_api::interface_shutdown_before_resource_release [成员]
@@ -2207,7 +2258,7 @@ struct jegl_graphic_api
     请参见：
         jegl_graphic_api::interface_post_shutdown
     */
-    shutdown_func_t         interface_shutdown_before_resource_release;
+    shutdown_func_t interface_shutdown_before_resource_release;
 
     /*
     jegl_graphic_api::interface_shutdown [成员]
@@ -2220,7 +2271,7 @@ struct jegl_graphic_api
     请参见：
         jegl_graphic_api::interface_pre_shutdown
     */
-    shutdown_func_t         interface_shutdown;
+    shutdown_func_t interface_shutdown;
 
     /*
     jegl_graphic_api::update_frame_ready [成员]
@@ -2231,7 +2282,7 @@ struct jegl_graphic_api
         * 接口若返回 update_action::SKIP，则表示图形实现请求跳过本帧的渲染，update_draw_commit将被跳过（并且不应执行任何渲
             染操作），但 **不会** 进入图形线程的退出流程。
     */
-    update_func_t           update_frame_ready;
+    update_func_t update_frame_ready;
 
     /*
     jegl_graphic_api::update_draw_commit [成员]
@@ -2241,7 +2292,7 @@ struct jegl_graphic_api
         * 接口若返回 update_action::SKIP，由于一帧的任务已经完成，因此事实上如同返回 update_action::CONTINUE，不会跳
             过任何任务。
     */
-    update_func_t           update_draw_commit;
+    update_func_t update_draw_commit;
 
     /*
     jegl_graphic_api::create_resource_blob_cache [成员]
@@ -2254,21 +2305,21 @@ struct jegl_graphic_api
         jegl_graphic_api::close_resource_blob_cache
         jegl_graphic_api::create_resource
     */
-    create_blob_func_t      create_resource_blob_cache;
+    create_blob_func_t create_resource_blob_cache;
 
     /*
     jegl_graphic_api::close_resource_blob_cache [成员]
     释放一个图形实现的缓存，这通常是因为图形线程被请求关闭，或者引擎认为该缓存已经过时。
         * 图形实现应当检查缓存是否为nullptr，以及缓存的类型，然后再释放缓存。
     */
-    close_blob_func_t       close_resource_blob_cache;
+    close_blob_func_t close_resource_blob_cache;
 
     /*
     jegl_graphic_api::create_resource [成员]
     创建一个图形资源，图形实现应当检查资源的类型，通过类型实例中提供的原始数据以初始化创建图形资源，并将资源句柄保存到实例
     的m_handle字段中。
     */
-    create_resource_func_t  create_resource;
+    create_resource_func_t create_resource;
 
     /*
     jegl_graphic_api::using_resource [成员]
@@ -2280,13 +2331,13 @@ struct jegl_graphic_api
     请参见：
         jegl_graphic_api::close_resource
     */
-    using_resource_func_t   using_resource;
+    using_resource_func_t using_resource;
 
     /*
     jegl_graphic_api::close_resource [成员]
     关闭一个图形资源，图形实现应当检查资源的类型，通过类型实例中提供的原始数据以释放图形资源。
     */
-    close_resource_func_t   close_resource;
+    close_resource_func_t close_resource;
 
     /*
     jegl_graphic_api::bind_uniform_buffer [成员]
@@ -2294,54 +2345,54 @@ struct jegl_graphic_api
         * 约定：由于RendChain的延迟渲染特性，接口假定所有相同的 uniform_buffer 实例在一帧之内
             不会发生数据改动。
     */
-    bind_resource_func_t    bind_uniform_buffer;
+    bind_resource_func_t bind_uniform_buffer;
 
     /*
     jegl_graphic_api::bind_texture [成员]
     绑定一个纹理到对应的通道位置。
     */
-    bind_texture_func_t     bind_texture;
+    bind_texture_func_t bind_texture;
 
     /*
     jegl_graphic_api::bind_shader [成员]
     绑定一个着色器作为当前渲染使用的着色器。
     */
-    bind_resource_func_t    bind_shader;
+    bind_resource_func_t bind_shader;
 
     /*
     jegl_graphic_api::bind_framebuf [成员]
     设置渲染目标，若传入nullptr，则目标为屏幕空间。
     */
-    bind_framebuf_func_t    bind_framebuf;
+    bind_framebuf_func_t bind_framebuf;
 
     /*
     jegl_graphic_api::draw_vertex [成员]
     使用之前绑定的着色器和纹理，绘制给定的顶点模型。
     */
-    draw_vertex_func_t      draw_vertex;
+    draw_vertex_func_t draw_vertex;
 
     /*
     jegl_graphic_api::clear_frame_color [成员]
     以指定颜色清除渲染目标的所有颜色附件。
     */
-    clear_color_func_t      clear_frame_color;
+    clear_color_func_t clear_frame_color;
 
     /*
     jegl_graphic_api::clear_frame_depth [成员]
     以`无穷远`清空渲染目标的深度附件。
     */
-    clear_depth_func_t      clear_frame_depth;
+    clear_depth_func_t clear_frame_depth;
 
     /*
     jegl_graphic_api::set_uniform [成员]
     向当前正在绑定的着色器设置一致变量。
     */
-    set_uniform_func_t      set_uniform;
+    set_uniform_func_t set_uniform;
 };
 static_assert(sizeof(jegl_graphic_api) % sizeof(void*) == 0);
 
-using jeecs_api_register_func_t = void(*)(jegl_graphic_api*);
-using jeecs_sync_callback_func_t = void(*)(jegl_context*, void*);
+using jeecs_api_register_func_t = void (*)(jegl_graphic_api*);
+using jeecs_sync_callback_func_t = void (*)(jegl_context*, void*);
 
 /*
 jegl_register_sync_graphic_callback [基本接口]
@@ -2379,7 +2430,7 @@ jegl_sync_init [基本接口]
     jegl_sync_update
     jegl_sync_shutdown
 */
-JE_API void             jegl_sync_init(
+JE_API void jegl_sync_init(
     jegl_context* thread,
     bool isreboot);
 
@@ -2402,7 +2453,7 @@ jegl_sync_update [基本接口]
     jegl_sync_init
     jegl_sync_shutdown
 */
-JE_API jegl_sync_state  jegl_sync_update(jegl_context* thread);
+JE_API jegl_sync_state jegl_sync_update(jegl_context* thread);
 
 /*
 jegl_sync_shutdown [基本接口]
@@ -2419,7 +2470,7 @@ jegl_sync_shutdown [基本接口]
     jegl_sync_init
     jegl_sync_shutdown
 */
-JE_API bool             jegl_sync_shutdown(jegl_context* thread, bool isreboot);
+JE_API bool jegl_sync_shutdown(jegl_context* thread, bool isreboot);
 
 /*
 jegl_start_graphic_thread [基本接口]
@@ -2436,7 +2487,7 @@ JE_API jegl_context* jegl_start_graphic_thread(
     jegl_interface_config config,
     void* universe_instance,
     jeecs_api_register_func_t register_func,
-    void(*frame_rend_work)(jegl_context*, void*),
+    void (*frame_rend_work)(jegl_context*, void*),
     void* arg);
 
 /*
@@ -2499,9 +2550,9 @@ jegl_create_texture [基本接口]
     jegl_close_resource
 */
 JE_API jegl_resource* jegl_create_texture(
-    size_t                  width,
-    size_t                  height,
-    jegl_texture::format    format);
+    size_t width,
+    size_t height,
+    jegl_texture::format format);
 
 /*
 jegl_load_vertex [基本接口]
@@ -2524,13 +2575,13 @@ jegl_create_vertex [基本接口]
     jegl_close_resource
 */
 JE_API jegl_resource* jegl_create_vertex(
-    jegl_vertex::type               type,
+    jegl_vertex::type type,
     const void* datas,
-    size_t                          data_length,
+    size_t data_length,
     const uint32_t* indexs,
-    size_t                          index_count,
+    size_t index_count,
     const jegl_vertex::data_layout* format,
-    size_t                          format_count);
+    size_t format_count);
 
 /*
 jegl_create_framebuf [基本接口]
@@ -2540,10 +2591,10 @@ jegl_create_framebuf [基本接口]
     jegl_close_resource
 */
 JE_API jegl_resource* jegl_create_framebuf(
-    size_t                      width,
-    size_t                      height,
+    size_t width,
+    size_t height,
     const jegl_texture::format* attachment_formats,
-    size_t                      attachment_count);
+    size_t attachment_count);
 
 typedef struct je_stb_font_data je_font;
 typedef void (*je_font_char_updater_t)(jegl_texture::pixel_data_t*, size_t, size_t);
@@ -2561,17 +2612,17 @@ char_texture_updater 用于指示文字纹理创建后所需的预处理方法�
 */
 JE_API je_font* je_font_load(
     const char* font_path,
-    float                   scalex,
-    float                   scaley,
-    size_t                  board_blank_size_x,
-    size_t                  board_blank_size_y,
-    je_font_char_updater_t  char_texture_updater);
+    float scalex,
+    float scaley,
+    size_t board_blank_size_x,
+    size_t board_blank_size_y,
+    je_font_char_updater_t char_texture_updater);
 
 /*
 je_font_free [基本接口]
 关闭一个字体
 */
-JE_API void         je_font_free(je_font* font);
+JE_API void je_font_free(je_font* font);
 
 /*
 je_font_get_char [基本接口]
@@ -2611,7 +2662,7 @@ jegl_load_shader_source [基本接口]
 JE_API jegl_resource* jegl_load_shader_source(
     const char* path,
     const char* src,
-    bool            is_virtual_file);
+    bool is_virtual_file);
 
 /*
 jegl_load_shader [基本接口]
@@ -2629,8 +2680,8 @@ jegl_create_uniformbuf [基本接口]
     jegl_close_resource
 */
 JE_API jegl_resource* jegl_create_uniformbuf(
-    size_t          binding_place,
-    size_t          length);
+    size_t binding_place,
+    size_t length);
 
 /*
 jegl_update_uniformbuf [基本接口]
@@ -2639,15 +2690,15 @@ jegl_update_uniformbuf [基本接口]
 JE_API void jegl_update_uniformbuf(
     jegl_resource* uniformbuf,
     const void* buf,
-    size_t          update_offset,
-    size_t          update_length);
+    size_t update_offset,
+    size_t update_length);
 
 /*
 jegl_graphic_api_entry [类型]
 基础图形库的入口类型
 指向一个用于初始化基础图形接口的入口函数
 */
-typedef void(*jegl_graphic_api_entry)(jegl_graphic_api*);
+typedef void (*jegl_graphic_api_entry)(jegl_graphic_api*);
 
 /*
 jegl_set_host_graphic_api [基本接口]
@@ -2693,7 +2744,6 @@ jegl_using_vulkan130_apis [基本接口] (暂未实现)
     jegl_start_graphic_thread
 */
 JE_API void jegl_using_vk130_apis(jegl_graphic_api* write_to_apis);
-
 
 /*
 jegl_using_metal_apis [基本接口] (暂未实现)
@@ -3108,7 +3158,6 @@ JE_API void jegl_rchain_set_uniform_float4x4(
     uint32_t binding_place,
     const float(*mat)[4]);
 
-
 /*
 jegl_rchain_set_builtin_uniform_int [基本接口]
 为 act 指定的绘制操作应用整型一致变量
@@ -3327,7 +3376,7 @@ JE_API void jegui_set_font(
 
 typedef uint64_t jegui_user_image_handle_t;
 typedef jegui_user_image_handle_t(*jegui_user_image_loader_t)(jegl_context::userdata_t, jegl_resource*);
-typedef void(*jegui_user_sampler_loader_t)(jegl_context::userdata_t, jegl_resource*);
+typedef void (*jegui_user_sampler_loader_t)(jegl_context::userdata_t, jegl_resource*);
 
 /*
 jegui_init_basic [基本接口]
@@ -3613,10 +3662,9 @@ struct jeal_play_device
     jeal_native_play_device_instance*
         m_device_instance;
 
-    const char* m_name;     // 设备名称
-    bool        m_active;   // 是否是当前使用的播放设备
-    int         m_max_auxiliary_sends;
-    // 最大辅助发送数量，如果等于0，则不支持
+    const char* m_name;         // 设备名称
+    bool m_active;              // 是否是当前使用的播放设备
+    int m_max_auxiliary_sends;  // 最大辅助发送数量，如果等于0，则不支持
 };
 
 /*
@@ -3650,13 +3698,13 @@ struct jeal_buffer
     jeal_native_buffer_instance*
         m_buffer_instance;
 
-    size_t      m_references;   // 引用计数
+    size_t m_references; // 引用计数
 
     const void* m_data;
-    size_t      m_size;
-    size_t      m_sample_rate;
-    size_t      m_sample_size;
-    size_t      m_byte_rate;
+    size_t m_size;
+    size_t m_sample_rate;
+    size_t m_sample_size;
+    size_t m_byte_rate;
     jeal_format m_format;
 };
 
@@ -3666,21 +3714,21 @@ struct jeal_source
     jeal_native_source_instance*
         m_source_instance;
 
-    bool        m_loop;         // 是否循环播放
-    float       m_gain;         // 音量增益
-    float       m_pitch;        // 播放速度
-    float       m_location[3];  // 声音位置
-    float       m_velocity[3];  // 声源自身速度（非播放速度）
+    bool m_loop;         // 是否循环播放
+    float m_gain;        // 音量增益
+    float m_pitch;       // 播放速度
+    float m_location[3]; // 声音位置
+    float m_velocity[3]; // 声源自身速度（非播放速度）
 };
 
 struct jeal_listener
 {
-    float       m_gain;          // 音量增益，最终起效的是 m_gain * m_global_gain
-    float       m_global_gain;   // 全局增益，最终起效的是 m_gain * m_global_gain
-    float       m_location[3];   // 监听器位置
-    float       m_velocity[3];   // 监听器自身速度（非播放速度）
-    float       m_forward[3];    // 监听器朝向（前方向）
-    float       m_upward[3];     // 监听器朝向（顶方向）
+    float m_gain;        // 音量增益，最终起效的是 m_gain * m_global_gain
+    float m_global_gain; // 全局增益，最终起效的是 m_gain * m_global_gain
+    float m_location[3]; // 监听器位置
+    float m_velocity[3]; // 监听器自身速度（非播放速度）
+    float m_forward[3];  // 监听器朝向（前方向）
+    float m_upward[3];   // 监听器朝向（顶方向）
 };
 
 struct jeal_native_effect_slot_instance;
@@ -3689,9 +3737,9 @@ struct jeal_effect_slot
     jeal_native_effect_slot_instance*
         m_effect_slot_instance;
 
-    size_t m_references;   // 引用计数
+    size_t m_references; // 引用计数
 
-    float m_gain;               // 增益，默认值为 1.0，范围 [0.0, 1.0]
+    float m_gain; // 增益，默认值为 1.0，范围 [0.0, 1.0]
 };
 
 /*
@@ -3701,19 +3749,19 @@ jeal_effect_reverb [类型]
 */
 struct jeal_effect_reverb
 {
-    float m_density;            // 密度, 默认值为 1.0，范围 [0.0, 1.0]
-    float m_diffusion;          // 扩散度, 默认值为 1.0，范围 [0.0, 1.0]
-    float m_gain;               // 增益, 默认值为 0.32，范围 [0.0, 1.0]
-    float m_gain_hf;            // 高频增益, 默认值为 0.89，范围 [0.0, 1.0]
-    float m_decay_time;         // 衰减时间, 默认值为 1.49，范围 [0.1, 20.0]
-    float m_decay_hf_ratio;     // 高频衰减比率, 默认值为 0.83，范围 [0.1, 2.0]
-    float m_reflections_gain;   // 反射增益, 默认值为 0.05，范围 [0.0, 3.16]
-    float m_reflections_delay;  // 反射延迟, 默认值为 0.007，范围 [0.0, 0.3]
-    float m_late_reverb_gain;   // 后混响增益, 默认值为 1.26，范围 [0.0, 10.0]
-    float m_late_reverb_delay;  // 后混响延迟, 默认值为 0.011，范围 [0.0, 0.1]   
-    float m_air_absorption_gain_hf;  // 高频吸收, 默认值为 0.994，范围 [0.892, 1.0]
-    float m_room_rolloff_factor;// 房间衰减因子, 默认值为 0.0，范围 [0.0, 10.0]
-    bool m_decay_hf_limit;    // 高频衰减限制器, 默认值为 false
+    float m_density;                // 密度, 默认值为 1.0，范围 [0.0, 1.0]
+    float m_diffusion;              // 扩散度, 默认值为 1.0，范围 [0.0, 1.0]
+    float m_gain;                   // 增益, 默认值为 0.32，范围 [0.0, 1.0]
+    float m_gain_hf;                // 高频增益, 默认值为 0.89，范围 [0.0, 1.0]
+    float m_decay_time;             // 衰减时间, 默认值为 1.49，范围 [0.1, 20.0]
+    float m_decay_hf_ratio;         // 高频衰减比率, 默认值为 0.83，范围 [0.1, 2.0]
+    float m_reflections_gain;       // 反射增益, 默认值为 0.05，范围 [0.0, 3.16]
+    float m_reflections_delay;      // 反射延迟, 默认值为 0.007，范围 [0.0, 0.3]
+    float m_late_reverb_gain;       // 后混响增益, 默认值为 1.26，范围 [0.0, 10.0]
+    float m_late_reverb_delay;      // 后混响延迟, 默认值为 0.011，范围 [0.0, 0.1]
+    float m_air_absorption_gain_hf; // 高频吸收, 默认值为 0.994，范围 [0.892, 1.0]
+    float m_room_rolloff_factor;    // 房间衰减因子, 默认值为 0.0，范围 [0.0, 10.0]
+    bool m_decay_hf_limit;          // 高频衰减限制器, 默认值为 false
 };
 
 /*
@@ -3729,12 +3777,12 @@ struct jeal_effect_chorus
         TRIANGLE = 1,
     };
 
-    waveform m_waveform;    // 波形类型，默认值为 SINUSOID
-    int m_phase;            // 相位，默认值为 90，范围 [-180, 180]
-    float m_rate;           // 速率，默认值为 1.1，范围 [0.0, 10.0]
-    float m_depth;          // 深度，默认值为 0.1，范围 [0.0, 1.0]
-    float m_feedback;       // 反馈，默认值为 0.25，范围 [-1.0, 1.0]
-    float m_delay;          // 延迟，默认值为 0.16，范围 [0.0, 0.016]
+    waveform m_waveform; // 波形类型，默认值为 SINUSOID
+    int m_phase;         // 相位，默认值为 90，范围 [-180, 180]
+    float m_rate;        // 速率，默认值为 1.1，范围 [0.0, 10.0]
+    float m_depth;       // 深度，默认值为 0.1，范围 [0.0, 1.0]
+    float m_feedback;    // 反馈，默认值为 0.25，范围 [-1.0, 1.0]
+    float m_delay;       // 延迟，默认值为 0.16，范围 [0.0, 0.016]
 };
 
 /*
@@ -3744,11 +3792,11 @@ jeal_effect_distortion [类型]
 */
 struct jeal_effect_distortion
 {
-    float m_edge;                   // 边缘，默认值为 0.2，范围 [0.0, 1.0]
-    float m_gain;                   // 增益，默认值为 0.05，范围 [0.01, 1.0]
-    float m_lowpass_cutoff;         // 低通截止频率，默认值为 8000.0，范围 [80.0, 24000.0]
-    float m_equalizer_center_freq;  // 均衡器中心频率，默认值为 3600.0，范围 [80.0, 24000.0]
-    float m_equalizer_bandwidth;    // 均衡器带宽，默认值为 3600.0，范围 [80.0, 24000.0]
+    float m_edge;                  // 边缘，默认值为 0.2，范围 [0.0, 1.0]
+    float m_gain;                  // 增益，默认值为 0.05，范围 [0.01, 1.0]
+    float m_lowpass_cutoff;        // 低通截止频率，默认值为 8000.0，范围 [80.0, 24000.0]
+    float m_equalizer_center_freq; // 均衡器中心频率，默认值为 3600.0，范围 [80.0, 24000.0]
+    float m_equalizer_bandwidth;   // 均衡器带宽，默认值为 3600.0，范围 [80.0, 24000.0]
 };
 
 /*
@@ -3758,11 +3806,11 @@ jeal_effect_echo [类型]
 */
 struct jeal_effect_echo
 {
-    float m_delay;          // 延迟时间，默认值为 0.1，范围 [0.0, 0.207]
-    float m_lr_delay;       // 左声道延迟，默认值为 0.1，范围 [0.0, 0.404]
-    float m_damping;        // 阻尼，默认值为 0.5，范围 [0.0, 0.99]
-    float m_feedback;       // 反馈，默认值为 0.5，范围 [0.0, 1.0]
-    float m_spread;         // 扩散，默认值为 -1.0，范围 [-1.0, 1.0]
+    float m_delay;    // 延迟时间，默认值为 0.1，范围 [0.0, 0.207]
+    float m_lr_delay; // 左声道延迟，默认值为 0.1，范围 [0.0, 0.404]
+    float m_damping;  // 阻尼，默认值为 0.5，范围 [0.0, 0.99]
+    float m_feedback; // 反馈，默认值为 0.5，范围 [0.0, 1.0]
+    float m_spread;   // 扩散，默认值为 -1.0，范围 [-1.0, 1.0]
 };
 
 /*
@@ -3774,12 +3822,12 @@ struct jeal_effect_flanger
 {
     typedef jeal_effect_chorus::waveform waveform;
 
-    waveform m_waveform;    // 波形类型，默认值为 TRIANGLE
-    int m_phase;            // 相位，默认值为 0，范围 [-180, 180]
-    float m_rate;           // 速率，默认值为 0.27，范围 [0.0, 10.0]
-    float m_depth;          // 深度，默认值为 1.0，范围 [0.0, 1.0]
-    float m_feedback;       // 反馈，默认值为 -0.5，范围 [-1.0, 1.0]
-    float m_delay;          // 延迟，默认值为 0.002，范围 [0.0, 0.004]
+    waveform m_waveform; // 波形类型，默认值为 TRIANGLE
+    int m_phase;         // 相位，默认值为 0，范围 [-180, 180]
+    float m_rate;        // 速率，默认值为 0.27，范围 [0.0, 10.0]
+    float m_depth;       // 深度，默认值为 1.0，范围 [0.0, 1.0]
+    float m_feedback;    // 反馈，默认值为 -0.5，范围 [-1.0, 1.0]
+    float m_delay;       // 延迟，默认值为 0.002，范围 [0.0, 0.004]
 };
 
 /*
@@ -3796,9 +3844,9 @@ struct jeal_effect_frequency_shifter
         OFF = 2,
     };
 
-    float m_frequency;              // 频率，默认值为 0.0，范围 [0.0, 24000.0]
-    direction m_left_direction;     // 左声道方向，默认值为 DOWN
-    direction m_right_direction;    // 右声道方向，默认值为 DOWN
+    float m_frequency;           // 频率，默认值为 0.0，范围 [0.0, 24000.0]
+    direction m_left_direction;  // 左声道方向，默认值为 DOWN
+    direction m_right_direction; // 右声道方向，默认值为 DOWN
 };
 
 /*
@@ -3810,11 +3858,36 @@ struct jeal_effect_vocal_morpher
 {
     enum phoneme
     {
-        A = 0, E, I, O, U,
-        AA, AE, AH, AO,
-        EH, ER, IH, IY,
-        UH, UW,
-        B, D, F, G, J, K, L, M, N, P, R, S, T, V, Z,
+        A = 0,
+        E,
+        I,
+        O,
+        U,
+        AA,
+        AE,
+        AH,
+        AO,
+        EH,
+        ER,
+        IH,
+        IY,
+        UH,
+        UW,
+        B,
+        D,
+        F,
+        G,
+        J,
+        K,
+        L,
+        M,
+        N,
+        P,
+        R,
+        S,
+        T,
+        V,
+        Z,
     };
 
     enum waveform
@@ -3824,12 +3897,12 @@ struct jeal_effect_vocal_morpher
         SAWTOOTH = 2,
     };
 
-    phoneme m_phoneme_a;             // 元音a，默认值为 A
-    int m_phoneme_a_coarse_tuning;   // 元音a粗调，默认值为 0，范围 [-24, 24]
-    phoneme m_phoneme_b;             // 元音b，默认值为 ER
-    int m_phoneme_b_coarse_tuning;   // 元音b粗调，默认值为 0，范围 [-24, 24]
-    waveform m_waveform;            // 波形类型，默认值为 SINUSOID
-    float m_rate;                   // 速率，默认值为 1.41，范围 [0.0, 10.0]
+    phoneme m_phoneme_a;           // 元音a，默认值为 A
+    int m_phoneme_a_coarse_tuning; // 元音a粗调，默认值为 0，范围 [-24, 24]
+    phoneme m_phoneme_b;           // 元音b，默认值为 ER
+    int m_phoneme_b_coarse_tuning; // 元音b粗调，默认值为 0，范围 [-24, 24]
+    waveform m_waveform;           // 波形类型，默认值为 SINUSOID
+    float m_rate;                  // 速率，默认值为 1.41，范围 [0.0, 10.0]
 };
 
 /*
@@ -3839,8 +3912,8 @@ jeal_effect_pitch_shifter [类型]
 */
 struct jeal_effect_pitch_shifter
 {
-    int m_coarse_tune;        // 粗调，默认值为 12，范围 [-12, 12]
-    int m_fine_tune;          // 细调，默认值为 0，范围 [-50, 50]
+    int m_coarse_tune; // 粗调，默认值为 12，范围 [-12, 12]
+    int m_fine_tune;   // 细调，默认值为 0，范围 [-50, 50]
 };
 
 /*
@@ -3857,9 +3930,9 @@ struct jeal_effect_ring_modulator
         SQUARE = 2,
     };
 
-    float m_frequency;              // 频率，默认值为 440.0，范围 [0.0, 8000.0]
-    float m_highpass_cutoff;        // 高通截止频率，默认值为 800.0，范围 [0.0, 24000.0]
-    waveform m_waveform;            // 波形类型，默认值为 SINUSOID
+    float m_frequency;       // 频率，默认值为 440.0，范围 [0.0, 8000.0]
+    float m_highpass_cutoff; // 高通截止频率，默认值为 800.0，范围 [0.0, 24000.0]
+    waveform m_waveform;     // 波形类型，默认值为 SINUSOID
 };
 
 /*
@@ -3869,10 +3942,10 @@ jeal_effect_autowah [类型]
 */
 struct jeal_effect_autowah
 {
-    float m_attack_time;         // 攻击时间，默认值为 0.06，范围 [0.0001, 1.0]
-    float m_release_time;        // 释放时间，默认值为 0.06，范围 [0.0001, 1.0]
-    float m_resonance;           // 共鸣，默认值为 1000.0，范围 [2.0, 1000]
-    float m_peak_gain;           // 峰值增益，默认值为 11.22，范围 [0.00003, 31621.0]
+    float m_attack_time;  // 攻击时间，默认值为 0.06，范围 [0.0001, 1.0]
+    float m_release_time; // 释放时间，默认值为 0.06，范围 [0.0001, 1.0]
+    float m_resonance;    // 共鸣，默认值为 1000.0，范围 [2.0, 1000]
+    float m_peak_gain;    // 峰值增益，默认值为 11.22，范围 [0.00003, 31621.0]
 };
 
 /*
@@ -3882,7 +3955,7 @@ jeal_effect_compressor [类型]
 */
 struct jeal_effect_compressor
 {
-    bool m_enabled;          // 是否启用，默认值为 true
+    bool m_enabled; // 是否启用，默认值为 true
 };
 
 /*
@@ -3892,16 +3965,16 @@ jeal_effect_equalizer [类型]
 */
 struct jeal_effect_equalizer
 {
-    float m_low_gain;       // 低频增益，默认值为 1.0，范围 [0.126, 7.943]
-    float m_low_cutoff;     // 低频截止频率，默认值为 200.0，范围 [50.0, 800.0]
-    float m_mid1_gain;      // 中频1增益，默认值为 1.0，范围 [0.126, 7.943]
-    float m_mid1_center;    // 中频1中心频率，默认值为 500.0，范围 [200.0, 3000.0]
-    float m_mid1_width;     // 中频1带宽，默认值为 1.0，范围 [0.01, 1.0]
-    float m_mid2_gain;      // 中频2增益，默认值为 1.0，范围 [0.126, 7.943]
-    float m_mid2_center;    // 中频2中心频率，默认值为 3000.0，范围 [1000.0, 8000.0]
-    float m_mid2_width;     // 中频2带宽，默认值为 1.0，范围 [0.01, 1.0]
-    float m_high_gain;      // 高频增益，默认值为 1.0，范围 [0.126, 7.943]
-    float m_high_cutoff;    // 高频截止频率，默认值为 6000.0，范围 [4000.0, 160000.0]
+    float m_low_gain;    // 低频增益，默认值为 1.0，范围 [0.126, 7.943]
+    float m_low_cutoff;  // 低频截止频率，默认值为 200.0，范围 [50.0, 800.0]
+    float m_mid1_gain;   // 中频1增益，默认值为 1.0，范围 [0.126, 7.943]
+    float m_mid1_center; // 中频1中心频率，默认值为 500.0，范围 [200.0, 3000.0]
+    float m_mid1_width;  // 中频1带宽，默认值为 1.0，范围 [0.01, 1.0]
+    float m_mid2_gain;   // 中频2增益，默认值为 1.0，范围 [0.126, 7.943]
+    float m_mid2_center; // 中频2中心频率，默认值为 3000.0，范围 [1000.0, 8000.0]
+    float m_mid2_width;  // 中频2带宽，默认值为 1.0，范围 [0.01, 1.0]
+    float m_high_gain;   // 高频增益，默认值为 1.0，范围 [0.126, 7.943]
+    float m_high_cutoff; // 高频截止频率，默认值为 6000.0，范围 [4000.0, 160000.0]
 };
 
 /*
@@ -3911,29 +3984,29 @@ jeal_effect_eaxreverb [类型]
 */
 struct jeal_effect_eaxreverb
 {
-    float m_density;            // 密度，默认值为 1.0，范围 [0.0, 1.0]
-    float m_diffusion;          // 扩散度，默认值为 1.0，范围 [0.0, 1.0]
-    float m_gain;               // 增益，默认值为 0.32，范围 [0.0, 1.0]
-    float m_gain_hf;            // 高频增益，默认值为 0.89，范围 [0.0, 1.0]
-    float m_gain_lf;            // 低频增益，默认值为 0.0，范围 [0.0, 1.0]
-    float m_decay_time;         // 衰减时间，默认值为 1.49，范围 [0.1, 20.0]
-    float m_decay_hf_ratio;     // 高频衰减比率，默认值为 0.83，范围 [0.1, 2.0]
-    float m_decay_lf_ratio;     // 低频衰减比率，默认值为 1.0，范围 [0.1, 2.0]
-    float m_reflections_gain;   // 反射增益，默认值为 0.05，范围 [0.0, 3.16]
-    float m_reflections_delay;  // 反射延迟，默认值为 0.007，范围 [0.0, 0.3]
+    float m_density;                // 密度，默认值为 1.0，范围 [0.0, 1.0]
+    float m_diffusion;              // 扩散度，默认值为 1.0，范围 [0.0, 1.0]
+    float m_gain;                   // 增益，默认值为 0.32，范围 [0.0, 1.0]
+    float m_gain_hf;                // 高频增益，默认值为 0.89，范围 [0.0, 1.0]
+    float m_gain_lf;                // 低频增益，默认值为 0.0，范围 [0.0, 1.0]
+    float m_decay_time;             // 衰减时间，默认值为 1.49，范围 [0.1, 20.0]
+    float m_decay_hf_ratio;         // 高频衰减比率，默认值为 0.83，范围 [0.1, 2.0]
+    float m_decay_lf_ratio;         // 低频衰减比率，默认值为 1.0，范围 [0.1, 2.0]
+    float m_reflections_gain;       // 反射增益，默认值为 0.05，范围 [0.0, 3.16]
+    float m_reflections_delay;      // 反射延迟，默认值为 0.007，范围 [0.0, 0.3]
     float m_reflections_pan_xyz[3]; // 反射声道位置，默认值为 {0.0, 0.0, 0.0}
-    float m_late_reverb_gain;   // 后混响增益，默认值为 1.26，范围 [0.0, 10.0]
-    float m_late_reverb_delay;  // 后混响延迟，默认值为 0.011，范围 [0.0, 0.1]
+    float m_late_reverb_gain;       // 后混响增益，默认值为 1.26，范围 [0.0, 10.0]
+    float m_late_reverb_delay;      // 后混响延迟，默认值为 0.011，范围 [0.0, 0.1]
     float m_late_reverb_pan_xyz[3]; // 后混响声道位置，默认值为 {0.0, 0.0, 0.0}
-    float m_echo_time;          // 回声时间，默认值为 0.25，范围 [0.075, 0.25]
-    float m_echo_depth;         // 回声深度，默认值为 0.0，范围 [0.0, 1.0]
-    float m_modulation_time;    // 调制时间，默认值为 0.25，范围 [0.04, 4.0]
-    float m_modulation_depth;  // 调制深度，默认值为 0.0，范围 [0.0, 1.0]
-    float m_air_absorption_gain_hf;  // 高频吸收，默认值为 0.994，范围 [0.892, 1.0]
-    float m_hf_reference;      // 高频反射，默认值为 5000.0，范围 [1000.0, 20000.0]
-    float m_lf_reference;      // 低频反射，默认值为 250.0，范围 [20.0, 1000.0]
-    float m_room_rolloff_factor;// 房间衰减因子，默认值为 0.0，范围 [0.0, 10.0]
-    bool m_decay_hf_limit;    // 高频衰减限制器，默认值为 true
+    float m_echo_time;              // 回声时间，默认值为 0.25，范围 [0.075, 0.25]
+    float m_echo_depth;             // 回声深度，默认值为 0.0，范围 [0.0, 1.0]
+    float m_modulation_time;        // 调制时间，默认值为 0.25，范围 [0.04, 4.0]
+    float m_modulation_depth;       // 调制深度，默认值为 0.0，范围 [0.0, 1.0]
+    float m_air_absorption_gain_hf; // 高频吸收，默认值为 0.994，范围 [0.892, 1.0]
+    float m_hf_reference;           // 高频反射，默认值为 5000.0，范围 [1000.0, 20000.0]
+    float m_lf_reference;           // 低频反射，默认值为 250.0，范围 [20.0, 1000.0]
+    float m_room_rolloff_factor;    // 房间衰减因子，默认值为 0.0，范围 [0.0, 10.0]
+    bool m_decay_hf_limit;          // 高频衰减限制器，默认值为 true
 };
 
 /*
@@ -4148,7 +4221,7 @@ je_main_script_entry [基本接口]
     * 尝试带缓存地加载 @/builtin/editor/main.wo
     * 如果未能加载 @/builtin/editor/main.wo，则尝试 @/builtin/main.wo
 */
-JE_API bool             je_main_script_entry();
+JE_API bool je_main_script_entry();
 
 // DEBUG API, SHOULD NOT BE USED IN GAME PROJECT, ONLY USED FOR EDITOR
 #ifdef JE_ENABLE_DEBUG_API
@@ -4193,13 +4266,13 @@ JE_API void jedbg_get_entity_arch_information(
 #endif
 
 // Atomic operator API
-#define JE_DECL_ATOMIC_OPERATOR_API(TYPE)\
-    JE_API TYPE je_atomic_exchange_##TYPE(TYPE* aim, TYPE value);\
-    JE_API bool je_atomic_cas_##TYPE(TYPE* aim, TYPE* comparer, TYPE value);\
-    JE_API TYPE je_atomic_fetch_add_##TYPE(TYPE* aim, TYPE value);\
-    JE_API TYPE je_atomic_fetch_sub_##TYPE(TYPE* aim, TYPE value);\
-    JE_API TYPE je_atomic_fetch_##TYPE(TYPE* aim);\
-    JE_API void je_atomic_store_##TYPE(TYPE* aim, TYPE value)
+#define JE_DECL_ATOMIC_OPERATOR_API(TYPE)                                    \
+    JE_API TYPE je_atomic_exchange_##TYPE(TYPE *aim, TYPE value);            \
+    JE_API bool je_atomic_cas_##TYPE(TYPE *aim, TYPE *comparer, TYPE value); \
+    JE_API TYPE je_atomic_fetch_add_##TYPE(TYPE *aim, TYPE value);           \
+    JE_API TYPE je_atomic_fetch_sub_##TYPE(TYPE *aim, TYPE value);           \
+    JE_API TYPE je_atomic_fetch_##TYPE(TYPE *aim);                           \
+    JE_API void je_atomic_store_##TYPE(TYPE *aim, TYPE value)
 
 JE_DECL_ATOMIC_OPERATOR_API(int8_t);
 JE_DECL_ATOMIC_OPERATOR_API(uint8_t);
@@ -4219,20 +4292,20 @@ JE_FORCE_CAPI_END
 namespace jeecs
 {
 #define JECS_DISABLE_MOVE_AND_COPY_OPERATOR(TYPE) \
-    TYPE& operator = (const TYPE &) = delete;\
-    TYPE& operator = (TYPE &&) = delete
+    TYPE &operator=(const TYPE &) = delete;       \
+    TYPE &operator=(TYPE &&) = delete
 
 #define JECS_DISABLE_MOVE_AND_COPY_CONSTRUCTOR(TYPE) \
-    TYPE(const TYPE &)  = delete;\
-    TYPE(TYPE &&)       = delete
+    TYPE(const TYPE &) = delete;                     \
+    TYPE(TYPE &&) = delete
 
-#define JECS_DISABLE_MOVE_AND_COPY(TYPE) \
-    JECS_DISABLE_MOVE_AND_COPY_CONSTRUCTOR(TYPE);\
+#define JECS_DISABLE_MOVE_AND_COPY(TYPE)          \
+    JECS_DISABLE_MOVE_AND_COPY_CONSTRUCTOR(TYPE); \
     JECS_DISABLE_MOVE_AND_COPY_OPERATOR(TYPE)
 
 #define JECS_DEFAULT_CONSTRUCTOR(TYPE) \
-    TYPE() = default;\
-    TYPE(const TYPE &) = default;\
+    TYPE() = default;                  \
+    TYPE(const TYPE &) = default;      \
     TYPE(TYPE &&) = default;
 
     /*
@@ -4245,8 +4318,8 @@ namespace jeecs
         jeecs::debug::log [函数]
         用于产生一般日志
         */
-        template<typename ... ArgTs>
-        inline void log(const char* format, ArgTs&& ... args)
+        template <typename... ArgTs>
+        inline void log(const char* format, ArgTs &&...args)
         {
             je_log(JE_LOG_NORMAL, format, args...);
         }
@@ -4255,8 +4328,8 @@ namespace jeecs
         jeecs::debug::loginfo [函数]
         用于产生信息日志
         */
-        template<typename ... ArgTs>
-        inline void loginfo(const char* format, ArgTs&& ... args)
+        template <typename... ArgTs>
+        inline void loginfo(const char* format, ArgTs &&...args)
         {
             je_log(JE_LOG_INFO, format, args...);
         }
@@ -4265,8 +4338,8 @@ namespace jeecs
         jeecs::debug::logwarn [函数]
         用于产生警告日志
         */
-        template<typename ... ArgTs>
-        inline void logwarn(const char* format, ArgTs&& ... args)
+        template <typename... ArgTs>
+        inline void logwarn(const char* format, ArgTs &&...args)
         {
             je_log(JE_LOG_WARNING, format, args...);
         }
@@ -4275,8 +4348,8 @@ namespace jeecs
         jeecs::debug::logerr [函数]
         用于产生错误日志
         */
-        template<typename ... ArgTs>
-        inline void logerr(const char* format, ArgTs&& ... args)
+        template <typename... ArgTs>
+        inline void logerr(const char* format, ArgTs &&...args)
         {
             je_log(JE_LOG_ERROR, format, args...);
         }
@@ -4285,8 +4358,8 @@ namespace jeecs
         jeecs::debug::logfatal [函数]
         用于产生致命错误日志
         */
-        template<typename ... ArgTs>
-        inline void logfatal(const char* format, ArgTs&& ... args)
+        template <typename... ArgTs>
+        inline void logfatal(const char* format, ArgTs &&...args)
         {
             je_log(JE_LOG_FATAL, format, args...);
             wo_fail(WO_FAIL_JE_FATAL_ERROR, format, args...);
@@ -4295,16 +4368,16 @@ namespace jeecs
 
     namespace typing
     {
-#define JE_DECL_SFINAE_CHECKER_HELPLER(name, memberexpr) \
-        template<typename T, typename VoidT = void>\
-        struct sfinae_##name : std::false_type\
-        {\
-            static_assert(std::is_void<VoidT>::value);\
-        };\
-        template<typename T>\
-        struct sfinae_##name<T, std::void_t<decltype(memberexpr)>> : std::true_type\
-        {\
-        };
+#define JE_DECL_SFINAE_CHECKER_HELPLER(name, memberexpr)                        \
+    template <typename T, typename VoidT = void>                                \
+    struct sfinae_##name : std::false_type                                      \
+    {                                                                           \
+        static_assert(std::is_void<VoidT>::value);                              \
+    };                                                                          \
+    template <typename T>                                                       \
+    struct sfinae_##name<T, std::void_t<decltype(memberexpr)>> : std::true_type \
+    {                                                                           \
+    };
 
         JE_DECL_SFINAE_CHECKER_HELPLER(has_JERefRegsiter, &T::JERefRegsiter);
         JE_DECL_SFINAE_CHECKER_HELPLER(match_JERefRegsiter, T::JERefRegsiter((jeecs::typing::type_unregister_guard*)nullptr));
@@ -4330,7 +4403,7 @@ namespace jeecs
         JE_DECL_SFINAE_CHECKER_HELPLER(has__select_begin, &T::_select_begin);
         JE_DECL_SFINAE_CHECKER_HELPLER(has__select_continue, &T::_select_continue);
 
-        template<typename T>
+        template <typename T>
         constexpr bool sfinae_is_game_system_v =
             typing::sfinae_has__select_begin<T>::value &&
             typing::sfinae_has__select_continue<T>::value;
@@ -4350,20 +4423,19 @@ namespace jeecs
             * 当最后一个reference析构时，单例实例会被释放
             * 首次（或之前的单例释放之后的首次）获取时，会调用默认构造函数创建实例
         */
-        template<typename T>
+        template <typename T>
         class singleton
         {
             std::shared_mutex
                 m_singleton_mutex;
             T* m_instance;
-            size_t      m_ref_count;
+            size_t m_ref_count;
 
             JECS_DISABLE_MOVE_AND_COPY(singleton);
 
         public:
             singleton()
-                : m_instance(nullptr)
-                , m_ref_count(0)
+                : m_instance(nullptr), m_ref_count(0)
             {
             }
             ~singleton()
@@ -4379,15 +4451,13 @@ namespace jeecs
 
             public:
                 reference(singleton* s, T* inst)
-                    : m_singleton(s)
-                    , m_instance(inst)
+                    : m_singleton(s), m_instance(inst)
                 {
                     assert(m_singleton != nullptr);
                     assert(m_instance != nullptr);
                 }
                 reference(const reference& r)
-                    : m_singleton(r.m_singleton)
-                    , m_instance(r.m_instance)
+                    : m_singleton(r.m_singleton), m_instance(r.m_instance)
                 {
                     assert(m_singleton != nullptr);
                     assert(m_instance != nullptr);
@@ -4396,8 +4466,7 @@ namespace jeecs
                     m_singleton->m_ref_count++;
                 }
                 reference(reference&& mr)
-                    : m_singleton(mr.m_singleton)
-                    , m_instance(mr.m_instance)
+                    : m_singleton(mr.m_singleton), m_instance(mr.m_instance)
                 {
                     assert(m_singleton != nullptr);
                     assert(m_instance != nullptr);
@@ -4406,7 +4475,7 @@ namespace jeecs
                     mr.m_instance = nullptr;
                 }
 
-                reference& operator = (const reference& r)
+                reference& operator=(const reference& r)
                 {
                     m_singleton = r.m_singleton;
                     m_instance = r.m_instance;
@@ -4419,7 +4488,7 @@ namespace jeecs
 
                     return *this;
                 }
-                reference& operator = (reference&& mr)
+                reference& operator=(reference&& mr)
                 {
                     m_singleton = mr.m_singleton;
                     m_instance = mr.m_instance;
@@ -4468,7 +4537,7 @@ namespace jeecs
                     }
                 }
 
-                T* operator -> ()
+                T* operator->()
                 {
                     return m_instance;
                 }
@@ -4502,13 +4571,12 @@ namespace jeecs
             }
         };
 
-
         /*
         jeecs::basic::vector [类型]
         用于存放大小可变的连续存储容器
             * 为了保证模块之间的二进制一致性，公共组件中请不要使用std::vector
         */
-        template<typename ElemT>
+        template <typename ElemT>
         class vector
         {
             ElemT* _elems_ptr_begin = nullptr;
@@ -4517,35 +4585,35 @@ namespace jeecs
 
             static constexpr size_t _single_elem_size = sizeof(ElemT);
 
-            inline static size_t _move(ElemT* to_begin, ElemT* from_begin, ElemT* from_end)noexcept
+            inline static size_t _move(ElemT* to_begin, ElemT* from_begin, ElemT* from_end) noexcept
             {
                 for (ElemT* origin_elem = from_begin; origin_elem < from_end; ++origin_elem)
                 {
-                    new(to_begin++)ElemT(std::move(*origin_elem));
+                    new (to_begin++) ElemT(std::move(*origin_elem));
                     origin_elem->~ElemT();
                 }
                 return (size_t)(from_end - from_begin);
             }
-            inline static size_t _r_move(ElemT* to_begin, ElemT* from_begin, ElemT* from_end)noexcept
+            inline static size_t _r_move(ElemT* to_begin, ElemT* from_begin, ElemT* from_end) noexcept
             {
                 for (ElemT* origin_elem = from_end; origin_elem > from_begin;)
                 {
                     size_t offset = (size_t)((--origin_elem) - from_begin);
-                    new(to_begin + offset)ElemT(std::move(*origin_elem));
+                    new (to_begin + offset) ElemT(std::move(*origin_elem));
                     origin_elem->~ElemT();
                 }
                 return (size_t)(from_end - from_begin);
             }
-            inline static size_t _copy(ElemT* to_begin, ElemT* from_begin, ElemT* from_end)noexcept
+            inline static size_t _copy(ElemT* to_begin, ElemT* from_begin, ElemT* from_end) noexcept
             {
                 for (ElemT* origin_elem = from_begin; origin_elem < from_end;)
                 {
-                    new(to_begin++)ElemT(*(origin_elem++));
+                    new (to_begin++) ElemT(*(origin_elem++));
                 }
 
                 return (size_t)(from_end - from_begin);
             }
-            inline static size_t _erase(ElemT* from_begin, ElemT* from_end)noexcept
+            inline static size_t _erase(ElemT* from_begin, ElemT* from_end) noexcept
             {
                 if constexpr (!std::is_trivial<ElemT>::value)
                 {
@@ -4577,7 +4645,7 @@ namespace jeecs
             }
 
         public:
-            vector()noexcept
+            vector() noexcept
             {
             }
             ~vector() noexcept
@@ -4612,14 +4680,14 @@ namespace jeecs
                     another_list._elems_buffer_end = nullptr;
             }
 
-            inline vector& operator = (const vector& another_list)noexcept
+            inline vector& operator=(const vector& another_list) noexcept
             {
                 _reserve(another_list.size());
                 _elems_ptr_end += _copy(_elems_ptr_begin, another_list.begin(), another_list.end());
 
                 return *this;
             }
-            inline vector& operator = (vector&& another_list)noexcept
+            inline vector& operator=(vector&& another_list) noexcept
             {
                 clear();
                 je_mem_free(_elems_ptr_begin);
@@ -4655,70 +4723,70 @@ namespace jeecs
             {
                 return _elems_buffer_end - _elems_ptr_begin;
             }
-            inline void clear()noexcept
+            inline void clear() noexcept
             {
                 _erase(_elems_ptr_begin, _elems_ptr_end);
                 _elems_ptr_end = _elems_ptr_begin;
             }
-            inline void push_front(const ElemT& _e)noexcept
+            inline void push_front(const ElemT& _e) noexcept
             {
                 _assure(size() + 1);
                 _r_move(_elems_ptr_begin + 1, _elems_ptr_begin, _elems_ptr_end++);
                 new (_elems_ptr_begin) ElemT(_e);
             }
-            inline void push_back(const ElemT& _e)noexcept
+            inline void push_back(const ElemT& _e) noexcept
             {
                 _assure(size() + 1);
                 new (_elems_ptr_end++) ElemT(_e);
             }
-            inline void pop_back()noexcept
+            inline void pop_back() noexcept
             {
                 if constexpr (!std::is_trivial<ElemT>::value)
                     (_elems_ptr_end--)->~ElemT();
                 else
                     _elems_ptr_end--;
             }
-            inline auto begin() const noexcept->ElemT*
+            inline auto begin() const noexcept -> ElemT*
             {
                 return _elems_ptr_begin;
             }
-            inline auto end() const noexcept->ElemT*
+            inline auto end() const noexcept -> ElemT*
             {
                 return _elems_ptr_end;
             }
-            inline auto front() const noexcept->ElemT&
+            inline auto front() const noexcept -> ElemT&
             {
                 return *_elems_ptr_begin;
             }
-            inline auto back() const noexcept->ElemT&
+            inline auto back() const noexcept -> ElemT&
             {
                 return *(_elems_ptr_end - 1);
             }
-            inline void erase(size_t index)noexcept
+            inline void erase(size_t index) noexcept
             {
                 _elems_ptr_begin[index].~ElemT();
                 _move(_elems_ptr_begin + index, _elems_ptr_begin + index + 1, _elems_ptr_end--);
             }
-            inline void erase(ElemT* index)noexcept
+            inline void erase(ElemT* index) noexcept
             {
                 index->~ElemT();
                 _move(index, index + 1, _elems_ptr_end--);
             }
-            inline void erase_data(const ElemT& data)noexcept
+            inline void erase_data(const ElemT& data) noexcept
             {
                 auto fnd_place = std::find(begin(), end(), data);
                 if (fnd_place != end())
                     erase(fnd_place - begin());
             }
-            ElemT* data()const noexcept
+            ElemT* data() const noexcept
             {
                 return _elems_ptr_begin;
             }
-            ElemT& at(size_t index)const noexcept
+            ElemT& at(size_t index) const noexcept
             {
                 return _elems_ptr_begin[index];
             }
-            ElemT& operator[](size_t index)const noexcept
+            ElemT& operator[](size_t index) const noexcept
             {
                 return _elems_ptr_begin[index];
             }
@@ -4729,17 +4797,18 @@ namespace jeecs
         用于存放大小可变的唯一键值对
             * 为了保证模块之间的二进制一致性，公共组件中请不要使用std::map
         */
-        template<typename KeyT, typename ValT>
+        template <typename KeyT, typename ValT>
         class map
         {
-            struct pair {
+            struct pair
+            {
                 KeyT k;
                 ValT v;
             };
             basic::vector<pair> dats;
 
         public:
-            ValT& operator[](const KeyT& k)noexcept
+            ValT& operator[](const KeyT& k) noexcept
             {
                 auto* fnd = find(k);
                 if (fnd == dats.end())
@@ -4749,13 +4818,14 @@ namespace jeecs
                 }
                 return fnd->v;
             }
-            void clear()noexcept
+            void clear() noexcept
             {
                 dats.clear();
             }
             pair* find(const KeyT& k) const noexcept
             {
-                return std::find_if(dats.begin(), dats.end(), [&k](pair& p) {return p.k == k; });
+                return std::find_if(dats.begin(), dats.end(), [&k](pair& p)
+                    { return p.k == k; });
             }
             bool erase(const KeyT& k)
             {
@@ -4767,11 +4837,11 @@ namespace jeecs
                 }
                 return false;
             }
-            inline auto begin() const noexcept->pair*
+            inline auto begin() const noexcept -> pair*
             {
                 return dats.begin();
             }
-            inline auto end() const noexcept->pair*
+            inline auto end() const noexcept -> pair*
             {
                 return dats.end();
             }
@@ -4802,32 +4872,29 @@ namespace jeecs
             }
 
         public:
-
             ~string()
             {
                 if (_c_str != nullptr)
                     je_mem_free(_c_str);
             }
 
-            string()noexcept
+            string() noexcept
             {
                 _reserve(1);
             }
 
-            string(const string& str)noexcept
-                :string(str.c_str())
+            string(const string& str) noexcept
+                : string(str.c_str())
             {
             }
 
-            string(const std::string& str)noexcept
-                :string(str.c_str())
+            string(const std::string& str) noexcept
+                : string(str.c_str())
             {
             }
 
-            string(string&& str)noexcept
-                :_c_str(str._c_str)
-                , _buf_len(str._buf_len)
-                , _str_len(str._str_len)
+            string(string&& str) noexcept
+                : _c_str(str._c_str), _buf_len(str._buf_len), _str_len(str._str_len)
             {
                 str._c_str = 0;
                 str._buf_len = 0;
@@ -4877,7 +4944,7 @@ namespace jeecs
                 memcpy(_c_str, str, _str_len);
                 return *this;
             }
-            operator std::string()const
+            operator std::string() const
             {
                 return c_str();
             }
@@ -4885,11 +4952,11 @@ namespace jeecs
             {
                 return  std::string(c_str()).substr(from, count);
             }*/
-            size_t size()const
+            size_t size() const
             {
                 return _str_len;
             }
-            const char* c_str()const
+            const char* c_str() const
             {
                 _c_str[_str_len] = 0;
                 return _c_str;
@@ -4920,22 +4987,22 @@ namespace jeecs
             return aligned_sz + _allign_base;
         }
 
-        template<typename T, typename  ... ArgTs>
-        T* create_new(ArgTs&& ... args)
+        template <typename T, typename... ArgTs>
+        T* create_new(ArgTs &&...args)
         {
             static_assert(!std::is_void<T>::value);
 
-            return new(je_mem_alloc(sizeof(T)))T(args...);
+            return new (je_mem_alloc(sizeof(T))) T(args...);
         }
-        template<typename T, typename  ... ArgTs>
+        template <typename T, typename... ArgTs>
         T* create_new_n(size_t n)
         {
             static_assert(!std::is_void<T>::value);
 
-            return new(je_mem_alloc(sizeof(T) * n))T[n];
+            return new (je_mem_alloc(sizeof(T) * n)) T[n];
         }
 
-        template<typename T>
+        template <typename T>
         void destroy_free(T* address)
         {
             static_assert(!std::is_void<T>::value);
@@ -4943,7 +5010,7 @@ namespace jeecs
             address->~T();
             je_mem_free(address);
         }
-        template<typename T>
+        template <typename T>
         void destroy_free_n(T* address, size_t n)
         {
             static_assert(!std::is_void<T>::value);
@@ -4978,14 +5045,14 @@ namespace jeecs
             return str;
         }
 
-        template<typename NodeT>
+        template <typename NodeT>
         struct atomic_list
         {
             std::atomic<NodeT*> last_node = nullptr;
 
             void add_one(NodeT* node) noexcept
             {
-                NodeT* last_last_node = last_node.load();// .exchange(node);
+                NodeT* last_last_node = last_node.load(); // .exchange(node);
                 do
                 {
                     node->last = last_last_node;
@@ -5011,56 +5078,54 @@ namespace jeecs
             }
         };
 
-        template<typename T>
+        template <typename T>
         struct default_functions
         {
-            template<typename W>
-            struct _true_type : public std::true_type {};
+            template <typename W>
+            struct _true_type : public std::true_type
+            {
+            };
 
-            template<typename U>
+            template <typename U>
             struct has_pointer_typeinfo_constructor_function
             {
-                template<typename V>
-                static auto _tester(int) ->
-                    _true_type<decltype(new V(std::declval<void*>(), std::declval<const jeecs::typing::type_info*>()))>;
+                template <typename V>
+                static auto _tester(int) -> _true_type<decltype(new V(std::declval<void*>(), std::declval<const jeecs::typing::type_info*>()))>;
 
-                template<typename V>
+                template <typename V>
                 static std::false_type _tester(...);
 
                 constexpr static bool value = decltype(_tester<U>(0))::value;
             };
-            template<typename U>
+            template <typename U>
             struct has_pointer_constructor_function
             {
-                template<typename V>
-                static auto _tester(int) ->
-                    _true_type<decltype(new V(std::declval<void*>()))>;
+                template <typename V>
+                static auto _tester(int) -> _true_type<decltype(new V(std::declval<void*>()))>;
 
-                template<typename V>
+                template <typename V>
                 static std::false_type _tester(...);
 
                 constexpr static bool value = decltype(_tester<U>(0))::value;
             };
-            template<typename U>
+            template <typename U>
             struct has_typeinfo_constructor_function
             {
-                template<typename V>
-                static auto _tester(int) ->
-                    _true_type<decltype(new V(std::declval<const jeecs::typing::type_info*>()))>;
+                template <typename V>
+                static auto _tester(int) -> _true_type<decltype(new V(std::declval<const jeecs::typing::type_info*>()))>;
 
-                template<typename V>
+                template <typename V>
                 static std::false_type _tester(...);
 
                 constexpr static bool value = decltype(_tester<U>(0))::value;
             };
-            template<typename U>
+            template <typename U>
             struct has_default_constructor_function
             {
-                template<typename V>
-                static auto _tester(int) ->
-                    _true_type<decltype(new V())>;
+                template <typename V>
+                static auto _tester(int) -> _true_type<decltype(new V())>;
 
-                template<typename V>
+                template <typename V>
                 static std::false_type _tester(...);
 
                 constexpr static bool value = decltype(_tester<U>(0))::value;
@@ -5069,15 +5134,15 @@ namespace jeecs
             static void constructor(void* _ptr, void* arg_ptr, const jeecs::typing::type_info* tinfo)
             {
                 if constexpr (has_pointer_typeinfo_constructor_function<T>::value)
-                    new(_ptr)T(arg_ptr, tinfo);
-                else  if constexpr (has_pointer_constructor_function<T>::value)
-                    new(_ptr)T(arg_ptr);
-                else  if constexpr (has_typeinfo_constructor_function<T>::value)
-                    new(_ptr)T(tinfo);
+                    new (_ptr) T(arg_ptr, tinfo);
+                else if constexpr (has_pointer_constructor_function<T>::value)
+                    new (_ptr) T(arg_ptr);
+                else if constexpr (has_typeinfo_constructor_function<T>::value)
+                    new (_ptr) T(tinfo);
                 else
                 {
                     static_assert(has_default_constructor_function<T>::value);
-                    new(_ptr)T{};
+                    new (_ptr) T{};
                 }
             }
             static void destructor(void* _ptr)
@@ -5087,18 +5152,16 @@ namespace jeecs
             static void copier(void* _ptr, const void* _be_copy_ptr)
             {
                 if constexpr (std::is_copy_constructible<T>::value)
-                    new(_ptr)T(*(const T*)_be_copy_ptr);
+                    new (_ptr) T(*(const T*)_be_copy_ptr);
                 else
-                    debug::logerr("This type: '%s' is not copy-constructible but you try to do it."
-                        , typeid(T).name());
+                    debug::logerr("This type: '%s' is not copy-constructible but you try to do it.", typeid(T).name());
             }
             static void mover(void* _ptr, void* _be_moved_ptr)
             {
                 if constexpr (std::is_move_constructible<T>::value)
-                    new(_ptr)T(std::move(*(T*)_be_moved_ptr));
+                    new (_ptr) T(std::move(*(T*)_be_moved_ptr));
                 else
-                    debug::logerr("This type: '%s' is not move-constructible but you try to do it."
-                        , typeid(T).name());
+                    debug::logerr("This type: '%s' is not move-constructible but you try to do it.", typeid(T).name());
             }
 
             static void pre_update(void* _ptr)
@@ -5204,16 +5267,16 @@ namespace jeecs
             }
         };
 
-        template<typename T>
+        template <typename T>
         constexpr auto type_hash()
         {
             return typeid(T).hash_code();
         }
 
-        template<typename ... ArgTs>
+        template <typename... ArgTs>
         struct type_index_in_varargs
         {
-            template<size_t Index, typename AimT, typename CurrentT, typename ... Ts>
+            template <size_t Index, typename AimT, typename CurrentT, typename... Ts>
             constexpr static size_t _index()
             {
                 if constexpr (std::is_same<AimT, CurrentT>::value)
@@ -5222,7 +5285,7 @@ namespace jeecs
                     return _index<Index + 1, AimT, Ts...>();
             }
 
-            template<typename AimArgT>
+            template <typename AimArgT>
             constexpr size_t index_of() const noexcept
             {
                 return _index<0, AimArgT, ArgTs...>();
@@ -5233,11 +5296,11 @@ namespace jeecs
         jeecs::basic::shared_pointer [类型]
         线程安全的共享智能指针类型
         */
-        template<typename T>
+        template <typename T>
         class shared_pointer
         {
             using count_t = size_t;
-            using free_func_t = void(*)(T*);
+            using free_func_t = void (*)(T*);
 
             static void _default_free_func(T* ptr)
             {
@@ -5246,10 +5309,9 @@ namespace jeecs
 
             T* m_resource = nullptr;
             mutable count_t* m_count = nullptr;
-            free_func_t         m_freer = nullptr;
+            free_func_t m_freer = nullptr;
 
-            inline const static
-                count_t* _COUNT_USING_SPIN_LOCK_MARK = (count_t*)SIZE_MAX;
+            inline const static count_t* _COUNT_USING_SPIN_LOCK_MARK = (count_t*)SIZE_MAX;
 
             static count_t* _alloc_counter()
             {
@@ -5260,7 +5322,7 @@ namespace jeecs
                 destroy_free(p);
             }
 
-            count_t* _spin_lock()const
+            count_t* _spin_lock() const
             {
                 count_t* result;
                 do
@@ -5271,7 +5333,7 @@ namespace jeecs
 
                 return result;
             }
-            void _spin_unlock(count_t* p)const
+            void _spin_unlock(count_t* p) const
             {
                 je_atomic_exchange_intptr_t(
                     (intptr_t*)&m_count, (intptr_t)p);
@@ -5313,6 +5375,7 @@ namespace jeecs
 
                 return count;
             }
+
         public:
             ~shared_pointer()
             {
@@ -5320,10 +5383,8 @@ namespace jeecs
             }
 
             shared_pointer() noexcept = default;
-            shared_pointer(T* v, void(*f)(T*) = &_default_free_func)
-                : m_resource(v)
-                , m_freer(f)
-                , m_count(nullptr)
+            shared_pointer(T* v, void (*f)(T*) = &_default_free_func)
+                : m_resource(v), m_freer(f), m_count(nullptr)
             {
                 if (m_resource != nullptr)
                     m_count = _alloc_counter();
@@ -5342,7 +5403,7 @@ namespace jeecs
                 je_atomic_store_intptr_t((intptr_t*)&m_count, (intptr_t)counter);
                 v._spin_unlock(unlocker);
             }
-            shared_pointer& operator =(const shared_pointer& v) noexcept
+            shared_pointer& operator=(const shared_pointer& v) noexcept
             {
                 if (this != &v)
                 {
@@ -5356,7 +5417,7 @@ namespace jeecs
                 }
                 return *this;
             }
-            shared_pointer& operator =(shared_pointer&& v)noexcept
+            shared_pointer& operator=(shared_pointer&& v) noexcept
             {
                 if (this != &v)
                 {
@@ -5371,31 +5432,31 @@ namespace jeecs
                 return *this;
             }
 
-            T* get()const
+            T* get() const
             {
                 return m_resource;
             }
-            T* operator -> ()const noexcept
+            T* operator->() const noexcept
             {
                 return m_resource;
             }
-            T& operator * ()const noexcept
+            T& operator*() const noexcept
             {
                 return *m_resource;
             }
-            operator bool()const noexcept
+            operator bool() const noexcept
             {
                 return m_resource != nullptr;
             }
-            bool operator !()const noexcept
+            bool operator!() const noexcept
             {
                 return m_resource == nullptr;
             }
-            bool operator == (const T* ptr)const
+            bool operator==(const T* ptr) const
             {
                 return m_resource == ptr;
             }
-            bool operator != (const T* ptr)const
+            bool operator!=(const T* ptr) const
             {
                 return m_resource != ptr;
             }
@@ -5405,7 +5466,7 @@ namespace jeecs
         jeecs::basic::resource [类型别名]
         智能指针的类型别名，一般用于保管需要共享和自动管理的资源类型
         */
-        template<typename T>
+        template <typename T>
         using resource = shared_pointer<T>;
 
         /*
@@ -5414,11 +5475,12 @@ namespace jeecs
             * 类型T应该有 load 方法以创建和返回自身
             * 类型T如果是void，那么相当于只读取文件名
         */
-        template<typename T>
+        template <typename T>
         class fileresource
         {
             basic::resource<T> _m_resource = nullptr;
             basic::string _m_path = "";
+
         public:
             bool load(const std::string& path)
             {
@@ -5455,11 +5517,12 @@ namespace jeecs
             }
         };
 
-        template<>
+        template <>
         class fileresource<void>
         {
             bool _m_has_resource = false;
             basic::string _m_path = "";
+
         public:
             bool load(const std::string& path)
             {
@@ -5504,15 +5567,15 @@ namespace jeecs
                 const char* m_member_name;
 
                 const char* m_woovalue_type_may_null;
-                wo_pin_value        m_woovalue_init_may_null;
+                wo_pin_value m_woovalue_init_may_null;
 
                 const type_info* m_member_type;
-                ptrdiff_t           m_member_offset;
+                ptrdiff_t m_member_offset;
 
                 member_info* m_next_member;
             };
 
-            size_t                  m_member_count;
+            size_t m_member_count;
             member_info* m_members;
         };
 
@@ -5522,8 +5585,8 @@ namespace jeecs
         */
         struct typeinfo_script_parser
         {
-            parse_c2w_func_t        m_script_parse_c2w;
-            parse_w2c_func_t        m_script_parse_w2c;
+            parse_c2w_func_t m_script_parse_c2w;
+            parse_w2c_func_t m_script_parse_w2c;
             const char* m_woolang_typename;
             const char* m_woolang_typedecl;
         };
@@ -5567,7 +5630,7 @@ namespace jeecs
             {
                 assert(_m_self_registed_id_typeinfo.empty());
             }
-            template<typename T>
+            template <typename T>
             bool _register_or_get_local_type_info(const char* _typename, const type_info** out_typeinfo)
             {
                 do
@@ -5643,20 +5706,20 @@ namespace jeecs
         */
         struct type_info
         {
-            typeid_t    m_id;
+            typeid_t m_id;
 
-            const char* m_typename;   // will be free by je_typing_unregister
-            size_t      m_size;
-            size_t      m_align;
-            size_t      m_chunk_size; // calc by je_typing_register
-            typehash_t  m_hash;
+            const char* m_typename; // will be free by je_typing_unregister
+            size_t m_size;
+            size_t m_align;
+            size_t m_chunk_size; // calc by je_typing_register
+            typehash_t m_hash;
 
-            construct_func_t        m_constructor;
-            destruct_func_t         m_destructor;
-            copy_construct_func_t   m_copier;
-            move_construct_func_t   m_mover;
+            construct_func_t m_constructor;
+            destruct_func_t m_destructor;
+            copy_construct_func_t m_copier;
+            move_construct_func_t m_mover;
 
-            je_typing_class         m_type_class;
+            je_typing_class m_type_class;
 
             const typeinfo_member* m_member_types;
             const typeinfo_script_parser* m_script_parsers;
@@ -5665,7 +5728,7 @@ namespace jeecs
             const type_info* m_next;
 
         public:
-            template<typename T>
+            template <typename T>
             inline static const type_info* of()
             {
                 return je_typing_get_info_by_hash(typeid(T).hash_code());
@@ -5679,7 +5742,7 @@ namespace jeecs
                 return je_typing_get_info_by_name(name);
             }
 
-            template<typename T>
+            template <typename T>
             inline static typeid_t id()
             {
                 return of<T>()->m_id;
@@ -5693,7 +5756,7 @@ namespace jeecs
                 return of(name)->m_id;
             }
 
-            template<typename T>
+            template <typename T>
             inline static const type_info* register_type(
                 jeecs::typing::type_unregister_guard* guard, const char* _typename)
             {
@@ -5796,7 +5859,7 @@ namespace jeecs
             }
         };
 
-        template<typename ClassT, typename MemberT>
+        template <typename ClassT, typename MemberT>
         inline void register_member(
             jeecs::typing::type_unregister_guard* guard,
             ptrdiff_t member_offset,
@@ -5814,7 +5877,7 @@ namespace jeecs
                 member_offset);
         }
 
-        template<typename ClassT, typename MemberT>
+        template <typename ClassT, typename MemberT>
         inline void register_member(
             jeecs::typing::type_unregister_guard* guard,
             MemberT(ClassT::* _memboffset),
@@ -5825,11 +5888,11 @@ namespace jeecs
 
             register_member<ClassT, MemberT>(guard, member_offset, membname);
         }
-        template<typename T>
+        template <typename T>
         inline void register_script_parser(
             jeecs::typing::type_unregister_guard* guard,
-            void(*c2w)(const T*, wo_vm, wo_value),
-            void(*w2c)(T*, wo_vm, wo_value),
+            void (*c2w)(const T*, wo_vm, wo_value),
+            void (*w2c)(T*, wo_vm, wo_value),
             const std::string& woolang_typename,
             const std::string& woolang_typedecl)
         {
@@ -5853,26 +5916,26 @@ namespace jeecs
 
     public:
         game_world(void* ecs_world_addr)
-            :_m_ecs_world_addr(ecs_world_addr)
+            : _m_ecs_world_addr(ecs_world_addr)
         {
-
         }
+
     private:
         friend class game_system;
+
     public:
-        inline void* handle()const noexcept
+        inline void* handle() const noexcept
         {
             return _m_ecs_world_addr;
         }
 
-        template<typename FirstCompT, typename ... CompTs>
+        template <typename FirstCompT, typename... CompTs>
         inline game_entity add_entity()
         {
             typing::typeid_t component_ids[] = {
                 typing::type_info::id<FirstCompT>(),
                 typing::type_info::id<CompTs>()...,
-                typing::INVALID_TYPE_ID
-            };
+                typing::INVALID_TYPE_ID };
             game_entity gentity;
             je_ecs_world_create_entity_with_components(
                 handle(), &gentity, component_ids);
@@ -5887,14 +5950,13 @@ namespace jeecs
 
             return gentity;
         }
-        template<typename FirstCompT, typename ... CompTs>
+        template <typename FirstCompT, typename... CompTs>
         inline game_entity add_prefab()
         {
             typing::typeid_t component_ids[] = {
                 typing::type_info::id<FirstCompT>(),
                 typing::type_info::id<CompTs>()...,
-                typing::INVALID_TYPE_ID
-            };
+                typing::INVALID_TYPE_ID };
             game_entity gentity;
             je_ecs_world_create_prefab_with_components(
                 handle(), &gentity, component_ids);
@@ -5902,13 +5964,12 @@ namespace jeecs
             return gentity;
         }
 
-
         inline jeecs::game_system* add_system(jeecs::typing::typeid_t type)
         {
             return je_ecs_world_add_system_instance(handle(), type);
         }
 
-        template<typename SystemT>
+        template <typename SystemT>
         inline SystemT* add_system()
         {
             return static_cast<SystemT*>(add_system(
@@ -5920,7 +5981,7 @@ namespace jeecs
             return je_ecs_world_get_system_instance(handle(), type);
         }
 
-        template<typename SystemT>
+        template <typename SystemT>
         inline SystemT* get_system()
         {
             return static_cast<SystemT*>(get_system(
@@ -5932,12 +5993,11 @@ namespace jeecs
             je_ecs_world_remove_system_instance(handle(), type);
         }
 
-        template<typename SystemT>
+        template <typename SystemT>
         inline void remove_system()
         {
             remove_system(typing::type_info::id<SystemT>());
         }
-
 
         // This function only used for editor.
         inline game_entity _add_entity(std::vector<typing::typeid_t> components)
@@ -5967,7 +6027,7 @@ namespace jeecs
             je_ecs_world_destroy_entity(handle(), &entity);
         }
 
-        inline operator bool()const noexcept
+        inline operator bool() const noexcept
         {
             return handle() != nullptr;
         }
@@ -5995,10 +6055,10 @@ namespace jeecs
     {
         enum type : uint8_t
         {
-            CONTAIN,        // Must have spcify component
-            MAYNOT,         // May have or not have
-            ANYOF,          // Must have one of 'ANYOF' components
-            EXCEPT,         // Must not contain spcify component
+            CONTAIN, // Must have spcify component
+            MAYNOT,  // May have or not have
+            ANYOF,   // Must have one of 'ANYOF' components
+            EXCEPT,  // Must not contain spcify component
         };
 
         type m_require;
@@ -6006,9 +6066,7 @@ namespace jeecs
         typing::typeid_t m_type;
 
         requirement(type _require, size_t group_id, typing::typeid_t _type)
-            : m_require(_require)
-            , m_require_group_id(group_id)
-            , m_type(_type)
+            : m_require(_require), m_require_group_id(group_id), m_type(_type)
         {
         }
     };
@@ -6018,8 +6076,8 @@ namespace jeecs
         basic::vector<requirement> m_requirements;
 
         // Store archtypes here?
-        game_world  m_world = nullptr;
-        size_t      m_current_arch_version = 0;
+        game_world m_world = nullptr;
+        size_t m_current_arch_version = 0;
 
         // archs of dependences:
         struct arch_chunks_info
@@ -6051,27 +6109,19 @@ namespace jeecs
             size_t m_component_count;
             size_t* m_component_sizes;
             size_t* m_component_offsets;
-
         };
-        basic::vector<arch_chunks_info*>       m_archs;
+        basic::vector<arch_chunks_info*> m_archs;
         dependence() = default;
         dependence(const dependence& d)
-            : m_requirements(d.m_requirements)
-            , m_world(d.m_world)
-            , m_current_arch_version(0)
-            , m_archs({})
+            : m_requirements(d.m_requirements), m_world(d.m_world), m_current_arch_version(0), m_archs({})
         {
-
         }
         dependence(dependence&& d)
-            : m_requirements(std::move(d.m_requirements))
-            , m_world(std::move(d.m_world))
-            , m_current_arch_version(d.m_current_arch_version)
-            , m_archs(std::move(d.m_archs))
+            : m_requirements(std::move(d.m_requirements)), m_world(std::move(d.m_world)), m_current_arch_version(d.m_current_arch_version), m_archs(std::move(d.m_archs))
         {
             d.m_current_arch_version = 0;
         }
-        dependence& operator = (const dependence& d)
+        dependence& operator=(const dependence& d)
         {
             m_requirements = d.m_requirements;
             m_world = d.m_world;
@@ -6080,7 +6130,7 @@ namespace jeecs
 
             return *this;
         }
-        dependence& operator = (dependence&& d)
+        dependence& operator=(dependence&& d)
         {
             m_requirements = std::move(d.m_requirements);
             m_world = std::move(d.m_world);
@@ -6110,34 +6160,35 @@ namespace jeecs
     };
 
     /*
-    * 早上好，这一站我们来到了选择器，JoyEngine中第二混乱的东西
-    *
-    * 实际上只要和ArchSystem扯上关系，就永远不可能干净。很不幸，选择器正是一根搅屎棍，它负责从
-    * ArchSystem管理的区域内按照我们的需求，分离出满足我们需求的ArchType，再从上面把合法的组件
-    * 一个个摘出来递到我们面前。
-    *
-    * 在这里——jeecs.h中，选择器的实现已经显得非常麻烦，但实际上这里只是选择器的一部分，在
-    * ArchSystem中，有一个名为je_ecs_world_update_dependences_archinfo的函数。这个函数在黑暗处
-    * 负责在适当的实际更新选择器的筛选结果。
-    *
-    * 为了优雅，背后就得承担代价；为了性能我们就得做出牺牲。伟大的圣窝窝头，这么做真的值得吗？
-    *
-    *                                                                   ——虔诚的窝窝头信徒
-    *                                                                       mr_cino
-    */
+     * 早上好，这一站我们来到了选择器，JoyEngine中第二混乱的东西
+     *
+     * 实际上只要和ArchSystem扯上关系，就永远不可能干净。很不幸，选择器正是一根搅屎棍，它负责从
+     * ArchSystem管理的区域内按照我们的需求，分离出满足我们需求的ArchType，再从上面把合法的组件
+     * 一个个摘出来递到我们面前。
+     *
+     * 在这里——jeecs.h中，选择器的实现已经显得非常麻烦，但实际上这里只是选择器的一部分，在
+     * ArchSystem中，有一个名为je_ecs_world_update_dependences_archinfo的函数。这个函数在黑暗处
+     * 负责在适当的实际更新选择器的筛选结果。
+     *
+     * 为了优雅，背后就得承担代价；为了性能我们就得做出牺牲。伟大的圣窝窝头，这么做真的值得吗？
+     *
+     *                                                                   ——虔诚的窝窝头信徒
+     *                                                                       mr_cino
+     */
     struct selector
     {
         JECS_DISABLE_MOVE_AND_COPY(selector);
-        size_t                      m_curstep = 0;
-        size_t                      m_any_id = 0;
-        game_world                  m_current_world = nullptr;
+        size_t m_curstep = 0;
+        size_t m_any_id = 0;
+        game_world m_current_world = nullptr;
 
-        bool                        m_first_time_to_work = true;
-        basic::vector<dependence>   m_dependence_caches;
+        bool m_first_time_to_work = true;
+        basic::vector<dependence> m_dependence_caches;
 
         game_system* m_system_instance = nullptr;
+
     private:
-        template<size_t ArgN, typename FT>
+        template <size_t ArgN, typename FT>
         void _apply_dependence(dependence& dep)
         {
             using f = typing::function_traits<FT>;
@@ -6170,7 +6221,7 @@ namespace jeecs
             }
         }
 
-        template<typename CurRequireT, typename ... Ts>
+        template <typename CurRequireT, typename... Ts>
         void _apply_except(dependence& dep)
         {
             static_assert(std::is_same<typing::origin_t<CurRequireT>, CurRequireT>::value);
@@ -6188,7 +6239,7 @@ namespace jeecs
                 _apply_except<Ts...>(dep);
         }
 
-        template<typename CurRequireT, typename ... Ts>
+        template <typename CurRequireT, typename... Ts>
         void _apply_contain(dependence& dep)
         {
             static_assert(std::is_same<typing::origin_t<CurRequireT>, CurRequireT>::value);
@@ -6206,7 +6257,7 @@ namespace jeecs
                 _apply_contain<Ts...>(dep);
         }
 
-        template<typename CurRequireT, typename ... Ts>
+        template <typename CurRequireT, typename... Ts>
         void _apply_anyof(dependence& dep, size_t any_group)
         {
             static_assert(std::is_same<typing::origin_t<CurRequireT>, CurRequireT>::value);
@@ -6223,16 +6274,16 @@ namespace jeecs
                 _apply_anyof<Ts...>(dep, any_group);
         }
 
-        template<typename FT>
+        template <typename FT>
         struct _executor_extracting_agent : std::false_type
         {
         };
 
-        template<typename ComponentT, typename ... ArgTs>
+        template <typename ComponentT, typename... ArgTs>
         struct _const_type_index
         {
             using f_t = typing::function_traits<void(ArgTs...)>;
-            template<size_t id = 0>
+            template <size_t id = 0>
             static constexpr size_t _index()
             {
                 if constexpr (std::is_same<typename f_t::template argument<id>::type, ComponentT>::value)
@@ -6242,13 +6293,14 @@ namespace jeecs
             }
             static constexpr size_t index = _index();
         };
+
     public:
-        inline static bool get_entity_avaliable(const game_entity::meta* entity_meta, size_t eid)noexcept
+        inline static bool get_entity_avaliable(const game_entity::meta* entity_meta, size_t eid) noexcept
         {
             return jeecs::game_entity::entity_stat::READY == entity_meta[eid].m_stat;
         }
 
-        inline static bool get_entity_avaliable_version(const game_entity::meta* entity_meta, size_t eid, typing::version_t* out_version)noexcept
+        inline static bool get_entity_avaliable_version(const game_entity::meta* entity_meta, size_t eid, typing::version_t* out_version) noexcept
         {
             if (jeecs::game_entity::entity_stat::READY == entity_meta[eid].m_stat)
             {
@@ -6269,11 +6321,11 @@ namespace jeecs
             else
                 return nullptr;
         }
-        template<typename ComponentT, typename ... ArgTs>
+        template <typename ComponentT, typename... ArgTs>
         inline static ComponentT get_component_from_archchunk(dependence::arch_chunks_info* archinfo, void* chunkbuf, size_t entity_id)
         {
             constexpr size_t cid = _const_type_index<ComponentT, ArgTs...>::index;
-            auto* component_ptr = std::launder(reinterpret_cast<typename typing::origin_t<ComponentT>*>(
+            auto* component_ptr = std::launder(reinterpret_cast<typename typing::origin_t<ComponentT> *>(
                 get_component_from_archchunk_ptr(archinfo, chunkbuf, entity_id, cid)));
 
             if (component_ptr != nullptr)
@@ -6295,11 +6347,12 @@ namespace jeecs
             else
                 return nullptr; // Only maynot/anyof can be here, no need to cast the type;
         }
+
     private:
-        template<typename RT, typename ... ArgTs>
+        template <typename RT, typename... ArgTs>
         struct _executor_extracting_agent<RT(ArgTs...)> : std::true_type
         {
-            template<typename FT>
+            template <typename FT>
             inline static void exec(dependence* depend, FT&& f, game_system* sys) noexcept
             {
                 for (auto* archinfo : depend->m_archs)
@@ -6315,8 +6368,7 @@ namespace jeecs
                                 if constexpr (std::is_void<typename typing::function_traits<FT>::this_t>::value)
                                     f(get_component_from_archchunk<ArgTs, ArgTs...>(archinfo, cur_chunk, eid)...);
                                 else
-                                    (static_cast<typename typing::function_traits<FT>::this_t*>(sys)->*f)
-                                    (get_component_from_archchunk<ArgTs, ArgTs...>(archinfo, cur_chunk, eid)...);
+                                    (static_cast<typename typing::function_traits<FT>::this_t*>(sys)->*f)(get_component_from_archchunk<ArgTs, ArgTs...>(archinfo, cur_chunk, eid)...);
                             }
                         }
                         cur_chunk = je_arch_next_chunk(cur_chunk);
@@ -6325,10 +6377,10 @@ namespace jeecs
             }
         };
 
-        template<typename RT, typename ... ArgTs>
+        template <typename RT, typename... ArgTs>
         struct _executor_extracting_agent<RT(game_entity, ArgTs...)> : std::true_type
         {
-            template<typename FT>
+            template <typename FT>
             inline static void exec(dependence* depend, FT&& f, game_system* sys) noexcept
             {
                 for (auto* archinfo : depend->m_archs)
@@ -6356,7 +6408,7 @@ namespace jeecs
             }
         };
 
-        template<typename FT>
+        template <typename FT>
         void _update(FT&& exec)
         {
             assert((bool)m_current_world);
@@ -6385,6 +6437,7 @@ namespace jeecs
 
             ++m_curstep;
         }
+
     public:
         selector(game_system* game_sys)
             : m_system_instance(game_sys)
@@ -6413,13 +6466,13 @@ namespace jeecs
             m_current_world = w;
         }
 
-        template<typename FT>
+        template <typename FT>
         inline void exec(FT&& _exec)
         {
             _update(_exec);
         }
 
-        template<typename ... Ts>
+        template <typename... Ts>
         inline void except() noexcept
         {
             if (m_first_time_to_work)
@@ -6428,7 +6481,7 @@ namespace jeecs
                 _apply_except<Ts...>(depend);
             }
         }
-        template<typename ... Ts>
+        template <typename... Ts>
         inline void contain() noexcept
         {
             if (m_first_time_to_work)
@@ -6437,7 +6490,7 @@ namespace jeecs
                 _apply_contain<Ts...>(depend);
             }
         }
-        template<typename ... Ts>
+        template <typename... Ts>
         inline void anyof() noexcept
         {
             if (m_first_time_to_work)
@@ -6452,13 +6505,13 @@ namespace jeecs
     class game_universe
     {
         void* _m_universe_addr;
+
     public:
         game_universe(void* universe_addr)
-            :_m_universe_addr(universe_addr)
+            : _m_universe_addr(universe_addr)
         {
-
         }
-        inline void* handle()const noexcept
+        inline void* handle() const noexcept
         {
             return _m_universe_addr;
         }
@@ -6466,7 +6519,7 @@ namespace jeecs
         {
             return je_ecs_world_create(_m_universe_addr);
         }
-        inline void wait()const noexcept
+        inline void wait() const noexcept
         {
             je_ecs_universe_loop(handle());
         }
@@ -6529,11 +6582,11 @@ namespace jeecs
 
     private:
         game_world _m_game_world;
-        selector   _m_default_selector;
+        selector _m_default_selector;
+
     public:
         game_system(game_world world)
-            : _m_game_world(world)
-            , _m_default_selector(this)
+            : _m_game_world(world), _m_default_selector(this)
         {
         }
 
@@ -6541,7 +6594,7 @@ namespace jeecs
         {
             return _m_game_world.get_universe().get_real_deltatimed();
         }
-        inline float deltatime()const
+        inline float deltatime() const
         {
             return _m_game_world.get_universe().get_real_deltatime();
         }
@@ -6549,7 +6602,7 @@ namespace jeecs
         {
             return _m_game_world.get_universe().get_smooth_deltatimed();
         }
-        inline float smooth_deltatime()const
+        inline float smooth_deltatime() const
         {
             return _m_game_world.get_universe().get_smooth_deltatime();
         }
@@ -6586,21 +6639,21 @@ namespace jeecs
         return game_universe(je_ecs_world_in_universe(handle()));
     }
 
-    template<typename T>
-    inline T* game_entity::get_component()const noexcept
+    template <typename T>
+    inline T* game_entity::get_component() const noexcept
     {
         return (T*)je_ecs_world_entity_get_component(this,
             typing::type_info::id<T>());
     }
 
-    template<typename T>
-    inline T* game_entity::add_component()const noexcept
+    template <typename T>
+    inline T* game_entity::add_component() const noexcept
     {
         return (T*)je_ecs_world_entity_add_component(this,
             typing::type_info::id<T>());
     }
 
-    template<typename T>
+    template <typename T>
     inline void game_entity::remove_component() const noexcept
     {
         return je_ecs_world_entity_remove_component(this,
@@ -6627,18 +6680,18 @@ namespace jeecs
         constexpr static float DEG2RAD = PI / 180.f;
         constexpr static float EPSILON = FLT_EPSILON;
 
-        template<typename T>
+        template <typename T>
         static T clamp(T src, T min, T max)
         {
             return std::min(std::max(src, min), max);
         }
-        template<typename T>
+        template <typename T>
         inline T lerp(T va, T vb, float deg)
         {
             return va * (1.0f - deg) + vb * deg;
         }
 
-        template<typename T>
+        template <typename T>
         inline T random(T from, T to)
         {
             static std::random_device rd;
@@ -6654,23 +6707,18 @@ namespace jeecs
                 std::uniform_int_distribution<> dis(from, to);
                 return (T)dis(gen);
             }
-
         }
 
         inline void mat4xmat4(float* out_result, const float* left, const float* right)
         {
-#define R(x, y) (out_result[(x) + (y)* 4])
-#define A(x, y) (left[(x) + (y)* 4])
-#define B(x, y) (right[(x) + (y)* 4])
+#define R(x, y) (out_result[(x) + (y) * 4])
+#define A(x, y) (left[(x) + (y) * 4])
+#define B(x, y) (right[(x) + (y) * 4])
             memset(out_result, 0, 16 * sizeof(float));
             for (size_t iy = 0; iy < 4; iy++)
                 for (size_t ix = 0; ix < 4; ix++)
                 {
-                    R(ix, iy)
-                        += A(ix, 0) * B(0, iy)
-                        + A(ix, 1) * B(1, iy)
-                        + A(ix, 2) * B(2, iy)
-                        + A(ix, 3) * B(3, iy);
+                    R(ix, iy) += A(ix, 0) * B(0, iy) + A(ix, 1) * B(1, iy) + A(ix, 2) * B(2, iy) + A(ix, 3) * B(3, iy);
                 }
 
 #undef R
@@ -6684,17 +6732,14 @@ namespace jeecs
 
         inline void mat3xmat3(float* out_result, const float* left, const float* right)
         {
-#define R(x, y) (out_result[(x) + (y)* 3])
-#define A(x, y) (left[(x) + (y)* 3])
-#define B(x, y) (right[(x) + (y)* 3])
+#define R(x, y) (out_result[(x) + (y) * 3])
+#define A(x, y) (left[(x) + (y) * 3])
+#define B(x, y) (right[(x) + (y) * 3])
             memset(out_result, 0, 9 * sizeof(float));
             for (size_t iy = 0; iy < 3; iy++)
                 for (size_t ix = 0; ix < 3; ix++)
                 {
-                    R(ix, iy)
-                        += A(ix, 0) * B(0, iy)
-                        + A(ix, 1) * B(1, iy)
-                        + A(ix, 2) * B(2, iy);
+                    R(ix, iy) += A(ix, 0) * B(0, iy) + A(ix, 1) * B(1, iy) + A(ix, 2) * B(2, iy);
                 }
 
 #undef R
@@ -6709,7 +6754,7 @@ namespace jeecs
         inline void mat3xvec3(float* out_result, const float* left_mat, const float* right_vex)
         {
 #define R(x) (out_result[x])
-#define A(x, y) (left_mat[(x) + (y)* 3])
+#define A(x, y) (left_mat[(x) + (y) * 3])
 #define B(x) (right_vex[x])
             R(0) = A(0, 0) * B(0) + A(0, 1) * B(1) + A(0, 2) * B(2);
             R(1) = A(1, 0) * B(0) + A(1, 1) * B(1) + A(1, 2) * B(2);
@@ -6726,7 +6771,7 @@ namespace jeecs
         inline void mat4xvec4(float* out_result, const float* left_mat, const float* right_vex)
         {
 #define R(x) (out_result[x])
-#define A(x, y) (left_mat[(x) + (y)* 4])
+#define A(x, y) (left_mat[(x) + (y) * 4])
 #define B(x) (right_vex[x])
             R(0) = A(0, 0) * B(0) + A(0, 1) * B(1) + A(0, 2) * B(2) + A(0, 3) * B(3);
             R(1) = A(1, 0) * B(0) + A(1, 1) * B(1) + A(1, 2) * B(2) + A(1, 3) * B(3);
@@ -6767,122 +6812,129 @@ namespace jeecs
         struct _basevec2
         {
             float x, y;
-            constexpr _basevec2(float _x, float _y) noexcept :x(_x), y(_y) {}
+            constexpr _basevec2(float _x, float _y) noexcept : x(_x), y(_y) {}
         };
         struct _basevec3
         {
             float x, y, z;
-            constexpr _basevec3(float _x, float _y, float _z) noexcept :x(_x), y(_y), z(_z) {}
+            constexpr _basevec3(float _x, float _y, float _z) noexcept : x(_x), y(_y), z(_z) {}
         };
         struct _basevec4
         {
             float x, y, z, w;
-            constexpr _basevec4(float _x, float _y, float _z, float _w) noexcept :x(_x), y(_y), z(_z), w(_w) {}
+            constexpr _basevec4(float _x, float _y, float _z, float _w) noexcept : x(_x), y(_y), z(_z), w(_w) {}
         };
 
         struct vec2 : public _basevec2
         {
             constexpr vec2(float _x = 0.f, float _y = 0.f) noexcept
-                :_basevec2(_x, _y) {
+                : _basevec2(_x, _y)
+            {
             }
-            constexpr vec2(const vec2& _v2)noexcept
-                :_basevec2(_v2.x, _v2.y) {
+            constexpr vec2(const vec2& _v2) noexcept
+                : _basevec2(_v2.x, _v2.y)
+            {
             }
-            constexpr vec2(vec2&& _v2)noexcept
-                :_basevec2(_v2.x, _v2.y) {
+            constexpr vec2(vec2&& _v2) noexcept
+                : _basevec2(_v2.x, _v2.y)
+            {
             }
 
-            constexpr vec2(const _basevec3& _v3)noexcept
-                :_basevec2(_v3.x, _v3.y) {
+            constexpr vec2(const _basevec3& _v3) noexcept
+                : _basevec2(_v3.x, _v3.y)
+            {
             }
-            constexpr vec2(_basevec3&& _v3)noexcept
-                :_basevec2(_v3.x, _v3.y) {
+            constexpr vec2(_basevec3&& _v3) noexcept
+                : _basevec2(_v3.x, _v3.y)
+            {
             }
-            constexpr vec2(const _basevec4& _v4)noexcept
-                :_basevec2(_v4.x, _v4.y) {
+            constexpr vec2(const _basevec4& _v4) noexcept
+                : _basevec2(_v4.x, _v4.y)
+            {
             }
-            constexpr vec2(_basevec4&& _v4)noexcept
-                :_basevec2(_v4.x, _v4.y) {
+            constexpr vec2(_basevec4&& _v4) noexcept
+                : _basevec2(_v4.x, _v4.y)
+            {
             }
 
             // + - * / with another vec2
-            inline constexpr vec2 operator + (const vec2& _v2) const noexcept
+            inline constexpr vec2 operator+(const vec2& _v2) const noexcept
             {
                 return vec2(x + _v2.x, y + _v2.y);
             }
-            inline constexpr vec2 operator - (const vec2& _v2) const noexcept
+            inline constexpr vec2 operator-(const vec2& _v2) const noexcept
             {
                 return vec2(x - _v2.x, y - _v2.y);
             }
-            inline constexpr vec2 operator - () const noexcept
+            inline constexpr vec2 operator-() const noexcept
             {
                 return vec2(-x, -y);
             }
-            inline constexpr vec2 operator + () const noexcept
+            inline constexpr vec2 operator+() const noexcept
             {
                 return vec2(x, y);
             }
-            inline constexpr vec2 operator * (const vec2& _v2) const noexcept
+            inline constexpr vec2 operator*(const vec2& _v2) const noexcept
             {
                 return vec2(x * _v2.x, y * _v2.y);
             }
-            inline constexpr vec2 operator / (const vec2& _v2) const noexcept
+            inline constexpr vec2 operator/(const vec2& _v2) const noexcept
             {
                 return vec2(x / _v2.x, y / _v2.y);
             }
             // * / with float
-            inline constexpr vec2 operator * (float _f) const noexcept
+            inline constexpr vec2 operator*(float _f) const noexcept
             {
                 return vec2(x * _f, y * _f);
             }
-            inline constexpr vec2 operator / (float _f) const noexcept
+            inline constexpr vec2 operator/(float _f) const noexcept
             {
                 return vec2(x / _f, y / _f);
             }
 
-            inline constexpr vec2& operator = (const vec2& _v2) noexcept = default;
-            inline constexpr vec2& operator += (const vec2& _v2) noexcept
+            inline constexpr vec2& operator=(const vec2& _v2) noexcept = default;
+            inline constexpr vec2& operator+=(const vec2& _v2) noexcept
             {
                 x += _v2.x;
                 y += _v2.y;
                 return *this;
             }
-            inline constexpr vec2& operator -= (const vec2& _v2) noexcept
+            inline constexpr vec2& operator-=(const vec2& _v2) noexcept
             {
                 x -= _v2.x;
                 y -= _v2.y;
                 return *this;
             }
-            inline constexpr vec2& operator *= (const vec2& _v2) noexcept
+            inline constexpr vec2& operator*=(const vec2& _v2) noexcept
             {
                 x *= _v2.x;
                 y *= _v2.y;
                 return *this;
             }
-            inline constexpr vec2& operator *= (float _f) noexcept
+            inline constexpr vec2& operator*=(float _f) noexcept
             {
                 x *= _f;
                 y *= _f;
                 return *this;
             }
-            inline constexpr vec2& operator /= (const vec2& _v2) noexcept
+            inline constexpr vec2& operator/=(const vec2& _v2) noexcept
             {
                 x /= _v2.x;
                 y /= _v2.y;
                 return *this;
             }
-            inline constexpr vec2& operator /= (float _f) noexcept
+            inline constexpr vec2& operator/=(float _f) noexcept
             {
                 x /= _f;
                 y /= _f;
                 return *this;
             }
             // == !=
-            inline constexpr bool operator == (const vec2& _v2) const noexcept
+            inline constexpr bool operator==(const vec2& _v2) const noexcept
             {
                 return x == _v2.x && y == _v2.y;
             }
-            inline constexpr bool operator != (const vec2& _v2) const noexcept
+            inline constexpr bool operator!=(const vec2& _v2) const noexcept
             {
                 return x != _v2.x || y != _v2.y;
             }
@@ -6944,7 +6996,7 @@ namespace jeecs
                 wo_struct_set(v, 1, &elem);
             }
         };
-        inline static constexpr vec2 operator * (float _f, const vec2& _v2) noexcept
+        inline static constexpr vec2 operator*(float _f, const vec2& _v2) noexcept
         {
             return vec2(_v2.x * _f, _v2.y * _f);
         }
@@ -6954,103 +7006,97 @@ namespace jeecs
             int x;
             int y;
             constexpr ivec2(int _x = 0, int _y = 0) noexcept
-                : x(_x)
-                , y(_y)
+                : x(_x), y(_y)
             {
-
             }
-            constexpr ivec2(const vec2& _v2)noexcept
-                : x((int)_v2.x)
-                , y((int)_v2.y)
+            constexpr ivec2(const vec2& _v2) noexcept
+                : x((int)_v2.x), y((int)_v2.y)
             {
-
             }
 
-            constexpr ivec2(vec2&& _v2)noexcept
-                : x((int)_v2.x)
-                , y((int)_v2.y)
+            constexpr ivec2(vec2&& _v2) noexcept
+                : x((int)_v2.x), y((int)_v2.y)
             {
-
             }
 
             // + - * / with another vec2
-            inline constexpr ivec2 operator + (const ivec2& _v2) const noexcept
+            inline constexpr ivec2 operator+(const ivec2& _v2) const noexcept
             {
                 return ivec2(x + _v2.x, y + _v2.y);
             }
-            inline constexpr ivec2 operator - (const ivec2& _v2) const noexcept
+            inline constexpr ivec2 operator-(const ivec2& _v2) const noexcept
             {
                 return ivec2(x - _v2.x, y - _v2.y);
             }
-            inline constexpr ivec2 operator - () const noexcept
+            inline constexpr ivec2 operator-() const noexcept
             {
                 return ivec2(-x, -y);
             }
-            inline constexpr ivec2 operator + () const noexcept
+            inline constexpr ivec2 operator+() const noexcept
             {
                 return ivec2(x, y);
             }
-            inline constexpr ivec2 operator * (const ivec2& _v2) const noexcept
+            inline constexpr ivec2 operator*(const ivec2& _v2) const noexcept
             {
                 return ivec2(x * _v2.x, y * _v2.y);
             }
-            inline constexpr ivec2 operator / (const ivec2& _v2) const noexcept
+            inline constexpr ivec2 operator/(const ivec2& _v2) const noexcept
             {
                 return ivec2(x / _v2.x, y / _v2.y);
             }
             // * / with float
-            inline constexpr ivec2 operator * (int _f) const noexcept
+            inline constexpr ivec2 operator*(int _f) const noexcept
             {
                 return ivec2(x * _f, y * _f);
             }
-            inline constexpr ivec2 operator / (int _f) const noexcept
+            inline constexpr ivec2 operator/(int _f) const noexcept
             {
                 return ivec2(x / _f, y / _f);
             }
 
-            inline constexpr ivec2& operator = (const ivec2& _v2) noexcept = default;
-            inline constexpr ivec2& operator += (const ivec2& _v2) noexcept
+            inline constexpr ivec2& operator=(const ivec2& _v2) noexcept = default;
+            inline constexpr ivec2& operator+=(const ivec2& _v2) noexcept
             {
                 x += _v2.x;
                 y += _v2.y;
                 return *this;
             }
-            inline constexpr ivec2& operator -= (const ivec2& _v2) noexcept
+            inline constexpr ivec2& operator-=(const ivec2& _v2) noexcept
             {
                 x -= _v2.x;
                 y -= _v2.y;
                 return *this;
             }
-            inline constexpr ivec2& operator *= (const ivec2& _v2) noexcept
+            inline constexpr ivec2& operator*=(const ivec2& _v2) noexcept
             {
                 x *= _v2.x;
                 y *= _v2.y;
                 return *this;
             }
-            inline constexpr ivec2& operator *= (float _f) noexcept
+            inline constexpr ivec2& operator*=(float _f) noexcept
             {
                 x = (int)((float)x * _f);
                 y = (int)((float)y * _f);
                 return *this;
             }
-            inline constexpr ivec2& operator /= (const ivec2& _v2) noexcept
+            inline constexpr ivec2& operator/=(const ivec2& _v2) noexcept
             {
                 x /= _v2.x;
                 y /= _v2.y;
                 return *this;
             }
-            inline constexpr ivec2& operator /= (int _f) noexcept
+            inline constexpr ivec2& operator/=(int _f) noexcept
             {
                 x /= _f;
                 y /= _f;
                 return *this;
             }
             // == !=
-            inline constexpr bool operator == (const ivec2& _v2) const noexcept
+            inline constexpr bool operator==(const ivec2& _v2) const noexcept
             {
                 return x == _v2.x && y == _v2.y;
             }
-            inline constexpr bool operator != (const ivec2& _v2) const noexcept
+            inline constexpr bool operator!=(const ivec2& _v2) const noexcept
             {
                 return x != _v2.x || y != _v2.y;
             }
@@ -7097,103 +7143,110 @@ namespace jeecs
             }
         };
 
-        struct vec3 :public _basevec3
+        struct vec3 : public _basevec3
         {
-            constexpr vec3(float _x = 0.f, float _y = 0.f, float _z = 0.f)noexcept
-                :_basevec3(_x, _y, _z) {
+            constexpr vec3(float _x = 0.f, float _y = 0.f, float _z = 0.f) noexcept
+                : _basevec3(_x, _y, _z)
+            {
             }
-            constexpr vec3(const vec3& _v3)noexcept
-                :_basevec3(_v3.x, _v3.y, _v3.z) {
+            constexpr vec3(const vec3& _v3) noexcept
+                : _basevec3(_v3.x, _v3.y, _v3.z)
+            {
             }
-            constexpr vec3(vec3&& _v3)noexcept
-                :_basevec3(_v3.x, _v3.y, _v3.z) {
+            constexpr vec3(vec3&& _v3) noexcept
+                : _basevec3(_v3.x, _v3.y, _v3.z)
+            {
             }
 
-            constexpr vec3(const _basevec2& _v2)noexcept
-                :_basevec3(_v2.x, _v2.y, 0.f) {
+            constexpr vec3(const _basevec2& _v2) noexcept
+                : _basevec3(_v2.x, _v2.y, 0.f)
+            {
             }
-            constexpr vec3(_basevec2&& _v2)noexcept
-                :_basevec3(_v2.x, _v2.y, 0.f) {
+            constexpr vec3(_basevec2&& _v2) noexcept
+                : _basevec3(_v2.x, _v2.y, 0.f)
+            {
             }
-            constexpr vec3(const _basevec4& _v4)noexcept
-                :_basevec3(_v4.x, _v4.y, _v4.z) {
+            constexpr vec3(const _basevec4& _v4) noexcept
+                : _basevec3(_v4.x, _v4.y, _v4.z)
+            {
             }
-            constexpr vec3(_basevec4&& _v4)noexcept
-                :_basevec3(_v4.x, _v4.y, _v4.z) {
+            constexpr vec3(_basevec4&& _v4) noexcept
+                : _basevec3(_v4.x, _v4.y, _v4.z)
+            {
             }
 
             // + - * / with another vec3
-            inline constexpr vec3 operator + (const vec3& _v3) const noexcept
+            inline constexpr vec3 operator+(const vec3& _v3) const noexcept
             {
                 return vec3(x + _v3.x, y + _v3.y, z + _v3.z);
             }
-            inline constexpr vec3 operator - (const vec3& _v3) const noexcept
+            inline constexpr vec3 operator-(const vec3& _v3) const noexcept
             {
                 return vec3(x - _v3.x, y - _v3.y, z - _v3.z);
             }
-            inline constexpr vec3 operator - () const noexcept
+            inline constexpr vec3 operator-() const noexcept
             {
                 return vec3(-x, -y, -z);
             }
-            inline constexpr vec3 operator + () const noexcept
+            inline constexpr vec3 operator+() const noexcept
             {
                 return vec3(x, y, z);
             }
-            inline constexpr vec3 operator * (const vec3& _v3) const noexcept
+            inline constexpr vec3 operator*(const vec3& _v3) const noexcept
             {
                 return vec3(x * _v3.x, y * _v3.y, z * _v3.z);
             }
-            inline constexpr vec3 operator / (const vec3& _v3) const noexcept
+            inline constexpr vec3 operator/(const vec3& _v3) const noexcept
             {
                 return vec3(x / _v3.x, y / _v3.y, z / _v3.z);
             }
             // * / with float
-            inline constexpr vec3 operator * (float _f) const noexcept
+            inline constexpr vec3 operator*(float _f) const noexcept
             {
                 return vec3(x * _f, y * _f, z * _f);
             }
-            inline constexpr vec3 operator / (float _f) const noexcept
+            inline constexpr vec3 operator/(float _f) const noexcept
             {
                 return vec3(x / _f, y / _f, z / _f);
             }
 
-            inline constexpr vec3& operator = (const vec3& _v3) noexcept = default;
-            inline constexpr vec3& operator += (const vec3& _v3) noexcept
+            inline constexpr vec3& operator=(const vec3& _v3) noexcept = default;
+            inline constexpr vec3& operator+=(const vec3& _v3) noexcept
             {
                 x += _v3.x;
                 y += _v3.y;
                 z += _v3.z;
                 return *this;
             }
-            inline constexpr vec3& operator -= (const vec3& _v3) noexcept
+            inline constexpr vec3& operator-=(const vec3& _v3) noexcept
             {
                 x -= _v3.x;
                 y -= _v3.y;
                 z -= _v3.z;
                 return *this;
             }
-            inline constexpr vec3& operator *= (const vec3& _v3) noexcept
+            inline constexpr vec3& operator*=(const vec3& _v3) noexcept
             {
                 x *= _v3.x;
                 y *= _v3.y;
                 z *= _v3.z;
                 return *this;
             }
-            inline constexpr vec3& operator *= (float _f) noexcept
+            inline constexpr vec3& operator*=(float _f) noexcept
             {
                 x *= _f;
                 y *= _f;
                 z *= _f;
                 return *this;
             }
-            inline constexpr vec3& operator /= (const vec3& _v3) noexcept
+            inline constexpr vec3& operator/=(const vec3& _v3) noexcept
             {
                 x /= _v3.x;
                 y /= _v3.y;
                 z /= _v3.z;
                 return *this;
             }
-            inline constexpr vec3& operator /= (float _f) noexcept
+            inline constexpr vec3& operator/=(float _f) noexcept
             {
                 x /= _f;
                 y /= _f;
@@ -7201,11 +7254,11 @@ namespace jeecs
                 return *this;
             }
             // == !=
-            inline constexpr bool operator == (const vec3& _v3) const noexcept
+            inline constexpr bool operator==(const vec3& _v3) const noexcept
             {
                 return x == _v3.x && y == _v3.y && z == _v3.z;
             }
-            inline constexpr bool operator != (const vec3& _v3) const noexcept
+            inline constexpr bool operator!=(const vec3& _v3) const noexcept
             {
                 return x != _v3.x || y != _v3.y || z != _v3.z;
             }
@@ -7281,73 +7334,80 @@ namespace jeecs
                 wo_struct_set(v, 2, &elem);
             }
         };
-        inline static constexpr vec3 operator * (float _f, const vec3& _v3) noexcept
+        inline static constexpr vec3 operator*(float _f, const vec3& _v3) noexcept
         {
             return vec3(_v3.x * _f, _v3.y * _f, _v3.z * _f);
         }
 
-        struct vec4 :public _basevec4
+        struct vec4 : public _basevec4
         {
-            constexpr vec4(float _x = 0.f, float _y = 0.f, float _z = 0.f, float _w = 0.f)noexcept
-                :_basevec4(_x, _y, _z, _w) {
+            constexpr vec4(float _x = 0.f, float _y = 0.f, float _z = 0.f, float _w = 0.f) noexcept
+                : _basevec4(_x, _y, _z, _w)
+            {
             }
-            constexpr vec4(const vec4& _v4)noexcept
-                :_basevec4(_v4.x, _v4.y, _v4.z, _v4.w) {
+            constexpr vec4(const vec4& _v4) noexcept
+                : _basevec4(_v4.x, _v4.y, _v4.z, _v4.w)
+            {
             }
-            constexpr vec4(vec4&& _v4)noexcept
-                :_basevec4(_v4.x, _v4.y, _v4.z, _v4.w) {
+            constexpr vec4(vec4&& _v4) noexcept
+                : _basevec4(_v4.x, _v4.y, _v4.z, _v4.w)
+            {
             }
 
-            constexpr vec4(const _basevec2& _v2)noexcept
-                :_basevec4(_v2.x, _v2.y, 0.f, 0.f) {
+            constexpr vec4(const _basevec2& _v2) noexcept
+                : _basevec4(_v2.x, _v2.y, 0.f, 0.f)
+            {
             }
-            constexpr vec4(_basevec2&& _v2)noexcept
-                :_basevec4(_v2.x, _v2.y, 0.f, 0.f) {
+            constexpr vec4(_basevec2&& _v2) noexcept
+                : _basevec4(_v2.x, _v2.y, 0.f, 0.f)
+            {
             }
-            constexpr vec4(const _basevec3& _v3)noexcept
-                :_basevec4(_v3.x, _v3.y, _v3.z, 0.f) {
+            constexpr vec4(const _basevec3& _v3) noexcept
+                : _basevec4(_v3.x, _v3.y, _v3.z, 0.f)
+            {
             }
-            constexpr vec4(_basevec3&& _v3)noexcept
-                :_basevec4(_v3.x, _v3.y, _v3.z, 0.f) {
+            constexpr vec4(_basevec3&& _v3) noexcept
+                : _basevec4(_v3.x, _v3.y, _v3.z, 0.f)
+            {
             }
 
             // + - * / with another vec4
-            inline constexpr vec4 operator + (const vec4& _v4) const noexcept
+            inline constexpr vec4 operator+(const vec4& _v4) const noexcept
             {
                 return vec4(x + _v4.x, y + _v4.y, z + _v4.z, w + _v4.w);
             }
-            inline constexpr vec4 operator - (const vec4& _v4) const noexcept
+            inline constexpr vec4 operator-(const vec4& _v4) const noexcept
             {
                 return vec4(x - _v4.x, y - _v4.y, z - _v4.z, w - _v4.w);
             }
-            inline constexpr vec4 operator - () const noexcept
+            inline constexpr vec4 operator-() const noexcept
             {
                 return vec4(-x, -y, -z, -w);
             }
-            inline constexpr vec4 operator + () const noexcept
+            inline constexpr vec4 operator+() const noexcept
             {
                 return vec4(x, y, z, w);
             }
-            inline constexpr vec4 operator * (const vec4& _v4) const noexcept
+            inline constexpr vec4 operator*(const vec4& _v4) const noexcept
             {
                 return vec4(x * _v4.x, y * _v4.y, z * _v4.z, w * _v4.w);
             }
-            inline constexpr vec4 operator / (const vec4& _v4) const noexcept
+            inline constexpr vec4 operator/(const vec4& _v4) const noexcept
             {
                 return vec4(x / _v4.x, y / _v4.y, z / _v4.z, w / _v4.w);
             }
             // * / with float
-            inline constexpr vec4 operator * (float _f) const noexcept
+            inline constexpr vec4 operator*(float _f) const noexcept
             {
                 return vec4(x * _f, y * _f, z * _f, w * _f);
             }
-            inline constexpr vec4 operator / (float _f) const noexcept
+            inline constexpr vec4 operator/(float _f) const noexcept
             {
                 return vec4(x / _f, y / _f, z / _f, w / _f);
             }
 
-            inline constexpr vec4& operator = (const vec4& _v4) noexcept = default;
-            inline constexpr vec4& operator += (const vec4& _v4) noexcept
+            inline constexpr vec4& operator=(const vec4& _v4) noexcept = default;
+            inline constexpr vec4& operator+=(const vec4& _v4) noexcept
             {
                 x += _v4.x;
                 y += _v4.y;
@@ -7355,7 +7415,7 @@ namespace jeecs
                 w += _v4.w;
                 return *this;
             }
-            inline constexpr vec4& operator -= (const vec4& _v4) noexcept
+            inline constexpr vec4& operator-=(const vec4& _v4) noexcept
             {
                 x -= _v4.x;
                 y -= _v4.y;
@@ -7363,7 +7423,7 @@ namespace jeecs
                 w -= _v4.w;
                 return *this;
             }
-            inline constexpr vec4& operator *= (const vec4& _v4) noexcept
+            inline constexpr vec4& operator*=(const vec4& _v4) noexcept
             {
                 x *= _v4.x;
                 y *= _v4.y;
@@ -7371,7 +7431,7 @@ namespace jeecs
                 w *= _v4.w;
                 return *this;
             }
-            inline constexpr vec4& operator *= (float _f) noexcept
+            inline constexpr vec4& operator*=(float _f) noexcept
             {
                 x *= _f;
                 y *= _f;
@@ -7379,7 +7439,7 @@ namespace jeecs
                 w *= _f;
                 return *this;
             }
-            inline constexpr vec4& operator /= (const vec4& _v4) noexcept
+            inline constexpr vec4& operator/=(const vec4& _v4) noexcept
             {
                 x /= _v4.x;
                 y /= _v4.y;
@@ -7387,7 +7447,7 @@ namespace jeecs
                 w /= _v4.w;
                 return *this;
             }
-            inline constexpr vec4& operator /= (float _f) noexcept
+            inline constexpr vec4& operator/=(float _f) noexcept
             {
                 x /= _f;
                 y /= _f;
@@ -7397,11 +7457,11 @@ namespace jeecs
             }
 
             // == !=
-            inline constexpr bool operator == (const vec4& _v4) const noexcept
+            inline constexpr bool operator==(const vec4& _v4) const noexcept
             {
                 return x == _v4.x && y == _v4.y && z == _v4.z && w == _v4.w;
             }
-            inline constexpr bool operator != (const vec4& _v4) const noexcept
+            inline constexpr bool operator!=(const vec4& _v4) const noexcept
             {
                 return x != _v4.x || y != _v4.y || z != _v4.z || w != _v4.w;
             }
@@ -7475,7 +7535,7 @@ namespace jeecs
                 wo_struct_set(v, 3, &elem);
             }
         };
-        inline static constexpr vec4 operator * (float _f, const vec4& _v4) noexcept
+        inline static constexpr vec4 operator*(float _f, const vec4& _v4) noexcept
         {
             return vec4(_v4.x * _f, _v4.y * _f, _v4.z * _f, _v4.w * _f);
         }
@@ -7484,11 +7544,11 @@ namespace jeecs
         {
             float x, y, z, w;
 
-            inline constexpr bool operator == (const quat& q) const noexcept
+            inline constexpr bool operator==(const quat& q) const noexcept
             {
                 return x == q.x && y == q.y && z == q.z && w == q.w;
             }
-            inline constexpr bool operator != (const quat& q) const noexcept
+            inline constexpr bool operator!=(const quat& q) const noexcept
             {
                 return x != q.x || y != q.y || z != q.z || w != q.w;
             }
@@ -7503,10 +7563,8 @@ namespace jeecs
             }
 
             constexpr quat() noexcept
-                : x(0.f)
-                , y(0.f)
-                , z(0.f)
-                , w(1.f) {
+                : x(0.f), y(0.f), z(0.f), w(1.f)
+            {
             }
 
             quat(float yaw, float pitch, float roll) noexcept
@@ -7516,7 +7574,8 @@ namespace jeecs
 
             inline void create_matrix(float* pMatrix) const noexcept
             {
-                if (!pMatrix) return;
+                if (!pMatrix)
+                    return;
                 float m_x = x;
                 float m_y = y;
                 float m_z = z;
@@ -7545,7 +7604,8 @@ namespace jeecs
             inline void create_inv_matrix(float* pMatrix) const noexcept
             {
 
-                if (!pMatrix) return;
+                if (!pMatrix)
+                    return;
                 float m_x = x;
                 float m_y = y;
                 float m_z = z;
@@ -7662,7 +7722,8 @@ namespace jeecs
                     cos_theta = -cos_theta;
                     sign = -1.f;
                 }
-                else sign = 1.f;
+                else
+                    sign = 1.f;
                 float c1, c2;
                 if (cos_theta > 1.f - EPSILON)
                 {
@@ -7675,7 +7736,7 @@ namespace jeecs
                 {
                     // float theta = gFloat::ArcCosTable(cos_theta);
                     // faster than table-based :
-                    //const float theta = myacos(cos_theta);
+                    // const float theta = myacos(cos_theta);
                     float theta = acos(cos_theta);
                     float sin_theta = sin(theta);
                     float t_theta = t * theta;
@@ -7697,7 +7758,7 @@ namespace jeecs
                     return -2.f * RAD2DEG * acos(-cos_theta);
             }
 
-            static inline quat rotation(const vec3& a, const vec3& b)noexcept
+            static inline quat rotation(const vec3& a, const vec3& b) noexcept
             {
                 auto axis = b.cross(a);
                 auto angle = RAD2DEG * acos(b.dot(a) / (b.length() * a.length()));
@@ -7721,7 +7782,7 @@ namespace jeecs
                 return vec3(RAD2DEG * yaw, RAD2DEG * pitch, RAD2DEG * roll);
             }
 
-            inline quat operator * (const quat& _quat) const noexcept
+            inline quat operator*(const quat& _quat) const noexcept
             {
                 float w1 = w;
                 float w2 = _quat.w;
@@ -7732,12 +7793,10 @@ namespace jeecs
                 vec3 v3 = v1.cross(v2) + w1 * v2 + w2 * v1;
                 return quat(v3.x, v3.y, v3.z, w3);
             }
-            inline constexpr vec3 operator *(const vec3& _v3) const noexcept
+            inline constexpr vec3 operator*(const vec3& _v3) const noexcept
             {
                 vec3 u(x, y, z);
-                return 2.0f * u.dot(_v3) * u
-                    + (w * w - u.dot(u)) * _v3
-                    + 2.0f * w * u.cross(_v3);
+                return 2.0f * u.dot(_v3) * u + (w * w - u.dot(u)) * _v3 + 2.0f * w * u.cross(_v3);
             }
             static const char* JEScriptTypeName()
             {
@@ -7860,12 +7919,14 @@ namespace jeecs
             JECS_DISABLE_MOVE_AND_COPY(resource_basic);
 
             jegl_resource* _m_resource;
+
         protected:
             resource_basic(jegl_resource* res) noexcept
-                :_m_resource(res)
+                : _m_resource(res)
             {
                 assert(_m_resource != nullptr);
             }
+
         public:
             inline jegl_resource* resource() const noexcept
             {
@@ -7884,6 +7945,7 @@ namespace jeecs
                 : resource_basic(res)
             {
             }
+
         public:
             static basic::resource<texture> load(jegl_context* context, const std::string& str)
             {
@@ -7907,8 +7969,7 @@ namespace jeecs
             static basic::resource<texture> clip(
                 const basic::resource<texture>& src, size_t x, size_t y, size_t w, size_t h)
             {
-                jegl_texture::format new_texture_format = (jegl_texture::format)(
-                    src->resource()->m_raw_texture_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK);
+                jegl_texture::format new_texture_format = (jegl_texture::format)(src->resource()->m_raw_texture_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK);
                 jegl_resource* res = jegl_create_texture(w, h, new_texture_format);
 
                 // Create texture must be successfully.
@@ -7954,12 +8015,11 @@ namespace jeecs
                 jegl_resource* _m_texture;
                 jegl_texture::pixel_data_t*
                     _m_pixel;
-                size_t              _m_x, _m_y;
+                size_t _m_x, _m_y;
+
             public:
                 pixel(jegl_resource* _texture, size_t x, size_t y) noexcept
-                    : _m_texture(_texture)
-                    , _m_x(x)
-                    , _m_y(y)
+                    : _m_texture(_texture), _m_x(x), _m_y(y)
                 {
                     assert(_texture->m_type == jegl_resource::type::TEXTURE);
                     assert(sizeof(jegl_texture::pixel_data_t) == 1);
@@ -7968,9 +8028,7 @@ namespace jeecs
                         _m_texture->m_raw_texture_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK;
 
                     if (x < _m_texture->m_raw_texture_data->m_width && y < _m_texture->m_raw_texture_data->m_height)
-                        _m_pixel = _m_texture->m_raw_texture_data->m_pixels
-                        + y * _m_texture->m_raw_texture_data->m_width * color_depth
-                        + x * color_depth;
+                        _m_pixel = _m_texture->m_raw_texture_data->m_pixels + y * _m_texture->m_raw_texture_data->m_width * color_depth + x * color_depth;
                     else
                         _m_pixel = nullptr;
                 }
@@ -7993,7 +8051,8 @@ namespace jeecs
                             _m_pixel[2] / 255.0f,
                             _m_pixel[3] / 255.0f };
                     default:
-                        assert(0); return {};
+                        assert(0);
+                        return {};
                     }
                 }
                 inline void set(const math::vec4& value) const noexcept
@@ -8043,15 +8102,16 @@ namespace jeecs
                         _m_pixel[3] = (jegl_texture::pixel_data_t)round(math::clamp(value.w, 0.f, 1.f) * 255.0f);
                         break;
                     default:
-                        assert(0); break;
+                        assert(0);
+                        break;
                     }
                 }
 
-                inline operator math::vec4()const noexcept
+                inline operator math::vec4() const noexcept
                 {
                     return get();
                 }
-                inline pixel& operator = (const math::vec4& col) noexcept
+                inline pixel& operator=(const math::vec4& col) noexcept
                 {
                     set(col);
                     return *this;
@@ -8086,11 +8146,11 @@ namespace jeecs
         {
         private:
             explicit shader(jegl_resource* res)
-                : resource_basic(res)
-                , m_builtin(nullptr)
+                : resource_basic(res), m_builtin(nullptr)
             {
                 m_builtin = &this->resource()->m_raw_shader_data->m_builtin_uniforms;
             }
+
         public:
             jegl_shader::builtin_uniform_location* m_builtin;
 
@@ -8109,7 +8169,7 @@ namespace jeecs
                 return nullptr;
             }
 
-            void set_uniform(const std::string& name, int val)noexcept
+            void set_uniform(const std::string& name, int val) noexcept
             {
                 auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
                 while (jegl_shad_uniforms)
@@ -8130,7 +8190,7 @@ namespace jeecs
                     jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
             }
-            void set_uniform(const std::string& name, int x, int y)noexcept
+            void set_uniform(const std::string& name, int x, int y) noexcept
             {
                 auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
                 while (jegl_shad_uniforms)
@@ -8139,8 +8199,7 @@ namespace jeecs
                     {
                         if (jegl_shad_uniforms->m_uniform_type !=
                             jegl_shader::uniform_type::INT)
-                            debug::logerr("Trying set uniform('%s' = %d, %d) to shader(%p), but current uniform type is not 'INT2'."
-                                , name.c_str(), x, y, this);
+                            debug::logerr("Trying set uniform('%s' = %d, %d) to shader(%p), but current uniform type is not 'INT2'.", name.c_str(), x, y, this);
                         else
                         {
                             jegl_shad_uniforms->ix = x;
@@ -8152,7 +8211,7 @@ namespace jeecs
                     jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
             }
-            void set_uniform(const std::string& name, int x, int y, int z)noexcept
+            void set_uniform(const std::string& name, int x, int y, int z) noexcept
             {
                 auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
                 while (jegl_shad_uniforms)
@@ -8161,8 +8220,7 @@ namespace jeecs
                     {
                         if (jegl_shad_uniforms->m_uniform_type !=
                             jegl_shader::uniform_type::INT)
-                            debug::logerr("Trying set uniform('%s' = %d, %d, %d) to shader(%p), but current uniform type is not 'INT3'."
-                                , name.c_str(), x, y, z, this);
+                            debug::logerr("Trying set uniform('%s' = %d, %d, %d) to shader(%p), but current uniform type is not 'INT3'.", name.c_str(), x, y, z, this);
                         else
                         {
                             jegl_shad_uniforms->ix = x;
@@ -8175,7 +8233,7 @@ namespace jeecs
                     jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
             }
-            void set_uniform(const std::string& name, int x, int y, int z, int w)noexcept
+            void set_uniform(const std::string& name, int x, int y, int z, int w) noexcept
             {
                 auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
                 while (jegl_shad_uniforms)
@@ -8184,8 +8242,7 @@ namespace jeecs
                     {
                         if (jegl_shad_uniforms->m_uniform_type !=
                             jegl_shader::uniform_type::INT)
-                            debug::logerr("Trying set uniform('%s' = %d, %d, %d, %d) to shader(%p), but current uniform type is not 'INT4'."
-                                , name.c_str(), x, y, z, w, this);
+                            debug::logerr("Trying set uniform('%s' = %d, %d, %d, %d) to shader(%p), but current uniform type is not 'INT4'.", name.c_str(), x, y, z, w, this);
                         else
                         {
                             jegl_shad_uniforms->ix = x;
@@ -8199,7 +8256,7 @@ namespace jeecs
                     jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
             }
-            void set_uniform(const std::string& name, float val)noexcept
+            void set_uniform(const std::string& name, float val) noexcept
             {
                 auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
                 while (jegl_shad_uniforms)
@@ -8208,8 +8265,7 @@ namespace jeecs
                     {
                         if (jegl_shad_uniforms->m_uniform_type !=
                             jegl_shader::uniform_type::FLOAT)
-                            debug::logerr("Trying set uniform('%s' = %f) to shader(%p), but current uniform type is not 'FLOAT'."
-                                , name.c_str(), val, this);
+                            debug::logerr("Trying set uniform('%s' = %f) to shader(%p), but current uniform type is not 'FLOAT'.", name.c_str(), val, this);
                         else
                         {
                             jegl_shad_uniforms->x = val;
@@ -8220,7 +8276,7 @@ namespace jeecs
                     jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
             }
-            void set_uniform(const std::string& name, const math::vec2& val)noexcept
+            void set_uniform(const std::string& name, const math::vec2& val) noexcept
             {
                 auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
                 while (jegl_shad_uniforms)
@@ -8229,8 +8285,7 @@ namespace jeecs
                     {
                         if (jegl_shad_uniforms->m_uniform_type !=
                             jegl_shader::uniform_type::FLOAT2)
-                            debug::logerr("Trying set uniform('%s' = (%f, %f)) to shader(%p), but current uniform type is not 'FLOAT2'."
-                                , name.c_str(), val.x, val.y, this);
+                            debug::logerr("Trying set uniform('%s' = (%f, %f)) to shader(%p), but current uniform type is not 'FLOAT2'.", name.c_str(), val.x, val.y, this);
                         else
                         {
                             jegl_shad_uniforms->x = val.x;
@@ -8242,7 +8297,7 @@ namespace jeecs
                     jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
             }
-            void set_uniform(const std::string& name, const math::vec3& val)noexcept
+            void set_uniform(const std::string& name, const math::vec3& val) noexcept
             {
                 auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
                 while (jegl_shad_uniforms)
@@ -8251,8 +8306,7 @@ namespace jeecs
                     {
                         if (jegl_shad_uniforms->m_uniform_type !=
                             jegl_shader::uniform_type::FLOAT3)
-                            debug::logerr("Trying set uniform('%s' = (%f, %f, %f)) to shader(%p), but current uniform type is not 'FLOAT3'."
-                                , name.c_str(), val.x, val.y, val.z, this);
+                            debug::logerr("Trying set uniform('%s' = (%f, %f, %f)) to shader(%p), but current uniform type is not 'FLOAT3'.", name.c_str(), val.x, val.y, val.z, this);
                         else
                         {
                             jegl_shad_uniforms->x = val.x;
@@ -8265,7 +8319,7 @@ namespace jeecs
                     jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
             }
-            void set_uniform(const std::string& name, const math::vec4& val)noexcept
+            void set_uniform(const std::string& name, const math::vec4& val) noexcept
             {
                 auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
                 while (jegl_shad_uniforms)
@@ -8274,8 +8328,7 @@ namespace jeecs
                     {
                         if (jegl_shad_uniforms->m_uniform_type !=
                             jegl_shader::uniform_type::FLOAT4)
-                            debug::logerr("Trying set uniform('%s' = (%f, %f, %f, %f)) to shader(%p), but current uniform type is not 'FLOAT4'."
-                                , name.c_str(), val.x, val.y, val.z, val.w, this);
+                            debug::logerr("Trying set uniform('%s' = (%f, %f, %f, %f)) to shader(%p), but current uniform type is not 'FLOAT4'.", name.c_str(), val.x, val.y, val.z, val.w, this);
                         else
                         {
                             jegl_shad_uniforms->x = val.x;
@@ -8326,6 +8379,7 @@ namespace jeecs
                 : resource_basic(res)
             {
             }
+
         public:
             static basic::resource<vertex> load(jegl_context* context, const std::string& str)
             {
@@ -8337,7 +8391,7 @@ namespace jeecs
             static basic::resource<vertex> create(
                 jegl_vertex::type type,
                 const void* pdatas,
-                size_t            pdatalen,
+                size_t pdatalen,
                 const std::vector<uint32_t> idatas, // EBO Indexs
                 const std::vector<jegl_vertex::data_layout> fdatas)
             {
@@ -8359,6 +8413,7 @@ namespace jeecs
                 : resource_basic(res)
             {
             }
+
         public:
             static basic::resource<framebuffer> create(size_t reso_w, size_t reso_h, const std::vector<jegl_texture::format>& attachment)
             {
@@ -8373,7 +8428,7 @@ namespace jeecs
                 if (index < resource()->m_raw_framebuf_data->m_attachment_count)
                 {
                     auto* attachments = std::launder(
-                        reinterpret_cast<basic::resource<graphic::texture>*>(
+                        reinterpret_cast<basic::resource<graphic::texture> *>(
                             resource()->m_raw_framebuf_data->m_output_attachments));
                     return attachments[index];
                 }
@@ -8402,10 +8457,11 @@ namespace jeecs
         class uniformbuffer : public resource_basic
         {
             explicit uniformbuffer(jegl_resource* res)
-                :resource_basic(res)
+                : resource_basic(res)
             {
                 assert(resource() != nullptr);
             }
+
         public:
             static basic::resource<uniformbuffer> create(size_t binding_place, size_t buffersize)
             {
@@ -8570,23 +8626,23 @@ namespace jeecs
             basic::resource<texture> m_texture;
 
             // 字符本身
-            wchar_t                  m_char = 0;
+            wchar_t m_char = 0;
             // 字符本身的宽度和高度, 单位是像素
             // * 包含边框的影响
-            int                      m_width = 0;
-            int                      m_height = 0;
+            int m_width = 0;
+            int m_height = 0;
 
             // 建议的字符横向进展，通常用于计算下一列字符的起始位置，单位是像素，正数表示向右方延伸
-            int                      m_advance_x = 0;
+            int m_advance_x = 0;
             // 建议的字符纵向进展，即行间距，通常用于计算下一行字符的起始位置，单位是像素，正数表示向上方延伸
-            int                      m_advance_y = 0;
+            int m_advance_y = 0;
 
             // 当前字符基线横向偏移量，单位是像素，正数表示向右方偏移
             // * 包含边框的影响
-            int                      m_baseline_offset_x = 0;
+            int m_baseline_offset_x = 0;
             // 当前字符基线纵向偏移量，单位是像素，正数表示向上方偏移
             // * 包含边框的影响
-            int                      m_baseline_offset_y = 0;
+            int m_baseline_offset_y = 0;
         };
 
         class font
@@ -8594,23 +8650,23 @@ namespace jeecs
             JECS_DISABLE_MOVE_AND_COPY(font);
 
             je_font* m_font;
-        public:
-            const size_t          m_size;
-            const basic::string   m_path;
-        private:
-            font(je_font* font_resource, size_t size, const char* path)noexcept
-                : m_font(font_resource)
-                , m_size(size)
-                , m_path(path)
-            {
 
+        public:
+            const size_t m_size;
+            const basic::string m_path;
+
+        private:
+            font(je_font* font_resource, size_t size, const char* path) noexcept
+                : m_font(font_resource), m_size(size), m_path(path)
+            {
             }
+
         public:
             static font* load(
                 const std::string& fontfile,
-                size_t                  size,
-                size_t                  board_size = 0,
-                je_font_char_updater_t  char_texture_updater = nullptr)
+                size_t size,
+                size_t board_size = 0,
+                je_font_char_updater_t char_texture_updater = nullptr)
             {
                 auto* font_res = je_font_load(
                     fontfile.c_str(), (float)size, (float)size,
@@ -8639,6 +8695,7 @@ namespace jeecs
             {
                 return text_texture(*this, wo_str_to_wstr(text.c_str()), one_line_size, max_line_count);
             }
+
         private:
             inline static basic::resource<texture> text_texture(
                 font& font_base,
@@ -8647,11 +8704,11 @@ namespace jeecs
                 int max_line_count) noexcept
             {
                 std::map<std::string, std::map<int, basic::resource<font>>> FONT_POOL;
-                math::vec4 TEXT_COLOR = { 1,1,1,1 };
+                math::vec4 TEXT_COLOR = { 1, 1, 1, 1 };
                 float TEXT_SCALE = 1.0f;
-                math::vec2 TEXT_OFFSET = { 0,0 };
+                math::vec2 TEXT_OFFSET = { 0, 0 };
 
-                //计算文字所需要纹理的大小
+                // 计算文字所需要纹理的大小
                 int next_ch_x = 0;
                 int next_ch_y = 0;
                 int line_count = 0;
@@ -8699,7 +8756,7 @@ namespace jeecs
                                             used_font = &font_base;
                                         else
                                         {
-                                            auto& new_font = FONT_POOL[font_base.m_path][int(TEXT_SCALE * font_base.m_size + 0.5f)/*四舍五入*/];
+                                            auto& new_font = FONT_POOL[font_base.m_path][int(TEXT_SCALE * font_base.m_size + 0.5f) /*四舍五入*/];
                                             if (new_font == nullptr)
                                                 new_font = font::load(font_base.m_path, int(TEXT_SCALE * font_base.m_size + 0.5f));
 
@@ -8757,7 +8814,7 @@ namespace jeecs
                 next_ch_y = 0;
                 line_count = 0;
                 TEXT_SCALE = 1.0f;
-                TEXT_OFFSET = { 0,0 };
+                TEXT_OFFSET = { 0, 0 };
                 used_font = &font_base;
 
                 auto new_texture = texture::create(size_x, size_y, jegl_texture::format::RGBA);
@@ -8790,7 +8847,6 @@ namespace jeecs
                                 {
                                     item_name = wo_wstr_to_str(text.substr(ti + 1, ei - ti - 1).c_str());
                                     ti = ei;
-
                                 }
                                 else if (text[ei] == L'}')
                                 {
@@ -8810,7 +8866,7 @@ namespace jeecs
                                         unsigned char Gs = (*(((unsigned char*)(&colordata)) + 2));
                                         unsigned char Rs = (*(((unsigned char*)(&colordata)) + 3));
 
-                                        TEXT_COLOR = { Rs / 255.0f,Gs / 255.0f ,Bs / 255.0f ,As / 255.0f };
+                                        TEXT_COLOR = { Rs / 255.0f, Gs / 255.0f, Bs / 255.0f, As / 255.0f };
                                     }
                                     else if (item_name == "scale")
                                     {
@@ -8819,7 +8875,7 @@ namespace jeecs
                                             used_font = &font_base;
                                         else
                                         {
-                                            auto& new_font = FONT_POOL[font_base.m_path][int(TEXT_SCALE * font_base.m_size + 0.5f)/*四舍五入*/];
+                                            auto& new_font = FONT_POOL[font_base.m_path][int(TEXT_SCALE * font_base.m_size + 0.5f) /*四舍五入*/];
                                             assert(new_font != nullptr);
                                             used_font = new_font.get();
                                         }
@@ -8839,27 +8895,27 @@ namespace jeecs
                             struct p_index
                             {
                                 size_t id;
-                                p_index operator ++()
+                                p_index operator++()
                                 {
                                     return { ++id };
                                 }
-                                p_index operator ++(int)
+                                p_index operator++(int)
                                 {
                                     return { id++ };
                                 }
-                                bool operator ==(const p_index& pindex)const
+                                bool operator==(const p_index& pindex) const
                                 {
                                     return id == pindex.id;
                                 }
-                                bool operator !=(const p_index& pindex)const
+                                bool operator!=(const p_index& pindex) const
                                 {
                                     return id != pindex.id;
                                 }
-                                size_t& operator *()
+                                size_t& operator*()
                                 {
                                     return id;
                                 }
-                                ptrdiff_t operator-(const p_index& another)const
+                                ptrdiff_t operator-(const p_index& another) const
                                 {
                                     return ptrdiff_t(id - another.id);
                                 }
@@ -8875,17 +8931,18 @@ namespace jeecs
                                 std::execution::par_unseq,
 #endif
                                 p_index{ 0 }, p_index{ size_t(gcs->m_texture->height()) },
-                                [&](size_t fy) {
+                                [&](size_t fy)
+                                {
                                     std::for_each(
 #ifdef __cpp_lib_execution
                                         std::execution::par_unseq,
 #endif
                                         p_index{ 0 }, p_index{ size_t(gcs->m_texture->width()) },
-                                        [&](size_t fx) {
+                                        [&](size_t fx)
+                                        {
                                             auto pdst = new_texture->pix(
                                                 correct_x + next_ch_x + int(fx) + gcs->m_baseline_offset_x + int(TEXT_OFFSET.x * font_base.m_size),
-                                                correct_y + next_ch_y + int(fy) + gcs->m_baseline_offset_y + int(TEXT_OFFSET.y * font_base.m_size)
-                                            );
+                                                correct_y + next_ch_y + int(fy) + gcs->m_baseline_offset_y + int(TEXT_OFFSET.y * font_base.m_size));
 
                                             auto psrc = gcs->m_texture->pix(int(fx), int(fy)).get();
 
@@ -8896,13 +8953,9 @@ namespace jeecs
                                                     src_alpha * psrc.x * TEXT_COLOR.x + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().x : 1.0f),
                                                     src_alpha * psrc.y * TEXT_COLOR.y + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().y : 1.0f),
                                                     src_alpha * psrc.z * TEXT_COLOR.z + (1.0f - src_alpha) * (pdst.get().w ? pdst.get().z : 1.0f),
-                                                    src_alpha * psrc.w * TEXT_COLOR.w + (1.0f - src_alpha) * pdst.get().w
-                                                )
-                                            );
-                                        }
-                                    ); // end of  for each
-                                }
-                            );
+                                                    src_alpha * psrc.w * TEXT_COLOR.w + (1.0f - src_alpha) * pdst.get().w));
+                                        }); // end of  for each
+                                });
                             next_ch_x += gcs->m_advance_x;
                         }
                         if (ch == L'\n' || next_ch_x >= int(max_line_character_size * font_base.m_size))
@@ -8917,7 +8970,6 @@ namespace jeecs
                 }
                 return new_texture;
             }
-
         };
 
         /*
@@ -8938,13 +8990,11 @@ namespace jeecs
             };
 
             graphic_uhost* _m_graphic_host;
-            std::vector<rendchain_branch*>  _m_rchain_pipeline;
-            size_t                          _m_this_frame_allocate_rchain_pipeline_count;
+            std::vector<rendchain_branch*> _m_rchain_pipeline;
+            size_t _m_this_frame_allocate_rchain_pipeline_count;
 
             BasePipelineInterface(game_world w, const jegl_interface_config* config)
-                : game_system(w)
-                , _m_graphic_host(jegl_uhost_get_or_create_for_universe(w.get_universe().handle(), config))
-                , _m_this_frame_allocate_rchain_pipeline_count(0)
+                : game_system(w), _m_graphic_host(jegl_uhost_get_or_create_for_universe(w.get_universe().handle(), config)), _m_this_frame_allocate_rchain_pipeline_count(0)
             {
             }
             ~BasePipelineInterface()
@@ -8984,7 +9034,7 @@ namespace jeecs
 
     namespace audio
     {
-        template<typename T>
+        template <typename T>
         class effect
         {
             JECS_DISABLE_MOVE_AND_COPY(effect);
@@ -8996,6 +9046,7 @@ namespace jeecs
             {
                 assert(m_effect != nullptr);
             }
+
         public:
             ~effect()
             {
@@ -9039,7 +9090,7 @@ namespace jeecs
                 return new effect<T>(instance);
             }
 
-            T* handle()const
+            T* handle() const
             {
                 return m_effect;
             }
@@ -9058,12 +9109,13 @@ namespace jeecs
             {
                 assert(m_effect_slot != nullptr);
             }
+
         public:
             ~effect_slot()
             {
                 jeal_close_effect_slot(m_effect_slot);
             }
-            template<typename T>
+            template <typename T>
             void bind_effect(const basic::resource<effect<T>>& effect)
             {
                 jeal_effect_slot_bind(m_effect_slot, effect->handle());
@@ -9095,6 +9147,7 @@ namespace jeecs
             {
                 assert(_m_audio_buffer != nullptr);
             }
+
         public:
             ~buffer()
             {
@@ -9118,7 +9171,7 @@ namespace jeecs
                     return new buffer(buf);
                 return nullptr;
             }
-            const jeal_buffer* handle()const
+            const jeal_buffer* handle() const
             {
                 return _m_audio_buffer;
             }
@@ -9134,6 +9187,7 @@ namespace jeecs
             {
                 assert(_m_audio_source != nullptr);
             }
+
         public:
             ~source()
             {
@@ -9152,7 +9206,7 @@ namespace jeecs
             {
                 jeal_set_source_buffer(_m_audio_source, buffer->handle());
             }
-            jeal_source* handle()const
+            jeal_source* handle() const
             {
                 return _m_audio_source;
             }
@@ -9207,7 +9261,7 @@ namespace jeecs
         // An entity without childs and parent will contain these components:
         // LocalPosition/LocalRotation/LocalScale and using LocalToWorld to apply
         // local transform to Translation
-        // If an entity have childs, it will have Anchor 
+        // If an entity have childs, it will have Anchor
         // If an entity have parent, it will have LocalToParent and without
         // LocalToWorld.
         /*
@@ -9266,7 +9320,7 @@ namespace jeecs
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Translation);
             JECS_DEFAULT_CONSTRUCTOR(Translation);
 
-            float object2world[4][4] = { };
+            float object2world[4][4] = {};
 
             math::vec3 world_position = { 0.0f, 0.0f, 0.0f };
             math::quat world_rotation;
@@ -9414,7 +9468,7 @@ namespace jeecs
                 if (root_center & origin_center::bottom)
                     absoffset.y += -h / 2.0f;
 
-                //////////////////////////////////// 
+                ////////////////////////////////////
                 if (elem_center & origin_center::left)
                 {
                     absoffset.x += abssize.x / 2.0f;
@@ -9510,8 +9564,8 @@ namespace jeecs
     };
     namespace Renderer
     {
-        // An entity need to be rendered, must have Transform::Translation and 
-        // Renderer, 
+        // An entity need to be rendered, must have Transform::Translation and
+        // Renderer,
         /*
 
         (Viewport)
@@ -9557,7 +9611,7 @@ namespace jeecs
             // NOTE: shaders should not be nullptr!
             basic::vector<basic::resource<graphic::shader>> shaders;
 
-            template<typename T>
+            template <typename T>
             void set_uniform(const std::string& name, const T& val) noexcept
             {
                 for (auto& shad : shaders)
@@ -9577,10 +9631,8 @@ namespace jeecs
                 basic::resource<graphic::texture> m_texture;
 
                 texture_with_passid(size_t pass, const basic::resource<graphic::texture>& tex)
-                    : m_pass_id(pass)
-                    , m_texture(tex)
+                    : m_pass_id(pass), m_texture(tex)
                 {
-
                 }
             };
             math::vec2 tiling = math::vec2(1.f, 1.f);
@@ -9671,7 +9723,6 @@ namespace jeecs
                 }
                 return true;
             }
-
         };
         struct Projection
         {
@@ -9749,11 +9800,11 @@ namespace jeecs
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(World);
             JECS_DEFAULT_CONSTRUCTOR(World);
 
-            size_t      layerid = 0;
-            math::vec2  gravity = math::vec2(0.f, -9.8f);
-            bool        sleepable = true;
-            bool        continuous = true;
-            size_t      step = 4;
+            size_t layerid = 0;
+            math::vec2 gravity = math::vec2(0.f, -9.8f);
+            bool sleepable = true;
+            bool continuous = true;
+            size_t step = 4;
 
             basic::fileresource<void> group_config;
 
@@ -9778,13 +9829,13 @@ namespace jeecs
             rigidbody_id_t native_rigidbody = null_rigidbody;
             Rigidbody* _arch_updated_modify_hack = nullptr;
 
-            bool        rigidbody_just_created = false;
-            math::vec2  record_body_scale = math::vec2(0.f, 0.f);
-            float       record_density = 0.f;
-            float       record_friction = 0.f;
-            float       record_restitution = 0.f;
+            bool rigidbody_just_created = false;
+            math::vec2 record_body_scale = math::vec2(0.f, 0.f);
+            float record_density = 0.f;
+            float record_friction = 0.f;
+            float record_restitution = 0.f;
 
-            size_t      layerid = 0;
+            size_t layerid = 0;
 
             Rigidbody() = default;
             Rigidbody(Rigidbody&&) = default;
@@ -9987,9 +10038,9 @@ namespace jeecs
 
             struct light_shape
             {
-                size_t                      m_point_count;
-                basic::vector<float>        m_strength;
-                basic::vector<math::vec2>   m_positions;
+                size_t m_point_count;
+                basic::vector<float> m_strength;
+                basic::vector<math::vec2> m_positions;
                 jeecs::basic::resource<jeecs::graphic::vertex>
                     m_light_mesh;
 
@@ -10249,7 +10300,6 @@ namespace jeecs
                 typing::register_member(guard, &SpriteShadow::factor, "factor");
                 typing::register_member(guard, &SpriteShadow::distance, "distance");
             }
-
         };
         struct SelfShadow
         {
@@ -10288,7 +10338,8 @@ namespace jeecs
                             VEC4,
                             QUAT4,
                         };
-                        union value {
+                        union value
+                        {
                             int i32;
                             float f32;
                             math::vec2 v2;
@@ -10297,27 +10348,27 @@ namespace jeecs
                             math::quat q4;
                         };
 
-                        type    m_type = type::INT;
-                        value   m_value = { 0 };
+                        type m_type = type::INT;
+                        value m_value = { 0 };
 
                         data_value() noexcept = default;
-                        data_value(const data_value& val)noexcept
+                        data_value(const data_value& val) noexcept
                         {
                             m_type = val.m_type;
                             memcpy((void*)&m_value, &val.m_value, sizeof(value));
                         }
-                        data_value(data_value&& val)noexcept
+                        data_value(data_value&& val) noexcept
                         {
                             m_type = val.m_type;
                             memcpy((void*)&m_value, &val.m_value, sizeof(value));
                         }
-                        data_value& operator = (const data_value& val)noexcept
+                        data_value& operator=(const data_value& val) noexcept
                         {
                             m_type = val.m_type;
                             memcpy((void*)&m_value, &val.m_value, sizeof(value));
                             return *this;
                         }
-                        data_value& operator = (data_value&& val)noexcept
+                        data_value& operator=(data_value&& val) noexcept
                         {
                             m_type = val.m_type;
                             memcpy((void*)&m_value, &val.m_value, sizeof(value));
@@ -10330,21 +10381,21 @@ namespace jeecs
                             m_component_type;
                         const jeecs::typing::typeinfo_member::member_info*
                             m_member_info;
-                        data_value          m_member_value;
-                        bool                m_offset_mode;
+                        data_value m_member_value;
+                        bool m_offset_mode;
 
                         void* m_member_addr_cache;
-                        jeecs::game_entity  m_entity_cache;
+                        jeecs::game_entity m_entity_cache;
                     };
                     struct uniform_data
                     {
-                        basic::string   m_uniform_name;
-                        data_value      m_uniform_value;
+                        basic::string m_uniform_name;
+                        data_value m_uniform_value;
                     };
 
-                    float                         m_frame_time;
+                    float m_frame_time;
                     basic::vector<component_data> m_component_data;
-                    basic::vector<uniform_data>   m_uniform_data;
+                    basic::vector<uniform_data> m_uniform_data;
                 };
                 struct animation_data
                 {
@@ -10353,15 +10404,15 @@ namespace jeecs
 
                 struct animation_data_set
                 {
-                    basic::map<basic::string, animation_data>  m_animations;
-                    basic::string                              m_path;
+                    basic::map<basic::string, animation_data> m_animations;
+                    basic::string m_path;
 
-                    basic::string       m_current_action = "";
-                    size_t              m_current_frame_index = SIZE_MAX;
-                    double              m_next_update_time = 0.0f;
-                    float               m_last_speed = 1.0f;
+                    basic::string m_current_action = "";
+                    size_t m_current_frame_index = SIZE_MAX;
+                    double m_next_update_time = 0.0f;
+                    float m_last_speed = 1.0f;
 
-                    bool                m_loop = false;
+                    bool m_loop = false;
 
                     void set_loop(bool loop)
                     {
@@ -10373,7 +10424,7 @@ namespace jeecs
                         m_current_frame_index = SIZE_MAX;
                         m_next_update_time = 0.0f;
                     }
-                    std::string get_action()const
+                    std::string get_action() const
                     {
                         return m_current_action.c_str();
                     }
@@ -10453,17 +10504,23 @@ namespace jeecs
                                             switch (value.m_type)
                                             {
                                             case frame_data::data_value::type::INT:
-                                                jeecs_file_read(&value.m_value.i32, sizeof(value.m_value.i32), 1, file_handle); break;
+                                                jeecs_file_read(&value.m_value.i32, sizeof(value.m_value.i32), 1, file_handle);
+                                                break;
                                             case frame_data::data_value::type::FLOAT:
-                                                jeecs_file_read(&value.m_value.f32, sizeof(value.m_value.f32), 1, file_handle); break;
+                                                jeecs_file_read(&value.m_value.f32, sizeof(value.m_value.f32), 1, file_handle);
+                                                break;
                                             case frame_data::data_value::type::VEC2:
-                                                jeecs_file_read(&value.m_value.v2, sizeof(value.m_value.v2), 1, file_handle); break;
+                                                jeecs_file_read(&value.m_value.v2, sizeof(value.m_value.v2), 1, file_handle);
+                                                break;
                                             case frame_data::data_value::type::VEC3:
-                                                jeecs_file_read(&value.m_value.v3, sizeof(value.m_value.v3), 1, file_handle); break;
+                                                jeecs_file_read(&value.m_value.v3, sizeof(value.m_value.v3), 1, file_handle);
+                                                break;
                                             case frame_data::data_value::type::VEC4:
-                                                jeecs_file_read(&value.m_value.v4, sizeof(value.m_value.v4), 1, file_handle); break;
+                                                jeecs_file_read(&value.m_value.v4, sizeof(value.m_value.v4), 1, file_handle);
+                                                break;
                                             case frame_data::data_value::type::QUAT4:
-                                                jeecs_file_read(&value.m_value.q4, sizeof(value.m_value.q4), 1, file_handle); break;
+                                                jeecs_file_read(&value.m_value.q4, sizeof(value.m_value.q4), 1, file_handle);
+                                                break;
                                             default:
                                                 jeecs::debug::logerr("Unknown value type(%d) for component frame data when reading animation '%s' frame %zu in '%s'.",
                                                     (int)value.m_type, frame_name.c_str(), (size_t)j, str.c_str());
@@ -10508,15 +10565,20 @@ namespace jeecs
                                             switch (value.m_type)
                                             {
                                             case frame_data::data_value::type::INT:
-                                                jeecs_file_read(&value.m_value.i32, sizeof(value.m_value.i32), 1, file_handle); break;
+                                                jeecs_file_read(&value.m_value.i32, sizeof(value.m_value.i32), 1, file_handle);
+                                                break;
                                             case frame_data::data_value::type::FLOAT:
-                                                jeecs_file_read(&value.m_value.f32, sizeof(value.m_value.f32), 1, file_handle); break;
+                                                jeecs_file_read(&value.m_value.f32, sizeof(value.m_value.f32), 1, file_handle);
+                                                break;
                                             case frame_data::data_value::type::VEC2:
-                                                jeecs_file_read(&value.m_value.v2, sizeof(value.m_value.v2), 1, file_handle); break;
+                                                jeecs_file_read(&value.m_value.v2, sizeof(value.m_value.v2), 1, file_handle);
+                                                break;
                                             case frame_data::data_value::type::VEC3:
-                                                jeecs_file_read(&value.m_value.v3, sizeof(value.m_value.v3), 1, file_handle); break;
+                                                jeecs_file_read(&value.m_value.v3, sizeof(value.m_value.v3), 1, file_handle);
+                                                break;
                                             case frame_data::data_value::type::VEC4:
-                                                jeecs_file_read(&value.m_value.v4, sizeof(value.m_value.v4), 1, file_handle); break;
+                                                jeecs_file_read(&value.m_value.v4, sizeof(value.m_value.v4), 1, file_handle);
+                                                break;
                                             default:
                                                 jeecs::debug::logerr("Unknown value type(%d) for uniform frame data when reading animation '%s' frame %zu in '%s'.",
                                                     (int)value.m_type, str.c_str());
@@ -10551,7 +10613,7 @@ namespace jeecs
                         m_animations[id].set_loop(loop);
                     }
                 }
-                bool is_playing(size_t id)const
+                bool is_playing(size_t id) const
                 {
                     if (id < m_animations.size())
                         return m_animations[id].m_current_action != "";
@@ -10651,10 +10713,8 @@ namespace jeecs
 
             math::vec3 last_position;
 
-            Source()noexcept
-                : source(audio::source::create())
-                , pitch(1.0f)
-                , volume(1.0f)
+            Source() noexcept
+                : source(audio::source::create()), pitch(1.0f), volume(1.0f)
 
             {
             }
@@ -10668,10 +10728,7 @@ namespace jeecs
                 last_position = another.last_position;
             }
             Source(Source&& another) noexcept
-                : source(std::move(another.source))
-                , pitch(another.pitch)
-                , volume(another.volume)
-                , last_position(another.last_position)
+                : source(std::move(another.source)), pitch(another.pitch), volume(another.volume), last_position(another.last_position)
             {
             }
 
@@ -10687,8 +10744,8 @@ namespace jeecs
             JECS_DEFAULT_CONSTRUCTOR(Listener);
 
             float volume = 1.0f;
-            math::vec3 face = { 0,0,1 };
-            math::vec3 up = { 0,1,0 };
+            math::vec3 face = { 0, 0, 1 };
+            math::vec3 up = { 0, 1, 0 };
 
             math::vec3 last_position = {};
 
@@ -10735,12 +10792,11 @@ namespace jeecs
             input::keycode left_stick_up_left_down_right[4];
 
             VirtualGamepad()
-                : gamepad(je_io_create_gamepad(nullptr, nullptr))
-                , left_stick_up_left_down_right{
-                    input::keycode::W,
-                    input::keycode::A,
-                    input::keycode::S,
-                    input::keycode::D }
+                : gamepad(je_io_create_gamepad(nullptr, nullptr)), left_stick_up_left_down_right{
+                                                                       input::keycode::W,
+                                                                       input::keycode::A,
+                                                                       input::keycode::S,
+                                                                       input::keycode::D }
             {
                 keymap[input::keycode::UP] = input::gamepadcode::UP;
                 keymap[input::keycode::DOWN] = input::gamepadcode::DOWN;
@@ -10751,23 +10807,19 @@ namespace jeecs
                 keymap[input::keycode::ESC] = input::gamepadcode::SELECT;
             }
             VirtualGamepad(const VirtualGamepad& another)
-                : gamepad(je_io_create_gamepad(nullptr, nullptr))
-                , keymap(another.keymap)
-                , left_stick_up_left_down_right{
-                    another.left_stick_up_left_down_right[0],
-                    another.left_stick_up_left_down_right[1],
-                    another.left_stick_up_left_down_right[2],
-                    another.left_stick_up_left_down_right[3] }
+                : gamepad(je_io_create_gamepad(nullptr, nullptr)), keymap(another.keymap), left_stick_up_left_down_right{
+                                                                                               another.left_stick_up_left_down_right[0],
+                                                                                               another.left_stick_up_left_down_right[1],
+                                                                                               another.left_stick_up_left_down_right[2],
+                                                                                               another.left_stick_up_left_down_right[3] }
             {
             }
             VirtualGamepad(VirtualGamepad&& another)
-                : gamepad(another.gamepad)
-                , keymap(std::move(another.keymap))
-                , left_stick_up_left_down_right{
-                    another.left_stick_up_left_down_right[0],
-                    another.left_stick_up_left_down_right[1],
-                    another.left_stick_up_left_down_right[2],
-                    another.left_stick_up_left_down_right[3] }
+                : gamepad(another.gamepad), keymap(std::move(another.keymap)), left_stick_up_left_down_right{
+                                                                                   another.left_stick_up_left_down_right[0],
+                                                                                   another.left_stick_up_left_down_right[1],
+                                                                                   another.left_stick_up_left_down_right[2],
+                                                                                   another.left_stick_up_left_down_right[3] }
             {
                 another.gamepad = nullptr;
             }
@@ -10784,26 +10836,24 @@ namespace jeecs
         struct ray
         {
         public:
-            vec3 orgin = { 0,0,0 };
-            vec3 direction = { 0,0,1 };
+            vec3 orgin = { 0, 0, 0 };
+            vec3 direction = { 0, 0, 1 };
 
             ray() = default;
 
             ray(ray&&) = default;
             ray(const ray&) = default;
 
-            ray& operator = (ray&&) = default;
-            ray& operator = (const ray&) = default;
+            ray& operator=(ray&&) = default;
+            ray& operator=(const ray&) = default;
 
-            ray(const vec3& _orgin, const vec3& _direction) :
-                orgin(_orgin),
+            ray(const vec3& _orgin, const vec3& _direction) : orgin(_orgin),
                 direction(_direction)
             {
-
             }
             ray(const Transform::Translation& camera_trans, const Camera::Projection& camera_proj, const vec2& screen_pos, bool ortho)
             {
-                //根据摄像机和屏幕坐标创建射线
+                // 根据摄像机和屏幕坐标创建射线
                 float ray_eye[4] = { screen_pos.x, screen_pos.y, 1.0f, 1.0f };
 
                 float ray_world[4];
@@ -10820,8 +10870,7 @@ namespace jeecs
                 if (ortho)
                 {
                     // not perspective
-                    orgin = camera_trans.world_position
-                        + camera_trans.world_rotation * vec3{ ray_world[0], ray_world[1], 0 };
+                    orgin = camera_trans.world_position + camera_trans.world_rotation * vec3{ ray_world[0], ray_world[1], 0 };
                     direction = vec3(0, 0, 1);
                 }
                 else
@@ -10839,12 +10888,10 @@ namespace jeecs
                 float distance = INFINITY;
 
                 intersect_result() = default;
-                intersect_result(bool rslt, float dist = INFINITY, const vec3& plce = vec3(0, 0, 0)) :
-                    intersected(rslt),
+                intersect_result(bool rslt, float dist = INFINITY, const vec3& plce = vec3(0, 0, 0)) : intersected(rslt),
                     place(plce),
                     distance(dist)
                 {
-
                 }
             };
 
@@ -10877,23 +10924,23 @@ namespace jeecs
                     return false;
                 // Calculate u and make sure u <= 1
 
-                *u = T.dot(P);// T.dot(P);
+                *u = T.dot(P); // T.dot(P);
                 if (*u < 0.0f || *u > det)
                     return false;
 
                 // Q
 
-                vec3 Q = T.cross(E1);// T.Cross(E1);
+                vec3 Q = T.cross(E1); // T.Cross(E1);
 
                 // Calculate v and make sure u + v <= 1
-                *v = direction.dot(Q); //direction.dot(Q);
+                *v = direction.dot(Q); // direction.dot(Q);
 
                 if (*v < 0.0f || *u + *v > det)
                     return false;
 
                 // Calculate t, scale parameters, ray intersects triangle
 
-                *t = E2.dot(Q);// .dot(Q);
+                *t = E2.dot(Q); // .dot(Q);
 
                 float fInvDet = 1.0f / det;
                 *t *= fInvDet;
@@ -10907,7 +10954,7 @@ namespace jeecs
                 {
                     return false;
                 }
-                //if (vec3::dot(delta, direction) < 0.0f)
+                // if (vec3::dot(delta, direction) < 0.0f)
                 //	return false;
                 return intersect_result(true, delta.length(), clid);
             }
@@ -10946,7 +10993,7 @@ namespace jeecs
                 intersect_result minResult = false;
                 minResult.distance = INFINITY;
 
-                //pos
+                // pos
                 finalBoxPos[0].x = finalBoxPos[2].x = finalBoxPos[4].x = finalBoxPos[6].x =
                     -(finalBoxPos[1].x = finalBoxPos[3].x = finalBoxPos[5].x = finalBoxPos[7].x = size.x / 2.0f);
                 finalBoxPos[2].y = finalBoxPos[3].y = finalBoxPos[6].y = finalBoxPos[7].y =
@@ -10954,41 +11001,41 @@ namespace jeecs
                 finalBoxPos[0].z = finalBoxPos[1].z = finalBoxPos[2].z = finalBoxPos[3].z =
                     -(finalBoxPos[4].z = finalBoxPos[5].z = finalBoxPos[6].z = finalBoxPos[7].z = size.z / 2.0f);
 
-                //rot and transform
+                // rot and transform
                 for (int i = 0; i < 8; i++)
                     finalBoxPos[i] = (rotation * finalBoxPos[i]) + offset;
 
-                //front
+                // front
                 {
                     auto&& f = intersect_rectangle(finalBoxPos[0], finalBoxPos[1], finalBoxPos[3], finalBoxPos[2]);
                     if (f.intersected && f.distance < minResult.distance)
                         minResult = f;
                 }
-                //back
+                // back
                 {
                     auto&& f = intersect_rectangle(finalBoxPos[4], finalBoxPos[5], finalBoxPos[7], finalBoxPos[6]);
                     if (f.intersected && f.distance < minResult.distance)
                         minResult = f;
                 }
-                //left
+                // left
                 {
                     auto&& f = intersect_rectangle(finalBoxPos[0], finalBoxPos[2], finalBoxPos[6], finalBoxPos[4]);
                     if (f.intersected && f.distance < minResult.distance)
                         minResult = f;
                 }
-                //right
+                // right
                 {
                     auto&& f = intersect_rectangle(finalBoxPos[1], finalBoxPos[3], finalBoxPos[7], finalBoxPos[5]);
                     if (f.intersected && f.distance < minResult.distance)
                         minResult = f;
                 }
-                //top
+                // top
                 {
                     auto&& f = intersect_rectangle(finalBoxPos[0], finalBoxPos[1], finalBoxPos[5], finalBoxPos[4]);
                     if (f.intersected && f.distance < minResult.distance)
                         minResult = f;
                 }
-                //bottom
+                // bottom
                 {
                     auto&& f = intersect_rectangle(finalBoxPos[2], finalBoxPos[3], finalBoxPos[7], finalBoxPos[6]);
                     if (f.intersected && f.distance < minResult.distance)
@@ -11015,22 +11062,18 @@ namespace jeecs
                     {
                         const float* point_0 =
                             std::launder(reinterpret_cast<const float*>(
-                                (intptr_t)raw_vertex_data->m_vertexs
-                                + raw_vertex_data->m_data_size_per_point * i));
+                                (intptr_t)raw_vertex_data->m_vertexs + raw_vertex_data->m_data_size_per_point * i));
                         const float* point_1 =
                             std::launder(reinterpret_cast<const float*>(
-                                (intptr_t)raw_vertex_data->m_vertexs
-                                + raw_vertex_data->m_data_size_per_point * (i + 1)));
+                                (intptr_t)raw_vertex_data->m_vertexs + raw_vertex_data->m_data_size_per_point * (i + 1)));
                         const float* point_2 =
                             std::launder(reinterpret_cast<const float*>(
-                                (intptr_t)raw_vertex_data->m_vertexs
-                                + raw_vertex_data->m_data_size_per_point * (i + 2)));
+                                (intptr_t)raw_vertex_data->m_vertexs + raw_vertex_data->m_data_size_per_point * (i + 2)));
 
                         vec3 triangle_point[3] = {
                             {point_0[0], point_0[1], point_0[2]},
                             {point_1[0], point_1[1], point_1[2]},
-                            {point_2[0], point_2[1], point_2[2]}
-                        };
+                            {point_2[0], point_2[1], point_2[2]} };
 
                         auto&& f = intersect_triangle(
                             offset + rotation * triangle_point[0] * scale,
@@ -11059,8 +11102,7 @@ namespace jeecs
                     for (size_t i = 2; i < raw_vertex_data->m_index_count; ++i)
                     {
                         const float* point = std::launder(reinterpret_cast<const float*>(
-                            (intptr_t)raw_vertex_data->m_vertexs
-                            + raw_vertex_data->m_data_size_per_point * i));
+                            (intptr_t)raw_vertex_data->m_vertexs + raw_vertex_data->m_data_size_per_point * i));
 
                         triangle_point[i % 3] = { point[0], point[1], point[2] };
 
@@ -11080,7 +11122,6 @@ namespace jeecs
                 }
 
                 return minResult;
-
             }
 
             intersect_result intersect_entity(
@@ -11123,10 +11164,7 @@ namespace jeecs
                         translation.local_scale * entity_box_size,
                         translation.world_rotation);
 
-                if (minResult.intersected
-                    && consider_mesh
-                    && entity_shape_may_null != nullptr
-                    && entity_shape_may_null->vertex != nullptr)
+                if (minResult.intersected && consider_mesh && entity_shape_may_null != nullptr && entity_shape_may_null->vertex != nullptr)
                 {
                     return intersect_mesh(
                         entity_shape_may_null->vertex,
@@ -11214,7 +11252,8 @@ namespace jeecs
 
             typing::register_script_parser<basic::fileresource<void>>(
                 guard,
-                [](const basic::fileresource<void>* v, wo_vm vm, wo_value value) {
+                [](const basic::fileresource<void>* v, wo_vm vm, wo_value value)
+                {
                     wo_value result = wo_register(vm, WO_REG_T0);
                     wo_set_struct(value, vm, 1);
 
@@ -11225,7 +11264,8 @@ namespace jeecs
 
                     wo_struct_set(value, 0, result);
                 },
-                [](basic::fileresource<void>* v, wo_vm vm, wo_value value) {
+                [](basic::fileresource<void>* v, wo_vm vm, wo_value value)
+                {
                     wo_value result = wo_register(vm, WO_REG_T0);
                     wo_struct_get(result, value, 0);
 
@@ -11239,7 +11279,8 @@ namespace jeecs
 
             typing::register_script_parser<basic::fileresource<audio::buffer>>(
                 guard,
-                [](const basic::fileresource<audio::buffer>* v, wo_vm vm, wo_value value) {
+                [](const basic::fileresource<audio::buffer>* v, wo_vm vm, wo_value value)
+                {
                     wo_value result = wo_register(vm, WO_REG_T0);
                     wo_set_struct(value, vm, 1);
 
@@ -11250,7 +11291,8 @@ namespace jeecs
 
                     wo_struct_set(value, 0, result);
                 },
-                [](basic::fileresource<audio::buffer>* v, wo_vm vm, wo_value value) {
+                [](basic::fileresource<audio::buffer>* v, wo_vm vm, wo_value value)
+                {
                     wo_value result = wo_register(vm, WO_REG_T0);
                     wo_struct_get(result, value, 0);
 
@@ -11264,18 +11306,23 @@ namespace jeecs
 
             typing::register_script_parser<bool>(
                 guard,
-                [](const bool* v, wo_vm, wo_value value) {
+                [](const bool* v, wo_vm, wo_value value)
+                {
                     wo_set_bool(value, *v);
                 },
-                [](bool* v, wo_vm, wo_value value) {
+                [](bool* v, wo_vm, wo_value value)
+                {
                     *v = wo_bool(value);
-                }, "bool", "");
+                },
+                "bool", "");
 
-            auto integer_uniform_parser_c2w = [](const auto* v, wo_vm, wo_value value) {
-                wo_set_int(value, (wo_integer_t)*v);
+            auto integer_uniform_parser_c2w = [](const auto* v, wo_vm, wo_value value)
+                {
+                    wo_set_int(value, (wo_integer_t)*v);
                 };
-            auto integer_uniform_parser_w2c = [](auto* v, wo_vm, wo_value value) {
-                *v = (typename std::remove_reference<decltype(*v)>::type)wo_int(value);
+            auto integer_uniform_parser_w2c = [](auto* v, wo_vm, wo_value value)
+                {
+                    *v = (typename std::remove_reference<decltype(*v)>::type)wo_int(value);
                 };
             typing::register_script_parser<int8_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
                 "int8", "public alias int8 = int;");
@@ -11311,8 +11358,7 @@ namespace jeecs
                 else
                 {
                     // Unknown size_t type? assert and support it if found.
-                    static_assert(sizeof(size_t) == sizeof(uint64_t)
-                        || sizeof(size_t) == sizeof(uint32_t));
+                    static_assert(sizeof(size_t) == sizeof(uint64_t) || sizeof(size_t) == sizeof(uint32_t));
                 }
             }
 
@@ -11321,47 +11367,62 @@ namespace jeecs
 
             typing::register_script_parser<float>(
                 guard,
-                [](const float* v, wo_vm, wo_value value) {
+                [](const float* v, wo_vm, wo_value value)
+                {
                     wo_set_float(value, *v);
                 },
-                [](float* v, wo_vm, wo_value value) {
+                [](float* v, wo_vm, wo_value value)
+                {
                     *v = wo_float(value);
-                }, "float", "public alias float = real;");
+                },
+                "float", "public alias float = real;");
             typing::register_script_parser<double>(
                 guard,
-                [](const double* v, wo_vm, wo_value value) {
+                [](const double* v, wo_vm, wo_value value)
+                {
                     wo_set_real(value, *v);
                 },
-                [](double* v, wo_vm, wo_value value) {
+                [](double* v, wo_vm, wo_value value)
+                {
                     *v = wo_real(value);
-                }, "real", "");
+                },
+                "real", "");
 
             typing::register_script_parser<jeecs::basic::string>(
                 guard,
-                [](const jeecs::basic::string* v, wo_vm vm, wo_value value) {
+                [](const jeecs::basic::string* v, wo_vm vm, wo_value value)
+                {
                     wo_set_string(value, vm, v->c_str());
                 },
-                [](jeecs::basic::string* v, wo_vm, wo_value value) {
+                [](jeecs::basic::string* v, wo_vm, wo_value value)
+                {
                     *v = wo_string(value);
-                }, "string", "");
+                },
+                "string", "");
 
             typing::register_script_parser<std::string>(
                 guard,
-                [](const std::string* v, wo_vm vm, wo_value value) {
+                [](const std::string* v, wo_vm vm, wo_value value)
+                {
                     wo_set_string(value, vm, v->c_str());
                 },
-                [](std::string* v, wo_vm, wo_value value) {
+                [](std::string* v, wo_vm, wo_value value)
+                {
                     *v = wo_string(value);
-                }, "string", "");
+                },
+                "string", "");
 
             typing::register_script_parser<UserInterface::Origin::origin_center>(
                 guard,
-                [](const UserInterface::Origin::origin_center* v, wo_vm vm, wo_value value) {
+                [](const UserInterface::Origin::origin_center* v, wo_vm vm, wo_value value)
+                {
                     wo_set_int(value, *v);
                 },
-                [](UserInterface::Origin::origin_center* v, wo_vm, wo_value value) {
+                [](UserInterface::Origin::origin_center* v, wo_vm, wo_value value)
+                {
                     *v = (UserInterface::Origin::origin_center)wo_int(value);
-                }, "UserInterface::Origin::origin_center", R"(
+                },
+                "UserInterface::Origin::origin_center", R"(
 namespace UserInterface::Origin
 {
     public enum origin_center
@@ -11421,7 +11482,7 @@ namespace UserInterface::Origin
             return { x, y };
         }
 
-        template<typing::typehash_t hash_v1, int v2>
+        template <typing::typehash_t hash_v1, int v2>
         static bool _isUp(bool keystate)
         {
             static bool lastframekeydown;
@@ -11429,7 +11490,7 @@ namespace UserInterface::Origin
             lastframekeydown = keystate;
             return res;
         }
-        template<typing::typehash_t hash_v1, int v2>
+        template <typing::typehash_t hash_v1, int v2>
         static bool _firstDown(bool keystate)
         {
             static bool lastframekeydown;
@@ -11437,7 +11498,7 @@ namespace UserInterface::Origin
             lastframekeydown = keystate;
             return res;
         }
-        template<typing::typehash_t hash_v1, int v2>
+        template <typing::typehash_t hash_v1, int v2>
         static bool _doubleClick(bool keystate, float i = 0.1f)
         {
             static typing::ms_stamp_t lact_click_tm = je_clock_time_stamp();
@@ -11472,11 +11533,12 @@ namespace UserInterface::Origin
 
         static void is_up(...);
         static void first_down(...);
-        static void double_click(...);// just for fool ide
+        static void double_click(...); // just for fool ide
 
         class gamepad
         {
             je_io_gamepad_handle_t m_gamepad_handle;
+
         public:
             gamepad(je_io_gamepad_handle_t gamepad_handle)
                 : m_gamepad_handle(gamepad_handle)
@@ -11484,8 +11546,8 @@ namespace UserInterface::Origin
             }
             gamepad(const gamepad&) = default;
             gamepad(gamepad&&) = default;
-            gamepad& operator = (const gamepad&) = default;
-            gamepad& operator = (gamepad&&) = default;
+            gamepad& operator=(const gamepad&) = default;
+            gamepad& operator=(gamepad&&) = default;
             ~gamepad() = default;
 
             bool button(gamepadcode button) const
@@ -11503,6 +11565,7 @@ namespace UserInterface::Origin
                 return je_io_gamepad_is_active(
                     m_gamepad_handle, out_last_update_time_may_null);
             }
+
         private:
             static std::vector<je_io_gamepad_handle_t> _get_all_handle()
             {
@@ -11512,6 +11575,7 @@ namespace UserInterface::Origin
                 je_io_gamepad_get(current_gamepad_count, gamepad_handles.data());
                 return gamepad_handles;
             }
+
         public:
             static std::vector<gamepad> all()
             {
@@ -11556,9 +11620,9 @@ namespace UserInterface::Origin
             }
         };
 
-#define is_up _isUp<jeecs::basic::hash_compile_time(__FILE__),__LINE__>
-#define first_down _firstDown<jeecs::basic::hash_compile_time(__FILE__),__LINE__>
-#define double_click _doubleClick<jeecs::basic::hash_compile_time(__FILE__),__LINE__>
+#define is_up _isUp<jeecs::basic::hash_compile_time(__FILE__), __LINE__>
+#define first_down _firstDown<jeecs::basic::hash_compile_time(__FILE__), __LINE__>
+#define double_click _doubleClick<jeecs::basic::hash_compile_time(__FILE__), __LINE__>
     }
 }
 #endif
