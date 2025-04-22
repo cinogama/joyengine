@@ -29,8 +29,10 @@ void jegui_update_dx11()
 {
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplGlfw_NewFrame();
-    jegui_update_basic();
-    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+
+    jegui_update_basic(
+        [](void*) {ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData()); },
+        nullptr);
 }
 
 void jegui_shutdown_dx11(bool reboot)

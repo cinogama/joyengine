@@ -25,7 +25,7 @@ void jegui_update_none()
     io.DisplaySize = ImVec2(1920, 1080);
     io.DeltaTime = 1.0f / 60.0f;
 
-    jegui_update_basic();
+    jegui_update_basic([](void*) {}, nullptr);
 }
 
 void jegui_shutdown_none(bool reboot)

@@ -157,8 +157,14 @@ void jegui_update_vk130(VkCommandBuffer cmdbuf)
 #else
     ImGui_ImplGlfw_NewFrame();
 #endif
-    jegui_update_basic();
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdbuf);
+    jegui_update_basic(
+        [](void* p_cmdbuf) 
+        {
+            ImGui_ImplVulkan_RenderDrawData(
+                ImGui::GetDrawData(),
+                *reinterpret_cast<VkCommandBuffer*>(p_cmdbuf));
+        }, 
+        &cmdbuf);
 }
 
 void jegui_shutdown_vk130(bool reboot)

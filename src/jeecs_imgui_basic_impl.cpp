@@ -2391,7 +2391,10 @@ public func frag(vf: v2f)
     // ImGui::StyleColorsLight();
 
     ImGuiIO& io = ImGui::GetIO();
+    
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+
     io.IniFilename = _je_gui_tls_ctx._jegui_imgui_config_path.c_str();
 
     auto* general_ttf_file =
@@ -2470,7 +2473,9 @@ public func frag(vf: v2f)
     }
 }
 
-void jegui_update_basic()
+void jegui_update_basic(
+    jegui_platform_draw_callback_t platform_draw_callback,
+    void* data)
 {
     jegl_using_resource(_je_gui_tls_ctx._jegl_rend_texture_shader->resource());
 
@@ -2535,6 +2540,11 @@ void jegui_update_basic()
     }
 
     ImGui::Render();
+
+    platform_draw_callback(data);
+
+    ImGui::UpdatePlatformWindows();
+    ImGui::RenderPlatformWindowsDefault();
 }
 void jegui_shutdown_basic(bool reboot)
 {

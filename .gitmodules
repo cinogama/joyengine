@@ -21,6 +21,7 @@
 [submodule "3rd/openal-soft"]
     path = 3rd/openal-soft
     url = https://git.cinogama.net/cinogamaproject/joyengineecs/openal-soft.git
+    branch = master
     tag = 1.24.3
 [submodule "3rd/opengles_env_w64"]
     path = 3rd/opengles_env_w64
@@ -49,6 +50,7 @@
 [submodule "3rd/box2d"]
     path = 3rd/box2d
     url = https://git.cinogama.net/cinogamaproject/joyengineecs/box2d.git
+    branch = main
     tag = v3.1.0
 [submodule "3rd/ImGuiColorTextEdit"]
     path = 3rd/ImGuiColorTextEdit

@@ -153,8 +153,9 @@ void jegui_update_gl330()
 #else
     ImGui_ImplGlfw_NewFrame();
 #endif
-    jegui_update_basic();
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    jegui_update_basic(
+        [](void*) {ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData()); },
+        nullptr);
 }
 
 void jegui_shutdown_gl330(bool reboot)

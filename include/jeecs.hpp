@@ -3394,12 +3394,16 @@ JE_API void jegui_init_basic(
     jegui_user_image_loader_t get_img_res,
     jegui_user_sampler_loader_t apply_shader_sampler);
 
+typedef void(*jegui_platform_draw_callback_t)(void*);
+
 /*
 jegui_update_basic [基本接口]
 一帧渲染开始之后，需要调用此接口以完成ImGUI的绘制和更新操作
     * 此接口仅适合用于对接自定义渲染API时使用
 */
-JE_API void jegui_update_basic();
+JE_API void jegui_update_basic(
+    jegui_platform_draw_callback_t platform_draw_callback, 
+    void* data);
 
 /*
 jegui_shutdown_basic [基本接口]
