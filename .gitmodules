@@ -43,14 +43,14 @@
     url = https://git.cinogama.net/cinogamaproject/joyengineecs/SPIRV-Cross.git
     branch = main
 [submodule "3rd/imgui-node-editor"]
-	path = 3rd/imgui-node-editor
-	url = https://git.cinogama.net/cinogamaproject/joyengineecs/imgui-node-editor.git
-	branch = master
-[submodule "3rd/box2c"]
-	path = 3rd/box2c
-	url = https://git.cinogama.net/cinogamaproject/joyengineecs/box2c.git
-	branch = main
+    path = 3rd/imgui-node-editor
+    url = https://git.cinogama.net/cinogamaproject/joyengineecs/imgui-node-editor.git
+    branch = master
+[submodule "3rd/box2d"]
+    path = 3rd/box2d
+    url = https://git.cinogama.net/cinogamaproject/joyengineecs/box2d.git
+    tag = v3.1.0
 [submodule "3rd/ImGuiColorTextEdit"]
-	path = 3rd/ImGuiColorTextEdit
-	url = https://git.cinogama.net/cinogamaproject/joyengineecs/ImGuiColorTextEdit.git
-	branch = master
+    path = 3rd/ImGuiColorTextEdit
+    url = https://git.cinogama.net/cinogamaproject/joyengineecs/ImGuiColorTextEdit.git
+    branch = master

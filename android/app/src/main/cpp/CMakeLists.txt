@@ -23,7 +23,6 @@ set(JE4_ENABLE_METAL_GAPI               OFF CACHE BOOL "Disable Metal on Android
 set(WO_DISABLE_COMPILER                 ON CACHE BOOL "Disable compiler on Android to reduce size" FORCE)
 set(WO_SUPPORT_ASMJIT                   OFF CACHE BOOL "Disable JIT on Android" FORCE)
 set(WO_DISABLE_FUNCTION_FOR_WASM        ON CACHE BOOL "Disable dynamic lib loading" FORCE)
-set(BOX2D_AVX2                          OFF CACHE BOOL "Disable avx2 for box2d" FORCE)
 
 # Searches for a package provided by the game activity dependency
 find_package(game-activity REQUIRED CONFIG)

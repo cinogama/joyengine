@@ -69,8 +69,8 @@ if (JE4_SPECIFY_OPENAL_LIB_NAME STREQUAL "")
     set(BUILD_SHARED_LIBS ON CACHE BOOL "Build shared opengal-soft" FORCE)
     add_subdirectory("3rd/openal-soft")
 endif()
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static box2d 3.0" FORCE)
-add_subdirectory("3rd/box2c")
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static box2d 3.1" FORCE)
+add_subdirectory("3rd/box2d")
 
 if(MSVC)
     # Set char set to UTF-8 for assimp.

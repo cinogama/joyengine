@@ -298,7 +298,7 @@ namespace jeecs
                     if (rigidbody.rigidbody_just_created == true)
                     {
                         b2BodyDef default_rigidbody_config = b2DefaultBodyDef();
-                        default_rigidbody_config.angle = final_offset_rotation / math::RAD2DEG;
+                        default_rigidbody_config.rotation = b2MakeRot(final_offset_rotation * math::DEG2RAD);
                         default_rigidbody_config.position = {
                             translation.world_position.x + final_offset_position.x,
                             translation.world_position.y + final_offset_position.y };
@@ -387,8 +387,8 @@ namespace jeecs
                         {
                             b2ShapeDef shape_define = b2DefaultShapeDef();
                             shape_define.density = mass ? mass->density : 0.f;
-                            shape_define.friction = friction ? friction->value : 0.f;
-                            shape_define.restitution = restitution ? restitution->value : 0.f;
+                            shape_define.material.friction = friction ? friction->value : 0.f;
+                            shape_define.material.restitution = restitution ? restitution->value : 0.f;
 
                             b2ShapeId created_shape_id;
 
@@ -444,10 +444,8 @@ namespace jeecs
                             b2Shape_SetUserData(created_shape_id, &rigidbody);
 
                             if (old_shape_count != 0)
-                                b2DestroyShape(old_shape_id);
+                                b2DestroyShape(old_shape_id, true);
                         }
-
-
 
                         if (kinematics == nullptr)
                             b2Body_SetType(rigidbody_instance, b2_staticBody);
@@ -477,14 +475,14 @@ namespace jeecs
                                 b2Body_SetAwake(rigidbody_instance, true);
                             }
                         }
-
+                        
                         if (check_if_need_update_vec2(
                             b2Body_GetPosition(rigidbody_instance),
                             math::vec2(
                                 translation.world_position.x + final_offset_position.x,
                                 translation.world_position.y + final_offset_position.y))
                             || check_if_need_update_float(
-                                b2Body_GetAngle(rigidbody_instance) * math::RAD2DEG,
+                                b2Rot_GetAngle(b2Body_GetRotation(rigidbody_instance)) * math::RAD2DEG,
                                 final_offset_rotation))
                         {
                             b2Body_SetTransform(
@@ -492,7 +490,7 @@ namespace jeecs
                                 b2Vec2{
                                     translation.world_position.x + final_offset_position.x,
                                     translation.world_position.y + final_offset_position.y },
-                                    final_offset_rotation / math::RAD2DEG);
+                                    b2MakeRot(final_offset_rotation * math::DEG2RAD));
                             b2Body_SetAwake(rigidbody_instance, true);
                         }
 
@@ -592,8 +590,9 @@ namespace jeecs
                                 ? math::vec3(posoffset->offset)
                                 : math::vec3(0.f, 0.f, 0.f)
                                 ;
-                            float final_offset_rotation = b2Body_GetAngle(rigidbody_instance) * math::RAD2DEG - (
-                                rotoffset != nullptr ? rotoffset->angle : 0.f);
+                            float final_offset_rotation = 
+                                b2Rot_GetAngle(b2Body_GetRotation(rigidbody_instance)) * math::RAD2DEG 
+                                - (rotoffset != nullptr ? rotoffset->angle : 0.f);
 
                             math::vec3 final_offset_position =
                                 math::quat::euler(0.f, 0.f, final_offset_rotation) * offset_position;
