@@ -369,27 +369,27 @@ namespace je
         using effect<EffectT> = gchandle
         {
             using reverb = struct{
-                density: mut real,
-                diffusion: mut real,
-                gain: mut real,
-                gain_hf: mut real,
-                decay_time: mut real,
-                decay_hf_ratio: mut real,
-                reflections_gain: mut real,
-                reflections_delay: mut real,
-                late_reverb_gain: mut real,
-                late_reverb_delay: mut real,
-                air_absorption_gain_hf: mut real,
-                room_rolloff_factor: mut real,
-                decay_hf_limit: mut bool,
+                public density: mut real,
+                public diffusion: mut real,
+                public gain: mut real,
+                public gain_hf: mut real,
+                public decay_time: mut real,
+                public decay_hf_ratio: mut real,
+                public reflections_gain: mut real,
+                public reflections_delay: mut real,
+                public late_reverb_gain: mut real,
+                public late_reverb_delay: mut real,
+                public air_absorption_gain_hf: mut real,
+                public room_rolloff_factor: mut real,
+                public decay_hf_limit: mut bool,
             };
             using chorus = struct{
-                waveform: mut waveform,
-                phase: mut int,
-                rate: mut real,
-                depth: mut real,
-                feedback: mut real,
-                delay: mut real,
+                public waveform: mut waveform,
+                public phase: mut int,
+                public rate: mut real,
+                public depth: mut real,
+                public feedback: mut real,
+                public delay: mut real,
             }
             {
                 public enum waveform
@@ -399,26 +399,26 @@ namespace je
                 }
             }
             using distortion = struct{
-                edge: mut real,
-                gain: mut real,
-                lowpass_cutoff: mut real,
-                equalizer_center_freq: mut real,
-                equalizer_bandwidth: mut real,                
+                public edge: mut real,
+                public gain: mut real,
+                public lowpass_cutoff: mut real,
+                public equalizer_center_freq: mut real,
+                public equalizer_bandwidth: mut real,                
             };
             using echo = struct{
-                delay: mut real,
-                lr_delay: mut real,
-                damping: mut real,
-                feedback: mut real,
-                spread: mut real,
+                public delay: mut real,
+                public lr_delay: mut real,
+                public damping: mut real,
+                public feedback: mut real,
+                public spread: mut real,
             };
             using flanger = struct{
-                waveform: mut waveform,
-                phase: mut int,
-                rate: mut real,
-                depth: mut real,
-                feedback: mut real,
-                delay: mut real,
+                public waveform: mut waveform,
+                public phase: mut int,
+                public rate: mut real,
+                public depth: mut real,
+                public feedback: mut real,
+                public delay: mut real,
             }
             {
                 public enum waveform
@@ -428,9 +428,9 @@ namespace je
                 }
             }
             using frequency_shifter = struct{
-                frequency: mut real,
-                left_direction: mut direction,
-                right_direction: mut direction,
+                public frequency: mut real,
+                public left_direction: mut direction,
+                public right_direction: mut direction,
             }
             {
                 public enum direction
@@ -441,12 +441,12 @@ namespace je
                 }
             }
             using vocal_morpher = struct{
-                phoneme_a: mut phoneme,
-                phoneme_a_coarse_tuning: mut int,
-                phoneme_b: mut phoneme,
-                phoneme_b_coarse_tuning: mut int,
-                waveform: mut waveform,
-                rate: mut real,
+                public phoneme_a: mut phoneme,
+                public phoneme_a_coarse_tuning: mut int,
+                public phoneme_b: mut phoneme,
+                public phoneme_b_coarse_tuning: mut int,
+                public waveform: mut waveform,
+                public rate: mut real,
             }
             {
                 public enum phoneme
@@ -465,13 +465,13 @@ namespace je
                 }
             }
             using pitch_shifter = struct{
-                coarse_tune: mut int,
-                fine_tune: mut int,
+                public coarse_tune: mut int,
+                public fine_tune: mut int,
             };
             using ring_modulator = struct{
-                frequency: mut real,
-                highpass_cutoff: mut real,
-                waveform: mut waveform,
+                public frequency: mut real,
+                public highpass_cutoff: mut real,
+                public waveform: mut waveform,
             }
             {
                 public enum waveform
@@ -482,56 +482,151 @@ namespace je
                 }
             }
             using autowah = struct{
-                attack_time: mut real,
-                release_time: mut real,
-                resonance: mut real,
-                peak_gain: mut real,
+                public attack_time: mut real,
+                public release_time: mut real,
+                public resonance: mut real,
+                public peak_gain: mut real,
             };
             using compressor = struct{
                 enable: mut bool,
             };
             using equalizer = struct{
-                low_gain: mut real,
-                low_cutoff: mut real,
-                mid1_gain: mut real,
-                mid1_center: mut real,
-                mid1_width: mut real,
-                mid2_gain: mut real,
-                mid2_center: mut real,
-                mid2_width: mut real,
-                high_gain: mut real,
-                high_cutoff: mut real,
+                public low_gain: mut real,
+                public low_cutoff: mut real,
+                public mid1_gain: mut real,
+                public mid1_center: mut real,
+                public mid1_width: mut real,
+                public mid2_gain: mut real,
+                public mid2_center: mut real,
+                public mid2_width: mut real,
+                public high_gain: mut real,
+                public high_cutoff: mut real,
             };
             using eaxreverb = struct{
-                density: mut real,
-                diffusion: mut real,
-                gain: mut real,
-                gain_hf: mut real,
-                gain_lf: mut real,
-                decay_time: mut real,
-                decay_hf_ratio: mut real,
-                decay_lf_ratio: mut real,
-                reflections_gain: mut real,
-                reflections_delay: mut real,
-                reflections_pan: mut (real, real, real),
-                late_reverb_gain: mut real,
-                late_reverb_delay: mut real,
-                late_reverb_pan: mut (real, real, real),
-                echo_time: mut real,
-                echo_depth: mut real,
-                modulation_time: mut real,
-                modulation_depth: mut real,
-                air_absorption_gain_hf: mut real,
-                hf_reference: mut real,
-                lf_reference: mut real,
-                room_rolloff_factor: mut real,
-                decay_hf_limit: mut bool,
+                public density: mut real,
+                public diffusion: mut real,
+                public gain: mut real,
+                public gain_hf: mut real,
+                public gain_lf: mut real,
+                public decay_time: mut real,
+                public decay_hf_ratio: mut real,
+                public decay_lf_ratio: mut real,
+                public reflections_gain: mut real,
+                public reflections_delay: mut real,
+                public reflections_pan: mut (real, real, real),
+                public late_reverb_gain: mut real,
+                public late_reverb_delay: mut real,
+                public late_reverb_pan: mut (real, real, real),
+                public echo_time: mut real,
+                public echo_depth: mut real,
+                public modulation_time: mut real,
+                public modulation_depth: mut real,
+                public air_absorption_gain_hf: mut real,
+                public hf_reference: mut real,
+                public lf_reference: mut real,
+                public room_rolloff_factor: mut real,
+                public decay_hf_limit: mut bool,
             };
+
+            private enum effect_kind
+            {
+                REVERB,
+                CHORUS,
+                DISTORTION,
+                ECHO,
+                FLANGER,
+                FREQUENCY_SHIFTER,
+                VOCAL_MORPHER,
+                PITCH_SHIFTER,
+                RING_MODULATOR,
+                AUTOWAH,
+                COMPRESSOR,
+                EQUALIZER,
+                EAXREVERB,
+
+                UNKOWN,
+            }
+
+            private let kind<EffectT> = 
+                std::type_traits::is_same:<EffectT, reverb> ? effect_kind::REVERB |
+                std::type_traits::is_same:<EffectT, chorus> ? effect_kind::CHORUS |
+                std::type_traits::is_same:<EffectT, distortion> ? effect_kind::DISTORTION |
+                std::type_traits::is_same:<EffectT, echo> ? effect_kind::ECHO |
+                std::type_traits::is_same:<EffectT, flanger> ? effect_kind::FLANGER |
+                std::type_traits::is_same:<EffectT, frequency_shifter> ? effect_kind::FREQUENCY_SHIFTER |
+                std::type_traits::is_same:<EffectT, vocal_morpher> ? effect_kind::VOCAL_MORPHER |
+                std::type_traits::is_same:<EffectT, pitch_shifter> ? effect_kind::PITCH_SHIFTER |
+                std::type_traits::is_same:<EffectT, ring_modulator> ? effect_kind::RING_MODULATOR |
+                std::type_traits::is_same:<EffectT, autowah> ? effect_kind::AUTOWAH |
+                std::type_traits::is_same:<EffectT, compressor> ? effect_kind::COMPRESSOR |
+                std::type_traits::is_same:<EffectT, equalizer> ? effect_kind::EQUALIZER |
+                std::type_traits::is_same:<EffectT, eaxreverb> ? effect_kind::EAXREVERB |
+                effect_kind::UNKOWN;
+
+            public func create<EffectT>()=> effect<EffectT>
+                where kind:<EffectT> != effect_kind::UNKOWN;
+            {
+                extern("libjoyecs", "wojeapi_audio_effect_create")
+                func _create<EffectT>(kind: effect_kind)=> effect<EffectT>;
+
+                return _create:<EffectT>(kind:<EffectT>);
+            }
+            public func close<EffectT>(self: effect<EffectT>)=> bool
+            {
+                return self: gchandle->close();
+            }
+            public func info<EffectT>(self: effect<EffectT>)=> EffectT
+            {
+                extern("libjoyecs", "wojeapi_audio_effect_info")
+                func _info<EffectT>(self: effect<EffectT>, kind: effect_kind)=> EffectT;
+
+                return _info(self, kind:<EffectT>);
+            }
+            public func update<EffectT>(self: effect<EffectT>, f: (EffectT)=> void)=> void
+            {
+                extern("libjoyecs", "wojeapi_audio_effect_update")
+                func _update<EffectT>(self: effect<EffectT>, kind: effect_kind, info: EffectT)=> void;
+
+                let i = self->info();
+                f(i);
+                _update(self, kind:<EffectT>, i);
+            }
         }
 
         using effect_slot = gchandle
         {
+            using effect_slot_data_t = struct{
+                public gain: real,
+            };
 
+            extern("libjoyecs", "wojeapi_audio_effect_slot_create")
+            public func create() => effect_slot;
+
+            public func close(self: effect_slot)=> bool
+            {
+                return self: gchandle->close();
+            }
+
+            public func bind_effect<EffectT>(self: effect_slot, effect_instance: effect<EffectT>)=> void
+            {
+                extern("libjoyecs", "wojeapi_audio_effect_slot_bind_effect")
+                func _bind_effect<EffectT>(self: effect_slot, effect_instance: effect<EffectT>, kind: effect::effect_kind)=> void;
+
+                _bind_effect(self, effect_instance, effect::kind:<EffectT>);
+            }
+
+            extern("libjoyecs", "wojeapi_audio_effect_slot_info")
+            public func info(self: effect_slot)=> effect_slot_data_t;
+
+            public func update<EffectT>(self: effect_slot, f: (effect_slot_data_t)=> void)=> void
+            {
+                extern("libjoyecs", "wojeapi_audio_effect_slot_update")
+                func _update(self: effect_slot, info: effect_slot_data_t)=> void;
+
+                let i = self->info();
+                f(i);
+                _update(self, i);
+            }
         }
 
         using buffer = gchandle
@@ -547,11 +642,11 @@ namespace je
             }
 
             using buffer_data_t = struct{
-                size: int,
-                sample_rate: int,
-                sample_size: int,
-                byte_rate: int,
-                format: format,
+                public size: int,
+                public sample_rate: int,
+                public sample_size: int,
+                public byte_rate: int,
+                public format: format,
             };
 
             public func close(self: buffer)=> bool
@@ -574,11 +669,11 @@ namespace je
                 PAUSED,
             }
             using source_data_t = struct{
-                loop: mut bool,
-                gain: mut real,
-                pitch: mut real,
-                location: mut(real, real, real),
-                velocity: mut(real, real, real),
+                public loop: mut bool,
+                public gain: mut real,
+                public pitch: mut real,
+                public location: mut(real, real, real),
+                public velocity: mut(real, real, real),
             };
 
             extern("libjoyecs", "wojeapi_audio_source_create")
@@ -595,10 +690,11 @@ namespace je
             public func update(self: source, f: (source_data_t)=> void)=> void
             {
                 extern("libjoyecs", "wojeapi_audio_source_update")
-                func _update(self: source)=> void;
+                func _update(self: source, info: source_data_t)=> void;
 
-                f(self->info());
-                _update(self);
+                let i = self->info();
+                f(i);
+                _update(self, i);
             }
 
             extern("libjoyecs", "wojeapi_audio_source_play")
@@ -620,17 +716,20 @@ namespace je
             public func get_offset(self: source)=> int;
 
             extern("libjoyecs", "wojeapi_audio_source_set_offset")
-            public func set_offset(self: source, offset: int)=> void;           
+            public func set_offset(self: source, offset: int)=> void;
+
+            extern("libjoyecs", "wojeapi_audio_source_bind_effect_slot")
+            public func bind_effect_slot(self: source, effect_slot: effect_slot, pass: int)=> void;
         }
         namespace listener
         {
             using listener_data_t = struct{
-                gain: mut real,
-                global_gain: mut real,
-                location: mut (real, real, real),
-                velocity: mut (real, real, real),
-                forward: mut (real, real, real),
-                upward: mut (real, real, real),
+                public gain: mut real,
+                public global_gain: mut real,
+                public location: mut (real, real, real),
+                public velocity: mut (real, real, real),
+                public forward: mut (real, real, real),
+                public upward: mut (real, real, real),
             };
 
             extern("libjoyecs", "wojeapi_audio_listener_info")
@@ -639,10 +738,11 @@ namespace je
             public func update(f: (listener_data_t)=> void)=> void
             {
                 extern("libjoyecs", "wojeapi_audio_listener_update")
-                func _update()=> void;
+                func _update(info: listener_data_t)=> void;
 
-                f(info());
-                _update();
+                let i = info();
+                f(i);
+                _update(i);
             }
         }
     }
