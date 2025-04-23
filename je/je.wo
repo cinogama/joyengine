@@ -271,6 +271,9 @@ namespace je
         extern("libjoyecs", "wojeapi_input_window_size")
         public func windowsize()=> (int, int);
 
+        extern("libjoyecs", "wojeapi_input_window_pos")
+        public func windowpos()=> (int, int);
+
         extern("libjoyecs", "wojeapi_input_mouse_pos")
         public func mousepos(group: int)=> (int, int);
 

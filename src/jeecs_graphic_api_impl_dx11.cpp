@@ -129,20 +129,19 @@ namespace jeecs::graphic::api::dx11
 #define JEDX11_TRACE_DEBUG_NAME(OB, NAME) _jedx11_trace_debug(OB, NAME)
 #endif
 
-    void dx11_callback_windows_size_changed(jegl_dx11_context* context, size_t w, size_t h)
+    void dx11_callback_windows_size_changed(jegl_dx11_context* context)
     {
-        je_io_update_window_size((int)w, (int)h);
         if (context->m_dx_context_finished == false)
             return;
+
+        int w, h;
+        je_io_get_window_size(&w, &h);
 
         if (w == 0 || h == 0)
             return;
 
-        if (context->m_lock_resolution_for_fullscreen == false)
-        {
-            context->RESOLUTION_WIDTH = w;
-            context->RESOLUTION_HEIGHT = h;
-        }
+        context->RESOLUTION_WIDTH = (size_t)w;
+        context->RESOLUTION_HEIGHT = (size_t)h;
 
         // 释放渲染管线输出用到的相关资源
         context->m_dx_main_renderer_target_depth_view.Reset();
@@ -230,8 +229,6 @@ namespace jeecs::graphic::api::dx11
         context->m_current_target_shader = nullptr;
         context->m_current_target_framebuffer = nullptr;
         context->m_dx_context_finished = false;
-        context->RESOLUTION_WIDTH = config->m_width;
-        context->RESOLUTION_HEIGHT = config->m_height;
         context->m_lock_resolution_for_fullscreen = false;
         context->MSAA_LEVEL = config->m_msaa;
         context->FPS = config->m_fps;
@@ -355,8 +352,7 @@ namespace jeecs::graphic::api::dx11
 
         context->m_dx_context_finished = true;
 
-        dx11_callback_windows_size_changed(context,
-            config->m_width, config->m_height);
+        dx11_callback_windows_size_changed(context);
 
         // Fullscreen?
         if (context->m_lock_resolution_for_fullscreen)
@@ -438,9 +434,7 @@ namespace jeecs::graphic::api::dx11
         case basic_interface::update_result::PAUSE:
             return jegl_graphic_api::update_action::SKIP;
         case basic_interface::update_result::RESIZE:
-            dx11_callback_windows_size_changed(context,
-                context->m_interface->m_interface_width,
-                context->m_interface->m_interface_height);
+            dx11_callback_windows_size_changed(context);
             /*fallthrough*/
             [[fallthrough]];
         case basic_interface::update_result::NORMAL:
@@ -1591,8 +1585,14 @@ namespace jeecs::graphic::api::dx11
 
         auto* framw_buffer_raw = framebuffer != nullptr ? framebuffer->m_raw_framebuf_data : nullptr;
 
-        size_t buf_w = framw_buffer_raw != nullptr ? framw_buffer_raw->m_width : context->RESOLUTION_WIDTH;
-        size_t buf_h = framw_buffer_raw != nullptr ? framw_buffer_raw->m_height : context->RESOLUTION_HEIGHT;
+        size_t buf_w = context->RESOLUTION_WIDTH;
+        size_t buf_h = context->RESOLUTION_HEIGHT;
+
+        if (framw_buffer_raw != nullptr)
+        {
+            buf_w = framw_buffer_raw->m_width;
+            buf_h = framw_buffer_raw->m_height;
+        }
 
         if (w == 0)
             w = buf_w;

@@ -1803,14 +1803,9 @@ struct jegl_interface_config
         BOARDLESS,
     };
 
-    enum resolution_mode
-    {
-        SCALE,
-        ABSOLUTE,
-    };
-
+    // 显示模式，指示图形应该在全屏、窗口或无边框窗口中显示
+    // * 在一些平台上无效
     display_mode m_display_mode;
-    resolution_mode m_resolution_mode;
 
     bool m_enable_resize;
 
@@ -1819,14 +1814,11 @@ struct jegl_interface_config
     //  * 最终能否使用取决于图形库
     size_t m_msaa;
 
-    // 启动时的窗口大小
+    // 启动时的窗口大，即绘制区域的大小，如果设置为0，则使用默认可用的绘制空间大小
+    // 如需全屏，通常设置为 0 即可（即使用显示器的分辨率）
+    // * 在一些平台上无效
     size_t m_width;
     size_t m_height;
-
-    // 启动时的分辨率，若m_resolution_mode是ABSOLUTE
-    // 则此处的值是绝对值，否则是实际窗口大小的缩放比例
-    size_t m_reso_x;
-    size_t m_reso_y;
 
     // 限制帧数，若指定为0，则启用垂直同步
     // 不限制帧率请设置为 SIZE_MAX
@@ -3447,6 +3439,13 @@ je_io_update_window_size [基本接口]
 JE_API void je_io_update_window_size(int x, int y);
 
 /*
+je_io_update_window_pos [基本接口]
+更新窗口位置
+    * 此操作`不会`影响窗口的实际位置
+*/
+JE_API void je_io_update_window_pos(int x, int y);
+
+/*
 je_io_update_wheel [基本接口]
 更新鼠标滚轮的计数
 */
@@ -3475,6 +3474,12 @@ je_io_get_window_size [基本接口]
 获取窗口的大小
 */
 JE_API void je_io_get_window_size(int* out_x, int* out_y);
+
+/*
+je_io_get_window_pos [基本接口]
+获取窗口的位置
+*/
+JE_API void je_io_get_window_pos(int* out_x, int* out_y);
 
 /*
 je_io_get_wheel [基本接口]
@@ -11483,6 +11488,12 @@ namespace UserInterface::Origin
         {
             int x, y;
             je_io_get_window_size(&x, &y);
+            return { x, y };
+        }
+        inline math::ivec2 windowpos()
+        {
+            int x, y;
+            je_io_get_window_pos(&x, &y);
             return { x, y };
         }
 

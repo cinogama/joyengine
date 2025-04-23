@@ -135,12 +135,8 @@ namespace jeecs
             if (_config == nullptr)
             {
                 config.m_display_mode = jegl_interface_config::display_mode::WINDOWED;
-                config.m_resolution_mode = jegl_interface_config::resolution_mode::SCALE;
                 config.m_width = 640;
                 config.m_height = 480;
-
-                config.m_reso_x = 1;
-                config.m_reso_y = 1;
 
                 if (host_graphic_api == jegl_using_dx11_apis)
                     config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " DirectX11)";

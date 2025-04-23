@@ -100,6 +100,7 @@ WO_API wo_api je_gui_get_id(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_get_input_state(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_get_item_rect(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_get_item_rect_size(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_get_main_viewport_pos(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_get_mouse_delta_pos(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_get_mouse_pos(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_get_window_draw_list(wo_vm vm, wo_value args);
@@ -364,6 +365,7 @@ WO_API wo_api wojeapi_input_mouse_view_pos(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_input_mousedown(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_input_update_window_size(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_input_update_window_title(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_input_window_pos(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_input_window_size(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_is_child_of_entity(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_is_top_entity(wo_vm vm, wo_value args);
@@ -610,6 +612,7 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"je_gui_get_input_state", (void*)&je_gui_get_input_state},
         wo_extern_lib_func_t{"je_gui_get_item_rect", (void*)&je_gui_get_item_rect},
         wo_extern_lib_func_t{"je_gui_get_item_rect_size", (void*)&je_gui_get_item_rect_size},
+        wo_extern_lib_func_t{"je_gui_get_main_viewport_pos", (void*)&je_gui_get_main_viewport_pos},
         wo_extern_lib_func_t{"je_gui_get_mouse_delta_pos", (void*)&je_gui_get_mouse_delta_pos},
         wo_extern_lib_func_t{"je_gui_get_mouse_pos", (void*)&je_gui_get_mouse_pos},
         wo_extern_lib_func_t{"je_gui_get_window_draw_list", (void*)&je_gui_get_window_draw_list},
@@ -874,6 +877,7 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"wojeapi_input_mousedown", (void*)&wojeapi_input_mousedown},
         wo_extern_lib_func_t{"wojeapi_input_update_window_size", (void*)&wojeapi_input_update_window_size},
         wo_extern_lib_func_t{"wojeapi_input_update_window_title", (void*)&wojeapi_input_update_window_title},
+        wo_extern_lib_func_t{"wojeapi_input_window_pos", (void*)&wojeapi_input_window_pos},
         wo_extern_lib_func_t{"wojeapi_input_window_size", (void*)&wojeapi_input_window_size},
         wo_extern_lib_func_t{"wojeapi_is_child_of_entity", (void*)&wojeapi_is_child_of_entity},
         wo_extern_lib_func_t{"wojeapi_is_top_entity", (void*)&wojeapi_is_top_entity},

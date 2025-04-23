@@ -1,9 +1,9 @@
-#include "jeecs_graphic_api_interface.hpp"
-
 #ifndef JE_IMPL
 #   error JE_IMPL must be defined, please check `jeecs_core_systems_and_components.cpp`
 #endif
 #include "jeecs.hpp"
+
+#include "jeecs_graphic_api_interface.hpp"
 
 #   include <EGL/egl.h>
 #   include <EGL/eglext.h>
@@ -35,8 +35,13 @@ namespace jeecs::graphic
 
         egl_context m_context;
 
+        EGLint _m_recorded_width;
+        EGLint _m_recorded_height;
+
     public:
         egl()
+            : _m_recorded_width(0)
+            , _m_recorded_height(0)
         {
         }
 
@@ -130,23 +135,24 @@ namespace jeecs::graphic
 
             bool _window_size_resized = false;
 
-            if (m_interface_width != (size_t)width || m_interface_height != (size_t)height)
+            if (_m_recorded_width != width 
+                || _m_recorded_height != height)
             {
-                m_interface_width = (size_t)width;
-                m_interface_height = (size_t)height;
+                _m_recorded_width = width;
+                _m_recorded_height = height;
 
                 je_io_update_window_size((int)width, (int)height);
 
                 _window_size_resized = true;
             }
 
-            if (m_interface_width == 0 || m_interface_height == 0)
+            if (_m_recorded_width == 0 || _m_recorded_height == 0)
                 return update_result::PAUSE;
 
             if (_window_size_resized)
                 return update_result::RESIZE;
 
-            return update_result::NORMAL ;
+            return update_result::NORMAL;
         }
         virtual void shutdown(bool reboot) override
         {

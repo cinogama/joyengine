@@ -45,6 +45,9 @@ struct _je_basic_io_state
     int             _windows_width;
     int             _windows_height;
 
+    int             _windows_pos_x,
+                    _windows_pos_y;
+
     bool            _shoudle_lock_mouse;
     int             _mouse_lock_place_x,
                     _mouse_lock_place_y;
@@ -52,6 +55,10 @@ struct _je_basic_io_state
     bool            _should_update_windowsize;
     int             _new_windows_width,
                     _new_windows_height;
+
+    //bool            _should_update_windowpos;
+    //int             _new_windows_pos_x,
+    //                _new_windows_pos_y;
 
     bool            _should_update_windowtitle;
     std::string     _new_windowtitle;
@@ -85,7 +92,11 @@ void je_io_update_window_size(int x, int y)
     _state._windows_width = x;
     _state._windows_height = y;
 }
-
+void je_io_update_window_pos(int x, int y)
+{
+    _state._windows_pos_x = x;
+    _state._windows_pos_y = y;
+}
 void je_io_set_lock_mouse(bool lock, int x, int y)
 {
     _state._shoudle_lock_mouse = lock;
@@ -137,7 +148,11 @@ void je_io_get_window_size(int* out_x, int* out_y)
     *out_x = _state._windows_width;
     *out_y = _state._windows_height;
 }
-
+void je_io_get_window_pos(int* out_x, int* out_y)
+{
+    *out_x = _state._windows_pos_x;
+    *out_y = _state._windows_pos_y;
+}
 void je_io_set_window_size(int x, int y)
 {
     _state._new_windows_width = x;

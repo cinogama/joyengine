@@ -35,6 +35,9 @@ namespace jeecs::graphic::api::gl3
     {
         basic_interface* m_interface;
 
+        size_t RESOLUTION_WIDTH = 0;
+        size_t RESOLUTION_HEIGHT = 0;
+
         GLint m_last_active_pass_id = 0;
         GLuint m_binded_texture_passes[128] = {};
         GLenum m_binded_texture_passes_type[128] = {};
@@ -260,7 +263,15 @@ namespace jeecs::graphic::api::gl3
         case basic_interface::update_result::PAUSE:
             return jegl_graphic_api::update_action::SKIP;
         case basic_interface::update_result::RESIZE:
-            /*fallthrough*/
+        {
+            int width, height;
+            je_io_get_window_size(&width, &height);
+
+            context->RESOLUTION_WIDTH = (size_t)width;
+            context->RESOLUTION_HEIGHT = (size_t)height;
+        }
+        /*fallthrough*/
+        [[fallthrough]];
         case basic_interface::update_result::NORMAL:
             return jegl_graphic_api::update_action::CONTINUE;
         default:
@@ -473,9 +484,9 @@ namespace jeecs::graphic::api::gl3
             break;
         default:
             break;
-        }
-        return nullptr;
     }
+        return nullptr;
+}
 
     void gl_close_resource_blob(jegl_context::userdata_t ctx, jegl_resource_blob blob)
     {
@@ -621,7 +632,7 @@ namespace jeecs::graphic::api::gl3
                             NULL
                         );
                     }
-                }
+                    }
                 else
                     glTexImage2D(gl_texture_type, 0,
 #if defined(JE_ENABLE_WEBGL20_GAPI)
@@ -1166,11 +1177,12 @@ namespace jeecs::graphic::api::gl3
         if (w == 0)
             w = framw_buffer_raw != nullptr
             ? framebuffer->m_raw_framebuf_data->m_width
-            : context->m_interface->m_interface_width;
+            : context->RESOLUTION_WIDTH;
         if (h == 0)
             h = framw_buffer_raw != nullptr
             ? framebuffer->m_raw_framebuf_data->m_height
-            : context->m_interface->m_interface_height;
+            : context->RESOLUTION_HEIGHT;
+
         glViewport((GLint)x, (GLint)y, (GLsizei)w, (GLsizei)h);
     }
     void gl_clear_framebuffer_color(jegl_context::userdata_t, float color[4])

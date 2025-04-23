@@ -1,9 +1,9 @@
-#include "jeecs_graphic_api_interface.hpp"
-
 #ifndef JE_IMPL
 #   error JE_IMPL must be defined, please check `jeecs_core_systems_and_components.cpp`
 #endif
 #include "jeecs.hpp"
+
+#include "jeecs_graphic_api_interface.hpp"
 
 #include <GLFW/glfw3.h>
 
@@ -20,6 +20,7 @@ namespace jeecs::graphic
 
         GLFWwindow* _m_windows;
         bool _m_window_resized;
+        bool _m_window_paused;
 
         inline static std::mutex _m_glfw_instance_mx;
         inline static size_t _m_glfw_taking_count = 0;
@@ -38,12 +39,18 @@ namespace jeecs::graphic
         {
             glfw* context = std::launder(reinterpret_cast<glfw*>(glfwGetWindowUserPointer(fw)));
 
-            context->m_interface_width = (size_t)x;
-            context->m_interface_height = (size_t)y;
-
             je_io_update_window_size(x, y);
 
             context->_m_window_resized = true;
+
+            if (x == 0 || y == 0)
+                context->_m_window_paused = true;
+            else
+                context->_m_window_paused = false;
+        }
+        static void glfw_callback_windows_pos_changed(GLFWwindow* fw, int x, int y)
+        {
+            je_io_update_window_pos(x, y);
         }
         static void glfw_callback_mouse_pos_changed(GLFWwindow* fw, double x, double y)
         {
@@ -161,7 +168,7 @@ namespace jeecs::graphic
             }
 
             je_io_update_key_state(keycode, stage != 0);
-        }
+            }
 
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WEBGL
         // No gamepad support for webgl.
@@ -304,9 +311,10 @@ namespace jeecs::graphic
 #endif
     public:
         glfw(interface_type type)
+            : _m_windows(nullptr)
+            , _m_window_resized(true)
+            , _m_window_paused(false)
         {
-            _m_window_resized = false;
-
             if (type == interface_type::HOLD)
                 return;
 
@@ -360,9 +368,11 @@ namespace jeecs::graphic
             auto display_mode = config->m_display_mode;
             auto* primary_monitor = glfwGetPrimaryMonitor();
 
+            int interface_width, interface_height;
+
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WEBGL
-            m_interface_width = config->m_width;
-            m_interface_height = config->m_height;
+            interface_width = config->m_width;
+            interface_height = config->m_height;
 
             display_mode = jegl_interface_config::display_mode::WINDOWED;
 
@@ -370,11 +380,11 @@ namespace jeecs::graphic
 #else
             auto* primary_monitor_video_mode = glfwGetVideoMode(primary_monitor);
 
-            m_interface_width = config->m_width == 0
+            interface_width = config->m_width == 0
                 ? primary_monitor_video_mode->width
                 : config->m_width;
 
-            m_interface_height = config->m_height == 0
+            interface_height = config->m_height == 0
                 ? primary_monitor_video_mode->height
                 : config->m_height;
 
@@ -386,9 +396,6 @@ namespace jeecs::graphic
             glfwWindowHint(GLFW_RESIZABLE, config->m_enable_resize ? GLFW_TRUE : GLFW_FALSE);
             glfwWindowHint(GLFW_SAMPLES, (int)config->m_msaa);
 
-            je_io_update_window_size(
-                (int)m_interface_width, (int)m_interface_height);
-
             switch (display_mode)
             {
             case jegl_interface_config::display_mode::BOARDLESS:
@@ -398,15 +405,15 @@ namespace jeecs::graphic
                 [[fallthrough]];
             case jegl_interface_config::display_mode::WINDOWED:
                 _m_windows = glfwCreateWindow(
-                    (int)m_interface_width,
-                    (int)m_interface_height,
+                    (int)interface_width,
+                    (int)interface_height,
                     config->m_title,
                     NULL, NULL);
                 break;
             case jegl_interface_config::display_mode::FULLSCREEN:
                 _m_windows = glfwCreateWindow(
-                    (int)m_interface_width,
-                    (int)m_interface_height,
+                    (int)interface_width,
+                    (int)interface_height,
                     config->m_title,
                     primary_monitor, NULL);
                 break;
@@ -433,7 +440,9 @@ namespace jeecs::graphic
 
             // Try load icon from @/icon.png or !/builtin/icon/icon.png.
             // Do nothing if both not exist.
-            jeecs::basic::resource<jeecs::graphic::texture> icon = jeecs::graphic::texture::load(nullptr, "@/icon.png");
+            jeecs::basic::resource<jeecs::graphic::texture> icon = 
+                jeecs::graphic::texture::load(nullptr, "@/icon.png");
+
             if (icon == nullptr)
                 icon = jeecs::graphic::texture::load(nullptr, "!/builtin/icon/icon.png");
 
@@ -461,8 +470,18 @@ namespace jeecs::graphic
 
             glfwMakeContextCurrent(_m_windows);
             glfwSetWindowSizeCallback(_m_windows, glfw_callback_windows_size_changed);
+            glfwSetWindowPosCallback(_m_windows, glfw_callback_windows_pos_changed);
             glfwSetKeyCallback(_m_windows, glfw_callback_keyboard_stage_changed);
             glfwSetWindowUserPointer(_m_windows, this);
+
+            int window_x, window_y;
+            glfwGetWindowPos(_m_windows, &window_x, &window_y);
+            glfw_callback_windows_pos_changed(_m_windows, window_x, window_y);
+
+            glfw_callback_windows_size_changed(
+                _m_windows,
+                (int)interface_width,
+                (int)interface_height);
 
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WEBGL
             // Donot sync for webgl, and donot process mouse event.
@@ -477,7 +496,7 @@ namespace jeecs::graphic
             else
 #endif
                 glfwSwapInterval(0);
-        }
+            }
         virtual void swap_for_opengl() override
         {
             glfwSwapBuffers(_m_windows);
@@ -510,7 +529,7 @@ namespace jeecs::graphic
                 return update_result::CLOSE;
             }
 
-            if (m_interface_width == 0 || m_interface_height == 0)
+            if (_m_window_paused)
                 return update_result::PAUSE;
 
             if (_m_window_resized)
@@ -554,5 +573,5 @@ namespace jeecs::graphic
             return glfwGetWin32Window(_m_windows);
         }
 #endif
-    };
-}
+        };
+        }

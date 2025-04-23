@@ -991,6 +991,25 @@ WO_API wo_api wojeapi_input_window_size(wo_vm vm, wo_value args)
     return wo_ret_val(vm, result);
 }
 
+WO_API wo_api wojeapi_input_window_pos(wo_vm vm, wo_value args)
+{
+    wo_value s = wo_reserve_stack(vm, 2, &args);
+
+    auto winsz = jeecs::input::windowpos();
+
+    wo_value result = s + 0;
+    wo_value elem = s + 1;
+
+    wo_set_struct(result, vm, 2);
+
+    wo_set_int(elem, (wo_int_t)winsz.x);
+    wo_struct_set(result, 0, elem);
+    wo_set_int(elem, (wo_int_t)winsz.y);
+    wo_struct_set(result, 1, elem);
+
+    return wo_ret_val(vm, result);
+}
+
 WO_API wo_api wojeapi_input_mouse_pos(wo_vm vm, wo_value args)
 {
     wo_value s = wo_reserve_stack(vm, 2, &args);

@@ -121,6 +121,14 @@ void jegui_init_gl330(
     ImGui_ImplGlfw_InitForOpenGL((GLFWwindow*)window_handle, true);
 #endif
     ImGui_ImplOpenGL3_Init(nullptr);
+
+#ifndef JE_ENABLE_GL330_GAPI
+
+    // Disable multi-viewport in opengles3.0 & webgl2.0
+    ImGui::GetIO().ConfigFlags &= ~ImGuiConfigFlags_ViewportsEnable;
+
+#endif // JE_ENABLE_GLES300_API
+
 }
 
 void jegui_update_gl330()

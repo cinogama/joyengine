@@ -348,6 +348,7 @@ namespace editor::gui::edit_forms
                                 {
                                     let (frame_tex_width, frame_tex_height) = frametex->size;
 
+                                    let (vx, vy) = GetMainViewportPos();
                                     let (wx, wy) = GetWindowPos();
                                     let (lupx, lupy) = GetCursorPos();
 
@@ -369,8 +370,8 @@ namespace editor::gui::edit_forms
                                         je::internal::update_editor_mouse_pos(
                                             uniform_mpos_x, 
                                             uniform_mpos_y, 
-                                            wx:int + lupx:int + (itemw:int / 2), 
-                                            wy:int + lupy:int + (itemh:int / 2));
+                                            (wx + lupx + (itemw / 2.) - vx): int, 
+                                            (wy + lupy + (itemh / 2.) - vy): int);
 
                                         static let 
                                             mut right_key_down_time = 0., 

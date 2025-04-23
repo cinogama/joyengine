@@ -373,6 +373,9 @@ VK_API_PLATFORM_API_LIST
         VkPresentModeKHR            _vk_surface_present_mode;
         VkFormat                    _vk_depth_format;
 
+        size_t RESOLUTION_WIDTH;
+        size_t RESOLUTION_HEIGHT;
+
         enum descriptor_set_type : uint32_t
         {
             UNIFORM_VARIABLES = 0,
@@ -1178,12 +1181,18 @@ VK_API_PLATFORM_API_LIST
             vkDestroySwapchainKHR(_vk_logic_device, _vk_swapchain, nullptr);
         }
 
-        void recreate_swap_chain_for_current_surface(size_t w, size_t h)
+        void recreate_swap_chain_for_current_surface()
         {
+            int _w, _h;
+            je_io_get_window_size(&_w, &_h);
+
+            RESOLUTION_WIDTH = (size_t)_w;
+            RESOLUTION_HEIGHT = (size_t)_h;
+
             // 在此处开始创建交换链
             vkGetPhysicalDeviceSurfaceCapabilitiesKHR(_vk_device, _vk_surface, &_vk_surface_capabilities);
 
-            VkExtent2D used_extent = { (uint32_t)w, (uint32_t)h };
+            VkExtent2D used_extent = { (uint32_t)RESOLUTION_WIDTH, (uint32_t)RESOLUTION_HEIGHT };
             if (_vk_surface_capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
             {
                 used_extent = _vk_surface_capabilities.currentExtent;
@@ -1373,7 +1382,9 @@ VK_API_PLATFORM_API_LIST
                 );
 
                 jevk11_texture* depth_attachment = create_framebuf_texture(
-                    (jegl_texture::format)(jegl_texture::format::DEPTH | jegl_texture::format::FRAMEBUF), w, h);
+                    (jegl_texture::format)(jegl_texture::format::DEPTH | jegl_texture::format::FRAMEBUF), 
+                    RESOLUTION_WIDTH, 
+                    RESOLUTION_HEIGHT);
 
                 auto* framebuffer = create_frame_buffer(
                     (size_t)used_extent.width,
@@ -1864,9 +1875,7 @@ VK_API_PLATFORM_API_LIST
                 jeecs::debug::logfatal("Failed to create vk130 imgui descriptor pool.");
             }
 
-            recreate_swap_chain_for_current_surface(
-                _vk_jegl_interface->m_interface_width,
-                _vk_jegl_interface->m_interface_height);
+            recreate_swap_chain_for_current_surface();
 
             _vk_dear_imgui_sampler = create_sampler(
                 jegl_shader::fliter_mode::NEAREST,
@@ -1876,7 +1885,7 @@ VK_API_PLATFORM_API_LIST
                 jegl_shader::wrap_mode::CLAMP);
 
             imgui_init();
-        }
+                }
         void pre_shutdown()
         {
             vkDeviceWaitIdle(_vk_logic_device);
@@ -3148,7 +3157,7 @@ VK_API_PLATFORM_API_LIST
 
             auto* raw_uniformbuf_data = resource->m_raw_uniformbuf_data;
             assert(raw_uniformbuf_data != nullptr && raw_uniformbuf_data->m_update_length > 0);
-  
+
             update_uniform_buffer_with_range(
                 uniformbuf,
                 raw_uniformbuf_data->m_buffer + raw_uniformbuf_data->m_update_begin_offset,
@@ -3521,7 +3530,7 @@ VK_API_PLATFORM_API_LIST
 
             end_temp_command_buffer_record(cmdbuf);
         }
-    };
+            };
 
     jevk11_shader_blob::blob_data::~blob_data()
     {
@@ -3684,9 +3693,7 @@ VK_API_PLATFORM_API_LIST
             // Wait for device idle.
             context->vkDeviceWaitIdle(context->_vk_logic_device);
             jegui_shutdown_vk130(true);
-            context->recreate_swap_chain_for_current_surface(
-                context->_vk_jegl_interface->m_interface_width,
-                context->_vk_jegl_interface->m_interface_height);
+            context->recreate_swap_chain_for_current_surface();
             context->imgui_init();
 
             context->update();
@@ -3979,7 +3986,7 @@ VK_API_PLATFORM_API_LIST
             break;
         }
     }
-}
+        }
 
 // 导出图形接口！ 
 void jegl_using_vk130_apis(jegl_graphic_api* write_to_apis)

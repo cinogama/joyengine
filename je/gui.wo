@@ -73,6 +73,8 @@ namespace je::gui
     extern("libjoyecs", "je_gui_get_clip_board_text")
     public func GetClipboardText()=> string;
 
+    extern("libjoyecs", "je_gui_get_main_viewport_pos")
+    public func GetMainViewportPos()=> ImVec2;
     extern("libjoyecs", "je_gui_get_window_pos")
     public func GetWindowPos()=> ImVec2;
     extern("libjoyecs", "je_gui_get_mouse_pos")
