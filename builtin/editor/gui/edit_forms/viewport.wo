@@ -369,14 +369,15 @@ namespace editor::gui::edit_forms
                                         je::internal::update_editor_mouse_pos(
                                             uniform_mpos_x, 
                                             uniform_mpos_y, 
-                                            wx:int + lupx:int + (itemw:int/2), 
-                                            wy:int + lupy:int + (itemh:int/2));
+                                            wx:int + lupx:int + (itemw:int / 2), 
+                                            wy:int + lupy:int + (itemh:int / 2));
 
                                         static let 
                                             mut right_key_down_time = 0., 
                                             mut noclick_flag = true;
 
-                                        if (je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Right) && noclick_flag)
+                                        if (je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Right) 
+                                            && noclick_flag)
                                         {
                                             noclick_flag = false;
                                             right_key_down_time = std::time();

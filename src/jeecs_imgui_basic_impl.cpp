@@ -631,6 +631,11 @@ WO_API wo_api je_gui_is_mouse_released(wo_vm vm, wo_value args)
     return wo_ret_bool(vm, ImGui::IsMouseReleased((ImGuiMouseButton)wo_int(args + 0)));
 }
 
+WO_API wo_api je_gui_is_key_down(wo_vm vm, wo_value args)
+{
+    return wo_ret_bool(vm, ImGui::IsKeyDown((ImGuiKey)wo_int(args + 0)));
+}
+
 WO_API wo_api je_gui_set_tooltip(wo_vm vm, wo_value args)
 {
     ImGui::SetTooltip("%s", wo_string(args + 0));

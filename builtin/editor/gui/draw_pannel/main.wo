@@ -419,7 +419,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                             if (ColorButton("##sub_color", draw_context.subcolor) )
                                 OpenPopup("SubColorPicker");
 
-                            let mut enable_draw = !input::keydown(keycode::L_CTRL);
+                            let mut enable_draw = !je::gui::IsKeyDown(je::gui::ImGuiKey::ImGuiKey_LeftCtrl);
                             if (BeginPopup("MainColorPicker"))
                             {
                                 enable_draw = false;
@@ -483,7 +483,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                             do InvisibleButton("##draw_space", (avaliw <= 100. ? 100. | avaliw, avalih <= 100. ? 100. | avalih));
                             if (IsItemActive() || IsItemHovered())
                             {
-                                if (input::keydown(keycode::L_CTRL) 
+                                if (IsKeyDown(ImGuiKey::ImGuiKey_LeftCtrl)
                                     && IsMouseDragging(ImGuiMouseButton::ImGuiMouseButton_Left))
                                 {
                                     let (mousedelta_x, mousedelta_y) = GetMouseDeltaPos();

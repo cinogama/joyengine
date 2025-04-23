@@ -1178,7 +1178,7 @@ namespace editor::gui::tilemap
                     self.m_scale *= math::pow(2., (new_wheel_count - recored_wheel_count): real);
                     recored_wheel_count = new_wheel_count;
 
-                    let ctrl_down = input::keydown(keycode::L_CTRL);
+                    let ctrl_down = IsKeyDown(ImGuiKey::ImGuiKey_LeftCtrl);
 
                     let (mposx, mposy) = GetMousePos();
 

@@ -132,6 +132,7 @@ WO_API wo_api je_gui_is_item_active(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_is_itemclicked(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_is_itemhovered(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_is_itemtoggledopen(wo_vm vm, wo_value args);
+WO_API wo_api je_gui_is_key_down(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_is_mouse_down(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_is_mouse_dragging(wo_vm vm, wo_value args);
 WO_API wo_api je_gui_is_mouse_released(wo_vm vm, wo_value args);
@@ -641,6 +642,7 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"je_gui_is_itemclicked", (void*)&je_gui_is_itemclicked},
         wo_extern_lib_func_t{"je_gui_is_itemhovered", (void*)&je_gui_is_itemhovered},
         wo_extern_lib_func_t{"je_gui_is_itemtoggledopen", (void*)&je_gui_is_itemtoggledopen},
+        wo_extern_lib_func_t{"je_gui_is_key_down", (void*)&je_gui_is_key_down},
         wo_extern_lib_func_t{"je_gui_is_mouse_down", (void*)&je_gui_is_mouse_down},
         wo_extern_lib_func_t{"je_gui_is_mouse_dragging", (void*)&je_gui_is_mouse_dragging},
         wo_extern_lib_func_t{"je_gui_is_mouse_released", (void*)&je_gui_is_mouse_released},
