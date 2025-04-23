@@ -1033,7 +1033,7 @@ namespace editor::gui::tilemap
 
                             if (ismouse_hovered)
                             {
-                                if (input::mousedown(0, mousecode::LEFT))
+                                if (je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Left))
                                     self.m_selected_tile = (mpblockx: int, mpblocky: int);
                                 else
                                     drawlist->AddRectFilled(
@@ -1194,20 +1194,20 @@ namespace editor::gui::tilemap
                         highlight_alpha = 0;
 
                         // Move
-                        if (input::mousedown(0, mousecode::LEFT) 
-                            || input::mousedown(0, mousecode::RIGHT))
+                        if (je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Left)
+                            || je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Right))
                         {
                             let (mousedelta_x, mousedelta_y) = GetMouseDeltaPos();
                             self.m_offset = 
                                 (oldorigin_offsetx + mousedelta_x, oldorigin_offsety + mousedelta_y);
                         }
                     }
-                    else if (input::mousedown(0, mousecode::LEFT))
+                    else if (je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Left))
                     {
                         highlight_alpha = 50;
                         self->apply_draw_tile(mpblockx: int, mpblocky: int);
                     }
-                    else if (input::mousedown(0, mousecode::RIGHT))
+                    else if (je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Right))
                     {
                         highlight_alpha = 50;
                         self->clear_draw_tile(mpblockx: int, mpblocky: int);

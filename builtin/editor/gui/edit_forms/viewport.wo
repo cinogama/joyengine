@@ -376,13 +376,13 @@ namespace editor::gui::edit_forms
                                             mut right_key_down_time = 0., 
                                             mut noclick_flag = true;
 
-                                        if (je::input::mousedown(0, je::mousecode::RIGHT) && noclick_flag)
+                                        if (je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Right) && noclick_flag)
                                         {
                                             noclick_flag = false;
                                             right_key_down_time = std::time();
                                         }
 
-                                        if (!je::input::mousedown(0, je::mousecode::RIGHT))
+                                        if (!je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Right))
                                         {
                                             noclick_flag = true;
                                             if (std::time() - right_key_down_time < 0.2)
