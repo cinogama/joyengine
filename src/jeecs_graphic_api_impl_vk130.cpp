@@ -3706,7 +3706,8 @@ VK_API_PLATFORM_API_LIST
             abort();
         }
     }
-    jegl_graphic_api::update_action commit_update(jegl_context::userdata_t ctx)
+    jegl_graphic_api::update_action commit_update(
+        jegl_context::userdata_t ctx, jegl_graphic_api::update_action)
     {
         jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
 

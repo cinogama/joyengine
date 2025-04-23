@@ -121,14 +121,6 @@ void jegui_init_gl330(
     ImGui_ImplGlfw_InitForOpenGL((GLFWwindow*)window_handle, true);
 #endif
     ImGui_ImplOpenGL3_Init(nullptr);
-
-#ifndef JE_ENABLE_GL330_GAPI
-
-    // Disable multi-viewport in opengles3.0 & webgl2.0
-    ImGui::GetIO().ConfigFlags &= ~ImGuiConfigFlags_ViewportsEnable;
-
-#endif // JE_ENABLE_GLES300_API
-
 }
 
 void jegui_update_gl330()
@@ -161,9 +153,17 @@ void jegui_update_gl330()
 #else
     ImGui_ImplGlfw_NewFrame();
 #endif
+
+#ifndef JE_GL_USE_EGL_INSTEAD_GLFW
+    GLFWwindow* backup_current_context = glfwGetCurrentContext();
+#endif
     jegui_update_basic(
         [](void*) {ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData()); },
         nullptr);
+
+#ifndef JE_GL_USE_EGL_INSTEAD_GLFW
+    glfwMakeContextCurrent(backup_current_context);
+#endif
 }
 
 void jegui_shutdown_gl330(bool reboot)

@@ -279,7 +279,8 @@ namespace jeecs::graphic::api::gl3
         }
     }
 
-    jegl_graphic_api::update_action gl_commit_update(jegl_context::userdata_t)
+    jegl_graphic_api::update_action gl_commit_update(
+        jegl_context::userdata_t, jegl_graphic_api::update_action)
     {
         jegui_update_gl330();
 

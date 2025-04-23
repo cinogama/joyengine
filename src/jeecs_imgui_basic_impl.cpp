@@ -1,5 +1,8 @@
 #define JE_IMPL
 #include "jeecs.hpp"
+
+#include "jeecs_imgui_backend_api.hpp"
+
 #include <string>
 #include <unordered_set>
 #include <optional>
@@ -2405,7 +2408,10 @@ public func frag(vf: v2f)
     ImGuiIO& io = ImGui::GetIO();
 
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
+#ifndef JE_GL_USE_EGL_INSTEAD_GLFW
     io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+#endif
 
     io.IniFilename = _je_gui_tls_ctx._jegui_imgui_config_path.c_str();
 

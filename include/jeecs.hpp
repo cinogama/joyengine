@@ -2213,6 +2213,7 @@ struct jegl_graphic_api
     using shutdown_func_t = void (*)(jegl_context*, jegl_context::userdata_t, bool);
 
     using update_func_t = update_action(*)(jegl_context::userdata_t);
+    using commit_func_t = update_action(*)(jegl_context::userdata_t, update_action);
 
     using create_blob_func_t = jegl_resource_blob(*)(jegl_context::userdata_t, jegl_resource*);
     using close_blob_func_t = void (*)(jegl_context::userdata_t, jegl_resource_blob);
@@ -2269,10 +2270,13 @@ struct jegl_graphic_api
     jegl_graphic_api::update_frame_ready [成员]
     图形接口在更新一帧画面的起始位置会调用的接口，图形实现应当在此接口的开头完成前一帧画面的交换以呈现在屏幕上（这样可
     以获得最佳的画面流畅度），然后做好其他准备：正式的主要渲染任务会在此接口返回后开始。
-        * 接口若返回 update_action::STOP，则表示图形实现请求关闭渲染，update_draw_commit将被跳过（并且不应执行任何渲染操作），
-            并在帧同步工作完成后进入图形线程的退出流程。
-        * 接口若返回 update_action::SKIP，则表示图形实现请求跳过本帧的渲染，update_draw_commit将被跳过（并且不应执行任何渲
-            染操作），但 **不会** 进入图形线程的退出流程。
+        * 接口若返回 update_action::STOP，则表示图形实现请求关闭渲染
+            创建图形线程时指示的绘制任务将被跳过，在帧同步工作完成后进入图形线程的退出流程。
+        * 接口若返回 update_action::SKIP，则表示图形实现请求跳过本帧的渲染，
+            通常这种情况是由于窗口被切换至后台、最小化等情况导致的，
+            创建图形线程时指示的绘制任务将被跳过，但 **不会** 进入图形线程的退出流程。
+        无论如何，update_draw_commit 都会被执行（目的是能正确执行 gui 的逻辑），update_draw_commit将通过参数
+        获知渲染任务是否被执行
     */
     update_func_t update_frame_ready;
 
@@ -2281,10 +2285,9 @@ struct jegl_graphic_api
     图形接口在完成指示的渲染操作之后会调用的接口，图形实现应当在此接口中，将既存的提交任务提交到图形设备中（以最大化利用
     设备空闲），如果可以，渲染GUI的任务也应当在此处实现，并一并提交。
         * 接口若返回 update_action::STOP，则表示图形实现请求关闭渲染，在帧同步工作完成后进入图形线程的退出流程。
-        * 接口若返回 update_action::SKIP，由于一帧的任务已经完成，因此事实上如同返回 update_action::CONTINUE，不会跳
-            过任何任务。
+        * 接口若返回 update_action::SKIP，由于并没有后续的渲染任务可被跳过，因此事实上如同返回 update_action::CONTINUE。
     */
-    update_func_t update_draw_commit;
+    commit_func_t update_draw_commit;
 
     /*
     jegl_graphic_api::create_resource_blob_cache [成员]

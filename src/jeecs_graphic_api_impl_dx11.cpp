@@ -445,7 +445,8 @@ namespace jeecs::graphic::api::dx11
         }
     }
 
-    jegl_graphic_api::update_action dx11_commit_update(jegl_context::userdata_t)
+    jegl_graphic_api::update_action dx11_commit_update(
+        jegl_context::userdata_t, jegl_graphic_api::update_action)
     {
         jegui_update_dx11();
         return jegl_graphic_api::update_action::CONTINUE;

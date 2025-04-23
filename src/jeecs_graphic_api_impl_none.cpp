@@ -38,7 +38,8 @@ namespace jeecs::graphic::api::none
     {
         return jegl_graphic_api::update_action::CONTINUE;
     }
-    jegl_graphic_api::update_action commit_update(jegl_context::userdata_t ctx)
+    jegl_graphic_api::update_action commit_update(
+        jegl_context::userdata_t, jegl_graphic_api::update_action)
     {
         jegui_update_none();
         return jegl_graphic_api::update_action::CONTINUE;

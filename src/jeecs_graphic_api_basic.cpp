@@ -426,7 +426,10 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
             || thread->_m_thread_notifier->m_reboot_flag)
             goto is_reboot_or_shutdown;
 
-        switch (thread->m_apis->update_frame_ready(thread->m_userdata))
+        const auto frame_update_state = 
+            thread->m_apis->update_frame_ready(thread->m_userdata);
+
+        switch (frame_update_state)
         {
         case jegl_graphic_api::update_action::STOP:
             // graphic thread want to exit. mark stop update
@@ -435,17 +438,21 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
         case jegl_graphic_api::update_action::CONTINUE:
             // Only clear commited rendchains when update action is CONTINUE.
             thread->_m_frame_rend_work(thread, thread->_m_frame_rend_work_arg);
-
-            if (thread->m_apis->update_draw_commit(thread->m_userdata) == jegl_graphic_api::update_action::STOP)
-                std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->store(true);
             break;
         case jegl_graphic_api::update_action::SKIP:
             // Skip current frame.
             if (thread->m_config.m_fps == 0)
                 // If vsync is available, wait for 1./120. sec here to decrease CPU usage.
                 je_clock_sleep_for(1. / 120.);
-
             break;
+        default:
+            jeecs::debug::logfatal("Unknown frame update state: %d.", (int)frame_update_state);
+        }
+
+        if (jegl_graphic_api::update_action::STOP ==
+            thread->m_apis->update_draw_commit(thread->m_userdata, frame_update_state))
+        {
+            std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->store(true);
         }
 
         auto* del_res = thread->_m_thread_notifier->_m_closing_resources.pick_all();
