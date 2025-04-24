@@ -101,7 +101,7 @@ int jegui_android_PollUnicodeChars()
 #   endif
 
 void jegui_init_vk130(
-    jegl_context::userdata_t ctx,
+    jegl_context* ctx,
     jegui_user_image_loader_t get_img_res,
     jegui_user_sampler_loader_t apply_shader_sampler,
     void* window_handle,

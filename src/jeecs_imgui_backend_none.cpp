@@ -6,7 +6,7 @@
 #include <imgui.h>
 
 void jegui_init_none(
-    jegl_context::userdata_t ctx,
+    jegl_context* ctx,
     jegui_user_image_loader_t get_img_res,
     jegui_user_sampler_loader_t apply_shader_sampler)
 {

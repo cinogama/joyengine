@@ -1830,6 +1830,7 @@ struct jegl_interface_config
 
 struct jegl_context_notifier;
 struct jegl_graphic_api;
+struct jegl_context_promise_t;
 
 /*
 jegl_context [类型]
@@ -1840,7 +1841,6 @@ struct jegl_context
     using userdata_t = void*;
     using frame_job_t = void (*)(jegl_context*, void*);
 
-    void* /*std::promise<void>*/ _m_promise;
     frame_job_t _m_frame_rend_work;
     void* _m_frame_rend_work_arg;
     void* _m_sync_callback_arg;
@@ -1852,7 +1852,6 @@ struct jegl_context
     jeecs::typing::version_t m_version;
     jegl_interface_config m_config;
     jegl_graphic_api* m_apis;
-    void* /*std::atomic_bool*/ m_stop_update;
     userdata_t m_userdata;
 };
 
@@ -3370,8 +3369,8 @@ JE_API void jegui_set_font(
     size_t size);
 
 typedef uint64_t jegui_user_image_handle_t;
-typedef jegui_user_image_handle_t(*jegui_user_image_loader_t)(jegl_context::userdata_t, jegl_resource*);
-typedef void (*jegui_user_sampler_loader_t)(jegl_context::userdata_t, jegl_resource*);
+typedef jegui_user_image_handle_t(*jegui_user_image_loader_t)(jegl_context*, jegl_resource*);
+typedef void (*jegui_user_sampler_loader_t)(jegl_context*, jegl_resource*);
 
 /*
 jegui_init_basic [基本接口]
@@ -3384,7 +3383,7 @@ jegui_init_basic [基本接口]
     * 此接口仅适合用于对接自定义渲染API时使用
 */
 JE_API void jegui_init_basic(
-    jegl_context::userdata_t gl_context,
+    jegl_context* gl_context,
     bool need_flip_frame_buf,
     jegui_user_image_loader_t get_img_res,
     jegui_user_sampler_loader_t apply_shader_sampler);

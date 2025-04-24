@@ -113,8 +113,6 @@ namespace jeecs::graphic::api::dx11
         UINT m_color_target_count;
     };
 
-    thread_local jegl_dx11_context* _je_dx_current_thread_context;
-
     template<typename T>
     void _jedx11_trace_debug(T& ob, const std::string& obname)
     {
@@ -219,7 +217,6 @@ namespace jeecs::graphic::api::dx11
     jegl_context::userdata_t dx11_startup(jegl_context* gthread, const jegl_interface_config* config, bool reboot)
     {
         jegl_dx11_context* context = new jegl_dx11_context;
-        _je_dx_current_thread_context = context;
 
         context->m_interface = new glfw(reboot ? glfw::HOLD : glfw::DIRECTX11);
         context->m_interface->create_interface(gthread, config);
@@ -359,19 +356,20 @@ namespace jeecs::graphic::api::dx11
             context->m_dx_swapchain->SetFullscreenState(true, nullptr);
 
         jegui_init_dx11(
-            context,
-            [](jegl_context::userdata_t ctx, jegl_resource* res) {
+            gthread,
+            [](jegl_context*, jegl_resource* res) {
                 auto* resource = std::launder(reinterpret_cast<jedx11_texture*>(res->m_handle.m_ptr));
                 return (uint64_t)resource->m_texture_view.Get();
             },
-            [](jegl_context::userdata_t ctx, jegl_resource* res)
+            [](jegl_context* ctx, jegl_resource* res)
             {
+                auto* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx->m_userdata));
                 auto* shader = std::launder(reinterpret_cast<jedx11_shader*>(res->m_handle.m_ptr));
                 for (auto& sampler : shader->m_samplers)
                 {
-                    _je_dx_current_thread_context->m_dx_context->VSSetSamplers(
+                    context->m_dx_context->VSSetSamplers(
                         sampler.m_sampler_id, 1, sampler.m_sampler.GetAddressOf());
-                    _je_dx_current_thread_context->m_dx_context->PSSetSamplers(
+                    context->m_dx_context->PSSetSamplers(
                         sampler.m_sampler_id, 1, sampler.m_sampler.GetAddressOf());
                 }
             },

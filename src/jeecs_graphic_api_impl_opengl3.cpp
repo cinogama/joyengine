@@ -42,6 +42,12 @@ namespace jeecs::graphic::api::gl3
         GLuint m_binded_texture_passes[128] = {};
         GLenum m_binded_texture_passes_type[128] = {};
 
+        jegl_shader::depth_test_method  ACTIVE_DEPTH_MODE = jegl_shader::depth_test_method::INVALID;
+        jegl_shader::depth_mask_method  ACTIVE_MASK_MODE = jegl_shader::depth_mask_method::INVALID;
+        jegl_shader::blend_method       ACTIVE_BLEND_SRC_MODE = jegl_shader::blend_method::INVALID;
+        jegl_shader::blend_method       ACTIVE_BLEND_DST_MODE = jegl_shader::blend_method::INVALID;
+        jegl_shader::cull_mode          ACTIVE_CULL_MODE = jegl_shader::cull_mode::INVALID;
+
         JECS_DISABLE_MOVE_AND_COPY(jegl_gl3_context);
 
         jegl_gl3_context(jegl_context* gthread, const jegl_interface_config* config, bool reboot)
@@ -188,11 +194,11 @@ namespace jeecs::graphic::api::gl3
 #endif
 
         jegui_init_gl330(
-            context,
-            [](jegl_context::userdata_t ctx, jegl_resource* res) {
+            gthread,
+            [](jegl_context*, jegl_resource* res) {
                 return (uint64_t)res->m_handle.m_uint1;
             },
-            [](jegl_context::userdata_t ctx, jegl_resource* res)
+            [](jegl_context*, jegl_resource* res)
             {
                 if (res->m_raw_shader_data != nullptr)
                 {
@@ -485,9 +491,9 @@ namespace jeecs::graphic::api::gl3
             break;
         default:
             break;
-    }
+        }
         return nullptr;
-}
+    }
 
     void gl_close_resource_blob(jegl_context::userdata_t ctx, jegl_resource_blob blob)
     {
@@ -633,7 +639,7 @@ namespace jeecs::graphic::api::gl3
                             NULL
                         );
                     }
-                    }
+                }
                 else
                     glTexImage2D(gl_texture_type, 0,
 #if defined(JE_ENABLE_WEBGL20_GAPI)
@@ -841,18 +847,12 @@ namespace jeecs::graphic::api::gl3
 
     }
 
-    thread_local static jegl_shader::depth_test_method  ACTIVE_DEPTH_MODE = jegl_shader::depth_test_method::INVALID;
-    thread_local static jegl_shader::depth_mask_method  ACTIVE_MASK_MODE = jegl_shader::depth_mask_method::INVALID;
-    thread_local static jegl_shader::blend_method       ACTIVE_BLEND_SRC_MODE = jegl_shader::blend_method::INVALID;
-    thread_local static jegl_shader::blend_method       ACTIVE_BLEND_DST_MODE = jegl_shader::blend_method::INVALID;
-    thread_local static jegl_shader::cull_mode          ACTIVE_CULL_MODE = jegl_shader::cull_mode::INVALID;
-
-    void _gl_update_depth_test_method(jegl_shader::depth_test_method mode)
+    void _gl_update_depth_test_method(jegl_gl3_context* ctx, jegl_shader::depth_test_method mode)
     {
         assert(mode != jegl_shader::depth_test_method::INVALID);
-        if (ACTIVE_DEPTH_MODE != mode)
+        if (ctx->ACTIVE_DEPTH_MODE != mode)
         {
-            ACTIVE_DEPTH_MODE = mode;
+            ctx->ACTIVE_DEPTH_MODE = mode;
 
             if (mode == jegl_shader::depth_test_method::OFF)
                 glDisable(GL_DEPTH_TEST);
@@ -876,12 +876,12 @@ namespace jeecs::graphic::api::gl3
             }// end else
         }
     }
-    void _gl_update_depth_mask_method(jegl_shader::depth_mask_method mode)
+    void _gl_update_depth_mask_method(jegl_gl3_context* ctx, jegl_shader::depth_mask_method mode)
     {
         assert(mode != jegl_shader::depth_mask_method::INVALID);
-        if (ACTIVE_MASK_MODE != mode)
+        if (ctx->ACTIVE_MASK_MODE != mode)
         {
-            ACTIVE_MASK_MODE = mode;
+            ctx->ACTIVE_MASK_MODE = mode;
 
             if (mode == jegl_shader::depth_mask_method::ENABLE)
                 glDepthMask(GL_TRUE);
@@ -889,13 +889,13 @@ namespace jeecs::graphic::api::gl3
                 glDepthMask(GL_FALSE);
         }
     }
-    void _gl_update_blend_mode_method(jegl_shader::blend_method src_mode, jegl_shader::blend_method dst_mode)
+    void _gl_update_blend_mode_method(jegl_gl3_context* ctx, jegl_shader::blend_method src_mode, jegl_shader::blend_method dst_mode)
     {
         assert(src_mode != jegl_shader::blend_method::INVALID && dst_mode != jegl_shader::blend_method::INVALID);
-        if (ACTIVE_BLEND_SRC_MODE != src_mode || ACTIVE_BLEND_DST_MODE != dst_mode)
+        if (ctx->ACTIVE_BLEND_SRC_MODE != src_mode || ctx->ACTIVE_BLEND_DST_MODE != dst_mode)
         {
-            ACTIVE_BLEND_SRC_MODE = src_mode;
-            ACTIVE_BLEND_DST_MODE = dst_mode;
+            ctx->ACTIVE_BLEND_SRC_MODE = src_mode;
+            ctx->ACTIVE_BLEND_DST_MODE = dst_mode;
 
             if (src_mode == jegl_shader::blend_method::ONE && dst_mode == jegl_shader::blend_method::ZERO)
                 glDisable(GL_BLEND);
@@ -936,12 +936,12 @@ namespace jeecs::graphic::api::gl3
 
         }
     }
-    void _gl_update_cull_mode_method(jegl_shader::cull_mode mode)
+    void _gl_update_cull_mode_method(jegl_gl3_context* ctx, jegl_shader::cull_mode mode)
     {
         assert(mode != jegl_shader::cull_mode::INVALID);
-        if (ACTIVE_CULL_MODE != mode)
+        if (ctx->ACTIVE_CULL_MODE != mode)
         {
-            ACTIVE_CULL_MODE = mode;
+            ctx->ACTIVE_CULL_MODE = mode;
 
             if (mode == jegl_shader::cull_mode::NONE)
                 glDisable(GL_CULL_FACE);
@@ -963,16 +963,17 @@ namespace jeecs::graphic::api::gl3
         }
     }
 
-    void _gl_using_shader_program(jegl_resource* resource)
+    void _gl_using_shader_program(jegl_gl3_context* context, jegl_resource* resource)
     {
         if (resource->m_raw_shader_data != nullptr)
         {
-            _gl_update_depth_test_method(resource->m_raw_shader_data->m_depth_test);
-            _gl_update_depth_mask_method(resource->m_raw_shader_data->m_depth_mask);
+            _gl_update_depth_test_method(context, resource->m_raw_shader_data->m_depth_test);
+            _gl_update_depth_mask_method(context, resource->m_raw_shader_data->m_depth_mask);
             _gl_update_blend_mode_method(
+                context,
                 resource->m_raw_shader_data->m_blend_src_mode,
                 resource->m_raw_shader_data->m_blend_dst_mode);
-            _gl_update_cull_mode_method(resource->m_raw_shader_data->m_cull_mode);
+            _gl_update_cull_mode_method(context, resource->m_raw_shader_data->m_cull_mode);
 
             for (size_t i = 0; i < resource->m_raw_shader_data->m_sampler_count; ++i)
             {
@@ -1132,9 +1133,10 @@ namespace jeecs::graphic::api::gl3
         }
     }
 
-    void gl_bind_shader(jegl_context::userdata_t, jegl_resource* shader)
+    void gl_bind_shader(jegl_context::userdata_t context, jegl_resource* shader)
     {
-        _gl_using_shader_program(shader);
+        jegl_gl3_context* ctx = std::launder(reinterpret_cast<jegl_gl3_context*>(context));
+        _gl_using_shader_program(ctx, shader);
     }
 
     void gl_bind_uniform_buffer(jegl_context::userdata_t, jegl_resource* uniformbuf)
@@ -1192,9 +1194,10 @@ namespace jeecs::graphic::api::gl3
         glClear(GL_COLOR_BUFFER_BIT);
     }
 
-    void gl_clear_framebuffer_depth(jegl_context::userdata_t)
+    void gl_clear_framebuffer_depth(jegl_context::userdata_t ctx)
     {
-        _gl_update_depth_mask_method(jegl_shader::depth_mask_method::ENABLE);
+        jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
+        _gl_update_depth_mask_method(context, jegl_shader::depth_mask_method::ENABLE);
         glClear(GL_DEPTH_BUFFER_BIT);
     }
 }

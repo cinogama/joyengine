@@ -35,7 +35,7 @@ jeecs::basic::atomic_list<gui_wo_job_coroutine> _wo_new_job_list;
 
 struct _jegui_thread_local_context
 {
-    jegl_context::userdata_t _jegl_user_data = nullptr;
+    jegl_context* _jegl_context = nullptr;
     bool _jegui_stop_work_flag = false;
     bool _jegui_need_flip_frambuf = false;
 
@@ -474,13 +474,13 @@ WO_API wo_api je_gui_draw_list_add_image(wo_vm vm, wo_value args)
     dlist->AddCallback(
         [](auto, auto) {
             _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
-                _je_gui_tls_ctx._jegl_user_data,
+                _je_gui_tls_ctx._jegl_context,
                 _je_gui_tls_ctx._jegl_rend_texture_shader->resource());
         },
         nullptr);
     dlist->AddImage(
         (ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture(
-            _je_gui_tls_ctx._jegl_user_data,
+            _je_gui_tls_ctx._jegl_context,
             (*texture)->resource()),
         val2vec2(args + 1),
         val2vec2(args + 2),
@@ -947,13 +947,13 @@ WO_API wo_api je_gui_image(wo_vm vm, wo_value args)
     auto* dlist = ImGui::GetWindowDrawList();
     dlist->AddCallback([](auto, auto) {
         _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
-            _je_gui_tls_ctx._jegl_user_data,
+            _je_gui_tls_ctx._jegl_context,
             _je_gui_tls_ctx._jegl_rend_texture_shader->resource());
         },
         nullptr);
     ImGui::Image(
         (ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture(
-            _je_gui_tls_ctx._jegl_user_data,
+            _je_gui_tls_ctx._jegl_context,
             (*texture)->resource()),
         ImVec2(
             (float)((*texture)->resource())->m_raw_texture_data->m_width,
@@ -984,11 +984,11 @@ WO_API wo_api je_gui_image_scale(wo_vm vm, wo_value args)
     auto* dlist = ImGui::GetWindowDrawList();
     dlist->AddCallback([](auto, auto) {
         _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
-            _je_gui_tls_ctx._jegl_user_data,
+            _je_gui_tls_ctx._jegl_context,
             _je_gui_tls_ctx._jegl_rend_texture_shader->resource()); },
         nullptr);
     ImGui::Image((ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture(
-        _je_gui_tls_ctx._jegl_user_data,
+        _je_gui_tls_ctx._jegl_context,
         (*texture)->resource()),
         ImVec2(
             ((*texture)->resource())->m_raw_texture_data->m_width * wo_float(args + 1),
@@ -1019,12 +1019,12 @@ WO_API wo_api je_gui_image_size(wo_vm vm, wo_value args)
     auto* dlist = ImGui::GetWindowDrawList();
     dlist->AddCallback([](auto, auto) {
         _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
-            _je_gui_tls_ctx._jegl_user_data,
+            _je_gui_tls_ctx._jegl_context,
             _je_gui_tls_ctx._jegl_rend_texture_shader->resource());
         },
         nullptr);
     ImGui::Image((ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture(
-        _je_gui_tls_ctx._jegl_user_data,
+        _je_gui_tls_ctx._jegl_context,
         (*texture)->resource()),
         ImVec2(
             wo_float(args + 1),
@@ -1056,12 +1056,12 @@ WO_API wo_api je_gui_image_size_color(wo_vm vm, wo_value args)
     auto* dlist = ImGui::GetWindowDrawList();
     dlist->AddCallback([](auto, auto) {
         _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
-            _je_gui_tls_ctx._jegl_user_data,
+            _je_gui_tls_ctx._jegl_context,
             _je_gui_tls_ctx._jegl_rend_texture_shader->resource());
         },
         nullptr);
     ImGui::Image((ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture(
-        _je_gui_tls_ctx._jegl_user_data,
+        _je_gui_tls_ctx._jegl_context,
         (*texture)->resource()),
         ImVec2(
             wo_float(args + 1),
@@ -1097,14 +1097,14 @@ WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args)
     auto* dlist = ImGui::GetWindowDrawList();
     dlist->AddCallback([](auto, auto) {
         _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
-            _je_gui_tls_ctx._jegl_user_data,
+            _je_gui_tls_ctx._jegl_context,
             _je_gui_tls_ctx._jegl_rend_texture_shader->resource());
         },
         nullptr);
     result = ImGui::ImageButton(
         label,
         (ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture(
-            _je_gui_tls_ctx._jegl_user_data,
+            _je_gui_tls_ctx._jegl_context,
             (*texture)->resource()),
         ImVec2(
             (float)((*texture)->resource())->m_raw_texture_data->m_width,
@@ -1138,14 +1138,14 @@ WO_API wo_api je_gui_imagebutton_scale(wo_vm vm, wo_value args)
     auto* dlist = ImGui::GetWindowDrawList();
     dlist->AddCallback([](auto, auto) {
         _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
-            _je_gui_tls_ctx._jegl_user_data,
+            _je_gui_tls_ctx._jegl_context,
             _je_gui_tls_ctx._jegl_rend_texture_shader->resource());
         },
         nullptr);
     result = ImGui::ImageButton(
         label,
         (ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture(
-            _je_gui_tls_ctx._jegl_user_data,
+            _je_gui_tls_ctx._jegl_context,
             (*texture)->resource()),
         ImVec2(
             ((*texture)->resource())->m_raw_texture_data->m_width * wo_float(args + 2),
@@ -1177,14 +1177,14 @@ WO_API wo_api je_gui_imagebutton_size(wo_vm vm, wo_value args)
     auto* dlist = ImGui::GetWindowDrawList();
     dlist->AddCallback([](auto, auto) {
         _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
-            _je_gui_tls_ctx._jegl_user_data,
+            _je_gui_tls_ctx._jegl_context,
             _je_gui_tls_ctx._jegl_rend_texture_shader->resource());
         },
         nullptr);
     result = ImGui::ImageButton(
         label,
         (ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture(
-            _je_gui_tls_ctx._jegl_user_data,
+            _je_gui_tls_ctx._jegl_context,
             (*texture)->resource()),
         ImVec2(
             wo_float(args + 2),
@@ -2345,12 +2345,12 @@ WO_API wo_api je_gui_node_editor_resume(wo_vm vm, wo_value args)
 ////////////////////////////////////////////////////////////////////////////////////////////
 
 void jegui_init_basic(
-    jegl_context::userdata_t gl_context,
+    jegl_context* gl_context,
     bool need_flip_frame_buf,
     jegui_user_image_loader_t get_img_res,
     jegui_user_sampler_loader_t apply_shader_sampler)
 {
-    _je_gui_tls_ctx._jegl_user_data = gl_context;
+    _je_gui_tls_ctx._jegl_context = gl_context;
     _je_gui_tls_ctx._jegui_need_flip_frambuf = need_flip_frame_buf;
     _je_gui_tls_ctx._jegl_get_native_texture = get_img_res;
     _je_gui_tls_ctx._jegl_bind_shader_sampler_state = apply_shader_sampler;
@@ -2410,7 +2410,9 @@ public func frag(vf: v2f)
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
 #ifndef JE_GL_USE_EGL_INSTEAD_GLFW
-    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+    // 仅普通窗口模式下启用多视口支持
+    if (gl_context->m_config.m_display_mode == jegl_interface_config::display_mode::WINDOWED)
+        io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 #endif
 
     io.IniFilename = _je_gui_tls_ctx._jegui_imgui_config_path.c_str();

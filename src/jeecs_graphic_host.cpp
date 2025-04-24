@@ -76,7 +76,7 @@ namespace jeecs
                 ? jegl_update_sync_mode::JEGL_WAIT_LAST_FRAME_END
                 : jegl_update_sync_mode::JEGL_WAIT_THIS_FRAME_END;
 
-            if (!jegl_update(graphic_host->glthread, jegl_update_sync_mode::JEGL_WAIT_THIS_FRAME_END))
+            if (!jegl_update(graphic_host->glthread, SYNC_MODE))
             {
                 graphic_host->universe.stop();
             }

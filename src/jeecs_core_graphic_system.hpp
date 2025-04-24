@@ -299,7 +299,7 @@ public let frag =
         {
             math::vec3 size = trans.local_scale;
 
-            const auto& light_shape = 
+            const auto& light_shape =
                 mesh != nullptr ? mesh : m_default_resources.default_shape_quad;
 
             assert(light_shape->resource() != nullptr);
@@ -395,7 +395,6 @@ public let frag =
                 // Windows' size is invalid, skip this frame.
                 return;
 
-            // TODO: Update shared uniform.
             double current_time = je_clock_time();
 
             math::vec4 shader_time =
@@ -663,8 +662,7 @@ public let frag =
                 Rendqueue* rendqueue,
                 Renderer::Color* color)
                 {
-                    // TODO: Need Impl AnyOf
-                        // RendOb will be input to a chain and used for swap
+                    // RendOb will be input to a chain and used for swap
                     m_renderer_list.emplace_back(
                         renderer_arch{
                             color, rendqueue, &trans, &shape, &shads, texs
@@ -685,7 +683,6 @@ public let frag =
                 // Windows' size is invalid, skip this frame.
                 return;
 
-            // TODO: Update shared uniform.
             double current_time = je_clock_time();
 
             math::vec4 shader_time =
@@ -1521,8 +1518,8 @@ public func frag(_: v2f)
                             std::max((size_t)1, (size_t)llround(
                                 (cameraviewport ? cameraviewport->viewport.w : 1.0f) *
                                 (rend_aim_buffer ? rend_aim_buffer->height() : WINDOWS_HEIGHT)));
-                        
-                        size_t LIGHT_BUFFER_WIDTH = 
+
+                        size_t LIGHT_BUFFER_WIDTH =
                             std::max((size_t)1, (size_t)llround(
                                 RENDAIMBUFFER_WIDTH * std::max(0.f, std::min(light2dpostpass->light_rend_ratio, 1.0f))));
 
@@ -1793,7 +1790,6 @@ public func frag(_: v2f)
                 // Windows' size is invalid, skip this frame.
                 return;
 
-            // TODO: Update shared uniform.
             double current_time = je_clock_time();
 
             math::vec4 shader_time =

@@ -6,18 +6,18 @@
 namespace jeecs::graphic::api::none
 {
     jegl_context::userdata_t
-        startup(jegl_context*, const jegl_interface_config*, bool reboot)
+        startup(jegl_context* glthread, const jegl_interface_config*, bool reboot)
     {
         if (!reboot)
             jeecs::debug::log("Graphic thread (None) start!");
 
         jegui_init_none(
-            nullptr,
-            [](jegl_context::userdata_t ctx, jegl_resource* res) 
+            glthread,
+            [](jegl_context*, jegl_resource*) 
             {
                 return (uint64_t)nullptr; 
             },
-            [](jegl_context::userdata_t ctx, jegl_resource* res)
+            [](jegl_context*, jegl_resource*)
             {
             });
 

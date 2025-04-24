@@ -174,13 +174,15 @@ struct _jegl_destroy_resource
 
 struct jegl_context_notifier
 {
-    std::atomic_flag m_graphic_terminate_flag;
+    std::atomic_bool m_graphic_terminated;
 
-    std::mutex       m_update_mx;
+    std::mutex m_update_mx;
     std::atomic_bool m_update_flag;
     std::condition_variable m_update_waiter;
 
     std::atomic_bool m_reboot_flag;
+
+    std::promise<void> m_promise;
 
     // Aliving resource.
     std::unordered_set<jegl_resource*> _m_created_resources;
@@ -411,7 +413,7 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
 {
     std::unordered_map<_jegl_destroy_resource*, bool> _waiting_to_free_resource;
 
-    if (thread->_m_thread_notifier->m_graphic_terminate_flag.test_and_set())
+    if (!thread->_m_thread_notifier->m_graphic_terminated.load())
     {
         do
         {
@@ -422,18 +424,19 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
         } while (0);
 
         // Ready for rend..
-        if (!thread->_m_thread_notifier->m_graphic_terminate_flag.test_and_set()
+        if (thread->_m_thread_notifier->m_graphic_terminated.load()
             || thread->_m_thread_notifier->m_reboot_flag)
             goto is_reboot_or_shutdown;
 
-        const auto frame_update_state = 
+        const auto frame_update_state =
             thread->m_apis->update_frame_ready(thread->m_userdata);
 
         switch (frame_update_state)
         {
         case jegl_graphic_api::update_action::STOP:
             // graphic thread want to exit. mark stop update
-            std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->store(true);
+            // std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->store(true);
+            thread->_m_thread_notifier->m_graphic_terminated.store(true);
             break;
         case jegl_graphic_api::update_action::CONTINUE:
             // Only clear commited rendchains when update action is CONTINUE.
@@ -452,7 +455,8 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
         if (jegl_graphic_api::update_action::STOP ==
             thread->m_apis->update_draw_commit(thread->m_userdata, frame_update_state))
         {
-            std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->store(true);
+            // std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->store(true);
+            thread->_m_thread_notifier->m_graphic_terminated.store(true);
         }
 
         auto* del_res = thread->_m_thread_notifier->_m_closing_resources.pick_all();
@@ -548,11 +552,7 @@ bool jegl_sync_shutdown(jegl_context* thread, bool isreboot)
     if (!isreboot)
     {
         // Really shutdown, give promise!
-        auto* promise = std::launder(
-            reinterpret_cast<std::promise<void>*>(
-                thread->_m_promise));
-
-        promise->set_value();
+        thread->_m_thread_notifier->m_promise.set_value();
         _current_graphic_thread = nullptr;
         return true;
     }
@@ -629,15 +629,12 @@ jegl_context* jegl_start_graphic_thread(
 
     // Take place.
     thread_handle->m_config = config;
-    thread_handle->_m_thread_notifier->m_graphic_terminate_flag.test_and_set();
+    thread_handle->_m_thread_notifier->m_graphic_terminated.store(false);
     thread_handle->_m_thread_notifier->m_update_flag = false;
     thread_handle->_m_thread_notifier->m_reboot_flag = false;
     thread_handle->m_universe_instance = universe_instance;
-    thread_handle->m_stop_update = new std::atomic_bool(false);
     thread_handle->_m_frame_rend_work = frame_rend_work;
     thread_handle->_m_frame_rend_work_arg = arg;
-
-    thread_handle->_m_promise = new std::promise<void>();
 
     assert(_jegl_sync_callback_func != nullptr);
     thread_handle->_m_sync_callback_arg = _jegl_sync_callback_arg;
@@ -675,8 +672,7 @@ void jegl_terminate_graphic_thread(jegl_context* thread)
 
     } while (0);
 
-    assert(thread->_m_thread_notifier->m_graphic_terminate_flag.test_and_set());
-    thread->_m_thread_notifier->m_graphic_terminate_flag.clear();
+    thread->_m_thread_notifier->m_graphic_terminated.store(true);
 
     do
     {
@@ -685,8 +681,8 @@ void jegl_terminate_graphic_thread(jegl_context* thread)
         thread->_m_thread_notifier->m_update_waiter.notify_all();
     } while (0);
 
-    auto* promise = std::launder(reinterpret_cast<std::promise<void>*>(thread->_m_promise));
-    promise->get_future().get();
+    // Sync thread and wait for shutting-down
+    thread->_m_thread_notifier->m_promise.get_future().get();
 
     _je_graphic_shared_context_instance._free_resource_in_gcontext(thread);
 
@@ -700,9 +696,7 @@ void jegl_terminate_graphic_thread(jegl_context* thread)
         delete cur_closing_resource;
     }
 
-    delete promise;
-
-    delete std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update));
+    // delete std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update));
     delete thread->_m_thread_notifier;
     delete thread->m_apis;
     delete thread;
@@ -710,31 +704,28 @@ void jegl_terminate_graphic_thread(jegl_context* thread)
 
 bool jegl_update(jegl_context* thread, jegl_update_sync_mode mode)
 {
-    if (std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->load())
-        return false;
+    if (thread->_m_thread_notifier->m_graphic_terminated.load())
+         return false;
 
-    do
+    std::unique_lock uq1(thread->_m_thread_notifier->m_update_mx);
+    if (mode == jegl_update_sync_mode::JEGL_WAIT_LAST_FRAME_END)
     {
-        std::unique_lock uq1(thread->_m_thread_notifier->m_update_mx);
-        if (mode == jegl_update_sync_mode::JEGL_WAIT_LAST_FRAME_END)
-        {
-            // Wait until `last` frame draw end.
-            thread->_m_thread_notifier->m_update_waiter.wait(uq1, [thread]()->bool {
-                return !thread->_m_thread_notifier->m_update_flag;
-                });
-        }
+        // Wait until `last` frame draw end.
+        thread->_m_thread_notifier->m_update_waiter.wait(uq1, [thread]()->bool {
+            return !thread->_m_thread_notifier->m_update_flag;
+            });
+    }
 
-        thread->_m_thread_notifier->m_update_flag = true;
-        thread->_m_thread_notifier->m_update_waiter.notify_all();
+    thread->_m_thread_notifier->m_update_flag = true;
+    thread->_m_thread_notifier->m_update_waiter.notify_all();
 
-        if (mode == jegl_update_sync_mode::JEGL_WAIT_THIS_FRAME_END)
-        {
-            // Wait until `this` frame draw end.
-            thread->_m_thread_notifier->m_update_waiter.wait(uq1, [thread]()->bool {
-                return !thread->_m_thread_notifier->m_update_flag;
-                });
-        }
-    } while (0);
+    if (mode == jegl_update_sync_mode::JEGL_WAIT_THIS_FRAME_END)
+    {
+        // Wait until `this` frame draw end.
+        thread->_m_thread_notifier->m_update_waiter.wait(uq1, [thread]()->bool {
+            return !thread->_m_thread_notifier->m_update_flag;
+            });
+    }
 
     return true;
 }
@@ -932,7 +923,7 @@ void jegl_close_resource(jegl_resource* resource)
                 _jegl_free_vertex_bone_data(resource->m_raw_vertex_data->m_bones[bone_idx]);
 
             je_mem_free((void*)resource->m_raw_vertex_data->m_bones);
-            
+
             delete resource->m_raw_vertex_data;
             break;
         case jegl_resource::FRAMEBUF:
@@ -1265,7 +1256,7 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
 
             for (size_t bone_idx = 0; bone_idx < mesh->mNumBones; ++bone_idx)
             {
-                jegl_vertex::bone_data* bone_data = 
+                jegl_vertex::bone_data* bone_data =
                     (jegl_vertex::bone_data*)je_mem_alloc(sizeof(jegl_vertex::bone_data));
 
                 assert(bone_data != nullptr);
@@ -1288,7 +1279,7 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
                 if (bone_id >= MAX_BONE_COUNT)
                     // Too many bones, skip to avoid overflow.
                     continue;
-                
+
                 auto* weights = mesh->mBones[bone_idx]->mWeights;
                 size_t numWeights = (size_t)mesh->mBones[bone_idx]->mNumWeights;
 
@@ -1300,7 +1291,7 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
                     size_t min_weight_index = 0;
                     for (size_t i = 1; i < 4; ++i)
                     {
-                        if (vertex.m_vertex[i] == -1 
+                        if (vertex.m_vertex[i] == -1
                             || abs(vertex.m_bone_weight[i]) < abs(vertex.m_bone_weight[min_weight_index]))
                             min_weight_index = i;
                     }
@@ -1340,13 +1331,13 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
     {
         vertex->m_path = jeecs::basic::make_new_string(path);
 
-        const jegl_vertex::bone_data** cbones = 
+        const jegl_vertex::bone_data** cbones =
             (const jegl_vertex::bone_data**)je_mem_alloc(
                 bones.size() * sizeof(const jegl_vertex::bone_data*));
 
         memcpy(
-            cbones, 
-            bones.data(), 
+            cbones,
+            bones.data(),
             bones.size() * sizeof(const jegl_vertex::bone_data*));
 
         vertex->m_raw_vertex_data->m_bones = cbones;
@@ -1364,9 +1355,9 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
 
 jegl_resource* jegl_create_vertex(
     jegl_vertex::type               type,
-    const void*                     datas,
+    const void* datas,
     size_t                          data_length,
-    const uint32_t*                 indexs,
+    const uint32_t* indexs,
     size_t                          index_count,
     const jegl_vertex::data_layout* format,
     size_t                          format_count)
@@ -1402,7 +1393,7 @@ jegl_resource* jegl_create_vertex(
     vertex->m_raw_vertex_data->m_bones = nullptr;
     vertex->m_raw_vertex_data->m_bone_count = 0;
 
-    void * data_buffer = (void*)je_mem_alloc(data_length);
+    void* data_buffer = (void*)je_mem_alloc(data_length);
     memcpy(data_buffer, datas, data_length);
     vertex->m_raw_vertex_data->m_vertexs = data_buffer;
     vertex->m_raw_vertex_data->m_vertex_length = data_length;
@@ -1535,7 +1526,7 @@ void jegl_update_uniformbuf(jegl_resource* uniformbuf, const void* buf, size_t u
         else
         {
             assert(uniformbuf->m_raw_uniformbuf_data->m_update_length != 0);
- 
+
             size_t new_begin = std::min(uniformbuf->m_raw_uniformbuf_data->m_update_begin_offset, update_offset);
             size_t new_end = std::max(
                 uniformbuf->m_raw_uniformbuf_data->m_update_begin_offset
@@ -1688,7 +1679,7 @@ void jegl_uniform_float(uint32_t location, float value)
 void jegl_uniform_float2(uint32_t location, float x, float y)
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
-    float value[] = {x,y};
+    float value[] = { x,y };
     _current_graphic_thread->m_apis->set_uniform(
         _current_graphic_thread->m_userdata, location, jegl_shader::FLOAT2, &value);
 }
@@ -1696,7 +1687,7 @@ void jegl_uniform_float2(uint32_t location, float x, float y)
 void jegl_uniform_float3(uint32_t location, float x, float y, float z)
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
-    float value[] = {x,y,z};
+    float value[] = { x,y,z };
     _current_graphic_thread->m_apis->set_uniform(
         _current_graphic_thread->m_userdata, location, jegl_shader::FLOAT3, &value);
 }
@@ -1704,7 +1695,7 @@ void jegl_uniform_float3(uint32_t location, float x, float y, float z)
 void jegl_uniform_float4(uint32_t location, float x, float y, float z, float w)
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
-    float value[] = {x,y,z,w};
+    float value[] = { x,y,z,w };
     _current_graphic_thread->m_apis->set_uniform(
         _current_graphic_thread->m_userdata, location, jegl_shader::FLOAT4, &value);
 }
