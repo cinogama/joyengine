@@ -79,6 +79,8 @@ namespace je::gui
     public func GetWindowPos()=> ImVec2;
     extern("libjoyecs", "je_gui_get_mouse_pos")
     public func GetMousePos()=> ImVec2;
+    extern("libjoyecs", "je_gui_get_mouse_wheel")
+    public func GetMouseWheel()=> ImVec2;
     extern("libjoyecs", "je_gui_get_mouse_delta_pos")
     public func GetMouseDeltaPos()=> ImVec2;
     extern("libjoyecs", "je_gui_get_cursor_pos")

@@ -315,10 +315,13 @@ namespace je
     }
     namespace input::internal
     {
-        extern("libjoyecs", "wojeapi_input_set_mouse_state")
-        public func set_mouse_state(group: int, key: mousecode, down: bool)=> void;
+        extern("libjoyecs", "wojeapi_input_update_mouse_state")
+        public func update_mouse_state(group: int, key: mousecode, down: bool)=> void;
 
-        extern("libjoyecs", "wojeapi_input_set_key_state")
-        public func set_key_state(key: keycode, down: bool)=> void;
+        extern("libjoyecs", "wojeapi_input_update_wheel")
+        public func update_wheel(group: int, x: real, y: real)=> void;
+
+        extern("libjoyecs", "wojeapi_input_update_key_state")
+        public func update_key_state(key: keycode, down: bool)=> void;
     }
 }

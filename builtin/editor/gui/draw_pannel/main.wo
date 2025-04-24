@@ -170,11 +170,7 @@ namespace editor::gui::drawpannel
 
     func _delta_wheel()
     {
-        static let mut _w = input::wheel(0)[1];
-        let _nw = input::wheel(0)[1];
-        let delta = _nw - _w;
-        _w = _nw;
-        return delta;
+        return GetMouseWheel()[1];
     }
 
     interface! IDrawtool

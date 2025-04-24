@@ -1170,14 +1170,9 @@ namespace editor::gui::tilemap
                 }
 
                 // 高亮鼠标所在的块儿
-                static let mut recored_wheel_count = input::wheel(0)[1];
-                
                 if (ismouse_hovered)
                 {
-                    let new_wheel_count = input::wheel(0)[1];
-                    self.m_scale *= math::pow(2., (new_wheel_count - recored_wheel_count): real);
-                    recored_wheel_count = new_wheel_count;
-
+                    self.m_scale *= math::pow(2., GetMouseWheel()[1]);
                     let ctrl_down = IsKeyDown(ImGuiKey::ImGuiKey_LeftCtrl);
 
                     let (mposx, mposy) = GetMousePos();
@@ -1218,8 +1213,6 @@ namespace editor::gui::tilemap
                         (lux + mpblockx * scaled_tile_size + scaled_tile_size + oldoffsetx, luy + mpblocky * scaled_tile_size + scaled_tile_size + oldoffsety), 
                         (255, 255, 255, highlight_alpha));
                 }
-                else
-                    recored_wheel_count = input::wheel(0)[1];
 
                 PopClipRect();
 

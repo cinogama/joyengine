@@ -217,6 +217,14 @@ WO_API wo_api je_gui_get_mouse_pos(wo_vm vm, wo_value args)
     return wo_ret_val(vm, set_float2_to_struct(s + 0, vm, mpos.x, mpos.y));
 }
 
+WO_API wo_api je_gui_get_mouse_wheel(wo_vm vm, wo_value args)
+{
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
+    auto& imgui_io = ImGui::GetIO();
+    return wo_ret_val(vm, set_float2_to_struct(s + 0, vm, imgui_io.MouseWheelH, imgui_io.MouseWheel));
+}
+
 WO_API wo_api je_gui_get_mouse_delta_pos(wo_vm vm, wo_value args)
 {
     wo_value s = wo_reserve_stack(vm, 1, &args);

@@ -358,17 +358,21 @@ namespace editor::gui::edit_forms
 
                                         // TODO: 需要把整个编辑器系统迁移到woolang实现
 
-                                        je::input::internal::set_key_state(je::keycode::W, IsKeyDown(ImGuiKey::ImGuiKey_W));
-                                        je::input::internal::set_key_state(je::keycode::S, IsKeyDown(ImGuiKey::ImGuiKey_S));
-                                        je::input::internal::set_key_state(je::keycode::A, IsKeyDown(ImGuiKey::ImGuiKey_A));
-                                        je::input::internal::set_key_state(je::keycode::D, IsKeyDown(ImGuiKey::ImGuiKey_D));
+                                        je::input::internal::update_key_state(je::keycode::W, IsKeyDown(ImGuiKey::ImGuiKey_W));
+                                        je::input::internal::update_key_state(je::keycode::S, IsKeyDown(ImGuiKey::ImGuiKey_S));
+                                        je::input::internal::update_key_state(je::keycode::A, IsKeyDown(ImGuiKey::ImGuiKey_A));
+                                        je::input::internal::update_key_state(je::keycode::D, IsKeyDown(ImGuiKey::ImGuiKey_D));
                                         
-                                        je::input::internal::set_key_state(je::keycode::TAB, IsKeyDown(ImGuiKey::ImGuiKey_Tab));
-                                        je::input::internal::set_key_state(je::keycode::L_CTRL, IsKeyDown(ImGuiKey::ImGuiKey_LeftCtrl));
-                                        je::input::internal::set_key_state(je::keycode::L_SHIFT, IsKeyDown(ImGuiKey::ImGuiKey_LeftShift));
+                                        je::input::internal::update_key_state(je::keycode::TAB, IsKeyDown(ImGuiKey::ImGuiKey_Tab));
+                                        je::input::internal::update_key_state(je::keycode::L_CTRL, IsKeyDown(ImGuiKey::ImGuiKey_LeftCtrl));
+                                        je::input::internal::update_key_state(je::keycode::L_SHIFT, IsKeyDown(ImGuiKey::ImGuiKey_LeftShift));
 
-                                        je::input::internal::set_mouse_state(0, je::mousecode::LEFT, IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Left));
-                                        je::input::internal::set_mouse_state(0, je::mousecode::RIGHT, IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Right));
+                                        je::input::internal::update_mouse_state(0, je::mousecode::LEFT, IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Left));
+                                        je::input::internal::update_mouse_state(0, je::mousecode::RIGHT, IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Right));
+
+                                        let (wheelx, wheely) = je::input::wheel(0);
+                                        let (guiwheelx, guiwheely) = GetMouseWheel();
+                                        je::input::internal::update_wheel(0, wheelx + guiwheelx, wheely + guiwheely); 
                                     }
 
                                     static let mut mouse_hovered_flag = false;
