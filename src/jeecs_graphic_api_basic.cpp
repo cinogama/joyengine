@@ -751,29 +751,36 @@ bool jegl_using_resource(jegl_resource* resource)
         return false;
     }
 
-    if (!resource->m_graphic_thread)
+    if (nullptr == resource->m_graphic_thread)
     {
         need_init_resource = true;
-        resource->m_graphic_thread = _current_graphic_thread;
-        resource->m_graphic_thread_version = _current_graphic_thread->m_version;
     }
-    if (_current_graphic_thread != resource->m_graphic_thread)
+    else if (_current_graphic_thread != resource->m_graphic_thread)
     {
-        jeecs::debug::logerr("This resource has been used in graphic thread: %p.", resource->m_graphic_thread);
+        jeecs::debug::logerr("This resource has been used in graphic thread: %p.", 
+            resource->m_graphic_thread);
         return false;
     }
     if (resource->m_graphic_thread_version != _current_graphic_thread->m_version)
     {
         need_init_resource = true;
-        resource->m_graphic_thread_version = _current_graphic_thread->m_version;
     }
 
     // If resource is died, ignore it.
-    if (resource->m_custom_resource == nullptr)
-        need_init_resource = false;
+    if (resource->m_custom_resource == nullptr && need_init_resource)
+    {
+        // Bad resource, it has been closed without any init job.
+        jeecs::debug::logerr("This resource has been closed but not been inited: %p.", 
+            resource);
+        return false;
+    }
 
     if (need_init_resource)
     {
+        resource->m_graphic_thread = _current_graphic_thread;
+        resource->m_graphic_thread_version = _current_graphic_thread->m_version;
+        resource->m_graphic_thread_version = _current_graphic_thread->m_version;
+
         jegl_resource_blob resource_blob = nullptr;
 
         size_t resource_blob_version = 0;
