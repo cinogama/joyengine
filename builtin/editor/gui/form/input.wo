@@ -32,13 +32,13 @@ namespace jeapi::gui::form
                 if (Button("还原"))
                     inputval->set(defaultval);
 
-                if (Button("确定") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ENTER)))
+                if (Button("确定") || (IsWindowFocused() && inputmgr::keypush(ImGuiKey::ImGuiKey_Enter)))
                 {
                     okevent(inputval->get);
                     f->close();
                 }
                 SameLine();
-                if (Button("取消") || (IsWindowFocused() && inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::BACKSPACE])))
+                if (Button("取消") || (IsWindowFocused() && inputmgr::keyspush([ImGuiKey::ImGuiKey_LeftCtrl, ImGuiKey::ImGuiKey_Backspace])))
                     f->close();
             })
             -> show
@@ -62,14 +62,14 @@ namespace jeapi::gui::form
                 SameLine();
                 if (Button("还原"))
                     inputval->set(defaultval);
-
-                if (Button("确定") || (IsWindowFocused() && inputmgr::keyspush([je::keycode::L_SHIFT, je::keycode::ENTER])))
+                    
+                if (Button("确定") || (IsWindowFocused() && inputmgr::keyspush([ImGuiKey::ImGuiKey_LeftShift, ImGuiKey::ImGuiKey_Enter])))
                 {
                     okevent(inputval->get);
                     f->close();
                 }
                 SameLine();
-                if (Button("取消") || (IsWindowFocused() && inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::BACKSPACE])))
+                if (Button("取消") || (IsWindowFocused() && inputmgr::keyspush([ImGuiKey::ImGuiKey_LeftCtrl, ImGuiKey::ImGuiKey_Backspace])))
                     f->close();
             })
             -> show

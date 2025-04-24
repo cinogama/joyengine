@@ -23,7 +23,7 @@ struct key_state
 };
 
 std::mutex _key_state_record_mx;
-std::unordered_map<jeecs::input::keycode, key_state> _key_state_record;
+std::unordered_map<ImGuiKey, key_state> _key_state_record;
 
 struct gui_wo_job_coroutine
 {
@@ -1603,7 +1603,7 @@ WO_API wo_api je_gui_stop_all_work(wo_vm vm, wo_value args)
 WO_API wo_api je_gui_get_input_state(wo_vm vm, wo_value args)
 {
     wo_value s = wo_reserve_stack(vm, 2, &args);
-    jeecs::input::keycode kcode = (jeecs::input::keycode)wo_int(args + 0);
+    ImGuiKey kcode = (ImGuiKey)wo_int(args + 0);
 
     std::lock_guard g1(_key_state_record_mx);
     auto fnd = _key_state_record.find(kcode);
@@ -1611,7 +1611,7 @@ WO_API wo_api je_gui_get_input_state(wo_vm vm, wo_value args)
     {
         _key_state_record[kcode] = key_state{
             false,
-            jeecs::input::keydown(kcode),
+            ImGui::IsKeyDown(kcode),
         };
 
         fnd = _key_state_record.find(kcode);
@@ -2410,7 +2410,7 @@ public func frag(vf: v2f)
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
 #ifndef JE_GL_USE_EGL_INSTEAD_GLFW
-    // ½öÆÕÍ¨´°¿ÚÄ£Ê½ÏÂÆôÓÃ¶àÊÓ¿ÚÖ§³Ö
+    // ä»…æ™®é€šçª—å£æ¨¡å¼ä¸‹å¯ç”¨å¤šè§†å£æ”¯æŒ
     if (gl_context->m_config.m_display_mode == jegl_interface_config::display_mode::WINDOWED)
         io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 #endif
@@ -2534,7 +2534,7 @@ void jegui_update_basic(
         for (auto& [k, v] : _key_state_record)
         {
             v.m_last_frame_down = v.m_this_frame_down;
-            v.m_this_frame_down = jeecs::input::keydown(k);
+            v.m_this_frame_down = ImGui::IsKeyDown(k);
         }
     } while (0);
 

@@ -8,60 +8,60 @@
 
 struct _je_mouse_state
 {
-    bool    _key_states[(uint8_t)jeecs::input::mousecode::_COUNT];
-    int     _pos_x;
-    int     _pos_y;
-    float   _wheel_x;
-    float   _wheel_y;
+    bool _key_states[(uint8_t)jeecs::input::mousecode::_COUNT];
+    int _pos_x;
+    int _pos_y;
+    float _wheel_x;
+    float _wheel_y;
 };
 struct _je_gamepad_state
 {
-    bool            _enabled;
-    std::string     _name;
-    std::string     _guid;
+    bool _enabled;
+    std::string _name;
+    std::string _guid;
     jeecs::typing::ms_stamp_t
-                    _last_update_time;
+        _last_update_time;
 
-    bool            _key_states[(uint8_t)jeecs::input::gamepadcode::_COUNT];
+    bool _key_states[(uint8_t)jeecs::input::gamepadcode::_COUNT];
 
     struct __je_gamepad_stick_state
     {
         jeecs::math::vec2 _position;
-        float             _deadzone;
+        float _deadzone;
     };
     __je_gamepad_stick_state _stick_states[(uint8_t)jeecs::input::joystickcode::_COUNT];
 };
 
 struct _je_basic_io_state
 {
-    
+
     std::shared_mutex                   _gamepads_mx;
     std::queue<je_io_gamepad_handle_t>  _gamepads_free_slot;
     std::list<_je_gamepad_state>        _gamepads;
 
     _je_mouse_state _mouses[jeecs::input::MAX_MOUSE_GROUP_COUNT];
-    bool            _key_states[(uint16_t)jeecs::input::keycode::_COUNT];
+    bool _key_states[(uint16_t)jeecs::input::keycode::_COUNT];
 
-    int             _windows_width;
-    int             _windows_height;
+    int _windows_width;
+    int _windows_height;
 
-    int             _windows_pos_x,
-                    _windows_pos_y;
+    int _windows_pos_x,
+        _windows_pos_y;
 
-    bool            _shoudle_lock_mouse;
-    int             _mouse_lock_place_x,
-                    _mouse_lock_place_y;
+    bool _shoudle_lock_mouse;
+    int _mouse_lock_place_x,
+        _mouse_lock_place_y;
 
-    bool            _should_update_windowsize;
-    int             _new_windows_width,
-                    _new_windows_height;
+    bool _should_update_windowsize;
+    int _new_windows_width,
+        _new_windows_height;
 
-    //bool            _should_update_windowpos;
-    //int             _new_windows_pos_x,
-    //                _new_windows_pos_y;
+    //bool _should_update_windowpos;
+    //int _new_windows_pos_x,
+    //    _new_windows_pos_y;
 
-    bool            _should_update_windowtitle;
-    std::string     _new_windowtitle;
+    bool _should_update_windowtitle;
+    std::string _new_windowtitle;
 };
 _je_basic_io_state _state = {};
 
@@ -206,7 +206,7 @@ je_io_gamepad_handle_t je_io_create_gamepad(
     const char* name_may_null, const char* guid_may_null)
 {
     std::lock_guard g(_state._gamepads_mx);
-    
+
     je_io_gamepad_handle_t gamepad;
     do
     {
@@ -255,7 +255,7 @@ je_io_gamepad_handle_t je_io_create_gamepad(
         stick._deadzone = 0.f;
     }
 
-    jeecs::debug::loginfo("Gamepad device: '%s'[%s](%p) created.", 
+    jeecs::debug::loginfo("Gamepad device: '%s'[%s](%p) created.",
         gamepad->_name.c_str(), gamepad->_guid.c_str(), gamepad);
 
     gamepad->_enabled = true;
@@ -287,7 +287,7 @@ const char* je_io_gamepad_guid(je_io_gamepad_handle_t gamepad)
 size_t je_io_gamepad_get(size_t count, je_io_gamepad_handle_t* out_gamepads)
 {
     std::shared_lock g(_state._gamepads_mx);
-    
+
     if (count == 0)
         return _state._gamepads.size();
 

@@ -257,19 +257,19 @@ func my_ask_for_get_yes_no_cancel_result(
                         Separator();
                     }
 
-                    if (Button("是") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ENTER)))
+                    if (Button("是") || (IsWindowFocused() && inputmgr::keypush(ImGuiKey::ImGuiKey_Enter)))
                     {
                         okevent(1);
                         open = false;
                     }
                     SameLine();
-                    if (Button("否") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ESC)))
+                    if (Button("否") || (IsWindowFocused() && inputmgr::keypush(ImGuiKey::ImGuiKey_Escape)))
                     {
                         okevent(0);
                         open = false;
                     }
                     SameLine();
-                    if (Button("取消") || (IsWindowFocused() && inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::BACKSPACE])))
+                    if (Button("取消") || (IsWindowFocused() && inputmgr::keyspush([ImGuiKey::ImGuiKey_LeftCtrl, ImGuiKey::ImGuiKey_Backspace])))
                     {
                         okevent(-1);
                         open = false;

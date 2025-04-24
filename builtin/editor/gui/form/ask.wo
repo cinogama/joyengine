@@ -20,19 +20,19 @@ namespace jeapi::gui::form
             func(f)
             {
                 Text(text);
-                if (Button("是") || (IsWindowFocused() && inputmgr::keypush(je::keycode::ENTER)))
+                if (Button("是") || (IsWindowFocused() && inputmgr::keypush(ImGuiKey::ImGuiKey_Enter)))
                 {
                     okevent(true);
                     f->close();
                 }
                 SameLine();
-                if (Button("否") || (IsWindowFocused() && inputmgr::keyspush([je::keycode::ESC])))
+                if (Button("否") || (IsWindowFocused() && inputmgr::keyspush([ImGuiKey::ImGuiKey_Escape])))
                 {
                     okevent(false);
                     f->close();
                 }
                 SameLine();
-                if (Button("取消") || (IsWindowFocused() && inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::BACKSPACE])))
+                if (Button("取消") || (IsWindowFocused() && inputmgr::keyspush([ImGuiKey::ImGuiKey_LeftCtrl, ImGuiKey::ImGuiKey_Backspace])))
                     f->close();
             })
             -> show

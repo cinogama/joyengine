@@ -363,6 +363,8 @@ WO_API wo_api wojeapi_input_keydown(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_input_mouse_pos(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_input_mouse_view_pos(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_input_mousedown(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_input_set_key_state(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_input_set_mouse_state(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_input_update_window_size(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_input_update_window_title(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_input_window_pos(wo_vm vm, wo_value args);
@@ -875,6 +877,8 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"wojeapi_input_mouse_pos", (void*)&wojeapi_input_mouse_pos},
         wo_extern_lib_func_t{"wojeapi_input_mouse_view_pos", (void*)&wojeapi_input_mouse_view_pos},
         wo_extern_lib_func_t{"wojeapi_input_mousedown", (void*)&wojeapi_input_mousedown},
+        wo_extern_lib_func_t{"wojeapi_input_set_key_state", (void*)&wojeapi_input_set_key_state},
+        wo_extern_lib_func_t{"wojeapi_input_set_mouse_state", (void*)&wojeapi_input_set_mouse_state},
         wo_extern_lib_func_t{"wojeapi_input_update_window_size", (void*)&wojeapi_input_update_window_size},
         wo_extern_lib_func_t{"wojeapi_input_update_window_title", (void*)&wojeapi_input_update_window_title},
         wo_extern_lib_func_t{"wojeapi_input_window_pos", (void*)&wojeapi_input_window_pos},

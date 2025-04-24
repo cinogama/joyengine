@@ -313,4 +313,12 @@ namespace je
         extern("libjoyecs", "wojeapi_set_editing_gizmo_mode")
         public func set_editing_gizmo_mode(w: je::world, a: gizmo_mode)=> void;
     }
+    namespace input::internal
+    {
+        extern("libjoyecs", "wojeapi_input_set_mouse_state")
+        public func set_mouse_state(group: int, key: mousecode, down: bool)=> void;
+
+        extern("libjoyecs", "wojeapi_input_set_key_state")
+        public func set_key_state(key: keycode, down: bool)=> void;
+    }
 }

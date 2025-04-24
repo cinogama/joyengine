@@ -181,9 +181,14 @@ namespace editor::gui
         context->launch_editor_form(func(){
             context->update_api();
 
-            if (jeapi::gui::inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::L_SHIFT, je::keycode::O]))
+            if (jeapi::gui::inputmgr::keyspush([
+                ImGuiKey::ImGuiKey_LeftCtrl, 
+                ImGuiKey::ImGuiKey_LeftShift, 
+                ImGuiKey::ImGuiKey_O]))
                 context->hide_all_editor_form();
-            else if (jeapi::gui::inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::O]))
+            else if (jeapi::gui::inputmgr::keyspush([
+                ImGuiKey::ImGuiKey_LeftCtrl, 
+                ImGuiKey::ImGuiKey_O]))
                 context->show_all_editor_form();
 
             if (!context->get_project->is_debugging)
@@ -337,7 +342,9 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                     EndMainMenuBar();
                 }
 
-                if (jeapi::gui::inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::S]))
+                if (jeapi::gui::inputmgr::keyspush([
+                    ImGuiKey::ImGuiKey_LeftCtrl, 
+                    ImGuiKey::ImGuiKey_S]))
                     _save_project(context);
             }
         }, ());

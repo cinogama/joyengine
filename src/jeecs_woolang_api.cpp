@@ -3904,3 +3904,23 @@ WO_API wo_api wojeapi_audio_effect_slot_update(wo_vm vm, wo_value args)
 
     return wo_ret_void(vm);
 }
+
+WO_API wo_api wojeapi_input_set_mouse_state(wo_vm vm, wo_value args)
+{
+    auto group = (size_t)wo_int(args + 0);
+    auto key = (jeecs::input::mousecode)wo_int(args + 1);
+    auto down = wo_bool(args + 2);
+
+    je_io_update_mouse_state(group, key, down);
+
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_input_set_key_state(wo_vm vm, wo_value args)
+{
+    auto key = (jeecs::input::keycode)wo_int(args + 0);
+    auto down = wo_bool(args + 1);
+
+    je_io_update_key_state(key, down);
+
+    return wo_ret_void(vm);
+}

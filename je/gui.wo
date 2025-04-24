@@ -1138,7 +1138,7 @@ namespace je::gui
     namespace input
     {
         extern("libjoyecs", "je_gui_get_input_state")
-        public func keystate(kcode: je::keycode)=> (bool, bool);
+        public func keystate(kcode: ImGuiKey)=> (bool, bool);
     }
     
     extern("libjoyecs", "je_gui_register_exit_callback")

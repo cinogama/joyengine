@@ -226,9 +226,9 @@ namespace editor::gui::drawpannel
 
                         if (IsWindowFocused())
                         {
-                            if (jeapi::gui::inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::Z]))
+                            if (jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_LeftCtrl, ImGuiKey::ImGuiKey_Z]))
                                 history_mgr->undo();
-                            if (jeapi::gui::inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::Y]))
+                            if (jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_LeftCtrl, ImGuiKey::ImGuiKey_Y]))
                                 history_mgr->redo();
                         }
 

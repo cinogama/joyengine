@@ -100,7 +100,7 @@ namespace editor::gui::edit_forms
                         if (! proj->is_debugging)
                         {
                             if (MenuItemShortcut("调试运行", "Ctrl + P") 
-                                || (IsWindowFocused() && jeapi::gui::inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::P])))
+                                || (IsWindowFocused() && jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_LeftCtrl, ImGuiKey::ImGuiKey_P])))
                             {
                                 do context->start_debug()->error->>\e = jeapi::gui::form::errmsg("失败", F"开始调试失败, {e}");;
                                 je::loginfo("=======================调试开始=======================");
@@ -115,7 +115,7 @@ namespace editor::gui::edit_forms
                                             do DragFloat("时间缩放", proj->get_env->get_universe->get_timescale, 0.1, 0.0, 16.0)
                                                 ->> \val = proj->get_env->get_universe->set_timescale(val);
                                                 ;
-                                            if (Button("终止当前调试") || jeapi::gui::inputmgr::keyspush([je::keycode::L_CTRL, je::keycode::ESC]))
+                                            if (Button("终止当前调试") || jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_LeftCtrl, ImGuiKey::ImGuiKey_Escape]))
                                             {
                                                 proj->get_env->get_universe->set_timescale(1.);
                                                 do context->stop_debug()->error->>\e = jeapi::gui::form::errmsg("失败", F"终止调试失败, {e}");;
@@ -159,19 +159,19 @@ namespace editor::gui::edit_forms
                         let mut mover_mode = debug_world->>\w = je::internal::get_editing_mover_mode(w);->or(je::internal::mover_mode::SELECTION);
                         let mut coord_mode = debug_world->>\w = je::internal::get_editing_coord_mode(w);->or(je::internal::coord_mode::GLOBAL);
 
-                        if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::C]))
+                        if (jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_Tab, ImGuiKey::ImGuiKey_C]))
                             mover_mode = je::internal::mover_mode::SELECTION;
-                        else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::T]))
+                        else if (jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_Tab, ImGuiKey::ImGuiKey_T]))
                             mover_mode = je::internal::mover_mode::MOVEMENT;
-                        else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::R]))
+                        else if (jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_Tab, ImGuiKey::ImGuiKey_R]))
                             mover_mode = je::internal::mover_mode::ROTATION;
-                        else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::S]))
+                        else if (jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_Tab, ImGuiKey::ImGuiKey_S]))
                             mover_mode = je::internal::mover_mode::SCALE;
-                        else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::G]))
+                        else if (jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_Tab, ImGuiKey::ImGuiKey_G]))
                             coord_mode = je::internal::coord_mode::GLOBAL;
-                        else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB, je::keycode::L]))
+                        else if (jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_Tab, ImGuiKey::ImGuiKey_L]))
                             coord_mode = je::internal::coord_mode::LOCAL;
-                        else if (jeapi::gui::inputmgr::keyspush([je::keycode::TAB]))
+                        else if (jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_Tab]))
                         {
                             static let mut last_click_time = 0.;
                             if (std::time() - last_click_time <= 0.2)
@@ -357,6 +357,26 @@ namespace editor::gui::edit_forms
                                     let (itemw, itemh) = GetItemRectSize();
                                     let (mx, my) = GetMousePos();
                                     let (offsetx, offsety) = (mx - lupx - wx, my - lupy - wy);
+
+                                    if (IsWindowFocused())
+                                    {
+                                        // NOTE: 因为引擎只关注主窗口，而编辑器系统只能获取主窗口的输入；
+                                        // 此处需要将编辑器关注的鼠标/键盘状态从GUI同步到引擎IO
+
+                                        // TODO: 需要把整个编辑器系统迁移到woolang实现
+
+                                        je::input::internal::set_key_state(je::keycode::W, IsKeyDown(ImGuiKey::ImGuiKey_W));
+                                        je::input::internal::set_key_state(je::keycode::S, IsKeyDown(ImGuiKey::ImGuiKey_S));
+                                        je::input::internal::set_key_state(je::keycode::A, IsKeyDown(ImGuiKey::ImGuiKey_A));
+                                        je::input::internal::set_key_state(je::keycode::D, IsKeyDown(ImGuiKey::ImGuiKey_D));
+                                        
+                                        je::input::internal::set_key_state(je::keycode::TAB, IsKeyDown(ImGuiKey::ImGuiKey_Tab));
+                                        je::input::internal::set_key_state(je::keycode::L_CTRL, IsKeyDown(ImGuiKey::ImGuiKey_LeftCtrl));
+                                        je::input::internal::set_key_state(je::keycode::L_SHIFT, IsKeyDown(ImGuiKey::ImGuiKey_LeftShift));
+
+                                        je::input::internal::set_mouse_state(0, je::mousecode::LEFT, IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Left));
+                                        je::input::internal::set_mouse_state(0, je::mousecode::RIGHT, IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Right));
+                                    }
 
                                     if (IsItemHovered())
                                     {

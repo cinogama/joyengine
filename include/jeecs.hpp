@@ -9443,7 +9443,12 @@ namespace jeecs
 
             // 用于计算ui元素的绝对坐标和大小，接受显示区域的宽度和高度，获取以屏幕左下角为原点的元素位置和大小。
             // 其中位置是ui元素中心位置，而非坐标原点位置。
-            void get_layout(float w, float h, math::vec2* out_absoffset, math::vec2* out_abssize, math::vec2* out_center_offset) const
+            void get_layout(
+                float w, 
+                float h,
+                math::vec2* out_absoffset,
+                math::vec2* out_abssize, 
+                math::vec2* out_center_offset) const
             {
                 math::vec2 rel2abssize = scale * math::vec2(w, h);
                 math::vec2 rel2absoffset = global_location * math::vec2(w, h);
@@ -9509,7 +9514,11 @@ namespace jeecs
                     *out_absoffset = absoffset;
             }
 
-            bool mouse_on(float w, float h, float rot_angle, math::vec2 mouse_view_pos)
+            bool mouse_on(
+                float w, 
+                float h, 
+                float rot_angle, 
+                math::vec2 mouse_view_pos) const
             {
                 math::vec2 absoffset;
                 math::vec2 abssize;
