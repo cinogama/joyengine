@@ -456,7 +456,6 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
         if (jegl_update_action::JEGL_UPDATE_STOP ==
             thread->m_apis->update_draw_commit(thread->m_userdata, frame_update_state))
         {
-            // std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->store(true);
             thread->_m_thread_notifier->m_graphic_terminated.store(true);
         }
 
@@ -479,10 +478,8 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
                     _waiting_to_free_resource[cur_del_res] = true;
             }
             else
-            {
                 // Free this
                 _waiting_to_free_resource[cur_del_res] = false;
-            }
         }
 
         do {
@@ -897,6 +894,11 @@ void jegl_close_resource(jegl_resource* resource)
     if (resource->m_raw_ref_count == nullptr ||
         1 == std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_raw_ref_count))->fetch_sub(1))
     {
+        if (resource->m_graphic_thread == nullptr)
+        {
+
+        }
+
         switch (resource->m_type)
         {
         case jegl_resource::TEXTURE:

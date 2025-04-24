@@ -13,52 +13,83 @@ namespace jeecs
 
         static constexpr size_t BRANCH_CHAIN_POOL_SIZE = 2;
 
-        std::vector<jegl_rendchain*> m_allocated_chains[BRANCH_CHAIN_POOL_SIZE];
-        size_t m_operating_chain_index;
+        struct allocated_chain_t
+        {
+            JECS_DISABLE_MOVE_AND_COPY(allocated_chain_t);
 
-        size_t m_allocated_chains_count;
-        int    m_priority;
+            allocated_chain_t() = default;
+
+            std::vector<jegl_rendchain*> m_allocated_chains;
+            size_t m_allocated_chains_count;
+            int    m_priority;
+        };
+
+        allocated_chain_t m_chain_buffers[BRANCH_CHAIN_POOL_SIZE];
+        size_t m_operating_chain_buffer_index;
 
         rendchain_branch()
-            : m_operating_chain_index(0)
-            , m_allocated_chains_count(0)
-            , m_priority(0)
+            : m_operating_chain_buffer_index(0)
         {
+            for (auto& chain_buffer : m_chain_buffers)
+            {
+                chain_buffer.m_allocated_chains_count = 0;
+                chain_buffer.m_priority = 0;
+            }
         }
         ~rendchain_branch()
         {
-            for (auto& chains : m_allocated_chains)
-                for (auto* chain : chains)
+            for (auto& chain_buffer : m_chain_buffers)
+                for (auto* chain : chain_buffer.m_allocated_chains)
                     jegl_rchain_close(chain);
         }
 
         void new_frame(int priority)
         {
-            m_priority = priority;
-            m_allocated_chains_count = 0;
+            m_operating_chain_buffer_index =
+                (m_operating_chain_buffer_index + 1) % BRANCH_CHAIN_POOL_SIZE;
 
-            m_operating_chain_index = 
-                (m_operating_chain_index + 1) % BRANCH_CHAIN_POOL_SIZE;
+            auto& chain_buffer = get_operating_chain_buffer();
+            chain_buffer.m_allocated_chains_count = 0;
+            chain_buffer.m_priority = priority;
         }
         jegl_rendchain* allocate_new_chain(jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
         {
-            if (m_allocated_chains_count >= m_allocated_chains[m_operating_chain_index].size())
+            auto& chain_buffer = get_operating_chain_buffer();
+
+            if (chain_buffer.m_allocated_chains_count >= chain_buffer.m_allocated_chains.size())
             {
-                assert(m_allocated_chains_count == m_allocated_chains[m_operating_chain_index].size());
-                m_allocated_chains[m_operating_chain_index].push_back(jegl_rchain_create());
+                assert(chain_buffer.m_allocated_chains_count == chain_buffer.m_allocated_chains.size());
+                chain_buffer.m_allocated_chains.push_back(jegl_rchain_create());
             }
-            auto* rchain = m_allocated_chains[m_operating_chain_index][m_allocated_chains_count];
+            auto* rchain = chain_buffer.m_allocated_chains[chain_buffer.m_allocated_chains_count++];
             jegl_rchain_begin(rchain, framebuffer, x, y, w, h);
-            ++m_allocated_chains_count;
             return rchain;
         }
+
+        allocated_chain_t& get_operating_chain_buffer()
+        {
+            return m_chain_buffers[m_operating_chain_buffer_index];
+        }
+        allocated_chain_t& get_commit_finished_chain_buffer()
+        {
+            return m_chain_buffers[(m_operating_chain_buffer_index + 1) % BRANCH_CHAIN_POOL_SIZE];
+        }
+
         void _commit_frame(jegl_context* thread, jegl_update_action action)
         {
-            auto& chains = m_allocated_chains[m_operating_chain_index];
+            const auto commit_finished_frame_index =
+                (m_operating_chain_buffer_index + 1) % BRANCH_CHAIN_POOL_SIZE;
 
-            for (size_t i = 0; i < m_allocated_chains_count; ++i)
+            auto& chain_buffer = get_commit_finished_chain_buffer();
+            assert(chain_buffer.m_allocated_chains_count <= chain_buffer.m_allocated_chains.size());
+
+            auto chain_iter = chain_buffer.m_allocated_chains.begin();
+            const auto chain_iter_end = 
+                chain_buffer.m_allocated_chains.begin() + chain_buffer.m_allocated_chains_count;
+            
+            while (chain_iter != chain_iter_end)
             {
-                auto* rend_job_chain = chains[i];
+                auto* rend_job_chain = *(chain_iter++);
                 if (action != jegl_update_action::JEGL_UPDATE_CONTINUE
                     && jegl_rchain_get_target_framebuf(rend_job_chain) == nullptr)
                     continue;
@@ -82,7 +113,7 @@ namespace jeecs
         {
             auto* graphic_host = std::launder(reinterpret_cast<graphic_uhost*>(host));
 
-            constexpr jegl_update_sync_mode SYNC_MODE = 
+            constexpr jegl_update_sync_mode SYNC_MODE =
                 rendchain_branch::BRANCH_CHAIN_POOL_SIZE > 1
                 ? jegl_update_sync_mode::JEGL_WAIT_LAST_FRAME_END
                 : jegl_update_sync_mode::JEGL_WAIT_THIS_FRAME_END;
@@ -135,7 +166,10 @@ namespace jeecs
                 std::stable_sort(m_rendchain_branchs.begin(), m_rendchain_branchs.end(),
                     [](rendchain_branch* a, rendchain_branch* b)
                     {
-                        return a->m_priority < b->m_priority;
+                        return 
+                            a->get_commit_finished_chain_buffer().m_priority 
+                            < 
+                            b->get_commit_finished_chain_buffer().m_priority;
                     });
 
                 for (auto* gpipe : m_rendchain_branchs)
@@ -179,12 +213,12 @@ namespace jeecs
                     config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " None)";
                 else
                     config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " Custom Graphic API)";
-                
+
                 config.m_enable_resize = true;
                 config.m_fps = 0;               // 使用垂直同步
                 config.m_msaa = 4;              // 使用MSAAx4抗锯齿
                 config.m_userdata = nullptr;    // 用户自定义数据，默认留空，用户可以根据自己需要，
-                                                // 使用 jegl_reboot_graphic_thread 传入设置并应用
+                // 使用 jegl_reboot_graphic_thread 传入设置并应用
             }
             else
             {
@@ -204,8 +238,8 @@ namespace jeecs
             if (glthread != nullptr)
                 je_ecs_universe_register_after_call_once_job(
                     universe.handle(),
-                    _update_frame_universe_job, 
-                    this, 
+                    _update_frame_universe_job,
+                    this,
                     nullptr);
         }
 
@@ -213,7 +247,7 @@ namespace jeecs
         {
             if (glthread)
                 jegl_terminate_graphic_thread(glthread);
-            
+
             // All branches should be freed before graphic-uhost closed.
             assert(m_rendchain_branchs.empty());
 
