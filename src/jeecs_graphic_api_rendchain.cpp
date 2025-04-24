@@ -395,7 +395,10 @@ void jegl_rchain_bind_pre_texture_group(jegl_rendchain* chain, size_t texture_gr
     assert(texture_group < chain->m_binding_textures_count);
     chain->m_pre_bind_tetuxre_group.push_back(texture_group);
 }
-
+jegl_resource* jegl_rchain_get_target_framebuf(jegl_rendchain* chain)
+{
+    return chain->m_target_frame_buffer;
+}
 void jegl_rchain_commit(jegl_rendchain* chain, jegl_context* glthread)
 {
     // 遍历所有绘制命令，开始提交！

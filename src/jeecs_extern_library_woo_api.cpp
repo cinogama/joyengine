@@ -353,7 +353,7 @@ WO_API wo_api wojeapi_get_universe_from_world(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_get_world_from_entity(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_get_world_name(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_graphic_shrink_cache(wo_vm vm, wo_value args);
-WO_API wo_api wojeapi_init_graphic_pipeline(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_init_graphic_pipeline_for_editor(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_input_gamepad_actived(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_input_gamepad_axis(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_input_gamepad_button(wo_vm vm, wo_value args);
@@ -867,7 +867,7 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"wojeapi_get_world_from_entity", (void*)&wojeapi_get_world_from_entity},
         wo_extern_lib_func_t{"wojeapi_get_world_name", (void*)&wojeapi_get_world_name},
         wo_extern_lib_func_t{"wojeapi_graphic_shrink_cache", (void*)&wojeapi_graphic_shrink_cache},
-        wo_extern_lib_func_t{"wojeapi_init_graphic_pipeline", (void*)&wojeapi_init_graphic_pipeline},
+        wo_extern_lib_func_t{"wojeapi_init_graphic_pipeline_for_editor", (void*)&wojeapi_init_graphic_pipeline_for_editor},
         wo_extern_lib_func_t{"wojeapi_input_gamepad_actived", (void*)&wojeapi_input_gamepad_actived},
         wo_extern_lib_func_t{"wojeapi_input_gamepad_axis", (void*)&wojeapi_input_gamepad_axis},
         wo_extern_lib_func_t{"wojeapi_input_gamepad_button", (void*)&wojeapi_input_gamepad_button},

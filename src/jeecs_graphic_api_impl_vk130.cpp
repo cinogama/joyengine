@@ -3672,7 +3672,7 @@ VK_API_PLATFORM_API_LIST
         delete context;
     }
 
-    jegl_graphic_api::update_action pre_update(jegl_context::userdata_t ctx)
+    jegl_update_action pre_update(jegl_context::userdata_t ctx)
     {
         jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
 
@@ -3680,11 +3680,10 @@ VK_API_PLATFORM_API_LIST
         {
         case basic_interface::update_result::CLOSE:
             if (jegui_shutdown_callback())
-                return jegl_graphic_api::update_action::STOP;
-            /*fallthrough*/
-            [[fallthrough]];
+                return jegl_update_action::JEGL_UPDATE_STOP;
+            return jegl_update_action::JEGL_UPDATE_CONTINUE;
         case basic_interface::update_result::PAUSE:
-            return jegl_graphic_api::update_action::SKIP;
+            return jegl_update_action::JEGL_UPDATE_SKIP;
         case basic_interface::update_result::RESIZE:
             // Make present before swap chain recreation.
             context->present();
@@ -3696,23 +3695,23 @@ VK_API_PLATFORM_API_LIST
             context->imgui_init();
 
             context->update();
-            return jegl_graphic_api::update_action::CONTINUE;
+            return jegl_update_action::JEGL_UPDATE_CONTINUE;
         case basic_interface::update_result::NORMAL:
             context->present();
             context->update();
-            return jegl_graphic_api::update_action::CONTINUE;
+            return jegl_update_action::JEGL_UPDATE_CONTINUE;
         default:
             abort();
         }
     }
-    jegl_graphic_api::update_action commit_update(
-        jegl_context::userdata_t ctx, jegl_graphic_api::update_action)
+    jegl_update_action commit_update(
+        jegl_context::userdata_t ctx, jegl_update_action)
     {
         jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
 
         context->late_update();
 
-        return jegl_graphic_api::update_action::CONTINUE;
+        return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
 
     jegl_resource_blob create_resource_blob(jegl_context::userdata_t ctx, jegl_resource* resource)

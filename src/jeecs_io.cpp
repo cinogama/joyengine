@@ -49,8 +49,6 @@ struct _je_basic_io_state
         _windows_pos_y;
 
     bool _shoudle_lock_mouse;
-    int _mouse_lock_place_x,
-        _mouse_lock_place_y;
 
     bool _should_update_windowsize;
     int _new_windows_width,
@@ -97,11 +95,9 @@ void je_io_update_window_pos(int x, int y)
     _state._windows_pos_x = x;
     _state._windows_pos_y = y;
 }
-void je_io_set_lock_mouse(bool lock, int x, int y)
+void je_io_set_lock_mouse(bool lock)
 {
     _state._shoudle_lock_mouse = lock;
-    _state._mouse_lock_place_x = x;
-    _state._mouse_lock_place_y = y;
 }
 
 bool je_io_get_key_down(jeecs::input::keycode keycode)
@@ -137,10 +133,8 @@ void je_io_get_wheel(size_t group, float* out_x, float* out_y)
         *out_y = 0.0f;
     }
 }
-bool je_io_get_lock_mouse(int* out_x, int* out_y)
+bool je_io_get_lock_mouse()
 {
-    *out_x = _state._mouse_lock_place_x;
-    *out_y = _state._mouse_lock_place_y;
     return _state._shoudle_lock_mouse;
 }
 void je_io_get_window_size(int* out_x, int* out_y)

@@ -52,12 +52,19 @@ namespace jeecs
             ++m_allocated_chains_count;
             return rchain;
         }
-        void _commit_frame(jegl_context* thread)
+        void _commit_frame(jegl_context* thread, jegl_update_action action)
         {
             auto& chains = m_allocated_chains[m_operating_chain_index];
 
             for (size_t i = 0; i < m_allocated_chains_count; ++i)
-                jegl_rchain_commit(chains[i], thread);
+            {
+                auto* rend_job_chain = chains[i];
+                if (action != jegl_update_action::JEGL_UPDATE_CONTINUE
+                    && jegl_rchain_get_target_framebuf(rend_job_chain) == nullptr)
+                    continue;
+
+                jegl_rchain_commit(rend_job_chain, thread);
+            }
         }
     };
     struct graphic_uhost
@@ -66,6 +73,10 @@ namespace jeecs
 
         jegl_context* glthread = nullptr;
         jeecs::game_universe universe;
+
+        // 当图形实现请求跳过绘制时，是否跳过全部绘制流程
+        // * 如果为true，则跳过全部的绘制流程，反之，则仍然绘制以非屏幕缓冲区的绘制操作
+        bool m_skip_all_draw;
 
         static void _update_frame_universe_job(void* host)
         {
@@ -105,29 +116,39 @@ namespace jeecs
             delete pipe;
         }
 
-        void _frame_rend_impl()
+        void _frame_rend_impl(jegl_update_action action)
         {
-            // Clear frame buffer
-            float clearcolor[] = { 0.f, 0.f, 0.f, 0.f };
-            jegl_clear_framebuffer_color(clearcolor);
-            jegl_clear_framebuffer_depth();
+            if (action == jegl_update_action::JEGL_UPDATE_CONTINUE)
+            {
+                // Clear main frame buffer
+                float clearcolor[] = { 0.f, 0.f, 0.f, 0.f };
+                jegl_clear_framebuffer_color(clearcolor);
+                jegl_clear_framebuffer_depth();
+            }
+            else if (m_skip_all_draw)
+                return;
 
-            std::lock_guard g1(m_rendchain_branchs_mx);
+            do
+            {
+                std::lock_guard g1(m_rendchain_branchs_mx);
 
-            std::stable_sort(m_rendchain_branchs.begin(), m_rendchain_branchs.end(),
-                [](rendchain_branch* a, rendchain_branch* b)
-                {
-                    return a->m_priority < b->m_priority;
-                });
+                std::stable_sort(m_rendchain_branchs.begin(), m_rendchain_branchs.end(),
+                    [](rendchain_branch* a, rendchain_branch* b)
+                    {
+                        return a->m_priority < b->m_priority;
+                    });
 
-            for (auto* gpipe : m_rendchain_branchs)
-                gpipe->_commit_frame(glthread);
+                for (auto* gpipe : m_rendchain_branchs)
+                    gpipe->_commit_frame(glthread, action);
+
+            } while (0);
 
             jegl_rend_to_framebuffer(nullptr, 0, 0, 0, 0);
         }
 
         graphic_uhost(jeecs::game_universe _universe, const jegl_interface_config* _config)
             : universe(_universe)
+            , m_skip_all_draw(true)
         {
             auto host_graphic_api = jegl_get_host_graphic_api();
 
@@ -174,9 +195,9 @@ namespace jeecs
                 config,
                 universe.handle(),
                 jegl_get_host_graphic_api(),
-                [](jegl_context* glthread, void* ptr)
+                [](jegl_context* glthread, void* ptr, jegl_update_action action)
                 {
-                    std::launder(reinterpret_cast<graphic_uhost*>(ptr))->_frame_rend_impl();
+                    std::launder(reinterpret_cast<graphic_uhost*>(ptr))->_frame_rend_impl(action);
                 },
                 this);
 
@@ -253,6 +274,10 @@ jeecs::graphic_uhost* jegl_uhost_get_or_create_for_universe(
     void* universe, const jegl_interface_config* config)
 {
     return jeecs::graphic_uhost::get_default_graphic_pipeline_instance(universe, config);
+}
+void jegl_uhost_set_skip_behavior(jeecs::graphic_uhost* host, bool skip_all_draw)
+{
+    host->m_skip_all_draw = skip_all_draw;
 }
 jegl_context* jegl_uhost_get_context(jeecs::graphic_uhost* host)
 {

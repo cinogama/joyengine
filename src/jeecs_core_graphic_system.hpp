@@ -391,10 +391,6 @@ public let frag =
 
         void DrawFrame()
         {
-            if (WINDOWS_WIDTH == 0 || WINDOWS_HEIGHT == 0)
-                // Windows' size is invalid, skip this frame.
-                return;
-
             double current_time = je_clock_time();
 
             math::vec4 shader_time =
@@ -679,10 +675,6 @@ public let frag =
 
         void DrawFrame()
         {
-            if (WINDOWS_WIDTH == 0 || WINDOWS_HEIGHT == 0)
-                // Windows' size is invalid, skip this frame.
-                return;
-
             double current_time = je_clock_time();
 
             math::vec4 shader_time =
@@ -1786,10 +1778,6 @@ public func frag(_: v2f)
 
         void DrawFrame()
         {
-            if (WINDOWS_WIDTH == 0 || WINDOWS_HEIGHT == 0)
-                // Windows' size is invalid, skip this frame.
-                return;
-
             double current_time = je_clock_time();
 
             math::vec4 shader_time =

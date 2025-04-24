@@ -1814,8 +1814,8 @@ struct jegl_interface_config
     //  * 最终能否使用取决于图形库
     size_t m_msaa;
 
-    // 启动时的窗口大，即绘制区域的大小，如果设置为0，则使用默认可用的绘制空间大小
-    // 如需全屏，通常设置为 0 即可（即使用显示器的分辨率）
+    // 启动时的窗口尺寸，即绘制区域的大小，如果设置为0，则使用默认可用的绘制空间大小
+    // * 如需全屏，通常设置为 0 即可。
     // * 在一些平台上无效
     size_t m_width;
     size_t m_height;
@@ -1832,6 +1832,13 @@ struct jegl_context_notifier;
 struct jegl_graphic_api;
 struct jegl_context_promise_t;
 
+enum jegl_update_action
+{
+    JEGL_UPDATE_CONTINUE,
+    JEGL_UPDATE_SKIP,
+    JEGL_UPDATE_STOP,
+};
+
 /*
 jegl_context [类型]
 图形上下文，储存有当前图形线程的各项信息
@@ -1839,9 +1846,10 @@ jegl_context [类型]
 struct jegl_context
 {
     using userdata_t = void*;
-    using frame_job_t = void (*)(jegl_context*, void*);
+    using frame_job_func_t = 
+        void (*)(jegl_context*, void*, jegl_update_action);
 
-    frame_job_t _m_frame_rend_work;
+    frame_job_func_t _m_frame_rend_work;
     void* _m_frame_rend_work_arg;
     void* _m_sync_callback_arg;
 
@@ -2201,18 +2209,11 @@ jegl_graphic_api [类型]
 */
 struct jegl_graphic_api
 {
-    enum update_action
-    {
-        CONTINUE,
-        SKIP,
-        STOP,
-    };
-
     using startup_func_t = jegl_context::userdata_t(*)(jegl_context*, const jegl_interface_config*, bool);
     using shutdown_func_t = void (*)(jegl_context*, jegl_context::userdata_t, bool);
 
-    using update_func_t = update_action(*)(jegl_context::userdata_t);
-    using commit_func_t = update_action(*)(jegl_context::userdata_t, update_action);
+    using update_func_t = jegl_update_action(*)(jegl_context::userdata_t);
+    using commit_func_t = jegl_update_action(*)(jegl_context::userdata_t, jegl_update_action);
 
     using create_blob_func_t = jegl_resource_blob(*)(jegl_context::userdata_t, jegl_resource*);
     using close_blob_func_t = void (*)(jegl_context::userdata_t, jegl_resource_blob);
@@ -2269,9 +2270,9 @@ struct jegl_graphic_api
     jegl_graphic_api::update_frame_ready [成员]
     图形接口在更新一帧画面的起始位置会调用的接口，图形实现应当在此接口的开头完成前一帧画面的交换以呈现在屏幕上（这样可
     以获得最佳的画面流畅度），然后做好其他准备：正式的主要渲染任务会在此接口返回后开始。
-        * 接口若返回 update_action::STOP，则表示图形实现请求关闭渲染
+        * 接口若返回 jegl_update_action::STOP，则表示图形实现请求关闭渲染
             创建图形线程时指示的绘制任务将被跳过，在帧同步工作完成后进入图形线程的退出流程。
-        * 接口若返回 update_action::SKIP，则表示图形实现请求跳过本帧的渲染，
+        * 接口若返回 jegl_update_action::SKIP，则表示图形实现请求跳过本帧的渲染，
             通常这种情况是由于窗口被切换至后台、最小化等情况导致的，
             创建图形线程时指示的绘制任务将被跳过，但 **不会** 进入图形线程的退出流程。
         无论如何，update_draw_commit 都会被执行（目的是能正确执行 gui 的逻辑），update_draw_commit将通过参数
@@ -2283,8 +2284,8 @@ struct jegl_graphic_api
     jegl_graphic_api::update_draw_commit [成员]
     图形接口在完成指示的渲染操作之后会调用的接口，图形实现应当在此接口中，将既存的提交任务提交到图形设备中（以最大化利用
     设备空闲），如果可以，渲染GUI的任务也应当在此处实现，并一并提交。
-        * 接口若返回 update_action::STOP，则表示图形实现请求关闭渲染，在帧同步工作完成后进入图形线程的退出流程。
-        * 接口若返回 update_action::SKIP，由于并没有后续的渲染任务可被跳过，因此事实上如同返回 update_action::CONTINUE。
+        * 接口若返回 jegl_update_action::STOP，则表示图形实现请求关闭渲染，在帧同步工作完成后进入图形线程的退出流程。
+        * 接口若返回 jegl_update_action::SKIP，由于并没有后续的渲染任务可被跳过，因此事实上如同返回 jegl_update_action::CONTINUE。
     */
     commit_func_t update_draw_commit;
 
@@ -2481,7 +2482,7 @@ JE_API jegl_context* jegl_start_graphic_thread(
     jegl_interface_config config,
     void* universe_instance,
     jeecs_api_register_func_t register_func,
-    void (*frame_rend_work)(jegl_context*, void*),
+    jegl_context::frame_job_func_t frame_rend_work,
     void* arg);
 
 /*
@@ -3291,6 +3292,14 @@ JE_API void jegl_rchain_commit(
     jegl_context* glthread);
 
 /*
+jegl_rchain_get_target_framebuf [基本接口]
+获取当前绘制链的目标帧缓冲区
+    * 如果当前绘制链的目标帧缓冲区是屏幕缓冲区，则返回 nullptr
+*/
+JE_API jegl_resource* jegl_rchain_get_target_framebuf(
+    jegl_rendchain* chain);
+
+/*
 jegl_uhost_get_or_create_for_universe [基本接口]
 获取或创建指定Universe的可编程图形上下文接口 uhost
     * config 被用于指示图形配置，若首次创建图形接口则使用此设置，
@@ -3312,6 +3321,15 @@ jegl_uhost_get_context [基本接口]
 */
 JE_API jegl_context* jegl_uhost_get_context(
     jeecs::graphic_uhost* host);
+
+/*
+jegl_uhost_set_skip_behavior [基本接口]
+设置图形实现请求跳过这一帧时，uhost的绘制动作行为
+    * skip_all_draw 为真时，跳过全部绘制动作；反之只跳过以屏幕缓冲区为目标的动作
+    * uhost 实例创建时默认为真
+*/
+JE_API void jegl_uhost_set_skip_behavior(
+    jeecs::graphic_uhost* host, bool skip_all_draw);
 
 /*
 jegl_uhost_alloc_branch [基本接口]
@@ -3491,15 +3509,15 @@ JE_API void je_io_get_wheel(size_t group, float* out_x, float* out_y);
 
 /*
 je_io_set_lock_mouse [基本接口]
-设置是否需要将鼠标锁定在指定位置，x,y是窗口坐标
+设置是否需要将鼠标锁定
 */
-JE_API void je_io_set_lock_mouse(bool lock, int x, int y);
+JE_API void je_io_set_lock_mouse(bool lock);
 
 /*
 je_io_get_lock_mouse [基本接口]
-获取当前是否应该锁定鼠标及锁定的位置
+获取当前是否应该锁定鼠标
 */
-JE_API bool je_io_get_lock_mouse(int* out_x, int* out_y);
+JE_API bool je_io_get_lock_mouse();
 
 /*
 je_io_set_window_size [基本接口]

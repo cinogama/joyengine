@@ -34,15 +34,15 @@ namespace jeecs::graphic::api::none
         jegui_shutdown_none(reboot);
     }
 
-    jegl_graphic_api::update_action pre_update(jegl_context::userdata_t)
+    jegl_update_action pre_update(jegl_context::userdata_t)
     {
-        return jegl_graphic_api::update_action::CONTINUE;
+        return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
-    jegl_graphic_api::update_action commit_update(
-        jegl_context::userdata_t, jegl_graphic_api::update_action)
+    jegl_update_action commit_update(
+        jegl_context::userdata_t, jegl_update_action)
     {
         jegui_update_none();
-        return jegl_graphic_api::update_action::CONTINUE;
+        return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
 
     jegl_resource_blob create_resource_blob(jegl_context::userdata_t, jegl_resource*)

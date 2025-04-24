@@ -188,9 +188,11 @@ WO_API wo_api wojeapi_mark_shared_glresource_outdated(wo_vm vm, wo_value args)
     return wo_ret_bool(vm, jegl_mark_shared_resources_outdated(wo_string(args + 0)));
 }
 
-WO_API wo_api wojeapi_init_graphic_pipeline(wo_vm vm, wo_value args)
+WO_API wo_api wojeapi_init_graphic_pipeline_for_editor(wo_vm vm, wo_value args)
 {
-    jegl_uhost_get_or_create_for_universe(wo_pointer(args + 0), nullptr);
+    auto* uhost = jegl_uhost_get_or_create_for_universe(wo_pointer(args + 0), nullptr);
+    jegl_uhost_set_skip_behavior(uhost, false);
+
     return wo_ret_void(vm);
 }
 

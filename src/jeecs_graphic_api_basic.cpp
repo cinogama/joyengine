@@ -433,26 +433,27 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
 
         switch (frame_update_state)
         {
-        case jegl_graphic_api::update_action::STOP:
-            // graphic thread want to exit. mark stop update
-            // std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->store(true);
+        case jegl_update_action::JEGL_UPDATE_STOP:
+            // graphic thread want to exit. mark stop update.
             thread->_m_thread_notifier->m_graphic_terminated.store(true);
             break;
-        case jegl_graphic_api::update_action::CONTINUE:
-            // Only clear commited rendchains when update action is CONTINUE.
-            thread->_m_frame_rend_work(thread, thread->_m_frame_rend_work_arg);
-            break;
-        case jegl_graphic_api::update_action::SKIP:
-            // Skip current frame.
+        case jegl_update_action::JEGL_UPDATE_SKIP:
             if (thread->m_config.m_fps == 0)
-                // If vsync is available, wait for 1./120. sec here to decrease CPU usage.
-                je_clock_sleep_for(1. / 120.);
+                je_clock_sleep_for(1.0 / (double)60.f);
+            else
+                je_clock_sleep_for(1.0 / (double)thread->m_config.m_fps);
             break;
-        default:
-            jeecs::debug::logfatal("Unknown frame update state: %d.", (int)frame_update_state);
+        case jegl_update_action::JEGL_UPDATE_CONTINUE:
+            // do nothing.
+            break;
         }
 
-        if (jegl_graphic_api::update_action::STOP ==
+        thread->_m_frame_rend_work(
+            thread,
+            thread->_m_frame_rend_work_arg,
+            frame_update_state);
+
+        if (jegl_update_action::JEGL_UPDATE_STOP ==
             thread->m_apis->update_draw_commit(thread->m_userdata, frame_update_state))
         {
             // std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update))->store(true);
@@ -571,7 +572,7 @@ jegl_context* jegl_start_graphic_thread(
     jegl_interface_config config,
     void* universe_instance,
     jeecs_api_register_func_t register_func,
-    void(*frame_rend_work)(jegl_context*, void*),
+    jegl_context::frame_job_func_t frame_rend_work,
     void* arg)
 {
     jegl_context* thread_handle = nullptr;
@@ -705,7 +706,7 @@ void jegl_terminate_graphic_thread(jegl_context* thread)
 bool jegl_update(jegl_context* thread, jegl_update_sync_mode mode)
 {
     if (thread->_m_thread_notifier->m_graphic_terminated.load())
-         return false;
+        return false;
 
     std::unique_lock uq1(thread->_m_thread_notifier->m_update_mx);
     if (mode == jegl_update_sync_mode::JEGL_WAIT_LAST_FRAME_END)

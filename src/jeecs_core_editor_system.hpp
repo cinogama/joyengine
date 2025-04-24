@@ -414,41 +414,41 @@ public func frag(vf: v2f)
                     {jegl_vertex::data_type::FLOAT32, 2},
                 });
 
-                float gizmo_camera_visual_cone_vertex_data[] = {
-                    -1.0f, -1.0f, -1.0f,
-                    1.0f, -1.0f, -1.0f,
-                    1.0f, 1.0f, -1.0f,
-                    -1.0f, 1.0f, -1.0f,
-                    -1.0f, -1.0f, 1.0f,
-                    1.0f, -1.0f, 1.0f,
-                    1.0f, 1.0f, 1.0f,
-                    -1.0f, 1.0f, 1.0f,
-                };
-                m_gizmo_camera_visual_cone_vertex =
-                    graphic::vertex::create(jegl_vertex::type::LINESTRIP,
-                        gizmo_camera_visual_cone_vertex_data,
-                        sizeof(gizmo_camera_visual_cone_vertex_data),
-                        {
-                            0, 1, 2, 3, 0, 4, 5, 6, 7, 4, 5, 1, 2, 6, 7, 3
-                        },
+            float gizmo_camera_visual_cone_vertex_data[] = {
+                -1.0f, -1.0f, -1.0f,
+                1.0f, -1.0f, -1.0f,
+                1.0f, 1.0f, -1.0f,
+                -1.0f, 1.0f, -1.0f,
+                -1.0f, -1.0f, 1.0f,
+                1.0f, -1.0f, 1.0f,
+                1.0f, 1.0f, 1.0f,
+                -1.0f, 1.0f, 1.0f,
+            };
+            m_gizmo_camera_visual_cone_vertex =
+                graphic::vertex::create(jegl_vertex::type::LINESTRIP,
+                    gizmo_camera_visual_cone_vertex_data,
+                    sizeof(gizmo_camera_visual_cone_vertex_data),
+                    {
+                        0, 1, 2, 3, 0, 4, 5, 6, 7, 4, 5, 1, 2, 6, 7, 3
+                    },
                     {
                         {jegl_vertex::data_type::FLOAT32, 3},
                     });
 
-                    m_gizmo_physics2d_collider_box_vertex = graphic::vertex::create(
-                        jegl_vertex::type::LINESTRIP,
-                        gizmo_vertex_data,
-                        sizeof(gizmo_vertex_data),
-                        {
-                            0, 1, 3, 2, 0
-                        },
+            m_gizmo_physics2d_collider_box_vertex = graphic::vertex::create(
+                jegl_vertex::type::LINESTRIP,
+                gizmo_vertex_data,
+                sizeof(gizmo_vertex_data),
+                {
+                    0, 1, 3, 2, 0
+                },
                 {
                     {jegl_vertex::data_type::FLOAT32, 3},
                     {jegl_vertex::data_type::FLOAT32, 2},
                 });
 
-                m_gizmo_physics2d_collider_circle_vertex =
-                    _create_circle_vertex({ 0.f, 0.f, 1.f });
+            m_gizmo_physics2d_collider_circle_vertex =
+                _create_circle_vertex({ 0.f, 0.f, 1.f });
         }
     };
 
@@ -464,15 +464,15 @@ public func frag(vf: v2f)
         };
         enum gizmo_mode
         {
-            NONE                = 0,
+            NONE = 0,
 
-            CAMERA              = 0b0000'0001,
-            CAMERA_VISUAL_CONE  = 0b0000'0010,
-            LIGHT2D             = 0b0000'0100,
-            PHYSICS2D_COLLIDER  = 0b0000'1000,
+            CAMERA = 0b0000'0001,
+            CAMERA_VISUAL_CONE = 0b0000'0010,
+            LIGHT2D = 0b0000'0100,
+            PHYSICS2D_COLLIDER = 0b0000'1000,
             SELECTING_HIGHLIGHT = 0b0001'0000,
 
-            ALL                 = 0x7FFFFFFF,
+            ALL = 0x7FFFFFFF,
         };
 
         graphic_uhost* _graphic_uhost;
@@ -493,9 +493,6 @@ public func frag(vf: v2f)
         basic::resource<graphic::vertex> circ_y;
         basic::resource<graphic::vertex> circ_z;
 
-        math::vec3 _begin_drag;
-        bool _drag_viewing = false;
-
         math::vec3 _camera_pos;
         math::quat _camera_rot;
         math::ray _camera_ray;
@@ -503,6 +500,9 @@ public func frag(vf: v2f)
         const Camera::Projection* _camera_porjection = nullptr;
         const Camera::OrthoProjection* _camera_ortho_porjection = nullptr;
         bool _camera_is_in_o2d_mode = false;
+
+        inline static constexpr float MOUSE_MOVEMENT_SCALE = 0.002f;
+        inline static constexpr float MOUSE_ROTATION_SCALE = 0.1f;
 
         struct input_msg
         {
@@ -526,11 +526,17 @@ public func frag(vf: v2f)
 
             float delta_time = 0.0f;
 
-            jeecs::math::vec2 uniform_mouse_pos = {};
-            jeecs::math::ivec2 advise_lock_mouse_pos = {};
+            bool _drag_viewing = false;
+            math::vec2 _last_drag_mouse_pos = {};
+            jeecs::math::vec2 _next_drag_mouse_pos = {};
+            jeecs::math::vec2 current_mouse_pos = {};
 
             int _wheel_count_record = INT_MAX;
             int wheel_delta_count = 0;
+
+            bool advise_lock_mouse_walking_camera = false;
+            bool advise_lock_mouse_move_items = false;
+            const Transform::Translation* _grab_axis_translation = nullptr;
 
             // Why write an empty constructor function here?
             // It's a bug of clang/gcc, fuck!
@@ -564,77 +570,77 @@ public func frag(vf: v2f)
                     {jegl_vertex::data_type::FLOAT32, 3},
                 });
 
-                const float axis_y_data[] = {
-                    0.f, -1.f, 0.f,       0.f, 0.25f, 0.f,
-                    0.f, 1.f, 0.f,        0.f, 1.f, 0.f,
-                };
-                axis_y = graphic::vertex::create(jegl_vertex::type::LINES,
-                    axis_y_data,
-                    sizeof(axis_y_data),
-                    {
-                        0, 1
-                    },
+            const float axis_y_data[] = {
+                0.f, -1.f, 0.f,       0.f, 0.25f, 0.f,
+                0.f, 1.f, 0.f,        0.f, 1.f, 0.f,
+            };
+            axis_y = graphic::vertex::create(jegl_vertex::type::LINES,
+                axis_y_data,
+                sizeof(axis_y_data),
+                {
+                    0, 1
+                },
                 {
                     {jegl_vertex::data_type::FLOAT32, 3},
                     {jegl_vertex::data_type::FLOAT32, 3},
                 });
 
-                const float axis_z_data[] = {
-                    0.f, 0.f, -1.f,       0.f, 0.f, 0.25f,
-                    0.f, 0.f,  1.f,       0.f, 0.f, 1.f
-                };
-                axis_z = graphic::vertex::create(jegl_vertex::type::LINES,
-                    axis_z_data,
-                    sizeof(axis_z_data),
-                    {
-                        0, 1
-                    },
+            const float axis_z_data[] = {
+                0.f, 0.f, -1.f,       0.f, 0.f, 0.25f,
+                0.f, 0.f,  1.f,       0.f, 0.f, 1.f
+            };
+            axis_z = graphic::vertex::create(jegl_vertex::type::LINES,
+                axis_z_data,
+                sizeof(axis_z_data),
+                {
+                    0, 1
+                },
                 {
                     {jegl_vertex::data_type::FLOAT32, 3},
                     {jegl_vertex::data_type::FLOAT32, 3},
                 });
-                circ_x = GizmoResources::_create_circle_vertex({ 1.f, 0.f, 0.f });
-                circ_y = GizmoResources::_create_circle_vertex({ 0.f, 1.f, 0.f });
-                circ_z = GizmoResources::_create_circle_vertex({ 0.f, 0.f, 1.f });
+            circ_x = GizmoResources::_create_circle_vertex({ 1.f, 0.f, 0.f });
+            circ_y = GizmoResources::_create_circle_vertex({ 0.f, 1.f, 0.f });
+            circ_z = GizmoResources::_create_circle_vertex({ 0.f, 0.f, 1.f });
 
-                const float selector_size = 0.1f;
+            const float selector_size = 0.1f;
 
-                circ_x->resource()->m_raw_vertex_data->m_y_min += -selector_size;
-                circ_x->resource()->m_raw_vertex_data->m_y_max += selector_size;
-                circ_x->resource()->m_raw_vertex_data->m_z_min += -selector_size;
-                circ_x->resource()->m_raw_vertex_data->m_z_max += selector_size;
+            circ_x->resource()->m_raw_vertex_data->m_y_min += -selector_size;
+            circ_x->resource()->m_raw_vertex_data->m_y_max += selector_size;
+            circ_x->resource()->m_raw_vertex_data->m_z_min += -selector_size;
+            circ_x->resource()->m_raw_vertex_data->m_z_max += selector_size;
 
-                circ_y->resource()->m_raw_vertex_data->m_x_min += -selector_size;
-                circ_y->resource()->m_raw_vertex_data->m_x_max += selector_size;
-                circ_y->resource()->m_raw_vertex_data->m_z_min += -selector_size;
-                circ_y->resource()->m_raw_vertex_data->m_z_max += selector_size;
+            circ_y->resource()->m_raw_vertex_data->m_x_min += -selector_size;
+            circ_y->resource()->m_raw_vertex_data->m_x_max += selector_size;
+            circ_y->resource()->m_raw_vertex_data->m_z_min += -selector_size;
+            circ_y->resource()->m_raw_vertex_data->m_z_max += selector_size;
 
-                circ_z->resource()->m_raw_vertex_data->m_x_min += -selector_size;
-                circ_z->resource()->m_raw_vertex_data->m_x_max += selector_size;
-                circ_z->resource()->m_raw_vertex_data->m_y_min += -selector_size;
-                circ_z->resource()->m_raw_vertex_data->m_y_max += selector_size;
+            circ_z->resource()->m_raw_vertex_data->m_x_min += -selector_size;
+            circ_z->resource()->m_raw_vertex_data->m_x_max += selector_size;
+            circ_z->resource()->m_raw_vertex_data->m_y_min += -selector_size;
+            circ_z->resource()->m_raw_vertex_data->m_y_max += selector_size;
 
-                circ_x->resource()->m_raw_vertex_data->m_x_min
-                    = circ_y->resource()->m_raw_vertex_data->m_y_min
-                    = circ_z->resource()->m_raw_vertex_data->m_z_min
-                    = axis_x->resource()->m_raw_vertex_data->m_y_min
-                    = axis_x->resource()->m_raw_vertex_data->m_z_min
-                    = axis_y->resource()->m_raw_vertex_data->m_x_min
-                    = axis_y->resource()->m_raw_vertex_data->m_z_min
-                    = axis_z->resource()->m_raw_vertex_data->m_x_min
-                    = axis_z->resource()->m_raw_vertex_data->m_y_min
-                    = -selector_size;
+            circ_x->resource()->m_raw_vertex_data->m_x_min
+                = circ_y->resource()->m_raw_vertex_data->m_y_min
+                = circ_z->resource()->m_raw_vertex_data->m_z_min
+                = axis_x->resource()->m_raw_vertex_data->m_y_min
+                = axis_x->resource()->m_raw_vertex_data->m_z_min
+                = axis_y->resource()->m_raw_vertex_data->m_x_min
+                = axis_y->resource()->m_raw_vertex_data->m_z_min
+                = axis_z->resource()->m_raw_vertex_data->m_x_min
+                = axis_z->resource()->m_raw_vertex_data->m_y_min
+                = -selector_size;
 
-                circ_x->resource()->m_raw_vertex_data->m_x_max
-                    = circ_y->resource()->m_raw_vertex_data->m_y_max
-                    = circ_z->resource()->m_raw_vertex_data->m_z_max
-                    = axis_x->resource()->m_raw_vertex_data->m_y_max
-                    = axis_x->resource()->m_raw_vertex_data->m_z_max
-                    = axis_y->resource()->m_raw_vertex_data->m_x_max
-                    = axis_y->resource()->m_raw_vertex_data->m_z_max
-                    = axis_z->resource()->m_raw_vertex_data->m_x_max
-                    = axis_z->resource()->m_raw_vertex_data->m_y_max
-                    = selector_size;
+            circ_x->resource()->m_raw_vertex_data->m_x_max
+                = circ_y->resource()->m_raw_vertex_data->m_y_max
+                = circ_z->resource()->m_raw_vertex_data->m_z_max
+                = axis_x->resource()->m_raw_vertex_data->m_y_max
+                = axis_x->resource()->m_raw_vertex_data->m_z_max
+                = axis_y->resource()->m_raw_vertex_data->m_x_max
+                = axis_y->resource()->m_raw_vertex_data->m_z_max
+                = axis_z->resource()->m_raw_vertex_data->m_x_max
+                = axis_z->resource()->m_raw_vertex_data->m_y_max
+                = selector_size;
 
         }
         ~DefaultEditorSystem()
@@ -654,11 +660,6 @@ public func frag(vf: v2f)
         };
         std::multiset<SelectedResult> selected_list;
 
-        const Transform::Translation* _grab_axis_translation = nullptr;
-        math::vec2 _grab_last_pos;
-
-        bool advise_lock_mouse = false;
-
         void MoveWalker(Transform::LocalPosition& position, Transform::LocalRotation& rotation, Transform::Translation& trans)
         {
             if (!_editor_enabled)
@@ -669,8 +670,7 @@ public func frag(vf: v2f)
 
             if (_inputs.r_button_pushed)
             {
-                _begin_drag = _inputs.uniform_mouse_pos;
-                _drag_viewing = false;
+                _inputs._drag_viewing = false;
             }
 
             if (_inputs.r_button)
@@ -681,10 +681,10 @@ public func frag(vf: v2f)
                 if (_inputs.l_shift)
                     move_speed = move_speed * 2.0f;
 
-                auto delta_drag = _inputs.uniform_mouse_pos - _begin_drag;
-                if (_drag_viewing || delta_drag.length() >= 0.01f)
+                auto delta_drag = _inputs.current_mouse_pos - _inputs._last_drag_mouse_pos;
+                if (_inputs._drag_viewing || delta_drag.length() >= 0.01f)
                 {
-                    _drag_viewing = true;
+                    _inputs._drag_viewing = true;
 
                     if (_camera_is_in_o2d_mode)
                     {
@@ -692,14 +692,13 @@ public func frag(vf: v2f)
 
                         move_speed /= _camera_ortho_porjection->scale * 0.5f;
 
-                        _begin_drag = _inputs.uniform_mouse_pos;
-                        position.pos -= move_speed * vec3(delta_drag.x, delta_drag.y, 0.0);
+                        position.pos -= move_speed * vec3(delta_drag.x, -delta_drag.y, 0.0) * MOUSE_MOVEMENT_SCALE;
                         rotation.rot = quat();
                     }
                     else
                     {
-                        advise_lock_mouse = true;
-                        rotation.rot = rotation.rot * quat(0, 30.f * _inputs.uniform_mouse_pos.x, 0);
+                        _inputs.advise_lock_mouse_walking_camera = true;
+                        rotation.rot = rotation.rot * quat(0, MOUSE_ROTATION_SCALE * delta_drag.x, 0);
                     }
                 }
 
@@ -713,7 +712,7 @@ public func frag(vf: v2f)
                     position.pos += _camera_rot * vec3(move_speed * _inputs.delta_time, 0, 0);
             }
             else
-                advise_lock_mouse = false;
+                _inputs.advise_lock_mouse_walking_camera = false;
         }
 
         void SelectEntity(game_entity entity, Transform::Translation& trans, Renderer::Shape* shape)
@@ -765,9 +764,9 @@ public func frag(vf: v2f)
                             {jegl_vertex::data_type::FLOAT32, 3},
                         });
 
-                        basic::resource<graphic::shader>
-                            axis_shader = graphic::shader::create("!/builtin/mover_axis.shader",
-                                { R"(
+                basic::resource<graphic::shader>
+                    axis_shader = graphic::shader::create("!/builtin/mover_axis.shader",
+                        { R"(
 import je::shader;
         
 SHARED  (true);
@@ -806,9 +805,9 @@ public let frag =
     ;
 ;
         )" });
-                        basic::resource<graphic::shader>
-                            select_box_shader = graphic::shader::create("!/builtin/select_box.shader",
-                                { R"(
+                basic::resource<graphic::shader>
+                    select_box_shader = graphic::shader::create("!/builtin/select_box.shader",
+                        { R"(
 import je::shader;
         
 SHARED  (true);
@@ -843,85 +842,85 @@ public let frag =
 ;
         )" });
 
-                        game_world current_world = mover_entity.game_world();
-                        game_entity axis_x_e = current_world.add_entity<
-                            Transform::LocalPosition,
-                            Transform::LocalScale,
-                            Transform::LocalToParent,
-                            Transform::Translation,
-                            Renderer::Shaders,
-                            Renderer::Shape,
-                            Renderer::Rendqueue,
-                            Renderer::Color,
-                            Editor::Invisable,
-                            Editor::EntityMover
-                        >();
-                        game_entity axis_y_e = current_world.add_entity<
-                            Transform::LocalPosition,
-                            Transform::LocalScale,
-                            Transform::LocalToParent,
-                            Transform::Translation,
-                            Renderer::Shaders,
-                            Renderer::Shape,
-                            Renderer::Rendqueue,
-                            Renderer::Color,
-                            Editor::Invisable,
-                            Editor::EntityMover
-                        >();
-                        game_entity axis_z_e = current_world.add_entity<
-                            Transform::LocalPosition,
-                            Transform::LocalScale,
-                            Transform::LocalToParent,
-                            Transform::Translation,
-                            Renderer::Shaders,
-                            Renderer::Shape,
-                            Renderer::Rendqueue,
-                            Renderer::Color,
-                            Editor::Invisable,
-                            Editor::EntityMover
-                        >();
+                game_world current_world = mover_entity.game_world();
+                game_entity axis_x_e = current_world.add_entity<
+                    Transform::LocalPosition,
+                    Transform::LocalScale,
+                    Transform::LocalToParent,
+                    Transform::Translation,
+                    Renderer::Shaders,
+                    Renderer::Shape,
+                    Renderer::Rendqueue,
+                    Renderer::Color,
+                    Editor::Invisable,
+                    Editor::EntityMover
+                >();
+                game_entity axis_y_e = current_world.add_entity<
+                    Transform::LocalPosition,
+                    Transform::LocalScale,
+                    Transform::LocalToParent,
+                    Transform::Translation,
+                    Renderer::Shaders,
+                    Renderer::Shape,
+                    Renderer::Rendqueue,
+                    Renderer::Color,
+                    Editor::Invisable,
+                    Editor::EntityMover
+                >();
+                game_entity axis_z_e = current_world.add_entity<
+                    Transform::LocalPosition,
+                    Transform::LocalScale,
+                    Transform::LocalToParent,
+                    Transform::Translation,
+                    Renderer::Shaders,
+                    Renderer::Shape,
+                    Renderer::Rendqueue,
+                    Renderer::Color,
+                    Editor::Invisable,
+                    Editor::EntityMover
+                >();
 
-                        game_entity select_box = current_world.add_entity<
-                            Transform::LocalRotation,
-                            Transform::LocalPosition,
-                            Transform::LocalScale,
-                            Transform::LocalToParent,
-                            Transform::Translation,
-                            Renderer::Shaders,
-                            Renderer::Shape,
-                            Renderer::Rendqueue,
-                            Editor::Invisable,
-                            Editor::EntitySelectBox
-                        >();
+                game_entity select_box = current_world.add_entity<
+                    Transform::LocalRotation,
+                    Transform::LocalPosition,
+                    Transform::LocalScale,
+                    Transform::LocalToParent,
+                    Transform::Translation,
+                    Renderer::Shaders,
+                    Renderer::Shape,
+                    Renderer::Rendqueue,
+                    Editor::Invisable,
+                    Editor::EntitySelectBox
+                >();
 
-                        axis_x_e.get_component<Renderer::Shaders>()->shaders.push_back(axis_shader);
-                        axis_y_e.get_component<Renderer::Shaders>()->shaders.push_back(axis_shader);
-                        axis_z_e.get_component<Renderer::Shaders>()->shaders.push_back(axis_shader);
-                        select_box.get_component<Renderer::Shaders>()->shaders.push_back(select_box_shader);
+                axis_x_e.get_component<Renderer::Shaders>()->shaders.push_back(axis_shader);
+                axis_y_e.get_component<Renderer::Shaders>()->shaders.push_back(axis_shader);
+                axis_z_e.get_component<Renderer::Shaders>()->shaders.push_back(axis_shader);
+                select_box.get_component<Renderer::Shaders>()->shaders.push_back(select_box_shader);
 
-                        axis_x_e.get_component<Editor::EntityMover>()->axis = math::vec3(1.f, 0, 0);
-                        axis_y_e.get_component<Editor::EntityMover>()->axis = math::vec3(0, 1.f, 0);
-                        axis_z_e.get_component<Editor::EntityMover>()->axis = math::vec3(0, 0, 1.f);
+                axis_x_e.get_component<Editor::EntityMover>()->axis = math::vec3(1.f, 0, 0);
+                axis_y_e.get_component<Editor::EntityMover>()->axis = math::vec3(0, 1.f, 0);
+                axis_z_e.get_component<Editor::EntityMover>()->axis = math::vec3(0, 0, 1.f);
 
-                        axis_x_e.get_component<Renderer::Shape>()->vertex = axis_x;
-                        axis_y_e.get_component<Renderer::Shape>()->vertex = axis_y;
-                        axis_z_e.get_component<Renderer::Shape>()->vertex = axis_z;
-                        select_box.get_component<Renderer::Shape>()->vertex = select_box_vert;
+                axis_x_e.get_component<Renderer::Shape>()->vertex = axis_x;
+                axis_y_e.get_component<Renderer::Shape>()->vertex = axis_y;
+                axis_z_e.get_component<Renderer::Shape>()->vertex = axis_z;
+                select_box.get_component<Renderer::Shape>()->vertex = select_box_vert;
 
-                        select_box.get_component<Renderer::Rendqueue>()->rend_queue =
-                            axis_x_e.get_component<Renderer::Rendqueue>()->rend_queue =
-                            axis_y_e.get_component<Renderer::Rendqueue>()->rend_queue =
-                            axis_z_e.get_component<Renderer::Rendqueue>()->rend_queue = 100000;
+                select_box.get_component<Renderer::Rendqueue>()->rend_queue =
+                    axis_x_e.get_component<Renderer::Rendqueue>()->rend_queue =
+                    axis_y_e.get_component<Renderer::Rendqueue>()->rend_queue =
+                    axis_z_e.get_component<Renderer::Rendqueue>()->rend_queue = 100000;
 
-                        axis_x_e.get_component<Transform::LocalPosition>()->pos = math::vec3(1.f, 0, 0);
-                        axis_y_e.get_component<Transform::LocalPosition>()->pos = math::vec3(0, 1.f, 0);
-                        axis_z_e.get_component<Transform::LocalPosition>()->pos = math::vec3(0, 0, 1.f);
+                axis_x_e.get_component<Transform::LocalPosition>()->pos = math::vec3(1.f, 0, 0);
+                axis_y_e.get_component<Transform::LocalPosition>()->pos = math::vec3(0, 1.f, 0);
+                axis_z_e.get_component<Transform::LocalPosition>()->pos = math::vec3(0, 0, 1.f);
 
-                        select_box.get_component<Transform::LocalToParent>()->parent_uid =
-                            axis_x_e.get_component<Transform::LocalToParent>()->parent_uid =
-                            axis_y_e.get_component<Transform::LocalToParent>()->parent_uid =
-                            axis_z_e.get_component<Transform::LocalToParent>()->parent_uid =
-                            anchor.uid;
+                select_box.get_component<Transform::LocalToParent>()->parent_uid =
+                    axis_x_e.get_component<Transform::LocalToParent>()->parent_uid =
+                    axis_y_e.get_component<Transform::LocalToParent>()->parent_uid =
+                    axis_z_e.get_component<Transform::LocalToParent>()->parent_uid =
+                    anchor.uid;
             }
             if (const game_entity* current = _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr)
             {
@@ -1000,22 +999,28 @@ public let frag =
                 : nullptr;
 
             if (_inputs.r_button || !_inputs.l_button || nullptr == editing_trans)
-                _grab_axis_translation = nullptr;
+                _inputs._grab_axis_translation = nullptr;
 
-            if (_grab_axis_translation && _inputs.l_button && editing_trans)
+            if (_inputs._grab_axis_translation && _inputs.l_button && editing_trans)
             {
-                if (_grab_axis_translation == &trans && _camera_porjection)
+                if (_inputs._grab_axis_translation == &trans && _camera_porjection)
                 {
-                    // advise_lock_mouse = true;
-                    math::vec2 cur_mouse_pos = _inputs.uniform_mouse_pos;
-                    math::vec2 diff = cur_mouse_pos - _grab_last_pos;
+                    math::vec2 diff = 
+                        (_inputs.current_mouse_pos - _inputs._last_drag_mouse_pos) 
+                        * MOUSE_MOVEMENT_SCALE;
 
                     math::vec4 p0 = trans.world_position;
                     p0.w = 1.0f;
-                    p0 = math::mat4trans(_camera_porjection->projection, math::mat4trans(_camera_porjection->view, p0));
+                    p0 = math::mat4trans(
+                        _camera_porjection->projection, 
+                        math::mat4trans(_camera_porjection->view, p0));
+
                     math::vec4 p1 = trans.world_position + trans.world_rotation * mover.axis;
+
                     p1.w = 1.0f;
-                    p1 = math::mat4trans(_camera_porjection->projection, math::mat4trans(_camera_porjection->view, p1));
+                    p1 = math::mat4trans(
+                        _camera_porjection->projection,
+                        math::mat4trans(_camera_porjection->view, p1));
 
                     math::vec2 screen_axis = { p1.x - p0.x,p1.y - p0.y };
                     screen_axis = screen_axis.unit();
@@ -1034,7 +1039,8 @@ public let frag =
                     if (mover.mode == Editor::EntityMover::mover_mode::MOVEMENT && editing_pos_may_null)
                     {
                         editing_trans->set_global_position(
-                            editing_trans->world_position + diff.dot(screen_axis) * (trans.world_rotation * (mover.axis * distance * factor)),
+                            editing_trans->world_position + diff.dot(
+                                screen_axis) * (trans.world_rotation * (mover.axis * distance * factor)),
                             editing_pos_may_null,
                             editing_rot_may_null);
                     }
@@ -1047,8 +1053,6 @@ public let frag =
                         auto euler = trans.world_rotation * mover.axis * (diff.x + diff.y) * factor * 20.0f;
                         editing_rot_may_null->rot = math::quat(euler.x, euler.y, euler.z) * editing_rot_may_null->rot;
                     }
-
-                    _grab_last_pos = cur_mouse_pos;
                 }
             }
             else
@@ -1073,10 +1077,8 @@ public let frag =
                 if (intersected)
                 {
                     if (select_click)
-                    {
-                        _grab_axis_translation = &trans;
-                        _grab_last_pos = _inputs.uniform_mouse_pos;
-                    }
+                        _inputs._grab_axis_translation = &trans;
+
                     if (!_inputs.l_button)
                         color.color.x = 1.0f;
                 }
@@ -1167,14 +1169,15 @@ public let frag =
                 Camera::RendToFramebuffer& r2b,
                 Camera::OrthoProjection* o2d)
                 {
-                    if (r2b.framebuffer != nullptr && proj.default_uniform_buffer != nullptr)
-                    {
-                        enable_draw_gizmo_at_framebuf = EditorGizmoContext{
-                            r2b.framebuffer,
-                            &trans,
-                            &proj,
-                        };
-                    }
+                    if (r2b.framebuffer == nullptr
+                        || proj.default_uniform_buffer == nullptr)
+                        return;
+
+                    enable_draw_gizmo_at_framebuf = EditorGizmoContext{
+                           r2b.framebuffer,
+                           &trans,
+                           &proj,
+                    };
 
                     if (!_editor_enabled)
                         return;
@@ -1182,7 +1185,11 @@ public let frag =
                     using namespace input;
                     using namespace math;
 
-                    auto mouse_position = _inputs.uniform_mouse_pos;
+                    auto view_space_width = r2b.framebuffer->width();
+                    auto view_space_height = r2b.framebuffer->height();
+
+                    auto uniform_mouse_x = 2.0f * ((float)_inputs.current_mouse_pos.x / (float)view_space_width - 0.5f);
+                    auto uniform_mouse_y = -2.0f * ((float)_inputs.current_mouse_pos.y / (float)view_space_height - 0.5f);
 
                     if ((_camera_is_in_o2d_mode = o2d != nullptr))
                     {
@@ -1190,14 +1197,22 @@ public let frag =
                         rotation.rot = quat();
                     }
 
-                    _camera_ray = math::ray(trans, proj, mouse_position, _camera_is_in_o2d_mode);
+                    _camera_ray = math::ray(
+                        trans, 
+                        proj, 
+                        math::vec2(uniform_mouse_x, uniform_mouse_y),
+                        _camera_is_in_o2d_mode);
+
                     _camera_porjection = &proj;
                     _camera_ortho_porjection = o2d;
 
-                    if (_drag_viewing && _inputs.r_button)
+                    if (_inputs._drag_viewing && _inputs.r_button)
                     {
                         if (!_camera_is_in_o2d_mode)
-                            rotation.rot = rotation.rot * quat(30.f * -mouse_position.y, 0, 0);
+                        {
+                            auto delta_drag = _inputs.current_mouse_pos - _inputs._last_drag_mouse_pos;
+                            rotation.rot = rotation.rot * quat(MOUSE_ROTATION_SCALE * delta_drag.y, 0, 0);
+                        }
 
                         _camera_rot = trans.world_rotation;
                         _camera_pos = trans.world_position;
@@ -1605,7 +1620,7 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
             if (!_editor_enabled)
                 return;
 
-            if (nullptr == _grab_axis_translation)
+            if (nullptr == _inputs._grab_axis_translation)
             {
                 auto _set_editing_entity = [](const jeecs::game_entity& e)
                     {
@@ -1643,7 +1658,12 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                     jedbg_set_editing_entity_uid(0);
             }
 
-            je_io_set_lock_mouse(advise_lock_mouse, _inputs.advise_lock_mouse_pos.x, _inputs.advise_lock_mouse_pos.y);
+            je_io_set_lock_mouse(
+                _inputs.advise_lock_mouse_walking_camera 
+                || _inputs.advise_lock_mouse_move_items);
+
+            _inputs._last_drag_mouse_pos = _inputs.current_mouse_pos;
+            _inputs.current_mouse_pos = _inputs._next_drag_mouse_pos;
 
             selected_list.clear();
         }
@@ -1660,7 +1680,6 @@ WO_API wo_api wojeapi_store_bad_shader_name(wo_vm vm, wo_value args)
 
     return wo_ret_pointer(vm, &badShadersUniform->stored_uniforms.emplace_back(jeecs::Editor::BadShadersUniform::bad_shader_data(shader_path)));
 }
-
 WO_API wo_api wojeapi_store_bad_shader_uniforms_int(wo_vm vm, wo_value args)
 {
     auto* bad_shader = &((jeecs::Editor::BadShadersUniform::ok_or_bad_shader*)wo_pointer(args + 0))->get_bad();
@@ -1754,7 +1773,10 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_float4(wo_vm vm, wo_value args)
     return wo_ret_void(vm);
 }
 
-inline void update_shader(jegl_shader::unifrom_variables* uni_var, const std::string& uname, jeecs::graphic::shader* new_shad)
+inline void update_shader(
+    jegl_shader::unifrom_variables* uni_var,
+    const std::string& uname,
+    jeecs::graphic::shader* new_shad)
 {
     switch (uni_var->m_uniform_type)
     {
@@ -1788,8 +1810,9 @@ inline void update_shader(jegl_shader::unifrom_variables* uni_var, const std::st
     default: break; // donothing
     }
 }
-
-bool _update_bad_shader_to_new_shader(jeecs::Renderer::Shaders* shaders, jeecs::Editor::BadShadersUniform* bad_uniforms)
+bool _update_bad_shader_to_new_shader(
+    jeecs::Renderer::Shaders* shaders,
+    jeecs::Editor::BadShadersUniform* bad_uniforms)
 {
     assert(bad_uniforms != nullptr && shaders != nullptr);
     for (auto& ok_or_bad_shader : bad_uniforms->stored_uniforms)
@@ -1800,7 +1823,6 @@ bool _update_bad_shader_to_new_shader(jeecs::Renderer::Shaders* shaders, jeecs::
         shaders->shaders.push_back(ok_or_bad_shader.get_ok());
     return true;
 }
-
 
 WO_API wo_api wojeapi_remove_bad_shader_name(wo_vm vm, wo_value args)
 {
@@ -1826,7 +1848,6 @@ WO_API wo_api wojeapi_remove_bad_shader_name(wo_vm vm, wo_value args)
     }
     return wo_ret_void(vm);
 }
-
 WO_API wo_api wojeapi_reload_texture_of_entity(wo_vm vm, wo_value args)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
@@ -2106,11 +2127,8 @@ WO_API wo_api wojeapi_setable_editor_system(wo_vm vm, wo_value args)
 }
 WO_API wo_api wojeapi_update_editor_mouse_pos(wo_vm vm, wo_value args)
 {
-    jeecs::DefaultEditorSystem::_inputs.uniform_mouse_pos =
+    jeecs::DefaultEditorSystem::_inputs._next_drag_mouse_pos =
         jeecs::math::vec2{ wo_float(args + 0), wo_float(args + 1) };
-
-    jeecs::DefaultEditorSystem::_inputs.advise_lock_mouse_pos =
-        jeecs::math::ivec2{ (int)wo_int(args + 2), (int)wo_int(args + 3) };
 
     return wo_ret_void(vm);
 }

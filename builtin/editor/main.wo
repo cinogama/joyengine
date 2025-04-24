@@ -486,7 +486,7 @@ for (;;)
         let editor_configs = read_editor_data();
         let historys = editor_configs->get_or("history": dynamic, []: dynamic) as array<dynamic>->unsafe::cast:< vec<array<string>> >;
 
-        je::internal::init_graphic_pipeline(u->get_universe());
+        je::internal::init_graphic_pipeline_for_editor(u->get_universe());
 
         if (std::platform::os != std::platform::os_type::WIN32 || 
             editor::CxxProject::is_builder_ready())

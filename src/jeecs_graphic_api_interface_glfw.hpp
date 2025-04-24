@@ -18,9 +18,17 @@ namespace jeecs::graphic
     {
         JECS_DISABLE_MOVE_AND_COPY(glfw);
 
+        enum class mouse_lock_state_t
+        {
+            NO_SPECIFY,
+            LOCKED,
+            UNLOCKED,
+        };
+
         GLFWwindow* _m_windows;
         bool _m_window_resized;
         bool _m_window_paused;
+        mouse_lock_state_t _m_mouse_locked;
 
         inline static std::mutex _m_glfw_instance_mx;
         inline static size_t _m_glfw_taking_count = 0;
@@ -168,7 +176,7 @@ namespace jeecs::graphic
             }
 
             je_io_update_key_state(keycode, stage != 0);
-            }
+        }
 
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WEBGL
         // No gamepad support for webgl.
@@ -314,6 +322,7 @@ namespace jeecs::graphic
             : _m_windows(nullptr)
             , _m_window_resized(true)
             , _m_window_paused(false)
+            , _m_mouse_locked(mouse_lock_state_t::NO_SPECIFY)
         {
             if (type == interface_type::HOLD)
                 return;
@@ -365,6 +374,8 @@ namespace jeecs::graphic
 
         virtual void create_interface(jegl_context* thread, const jegl_interface_config* config) override
         {
+            _m_mouse_locked = mouse_lock_state_t::NO_SPECIFY;
+
             auto display_mode = config->m_display_mode;
             auto* primary_monitor = glfwGetPrimaryMonitor();
 
@@ -440,7 +451,7 @@ namespace jeecs::graphic
 
             // Try load icon from @/icon.png or !/builtin/icon/icon.png.
             // Do nothing if both not exist.
-            jeecs::basic::resource<jeecs::graphic::texture> icon = 
+            jeecs::basic::resource<jeecs::graphic::texture> icon =
                 jeecs::graphic::texture::load(nullptr, "@/icon.png");
 
             if (icon == nullptr)
@@ -496,16 +507,29 @@ namespace jeecs::graphic
             else
 #endif
                 glfwSwapInterval(0);
-            }
+        }
         virtual void swap_for_opengl() override
         {
             glfwSwapBuffers(_m_windows);
         }
         virtual update_result update() override
         {
-            int mouse_lock_x, mouse_lock_y;
-            if (je_io_get_lock_mouse(&mouse_lock_x, &mouse_lock_y))
-                glfwSetCursorPos(_m_windows, mouse_lock_x, mouse_lock_y);
+            if (je_io_get_lock_mouse())
+            {
+                if (_m_mouse_locked != mouse_lock_state_t::LOCKED)
+                {
+                    glfwSetInputMode(_m_windows, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+                    _m_mouse_locked = mouse_lock_state_t::LOCKED;
+                }
+            }
+            else
+            {
+                if (_m_mouse_locked != mouse_lock_state_t::UNLOCKED)
+                {
+                    glfwSetInputMode(_m_windows, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+                    _m_mouse_locked = mouse_lock_state_t::UNLOCKED;
+                }
+            }
 
             int window_width, window_height;
             if (je_io_fetch_update_window_size(&window_width, &window_height))
@@ -559,8 +583,8 @@ namespace jeecs::graphic
                         glfwTerminate();
 
                 } while (0);
-            }
         }
+    }
 
         virtual void* interface_handle() const override
         {
@@ -573,5 +597,5 @@ namespace jeecs::graphic
             return glfwGetWin32Window(_m_windows);
         }
 #endif
-        };
-        }
+};
+}

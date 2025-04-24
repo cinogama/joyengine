@@ -191,8 +191,8 @@ namespace je
         extern("libjoyecs", "wojeapi_mark_shared_glresource_outdated")
         public func mark_shared_glresource_outdated(respath: string)=> bool;
 
-        extern("libjoyecs", "wojeapi_init_graphic_pipeline")
-        public func init_graphic_pipeline(u: universe)=> void;
+        extern("libjoyecs", "wojeapi_init_graphic_pipeline_for_editor")
+        public func init_graphic_pipeline_for_editor(u: universe)=> void;
 
         extern("libjoyecs", "wojeapi_set_runtime_path")
         public func set_runtime_path(path: string)=> void;
@@ -258,7 +258,7 @@ namespace je
         public func getlogs()=> array<(loglevel, string)>;
 
         extern("libjoyecs", "wojeapi_update_editor_mouse_pos")
-        public func update_editor_mouse_pos(x: real, y: real, lockposx: int, lockposy: int)=> void;
+        public func update_editor_mouse_pos(x: real, y: real)=> void;
 
         extern("libjoyecs", "wojeapi_setable_editor_system")
         public func enable_editor_system(able: bool)=> void;

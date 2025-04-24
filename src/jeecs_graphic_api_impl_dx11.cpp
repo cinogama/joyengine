@@ -417,7 +417,7 @@ namespace jeecs::graphic::api::dx11
 #endif
     }
 
-    jegl_graphic_api::update_action dx11_pre_update(jegl_context::userdata_t ctx)
+    jegl_update_action dx11_pre_update(jegl_context::userdata_t ctx)
     {
         jegl_dx11_context* context =
             std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
@@ -426,28 +426,27 @@ namespace jeecs::graphic::api::dx11
         {
         case basic_interface::update_result::CLOSE:
             if (jegui_shutdown_callback())
-                return jegl_graphic_api::update_action::STOP;
-            /*fallthrough*/
-            [[fallthrough]];
+                return jegl_update_action::JEGL_UPDATE_STOP;
+            return jegl_update_action::JEGL_UPDATE_CONTINUE;
         case basic_interface::update_result::PAUSE:
-            return jegl_graphic_api::update_action::SKIP;
+            return jegl_update_action::JEGL_UPDATE_SKIP;
         case basic_interface::update_result::RESIZE:
             dx11_callback_windows_size_changed(context);
             /*fallthrough*/
             [[fallthrough]];
         case basic_interface::update_result::NORMAL:
             JERCHECK(context->m_dx_swapchain->Present(context->FPS == 0 ? 1 : 0, 0));
-            return jegl_graphic_api::update_action::CONTINUE;
+            return jegl_update_action::JEGL_UPDATE_CONTINUE;
         default:
             abort();
         }
     }
 
-    jegl_graphic_api::update_action dx11_commit_update(
-        jegl_context::userdata_t, jegl_graphic_api::update_action)
+    jegl_update_action dx11_commit_update(
+        jegl_context::userdata_t, jegl_update_action)
     {
         jegui_update_dx11();
-        return jegl_graphic_api::update_action::CONTINUE;
+        return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
 
     struct dx11_resource_blob

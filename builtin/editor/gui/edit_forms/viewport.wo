@@ -346,17 +346,10 @@ namespace editor::gui::edit_forms
                             {
                             value(frametex)?
                                 {
-                                    let (frame_tex_width, frame_tex_height) = frametex->size;
-
-                                    let (vx, vy) = GetMainViewportPos();
                                     let (wx, wy) = GetWindowPos();
                                     let (lupx, lupy) = GetCursorPos();
 
                                     ImageSize(frametex, available_width, available_height);
-
-                                    let (itemw, itemh) = GetItemRectSize();
-                                    let (mx, my) = GetMousePos();
-                                    let (offsetx, offsety) = (mx - lupx - wx, my - lupy - wy);
 
                                     if (IsWindowFocused())
                                     {
@@ -378,36 +371,34 @@ namespace editor::gui::edit_forms
                                         je::input::internal::set_mouse_state(0, je::mousecode::RIGHT, IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Right));
                                     }
 
-                                    if (IsItemHovered())
+                                    static let mut mouse_hovered_flag = false;
+                                    if (IsItemHovered() || mouse_hovered_flag)
                                     {
                                         // 在渲染区域内！
                                         windows_moveable = false;
 
-                                        let uniform_mpos_x = 2. * ((offsetx:int - itemw:int/2):real / itemw), 
-                                            uniform_mpos_y = -2. * ((offsety:int - itemh:int/2):real / itemh);
+                                        let (mx, my) = GetMousePos();
 
                                         je::internal::enable_editor_system(true);
-                                        je::internal::update_editor_mouse_pos(
-                                            uniform_mpos_x, 
-                                            uniform_mpos_y, 
-                                            (wx + lupx + (itemw / 2.) - vx): int, 
-                                            (wy + lupy + (itemh / 2.) - vy): int);
+                                        je::internal::update_editor_mouse_pos(mx - lupx - wx, my - lupy - wy);
 
-                                        static let 
-                                            mut right_key_down_time = 0., 
-                                            mut noclick_flag = true;
+                                        static let mut right_key_down_time = 0.;
 
-                                        if (je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Right) 
-                                            && noclick_flag)
+                                        if (je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Left))
+                                            mouse_hovered_flag = true;
+
+                                        if (je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Right))
                                         {
-                                            noclick_flag = false;
-                                            right_key_down_time = std::time();
+                                            if (!mouse_hovered_flag)
+                                                right_key_down_time = std::time();
+                                                
+                                            mouse_hovered_flag = true;
                                         }
-
-                                        if (!je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Right))
+                                        else
                                         {
-                                            noclick_flag = true;
-                                            if (std::time() - right_key_down_time < 0.2)
+                                            mouse_hovered_flag = false;
+
+                                            if (std::time() - right_key_down_time < 0.1)
                                                 OpenPopup("RightClickContextMenu");
                                         }
                                     }
@@ -417,7 +408,9 @@ namespace editor::gui::edit_forms
                                         je::internal::enable_editor_system(false);
                                     }
 
-                                    if (frame_tex_width != available_width: int || frame_tex_height != available_height: int)
+                                    let (frame_tex_width, frame_tex_height) = frametex->size;
+                                    if (frame_tex_width != available_width: int 
+                                        || frame_tex_height != available_height: int)
                                         need_update_frame = true;
                                 }
                             none?

@@ -256,7 +256,7 @@ namespace jeecs::graphic::api::gl3
         return context;
     }
 
-    jegl_graphic_api::update_action gl_pre_update(jegl_context::userdata_t ctx)
+    jegl_update_action gl_pre_update(jegl_context::userdata_t ctx)
     {
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
         context->m_interface->swap_for_opengl();
@@ -265,9 +265,10 @@ namespace jeecs::graphic::api::gl3
         {
         case basic_interface::update_result::CLOSE:
             if (jegui_shutdown_callback())
-                return jegl_graphic_api::update_action::STOP;
+                return jegl_update_action::JEGL_UPDATE_STOP;
+            return jegl_update_action::JEGL_UPDATE_CONTINUE;
         case basic_interface::update_result::PAUSE:
-            return jegl_graphic_api::update_action::SKIP;
+            return jegl_update_action::JEGL_UPDATE_SKIP;
         case basic_interface::update_result::RESIZE:
         {
             int width, height;
@@ -279,21 +280,21 @@ namespace jeecs::graphic::api::gl3
         /*fallthrough*/
         [[fallthrough]];
         case basic_interface::update_result::NORMAL:
-            return jegl_graphic_api::update_action::CONTINUE;
+            return jegl_update_action::JEGL_UPDATE_CONTINUE;
         default:
             abort();
         }
     }
 
-    jegl_graphic_api::update_action gl_commit_update(
-        jegl_context::userdata_t, jegl_graphic_api::update_action)
+    jegl_update_action gl_commit_update(
+        jegl_context::userdata_t, jegl_update_action)
     {
         jegui_update_gl330();
 
         // 将绘制命令异步地提交给GPU
         glFlush();
 
-        return jegl_graphic_api::update_action::CONTINUE;
+        return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
     void gl_pre_shutdown(jegl_context*, jegl_context::userdata_t, bool)
     {
