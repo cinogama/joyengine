@@ -2154,6 +2154,7 @@ struct jegl_uniform_buffer
 };
 
 using jegl_resource_blob = void*;
+struct jegl_resource_bind_counter;
 
 /*
 jegl_resource [类型]
@@ -2181,17 +2182,18 @@ struct jegl_resource
         };
     };
 
-    type m_type;
-    bool m_modified;
-    jegl_context* m_graphic_thread;
-    jeecs::typing::version_t
-        m_graphic_thread_version;
+    jegl_resource_bind_counter* m_raw_ref_count;
 
-    void* m_binding_count;
+    jegl_context* m_graphic_thread;
+    jeecs::typing::version_t m_graphic_thread_version;
+
+    // jegl_resource_bind_counter* m_binding_count;
     resource_handle m_handle;
 
+    type m_type;
+    bool m_modified;
+
     const char* m_path;
-    void* m_raw_ref_count;
     union
     {
         jegl_custom_resource_t m_custom_resource;
@@ -2767,6 +2769,15 @@ jegl_using_resource [基本接口]
     * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
 */
 JE_API bool jegl_using_resource(jegl_resource* resource);
+
+/*
+jegl_share_resource [基本接口]
+对资源的占有，通常用于避免正在使用的图形资源被其他持有者释放
+    * 占有的资源应当在使用完毕后，使用 jegl_close_resource 释放
+参见：
+    jegl_close_resource
+*/
+JE_API void jegl_share_resource(jegl_resource* resource);
 
 /*
 jegl_close_resource [基本接口]

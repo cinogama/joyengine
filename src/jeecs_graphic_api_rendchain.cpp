@@ -69,18 +69,13 @@ struct jegl_rendchain
     void using_resource(jegl_resource* res)
     {
         if (m_used_resource.insert(res).second)
-            ++*std::launder(reinterpret_cast<std::atomic_uint32_t*>(res->m_binding_count));
+            jegl_share_resource(res);
     }
     void clear_used_resource()
     {
         for (auto* res : m_used_resource)
         {
-            auto* binding_count = std::launder(reinterpret_cast<std::atomic_uint32_t*>(res->m_binding_count));
-            if (--*binding_count == jeecs::typing::INVALID_UINT32)
-            {
-                delete binding_count;
-                delete res;
-            }
+            jegl_close_resource(res);
         }
         m_used_resource.clear();
     }

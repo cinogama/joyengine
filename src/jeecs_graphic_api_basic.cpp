@@ -172,6 +172,17 @@ struct _jegl_destroy_resource
     _jegl_destroy_resource* last;
 };
 
+struct jegl_resource_bind_counter
+{
+    JECS_DISABLE_MOVE_AND_COPY(jegl_resource_bind_counter);
+
+    std::atomic_int32_t m_binding_count;
+    jegl_resource_bind_counter(int32_t init)
+        : m_binding_count(init)
+    {
+    }
+};
+
 struct jegl_context_notifier
 {
     std::atomic_bool m_graphic_terminated;
@@ -255,11 +266,7 @@ struct _je_graphic_shared_context
     static jegl_resource* _share_resource(jegl_resource* resource)
     {
         assert(resource != nullptr);
-        if (resource->m_raw_ref_count == nullptr)
-            resource->m_raw_ref_count = reinterpret_cast<void*>(new std::atomic_uint32_t(1));
-
-        std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_raw_ref_count))->fetch_add(1);
-
+        ++resource->m_raw_ref_count->m_binding_count;
         return resource;
     }
 
@@ -409,9 +416,17 @@ void jegl_sync_init(jegl_context* thread, bool isreboot)
     ++thread->m_version;
 }
 
+void jegl_share_resource(jegl_resource* resource)
+{
+    _je_graphic_shared_context::_share_resource(resource);
+}
+
 jegl_sync_state jegl_sync_update(jegl_context* thread)
 {
-    std::unordered_map<_jegl_destroy_resource*, bool> _waiting_to_free_resource;
+    std::unordered_map<
+        _jegl_destroy_resource*,
+        bool /* Need close graphic resource */>
+        _waiting_to_free_resource;
 
     if (!thread->_m_thread_notifier->m_graphic_terminated.load())
     {
@@ -468,15 +483,7 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
             assert(cur_del_res->m_destroy_resource->m_graphic_thread == thread);
 
             if (cur_del_res->m_destroy_resource->m_graphic_thread_version == thread->m_version)
-            {
-                auto* counter = std::launder(reinterpret_cast<std::atomic_uint32_t*>(
-                    cur_del_res->m_destroy_resource->m_binding_count));
-
-                if (counter->load() != 0)
-                    thread->_m_thread_notifier->_m_closing_resources.add_one(cur_del_res);
-                else
-                    _waiting_to_free_resource[cur_del_res] = true;
-            }
+                _waiting_to_free_resource[cur_del_res] = true;
             else
                 // Free this
                 _waiting_to_free_resource[cur_del_res] = false;
@@ -488,19 +495,14 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
             thread->_m_thread_notifier->m_update_waiter.notify_all();
         } while (0);
 
-        for (auto [deleting_resource, need_release] : _waiting_to_free_resource)
+        for (auto [deleting_resource, need_close] : _waiting_to_free_resource)
         {
-            if (need_release)
+            if (need_close)
             {
                 thread->m_apis->close_resource(thread->m_userdata, deleting_resource->m_destroy_resource);
                 thread->_m_thread_notifier->_m_created_resources.erase(deleting_resource->m_destroy_resource);
             }
-            auto* binding_counter = std::launder(reinterpret_cast<std::atomic_uint32_t*>(
-                deleting_resource->m_destroy_resource->m_binding_count));
 
-            assert(binding_counter->load() == 0);
-
-            delete binding_counter;
             delete deleting_resource->m_destroy_resource;
             delete deleting_resource;
         }
@@ -846,7 +848,6 @@ bool jegl_using_resource(jegl_resource* resource)
 void _jegl_free_resource_instance(jegl_resource* resource)
 {
     assert(resource != nullptr);
-    assert(resource->m_binding_count != nullptr);
     assert(resource->m_custom_resource == nullptr);
     assert(resource->m_raw_ref_count == nullptr);
 
@@ -869,20 +870,7 @@ void _jegl_free_resource_instance(jegl_resource* resource)
             jeecs::debug::logwarn("Resource %p cannot free by correct graphic context, maybe it is out-dated? Free it!",
                 del_res->m_destroy_resource);
 
-        auto* binding_count = std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_binding_count));
-        if (--*binding_count == jeecs::typing::INVALID_UINT32)
-        {
-            delete binding_count;
-            delete del_res->m_destroy_resource;
-        }
-        else
-        {
-            // 资源尚被其他RendChain使用，将被RendChain负责释放
-            // NOTE: 代码跑到这边只有以下情况：
-            //  * 资源仅被绑定到RendChain上，但是RendChain尚未被提交
-            //  * 资源被绑定到RendChain上，但是被覆盖（一般见于纹理）
-            // 无论哪一种，都无所谓，因为资源并没有被图形实现创建，因此也不必担心释放问题
-        }
+        delete del_res->m_destroy_resource;
         delete del_res;
     }
 }
@@ -898,14 +886,8 @@ void jegl_close_resource(jegl_resource* resource)
     assert(resource != nullptr);
     assert(resource->m_custom_resource != nullptr);
 
-    if (resource->m_raw_ref_count == nullptr ||
-        1 == std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_raw_ref_count))->fetch_sub(1))
+    if (0 == --resource->m_raw_ref_count->m_binding_count)
     {
-        if (resource->m_graphic_thread == nullptr)
-        {
-
-        }
-
         switch (resource->m_type)
         {
         case jegl_resource::TEXTURE:
@@ -962,13 +944,10 @@ void jegl_close_resource(jegl_resource* resource)
         if (resource->m_path)
             je_mem_free((void*)resource->m_path);
 
+        delete resource->m_raw_ref_count;
+        resource->m_raw_ref_count = nullptr;
         resource->m_custom_resource = nullptr;
 
-        if (resource->m_raw_ref_count != nullptr)
-        {
-            delete std::launder(reinterpret_cast<std::atomic_uint32_t*>(resource->m_raw_ref_count));
-            resource->m_raw_ref_count = nullptr;
-        }
         _jegl_free_resource_instance(resource);
     }
 }
@@ -976,8 +955,7 @@ void jegl_close_resource(jegl_resource* resource)
 jegl_resource* _create_resource()
 {
     jegl_resource* res = new jegl_resource{};
-    res->m_binding_count =
-        reinterpret_cast<void*>(new std::atomic_uint32_t(0));
+    res->m_raw_ref_count = new jegl_resource_bind_counter(1);
     return res;
 }
 
