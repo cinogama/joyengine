@@ -45,9 +45,6 @@ namespace jeecs
 
         void new_frame(int priority)
         {
-            m_operating_chain_buffer_index =
-                (m_operating_chain_buffer_index + 1) % BRANCH_CHAIN_POOL_SIZE;
-
             auto& chain_buffer = get_operating_chain_buffer();
             chain_buffer.m_allocated_chains_count = 0;
             chain_buffer.m_priority = priority;
@@ -77,7 +74,8 @@ namespace jeecs
 
         void _commit_frame(jegl_context* thread, jegl_update_action action)
         {
-            const auto commit_finished_frame_index =
+            // Flip render chain buffer;
+            m_operating_chain_buffer_index = 
                 (m_operating_chain_buffer_index + 1) % BRANCH_CHAIN_POOL_SIZE;
 
             auto& chain_buffer = get_commit_finished_chain_buffer();
