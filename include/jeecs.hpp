@@ -2502,6 +2502,8 @@ enum jegl_update_sync_mode
     JEGL_WAIT_LAST_FRAME_END,
 };
 
+typedef void(*jegl_update_sync_callback_t)(void*);
+
 /*
 jegl_update [基本接口]
 调度图形线程更新一帧，此函数将阻塞直到一帧的绘制操作完成
@@ -2511,7 +2513,11 @@ jegl_update [基本接口]
         WAIT_LAST_FRAME_END：阻塞直到上一帧渲染完毕（绘制信号发出后立即返回）
         * 更适合CPU密集操作，但需要更复杂的机制以保证数据完整性
 */
-JE_API bool jegl_update(jegl_context* thread_handle, jegl_update_sync_mode mode);
+JE_API bool jegl_update(
+    jegl_context* thread_handle, 
+    jegl_update_sync_mode mode,
+    jegl_update_sync_callback_t callback_may_null,
+    void* callback_param);
 
 /*
 jegl_reboot_graphic_thread [基本接口]

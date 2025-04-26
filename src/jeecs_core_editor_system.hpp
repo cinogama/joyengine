@@ -387,7 +387,7 @@ let Main            = uniform_texture:<texture2d>("Main", NearestSampler, 0);
 public func frag(vf: v2f)
 {
     let final_color = 
-        vec4(0.1, 0.1, 0.5, abs(sin(je_time->x * 2.)) * 0.5 * alphatest(texture(Main, vf.uv))->w);
+        vec4(0.62, 0.22, 0.16, abs(sin(je_time->x * 2.)) * 0.5 * alphatest(texture(Main, vf.uv))->w);
 
     return fout{
         color = final_color,
@@ -501,7 +501,7 @@ public func frag(vf: v2f)
         const Camera::OrthoProjection* _camera_ortho_porjection = nullptr;
         bool _camera_is_in_o2d_mode = false;
 
-        inline static constexpr float MOUSE_MOVEMENT_SCALE = 0.002f;
+        inline static constexpr float MOUSE_MOVEMENT_SCALE = 0.005f;
         inline static constexpr float MOUSE_ROTATION_SCALE = 0.1f;
 
         struct input_msg

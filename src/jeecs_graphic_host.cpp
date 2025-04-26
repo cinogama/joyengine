@@ -11,7 +11,7 @@ namespace jeecs
     {
         JECS_DISABLE_MOVE_AND_COPY(rendchain_branch);
 
-        static constexpr size_t BRANCH_CHAIN_POOL_SIZE = 2;
+        static constexpr uint8_t BRANCH_CHAIN_POOL_SIZE = 1;
 
         struct allocated_chain_t
         {
@@ -25,10 +25,14 @@ namespace jeecs
         };
 
         allocated_chain_t m_chain_buffers[BRANCH_CHAIN_POOL_SIZE];
-        size_t m_operating_chain_buffer_index;
+        uint8_t m_writing_chain_buffer_index;
+        allocated_chain_t* m_writing_chain_buffer_p;
+        allocated_chain_t* m_rendering_chain_buffer_p;
 
         rendchain_branch()
-            : m_operating_chain_buffer_index(0)
+            : m_writing_chain_buffer_index(0)
+            , m_writing_chain_buffer_p(&m_chain_buffers[0])
+            , m_rendering_chain_buffer_p(&m_chain_buffers[(BRANCH_CHAIN_POOL_SIZE - 1) % BRANCH_CHAIN_POOL_SIZE])
         {
             for (auto& chain_buffer : m_chain_buffers)
             {
@@ -45,13 +49,13 @@ namespace jeecs
 
         void new_frame(int priority)
         {
-            auto& chain_buffer = get_operating_chain_buffer();
+            auto& chain_buffer = get_commiting_chain_buffer();
             chain_buffer.m_allocated_chains_count = 0;
             chain_buffer.m_priority = priority;
         }
         jegl_rendchain* allocate_new_chain(jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
         {
-            auto& chain_buffer = get_operating_chain_buffer();
+            auto& chain_buffer = get_commiting_chain_buffer();
 
             if (chain_buffer.m_allocated_chains_count >= chain_buffer.m_allocated_chains.size())
             {
@@ -63,28 +67,30 @@ namespace jeecs
             return rchain;
         }
 
-        allocated_chain_t& get_operating_chain_buffer()
+        allocated_chain_t& get_commiting_chain_buffer()
         {
-            return m_chain_buffers[m_operating_chain_buffer_index];
+            return *m_writing_chain_buffer_p;
         }
-        allocated_chain_t& get_commit_finished_chain_buffer()
+        allocated_chain_t& get_rendering_chain_buffer()
         {
-            return m_chain_buffers[(m_operating_chain_buffer_index + 1) % BRANCH_CHAIN_POOL_SIZE];
+            return *m_rendering_chain_buffer_p;
+        }
+        void flip_chain_buffer()
+        {
+            m_rendering_chain_buffer_p = m_writing_chain_buffer_p;
+            m_writing_chain_buffer_p = &m_chain_buffers[++m_writing_chain_buffer_index % BRANCH_CHAIN_POOL_SIZE];
         }
 
         void _commit_frame(jegl_context* thread, jegl_update_action action)
         {
-            // Flip render chain buffer;
-            m_operating_chain_buffer_index = 
-                (m_operating_chain_buffer_index + 1) % BRANCH_CHAIN_POOL_SIZE;
+            auto& chain_buffer = get_rendering_chain_buffer();
 
-            auto& chain_buffer = get_commit_finished_chain_buffer();
             assert(chain_buffer.m_allocated_chains_count <= chain_buffer.m_allocated_chains.size());
 
             auto chain_iter = chain_buffer.m_allocated_chains.begin();
-            const auto chain_iter_end = 
+            const auto chain_iter_end =
                 chain_buffer.m_allocated_chains.begin() + chain_buffer.m_allocated_chains_count;
-            
+
             while (chain_iter != chain_iter_end)
             {
                 auto* rend_job_chain = *(chain_iter++);
@@ -107,6 +113,9 @@ namespace jeecs
         // * 如果为true，则跳过全部的绘制流程，反之，则仍然绘制以非屏幕缓冲区的绘制操作
         bool m_skip_all_draw;
 
+        std::mutex m_rendchain_branchs_mx;
+        std::vector<rendchain_branch*> m_rendchain_branchs;
+
         static void _update_frame_universe_job(void* host)
         {
             auto* graphic_host = std::launder(reinterpret_cast<graphic_uhost*>(host));
@@ -116,15 +125,21 @@ namespace jeecs
                 ? jegl_update_sync_mode::JEGL_WAIT_LAST_FRAME_END
                 : jegl_update_sync_mode::JEGL_WAIT_THIS_FRAME_END;
 
-            if (!jegl_update(graphic_host->glthread, SYNC_MODE))
+            // ATTENTION: 注意，由于渲染线程在此处翻转，因此任何其他的绘制操作都不能与此同时发生
+            //  由于 _update_frame_universe_job 是一个 universe_after_call_once_job，所以此阶段
+            //  同时不能有其他绘制相关操作。
+            if (!jegl_update(graphic_host->glthread, SYNC_MODE,
+                [](void* p)
+                {
+                    auto* graphic_host = std::launder(reinterpret_cast<graphic_uhost*>(p));
+                    for (auto& branch : graphic_host->m_rendchain_branchs)
+                        branch->flip_chain_buffer();
+                    
+                }, host))
             {
                 graphic_host->universe.stop();
             }
         }
-
-        std::mutex m_rendchain_branchs_mx;
-        std::vector<rendchain_branch*> m_rendchain_branchs;
-
         rendchain_branch* alloc_pipeline()
         {
             rendchain_branch* pipe = new rendchain_branch();
@@ -134,7 +149,6 @@ namespace jeecs
 
             return pipe;
         }
-
         void free_pipeline(rendchain_branch* pipe)
         {
             std::lock_guard g1(m_rendchain_branchs_mx);
@@ -164,10 +178,10 @@ namespace jeecs
                 std::stable_sort(m_rendchain_branchs.begin(), m_rendchain_branchs.end(),
                     [](rendchain_branch* a, rendchain_branch* b)
                     {
-                        return 
-                            a->get_commit_finished_chain_buffer().m_priority 
-                            < 
-                            b->get_commit_finished_chain_buffer().m_priority;
+                        return
+                            a->get_rendering_chain_buffer().m_priority
+                            <
+                            b->get_rendering_chain_buffer().m_priority;
                     });
 
                 for (auto* gpipe : m_rendchain_branchs)
