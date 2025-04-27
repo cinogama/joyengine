@@ -10,6 +10,7 @@ import je::towoo::components;
 import je::towoo::types;
 
 import pkg::fsys;
+import pkg::math;
 
 import builtin::editor::gui::form::input;
 import builtin::editor::gui::form::ask;
@@ -375,18 +376,19 @@ namespace editor::gui::edit_forms
                                         je::input::internal::update_wheel(0, wheelx + guiwheelx, wheely + guiwheely); 
                                     }
 
+                                    let (mx, my) = GetMousePos();
+                                    je::internal::update_editor_mouse_pos(mx - lupx - wx, my - lupy - wy);
+
                                     static let mut mouse_hovered_flag = false;
                                     if (IsItemHovered() || mouse_hovered_flag)
                                     {
                                         // 在渲染区域内！
                                         windows_moveable = false;
-
-                                        let (mx, my) = GetMousePos();
-
                                         je::internal::enable_editor_system(true);
-                                        je::internal::update_editor_mouse_pos(mx - lupx - wx, my - lupy - wy);
-
-                                        static let mut right_key_down_time = 0.;
+                              
+                                        static let mut right_key_down_time = 0.,
+                                            mut mouse_click_x = 0.,
+                                            mut mouse_click_y = 0.;
 
                                         if (je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Left))
                                             mouse_hovered_flag = true;
@@ -394,7 +396,11 @@ namespace editor::gui::edit_forms
                                         if (je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Right))
                                         {
                                             if (!mouse_hovered_flag)
+                                            {
                                                 right_key_down_time = std::time();
+                                                mouse_click_x = mx;
+                                                mouse_click_y = my;
+                                            }
                                                 
                                             mouse_hovered_flag = true;
                                         }
@@ -402,7 +408,8 @@ namespace editor::gui::edit_forms
                                         {
                                             mouse_hovered_flag = false;
 
-                                            if (std::time() - right_key_down_time < 0.1)
+                                            if (std::time() - right_key_down_time < 0.2
+                                                && (mouse_click_x - mx, mouse_click_y - my): vec2->length < 5.)
                                                 OpenPopup("RightClickContextMenu");
                                         }
                                     }

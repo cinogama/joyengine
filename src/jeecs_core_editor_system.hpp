@@ -681,7 +681,7 @@ public func frag(vf: v2f)
                     move_speed = move_speed * 2.0f;
 
                 auto delta_drag = _inputs.current_mouse_pos - _inputs._last_drag_mouse_pos;
-                if (_inputs._drag_viewing || delta_drag.length() >= 0.01f)
+                if (_inputs._drag_viewing || delta_drag.length() >= 5.f)
                 {
                     _inputs._drag_viewing = true;
 
@@ -1616,54 +1616,52 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
             // Mover mgr          
             selector.exec(&DefaultEditorSystem::MoveEntity);
 
-            if (!_editor_enabled)
-                return;
-
-            if (nullptr == _inputs._grab_axis_translation)
+            if (_editor_enabled)
             {
-                auto _set_editing_entity = [](const jeecs::game_entity& e)
-                    {
-                        auto* eid = e.get_component<Editor::EntityId>();
-                        if (eid != nullptr)
-                            jedbg_set_editing_entity_uid(eid->eid);
-                    };
-
-                if (!selected_list.empty())
+                if (nullptr == _inputs._grab_axis_translation)
                 {
-                    const game_entity* e = _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr;
-                    if (auto fnd = std::find_if(selected_list.begin(), selected_list.end(),
-                        [e](const SelectedResult& s)->bool {return e ? s.entity == *e : false; });
-                        fnd != selected_list.end())
-                    {
-                        if (_inputs.l_shift)
+                    auto _set_editing_entity = [](const jeecs::game_entity& e)
                         {
-                            if (fnd == selected_list.begin())
-                                fnd = selected_list.end();
+                            auto* eid = e.get_component<Editor::EntityId>();
+                            if (eid != nullptr)
+                                jedbg_set_editing_entity_uid(eid->eid);
+                        };
 
-                            _set_editing_entity((--fnd)->entity);
+                    if (!selected_list.empty())
+                    {
+                        const game_entity* e = _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr;
+                        if (auto fnd = std::find_if(selected_list.begin(), selected_list.end(),
+                            [e](const SelectedResult& s)->bool {return e ? s.entity == *e : false; });
+                            fnd != selected_list.end())
+                        {
+                            if (_inputs.l_shift)
+                            {
+                                if (fnd == selected_list.begin())
+                                    fnd = selected_list.end();
+
+                                _set_editing_entity((--fnd)->entity);
+                            }
+                            else
+                            {
+                                if (++fnd == selected_list.end())
+                                    _set_editing_entity(selected_list.begin()->entity);
+                                else
+                                    _set_editing_entity(fnd->entity);
+                            }
                         }
                         else
-                        {
-                            if (++fnd == selected_list.end())
-                                _set_editing_entity(selected_list.begin()->entity);
-                            else
-                                _set_editing_entity(fnd->entity);
-                        }
+                            _set_editing_entity(selected_list.begin()->entity);
                     }
-                    else
-                        _set_editing_entity(selected_list.begin()->entity);
+                    else if (_inputs.l_button_pushed)
+                        jedbg_set_editing_entity_uid(0);
                 }
-                else if (_inputs.l_button_pushed)
-                    jedbg_set_editing_entity_uid(0);
+                selected_list.clear();
             }
-
             je_io_set_lock_mouse(
                 _inputs.advise_lock_mouse_walking_camera);
 
             _inputs._last_drag_mouse_pos = _inputs.current_mouse_pos;
             _inputs.current_mouse_pos = _inputs._next_drag_mouse_pos;
-
-            selected_list.clear();
         }
     };
 }
