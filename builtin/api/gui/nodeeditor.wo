@@ -70,7 +70,7 @@ namespace jeapi::gui
             public func maxoutput(self: ITyped)=> int;
             public func color(self: ITyped)=> (int, int, int, int);
 
-            require Self::create is ()=> Self;
+            require typeof:<Self>::create is ()=> Self;
         }
 
         interface! INode
@@ -83,19 +83,20 @@ namespace jeapi::gui
             public func tostring(self: INode)=> string;
             public func parse(self: INode, value: string)=> void;
 
-            require Self::create is (node_editor)=> Self;
+            require typeof:<Self>::create is (node_editor)=> Self;
         }
         namespace INode
         {
-            public let creator<T> = \e: node_editor = INode::create(T::create(e));;
+            public let creator<T> = \e: node_editor = typeof:<INode>::create(typeof:<T>::create(e));;
         }
 
-        public alias NodeDict = dict<string, NodeDictItem>;
         public union NodeDictItem
         {
             Node((node_editor)=>INode),
-            Dict(NodeDict),
+            Dict(dict<string, NodeDictItem>),
         }
+        public alias NodeDict = dict<string, NodeDictItem>;
+
         using _NodeInfo = struct
         {
             name: string,
@@ -104,12 +105,13 @@ namespace jeapi::gui
             generator: (node_editor)=>INode,
         };
 
-        alias _NodeInfoDict = dict<string, _NodeInfoDictItem>;
         union _NodeInfoDictItem
         {
             Node(_NodeInfo),
-            Dict(_NodeInfoDict),
+            Dict(dict<string, _NodeInfoDictItem>),
         }
+        alias _NodeInfoDict = dict<string, _NodeInfoDictItem>;
+
         using _Producer = struct{
             id: PinId,
             producer: IProducer,
@@ -351,7 +353,7 @@ namespace jeapi::gui
 
             let node = _Node{
                 id = new_id,
-                instance = INode::create(generator(self)),
+                instance = typeof:<INode>::create(generator(self)),
                 producers = self.__allocating_producers->unwrap->unsafe::asarray,
                 inputs = self.__allocating_input_nodes->unwrap->unsafe::asarray,
                 outputs = self.__allocating_output_nodes->unwrap->unsafe::asarray,
@@ -785,7 +787,7 @@ namespace jeapi::gui
             }
             EndDelete();
         }
-        func _menu_show_sub_new_nodes(self: node_editor, d: _NodeInfoDict)
+        func _menu_show_sub_new_nodes(self: node_editor, d: _NodeInfoDict)=> void
         {
             for (let (name, item) : d)
             {
@@ -917,7 +919,7 @@ namespace jeapi::gui
             for (let n : nodes)
                 n.evaled = false;
         }
-        func __collect_input_way_nodes(self: node_editor, node: _Node, out: vec<_Node>)
+        func __collect_input_way_nodes(self: node_editor, node: _Node, out: vec<_Node>)=> void
         {
             if (out->find(node)->is_none)
             {
@@ -1133,14 +1135,14 @@ namespace jeapi::gui
         public func add_producer<ProducerT>(self: node_editor, name: string)
             where require!(ProducerT: IProducer);
         {
-            let producer = ProducerT::create();
+            let producer = typeof:<ProducerT>::create();
 
             assertmsg(self.__allocating_producers->is_value,
                 "请在节点的create方法中调用此函数.");
 
             let _producer = _Producer{
                 id = self->alloc_id:<PinId>(), 
-                producer = IProducer::create(producer),
+                producer = typeof:<IProducer>::create(producer),
                 name = name,
             };
             self.__allocating_producers->unwrap->add(_producer);
@@ -1150,7 +1152,7 @@ namespace jeapi::gui
         public func add_input<TypeT>(self: node_editor, name: string)
             where require!(TypeT: ITyped);
         {
-            let val = TypeT::create();
+            let val = typeof:<TypeT>::create();
 
             assertmsg(self.__allocating_input_nodes->is_value,
                 "请在节点的create方法中调用此函数.");
@@ -1158,7 +1160,7 @@ namespace jeapi::gui
             let _pin = _InputPin{
                 id = self->alloc_id:<PinId>(), 
                 nodeid = self.__current_node_id->unwrap, 
-                typeval = ITyped::create(val),
+                typeval = typeof:<ITyped>::create(val),
                 name = name,
                 linked_pin = mut option::none,
             };
@@ -1168,7 +1170,7 @@ namespace jeapi::gui
         public func add_output<TypeT>(self: node_editor, name: string)
             where require!(TypeT: ITyped);
         {
-            let val = TypeT::create();
+            let val = typeof:<TypeT>::create();
 
             assertmsg(self.__allocating_output_nodes->is_value,
                 "请在节点的create方法中调用此函数.");
@@ -1176,7 +1178,7 @@ namespace jeapi::gui
             let _pin = _OutputPin{ 
                 id = self->alloc_id:<PinId>(), 
                 nodeid = self.__current_node_id->unwrap, 
-                typeval = ITyped::create(val),
+                typeval = typeof:<ITyped>::create(val),
                 name = name,
                 linked_pins = []mut,
             };
@@ -1208,7 +1210,7 @@ namespace jeapi::gui
                 self->_generate_node_impl(
                     func(e)
                     {
-                        let n = NodeT::create(e);
+                        let n = typeof:<NodeT>::create(e);
                         node->set(n);
 
                         return n;

@@ -621,6 +621,9 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
 import woo::std;
 import je;
 import je::gui;
+
+import pkg::interface;
+
 import builtin::api::gui::nodeeditor;
 
 using je::gui;
@@ -690,6 +693,9 @@ using $NEW_NODE_NAME$ = struct{}
 import woo::std;
 import je;
 import je::gui;
+
+import pkg::interface;
+
 import builtin::api::gui::nodeeditor;
 
 using je::gui;
@@ -759,6 +765,9 @@ using $NEW_TYPE_NAME$ = struct{}
 import woo::std;
 import je;
 import je::gui;
+
+import pkg::interface;
+
 import builtin::api::gui::nodeeditor;
 
 using je::gui;

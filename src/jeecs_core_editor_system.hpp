@@ -535,7 +535,6 @@ public func frag(vf: v2f)
             int wheel_delta_count = 0;
 
             bool advise_lock_mouse_walking_camera = false;
-            bool advise_lock_mouse_move_items = false;
             const Transform::Translation* _grab_axis_translation = nullptr;
 
             // Why write an empty constructor function here?
@@ -1659,8 +1658,7 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
             }
 
             je_io_set_lock_mouse(
-                _inputs.advise_lock_mouse_walking_camera 
-                || _inputs.advise_lock_mouse_move_items);
+                _inputs.advise_lock_mouse_walking_camera);
 
             _inputs._last_drag_mouse_pos = _inputs.current_mouse_pos;
             _inputs.current_mouse_pos = _inputs._next_drag_mouse_pos;

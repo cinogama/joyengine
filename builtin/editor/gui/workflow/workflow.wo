@@ -50,10 +50,11 @@ namespace editor::gui::workflow
             };
         }
 
-        let mut source = "import je;\n";
-        source += "import je::gui;\n";
+        let mut source = @"
+import woo::std;
+import je;
+import je::gui;
 
-        source += @"
 namespace Editor
 {
     let mut _universe = option::none: option<je::universe>;
