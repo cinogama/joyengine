@@ -231,6 +231,10 @@ if (JE4_STATIC_LINK_MODULE_AND_PKGS)
                 target_compile_definitions(${pkg_name} PRIVATE -Dwolib_entry=je_static_wo_pkg_${pkg_name}_entry)
                 target_compile_definitions(${pkg_name} PRIVATE -Dwolib_exit=je_static_wo_pkg_${pkg_name}_exit)
 
+                if (NOT MSVC)
+                    target_compile_options(${pkg_name} PRIVATE -fPIC)
+                endif()
+
                 list(APPEND JE4_STATIC_LINKED_PKG_AND_MODULE_LIST ${pkg_name})
                 
                 if ("${pkg_name}" STREQUAL "image")

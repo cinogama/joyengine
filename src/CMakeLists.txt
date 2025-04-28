@@ -70,7 +70,7 @@ if (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES300_GAPI OR JE4_ENABLE_WEBGL
         target_compile_definitions(joyengine_core_configs INTERFACE -DJE_ENABLE_GL330_GAPI)
 
         include_directories("../3rd/glew/include")
-        if (WIN32)
+        if (MSVC)
             list(APPEND jeecs_graphic_libs OpenGL32)
         else()
             target_compile_options(glew_s PRIVATE -fPIC)
@@ -152,7 +152,7 @@ if (JE4_ENABLE_OPENGL330_GAPI OR
 
         if (NOT JE4_ENABLE_WEBGL20_GAPI)
             # Use built-in glfw3 for webgl target, so we don't need to build glfw3.
-            if (NOT WIN32)
+            if (NOT MSVC)
                 target_compile_options(glfw PRIVATE -fPIC)
             endif()
 
@@ -199,7 +199,7 @@ else()
     message(FATAL_ERROR "Unknown platform")
 endif()
 
-if (NOT WIN32)
+if (NOT MSVC)
     target_compile_options (box2d PRIVATE -fPIC)
 endif()
 
