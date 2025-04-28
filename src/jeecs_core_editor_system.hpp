@@ -1006,6 +1006,7 @@ public let frag =
                 {
                     math::vec2 diff = 
                         (_inputs.current_mouse_pos - _inputs._last_drag_mouse_pos) 
+                        * math::vec2(1.f, -1.f)
                         * MOUSE_MOVEMENT_SCALE;
 
                     math::vec4 p0 = trans.world_position;
