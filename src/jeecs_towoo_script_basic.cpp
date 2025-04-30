@@ -115,7 +115,7 @@ namespace jeecs
                     else
                     {
                         m_context = wo_create_pin_value();
-                        wo_pin_value_set_dup(m_context, v);
+                        wo_pin_value_set(m_context, v);
                     }
                      
                 }
