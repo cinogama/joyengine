@@ -240,13 +240,28 @@ namespace editor::gui
 
         try! content = RefactorAskContent::create(context, old_path, target_path);
         let raise_final_check = func(need_raise_world_list: bool){
-            jeapi::gui::form::ask("重构准备完成", "即将应用所有选定重构，是否确认继续重命名/移动？", 
+            jeapi::gui::form::ask("重构准备完成", "即将保存并应用所有选定重构，是否确认继续重命名/移动？", 
                 func(ok){
+                    let mut need_reload = false;
                     if (ok)
-                        content->apply();
+                    {
+                        if (need_raise_world_list)
+                        {
+                            if (context->get_project->save_project())
+                            {
+                                need_reload = true;
+                                context->get_project->close_all_world();
+                            }
+                            else
+                            {
+                                jeapi::gui::errmsg("保存失败", "保存项目失败，请检查项目是否有未保存的文件");
+                            }
+                        }
+                    }
                     
                     launch(func(){
-                        if (need_raise_world_list)
+                        content->apply();
+                        if (need_reload)
                         {
                             std::yield();
 
@@ -266,8 +281,6 @@ namespace editor::gui
 
         let all_world_saved_and_closed = std::mutable::create(false);
         let checked_files = {}mut: ::map<RefactorAskContent::ReplacingContent, void>;
-
-        let load_world_list_after_form_closed = std::mutable::create(false);
         let select_all = std::mutable::create(true);
 
         let f = jeapi::gui::form::create("重构中……", true, 
@@ -275,20 +288,19 @@ namespace editor::gui
                 Text("重命名或移动操作可能影响其他文件");
                 Separator();
 
-                if (false == all_world_saved_and_closed->get)
+                if (!all_world_saved_and_closed->get)
                 {
-                    Text("点击确认保存项目，然后开始重构");
+                    Text("为了确保能够正确地应用到当前编辑中的场景，");
+                    Text("点击 `确认保存项目`，然后开始重构");
 
                     Separator();
 
                     if (Button("确认保存项目"))
                     {
-                        if (context->get_project->save_project())
-                        {
-                            context->get_project->close_all_world();
-                            all_world_saved_and_closed->set(true);
-                            load_world_list_after_form_closed->set(true);
-                        }
+                        if (!context->get_project->save_project())
+                            jeapi::gui::errmsg("保存失败", "保存项目失败，请检查项目是否有未保存的文件");
+                        
+                        all_world_saved_and_closed->set <| true;
                     }
                     return;
                 }
@@ -355,6 +367,9 @@ namespace editor::gui
                     }
                     select_all->set(false);
                 }
+                else
+                    has_any_file_to_update = true;
+
                 EndChild();
 
                 if (Button("应用修改") || !has_any_file_to_update)
@@ -372,8 +387,6 @@ namespace editor::gui
                     if (!content->prepare_update())
                     {
                         // All done...
-                        load_world_list_after_form_closed->set(false);
-
                         raise_final_check(true);
                         this_form->close;
                     }
@@ -382,8 +395,6 @@ namespace editor::gui
             });
         do f->show();
         f->set_callback_close(func(){
-            if (load_world_list_after_form_closed->get)
-                context->get_project->load_worlds_from_list();
             return true;
         });
         
