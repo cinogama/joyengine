@@ -309,7 +309,8 @@ namespace editor::gui::edit_forms
                                 value(components_data_dict)?
                                     for (let (prefab_component_name, _) : components_data_dict)
                                     {
-                                        if (cur_e->internal::get_components->find_if(\t, _ = t->name == prefab_component_name;)->is_none)
+                                        if (! prefab_component_name->begin_with("Transform::")
+                                            && cur_e->internal::get_components->find_if(\t, _ = t->name == prefab_component_name;)->is_none)
                                         {
                                             PushStyleColor(ImGuiCol::ImGuiCol_Text, (200, 0, 0, 255));
                                             Text(F"<预设体中的 {prefab_component_name} 被移除>");
@@ -332,9 +333,14 @@ namespace editor::gui::edit_forms
                                     PushStyleColor(ImGuiCol::ImGuiCol_Text, (50, 150, 100, 255));
                                     let show_group = TreeNodeEx(groupname, tree_attrib);
                                     PopStyleColor(1);
-
+                                
                                     if (show_group)
                                     {
+                                        let is_sync_group = groupname != "Transform";
+
+                                        if (! is_sync_group && components_data->is_value)
+                                            TextDisabled("* 这部分组件成员不会被同步到预设体");
+
                                         BeginGroup();
 
                                         for (let (ctype, component) : components)
@@ -404,12 +410,11 @@ namespace editor::gui::edit_forms
                                                     {
                                                     value(this_component_prefab_data)?
                                                     {
-                                                        // let component_data = prefab_data_dict->;
                                                         match (je::towoo::unsafe::dynamic_parser::saving(mtype, mvalue))
                                                         {
                                                         value(real_data)?
                                                         {
-                                                            if (real_data != this_component_prefab_data)
+                                                            if (real_data != this_component_prefab_data && is_sync_group)
                                                             {
                                                                 SameLine();
 
@@ -423,8 +428,8 @@ namespace editor::gui::edit_forms
                                                                 if (IsItemHovered())
                                                                 {
                                                                     BeginTooltip();
-                                                                    TextDisabled("预设体的值为：");
-                                                                    TextDisabled("  " + real_data);
+                                                                    TextDisabled(F"预设体：{this_component_prefab_data}");
+                                                                    TextDisabled(F"当前：{real_data}");
                                                                     EndTooltip();
                                                                 }
 

@@ -161,12 +161,16 @@ namespace jeapi
                     let removed_component = []mut: vec<string>;
                     for (let (c, ms) : prefab_component_dat)
                     {
+                        let always_keep_member = c->begin_with("Transform::");
                         if (components->contain(c))
                         {
                             let result_ms = components[c];
                             for (let (m, v) : ms)
                             {
-                                if (result_ms->get(m)->>\vv = vv == v;->or(false))
+                                if (result_ms->get(m)
+                                     // always_keep_member: 确保变换组件的数据独立
+                                    ->> \vv = !always_keep_member && vv == v;
+                                    -> or(false))
                                     assert(result_ms->remove(m));
                             }
                             if (result_ms->empty)
