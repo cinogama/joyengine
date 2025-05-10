@@ -237,6 +237,8 @@ namespace jeecs_impl
 
         void declear_system_updater(
             jeecs::typing::type_info* _typeinfo,
+            jeecs::typing::on_enable_or_disable_func_t _on_enable,
+            jeecs::typing::on_enable_or_disable_func_t _on_disable,
             jeecs::typing::update_func_t _pre_update,
             jeecs::typing::update_func_t _state_update,
             jeecs::typing::update_func_t _update,
@@ -264,6 +266,8 @@ namespace jeecs_impl
                 assert(_graphic_update != nullptr);
 
                 jeecs::typing::typeinfo_system_updater* updater = new jeecs::typing::typeinfo_system_updater();
+                updater->m_on_enable = _on_enable;
+                updater->m_on_disable = _on_disable;
                 updater->m_pre_update = _pre_update;
                 updater->m_state_update = _state_update;
                 updater->m_update = _update;
@@ -519,6 +523,8 @@ void je_register_script_parser(
 
 void je_register_system_updater(
     const jeecs::typing::type_info* _type,
+    jeecs::typing::on_enable_or_disable_func_t _on_enable,
+    jeecs::typing::on_enable_or_disable_func_t _on_disable,
     jeecs::typing::update_func_t _pre_update,
     jeecs::typing::update_func_t _state_update,
     jeecs::typing::update_func_t _update,
@@ -531,6 +537,8 @@ void je_register_system_updater(
     jeecs_impl::global_factory_holder::holder()
         ->declear_system_updater(
             const_cast<jeecs::typing::type_info*>(_type),
+            _on_enable,
+            _on_disable,
             _pre_update, 
             _state_update,
             _update,

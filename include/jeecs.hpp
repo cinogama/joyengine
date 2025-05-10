@@ -103,6 +103,9 @@
 #define JEParseFromScriptType   JEParseFromScriptType
 #define JEParseToScriptType     JEParseToScriptType
 
+#define OnEnable            OnEnable        // * 用户系统激活，通常用于初始化
+#define OnDisable           OnDisable       // * 用户系统失活，通常用于清理
+
 #define PreUpdate           PreUpdate       // * 用户预更新，
 #define StateUpdate         StateUpdate     // 用于将初始状态给予各个组件 (Animation VirtualGamepadInput)
 #define Update              Update          // * 用户更新
@@ -187,6 +190,7 @@ namespace jeecs
         using copy_construct_func_t = void (*)(void*, const void*);
         using move_construct_func_t = void (*)(void*, void*);
 
+        using on_enable_or_disable_func_t = void(*)(void*);
         using update_func_t = void (*)(void*);
 
         using parse_c2w_func_t = void (*)(const void*, wo_vm, wo_value);
@@ -970,6 +974,8 @@ je_register_system_updater [基本接口]
 */
 JE_API void je_register_system_updater(
     const jeecs::typing::type_info* _type,
+    jeecs::typing::on_enable_or_disable_func_t _on_enable,
+    jeecs::typing::on_enable_or_disable_func_t _on_disable,
     jeecs::typing::update_func_t _pre_update,
     jeecs::typing::update_func_t _state_update,
     jeecs::typing::update_func_t _update,
@@ -1451,6 +1457,8 @@ je_ecs_world_set_able [基本接口]
 设置世界是否被激活
     * 若世界未激活，则实体组件系统更新将被暂停，世界任务亦将被跳过，仅响应
         世界销毁请求和激活世界请求
+    * 世界在激活/取消激活时，所有系统的对应回调会被执行；如果系统实例创建时，
+        世界尚未激活，则系统的回调函数不会被执行
 */
 JE_API void je_ecs_world_set_able(void* world, bool enable);
 
@@ -1846,7 +1854,7 @@ jegl_context [类型]
 struct jegl_context
 {
     using userdata_t = void*;
-    using frame_job_func_t = 
+    using frame_job_func_t =
         void (*)(jegl_context*, void*, jegl_update_action);
 
     frame_job_func_t _m_frame_rend_work;
@@ -2514,7 +2522,7 @@ jegl_update [基本接口]
         * 更适合CPU密集操作，但需要更复杂的机制以保证数据完整性
 */
 JE_API bool jegl_update(
-    jegl_context* thread_handle, 
+    jegl_context* thread_handle,
     jegl_update_sync_mode mode,
     jegl_update_sync_callback_t callback_may_null,
     void* callback_param);
@@ -3431,7 +3439,7 @@ jegui_update_basic [基本接口]
     * 此接口仅适合用于对接自定义渲染API时使用
 */
 JE_API void jegui_update_basic(
-    jegui_platform_draw_callback_t platform_draw_callback, 
+    jegui_platform_draw_callback_t platform_draw_callback,
     void* data);
 
 /*
@@ -4437,6 +4445,9 @@ namespace jeecs
         // void T::JEParseToScriptType(wo_vm vm, wo_value val) const
         JE_DECL_SFINAE_CHECKER_HELPLER(has_JEParseToScriptType, &T::JEParseToScriptType);
 
+        JE_DECL_SFINAE_CHECKER_HELPLER(has_OnEnable, &T::OnEnable);
+        JE_DECL_SFINAE_CHECKER_HELPLER(has_OnDisable, &T::OnDisable);
+
         JE_DECL_SFINAE_CHECKER_HELPLER(has_PreUpdate, &T::PreUpdate);
         JE_DECL_SFINAE_CHECKER_HELPLER(has_StateUpdate, &T::StateUpdate);
         JE_DECL_SFINAE_CHECKER_HELPLER(has_Update, &T::Update);
@@ -5209,18 +5220,31 @@ namespace jeecs
                 else
                     debug::logerr("This type: '%s' is not move-constructible but you try to do it.", typeid(T).name());
             }
-
+            static void on_enable(void* _ptr)
+            {
+                if constexpr (typing::sfinae_is_game_system_v<T>
+                    && typing::sfinae_has_OnEnable<T>::value)
+                {
+                    reinterpret_cast<T*>(_ptr)->OnEnable();
+                }
+            }
+            static void on_disable(void* _ptr)
+            {
+                if constexpr (typing::sfinae_is_game_system_v<T>
+                    && typing::sfinae_has_OnDisable<T>::value)
+                {
+                    reinterpret_cast<T*>(_ptr)->OnDisable();
+                }
+            }
             static void pre_update(void* _ptr)
             {
                 if constexpr (typing::sfinae_is_game_system_v<T>)
                 {
-                    T* sys = std::launder(reinterpret_cast<T*>(_ptr));
+                    T* sys = reinterpret_cast<T*>(_ptr);
                     sys->_select_begin();
 
                     if constexpr (typing::sfinae_has_PreUpdate<T>::value)
-                    {
                         sys->PreUpdate(sys->_select_continue());
-                    }
                 }
             }
             static void state_update(void* _ptr)
@@ -5229,7 +5253,7 @@ namespace jeecs
                 {
                     if constexpr (typing::sfinae_has_StateUpdate<T>::value)
                     {
-                        T* sys = std::launder(reinterpret_cast<T*>(_ptr));
+                        T* sys = reinterpret_cast<T*>(_ptr);
                         sys->StateUpdate(sys->_select_continue());
                     }
                 }
@@ -5240,7 +5264,7 @@ namespace jeecs
                 {
                     if constexpr (typing::sfinae_has_Update<T>::value)
                     {
-                        T* sys = std::launder(reinterpret_cast<T*>(_ptr));
+                        T* sys = reinterpret_cast<T*>(_ptr);
                         sys->Update(sys->_select_continue());
                     }
                 }
@@ -5251,7 +5275,7 @@ namespace jeecs
                 {
                     if constexpr (typing::sfinae_has_PhysicsUpdate<T>::value)
                     {
-                        T* sys = std::launder(reinterpret_cast<T*>(_ptr));
+                        T* sys = reinterpret_cast<T*>(_ptr);
                         sys->PhysicsUpdate(sys->_select_continue());
                     }
                 }
@@ -5262,7 +5286,7 @@ namespace jeecs
                 {
                     if constexpr (typing::sfinae_has_TransformUpdate<T>::value)
                     {
-                        T* sys = std::launder(reinterpret_cast<T*>(_ptr));
+                        T* sys = reinterpret_cast<T*>(_ptr);
                         sys->TransformUpdate(sys->_select_continue());
                     }
                 }
@@ -5273,7 +5297,7 @@ namespace jeecs
                 {
                     if constexpr (typing::sfinae_has_LateUpdate<T>::value)
                     {
-                        T* sys = std::launder(reinterpret_cast<T*>(_ptr));
+                        T* sys = reinterpret_cast<T*>(_ptr);
                         sys->LateUpdate(sys->_select_continue());
                     }
                 }
@@ -5284,7 +5308,7 @@ namespace jeecs
                 {
                     if constexpr (typing::sfinae_has_CommitUpdate<T>::value)
                     {
-                        T* sys = std::launder(reinterpret_cast<T*>(_ptr));
+                        T* sys = reinterpret_cast<T*>(_ptr);
                         sys->CommitUpdate(sys->_select_continue());
                     }
                 }
@@ -5295,7 +5319,7 @@ namespace jeecs
                 {
                     if constexpr (typing::sfinae_has_GraphicUpdate<T>::value)
                     {
-                        T* sys = std::launder(reinterpret_cast<T*>(_ptr));
+                        T* sys = reinterpret_cast<T*>(_ptr);
                         sys->GraphicUpdate(sys->_select_continue());
                     }
                 }
@@ -5304,12 +5328,12 @@ namespace jeecs
             static void parse_from_script_type(void* _ptr, wo_vm vm, wo_value val)
             {
                 if constexpr (typing::sfinae_has_JEParseFromScriptType<T>::value)
-                    std::launder(reinterpret_cast<T*>(_ptr))->JEParseFromScriptType(vm, val);
+                    reinterpret_cast<T*>(_ptr)->JEParseFromScriptType(vm, val);
             }
             static void parse_to_script_type(const void* _ptr, wo_vm vm, wo_value val)
             {
                 if constexpr (typing::sfinae_has_JEParseToScriptType<T>::value)
-                    std::launder(reinterpret_cast<const T*>(_ptr))->JEParseToScriptType(vm, val);
+                    reinterpret_cast<const T*>(_ptr)->JEParseToScriptType(vm, val);
             }
         };
 
@@ -5643,6 +5667,9 @@ namespace jeecs
         */
         struct typeinfo_system_updater
         {
+            on_enable_or_disable_func_t m_on_enable;
+            on_enable_or_disable_func_t m_on_disable;
+
             update_func_t m_pre_update;
             update_func_t m_state_update;
             update_func_t m_update;
@@ -5823,6 +5850,8 @@ namespace jeecs
                 {
                     je_register_system_updater(
                         local_type,
+                        basic::default_functions<T>::on_enable,
+                        basic::default_functions<T>::on_disable,
                         basic::default_functions<T>::pre_update,
                         basic::default_functions<T>::state_update,
                         basic::default_functions<T>::update,
@@ -9479,10 +9508,10 @@ namespace jeecs
             // 用于计算ui元素的绝对坐标和大小，接受显示区域的宽度和高度，获取以屏幕左下角为原点的元素位置和大小。
             // 其中位置是ui元素中心位置，而非坐标原点位置。
             void get_layout(
-                float w, 
+                float w,
                 float h,
                 math::vec2* out_absoffset,
-                math::vec2* out_abssize, 
+                math::vec2* out_abssize,
                 math::vec2* out_center_offset) const
             {
                 math::vec2 rel2abssize = scale * math::vec2(w, h);
@@ -9550,9 +9579,9 @@ namespace jeecs
             }
 
             bool mouse_on(
-                float w, 
-                float h, 
-                float rot_angle, 
+                float w,
+                float h,
+                float rot_angle,
                 math::vec2 mouse_view_pos) const
             {
                 math::vec2 absoffset;

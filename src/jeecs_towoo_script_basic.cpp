@@ -45,6 +45,8 @@ namespace jeecs
                 wo_vm m_base_vm;
                 bool m_is_good;
 
+                std::optional<wo_integer_t> m_on_active_function;
+                std::optional<wo_integer_t> m_on_disable_function;
                 wo_integer_t m_create_function;
                 wo_integer_t m_close_function;
 
@@ -70,8 +72,12 @@ namespace jeecs
             // 执行代码使用的虚拟机
             wo_vm m_job_vm;
             wo_pin_value m_context;
+
+            std::optional<wo_integer_t> m_on_active_function;
+            std::optional<wo_integer_t> m_on_disable_function;
             wo_integer_t m_create_function;
             wo_integer_t m_close_function;
+
             const jeecs::typing::type_info* m_type;
 
             // 执行方法使用的需求器和对应的执行逻辑
@@ -92,8 +98,11 @@ namespace jeecs
                 if (base_info->m_is_good)
                 {
                     m_job_vm = wo_borrow_vm(base_info->m_base_vm);
+
                     m_create_function = base_info->m_create_function;
                     m_close_function = base_info->m_close_function;
+                    m_on_active_function = base_info->m_on_active_function;
+                    m_on_disable_function = base_info->m_on_disable_function;
 
                     m_pre_dependences = base_info->m_preworks;
                     m_dependences = base_info->m_works;
@@ -117,7 +126,7 @@ namespace jeecs
                         m_context = wo_create_pin_value();
                         wo_pin_value_set(m_context, v);
                     }
-                     
+
                 }
                 else
                 {
@@ -145,7 +154,11 @@ namespace jeecs
                 }
             }
 
-            static void create_component_struct(wo_value writeval, wo_vm vm, void* component, const typing::type_info* ctype)
+            static void create_component_struct(
+                wo_value writeval,
+                wo_vm vm, 
+                void* component, 
+                const typing::type_info* ctype)
             {
                 assert(component != nullptr);
 
@@ -279,6 +292,34 @@ namespace jeecs
                 }
 
                 ScriptRuntimeSystem::system_instance = nullptr;
+            }
+
+            void OnEnable()
+            {
+                if (m_job_vm == nullptr)
+                    return;
+
+                if (m_on_active_function.has_value())
+                {
+                    wo_value s = wo_reserve_stack(m_job_vm, 1, nullptr);
+                    wo_pin_value_get(s, m_context);
+                    // Invoke!
+                    wo_invoke_rsfunc(m_job_vm, m_on_active_function.value(), 1, nullptr, &s);
+                    wo_pop_stack(m_job_vm, 1);
+                }
+            }
+            void OnDisable()
+            {
+                if (m_job_vm == nullptr)
+                    return;
+                if (m_on_disable_function.has_value())
+                {
+                    wo_value s = wo_reserve_stack(m_job_vm, 1, nullptr);
+                    wo_pin_value_get(s, m_context);
+                    // Invoke!
+                    wo_invoke_rsfunc(m_job_vm, m_on_disable_function.value(), 1, nullptr, &s);
+                    wo_pop_stack(m_job_vm, 1);
+                }
             }
 
             void PreUpdate(jeecs::selector&)
@@ -593,8 +634,12 @@ const jeecs::typing::type_info* je_towoo_register_system(
 {
     wo_vm vm = wo_create_vm();
     auto systinfo = std::make_unique<jeecs::towoo::ToWooBaseSystem::towoo_system_info>(vm);
+
+    systinfo->m_on_active_function = std::nullopt;
+    systinfo->m_on_disable_function = std::nullopt;
     systinfo->m_create_function = 0;
     systinfo->m_close_function = 0;
+
     auto* sysinfo_ptr = systinfo.get();
 
     sysinfo_ptr->m_is_good = false;
@@ -613,9 +658,14 @@ const jeecs::typing::type_info* je_towoo_register_system(
         if (result)
         {
             // Invoke "_init_towoo_system", if failed... boom!
+            wo_integer_t initfunc = _je_wo_extern_symb_rsfunc(vm, "_init_towoo_system");
+
             wo_integer_t create_function = _je_wo_extern_symb_rsfunc(vm, "create");
             wo_integer_t close_function = _je_wo_extern_symb_rsfunc(vm, "close");
-            wo_integer_t initfunc = _je_wo_extern_symb_rsfunc(vm, "_init_towoo_system");
+
+            wo_integer_t on_active_function = _je_wo_extern_symb_rsfunc(vm, "on_active");
+            wo_integer_t on_disable_function = _je_wo_extern_symb_rsfunc(vm, "on_disable");
+
             if (initfunc == 0)
             {
                 jeecs::debug::logerr("Failed to register: '%s' cannot find '_init_towoo_system' in '%s', "
@@ -645,6 +695,12 @@ const jeecs::typing::type_info* je_towoo_register_system(
                     sysinfo_ptr->m_create_function = create_function;
                     sysinfo_ptr->m_close_function = close_function;
 
+                    if (on_active_function != 0)
+                        sysinfo_ptr->m_on_active_function = on_active_function;
+
+                    if (on_disable_function != 0)
+                        sysinfo_ptr->m_on_disable_function = on_disable_function;
+
                     je_towoo_unregister_system(je_typing_get_info_by_name(system_name));
 
                     auto* towoo_system_tinfo = je_typing_register(
@@ -658,7 +714,10 @@ const jeecs::typing::type_info* je_towoo_register_system(
                         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::copier,
                         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::mover);
 
-                    je_register_system_updater(towoo_system_tinfo,
+                    je_register_system_updater(
+                        towoo_system_tinfo,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::on_enable,
+                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::on_disable,
                         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::pre_update,
                         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::state_update,
                         jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::update,
@@ -1160,8 +1219,8 @@ WO_API wo_api wojeapi_towoo_physics2d_collisionresult_check(wo_vm vm, wo_value a
     auto* result = collisionResult.check(&rigidbody);
     if (result != nullptr)
     {
-        wo_value ret = s + 0; 
-        
+        wo_value ret = s + 0;
+
         wo_set_struct(ret, vm, 2);
 
         wo_set_vec2(s + 1, vm, result->position);
@@ -1277,7 +1336,7 @@ WO_API wo_api wojeapi_towoo_renderer_shaders_get_shaders(wo_vm vm, wo_value args
     wo_value s = wo_reserve_stack(vm, 2, &args);
     auto& shaders = wo_component<jeecs::Renderer::Shaders>(args + 0);
 
-    wo_value c = s + 0; 
+    wo_value c = s + 0;
     wo_value elem = s + 1;
 
     wo_set_arr(c, vm, 0);

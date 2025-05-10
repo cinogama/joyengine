@@ -534,17 +534,22 @@ extern func close(_: Context)
 {
 }
 
-PRE_UPDATE!
+extern func on_enable(_: Context)
+{
+}
+extern func on_disable(_: Context)
 {
 }
 
+PRE_UPDATE!
+{
+}
 UPDATE!
 {
     system! update()
     {
     }
 }
-
 LATE_UPDATE!
 {
 }
@@ -590,7 +595,6 @@ using je;
 
 extern func main(_: universe, _: option<world>, _: option<entity>)
 {
-
 }
 "@;
                     jeapi::gui::form::input("新建编辑器工具脚本", F"在{cur_creating_path}新建编辑器工具脚本", "NewScript",
@@ -1220,6 +1224,9 @@ namespace $$MODULE_NAME$$
         $$SYSTEM_NAME$$(jeecs::game_world world);
         ~$$SYSTEM_NAME$$();
         
+        void OnEnable();
+        void OnDisable();
+
         void PreUpdate(jeecs::selector&);
         void Update(jeecs::selector&);
         void LateUpdate(jeecs::selector&);
@@ -1237,27 +1244,26 @@ namespace $$MODULE_NAME$$
     $$SYSTEM_NAME$$::$$SYSTEM_NAME$$(game_world world)
         : game_system(world)
     {
-        
     }
-
     $$SYSTEM_NAME$$::~$$SYSTEM_NAME$$()
     {
-        
+    }
+
+    void $$SYSTEM_NAME$$::OnEnable()
+    {
+    }
+    void $$SYSTEM_NAME$$::OnDisable()
+    {
     }
 
     void $$SYSTEM_NAME$$::PreUpdate(jeecs::selector& selector)
     {
-
     }
-
     void $$SYSTEM_NAME$$::Update(jeecs::selector& selector)
     {
-
     }
-
     void $$SYSTEM_NAME$$::LateUpdate(jeecs::selector& selector)
     {
-
     }
 }
 "@;

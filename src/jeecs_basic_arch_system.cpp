@@ -1273,8 +1273,11 @@ namespace jeecs_impl
             return m_systems;
         }
 
-        static void _destroy_system_instance(const jeecs::typing::type_info* type, jeecs::game_system* sys)noexcept
+        void _destroy_system_instance(const jeecs::typing::type_info* type, jeecs::game_system* sys)noexcept
         {
+            if (_m_world_enabled)
+                type->m_system_updaters->m_on_disable(sys);
+
             type->destruct(sys);
             je_mem_free(sys);
         }
@@ -1288,7 +1291,12 @@ namespace jeecs_impl
         {
             auto fnd = m_systems.find(type);
             if (fnd == m_systems.end())
+            {
+                if (_m_world_enabled)
+                    type->m_system_updaters->m_on_enable(sys);
+
                 m_systems[type] = sys;
+            }
             else
             {
 #ifndef NDEBUG
@@ -1452,13 +1460,28 @@ namespace jeecs_impl
         }
         inline void _set_able_world(bool enable) noexcept
         {
-            _m_world_enabled = enable;
+            if (_m_world_enabled != enable)
+            {
+                if (enable)
+                {
+                    // Invoke OnActive
+                    for (auto& sys: m_systems)
+                        sys.first->m_system_updaters->m_on_enable(sys.second);
+                }
+                else
+                {
+                    // Invoke OnDisable
+                    for (auto& sys : m_systems)
+                        sys.first->m_system_updaters->m_on_disable(sys.second);
+                }
+
+                _m_world_enabled = enable;
+            }
         }
         inline ecs_universe* get_universe() const noexcept
         {
             return _m_universe;
         }
-
     };
 
     void default_job_for_execute_sys_update_for_worlds(void* _ecs_world, void* _);
