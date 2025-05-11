@@ -394,7 +394,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                                             new! ScriptEditor(context, DEFAULT_SCRIPT_SRC, "图像效果", false)
                                                 ->set_callback(func(vmm)
                                                 {
-                                                    let result = vmm->invoke("main", [texture: dynamic]);
+                                                    let result = vmm->invoke("main", [texture: dynamic, (0, 0): dynamic, texture->size: dynamic]);
                                                     history_mgr->save_step();
 
                                                     return result;

@@ -299,7 +299,7 @@ namespace editor::gui::edit_forms
                                     ;
                             }
 
-                            do CxxProject::get_dylib_files_by_config(std::platform::runtime)
+                            do CxxProject::get_dylib_files_by_config(std::platform::runtime_type::RELEASE)
                                 ->> \libpath = 
                                     do fsys::copy(
                                         fsys::normalize(
