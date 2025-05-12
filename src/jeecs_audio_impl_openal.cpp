@@ -18,7 +18,7 @@ struct jeal_native_effect_instance
 
     struct dump_data_t
     {
-
+        // Empty
     };
     std::optional<dump_data_t> m_dump;
 };

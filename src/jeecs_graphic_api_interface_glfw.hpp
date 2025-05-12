@@ -494,10 +494,9 @@ namespace jeecs::graphic
                 (int)interface_width,
                 (int)interface_height);
 
-#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WEBGL
             // Donot sync for webgl, and donot process mouse event.
             // We will process mouse event in javascript(WebGL).
-#else
+#if JE4_CURRENT_PLATFORM != JE4_PLATFORM_WEBGL
             glfwSetCursorPosCallback(_m_windows, glfw_callback_mouse_pos_changed);
             glfwSetMouseButtonCallback(_m_windows, glfw_callback_mouse_key_clicked);
             glfwSetScrollCallback(_m_windows, glfw_callback_mouse_scroll_changed);
@@ -541,9 +540,7 @@ namespace jeecs::graphic
 
             glfwPollEvents();
 
-#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WEBGL
-            // Do nothing.
-#else
+#if JE4_CURRENT_PLATFORM != JE4_PLATFORM_WEBGL
             _gamepad_manager.update(this);
 #endif
 
@@ -569,9 +566,7 @@ namespace jeecs::graphic
             glfwDestroyWindow(_m_windows);
             if (!reboot)
             {
-#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WEBGL
-                // Do nothing.
-#else
+#if JE4_CURRENT_PLATFORM != JE4_PLATFORM_WEBGL
                 _gamepad_manager.detach(this);
 #endif
 
@@ -583,8 +578,8 @@ namespace jeecs::graphic
                         glfwTerminate();
 
                 } while (0);
+            }
         }
-    }
 
         virtual void* interface_handle() const override
         {
@@ -597,5 +592,5 @@ namespace jeecs::graphic
             return glfwGetWin32Window(_m_windows);
         }
 #endif
-};
+    };
 }

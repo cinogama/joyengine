@@ -1947,13 +1947,11 @@ struct jegl_vertex
     size_t m_vertex_length;
     const uint32_t* m_indexs;
     size_t m_index_count;
-    const data_layout*
-        m_formats;
+    const data_layout* m_formats;
     size_t m_format_count;
     size_t m_data_size_per_point;
     type m_type;
-    const bone_data**
-        m_bones;
+    const bone_data** m_bones;
     size_t m_bone_count;
 };
 
@@ -2194,8 +2192,6 @@ struct jegl_resource
 
     jegl_context* m_graphic_thread;
     jeecs::typing::version_t m_graphic_thread_version;
-
-    // jegl_resource_bind_counter* m_binding_count;
     resource_handle m_handle;
 
     type m_type;
@@ -2570,6 +2566,13 @@ jegl_load_vertex [基本接口]
 从指定路径加载一个顶点（模型）资源，加载的路径规则与 jeecs_file_open 相同
     * 若指定的文件不存在或不是一个合法的模型，则返回nullptr
     * 所有的图形资源都通过 jegl_close_resource 关闭并等待图形线程释放
+    * 使用此方法加载的模型，其顶点数据格式如下所示：
+        顶点坐标    3 * f32
+        UV映射坐标  2 * f32
+        法线方向向量  3 * f32
+        骨骼索引    4 * i32
+        骨骼权重    4 * f32
+    * 对于绑定骨骼数量小于4的顶点，其空余位置的骨骼索引被 0 填充，权重为 0.f
 请参见：
     jeecs_file_open
     jegl_close_resource
