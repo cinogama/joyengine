@@ -119,7 +119,7 @@ namespace jeecs
                             {
                                 // Resolve!
 
-                                wo_integer_t configed_group_count = wo_lengthof(result);
+                                wo_integer_t configed_group_count = wo_arr_len(result);
                                 if (configed_group_count > (wo_integer_t)MAX_GROUP_COUNT)
                                 {
                                     jeecs::debug::logwarn("The number of physics2d collision groups is limited to 16, "
@@ -135,7 +135,7 @@ namespace jeecs
                                     {
                                         wo_arr_get(group_config_info, result, i);
                                         wo_struct_get(filter_types, group_config_info, 0);
-                                        for (wo_integer_t ii = wo_lengthof(filter_types); ii > 0; --ii)
+                                        for (wo_integer_t ii = wo_arr_len(filter_types); ii > 0; --ii)
                                         {
                                             wo_arr_get(group_collide_with_mask, filter_types, ii - 1);
                                             wo_struct_get(group_requirement, group_collide_with_mask, 1);

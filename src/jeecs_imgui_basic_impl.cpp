@@ -685,7 +685,7 @@ WO_API wo_api je_gui_listbox(wo_vm vm, wo_value args)
     int selected_item = -1;
     int max_height_item = -1;
 
-    std::vector<const char*> items((size_t)wo_lengthof(args + 1));
+    std::vector<const char*> items((size_t)wo_arr_len(args + 1));
     wo_value elem = s + 0;
     for (size_t i = 0; i < items.size(); i++)
     {
@@ -706,7 +706,7 @@ WO_API wo_api je_gui_listbox_select(wo_vm vm, wo_value args)
     int selected_item = (int)wo_int(args + 2);
     int max_height_item = -1;
 
-    std::vector<const char*> items((size_t)wo_lengthof(args + 1));
+    std::vector<const char*> items((size_t)wo_arr_len(args + 1));
     wo_value elem = s + 0;
     for (size_t i = 0; i < items.size(); i++)
     {
@@ -727,7 +727,7 @@ WO_API wo_api je_gui_listbox_select_height(wo_vm vm, wo_value args)
     int selected_item = (int)wo_int(args + 2);
     int max_height_item = (int)wo_int(args + 3);
 
-    std::vector<const char*> items((size_t)wo_lengthof(args + 1));
+    std::vector<const char*> items((size_t)wo_arr_len(args + 1));
     wo_value elem = s + 0;
     for (size_t i = 0; i < items.size(); i++)
     {
@@ -755,7 +755,7 @@ WO_API wo_api je_gui_listbox_withsize(wo_vm vm, wo_value args)
 
     if (ImGui::BeginListBox(wo_string(args + 0), ImVec2(wo_float(args + 3), wo_float(args + 4))))
     {
-        size_t sz = (size_t)wo_lengthof(args + 1);
+        size_t sz = (size_t)wo_arr_len(args + 1);
         for (size_t i = 0; i < sz; i++)
         {
             wo_arr_get(elem, args + 1, i);
@@ -1565,7 +1565,7 @@ WO_API wo_api je_gui_combo(wo_vm vm, wo_value args)
 
     std::vector<const char*> combo_items;
     wo_value elem = s + 0;
-    for (wo_integer_t i = 0; i < wo_lengthof(args + 1); ++i)
+    for (wo_integer_t i = 0; i < wo_arr_len(args + 1); ++i)
     {
         wo_arr_get(elem, args + 1, i);
         combo_items.push_back(wo_string(elem));

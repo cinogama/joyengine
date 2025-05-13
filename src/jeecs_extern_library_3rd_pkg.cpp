@@ -52,6 +52,20 @@ WO_API wo_api buffer_createui8_buffer(wo_vm vm, wo_value args);
 WO_API wo_api buffer_find_break_builder(wo_vm vm, wo_value args);
 WO_API wo_api buffer_find_cchar_builder(wo_vm vm, wo_value args);
 WO_API wo_api buffer_find_string_builder(wo_vm vm, wo_value args);
+WO_API wo_api buffer_int_i16(wo_vm vm, wo_value args);
+WO_API wo_api buffer_int_i16_be(wo_vm vm, wo_value args);
+WO_API wo_api buffer_int_i16_le(wo_vm vm, wo_value args);
+WO_API wo_api buffer_int_i32(wo_vm vm, wo_value args);
+WO_API wo_api buffer_int_i32_be(wo_vm vm, wo_value args);
+WO_API wo_api buffer_int_i32_le(wo_vm vm, wo_value args);
+WO_API wo_api buffer_int_i64_be(wo_vm vm, wo_value args);
+WO_API wo_api buffer_int_i64_le(wo_vm vm, wo_value args);
+WO_API wo_api buffer_int_ui16(wo_vm vm, wo_value args);
+WO_API wo_api buffer_int_ui16_be(wo_vm vm, wo_value args);
+WO_API wo_api buffer_int_ui16_le(wo_vm vm, wo_value args);
+WO_API wo_api buffer_int_ui32(wo_vm vm, wo_value args);
+WO_API wo_api buffer_int_ui32_be(wo_vm vm, wo_value args);
+WO_API wo_api buffer_int_ui32_le(wo_vm vm, wo_value args);
 WO_API wo_api buffer_length_builder(wo_vm vm, wo_value args);
 WO_API wo_api buffer_open_builder(wo_vm vm, wo_value args);
 WO_API wo_api buffer_peek_buffer_builder(wo_vm vm, wo_value args);
@@ -337,6 +351,20 @@ void je_extern_lib_3rd_pkgs_init()
         wo_extern_lib_func_t{"buffer_find_break_builder", (void*)&buffer_find_break_builder},
         wo_extern_lib_func_t{"buffer_find_cchar_builder", (void*)&buffer_find_cchar_builder},
         wo_extern_lib_func_t{"buffer_find_string_builder", (void*)&buffer_find_string_builder},
+        wo_extern_lib_func_t{"buffer_int_i16", (void*)&buffer_int_i16},
+        wo_extern_lib_func_t{"buffer_int_i16_be", (void*)&buffer_int_i16_be},
+        wo_extern_lib_func_t{"buffer_int_i16_le", (void*)&buffer_int_i16_le},
+        wo_extern_lib_func_t{"buffer_int_i32", (void*)&buffer_int_i32},
+        wo_extern_lib_func_t{"buffer_int_i32_be", (void*)&buffer_int_i32_be},
+        wo_extern_lib_func_t{"buffer_int_i32_le", (void*)&buffer_int_i32_le},
+        wo_extern_lib_func_t{"buffer_int_i64_be", (void*)&buffer_int_i64_be},
+        wo_extern_lib_func_t{"buffer_int_i64_le", (void*)&buffer_int_i64_le},
+        wo_extern_lib_func_t{"buffer_int_ui16", (void*)&buffer_int_ui16},
+        wo_extern_lib_func_t{"buffer_int_ui16_be", (void*)&buffer_int_ui16_be},
+        wo_extern_lib_func_t{"buffer_int_ui16_le", (void*)&buffer_int_ui16_le},
+        wo_extern_lib_func_t{"buffer_int_ui32", (void*)&buffer_int_ui32},
+        wo_extern_lib_func_t{"buffer_int_ui32_be", (void*)&buffer_int_ui32_be},
+        wo_extern_lib_func_t{"buffer_int_ui32_le", (void*)&buffer_int_ui32_le},
         wo_extern_lib_func_t{"buffer_length_builder", (void*)&buffer_length_builder},
         wo_extern_lib_func_t{"buffer_open_builder", (void*)&buffer_open_builder},
         wo_extern_lib_func_t{"buffer_peek_buffer_builder", (void*)&buffer_peek_buffer_builder},

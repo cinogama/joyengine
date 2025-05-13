@@ -42,7 +42,7 @@ WO_API wo_api wojeapi_startup_coroutine(wo_vm vm, wo_value args)
 
     // start_coroutine(workjob, (args))
     wo_value arguments = args + 1;
-    auto argument_count = wo_lengthof(arguments);
+    auto argument_count = wo_struct_len(arguments);
 
     wo_vm co_vmm = wo_borrow_vm(vm);
     wo_value co_vmm_s = wo_reserve_stack(co_vmm,  (size_t)argument_count, nullptr);

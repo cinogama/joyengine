@@ -587,7 +587,7 @@ WO_API wo_api jeecs_shader_create_shader_value_out(wo_vm vm, wo_value args)
     if (wo_valuetype(voutstruct) != WO_STRUCT_TYPE)
         return wo_ret_halt(vm, "'type' must struct when return from vext or frag.");
 
-    uint16_t structsz = (uint16_t)wo_lengthof(voutstruct);
+    uint16_t structsz = (uint16_t)wo_struct_len(voutstruct);
 
     // is vertex out, check it
     wo_value elem = s + 0;
@@ -649,7 +649,7 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args)
         (shader_value_outs*)wo_pointer(args + 1),
         (shader_value_outs*)wo_pointer(args + 2));
 
-    wo_integer_t vin_size = wo_lengthof(args + 0);
+    wo_integer_t vin_size = wo_struct_len(args + 0);
 
     for (wo_integer_t i = 0; i < vin_size; ++i)
     {
@@ -675,7 +675,7 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args)
     wo_struct_get(elem, args + 3, 5);
     wrapper->shader_config.m_cull_mode = (jegl_shader::cull_mode)wo_int(elem);
 
-    size_t ubo_count = (size_t)wo_lengthof(args + 4);
+    size_t ubo_count = (size_t)wo_arr_len(args + 4);
     for (size_t i = 0; i < ubo_count; ++i)
     {
         wo_arr_get(elem, args + 4, i);
@@ -683,7 +683,7 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args)
             (shader_struct_define*)wo_pointer(elem));
     }
 
-    size_t sampler_count = (size_t)wo_lengthof(args + 5);
+    size_t sampler_count = (size_t)wo_arr_len(args + 5);
     for (size_t i = 0; i < sampler_count; ++i)
     {
         wo_arr_get(elem, args + 5, i);
@@ -691,7 +691,7 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args)
             (shader_sampler*)wo_pointer(elem));
     }
 
-    size_t custom_method_count = (size_t)wo_lengthof(args + 6);
+    size_t custom_method_count = (size_t)wo_arr_len(args + 6);
     for (size_t i = 0; i < custom_method_count; ++i)
     {
         wo_arr_get(elem, args + 6, i);
@@ -707,7 +707,7 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args)
         custom_shader_srcs.m_hlsl_impl = wo_string(elem);
     }
 
-    size_t user_function_count = (size_t)wo_lengthof(args + 7);
+    size_t user_function_count = (size_t)wo_arr_len(args + 7);
     for (size_t i = 0; i < user_function_count; ++i)
     {
         wo_arr_get(elem, args + 7, i);
@@ -720,7 +720,7 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args)
         user_function.m_result = (shader_value_outs*)wo_pointer(val);
 
         wo_struct_get(val, elem, 1);
-        size_t user_function_arg_count = (size_t)wo_lengthof(val);
+        size_t user_function_arg_count = (size_t)wo_struct_len(val);
         for (size_t i = 0; i < user_function_arg_count; ++i)
         {
             wo_struct_get(elem, val, (uint16_t)i);

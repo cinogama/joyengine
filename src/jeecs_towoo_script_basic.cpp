@@ -812,7 +812,7 @@ WO_API wo_api wojeapi_towoo_register_system_job(wo_vm vm, wo_value args)
 
     if (!stepwork.m_is_single_work)
     {
-        for (wo_integer_t i = 0; i < wo_lengthof(requirements); ++i)
+        for (wo_integer_t i = 0; i < wo_arr_len(requirements); ++i)
         {
             wo_arr_get(requirement_info, requirements, i);
 
@@ -868,7 +868,7 @@ WO_API wo_api wojeapi_towoo_update_component_data(wo_vm vm, wo_value args)
     }
 
     wo_value members = args + 1;
-    wo_integer_t member_count = wo_lengthof(members);
+    wo_integer_t member_count = wo_arr_len(members);
 
     size_t component_size = sizeof(jeecs::towoo::ToWooBaseComponent);
     size_t component_allign = alignof(jeecs::towoo::ToWooBaseComponent);
@@ -1282,7 +1282,7 @@ WO_API wo_api wojeapi_towoo_renderer_shaders_set_uniform(wo_vm vm, wo_value args
     case WO_STRUCT_TYPE:
     {
         wo_value v = s + 0;
-        switch (wo_lengthof(val))
+        switch (wo_struct_len(val))
         {
         case 2:
         {
@@ -1318,7 +1318,7 @@ WO_API wo_api wojeapi_towoo_renderer_shaders_set_shaders(wo_vm vm, wo_value args
     wo_value c = s + 0;
 
     shaders.shaders.clear();
-    auto setting_shaders_len = wo_lengthof(args + 1);
+    auto setting_shaders_len = wo_arr_len(args + 1);
     for (wo_integer_t i = 0; i < setting_shaders_len; ++i)
     {
         wo_arr_get(c, args + 1, i);

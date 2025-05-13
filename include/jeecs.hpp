@@ -10159,7 +10159,7 @@ namespace jeecs
                     wo_struct_get(strengths, v, 1);
                     wo_struct_get(positions, v, 2);
                     size_t position_count = (size_t)wo_int(val);
-                    size_t layer_count = (size_t)wo_lengthof(strengths);
+                    size_t layer_count = (size_t)wo_arr_len(strengths);
 
                     m_point_count = position_count;
                     m_positions.clear();
@@ -10312,7 +10312,7 @@ namespace jeecs
                     m_block_mesh = nullptr;
 
                     wo_value pos = wo_register(vm, WO_REG_T0);
-                    size_t point_count = (size_t)wo_lengthof(v);
+                    size_t point_count = (size_t)wo_arr_len(v);
 
                     m_block_points.clear();
 
@@ -10727,7 +10727,7 @@ namespace jeecs
 
                     wo_value animation = wo_register(vm, WO_REG_T0);
                     wo_value tmp = wo_register(vm, WO_REG_T1);
-                    size_t animation_count = (size_t)wo_lengthof(v);
+                    size_t animation_count = (size_t)wo_arr_len(v);
 
                     for (size_t i = 0; i < animation_count; ++i)
                     {

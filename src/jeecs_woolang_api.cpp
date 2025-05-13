@@ -26,7 +26,7 @@ struct _je_thread
 WO_API wo_api wojeapi_startup_thread(wo_vm vm, wo_value args)
 {
     wo_value arguments = args + 1;
-    auto argument_count = wo_lengthof(arguments);
+    auto argument_count = wo_struct_len(arguments);
 
     wo_vm co_vmm = wo_borrow_vm(vm);
     wo_value co_s = wo_reserve_stack(co_vmm, argument_count + 1, nullptr);
@@ -157,7 +157,7 @@ WO_API wo_api wojeapi_file_cache_write_all(wo_vm vm, wo_value args)
     // public func saveall(path: string, content : string) = > bool;
     if (auto* cache = jeecs_create_cache_file(wo_string(args + 0), 0, 1))
     {
-        auto data_length = wo_str_bytelen(args + 1);
+        auto data_length = wo_str_byte_len(args + 1);
         auto written_len = jeecs_write_cache_file(wo_string(args + 1), sizeof(char), data_length, cache);
 
         jeecs_close_cache_file(cache);
@@ -543,7 +543,7 @@ WO_API wo_api wojeapi_add_entity_to_world_with_components(wo_vm vm, wo_value arg
     std::vector<jeecs::typing::typeid_t> components;
 
     wo_value elem = s + 0;
-    for (wo_integer_t i = 0; i < wo_lengthof(components_list); ++i)
+    for (wo_integer_t i = 0; i < wo_arr_len(components_list); ++i)
     {
         wo_arr_get(elem, components_list, i);
         components.push_back(((const jeecs::typing::type_info*)wo_pointer(elem))->m_id);
@@ -572,7 +572,7 @@ WO_API wo_api wojeapi_add_prefab_to_world_with_components(wo_vm vm, wo_value arg
     std::vector<jeecs::typing::typeid_t> components;
 
     wo_value elem = s + 0;
-    for (wo_integer_t i = 0; i < wo_lengthof(components_list); ++i)
+    for (wo_integer_t i = 0; i < wo_arr_len(components_list); ++i)
     {
         wo_arr_get(elem, components_list, i);
         components.push_back(((const jeecs::typing::type_info*)wo_pointer(elem))->m_id);
@@ -593,7 +593,7 @@ WO_API wo_api wojeapi_get_all_entities_from_world(wo_vm vm, wo_value args)
 
     void* world_instance = wo_pointer(args + 0);
 
-    auto required_components_len = wo_lengthof(args + 1);
+    auto required_components_len = wo_arr_len(args + 1);
     std::vector<jeecs::typing::typeid_t> required_components(required_components_len);
 
     for (size_t i = 0; i < required_components_len; ++i)
@@ -1748,9 +1748,9 @@ WO_API wo_api wojeapi_vertex_create(wo_vm vm, wo_value args)
 
     // vertices: array<real>, indices: array<int>
     jegl_vertex::type vertex_type = (jegl_vertex::type)wo_int(args + 0);
-    std::vector<float> vertices(wo_lengthof(args + 1));
-    std::vector<uint32_t> indices(wo_lengthof(args + 2));
-    std::vector<jegl_vertex::data_layout> formats(wo_lengthof(args + 3));
+    std::vector<float> vertices(wo_arr_len(args + 1));
+    std::vector<uint32_t> indices(wo_arr_len(args + 2));
+    std::vector<jegl_vertex::data_layout> formats(wo_arr_len(args + 3));
 
     wo_value elem = s + 0;
     for (size_t i = 0; i < vertices.size(); ++i)
@@ -1836,7 +1836,7 @@ WO_API wo_api wojeapi_set_shaders_of_entity(wo_vm vm, wo_value args)
         wo_value elem = s + 0;
 
         shaders->shaders.clear();
-        size_t arrsize = (size_t)wo_lengthof(shader_array);
+        size_t arrsize = (size_t)wo_arr_len(shader_array);
         for (size_t i = 0; i < arrsize; ++i)
         {
             wo_arr_get(elem, shader_array, i);
