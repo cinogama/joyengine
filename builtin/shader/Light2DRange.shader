@@ -52,7 +52,7 @@ func multi_sampling_for_bias_shadow(
         (0., -1.),
     ];
 
-    let bias_step = float2::const(0.5, 0.5) / je_light2d_resolution;
+    let bias_step = float2::const(1.5, 1.5) / je_light2d_resolution;
     for (let (x, y) : bias)
     {
         shadow_factor = max(
