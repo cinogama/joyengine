@@ -309,7 +309,7 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                                     value(euid)?
                                         euid->dosth(invoke_entry);
                                     none? 
-                                        invoke_entry(none);
+                                        invoke_entry(option::none);
                                     }
                                     return option::value(nil: dynamic);
                                 });

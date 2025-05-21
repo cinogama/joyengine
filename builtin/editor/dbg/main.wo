@@ -183,7 +183,7 @@ namespace jeapi::debug
                     return option::value(e);
                 match (find_entity(e.childs, eid))
                 {
-                value(e)? return value(e);
+                value(e)? return option::value(e);
                 none?;
                 }
             }

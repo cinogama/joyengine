@@ -224,7 +224,7 @@ namespace editor::gui
             }
             match (cached_image_file_mip_map[_path.path])
             {
-            value(tex)? icon = value(tex);
+            value(tex)? icon = option::value(tex);
             none?;
             }
         }

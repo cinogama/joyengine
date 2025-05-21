@@ -102,11 +102,11 @@ namespace editor::gui
         {
             match (self->get_project->start_debug())
             {
-            err(msg)? return err(msg);
+            err(msg)? return result::err(msg);
             ok(_)?
                 {
                     self->begin_debug_and_hide_all_editor_form();
-                    return ok(do nil);
+                    return result::ok(do nil);
                 }
             }
         }
@@ -115,11 +115,11 @@ namespace editor::gui
         {
             match (self->get_project->stop_debug())
             {
-            err(msg)? return err(msg);
+            err(msg)? return result::err(msg);
             ok(_)?
                 {
                     self->end_debug_and_restore_all_editor_form();
-                    return ok(do nil);
+                    return result::ok(do nil);
                 }
             }
         }
@@ -145,7 +145,7 @@ namespace editor::gui
             value(eid)? 
                 eid->dosth(func(oentity){
                     if (oentity->is_value == false)
-                        self->set_editing_entity(none);
+                        self->set_editing_entity(option::none);
                 }); 
             none?;
             }

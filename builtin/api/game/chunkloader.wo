@@ -63,7 +63,7 @@ namespace jeapi::loader
 
                         let parent_path = _get_located_path(chunk_layer_path);
 
-                        return value(layer{
+                        return option::value(layer{
                             m_layer = layer,
                             m_size = sz,
                             m_path = parent_path + tex,
@@ -71,7 +71,7 @@ namespace jeapi::loader
                             m_walkable = wkable,
                         });
                     }
-                    none? return none;
+                    none? return option::none;
                     }
                 }
                 func close(self: layer)
@@ -161,7 +161,7 @@ namespace jeapi::loader
                     
                 }
                 none?
-                    return none;
+                    return option::none;
                 }
             }
             func close(self: chunk)

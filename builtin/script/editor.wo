@@ -593,12 +593,12 @@ namespace Light2D::BlockShadow::block_mesh
             ))
             {
             value(posgroups)?
-                return value(posgroups[0] as array<(real, real)>->>\p = p: vec2;: Light2D::BlockShadow::block_mesh);
+                return option::value(posgroups[0] as array<(real, real)>->>\p = p: vec2;: Light2D::BlockShadow::block_mesh);
             none?
                 if (size_changed)
-                    return value(val);
+                    return option::value(val);
                 else
-                    return none;
+                    return option::none;
             }
         }
     }

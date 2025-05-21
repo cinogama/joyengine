@@ -174,12 +174,12 @@ namespace editor::gui::animation2d
     {
         match (a)
         {
-        INT(v)? return INT(lerp(v, b->unsafe::cast :<(void, int)>()[1], deg));
-        FLOAT(v)? return FLOAT(lerp(v, b->unsafe::cast :<(void, real)>()[1], deg));
-        VEC2(v)? return VEC2(lerp(v, b->unsafe::cast :<(void, (real, real))>()[1], deg));
-        VEC3(v)? return VEC3(lerp(v, b->unsafe::cast :<(void, (real, real, real))>()[1], deg));
-        VEC4(v)? return VEC4(lerp(v, b->unsafe::cast :<(void, (real, real, real, real))>()[1], deg));
-        QUAT4(v)? return QUAT4(lerp(v, b->unsafe::cast :<(void, (real, real, real))>()[1], deg));
+        INT(v)? return DataValue::INT(lerp(v, b->unsafe::cast :<(void, int)>()[1], deg));
+        FLOAT(v)? return DataValue::FLOAT(lerp(v, b->unsafe::cast :<(void, real)>()[1], deg));
+        VEC2(v)? return DataValue::VEC2(lerp(v, b->unsafe::cast :<(void, (real, real))>()[1], deg));
+        VEC3(v)? return DataValue::VEC3(lerp(v, b->unsafe::cast :<(void, (real, real, real))>()[1], deg));
+        VEC4(v)? return DataValue::VEC4(lerp(v, b->unsafe::cast :<(void, (real, real, real, real))>()[1], deg));
+        QUAT4(v)? return DataValue::QUAT4(lerp(v, b->unsafe::cast :<(void, (real, real, real))>()[1], deg));
         }
     }
 
@@ -784,17 +784,17 @@ namespace editor::gui::animation2d
                                                             match (editing_value->get)
                                                             {
                                                             INT(n)?
-                                                                do InputInt("值", n)->>\nv = editing_value->set(INT(nv));;
+                                                                do InputInt("值", n)->>\nv = editing_value->set(DataValue::INT(nv));;
                                                             FLOAT(x)?
-                                                                do InputFloat("值", x)->>\nv = editing_value->set(FLOAT(nv));;
+                                                                do InputFloat("值", x)->>\nv = editing_value->set(DataValue::FLOAT(nv));;
                                                             VEC2((x, y))?
-                                                                do InputFloat2("值", x, y)->>\nv = editing_value->set(VEC2(nv));;
+                                                                do InputFloat2("值", x, y)->>\nv = editing_value->set(DataValue::VEC2(nv));;
                                                             VEC3((x, y, z))?
-                                                                do InputFloat3("值", x, y, z)->>\nv = editing_value->set(VEC3(nv));;
+                                                                do InputFloat3("值", x, y, z)->>\nv = editing_value->set(DataValue::VEC3(nv));;
                                                             VEC4((x, y, z, w))?
-                                                                do InputFloat4("值", x, y, z, w)->>\nv = editing_value->set(VEC4(nv));;
+                                                                do InputFloat4("值", x, y, z, w)->>\nv = editing_value->set(DataValue::VEC4(nv));;
                                                             QUAT4((x, y, z))?
-                                                                do InputFloat3("值", x, y, z)->>\nv = editing_value->set(QUAT4(nv));;
+                                                                do InputFloat3("值", x, y, z)->>\nv = editing_value->set(DataValue::QUAT4(nv));;
                                                             }
 
                                                             if (lerp_mode->get)
@@ -802,17 +802,17 @@ namespace editor::gui::animation2d
                                                                 match (lerp_end_value->get)
                                                                 {
                                                                 INT(n)?
-                                                                    do InputInt("插值目标", n)->>\nv = lerp_end_value->set(INT(nv));;
+                                                                    do InputInt("插值目标", n)->>\nv = lerp_end_value->set(DataValue::INT(nv));;
                                                                 FLOAT(x)?
-                                                                    do InputFloat("插值目标", x)->>\nv = lerp_end_value->set(FLOAT(nv));;
+                                                                    do InputFloat("插值目标", x)->>\nv = lerp_end_value->set(DataValue::FLOAT(nv));;
                                                                 VEC2((x, y))?
-                                                                    do InputFloat2("插值目标", x, y)->>\nv = lerp_end_value->set(VEC2(nv));;
+                                                                    do InputFloat2("插值目标", x, y)->>\nv = lerp_end_value->set(DataValue::VEC2(nv));;
                                                                 VEC3((x, y, z))?
-                                                                    do InputFloat3("插值目标", x, y, z)->>\nv = lerp_end_value->set(VEC3(nv));;
+                                                                    do InputFloat3("插值目标", x, y, z)->>\nv = lerp_end_value->set(DataValue::VEC3(nv));;
                                                                 VEC4((x, y, z, w))?
-                                                                    do InputFloat4("插值目标", x, y, z, w)->>\nv = lerp_end_value->set(VEC4(nv));;
+                                                                    do InputFloat4("插值目标", x, y, z, w)->>\nv = lerp_end_value->set(DataValue::VEC4(nv));;
                                                                 QUAT4((x, y, z))?
-                                                                    do InputFloat3("插值目标", x, y, z)->>\nv = lerp_end_value->set(QUAT4(nv));;
+                                                                    do InputFloat3("插值目标", x, y, z)->>\nv = lerp_end_value->set(DataValue::QUAT4(nv));;
                                                                 }
                                                             }
 
@@ -947,17 +947,17 @@ namespace editor::gui::animation2d
                                                         match (uniform_types[idx][1])
                                                         {
                                                         INT(n)?
-                                                            do InputInt("值", n)->>\nv = uniform_types[idx][1] = INT(nv);;
+                                                            do InputInt("值", n)->>\nv = uniform_types[idx][1] = DataValue::INT(nv);;
                                                         FLOAT(x)?
-                                                            do InputFloat("值", x)->>\nv = uniform_types[idx][1] = FLOAT(nv);;
+                                                            do InputFloat("值", x)->>\nv = uniform_types[idx][1] = DataValue::FLOAT(nv);;
                                                         VEC2((x, y))?
-                                                            do InputFloat2("值", x, y)->>\nv = uniform_types[idx][1] = VEC2(nv);;
+                                                            do InputFloat2("值", x, y)->>\nv = uniform_types[idx][1] = DataValue::VEC2(nv);;
                                                         VEC3((x, y, z))?
-                                                            do InputFloat3("值", x, y, z)->>\nv = uniform_types[idx][1] = VEC3(nv);;
+                                                            do InputFloat3("值", x, y, z)->>\nv = uniform_types[idx][1] = DataValue::VEC3(nv);;
                                                         VEC4((x, y, z, w))?
-                                                            do InputFloat4("值", x, y, z, w)->>\nv = uniform_types[idx][1] = VEC4(nv);;
+                                                            do InputFloat4("值", x, y, z, w)->>\nv = uniform_types[idx][1] = DataValue::VEC4(nv);;
                                                         QUAT4((x, y, z))?
-                                                            do InputFloat3("值", x, y, z)->>\nv = uniform_types[idx][1] = QUAT4(nv);;
+                                                            do InputFloat3("值", x, y, z)->>\nv = uniform_types[idx][1] = DataValue::QUAT4(nv);;
                                                         }
 
                                                         if (lerp_mode->get)
@@ -965,17 +965,17 @@ namespace editor::gui::animation2d
                                                             match (uniform_types[idx][2])
                                                             {
                                                             INT(n)?
-                                                                do InputInt("插值目标", n)->>\nv = uniform_types[idx][2] = INT(nv);;
+                                                                do InputInt("插值目标", n)->>\nv = uniform_types[idx][2] = DataValue::INT(nv);;
                                                             FLOAT(x)?
-                                                                do InputFloat("插值目标", x)->>\nv = uniform_types[idx][2] = FLOAT(nv);;
+                                                                do InputFloat("插值目标", x)->>\nv = uniform_types[idx][2] = DataValue::FLOAT(nv);;
                                                             VEC2((x, y))?
-                                                                do InputFloat2("插值目标", x, y)->>\nv = uniform_types[idx][2] = VEC2(nv);;
+                                                                do InputFloat2("插值目标", x, y)->>\nv = uniform_types[idx][2] = DataValue::VEC2(nv);;
                                                             VEC3((x, y, z))?
-                                                                do InputFloat3("插值目标", x, y, z)->>\nv = uniform_types[idx][2] = VEC3(nv);;
+                                                                do InputFloat3("插值目标", x, y, z)->>\nv = uniform_types[idx][2] = DataValue::VEC3(nv);;
                                                             VEC4((x, y, z, w))?
-                                                                do InputFloat4("插值目标", x, y, z, w)->>\nv = uniform_types[idx][2] = VEC4(nv);;
+                                                                do InputFloat4("插值目标", x, y, z, w)->>\nv = uniform_types[idx][2] = DataValue::VEC4(nv);;
                                                             QUAT4((x, y, z))?
-                                                                do InputFloat3("插值目标", x, y, z)->>\nv = uniform_types[idx][2] = QUAT4(nv);;
+                                                                do InputFloat3("插值目标", x, y, z)->>\nv = uniform_types[idx][2] = DataValue::QUAT4(nv);;
                                                             }
                                                         }
                                                     }
@@ -1200,23 +1200,23 @@ namespace editor::gui::animation2d
                         match (selected_frame=>>\f = f.m_component_dats->get(id);)
                         {
                         none?
-                            animation_context.m_selected_c_or_u_data = None;
+                            animation_context.m_selected_c_or_u_data = SelectedComponentOrUniformData::None;
                         value(cdata)?
                             {
                                 match (cdata.m_value)
                                 {
                                 INT(n)?
-                                    do InputInt("值", n)->>\nv = cdata.m_value = INT(nv);;
+                                    do InputInt("值", n)->>\nv = cdata.m_value = DataValue::INT(nv);;
                                 FLOAT(x)?
-                                    do InputFloat("值", x)->>\nv = cdata.m_value = FLOAT(nv);;
+                                    do InputFloat("值", x)->>\nv = cdata.m_value = DataValue::FLOAT(nv);;
                                 VEC2((x, y))?
-                                    do InputFloat2("值", x, y)->>\nv = cdata.m_value = VEC2(nv);;
+                                    do InputFloat2("值", x, y)->>\nv = cdata.m_value = DataValue::VEC2(nv);;
                                 VEC3((x, y, z))?
-                                    do InputFloat3("值", x, y, z)->>\nv = cdata.m_value = VEC3(nv);;
+                                    do InputFloat3("值", x, y, z)->>\nv = cdata.m_value = DataValue::VEC3(nv);;
                                 VEC4((x, y, z, w))?
-                                    do InputFloat4("值", x, y, z, w)->>\nv = cdata.m_value = VEC4(nv);;
+                                    do InputFloat4("值", x, y, z, w)->>\nv = cdata.m_value = DataValue::VEC4(nv);;
                                 QUAT4((x, y, z))?
-                                    do InputFloat3("值", x, y, z)->>\nv = cdata.m_value = QUAT4(nv);;
+                                    do InputFloat3("值", x, y, z)->>\nv = cdata.m_value = DataValue::QUAT4(nv);;
                                 }
                                 do CheckBox("偏移模式", cdata.m_offset_mode)->>\nv = cdata.m_offset_mode = nv;;
                             }
@@ -1225,22 +1225,22 @@ namespace editor::gui::animation2d
                         match (selected_frame=>>\f = f.m_uniform_dats->get(id);)
                         {
                         none?
-                            animation_context.m_selected_c_or_u_data = None;
+                            animation_context.m_selected_c_or_u_data = SelectedComponentOrUniformData::None;
                         value(udata)?
                             match (udata.m_value)
                             {
                             INT(n)?
-                                do InputInt("值", n)->>\nv = udata.m_value = INT(nv);;
+                                do InputInt("值", n)->>\nv = udata.m_value = DataValue::INT(nv);;
                             FLOAT(x)?
-                                do InputFloat("值", x)->>\nv = udata.m_value = FLOAT(nv);;
+                                do InputFloat("值", x)->>\nv = udata.m_value = DataValue::FLOAT(nv);;
                             VEC2((x, y))?
-                                do InputFloat2("值", x, y)->>\nv = udata.m_value = VEC2(nv);;
+                                do InputFloat2("值", x, y)->>\nv = udata.m_value = DataValue::VEC2(nv);;
                             VEC3((x, y, z))?
-                                do InputFloat3("值", x, y, z)->>\nv = udata.m_value = VEC3(nv);;
+                                do InputFloat3("值", x, y, z)->>\nv = udata.m_value = DataValue::VEC3(nv);;
                             VEC4((x, y, z, w))?
-                                do InputFloat4("值", x, y, z, w)->>\nv = udata.m_value = VEC4(nv);;
+                                do InputFloat4("值", x, y, z, w)->>\nv = udata.m_value = DataValue::VEC4(nv);;
                             QUAT4((x, y, z))?
-                                do InputFloat3("值", x, y, z)->>\nv = udata.m_value = QUAT4(nv);;
+                                do InputFloat3("值", x, y, z)->>\nv = udata.m_value = DataValue::QUAT4(nv);;
                             }
                         }
                     None?

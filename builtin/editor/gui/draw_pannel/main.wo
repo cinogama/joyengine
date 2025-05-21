@@ -218,7 +218,7 @@ namespace editor::gui::drawpannel
                 {
                     for (let (index, (passid, texture, path)) : images->iter |> iterator::enumerate)
                     {
-                        let history_mgr = draw_context.edited_textures[texture][1];
+                        let history_mgr = draw_context.edited_textures[immut texture][1];
 
                         if (IsWindowFocused())
                         {
@@ -228,7 +228,7 @@ namespace editor::gui::drawpannel
                                 history_mgr->redo();
                         }
 
-                        let texture_path = path->or("<内置>");
+                        let texture_path = (immut path)->or("<内置>");
                         if (BeginTabItem(F"通道{passid}: {texture_path}"))
                         {
                             if (BeginMenuBar())
@@ -242,7 +242,7 @@ namespace editor::gui::drawpannel
                                             {
                                                 if (ok)
                                                 {
-                                                    draw_context->update_edit_textures_history(passid, texture, texture);
+                                                    draw_context->update_edit_textures_history(passid, immut texture, immut texture);
                                                     images[index][2] = option::none;
                                                 }
                                             });
@@ -250,7 +250,7 @@ namespace editor::gui::drawpannel
                                     if (MenuItem("画布尺寸"))
                                     {
                                         // 更新画布尺寸之后，创建新的纹理对象覆盖到数组里
-                                        let image_old_sz = texture->size;
+                                        let image_old_sz = (immut texture)->size;
                                         let image_new_sz = (mut image_old_sz[0], mut image_old_sz[1]);
 
                                         let open = new! std::mutable(true);
@@ -284,16 +284,17 @@ namespace editor::gui::drawpannel
                                                                 {
                                                                     open->set(false);
                                                                     
-                                                                    let new_texture = new! je::graphic::texture(image_new_sz...);
+                                                                    let new_texture = new! je::graphic::texture(
+                                                                            immut image_new_sz.0, immut image_new_sz.1);
                                                                     for (let mut ix = 0; ix < math::min(image_new_sz[0], image_old_sz[0]); ix += 1)
                                                                         for (let mut iy = 0; iy < math::min(image_new_sz[1], image_old_sz[1]); iy += 1)
                                                                             new_texture->pix((ix, image_new_sz[1] - iy - 1))
-                                                                                ->set_color(texture->pix((ix, image_old_sz[0] - iy - 1))->get_color());
+                                                                                ->set_color((immut texture)->pix((ix, image_old_sz[0] - iy - 1))->get_color());
 
                                                                     images[index][1] = new_texture;
-                                                                    do texture->path->>\path = new_texture->bind_path(path);;
+                                                                    do (immut texture)->path->>\path = new_texture->bind_path(path);;
 
-                                                                    draw_context->update_edit_textures_history(passid, texture, new_texture);
+                                                                    draw_context->update_edit_textures_history(passid, immut texture, new_texture);
                                                                 }
                                                             });                           
                                                     }
@@ -329,16 +330,16 @@ namespace editor::gui::drawpannel
                                     {
                                         for (let (opassid, otexture, path) : images)
                                         {
-                                            if (MenuItemEnabled(F"通道{opassid}：{path->or("<内置>")}", passid != opassid))
+                                            if (MenuItemEnabled(F"通道{opassid}：{(immut path)->or("<内置>")}", passid != opassid))
                                             {
                                                 jeapi::gui::form::ask("是否确认", "将覆盖当前通道纹理，操作不可撤销，是否继续？",
                                                     func(ok)
                                                     {
                                                         if (ok)
                                                         {
-                                                            let new_tex = create_and_copy_texture(otexture);
+                                                            let new_tex = create_and_copy_texture(immut otexture);
                                                             images[index][1] = new_tex;
-                                                            draw_context->update_edit_textures_history(passid, texture, new_tex);
+                                                            draw_context->update_edit_textures_history(passid, immut texture, new_tex);
                                                         }
                                                     });
                                             }
@@ -356,7 +357,7 @@ namespace editor::gui::drawpannel
                                         {
                                             if (MenuItem(name))
                                             {
-                                                match (apply_script(name, texture, (0, 0), texture->size))
+                                                match (apply_script(name, immut texture, (0, 0), (immut texture)->size))
                                                 {
                                                 err(msg)?
                                                     jeapi::gui::form::errmsg("失败", F"图像处理过程报告了一个错误: {msg}");
@@ -394,7 +395,8 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                                             new! ScriptEditor(context, DEFAULT_SCRIPT_SRC, "图像效果", false)
                                                 ->set_callback(func(vmm)
                                                 {
-                                                    let result = vmm->invoke("main", [texture: dynamic, (0, 0): dynamic, texture->size: dynamic]);
+                                                    let result = vmm->invoke(
+                                                        "main", [texture: dynamic, (0, 0): dynamic, (immut texture)->size: dynamic]);
                                                     history_mgr->save_step();
 
                                                     return result;
@@ -433,7 +435,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                             Text(F"网格块大小");
                             if (BeginChildSize("##block_size_block", 150., 40.))
                             {
-                                do InputInt2("##block_size", draw_context.block_size...)
+                                do InputInt2("##block_size", immut draw_context.block_size.0, immut draw_context.block_size.1)
                                     ->> func((x, y))
                                         {
                                             if (x > 0)
@@ -471,7 +473,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
 
                             SameLine();
 
-                            let (tex_width, tex_height) = texture->size;
+                            let (tex_width, tex_height) = (immut texture)->size;
                             let drawlist = GetWindowDrawList();
 
                             let (avaliw, avalih) = GetContentRegionAvail();
@@ -506,7 +508,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                                 (lux + draw_context.offset_x, luy + draw_context.offset_y), 
                                 (lux + draw_context.scale * tex_width:real + draw_context.offset_x, 
                                 luy + draw_context.scale * tex_height:real + draw_context.offset_y), 
-                                texture,
+                                immut texture,
                                 (255, 255, 255, 255));
                                 
                             // OK 如果缩放大于5，就顺手画一下网格
@@ -557,7 +559,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                             if (je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Middle)
                                 && mepixx >= 0 && mepixx < tex_width
                                 && mepixy >= 0 && mepixy < tex_height)
-                                draw_context.maincolor = texture->pix((mepixx, mepixy))->get_color;
+                                draw_context.maincolor = (immut texture)->pix((mepixx, mepixy))->get_color;
 
                             // 对接绘制工具，针对鼠标刚刚点下、按住、和松开分别回调
                             if (enable_draw)
@@ -578,15 +580,18 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                                 {
                                     draw_context.mousedown = true;
                                     if (first_click)
-                                        draw_context.drawtool->OnMouseDown(texture, draw_context.usecolor, (mepixx, mepixy));
+                                        draw_context.drawtool->OnMouseDown(
+                                            immut texture, draw_context.usecolor, (mepixx, mepixy));
                                     else
-                                        draw_context.drawtool->OnMouseHold(texture, draw_context.usecolor, (mepixx, mepixy));
+                                        draw_context.drawtool->OnMouseHold(
+                                            immut texture, draw_context.usecolor, (mepixx, mepixy));
                                 }
                                 else
                                 {
                                     if (draw_context.mousedown)
                                     {
-                                        draw_context.drawtool->OnMouseUp(texture, draw_context.usecolor, (mepixx, mepixy));
+                                        draw_context.drawtool->OnMouseUp(
+                                            immut texture, draw_context.usecolor, (mepixx, mepixy));
                                         history_mgr->save_step();
                                     }
                                     draw_context.mousedown = false;
@@ -612,12 +617,12 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
             // 遍历所有被编辑过的图片，直接保存！
             for (let (passid, edited_texture, path) : images)
             {
-                if (!draw_context.edited_textures[edited_texture][1]->edited)
+                if (!draw_context.edited_textures[immut edited_texture][1]->edited)
                     continue;
                 
                 // 生成文件名，如果已经有了就有，没有就死！
                 let projpath = context->get_project()->get_path;
-                let saving_path = path
+                let saving_path = (immut path)
                     ->> \p = fsys::normalize(p);
                     ->  or_do(func()
                         {
@@ -636,7 +641,8 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                 
                 saving_image_action->add(func()
                     {
-                        if (save_texture_to_path(edited_texture, context->get_project->parse_path_normalize(saving_path)))
+                        if (save_texture_to_path(
+                            immut edited_texture, context->get_project->parse_path_normalize(saving_path)))
                         {
                             do entity_euid
                                 ->> \eid = eid->justdo(

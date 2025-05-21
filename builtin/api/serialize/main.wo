@@ -79,7 +79,7 @@ namespace jeapi
                     }
                 }
             none?
-                return none;
+                return option::none;
             }
         }
         public func load_prefab(path: string)=> option<dict<string, dynamic>>
@@ -96,10 +96,10 @@ namespace jeapi
                     let parent_prefab = dat->get("prefab")
                         =>> \p = load_prefab(p: string);
                         ->  or({});
-                    return value(combine_prefab_data(parent_prefab, dat));
+                    return option::value(combine_prefab_data(parent_prefab, dat));
                 }
             none?
-                return none;
+                return option::none;
             }
 
         }

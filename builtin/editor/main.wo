@@ -112,7 +112,7 @@ using Path = struct {
                 match(child_path->show())
                 {
                 value(result)?
-                    selected_path = value(result);
+                    selected_path = option::value(result);
                 none?
                     ;
                 }
@@ -417,7 +417,7 @@ CMakeLists.txt text eol=lf
                             err(msg)?
                                 {
                                     p->close();
-                                    return err(msg);
+                                    return result::err(msg);
                                 }
                             }
 

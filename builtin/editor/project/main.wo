@@ -639,7 +639,7 @@ namespace editor
             err(msg)?
                 {
                     self->close();
-                    return err(msg);
+                    return result::err(msg);
                 }
             }
 
@@ -984,7 +984,7 @@ namespace editor
                     };
                     return option::value(debug_camera_info);
                 }
-            none? return none;
+            none? return option::none;
             }
         }
         public func set_debug_camera_info(_: Project, w: je::world, cameradat: dict<string, dynamic>)

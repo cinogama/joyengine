@@ -182,7 +182,7 @@ namespace editor::gui::edit_forms
                 }
             }
         err(errdat)?
-            return err(errdat);
+            return result::err(errdat);
         }
         
         // 2.2. 遍历所有目录，记录下所有文件的原始路径和最终路径
@@ -481,10 +481,10 @@ namespace editor::gui::edit_forms
                             config.m_finished = true;
                         }
                     }, ());
-                return ok(do nil);
+                return result::ok(do nil);
             }
         err(errdat)?
-            return err(errdat);
+            return result::err(errdat);
         }
     }
     public func show_export_project(context: EditorContext)
@@ -537,7 +537,7 @@ namespace editor::gui::edit_forms
 
                     do BeginChild("SUBFORM.2");
                     do selecting_all_worlds_file
-                        ->> \path_and_checked = do CheckBox(path_and_checked...)
+                        ->> \path_and_checked = do CheckBox(path_and_checked.0, immut path_and_checked.1)
                                 ->> \opt = path_and_checked[1] = opt;
                             ;
                         ;

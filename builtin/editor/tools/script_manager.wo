@@ -48,7 +48,7 @@ namespace editor::tools
                         match (ctx->get_editing_entity)
                         {
                         value(euid)? euid->dosth(invoke_script);
-                        none? invoke_script(none);
+                        none? invoke_script(option::none);
                         }
                         return result::ok(nil: void);
                     }

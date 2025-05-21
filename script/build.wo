@@ -109,7 +109,7 @@ func scan_extern_function_in_path(i, skip_process_and_socket)
         std::println(F"Found {libname}::{funcname}");
         result[libname][funcname] = do nil;
     }
-    return result->>\k, v = (k, v->unmapping->>\kv = kv.0;->std::sort(\l, r = l < r;));;
+    return result->>\k, v = (k, (immut v)->unmapping->>\kv = kv.0;->std::sort(\l, r = l < r;));;
 }
 
 func scan_pkg_entry_leave_function_in_path(i, skip_process_and_socket)
