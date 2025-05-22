@@ -7,6 +7,7 @@
 #if JE4_STATIC_LINK_MODULE_AND_PKGS
 WO_API wo_api async_create(wo_vm vm, wo_value args);
 WO_API wo_api async_dispatch(wo_vm vm, wo_value args);
+WO_API wo_api async_promise_yield(wo_vm vm, wo_value args);
 
 WO_API wo_api buffer_append_buffer_builder(wo_vm vm, wo_value args);
 WO_API wo_api buffer_append_buffer_builder_builder(wo_vm vm, wo_value args);
@@ -298,6 +299,7 @@ void je_extern_lib_3rd_pkgs_init()
     wo_extern_lib_func_t libasync_fs[] = {
         wo_extern_lib_func_t{"async_create", (void*)&async_create},
         wo_extern_lib_func_t{"async_dispatch", (void*)&async_dispatch},
+        wo_extern_lib_func_t{"async_promise_yield", (void*)&async_promise_yield},
         WO_EXTERN_LIB_FUNC_END,
     };
     _je_3rd_pkg_lib_handle.push_back(
