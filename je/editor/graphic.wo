@@ -1,4 +1,4 @@
-// (C)Cinogama project.
+// Joyengine 4.x
 import je;
 
 public func tex(t: je::graphic::texture, x: int, y: int)

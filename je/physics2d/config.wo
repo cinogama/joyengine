@@ -1,4 +1,4 @@
-// (C)Cinogama. 
+// Joyengine 4.x
 import woo::std;
 import je;
 import je::towoo;

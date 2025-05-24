@@ -1,6 +1,4 @@
-// Partical baker
-// (C)Cinogama project.
-
+// Joyengine 4.x
 import woo::std;
 import pkg::math;
 import je;
