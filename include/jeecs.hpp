@@ -9367,7 +9367,6 @@ namespace jeecs
                 typing::register_member(guard, &LocalRotation::rot, "rot");
             }
         };
-
         struct LocalPosition
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(LocalPosition);
@@ -9379,7 +9378,6 @@ namespace jeecs
                 typing::register_member(guard, &LocalPosition::pos, "pos");
             }
         };
-
         struct LocalScale
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(LocalScale);
@@ -9392,7 +9390,6 @@ namespace jeecs
                 typing::register_member(guard, &LocalScale::scale, "scale");
             }
         };
-
         struct Translation
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Translation);
@@ -9430,7 +9427,6 @@ namespace jeecs
                 world_position = _pos;
             }
         };
-
         struct Anchor
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Anchor);
@@ -9446,7 +9442,6 @@ namespace jeecs
                 typing::register_member(guard, &Anchor::uid, "uid");
             }
         };
-
         struct LocalToParent
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(LocalToParent);
@@ -9463,7 +9458,6 @@ namespace jeecs
                 typing::register_member(guard, &LocalToParent::parent_uid, "parent_uid");
             }
         };
-
         struct LocalToWorld
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(LocalToWorld);
@@ -9476,7 +9470,6 @@ namespace jeecs
         static_assert(offsetof(LocalToParent, pos) == offsetof(LocalToWorld, pos));
         static_assert(offsetof(LocalToParent, scale) == offsetof(LocalToWorld, scale));
         static_assert(offsetof(LocalToParent, rot) == offsetof(LocalToWorld, rot));
-
     }
     namespace UserInterface
     {
@@ -9681,7 +9674,6 @@ namespace jeecs
                 typing::register_member(guard, &Rendqueue::rend_queue, "rend_queue");
             }
         };
-
         struct Shape
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Shape);
@@ -9689,7 +9681,6 @@ namespace jeecs
 
             basic::resource<graphic::vertex> vertex;
         };
-
         struct Shaders
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Shaders);
@@ -9705,7 +9696,6 @@ namespace jeecs
                     shad->set_uniform(name, val);
             }
         };
-
         struct Textures
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Textures);
@@ -9759,7 +9749,6 @@ namespace jeecs
                 typing::register_member(guard, &Textures::offset, "offset");
             }
         };
-
         struct Color
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Color);
@@ -9905,7 +9894,6 @@ namespace jeecs
                 typing::register_member(guard, &World::group_config, "group_config");
             }
         };
-
         struct Rigidbody
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Rigidbody);
@@ -10074,7 +10062,6 @@ namespace jeecs
                 Capsule(const Capsule&) {};
             };
         }
-
         struct CollisionResult
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(CollisionResult);
