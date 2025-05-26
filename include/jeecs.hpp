@@ -9072,7 +9072,9 @@ namespace jeecs
             size_t _m_this_frame_allocate_rchain_pipeline_count;
 
             BasePipelineInterface(game_world w, const jegl_interface_config* config)
-                : game_system(w), _m_graphic_host(jegl_uhost_get_or_create_for_universe(w.get_universe().handle(), config)), _m_this_frame_allocate_rchain_pipeline_count(0)
+                : game_system(w)
+                , _m_graphic_host(jegl_uhost_get_or_create_for_universe(w.get_universe().handle(), config))
+                , _m_this_frame_allocate_rchain_pipeline_count(0)
             {
             }
             ~BasePipelineInterface()

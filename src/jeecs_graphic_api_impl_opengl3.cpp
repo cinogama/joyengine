@@ -30,7 +30,6 @@
 // OpenGL version.
 namespace jeecs::graphic::api::gl3
 {
-    // using jegl_gl3_context = basic_interface;
     struct jegl_gl3_context
     {
         basic_interface* m_interface;
@@ -101,6 +100,76 @@ namespace jeecs::graphic::api::gl3
     };
 
     /////////////////////////////////////////////////////////////////////////////////////
+
+
+    struct jegl3_vertex_data
+    {
+        GLuint m_vao;
+        GLuint m_vbo;
+        GLuint m_ebo;
+        GLenum m_method;
+        GLsizei m_pointcount;
+    };
+
+    struct jegl3_sampler
+    {
+        GLuint m_sampler;
+        std::vector<uint32_t> m_passes;
+
+        jegl3_sampler()
+        {
+            glGenSamplers(1, &m_sampler);
+        }
+        ~jegl3_sampler()
+        {
+            glDeleteSamplers(1, &m_sampler);
+        }
+    };
+
+    struct jegl3_shader_blob
+    {
+        struct jegl3_shader_blob_shared
+        {
+            std::vector<jegl3_sampler> m_samplers;
+
+            JECS_DISABLE_MOVE_AND_COPY(jegl3_shader_blob_shared);
+            jegl3_shader_blob_shared(uint32_t sampler_count)
+                : m_samplers(sampler_count)
+            {
+            }
+        };
+
+        GLuint m_vertex_shader;
+        GLuint m_fragment_shader;
+
+        jeecs::basic::resource<jegl3_shader_blob_shared> m_shared_blob_data;
+    };
+
+    struct jegl_gl3_shader
+    {
+        GLuint instance;
+        jeecs::basic::resource<jegl3_shader_blob::jegl3_shader_blob_shared> m_shared_blob_data;
+
+        jegl_gl3_shader(GLuint instance, jegl3_shader_blob* blob)
+            : instance(instance)
+            , m_shared_blob_data(blob->m_shared_blob_data)
+        {
+
+        }
+        ~jegl_gl3_shader()
+        {
+            glDeleteProgram(instance);
+        }
+    };
+
+    void _gl_bind_shader_samplers(jegl_gl3_shader* shader_instance)
+    {
+        for (auto& sampler : shader_instance->m_shared_blob_data->m_samplers)
+        {
+            for (auto id : sampler.m_passes)
+                glBindSampler((GLuint)id, sampler.m_sampler);
+        }
+    }
 
 #ifdef JE_ENABLE_GL330_GAPI
     void APIENTRY glDebugOutput(GLenum source,
@@ -200,55 +269,12 @@ namespace jeecs::graphic::api::gl3
             },
             [](jegl_context*, jegl_resource* res)
             {
-                if (res->m_raw_shader_data != nullptr)
-                {
-                    for (size_t i = 0; i < res->m_raw_shader_data->m_sampler_count; ++i)
-                    {
-                        auto& sampler = res->m_raw_shader_data->m_sampler_methods[i];
-                        for (size_t id = 0; id < (size_t)sampler.m_pass_id_count; ++id)
-                        {
-                            glActiveTexture(GL_TEXTURE0 + sampler.m_pass_ids[id]);
-                            switch (sampler.m_mag)
-                            {
-                            case jegl_shader::fliter_mode::LINEAR:
-                                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR); break;
-                            case jegl_shader::fliter_mode::NEAREST:
-                                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST); break;
-                            default:
-                                abort();
-                            }
-                            switch (sampler.m_min)
-                            {
-                            case jegl_shader::fliter_mode::LINEAR:
-                                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-                                break;
-                            case jegl_shader::fliter_mode::NEAREST:
-                                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-                                break;
-                            default:
-                                abort();
-                            }
-                            switch (sampler.m_uwrap)
-                            {
-                            case jegl_shader::wrap_mode::CLAMP:
-                                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); break;
-                            case jegl_shader::wrap_mode::REPEAT:
-                                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); break;
-                            default:
-                                abort();
-                            }
-                            switch (sampler.m_vwrap)
-                            {
-                            case jegl_shader::wrap_mode::CLAMP:
-                                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); break;
-                            case jegl_shader::wrap_mode::REPEAT:
-                                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT); break;
-                            default:
-                                abort();
-                            }
-                        }
-                    }
-                }
+                jegl_gl3_shader* shader_instance =
+                    reinterpret_cast<jegl_gl3_shader*>(res->m_handle.m_ptr);
+
+                assert(shader_instance != nullptr);
+
+                _gl_bind_shader_samplers(shader_instance);
             },
             context->m_interface->interface_handle(),
             reboot);
@@ -311,15 +337,6 @@ namespace jeecs::graphic::api::gl3
         context->m_interface->shutdown(reboot);
         delete context;
     }
-
-    uint32_t gl_get_uniform_location(jegl_context::userdata_t, jegl_resource* shader, const char* name)
-    {
-        auto loc = glGetUniformLocation(shader->m_handle.m_uint1, name);
-        if (loc == -1)
-            return jeecs::typing::INVALID_UINT32;
-        return (uint32_t)loc;
-    }
-
     void gl_set_uniform(jegl_context::userdata_t ctx, uint32_t location, jegl_shader::uniform_type type, const void* val)
     {
         if (location == jeecs::typing::INVALID_UINT32)
@@ -383,28 +400,25 @@ namespace jeecs::graphic::api::gl3
         }
     }
 
-    struct jegl3_vertex_data
+    uint32_t gl_get_uniform_location(jegl_context::userdata_t, jegl_resource* shader, const char* name)
     {
-        GLuint m_vao;
-        GLuint m_vbo;
-        GLuint m_ebo;
-        GLenum m_method;
-        GLsizei m_pointcount;
-    };
+        jegl_gl3_shader* shader_instance =
+            reinterpret_cast<jegl_gl3_shader*>(shader->m_handle.m_ptr);
 
-    struct jegl3_resource_blob
-    {
-        GLuint m_vertex_shader;
-        GLuint m_fragment_shader;
-    };
+        assert(shader_instance != nullptr);
 
+        auto loc = glGetUniformLocation(shader_instance->instance, name);
+        if (loc == -1)
+            return jeecs::typing::INVALID_UINT32;
+        return (uint32_t)loc;
+    }
     jegl_resource_blob gl_create_resource_blob(jegl_context::userdata_t ctx, jegl_resource* resource)
     {
         switch (resource->m_type)
         {
         case jegl_resource::type::SHADER:
         {
-            jegl3_resource_blob* blob = new jegl3_resource_blob;
+            jegl3_shader_blob* blob = new jegl3_shader_blob;
 
             std::string vertex_src
 #ifdef JE_ENABLE_GL330_GAPI
@@ -478,6 +492,66 @@ namespace jeecs::graphic::api::gl3
             }
             else
             {
+                blob->m_shared_blob_data =
+                    new jegl3_shader_blob::jegl3_shader_blob_shared(
+                        (uint32_t)resource->m_raw_shader_data->m_sampler_count);
+
+                for (size_t i = 0; i < resource->m_raw_shader_data->m_sampler_count; ++i)
+                {
+                    auto& sampler_config = resource->m_raw_shader_data->m_sampler_methods[i];
+                    auto& samplers = blob->m_shared_blob_data->m_samplers.at(i);
+
+                    switch (sampler_config.m_mag)
+                    {
+                    case jegl_shader::fliter_mode::LINEAR:
+                        glSamplerParameteri(samplers.m_sampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                        break;
+                    case jegl_shader::fliter_mode::NEAREST:
+                        glSamplerParameteri(samplers.m_sampler, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+                        break;
+                    default:
+                        abort();
+                    }
+                    switch (sampler_config.m_min)
+                    {
+                    case jegl_shader::fliter_mode::LINEAR:
+                        glSamplerParameteri(samplers.m_sampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                        break;
+                    case jegl_shader::fliter_mode::NEAREST:
+                        glSamplerParameteri(samplers.m_sampler, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                        break;
+                    default:
+                        abort();
+                    }
+                    switch (sampler_config.m_uwrap)
+                    {
+                    case jegl_shader::wrap_mode::CLAMP:
+                        glSamplerParameteri(samplers.m_sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+                        break;
+                    case jegl_shader::wrap_mode::REPEAT:
+                        glSamplerParameteri(samplers.m_sampler, GL_TEXTURE_WRAP_S, GL_REPEAT);
+                        break;
+                    default:
+                        abort();
+                    }
+                    switch (sampler_config.m_vwrap)
+                    {
+                    case jegl_shader::wrap_mode::CLAMP:
+                        glSamplerParameteri(samplers.m_sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+                        break;
+                    case jegl_shader::wrap_mode::REPEAT:
+                        glSamplerParameteri(samplers.m_sampler, GL_TEXTURE_WRAP_T, GL_REPEAT);
+                        break;
+                    default:
+                        abort();
+                    }
+
+                    samplers.m_passes.resize((size_t)sampler_config.m_pass_id_count);
+                    for (uint64_t i = 0; i < sampler_config.m_pass_id_count; i += 1)
+                    {
+                        samplers.m_passes.at(i) = sampler_config.m_pass_ids[i];
+                    }
+                }
                 return blob;
             }
             break;
@@ -500,7 +574,7 @@ namespace jeecs::graphic::api::gl3
     {
         if (blob != nullptr)
         {
-            auto* shader_blob = std::launder(reinterpret_cast<jegl3_resource_blob*>(blob));
+            auto* shader_blob = std::launder(reinterpret_cast<jegl3_shader_blob*>(blob));
             glDeleteShader(shader_blob->m_vertex_shader);
             glDeleteShader(shader_blob->m_fragment_shader);
             delete shader_blob;
@@ -516,9 +590,10 @@ namespace jeecs::graphic::api::gl3
         {
         case jegl_resource::type::SHADER:
         {
+            resource->m_handle.m_ptr = nullptr;
             if (blob != nullptr)
             {
-                auto* shader_blob = std::launder(reinterpret_cast<jegl3_resource_blob*>(blob));
+                auto* shader_blob = std::launder(reinterpret_cast<jegl3_shader_blob*>(blob));
                 GLuint shader_program = glCreateProgram();
                 glAttachShader(shader_program, shader_blob->m_vertex_shader);
                 glAttachShader(shader_program, shader_blob->m_fragment_shader);
@@ -537,13 +612,16 @@ namespace jeecs::graphic::api::gl3
                     if (errmsg_len > 0)
                         glGetProgramInfoLog(shader_program, errmsg_len, &errmsg_written_len, errmsg_buf.data());
 
-                    jeecs::debug::logerr("Some error happend when tring compile shader %p, please check.\n %s",
+                    jeecs::debug::logfatal("Some error happend when tring compile shader %p, please check.\n %s",
                         resource, errmsg_buf.data());
+                    abort();
                 }
                 else
                 {
                     glUseProgram(shader_program);
-                    resource->m_handle.m_uint1 = shader_program;
+
+                    resource->m_handle.m_ptr = new jegl_gl3_shader(shader_program, shader_blob);
+
                     auto& builtin_uniforms = resource->m_raw_shader_data->m_builtin_uniforms;
 
                     builtin_uniforms.m_builtin_uniform_m = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_M");
@@ -602,11 +680,6 @@ namespace jeecs::graphic::api::gl3
             glBindTexture(gl_texture_type, texture);
 
             assert(GL_TEXTURE_2D == gl_texture_type);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
             const GLenum jegl_texture_cube_map_ways[] = {
                 GL_TEXTURE_CUBE_MAP_POSITIVE_X,
@@ -966,6 +1039,11 @@ namespace jeecs::graphic::api::gl3
 
     void _gl_using_shader_program(jegl_gl3_context* context, jegl_resource* resource)
     {
+        jegl_gl3_shader* shader_instance =
+            reinterpret_cast<jegl_gl3_shader*>(resource->m_handle.m_ptr);
+
+        assert(shader_instance != nullptr);
+
         if (resource->m_raw_shader_data != nullptr)
         {
             _gl_update_depth_test_method(context, resource->m_raw_shader_data->m_depth_test);
@@ -975,57 +1053,10 @@ namespace jeecs::graphic::api::gl3
                 resource->m_raw_shader_data->m_blend_src_mode,
                 resource->m_raw_shader_data->m_blend_dst_mode);
             _gl_update_cull_mode_method(context, resource->m_raw_shader_data->m_cull_mode);
-
-            for (size_t i = 0; i < resource->m_raw_shader_data->m_sampler_count; ++i)
-            {
-                auto& sampler = resource->m_raw_shader_data->m_sampler_methods[i];
-                for (size_t id = 0; id < (size_t)sampler.m_pass_id_count; ++id)
-                {
-                    glActiveTexture(GL_TEXTURE0 + sampler.m_pass_ids[id]);
-                    switch (sampler.m_mag)
-                    {
-                    case jegl_shader::fliter_mode::LINEAR:
-                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR); break;
-                    case jegl_shader::fliter_mode::NEAREST:
-                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST); break;
-                    default:
-                        abort();
-                    }
-                    switch (sampler.m_min)
-                    {
-                    case jegl_shader::fliter_mode::LINEAR:
-                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-                        break;
-                    case jegl_shader::fliter_mode::NEAREST:
-                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-                        break;
-                    default:
-                        abort();
-                    }
-                    switch (sampler.m_uwrap)
-                    {
-                    case jegl_shader::wrap_mode::CLAMP:
-                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); break;
-                    case jegl_shader::wrap_mode::REPEAT:
-                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); break;
-                    default:
-                        abort();
-                    }
-                    switch (sampler.m_vwrap)
-                    {
-                    case jegl_shader::wrap_mode::CLAMP:
-                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); break;
-                    case jegl_shader::wrap_mode::REPEAT:
-                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT); break;
-                    default:
-                        abort();
-                    }
-                }
-            }
         }
-        glUseProgram(resource->m_handle.m_uint1);
+        _gl_bind_shader_samplers(shader_instance);
+        glUseProgram(shader_instance->instance);
     }
-    void gl_close_resource(jegl_context::userdata_t ctx, jegl_resource* resource);
 
     void gl_using_resource(jegl_context::userdata_t ctx, jegl_resource* resource)
     {
@@ -1108,8 +1139,10 @@ namespace jeecs::graphic::api::gl3
         switch (resource->m_type)
         {
         case jegl_resource::type::SHADER:
-            glDeleteProgram(resource->m_handle.m_uint1);
+        {
+            delete reinterpret_cast<jegl_gl3_shader*>(resource->m_handle.m_ptr);
             break;
+        }
         case jegl_resource::type::TEXTURE:
             glDeleteTextures(1, &resource->m_handle.m_uint1);
             break;
