@@ -98,7 +98,7 @@ namespace jeecs
                             wo_value vmm_s = wo_reserve_stack(vmm, 4, nullptr);
 
                             // group_config_info_t: struct{types, collider_mask}
-                            wo_value group_config_info = vmm_s + 0; 
+                            wo_value group_config_info = vmm_s + 0;
 
                             // array<(const type_info*, Requirement)>
                             wo_value filter_types = vmm_s + 1;
@@ -475,7 +475,7 @@ namespace jeecs
                                 b2Body_SetAwake(rigidbody_instance, true);
                             }
                         }
-                        
+
                         if (check_if_need_update_vec2(
                             b2Body_GetPosition(rigidbody_instance),
                             math::vec2(
@@ -590,8 +590,8 @@ namespace jeecs
                                 ? math::vec3(posoffset->offset)
                                 : math::vec3(0.f, 0.f, 0.f)
                                 ;
-                            float final_offset_rotation = 
-                                b2Rot_GetAngle(b2Body_GetRotation(rigidbody_instance)) * math::RAD2DEG 
+                            float final_offset_rotation =
+                                b2Rot_GetAngle(b2Body_GetRotation(rigidbody_instance)) * math::RAD2DEG
                                 - (rotoffset != nullptr ? rotoffset->angle : 0.f);
 
                             math::vec3 final_offset_position =
@@ -610,7 +610,7 @@ namespace jeecs
                                     translation.world_position.z),
                                 &localposition,
                                 &localrotation);
-                            
+
                             kinematics->angular_velocity = b2Body_GetAngularVelocity(rigidbody_instance);
 
                             auto world_angle = translation.world_rotation.euler_angle();

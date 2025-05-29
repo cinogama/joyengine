@@ -9357,7 +9357,6 @@ namespace jeecs
         LocalRotation----/                                (LocalToXXX) Still using 2x 3 vector + 1x quat
 
         */
-
         struct LocalRotation
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(LocalRotation);
