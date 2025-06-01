@@ -704,7 +704,9 @@ void jegl_terminate_graphic_thread(jegl_context* thread)
 
 bool jegl_update(
     jegl_context* thread, 
-    jegl_update_sync_mode mode)
+    jegl_update_sync_mode mode,
+    jegl_update_sync_callback_t callback_after_wait_may_null,
+    void* callback_param)
 {
     if (thread->_m_thread_notifier->m_graphic_terminated.load())
         return false;
@@ -716,6 +718,9 @@ bool jegl_update(
         thread->_m_thread_notifier->m_update_waiter.wait(uq1, [thread]()->bool {
             return !thread->_m_thread_notifier->m_update_flag;
             });
+
+        if (nullptr != callback_after_wait_may_null)
+            callback_after_wait_may_null(callback_param);
     }
 
     thread->_m_thread_notifier->m_update_flag = true;
@@ -727,6 +732,9 @@ bool jegl_update(
         thread->_m_thread_notifier->m_update_waiter.wait(uq1, [thread]()->bool {
             return !thread->_m_thread_notifier->m_update_flag;
             });
+
+        if (nullptr != callback_after_wait_may_null)
+            callback_after_wait_may_null(callback_param);
     }
 
     return true;

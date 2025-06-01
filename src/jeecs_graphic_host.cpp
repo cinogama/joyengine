@@ -10,6 +10,9 @@ namespace jeecs
     struct rendchain_branch
     {
         JECS_DISABLE_MOVE_AND_COPY(rendchain_branch);
+
+        static constexpr uint8_t BRANCH_CHAIN_POOL_SIZE = 2;
+
         struct allocated_chain_t
         {
             JECS_DISABLE_MOVE_AND_COPY(allocated_chain_t);
@@ -21,43 +24,72 @@ namespace jeecs
             int    m_priority;
         };
 
-        allocated_chain_t m_chain_buffers;
+        allocated_chain_t m_chain_buffers[BRANCH_CHAIN_POOL_SIZE];
+        uint8_t m_writing_chain_buffer_index;
+        allocated_chain_t* m_writing_chain_buffer_p;
+        allocated_chain_t* m_rendering_chain_buffer_p;
 
         rendchain_branch()
+            : m_writing_chain_buffer_index(0)
+            , m_writing_chain_buffer_p(&m_chain_buffers[0])
+            , m_rendering_chain_buffer_p(&m_chain_buffers[(BRANCH_CHAIN_POOL_SIZE - 1) % BRANCH_CHAIN_POOL_SIZE])
         {
-            m_chain_buffers.m_allocated_chains_count = 0;
-            m_chain_buffers.m_priority = 0;
+            for (auto& chain_buffer : m_chain_buffers)
+            {
+                chain_buffer.m_allocated_chains_count = 0;
+                chain_buffer.m_priority = 0;
+            }
         }
         ~rendchain_branch()
         {
-            for (auto* chain : m_chain_buffers.m_allocated_chains)
-                jegl_rchain_close(chain);
+            for (auto& chain_buffer : m_chain_buffers)
+                for (auto* chain : chain_buffer.m_allocated_chains)
+                    jegl_rchain_close(chain);
         }
 
         void new_frame(int priority)
         {
-            m_chain_buffers.m_allocated_chains_count = 0;
-            m_chain_buffers.m_priority = priority;
+            auto& chain_buffer = get_commiting_chain_buffer();
+            chain_buffer.m_allocated_chains_count = 0;
+            chain_buffer.m_priority = priority;
         }
         jegl_rendchain* allocate_new_chain(jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
         {
-            if (m_chain_buffers.m_allocated_chains_count >= m_chain_buffers.m_allocated_chains.size())
+            auto& chain_buffer = get_commiting_chain_buffer();
+
+            if (chain_buffer.m_allocated_chains_count >= chain_buffer.m_allocated_chains.size())
             {
-                assert(m_chain_buffers.m_allocated_chains_count == m_chain_buffers.m_allocated_chains.size());
-                m_chain_buffers.m_allocated_chains.push_back(jegl_rchain_create());
+                assert(chain_buffer.m_allocated_chains_count == chain_buffer.m_allocated_chains.size());
+                chain_buffer.m_allocated_chains.push_back(jegl_rchain_create());
             }
-            auto* rchain = m_chain_buffers.m_allocated_chains[m_chain_buffers.m_allocated_chains_count++];
+            auto* rchain = chain_buffer.m_allocated_chains[chain_buffer.m_allocated_chains_count++];
             jegl_rchain_begin(rchain, framebuffer, x, y, w, h);
             return rchain;
         }
 
+        allocated_chain_t& get_commiting_chain_buffer()
+        {
+            return *m_writing_chain_buffer_p;
+        }
+        allocated_chain_t& get_rendering_chain_buffer()
+        {
+            return *m_rendering_chain_buffer_p;
+        }
+        void flip_chain_buffer()
+        {
+            m_rendering_chain_buffer_p = m_writing_chain_buffer_p;
+            m_writing_chain_buffer_p = &m_chain_buffers[++m_writing_chain_buffer_index % BRANCH_CHAIN_POOL_SIZE];
+        }
+
         void _commit_frame(jegl_context* thread, jegl_update_action action)
         {
-            assert(m_chain_buffers.m_allocated_chains_count <= m_chain_buffers.m_allocated_chains.size());
+            auto& chain_buffer = get_rendering_chain_buffer();
 
-            auto chain_iter = m_chain_buffers.m_allocated_chains.begin();
+            assert(chain_buffer.m_allocated_chains_count <= chain_buffer.m_allocated_chains.size());
+
+            auto chain_iter = chain_buffer.m_allocated_chains.begin();
             const auto chain_iter_end =
-                m_chain_buffers.m_allocated_chains.begin() + m_chain_buffers.m_allocated_chains_count;
+                chain_buffer.m_allocated_chains.begin() + chain_buffer.m_allocated_chains_count;
 
             while (chain_iter != chain_iter_end)
             {
@@ -88,8 +120,25 @@ namespace jeecs
         {
             auto* graphic_host = std::launder(reinterpret_cast<graphic_uhost*>(host));
 
-            if (!jegl_update(graphic_host->glthread, jegl_update_sync_mode::JEGL_WAIT_THIS_FRAME_END))
+            constexpr jegl_update_sync_mode SYNC_MODE =
+                rendchain_branch::BRANCH_CHAIN_POOL_SIZE > 1
+                ? jegl_update_sync_mode::JEGL_WAIT_LAST_FRAME_END
+                : jegl_update_sync_mode::JEGL_WAIT_THIS_FRAME_END;
+
+            // ATTENTION: 注意，由于渲染线程在此处翻转，因此任何其他的绘制操作都不能与此同时发生
+            //  由于 _update_frame_universe_job 是一个 universe_after_call_once_job，所以此阶段
+            //  同时不能有其他绘制相关操作。
+            if (!jegl_update(graphic_host->glthread, SYNC_MODE,
+                [](void* p)
+                {
+                    auto* graphic_host = std::launder(reinterpret_cast<graphic_uhost*>(p));
+                    for (auto& branch : graphic_host->m_rendchain_branchs)
+                        branch->flip_chain_buffer();
+                    
+                }, host))
+            {
                 graphic_host->universe.stop();
+            }
         }
         rendchain_branch* alloc_pipeline()
         {
@@ -103,8 +152,10 @@ namespace jeecs
         void free_pipeline(rendchain_branch* pipe)
         {
             std::lock_guard g1(m_rendchain_branchs_mx);
+
             auto fnd = std::find(m_rendchain_branchs.begin(), m_rendchain_branchs.end(), pipe);
             assert(fnd != m_rendchain_branchs.end());
+
             m_rendchain_branchs.erase(fnd);
 
             delete pipe;
@@ -130,7 +181,9 @@ namespace jeecs
                     [](rendchain_branch* a, rendchain_branch* b)
                     {
                         return
-                            a->m_chain_buffers.m_priority < b->m_chain_buffers.m_priority;
+                            a->get_rendering_chain_buffer().m_priority
+                            <
+                            b->get_rendering_chain_buffer().m_priority;
                     });
 
                 for (auto* gpipe : m_rendchain_branchs)

@@ -2519,7 +2519,9 @@ jegl_update [基本接口]
 */
 JE_API bool jegl_update(
     jegl_context* thread_handle,
-    jegl_update_sync_mode mode);
+    jegl_update_sync_mode mode,
+    jegl_update_sync_callback_t callback_after_wait_may_null,
+    void* callback_param);
 
 /*
 jegl_reboot_graphic_thread [基本接口]
@@ -5149,7 +5151,7 @@ namespace jeecs
             struct has_pointer_typeinfo_constructor_function
             {
                 template <typename V>
-                static auto _tester(int) -> 
+                static auto _tester(int) ->
                     _true_type<decltype(new V(std::declval<void*>(), std::declval<const jeecs::typing::type_info*>()))>;
 
                 template <typename V>
@@ -6478,11 +6480,11 @@ namespace jeecs
                             if (get_entity_avaliable_version(entity_meta_addr, eid, &version))
                             {
                                 if constexpr (std::is_void<typename typing::function_traits<FT>::this_t>::value)
-                                    f(game_entity{ cur_chunk, eid, version }, 
+                                    f(game_entity{ cur_chunk, eid, version },
                                         get_component_from_archchunk<ArgTs, ArgTs...>(archinfo, cur_chunk, eid)...);
                                 else
                                     (static_cast<typename typing::function_traits<FT>::this_t*>(sys)->*f)(
-                                        game_entity{ cur_chunk, eid, version }, 
+                                        game_entity{ cur_chunk, eid, version },
                                         get_component_from_archchunk<ArgTs, ArgTs...>(archinfo, cur_chunk, eid)...);
                             }
                         }
@@ -8286,7 +8288,7 @@ namespace jeecs
                         if (jegl_shad_uniforms->m_uniform_type !=
                             jegl_shader::uniform_type::INT)
                             debug::logerr(
-                                "Trying set uniform('%s' = %d, %d) to shader(%p), but current uniform type is not 'INT2'.", 
+                                "Trying set uniform('%s' = %d, %d) to shader(%p), but current uniform type is not 'INT2'.",
                                 name.c_str(), x, y, this);
                         else
                         {
@@ -8309,7 +8311,7 @@ namespace jeecs
                         if (jegl_shad_uniforms->m_uniform_type !=
                             jegl_shader::uniform_type::INT)
                             debug::logerr(
-                                "Trying set uniform('%s' = %d, %d, %d) to shader(%p), but current uniform type is not 'INT3'.", 
+                                "Trying set uniform('%s' = %d, %d, %d) to shader(%p), but current uniform type is not 'INT3'.",
                                 name.c_str(), x, y, z, this);
                         else
                         {
@@ -8333,7 +8335,7 @@ namespace jeecs
                         if (jegl_shad_uniforms->m_uniform_type !=
                             jegl_shader::uniform_type::INT)
                             debug::logerr(
-                                "Trying set uniform('%s' = %d, %d, %d, %d) to shader(%p), but current uniform type is not 'INT4'.", 
+                                "Trying set uniform('%s' = %d, %d, %d, %d) to shader(%p), but current uniform type is not 'INT4'.",
                                 name.c_str(), x, y, z, w, this);
                         else
                         {
@@ -8403,7 +8405,7 @@ namespace jeecs
                         if (jegl_shad_uniforms->m_uniform_type !=
                             jegl_shader::uniform_type::FLOAT3)
                             debug::logerr(
-                                "Trying set uniform('%s' = (%f, %f, %f)) to shader(%p), but current uniform type is not 'FLOAT3'.", 
+                                "Trying set uniform('%s' = (%f, %f, %f)) to shader(%p), but current uniform type is not 'FLOAT3'.",
                                 name.c_str(), val.x, val.y, val.z, this);
                         else
                         {
@@ -8427,7 +8429,7 @@ namespace jeecs
                         if (jegl_shad_uniforms->m_uniform_type !=
                             jegl_shader::uniform_type::FLOAT4)
                             debug::logerr(
-                                "Trying set uniform('%s' = (%f, %f, %f, %f)) to shader(%p), but current uniform type is not 'FLOAT4'.", 
+                                "Trying set uniform('%s' = (%f, %f, %f, %f)) to shader(%p), but current uniform type is not 'FLOAT4'.",
                                 name.c_str(), val.x, val.y, val.z, val.w, this);
                         else
                         {
@@ -9102,6 +9104,12 @@ namespace jeecs
             }
             ~BasePipelineInterface()
             {
+                OnDisable();
+            }
+
+            void OnDisable()
+            {
+                // Free all branch if disabled.
                 for (auto* branch : _m_rchain_pipeline)
                     jegl_uhost_free_branch(_m_graphic_host, branch);
 
