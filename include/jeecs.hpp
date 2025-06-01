@@ -2519,9 +2519,7 @@ jegl_update [基本接口]
 */
 JE_API bool jegl_update(
     jegl_context* thread_handle,
-    jegl_update_sync_mode mode,
-    jegl_update_sync_callback_t callback_may_null,
-    void* callback_param);
+    jegl_update_sync_mode mode);
 
 /*
 jegl_reboot_graphic_thread [基本接口]
