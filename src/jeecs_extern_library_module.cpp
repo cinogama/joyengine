@@ -7,10 +7,6 @@
 #if JE4_STATIC_LINK_MODULE_AND_PKGS
 extern "C"
 {
-JE_EXPORT void jestatic_module_GameControl_entry(wo_dylib_handle_t lib_instance);
-JE_EXPORT void jestatic_module_GameControl_leave();
-JE_EXPORT void jestatic_module_UIManager_entry(wo_dylib_handle_t lib_instance);
-JE_EXPORT void jestatic_module_UIManager_leave();
 
 }
 #endif
@@ -20,22 +16,6 @@ void je_extern_lib_module_init()
 {
     assert(_je_static_module_lib_handle.empty());
 #if JE4_STATIC_LINK_MODULE_AND_PKGS
-    wo_extern_lib_func_t GameControl_fs[] = {
-        wo_extern_lib_func_t{"jeecs_module_entry", (void*)&jestatic_module_GameControl_entry},
-        wo_extern_lib_func_t{"jeecs_module_leave", (void*)&jestatic_module_GameControl_leave},
-        WO_EXTERN_LIB_FUNC_END,
-    };
-    _je_static_module_lib_handle.push_back(
-        wo_fake_lib("GameControl", GameControl_fs, nullptr));
-
-    wo_extern_lib_func_t UIManager_fs[] = {
-        wo_extern_lib_func_t{"jeecs_module_entry", (void*)&jestatic_module_UIManager_entry},
-        wo_extern_lib_func_t{"jeecs_module_leave", (void*)&jestatic_module_UIManager_leave},
-        WO_EXTERN_LIB_FUNC_END,
-    };
-    _je_static_module_lib_handle.push_back(
-        wo_fake_lib("UIManager", UIManager_fs, nullptr));
-
 
 #endif
 }
