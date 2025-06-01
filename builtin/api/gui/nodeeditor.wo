@@ -799,38 +799,42 @@ namespace jeapi::gui
                     {
                         let node = self->_generate_node_impl(info.generator);
                         self->_add_node_impl(node);
-
-                        match (self.creating_linking_pin)
-                        {
-                        value(pin)?
-                        {
-                            if (self.inputpins->contain(pin))
+                        
+                        self->execute(func(){
+                            // 确保链接的建立和删除发生在editor内
+                            match (self.creating_linking_pin)
                             {
-                                let inpin = self.inputpins[pin];
-                                for (let outpin : node.outputs)
+                            value(pin)?
+                            {
+                                if (self.inputpins->contain(pin))
                                 {
-                                    if (inpin.typeval->typename() == outpin.typeval->typename())
+                                    let inpin = self.inputpins[pin];
+                                    for (let outpin : node.outputs)
                                     {
-                                        do self->_create_link(inpin, outpin);
-                                        break;
+                                        if (inpin.typeval->typename() == outpin.typeval->typename())
+                                        {
+                                            do self->_create_link(inpin, outpin);
+                                            break;
+                                        }
+                                    }
+                                }
+                                else if (self.outputpins->contain(pin))
+                                {
+                                    let outpin = self.outputpins[pin];
+                                    for (let inpin : node.inputs)
+                                    {
+                                        if (inpin.typeval->typename() == outpin.typeval->typename())
+                                        {
+                                            do self->_create_link(inpin, outpin);
+                                            break;
+                                        }
                                     }
                                 }
                             }
-                            else if (self.outputpins->contain(pin))
-                            {
-                                let outpin = self.outputpins[pin];
-                                for (let inpin : node.inputs)
-                                {
-                                    if (inpin.typeval->typename() == outpin.typeval->typename())
-                                    {
-                                        do self->_create_link(inpin, outpin);
-                                        break;
-                                    }
-                                }
+                            none?;
                             }
-                        }
-                        none?;
-                        }
+                            
+                        });
                     }
                 }
                 Dict(subd)?
@@ -1112,14 +1116,14 @@ namespace jeapi::gui
             
             for (let job : self.executing_jobs)
                 job();
-
             self.executing_jobs->clear();
 
             gui::PopStyleColor(1);
 
             let hovered = self->_get_current_hoverd();
-            node_editor::End();
 
+            node_editor::End();
+      
             self->_context_menu(hovered);
         }
 
