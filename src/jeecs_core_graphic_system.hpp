@@ -77,7 +77,7 @@ public let frag =
             }
             , default_texture{
                 graphic::texture::create(2, 2, jegl_texture::format::RGBA) }
-            , default_shaders_list{ default_shader }
+                , default_shaders_list{ default_shader }
         {
             default_texture->pix(0, 0).set({ 1.f, 0.25f, 1.f, 1.f });
             default_texture->pix(1, 1).set({ 1.f, 0.25f, 1.f, 1.f });
@@ -181,9 +181,9 @@ public let frag =
             float zfar = clip ? clip->zfar : 1000.0f;
 
             graphic::framebuffer* rend_aim_buffer =
-                rendbuf && rendbuf->framebuffer.has_value() 
-                    ? rendbuf->framebuffer.value().get() 
-                    : nullptr;
+                rendbuf && rendbuf->framebuffer.has_value()
+                ? rendbuf->framebuffer.value().get()
+                : nullptr;
 
             size_t
                 RENDAIMBUFFER_WIDTH =
@@ -300,12 +300,14 @@ public let frag =
             }
         }
 
-        math::vec3 get_entity_size(const Transform::Translation& trans, const basic::resource<graphic::vertex>& mesh)
+        math::vec3 get_entity_size(
+            const Transform::Translation& trans,
+            const basic::optional<basic::resource<graphic::vertex>>& mesh)
         {
             math::vec3 size = trans.local_scale;
 
-            const auto& light_shape =
-                mesh != nullptr ? mesh : m_default_resources.default_shape_quad;
+            const auto* light_shape =
+                mesh.has_value() ? mesh->get() : m_default_resources.default_shape_quad.get();
 
             assert(light_shape->resource() != nullptr);
 
@@ -322,7 +324,10 @@ public let frag =
         }
         math::vec3 get_entity_size(const Transform::Translation& trans, const Renderer::Shape* shape_may_null)
         {
-            return get_entity_size(trans, shape_may_null != nullptr ? shape_may_null->vertex.get() : nullptr);
+            if (shape_may_null != nullptr)
+                return get_entity_size(trans, shape_may_null->vertex);
+            else
+                return get_entity_size(trans, std::nullopt);
         }
     };
 
@@ -422,12 +427,12 @@ public let frag =
 
                 graphic::framebuffer* rend_aim_buffer = nullptr;
 
-                if (current_camera.rendToFramebuffer)
+                if (current_camera.rendToFramebuffer != nullptr)
                 {
-                    if (current_camera.rendToFramebuffer->framebuffer == nullptr)
-                        continue;
+                    if (current_camera.rendToFramebuffer->framebuffer.has_value())
+                        rend_aim_buffer = current_camera.rendToFramebuffer->framebuffer->get();
                     else
-                        rend_aim_buffer = current_camera.rendToFramebuffer->framebuffer.get();
+                        continue;
                 }
 
                 size_t
@@ -498,8 +503,8 @@ public let frag =
                         && rendentity.shape != nullptr);
 
                     auto& drawing_shape =
-                        rendentity.shape->vertex != nullptr
-                        ? rendentity.shape->vertex
+                        rendentity.shape->vertex.has_value()
+                        ? rendentity.shape->vertex.value()
                         : m_default_resources.default_shape_quad;
 
                     auto& drawing_shaders =
@@ -582,7 +587,8 @@ public let frag =
                         if (!shader_pass->m_builtin)
                             using_shader = &m_default_resources.default_shader;
 
-                        auto* rchain_draw_action = jegl_rchain_draw(rend_chain, (*using_shader)->resource(), drawing_shape->resource(), rchain_texture_group);
+                        auto* rchain_draw_action = jegl_rchain_draw(
+                            rend_chain, (*using_shader)->resource(), drawing_shape->resource(), rchain_texture_group);
                         auto* builtin_uniform = (*using_shader)->m_builtin;
 
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, MAT4_UI_MODEL);
@@ -698,10 +704,10 @@ public let frag =
                 graphic::framebuffer* rend_aim_buffer = nullptr;
                 if (current_camera.rendToFramebuffer)
                 {
-                    if (current_camera.rendToFramebuffer->framebuffer == nullptr)
-                        continue;
+                    if (current_camera.rendToFramebuffer->framebuffer.has_value())
+                        rend_aim_buffer = current_camera.rendToFramebuffer->framebuffer->get();
                     else
-                        rend_aim_buffer = current_camera.rendToFramebuffer->framebuffer.get();
+                        continue;
                 }
 
                 size_t
@@ -781,8 +787,8 @@ public let frag =
                     }
 
                     auto& drawing_shape =
-                        rendentity.shape->vertex != nullptr
-                        ? rendentity.shape->vertex
+                        rendentity.shape->vertex.has_value()
+                        ? rendentity.shape->vertex.value()
                         : m_default_resources.default_shape_quad;
 
                     auto& drawing_shaders =
@@ -874,20 +880,22 @@ public let frag =
 
             jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_pass;
 
-            DeferLight2DResource()
-            {
-                using namespace jeecs::graphic;
-
-                _no_shadow = texture::create(1, 1, jegl_texture::format::RGBA);
-                _no_shadow->pix(0, 0).set(math::vec4(0.f, 0.f, 0.f, 0.f));
-
-                const float _screen_vertex_data[] = {
+            inline static const float _screen_vertex_data[] = {
                     -1.f, 1.f, 0.f,     0.f, 1.f,
                     -1.f, -1.f, 0.f,    0.f, 0.f,
                     1.f, 1.f, 0.f,      1.f, 1.f,
                     1.f, -1.f, 0.f,     1.f, 0.f,
-                };
-                _screen_vertex = vertex::create(jegl_vertex::type::TRIANGLESTRIP,
+            };
+            inline static const float _sprite_shadow_vertex_data[] = {
+                   -0.5f, -0.5f, 0.0f,     0.0f, 1.0f,  1.0f,
+                    -0.5f, -0.5f, 0.0f,     0.0f, 0.0f,  0.0f,
+                    0.5f, -0.5f, 0.0f,      1.0f, 1.0f,  1.0f,
+                    0.5f, -0.5f, 0.0f,      1.0f, 0.0f,  0.0f,
+            };
+            DeferLight2DResource()
+                : _no_shadow{ jeecs::graphic::texture::create(1, 1, jegl_texture::format::RGBA) }
+                , _screen_vertex{ jeecs::graphic::vertex::create(
+                    jegl_vertex::type::TRIANGLESTRIP,
                     _screen_vertex_data,
                     sizeof(_screen_vertex_data),
                     {
@@ -896,15 +904,10 @@ public let frag =
                     {
                         {jegl_vertex::data_type::FLOAT32, 3},
                         {jegl_vertex::data_type::FLOAT32, 2},
-                    });
-
-                const float _sprite_shadow_vertex_data[] = {
-                   -0.5f, -0.5f, 0.0f,     0.0f, 1.0f,  1.0f,
-                    -0.5f, -0.5f, 0.0f,     0.0f, 0.0f,  0.0f,
-                    0.5f, -0.5f, 0.0f,      1.0f, 1.0f,  1.0f,
-                    0.5f, -0.5f, 0.0f,      1.0f, 0.0f,  0.0f,
-                };
-                _sprite_shadow_vertex = vertex::create(jegl_vertex::TRIANGLESTRIP,
+                    }).value()
+                }
+                , _sprite_shadow_vertex{ jeecs::graphic::vertex::create(
+                    jegl_vertex::TRIANGLESTRIP,
                     _sprite_shadow_vertex_data,
                     sizeof(_sprite_shadow_vertex_data),
                     {
@@ -914,27 +917,23 @@ public let frag =
                         {jegl_vertex::data_type::FLOAT32, 3},
                         {jegl_vertex::data_type::FLOAT32, 2},
                         {jegl_vertex::data_type::FLOAT32, 1},
-                    });
-
-                // 用于消除阴影对象本身的阴影
-                _defer_light2d_shadow_sub_pass
-                    = { shader::create("!/builtin/defer_light2d_shadow_sub.shader", R"(
+                    }).value()
+                }
+                , _defer_light2d_shadow_point_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_point.shader", R"(
 import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
-BLEND   (ONE, ZERO);
-// MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
-CULL    (NONE);
+BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
+CULL    (BACK);
 
-VAO_STRUCT! vin 
+VAO_STRUCT! vin
 {
     vertex: float3,
-    uv: float2,
+    factor: float,
 };
 
 using v2f = struct{
     pos: float4,
-    uv: float2,
 };
 
 using fout = struct{
@@ -943,26 +942,145 @@ using fout = struct{
 
 public func vert(v: vin)
 {
-    return v2f{
-        pos = je_mvp * vec4(v.vertex, 1.),
-        uv = uvtrans(v.uv, je_tiling, je_offset),
-    };
+    // ATTENTION: We will using je_color: float4 to pass lwpos.
+    let light_vpos = je_v * je_color;
+    let vpos = je_mv * vec4(v.vertex, 1.);
+
+    let shadow_vdir = vec3(normalize(vpos->xy - light_vpos->xy), 0.) * 2000. * v.factor;
+    
+    return v2f{pos = je_p * vec4(vpos->xyz + shadow_vdir, 1.)};   
 }
-public func frag(vf: v2f)
+
+public func frag(_: v2f)
 {
-    let nearest_clamp = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
-    let Main = uniform_texture:<texture2d>("Main", nearest_clamp, 0);
-    let final_shadow = alphatest(vec4(je_color->xyz, texture(Main, vf.uv)->w));
-
+    // NOTE: je_local_scale->x is shadow factor here.
     return fout{
-        shadow_factor = vec4(final_shadow->x, final_shadow->x, final_shadow->x, float::one)
+        shadow_factor = vec4(float3::one, je_local_scale->x)
     };
 }
-)") };
+)").value() }
+, _defer_light2d_shadow_parallel_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_parallel.shader", R"(
+import je::shader;
 
-                // 用于产生点光源的形状阴影
-                _defer_light2d_shadow_shape_point_pass
-                    = { shader::create("!/builtin/defer_light2d_shadow_point_shape.shader", R"(
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
+CULL    (BACK);
+
+VAO_STRUCT! vin
+{
+    vertex: float3,
+    factor: float,
+};
+
+using v2f = struct{
+    pos: float4,
+};
+
+using fout = struct{
+    shadow_factor: float4,
+};
+
+public func vert(v: vin)
+{
+    // ATTENTION: We will using je_color: float4 to pass lwpos.
+    let light_vdir = (je_v * je_color)->xyz - movement(je_v);
+    let vpos = je_mv * vec4(v.vertex, 1.);
+
+    let shadow_vdir = vec3(normalize(light_vdir->xy), 0.) * 2000. * v.factor;
+    
+    return v2f{pos = je_p * vec4(vpos->xyz + shadow_vdir, 1.)};   
+}
+
+public func frag(_: v2f)
+{
+    // NOTE: je_local_scale->x is shadow factor here.
+    return fout{
+        shadow_factor = vec4(float3::one, je_local_scale->x)
+    };
+}
+)").value() }
+, _defer_light2d_shadow_point_reverse_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_reverse_point.shader", R"(
+import je::shader;
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
+CULL    (FRONT);
+
+VAO_STRUCT! vin
+{
+    vertex: float3,
+    factor: float,
+};
+
+using v2f = struct{
+    pos: float4,
+};
+
+using fout = struct{
+    shadow_factor: float4,
+};
+
+public func vert(v: vin)
+{
+    // ATTENTION: We will using je_color: float4 to pass lwpos.
+    let light_vpos = je_v * je_color;
+    let vpos = je_mv * vec4(v.vertex, 1.);
+
+    let shadow_vdir = vec3(normalize(vpos->xy - light_vpos->xy), 0.) * 2000. * v.factor;
+    
+    return v2f{pos = je_p * vec4(vpos->xyz + shadow_vdir, 1.)};   
+}
+
+public func frag(_: v2f)
+{
+    // NOTE: je_local_scale->x is shadow factor here.
+    return fout{
+        shadow_factor = vec4(float3::one, je_local_scale->x)
+    };
+}
+)").value() }
+, _defer_light2d_shadow_parallel_reverse_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_reverse_parallel.shader", R"(
+import je::shader;
+ZTEST   (ALWAYS);
+ZWRITE  (DISABLE);
+BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
+CULL    (FRONT);
+
+VAO_STRUCT! vin
+{
+    vertex: float3,
+    factor: float,
+};
+
+using v2f = struct{
+    pos: float4,
+};
+
+using fout = struct{
+    shadow_factor: float4,
+};
+
+public func vert(v: vin)
+{
+    // ATTENTION: We will using je_color: float4 to pass lwpos.
+    let light_vdir = (je_v * je_color)->xyz - movement(je_v);
+    let vpos = je_mv * vec4(v.vertex, 1.);
+
+    let shadow_vdir = vec3(normalize(light_vdir->xy), 0.) * 2000. * v.factor;
+    
+    return v2f{pos = je_p * vec4(vpos->xyz + shadow_vdir, 1.)};   
+}
+
+public func frag(_: v2f)
+{
+    // NOTE: je_local_scale->x is shadow factor here.
+    return fout{
+        shadow_factor = vec4(float3::one, je_local_scale->x)
+    };
+}
+)").value() }
+, _defer_light2d_shadow_shape_point_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_point_shape.shader", R"(
 import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -1019,11 +1137,8 @@ public func frag(vf: v2f)
         shadow_factor = vec4(float3::one, final_shadow->x)
     };
 }
-)") };
-
-                // 用于产生平行光源的形状阴影
-                _defer_light2d_shadow_shape_parallel_pass
-                    = { shader::create("!/builtin/defer_light2d_shadow_parallel_shape.shader", R"(
+)").value() }
+, _defer_light2d_shadow_shape_parallel_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_parallel_shape.shader", R"(
 import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -1076,11 +1191,8 @@ public func frag(vf: v2f)
         shadow_factor = vec4(float3::one, final_shadow->x)
     };
 }
-)") };
-
-                // 用于产生点光源的精灵阴影
-                _defer_light2d_shadow_sprite_point_pass
-                    = { shader::create("!/builtin/defer_light2d_shadow_point_sprite.shader", R"(
+)").value() }
+, _defer_light2d_shadow_sprite_point_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_point_sprite.shader", R"(
 import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -1133,11 +1245,8 @@ public func frag(vf: v2f)
         shadow_factor = vec4(float3::one, final_shadow->x)
     };
 }
-)") };
-
-                // 用于产生平行光源的精灵阴影
-                _defer_light2d_shadow_sprite_parallel_pass
-                    = { shader::create("!/builtin/defer_light2d_shadow_parallel_sprite.shader", R"(
+)").value() }
+, _defer_light2d_shadow_sprite_parallel_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_parallel_sprite.shader", R"(
 import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -1187,25 +1296,24 @@ public func frag(vf: v2f)
         shadow_factor = vec4(float3::one, final_shadow->x)
     };
 }
-)") };
-
-                // 用于产生点光源的范围阴影
-                _defer_light2d_shadow_point_pass
-                    = { shader::create("!/builtin/defer_light2d_shadow_point.shader", R"(
+)").value() }
+, _defer_light2d_shadow_sub_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_sub.shader", R"(
 import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
-BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
-CULL    (BACK);
+BLEND   (ONE, ZERO);
+// MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
+CULL    (NONE);
 
-VAO_STRUCT! vin
+VAO_STRUCT! vin 
 {
     vertex: float3,
-    factor: float,
+    uv: float2,
 };
 
 using v2f = struct{
     pos: float4,
+    uv: float2,
 };
 
 using fout = struct{
@@ -1214,153 +1322,23 @@ using fout = struct{
 
 public func vert(v: vin)
 {
-    // ATTENTION: We will using je_color: float4 to pass lwpos.
-    let light_vpos = je_v * je_color;
-    let vpos = je_mv * vec4(v.vertex, 1.);
-
-    let shadow_vdir = vec3(normalize(vpos->xy - light_vpos->xy), 0.) * 2000. * v.factor;
-    
-    return v2f{pos = je_p * vec4(vpos->xyz + shadow_vdir, 1.)};   
-}
-
-public func frag(_: v2f)
-{
-    // NOTE: je_local_scale->x is shadow factor here.
-    return fout{
-        shadow_factor = vec4(float3::one, je_local_scale->x)
+    return v2f{
+        pos = je_mvp * vec4(v.vertex, 1.),
+        uv = uvtrans(v.uv, je_tiling, je_offset),
     };
 }
-)") };
-
-                // 用于产生平行光源的范围阴影
-                _defer_light2d_shadow_parallel_pass
-                    = { shader::create("!/builtin/defer_light2d_shadow_parallel.shader", R"(
-import je::shader;
-
-ZTEST   (ALWAYS);
-ZWRITE  (DISABLE);
-BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
-CULL    (BACK);
-
-VAO_STRUCT! vin
+public func frag(vf: v2f)
 {
-    vertex: float3,
-    factor: float,
-};
+    let nearest_clamp = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
+    let Main = uniform_texture:<texture2d>("Main", nearest_clamp, 0);
+    let final_shadow = alphatest(vec4(je_color->xyz, texture(Main, vf.uv)->w));
 
-using v2f = struct{
-    pos: float4,
-};
-
-using fout = struct{
-    shadow_factor: float4,
-};
-
-public func vert(v: vin)
-{
-    // ATTENTION: We will using je_color: float4 to pass lwpos.
-    let light_vdir = (je_v * je_color)->xyz - movement(je_v);
-    let vpos = je_mv * vec4(v.vertex, 1.);
-
-    let shadow_vdir = vec3(normalize(light_vdir->xy), 0.) * 2000. * v.factor;
-    
-    return v2f{pos = je_p * vec4(vpos->xyz + shadow_vdir, 1.)};   
-}
-
-public func frag(_: v2f)
-{
-    // NOTE: je_local_scale->x is shadow factor here.
     return fout{
-        shadow_factor = vec4(float3::one, je_local_scale->x)
+        shadow_factor = vec4(final_shadow->x, final_shadow->x, final_shadow->x, float::one)
     };
 }
-)") };
-
-                // 用于产生点光源的范围阴影（光在物体后） 逆序
-                _defer_light2d_shadow_point_reverse_pass
-                    = { shader::create("!/builtin/defer_light2d_shadow_reverse_point.shader", R"(
-import je::shader;
-ZTEST   (ALWAYS);
-ZWRITE  (DISABLE);
-BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
-CULL    (FRONT);
-
-VAO_STRUCT! vin
-{
-    vertex: float3,
-    factor: float,
-};
-
-using v2f = struct{
-    pos: float4,
-};
-
-using fout = struct{
-    shadow_factor: float4,
-};
-
-public func vert(v: vin)
-{
-    // ATTENTION: We will using je_color: float4 to pass lwpos.
-    let light_vpos = je_v * je_color;
-    let vpos = je_mv * vec4(v.vertex, 1.);
-
-    let shadow_vdir = vec3(normalize(vpos->xy - light_vpos->xy), 0.) * 2000. * v.factor;
-    
-    return v2f{pos = je_p * vec4(vpos->xyz + shadow_vdir, 1.)};   
-}
-
-public func frag(_: v2f)
-{
-    // NOTE: je_local_scale->x is shadow factor here.
-    return fout{
-        shadow_factor = vec4(float3::one, je_local_scale->x)
-    };
-}
-)") };
-
-                // 用于产生平行光源的范围阴影（光在物体后）逆序
-                _defer_light2d_shadow_parallel_reverse_pass
-                    = { shader::create("!/builtin/defer_light2d_shadow_reverse_parallel.shader", R"(
-import je::shader;
-ZTEST   (ALWAYS);
-ZWRITE  (DISABLE);
-BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
-CULL    (FRONT);
-
-VAO_STRUCT! vin
-{
-    vertex: float3,
-    factor: float,
-};
-
-using v2f = struct{
-    pos: float4,
-};
-
-using fout = struct{
-    shadow_factor: float4,
-};
-
-public func vert(v: vin)
-{
-    // ATTENTION: We will using je_color: float4 to pass lwpos.
-    let light_vdir = (je_v * je_color)->xyz - movement(je_v);
-    let vpos = je_mv * vec4(v.vertex, 1.);
-
-    let shadow_vdir = vec3(normalize(light_vdir->xy), 0.) * 2000. * v.factor;
-    
-    return v2f{pos = je_p * vec4(vpos->xyz + shadow_vdir, 1.)};   
-}
-
-public func frag(_: v2f)
-{
-    // NOTE: je_local_scale->x is shadow factor here.
-    return fout{
-        shadow_factor = vec4(float3::one, je_local_scale->x)
-    };
-}
-)") };
+)").value() }
+            {
             }
         };
 
@@ -1503,8 +1481,8 @@ public func frag(_: v2f)
 
                     if (light2dpostpass != nullptr)
                     {
-                        graphic::framebuffer* rend_aim_buffer = (rendbuf != nullptr && rendbuf->framebuffer != nullptr)
-                            ? rendbuf->framebuffer.get()
+                        graphic::framebuffer* rend_aim_buffer = (rendbuf != nullptr && rendbuf->framebuffer.has_value())
+                            ? rendbuf->framebuffer->get()
                             : nullptr;
 
                         size_t RENDAIMBUFFER_WIDTH =
@@ -1524,11 +1502,19 @@ public func frag(_: v2f)
                             std::max((size_t)1, (size_t)llround(
                                 RENDAIMBUFFER_HEIGHT * std::max(0.f, std::min(light2dpostpass->light_rend_ratio, 1.0f))));
 
-                        bool need_update = light2dpostpass->post_rend_target == nullptr
-                            || light2dpostpass->post_light_target->width() != LIGHT_BUFFER_WIDTH
-                            || light2dpostpass->post_light_target->height() != LIGHT_BUFFER_HEIGHT
-                            || light2dpostpass->post_rend_target->width() != RENDAIMBUFFER_WIDTH
-                            || light2dpostpass->post_rend_target->height() != RENDAIMBUFFER_HEIGHT;
+                        bool need_update = !light2dpostpass->post_rend_target.has_value();
+
+                        if (!need_update)
+                        {
+                            auto& light_target = light2dpostpass->post_light_target.value();
+                            auto& rend_target = light2dpostpass->post_rend_target.value();
+
+                            if (light_target->width() != LIGHT_BUFFER_WIDTH
+                                || light_target->height() != LIGHT_BUFFER_HEIGHT
+                                || rend_target->width() != RENDAIMBUFFER_WIDTH
+                                || rend_target->height() != RENDAIMBUFFER_HEIGHT)
+                                need_update = true;
+                        }
                         if (need_update && RENDAIMBUFFER_WIDTH > 0 && RENDAIMBUFFER_HEIGHT > 0)
                         {
                             light2dpostpass->post_rend_target
@@ -1544,13 +1530,13 @@ public func frag(_: v2f)
                                         jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::FLOAT16),
                                         // 深度缓冲区
                                         jegl_texture::format::DEPTH,
-                                    });
+                                    }).value();
                             light2dpostpass->post_light_target
                                 = jeecs::graphic::framebuffer::create(LIGHT_BUFFER_WIDTH, LIGHT_BUFFER_HEIGHT,
                                     {
                                         // 光渲染结果
                                         (jegl_texture::format)(jegl_texture::format::RGBA | jegl_texture::format::FLOAT16),
-                                    });
+                                    }).value();
                         }
                     }
                 });
@@ -1583,7 +1569,7 @@ public func frag(_: v2f)
                             &trans, topdown, point, parallel, range, gain, shadowbuffer,
                             color, &shape, &shads, texs,
                         }
-                    );
+                        );
                     if (shadowbuffer != nullptr)
                     {
                         size_t SHADOW_BUFFER_WIDTH =
@@ -1594,10 +1580,14 @@ public func frag(_: v2f)
                             std::max((size_t)1, (size_t)llround(
                                 WINDOWS_HEIGHT * std::max(0.f, std::min(shadowbuffer->resolution_ratio, 1.0f))));
 
-                        bool generate_new_framebuffer =
-                            shadowbuffer->buffer == nullptr
-                            || shadowbuffer->buffer->width() != SHADOW_BUFFER_WIDTH
-                            || shadowbuffer->buffer->height() != SHADOW_BUFFER_HEIGHT;
+                        bool generate_new_framebuffer = !shadowbuffer->buffer.has_value();
+                        if (!generate_new_framebuffer)
+                        {
+                            auto& buffer = shadowbuffer->buffer.value();
+                            if (buffer->width() != SHADOW_BUFFER_WIDTH
+                                || buffer->height() != SHADOW_BUFFER_HEIGHT)
+                                generate_new_framebuffer = true;
+                        }
 
                         if (generate_new_framebuffer)
                         {
@@ -1607,13 +1597,12 @@ public func frag(_: v2f)
                                 {
                                     jegl_texture::format::RGBA,
                                     // Only store shadow value to R-pass
-                                }
-                            );
+                                }).value();
                         }
                     }
                     if (range != nullptr)
                     {
-                        if (range->shape.m_light_mesh == nullptr
+                        if (!range->shape.m_light_mesh.has_value()
                             && range->shape.m_point_count != 0
                             && !range->shape.m_positions.empty())
                         {
@@ -1711,7 +1700,7 @@ public func frag(_: v2f)
                 {
                     if (blockshadow != nullptr)
                     {
-                        if (blockshadow->mesh.m_block_mesh == nullptr)
+                        if (!blockshadow->mesh.m_block_mesh.has_value())
                         {
                             std::vector<float> _vertex_buffer;
                             std::vector<uint32_t> _index_buffer;
@@ -1742,7 +1731,7 @@ public func frag(_: v2f)
                                     });
                             }
                             else
-                                blockshadow->mesh.m_block_mesh = nullptr;
+                                blockshadow->mesh.m_block_mesh.reset();
                         }
                     }
 
@@ -1798,10 +1787,10 @@ public func frag(_: v2f)
                 graphic::framebuffer* rend_aim_buffer = nullptr;
                 if (current_camera.rendToFramebuffer)
                 {
-                    if (current_camera.rendToFramebuffer->framebuffer == nullptr)
-                        continue;
+                    if (current_camera.rendToFramebuffer->framebuffer.has_value())
+                        rend_aim_buffer = current_camera.rendToFramebuffer->framebuffer->get();
                     else
-                        rend_aim_buffer = current_camera.rendToFramebuffer->framebuffer.get();
+                        continue;
                 }
 
                 size_t
@@ -1842,8 +1831,8 @@ public func frag(_: v2f)
                 // If current camera contain light2d-pass, prepare light shadow here.
                 if (current_camera.light2DPostPass != nullptr)
                 {
-                    if (current_camera.light2DPostPass->post_rend_target == nullptr
-                        || current_camera.light2DPostPass->post_light_target == nullptr)
+                    if (!current_camera.light2DPostPass->post_rend_target.has_value()
+                        || !current_camera.light2DPostPass->post_light_target.has_value())
                         // Not ready, skip this frame.
                         continue;
 
@@ -1867,7 +1856,9 @@ public func frag(_: v2f)
 
                         if (lightarch.shadowbuffer != nullptr)
                         {
-                            auto light2d_shadow_aim_buffer = lightarch.shadowbuffer->buffer.get();
+                            assert(lightarch.shadowbuffer->buffer.has_value());
+
+                            auto& light2d_shadow_aim_buffer = lightarch.shadowbuffer->buffer.value();
                             jegl_rendchain* light2d_shadow_rend_chain = jegl_branch_new_chain(
                                 current_camera.branchPipeline,
                                 light2d_shadow_aim_buffer->resource(), 0, 0,
@@ -1934,7 +1925,7 @@ public func frag(_: v2f)
                                     if (blockarch.blockshadow != nullptr && blockarch.blockshadow->factor > 0.f
                                         && (!light_is_above_block || !blockarch.blockshadow->auto_disable))
                                     {
-                                        if (blockarch.blockshadow->mesh.m_block_mesh != nullptr)
+                                        if (blockarch.blockshadow->mesh.m_block_mesh.has_value())
                                         {
                                             auto& using_shadow_pass_shader = blockarch.blockshadow->reverse
                                                 ? reverse_normal_shadow_pass
@@ -1943,7 +1934,7 @@ public func frag(_: v2f)
                                             auto* rchain_draw_action = jegl_rchain_draw(
                                                 light2d_shadow_rend_chain,
                                                 using_shadow_pass_shader->resource(),
-                                                blockarch.blockshadow->mesh.m_block_mesh->resource(),
+                                                blockarch.blockshadow->mesh.m_block_mesh.value()->resource(),
                                                 SIZE_MAX);
                                             auto* builtin_uniform = using_shadow_pass_shader->m_builtin;
 
@@ -1985,17 +1976,19 @@ public func frag(_: v2f)
                                         auto texture_group = jegl_rchain_allocate_texture_group(light2d_shadow_rend_chain);
                                         if (blockarch.textures != nullptr)
                                         {
-                                            jeecs::graphic::texture* main_texture = blockarch.textures->get_texture(0).get();
-                                            if (main_texture != nullptr)
-                                                jegl_rchain_bind_texture(light2d_shadow_rend_chain, texture_group, 0, main_texture->resource());
+                                            auto main_texture = blockarch.textures->get_texture(0);
+                                            if (main_texture.has_value())
+                                                jegl_rchain_bind_texture(
+                                                    light2d_shadow_rend_chain, texture_group, 0, main_texture.value()->resource());
                                             else
-                                                jegl_rchain_bind_texture(light2d_shadow_rend_chain, texture_group, 0, m_default_resources.default_texture->resource());
+                                                jegl_rchain_bind_texture(
+                                                    light2d_shadow_rend_chain, texture_group, 0, m_default_resources.default_texture->resource());
                                         }
 
                                         assert(blockarch.shape != nullptr);
-                                        jeecs::graphic::vertex* using_shape = blockarch.shape->vertex == nullptr
-                                            ? m_default_resources.default_shape_quad.get()
-                                            : blockarch.shape->vertex.get()
+                                        const auto& using_shape = blockarch.shape->vertex.has_value()
+                                            ? blockarch.shape->vertex.value()
+                                            : m_default_resources.default_shape_quad
                                             ;
 
                                         auto* rchain_draw_action = jegl_rchain_draw(
@@ -2053,14 +2046,16 @@ public func frag(_: v2f)
                                         auto texture_group = jegl_rchain_allocate_texture_group(light2d_shadow_rend_chain);
                                         if (blockarch.textures != nullptr)
                                         {
-                                            jeecs::graphic::texture* main_texture = blockarch.textures->get_texture(0).get();
-                                            if (main_texture != nullptr)
-                                                jegl_rchain_bind_texture(light2d_shadow_rend_chain, texture_group, 0, main_texture->resource());
+                                            auto main_texture = blockarch.textures->get_texture(0);
+                                            if (main_texture.has_value())
+                                                jegl_rchain_bind_texture(
+                                                    light2d_shadow_rend_chain, texture_group, 0, main_texture.value()->resource());
                                             else
-                                                jegl_rchain_bind_texture(light2d_shadow_rend_chain, texture_group, 0, m_default_resources.default_texture->resource());
+                                                jegl_rchain_bind_texture(
+                                                    light2d_shadow_rend_chain, texture_group, 0, m_default_resources.default_texture->resource());
                                         }
 
-                                        jeecs::graphic::vertex* using_shape = m_defer_light2d_host._sprite_shadow_vertex.get();
+                                        const auto& using_shape = m_defer_light2d_host._sprite_shadow_vertex;
 
                                         auto* rchain_draw_action = jegl_rchain_draw(
                                             light2d_shadow_rend_chain,
@@ -2126,18 +2121,20 @@ public func frag(_: v2f)
                                         auto texture_group = jegl_rchain_allocate_texture_group(light2d_shadow_rend_chain);
                                         if (block_in_layer->textures != nullptr)
                                         {
-                                            jeecs::graphic::texture* main_texture = block_in_layer->textures->get_texture(0).get();
-                                            if (main_texture != nullptr)
-                                                jegl_rchain_bind_texture(light2d_shadow_rend_chain, texture_group, 0, main_texture->resource());
+                                            auto main_texture = block_in_layer->textures->get_texture(0);
+                                            if (main_texture.has_value())
+                                                jegl_rchain_bind_texture(
+                                                    light2d_shadow_rend_chain, texture_group, 0, main_texture.value()->resource());
                                             else
-                                                jegl_rchain_bind_texture(light2d_shadow_rend_chain, texture_group, 0, m_default_resources.default_texture->resource());
+                                                jegl_rchain_bind_texture(
+                                                    light2d_shadow_rend_chain, texture_group, 0, m_default_resources.default_texture->resource());
                                         }
 
                                         assert(block_in_layer->shape != nullptr);
-                                        jeecs::graphic::vertex* using_shape =
-                                            block_in_layer->shape->vertex == nullptr
-                                            ? m_default_resources.default_shape_quad.get()
-                                            : block_in_layer->shape->vertex.get();
+                                        const auto& using_shape =
+                                            block_in_layer->shape->vertex.has_value()
+                                            ? block_in_layer->shape->vertex.value()
+                                            : m_default_resources.default_shape_quad;
 
                                         // 如果物体被指定为不需要cover，那么就不绘制
                                         if (block_in_layer->selfshadow != nullptr)
@@ -2190,7 +2187,7 @@ public func frag(_: v2f)
                     }
 
                     auto light2d_rend_aim_buffer =
-                        current_camera.light2DPostPass->post_rend_target->resource();
+                        current_camera.light2DPostPass->post_rend_target.value()->resource();
 
                     rend_chain = jegl_branch_new_chain(
                         current_camera.branchPipeline,
@@ -2270,9 +2267,9 @@ public func frag(_: v2f)
                     math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
                     math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
 
-                    auto& drawing_shape =
-                        rendentity.shape->vertex != nullptr
-                        ? rendentity.shape->vertex
+                    const auto& drawing_shape =
+                        rendentity.shape->vertex.has_value()
+                        ? rendentity.shape->vertex.value()
                         : m_default_resources.default_shape_quad;
                     auto& drawing_shaders =
                         rendentity.shaders->shaders.empty() == false
@@ -2334,14 +2331,13 @@ public func frag(_: v2f)
                 if (current_camera.light2DPostPass != nullptr
                     && current_camera.shaders != nullptr)
                 {
-                    // Rend light buffer to target buffer.
-                    assert(current_camera.light2DPostPass->post_rend_target != nullptr
-                        && current_camera.light2DPostPass->post_light_target != nullptr);
+                    assert(current_camera.light2DPostPass->post_rend_target.has_value()
+                        && current_camera.light2DPostPass->post_light_target.has_value());
 
                     // Rend Light result to target buffer.
                     jegl_rendchain* light2d_light_effect_rend_chain = jegl_branch_new_chain(
                         current_camera.branchPipeline,
-                        current_camera.light2DPostPass->post_light_target->resource(),
+                        current_camera.light2DPostPass->post_light_target.value()->resource(),
                         0, 0, 0, 0);
 
                     jegl_rchain_clear_color_buffer(light2d_light_effect_rend_chain, nullptr);
@@ -2351,19 +2347,20 @@ public func frag(_: v2f)
 
                     auto lightpass_pre_bind_texture_group = jegl_rchain_allocate_texture_group(light2d_light_effect_rend_chain);
 
+                    auto* post_rend_target_frame_buffer = current_camera.light2DPostPass->post_rend_target.value().get();
                     // Bind attachment
                     // 绑定漫反射颜色通道
                     jegl_rchain_bind_texture(light2d_light_effect_rend_chain, lightpass_pre_bind_texture_group, JE_LIGHT2D_DEFER_0 + 0,
-                        current_camera.light2DPostPass->post_rend_target->get_attachment(0)->resource());
+                        post_rend_target_frame_buffer->get_attachment(0).value()->resource());
                     // 绑定自发光通道
                     jegl_rchain_bind_texture(light2d_light_effect_rend_chain, lightpass_pre_bind_texture_group, JE_LIGHT2D_DEFER_0 + 1,
-                        current_camera.light2DPostPass->post_rend_target->get_attachment(1)->resource());
+                        post_rend_target_frame_buffer->get_attachment(1).value()->resource());
                     // 绑定视空间坐标通道
                     jegl_rchain_bind_texture(light2d_light_effect_rend_chain, lightpass_pre_bind_texture_group, JE_LIGHT2D_DEFER_0 + 2,
-                        current_camera.light2DPostPass->post_rend_target->get_attachment(2)->resource());
+                        post_rend_target_frame_buffer->get_attachment(2).value()->resource());
                     // 绑定视空间法线通道
                     jegl_rchain_bind_texture(light2d_light_effect_rend_chain, lightpass_pre_bind_texture_group, JE_LIGHT2D_DEFER_0 + 3,
-                        current_camera.light2DPostPass->post_rend_target->get_attachment(3)->resource());
+                        post_rend_target_frame_buffer->get_attachment(3).value()->resource());
 
                     jegl_rchain_bind_pre_texture_group(light2d_light_effect_rend_chain, lightpass_pre_bind_texture_group);
 
@@ -2381,8 +2378,8 @@ public func frag(_: v2f)
 
                         jegl_rchain_bind_texture(light2d_light_effect_rend_chain, texture_group,
                             JE_LIGHT2D_DEFER_0 + 4,
-                            light2d.shadowbuffer != nullptr
-                            ? light2d.shadowbuffer->buffer->get_attachment(0)->resource()
+                            light2d.shadowbuffer != nullptr // assert light2d.shadowbuffer->buffer.has_value()
+                            ? light2d.shadowbuffer->buffer.value()->get_attachment(0).value()->resource()
                             : m_defer_light2d_host._no_shadow->resource());
 
                         // 开始渲染光照！
@@ -2395,8 +2392,8 @@ public func frag(_: v2f)
                             : light2d.shape->vertex;
 
                         auto& drawing_shape =
-                            drawing_mesh != nullptr
-                            ? drawing_mesh
+                            drawing_mesh.has_value()
+                            ? drawing_mesh.value()
                             : m_default_resources.default_shape_quad;
                         auto& drawing_shaders =
                             light2d.shaders->shaders.empty() == false
@@ -2520,20 +2517,20 @@ public func frag(_: v2f)
                     auto texture_group = jegl_rchain_allocate_texture_group(final_target_rend_chain);
 
                     jegl_rchain_bind_texture(final_target_rend_chain, texture_group, 0,
-                        current_camera.light2DPostPass->post_light_target->get_attachment(0)->resource());
+                        current_camera.light2DPostPass->post_light_target.value()->get_attachment(0).value()->resource());
 
                     // 绑定漫反射颜色通道
                     jegl_rchain_bind_texture(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 0,
-                        current_camera.light2DPostPass->post_rend_target->get_attachment(0)->resource());
+                        post_rend_target_frame_buffer->get_attachment(0).value()->resource());
                     // 绑定自发光通道
                     jegl_rchain_bind_texture(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 1,
-                        current_camera.light2DPostPass->post_rend_target->get_attachment(1)->resource());
+                        post_rend_target_frame_buffer->get_attachment(1).value()->resource());
                     // 绑定视空间坐标通道
                     jegl_rchain_bind_texture(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 2,
-                        current_camera.light2DPostPass->post_rend_target->get_attachment(2)->resource());
+                        post_rend_target_frame_buffer->get_attachment(2).value()->resource());
                     // 绑定视空间法线通道
                     jegl_rchain_bind_texture(final_target_rend_chain, texture_group, JE_LIGHT2D_DEFER_0 + 3,
-                        current_camera.light2DPostPass->post_rend_target->get_attachment(3)->resource());
+                        post_rend_target_frame_buffer->get_attachment(3).value()->resource());
 
                     const jeecs::math::vec2
                         * _using_tiling = &default_tiling,
@@ -2564,9 +2561,11 @@ public func frag(_: v2f)
 
                         auto* builtin_uniform = (*using_shader)->m_builtin;
 
+                        auto* post_light_target_frame_buffer = current_camera.light2DPostPass->post_light_target.value().get();
+
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, light2d_resolution, float2,
-                            (float)current_camera.light2DPostPass->post_light_target->width(),
-                            (float)current_camera.light2DPostPass->post_light_target->height());
+                            (float)post_light_target_frame_buffer->width(),
+                            (float)post_light_target_frame_buffer->height());
 
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, tiling, float2, _using_tiling->x, _using_tiling->y);
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, offset, float2, _using_offset->x, _using_offset->y);

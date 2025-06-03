@@ -1251,10 +1251,10 @@ WO_API wo_api wojeapi_towoo_renderer_textures_get_texture(wo_vm vm, wo_value arg
 
     auto tex = textures.get_texture(pass);
 
-    if (tex != nullptr)
+    if (tex.has_value())
     {
         return wo_ret_option_gchandle(vm,
-            new jeecs::basic::resource<jeecs::graphic::texture>(tex),
+            new jeecs::basic::resource<jeecs::graphic::texture>(tex.value()),
             nullptr,
             [](void* p)
             {

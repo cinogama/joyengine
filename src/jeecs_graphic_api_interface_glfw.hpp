@@ -451,19 +451,20 @@ namespace jeecs::graphic
 
             // Try load icon from @/icon.png or !/builtin/icon/icon.png.
             // Do nothing if both not exist.
-            jeecs::basic::resource<jeecs::graphic::texture> icon =
-                jeecs::graphic::texture::load(nullptr, "@/icon.png");
+            auto icon = jeecs::graphic::texture::load(nullptr, "@/icon.png");
 
-            if (icon == nullptr)
+            if (!icon.has_value())
                 icon = jeecs::graphic::texture::load(nullptr, "!/builtin/icon/icon.png");
 
-            if (icon != nullptr)
+            if (icon.has_value())
             {
+                auto& icon_texture = icon.value();
+
                 GLFWimage icon_data;
-                icon_data.width = (int)icon->width();
-                icon_data.height = (int)icon->height();
+                icon_data.width = (int)icon_texture->width();
+                icon_data.height = (int)icon_texture->height();
                 // Here need a y-direct flip.
-                auto* image_pixels = icon->resource()->m_raw_texture_data->m_pixels;
+                auto* image_pixels = icon_texture->resource()->m_raw_texture_data->m_pixels;
                 icon_data.pixels = (unsigned char*)je_mem_alloc((size_t)icon_data.width * (size_t)icon_data.height * 4);
                 assert(icon_data.pixels != nullptr);
 

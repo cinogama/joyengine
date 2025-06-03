@@ -329,7 +329,7 @@ WO_API wo_api wojeapi_apply_camera_framebuf_setting(wo_vm vm, wo_value args)
                 jegl_texture::format::RGBA,
                 jegl_texture::format::DEPTH,
             }
-        );
+            );
     }
     else
         jeecs::debug::logfatal("No RendToFramebuffer in specify entity when 'wojeapi_apply_camera_framebuf_setting'.");
@@ -341,22 +341,21 @@ WO_API wo_api wojeapi_get_framebuf_texture(wo_vm vm, wo_value args)
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
     if (jeecs::Camera::RendToFramebuffer* rbf = entity->get_component<jeecs::Camera::RendToFramebuffer>())
     {
-        if (!rbf->framebuffer)
-        {
+        if (!rbf->framebuffer.has_value())
             return wo_ret_option_none(vm);
-        }
-        auto tex = rbf->framebuffer->get_attachment((size_t)wo_int(args + 1));
-        if (!tex)
-        {
-            jeecs::debug::logerr("RendToFramebuffer(%p).framebuffer not contain attach(%zu) in entity when 'wojeapi_get_framebuf_texture'.",
-                rbf, (size_t)wo_int(args + 1));
-            return wo_ret_option_none(vm);
-        }
-        return wo_ret_option_gchandle(vm,
-            new jeecs::basic::resource<jeecs::graphic::texture>(tex), nullptr,
-            [](void* ptr) {
-                delete (jeecs::basic::resource<jeecs::graphic::texture>*)ptr;
-            });
+
+        auto tex = rbf->framebuffer.value()->get_attachment((size_t)wo_int(args + 1));
+        if (tex.has_value())
+            return wo_ret_option_gchandle(vm,
+                new jeecs::basic::resource<jeecs::graphic::texture>(tex.value()), nullptr,
+                [](void* ptr) {
+                    delete (jeecs::basic::resource<jeecs::graphic::texture>*)ptr;
+                });
+
+        jeecs::debug::logerr("RendToFramebuffer(%p).framebuffer not contain attach(%zu) in entity when 'wojeapi_get_framebuf_texture'.",
+            rbf, (size_t)wo_int(args + 1));
+        return wo_ret_option_none(vm);
+
     }
     else
         jeecs::debug::logerr("No RendToFramebuffer in specify entity when 'wojeapi_get_framebuf_texture'.");
@@ -1359,9 +1358,9 @@ WO_API wo_api wojeapi_texture_open(wo_vm vm, wo_value args)
     }
     auto loaded_texture = jeecs::graphic::texture::load(gcontext, wo_string(args + 1));
 
-    if (loaded_texture != nullptr)
+    if (loaded_texture.has_value())
         return wo_ret_option_gchandle(vm,
-            new jeecs::basic::resource<jeecs::graphic::texture>(loaded_texture), nullptr,
+            new jeecs::basic::resource<jeecs::graphic::texture>(loaded_texture.value()), nullptr,
             [](void* ptr) {
                 delete (jeecs::basic::resource<jeecs::graphic::texture>*)ptr;
             });
@@ -1508,16 +1507,15 @@ WO_API wo_api wojeapi_texture_set_pixel_color(wo_vm vm, wo_value args)
 /////////////////////////////////////////////////////////////
 WO_API wo_api wojeapi_font_open(wo_vm vm, wo_value args)
 {
-    auto* loaded_font = jeecs::graphic::font::load(wo_string(args + 0), (size_t)wo_int(args + 1));
-    if (loaded_font != nullptr)
+    auto loaded_font = jeecs::graphic::font::load(wo_string(args + 0), (size_t)wo_int(args + 1));
+    if (loaded_font.has_value())
     {
         return wo_ret_option_gchandle(vm,
-            new jeecs::basic::resource<jeecs::graphic::font>(loaded_font), nullptr,
+            new jeecs::basic::resource<jeecs::graphic::font>(loaded_font.value()), nullptr,
             [](void* ptr) {
                 delete (jeecs::basic::resource<jeecs::graphic::font>*)ptr;
             });
     }
-    delete loaded_font;
     return wo_ret_option_none(vm);
 }
 
@@ -1600,11 +1598,10 @@ WO_API wo_api wojeapi_shader_open(wo_vm vm, wo_value args)
                 wo_pointer(universe_ptr), nullptr));
     }
     auto loaded_shader = jeecs::graphic::shader::load(gcontext, wo_string(args + 1));
-
-    if (loaded_shader != nullptr)
+    if (loaded_shader.has_value())
     {
         return wo_ret_option_gchandle(vm,
-            new jeecs::basic::resource<jeecs::graphic::shader>(loaded_shader), nullptr,
+            new jeecs::basic::resource<jeecs::graphic::shader>(loaded_shader.value()), nullptr,
             [](void* ptr) {
                 delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
             });
@@ -1615,10 +1612,10 @@ WO_API wo_api wojeapi_shader_open(wo_vm vm, wo_value args)
 WO_API wo_api wojeapi_shader_create(wo_vm vm, wo_value args)
 {
     auto loaded_shader = jeecs::graphic::shader::create(wo_string(args + 0), wo_string(args + 1));
-    if (loaded_shader != nullptr)
+    if (loaded_shader.has_value())
     {
         return wo_ret_gchandle(vm,
-            new jeecs::basic::resource<jeecs::graphic::shader>(loaded_shader), nullptr,
+            new jeecs::basic::resource<jeecs::graphic::shader>(loaded_shader.value()), nullptr,
             [](void* ptr) {
                 delete (jeecs::basic::resource<jeecs::graphic::shader>*)ptr;
             });
@@ -1641,8 +1638,6 @@ WO_API wo_api wojeapi_textures_of_entity(wo_vm vm, wo_value args)
 
         for (auto& texture : textures->textures)
         {
-            if (!texture.m_texture)
-                return wo_ret_panic(vm, "Texture cannot be nullptr.");
             wo_set_int(key, (wo_integer_t)texture.m_pass_id);
             wo_set_gchandle(val, vm,
                 new jeecs::basic::resource<jeecs::graphic::texture>(texture.m_texture), nullptr,
@@ -1673,7 +1668,7 @@ WO_API wo_api wojeapi_bind_texture_for_entity(wo_vm vm, wo_value args)
         }
         else
         {
-            textures->bind_texture((size_t)wo_int(args + 1), nullptr);
+            textures->remove_texture((size_t)wo_int(args + 1));
         }
     }
 
@@ -1692,9 +1687,9 @@ WO_API wo_api wojeapi_set_shape_for_entity(wo_vm vm, wo_value args)
     {
         wo_value elem = s + 0;
         if (wo_option_get(elem, args + 1))
-            shape->vertex = *(jeecs::basic::resource<jeecs::graphic::vertex>*)wo_pointer(elem);
+            shape->vertex.emplace(*(jeecs::basic::resource<jeecs::graphic::vertex>*)wo_pointer(elem));
         else
-            shape->vertex = nullptr;
+            shape->vertex.reset();
     }
 
     // TODO: 如果当前实体不包含jeecs::Renderer::Textures组件，在此panic?
@@ -1708,9 +1703,9 @@ WO_API wo_api wojeapi_get_shape_of_entity(wo_vm vm, wo_value args)
 
     if (jeecs::Renderer::Shape* shape = entity->get_component<jeecs::Renderer::Shape>())
     {
-        if (shape->vertex != nullptr)
+        if (shape->vertex.has_value())
             return wo_ret_option_pointer(vm,
-                new jeecs::basic::resource<jeecs::graphic::vertex>(shape->vertex));
+                new jeecs::basic::resource<jeecs::graphic::vertex>(shape->vertex.value()));
     }
 
     return wo_ret_option_none(vm);
@@ -1731,10 +1726,9 @@ WO_API wo_api wojeapi_vertex_load(wo_vm vm, wo_value args)
     }
 
     auto loaded_vertex = jeecs::graphic::vertex::load(gcontext, wo_string(args + 1));
-
-    if (loaded_vertex != nullptr)
+    if (loaded_vertex.has_value())
         return wo_ret_option_gchandle(vm,
-            new jeecs::basic::resource<jeecs::graphic::vertex>(loaded_vertex), nullptr,
+            new jeecs::basic::resource<jeecs::graphic::vertex>(loaded_vertex.value()), nullptr,
             [](void* ptr) {
                 delete (jeecs::basic::resource<jeecs::graphic::vertex>*)ptr;
             });
@@ -1776,11 +1770,14 @@ WO_API wo_api wojeapi_vertex_create(wo_vm vm, wo_value args)
         indices,
         formats);
 
-    return wo_ret_gchandle(vm,
-        new jeecs::basic::resource<jeecs::graphic::vertex>(loaded_vertex), nullptr,
-        [](void* ptr) {
-            delete (jeecs::basic::resource<jeecs::graphic::vertex>*)ptr;
-        });
+    if (loaded_vertex.has_value())
+        return wo_ret_gchandle(vm,
+            new jeecs::basic::resource<jeecs::graphic::vertex>(loaded_vertex.value()), nullptr,
+            [](void* ptr) {
+                delete (jeecs::basic::resource<jeecs::graphic::vertex>*)ptr;
+            });
+
+    return wo_ret_panic(vm, "Bad vertex format.");
 }
 
 WO_API wo_api wojeapi_vertex_path(wo_vm vm, wo_value args)
@@ -1806,8 +1803,6 @@ WO_API wo_api wojeapi_shaders_of_entity(wo_vm vm, wo_value args)
 
         for (auto& shader : shaders->shaders)
         {
-            if (!shader)
-                return wo_ret_halt(vm, "Shader cannot be nullptr.");
             wo_set_gchandle(elem, vm,
                 new jeecs::basic::resource<jeecs::graphic::shader>(shader), nullptr,
                 [](void* ptr) {
@@ -2248,7 +2243,7 @@ struct _jewo_singleton
 };
 std::unordered_map<std::string, jeecs::basic::resource<_jewo_singleton>> _jewo_singleton_list;
 
-jeecs::basic::resource<_jewo_singleton> _jewo_create_singleton(
+std::optional<jeecs::basic::resource<_jewo_singleton>> _jewo_create_singleton(
     wo_vm vm, const char* token, wo_value func, wo_value* inout_args)
 {
     std::lock_guard g1(_jewo_singleton_list_mx);
@@ -2261,11 +2256,12 @@ jeecs::basic::resource<_jewo_singleton> _jewo_create_singleton(
         wo_value ret = wo_invoke_value(vm, func, 0, inout_args, nullptr);
         if (ret != nullptr)
         {
-            return _jewo_singleton_list[token] =
-                new _jewo_singleton(ret);
+            return _jewo_singleton_list.insert(
+                std::make_pair(token, jeecs::basic::resource<_jewo_singleton>(
+                    new _jewo_singleton(ret)))).first->second;
         }
-        return nullptr;
     }
+    return std::nullopt;
 }
 void _jewo_clear_singletons()
 {
@@ -2276,10 +2272,10 @@ void _jewo_clear_singletons()
 WO_API wo_api wojeapi_create_singleton(wo_vm vm, wo_value args)
 {
     auto singleton = _jewo_create_singleton(vm, wo_string(args + 0), args + 1, &args);
-    if (singleton != nullptr)
+    if (singleton.has_value())
     {
         return wo_ret_gchandle(vm,
-            new jeecs::basic::resource<_jewo_singleton>(singleton),
+            new jeecs::basic::resource<_jewo_singleton>(singleton.value()),
             nullptr,
             [](void* p)
             {
@@ -2580,7 +2576,7 @@ WO_API wo_api wojeapi_audio_buffer_load(wo_vm vm, wo_value args)
     {
         return wo_ret_option_gchandle(
             vm,
-            new jeecs::basic::resource<jeecs::audio::buffer>(std::move(buffer)),
+            new jeecs::basic::resource<jeecs::audio::buffer>(buffer.value()),
             nullptr,
             [](void* p)
             {

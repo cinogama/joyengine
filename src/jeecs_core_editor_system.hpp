@@ -169,8 +169,36 @@ namespace jeecs
                 {
                     {jegl_vertex::data_type::FLOAT32, 3},
                     {jegl_vertex::data_type::FLOAT32, 3},
-                });
+                }).value();
         }
+        static basic::resource<graphic::texture> _create_missing_default_icon()
+        {
+            basic::resource<graphic::texture> result =
+                graphic::texture::create(8, 8, jegl_texture::format::RGBA);
+
+            static const uint8_t _unexist_gizmo_icon[8][8] = {
+               { 0, 0, 1, 1, 1, 1, 0, 0, },
+               { 0, 1, 0, 0, 0, 0, 1, 0, },
+               { 0, 1, 0, 0, 0, 0, 1, 0, },
+               { 0, 0, 0, 0, 0, 1, 1, 0, },
+               { 0, 0, 0, 0, 1, 0, 0, 0, },
+               { 0, 0, 0, 1, 1, 0, 0, 0, },
+               { 0, 0, 0, 0, 0, 0, 0, 0, },
+               { 0, 0, 0, 1, 1, 0, 0, 0, },
+            };
+
+            for (size_t ix = 0; ix < 8; ++ix)
+            {
+                for (size_t iy = 0; iy < 8; ++iy)
+                {
+                    if (_unexist_gizmo_icon[7 - iy][ix] == 0)
+                        result->pix(ix, iy).set({ 0.f, 0.f, 0.f, 0.f });
+                    else
+                        result->pix(ix, iy).set({ 1.f, 1.f, 1.f, 0.8f });
+                }
+            }
+            return result;
+        };
 
         basic::resource<graphic::texture> m_camera_icon;
         basic::resource<graphic::texture> m_point_or_shape_light2d_icon;
@@ -189,57 +217,31 @@ namespace jeecs
         basic::resource<graphic::vertex> m_gizmo_physics2d_collider_circle_vertex;
         //basic::resource<graphic::vertex> m_gizmo_physics2d_collider_capsule_vertex;
 
+        inline static const float gizmo_vertex_data[] = {
+               -0.5f, 0.5f, 0.0f,      0.0f, 1.0f,
+               -0.5f, -0.5f, 0.0f,     0.0f, 0.0f,
+               0.5f, 0.5f, 0.0f,       1.0f, 1.0f,
+               0.5f, -0.5f, 0.0f,      1.0f, 0.0f,
+        };
+        inline static const float gizmo_camera_visual_cone_vertex_data[] = {
+            -1.0f, -1.0f, -1.0f,
+            1.0f, -1.0f, -1.0f,
+            1.0f, 1.0f, -1.0f,
+            -1.0f, 1.0f, -1.0f,
+            -1.0f, -1.0f, 1.0f,
+            1.0f, -1.0f, 1.0f,
+            1.0f, 1.0f, 1.0f,
+            -1.0f, 1.0f, 1.0f,
+        };
+
         JECS_DISABLE_MOVE_AND_COPY(GizmoResources);
 
         GizmoResources(jegl_context* glcontext)
-        {
-            auto create_texture_for_unexist_gizmo_icon =
-                [&]()
-                {
-                    basic::resource<graphic::texture> result =
-                        graphic::texture::create(8, 8, jegl_texture::format::RGBA);
-
-                    static const uint8_t _unexist_gizmo_icon[8][8] = {
-                       { 0, 0, 1, 1, 1, 1, 0, 0, },
-                       { 0, 1, 0, 0, 0, 0, 1, 0, },
-                       { 0, 1, 0, 0, 0, 0, 1, 0, },
-                       { 0, 0, 0, 0, 0, 1, 1, 0, },
-                       { 0, 0, 0, 0, 1, 0, 0, 0, },
-                       { 0, 0, 0, 1, 1, 0, 0, 0, },
-                       { 0, 0, 0, 0, 0, 0, 0, 0, },
-                       { 0, 0, 0, 1, 1, 0, 0, 0, },
-                    };
-
-                    for (size_t ix = 0; ix < 8; ++ix)
-                    {
-                        for (size_t iy = 0; iy < 8; ++iy)
-                        {
-                            if (_unexist_gizmo_icon[7 - iy][ix] == 0)
-                                result->pix(ix, iy).set({ 0.f, 0.f, 0.f, 0.f });
-                            else
-                                result->pix(ix, iy).set({ 1.f, 1.f, 1.f, 0.8f });
-                        }
-                    }
-
-                    return result;
-                };
-
-            m_camera_icon = graphic::texture::load(glcontext, "!/builtin/icon/gizmo_camera.png");
-            if (m_camera_icon == nullptr)
-                m_camera_icon = create_texture_for_unexist_gizmo_icon();
-
-            m_point_or_shape_light2d_icon = graphic::texture::load(glcontext, "!/builtin/icon/gizmo_point_light2d.png");
-            if (m_point_or_shape_light2d_icon == nullptr)
-                m_point_or_shape_light2d_icon = create_texture_for_unexist_gizmo_icon();
-
-            m_parallel_light2d_icon = graphic::texture::load(glcontext, "!/builtin/icon/gizmo_parallel_light2d.png");
-            if (m_parallel_light2d_icon == nullptr)
-                m_parallel_light2d_icon = create_texture_for_unexist_gizmo_icon();
-
-            m_selecting_default_texture = graphic::texture::create(1, 1, jegl_texture::format::RGBA);
-            m_selecting_default_texture->pix(0, 0).set({ 1.f, 1.f, 1.f, 1.f });
-
-            m_gizmo_shader = graphic::shader::create("!/builtin/gizmo.shader",
+            : m_camera_icon{ _create_missing_default_icon() }
+            , m_point_or_shape_light2d_icon{ _create_missing_default_icon() }
+            , m_parallel_light2d_icon{ _create_missing_default_icon() }
+            , m_selecting_default_texture{ graphic::texture::create(1, 1, jegl_texture::format::RGBA) }
+            , m_gizmo_shader{ graphic::shader::create("!/builtin/gizmo.shader",
                 { R"(
 import je::shader;
 
@@ -278,9 +280,9 @@ public let frag =
     where texture_color = alphatest(je_color * texture(Main, vf.uv))
     ;
 ;
-)" });
-            m_gizmo_camera_visual_cone_shader = graphic::shader::create("!/builtin/gizmo_camera_visual_cone.shader",
-                { R"(
+)" }).value() }
+, m_gizmo_camera_visual_cone_shader{ graphic::shader::create("!/builtin/gizmo_camera_visual_cone.shader",
+    { R"(
 import je::shader;
 
 SHARED  (true);
@@ -313,8 +315,8 @@ public func frag(_: v2f)
         self_lum = vec4(1., 1., 1., 1.0),
     };
 }
-)" });
-            m_gizmo_physics2d_collider_shader = graphic::shader::create("!/builtin/gizmo_physics2d_collider.shader",
+)" }).value() }
+, m_gizmo_physics2d_collider_shader{ graphic::shader::create("!/builtin/gizmo_physics2d_collider.shader",
                 { R"(
 import je::shader;
 
@@ -347,8 +349,8 @@ public let frag =
     }
     ;
 ;
-)" });
-            m_gizmo_selecting_item_highlight_shader = graphic::shader::create("!/builtin/gizmo_selecting_item_highlight.shader",
+)" }).value() }
+, m_gizmo_selecting_item_highlight_shader{ graphic::shader::create("!/builtin/gizmo_selecting_item_highlight.shader",
                 { R"(
 import je::shader;
 
@@ -394,15 +396,8 @@ public func frag(vf: v2f)
         self_lum = float4::zero,
     };
 }
-)" });
-
-            float gizmo_vertex_data[] = {
-                -0.5f, 0.5f, 0.0f,      0.0f, 1.0f,
-                -0.5f, -0.5f, 0.0f,     0.0f, 0.0f,
-                0.5f, 0.5f, 0.0f,       1.0f, 1.0f,
-                0.5f, -0.5f, 0.0f,      1.0f, 0.0f,
-            };
-            m_gizmo_vertex = graphic::vertex::create(
+)" }).value() }
+, m_gizmo_vertex{ graphic::vertex::create(
                 jegl_vertex::type::TRIANGLESTRIP,
                 gizmo_vertex_data,
                 sizeof(gizmo_vertex_data),
@@ -412,43 +407,42 @@ public func frag(vf: v2f)
                 {
                     {jegl_vertex::data_type::FLOAT32, 3},
                     {jegl_vertex::data_type::FLOAT32, 2},
-                });
-
-            float gizmo_camera_visual_cone_vertex_data[] = {
-                -1.0f, -1.0f, -1.0f,
-                1.0f, -1.0f, -1.0f,
-                1.0f, 1.0f, -1.0f,
-                -1.0f, 1.0f, -1.0f,
-                -1.0f, -1.0f, 1.0f,
-                1.0f, -1.0f, 1.0f,
-                1.0f, 1.0f, 1.0f,
-                -1.0f, 1.0f, 1.0f,
-            };
-            m_gizmo_camera_visual_cone_vertex =
-                graphic::vertex::create(jegl_vertex::type::LINESTRIP,
-                    gizmo_camera_visual_cone_vertex_data,
-                    sizeof(gizmo_camera_visual_cone_vertex_data),
-                    {
-                        0, 1, 2, 3, 0, 4, 5, 6, 7, 4, 5, 1, 2, 6, 7, 3
-                    },
+                }).value() }
+                , m_gizmo_camera_visual_cone_vertex{ graphic::vertex::create(jegl_vertex::type::LINESTRIP,
+                        gizmo_camera_visual_cone_vertex_data,
+                        sizeof(gizmo_camera_visual_cone_vertex_data),
+                        {
+                            0, 1, 2, 3, 0, 4, 5, 6, 7, 4, 5, 1, 2, 6, 7, 3
+                        },
                     {
                         {jegl_vertex::data_type::FLOAT32, 3},
-                    });
-
-            m_gizmo_physics2d_collider_box_vertex = graphic::vertex::create(
-                jegl_vertex::type::LINESTRIP,
-                gizmo_vertex_data,
-                sizeof(gizmo_vertex_data),
-                {
-                    0, 1, 3, 2, 0
-                },
+                    }).value() }
+                    , m_gizmo_physics2d_collider_box_vertex{ graphic::vertex::create(
+                        jegl_vertex::type::LINESTRIP,
+                        gizmo_vertex_data,
+                        sizeof(gizmo_vertex_data),
+                        {
+                            0, 1, 3, 2, 0
+                        },
                 {
                     {jegl_vertex::data_type::FLOAT32, 3},
                     {jegl_vertex::data_type::FLOAT32, 2},
-                });
+                }).value() }
+                , m_gizmo_physics2d_collider_circle_vertex{ _create_circle_vertex({ 0.f, 0.f, 1.f }) }
+        {
+            auto camera_icon = graphic::texture::load(glcontext, "!/builtin/icon/gizmo_camera.png");
+            if (camera_icon.has_value())
+                m_camera_icon = camera_icon.value();
 
-            m_gizmo_physics2d_collider_circle_vertex =
-                _create_circle_vertex({ 0.f, 0.f, 1.f });
+            auto point_or_shape_light2d_icon = graphic::texture::load(glcontext, "!/builtin/icon/gizmo_point_light2d.png");
+            if (point_or_shape_light2d_icon.has_value())
+                m_point_or_shape_light2d_icon = point_or_shape_light2d_icon.value();
+
+            auto parallel_light2d_icon = graphic::texture::load(glcontext, "!/builtin/icon/gizmo_parallel_light2d.png");
+            if (parallel_light2d_icon.has_value())
+                m_parallel_light2d_icon = parallel_light2d_icon.value();
+
+            m_selecting_default_texture->pix(0, 0).set({ 1.f, 1.f, 1.f, 1.f });
         }
     };
 
@@ -547,18 +541,24 @@ public func frag(vf: v2f)
 
         inline static input_msg _inputs = {};
 
+        inline static const float axis_x_data[] = {
+           -1.f, 0.f, 0.f,       0.25f, 0.f, 0.f,
+           1.f, 0.f, 0.f,       1.f,   0.f, 0.f
+        };
+        inline static const float axis_y_data[] = {
+            0.f, -1.f, 0.f,       0.f, 0.25f, 0.f,
+            0.f, 1.f, 0.f,        0.f, 1.f, 0.f,
+        };
+        inline static const float axis_z_data[] = {
+            0.f, 0.f, -1.f,       0.f, 0.f, 0.25f,
+            0.f, 0.f,  1.f,       0.f, 0.f, 1.f
+        };
+
         DefaultEditorSystem(game_world w)
             : game_system(w)
             , _graphic_uhost(jegl_uhost_get_or_create_for_universe(w.get_universe().handle(), nullptr))
             , _gizmo_resources(jegl_uhost_get_context(_graphic_uhost))
-        {
-            _gizmo_draw_branch = jegl_uhost_alloc_branch(_graphic_uhost);
-
-            const float axis_x_data[] = {
-                -1.f, 0.f, 0.f,       0.25f, 0.f, 0.f,
-                1.f, 0.f, 0.f,       1.f,   0.f, 0.f
-            };
-            axis_x = graphic::vertex::create(jegl_vertex::type::LINES,
+            , axis_x{ graphic::vertex::create(jegl_vertex::type::LINES,
                 axis_x_data,
                 sizeof(axis_x_data),
                 {
@@ -567,40 +567,32 @@ public func frag(vf: v2f)
                 {
                     {jegl_vertex::data_type::FLOAT32, 3},
                     {jegl_vertex::data_type::FLOAT32, 3},
-                });
-
-            const float axis_y_data[] = {
-                0.f, -1.f, 0.f,       0.f, 0.25f, 0.f,
-                0.f, 1.f, 0.f,        0.f, 1.f, 0.f,
-            };
-            axis_y = graphic::vertex::create(jegl_vertex::type::LINES,
-                axis_y_data,
-                sizeof(axis_y_data),
-                {
-                    0, 1
-                },
+                }).value() }
+                , axis_y{ graphic::vertex::create(jegl_vertex::type::LINES,
+                    axis_y_data,
+                    sizeof(axis_y_data),
+                    {
+                        0, 1
+                    },
                 {
                     {jegl_vertex::data_type::FLOAT32, 3},
                     {jegl_vertex::data_type::FLOAT32, 3},
-                });
-
-            const float axis_z_data[] = {
-                0.f, 0.f, -1.f,       0.f, 0.f, 0.25f,
-                0.f, 0.f,  1.f,       0.f, 0.f, 1.f
-            };
-            axis_z = graphic::vertex::create(jegl_vertex::type::LINES,
-                axis_z_data,
-                sizeof(axis_z_data),
-                {
-                    0, 1
-                },
+                }).value() }
+                , axis_z{ graphic::vertex::create(jegl_vertex::type::LINES,
+                    axis_z_data,
+                    sizeof(axis_z_data),
+                    {
+                        0, 1
+                    },
                 {
                     {jegl_vertex::data_type::FLOAT32, 3},
                     {jegl_vertex::data_type::FLOAT32, 3},
-                });
-            circ_x = GizmoResources::_create_circle_vertex({ 1.f, 0.f, 0.f });
-            circ_y = GizmoResources::_create_circle_vertex({ 0.f, 1.f, 0.f });
-            circ_z = GizmoResources::_create_circle_vertex({ 0.f, 0.f, 1.f });
+                }).value() }
+                , circ_x{ GizmoResources::_create_circle_vertex({ 1.f, 0.f, 0.f }) }
+            , circ_y{ GizmoResources::_create_circle_vertex({ 0.f, 1.f, 0.f }) }
+            , circ_z{ GizmoResources::_create_circle_vertex({ 0.f, 0.f, 1.f }) }
+        {
+            _gizmo_draw_branch = jegl_uhost_alloc_branch(_graphic_uhost);
 
             const float selector_size = 0.1f;
 
@@ -761,11 +753,11 @@ public func frag(vf: v2f)
                         },
                         {
                             {jegl_vertex::data_type::FLOAT32, 3},
-                        });
+                        }).value();
 
-                basic::resource<graphic::shader>
-                    axis_shader = graphic::shader::create("!/builtin/mover_axis.shader",
-                        { R"(
+                        basic::resource<graphic::shader>
+                            axis_shader = graphic::shader::create("!/builtin/mover_axis.shader",
+                                { R"(
 import je::shader;
         
 SHARED  (true);
@@ -803,10 +795,10 @@ public let frag =
         , ratio = step(float::const(0.5), je_color->x)
     ;
 ;
-        )" });
-                basic::resource<graphic::shader>
-                    select_box_shader = graphic::shader::create("!/builtin/select_box.shader",
-                        { R"(
+        )" }).value();
+                        basic::resource<graphic::shader>
+                            select_box_shader = graphic::shader::create("!/builtin/select_box.shader",
+                                { R"(
 import je::shader;
         
 SHARED  (true);
@@ -839,87 +831,87 @@ public let frag =
     }
     ;
 ;
-        )" });
+        )" }).value();
 
-                game_world current_world = mover_entity.game_world();
-                game_entity axis_x_e = current_world.add_entity<
-                    Transform::LocalPosition,
-                    Transform::LocalScale,
-                    Transform::LocalToParent,
-                    Transform::Translation,
-                    Renderer::Shaders,
-                    Renderer::Shape,
-                    Renderer::Rendqueue,
-                    Renderer::Color,
-                    Editor::Invisable,
-                    Editor::EntityMover
-                >();
-                game_entity axis_y_e = current_world.add_entity<
-                    Transform::LocalPosition,
-                    Transform::LocalScale,
-                    Transform::LocalToParent,
-                    Transform::Translation,
-                    Renderer::Shaders,
-                    Renderer::Shape,
-                    Renderer::Rendqueue,
-                    Renderer::Color,
-                    Editor::Invisable,
-                    Editor::EntityMover
-                >();
-                game_entity axis_z_e = current_world.add_entity<
-                    Transform::LocalPosition,
-                    Transform::LocalScale,
-                    Transform::LocalToParent,
-                    Transform::Translation,
-                    Renderer::Shaders,
-                    Renderer::Shape,
-                    Renderer::Rendqueue,
-                    Renderer::Color,
-                    Editor::Invisable,
-                    Editor::EntityMover
-                >();
+                        game_world current_world = mover_entity.game_world();
+                        game_entity axis_x_e = current_world.add_entity<
+                            Transform::LocalPosition,
+                            Transform::LocalScale,
+                            Transform::LocalToParent,
+                            Transform::Translation,
+                            Renderer::Shaders,
+                            Renderer::Shape,
+                            Renderer::Rendqueue,
+                            Renderer::Color,
+                            Editor::Invisable,
+                            Editor::EntityMover
+                        >();
+                        game_entity axis_y_e = current_world.add_entity<
+                            Transform::LocalPosition,
+                            Transform::LocalScale,
+                            Transform::LocalToParent,
+                            Transform::Translation,
+                            Renderer::Shaders,
+                            Renderer::Shape,
+                            Renderer::Rendqueue,
+                            Renderer::Color,
+                            Editor::Invisable,
+                            Editor::EntityMover
+                        >();
+                        game_entity axis_z_e = current_world.add_entity<
+                            Transform::LocalPosition,
+                            Transform::LocalScale,
+                            Transform::LocalToParent,
+                            Transform::Translation,
+                            Renderer::Shaders,
+                            Renderer::Shape,
+                            Renderer::Rendqueue,
+                            Renderer::Color,
+                            Editor::Invisable,
+                            Editor::EntityMover
+                        >();
 
-                game_entity select_box = current_world.add_entity<
-                    Transform::LocalRotation,
-                    Transform::LocalPosition,
-                    Transform::LocalScale,
-                    Transform::LocalToParent,
-                    Transform::Translation,
-                    Renderer::Shaders,
-                    Renderer::Shape,
-                    Renderer::Rendqueue,
-                    Editor::Invisable,
-                    Editor::EntitySelectBox
-                >();
+                        game_entity select_box = current_world.add_entity<
+                            Transform::LocalRotation,
+                            Transform::LocalPosition,
+                            Transform::LocalScale,
+                            Transform::LocalToParent,
+                            Transform::Translation,
+                            Renderer::Shaders,
+                            Renderer::Shape,
+                            Renderer::Rendqueue,
+                            Editor::Invisable,
+                            Editor::EntitySelectBox
+                        >();
 
-                axis_x_e.get_component<Renderer::Shaders>()->shaders.push_back(axis_shader);
-                axis_y_e.get_component<Renderer::Shaders>()->shaders.push_back(axis_shader);
-                axis_z_e.get_component<Renderer::Shaders>()->shaders.push_back(axis_shader);
-                select_box.get_component<Renderer::Shaders>()->shaders.push_back(select_box_shader);
+                        axis_x_e.get_component<Renderer::Shaders>()->shaders.push_back(axis_shader);
+                        axis_y_e.get_component<Renderer::Shaders>()->shaders.push_back(axis_shader);
+                        axis_z_e.get_component<Renderer::Shaders>()->shaders.push_back(axis_shader);
+                        select_box.get_component<Renderer::Shaders>()->shaders.push_back(select_box_shader);
 
-                axis_x_e.get_component<Editor::EntityMover>()->axis = math::vec3(1.f, 0, 0);
-                axis_y_e.get_component<Editor::EntityMover>()->axis = math::vec3(0, 1.f, 0);
-                axis_z_e.get_component<Editor::EntityMover>()->axis = math::vec3(0, 0, 1.f);
+                        axis_x_e.get_component<Editor::EntityMover>()->axis = math::vec3(1.f, 0, 0);
+                        axis_y_e.get_component<Editor::EntityMover>()->axis = math::vec3(0, 1.f, 0);
+                        axis_z_e.get_component<Editor::EntityMover>()->axis = math::vec3(0, 0, 1.f);
 
-                axis_x_e.get_component<Renderer::Shape>()->vertex = axis_x;
-                axis_y_e.get_component<Renderer::Shape>()->vertex = axis_y;
-                axis_z_e.get_component<Renderer::Shape>()->vertex = axis_z;
-                select_box.get_component<Renderer::Shape>()->vertex = select_box_vert;
+                        axis_x_e.get_component<Renderer::Shape>()->vertex = axis_x;
+                        axis_y_e.get_component<Renderer::Shape>()->vertex = axis_y;
+                        axis_z_e.get_component<Renderer::Shape>()->vertex = axis_z;
+                        select_box.get_component<Renderer::Shape>()->vertex = select_box_vert;
 
-                select_box.get_component<Renderer::Rendqueue>()->rend_queue =
-                    axis_x_e.get_component<Renderer::Rendqueue>()->rend_queue =
-                    axis_y_e.get_component<Renderer::Rendqueue>()->rend_queue =
-                    axis_z_e.get_component<Renderer::Rendqueue>()->rend_queue = 100000;
+                        select_box.get_component<Renderer::Rendqueue>()->rend_queue =
+                            axis_x_e.get_component<Renderer::Rendqueue>()->rend_queue =
+                            axis_y_e.get_component<Renderer::Rendqueue>()->rend_queue =
+                            axis_z_e.get_component<Renderer::Rendqueue>()->rend_queue = 100000;
 
-                axis_x_e.get_component<Transform::LocalPosition>()->pos = math::vec3(1.f, 0, 0);
-                axis_y_e.get_component<Transform::LocalPosition>()->pos = math::vec3(0, 1.f, 0);
-                axis_z_e.get_component<Transform::LocalPosition>()->pos = math::vec3(0, 0, 1.f);
+                        axis_x_e.get_component<Transform::LocalPosition>()->pos = math::vec3(1.f, 0, 0);
+                        axis_y_e.get_component<Transform::LocalPosition>()->pos = math::vec3(0, 1.f, 0);
+                        axis_z_e.get_component<Transform::LocalPosition>()->pos = math::vec3(0, 0, 1.f);
 
-                select_box.get_component<Transform::LocalToParent>()->parent_uid =
-                    axis_x_e.get_component<Transform::LocalToParent>()->parent_uid =
-                    axis_y_e.get_component<Transform::LocalToParent>()->parent_uid =
-                    axis_z_e.get_component<Transform::LocalToParent>()->parent_uid =
-                    anchor.uid;
+                        select_box.get_component<Transform::LocalToParent>()->parent_uid =
+                            axis_x_e.get_component<Transform::LocalToParent>()->parent_uid =
+                            axis_y_e.get_component<Transform::LocalToParent>()->parent_uid =
+                            axis_z_e.get_component<Transform::LocalToParent>()->parent_uid =
+                            anchor.uid;
             }
             if (const game_entity* current = _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr)
             {
@@ -1004,15 +996,15 @@ public let frag =
             {
                 if (_inputs._grab_axis_translation == &trans && _camera_porjection)
                 {
-                    math::vec2 diff = 
-                        (_inputs.current_mouse_pos - _inputs._last_drag_mouse_pos) 
+                    math::vec2 diff =
+                        (_inputs.current_mouse_pos - _inputs._last_drag_mouse_pos)
                         * math::vec2(1.f, -1.f)
                         * MOUSE_MOVEMENT_SCALE;
 
                     math::vec4 p0 = trans.world_position;
                     p0.w = 1.0f;
                     p0 = math::mat4trans(
-                        _camera_porjection->projection, 
+                        _camera_porjection->projection,
                         math::mat4trans(_camera_porjection->view, p0));
 
                     math::vec4 p1 = trans.world_position + trans.world_rotation * mover.axis;
@@ -1169,12 +1161,11 @@ public let frag =
                 Camera::RendToFramebuffer& r2b,
                 Camera::OrthoProjection* o2d)
                 {
-                    if (r2b.framebuffer == nullptr
-                        || proj.default_uniform_buffer == nullptr)
+                    if (!r2b.framebuffer.has_value())
                         return;
 
                     enable_draw_gizmo_at_framebuf = EditorGizmoContext{
-                           r2b.framebuffer,
+                           r2b.framebuffer.value(),
                            &trans,
                            &proj,
                     };
@@ -1185,8 +1176,8 @@ public let frag =
                     using namespace input;
                     using namespace math;
 
-                    auto view_space_width = r2b.framebuffer->width();
-                    auto view_space_height = r2b.framebuffer->height();
+                    auto view_space_width = r2b.framebuffer.value()->width();
+                    auto view_space_height = r2b.framebuffer.value()->height();
 
                     auto uniform_mouse_x = 2.0f * ((float)_inputs.current_mouse_pos.x / (float)view_space_width - 0.5f);
                     auto uniform_mouse_y = -2.0f * ((float)_inputs.current_mouse_pos.y / (float)view_space_height - 0.5f);
@@ -1198,8 +1189,8 @@ public let frag =
                     }
 
                     _camera_ray = math::ray(
-                        trans, 
-                        proj, 
+                        trans,
+                        proj,
                         math::vec2(uniform_mouse_x, uniform_mouse_y),
                         _camera_is_in_o2d_mode);
 
@@ -1515,14 +1506,14 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                             if (textures != nullptr)
                             {
                                 auto binded_in_zero = textures->get_texture(0);
-                                if (binded_in_zero != nullptr)
+                                if (binded_in_zero.has_value())
                                 {
                                     binded = true;
                                     jegl_rchain_bind_texture(
                                         gizmo_rchain,
                                         group,
                                         0,
-                                        binded_in_zero->resource());
+                                        binded_in_zero.value()->resource());
                                 }
                             }
 
@@ -1538,7 +1529,9 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                 translation->world_rotation,
                                 translation->local_scale,
                                 _gizmo_resources.m_gizmo_selecting_item_highlight_shader->resource(),
-                                shape->vertex != nullptr ? shape->vertex->resource() : _gizmo_resources.m_gizmo_vertex->resource(),
+                                shape->vertex.has_value()
+                                ? shape->vertex.value()->resource()
+                                : _gizmo_resources.m_gizmo_vertex->resource(),
                                 group);
 
                             if (draw_action != nullptr && textures != nullptr)
@@ -1592,13 +1585,16 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                                 && current->get_component<Light2D::Range>() == nullptr)
                             {
                                 localScale.scale = localScale.scale * (
-                                    eshape->vertex == nullptr
-                                    ? jeecs::math::vec3(1.0f, 1.0f, 0.0f)
-                                    : jeecs::math::vec3(
-                                        eshape->vertex->resource()->m_raw_vertex_data->m_x_max - eshape->vertex->resource()->m_raw_vertex_data->m_x_min,
-                                        eshape->vertex->resource()->m_raw_vertex_data->m_y_max - eshape->vertex->resource()->m_raw_vertex_data->m_y_min,
-                                        eshape->vertex->resource()->m_raw_vertex_data->m_z_max - eshape->vertex->resource()->m_raw_vertex_data->m_z_min
-                                    ));
+                                    eshape->vertex.has_value()
+                                    ? jeecs::math::vec3(
+                                        eshape->vertex.value()->resource()->m_raw_vertex_data->m_x_max
+                                        - eshape->vertex.value()->resource()->m_raw_vertex_data->m_x_min,
+                                        eshape->vertex.value()->resource()->m_raw_vertex_data->m_y_max
+                                        - eshape->vertex.value()->resource()->m_raw_vertex_data->m_y_min,
+                                        eshape->vertex.value()->resource()->m_raw_vertex_data->m_z_max
+                                        - eshape->vertex.value()->resource()->m_raw_vertex_data->m_z_min
+                                    )
+                                    : jeecs::math::vec3(1.0f, 1.0f, 0.0f));
                             }
                             else
                             {
@@ -1871,7 +1867,7 @@ WO_API wo_api wojeapi_reload_texture_of_entity(wo_vm vm, wo_value args)
             const char* existed_texture_path = texture_res.m_texture->resource()->m_path;
 
             if (existed_texture_path != nullptr && old_texture_path == existed_texture_path)
-                texture_res.m_texture = newtexture;
+                texture_res.m_texture = newtexture.value();
         }
     }
     return wo_ret_bool(vm, true);
@@ -1906,7 +1902,9 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
             assert(newshader != nullptr && (*newshader)->resource()->m_path != nullptr);
 
             jeecs::basic::resource<jeecs::graphic::shader> new_shader_instance = *newshader;
-            *newshader = jeecs::graphic::shader::load(gcontext, new_shader_instance->resource()->m_path);
+
+            // Load and create new shader instance, must be successful.
+            *newshader = jeecs::graphic::shader::load(gcontext, new_shader_instance->resource()->m_path).value();
 
             const char builtin_uniform_varname[] = "JOYENGINE_";
 
@@ -2017,10 +2015,42 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
             return wo_ret_bool(vm, true);
 
         // 1. Load shader for checking bad shaders
-        jeecs::basic::resource<jeecs::graphic::shader> new_shader =
+        auto new_shader =
             jeecs::graphic::shader::load(gcontext, new_shader_path);
 
-        if (new_shader == nullptr)
+        if (new_shader.has_value())
+        {
+            // 1.2 OK! replace old shader with new shader.
+            if (bad_uniforms == nullptr)
+            {
+                for (auto& shader : shaders->shaders)
+                {
+                    assert(shader != nullptr);
+                    if (shader->resource()->m_path != nullptr && old_shader_path == shader->resource()->m_path)
+                        shader = copy_shader_generator(&new_shader.value(), shader);
+                }
+            }
+            else
+            {
+                for (auto& ok_or_bad_shader : bad_uniforms->stored_uniforms)
+                {
+                    if (ok_or_bad_shader.is_ok())
+                    {
+                        auto& ok_shader = ok_or_bad_shader.get_ok();
+                        if (ok_shader->resource()->m_path != nullptr && old_shader_path == ok_shader->resource()->m_path)
+                            ok_or_bad_shader = copy_shader_generator(&new_shader.value(), ok_shader);
+                    }
+                    else if (ok_or_bad_shader.get_bad().m_path == old_shader_path)
+                        ok_or_bad_shader = copy_shader_generator(&new_shader.value(), ok_or_bad_shader.get_bad());
+                }
+
+                // Ok, check for update!
+                if (_update_bad_shader_to_new_shader(shaders, bad_uniforms))
+                    entity->remove_component<jeecs::Editor::BadShadersUniform>();
+            }
+            return wo_ret_bool(vm, true);
+        }
+        else
         {
             // 1.1 Shader is failed, if current entity still have BadShadersUniform, do nothing.
             //     or move all shader to BadShadersUniform.
@@ -2057,38 +2087,6 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
             shaders->shaders.clear();
 
             return wo_ret_bool(vm, false);
-        }
-        else
-        {
-            // 1.2 OK! replace old shader with new shader.
-            if (bad_uniforms == nullptr)
-            {
-                for (auto& shader : shaders->shaders)
-                {
-                    assert(shader != nullptr);
-                    if (shader->resource()->m_path != nullptr && old_shader_path == shader->resource()->m_path)
-                        shader = copy_shader_generator(&new_shader, shader);
-                }
-            }
-            else
-            {
-                for (auto& ok_or_bad_shader : bad_uniforms->stored_uniforms)
-                {
-                    if (ok_or_bad_shader.is_ok())
-                    {
-                        auto& ok_shader = ok_or_bad_shader.get_ok();
-                        if (ok_shader->resource()->m_path != nullptr && old_shader_path == ok_shader->resource()->m_path)
-                            ok_or_bad_shader = copy_shader_generator(&new_shader, ok_shader);
-                    }
-                    else if (ok_or_bad_shader.get_bad().m_path == old_shader_path)
-                        ok_or_bad_shader = copy_shader_generator(&new_shader, ok_or_bad_shader.get_bad());
-                }
-
-                // Ok, check for update!
-                if (_update_bad_shader_to_new_shader(shaders, bad_uniforms))
-                    entity->remove_component<jeecs::Editor::BadShadersUniform>();
-            }
-            return wo_ret_bool(vm, true);
         }
     }
     return wo_ret_bool(vm, true);

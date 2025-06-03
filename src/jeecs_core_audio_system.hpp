@@ -82,7 +82,7 @@ namespace jeecs
                     }
                     else
                     {
-                        source.source->set_playing_buffer(playing.buffer.get_resource());
+                        source.source->set_playing_buffer(playing.buffer.get_resource().value());
                         source.source->update(
                             [&](jeal_source* source_data) 
                             {

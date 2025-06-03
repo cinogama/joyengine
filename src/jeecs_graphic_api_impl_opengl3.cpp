@@ -141,8 +141,16 @@ namespace jeecs::graphic::api::gl3
 
         GLuint m_vertex_shader;
         GLuint m_fragment_shader;
-
         jeecs::basic::resource<jegl3_shader_blob_shared> m_shared_blob_data;
+
+        JECS_DISABLE_MOVE_AND_COPY(jegl3_shader_blob);
+
+        jegl3_shader_blob(GLuint vs, GLuint fs, jegl3_shader_blob_shared* s)
+            : m_vertex_shader(vs)
+            , m_fragment_shader(fs)
+            , m_shared_blob_data(jeecs::basic::resource<jegl3_shader_blob_shared>(s))
+        {
+        }
     };
 
     struct jegl_gl3_shader
@@ -418,8 +426,6 @@ namespace jeecs::graphic::api::gl3
         {
         case jegl_resource::type::SHADER:
         {
-            jegl3_shader_blob* blob = new jegl3_shader_blob;
-
             std::string vertex_src
 #ifdef JE_ENABLE_GL330_GAPI
                 = "#version 330 core\n\n"
@@ -438,16 +444,16 @@ namespace jeecs::graphic::api::gl3
             vertex_src += resource->m_raw_shader_data->m_vertex_glsl_src;
             const char* vertex_src_cstrptr = vertex_src.c_str();
 
-            blob->m_vertex_shader = glCreateShader(GL_VERTEX_SHADER);
-            glShaderSource(blob->m_vertex_shader, 1, &vertex_src_cstrptr, NULL);
-            glCompileShader(blob->m_vertex_shader);
+            GLuint vs = glCreateShader(GL_VERTEX_SHADER);
+            glShaderSource(vs, 1, &vertex_src_cstrptr, NULL);
+            glCompileShader(vs);
 
             fragment_src += resource->m_raw_shader_data->m_fragment_glsl_src;
             const char* fragment_src_cstrptr = fragment_src.c_str();
 
-            blob->m_fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-            glShaderSource(blob->m_fragment_shader, 1, &fragment_src_cstrptr, NULL);
-            glCompileShader(blob->m_fragment_shader);
+            GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
+            glShaderSource(fs, 1, &fragment_src_cstrptr, NULL);
+            glCompileShader(fs);
 
             // Check this program is acceptable?
             GLint compile_result;
@@ -457,44 +463,46 @@ namespace jeecs::graphic::api::gl3
             bool shader_program_has_error = false;
             std::string error_informations;
 
-            glGetShaderiv(blob->m_vertex_shader, GL_COMPILE_STATUS, &compile_result);
+            glGetShaderiv(vs, GL_COMPILE_STATUS, &compile_result);
             if (compile_result != GL_TRUE)
             {
                 shader_program_has_error = true;
-                glGetShaderiv(blob->m_vertex_shader, GL_INFO_LOG_LENGTH, &errmsg_len);
+                glGetShaderiv(vs, GL_INFO_LOG_LENGTH, &errmsg_len);
                 if (errmsg_len > 0)
                 {
                     std::vector<char> errmsg_buf(errmsg_len + 1);
-                    glGetShaderInfoLog(blob->m_vertex_shader, errmsg_len, &errmsg_written_len, errmsg_buf.data());
+                    glGetShaderInfoLog(vs, errmsg_len, &errmsg_written_len, errmsg_buf.data());
                     error_informations = error_informations + "In vertex shader: \n" + errmsg_buf.data();
                 }
             }
 
-            glGetShaderiv(blob->m_fragment_shader, GL_COMPILE_STATUS, &compile_result);
+            glGetShaderiv(fs, GL_COMPILE_STATUS, &compile_result);
             if (compile_result != GL_TRUE)
             {
                 shader_program_has_error = true;
-                glGetShaderiv(blob->m_fragment_shader, GL_INFO_LOG_LENGTH, &errmsg_len);
+                glGetShaderiv(fs, GL_INFO_LOG_LENGTH, &errmsg_len);
                 if (errmsg_len > 0)
                 {
                     std::vector<char> errmsg_buf(errmsg_len + 1);
-                    glGetShaderInfoLog(blob->m_fragment_shader, errmsg_len, &errmsg_written_len, errmsg_buf.data());
+                    glGetShaderInfoLog(fs, errmsg_len, &errmsg_written_len, errmsg_buf.data());
                     error_informations = error_informations + "In fragment shader: \n" + errmsg_buf.data();
                 }
             }
 
             if (shader_program_has_error)
             {
-                delete blob;
+                glDeleteShader(vs);
+                glDeleteShader(fs);
+
                 jeecs::debug::logerr("Some error happend when tring compile shader %p, please check.\n %s",
                     resource, error_informations.c_str());
                 return nullptr;
             }
             else
             {
-                blob->m_shared_blob_data =
-                    new jegl3_shader_blob::jegl3_shader_blob_shared(
-                        (uint32_t)resource->m_raw_shader_data->m_sampler_count);
+                jegl3_shader_blob* blob = new jegl3_shader_blob(
+                    vs, fs, new jegl3_shader_blob::jegl3_shader_blob_shared(
+                        (uint32_t)resource->m_raw_shader_data->m_sampler_count));
 
                 for (size_t i = 0; i < resource->m_raw_shader_data->m_sampler_count; ++i)
                 {

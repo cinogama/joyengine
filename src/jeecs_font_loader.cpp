@@ -95,7 +95,7 @@ void je_font_free(je_font* font)
     }
 }
 
-jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long chcode)
+const jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long chcode)
 {
     assert(font != nullptr);
 
@@ -103,10 +103,6 @@ jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long chcode)
 
     if (auto fnd = font->m_character_set.find(chcode); fnd != font->m_character_set.end())
         return &fnd->second;
-
-    jeecs::graphic::character& ch = font->m_character_set[chcode];
-
-    ch.m_char = (wchar_t)chcode;
 
     /////////////////////////////////////////////////
     int x0, y0, x1, y1, advance, lsb, pixel_w, pixel_h;
@@ -134,11 +130,26 @@ jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long chcode)
         pixel_h = 0;
     }
 
+    int texture_pixel_width = pixel_w + 2 * (int)font->m_board_size_x;
+    int texture_pixel_height = pixel_h + 2 * (int)font->m_board_size_y;
+
+    jeecs::graphic::character& ch =
+        font->m_character_set.insert(
+            std::make_pair(
+                chcode,
+                jeecs::graphic::character{
+                    jeecs::graphic::texture::create(
+                        (size_t)texture_pixel_width,
+                        (size_t)texture_pixel_width,
+                        jegl_texture::format::RGBA) })).first->second;
+
+    ch.m_char = (wchar_t)chcode;
+
     // 由于边框对字形大小没有发生影响，只是外围扩大了一圈
     // 所以为了保证所有显示仍然正确，需要让字体的大小扩大，
     // 基线偏移亦要考虑边框
-    ch.m_width = pixel_w + 2 * (int)font->m_board_size_x;
-    ch.m_height = pixel_h + 2 * (int)font->m_board_size_y;
+    ch.m_width = texture_pixel_width;
+    ch.m_height = texture_pixel_height;
     ch.m_advance_x = (int)round(font->m_x_scale_for_pix * (float)advance);
     ch.m_advance_y = -(int)round(font->m_y_scale_for_pix * (float)font->m_line_space);
     ch.m_baseline_offset_x = pixel_w ? (int)round(font->m_x_scale_for_pix * (float)x0) - (int)font->m_board_size_x : 0;

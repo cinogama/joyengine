@@ -2556,7 +2556,7 @@ jegl_create_texture [基本接口]
 请参见：
     jegl_close_resource
 */
-JE_API jegl_resource* jegl_create_texture(
+JE_API jegl_resource* /* NOT NULL */ jegl_create_texture(
     size_t width,
     size_t height,
     jegl_texture::format format);
@@ -2644,7 +2644,7 @@ je_font_get_char [基本接口]
 请参见：
     jeecs::graphic::character
 */
-JE_API jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long chcode);
+JE_API const jeecs::graphic::character* je_font_get_char(je_font* font, unsigned long chcode);
 
 /*
 jegl_mark_shared_resources_outdated [基本接口]
@@ -5550,23 +5550,35 @@ namespace jeecs
             {
             }
             optional(const std::nullopt_t&) noexcept
-                : optional()
+                : takeplace(0)
+                , has_constructed(false)
             {
             }
-
-            template<typename U = T>
+            optional(const std::optional<T>& opt) noexcept
+                : has_constructed(opt.has_value())
+            {
+                if (has_constructed)
+                    new (&storage) T(opt.value());
+            }
+            optional(const T& v) noexcept
+                : has_constructed(true)
+            {
+                new (&storage) T(v);
+            }
+            optional(T&& v) noexcept
+                : has_constructed(true)
+            {
+                new (&storage) T(std::move(v));
+            }
             optional(optional&& another) noexcept
                 : has_constructed(another.has_constructed)
             {
                 if (has_constructed)
                 {
                     new (&storage) T(std::move(another.storage));
-                    another.storage.~T();
-
-                    another.has_constructed = false;
+                    another.reset();
                 }
             }
-            template<typename U = T>
             optional(const optional& another) noexcept
                 : has_constructed(another.has_constructed)
             {
@@ -5575,8 +5587,6 @@ namespace jeecs
                     new (&storage) T(another.storage);
                 }
             }
-
-            template<typename U = T>
             optional& operator =(optional&& another) noexcept
             {
                 if (this != &another)
@@ -5594,7 +5604,6 @@ namespace jeecs
                 }
                 return *this;
             }
-            template<typename U = T>
             optional& operator =(const optional& another) noexcept
             {
                 if (this != &another)
@@ -5698,7 +5707,7 @@ namespace jeecs
                         m_file.emplace(
                             file_content_t{
                                 path,
-                                res,
+                                res.value(),
                             });
                         return true;
                     }
@@ -8930,7 +8939,7 @@ namespace jeecs
             {
                 je_font_free(m_font);
             }
-            character* get_character(unsigned int wcharacter) const noexcept
+            const character* get_character(unsigned int wcharacter) const noexcept
             {
                 return je_font_get_char(m_font, wcharacter);
             }
@@ -9077,9 +9086,7 @@ namespace jeecs
                 used_font = &font_base;
 
                 auto new_texture = texture::create(size_x, size_y, jegl_texture::format::RGBA);
-                assert(new_texture != nullptr);
                 std::memset(new_texture->resource()->m_raw_texture_data->m_pixels, 0, size_x * size_y * 4);
-
                 for (size_t ti = 0; ti < text.size(); ti++)
                 {
                     bool IgnoreEscapeSign = false;
@@ -9136,7 +9143,7 @@ namespace jeecs
                                         {
                                             auto& font_in_pool = FONT_POOL.at(
                                                 font_base.m_path.cpp_str()).at(
-                                                    (int)round(TEXT_SCALE * font_base.m_size + 0.5f));
+                                                    (int)round(TEXT_SCALE * font_base.m_size));
 
                                             used_font = font_in_pool.get();
                                         }
@@ -9356,7 +9363,7 @@ namespace jeecs
                         std::is_void_v<T> && !std::is_void_v<T> /* false */,
                         "Unsupported effect type");
 
-                return new effect<T>(instance);
+                return basic::resource<effect<T>>(new effect<T>(instance));
             }
 
             T* handle() const
@@ -9869,14 +9876,13 @@ namespace jeecs
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Shape);
             JECS_DEFAULT_CONSTRUCTOR(Shape);
 
-            basic::resource<graphic::vertex> vertex;
+            basic::optional<basic::resource<graphic::vertex>> vertex;
         };
         struct Shaders
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Shaders);
             JECS_DEFAULT_CONSTRUCTOR(Shaders);
 
-            // NOTE: shaders should not be nullptr!
             basic::vector<basic::resource<graphic::shader>> shaders;
 
             template <typename T>
@@ -9908,16 +9914,26 @@ namespace jeecs
 
             void bind_texture(size_t passid, const basic::resource<graphic::texture>& texture)
             {
-                for (auto i = textures.begin(); i != textures.end(); ++i)
+                for (auto& pair : textures)
                 {
-                    auto& [pass, tex] = *i;
-                    if (pass == passid)
+                    if (pair.m_pass_id == passid)
                     {
-                        tex = texture;
+                        pair.m_texture = texture;
                         return;
                     }
                 }
                 textures.push_back(texture_with_passid(passid, texture));
+            }
+            void remove_texture(size_t passid)
+            {
+                for (auto i = textures.begin(); i != textures.end(); ++i)
+                {
+                    if (i->m_pass_id == passid)
+                    {
+                        textures.erase(i);
+                        return;
+                    }
+                }
             }
             std::optional<basic::resource<graphic::texture>> get_texture(size_t passid) const
             {
@@ -11388,9 +11404,9 @@ namespace jeecs
                 vec3 entity_box_center, entity_box_size;
                 if (entity_shape_may_null)
                 {
-                    if (entity_shape_may_null->vertex != nullptr)
+                    if (entity_shape_may_null->vertex.has_value())
                     {
-                        auto* vertex_dat = entity_shape_may_null->vertex->resource()->m_raw_vertex_data;
+                        auto* vertex_dat = entity_shape_may_null->vertex.value()->resource()->m_raw_vertex_data;
                         entity_box_center = vec3(
                             (vertex_dat->m_x_max + vertex_dat->m_x_min) / 2.0f,
                             (vertex_dat->m_y_max + vertex_dat->m_y_min) / 2.0f,
@@ -11420,10 +11436,13 @@ namespace jeecs
                         translation.local_scale * entity_box_size,
                         translation.world_rotation);
 
-                if (minResult.intersected && consider_mesh && entity_shape_may_null != nullptr && entity_shape_may_null->vertex != nullptr)
+                if (minResult.intersected 
+                    && consider_mesh 
+                    && entity_shape_may_null != nullptr 
+                    && entity_shape_may_null->vertex.has_value())
                 {
                     return intersect_mesh(
-                        entity_shape_may_null->vertex,
+                        entity_shape_may_null->vertex.value(),
                         translation.world_position,
                         translation.world_rotation,
                         translation.local_scale);

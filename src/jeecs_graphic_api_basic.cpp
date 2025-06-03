@@ -703,7 +703,7 @@ void jegl_terminate_graphic_thread(jegl_context* thread)
 }
 
 bool jegl_update(
-    jegl_context* thread, 
+    jegl_context* thread,
     jegl_update_sync_mode mode,
     jegl_update_sync_callback_t callback_after_wait_may_null,
     void* callback_param)
@@ -769,7 +769,7 @@ bool jegl_using_resource(jegl_resource* resource)
     }
     else if (_current_graphic_thread != resource->m_graphic_thread)
     {
-        jeecs::debug::logerr("This resource has been used in graphic thread: %p.", 
+        jeecs::debug::logerr("This resource has been used in graphic thread: %p.",
             resource->m_graphic_thread);
         return false;
     }
@@ -782,7 +782,7 @@ bool jegl_using_resource(jegl_resource* resource)
     if (resource->m_custom_resource == nullptr && need_init_resource)
     {
         // Bad resource, it has been closed without any init job.
-        jeecs::debug::logerr("This resource has been closed but not been inited: %p.", 
+        jeecs::debug::logerr("This resource has been closed but not been inited: %p.",
             resource);
         return false;
     }
@@ -936,9 +936,13 @@ void jegl_close_resource(jegl_resource* resource)
             {
                 assert(resource->m_raw_framebuf_data->m_attachment_count > 0);
                 jeecs::basic::resource<jeecs::graphic::texture>* attachments =
-                    (jeecs::basic::resource<jeecs::graphic::texture>*)resource->m_raw_framebuf_data->m_output_attachments;
+                    reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture>*>(
+                        resource->m_raw_framebuf_data->m_output_attachments);
 
-                delete[]attachments;
+                for (size_t i = 0; i < resource->m_raw_framebuf_data->m_attachment_count; ++i)
+                    attachments[i].~shared_pointer();
+
+                free(attachments);
             }
             delete resource->m_raw_framebuf_data;
             break;
@@ -1460,7 +1464,7 @@ jegl_resource* jegl_create_framebuf(
 {
     if (width == 0 || height == 0 || attachment_count == 0)
     {
-        jeecs::debug::logwarn("Failed to create invalid framebuffer: size is zero or no attachment.");
+        jeecs::debug::logerr("Failed to create invalid framebuffer: size is zero or no attachment.");
         return nullptr;
     }
 
@@ -1476,14 +1480,17 @@ jegl_resource* jegl_create_framebuf(
     jeecs::basic::resource<jeecs::graphic::texture>* attachments = nullptr;
     if (attachment_count > 0)
     {
-        attachments = new jeecs::basic::resource<jeecs::graphic::texture>[attachment_count];
+        attachments = reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture>*>(
+            malloc(attachment_count * sizeof(jeecs::basic::resource<jeecs::graphic::texture>)));
 
         for (size_t i = 0; i < attachment_count; ++i)
-            attachments[i] = jeecs::graphic::texture::create(width, height,
-                jegl_texture::format(attachment_formats[i] | jegl_texture::format::FRAMEBUF));
+            new (&attachments[i]) jeecs::basic::resource<jeecs::graphic::texture>(
+                jeecs::graphic::texture::create(width, height,
+                    jegl_texture::format(attachment_formats[i] | jegl_texture::format::FRAMEBUF)));
     }
 
-    framebuf->m_raw_framebuf_data->m_output_attachments = (jegl_frame_buffer::attachment_t*)attachments;
+    framebuf->m_raw_framebuf_data->m_output_attachments =
+        (jegl_frame_buffer::attachment_t*)attachments;
 
     return framebuf;
 }

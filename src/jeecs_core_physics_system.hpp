@@ -74,7 +74,7 @@ namespace jeecs
 
                 if (world->group_config.has_resource())
                 {
-                    auto path = world->group_config.get_path();
+                    auto path = world->group_config.get_path().value();
                     auto* physics_group_config = jeecs_file_open(path.c_str());
 
                     if (physics_group_config == nullptr)

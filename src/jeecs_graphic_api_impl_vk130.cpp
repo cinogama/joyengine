@@ -219,6 +219,13 @@ VK_API_PLATFORM_API_LIST
 
         jeecs::basic::resource<blob_data> m_blob_data;
 
+        JECS_DISABLE_MOVE_AND_COPY(jevk13_shader_blob);
+
+        jevk13_shader_blob(blob_data* d)
+            : m_blob_data(jeecs::basic::resource<blob_data>(d))
+        {
+        }
+
         uint32_t get_built_in_location(const std::string& name)const
         {
             auto fnd = m_blob_data->m_ulocations.find(name);
@@ -244,8 +251,7 @@ VK_API_PLATFORM_API_LIST
     };
     struct jevk13_shader
     {
-        jeecs::basic::resource<jevk13_shader_blob::blob_data>
-            m_blob_data;
+        jeecs::basic::resource<jevk13_shader_blob::blob_data> m_blob_data;
 
         // Vulkan的这个设计真的让人很想吐槽，因为Pipeline和Shader与Pass/Rendbuffer
         // 捆绑在一起了，想尽办法最后就得靠目标渲染缓冲区的格式作为索引，根据shader
@@ -266,6 +272,13 @@ VK_API_PLATFORM_API_LIST
         VkPipeline prepare_pipeline(jegl_vk130_context* context);
         jevk13_uniformbuf* allocate_ubo_for_vars(jegl_vk130_context* context);
         jevk13_uniformbuf* get_last_usable_variable(jegl_vk130_context* context);
+
+        JECS_DISABLE_MOVE_AND_COPY(jevk13_shader);
+
+        jevk13_shader(jevk13_shader_blob* blob)
+            : m_blob_data(blob->m_blob_data)
+        {
+        }
     };
     struct jevk13_framebuffer
     {
@@ -2552,8 +2565,7 @@ VK_API_PLATFORM_API_LIST
                 jeecs::debug::logfatal("Failed to create vk130 pipeline layout.");
             }
 
-            auto* result = new jevk13_shader_blob;
-            result->m_blob_data = shader_blob;
+            auto* result = new jevk13_shader_blob(shader_blob);
             return result;
         }
         void destroy_shader_blob(jevk13_shader_blob* blob)
@@ -2565,11 +2577,9 @@ VK_API_PLATFORM_API_LIST
         {
             assert(blob != nullptr);
 
-            jevk13_shader* shader = new jevk13_shader{};
+            jevk13_shader* shader = new jevk13_shader(blob);
 
-            shader->m_blob_data = blob->m_blob_data;
             shader->m_uniform_cpu_buffer_size = shader->m_blob_data->m_uniform_size;
-
             shader->m_uniform_cpu_buffer_updated = true;
             shader->m_next_allocate_ubos_for_uniform_variable = 0;
             shader->m_command_commit_round = 0;
