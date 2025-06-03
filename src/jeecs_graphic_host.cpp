@@ -11,7 +11,7 @@ namespace jeecs
     {
         JECS_DISABLE_MOVE_AND_COPY(rendchain_branch);
 
-        static constexpr uint8_t BRANCH_CHAIN_POOL_SIZE = 1;
+        static constexpr uint8_t BRANCH_CHAIN_POOL_SIZE = 2;
 
         struct allocated_chain_t
         {
@@ -152,8 +152,10 @@ namespace jeecs
         void free_pipeline(rendchain_branch* pipe)
         {
             std::lock_guard g1(m_rendchain_branchs_mx);
+
             auto fnd = std::find(m_rendchain_branchs.begin(), m_rendchain_branchs.end(), pipe);
             assert(fnd != m_rendchain_branchs.end());
+
             m_rendchain_branchs.erase(fnd);
 
             delete pipe;
