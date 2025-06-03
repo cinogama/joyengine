@@ -28,15 +28,15 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
 
         JECS_DISABLE_MOVE_AND_COPY(DefaultResources);
 
-        DefaultResources()
-        {
-            const float default_shape_quad_data[] = {
+        inline static const float default_shape_quad_data[] = {
                 -0.5f, 0.5f, 0.0f,      0.0f, 1.0f,  0.0f, 0.0f, -1.0f,
                 -0.5f, -0.5f, 0.0f,     0.0f, 0.0f,  0.0f, 0.0f, -1.0f,
                 0.5f, 0.5f, 0.0f,       1.0f, 1.0f,  0.0f, 0.0f, -1.0f,
                 0.5f, -0.5f, 0.0f,      1.0f, 0.0f,  0.0f, 0.0f, -1.0f,
-            };
-            default_shape_quad =
+        };
+
+        DefaultResources()
+            : default_shape_quad{
                 graphic::vertex::create(
                     jegl_vertex::TRIANGLESTRIP,
                     default_shape_quad_data,
@@ -48,15 +48,10 @@ do{if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)\
                         {jegl_vertex::data_type::FLOAT32, 3},
                         {jegl_vertex::data_type::FLOAT32, 2},
                         {jegl_vertex::data_type::FLOAT32, 3},
-                    });
-
-            default_texture = graphic::texture::create(2, 2, jegl_texture::format::RGBA);
-            default_texture->pix(0, 0).set({ 1.f, 0.25f, 1.f, 1.f });
-            default_texture->pix(1, 1).set({ 1.f, 0.25f, 1.f, 1.f });
-            default_texture->pix(0, 1).set({ 0.25f, 0.25f, 0.25f, 1.f });
-            default_texture->pix(1, 0).set({ 0.25f, 0.25f, 0.25f, 1.f });
-
-            default_shader = graphic::shader::create("!/builtin/builtin_default.shader", R"(
+                    }).value()
+            }
+            , default_shader{
+                graphic::shader::create("!/builtin/builtin_default.shader", R"(
 // Default shader
 import je::shader;
 
@@ -78,8 +73,16 @@ public let frag =
 \_: v2f = fout{ color = vec4(t, 0., t, 1.) }
     where t = je_time->y();;
 
-)");
-            default_shaders_list.push_back(default_shader);
+)").value()
+            }
+            , default_texture{
+                graphic::texture::create(2, 2, jegl_texture::format::RGBA) }
+            , default_shaders_list{ default_shader }
+        {
+            default_texture->pix(0, 0).set({ 1.f, 0.25f, 1.f, 1.f });
+            default_texture->pix(1, 1).set({ 1.f, 0.25f, 1.f, 1.f });
+            default_texture->pix(0, 1).set({ 0.25f, 0.25f, 0.25f, 1.f });
+            default_texture->pix(1, 0).set({ 0.25f, 0.25f, 0.25f, 1.f });
         }
     };
 
@@ -178,7 +181,9 @@ public let frag =
             float zfar = clip ? clip->zfar : 1000.0f;
 
             graphic::framebuffer* rend_aim_buffer =
-                rendbuf && rendbuf->framebuffer ? rendbuf->framebuffer.get() : nullptr;
+                rendbuf && rendbuf->framebuffer.has_value() 
+                    ? rendbuf->framebuffer.value().get() 
+                    : nullptr;
 
             size_t
                 RENDAIMBUFFER_WIDTH =
@@ -317,7 +322,7 @@ public let frag =
         }
         math::vec3 get_entity_size(const Transform::Translation& trans, const Renderer::Shape* shape_may_null)
         {
-            return get_entity_size(trans, shape_may_null == nullptr ? nullptr : shape_may_null->vertex);
+            return get_entity_size(trans, shape_may_null != nullptr ? shape_may_null->vertex.get() : nullptr);
         }
     };
 

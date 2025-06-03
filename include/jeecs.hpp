@@ -5005,14 +5005,7 @@ namespace jeecs
                 memcpy(_c_str, str, _str_len);
                 return *this;
             }
-            operator std::string() const
-            {
-                return c_str();
-            }
-            /*string substr(size_t from, size_t count = (size_t)(-1))const
-            {
-                return  std::string(c_str()).substr(from, count);
-            }*/
+
             size_t size() const
             {
                 return _str_len;
@@ -5021,6 +5014,10 @@ namespace jeecs
             {
                 _c_str[_str_len] = 0;
                 return _c_str;
+            }
+            std::string cpp_str() const
+            {
+                return c_str();
             }
         };
 
@@ -5457,12 +5454,12 @@ namespace jeecs
                 _release_nolock((count_t*)je_atomic_fetch_intptr_t((intptr_t*)&m_count));
             }
 
-            shared_pointer() noexcept = default;
-            shared_pointer(T* v, void (*f)(T*) = &_default_free_func)
+            shared_pointer() = delete;
+            explicit shared_pointer(T* v, void (*f)(T*) = &_default_free_func)
                 : m_resource(v), m_freer(f), m_count(nullptr)
             {
-                if (m_resource != nullptr)
-                    m_count = _alloc_counter();
+                assert(m_resource != nullptr);
+                m_count = _alloc_counter();
             }
             shared_pointer(const shared_pointer& v) noexcept
             {
@@ -5519,14 +5516,7 @@ namespace jeecs
             {
                 return *m_resource;
             }
-            operator bool() const noexcept
-            {
-                return m_resource != nullptr;
-            }
-            bool operator!() const noexcept
-            {
-                return m_resource == nullptr;
-            }
+
             bool operator==(const T* ptr) const
             {
                 return m_resource == ptr;
@@ -5534,6 +5524,142 @@ namespace jeecs
             bool operator!=(const T* ptr) const
             {
                 return m_resource != ptr;
+            }
+        };
+
+        template <typename T>
+        class optional
+        {
+            union
+            {
+                char takeplace;
+                T storage;
+            };
+
+            bool has_constructed;
+        public:
+            ~optional()
+            {
+                if (has_constructed)
+                    storage.~T();
+            }
+
+            optional() noexcept
+                : takeplace(0)
+                , has_constructed(false)
+            {
+            }
+            optional(const std::nullopt_t&) noexcept
+                : optional()
+            {
+            }
+
+            template<typename U = T>
+            optional(optional&& another) noexcept
+                : has_constructed(another.has_constructed)
+            {
+                if (has_constructed)
+                {
+                    new (&storage) T(std::move(another.storage));
+                    another.storage.~T();
+
+                    another.has_constructed = false;
+                }
+            }
+            template<typename U = T>
+            optional(const optional& another) noexcept
+                : has_constructed(another.has_constructed)
+            {
+                if (has_constructed)
+                {
+                    new (&storage) T(another.storage);
+                }
+            }
+
+            template<typename U = T>
+            optional& operator =(optional&& another) noexcept
+            {
+                if (this != &another)
+                {
+                    if (has_constructed)
+                        storage.~T();
+
+                    has_constructed = another.has_constructed;
+                    if (has_constructed)
+                    {
+                        new (&storage) T(std::move(another.storage));
+                        another.storage.~T();
+                        another.has_constructed = false;
+                    }
+                }
+                return *this;
+            }
+            template<typename U = T>
+            optional& operator =(const optional& another) noexcept
+            {
+                if (this != &another)
+                {
+                    if (has_constructed)
+                        storage.~T();
+
+                    has_constructed = another.has_constructed;
+                    if (has_constructed)
+                    {
+                        new (&storage) T(another.storage);
+                    }
+                }
+                return *this;
+            }
+
+            bool has_value() const noexcept
+            {
+                return has_constructed;
+            }
+            T& value() noexcept
+            {
+                if (!has_constructed)
+                {
+                    jeecs::debug::logfatal(
+                        "jeecs::basic::optional: value is not constructed, you should call emplace() first.");
+                    abort();
+                }
+                return storage;
+            }
+            const T& value()const noexcept
+            {
+                if (!has_constructed)
+                {
+                    jeecs::debug::logfatal(
+                        "jeecs::basic::optional: value is not constructed, you should call emplace() first.");
+                    abort();
+                }
+                return storage;
+            }
+            void reset() noexcept
+            {
+                if (has_constructed)
+                {
+                    storage.~T();
+                    has_constructed = false;
+                }
+            }
+            template <typename... Args>
+            void emplace(Args&&... args) noexcept
+            {
+                if (has_constructed)
+                    storage.~T();
+                else
+                    has_constructed = true;
+                new (&storage) T(std::forward<Args>(args)...);
+            }
+
+            T* operator ->()noexcept
+            {
+                return &value();
+            }
+            const T* operator ->()const noexcept
+            {
+                return &value();
             }
         };
 
@@ -5553,69 +5679,101 @@ namespace jeecs
         template <typename T>
         class fileresource
         {
-            basic::resource<T> _m_resource = nullptr;
-            basic::string _m_path = "";
+            struct file_content_t
+            {
+                basic::string m_path;
+                basic::resource<T> m_resource;
+            };
+            std::optional<file_content_t> m_file;
 
         public:
             bool load(const std::string& path)
             {
-                _m_path = path;
-                _m_resource = nullptr;
+                clear();
                 if (path != "")
                 {
-                    _m_resource = T::load(path);
-                    return _m_resource != nullptr;
+                    auto res = T::load(path);
+                    if (res.has_value())
+                    {
+                        m_file.emplace(
+                            file_content_t{
+                                path,
+                                res,
+                            });
+                        return true;
+                    }
+                    return false;
                 }
                 return true;
             }
             void set_resource(const basic::resource<T>& res)
             {
-                _m_resource = res;
-                _m_path = "<builtin>";
+                m_file.emplace(
+                    file_content_t{
+                        "<builtin>",
+                        res,
+                    });
             }
             bool has_resource() const
             {
-                return _m_resource != nullptr;
+                return m_file.has_value();
             }
-            const basic::resource<T>& get_resource() const
+            std::optional<basic::resource<T>> get_resource() const
             {
-                return _m_resource;
+                if (m_file.has_value())
+                    return m_file->m_resource;
+
+                return std::nullopt;
             }
-            std::string get_path() const
+            std::optional<std::string> get_path() const
             {
-                return _m_path;
+                if (m_file.has_value())
+                    return m_file->m_path.cpp_str();
+
+                return std::nullopt;
             }
             void clear()
             {
-                _m_resource = nullptr;
-                _m_path = "";
+                m_file.reset();
             }
         };
 
         template <>
         class fileresource<void>
         {
-            bool _m_has_resource = false;
-            basic::string _m_path = "";
+            struct file_content_t
+            {
+                basic::string m_path;
+            };
+            std::optional<file_content_t> m_file;
 
         public:
             bool load(const std::string& path)
             {
-                _m_path = path;
-                return _m_has_resource = (path != "");
+                clear();
+                if (path != "")
+                {
+                    m_file.emplace(
+                        file_content_t{
+                            path,
+                        });
+                }
+                return true;
             }
-            std::string get_path() const
+            std::optional<std::string> get_path() const
             {
-                return _m_path;
+                if (m_file.has_value())
+                    return m_file->m_path.cpp_str();
+
+                return std::nullopt;
             }
             bool has_resource() const
             {
-                return _m_has_resource;
+                return m_file.has_value();
             }
             void clear()
             {
-                _m_has_resource = false;
-                _m_path = "";
+                m_file.reset();
             }
         };
     }
@@ -8034,12 +8192,12 @@ namespace jeecs
             }
 
         public:
-            static basic::resource<texture> load(jegl_context* context, const std::string& str)
+            static std::optional<basic::resource<texture>> load(jegl_context* context, const std::string& str)
             {
                 jegl_resource* res = jegl_load_texture(context, str.c_str());
                 if (res != nullptr)
-                    return new texture(res);
-                return nullptr;
+                    return basic::resource<texture>(new texture(res));
+                return std::nullopt;
             }
             static basic::resource<texture> create(size_t width, size_t height, jegl_texture::format format)
             {
@@ -8047,11 +8205,7 @@ namespace jeecs
 
                 // Create texture must be successfully.
                 assert(res != nullptr);
-
-                if (res != nullptr)
-                    return new texture(res);
-
-                return nullptr;
+                return basic::resource<texture>(new texture(res));
             }
             static basic::resource<texture> clip(
                 const basic::resource<texture>& src, size_t x, size_t y, size_t w, size_t h)
@@ -8062,39 +8216,34 @@ namespace jeecs
                 // Create texture must be successfully.
                 assert(res != nullptr);
 
-                if (res != nullptr)
-                {
-                    auto* new_texture = new texture(res);
+                auto* new_texture = new texture(res);
 
 #if 0
-                    for (size_t iy = 0; iy < h; ++iy)
+                for (size_t iy = 0; iy < h; ++iy)
+                {
+                    for (size_t ix = 0; ix < w; ++ix)
                     {
-                        for (size_t ix = 0; ix < w; ++ix)
-                        {
-                            new_texture->pix(ix, iy).set(
-                                src->pix(ix + x, iy + y).get());
-                        }
+                        new_texture->pix(ix, iy).set(
+                            src->pix(ix + x, iy + y).get());
                     }
-#else
-                    auto color_depth = (int)new_texture_format;
-                    auto* dst_pixels = new_texture->resource()->m_raw_texture_data->m_pixels;
-                    auto* src_pixels = src->resource()->m_raw_texture_data->m_pixels;
-
-                    size_t src_w = std::min(w, src->resource()->m_raw_texture_data->m_width);
-                    size_t src_h = std::min(h, src->resource()->m_raw_texture_data->m_height);
-
-                    for (size_t iy = 0; iy < src_h; ++iy)
-                    {
-                        memcpy(
-                            dst_pixels + iy * w * color_depth,
-                            src_pixels + (x + (y + iy) * src_w) * color_depth,
-                            src_w * color_depth);
-                    }
-#endif
-
-                    return new_texture;
                 }
-                return nullptr;
+#else
+                auto color_depth = (int)new_texture_format;
+                auto* dst_pixels = new_texture->resource()->m_raw_texture_data->m_pixels;
+                auto* src_pixels = src->resource()->m_raw_texture_data->m_pixels;
+
+                size_t src_w = std::min(w, src->resource()->m_raw_texture_data->m_width);
+                size_t src_h = std::min(h, src->resource()->m_raw_texture_data->m_height);
+
+                for (size_t iy = 0; iy < src_h; ++iy)
+                {
+                    memcpy(
+                        dst_pixels + iy * w * color_depth,
+                        src_pixels + (x + (y + iy) * src_w) * color_depth,
+                        src_w * color_depth);
+                }
+#endif
+                return basic::resource<texture>(new_texture);
             }
 
             class pixel
@@ -8241,19 +8390,19 @@ namespace jeecs
         public:
             jegl_shader::builtin_uniform_location* m_builtin;
 
-            static basic::resource<shader> create(const std::string& name_path, const std::string& src)
+            static std::optional<basic::resource<shader>> create(const std::string& name_path, const std::string& src)
             {
                 jegl_resource* res = jegl_load_shader_source(name_path.c_str(), src.c_str(), true);
                 if (res != nullptr)
-                    return new shader(res);
-                return nullptr;
+                    return basic::resource<shader>(new shader(res));
+                return std::nullopt;
             }
-            static basic::resource<shader> load(jegl_context* context, const std::string& src_path)
+            static std::optional<basic::resource<shader>> load(jegl_context* context, const std::string& src_path)
             {
                 jegl_resource* res = jegl_load_shader(context, src_path.c_str());
                 if (res != nullptr)
-                    return new shader(res);
-                return nullptr;
+                    return basic::resource<shader>(new shader(res));
+                return std::nullopt;
             }
 
             void set_uniform(const std::string& name, int val) noexcept
@@ -8483,14 +8632,14 @@ namespace jeecs
             }
 
         public:
-            static basic::resource<vertex> load(jegl_context* context, const std::string& str)
+            static std::optional<basic::resource<vertex>> load(jegl_context* context, const std::string& str)
             {
                 auto* res = jegl_load_vertex(context, str.c_str());
                 if (res != nullptr)
-                    return new vertex(res);
-                return nullptr;
+                    return basic::resource<vertex>(new vertex(res));
+                return std::nullopt;
             }
-            static basic::resource<vertex> create(
+            static std::optional<basic::resource<vertex>> create(
                 jegl_vertex::type type,
                 const void* pdatas,
                 size_t pdatalen,
@@ -8504,8 +8653,8 @@ namespace jeecs
                     fdatas.data(), fdatas.size());
 
                 if (res != nullptr)
-                    return new vertex(res);
-                return nullptr;
+                    return basic::resource<vertex>(new vertex(res));
+                return std::nullopt;
             }
         };
 
@@ -8517,16 +8666,15 @@ namespace jeecs
             }
 
         public:
-            static basic::resource<framebuffer> create(
+            static std::optional<basic::resource<framebuffer>> create(
                 size_t reso_w, size_t reso_h, const std::vector<jegl_texture::format>& attachment)
             {
                 auto* res = jegl_create_framebuf(reso_w, reso_h, attachment.data(), attachment.size());
                 if (res != nullptr)
-                    return new framebuffer(res);
-                return nullptr;
+                    return basic::resource<framebuffer>(new framebuffer(res));
+                return std::nullopt;
             }
-
-            basic::resource<texture> get_attachment(size_t index) const
+            std::optional<basic::resource<texture>> get_attachment(size_t index) const
             {
                 if (index < resource()->m_raw_framebuf_data->m_attachment_count)
                 {
@@ -8535,22 +8683,19 @@ namespace jeecs
                             resource()->m_raw_framebuf_data->m_output_attachments));
                     return attachments[index];
                 }
-                return nullptr;
+                return std::nullopt;
             }
 
             inline size_t height() const noexcept
             {
-                assert(resource()->m_raw_framebuf_data != nullptr);
                 return resource()->m_raw_framebuf_data->m_height;
             }
             inline size_t width() const noexcept
             {
-                assert(resource()->m_raw_framebuf_data != nullptr);
                 return resource()->m_raw_framebuf_data->m_width;
             }
             inline math::ivec2 size() const noexcept
             {
-                assert(resource()->m_raw_framebuf_data != nullptr);
                 return math::ivec2(
                     (int)resource()->m_raw_framebuf_data->m_width,
                     (int)resource()->m_raw_framebuf_data->m_height);
@@ -8566,12 +8711,13 @@ namespace jeecs
             }
 
         public:
-            static basic::resource<uniformbuffer> create(size_t binding_place, size_t buffersize)
+            static std::optional<basic::resource<uniformbuffer>> create(
+                size_t binding_place, size_t buffersize)
             {
                 jegl_resource* res = jegl_create_uniformbuf(binding_place, buffersize);
                 if (res != nullptr)
-                    return new uniformbuffer(res);
-                return nullptr;
+                    return basic::resource<uniformbuffer>(new uniformbuffer(res));
+                return std::nullopt;
             }
             void update_buffer(size_t offset, size_t size, const void* datafrom) const noexcept
             {
@@ -8765,7 +8911,7 @@ namespace jeecs
             }
 
         public:
-            static font* load(
+            static std::optional<basic::resource<font>> load(
                 const std::string& fontfile,
                 size_t size,
                 size_t board_size = 0,
@@ -8775,10 +8921,9 @@ namespace jeecs
                     fontfile.c_str(), (float)size, (float)size,
                     board_size, board_size, char_texture_updater);
 
-                if (font_res == nullptr)
-                    return nullptr;
-
-                return new font(font_res, size, fontfile.c_str());
+                if (font_res != nullptr)
+                    return basic::resource<font>(new font(font_res, size, fontfile.c_str()));
+                return std::nullopt;
             }
 
             ~font()
@@ -8859,14 +9004,25 @@ namespace jeecs
                                             used_font = &font_base;
                                         else
                                         {
-                                            auto& new_font = FONT_POOL[font_base.m_path][int(TEXT_SCALE * font_base.m_size + 0.5f) /*四舍五入*/];
-                                            if (new_font == nullptr)
-                                                new_font = font::load(font_base.m_path, int(TEXT_SCALE * font_base.m_size + 0.5f));
+                                            const auto font_base_path = font_base.m_path.cpp_str();
+                                            const auto font_size = (int)round(TEXT_SCALE * font_base.m_size);
+                                            auto& font_pool = FONT_POOL[font_base_path];
 
-                                            if (new_font == nullptr)
-                                                debug::logerr("Failed to open font: '%s'.", font_base.m_path.c_str());
+                                            auto font_fnd = font_pool.find(font_size);
+                                            if (font_fnd == font_pool.end())
+                                            {
+                                                auto loaded_font = font::load(font_base_path, font_size);
+                                                if (!loaded_font.has_value())
+                                                    debug::logerr("Failed to open font: '%s'.", font_base.m_path.c_str());
+                                                else
+                                                {
+                                                    used_font =
+                                                        font_pool.insert(
+                                                            std::make_pair(font_size, loaded_font.value())).first->second.get();
+                                                }
+                                            }
                                             else
-                                                used_font = new_font.get();
+                                                used_font = font_fnd->second.get();
                                         }
                                     }
                                     else if (item_name == "offset")
@@ -8978,9 +9134,11 @@ namespace jeecs
                                             used_font = &font_base;
                                         else
                                         {
-                                            auto& new_font = FONT_POOL[font_base.m_path][int(TEXT_SCALE * font_base.m_size + 0.5f) /*四舍五入*/];
-                                            assert(new_font != nullptr);
-                                            used_font = new_font.get();
+                                            auto& font_in_pool = FONT_POOL.at(
+                                                font_base.m_path.cpp_str()).at(
+                                                    (int)round(TEXT_SCALE * font_base.m_size + 0.5f));
+
+                                            used_font = font_in_pool.get();
                                         }
                                     }
                                     else if (item_name == "offset")
@@ -9236,7 +9394,7 @@ namespace jeecs
             {
                 auto* slot = jeal_create_effect_slot();
                 assert(slot != nullptr);
-                return new effect_slot(slot);
+                return basic::resource<effect_slot>(new effect_slot(slot));
             }
             jeal_effect_slot* handle() const
             {
@@ -9264,7 +9422,7 @@ namespace jeecs
             {
                 jeal_close_buffer(_m_audio_buffer);
             }
-            inline static basic::resource<buffer> create(
+            inline static std::optional<basic::resource<buffer>> create(
                 const void* data,
                 size_t length,
                 size_t samplerate,
@@ -9272,15 +9430,15 @@ namespace jeecs
             {
                 auto* buf = jeal_create_buffer(data, length, samplerate, format);
                 if (buf != nullptr)
-                    return new buffer(buf);
-                return nullptr;
+                    return basic::resource<buffer>(new buffer(buf));
+                return std::nullopt;
             }
-            inline static basic::resource<buffer> load(const std::string& path)
+            inline static std::optional<basic::resource<buffer>> load(const std::string& path)
             {
                 auto* buf = jeal_load_buffer_wav(path.c_str());
                 if (buf != nullptr)
-                    return new buffer(buf);
-                return nullptr;
+                    return basic::resource<buffer>(new buffer(buf));
+                return std::nullopt;
             }
             const jeal_buffer* handle() const
             {
@@ -9311,7 +9469,7 @@ namespace jeecs
             }
             inline static basic::resource<source> create()
             {
-                return new source(jeal_create_source());
+                return basic::resource<source>(new source(jeal_create_source()));
             }
             inline void set_playing_buffer(const basic::resource<buffer>& buffer)
             {
@@ -9750,29 +9908,24 @@ namespace jeecs
 
             void bind_texture(size_t passid, const basic::resource<graphic::texture>& texture)
             {
-                assert(texture != nullptr);
                 for (auto i = textures.begin(); i != textures.end(); ++i)
                 {
                     auto& [pass, tex] = *i;
                     if (pass == passid)
                     {
-                        if (texture)
-                            tex = texture;
-                        else
-                            textures.erase(i);
-
+                        tex = texture;
                         return;
                     }
                 }
                 textures.push_back(texture_with_passid(passid, texture));
             }
-            basic::resource<graphic::texture> get_texture(size_t passid) const
+            std::optional<basic::resource<graphic::texture>> get_texture(size_t passid) const
             {
                 for (auto& [pass, tex] : textures)
                     if (pass == passid)
                         return tex;
 
-                return nullptr;
+                return std::nullopt;
             }
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
@@ -9838,7 +9991,7 @@ namespace jeecs
 
             jeecs::basic::resource<jeecs::graphic::uniformbuffer>
                 default_uniform_buffer = jeecs::graphic::uniformbuffer::create(
-                    0, sizeof(graphic::BasePipelineInterface::default_uniform_buffer_data_t));
+                    0, sizeof(graphic::BasePipelineInterface::default_uniform_buffer_data_t)).value();
 
             float view[4][4] = {};
             float projection[4][4] = {};
@@ -9898,7 +10051,7 @@ namespace jeecs
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(RendToFramebuffer);
             JECS_DEFAULT_CONSTRUCTOR(RendToFramebuffer);
 
-            basic::resource<graphic::framebuffer> framebuffer = nullptr;
+            basic::optional<basic::resource<graphic::framebuffer>> framebuffer;
         };
     }
     namespace Physics2D
@@ -10147,8 +10300,7 @@ namespace jeecs
                 size_t m_point_count;
                 basic::vector<float> m_strength;
                 basic::vector<math::vec2> m_positions;
-                jeecs::basic::resource<jeecs::graphic::vertex>
-                    m_light_mesh;
+                basic::optional<jeecs::basic::resource<jeecs::graphic::vertex>> m_light_mesh;
 
                 light_shape()
                     : m_point_count(0)
@@ -10187,7 +10339,7 @@ namespace jeecs
                     m_positions.clear();
                     m_strength.clear();
 
-                    m_light_mesh = nullptr;
+                    m_light_mesh.reset();
 
                     for (size_t ilayer = 0; ilayer < layer_count; ++ilayer)
                     {
@@ -10269,7 +10421,7 @@ namespace jeecs
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(ShadowBuffer);
 
             float resolution_ratio = 0.5f;
-            basic::resource<graphic::framebuffer> buffer = nullptr;
+            basic::optional<basic::resource<graphic::framebuffer>> buffer;
 
             ShadowBuffer() = default;
             ShadowBuffer(const ShadowBuffer& another)
@@ -10287,8 +10439,8 @@ namespace jeecs
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(CameraPostPass);
 
-            basic::resource<graphic::framebuffer> post_rend_target = nullptr;
-            basic::resource<jeecs::graphic::framebuffer> post_light_target = nullptr;
+            basic::optional<basic::resource<graphic::framebuffer>> post_rend_target;
+            basic::optional < basic::resource<jeecs::graphic::framebuffer>> post_light_target;
 
             float light_rend_ratio = 0.5f;
 
@@ -10315,7 +10467,7 @@ namespace jeecs
                     math::vec2(0.5f, 0.5f),
                     math::vec2(-0.5f, 0.5f),
                 };
-                basic::resource<graphic::vertex> m_block_mesh = nullptr;
+                basic::optional<basic::resource<graphic::vertex>> m_block_mesh;
 
                 static const char* JEScriptTypeName()
                 {
@@ -10331,7 +10483,7 @@ namespace jeecs
                 }
                 void JEParseFromScriptType(wo_vm vm, wo_value v)
                 {
-                    m_block_mesh = nullptr;
+                    m_block_mesh.reset();
 
                     wo_value pos = wo_register(vm, WO_REG_T0);
                     size_t point_count = (size_t)wo_arr_len(v);
@@ -10827,8 +10979,6 @@ namespace jeecs
             Source(const Source& another) noexcept
                 : Source()
             {
-                assert(source != nullptr && source != another.source);
-
                 pitch = another.pitch;
                 volume = another.volume;
                 last_position = another.last_position;
@@ -11364,7 +11514,7 @@ namespace jeecs
                     wo_set_struct(value, vm, 1);
 
                     if (v->has_resource())
-                        wo_set_option_string(result, vm, v->get_path().c_str());
+                        wo_set_option_string(result, vm, v->get_path()->c_str());
                     else
                         wo_set_option_none(result, vm);
 
@@ -11391,7 +11541,7 @@ namespace jeecs
                     wo_set_struct(value, vm, 1);
 
                     if (v->has_resource())
-                        wo_set_option_string(result, vm, v->get_path().c_str());
+                        wo_set_option_string(result, vm, v->get_path()->c_str());
                     else
                         wo_set_option_none(result, vm);
 
