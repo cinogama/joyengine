@@ -1,10 +1,10 @@
 #pragma once
 
 #ifndef JE_IMPL
-#   error JE_IMPL must be defined, please check `jeecs_core_systems_and_components.cpp`
+#error JE_IMPL must be defined, please check `jeecs_core_systems_and_components.cpp`
 #endif
 #ifndef JE_ENABLE_DEBUG_API
-#   error JE_ENABLE_DEBUG_API must be defined, please check `jeecs_core_systems_and_components.cpp`
+#error JE_ENABLE_DEBUG_API must be defined, please check `jeecs_core_systems_and_components.cpp`
 #endif
 #include "jeecs.hpp"
 
@@ -29,7 +29,7 @@ namespace jeecs
                 if (m_pin_value != nullptr)
                     wo_close_pin_value(m_pin_value);
             }
-            woovalue(const woovalue& val)
+            woovalue(const woovalue &val)
                 : woovalue()
             {
                 _wo_value tmpval;
@@ -37,12 +37,12 @@ namespace jeecs
                 wo_pin_value_get(&tmpval, val.m_pin_value);
                 wo_pin_value_set(m_pin_value, &tmpval);
             }
-            woovalue(woovalue&& val)
+            woovalue(woovalue &&val)
             {
                 m_pin_value = val.m_pin_value;
                 val.m_pin_value = nullptr;
             }
-            woovalue& operator=(const woovalue& val)
+            woovalue &operator=(const woovalue &val)
             {
                 _wo_value tmpval;
 
@@ -51,7 +51,7 @@ namespace jeecs
 
                 return *this;
             }
-            woovalue& operator=(woovalue&& val)
+            woovalue &operator=(woovalue &&val)
             {
                 if (m_pin_value != nullptr)
                     wo_close_pin_value(m_pin_value);
@@ -62,11 +62,11 @@ namespace jeecs
                 return *this;
             }
 
-            static const char* JEScriptTypeName()
+            static const char *JEScriptTypeName()
             {
                 return "dynamic";
             }
-            static const char* JEScriptTypeDeclare()
+            static const char *JEScriptTypeDeclare()
             {
                 return "";
             }
@@ -81,7 +81,7 @@ namespace jeecs
         };
     }
 
-    struct ScriptRuntimeSystem :public game_system
+    struct ScriptRuntimeSystem : public game_system
     {
         struct vm_info
         {
@@ -92,29 +92,28 @@ namespace jeecs
 
         std::recursive_mutex _coroutine_list_mx;
         std::list<wo_vm> _coroutine_list;
-        
+
         void dispatch_coroutine_vm(wo_vm vmm)
         {
             std::lock_guard sg1(_coroutine_list_mx);
             _coroutine_list.push_back(vmm);
         }
 
-        inline static thread_local ScriptRuntimeSystem* system_instance = nullptr;
+        inline static thread_local ScriptRuntimeSystem *system_instance = nullptr;
 
         ScriptRuntimeSystem(game_world w)
             : game_system(w)
         {
-
         }
         ~ScriptRuntimeSystem()
         {
-            for (auto* co_vm : _coroutine_list)
+            for (auto *co_vm : _coroutine_list)
             {
                 wo_release_vm(co_vm);
             }
         }
 
-        void CommitUpdate(jeecs::selector&)
+        void CommitUpdate(jeecs::selector &)
         {
             system_instance = this;
 
@@ -130,9 +129,9 @@ namespace jeecs
                 if (result == nullptr)
                 {
                     jeecs::debug::logerr("Coroutine %p failed: '%s':\n %s",
-                        co_vm,
-                        wo_get_runtime_error(co_vm),
-                        wo_debug_trace_callstack(co_vm, 8));
+                                         co_vm,
+                                         wo_get_runtime_error(co_vm),
+                                         wo_debug_trace_callstack(co_vm, 8));
                 }
                 else if (result == WO_CONTINUE)
                 {

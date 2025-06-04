@@ -1,27 +1,26 @@
 #pragma once
 
 #ifndef JE_IMPL
-#   error JE_IMPL must be defined, please check `jeecs_core_systems_and_components.cpp`
+#error JE_IMPL must be defined, please check `jeecs_core_systems_and_components.cpp`
 #endif
 #ifndef JE_ENABLE_DEBUG_API
-#   error JE_ENABLE_DEBUG_API must be defined, please check `jeecs_core_systems_and_components.cpp`
+#error JE_ENABLE_DEBUG_API must be defined, please check `jeecs_core_systems_and_components.cpp`
 #endif
 #include "jeecs.hpp"
 
 namespace jeecs
 {
-    struct AudioUpdatingSystem :game_system
+    struct AudioUpdatingSystem : game_system
     {
         AudioUpdatingSystem(game_world w)
             : game_system(w)
         {
-
         }
 
-        void CommitUpdate(jeecs::selector& selector)
+        void CommitUpdate(jeecs::selector &selector)
         {
-            selector.exec([this](Audio::Listener& listener, Transform::Translation& trans)
-                {
+            selector.exec([this](Audio::Listener &listener, Transform::Translation &trans)
+                          {
                     auto velocity = (trans.world_position - listener.last_position) / std::max(deltatime(), 0.0001f);
                     listener.last_position = trans.world_position;
 
@@ -47,11 +46,10 @@ namespace jeecs
                             listener_data->m_velocity[0] = velocity.x;
                             listener_data->m_velocity[1] = velocity.y;
                             listener_data->m_velocity[2] = velocity.z;
-                        });
-                });
+                        }); });
 
-            selector.exec([this](Audio::Source& source, Transform::Translation& trans)
-                {
+            selector.exec([this](Audio::Source &source, Transform::Translation &trans)
+                          {
                     auto velocity = (trans.world_position - source.last_position) / std::max(deltatime(), 0.0001f);
                     source.last_position = trans.world_position;
 
@@ -68,11 +66,10 @@ namespace jeecs
                             source_data->m_velocity[0] = velocity.x;
                             source_data->m_velocity[1] = velocity.y;
                             source_data->m_velocity[2] = velocity.z;
-                        });
-                });
+                        }); });
 
-            selector.exec([this](Audio::Source& source, Audio::Playing& playing)
-                {
+            selector.exec([this](Audio::Source &source, Audio::Playing &playing)
+                          {
                     if (!playing.buffer.has_resource())
                     {
                         playing.is_playing = false;
@@ -104,8 +101,7 @@ namespace jeecs
                             else if (!playing.play && source.source->get_state() == jeal_state::JE_AUDIO_STATE_PLAYING)
                                 source.source->pause();
                         }
-                    }
-                });
+                    } });
         }
     };
 }

@@ -47,10 +47,10 @@ namespace jeecs
                     break;
                 }
             }
-            std::string generate_struct_body(shader_wrapper* wrapper, shader_struct_define* st)
+            std::string generate_struct_body(shader_wrapper *wrapper, shader_struct_define *st)
             {
                 std::string decl = "";
-                for (auto& variable_inform : st->variables)
+                for (auto &variable_inform : st->variables)
                 {
                     if (variable_inform.type == jegl_shader_value::type::STRUCT)
                         decl += "    " + variable_inform.struct_type_may_nil->name + " " + variable_inform.name;
@@ -58,19 +58,19 @@ namespace jeecs
                         decl += "    " + get_typename(variable_inform.type) + " " + variable_inform.name + "";
 
                     if (variable_inform.array_size)
-                       decl += "[" + std::to_string(variable_inform.array_size.value()) + "]";
+                        decl += "[" + std::to_string(variable_inform.array_size.value()) + "]";
 
                     decl += +";\n";
                 }
                 return decl;
             }
-            virtual std::string generate_struct(shader_wrapper* wrapper, shader_struct_define* st) override
+            virtual std::string generate_struct(shader_wrapper *wrapper, shader_struct_define *st) override
             {
                 std::string decl = "struct " + st->name + "\n{\n";
                 decl += generate_struct_body(wrapper, st);
                 return decl + "};\n";
             }
-            virtual std::string generate_uniform_block(shader_wrapper* wrapper, shader_struct_define* st) override
+            virtual std::string generate_uniform_block(shader_wrapper *wrapper, shader_struct_define *st) override
             {
                 std::string decl = "layout (std140) uniform " + st->name + "\n{\n";
                 decl += generate_struct_body(wrapper, st);
@@ -78,10 +78,10 @@ namespace jeecs
             }
 
             virtual std::string generate_code(
-                _shader_wrapper_contex* context,
-                jegl_shader_value* value,
+                _shader_wrapper_contex *context,
+                jegl_shader_value *value,
                 generate_target target,
-                std::string* out_src) override
+                std::string *out_src) override
             {
                 using namespace std;
 
@@ -108,10 +108,7 @@ namespace jeecs
 
                             std::string eval_expr;
 
-                            if (value->m_opname == "+"s
-                                || value->m_opname == "-"s
-                                || value->m_opname == "*"s
-                                || value->m_opname == "/"s)
+                            if (value->m_opname == "+"s || value->m_opname == "-"s || value->m_opname == "*"s || value->m_opname == "/"s)
                             {
                                 assert(variables.size() == 2 || value->m_opname == "-"s);
                                 if (variables.size() == 1)
@@ -179,7 +176,7 @@ namespace jeecs
                     }
                     else
                     {
-                        std::string apply/* = "    const " + _shader_wrapper_contex::get_type_name(value) + " " + varname + " = "*/;
+                        std::string apply /* = "    const " + _shader_wrapper_contex::get_type_name(value) + " " + varname + " = "*/;
 
                         switch (value->get_type())
                         {
@@ -242,11 +239,11 @@ namespace jeecs
                 return varname;
             }
 
-            virtual std::string use_custom_function(const shader_wrapper::custom_shader_src& src) override
+            virtual std::string use_custom_function(const shader_wrapper::custom_shader_src &src) override
             {
                 return src.m_glsl_impl;
             }
-            virtual std::string use_user_function(shader_wrapper* wrap, _shader_wrapper_contex* context, const shader_wrapper::user_function_information& user) override
+            virtual std::string use_user_function(shader_wrapper *wrap, _shader_wrapper_contex *context, const shader_wrapper::user_function_information &user) override
             {
                 assert(user.m_result != nullptr && user.m_result->out_values.size() == 1);
                 std::string function_declear = get_value_typename(user.m_result->out_values[0]) + " " + user.m_name + "(";
@@ -257,7 +254,6 @@ namespace jeecs
                         function_declear += ", ";
                     function_declear += get_typename(user.m_args[inidx]) + " _in_" + std::to_string(inidx);
                 }
-                
 
                 std::string function_body;
                 std::string result_var_name = generate_code(context, user.m_result->out_values[0], generate_target::USER, &function_body);
@@ -267,41 +263,39 @@ namespace jeecs
             }
 
         public:
-            virtual std::string generate_vertex(shader_wrapper* wrap) override
+            virtual std::string generate_vertex(shader_wrapper *wrap) override
             {
                 _shader_wrapper_contex contex;
-                std::string          body_result;
-                std::string          io_declear;
+                std::string body_result;
+                std::string io_declear;
 
-                const std::string    unifrom_block = generate_uniform_block_and_struct(wrap);
+                const std::string unifrom_block = generate_uniform_block_and_struct(wrap);
 
-                std::vector<std::pair<jegl_shader_value*, std::string>> outvalue;
-                for (auto* out_val : wrap->vertex_out->out_values)
+                std::vector<std::pair<jegl_shader_value *, std::string>> outvalue;
+                for (auto *out_val : wrap->vertex_out->out_values)
                     outvalue.push_back(std::make_pair(out_val, generate_code(&contex, out_val, generate_target::VERTEX, &body_result)));
 
                 // Generate built function src here.
                 std::string built_in_srcs = generate_builtin_codes(wrap, &contex);
 
-                for (auto& [name, uinfo] : wrap->uniform_variables)
+                for (auto &[name, uinfo] : wrap->uniform_variables)
                 {
                     if (uinfo.m_used_in_vertex)
                         io_declear += "uniform " + get_value_typename(uinfo.m_value) + " " + name + ";\n";
                 }
                 io_declear += "\n";
-                for (auto& indecl : contex._in_value)
-                    io_declear += "layout(location = " + std::to_string(indecl.second.first) + ") in "
-                    + get_value_typename(indecl.first) + " " + indecl.second.second + ";\n";
+                for (auto &indecl : contex._in_value)
+                    io_declear += "layout(location = " + std::to_string(indecl.second.first) + ") in " + get_value_typename(indecl.first) + " " + indecl.second.second + ";\n";
                 io_declear += "\n";
 
                 size_t outid = 0;
-                for (auto& outvarname : outvalue)
-                    io_declear += "out "
-                    + get_value_typename(outvarname.first) + " _v2f_" + std::to_string(outid++) + ";\n";
+                for (auto &outvarname : outvalue)
+                    io_declear += "out " + get_value_typename(outvarname.first) + " _v2f_" + std::to_string(outid++) + ";\n";
 
                 body_result = "\nvoid main()\n{\n" + body_result + "\n    // value out:\n";
 
                 outid = 0;
-                for (auto& outvarname : outvalue)
+                for (auto &outvarname : outvalue)
                 {
                     if (outid == 0)
                         body_result += "    gl_Position = " + outvarname.second + ";\n";
@@ -311,50 +305,44 @@ namespace jeecs
                 body_result += "\n}\n";
 
                 return std::move(
-                    "// Vertex shader source\n"
-                    + unifrom_block
-                    + io_declear
-                    + built_in_srcs
-                    + body_result);
+                    "// Vertex shader source\n" + unifrom_block + io_declear + built_in_srcs + body_result);
             }
-            virtual std::string generate_fragment(shader_wrapper* wrap) override
+            virtual std::string generate_fragment(shader_wrapper *wrap) override
             {
                 _shader_wrapper_contex contex;
-                std::string          body_result;
-                std::string          io_declear;
+                std::string body_result;
+                std::string io_declear;
 
-                const std::string    unifrom_block = generate_uniform_block_and_struct(wrap);
+                const std::string unifrom_block = generate_uniform_block_and_struct(wrap);
 
-                std::vector<std::pair<jegl_shader_value*, std::string>> outvalue;
-                for (auto* out_val : wrap->fragment_out->out_values)
+                std::vector<std::pair<jegl_shader_value *, std::string>> outvalue;
+                for (auto *out_val : wrap->fragment_out->out_values)
                     outvalue.push_back(std::make_pair(out_val, generate_code(&contex, out_val, generate_target::FRAGMENT, &body_result)));
 
                 // Generate built function src here.
                 std::string built_in_srcs = generate_builtin_codes(wrap, &contex);
 
-                for (auto& [name, uinfo] : wrap->uniform_variables)
+                for (auto &[name, uinfo] : wrap->uniform_variables)
                 {
                     if (uinfo.m_used_in_fragment)
                         io_declear += "uniform " + get_value_typename(uinfo.m_value) + " " + name + ";\n";
                 }
                 io_declear += "\n";
-                for (auto& indecl : contex._in_value)
-                    io_declear += "in "
-                    + get_value_typename(indecl.first) + " " + indecl.second.second + ";\n";
+                for (auto &indecl : contex._in_value)
+                    io_declear += "in " + get_value_typename(indecl.first) + " " + indecl.second.second + ";\n";
                 io_declear += "\n";
 
                 size_t outid = 0;
-                for (auto& outvarname : outvalue)
+                for (auto &outvarname : outvalue)
                 {
                     size_t oid = outid++;
-                    io_declear += "layout(location = " + std::to_string(oid) + ") out "
-                        + get_value_typename(outvarname.first) + " _out_" + std::to_string(oid) + ";\n";
+                    io_declear += "layout(location = " + std::to_string(oid) + ") out " + get_value_typename(outvarname.first) + " _out_" + std::to_string(oid) + ";\n";
                 }
 
                 body_result = "\nvoid main()\n{\n" + body_result + "\n    // value out:\n";
 
                 outid = 0;
-                for (auto& outvarname : outvalue)
+                for (auto &outvarname : outvalue)
                 {
                     body_result += "    _out_" + std::to_string(outid++) + " = " + outvarname.second + ";\n";
                 }
@@ -362,11 +350,7 @@ namespace jeecs
                 body_result += "\n}\n";
 
                 return std::move(
-                    "// Fragment shader source\n"
-                    + unifrom_block
-                    + io_declear
-                    + built_in_srcs
-                    + body_result);
+                    "// Fragment shader source\n" + unifrom_block + io_declear + built_in_srcs + body_result);
             }
         };
     }

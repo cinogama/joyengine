@@ -45,7 +45,7 @@ WO_API wo_api wojeapi_startup_coroutine(wo_vm vm, wo_value args)
     auto argument_count = wo_struct_len(arguments);
 
     wo_vm co_vmm = wo_borrow_vm(vm);
-    wo_value co_vmm_s = wo_reserve_stack(co_vmm,  (size_t)argument_count, nullptr);
+    wo_value co_vmm_s = wo_reserve_stack(co_vmm, (size_t)argument_count, nullptr);
 
     for (size_t i = 0; i < argument_count; --i)
     {
@@ -59,17 +59,16 @@ WO_API wo_api wojeapi_startup_coroutine(wo_vm vm, wo_value args)
     return wo_ret_void(vm);
 }
 
-
-const char* je_ecs_get_name_of_entity(const jeecs::game_entity* entity)
+const char *je_ecs_get_name_of_entity(const jeecs::game_entity *entity)
 {
-    jeecs::Editor::Name* c_name = entity->get_component<jeecs::Editor::Name>();
+    jeecs::Editor::Name *c_name = entity->get_component<jeecs::Editor::Name>();
     if (c_name)
         return c_name->name.c_str();
     return "";
 }
-const char* je_ecs_set_name_of_entity(const jeecs::game_entity* entity, const char* name)
+const char *je_ecs_set_name_of_entity(const jeecs::game_entity *entity, const char *name)
 {
-    jeecs::Editor::Name* c_name = entity->get_component<jeecs::Editor::Name>();
+    jeecs::Editor::Name *c_name = entity->get_component<jeecs::Editor::Name>();
     if (!c_name)
         c_name = entity->add_component<jeecs::Editor::Name>();
 
@@ -80,23 +79,23 @@ const char* je_ecs_set_name_of_entity(const jeecs::game_entity* entity, const ch
 
 WO_API wo_api wojeapi_entity_get_prefab_path(wo_vm vm, wo_value args)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-    if (auto* prefab = entity->get_component<jeecs::Editor::Prefab>())
+    jeecs::game_entity *entity = (jeecs::game_entity *)wo_pointer(args + 0);
+    if (auto *prefab = entity->get_component<jeecs::Editor::Prefab>())
         return wo_ret_option_string(vm, prefab->path.c_str());
     return wo_ret_option_none(vm);
 }
 
 WO_API wo_api wojeapi_entity_set_prefab_path(wo_vm vm, wo_value args)
 {
-    jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-    if (auto* prefab = entity->get_component<jeecs::Editor::Prefab>())
+    jeecs::game_entity *entity = (jeecs::game_entity *)wo_pointer(args + 0);
+    if (auto *prefab = entity->get_component<jeecs::Editor::Prefab>())
     {
         prefab->path = wo_string(args + 1);
     }
     return wo_ret_void(vm);
 }
 
-void _jeecs_entry_register_core_systems(jeecs::typing::type_unregister_guard* guard)
+void _jeecs_entry_register_core_systems(jeecs::typing::type_unregister_guard *guard)
 {
     jeecs::typing::type_info::register_type<jeecs::script::woovalue>(guard, nullptr);
 

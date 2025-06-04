@@ -28,14 +28,14 @@ std::unordered_map<ImGuiKey, key_state> _key_state_record;
 struct gui_wo_job_coroutine
 {
     wo_vm work_vm;
-    gui_wo_job_coroutine* last;
+    gui_wo_job_coroutine *last;
 };
 jeecs::basic::atomic_list<gui_wo_job_coroutine> _wo_job_list;
 jeecs::basic::atomic_list<gui_wo_job_coroutine> _wo_new_job_list;
 
 struct _jegui_thread_local_context
 {
-    jegl_context* _jegl_context = nullptr;
+    jegl_context *_jegl_context = nullptr;
     bool _jegui_stop_work_flag = false;
     bool _jegui_need_flip_frambuf = false;
 
@@ -59,14 +59,12 @@ struct _jegui_static_context
 _jegui_static_context _je_gui_static_ctx;
 
 void jegui_set_font(
-    const char* general_font_path,
-    const char* latin_font_path,
+    const char *general_font_path,
+    const char *latin_font_path,
     size_t size)
 {
-    _je_gui_static_ctx._jegui_specify_font_path
-        = general_font_path ? std::optional(general_font_path) : std::nullopt;
-    _je_gui_static_ctx._jegui_specify_latin_font_path
-        = latin_font_path ? std::optional(latin_font_path) : std::nullopt;
+    _je_gui_static_ctx._jegui_specify_font_path = general_font_path ? std::optional(general_font_path) : std::nullopt;
+    _je_gui_static_ctx._jegui_specify_latin_font_path = latin_font_path ? std::optional(latin_font_path) : std::nullopt;
 
     _je_gui_static_ctx._jegui_specify_font_size = size;
 }
@@ -126,9 +124,9 @@ WO_API wo_api je_gui_begin_drag_drop_target(wo_vm vm, wo_value args)
 }
 WO_API wo_api je_gui_accept_drag_drop_payload(wo_vm vm, wo_value args)
 {
-    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(wo_string(args + 0)))
+    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(wo_string(args + 0)))
     {
-        return wo_ret_option_string(vm, (const char*)payload->Data);
+        return wo_ret_option_string(vm, (const char *)payload->Data);
     }
     return wo_ret_option_none(vm);
 }
@@ -151,7 +149,7 @@ WO_API wo_api je_gui_set_clip_board_text(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_get_clip_board_text(wo_vm vm, wo_value args)
 {
-    const char* t = ImGui::GetClipboardText();
+    const char *t = ImGui::GetClipboardText();
     return wo_ret_string(vm, t == nullptr ? "" : t);
 }
 
@@ -212,7 +210,7 @@ WO_API wo_api je_gui_get_mouse_pos(wo_vm vm, wo_value args)
 {
     wo_value s = wo_reserve_stack(vm, 1, &args);
 
-    auto&& mpos = ImGui::GetMousePos();
+    auto &&mpos = ImGui::GetMousePos();
     return wo_ret_val(vm, set_float2_to_struct(s + 0, vm, mpos.x, mpos.y));
 }
 
@@ -220,7 +218,7 @@ WO_API wo_api je_gui_get_mouse_wheel(wo_vm vm, wo_value args)
 {
     wo_value s = wo_reserve_stack(vm, 1, &args);
 
-    auto& imgui_io = ImGui::GetIO();
+    auto &imgui_io = ImGui::GetIO();
     return wo_ret_val(vm, set_float2_to_struct(s + 0, vm, imgui_io.MouseWheelH, imgui_io.MouseWheel));
 }
 
@@ -228,7 +226,7 @@ WO_API wo_api je_gui_get_mouse_delta_pos(wo_vm vm, wo_value args)
 {
     wo_value s = wo_reserve_stack(vm, 1, &args);
 
-    auto&& mdpos = ImGui::GetIO().MouseDelta;
+    auto &&mdpos = ImGui::GetIO().MouseDelta;
     return wo_ret_val(vm, set_float2_to_struct(s + 0, vm, mdpos.x, mdpos.y));
 }
 
@@ -236,14 +234,14 @@ WO_API wo_api je_gui_get_cursor_pos(wo_vm vm, wo_value args)
 {
     wo_value s = wo_reserve_stack(vm, 1, &args);
 
-    auto&& cpos = ImGui::GetCursorPos();
+    auto &&cpos = ImGui::GetCursorPos();
     return wo_ret_val(vm, set_float2_to_struct(s + 0, vm, cpos.x, cpos.y));
 }
 WO_API wo_api je_gui_get_item_rect_size(wo_vm vm, wo_value args)
 {
     wo_value s = wo_reserve_stack(vm, 1, &args);
 
-    auto&& isize = ImGui::GetItemRectSize();
+    auto &&isize = ImGui::GetItemRectSize();
     return wo_ret_val(vm, set_float2_to_struct(s + 0, vm, isize.x, isize.y));
 }
 
@@ -251,8 +249,8 @@ WO_API wo_api je_gui_get_item_rect(wo_vm vm, wo_value args)
 {
     wo_value s = wo_reserve_stack(vm, 2, &args);
 
-    auto&& isizemin = ImGui::GetItemRectMin();
-    auto&& isizemax = ImGui::GetItemRectMax();
+    auto &&isizemin = ImGui::GetItemRectMin();
+    auto &&isizemax = ImGui::GetItemRectMax();
 
     wo_set_struct(s + 0, vm, 2);
 
@@ -431,55 +429,53 @@ WO_API wo_api je_gui_get_window_draw_list(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_draw_list_add_rect(wo_vm vm, wo_value args)
 {
-    ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
+    ImDrawList *list = (ImDrawList *)wo_pointer(args + 0);
     list->AddRect(val2vec2(args + 1), val2vec2(args + 2), val2color32(args + 3), 0.f, 0, wo_float(args + 4));
     return wo_ret_void(vm);
 }
 WO_API wo_api je_gui_draw_list_add_rect_filled(wo_vm vm, wo_value args)
 {
-    ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
+    ImDrawList *list = (ImDrawList *)wo_pointer(args + 0);
     list->AddRectFilled(val2vec2(args + 1), val2vec2(args + 2), val2color32(args + 3));
     return wo_ret_void(vm);
 }
 
 WO_API wo_api je_gui_draw_list_add_triangle(wo_vm vm, wo_value args)
 {
-    ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
+    ImDrawList *list = (ImDrawList *)wo_pointer(args + 0);
     list->AddTriangle(val2vec2(args + 1), val2vec2(args + 2), val2vec2(args + 3), val2color32(args + 4), wo_float(args + 5));
     return wo_ret_void(vm);
 }
 WO_API wo_api je_gui_draw_list_add_triangle_filled(wo_vm vm, wo_value args)
 {
-    ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
+    ImDrawList *list = (ImDrawList *)wo_pointer(args + 0);
     list->AddTriangleFilled(val2vec2(args + 1), val2vec2(args + 2), val2vec2(args + 3), val2color32(args + 4));
     return wo_ret_void(vm);
 }
 
-
 WO_API wo_api je_gui_draw_list_add_text(wo_vm vm, wo_value args)
 {
-    ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
+    ImDrawList *list = (ImDrawList *)wo_pointer(args + 0);
     list->AddText(val2vec2(args + 1), val2color32(args + 2), wo_string(args + 3));
     return wo_ret_void(vm);
 }
 
 WO_API wo_api je_gui_draw_list_add_image(wo_vm vm, wo_value args)
 {
-    ImDrawList* dlist = (ImDrawList*)wo_pointer(args + 0);
+    ImDrawList *dlist = (ImDrawList *)wo_pointer(args + 0);
 
-    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 3);
+    jeecs::basic::resource<jeecs::graphic::texture> *texture = (jeecs::basic::resource<jeecs::graphic::texture> *)wo_pointer(args + 3);
     jegl_using_resource((*texture)->resource());
 
     ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
-    if (_je_gui_tls_ctx._jegui_need_flip_frambuf
-        && (*texture)->resource()->m_raw_texture_data != nullptr
-        && 0 != ((*texture)->resource()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
+    if (_je_gui_tls_ctx._jegui_need_flip_frambuf && (*texture)->resource()->m_raw_texture_data != nullptr && 0 != ((*texture)->resource()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
     {
         uvmin = ImVec2(0.0f, 0.0f);
         uvmax = ImVec2(1.0f, 1.0f);
     }
     dlist->AddCallback(
-        [](auto, auto) {
+        [](auto, auto)
+        {
             _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
                 _je_gui_tls_ctx._jegl_context,
                 _je_gui_tls_ctx._jegl_rend_texture_shader.value()->resource());
@@ -500,32 +496,32 @@ WO_API wo_api je_gui_draw_list_add_image(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_draw_list_add_line(wo_vm vm, wo_value args)
 {
-    ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
+    ImDrawList *list = (ImDrawList *)wo_pointer(args + 0);
     list->AddLine(val2vec2(args + 1), val2vec2(args + 2), val2color32(args + 3), wo_float(args + 4));
     return wo_ret_void(vm);
 }
 
 WO_API wo_api je_gui_draw_list_add_circle(wo_vm vm, wo_value args)
 {
-    ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
+    ImDrawList *list = (ImDrawList *)wo_pointer(args + 0);
     list->AddCircle(val2vec2(args + 1), wo_float(args + 2), val2color32(args + 3), 0, wo_float(args + 4));
     return wo_ret_void(vm);
 }
 WO_API wo_api je_gui_draw_list_add_filled_circle(wo_vm vm, wo_value args)
 {
-    ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
+    ImDrawList *list = (ImDrawList *)wo_pointer(args + 0);
     list->AddCircleFilled(val2vec2(args + 1), wo_float(args + 2), val2color32(args + 3));
     return wo_ret_void(vm);
 }
 WO_API wo_api je_gui_draw_list_add_bezier_quad(wo_vm vm, wo_value args)
 {
-    ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
+    ImDrawList *list = (ImDrawList *)wo_pointer(args + 0);
     list->AddBezierQuadratic(val2vec2(args + 1), val2vec2(args + 2), val2vec2(args + 3), val2color32(args + 4), wo_float(args + 5));
     return wo_ret_void(vm);
 }
 WO_API wo_api je_gui_draw_list_add_bezier_cubic(wo_vm vm, wo_value args)
 {
-    ImDrawList* list = (ImDrawList*)wo_pointer(args + 0);
+    ImDrawList *list = (ImDrawList *)wo_pointer(args + 0);
     list->AddBezierCubic(val2vec2(args + 1), val2vec2(args + 2), val2vec2(args + 3), val2vec2(args + 4), val2color32(args + 5), wo_float(args + 6));
     return wo_ret_void(vm);
 }
@@ -627,7 +623,7 @@ WO_API wo_api je_gui_is_itemhovered(wo_vm vm, wo_value args)
 WO_API wo_api je_gui_is_mousehoveringrect(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm, ImGui::IsMouseHoveringRect(
-        val2vec2(args + 0), val2vec2(args + 1)));
+                               val2vec2(args + 0), val2vec2(args + 1)));
 }
 
 WO_API wo_api je_gui_is_item_active(wo_vm vm, wo_value args)
@@ -662,9 +658,9 @@ WO_API wo_api je_gui_set_tooltip(wo_vm vm, wo_value args)
 WO_API wo_api je_gui_treenodeex(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm,
-        ImGui::TreeNodeEx(
-            wo_string(args + 0),
-            (ImGuiTreeNodeFlags)wo_int(args + 1)));
+                       ImGui::TreeNodeEx(
+                           wo_string(args + 0),
+                           (ImGuiTreeNodeFlags)wo_int(args + 1)));
 }
 
 WO_API wo_api je_gui_treenode(wo_vm vm, wo_value args)
@@ -684,7 +680,7 @@ WO_API wo_api je_gui_listbox(wo_vm vm, wo_value args)
     int selected_item = -1;
     int max_height_item = -1;
 
-    std::vector<const char*> items((size_t)wo_arr_len(args + 1));
+    std::vector<const char *> items((size_t)wo_arr_len(args + 1));
     wo_value elem = s + 0;
     for (size_t i = 0; i < items.size(); i++)
     {
@@ -705,7 +701,7 @@ WO_API wo_api je_gui_listbox_select(wo_vm vm, wo_value args)
     int selected_item = (int)wo_int(args + 2);
     int max_height_item = -1;
 
-    std::vector<const char*> items((size_t)wo_arr_len(args + 1));
+    std::vector<const char *> items((size_t)wo_arr_len(args + 1));
     wo_value elem = s + 0;
     for (size_t i = 0; i < items.size(); i++)
     {
@@ -726,7 +722,7 @@ WO_API wo_api je_gui_listbox_select_height(wo_vm vm, wo_value args)
     int selected_item = (int)wo_int(args + 2);
     int max_height_item = (int)wo_int(args + 3);
 
-    std::vector<const char*> items((size_t)wo_arr_len(args + 1));
+    std::vector<const char *> items((size_t)wo_arr_len(args + 1));
     wo_value elem = s + 0;
     for (size_t i = 0; i < items.size(); i++)
     {
@@ -745,7 +741,7 @@ WO_API wo_api je_gui_listbox_withsize(wo_vm vm, wo_value args)
 {
     wo_value s = wo_reserve_stack(vm, 1, &args);
 
-    //func ListBox(label:string, items:array<string>, ref select_item:int, width:real, height:real)=> int;
+    // func ListBox(label:string, items:array<string>, ref select_item:int, width:real, height:real)=> int;
     int origin_selected_index = (int)wo_int(args + 2);
     int selected_index = -1;
     bool value_updated = false;
@@ -764,7 +760,6 @@ WO_API wo_api je_gui_listbox_withsize(wo_vm vm, wo_value args)
                 value_updated = true;
                 selected_index = (int)i;
             }
-
         }
         if (!value_updated)
             selected_index = origin_selected_index;
@@ -818,12 +813,12 @@ WO_API wo_api je_gui_begin_child(wo_vm vm, wo_value args)
 WO_API wo_api je_gui_begin_child_attr(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm, ImGui::BeginChild(wo_string(args + 0),
-        ImVec2(0.f, 0.f), true, (ImGuiWindowFlags)wo_int(args + 1)));
+                                             ImVec2(0.f, 0.f), true, (ImGuiWindowFlags)wo_int(args + 1)));
 }
 WO_API wo_api je_gui_begin_child_size(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm, ImGui::BeginChild(wo_string(args + 0),
-        ImVec2(wo_float(args + 1), wo_float(args + 2)), true));
+                                             ImVec2(wo_float(args + 1), wo_float(args + 2)), true));
 }
 
 WO_API wo_api je_gui_end_child(wo_vm vm, wo_value args)
@@ -843,7 +838,6 @@ WO_API wo_api je_gui_progress_bar_size(wo_vm vm, wo_value args)
     ImGui::ProgressBar(wo_float(args + 0), val2vec2(args + 1));
     return wo_ret_void(vm);
 }
-
 
 WO_API wo_api je_gui_text(wo_vm vm, wo_value args)
 {
@@ -938,34 +932,30 @@ WO_API wo_api je_gui_separator(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_image(wo_vm vm, wo_value args)
 {
-    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
+    jeecs::basic::resource<jeecs::graphic::texture> *texture = (jeecs::basic::resource<jeecs::graphic::texture> *)wo_pointer(args + 0);
 
     jegl_using_resource((*texture)->resource());
 
     ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
-    if (_je_gui_tls_ctx._jegui_need_flip_frambuf
-        && (*texture)->resource()->m_raw_texture_data != nullptr
-        && 0 != ((*texture)->resource()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
+    if (_je_gui_tls_ctx._jegui_need_flip_frambuf && (*texture)->resource()->m_raw_texture_data != nullptr && 0 != ((*texture)->resource()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
     {
         uvmin = ImVec2(0.0f, 0.0f);
         uvmax = ImVec2(1.0f, 1.0f);
     }
 
-    auto* dlist = ImGui::GetWindowDrawList();
-    dlist->AddCallback([](auto, auto) {
-        _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
-            _je_gui_tls_ctx._jegl_context,
-            _je_gui_tls_ctx._jegl_rend_texture_shader.value()->resource());
-        },
-        nullptr);
+    auto *dlist = ImGui::GetWindowDrawList();
+    dlist->AddCallback([](auto, auto)
+                       { _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
+                             _je_gui_tls_ctx._jegl_context,
+                             _je_gui_tls_ctx._jegl_rend_texture_shader.value()->resource()); },
+                       nullptr);
     ImGui::Image(
         (ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture(
             _je_gui_tls_ctx._jegl_context,
             (*texture)->resource()),
         ImVec2(
             (float)((*texture)->resource())->m_raw_texture_data->m_width,
-            (float)((*texture)->resource())->m_raw_texture_data->m_height
-        ),
+            (float)((*texture)->resource())->m_raw_texture_data->m_height),
         uvmin,
         uvmax);
 
@@ -975,34 +965,31 @@ WO_API wo_api je_gui_image(wo_vm vm, wo_value args)
 }
 WO_API wo_api je_gui_image_scale(wo_vm vm, wo_value args)
 {
-    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
+    jeecs::basic::resource<jeecs::graphic::texture> *texture = (jeecs::basic::resource<jeecs::graphic::texture> *)wo_pointer(args + 0);
 
     jegl_using_resource((*texture)->resource());
 
     ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
-    if (_je_gui_tls_ctx._jegui_need_flip_frambuf
-        && (*texture)->resource()->m_raw_texture_data != nullptr
-        && 0 != ((*texture)->resource()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
+    if (_je_gui_tls_ctx._jegui_need_flip_frambuf && (*texture)->resource()->m_raw_texture_data != nullptr && 0 != ((*texture)->resource()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
     {
         uvmin = ImVec2(0.0f, 0.0f);
         uvmax = ImVec2(1.0f, 1.0f);
     }
 
-    auto* dlist = ImGui::GetWindowDrawList();
-    dlist->AddCallback([](auto, auto) {
-        _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
-            _je_gui_tls_ctx._jegl_context,
-            _je_gui_tls_ctx._jegl_rend_texture_shader.value()->resource()); },
-        nullptr);
+    auto *dlist = ImGui::GetWindowDrawList();
+    dlist->AddCallback([](auto, auto)
+                       { _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
+                             _je_gui_tls_ctx._jegl_context,
+                             _je_gui_tls_ctx._jegl_rend_texture_shader.value()->resource()); },
+                       nullptr);
     ImGui::Image((ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture(
-        _je_gui_tls_ctx._jegl_context,
-        (*texture)->resource()),
-        ImVec2(
-            ((*texture)->resource())->m_raw_texture_data->m_width * wo_float(args + 1),
-            ((*texture)->resource())->m_raw_texture_data->m_height * wo_float(args + 1)
-        ),
-        uvmin,
-        uvmax);
+                     _je_gui_tls_ctx._jegl_context,
+                     (*texture)->resource()),
+                 ImVec2(
+                     ((*texture)->resource())->m_raw_texture_data->m_width * wo_float(args + 1),
+                     ((*texture)->resource())->m_raw_texture_data->m_height * wo_float(args + 1)),
+                 uvmin,
+                 uvmax);
 
     dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
 
@@ -1010,35 +997,31 @@ WO_API wo_api je_gui_image_scale(wo_vm vm, wo_value args)
 }
 WO_API wo_api je_gui_image_size(wo_vm vm, wo_value args)
 {
-    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
+    jeecs::basic::resource<jeecs::graphic::texture> *texture = (jeecs::basic::resource<jeecs::graphic::texture> *)wo_pointer(args + 0);
 
     jegl_using_resource((*texture)->resource());
 
     ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
-    if (_je_gui_tls_ctx._jegui_need_flip_frambuf
-        && (*texture)->resource()->m_raw_texture_data != nullptr
-        && 0 != ((*texture)->resource()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
+    if (_je_gui_tls_ctx._jegui_need_flip_frambuf && (*texture)->resource()->m_raw_texture_data != nullptr && 0 != ((*texture)->resource()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
     {
         uvmin = ImVec2(0.0f, 0.0f);
         uvmax = ImVec2(1.0f, 1.0f);
     }
 
-    auto* dlist = ImGui::GetWindowDrawList();
-    dlist->AddCallback([](auto, auto) {
-        _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
-            _je_gui_tls_ctx._jegl_context,
-            _je_gui_tls_ctx._jegl_rend_texture_shader.value()->resource());
-        },
-        nullptr);
+    auto *dlist = ImGui::GetWindowDrawList();
+    dlist->AddCallback([](auto, auto)
+                       { _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
+                             _je_gui_tls_ctx._jegl_context,
+                             _je_gui_tls_ctx._jegl_rend_texture_shader.value()->resource()); },
+                       nullptr);
     ImGui::Image((ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture(
-        _je_gui_tls_ctx._jegl_context,
-        (*texture)->resource()),
-        ImVec2(
-            wo_float(args + 1),
-            wo_float(args + 2)
-        ),
-        uvmin,
-        uvmax);
+                     _je_gui_tls_ctx._jegl_context,
+                     (*texture)->resource()),
+                 ImVec2(
+                     wo_float(args + 1),
+                     wo_float(args + 2)),
+                 uvmin,
+                 uvmax);
 
     dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
 
@@ -1047,36 +1030,32 @@ WO_API wo_api je_gui_image_size(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_image_size_color(wo_vm vm, wo_value args)
 {
-    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 0);
+    jeecs::basic::resource<jeecs::graphic::texture> *texture = (jeecs::basic::resource<jeecs::graphic::texture> *)wo_pointer(args + 0);
 
     jegl_using_resource((*texture)->resource());
 
     ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
-    if (_je_gui_tls_ctx._jegui_need_flip_frambuf
-        && (*texture)->resource()->m_raw_texture_data != nullptr
-        && 0 != ((*texture)->resource()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
+    if (_je_gui_tls_ctx._jegui_need_flip_frambuf && (*texture)->resource()->m_raw_texture_data != nullptr && 0 != ((*texture)->resource()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
     {
         uvmin = ImVec2(0.0f, 0.0f);
         uvmax = ImVec2(1.0f, 1.0f);
     }
 
-    auto* dlist = ImGui::GetWindowDrawList();
-    dlist->AddCallback([](auto, auto) {
-        _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
-            _je_gui_tls_ctx._jegl_context,
-            _je_gui_tls_ctx._jegl_rend_texture_shader.value()->resource());
-        },
-        nullptr);
+    auto *dlist = ImGui::GetWindowDrawList();
+    dlist->AddCallback([](auto, auto)
+                       { _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
+                             _je_gui_tls_ctx._jegl_context,
+                             _je_gui_tls_ctx._jegl_rend_texture_shader.value()->resource()); },
+                       nullptr);
     ImGui::Image((ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture(
-        _je_gui_tls_ctx._jegl_context,
-        (*texture)->resource()),
-        ImVec2(
-            wo_float(args + 1),
-            wo_float(args + 2)
-        ),
-        uvmin,
-        uvmax,
-        val2colorf4(args + 3));
+                     _je_gui_tls_ctx._jegl_context,
+                     (*texture)->resource()),
+                 ImVec2(
+                     wo_float(args + 1),
+                     wo_float(args + 2)),
+                 uvmin,
+                 uvmax,
+                 val2colorf4(args + 3));
 
     dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
 
@@ -1086,14 +1065,12 @@ WO_API wo_api je_gui_image_size_color(wo_vm vm, wo_value args)
 WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args)
 {
     wo_string_t label = wo_string(args + 0);
-    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 1);
+    jeecs::basic::resource<jeecs::graphic::texture> *texture = (jeecs::basic::resource<jeecs::graphic::texture> *)wo_pointer(args + 1);
 
     jegl_using_resource((*texture)->resource());
 
     ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
-    if (_je_gui_tls_ctx._jegui_need_flip_frambuf
-        && (*texture)->resource()->m_raw_texture_data != nullptr
-        && 0 != ((*texture)->resource()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
+    if (_je_gui_tls_ctx._jegui_need_flip_frambuf && (*texture)->resource()->m_raw_texture_data != nullptr && 0 != ((*texture)->resource()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
     {
         uvmin = ImVec2(0.0f, 0.0f);
         uvmax = ImVec2(1.0f, 1.0f);
@@ -1101,13 +1078,12 @@ WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args)
 
     bool result = false;
 
-    auto* dlist = ImGui::GetWindowDrawList();
-    dlist->AddCallback([](auto, auto) {
-        _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
-            _je_gui_tls_ctx._jegl_context,
-            _je_gui_tls_ctx._jegl_rend_texture_shader.value()->resource());
-        },
-        nullptr);
+    auto *dlist = ImGui::GetWindowDrawList();
+    dlist->AddCallback([](auto, auto)
+                       { _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
+                             _je_gui_tls_ctx._jegl_context,
+                             _je_gui_tls_ctx._jegl_rend_texture_shader.value()->resource()); },
+                       nullptr);
     result = ImGui::ImageButton(
         label,
         (ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture(
@@ -1115,8 +1091,7 @@ WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args)
             (*texture)->resource()),
         ImVec2(
             (float)((*texture)->resource())->m_raw_texture_data->m_width,
-            (float)((*texture)->resource())->m_raw_texture_data->m_height
-        ),
+            (float)((*texture)->resource())->m_raw_texture_data->m_height),
         uvmin,
         uvmax);
 
@@ -1127,14 +1102,12 @@ WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args)
 WO_API wo_api je_gui_imagebutton_scale(wo_vm vm, wo_value args)
 {
     wo_string_t label = wo_string(args + 0);
-    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 1);
+    jeecs::basic::resource<jeecs::graphic::texture> *texture = (jeecs::basic::resource<jeecs::graphic::texture> *)wo_pointer(args + 1);
 
     jegl_using_resource((*texture)->resource());
 
     ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
-    if (_je_gui_tls_ctx._jegui_need_flip_frambuf
-        && (*texture)->resource()->m_raw_texture_data != nullptr
-        && 0 != ((*texture)->resource()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
+    if (_je_gui_tls_ctx._jegui_need_flip_frambuf && (*texture)->resource()->m_raw_texture_data != nullptr && 0 != ((*texture)->resource()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
     {
         uvmin = ImVec2(0.0f, 0.0f);
         uvmax = ImVec2(1.0f, 1.0f);
@@ -1142,13 +1115,12 @@ WO_API wo_api je_gui_imagebutton_scale(wo_vm vm, wo_value args)
 
     bool result = false;
 
-    auto* dlist = ImGui::GetWindowDrawList();
-    dlist->AddCallback([](auto, auto) {
-        _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
-            _je_gui_tls_ctx._jegl_context,
-            _je_gui_tls_ctx._jegl_rend_texture_shader.value()->resource());
-        },
-        nullptr);
+    auto *dlist = ImGui::GetWindowDrawList();
+    dlist->AddCallback([](auto, auto)
+                       { _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
+                             _je_gui_tls_ctx._jegl_context,
+                             _je_gui_tls_ctx._jegl_rend_texture_shader.value()->resource()); },
+                       nullptr);
     result = ImGui::ImageButton(
         label,
         (ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture(
@@ -1156,8 +1128,8 @@ WO_API wo_api je_gui_imagebutton_scale(wo_vm vm, wo_value args)
             (*texture)->resource()),
         ImVec2(
             ((*texture)->resource())->m_raw_texture_data->m_width * wo_float(args + 2),
-            ((*texture)->resource())->m_raw_texture_data->m_height * wo_float(args + 2)
-        ), uvmin, uvmax);
+            ((*texture)->resource())->m_raw_texture_data->m_height * wo_float(args + 2)),
+        uvmin, uvmax);
 
     dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
 
@@ -1166,14 +1138,12 @@ WO_API wo_api je_gui_imagebutton_scale(wo_vm vm, wo_value args)
 WO_API wo_api je_gui_imagebutton_size(wo_vm vm, wo_value args)
 {
     wo_string_t label = wo_string(args + 0);
-    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture>*)wo_pointer(args + 1);
+    jeecs::basic::resource<jeecs::graphic::texture> *texture = (jeecs::basic::resource<jeecs::graphic::texture> *)wo_pointer(args + 1);
 
     jegl_using_resource((*texture)->resource());
 
     ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
-    if (_je_gui_tls_ctx._jegui_need_flip_frambuf
-        && (*texture)->resource()->m_raw_texture_data != nullptr
-        && 0 != ((*texture)->resource()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
+    if (_je_gui_tls_ctx._jegui_need_flip_frambuf && (*texture)->resource()->m_raw_texture_data != nullptr && 0 != ((*texture)->resource()->m_raw_texture_data->m_format & jegl_texture::format::FRAMEBUF))
     {
         uvmin = ImVec2(0.0f, 0.0f);
         uvmax = ImVec2(1.0f, 1.0f);
@@ -1181,13 +1151,12 @@ WO_API wo_api je_gui_imagebutton_size(wo_vm vm, wo_value args)
 
     bool result = false;
 
-    auto* dlist = ImGui::GetWindowDrawList();
-    dlist->AddCallback([](auto, auto) {
-        _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
-            _je_gui_tls_ctx._jegl_context,
-            _je_gui_tls_ctx._jegl_rend_texture_shader.value()->resource());
-        },
-        nullptr);
+    auto *dlist = ImGui::GetWindowDrawList();
+    dlist->AddCallback([](auto, auto)
+                       { _je_gui_tls_ctx._jegl_bind_shader_sampler_state(
+                             _je_gui_tls_ctx._jegl_context,
+                             _je_gui_tls_ctx._jegl_rend_texture_shader.value()->resource()); },
+                       nullptr);
     result = ImGui::ImageButton(
         label,
         (ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture(
@@ -1195,8 +1164,7 @@ WO_API wo_api je_gui_imagebutton_size(wo_vm vm, wo_value args)
             (*texture)->resource()),
         ImVec2(
             wo_float(args + 2),
-            wo_float(args + 3)
-        ),
+            wo_float(args + 3)),
         uvmin,
         uvmax);
 
@@ -1209,7 +1177,7 @@ WO_API wo_api je_gui_content_region_avail(wo_vm vm, wo_value args)
 {
     wo_value s = wo_reserve_stack(vm, 1, &args);
 
-    auto&& sz = ImGui::GetContentRegionAvail();
+    auto &&sz = ImGui::GetContentRegionAvail();
     return wo_ret_val(vm, set_float2_to_struct(s + 0, vm, sz.x, sz.y));
 }
 
@@ -1318,7 +1286,7 @@ WO_API wo_api je_gui_input_int2_box(wo_vm vm, wo_value args)
     wo_value s = wo_reserve_stack(vm, 2, &args);
 
     wo_string_t label = wo_string(args + 0);
-    int values[] = { (int)wo_int(args + 1), (int)wo_int(args + 2) };
+    int values[] = {(int)wo_int(args + 1), (int)wo_int(args + 2)};
     bool update = false;
 
     update = ImGui::InputInt2(label, values);
@@ -1343,7 +1311,7 @@ WO_API wo_api je_gui_input_int3_box(wo_vm vm, wo_value args)
     wo_value s = wo_reserve_stack(vm, 2, &args);
 
     wo_string_t label = wo_string(args + 0);
-    int values[] = { (int)wo_int(args + 1), (int)wo_int(args + 2), (int)wo_int(args + 3) };
+    int values[] = {(int)wo_int(args + 1), (int)wo_int(args + 2), (int)wo_int(args + 3)};
     bool update = false;
 
     update = ImGui::InputInt3(label, values);
@@ -1370,7 +1338,7 @@ WO_API wo_api je_gui_input_int4_box(wo_vm vm, wo_value args)
     wo_value s = wo_reserve_stack(vm, 2, &args);
 
     wo_string_t label = wo_string(args + 0);
-    int values[] = { (int)wo_int(args + 1), (int)wo_int(args + 2), (int)wo_int(args + 3), (int)wo_int(args + 4) };
+    int values[] = {(int)wo_int(args + 1), (int)wo_int(args + 2), (int)wo_int(args + 3), (int)wo_int(args + 4)};
     bool update = false;
 
     update = ImGui::InputInt3(label, values);
@@ -1424,7 +1392,7 @@ WO_API wo_api je_gui_input_float2_box(wo_vm vm, wo_value args)
     wo_value s = wo_reserve_stack(vm, 1, &args);
 
     wo_string_t label = wo_string(args + 0);
-    float values[] = { wo_float(args + 1), wo_float(args + 2) };
+    float values[] = {wo_float(args + 1), wo_float(args + 2)};
     bool update = false;
 
     update = ImGui::InputFloat2(label, values);
@@ -1440,7 +1408,7 @@ WO_API wo_api je_gui_input_float3_box(wo_vm vm, wo_value args)
     wo_value s = wo_reserve_stack(vm, 1, &args);
 
     wo_string_t label = wo_string(args + 0);
-    float values[] = { wo_float(args + 1), wo_float(args + 2), wo_float(args + 3) };
+    float values[] = {wo_float(args + 1), wo_float(args + 2), wo_float(args + 3)};
     bool update = false;
 
     update = ImGui::InputFloat3(label, values);
@@ -1456,7 +1424,7 @@ WO_API wo_api je_gui_input_float4_box(wo_vm vm, wo_value args)
     wo_value s = wo_reserve_stack(vm, 1, &args);
 
     wo_string_t label = wo_string(args + 0);
-    float values[] = { wo_float(args + 1), wo_float(args + 2), wo_float(args + 3), wo_float(args + 4) };
+    float values[] = {wo_float(args + 1), wo_float(args + 2), wo_float(args + 3), wo_float(args + 4)};
     bool update = false;
 
     update = ImGui::InputFloat4(label, values);
@@ -1486,7 +1454,7 @@ WO_API wo_api je_gui_input_float2_format_box(wo_vm vm, wo_value args)
     wo_value s = wo_reserve_stack(vm, 1, &args);
 
     wo_string_t label = wo_string(args + 0);
-    float values[] = { wo_float(args + 1), wo_float(args + 2) };
+    float values[] = {wo_float(args + 1), wo_float(args + 2)};
     bool update = false;
 
     wo_string_t format = wo_string(args + 3);
@@ -1503,7 +1471,7 @@ WO_API wo_api je_gui_input_float3_format_box(wo_vm vm, wo_value args)
     wo_value s = wo_reserve_stack(vm, 1, &args);
 
     wo_string_t label = wo_string(args + 0);
-    float values[] = { wo_float(args + 1), wo_float(args + 2), wo_float(args + 3) };
+    float values[] = {wo_float(args + 1), wo_float(args + 2), wo_float(args + 3)};
     bool update = false;
 
     wo_string_t format = wo_string(args + 4);
@@ -1520,7 +1488,7 @@ WO_API wo_api je_gui_input_float4_format_box(wo_vm vm, wo_value args)
     wo_value s = wo_reserve_stack(vm, 1, &args);
 
     wo_string_t label = wo_string(args + 0);
-    float values[] = { wo_float(args + 1), wo_float(args + 2), wo_float(args + 3), wo_float(args + 4) };
+    float values[] = {wo_float(args + 1), wo_float(args + 2), wo_float(args + 3), wo_float(args + 4)};
     bool update = false;
 
     wo_string_t format = wo_string(args + 5);
@@ -1551,7 +1519,7 @@ WO_API wo_api je_gui_input_text_multiline_size(wo_vm vm, wo_value args)
     bool updated = false;
 
     updated = ImGui::InputTextMultiline(wo_string(args + 0), &buf,
-        ImVec2(wo_float(args + 2), wo_float(args + 3)));
+                                        ImVec2(wo_float(args + 2), wo_float(args + 3)));
 
     if (updated)
         return wo_ret_option_string(vm, buf.c_str());
@@ -1562,7 +1530,7 @@ WO_API wo_api je_gui_combo(wo_vm vm, wo_value args)
 {
     wo_value s = wo_reserve_stack(vm, 1, &args);
 
-    std::vector<const char*> combo_items;
+    std::vector<const char *> combo_items;
     wo_value elem = s + 0;
     for (wo_integer_t i = 0; i < wo_arr_len(args + 1); ++i)
     {
@@ -1594,7 +1562,7 @@ WO_API wo_api je_gui_launch(wo_vm vm, wo_value args)
 
     wo_dispatch_value(vmm, args + 0, 2, nullptr, &vmm_s);
 
-    gui_wo_job_coroutine* guico = new gui_wo_job_coroutine;
+    gui_wo_job_coroutine *guico = new gui_wo_job_coroutine;
     guico->work_vm = vmm;
     _wo_new_job_list.add_one(guico);
 
@@ -1642,8 +1610,7 @@ WO_API wo_api je_gui_register_exit_callback(wo_vm vm, wo_value args)
         return wo_ret_panic(vm, "Callback has been registered.");
 
     assert(
-        _je_gui_static_ctx._jegui_exit_callback_handler_vm == nullptr
-        && _je_gui_static_ctx._jegui_exit_callback_function == nullptr);
+        _je_gui_static_ctx._jegui_exit_callback_handler_vm == nullptr && _je_gui_static_ctx._jegui_exit_callback_function == nullptr);
 
     _je_gui_static_ctx._jegui_exit_callback_handler_vm = wo_borrow_vm(vm);
     _je_gui_static_ctx._jegui_exit_callback_function = wo_create_pin_value();
@@ -1672,8 +1639,8 @@ WO_API wo_api je_gui_set_font(wo_vm vm, wo_value args)
     size_t argc = (size_t)wo_argc(vm);
 
     wo_value elem = s + 0;
-    const char* font_path = nullptr;
-    const char* latin_font_path = nullptr;
+    const char *font_path = nullptr;
+    const char *latin_font_path = nullptr;
 
     if (wo_option_get(elem, args + 0))
         font_path = wo_string(elem);
@@ -1690,7 +1657,7 @@ WO_API wo_api je_gui_style_get_config_color(wo_vm vm, wo_value args)
 {
     wo_value s = wo_reserve_stack(vm, 1, &args);
 
-    ImGuiStyle* style = &ImGui::GetStyle();
+    ImGuiStyle *style = &ImGui::GetStyle();
     auto color = style->Colors[wo_int(args + 0)];
 
     return wo_ret_val(vm, set_float4_to_struct(s + 0, vm, color.x, color.y, color.z, color.w));
@@ -1700,8 +1667,8 @@ WO_API wo_api je_gui_style_set_config_color(wo_vm vm, wo_value args)
 {
     wo_value s = wo_reserve_stack(vm, 1, &args);
 
-    ImGuiStyle* style = &ImGui::GetStyle();
-    auto& color = style->Colors[wo_int(args + 0)];
+    ImGuiStyle *style = &ImGui::GetStyle();
+    auto &color = style->Colors[wo_int(args + 0)];
 
     wo_value elem = s + 0;
     wo_struct_get(elem, args + 1, 0);
@@ -1775,26 +1742,26 @@ WO_API wo_api je_gui_dummy(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_code_editor_language_definition_create(wo_vm vm, wo_value args)
 {
-    TextEditor::LanguageDefinition* defs = new TextEditor::LanguageDefinition;
+    TextEditor::LanguageDefinition *defs = new TextEditor::LanguageDefinition;
     defs->mName = wo_string(args + 0);
     return wo_ret_gchandle(vm, defs, nullptr,
-        [](void* p)
-        {
-            delete std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(p));
-        });
+                           [](void *p)
+                           {
+                               delete std::launder(reinterpret_cast<TextEditor::LanguageDefinition *>(p));
+                           });
 }
 WO_API wo_api je_gui_code_editor_language_definition_add_keyword(wo_vm vm, wo_value args)
 {
-    TextEditor::LanguageDefinition* defs =
-        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(wo_pointer(args + 0)));
+    TextEditor::LanguageDefinition *defs =
+        std::launder(reinterpret_cast<TextEditor::LanguageDefinition *>(wo_pointer(args + 0)));
 
     defs->mKeywords.insert(wo_string(args + 1));
     return wo_ret_void(vm);
 }
 WO_API wo_api je_gui_code_editor_language_definition_add_identifier(wo_vm vm, wo_value args)
 {
-    TextEditor::LanguageDefinition* defs =
-        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(wo_pointer(args + 0)));
+    TextEditor::LanguageDefinition *defs =
+        std::launder(reinterpret_cast<TextEditor::LanguageDefinition *>(wo_pointer(args + 0)));
 
     TextEditor::Identifier ident;
     ident.mDeclaration = wo_string(args + 2);
@@ -1806,8 +1773,8 @@ WO_API wo_api je_gui_code_editor_language_definition_add_identifier(wo_vm vm, wo
 }
 WO_API wo_api je_gui_code_editor_language_definition_add_token_regex(wo_vm vm, wo_value args)
 {
-    TextEditor::LanguageDefinition* defs =
-        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(wo_pointer(args + 0)));
+    TextEditor::LanguageDefinition *defs =
+        std::launder(reinterpret_cast<TextEditor::LanguageDefinition *>(wo_pointer(args + 0)));
 
     defs->mTokenRegexStrings.push_back(
         std::make_pair(wo_string(args + 1), (TextEditor::PaletteIndex)wo_int(args + 2)));
@@ -1816,8 +1783,8 @@ WO_API wo_api je_gui_code_editor_language_definition_add_token_regex(wo_vm vm, w
 }
 WO_API wo_api je_gui_code_editor_language_definition_set_mlcomment(wo_vm vm, wo_value args)
 {
-    TextEditor::LanguageDefinition* defs =
-        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(wo_pointer(args + 0)));
+    TextEditor::LanguageDefinition *defs =
+        std::launder(reinterpret_cast<TextEditor::LanguageDefinition *>(wo_pointer(args + 0)));
 
     defs->mCommentStart = wo_string(args + 1);
     defs->mCommentEnd = wo_string(args + 2);
@@ -1826,8 +1793,8 @@ WO_API wo_api je_gui_code_editor_language_definition_set_mlcomment(wo_vm vm, wo_
 }
 WO_API wo_api je_gui_code_editor_language_definition_set_slcomment(wo_vm vm, wo_value args)
 {
-    TextEditor::LanguageDefinition* defs =
-        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(wo_pointer(args + 0)));
+    TextEditor::LanguageDefinition *defs =
+        std::launder(reinterpret_cast<TextEditor::LanguageDefinition *>(wo_pointer(args + 0)));
 
     defs->mSingleLineComment = wo_string(args + 1);
 
@@ -1835,8 +1802,8 @@ WO_API wo_api je_gui_code_editor_language_definition_set_slcomment(wo_vm vm, wo_
 }
 WO_API wo_api je_gui_code_editor_language_definition_set_case_sensitive(wo_vm vm, wo_value args)
 {
-    TextEditor::LanguageDefinition* defs =
-        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(wo_pointer(args + 0)));
+    TextEditor::LanguageDefinition *defs =
+        std::launder(reinterpret_cast<TextEditor::LanguageDefinition *>(wo_pointer(args + 0)));
 
     defs->mCaseSensitive = wo_bool(args + 1);
 
@@ -1844,8 +1811,8 @@ WO_API wo_api je_gui_code_editor_language_definition_set_case_sensitive(wo_vm vm
 }
 WO_API wo_api je_gui_code_editor_language_definition_set_auto_indentation(wo_vm vm, wo_value args)
 {
-    TextEditor::LanguageDefinition* defs =
-        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(wo_pointer(args + 0)));
+    TextEditor::LanguageDefinition *defs =
+        std::launder(reinterpret_cast<TextEditor::LanguageDefinition *>(wo_pointer(args + 0)));
 
     defs->mAutoIndentation = wo_bool(args + 1);
 
@@ -1853,8 +1820,8 @@ WO_API wo_api je_gui_code_editor_language_definition_set_auto_indentation(wo_vm 
 }
 WO_API wo_api je_gui_code_editor_language_definition_set_preproc_char(wo_vm vm, wo_value args)
 {
-    TextEditor::LanguageDefinition* defs =
-        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(wo_pointer(args + 0)));
+    TextEditor::LanguageDefinition *defs =
+        std::launder(reinterpret_cast<TextEditor::LanguageDefinition *>(wo_pointer(args + 0)));
 
     defs->mPreprocChar = (char)wo_char(args + 1);
 
@@ -1863,9 +1830,9 @@ WO_API wo_api je_gui_code_editor_language_definition_set_preproc_char(wo_vm vm, 
 
 WO_API wo_api je_gui_code_editor_set_language_definition(wo_vm vm, wo_value args)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
-    TextEditor::LanguageDefinition* defs =
-        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(wo_pointer(args + 1)));
+    TextEditor *text_editor = std::launder(reinterpret_cast<TextEditor *>(wo_pointer(args + 0)));
+    TextEditor::LanguageDefinition *defs =
+        std::launder(reinterpret_cast<TextEditor::LanguageDefinition *>(wo_pointer(args + 1)));
 
     text_editor->SetLanguageDefinition(*defs);
 
@@ -1873,30 +1840,30 @@ WO_API wo_api je_gui_code_editor_set_language_definition(wo_vm vm, wo_value args
 }
 WO_API wo_api je_gui_code_editor_undoable(wo_vm vm, wo_value args)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+    TextEditor *text_editor = std::launder(reinterpret_cast<TextEditor *>(wo_pointer(args + 0)));
     return wo_ret_bool(vm, text_editor->CanUndo());
 }
 WO_API wo_api je_gui_code_editor_redoable(wo_vm vm, wo_value args)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+    TextEditor *text_editor = std::launder(reinterpret_cast<TextEditor *>(wo_pointer(args + 0)));
     return wo_ret_bool(vm, text_editor->CanRedo());
 }
 WO_API wo_api je_gui_code_editor_undo(wo_vm vm, wo_value args)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+    TextEditor *text_editor = std::launder(reinterpret_cast<TextEditor *>(wo_pointer(args + 0)));
     text_editor->Undo();
     return wo_ret_void(vm);
 }
 WO_API wo_api je_gui_code_editor_redo(wo_vm vm, wo_value args)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+    TextEditor *text_editor = std::launder(reinterpret_cast<TextEditor *>(wo_pointer(args + 0)));
     text_editor->Redo();
     return wo_ret_void(vm);
 }
 WO_API wo_api je_gui_code_editor_get_cursor_pos(wo_vm vm, wo_value args)
 {
     wo_value s = wo_reserve_stack(vm, 2, &args);
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+    TextEditor *text_editor = std::launder(reinterpret_cast<TextEditor *>(wo_pointer(args + 0)));
 
     wo_value result = s + 0;
     wo_value elem = s + 1;
@@ -1916,7 +1883,7 @@ WO_API wo_api je_gui_code_editor_get_cursor_pos(wo_vm vm, wo_value args)
 WO_API wo_api je_gui_code_editor_set_cursor_pos(wo_vm vm, wo_value args)
 {
     wo_value s = wo_reserve_stack(vm, 1, &args);
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+    TextEditor *text_editor = std::launder(reinterpret_cast<TextEditor *>(wo_pointer(args + 0)));
 
     wo_value elem = s + 0;
 
@@ -1932,61 +1899,61 @@ WO_API wo_api je_gui_code_editor_set_cursor_pos(wo_vm vm, wo_value args)
 }
 WO_API wo_api je_gui_code_editor_insert_text(wo_vm vm, wo_value args)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+    TextEditor *text_editor = std::launder(reinterpret_cast<TextEditor *>(wo_pointer(args + 0)));
     text_editor->InsertText(wo_string(args + 1));
     return wo_ret_void(vm);
 }
 WO_API wo_api je_gui_code_editor_copy(wo_vm vm, wo_value args)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+    TextEditor *text_editor = std::launder(reinterpret_cast<TextEditor *>(wo_pointer(args + 0)));
     text_editor->Copy();
 
     return wo_ret_void(vm);
 }
 WO_API wo_api je_gui_code_editor_cut(wo_vm vm, wo_value args)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+    TextEditor *text_editor = std::launder(reinterpret_cast<TextEditor *>(wo_pointer(args + 0)));
     text_editor->Cut();
 
     return wo_ret_void(vm);
 }
 WO_API wo_api je_gui_code_editor_paste(wo_vm vm, wo_value args)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+    TextEditor *text_editor = std::launder(reinterpret_cast<TextEditor *>(wo_pointer(args + 0)));
     text_editor->Paste();
 
     return wo_ret_void(vm);
 }
 WO_API wo_api je_gui_code_editor_delete(wo_vm vm, wo_value args)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+    TextEditor *text_editor = std::launder(reinterpret_cast<TextEditor *>(wo_pointer(args + 0)));
     text_editor->Delete();
 
     return wo_ret_void(vm);
 }
 WO_API wo_api je_gui_code_editor_create(wo_vm vm, wo_value args)
 {
-    TextEditor* text_editor = new TextEditor();
+    TextEditor *text_editor = new TextEditor();
 
     text_editor->SetPalette(TextEditor::GetDarkPalette());
 
     return wo_ret_gchandle(vm, text_editor, nullptr,
-        [](void* p)
-        {
-            delete std::launder(reinterpret_cast<TextEditor*>(p));
-        });
+                           [](void *p)
+                           {
+                               delete std::launder(reinterpret_cast<TextEditor *>(p));
+                           });
 }
 
 WO_API wo_api je_gui_code_editor_get_text(wo_vm vm, wo_value args)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+    TextEditor *text_editor = std::launder(reinterpret_cast<TextEditor *>(wo_pointer(args + 0)));
 
     return wo_ret_string(vm, text_editor->GetText().c_str());
 }
 
 WO_API wo_api je_gui_code_editor_set_text(wo_vm vm, wo_value args)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+    TextEditor *text_editor = std::launder(reinterpret_cast<TextEditor *>(wo_pointer(args + 0)));
 
     text_editor->SetText(wo_string(args + 1));
     return wo_ret_void(vm);
@@ -1994,7 +1961,7 @@ WO_API wo_api je_gui_code_editor_set_text(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_code_editor_show(wo_vm vm, wo_value args)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+    TextEditor *text_editor = std::launder(reinterpret_cast<TextEditor *>(wo_pointer(args + 0)));
     text_editor->Render(wo_string(args + 0));
 
     return wo_ret_void(vm);
@@ -2002,7 +1969,7 @@ WO_API wo_api je_gui_code_editor_show(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_code_editor_show_size(wo_vm vm, wo_value args)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(wo_pointer(args + 0)));
+    TextEditor *text_editor = std::launder(reinterpret_cast<TextEditor *>(wo_pointer(args + 0)));
     text_editor->Render(wo_string(args + 1), val2vec2(args + 2), wo_bool(args + 3));
 
     return wo_ret_void(vm);
@@ -2013,19 +1980,19 @@ WO_API wo_api je_gui_node_editor_context_create(wo_vm vm, wo_value args)
     ax::NodeEditor::Config c;
     c.SettingsFile = nullptr;
 
-    ax::NodeEditor::EditorContext* ctx = ax::NodeEditor::CreateEditor(&c);
+    ax::NodeEditor::EditorContext *ctx = ax::NodeEditor::CreateEditor(&c);
     return wo_ret_gchandle(vm, ctx, nullptr,
-        [](void* p)
-        {
-            ax::NodeEditor::DestroyEditor(
-                reinterpret_cast<ax::NodeEditor::EditorContext*>(p));
-        });
+                           [](void *p)
+                           {
+                               ax::NodeEditor::DestroyEditor(
+                                   reinterpret_cast<ax::NodeEditor::EditorContext *>(p));
+                           });
 }
 
 WO_API wo_api je_gui_node_editor_begin(wo_vm vm, wo_value args)
 {
-    ax::NodeEditor::EditorContext* ctx =
-        reinterpret_cast<ax::NodeEditor::EditorContext*>(wo_pointer(args + 1));
+    ax::NodeEditor::EditorContext *ctx =
+        reinterpret_cast<ax::NodeEditor::EditorContext *>(wo_pointer(args + 1));
 
     ax::NodeEditor::SetCurrentEditor(ctx);
     ax::NodeEditor::Begin(wo_string(args + 0));
@@ -2133,8 +2100,8 @@ WO_API wo_api je_gui_node_editor_reject_new_item(wo_vm vm, wo_value args)
 WO_API wo_api je_gui_node_editor_accept_new_item_color(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm, ax::NodeEditor::AcceptNewItem(
-        val2colorf4(args + 0),
-        wo_float(args + 1)));
+                               val2colorf4(args + 0),
+                               wo_float(args + 1)));
 }
 
 WO_API wo_api je_gui_node_editor_reject_new_item_color(wo_vm vm, wo_value args)
@@ -2144,7 +2111,6 @@ WO_API wo_api je_gui_node_editor_reject_new_item_color(wo_vm vm, wo_value args)
         wo_float(args + 1));
     return wo_ret_void(vm);
 }
-
 
 WO_API wo_api je_gui_node_editor_accept_deleted_item(wo_vm vm, wo_value args)
 {
@@ -2189,7 +2155,6 @@ WO_API wo_api je_gui_node_editor_query_new_node(wo_vm vm, wo_value args)
     }
 
     return wo_ret_option_none(vm);
-
 }
 
 WO_API wo_api je_gui_node_editor_query_deleted_node(wo_vm vm, wo_value args)
@@ -2293,8 +2258,8 @@ WO_API wo_api je_gui_node_editor_get_hovered_link(wo_vm vm, wo_value args)
 WO_API wo_api je_gui_node_editor_is_node_selected(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm,
-        ax::NodeEditor::IsNodeSelected(
-            (ax::NodeEditor::NodeId)wo_int(args + 0)));
+                       ax::NodeEditor::IsNodeSelected(
+                           (ax::NodeEditor::NodeId)wo_int(args + 0)));
 }
 
 WO_API wo_api je_gui_node_editor_canvas_to_screen(wo_vm vm, wo_value args)
@@ -2352,7 +2317,7 @@ WO_API wo_api je_gui_node_editor_resume(wo_vm vm, wo_value args)
 ////////////////////////////////////////////////////////////////////////////////////////////
 
 void jegui_init_basic(
-    jegl_context* gl_context,
+    jegl_context *gl_context,
     bool need_flip_frame_buf,
     jegui_user_image_loader_t get_img_res,
     jegui_user_sampler_loader_t apply_shader_sampler)
@@ -2363,8 +2328,8 @@ void jegui_init_basic(
     _je_gui_tls_ctx._jegl_bind_shader_sampler_state = apply_shader_sampler;
 
     _je_gui_tls_ctx._jegl_rend_texture_shader = jeecs::graphic::shader::create(
-        "!/builtin/imgui_image_displayer.shader",
-        R"(
+                                                    "!/builtin/imgui_image_displayer.shader",
+                                                    R"(
 import je::shader;
 ZTEST   (OFF);
 ZWRITE  (DISABLE);
@@ -2401,7 +2366,8 @@ public func frag(vf: v2f)
         color = texture(Main, vf.uv)
     };
 }
-)").value();
+)")
+                                                    .value();
 
     _je_gui_tls_ctx._jegui_imgui_config_path =
         jeecs_file_get_host_path() + std::string("/builtin/imgui.ini.je4cache");
@@ -2412,7 +2378,7 @@ public func frag(vf: v2f)
     // Set style:
     // ImGui::StyleColorsLight();
 
-    ImGuiIO& io = ImGui::GetIO();
+    ImGuiIO &io = ImGui::GetIO();
 
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
@@ -2424,14 +2390,14 @@ public func frag(vf: v2f)
 
     io.IniFilename = _je_gui_tls_ctx._jegui_imgui_config_path.c_str();
 
-    auto* general_ttf_file =
+    auto *general_ttf_file =
         _je_gui_static_ctx._jegui_specify_font_path.has_value()
-        ? jeecs_file_open(_je_gui_static_ctx._jegui_specify_font_path.value().c_str())
-        : nullptr;
-    auto* latin_ttf_file =
+            ? jeecs_file_open(_je_gui_static_ctx._jegui_specify_font_path.value().c_str())
+            : nullptr;
+    auto *latin_ttf_file =
         _je_gui_static_ctx._jegui_specify_latin_font_path.has_value()
-        ? jeecs_file_open(_je_gui_static_ctx._jegui_specify_latin_font_path.value().c_str())
-        : nullptr;
+            ? jeecs_file_open(_je_gui_static_ctx._jegui_specify_latin_font_path.value().c_str())
+            : nullptr;
 
     if (general_ttf_file == nullptr)
         // Default font
@@ -2443,10 +2409,10 @@ public func frag(vf: v2f)
 
     if (general_ttf_file)
     {
-        void* file_buf = je_mem_alloc(general_ttf_file->m_file_length);
+        void *file_buf = je_mem_alloc(general_ttf_file->m_file_length);
         jeecs_file_read(file_buf, sizeof(char), general_ttf_file->m_file_length, general_ttf_file);
 
-        void* latin_file_buf = nullptr;
+        void *latin_file_buf = nullptr;
         if (latin_ttf_file != nullptr)
         {
             latin_file_buf = je_mem_alloc(latin_ttf_file->m_file_length);
@@ -2457,16 +2423,22 @@ public func frag(vf: v2f)
         {
             // Non latin characters
             static const ImWchar ranges[] =
-            {
-                // 0x0020, 0x00FF, // Basic Latin + Latin Supplement
-                0x2000, 0x206F, // General Punctuation
-                0x3000, 0x30FF, // CJK Symbols and Punctuations, Hiragana, Katakana
-                0x31F0, 0x31FF, // Katakana Phonetic Extensions
-                0xFF00, 0xFFEF, // Half-width characters
-                0xFFFD, 0xFFFD, // Invalid
-                0x4e00, 0x9FAF, // CJK Ideograms
-                0,
-            };
+                {
+                    // 0x0020, 0x00FF, // Basic Latin + Latin Supplement
+                    0x2000,
+                    0x206F, // General Punctuation
+                    0x3000,
+                    0x30FF, // CJK Symbols and Punctuations, Hiragana, Katakana
+                    0x31F0,
+                    0x31FF, // Katakana Phonetic Extensions
+                    0xFF00,
+                    0xFFEF, // Half-width characters
+                    0xFFFD,
+                    0xFFFD, // Invalid
+                    0x4e00,
+                    0x9FAF, // CJK Ideograms
+                    0,
+                };
 
             io.Fonts->AddFontFromMemoryTTF(
                 latin_file_buf,
@@ -2502,28 +2474,20 @@ public func frag(vf: v2f)
 
 void jegui_update_basic(
     jegui_platform_draw_callback_t platform_draw_callback,
-    void* data)
+    void *data)
 {
     jegl_using_resource(_je_gui_tls_ctx._jegl_rend_texture_shader.value()->resource());
 
     ImGui::NewFrame();
-    auto* viewport = ImGui::GetMainViewport();
+    auto *viewport = ImGui::GetMainViewport();
 
     ImGui::SetNextWindowPos(viewport->WorkPos);
     ImGui::SetNextWindowSize(viewport->WorkSize);
     ImGui::SetNextWindowViewport(viewport->ID);
 
     ImGuiWindowFlags host_window_flags = 0;
-    host_window_flags
-        |= ImGuiWindowFlags_NoTitleBar
-        | ImGuiWindowFlags_NoCollapse
-        | ImGuiWindowFlags_NoResize
-        | ImGuiWindowFlags_NoMove
-        | ImGuiWindowFlags_NoDocking;
-    host_window_flags
-        |= ImGuiWindowFlags_NoBringToFrontOnFocus
-        | ImGuiWindowFlags_NoNavFocus
-        | ImGuiWindowFlags_NoBackground;
+    host_window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDocking;
+    host_window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoBackground;
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
@@ -2538,7 +2502,7 @@ void jegui_update_basic(
     do
     {
         std::lock_guard g1(_key_state_record_mx);
-        for (auto& [k, v] : _key_state_record)
+        for (auto &[k, v] : _key_state_record)
         {
             v.m_last_frame_down = v.m_this_frame_down;
             v.m_this_frame_down = ImGui::IsKeyDown(k);

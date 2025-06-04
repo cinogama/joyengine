@@ -8,7 +8,7 @@
 
 std::atomic_uint32_t _uid_counter = 1;
 
-void je_uid_generate(jeecs::typing::uid_t* uid)
+void je_uid_generate(jeecs::typing::uid_t *uid)
 {
     static std::random_device rd;
     static std::mt19937 mt(rd());

@@ -1,10 +1,10 @@
 #pragma once
 
 #ifndef JE_IMPL
-#   error JE_IMPL must be defined, please check `jeecs_core_systems_and_components.cpp`
+#error JE_IMPL must be defined, please check `jeecs_core_systems_and_components.cpp`
 #endif
 #ifndef JE_ENABLE_DEBUG_API
-#   error JE_ENABLE_DEBUG_API must be defined, please check `jeecs_core_systems_and_components.cpp`
+#error JE_ENABLE_DEBUG_API must be defined, please check `jeecs_core_systems_and_components.cpp`
 #endif
 #include "jeecs.hpp"
 
@@ -17,21 +17,21 @@ namespace jeecs
     static_assert(sizeof(Physics2D::Rigidbody::rigidbody_id_t) == sizeof(b2BodyId));
     static_assert(sizeof(Physics2D::Collider::shape_id_t) == sizeof(b2ShapeId));
 
-#define JE_B2JBody(b) (*std::launder(\
-    reinterpret_cast<const Physics2D::Rigidbody::rigidbody_id_t*>(\
-        const_cast<const b2BodyId*>(&b))))
-#define JE_J2BBody(b) (*std::launder(\
-    reinterpret_cast<const b2BodyId*>(\
-        const_cast<const Physics2D::Rigidbody::rigidbody_id_t*>(&b))))
+#define JE_B2JBody(b) (*std::launder(                               \
+    reinterpret_cast<const Physics2D::Rigidbody::rigidbody_id_t *>( \
+        const_cast<const b2BodyId *>(&b))))
+#define JE_J2BBody(b) (*std::launder(   \
+    reinterpret_cast<const b2BodyId *>( \
+        const_cast<const Physics2D::Rigidbody::rigidbody_id_t *>(&b))))
 
-#define JE_B2JShape(b) (*std::launder(\
-    reinterpret_cast<const Physics2D::Collider::shape_id_t*>(\
-        const_cast<const b2ShapeId*>(&b))))
-#define JE_J2BShape(b) (*std::launder(\
-    reinterpret_cast<const b2ShapeId*>(\
-        const_cast<const Physics2D::Collider::shape_id_t*>(&b))))
+#define JE_B2JShape(b) (*std::launder(                         \
+    reinterpret_cast<const Physics2D::Collider::shape_id_t *>( \
+        const_cast<const b2ShapeId *>(&b))))
+#define JE_J2BShape(b) (*std::launder(   \
+    reinterpret_cast<const b2ShapeId *>( \
+        const_cast<const Physics2D::Collider::shape_id_t *>(&b))))
 
-    struct Physics2DUpdatingSystem :public game_system
+    struct Physics2DUpdatingSystem : public game_system
     {
         struct Physics2DWorldContext
         {
@@ -46,8 +46,8 @@ namespace jeecs
             {
                 struct filter_config
                 {
-                    const jeecs::typing::type_info* m_type;
-                    requirement::type               m_requirement;
+                    const jeecs::typing::type_info *m_type;
+                    requirement::type m_requirement;
                 };
 
                 std::vector<filter_config> m_group_filter;
@@ -58,13 +58,9 @@ namespace jeecs
             JECS_DISABLE_MOVE_AND_COPY(Physics2DWorldContext);
 
             Physics2DWorldContext(
-                const Physics2D::World* world,
-                size_t simulate_round_count
-            )
-                : m_physics_world({})
-                , m_step_count(4)
-                , m_simulate_round_count(0)
-                , m_group_configs()
+                const Physics2D::World *world,
+                size_t simulate_round_count)
+                : m_physics_world({}), m_step_count(4), m_simulate_round_count(0), m_group_configs()
             {
                 b2WorldDef world_def = b2DefaultWorldDef();
                 m_physics_world = b2CreateWorld(&world_def);
@@ -75,11 +71,11 @@ namespace jeecs
                 if (world->group_config.has_resource())
                 {
                     auto path = world->group_config.get_path().value();
-                    auto* physics_group_config = jeecs_file_open(path.c_str());
+                    auto *physics_group_config = jeecs_file_open(path.c_str());
 
                     if (physics_group_config == nullptr)
                         jeecs::debug::logerr("Unable to open physics group config: '%s', please check.",
-                            path.c_str());
+                                             path.c_str());
                     else
                     {
                         std::vector<char> buf(physics_group_config->m_file_length);
@@ -89,7 +85,7 @@ namespace jeecs
                         wo_vm vmm = wo_create_vm();
                         if (!wo_load_binary(vmm, path.c_str(), buf.data(), buf.size()))
                             jeecs::debug::logerr("Unable to resolve physics group config: '%s':\n%s.",
-                                path.c_str(), wo_get_compile_error(vmm, WO_NOTHING));
+                                                 path.c_str(), wo_get_compile_error(vmm, WO_NOTHING));
                         else
                         {
                             // array<group_config_info_t>
@@ -111,10 +107,10 @@ namespace jeecs
 
                             if (result == nullptr)
                                 jeecs::debug::logerr("Unable to resolve physics group config: '%s': %s.",
-                                    path.c_str(), wo_get_runtime_error(vmm));
+                                                     path.c_str(), wo_get_runtime_error(vmm));
                             else if (wo_valuetype(result) != WO_ARRAY_TYPE)
                                 jeecs::debug::logerr("Unable to resolve physics group config: '%s': Unexpected value type.",
-                                    path.c_str());
+                                                     path.c_str());
                             else
                             {
                                 // Resolve!
@@ -123,14 +119,14 @@ namespace jeecs
                                 if (configed_group_count > (wo_integer_t)MAX_GROUP_COUNT)
                                 {
                                     jeecs::debug::logwarn("The number of physics2d collision groups is limited to 16, "
-                                        "but the %d group(s) are provided in this configuration: `%s`, excess groups will be ignored",
-                                        (int)configed_group_count, path.c_str());
+                                                          "but the %d group(s) are provided in this configuration: `%s`, excess groups will be ignored",
+                                                          (int)configed_group_count, path.c_str());
                                     configed_group_count = (wo_integer_t)MAX_GROUP_COUNT;
                                 }
 
                                 for (wo_integer_t i = 0; i < (wo_integer_t)MAX_GROUP_COUNT; ++i)
                                 {
-                                    auto& group = m_group_configs[i];
+                                    auto &group = m_group_configs[i];
                                     if (i < configed_group_count)
                                     {
                                         wo_arr_get(group_config_info, result, i);
@@ -141,9 +137,8 @@ namespace jeecs
                                             wo_struct_get(group_requirement, group_collide_with_mask, 1);
                                             wo_struct_get(group_collide_with_mask, group_collide_with_mask, 0);
                                             group.m_group_filter.push_back(
-                                                group_config::filter_config
-                                                {
-                                                    (const typing::type_info*)wo_pointer(group_collide_with_mask),
+                                                group_config::filter_config{
+                                                    (const typing::type_info *)wo_pointer(group_collide_with_mask),
                                                     (requirement::type)wo_int(group_requirement),
                                                 });
                                         }
@@ -162,16 +157,16 @@ namespace jeecs
             }
 
             bool update_world_config(
-                const Physics2D::World* world,
+                const Physics2D::World *world,
                 size_t simulate_round_count)
             {
                 bool updated = false;
-                b2Vec2 gravity_config_value = b2Vec2{ world->gravity.x, world->gravity.y };
+                b2Vec2 gravity_config_value = b2Vec2{world->gravity.x, world->gravity.y};
 
                 if (b2World_GetGravity(m_physics_world) != gravity_config_value)
                 {
                     b2World_SetGravity(m_physics_world, gravity_config_value);
-                    for (auto& [rbody, _] : m_all_alive_bodys)
+                    for (auto &[rbody, _] : m_all_alive_bodys)
                     {
                         // Awake all rigidbody to make sure the gravity is updated.
                         b2Body_SetAwake(JE_J2BBody(rbody), true);
@@ -186,7 +181,7 @@ namespace jeecs
                 if (m_simulate_round_count == simulate_round_count)
                 {
                     jeecs::debug::logerr("Duplicate physical world layerid: %zu, please check and eliminate it.",
-                        world->layerid);
+                                         world->layerid);
 
                     return false;
                 }
@@ -202,14 +197,13 @@ namespace jeecs
         size_t m_simulate_round_count;
 
         Physics2DUpdatingSystem(game_world world)
-            : game_system(world)
-            , m_simulate_round_count(0)
+            : game_system(world), m_simulate_round_count(0)
         {
             assert(JE_B2JBody(b2_nullBodyId) == Physics2D::Rigidbody::null_rigidbody);
             assert(JE_B2JShape(b2_nullShapeId) == Physics2D::Collider::null_shape);
         }
 
-        inline static bool check_if_need_update_vec2(const b2Vec2& a, const math::vec2& b) noexcept
+        inline static bool check_if_need_update_vec2(const b2Vec2 &a, const math::vec2 &b) noexcept
         {
             if (a.x == b.x && a.y == b.y)
                 return false;
@@ -222,15 +216,15 @@ namespace jeecs
             return true;
         }
 
-        void PhysicsUpdate(jeecs::selector& selector)
+        void PhysicsUpdate(jeecs::selector &selector)
         {
             ++m_simulate_round_count;
 
             std::map<size_t, std::unique_ptr<Physics2DWorldContext>>
                 _m_this_frame_alive_worlds;
 
-            selector.exec([&](game_entity e, Physics2D::World& world)
-                {
+            selector.exec([&](game_entity e, Physics2D::World &world)
+                          {
                     auto fnd = _m_alive_physic_worlds.find(world.layerid);
                     if (fnd == _m_alive_physic_worlds.end())
                     {
@@ -247,30 +241,29 @@ namespace jeecs
                             e.remove_component<Physics2D::World>();
 
                         _m_this_frame_alive_worlds[world.layerid] = std::move(fnd->second);
-                    }
-                });
+                    } });
 
             selector.anyof<
                 Physics2D::Collider::Box,
                 Physics2D::Collider::Circle,
                 Physics2D::Collider::Capsule>();
             selector.exec([&](
-                game_entity e,
-                Transform::Translation& translation,
-                Physics2D::Rigidbody& rigidbody,
-                Physics2D::Mass* mass,
-                Physics2D::Kinematics* kinematics,
-                Physics2D::Restitution* restitution,
-                Physics2D::Friction* friction,
-                Physics2D::Bullet* bullet,
-                Physics2D::Collider::Box* boxcollider,
-                Physics2D::Collider::Circle* circlecollider,
-                Physics2D::Collider::Capsule* capsulecollider,
-                Physics2D::Transform::Scale* scale,
-                Physics2D::Transform::Position* posoffset,
-                Physics2D::Transform::Rotation* rotoffset,
-                Renderer::Shape* rendshape)
-                {
+                              game_entity e,
+                              Transform::Translation &translation,
+                              Physics2D::Rigidbody &rigidbody,
+                              Physics2D::Mass *mass,
+                              Physics2D::Kinematics *kinematics,
+                              Physics2D::Restitution *restitution,
+                              Physics2D::Friction *friction,
+                              Physics2D::Bullet *bullet,
+                              Physics2D::Collider::Box *boxcollider,
+                              Physics2D::Collider::Circle *circlecollider,
+                              Physics2D::Collider::Capsule *capsulecollider,
+                              Physics2D::Transform::Scale *scale,
+                              Physics2D::Transform::Position *posoffset,
+                              Physics2D::Transform::Rotation *rotoffset,
+                              Renderer::Shape *rendshape)
+                          {
                     auto fnd = _m_this_frame_alive_worlds.find(rigidbody.layerid);
                     if (fnd == _m_this_frame_alive_worlds.end())
                     {
@@ -534,11 +527,10 @@ namespace jeecs
                                 b2Shape_SetFilter(current_shape_id, filter);
                             }
                         }
-                    }
-                });
+                    } });
 
             // 物理引擎在此处进行物理解算
-            for (auto& [_, physics_world] : _m_this_frame_alive_worlds)
+            for (auto &[_, physics_world] : _m_this_frame_alive_worlds)
             {
                 b2World_Step(
                     physics_world->m_physics_world,
@@ -568,14 +560,14 @@ namespace jeecs
                 Physics2D::CollisionResult>();
             selector.exec(
                 [](
-                    Transform::Translation& translation,
-                    Transform::LocalPosition& localposition,
-                    Transform::LocalRotation& localrotation,
-                    Physics2D::Rigidbody& rigidbody,
-                    Physics2D::Kinematics* kinematics,
-                    Physics2D::CollisionResult* collisions,
-                    Physics2D::Transform::Position* posoffset,
-                    Physics2D::Transform::Rotation* rotoffset)
+                    Transform::Translation &translation,
+                    Transform::LocalPosition &localposition,
+                    Transform::LocalRotation &localrotation,
+                    Physics2D::Rigidbody &rigidbody,
+                    Physics2D::Kinematics *kinematics,
+                    Physics2D::CollisionResult *collisions,
+                    Physics2D::Transform::Position *posoffset,
+                    Physics2D::Transform::Rotation *rotoffset)
                 {
                     if (rigidbody.native_rigidbody != Physics2D::Rigidbody::null_rigidbody)
                     {
@@ -587,12 +579,10 @@ namespace jeecs
                             rigidbody.rigidbody_just_created == false)
                         {
                             math::vec3 offset_position = posoffset != nullptr
-                                ? math::vec3(posoffset->offset)
-                                : math::vec3(0.f, 0.f, 0.f)
-                                ;
+                                                             ? math::vec3(posoffset->offset)
+                                                             : math::vec3(0.f, 0.f, 0.f);
                             float final_offset_rotation =
-                                b2Rot_GetAngle(b2Body_GetRotation(rigidbody_instance)) * math::RAD2DEG
-                                - (rotoffset != nullptr ? rotoffset->angle : 0.f);
+                                b2Rot_GetAngle(b2Body_GetRotation(rigidbody_instance)) * math::RAD2DEG - (rotoffset != nullptr ? rotoffset->angle : 0.f);
 
                             math::vec3 final_offset_position =
                                 math::quat::euler(0.f, 0.f, final_offset_rotation) * offset_position;
@@ -601,8 +591,7 @@ namespace jeecs
 
                             kinematics->linear_velocity = math::vec2{
                                 kinematics->lock_movement_x ? 0.0f : new_velocity.x,
-                                kinematics->lock_movement_y ? 0.0f : new_velocity.y
-                            };
+                                kinematics->lock_movement_y ? 0.0f : new_velocity.y};
                             translation.set_global_position(
                                 math::vec3(
                                     kinematics->lock_movement_x ? translation.world_position.x : new_position.x - final_offset_position.x,
@@ -634,16 +623,16 @@ namespace jeecs
                             assert((size_t)contact_count <= contacts.size());
                             contacts.resize((size_t)contact_count);
 
-                            for (const auto& contact : contacts)
+                            for (const auto &contact : contacts)
                             {
                                 if (contact.manifold.pointCount > 0)
                                 {
-                                    auto* a = std::launder(reinterpret_cast<Physics2D::Rigidbody*>(
+                                    auto *a = std::launder(reinterpret_cast<Physics2D::Rigidbody *>(
                                         b2Shape_GetUserData(contact.shapeIdA)));
-                                    auto* b = std::launder(reinterpret_cast<Physics2D::Rigidbody*>(
+                                    auto *b = std::launder(reinterpret_cast<Physics2D::Rigidbody *>(
                                         b2Shape_GetUserData(contact.shapeIdB)));
 
-                                    Physics2D::Rigidbody* other_rigidbody;
+                                    Physics2D::Rigidbody *other_rigidbody;
                                     math::vec2 contact_point;
 
                                     if (a->native_rigidbody != rigidbody.native_rigidbody)
@@ -670,13 +659,12 @@ namespace jeecs
                                             math::vec2(
                                                 contact.manifold.normal.x,
                                                 contact.manifold.normal.y),
-                                    };
+                                        };
                                 }
                             }
                         }
                     }
-                }
-            );
+                });
         }
     };
 }

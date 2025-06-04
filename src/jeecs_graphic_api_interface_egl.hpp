@@ -1,12 +1,12 @@
 #ifndef JE_IMPL
-#   error JE_IMPL must be defined, please check `jeecs_core_systems_and_components.cpp`
+#error JE_IMPL must be defined, please check `jeecs_core_systems_and_components.cpp`
 #endif
 #include "jeecs.hpp"
 
 #include "jeecs_graphic_api_interface.hpp"
 
-#   include <EGL/egl.h>
-#   include <EGL/eglext.h>
+#include <EGL/egl.h>
+#include <EGL/eglext.h>
 
 namespace jeecs::graphic
 {
@@ -22,16 +22,16 @@ namespace jeecs::graphic
             EGLNativeWindowType m_window;
         };
 
-#   if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
         struct _jegl_window_android_app
         {
-            void* m_android_app;
-            void* m_android_window;
+            void *m_android_app;
+            void *m_android_window;
         };
-        struct android_app* m_app;
-#   else
-#       error Unknown platform.
-#   endif
+        struct android_app *m_app;
+#else
+#error Unknown platform.
+#endif
 
         egl_context m_context;
 
@@ -40,22 +40,20 @@ namespace jeecs::graphic
 
     public:
         egl()
-            : _m_recorded_width(0)
-            , _m_recorded_height(0)
+            : _m_recorded_width(0), _m_recorded_height(0)
         {
         }
 
-        virtual void create_interface(jegl_context* thread, const jegl_interface_config* config) override
+        virtual void create_interface(jegl_context *thread, const jegl_interface_config *config) override
         {
             constexpr EGLint attribs[] = {
-              EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
-              EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
-              EGL_BLUE_SIZE, 8,
-              EGL_GREEN_SIZE, 8,
-              EGL_RED_SIZE, 8,
-              EGL_DEPTH_SIZE, 24,
-              EGL_NONE
-            };
+                EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
+                EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+                EGL_BLUE_SIZE, 8,
+                EGL_GREEN_SIZE, 8,
+                EGL_RED_SIZE, 8,
+                EGL_DEPTH_SIZE, 24,
+                EGL_NONE};
 
             auto display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
             eglInitialize(display, nullptr, nullptr);
@@ -74,12 +72,11 @@ namespace jeecs::graphic
             auto egl_config = *std::find_if(
                 supportedConfigs.get(),
                 supportedConfigs.get() + numConfigs,
-                [&display](const EGLConfig& eglconfig) {
+                [&display](const EGLConfig &eglconfig)
+                {
                     EGLint red, green, blue, depth;
-                    if (eglGetConfigAttrib(display, eglconfig, EGL_RED_SIZE, &red)
-                        && eglGetConfigAttrib(display, eglconfig, EGL_GREEN_SIZE, &green)
-                        && eglGetConfigAttrib(display, eglconfig, EGL_BLUE_SIZE, &blue)
-                        && eglGetConfigAttrib(display, eglconfig, EGL_DEPTH_SIZE, &depth)) {
+                    if (eglGetConfigAttrib(display, eglconfig, EGL_RED_SIZE, &red) && eglGetConfigAttrib(display, eglconfig, EGL_GREEN_SIZE, &green) && eglGetConfigAttrib(display, eglconfig, EGL_BLUE_SIZE, &blue) && eglGetConfigAttrib(display, eglconfig, EGL_DEPTH_SIZE, &depth))
+                    {
 
                         return red == 8 && green == 8 && blue == 8 && depth == 24;
                     }
@@ -88,27 +85,27 @@ namespace jeecs::graphic
 
             assert(thread->_m_sync_callback_arg != nullptr);
 
-#   if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
-            auto* data = (_jegl_window_android_app*)thread->_m_sync_callback_arg;
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
+            auto *data = (_jegl_window_android_app *)thread->_m_sync_callback_arg;
             m_context.m_window = (EGLNativeWindowType)data->m_android_window;
-            m_app = (struct android_app*)data->m_android_app;
-#   else
-#       error Unknown platform.
-#   endif
+            m_app = (struct android_app *)data->m_android_app;
+#else
+#error Unknown platform.
+#endif
 
             EGLint format;
             eglGetConfigAttrib(display, egl_config, EGL_NATIVE_VISUAL_ID, &format);
             EGLSurface surface = eglCreateWindowSurface(display, egl_config, m_context.m_window, nullptr);
 
             // Create a GLES 3 context
-            EGLint contextAttribs[] = { EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE };
+            EGLint contextAttribs[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
             EGLContext eglcontext = eglCreateContext(display, egl_config, nullptr, contextAttribs);
 
             // get some window metrics
             auto madeCurrent = eglMakeCurrent(display, surface, surface, eglcontext);
             assert(madeCurrent);
 
-            // TODO-LIST: 
+            // TODO-LIST:
             // * MSAA support
             // * Direction ?
             // * Double buffer
@@ -135,8 +132,7 @@ namespace jeecs::graphic
 
             bool _window_size_resized = false;
 
-            if (_m_recorded_width != width 
-                || _m_recorded_height != height)
+            if (_m_recorded_width != width || _m_recorded_height != height)
             {
                 _m_recorded_width = width;
                 _m_recorded_height = height;
@@ -162,7 +158,7 @@ namespace jeecs::graphic
             eglTerminate(m_context.m_display);
         }
 
-        virtual void* interface_handle() const override
+        virtual void *interface_handle() const override
         {
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
             return m_app;

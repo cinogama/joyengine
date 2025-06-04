@@ -1,5 +1,5 @@
 #ifndef JE_IMPL
-#   error JE_IMPL must be defined, please check `jeecs_core_systems_and_components.cpp`
+#error JE_IMPL must be defined, please check `jeecs_core_systems_and_components.cpp`
 #endif
 #include "jeecs.hpp"
 
@@ -8,7 +8,7 @@
 #include <GLFW/glfw3.h>
 
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS && defined(JE_ENABLE_DX11_GAPI)
-#   define GLFW_EXPOSE_NATIVE_WIN32 1
+#define GLFW_EXPOSE_NATIVE_WIN32 1
 #endif
 #include <GLFW/glfw3native.h>
 
@@ -25,7 +25,7 @@ namespace jeecs::graphic
             UNLOCKED,
         };
 
-        GLFWwindow* _m_windows;
+        GLFWwindow *_m_windows;
         bool _m_window_resized;
         bool _m_window_paused;
         mouse_lock_state_t _m_mouse_locked;
@@ -42,10 +42,11 @@ namespace jeecs::graphic
             VULKAN130,
             DIRECTX11,
         };
+
     public:
-        static void glfw_callback_windows_size_changed(GLFWwindow* fw, int x, int y)
+        static void glfw_callback_windows_size_changed(GLFWwindow *fw, int x, int y)
         {
-            glfw* context = std::launder(reinterpret_cast<glfw*>(glfwGetWindowUserPointer(fw)));
+            glfw *context = std::launder(reinterpret_cast<glfw *>(glfwGetWindowUserPointer(fw)));
 
             je_io_update_window_size(x, y);
 
@@ -56,38 +57,41 @@ namespace jeecs::graphic
             else
                 context->_m_window_paused = false;
         }
-        static void glfw_callback_windows_pos_changed(GLFWwindow* fw, int x, int y)
+        static void glfw_callback_windows_pos_changed(GLFWwindow *fw, int x, int y)
         {
             je_io_update_window_pos(x, y);
         }
-        static void glfw_callback_mouse_pos_changed(GLFWwindow* fw, double x, double y)
+        static void glfw_callback_mouse_pos_changed(GLFWwindow *fw, double x, double y)
         {
             je_io_update_mouse_pos(0, (int)x, (int)y);
         }
-        static void glfw_callback_mouse_key_clicked(GLFWwindow* fw, int key, int state, int mod)
+        static void glfw_callback_mouse_key_clicked(GLFWwindow *fw, int key, int state, int mod)
         {
             jeecs::input::mousecode keycode;
             switch (key)
             {
             case GLFW_MOUSE_BUTTON_LEFT:
-                keycode = jeecs::input::mousecode::LEFT; break;
+                keycode = jeecs::input::mousecode::LEFT;
+                break;
             case GLFW_MOUSE_BUTTON_MIDDLE:
-                keycode = jeecs::input::mousecode::MID; break;
+                keycode = jeecs::input::mousecode::MID;
+                break;
             case GLFW_MOUSE_BUTTON_RIGHT:
-                keycode = jeecs::input::mousecode::RIGHT; break;
+                keycode = jeecs::input::mousecode::RIGHT;
+                break;
             default:
                 // do nothing.
                 return;
             }
             je_io_update_mouse_state(0, keycode, state != 0);
         }
-        static void glfw_callback_mouse_scroll_changed(GLFWwindow* fw, double xoffset, double yoffset)
+        static void glfw_callback_mouse_scroll_changed(GLFWwindow *fw, double xoffset, double yoffset)
         {
             float ox, oy;
             je_io_get_wheel(0, &ox, &oy);
             je_io_update_wheel(0, ox + (float)xoffset, oy + (float)yoffset);
         }
-        static void glfw_callback_keyboard_stage_changed(GLFWwindow* fw, int key, int w, int stage, int v)
+        static void glfw_callback_keyboard_stage_changed(GLFWwindow *fw, int key, int w, int stage, int v)
         {
             static_assert(GLFW_KEY_A == 'A');
             static_assert(GLFW_KEY_0 == '0');
@@ -97,25 +101,35 @@ namespace jeecs::graphic
             switch (key)
             {
             case GLFW_KEY_LEFT_SHIFT:
-                keycode = jeecs::input::keycode::L_SHIFT; break;
+                keycode = jeecs::input::keycode::L_SHIFT;
+                break;
             case GLFW_KEY_RIGHT_SHIFT:
-                keycode = jeecs::input::keycode::R_SHIFT; break;
+                keycode = jeecs::input::keycode::R_SHIFT;
+                break;
             case GLFW_KEY_LEFT_ALT:
-                keycode = jeecs::input::keycode::L_ALT; break;
+                keycode = jeecs::input::keycode::L_ALT;
+                break;
             case GLFW_KEY_RIGHT_ALT:
-                keycode = jeecs::input::keycode::R_ALT; break;
+                keycode = jeecs::input::keycode::R_ALT;
+                break;
             case GLFW_KEY_LEFT_CONTROL:
-                keycode = jeecs::input::keycode::L_CTRL; break;
+                keycode = jeecs::input::keycode::L_CTRL;
+                break;
             case GLFW_KEY_RIGHT_CONTROL:
-                keycode = jeecs::input::keycode::R_CTRL; break;
+                keycode = jeecs::input::keycode::R_CTRL;
+                break;
             case GLFW_KEY_TAB:
-                keycode = jeecs::input::keycode::TAB; break;
+                keycode = jeecs::input::keycode::TAB;
+                break;
             case GLFW_KEY_ENTER:
-                keycode = jeecs::input::keycode::ENTER; break;
+                keycode = jeecs::input::keycode::ENTER;
+                break;
             case GLFW_KEY_ESCAPE:
-                keycode = jeecs::input::keycode::ESC; break;
+                keycode = jeecs::input::keycode::ESC;
+                break;
             case GLFW_KEY_BACKSPACE:
-                keycode = jeecs::input::keycode::BACKSPACE; break;
+                keycode = jeecs::input::keycode::BACKSPACE;
+                break;
             case GLFW_KEY_KP_0:
             case GLFW_KEY_KP_1:
             case GLFW_KEY_KP_2:
@@ -126,29 +140,38 @@ namespace jeecs::graphic
             case GLFW_KEY_KP_7:
             case GLFW_KEY_KP_8:
             case GLFW_KEY_KP_9:
-                keycode = (jeecs::input::keycode)(
-                    (uint16_t)jeecs::input::keycode::NP_0 + (key - GLFW_KEY_KP_0));
+                keycode = (jeecs::input::keycode)((uint16_t)jeecs::input::keycode::NP_0 + (key - GLFW_KEY_KP_0));
                 break;
             case GLFW_KEY_KP_ADD:
-                keycode = jeecs::input::keycode::NP_ADD; break;
+                keycode = jeecs::input::keycode::NP_ADD;
+                break;
             case GLFW_KEY_KP_SUBTRACT:
-                keycode = jeecs::input::keycode::NP_SUBTRACT; break;
+                keycode = jeecs::input::keycode::NP_SUBTRACT;
+                break;
             case GLFW_KEY_KP_MULTIPLY:
-                keycode = jeecs::input::keycode::NP_MULTIPLY; break;
+                keycode = jeecs::input::keycode::NP_MULTIPLY;
+                break;
             case GLFW_KEY_KP_DIVIDE:
-                keycode = jeecs::input::keycode::NP_DIVIDE; break;
+                keycode = jeecs::input::keycode::NP_DIVIDE;
+                break;
             case GLFW_KEY_KP_DECIMAL:
-                keycode = jeecs::input::keycode::NP_DECIMAL; break;
+                keycode = jeecs::input::keycode::NP_DECIMAL;
+                break;
             case GLFW_KEY_KP_ENTER:
-                keycode = jeecs::input::keycode::NP_ENTER; break;
+                keycode = jeecs::input::keycode::NP_ENTER;
+                break;
             case GLFW_KEY_UP:
-                keycode = jeecs::input::keycode::UP; break;
+                keycode = jeecs::input::keycode::UP;
+                break;
             case GLFW_KEY_DOWN:
-                keycode = jeecs::input::keycode::DOWN; break;
+                keycode = jeecs::input::keycode::DOWN;
+                break;
             case GLFW_KEY_LEFT:
-                keycode = jeecs::input::keycode::LEFT; break;
+                keycode = jeecs::input::keycode::LEFT;
+                break;
             case GLFW_KEY_RIGHT:
-                keycode = jeecs::input::keycode::RIGHT; break;
+                keycode = jeecs::input::keycode::RIGHT;
+                break;
             case GLFW_KEY_F1:
             case GLFW_KEY_F2:
             case GLFW_KEY_F3:
@@ -165,8 +188,7 @@ namespace jeecs::graphic
             case GLFW_KEY_F14:
             case GLFW_KEY_F15:
             case GLFW_KEY_F16:
-                keycode = (jeecs::input::keycode)(
-                    (uint16_t)jeecs::input::keycode::F1 + (key - GLFW_KEY_F1));
+                keycode = (jeecs::input::keycode)((uint16_t)jeecs::input::keycode::F1 + (key - GLFW_KEY_F1));
             default:
                 if (key >= 0 && key <= 127)
                     keycode = (jeecs::input::keycode)key;
@@ -184,33 +206,33 @@ namespace jeecs::graphic
         class glfw_gamepad_management
         {
             std::unordered_map<int, je_io_gamepad_handle_t> _connected_gamepads;
-            std::atomic<glfw*> _gamepad_manage_glfw_context;
+            std::atomic<glfw *> _gamepad_manage_glfw_context;
 
             JECS_DISABLE_MOVE_AND_COPY(glfw_gamepad_management);
+
         public:
             glfw_gamepad_management()
-                : _connected_gamepads{}
-                , _gamepad_manage_glfw_context{}
+                : _connected_gamepads{}, _gamepad_manage_glfw_context{}
             {
             }
             ~glfw_gamepad_management()
             {
-                for (auto& [_, vgamepad] : _connected_gamepads)
+                for (auto &[_, vgamepad] : _connected_gamepads)
                     je_io_close_gamepad(vgamepad);
             }
 
-            void detach(glfw* host)
+            void detach(glfw *host)
             {
-                auto* manager = _gamepad_manage_glfw_context.load();
+                auto *manager = _gamepad_manage_glfw_context.load();
                 if (manager == host)
                 {
                     glfwSetJoystickCallback(nullptr);
                     _gamepad_manage_glfw_context.store(nullptr);
                 }
             }
-            void update(glfw* host)
+            void update(glfw *host)
             {
-                auto* manager = _gamepad_manage_glfw_context.load();
+                auto *manager = _gamepad_manage_glfw_context.load();
                 if (manager == nullptr)
                 {
                     // Init it.
@@ -233,7 +255,7 @@ namespace jeecs::graphic
                 else if (manager == host)
                 {
                     // Fetch gamepad state, update them.
-                    for (auto& [jid, vgamepad] : _connected_gamepads)
+                    for (auto &[jid, vgamepad] : _connected_gamepads)
                     {
                         GLFWgamepadstate state;
                         if (glfwGetGamepadState(jid, &state))
@@ -260,21 +282,21 @@ namespace jeecs::graphic
                                 0.f);
 
                             const static input::gamepadcode GLFW_2_JE_VGP_BUTTON_MAPPING[] = {
-                                input::gamepadcode::A,   // GLFW_GAMEPAD_BUTTON_A
-                                input::gamepadcode::B,   // GLFW_GAMEPAD_BUTTON_B
-                                input::gamepadcode::X,   // GLFW_GAMEPAD_BUTTON_X
-                                input::gamepadcode::Y,   // GLFW_GAMEPAD_BUTTON_Y
-                                input::gamepadcode::LB,  // GLFW_GAMEPAD_BUTTON_LEFT_BUMPER
-                                input::gamepadcode::RB,  // GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER
-                                input::gamepadcode::SELECT,// GLFW_GAMEPAD_BUTTON_BACK
-                                input::gamepadcode::START,// GLFW_GAMEPAD_BUTTON_START
-                                input::gamepadcode::GUIDE,// GLFW_GAMEPAD_BUTTON_GUIDE
-                                input::gamepadcode::LS,  // GLFW_GAMEPAD_BUTTON_LEFT_THUMB
-                                input::gamepadcode::RS,  // GLFW_GAMEPAD_BUTTON_RIGHT_THUMB
-                                input::gamepadcode::UP,   // GLFW_GAMEPAD_BUTTON_DPAD_UP
-                                input::gamepadcode::RIGHT,// GLFW_GAMEPAD_BUTTON_DPAD_RIGHT
-                                input::gamepadcode::DOWN, // GLFW_GAMEPAD_BUTTON_DPAD_DOWN
-                                input::gamepadcode::LEFT, // GLFW_GAMEPAD_BUTTON_DPAD_LEFT
+                                input::gamepadcode::A,      // GLFW_GAMEPAD_BUTTON_A
+                                input::gamepadcode::B,      // GLFW_GAMEPAD_BUTTON_B
+                                input::gamepadcode::X,      // GLFW_GAMEPAD_BUTTON_X
+                                input::gamepadcode::Y,      // GLFW_GAMEPAD_BUTTON_Y
+                                input::gamepadcode::LB,     // GLFW_GAMEPAD_BUTTON_LEFT_BUMPER
+                                input::gamepadcode::RB,     // GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER
+                                input::gamepadcode::SELECT, // GLFW_GAMEPAD_BUTTON_BACK
+                                input::gamepadcode::START,  // GLFW_GAMEPAD_BUTTON_START
+                                input::gamepadcode::GUIDE,  // GLFW_GAMEPAD_BUTTON_GUIDE
+                                input::gamepadcode::LS,     // GLFW_GAMEPAD_BUTTON_LEFT_THUMB
+                                input::gamepadcode::RS,     // GLFW_GAMEPAD_BUTTON_RIGHT_THUMB
+                                input::gamepadcode::UP,     // GLFW_GAMEPAD_BUTTON_DPAD_UP
+                                input::gamepadcode::RIGHT,  // GLFW_GAMEPAD_BUTTON_DPAD_RIGHT
+                                input::gamepadcode::DOWN,   // GLFW_GAMEPAD_BUTTON_DPAD_DOWN
+                                input::gamepadcode::LEFT,   // GLFW_GAMEPAD_BUTTON_DPAD_LEFT
                             };
 
                             static_assert(
@@ -282,8 +304,8 @@ namespace jeecs::graphic
                                 (GLFW_GAMEPAD_BUTTON_LAST + 1) * sizeof(input::gamepadcode));
 
                             for (auto glfw_bid = GLFW_GAMEPAD_BUTTON_A;
-                                glfw_bid <= GLFW_GAMEPAD_BUTTON_LAST;
-                                ++glfw_bid)
+                                 glfw_bid <= GLFW_GAMEPAD_BUTTON_LAST;
+                                 ++glfw_bid)
                             {
                                 je_io_gamepad_update_button_state(
                                     vgamepad, GLFW_2_JE_VGP_BUTTON_MAPPING[glfw_bid], state.buttons[glfw_bid]);
@@ -319,10 +341,7 @@ namespace jeecs::graphic
 #endif
     public:
         glfw(interface_type type)
-            : _m_windows(nullptr)
-            , _m_window_resized(true)
-            , _m_window_paused(false)
-            , _m_mouse_locked(mouse_lock_state_t::NO_SPECIFY)
+            : _m_windows(nullptr), _m_window_resized(true), _m_window_paused(false), _m_mouse_locked(mouse_lock_state_t::NO_SPECIFY)
         {
             if (type == interface_type::HOLD)
                 return;
@@ -372,12 +391,12 @@ namespace jeecs::graphic
 #endif
         }
 
-        virtual void create_interface(jegl_context* thread, const jegl_interface_config* config) override
+        virtual void create_interface(jegl_context *thread, const jegl_interface_config *config) override
         {
             _m_mouse_locked = mouse_lock_state_t::NO_SPECIFY;
 
             auto display_mode = config->m_display_mode;
-            auto* primary_monitor = glfwGetPrimaryMonitor();
+            auto *primary_monitor = glfwGetPrimaryMonitor();
 
             int interface_width, interface_height;
 
@@ -389,20 +408,20 @@ namespace jeecs::graphic
 
             assert(config->m_width != 0 && config->m_height != 0);
 #else
-            auto* primary_monitor_video_mode = glfwGetVideoMode(primary_monitor);
+            auto *primary_monitor_video_mode = glfwGetVideoMode(primary_monitor);
 
             interface_width = config->m_width == 0
-                ? primary_monitor_video_mode->width
-                : config->m_width;
+                                  ? primary_monitor_video_mode->width
+                                  : config->m_width;
 
             interface_height = config->m_height == 0
-                ? primary_monitor_video_mode->height
-                : config->m_height;
+                                   ? primary_monitor_video_mode->height
+                                   : config->m_height;
 
             glfwWindowHint(GLFW_REFRESH_RATE,
-                config->m_fps == 0
-                ? primary_monitor_video_mode->refreshRate
-                : (int)config->m_fps);
+                           config->m_fps == 0
+                               ? primary_monitor_video_mode->refreshRate
+                               : (int)config->m_fps);
 #endif
             glfwWindowHint(GLFW_RESIZABLE, config->m_enable_resize ? GLFW_TRUE : GLFW_FALSE);
             glfwWindowHint(GLFW_SAMPLES, (int)config->m_msaa);
@@ -438,12 +457,12 @@ namespace jeecs::graphic
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WEBGL
             // Do nothing.
 #else
-            const char* reason;
+            const char *reason;
             auto err_code = glfwGetError(&reason);
             if (err_code != GLFW_NO_ERROR)
             {
                 jeecs::debug::logfatal("Glfw reports an error(%d): %s.",
-                    err_code, reason);
+                                       err_code, reason);
                 je_clock_sleep_for(1.);
                 abort();
             }
@@ -458,14 +477,14 @@ namespace jeecs::graphic
 
             if (icon.has_value())
             {
-                auto& icon_texture = icon.value();
+                auto &icon_texture = icon.value();
 
                 GLFWimage icon_data;
                 icon_data.width = (int)icon_texture->width();
                 icon_data.height = (int)icon_texture->height();
                 // Here need a y-direct flip.
-                auto* image_pixels = icon_texture->resource()->m_raw_texture_data->m_pixels;
-                icon_data.pixels = (unsigned char*)je_mem_alloc((size_t)icon_data.width * (size_t)icon_data.height * 4);
+                auto *image_pixels = icon_texture->resource()->m_raw_texture_data->m_pixels;
+                icon_data.pixels = (unsigned char *)je_mem_alloc((size_t)icon_data.width * (size_t)icon_data.height * 4);
                 assert(icon_data.pixels != nullptr);
 
                 for (size_t iy = 0; iy < (size_t)icon_data.height; ++iy)
@@ -535,7 +554,7 @@ namespace jeecs::graphic
             if (je_io_fetch_update_window_size(&window_width, &window_height))
                 glfwSetWindowSize(_m_windows, window_width, window_height);
 
-            const char* title;
+            const char *title;
             if (je_io_fetch_update_window_title(&title))
                 glfwSetWindowTitle(_m_windows, title);
 
@@ -582,7 +601,7 @@ namespace jeecs::graphic
             }
         }
 
-        virtual void* interface_handle() const override
+        virtual void *interface_handle() const override
         {
             return _m_windows;
         }

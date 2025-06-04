@@ -9249,6 +9249,7 @@ namespace jeecs
         */
         struct BasePipelineInterface : game_system
         {
+            // Locate uniform buffer 0.
             struct default_uniform_buffer_data_t
             {
                 float m_v_float4x4[4][4];

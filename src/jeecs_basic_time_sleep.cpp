@@ -5,7 +5,7 @@
 #include <thread>
 
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
-#   include <Windows.h>
+#include <Windows.h>
 #endif
 
 auto _start_time = std::chrono::steady_clock::now();
@@ -13,7 +13,7 @@ auto _start_time = std::chrono::steady_clock::now();
 // 此值应该是是操作系统最小分片时间的二分之一，单位是秒
 // Linux平台下尚未考虑，Windows下设置了一毫秒的间隔
 // 因此此处是0.0005
-double _sleep_suppression = 0.0005; 
+double _sleep_suppression = 0.0005;
 
 double je_clock_get_sleep_suppression()
 {

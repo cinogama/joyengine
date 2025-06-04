@@ -533,8 +533,8 @@ endif()
                 err(no)?
                     if (no == 0: fsys::errno_t)
                     {
-                        // 根本没找到对应的运行库，就近开始现场编一个
-                        je::logwarn("动态库未找到，正在重新编译");
+                        // 根本没找到对应的运行库或者已经过期，就近开始现场编一个
+                        je::logwarn("动态库已失效，正在重新构建");
                         try! _ = created_module->regenerate_cmake_doc;
                         try! _ = update_engine_file(created_module.path);
                         do proj->deactive_module(created_module);
