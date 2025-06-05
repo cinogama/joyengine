@@ -9,7 +9,7 @@ namespace editor::Project
         m_value: mut T,
         m_widget: (T)=>option<T>,
         m_update_callback: (T, T)=>bool,
-        m_tostring: (T)=>string,
+        m_to_string: (T)=>string,
         m_parse: (string)=>option<T>,
         m_apply: (T)=>string,
     }
@@ -18,7 +18,7 @@ namespace editor::Project
             val: T, 
             widget: (T)=>option<T>, 
             callback: (T, T)=>bool,
-            tostring: (T)=>string,
+            to_string: (T)=>string,
             parse: (string)=>option<T>,
             apply: (T)=>string)
         {
@@ -26,7 +26,7 @@ namespace editor::Project
                 m_value = mut val,
                 m_widget = widget,
                 m_update_callback = callback,
-                m_tostring = tostring,
+                m_to_string = to_string,
                 m_parse = parse,
                 m_apply = apply,
             };
@@ -45,9 +45,9 @@ namespace editor::Project
                 ->> \v = self->modify(v);
                 ->  or(false);
         }
-        public func tostring<T>(self: Config<T>)
+        public func to_string<T>(self: Config<T>)
         {
-            return self.m_tostring(self.m_value);
+            return self.m_to_string(self.m_value);
         }
         public func parse<T>(self: Config<T>, dat: string)
         {
@@ -65,7 +65,7 @@ namespace editor::Project
 
     interface! IConfig
     {
-        public func tostring(self: IConfig)=> string;
+        public func to_string(self: IConfig)=> string;
         public func parse(self: IConfig, str: string)=>bool;
         public func edit(self: IConfig)=> bool;
         public func apply(self: IConfig)=> string;

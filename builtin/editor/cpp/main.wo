@@ -294,7 +294,7 @@ endif()
             match (search_file_in(get_current_runtime_path(self->get_runtime_path(rttype))->unwrap, ".dll"))
             {
             value(p)? 
-                return self.module_instance := je::load_module(self.name, p->tostring);
+                return self.module_instance := je::load_module(self.name, p->to_string);
             none? 
                 return self.module_instance := option::none;
             }
@@ -438,7 +438,7 @@ endif()
                                         || file_extension == ".h")
                                     {
                                         let wpath = self.project->make_path_normalize(path);
-                                        let crc64 = je::internal::crc64file(path->tostring());
+                                        let crc64 = je::internal::crc64file(path->to_string());
                                         varified_file += 1;
 
                                         if (! srclist->get(wpath)->>\crc = crc == crc64->or(0);->or(false))
@@ -470,7 +470,7 @@ endif()
                         || file_extension == ".h")
                     {
                         let wpath = self.project->make_path_normalize(path);
-                        let crc64 = je::internal::crc64file(path->tostring());
+                        let crc64 = je::internal::crc64file(path->to_string());
 
                         source_code_versions->set(wpath, crc64->or(0));
                     }
@@ -760,12 +760,12 @@ $$REGISTER_SYSTEM_TYPES$$
             do context->>\context = context.display_msg = F"正在使用CMake生成编译配置\n{config}";;
             do context->>\context = context.progress = 15;;
 
-            let building_path = self.path->tostring + "/.build_" + config;
+            let building_path = self.path->to_string + "/.build_" + config;
 
-            if (start_process(CMAKE_PATH->tostring, 
+            if (start_process(CMAKE_PATH->to_string, 
                 [
-                    CMAKE_PATH->tostring, 
-                    self.path->tostring, 
+                    CMAKE_PATH->to_string, 
+                    self.path->to_string, 
                     "-B", building_path,
                     F"-DCMAKE_BUILD_TYPE={config}",
                     F"-DBUILD_SHARED_LIBS=ON",
@@ -785,9 +785,9 @@ $$REGISTER_SYSTEM_TYPES$$
             do context->>\context = context.progress = 45;;
 
             let compile_result_statu_code = start_process(
-                CMAKE_PATH->tostring, 
+                CMAKE_PATH->to_string, 
                 [
-                    CMAKE_PATH->tostring, 
+                    CMAKE_PATH->to_string, 
                     "--build", building_path, 
                     "--config", config, 
                     "-j", thread::concurrency(): string

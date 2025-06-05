@@ -391,7 +391,7 @@ namespace editor::gui
                 [".wo"] = 
                     func (p: PathInfo, context: EditorContext)
                     {
-                        do std::shell(F"code {_wrap_path(context->get_project->get_path->tostring())} {_wrap_path(p.path->tostring)}");
+                        do std::shell(F"code {_wrap_path(context->get_project->get_path->to_string())} {_wrap_path(p.path->to_string)}");
                         return option::none;
                     },
 
@@ -404,9 +404,9 @@ namespace editor::gui
                     {
                         do new! thread(func()
                             {
-                                let result = std::shell(p.path->tostring());
+                                let result = std::shell(p.path->to_string());
                                 if (0 != result)
-                                    jeapi::gui::form::errmsg("失败", F"无法打开'{p.path->tostring()}'({result})");
+                                    jeapi::gui::form::errmsg("失败", F"无法打开'{p.path->to_string()}'({result})");
 
                             }, ());
                         return option::none;
@@ -420,10 +420,10 @@ namespace editor::gui
     public func set_current_work_path(path: fsys::path_t)
     {
         if (fsys::isdir(path))
-            current_work_path = path->tostring();
+            current_work_path = path->to_string();
         else
             // 刷新！
-            jeapi::gui::form::errmsg("无效的路径", F"无效的路径：{path->tostring()}");
+            jeapi::gui::form::errmsg("无效的路径", F"无效的路径：{path->to_string()}");
 
     }
 
@@ -661,7 +661,7 @@ using $NEW_NODE_NAME$ = struct{}
     {
         return true;
     }
-    public func tostring(_: $NEW_NODE_NAME$)=> string
+    public func to_string(_: $NEW_NODE_NAME$)=> string
     {
         return "";
     }
@@ -670,8 +670,8 @@ using $NEW_NODE_NAME$ = struct{}
     }
 }
 "@;
-                        if (false == fsys::normalize(cur_creating_path)->tostring()->begin_with(
-                            (context->get_project->get_path / "resource" / "workflow" / "node")->tostring))
+                        if (false == fsys::normalize(cur_creating_path)->to_string()->begin_with(
+                            (context->get_project->get_path / "resource" / "workflow" / "node")->to_string))
                             jeapi::gui::form::errmsg("创建Workflow Node失败", "Node只能在@/resource/workflow/node目录下创建");
                         else
                         {
@@ -712,7 +712,7 @@ using $NEW_TYPE_NAME$ = struct{}
     {
         return $NEW_TYPE_NAME${};
     }
-    public func tostring(_: $NEW_TYPE_NAME$)=> string
+    public func to_string(_: $NEW_TYPE_NAME$)=> string
     {
         return "";
     }
@@ -791,7 +791,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
     {
         return true;
     }
-    public func tostring(_: $NEW_PRODUCER_NAME$)=> string
+    public func to_string(_: $NEW_PRODUCER_NAME$)=> string
     {
         return "";
     }
@@ -986,7 +986,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
                 ;
                         
             if (MenuItem("在资源管理器中显示"))
-                do std::shell(F"explorer \"{fsys::normalize(cur_creating_path)->tostring->replace("/", "\\")}\"");
+                do std::shell(F"explorer \"{fsys::normalize(cur_creating_path)->to_string->replace("/", "\\")}\"");
 
             if (MenuItem(F"刷新"))
             {
@@ -1006,8 +1006,8 @@ using $NEW_PRODUCER_NAME$ = struct{}
 
         let normalized_path = path;
         let pure_path = 
-            \p: string = p->begin_with(normalized_path->tostring()) 
-                ? p->sub(normalized_path->tostring()->len)
+            \p: string = p->begin_with(normalized_path->to_string()) 
+                ? p->sub(normalized_path->to_string()->len)
                 | p
             ;
         ;
@@ -1017,9 +1017,9 @@ using $NEW_PRODUCER_NAME$ = struct{}
             -> okay
             =>> \childs = childs
                 ->> \child = isfile(child)
-                    ? fsys::filename(fsys::normalize(pchild)) + crc64file(child->tostring)->unwrap: string 
+                    ? fsys::filename(fsys::normalize(pchild)) + crc64file(child->to_string)->unwrap: string 
                     | pchild
-                    where pchild = pure_path(child->tostring);
+                    where pchild = pure_path(child->to_string);
                 ->  reduce(\l, r = l + r;)
                 ->> \str = crc64str(str);
                 ;
@@ -1100,7 +1100,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
         {
             if (MenuItem(F"更新此着色器"))
             {
-                update_shader(context, path.path->tostring());
+                update_shader(context, path.path->to_string());
             }
             Separator();
         }
@@ -1157,7 +1157,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
                         let file_path = path.path/"components"/F"{s}.hpp";
 
                         if (MenuItem("在VSCode中打开"))
-                            do std::shell(F"code {_wrap_path(path.path->tostring())} {_wrap_path(file_path->tostring)}");
+                            do std::shell(F"code {_wrap_path(path.path->to_string())} {_wrap_path(file_path->to_string)}");
                         if (MenuItem("移除此组件"))
                             jeapi::gui::form::ask("确认移除组件？", F"是否从模块{fsys::filename(path.path)}中移除组件{s}?",
                                 func(sure: bool){
@@ -1177,7 +1177,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
                         let file_path = path.path/"systems"/F"{s}.cpp";
 
                         if (MenuItem("在VSCode中打开"))
-                            do std::shell(F"code {_wrap_path(path.path->tostring)} {_wrap_path(file_path->tostring)}");
+                            do std::shell(F"code {_wrap_path(path.path->to_string)} {_wrap_path(file_path->to_string)}");
                         if (MenuItem("移除此系统"))
                             jeapi::gui::form::ask("确认移除系统？", F"是否从模块{fsys::filename(path.path)}中移除系统{s}?",
                                 func(sure: bool){
@@ -1405,7 +1405,7 @@ namespace $$MODULE_NAME$$
                 value(tex)?
                     drawpannel::drawimg(context, tex);
                 none?
-                    jeapi::gui::form::errmsg("编辑图片失败", F"无法打开图片纹理:{path.path->tostring}");
+                    jeapi::gui::form::errmsg("编辑图片失败", F"无法打开图片纹理:{path.path->to_string}");
                 }
                 
             }
@@ -1450,7 +1450,7 @@ namespace $$MODULE_NAME$$
         }
         if (MenuItemEnabled("移动到...", is_modifiable_file))
         {
-            jeapi::gui::form::input("移动到……", F"请输入{path.path}的路径", path.path->tostring, 
+            jeapi::gui::form::input("移动到……", F"请输入{path.path}的路径", path.path->to_string, 
                 \new_path = editor::gui::refactor(context, path.path, fsys::normalize(new_path))
                     -> or_do(\errid = jeapi::gui::form::errmsg("失败", F"重命名失败({errid})");)
                 ;);
@@ -1478,7 +1478,7 @@ namespace $$MODULE_NAME$$
     {
         BeginGroup();
             let clicked = ImageButtonSize(
-                F"##{path.path->tostring}#imagebutton", get_file_icon_by_extern_name(path, context), 32., 32.);
+                F"##{path.path->to_string}#imagebutton", get_file_icon_by_extern_name(path, context), 32., 32.);
             let hovered = IsItemHovered();
             let right_click = IsItemClicked(ImGuiMouseButton::ImGuiMouseButton_Right);
             context_menu(option::value(path), context);
@@ -1621,7 +1621,7 @@ namespace $$MODULE_NAME$$
                                     if (prefab_data->is_value)
                                         jeapi::gui::form::errmsg("无法覆盖预设体", "不允许已经为预设体的实体保存覆盖预设体文件");
                                     else
-                                        jeapi::gui::form::ask("是否覆盖", F"文件{filepath->tostring}已存在，是否覆盖？",
+                                        jeapi::gui::form::ask("是否覆盖", F"文件{filepath->to_string}已存在，是否覆盖？",
                                             func(overwrite){
                                                 if (overwrite)
                                                 {
@@ -1675,7 +1675,7 @@ namespace $$MODULE_NAME$$
             context->get_project->get_path;
 
         if (current_work_path == "")
-            current_work_path = root_path->tostring();
+            current_work_path = root_path->to_string();
 
         static let _root = PathInfo {
                 path = root_path,
@@ -1702,12 +1702,12 @@ namespace $$MODULE_NAME$$
                 let mut attribute = TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
                                 + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
                                 + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
-                if (current_work_path == path.path->tostring)
+                if (current_work_path == path.path->to_string)
                     attribute += TreeNodeAttribute::ImGuiTreeNodeFlags_Selected;
 
                 let show_child = TreeNodeEx(F"{path.name}##p", attribute);
                 if (IsItemClickedLeft() && !IsItemToggledOpen())
-                    current_work_path = path.path->tostring;
+                    current_work_path = path.path->to_string;
 
                 if (show_child)
                 {
@@ -1869,7 +1869,7 @@ namespace $$MODULE_NAME$$
                             if (Button("U"))
                             {
                                 current_work_path = 
-                                    fsys::parent(fsys::normalize(current_work_path))->tostring;
+                                    fsys::parent(fsys::normalize(current_work_path))->to_string;
                             }
                             SameLine();
                             Text(current_work_path);

@@ -34,23 +34,39 @@ namespace editor::gui::edit_forms
         m_rule: (bool, fsys::path_t, string)=> Action,
         m_resolution: (int, int),
 
+        m_pack_output_log_mx: thread::mutex,
         m_pack_output_log: vec<string>,
         m_finished: mut bool,
-    };
+    }
+    {
+        func log(self: pack_config, msg: string)
+        {
+            self.m_pack_output_log_mx |> thread::IMutex::exec(
+                func()
+                {
+                    self.m_pack_output_log->add(msg);
+                }
+            );
+        }
+        func rwalk_through_logs(self: pack_config, callback: (string)=> void)
+        {
+            self.m_pack_output_log_mx |> thread::IMutex::exec(
+                func()
+                {
+                    for (let mut i = self.m_pack_output_log->len; i > 0; i -= 1)
+                        callback(self.m_pack_output_log[i - 1]);
+                }
+            );
+        }
+    }
 
     func _default_rule(saving_woolang_pdi: bool, originpath: fsys::path_t, packpath: string)=> Action
     {
         // 如果是文件，才考虑打包
         if (fsys::isfile(originpath))
-        {
-            if (packpath->lower->find("/.export/")->is_value)
-                return Action::SKIP;  // 跳过导出目录，尽管这个目录正常情况下本身也会被删掉
-
-            if (packpath->lower->find("/.git/")->is_value)
-                return Action::SKIP;  // 跳过git目录
-
-            if (packpath->lower->find("/.temporary/")->is_value)
-                return Action::SKIP;  // 跳过临时文件
+        {            
+            if (originpath->to_string->split("/")->>\p = p->begin_with(".");->reduce(\l, r = l || r;)->or(false))
+                return Action::SKIP; // 跳过所有以 `.` 开头的文件、目录
 
             if (fsys::extension(originpath)->lower == ".je4project")
                 return Action::SKIP;  // 跳过项目文件
@@ -76,25 +92,16 @@ namespace editor::gui::edit_forms
             if (fsys::extension(originpath)->lower == ".je4style")
                 return Action::SKIP;  // 跳过样式文件
 
-            if (fsys::filename(originpath)->lower == ".gitattributes")            
-                return Action::SKIP;  // 跳过git属性文件
-
-            if (fsys::filename(originpath)->lower == ".gitignore")
-                return Action::SKIP;  // 跳过git忽略文件
-
-            if (fsys::filename(originpath)->lower == ".gitmodules")
-                return Action::SKIP;  // 跳过git子模块文件
-
             if (fsys::extension(originpath)->lower == ".shader")
                 return Action::ACTION(func(pconfig, _){
-                    pconfig.m_pack_output_log->add(F"正在编译着色器：{packpath}");
-                    match (je::graphic::shader::load(option::none, originpath->tostring))
+                    pconfig->log(F"正在编译着色器：{packpath}");
+                    match (je::graphic::shader::load(option::none, originpath->to_string))
                     {
                     value(_)?
-                        return [(originpath->tostring + ".je4cache", packpath + ".je4cache")];
+                        return [(originpath->to_string + ".je4cache", packpath + ".je4cache")];
                     none?
                         {
-                            pconfig.m_pack_output_log->add(F"无法编译着色器，跳过：{packpath}");
+                            pconfig->log(F"无法编译着色器，跳过：{packpath}");
                             return [];
                         }
                     }
@@ -109,8 +116,8 @@ namespace editor::gui::edit_forms
                     return Action::SKIP;  // 跳过图像处理脚本
 
                 return Action::ACTION(func(pconfig, fimg){
-                    pconfig.m_pack_output_log->add(F"正在编译脚本：{packpath}");
-                    match (vm::load(originpath->tostring))
+                    pconfig->log(F"正在编译脚本：{packpath}");
+                    match (vm::load(originpath->to_string))
                     {
                     ok(vminstance)?
                         {
@@ -122,8 +129,8 @@ namespace editor::gui::edit_forms
                         }
                     err(_)?
                         {
-                            pconfig.m_pack_output_log->add(F"无法编译脚本，原样传输：{packpath}");
-                            return [(originpath->tostring, packpath)];
+                            pconfig->log(F"无法编译脚本，原样传输：{packpath}");
+                            return [(originpath->to_string, packpath)];
                         }
                         
                     }
@@ -134,9 +141,6 @@ namespace editor::gui::edit_forms
             if (packpath->lower->find(".je4module/")->is_value)
                 return Action::SKIP;  // 跳过C++工程文件
             
-            if (packpath->lower->find("/.git/")->is_value)
-                return Action::SKIP;  // 跳过git文件
-
             if (fsys::extension(originpath)->lower == ".dll" ||
                 fsys::extension(originpath)->lower == ".so" ||
                 fsys::extension(originpath)->lower == ".dylib")
@@ -149,20 +153,20 @@ namespace editor::gui::edit_forms
     }
     func _export_logic(saving_woolang_pdi: bool, proj: Project, config: pack_config)
     {
-        config.m_pack_output_log->add("开始打包……");
+        config->log("开始打包……");
 
         let normalized_path = proj->get_path;
  
         // 1. 删掉 .export 目录下的内容
-        config.m_pack_output_log->add("正在删除 .export 目录");
+        config->log("正在删除 .export 目录");
         do fsys::remove(normalized_path/".export")->unwrap;
 
-        config.m_pack_output_log->add("开始整理打包文件……");
+        config->log("开始整理打包文件……");
 
         // 1.2 创建路径，准备打包
         let export_path = normalized_path/".export";
         do fsys::mkdir(export_path);
-        let fimg = new! je::internal::fimage_packer(export_path->tostring, config.m_image_size * 1024 * 1024);
+        let fimg = new! je::internal::fimage_packer(export_path->to_string, config.m_image_size * 1024 * 1024);
      
         // 2.1 遍历可执行文件所在路径，记录下所有文件的原始路径和最终路径
         let exe_located_path = fsys::parent(fsys::normalize(std::args()[0]));
@@ -174,10 +178,10 @@ namespace editor::gui::edit_forms
                 {
                     // 将引擎内置的着色器缓存打包进镜像
                     if (path->fsys::isfile() 
-                        && path->tostring->lower->end_with(".shader.je4cache"))
+                        && path->to_string->lower->end_with(".shader.je4cache"))
                     {
                         let relpath = fsys::relative(path, exe_located_path)->unwrap();
-                        assert(fimg->pack(path->tostring, "!/" + relpath));
+                        assert(fimg->pack(path->to_string, "!/" + relpath));
                     }
                 }
             }
@@ -208,7 +212,7 @@ namespace editor::gui::edit_forms
                 // P.S. 这个序号真牛逼，人家都是1 2 3，这里是1 2 0 哈哈哈
                 do thread::create(func()
                     {
-                        config.m_pack_output_log->add("正在编译模块");
+                        config->log("正在编译模块");
                         let compile_results = proj->get_all_modules
                             ->> \k, v = (k, (v, v->compile(std::platform::runtime_type::RELEASE, option::none)));
                             ;
@@ -218,9 +222,9 @@ namespace editor::gui::edit_forms
                             // 有编译失败，跳过！
                             for (let (name, _ ): error_compiling)
                             {
-                                config.m_pack_output_log->add(F"模块 {name} 编译失败");
+                                config->log(F"模块 {name} 编译失败");
                             }
-                            config.m_pack_output_log->add("注意：一个或多个模块编译失败，打包终止");
+                            config->log("注意：一个或多个模块编译失败，打包终止");
                             config.m_finished = true;
                             return;
                         }
@@ -249,7 +253,7 @@ namespace editor::gui::edit_forms
 
                             for (let (_, (opath, ppath)) : dll_module_path)
                             {
-                                config.m_pack_output_log->add(F"复制 {ppath}");
+                                config->log(F"复制 {ppath}");
 
                                 // assert(fimg->pack(opath, ppath));
                                 do copy_origin(opath, ppath)->unwrap;
@@ -261,29 +265,29 @@ namespace editor::gui::edit_forms
                                 {
                                 PACK?
                                     {
-                                        config.m_pack_output_log->add(F"打包 {ppath}");
-                                        assert(fimg->pack(opath->tostring, ppath));
+                                        config->log(F"打包 {ppath}");
+                                        assert(fimg->pack(opath->to_string, ppath));
                                     }
                                 ORIGIN?
                                     {
-                                        config.m_pack_output_log->add(F"复制 {ppath}");
+                                        config->log(F"复制 {ppath}");
                                         do copy_origin(opath, ppath)->unwrap;
                                     }
                                 ACTION(action)?
                                     {
                                         for (let (aopath, appath): action(config, fimg))
                                         {
-                                            config.m_pack_output_log->add(F"打包 {appath}");
+                                            config->log(F"打包 {appath}");
                                             assert(fimg->pack(aopath, appath));
                                         }
                                     }
                                 SKIP?
-                                    config.m_pack_output_log->add(F"跳过 {ppath}");
+                                    config->log(F"跳过 {ppath}");
                                 }
                             }
 
                             // 1.3 将引擎本体移动至打包目录
-                            config.m_pack_output_log->add(F"正在复制引擎运行时");
+                            config->log(F"正在复制引擎运行时");
                             do fsys::copy(fsys::normalize(std::args()[0]), export_path/F"{proj->get_name}.exe")->unwrap;
 
                             if (fsys::isfile(fsys::workpath() / "icon.ico"))
@@ -291,9 +295,9 @@ namespace editor::gui::edit_forms
                                 do new! process(F"{std::host_path()}/builtin/rcedit-x64.exe", 
                                     [
                                         F"{std::host_path()}/builtin/rcedit-x64.exe",
-                                        (export_path / F"{proj->get_name}.exe")->tostring, 
+                                        (export_path / F"{proj->get_name}.exe")->to_string, 
                                         "--set-icon", 
-                                        (fsys::workpath() / "icon.ico")->tostring,
+                                        (fsys::workpath() / "icon.ico")->to_string,
                                     ])
                                     ->> \proc = proc->wait;
                                     ;
@@ -307,10 +311,12 @@ namespace editor::gui::edit_forms
                                             export_path / libpath)->unwrap
                                     ;
                                 ;
-                            do fsys::copy(fsys::normalize(F"{std::host_path()}/OpenAL32.dll"), export_path / "OpenAL32.dll")->unwrap;
+                            do fsys::copy(
+                                fsys::normalize(F"{std::host_path()}/OpenAL32.dll"), 
+                                export_path / "OpenAL32.dll")->unwrap;
                             
                             // 1.4 将启动脚本编译后打入镜像
-                            config.m_pack_output_log->add(F"正在打包启动脚本");
+                            config->log(F"正在打包启动脚本");
                             let boot_up_script = @"
                                 import je;
                                 import je::gui;
@@ -391,7 +397,7 @@ namespace editor::gui::edit_forms
                             "@;
 
                             // 1.4.1 生成加载动态库相关代码
-                            config.m_pack_output_log->add(F"正在生成装载动态库的脚本");
+                            config->log(F"正在生成装载动态库的脚本");
                             let mut dylib_loader = "";
                             for (let (minstance, (_, ppath)) : dll_module_path)
                             {
@@ -429,7 +435,7 @@ namespace editor::gui::edit_forms
                                 ->  or("");
 
                             // 1.4.3 应用项目设置
-                            config.m_pack_output_log->add(F"正在生成应用项目设置的脚本");
+                            config->log(F"正在生成应用项目设置的脚本");
                             let mut proj_config = "";
                             for (let (_, pconfig) : proj->get_configs)
                             {
@@ -437,7 +443,7 @@ namespace editor::gui::edit_forms
                             }
 
                             // 1.4.4 加载和序列化世界
-                            config.m_pack_output_log->add(F"正在生成加载世界的脚本");
+                            config->log(F"正在生成加载世界的脚本");
                             let mut load_world_instance = "";
                             for (let startup_world_path : config.m_start_up_worlds)
                             {
@@ -468,15 +474,15 @@ namespace editor::gui::edit_forms
                             // 2. 结束，保存镜像
                             fimg->finish();
 
-                            config.m_pack_output_log->add(F"正在复制引擎使用的第三方许可证");
+                            config->log(F"正在复制引擎使用的第三方许可证");
                             match (fsys::copy(fsys::parent(fsys::normalize(std::args()[0])) / "licenses", export_path/"licenses"))
                             {
                             err(errnumber)?
-                                config.m_pack_output_log->add(F"无法复制引擎使用的第三方许可证，错误码：{errnumber}");
+                                config->log(F"无法复制引擎使用的第三方许可证，错误码：{errnumber}");
                             ok(_)?;
                             }
 
-                            config.m_pack_output_log->add("打包完成");
+                            config->log("打包完成");
 
                             config.m_finished = true;
                         }
@@ -659,6 +665,7 @@ namespace editor::gui::edit_forms
                             m_rule = _default_rule,
                             m_resolution = reso_config->get,
 
+                            m_pack_output_log_mx = new! thread::mutex(),
                             m_pack_output_log = []mut,
                             m_finished = mut false,
                         };
@@ -679,10 +686,7 @@ namespace editor::gui::edit_forms
                     let (avail_width, avail_height) = GetContentRegionAvail();
                     if (BeginListBox("##", avail_width, avail_height))
                     {
-                        let logs = pack_config_instance->get->unwrap.m_pack_output_log;
-                        for (let mut index = logs->len; index > 0; index -= 1)
-                            do Selectable(logs[index - 1]);
-
+                        pack_config_instance->get->unwrap->rwalk_through_logs(\msg =do Selectable(msg););
                         EndListBox();
                     }
                     

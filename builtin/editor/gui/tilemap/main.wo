@@ -365,7 +365,7 @@ namespace editor::gui::tilemap
                     tileimage->setpix((idx, tile_h - 1 - idy), maintex->pix((lux + idx, luy - 1 - idy))->get_color);
                 }
             }
-            if (tileimage->save(imgpath->tostring))
+            if (tileimage->save(imgpath->to_string))
                 return graphic::texture::load(option::none, context->get_project->make_path_normalize(imgpath));
 
             return option::none;
@@ -437,7 +437,7 @@ namespace editor::gui::tilemap
                     let tileimage = new! image(tile_w, tile_h);
 
                     way->get_sampling_texture(tileimage, self.maintex, self.location..., maintex_w / tile_w, maintex_h / tile_h);
-                    if (tileimage->save(saving_path->tostring))
+                    if (tileimage->save(saving_path->to_string))
                     {
                         match (graphic::texture::load(option::none, context->get_project->make_path_normalize(saving_path)))
                         {
@@ -450,7 +450,7 @@ namespace editor::gui::tilemap
                         }
                     }
 
-                    jeapi::gui::form::errmsg("失败", F"无法创建{saving_path->tostring}");
+                    jeapi::gui::form::errmsg("失败", F"无法创建{saving_path->to_string}");
                     return self.texture;
                 }
             none? return self.texture;
@@ -480,7 +480,7 @@ namespace editor::gui::tilemap
         func _clip_tiles(context: EditorContext, uid_val: string, tilemaptex: graphic::texture, xcount: int, ycount: int)
         {
             try! crc64 = tilemaptex->path
-                =>> \p = crc64file(context->get_project->parse_path_normalize(p)->tostring);
+                =>> \p = crc64file(context->get_project->parse_path_normalize(p)->to_string);
                 ->> \crc = result::ok(crc): result<int, string>;
                 ->  or(result::err("创建TileSet的纹理必须是从文件加载的"))
                 ;
@@ -657,9 +657,9 @@ namespace editor::gui::tilemap
                 {
                 ok(data)?
                     if (!fsys::writeall(tileset_path, data: string))
-                        jeapi::gui::form::errmsg("错误", F"无法保存TileSet到{tileset_path->tostring}: 无法写入文件");
+                        jeapi::gui::form::errmsg("错误", F"无法保存TileSet到{tileset_path->to_string}: 无法写入文件");
                 err(msg)?
-                    jeapi::gui::form::errmsg("错误", F"无法保存TileSet到{tileset_path->tostring}: {msg}");
+                    jeapi::gui::form::errmsg("错误", F"无法保存TileSet到{tileset_path->to_string}: {msg}");
                 }               
             }
         }
@@ -1596,15 +1596,15 @@ namespace editor::gui::tilemap
 
                         if (export_image.m_export_full_image)
                         {
-                            if (!context->generate_big_texture(export_image.m_tile_pcount)->save((target_path / F"{name}.png")->tostring))
-                                jeapi::gui::form::errmsg("错误", F"无法保存纹理到{target_path->tostring}");
+                            if (!context->generate_big_texture(export_image.m_tile_pcount)->save((target_path / F"{name}.png")->to_string))
+                                jeapi::gui::form::errmsg("错误", F"无法保存纹理到{target_path->to_string}");
                         }
                         if (export_image.m_export_layer_image)
                         {
                             for (let (layer, img): context->generate_layerd_big_texture(export_image.m_tile_pcount))
                             {
-                                if (!img->save((target_path / F"{name}_layer{layer}.png")->tostring))
-                                    jeapi::gui::form::errmsg("错误", F"无法保存纹理到{target_path->tostring}");
+                                if (!img->save((target_path / F"{name}_layer{layer}.png")->to_string))
+                                    jeapi::gui::form::errmsg("错误", F"无法保存纹理到{target_path->to_string}");
                             }
                         }
                         match (export_image.m_export_chunk_image)
@@ -1620,7 +1620,7 @@ namespace editor::gui::tilemap
                                 {
                                 ok(_)?;
                                 err(errno)?
-                                    jeapi::gui::form::errmsg("错误", F"无法删除{p->tostring}: {errno}");
+                                    jeapi::gui::form::errmsg("错误", F"无法删除{p->to_string}: {errno}");
                                 }
                             }
 
@@ -1640,8 +1640,8 @@ namespace editor::gui::tilemap
 
                                 for (let (layer, (img, walkable)): chunk.m_layers)
                                 {
-                                    if (!img->save((target_chunk_path / F"chunk_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}_{layer}.png")->tostring))
-                                        jeapi::gui::form::errmsg("错误", F"无法保存纹理到{target_chunk_path->tostring}");
+                                    if (!img->save((target_chunk_path / F"chunk_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}_{layer}.png")->to_string))
+                                        jeapi::gui::form::errmsg("错误", F"无法保存纹理到{target_chunk_path->to_string}");
                                     
                                     let chunk_info = {
                                         ["walkable"] = walkable: dynamic,
@@ -1650,7 +1650,7 @@ namespace editor::gui::tilemap
                                     };
                                     if (!fsys::writeall(target_chunk_path / F"chunk_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}_{layer}.je4chunk", chunk_info: string))
                                     {
-                                        jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_chunk_path->tostring}");
+                                        jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_chunk_path->to_string}");
                                     }
 
                                 }
@@ -1672,12 +1672,12 @@ namespace editor::gui::tilemap
                                             ->  mapping
                                     }: string -> \dat = fsys::writeall(target_chunk_path / F"chunk_{chunk.m_position.0}_{chunk.m_position.1}.je4chunk", dat);)
                                 {
-                                    jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_chunk_path->tostring}");                                    
+                                    jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_chunk_path->to_string}");                                    
                                 }
                             }
 
                             if (fsys::writeall(target_chunk_path / F"chunklist.je4chunklist", chunks_pos_info: string) == false)
-                                jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_path->tostring}");
+                                jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_path->to_string}");
                         }
                         none?;
                         }
@@ -1708,7 +1708,7 @@ namespace editor::gui::tilemap
         let editctx = new! TileEditContext(context, mapdata);
         launch(func(){
             let mut open = true;
-            match (BeginAttrOpen(F"瓦片地图编辑器 - {tilemap_file->tostring}", WindowsAttribute::ImGuiWindowFlags_MenuBar))
+            match (BeginAttrOpen(F"瓦片地图编辑器 - {tilemap_file->to_string}", WindowsAttribute::ImGuiWindowFlags_MenuBar))
             {
             value(show)?
                 if (show)
@@ -1767,7 +1767,7 @@ namespace editor::gui::tilemap
 
             if (open == false)
             {
-                jeapi::gui::form::ask("是否保存", F"是否保存当前绘制结果到: {tilemap_file->tostring}", 
+                jeapi::gui::form::ask("是否保存", F"是否保存当前绘制结果到: {tilemap_file->to_string}", 
                     func(opt)
                     {
                         editctx->save_tile_sets(); // 保存发生变化的tileset
@@ -1777,7 +1777,7 @@ namespace editor::gui::tilemap
                         {
                             if (!fsys::writeall(tilemap_file, editctx->dump_tiles: string))
                             {
-                                jeapi::gui::form::errmsg("错误", F"无法保存TileMap到{tilemap_file->tostring}: 无法写入文件");
+                                jeapi::gui::form::errmsg("错误", F"无法保存TileMap到{tilemap_file->to_string}: 无法写入文件");
                                 formopen->set(true);
                             }
                         }

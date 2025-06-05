@@ -23,11 +23,11 @@ namespace editor::gui::drawpannel
     {
         func create(path: fsys::path_t)
         {
-            try! vmm = vm::load(path->tostring);
+            try! vmm = vm::load(path->to_string);
             do vmm->jit;
 
             try! _ = vmm->run()
-                -> ok_or(F"脚本 {path->tostring} 执行失败")
+                -> ok_or(F"脚本 {path->to_string} 执行失败")
                 ;
 
             return_ok! ApplyScriptHost{vmm = vmm};
@@ -74,7 +74,7 @@ namespace editor::gui::drawpannel
                     -> or([]))
             )
         {
-            if (!path->tostring->lower->end_with(".image.wo"))
+            if (!path->to_string->lower->end_with(".image.wo"))
                 continue;
 
             r->set(fsys::purename(path), path);

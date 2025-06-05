@@ -27,7 +27,7 @@ namespace editor::tools
             return result::err("没有找到此脚本");
         value(path)?
             {
-                match (vm::load(path->tostring()))
+                match (vm::load(path->to_string()))
                 {
                 err(msg)?
                     return result::err(F"运行脚本失败：{msg}");

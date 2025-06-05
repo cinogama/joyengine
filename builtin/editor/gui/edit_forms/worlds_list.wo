@@ -55,7 +55,7 @@ namespace editor::gui::edit_forms
                                 Text(world->name);
                                 match (context->get_project->get_world_path(world))
                                 {
-                                value(p)? Text(p->tostring);
+                                value(p)? Text(p->to_string);
                                 none?;
                                 }
                                 Text(context->get_project->get_world_remark(world)->or("(无)"));

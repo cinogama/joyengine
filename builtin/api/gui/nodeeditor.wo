@@ -56,14 +56,14 @@ namespace jeapi::gui
         {
             public func reset(self: IProducer)=> void; // 重置迭代器状态
             public func finished(self: IProducer)=> bool; // 检测迭代是否结束
-            public func tostring(self: IProducer)=> string;
+            public func to_string(self: IProducer)=> string;
             public func parse(self: IProducer, dat: string)=> void;
             public func edit(self: IProducer, tag: string)=> void;
         }
 
         interface! ITyped
         {
-            public func tostring(self: ITyped)=> string;
+            public func to_string(self: ITyped)=> string;
             public func parse(self: ITyped, value: string)=> void;
             public func edit(self: ITyped, tag: string)=> void;
             public func typename(self: ITyped)=> string;
@@ -80,7 +80,7 @@ namespace jeapi::gui
             public func onUpdate(self: INode, editor: node_editor, tag: string)=> void;
             public func onDelete(self: INode, editor: node_editor)=> bool;
             public func onEval(self: INode, editor: node_editor)=> bool;
-            public func tostring(self: INode)=> string;
+            public func to_string(self: INode)=> string;
             public func parse(self: INode, value: string)=> void;
 
             require typeof:<Self>::create is (node_editor)=> Self;
@@ -222,7 +222,7 @@ namespace jeapi::gui
                 value(linked_output)?
                     {
                         let outpin = self.context.outputpins[linked_output];
-                        self.val->parse(outpin.typeval->tostring());
+                        self.val->parse(outpin.typeval->to_string());
                     }
                 none?;
                 }
@@ -283,9 +283,9 @@ namespace jeapi::gui
             {
                 return {
                     ["type"] = self.instance->name(): dynamic,
-                    ["producers"] = self.producers->>\p = p.producer->tostring();: dynamic,
-                    ["inputs"] = self.inputs->>\i = i.typeval->tostring();: dynamic,
-                    ["data"] = self.instance->tostring(): dynamic,
+                    ["producers"] = self.producers->>\p = p.producer->to_string();: dynamic,
+                    ["inputs"] = self.inputs->>\i = i.typeval->to_string();: dynamic,
+                    ["data"] = self.instance->to_string(): dynamic,
                 }->serialize()->unwrap;
             }
         }
@@ -1066,16 +1066,16 @@ namespace jeapi::gui
                     {
                         TextDisabled("输入：");
                         for (let p : node.producers)
-                            Text(F"{p.name}: {p.producer->tostring()}");
+                            Text(F"{p.name}: {p.producer->to_string()}");
  
                         for (let p : node.inputs)
-                            Text(F"{p.name}: {p.typeval->tostring()}");
+                            Text(F"{p.name}: {p.typeval->to_string()}");
                     }
                     if (!node.outputs->empty())
                     {
                         TextDisabled("输出：");
                         for (let p : node.outputs)
-                            Text(F"{p.name}: {p.typeval->tostring()}");
+                            Text(F"{p.name}: {p.typeval->to_string()}");
                     }
 
                     EndTooltip();

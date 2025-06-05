@@ -172,7 +172,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
 
         econtext.m_first_show = false;
 
-        match (BeginAttrOpen(F"粒子动画烘焙器 {partical_context.m_path->tostring}", 
+        match (BeginAttrOpen(F"粒子动画烘焙器 {partical_context.m_path->to_string}", 
             attrib + WindowsAttribute::ImGuiWindowFlags_MenuBar))
         {
         value(show)?
@@ -185,7 +185,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                         if (MenuItem("保存"))
                         {
                             if (!partical_context->save())
-                                jeapi::gui::form::errmsg("动画保存失败", F"动画未能保存到{partical_context.m_path->tostring}");
+                                jeapi::gui::form::errmsg("动画保存失败", F"动画未能保存到{partical_context.m_path->to_string}");
                         }
                         if (MenuItem("导出"))
                         {
@@ -195,7 +195,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                             let filename = fsys::purename(partical_context.m_path);
                             let outimgpath = fsys::parent(partical_context.m_path) / (filename + ".png");
                             let outanimpath = fsys::parent(partical_context.m_path) / (filename + ".je4animation");
-                            jeapi::gui::form::ask("确认导出", F"即将导出并覆盖到{outimgpath->tostring} 和 {outanimpath->tostring}，是否确认导出当前烘焙结果？",
+                            jeapi::gui::form::ask("确认导出", F"即将导出并覆盖到{outimgpath->to_string} 和 {outanimpath->to_string}，是否确认导出当前烘焙结果？",
                                 func(ok)
                                 {
                                     if (ok)
@@ -223,7 +223,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                                             }
                                         }
 
-                                        assert(animationimg->save(outimgpath->tostring()));
+                                        assert(animationimg->save(outimgpath->to_string()));
 
                                         let fanimdat = new! animation2d::AnimationContext(outanimpath);
                                         fanimdat->fast_create_for_partical(width, height, framecount, partical_context.m_frame_rate);
@@ -239,7 +239,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                     {
                         if (MenuItem("烘焙"))
                         {
-                            match (new! vm(partical_context.m_path->tostring + " : script.wo", 
+                            match (new! vm(partical_context.m_path->to_string + " : script.wo", 
                                 partical_context.m_script->GetText: buffer))
                             {
                             ok(vmm)?
@@ -355,7 +355,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
 
         if (! open)
         {
-            jeapi::gui::form::ask("是否保存粒子动画", F"是否将粒子配置保存到{partical_context.m_path->tostring}",
+            jeapi::gui::form::ask("是否保存粒子动画", F"是否将粒子配置保存到{partical_context.m_path->to_string}",
                 func(ok)
                 {
                     openform->set(false);
@@ -364,7 +364,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                         
                     if (! partical_context->save())
                     {
-                        jeapi::gui::form::errmsg("动画保存失败", F"动画未能保存到{partical_context.m_path->tostring}");
+                        jeapi::gui::form::errmsg("动画保存失败", F"动画未能保存到{partical_context.m_path->to_string}");
                         openform->set(true);
                     }
                 });

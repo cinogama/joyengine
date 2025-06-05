@@ -92,17 +92,17 @@ namespace editor
         }
         public func make_path_normalize(self: Project, path: fsys::path_t)
         {
-            let npath = path->tostring;
-            if (npath->begin_with(self.m_path->tostring + "/"))
+            let npath = path->to_string;
+            if (npath->begin_with(self.m_path->to_string + "/"))
             {
-                return "@" + npath->sub(self.m_path->tostring->len);
+                return "@" + npath->sub(self.m_path->to_string->len);
             }
             return npath;
         }
         public func parse_path_normalize(self: Project, path: string)
         {
             if (path->begin_with("@"))
-                return fsys::normalize(self.m_path->tostring + path->sub(1));
+                return fsys::normalize(self.m_path->to_string + path->sub(1));
             return fsys::normalize(path);
         }
         public func is_debugging(self: Project)
@@ -112,7 +112,7 @@ namespace editor
         public func create_dump(self: Project, dumpped: array<(dict<string, dynamic>, fsys::path_t)>)
         {
             do fsys::mkdir(self.m_path / ".temporary" / "jeeditor");
-            if (! dumpped->>\kv = [kv[0]: dynamic, kv[1]->tostring: dynamic];->serialize
+            if (! dumpped->>\kv = [kv[0]: dynamic, kv[1]->to_string: dynamic];->serialize
                 ->> \dat = fsys::writeall(self.m_path / ".temporary" / "jeeditor" / "debugcontext.dump", dat);
                 ->  or(false))
             {
@@ -415,9 +415,9 @@ namespace editor
 
                             dat->set("wooly.enable": dynamic, true: dynamic);
                             dat->set("wooly.scanroots": dynamic, [
-                                    fsys::normalize(std::host_path())->tostring,
-                                    self.m_path->tostring,
-                                    self->get_vfile_export_path->tostring,
+                                    fsys::normalize(std::host_path())->to_string,
+                                    self.m_path->to_string,
+                                    self->get_vfile_export_path->to_string,
                                 ]: dynamic);
 
                             if (!fsys::writeall(vsc_config_path, dat->serialize->unwrap))
@@ -445,7 +445,7 @@ namespace editor
                     // 不可以锁定目录
                     if (fsys::isdir(projfile) == true)
                         return false;
-                    let flock = new! process::flock(projfile->tostring);
+                    let flock = new! process::flock(projfile->to_string);
                     let result = flock->>\fl = fl->trylock();->or(false);
                     if (result)
                     {
@@ -614,7 +614,7 @@ namespace editor
                 err(msg)?
                     {
                         self->entry_safe_mode();
-                        jeapi::gui::form::errmsg("加载失败", F"无法加载 '{module_path->tostring}'：{msg}");
+                        jeapi::gui::form::errmsg("加载失败", F"无法加载 '{module_path->to_string}'：{msg}");
                     }
                 }
             }
@@ -666,7 +666,7 @@ namespace editor
         public func save_project(self: Project)
         {
             let bad_list = self.m_towoo_context->get_bad_scripts
-                ->> \p = p->tostring;
+                ->> \p = p->to_string;
                 ->  reduce(\l, r = l + "\n" + r;);
 
             match (bad_list)
@@ -682,8 +682,8 @@ namespace editor
 
             let dat = {
                 ["name"] = self.m_name: dynamic,
-                ["configs"] = self.m_configs->> \k, v = (k, v->tostring());: dynamic,
-                ["modules"] = self.m_modules->unmapping->>\kv = kv[0]->tostring->sub(self.m_path->tostring->len);: dynamic,
+                ["configs"] = self.m_configs->> \k, v = (k, v->to_string());: dynamic,
+                ["modules"] = self.m_modules->unmapping->>\kv = kv[0]->to_string->sub(self.m_path->to_string->len);: dynamic,
             };
 
             // 编辑中的世界保存到 .temporary 目录内
@@ -691,7 +691,7 @@ namespace editor
 
             if (! self.m_worlds
                 ->> \pw = (
-                        pw.m_world_path->tostring->sub(self.m_path->tostring->len), 
+                        pw.m_world_path->to_string->sub(self.m_path->to_string->len), 
                         self->get_editing_world->>\w = w == pw.m_world_instance;->or(false))
                     ;
                 ->  mapping
@@ -715,7 +715,7 @@ namespace editor
             if (failed_saving_worlds->empty == false)
             {
                 let failed_file_list = failed_saving_worlds
-                    ->> \pw = pw.m_world_path->tostring;
+                    ->> \pw = pw.m_world_path->to_string;
                     ->  reduce(\l, r = l + "\n" + r;)
                     ->  unwrap;
 
@@ -832,7 +832,7 @@ namespace editor
         public func get_config_editor_system(self: Project)
         {
             return self->get_config("JE_PROJECT_EDITOR_SYSTEM")
-                ->> \config = config->tostring;
+                ->> \config = config->to_string;
                 ->  or(DEFAULT_EDITOR_SYSTEM_NAME)
                 ->  je::typeinfo::load
                 ->  unwrap;
@@ -846,7 +846,7 @@ namespace editor
             do try!
             {
                 try! conf = self->get_config("JE_EDITOR_GENERATE_VFILE_FOR_WOOLY");
-                if (conf->tostring: bool)
+                if (conf->to_string: bool)
                 {
                     let loc = self->get_vfile_export_path();
                     for (let (name, content) : je::woolang::get_all_internal_scripts())
@@ -858,7 +858,7 @@ namespace editor
                         do fsys::mkdir(fsys::parent(path));
 
                         if (! fsys::writeall(path, content))
-                            jeapi::gui::form::errmsg("错误", F"无法写入虚拟文件 '{path->tostring}'");
+                            jeapi::gui::form::errmsg("错误", F"无法写入虚拟文件 '{path->to_string}'");
                     }
                 }
                 return_value!;

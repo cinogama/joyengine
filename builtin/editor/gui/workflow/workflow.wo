@@ -120,10 +120,10 @@ namespace Editor
         }     
         source += generate_node_dict(node_type_map);
         source += "    };\n";
-        source += F"    let doc_path = fsys::normalize(" + path->tostring->enstring + ");\n";
+        source += F"    let doc_path = fsys::normalize(" + path->to_string->enstring + ");\n";
         source += "    let node_editor = jeapi::gui::node_editor::create(\"workflow_node_editor\", nodedict);\n";
         source += "    do fsys::readall(doc_path)->>\\dat = node_editor->restore(dat);;\n";
-        source += F"    let form = jeapi::gui::form::create(\"Workflow 编辑器: \" + doc_path->tostring, true,\n";
+        source += F"    let form = jeapi::gui::form::create(\"Workflow 编辑器: \" + doc_path->to_string, true,\n";
         source += @"    func(_){
             node_editor->update();
         }"@;
@@ -132,7 +132,7 @@ namespace Editor
         source += "    form->set_autoresize(false);\n";
         source += @"   form->set_callback_close(func(){
             jeapi::gui::form::ask("即将关闭Workflow编辑器", 
-            "是否保存到:" + doc_path->tostring + "?", func(save){
+            "是否保存到:" + doc_path->to_string + "?", func(save){
                 if (save)
                 {
                     if (!fsys::writeall(doc_path, node_editor->dump()))
@@ -148,13 +148,13 @@ namespace Editor
         source += "\n";
         source += "    form->set_size_constraint(300., 200., 3000., 3000.);\n";
         source += "    if (!form->show())\n";
-        source += "         jeapi::gui::form::errmsg(\"打开失败\", doc_path->tostring + \"已在编辑中，不能重复打开\");\n";
+        source += "         jeapi::gui::form::errmsg(\"打开失败\", doc_path->to_string + \"已在编辑中，不能重复打开\");\n";
         source += "}\n";
         source += "main();\n";
         
         do try!
         {
-            try! vm = vm::create(path->tostring + ".wo", source: buffer);
+            try! vm = vm::create(path->to_string + ".wo", source: buffer);
             do vm->run();
             do vm->invoke("Editor::set_universe", 
                 [context->get_project->get_env->get_universe: dynamic]);

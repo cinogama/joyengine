@@ -204,10 +204,10 @@ namespace editor::gui
                     if (content.m_able_to_update)
                     {
                         if (! writeall(path, content.m_content))
-                            jeapi::gui::errmsg("保存失败", F"保存文件 `{path->tostring()}` 失败");
+                            jeapi::gui::errmsg("保存失败", F"保存文件 `{path->to_string()}` 失败");
                     }
                     else
-                        jeapi::gui::errmsg("无法修改动画文件", F"文件 `{path->tostring()}` 是一个动画文件，无法通过重构工具修改，请手动更新");
+                        jeapi::gui::errmsg("无法修改动画文件", F"文件 `{path->to_string()}` 是一个动画文件，无法通过重构工具修改，请手动更新");
                 }
             }
 
@@ -218,7 +218,7 @@ namespace editor::gui
             }
             catch! e
             {
-                jeapi::gui::errmsg("重命名/移动失败", F"重命名文件 `{self.m_old_path->tostring()}` 为 `{self.m_target_path->tostring()}` 失败：{e}");
+                jeapi::gui::errmsg("重命名/移动失败", F"重命名文件 `{self.m_old_path->to_string()}` 为 `{self.m_target_path->to_string()}` 失败：{e}");
             };
 
             // 3. 刷新browser
@@ -234,7 +234,7 @@ namespace editor::gui
     {
         if (fsys::exist(target_path))
         {
-            jeapi::gui::errmsg("目标文件已存在", F"文件 `{target_path->tostring()}` 已存在，请先删除或移动目标文件");
+            jeapi::gui::errmsg("目标文件已存在", F"文件 `{target_path->to_string()}` 已存在，请先删除或移动目标文件");
             return_ok!;
         }
 
@@ -338,7 +338,7 @@ namespace editor::gui
 
                         has_any_file_to_update = true;
 
-                        match (CheckBox(F"{path->tostring()}", checked_files->contain(replace_content)))
+                        match (CheckBox(F"{path->to_string()}", checked_files->contain(replace_content)))
                         {
                         value(checked)?
                             if (checked)
@@ -351,7 +351,7 @@ namespace editor::gui
                         if (IsItemHovered())
                         {
                             BeginTooltip();
-                            TextDisabled(path->tostring());
+                            TextDisabled(path->to_string());
                             for (let (pre, post, _) : replace_content.m_replacing_place)
                             {
                                 TextDisabled("...");

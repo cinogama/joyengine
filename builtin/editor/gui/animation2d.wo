@@ -41,7 +41,7 @@ namespace editor::gui::animation2d
     }
     namespace DataValue
     {
-        func tostring(self: DataValue)
+        func to_string(self: DataValue)
         {
             match (self)
             {
@@ -62,12 +62,12 @@ namespace editor::gui::animation2d
         m_value: mut DataValue,
     }
     {
-        func tostring(self: FrameComponentData)
+        func to_string(self: FrameComponentData)
         {
             if (self.m_offset_mode)
-                return F"{self.m_component_name}.{self.m_member_name}+={self.m_value->tostring}";
+                return F"{self.m_component_name}.{self.m_member_name}+={self.m_value->to_string}";
             else
-                return F"{self.m_component_name}.{self.m_member_name}={self.m_value->tostring}";
+                return F"{self.m_component_name}.{self.m_member_name}={self.m_value->to_string}";
         }
         func dup(self: FrameComponentData)
         {
@@ -84,9 +84,9 @@ namespace editor::gui::animation2d
         m_value: mut DataValue,
     }
     {
-        func tostring(self: FrameUniformData)
+        func to_string(self: FrameUniformData)
         {
-            return F"{self.m_uniform_name}={self.m_value->tostring}";
+            return F"{self.m_uniform_name}={self.m_value->to_string}";
         }
         func dup(self: FrameUniformData)
         {
@@ -206,7 +206,7 @@ namespace editor::gui::animation2d
         }
         public func open(path: fsys::path_t)
         {
-            try! bufdata = buffer::builder::fromfile(path->tostring, 0, -1);
+            try! bufdata = buffer::builder::fromfile(path->to_string, 0, -1);
 
             let self = AnimationContext{
                 m_animations = {}mut,
@@ -1121,14 +1121,14 @@ namespace editor::gui::animation2d
                             value(f)?
                                 for (let (cindex, cdata): f.m_component_dats->iter |> iterator::enumerate)
                                 {
-                                    if (SelectableSelected(cdata->tostring(), 
+                                    if (SelectableSelected(cdata->to_string(), 
                                         animation_context.m_selected_c_or_u_data->is_selected_component_idx(cindex)))
                                         animation_context.m_selected_c_or_u_data = SelectedComponentOrUniformData::ComponentIndex(cindex);
                                     if (BeginPopupContextItem())
                                     {
                                         if (MenuItem("删除"))
                                         {
-                                            jeapi::gui::form::ask("是否删除组件数据", F"是否要删除全部的{cdata->tostring}吗？\n选择是，删除动画中的所有该组件成员的值\n选择否，仅删除当前项", 
+                                            jeapi::gui::form::ask("是否删除组件数据", F"是否要删除全部的{cdata->to_string}吗？\n选择是，删除动画中的所有该组件成员的值\n选择否，仅删除当前项", 
                                             func(ok)
                                             {
                                                 if (ok)
@@ -1164,14 +1164,14 @@ namespace editor::gui::animation2d
                             value(f)?
                                 for (let (uindex, udata): f.m_uniform_dats->iter |> iterator::enumerate)
                                 {
-                                    if (SelectableSelected(udata->tostring(), 
+                                    if (SelectableSelected(udata->to_string(), 
                                         animation_context.m_selected_c_or_u_data->is_selected_uniform_idx(uindex)))
                                         animation_context.m_selected_c_or_u_data = SelectedComponentOrUniformData::UniformIndex(uindex);
                                     if (BeginPopupContextItem())
                                     {
                                         if (MenuItem("删除"))
                                         {
-                                            jeapi::gui::form::ask("是否删除着色器变量数据", F"确认要删除全部的{udata->tostring}吗？\n选择是，删除动画中的所有该变量的值\n选择否，仅删除当前项", 
+                                            jeapi::gui::form::ask("是否删除着色器变量数据", F"确认要删除全部的{udata->to_string}吗？\n选择是，删除动画中的所有该变量的值\n选择否，仅删除当前项", 
                                             func(ok)
                                             {
                                                 if (ok)

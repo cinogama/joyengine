@@ -60,7 +60,7 @@ using Path = struct {
             ->  forall(\path = fsys::isdir(path);)
             ->> \rootpath = Path
                 {
-                    name = rootpath->tostring(),
+                    name = rootpath->to_string(),
                     path = rootpath,
                     childs = mut option::none
                 }
@@ -97,7 +97,7 @@ using Path = struct {
                 + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
                 + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
                 + selected_path
-                    ->map(\p = p->tostring == path.path->tostring;)
+                    ->map(\p = p->to_string == path.path->to_string;)
                     ->or(false)
                     ->\b: bool = 
                         b   ? TreeNodeAttribute::ImGuiTreeNodeFlags_Selected
@@ -189,8 +189,8 @@ func save_editor_data_after_exit(dat: dict<dynamic, dynamic>, proj_name: string,
     let newdat = dat->to_map();
     newdat->set("form_size": dynamic, [win_w, win_h]: dynamic);
     newdat->set("history": dynamic, project_histories
-        ->forall(\record = record[1] != proj_path->tostring;)
-        ->inlay(0, [proj_name, proj_path->tostring]): dynamic);
+        ->forall(\record = record[1] != proj_path->to_string;)
+        ->inlay(0, [proj_name, proj_path->to_string]): dynamic);
 
     assert(
         fsys::writeall(fsys::normalize(std::host_path()) / "builtin" / "editor.dat.je4cache", newdat->serialize->unwrap)
@@ -343,7 +343,7 @@ func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: di
                     u->close();
                     f->set(false);
                     
-                    je::internal::set_runtime_path(project_path->tostring);
+                    je::internal::set_runtime_path(project_path->to_string);
 
                     action_after_guide_form_closed = 
                         func(){
@@ -450,7 +450,7 @@ func open_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict
             u->close();
             f->set(false);
 
-            je::internal::set_runtime_path(path->tostring());
+            je::internal::set_runtime_path(path->to_string());
 
             action_after_guide_form_closed = 
                 func()
@@ -524,7 +524,7 @@ for (;;)
                             if (MenuItem("加载此项目"))
                                 open_project_at(fsys::normalize(dat[1]), u, editor_configs, open);
                             if (MenuItem("打开项目所在路径"))
-                                do std::shell(F"explorer \"{fsys::normalize(dat[1])->tostring->replace("/", "\\")}\"");
+                                do std::shell(F"explorer \"{fsys::normalize(dat[1])->to_string->replace("/", "\\")}\"");
                             Separator();
                             if (MenuItem("从历史记录中移除"))
                             {

@@ -29,13 +29,13 @@ func copy_all_licenses()
                     filename(p)->lower->find("license")->is_value
                     || filename(p)->lower->find("copying")->is_value))
                 {
-                    let relpath = p->tostring()->sub(third_party_located_path->tostring->len);
+                    let relpath = p->to_string()->sub(third_party_located_path->to_string->len);
 
                     let target_path = build_path / "licenses" / relpath;
                     do mkdir(parent(target_path));
                     do copy(p, target_path);
 
-                    std::println("copy license file: ", p->tostring());
+                    std::println("copy license file: ", p->to_string());
                 }
             }
         }

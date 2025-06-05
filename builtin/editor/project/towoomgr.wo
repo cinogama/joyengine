@@ -130,7 +130,7 @@ namespace editor
                 // TODO: 文件系统特性(大小写问题)，考虑更正确的姿势
                 assert(filename(p)->lower->end_with(".jecomponent.wo"));
                 do self.m_removing_component->remove(pure_component_or_system_name(purename(p)));
-                match (towoo::update_component(pure_component_or_system_name(purename(p)), p->tostring))
+                match (towoo::update_component(pure_component_or_system_name(purename(p)), p->to_string))
                 {
                 value(t)?
                     new_scripts->set(p, (c, t));
@@ -148,7 +148,7 @@ namespace editor
                 // TODO: 文件系统特性(大小写问题)，考虑更正确的姿势
                 assert(filename(p)->lower->end_with(".jesystem.wo"));
                 do self.m_removing_system->remove(pure_component_or_system_name(purename(p)));
-                match (towoo::update_system(pure_component_or_system_name(purename(p)), p->tostring))
+                match (towoo::update_system(pure_component_or_system_name(purename(p)), p->to_string))
                 {
                 value(t)?
                     new_scripts->set(p, (c, t));
