@@ -175,10 +175,10 @@ namespace editor::gui::drawpannel
 
     interface! IDrawtool
     {
-        public func close(self: IDrawtool)=> void;
-        public func OnMouseDown(self: IDrawtool, tex: graphic::texture, col: color4_t, pos: (int, int))=> void;
-        public func OnMouseHold(self: IDrawtool, tex: graphic::texture, col: color4_t, pos: (int, int))=> void;
-        public func OnMouseUp(self: IDrawtool, tex: graphic::texture, col: color4_t, pos: (int, int))=> void;
+        public func close(self)=> void;
+        public func OnMouseDown(self, tex: graphic::texture, col: color4_t, pos: (int, int))=> void;
+        public func OnMouseHold(self, tex: graphic::texture, col: color4_t, pos: (int, int))=> void;
+        public func OnMouseUp(self, tex: graphic::texture, col: color4_t, pos: (int, int))=> void;
     }
 
     alias ToolsSetArray = array<(string, ()=> IDrawtool)>;

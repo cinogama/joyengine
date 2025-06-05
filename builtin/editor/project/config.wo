@@ -65,9 +65,9 @@ namespace editor::Project
 
     interface! IConfig
     {
-        public func to_string(self: IConfig)=> string;
-        public func parse(self: IConfig, str: string)=>bool;
-        public func edit(self: IConfig)=> bool;
-        public func apply(self: IConfig)=> string;
+        public func to_string(self)=> string;
+        public func parse(self, str: string)=>bool;
+        public func edit(self)=> bool;
+        public func apply(self)=> string;
     }
 }

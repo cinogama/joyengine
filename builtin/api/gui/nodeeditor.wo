@@ -54,36 +54,32 @@ namespace jeapi::gui
     {
         interface! IProducer
         {
-            public func reset(self: IProducer)=> void; // 重置迭代器状态
-            public func finished(self: IProducer)=> bool; // 检测迭代是否结束
-            public func to_string(self: IProducer)=> string;
-            public func parse(self: IProducer, dat: string)=> void;
-            public func edit(self: IProducer, tag: string)=> void;
+            public func reset(self)=> void; // 重置迭代器状态
+            public func finished(self)=> bool; // 检测迭代是否结束
+            public func to_string(self)=> string;
+            public func parse(self, dat: string)=> void;
+            public func edit(self, tag: string)=> void;
         }
 
         interface! ITyped
         {
-            public func to_string(self: ITyped)=> string;
-            public func parse(self: ITyped, value: string)=> void;
-            public func edit(self: ITyped, tag: string)=> void;
-            public func typename(self: ITyped)=> string;
-            public func maxoutput(self: ITyped)=> int;
-            public func color(self: ITyped)=> (int, int, int, int);
-
-            require typeof:<Self>::create is ()=> Self;
+            public func to_string(self)=> string;
+            public func parse(self, value: string)=> void;
+            public func edit(self, tag: string)=> void;
+            public func typename(self)=> string;
+            public func maxoutput(self)=> int;
+            public func color(self)=> (int, int, int, int);
         }
 
         interface! INode
         {
-            public func name(self: INode)=> string;
-            public func color(self: INode)=> (int, int, int, int);
-            public func onUpdate(self: INode, editor: node_editor, tag: string)=> void;
-            public func onDelete(self: INode, editor: node_editor)=> bool;
-            public func onEval(self: INode, editor: node_editor)=> bool;
-            public func to_string(self: INode)=> string;
-            public func parse(self: INode, value: string)=> void;
-
-            require typeof:<Self>::create is (node_editor)=> Self;
+            public func name(self)=> string;
+            public func color(self)=> (int, int, int, int);
+            public func onUpdate(self, editor: node_editor, tag: string)=> void;
+            public func onDelete(self, editor: node_editor)=> bool;
+            public func onEval(self, editor: node_editor)=> bool;
+            public func to_string(self)=> string;
+            public func parse(self, value: string)=> void;
         }
         namespace INode
         {

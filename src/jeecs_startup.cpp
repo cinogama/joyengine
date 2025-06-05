@@ -229,7 +229,7 @@ func main()
 
     for (let p : files)
     {   
-        let path = p->tostring;
+        let path = p->to_string;
         crc64_result += F"{crc64file(path)->or(0)}:{crc64str(path)};";
     }
 
