@@ -84,7 +84,10 @@ namespace editor::gui::edit_forms
     {
         let has_editing_entity = euid->is_value;
         if (MenuItem("创建实体"))
-            launch(\= show_entity_creator(context, new! EntityContext()););
+        {
+            let entity_context = new! EntityContext();
+            launch(\= show_entity_creator(context, entity_context););
+        }
         if (BeginMenu("快速创建实体"))
         {
             if (MenuItem("基本渲染实体"))

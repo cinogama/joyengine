@@ -1275,6 +1275,7 @@ namespace editor::gui::animation2d
     }
     public func show(context: EditorContext, animation_context: AnimationContext)
     {
-        je::gui::launch(\=_animation_edit_form(context, animation_context, new! std::mutable(true)););
+        let open = new! std::mutable(true);
+        je::gui::launch(\=_animation_edit_form(context, animation_context, open););
     }
 }

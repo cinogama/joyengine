@@ -450,7 +450,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                             if (BeginChildSize("##tool_block", 150., 0.))
                             {
                                 Text("绘制工具");
-                                let sorted_tools = draw_context.tools-> std::sort(\(lname, _), (rname, _) = lname < rname;);
+                                let sorted_tools = draw_context.tools;
                                 
                                 match (Combo(
                                     "##draw_tool", 
@@ -710,11 +710,8 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
     public func drawimg(context: EditorContext, t: graphic::texture)
     {
         let tools = create_all_draw_tools();
-        launch(\=edittexture(
-            context,
-            option::none,
-            [(0, mut t, mut t->path)],
-            DrawContextT{
+        let passes = [(0, mut t, mut t->path)];
+        let drawcontext = DrawContextT{
                 scale = mut 10.,
                 offset_x = mut 0.,
                 offset_y = mut 0.,
@@ -733,7 +730,12 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                 openform = mut true,
 
                 block_size = (mut 16, mut 16),
-            }
+            };
+        launch(\=edittexture(
+            context,
+            option::none,
+            passes,
+            drawcontext
         ););
     }
     public func drawedit(context: EditorContext, e: entity)
@@ -807,11 +809,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                 ;
             ;
         let tools = create_all_draw_tools();
-        launch(\=edittexture(
-            context,
-            jeapi::debug::get_entity_editor_id(e),
-            id_tex_list,
-            DrawContextT{
+        let drawcontext = DrawContextT{
                 scale = mut 10.,
                 offset_x = mut 0.,
                 offset_y = mut 0.,
@@ -834,7 +832,13 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                 openform = mut true,
 
                 block_size = (mut 16, mut 16),
-            }
+            };
+        let eid = jeapi::debug::get_entity_editor_id(e);
+        launch(\=edittexture(
+            context,
+            eid,
+            id_tex_list,
+            drawcontext
         ););
     }
 }

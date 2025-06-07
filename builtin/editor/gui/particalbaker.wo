@@ -377,8 +377,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
         _: EditorContext, 
         partical_context: ParticalContext)
     {
-        launch(\=_particalbaker_editor(partical_context, 
-            _EditorContext{
+        let editor_context = _EditorContext{
                 m_last_update_time = mut std::time(),
                 m_frame_index = mut 0,
                 m_enable_bake = mut true,
@@ -387,7 +386,11 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                 m_solved_launch_count = mut 0,
 
                 m_first_show = mut true,
-            },
-            new! std::mutable(true)););
+            };
+        let open = new! std::mutable(true);
+        launch(\=_particalbaker_editor(
+            partical_context, 
+            editor_context,
+            open););
     }
 }
