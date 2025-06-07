@@ -145,8 +145,7 @@ namespace editor::gui
 
                 End();
                 return formopen->get;
-            }, 
-            ());
+            });
     }
 
     private func _save_world(context: EditorContext)

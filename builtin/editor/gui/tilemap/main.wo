@@ -909,7 +909,7 @@ namespace editor::gui::tilemap
                     }
                     End();
                     return open;
-                }, ());
+                });
         }
         func show_tile_sets(self: TileEditContext)
         {
@@ -1699,7 +1699,7 @@ namespace editor::gui::tilemap
             }
 
             return open;
-        }, ());
+        });
     }
 
     public func main(context: EditorContext, tilemap_file: fsys::path_t, mapdata: dict<string, dynamic>)
@@ -1785,6 +1785,6 @@ namespace editor::gui::tilemap
             }
             
             return formopen->get();
-        }, ());
+        });
     }
 }

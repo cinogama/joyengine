@@ -96,7 +96,7 @@ namespace jeapi::gui
                     }
                     return true;
 
-                }, ());
+                });
                 return true;
             }
             return false;

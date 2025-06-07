@@ -170,7 +170,7 @@ are generated using Bison and comply with GPLv3 with special bison exception."@
             End();
 
             return open;
-        }, ());
+        });
     }
 
     public func display_copyright_msg()

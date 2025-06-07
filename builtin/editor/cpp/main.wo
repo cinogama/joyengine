@@ -613,7 +613,7 @@ endif()
                 End();
 
                 return context.show;
-            }, ());
+            });
 
             context.compile_thread = 
                 option::value(new! thread(func ()
@@ -655,11 +655,11 @@ endif()
                                     jeapi::gui::form::errmsg("失败", F"加载模块失败：{reason}");
                                 }
                                 return false;
-                            },() );
+                            });
                     }
                     err(_)?;
                     }
-                },()));
+                }));
         }
 
         public func compile(self: CxxProject, rttype: std::platform::runtime_type, context: option<compile_context>)

@@ -269,7 +269,7 @@ namespace editor::gui
                             context->get_project->load_worlds_from_list();
                         }
                         return false;
-                    }, ());
+                    });
                 });
         };
 

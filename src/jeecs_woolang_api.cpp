@@ -25,19 +25,11 @@ struct _je_thread
 
 WO_API wo_api wojeapi_startup_thread(wo_vm vm, wo_value args)
 {
-    wo_value arguments = args + 1;
-    auto argument_count = wo_struct_len(arguments);
-
     wo_vm co_vmm = wo_borrow_vm(vm);
-    wo_value co_s = wo_reserve_stack(co_vmm, argument_count + 1, nullptr);
+    wo_value co_s = wo_reserve_stack(co_vmm, 1, nullptr);
 
-    wo_value cofunc = co_s + argument_count;
+    wo_value cofunc = co_s + 0;
     wo_set_val(cofunc, args + 0);
-
-    for (size_t i = 0; i < argument_count; --i)
-    {
-        wo_struct_get(co_s + i, arguments, (uint16_t)i);
-    }
 
     std::lock_guard g1(_jewo_all_alive_vm_threads_mx);
     _jewo_all_alive_vm_threads.insert(co_vmm);
@@ -47,7 +39,7 @@ WO_API wo_api wojeapi_startup_thread(wo_vm vm, wo_value args)
     thread_instance->m_thread =
         new std::thread([=]
                         {
-                wo_invoke_value(co_vmm, cofunc, argument_count, nullptr, nullptr);
+                wo_invoke_value(co_vmm, cofunc, 0, nullptr, nullptr);
                 thread_instance->m_finished.store(true);
 
                 do

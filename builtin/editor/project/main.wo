@@ -173,12 +173,10 @@ namespace editor
 
             self->clear_dump();
 
-            je::gui::launch(func(){
+            je::gui::launch_coroutine(func(){
                 std::yield();
                 self.m_enable_update_towoo = true;
-
-                return false;
-            }, ());
+            });
 
             return result::ok(do nil);
         }
@@ -278,7 +276,7 @@ namespace editor
             }
             
             // 等待一帧，直到所有实体被确切地创建完毕
-            je::gui::launch(func(){self.m_world_has_been_dumped = false; return false;}, ());
+            je::gui::launch_coroutine(func(){self.m_world_has_been_dumped = false;});
         }
         func _create_default_configs(self: Project, env: Environment)
         {
@@ -529,12 +527,11 @@ namespace editor
             {
             ok(dat)?
                 {
-                    je::gui::launch(func()
+                    je::gui::launch_coroutine(func()
                         {
                             self->update_towoo_after_dump_and_close(force);
                             self->restore_all_world(dat);
-                            return false;
-                        }, ());
+                        });
                 }
             err(msg)?
                 jeapi::gui::form::errmsg("失败", F"更新ToWoo失败: {msg}");
@@ -620,7 +617,7 @@ namespace editor
             }
 
             self->update_towoo_after_dump_and_close(false);
-            je::gui::launch(func(){
+            je::gui::launch_coroutine(func(){
                 std::yield();
                 std::yield();
                 std::yield();
@@ -630,8 +627,7 @@ namespace editor
                     self->entry_safe_mode();
                     jeapi::gui::form::errmsg("加载失败", "初始化时 ToWoo 有编译失败未解决");
                 }
-                return false;
-            }, ());
+            });
 
             match (je::towoo::unsafe::dynamic_parser::update_all("@/editor.wo"))
             {
@@ -647,7 +643,7 @@ namespace editor
 
             // 设置style必须等到gui开起来，这里设置，可能图形库尚未启动，就炸了
             // launch出去自动执行
-            je::gui::launch(func()
+            je::gui::launch_coroutine(func()
                 {
                     do je::file::readall("@/editor.je4style")
                         =>> \style_dat = style_dat->dict::deserialize;
@@ -656,8 +652,7 @@ namespace editor
                             ;
                         ->> \style_dat = jeapi::gui::style::restore_config(style_dat);
                         ;
-                    return false;
-                }, ());
+                });
 
             self->restore_dump();
 
@@ -1077,7 +1072,7 @@ namespace editor
             match (dat->get("debug_camera"))
             {
             value(dat)?
-                je::gui::launch(
+                je::gui::launch_coroutine(
                     func()
                     {
                         let cameradat = dat as dict<dynamic, dynamic>
@@ -1092,8 +1087,7 @@ namespace editor
                             if (self->set_debug_camera_info(w, cameradat)->is_value)
                                 break;
                         }
-                        return false;
-                    }, ());
+                    });
             none?;
             }
             return w;

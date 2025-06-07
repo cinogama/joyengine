@@ -119,14 +119,14 @@ namespace editor::gui
             End();
 
             return open;
-        }, ());
+        });
     }
 
     func create_image(default_name: string, location: string, generator: (image)=> void)
     {
-        let create_context = (mut 16, mut 16, mut default_name);
+        let context = (mut 16, mut 16, mut default_name);
         launch(
-            func(context: (mut int, mut int, mut string))
+            func()
             {
                 let mut open = true;
                 je::gui::SetNextWindowSizeConstraints((300., 200.), (300., 200.));
@@ -168,7 +168,7 @@ namespace editor::gui
                 End();
 
                 return open;
-            }, (create_context, )
+            }
         );
     }
     
@@ -408,7 +408,7 @@ namespace editor::gui
                                 if (0 != result)
                                     jeapi::gui::form::errmsg("失败", F"无法打开'{p.path->to_string()}'({result})");
 
-                            }, ());
+                            });
                         return option::none;
                     }
                 );
@@ -834,7 +834,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
                     jeapi::gui::form::input("创建世界", F"将在{cur_creating_path}创建新世界：",
                         "Newworld",
                         \new_world_name = launch(
-                            edit_forms::show_world_creator, (context, new! edit_forms::WorldContext(
+                            \= edit_forms::show_world_creator(context, new! edit_forms::WorldContext(
                                 context->get_project(), new_world_name, fsys::normalize(F"{cur_creating_path}/{new_world_name}.je4world"),
                                 func (w)
                                 {
@@ -852,7 +852,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
                                     force_update();
                                     return true;
                                 }
-                            )));
+                            )););
                         ); 
                 }
                 if (MenuItem("瓦片地图"))
@@ -1191,8 +1191,10 @@ using $NEW_PRODUCER_NAME$ = struct{}
                     }
                 };
 
-                launch(func(mut open: bool)
+                launch(func()
                 {
+                    let mut open = true;
+                    
                     match (BeginAttrOpen(F"模块{fsys::filename(path.path)}当前组件和系统", 
                         WindowsAttribute::ImGuiWindowFlags_MenuBar))
                     {
@@ -1385,7 +1387,7 @@ namespace $$MODULE_NAME$$
                     End();
 
                     return open;
-                }, (true,));
+                });
             }
             Separator();
         }    

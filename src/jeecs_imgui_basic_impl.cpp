@@ -1551,16 +1551,9 @@ WO_API wo_api je_gui_combo(wo_vm vm, wo_value args)
 
 WO_API wo_api je_gui_launch(wo_vm vm, wo_value args)
 {
-    wo_value jobfunc = args + 1;
-    wo_value argpacks = args + 2;
-
     wo_vm vmm = wo_borrow_vm(vm);
-    wo_value vmm_s = wo_reserve_stack(vmm, 2, nullptr);
 
-    wo_set_val(vmm_s + 0, jobfunc);
-    wo_set_val(vmm_s + 1, argpacks);
-
-    wo_dispatch_value(vmm, args + 0, 2, nullptr, &vmm_s);
+    wo_dispatch_value(vmm, args + 0, 0, nullptr, nullptr);
 
     gui_wo_job_coroutine *guico = new gui_wo_job_coroutine;
     guico->work_vm = vmm;

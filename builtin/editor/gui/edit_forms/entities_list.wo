@@ -84,7 +84,7 @@ namespace editor::gui::edit_forms
     {
         let has_editing_entity = euid->is_value;
         if (MenuItem("创建实体"))
-            launch(show_entity_creator, (context, new! EntityContext()));
+            launch(\= show_entity_creator(context, new! EntityContext()););
         if (BeginMenu("快速创建实体"))
         {
             if (MenuItem("基本渲染实体"))
@@ -235,7 +235,7 @@ namespace editor::gui::edit_forms
                     End();
 
                     return open;
-                }, ());
+                });
             }
             Separator();
             if (MenuItem("2D光源（点）"))
@@ -394,7 +394,7 @@ namespace editor::gui::edit_forms
         {
             do euid
                 ->> \uid = launch(
-                    show_entity_creator, (context, EntityContext::edit(uid)));
+                    \=show_entity_creator(context, EntityContext::edit(uid)););
                 ;
         }
         if (MenuItemEnabled("绘制", has_editing_entity))
@@ -533,7 +533,7 @@ namespace editor::gui::edit_forms
                     if (BeginMenuBar())
                     {
                         if (MenuItem("创建新实体"))
-                            launch(show_entity_creator, (context, new! EntityContext()));
+                            launch(\=show_entity_creator(context, new! EntityContext()););
             
                         EndMenuBar();
                     }

@@ -255,7 +255,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                                         if (!vmm->invoke("_start_baking", [partical_context: dynamic, econtext: dynamic])->is_value)
                                             jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本运行终止，可能存在错误，请检查日志");
                                         econtext.m_enable_bake = true;
-                                    }, ());
+                                    });
                                 }
                             err(msg)?
                                 jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本存在错误\n{msg}");
@@ -377,7 +377,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
         _: EditorContext, 
         partical_context: ParticalContext)
     {
-        launch(_particalbaker_editor, (partical_context, 
+        launch(\=_particalbaker_editor(partical_context, 
             _EditorContext{
                 m_last_update_time = mut std::time(),
                 m_frame_index = mut 0,
@@ -388,6 +388,6 @@ public func color(_/*frame*/: int, context: PerparticleContext)
 
                 m_first_show = mut true,
             },
-            new! std::mutable(true)));
+            new! std::mutable(true)););
     }
 }

@@ -259,7 +259,7 @@ namespace editor::gui::edit_forms
                                                                                 context->get_project->restore_all_world(dat);
                                                                                 prefab_data_cache::reset(p);
                                                                                 return false;
-                                                                            }, ());
+                                                                            });
                                                                     }
                                                                 err(msg)?
                                                                     jeapi::gui::form::errmsg("失败", F"更新预设体失败: {msg}");

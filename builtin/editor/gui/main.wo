@@ -193,7 +193,7 @@ namespace editor::gui
                     return result;
 
                 return true;
-            }, ());
+            });
         }
         public func set_editing_entity(self: EditorContext, e: option<je::entity>)
         {

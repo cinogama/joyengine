@@ -100,8 +100,7 @@ namespace je
         namespace unsafe
         {
             extern("libjoyecs", "wojeapi_startup_thread")
-            public func create<FT, ArgTs>(f: FT, args: ArgTs)=> thread
-                where f(args...) is void;
+            public func create(f: ()=> void)=> thread;
 
             extern("libjoyecs", "wojeapi_abort_all_thread", slow)
             public func abort_all()=> void;

@@ -127,7 +127,7 @@ namespace editor::gui::edit_forms
                                         return true;
                                     }
                                     return false;
-                                }, ());
+                                });
                             }
                         }
                         else
@@ -540,7 +540,7 @@ namespace editor::gui::edit_forms
                                                         End();
 
                                                         return open;
-                                                    }, ());
+                                                    });
                                             }
                                         none?
                                             jeapi::gui::form::errmsg("失败", "从纹理创建实体失败");

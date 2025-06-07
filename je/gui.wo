@@ -1116,8 +1116,7 @@ namespace je::gui
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     extern("libjoyecs", "je_gui_launch")
-    private func _launch<LT, FT, ATs>(coloop:LT, job_func:FT, args: ATs)=> void
-        where coloop(job_func, args) is void;
+    public func launch_coroutine(coloop: ()=> void)=> void;
 
     namespace unsafe
     {
@@ -1125,17 +1124,12 @@ namespace je::gui
         public func shutdown()=> void;
     }
 
-    private func dialog<FT, ATs>(job_func:FT, args: ATs)=> void
-        where job_func(args...) is bool;
+    public func launch(gui_func: ()=> bool)=> void
     {
-        while (job_func(args...))
-            std::yield();
-    }
-
-    public func launch<FT, ATs>(job_func: FT, args: ATs)=> void
-        where job_func(args...) is bool;
-    {
-        return _launch(dialog:<FT, ATs>, job_func, args);
+        return launch_coroutine(func(){
+            while (gui_func())
+                std::yield();
+        });
     }
 
     namespace input

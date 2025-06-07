@@ -110,7 +110,7 @@ namespace editor::gui
             };
             self.m_source->SetLanguageDefinition(WOOLANG_LANGUAGE_DEFINITION);
             self.m_source->SetText(template_script);
-            launch(show, (self,));
+            launch(\=show(self););
             return self;
         }
         public func set_callback(self: ScriptEditor, hook_func: (vm)=>option<dynamic>)

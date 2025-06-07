@@ -309,7 +309,7 @@ namespace editor::gui::drawpannel
                                             
                                             End();
                                             return open->get;
-                                        }, ());
+                                        });
                                     }
                                     EndMenu();
                                 }
@@ -710,7 +710,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
     public func drawimg(context: EditorContext, t: graphic::texture)
     {
         let tools = create_all_draw_tools();
-        launch(edittexture, (
+        launch(\=edittexture(
             context,
             option::none,
             [(0, mut t, mut t->path)],
@@ -734,7 +734,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
 
                 block_size = (mut 16, mut 16),
             }
-        ));
+        ););
     }
     public func drawedit(context: EditorContext, e: entity)
     {
@@ -807,7 +807,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                 ;
             ;
         let tools = create_all_draw_tools();
-        launch(edittexture, (
+        launch(\=edittexture(
             context,
             jeapi::debug::get_entity_editor_id(e),
             id_tex_list,
@@ -835,6 +835,6 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
 
                 block_size = (mut 16, mut 16),
             }
-        ));
+        ););
     }
 }

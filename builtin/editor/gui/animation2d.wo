@@ -560,7 +560,7 @@ namespace editor::gui::animation2d
                                 launch(func(){
                                     animation_context.m_animations->set(action_name + "_复制", action_data->dup());
                                     return false;
-                                }, ());
+                                });
                             }
                             if (MenuItem("新建帧"))
                             {
@@ -572,7 +572,8 @@ namespace editor::gui::animation2d
                             }
                             if (MenuItem("新建若干帧"))
                             {
-                                launch(func(framecount: std::mutable<int>, frametime: std::mutable<real>)
+                                let framecount = new! std::mutable(2), frametime = new! std::mutable(0.1);
+                                launch(func()
                                 {
                                     let mut open = true;
                                     match (BeginAttrOpen(F"新建若干帧##{JobID()}", 
@@ -608,7 +609,7 @@ namespace editor::gui::animation2d
                                     }
                                     End();
                                     return open;
-                                }, (new! std::mutable(2), new! std::mutable(0.1)));
+                                });
                             }
                             if (MenuItem("重命名"))
                             {
@@ -886,7 +887,7 @@ namespace editor::gui::animation2d
 
                                             End();
                                             return open;
-                                        }, ());
+                                        });
                                     }
                                     if (MenuItem("新建着色器变量数据"))
                                     {
@@ -1043,7 +1044,7 @@ namespace editor::gui::animation2d
                                             }
                                             End();
                                             return open;
-                                        }, ());
+                                        });
                                     }
                                     Separator();
                                     if (MenuItem("复制并插入到下一帧"))
@@ -1052,7 +1053,7 @@ namespace editor::gui::animation2d
                                             // 迭代过程中不能修改，所以把插入帧的操作拉到外边去
                                             do animation.m_frames->insert(i + 1, frame_data->dup());
                                             return false;
-                                        }, ());
+                                        });
                                     }
                                     if (MenuItem("复制并插入到最后一帧"))
                                     {
@@ -1060,7 +1061,7 @@ namespace editor::gui::animation2d
                                             // 迭代过程中不能修改，所以把插入帧的操作拉到外边去
                                             do animation.m_frames->add(frame_data->dup());
                                             return false;
-                                        }, ());
+                                        });
                                     }
                                     Separator();
                                     if (MenuItemEnabled("上移", i > 0))
@@ -1070,7 +1071,7 @@ namespace editor::gui::animation2d
                                             do animation.m_frames->remove(i);
                                             do animation.m_frames->insert(i - 1, frame_data);
                                             return false;
-                                        }, ());
+                                        });
                                     }
                                     if (MenuItemEnabled("下移", i + 1 < animation.m_frames->len))
                                     {
@@ -1079,7 +1080,7 @@ namespace editor::gui::animation2d
                                             do animation.m_frames->remove(i);
                                             do animation.m_frames->insert(i + 1, frame_data);
                                             return false;
-                                        }, ());
+                                        });
                                     }
                                     Separator();
                                     if (MenuItem("删除帧"))
@@ -1274,6 +1275,6 @@ namespace editor::gui::animation2d
     }
     public func show(context: EditorContext, animation_context: AnimationContext)
     {
-        je::gui::launch(_animation_edit_form, (context, animation_context, new! std::mutable(true)));
+        je::gui::launch(\=_animation_edit_form(context, animation_context, new! std::mutable(true)););
     }
 }

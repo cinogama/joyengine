@@ -336,7 +336,7 @@ namespace editor::gui::edit_forms
                                     world_context.current_project->destroy_world(created_world)->unwrap;
                                 }
                                 return false;
-                            }, ());
+                            });
 
                         }
                         value(world)?
