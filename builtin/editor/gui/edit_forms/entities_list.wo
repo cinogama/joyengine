@@ -397,7 +397,9 @@ namespace editor::gui::edit_forms
         {
             do euid
                 ->> \uid = launch(
-                    \=show_entity_creator(context, EntityContext::edit(uid)););
+                    \ = show_entity_creator(context, econtext);)
+                        where econtext = EntityContext::edit(uid)
+                    ;
                 ;
         }
         if (MenuItemEnabled("绘制", has_editing_entity))
@@ -535,8 +537,9 @@ namespace editor::gui::edit_forms
                 {
                     if (BeginMenuBar())
                     {
+                        let econtext = new! EntityContext();
                         if (MenuItem("创建新实体"))
-                            launch(\=show_entity_creator(context, new! EntityContext()););
+                            launch(\=show_entity_creator(context, econtext););
             
                         EndMenuBar();
                     }
