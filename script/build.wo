@@ -91,7 +91,7 @@ func copy_pkgs(copy_src_only: bool)=> result<void, string>
 
 func scan_extern_function_in_path(i, skip_process_and_socket)
 {
-    let r = regex::create(@"extern\s*\(\s*\"(.*?)\"\s*,\s*\"(.*?)\""@);
+    let r = regex::expr:<{@"extern\s*\(\s*\"(.*?)\"\s*,\s*\"(.*?)\""@}>;
     let iter = i 
         |> filter_map(\p = isfile(p) ? readall(p) | option::none;)
         |> flat_map(\p = r->search(p);)
@@ -118,8 +118,8 @@ func scan_pkg_entry_leave_function_in_path(i, skip_process_and_socket)
     let entrys = {}mut: map<string, void>;
     let leaves = {}mut: map<string, void>;
 
-    let entry_r = regex::create(@"\s+wolib_entry\s*\("@);
-    let leave_r = regex::create(@"\s+wolib_exit\s*\("@);
+    let entry_r = regex::expr:<{@"\s+wolib_entry\s*\("@}>;
+    let leave_r = regex::expr:<{@"\s+wolib_exit\s*\("@}>;
 
     for (let pkg_dir : i)
     {
@@ -204,7 +204,7 @@ void je_extern_lib_woo_api_finish()
 
 func generate_je_static_module_decls()=> result<void, string>
 {
-    let module_name_regex = regex::create(@"(.*)\.je4module"@);
+    let module_name_regex = regex::expr:<{@"(.*)\.je4module"@}>;
     let module_name_list = []mut: vec<string>;
 
     for (let p : walk(current_workpath / "module")->iterator::iter_result)
