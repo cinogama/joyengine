@@ -147,7 +147,7 @@ endif()
 ##############################################################################
 # Execute build work script.
 execute_process(
-    COMMAND woodriver ./script/build.wo ${JE4_BUILD_SCRIPT_CMDS} 
+    COMMAND woolang ./script/build.wo ${JE4_BUILD_SCRIPT_CMDS} 
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 if (JE4_COPYING_BUILTIN_FILES)
