@@ -8,6 +8,8 @@ import pkg::try;
 import pkg::iterator;
 import pkg::worst;
 import pkg::math;
+import pkg::async;
+import pkg::thread;
 
 import builtin::api::gui::form;
 import builtin::api::gui::errmsg;
@@ -72,7 +74,7 @@ namespace editor::gui
                         break;
                     value (find_place)?
                     {
-                        place = find_place + old->len;
+                        place = math::max(find_place + old->len, 1);
 
                         if (find_place > 0 && self.m_content[find_place - 1]->is_identify_char)
                             continue;
@@ -159,6 +161,7 @@ namespace editor::gui
                 allsubpath(fsys::workpath())
                     -> or([])
                     -> iter
+                    |> filter(\p = p->to_string->find("/.")->is_none;)
                     |> filter(\p = focus_file_type->find(extension(p)->lower)->is_value;)
                     |> filter(\p = isfile(p);)
                     |> filter_map(\p = readall(p)->>\content = (p, ReplacingContent::create(p, content));;)
@@ -179,19 +182,56 @@ namespace editor::gui
             };
         }
 
-        public func prepare_update(self: RefactorAskContent)
+        async! public func async_prepare_update(
+            self: RefactorAskContent, callback_path_for_display_progress: (path_t)=> void)
         {
-            if (self.m_next_replacing_aim < self.m_replacing_aim->len)
-            {
-                let (old, new) = self.m_replacing_aim[self.m_next_replacing_aim];
-                for (let (_, content) : self.m_contents)
+            let prepare_thread_context = struct{
+                mx = thread::mutex::create(),
+                working_path = mut option::none: option<fsys::path_t>,
+                finished_result = mut option::none: option<bool>,
+            };
+
+            do thread::create(func(){
+                if (self.m_next_replacing_aim < self.m_replacing_aim->len)
                 {
-                    content->ready_to_update(old, new);
+                    let (old, new) = self.m_replacing_aim[self.m_next_replacing_aim];
+                    for (let (path, content) : self.m_contents)
+                    {
+                        prepare_thread_context.mx |> thread::IMutex::exec(func(){
+                            prepare_thread_context.working_path = option::value(path);
+                        });
+
+                        content->ready_to_update(old, new);
+                    }
+                    self.m_next_replacing_aim += 1;
+
+                    prepare_thread_context.mx |> thread::IMutex::exec(func(){
+                        prepare_thread_context.finished_result = option::value(true);
+                    });
+                    
+                    return;
                 }
-                self.m_next_replacing_aim += 1;
-                return true;
+                prepare_thread_context.mx |> thread::IMutex::exec(func(){
+                    prepare_thread_context.finished_result = option::value(false);
+                });
+                return;
+            });
+
+            while (prepare_thread_context.mx 
+                |> thread::IMutex::exec(\= prepare_thread_context.finished_result->is_none;))
+            {
+                prepare_thread_context.mx 
+                    |> thread::IMutex::exec(func(){
+                        match (prepare_thread_context.working_path)
+                        {
+                        value(p)?
+                            callback_path_for_display_progress(p);
+                        none?;
+                        }
+                    });
+                yield!;
             }
-            return false;
+            return prepare_thread_context.finished_result->unwrap;
         }
 
         public func apply(self: RefactorAskContent)
@@ -254,144 +294,169 @@ namespace editor::gui
                             }
                             else
                             {
-                                jeapi::gui::errmsg("保存失败", "保存项目失败，请检查项目是否有未保存的文件");
+                                jeapi::gui::errmsg("保存失败", "保存项目失败，重构操作已经取消");
+                                return; //发生失败，取消重构
                             }
                         }
-                    }
-                    
-                    launch(func(){
                         content->apply();
-                        if (need_reload)
-                        {
-                            std::yield();
+                        launch_coroutine(func(){
+                            if (need_reload)
+                            {
+                                std::yield();
 
-                            // 5. 重新拉起world list
-                            context->get_project->load_worlds_from_list();
-                        }
-                        return false;
-                    });
+                                // 5. 重新拉起world list
+                                context->get_project->load_worlds_from_list();
+                            }
+                        });
+                    }
                 });
         };
-
-        if (! content->prepare_update())
-        {
-            raise_final_check(false);
-            return_ok!;
-        }
 
         let all_world_saved_and_closed = std::mutable::create(false);
         let checked_files = {}mut: ::map<RefactorAskContent::ReplacingContent, void>;
         let select_all = std::mutable::create(true);
+
+        let show_progress_func = func(path: fsys::path_t){
+            TextDisabled(path->to_string);
+        };
+        let prepare_job_async = std::mutable::create(
+            option::value(content->async_prepare_update(show_progress_func)));
 
         let f = jeapi::gui::form::create("重构中……", true, 
             func(this_form){
                 Text("重命名或移动操作可能影响其他文件");
                 Separator();
 
-                if (!all_world_saved_and_closed->get)
+                match (prepare_job_async->get)
                 {
-                    Text("为了确保能够正确地应用到当前编辑中的场景，");
-                    Text("点击 `确认保存项目`，然后开始重构");
-
-                    Separator();
-
-                    if (Button("确认保存项目"))
+                value(async_job)?
                     {
-                        if (!context->get_project->save_project())
-                            jeapi::gui::errmsg("保存失败", "保存项目失败，请检查项目是否有未保存的文件");
-                        
-                        all_world_saved_and_closed->set <| true;
-                    }
-                    return;
-                }
-
-                let cur_step = content.m_next_replacing_aim - 1;
-                Text(F"请在下列文件中选择需要应用的修改({cur_step + 1}/{content.m_replacing_aim->len})");
-                
-                Separator();
-
-                let (old, new) = content.m_replacing_aim[cur_step];
-                
-                if (Button("全选"))
-                    select_all->set(true);
-
-                SameLine();
-                
-                if (Button("全不选"))
-                    checked_files->clear;
-
-                SameLine();
-                TextDisabled(F"更新 `{old}` => `{new}`");
-
-                Separator();
-
-                let mut has_any_file_to_update = false;
-                if (BeginChildSize("scrolling", 700., 300.))
-                {
-                    for (let (path, replace_content) : content.m_contents)
-                    {
-                        if (replace_content.m_replacing_place->empty)
-                            continue;
-                        
-                        if (select_all->get)
-                            checked_files->set(replace_content, do nil);
-
-                        has_any_file_to_update = true;
-
-                        match (CheckBox(F"{path->to_string()}", checked_files->contain(replace_content)))
+                        Text("正在检查：");
+                        match (async_job->forward())
                         {
-                        value(checked)?
-                            if (checked)
-                                checked_files->set(replace_content, do nil);
-                            else
-                                do checked_files->remove(replace_content);
-                        none?;
-                        }
-
-                        if (IsItemHovered())
-                        {
-                            BeginTooltip();
-                            TextDisabled(path->to_string());
-                            for (let (pre, post, _) : replace_content.m_replacing_place)
+                        returned(need_check)?
                             {
-                                TextDisabled("...");
-                                
-                                TextDisabled(pre);
-                                SameLine();
-                                Text(old);
-                                SameLine();
-                                TextDisabled(post);
+                                prepare_job_async->set <| option::none;
+                                if (!need_check)
+                                {
+                                    // All done...
+                                    raise_final_check(true);
+                                    this_form->close;
+                                }
                             }
-                            EndTooltip();
+                        _?;
                         }
                     }
-                    select_all->set(false);
-                }
-                else
-                    has_any_file_to_update = true;
-
-                EndChild();
-
-                if (Button("应用修改") || !has_any_file_to_update)
-                {
-                    select_all->set(true);
-
-                    if (has_any_file_to_update)
+                none?
                     {
-                        for (let (replace_content, _) : checked_files)
+                        if (!all_world_saved_and_closed->get)
                         {
-                            replace_content->apply_update(old, new);
+                            Text("为了确保能够正确地应用到当前编辑中的场景，");
+                            Text("点击 `确认保存项目`，然后开始重构");
+
+                            Separator();
+
+                            if (Button("确认保存项目"))
+                            {
+                                if (!context->get_project->save_project())
+                                    jeapi::gui::errmsg("保存失败", "保存项目失败，请检查项目是否有未保存的文件");
+                                
+                                all_world_saved_and_closed->set <| true;
+                            }
+                            SameLine();
+                            if (Button("不重构，仅移动"))
+                            {
+                                content->apply();
+                                this_form->close();
+                            }
+
+                            return;
+                        }
+
+                        let cur_step = content.m_next_replacing_aim - 1;
+                        Text(F"请在下列文件中选择需要应用的修改({cur_step + 1}/{content.m_replacing_aim->len})");
+                        
+                        Separator();
+
+                        let (old, new) = content.m_replacing_aim[cur_step];
+                        
+                        if (Button("全选"))
+                            select_all->set(true);
+
+                        SameLine();
+                        
+                        if (Button("全不选"))
+                            checked_files->clear;
+
+                        SameLine();
+                        TextDisabled(F"更新 `{old}` => `{new}`");
+
+                        Separator();
+
+                        let mut has_any_file_to_update = false;
+                        if (BeginChildSize("scrolling", 700., 300.))
+                        {
+                            for (let (path, replace_content) : content.m_contents)
+                            {
+                                if (replace_content.m_replacing_place->empty)
+                                    continue;
+                                
+                                if (select_all->get)
+                                    checked_files->set(replace_content, do nil);
+
+                                has_any_file_to_update = true;
+
+                                match (CheckBox(F"{path->to_string()}", checked_files->contain(replace_content)))
+                                {
+                                value(checked)?
+                                    if (checked)
+                                        checked_files->set(replace_content, do nil);
+                                    else
+                                        do checked_files->remove(replace_content);
+                                none?;
+                                }
+
+                                if (IsItemHovered())
+                                {
+                                    BeginTooltip();
+                                    TextDisabled(path->to_string());
+                                    for (let (pre, post, _) : replace_content.m_replacing_place)
+                                    {
+                                        TextDisabled("...");
+                                        
+                                        TextDisabled(pre);
+                                        SameLine();
+                                        Text(old);
+                                        SameLine();
+                                        TextDisabled(post);
+                                    }
+                                    EndTooltip();
+                                }
+                            }
+                            select_all->set(false);
+                        }
+                        else
+                            has_any_file_to_update = true;
+
+                        EndChild();
+
+                        if (Button("应用修改") || !has_any_file_to_update)
+                        {
+                            select_all->set(true);
+
+                            if (has_any_file_to_update)
+                            {
+                                for (let (replace_content, _) : checked_files)
+                                {
+                                    replace_content->apply_update(old, new);
+                                }
+                            }
+
+                            prepare_job_async->set <| 
+                                option::value(content->async_prepare_update(show_progress_func));
                         }
                     }
-
-                    if (!content->prepare_update())
-                    {
-                        // All done...
-                        raise_final_check(true);
-                        this_form->close;
-                    }
                 }
-
             });
         do f->show();
         f->set_callback_close(func(){

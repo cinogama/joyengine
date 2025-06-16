@@ -65,7 +65,7 @@ namespace editor::gui::edit_forms
         // 如果是文件，才考虑打包
         if (fsys::isfile(originpath))
         {            
-            if (originpath->to_string->split("/")->>\p = p->begin_with(".");->reduce(\l, r = l || r;)->or(false))
+            if (originpath->to_string->find("/.")->is_value)
                 return Action::SKIP; // 跳过所有以 `.` 开头的文件、目录
 
             if (fsys::extension(originpath)->lower == ".je4project")
