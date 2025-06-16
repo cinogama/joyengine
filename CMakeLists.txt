@@ -280,6 +280,10 @@ add_subdirectory("src")
 ##############################################################################
 
 file(GLOB_RECURSE jedriver_src driver/*.cpp)
+if (MSVC)
+    list(APPEND jedriver_src driver/resources.rc)
+endif()
+
 add_executable(jedriver ${jedriver_src} "include/jeecs.hpp")
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)

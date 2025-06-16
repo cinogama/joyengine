@@ -154,7 +154,6 @@ build_win64_dx11_opengl_vk:
     - cd ..
     - cd build
     - copy RelWithDebInfo\*
-    - ..\3rd\rcedit-x64.exe jedriver.exe --set-icon builtin\icon\icon.ico
     - cd ..
   artifacts:
     name: jeecs-win32-release-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHA
