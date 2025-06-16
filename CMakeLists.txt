@@ -286,6 +286,15 @@ endif()
 
 add_executable(jedriver ${jedriver_src} "include/jeecs.hpp")
 
+# No command line console for jedriver, it is a GUI application.
+if (MSVC)
+    set_target_properties(jedriver PROPERTIES
+        LINK_FLAGS "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup")
+elseif (MINGW)
+    set_target_properties(jedriver PROPERTIES
+        LINK_FLAGS "-mwindows")
+endif()
+
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
     set_target_properties(jedriver PROPERTIES RELEASE_POSTFIX "")
     set_target_properties(jedriver PROPERTIES DEBUG_POSTFIX "_debug")
