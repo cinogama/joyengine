@@ -16,7 +16,7 @@ namespace jeapi::varify
         public func current()
         {
             return EngineVersionInfo{
-                engine_core_version = build_version(),
+                engine_core_version = build_version_info(),
                 engine_commit_version = build_commit(),
                 woolang_version = woolang_version(),
             };

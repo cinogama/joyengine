@@ -115,6 +115,11 @@ WO_API wo_api wojeapi_generate_uid(wo_vm vm, wo_value args)
 
 WO_API wo_api wojeapi_build_version(wo_vm vm, wo_value args)
 {
+    return wo_ret_string(vm, JE_CORE_VERSION);
+}
+
+WO_API wo_api wojeapi_build_version_info(wo_vm vm, wo_value args)
+{
     return wo_ret_string(vm, je_build_version());
 }
 

@@ -41,7 +41,7 @@ namespace jeapi::welcome
             value(show)?
                 if (show)
                 {
-                    Text(je::internal::build_version());
+                    Text(je::internal::build_version_info());
                     Separator();
 
                     Text("第三方组件及开源许可");
@@ -206,7 +206,7 @@ are generated using Bison and comply with GPLv3 with special bison exception."@
             ;
         }
 
-        je::log(F"{je::internal::build_version()} (C)Cinogama project. 2022.");
+        je::log(F"{je::internal::build_version_info()} (C)Cinogama project. 2022.");
         je::log(F"Powered by {je::internal::woolang_version()}, (C)Cinogama project. 2021.");
         je::log(F"You are using the engine build from commit: {je::internal::build_commit()}");
     }

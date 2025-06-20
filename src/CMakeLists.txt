@@ -16,6 +16,20 @@ include_directories("../3rd/imgui-node-editor")
 include_directories("../3rd/ImGuiColorTextEdit")
 include_directories("../3rd/openal-soft/include")
 
+set(GIT_COMMIT_HASH "Unavailable")
+find_package(Git)
+if(GIT_FOUND)
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..
+        OUTPUT_VARIABLE GIT_COMMIT_HASH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+endif()
+file(WRITE ${CMAKE_CURRENT_SOURCE_DIR}/jeecs_commit_sha.hpp
+    "\"${GIT_COMMIT_HASH}\"\n")
+
 file(GLOB_RECURSE joyecs_srcs_cpp *.cpp)
 file(GLOB_RECURSE joyecs_srcs_hpp *.hpp)
 

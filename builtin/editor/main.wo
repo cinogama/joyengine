@@ -500,7 +500,22 @@ for (;;)
                     + WindowsAttribute::ImGuiWindowFlags_NoDocking
                     + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
                 {
-                    Text("欢迎使用JoyEngine，请选择一项以开始");
+                    Text("欢迎使用JoyEngine");
+                    SameLine();
+                    TextDisabled(F"({je::internal::build_version()})");
+                    if (IsItemHovered())
+                    {
+                        BeginTooltip();
+
+                        Text(je::internal::build_version_info());
+                        Text("来自提交：");
+                        SameLine();
+                        TextDisabled(je::internal::build_commit());
+
+                        EndTooltip();
+                    }
+                    SameLine();
+                    Text("，请选择一项以开始");
 
                     Separator();
 

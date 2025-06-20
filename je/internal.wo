@@ -228,6 +228,9 @@ namespace je
         extern("libjoyecs", "wojeapi_build_version")
         public func build_version()=> string;
 
+        extern("libjoyecs", "wojeapi_build_version_info")
+        public func build_version_info()=> string;
+
         extern("libjoyecs", "wojeapi_build_commit")
         public func build_commit()=> string;
     

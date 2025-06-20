@@ -295,6 +295,7 @@ WO_API wo_api wojeapi_audio_source_update(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_bind_texture_for_entity(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_build_commit(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_build_version(wo_vm vm, wo_value args);
+WO_API wo_api wojeapi_build_version_info(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_check_thread(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_clear_singletons(wo_vm vm, wo_value args);
 WO_API wo_api wojeapi_close_entity(wo_vm vm, wo_value args);
@@ -811,6 +812,7 @@ void je_extern_lib_woo_api_init()
         wo_extern_lib_func_t{"wojeapi_bind_texture_for_entity", (void*)&wojeapi_bind_texture_for_entity},
         wo_extern_lib_func_t{"wojeapi_build_commit", (void*)&wojeapi_build_commit},
         wo_extern_lib_func_t{"wojeapi_build_version", (void*)&wojeapi_build_version},
+        wo_extern_lib_func_t{"wojeapi_build_version_info", (void*)&wojeapi_build_version_info},
         wo_extern_lib_func_t{"wojeapi_check_thread", (void*)&wojeapi_check_thread},
         wo_extern_lib_func_t{"wojeapi_clear_singletons", (void*)&wojeapi_clear_singletons},
         wo_extern_lib_func_t{"wojeapi_close_entity", (void*)&wojeapi_close_entity},

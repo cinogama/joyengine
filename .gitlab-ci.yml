@@ -134,7 +134,6 @@ build_linux_opengles:
 build_win64_dx11_opengl_vk:
   stage: build
   script:
-    - echo "%CI_COMMIT_SHA%" > src/jeecs_commit_msg.hpp
     - git submodule update --init --recursive --force
     - if not exist cmakebuild ( mkdir cmakebuild )
     - cd cmakebuild
@@ -176,7 +175,6 @@ build_win64_dx11_opengl_vk:
 build_win64_dx11_opengles_vk:
   stage: build
   script:
-    - echo "%CI_COMMIT_SHA%" > src/jeecs_commit_msg.hpp
     - git submodule update --init --recursive --force
     - if not exist cmakebuild ( mkdir cmakebuild )
     - cd cmakebuild
@@ -199,7 +197,6 @@ build_win64_dx11_opengles_vk:
 build_win64_dx11_opengles_vk_static:
   stage: build
   script:
-    - echo "%CI_COMMIT_SHA%" > src/jeecs_commit_msg.hpp
     - git submodule update --init --recursive --force
     - if not exist cmakebuild ( mkdir cmakebuild )
     - cd cmakebuild

@@ -361,3 +361,5 @@ _deps
 /pkg/*
 /3rd/pkg/*
 /module/*
+/src/jeecs_commit_sha.hpp
+
