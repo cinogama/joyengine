@@ -152,7 +152,7 @@ void _jeecs_entry_register_core_systems(
 
 void je_init(int argc, char** argv)
 {
-    assert(_je_delay_free_libs.empty());
+    assert(_je_global_context._je_delay_free_libs.empty());
 
     // Update default graphic sync funciton
     jegl_register_sync_thread_callback(
@@ -206,7 +206,7 @@ void je_init(int argc, char** argv)
 
     jeal_init();
 
-    assert(_je_unregister_guard == nullptr);
+    assert(_je_global_context._je_unregister_guard == nullptr);
     _je_global_context._je_unregister_guard = new jeecs::typing::type_unregister_guard();
     jeecs::entry::module_entry(_je_global_context._je_unregister_guard);
     _jeecs_entry_register_core_systems(_je_global_context._je_unregister_guard);
@@ -357,7 +357,7 @@ bool je_main_script_entry()
 
 void je_finish()
 {
-    assert(_je_unregister_guard != nullptr);
+    assert(_je_global_context._je_unregister_guard != nullptr);
     jeecs::entry::module_leave(_je_global_context._je_unregister_guard);
 
     je_ecs_finish();
