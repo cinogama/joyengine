@@ -1,10 +1,7 @@
 import woo::std;
-
 import je;
-
 import pkg::worst;
 import pkg::try;
-
 import builtin::api::serialize::main;
 
 using je;

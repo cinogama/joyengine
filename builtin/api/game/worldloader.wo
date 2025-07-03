@@ -1,24 +1,23 @@
 import woo::std;
 import je;
+import pkg::worst;
 import builtin::api::serialize::main;
 
 namespace jeapi::loader
 {
     using worldloader = struct{
         __m_world: je::world,
-        __m_data: dict<string, dynamic>,
+        __m_data: serialize::WorldData,
     }
     {
         public func create(u: je::universe, wpath: string)
         {
             return je::file::readall(wpath)
                 =>> \dat = dat->dict::deserialize;
-                ->> \dat = dat
-                    ->> \k, v = (k: string, v);
-                    ;
+                =>> \dat = dat: dynamic->trycast:<serialize::WorldData::WorldDataRawType>;
                 ->> \dat = worldloader{
                         __m_world = je::world::create(u),
-                        __m_data = dat,
+                        __m_data = dat: serialize::WorldData,
                     }
                     ;
                 ;

@@ -45,7 +45,7 @@ namespace editor
     using DebugContext = struct {
         // 想了半天，还是把调试状态摆在这里维护
         m_project: Project,
-        m_dumped_editing_worlds: array<(dict<string, dynamic>, fsys::path_t)>,
+        m_dumped_editing_worlds: array<(jeapi::serialize::WorldData, fsys::path_t)>,
     };
 
     using Project = struct{
@@ -109,7 +109,7 @@ namespace editor
         {
             return self.m_debug_context->is_value;
         }
-        public func create_dump(self: Project, dumpped: array<(dict<string, dynamic>, fsys::path_t)>)
+        public func create_dump(self: Project, dumpped: array<(jeapi::serialize::WorldData, fsys::path_t)>)
         {
             do fsys::mkdir(self.m_path / ".temporary" / "jeeditor");
             if (! dumpped->>\kv = [kv[0]: dynamic, kv[1]->to_string: dynamic];->serialize
@@ -131,12 +131,16 @@ namespace editor
                         if (opt)
                         {
                             self->close_all_world();
-                            self->restore_all_world(dat
-                                ->>\wdat = (
-                                    wdat_pair[0] as dict<dynamic, dynamic>->>\k, v = (k as string, v);, 
-                                    fsys::normalize(wdat_pair[1]: string)
-                                    )
-                                    where wdat_pair = wdat as array<dynamic>;
+                            self->restore_all_world(
+                                dat->> 
+                                    \wdat = 
+                                        (
+                                            wdat_pair[0]->trycast:<jeapi::serialize::WorldData::WorldDataRawType>->unwrap
+                                                : jeapi::serialize::WorldData, 
+                                            fsys::normalize(wdat_pair[1]: string)
+                                        )
+                                        where wdat_pair = wdat as array<dynamic>
+                                    ;
                             );
                         }
                     });
@@ -201,7 +205,7 @@ namespace editor
             // OK 接下来在当前世界上创建游戏世界，至于在哪个世界渲染……emm
             for (let (wdat, _) : context.m_dumped_editing_worlds)
             {
-                let wdat_map = wdat->to_map();
+                let wdat_map = wdat: jeapi::serialize::WorldData::WorldDataRawType->to_map();
                 let syss = wdat_map->get_or("runtime_systems", []: dynamic) as array<dynamic>->connect(
                     wdat_map->get_or("systems", []: dynamic) as array<dynamic>
                 );
@@ -226,9 +230,13 @@ namespace editor
         {
             let dump_dats = self.m_worlds->to_array
                 =>> \pw = dat->is_value 
-                    ? [(dat->unwrap->apply("is_editing", self->get_editing_world
-                        ->> \ew = ew == pw.m_world_instance;
-                        ->  or(false) as bool: dynamic), 
+                    ? [(dat
+                        ->unwrap: jeapi::serialize::WorldData::WorldDataRawType
+                        -> apply(
+                            "is_editing", 
+                            self->get_editing_world
+                                ->> \ew = ew == pw.m_world_instance;
+                                ->  or(false) as bool: dynamic): jeapi::serialize::WorldData, 
                         pw.m_world_path)] 
                     | [] 
                     where dat = self->serialize_world(pw.m_world_instance, true)
@@ -256,7 +264,7 @@ namespace editor
             do self->close_all_world();
             return result::ok(dats);
         }
-        public func restore_all_world(self: Project, dats: array<(dict<string, dynamic>, fsys::path_t)>)
+        public func restore_all_world(self: Project, dats: array<(jeapi::serialize::WorldData, fsys::path_t)>)
         {
             // 正在恢复所有世界，为了确保不弄串，此处要确保阻止 dump_and_close_all_world
             self.m_world_has_been_dumped = true;
@@ -1024,7 +1032,7 @@ namespace editor
                 =>> \pw = jeapi::serialize::world::dump(w, true)->okay
                     ->> func (dat)
                         {
-                            let mdat = dat->to_map;
+                            let mdat = dat: jeapi::serialize::WorldData::WorldDataRawType->to_map;
                             mdat->set("entities", dat["entities"] as array<dynamic>
                                 ->  std::sort(
                                         \l, r = 
@@ -1045,14 +1053,14 @@ namespace editor
                                     ->> \debug_camera_info = mdat->set("debug_camera", debug_camera_info: dynamic);
                                     ;
                             }
-                            return mdat->unsafe::cast :<typeof(dat)>;
+                            return mdat->unsafe::asdict;
                         }
                     ->> \dat = dat->apply("runtime_systems", pw.m_runtime_systems->>\t=t->name; as array<string>: dynamic);
-                    ->> \dat = dat->apply("remark", pw.m_remark_note as string: dynamic);
+                    ->> \dat = dat->apply("remark", pw.m_remark_note as string: dynamic): jeapi::serialize::WorldData;
                     ;
                 ;
         }
-        public func deserialize_world(self: Project, dat: dict<string, dynamic>, file_path: fsys::path_t)
+        public func deserialize_world(self: Project, dat: jeapi::serialize::WorldData, file_path: fsys::path_t)
         {
             let w = self->append_world_to_list(
                 ProjectWorld 
@@ -1060,16 +1068,16 @@ namespace editor
                     m_world_instance = self.m_env->load_world(dat),
                     m_world_path = file_path,
                     m_runtime_systems = 
-                        mut dat->get_or("runtime_systems", []: dynamic) as array<dynamic>
+                        mut dat: jeapi::serialize::WorldData::WorldDataRawType->get_or("runtime_systems", []: dynamic) as array<dynamic>
                             =>> \elem = systype->is_value ? [systype->unwrap] | []
                                 where systype = je::typeinfo::load(elem as string);,
-                    m_remark_note = mut dat->get_or("remark", "": dynamic) as string,
+                    m_remark_note = mut dat: jeapi::serialize::WorldData::WorldDataRawType->get_or("remark", "": dynamic) as string,
                 });
 
-            if (dat->get_or("is_editing", false: dynamic) as bool)
+            if (dat: jeapi::serialize::WorldData::WorldDataRawType->get_or("is_editing", false: dynamic) as bool)
                 do self->reset_editing_world(w);
 
-            match (dat->get("debug_camera"))
+            match (dat: jeapi::serialize::WorldData::WorldDataRawType->get("debug_camera"))
             {
             value(dat)?
                 je::gui::launch_coroutine(
@@ -1130,7 +1138,7 @@ namespace editor
                         ;
 
                     return self->serialize_world(pw.m_world_instance, false)
-                        ->> \dat = fsys::writeall(pw.m_world_path, dat as dict<string, dynamic>: string);
+                        ->> \dat = fsys::writeall(pw.m_world_path, dat as jeapi::serialize::WorldData: string);
                     ;
                 }
                 ->  or(false);
@@ -1142,16 +1150,14 @@ namespace editor
             {
                 match (fsys::readall(file_path)
                     =>> \dat = dict::deserialize(dat)
-                        ->> \d = d
-                            ->> \k, v = (k as string, v);
-                            ;
+                        =>> \d = d: dynamic->trycast:<jeapi::serialize::WorldData::WorldDataRawType>;
                         ->> \d = d->apply(
                                 "debug_camera", 
                                 self->try_fetch_camera_debug_info_map(file_path)->or({}): dynamic
                             )
                             ;
                         ;
-                    ->> \dat = self->deserialize_world(dat, file_path);)
+                    ->> \dat = self->deserialize_world(dat: jeapi::serialize::WorldData, file_path);)
                 {
                 value(w)?
                     return result::ok(w);

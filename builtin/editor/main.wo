@@ -8,6 +8,7 @@ import pkg::interface;
 import pkg::makenew;
 import pkg::iterator;
 import pkg::try;
+import pkg::worst;
 
 import je;
 import je::gui;
@@ -441,7 +442,9 @@ func open_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict
     if (! fsys::exist(proj_path))
         return jeapi::gui::form::errmsg("失败", F"加载项目失败，找不到项目文件{proj_path}");
     
-    match (fsys::readall(proj_path)=>> \d = dict::deserialize(d)->> \d = d->> \k,v = (k as string, v);;;)
+    match (fsys::readall(proj_path)
+        =>> \d = dict::deserialize(d);
+        =>> \d = d: dynamic->trycast:<dict<string, dynamic>>;)
     {
     value(dat)?
         {
@@ -464,8 +467,7 @@ func open_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict
                     je::gui::unregister_exit_callback();
 
                     return result::ok(\=p->get_towoo_context_for_exit->close;);
-                }
-            ;
+                };
         }
     none?
         return do jeapi::gui::form::errmsg("失败", F"打开项目失败，找不到或无效的项目文件");

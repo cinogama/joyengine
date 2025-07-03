@@ -170,7 +170,7 @@ namespace editor::gui::edit_forms
 
     namespace prefab_data_cache
     {
-        let cached_prefab_data = {}mut: map<string, option<dict<string, dynamic>>>;
+        let cached_prefab_data = {}mut: map<string, option<jeapi::serialize::EntityData>>;
         public func fetch_or_update(path: string)
         {
             return cached_prefab_data->get_or_set_do(path, func()
@@ -228,7 +228,7 @@ namespace editor::gui::edit_forms
                                 {
                                     let p = prefab->unwrap.path->get;
                                     components_data = prefab_data_cache::fetch_or_update(p)
-                                        =>> \d = d->get("components");
+                                        =>> \d = d: jeapi::serialize::EntityData::EntityDataRawType->get("components");
                                         =>> \d = d->trycast:<dict<string, dict<string, string>>>;
                                         ;
 
@@ -347,9 +347,6 @@ namespace editor::gui::edit_forms
                                             if (TreeNodeEx(component_name->split("::")->sub(1)->reduce(\l, r= l + "::" + r;)->or_do(\= component_name;),
                                                 tree_attrib + TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen))
                                             {
-                                                if (jeapi::serialize::prefab::check_component_need_to_sync(component_name))
-                                                    TextDisabled("* 这部分组件成员不会被同步到预设体");
-
                                                 jeapi::gui::context_menu(func(){
                                                     if (MenuItem(F"移除"))
                                                     {
@@ -384,6 +381,8 @@ namespace editor::gui::edit_forms
                                                     }
                                                 });
 
+                                                if (jeapi::serialize::prefab::is_no_data_sync_component_typename(component_name))
+                                                    TextDisabled("* 这部分组件成员不会被同步到预设体");
                                                 Separator();
 
                                                 let component_data = components_data

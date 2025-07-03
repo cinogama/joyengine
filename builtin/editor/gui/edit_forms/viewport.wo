@@ -452,11 +452,11 @@ namespace editor::gui::edit_forms
                                                 =>> func(w)
                                                     {
                                                         let e = jeapi::serialize::entity::instantiate(
-                                                        w, 
-                                                        {
-                                                            ["prefab"] = proj->make_path_normalize(filepath): dynamic
-                                                        },
-                                                        true);
+                                                            w, 
+                                                            {
+                                                                ["prefab"] = proj->make_path_normalize(filepath): dynamic
+                                                            }: jeapi::serialize::EntityData,
+                                                            true);
 
                                                         do e->>\e = set_new_created_entity_pos(w, e);;
                                                         return e;

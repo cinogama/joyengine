@@ -841,7 +841,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
                                     if (context->get_project()->serialize_world(w, true)
                                             ->> \wdat = write_file_if_not_exist(
                                                 fsys::normalize(F"{cur_creating_path}/{new_world_name}.je4world"), 
-                                                wdat as dict<string, dynamic>: string)
+                                                wdat as jeapi::serialize::WorldData: string)
                                                 ;
                                             ->  or(false)
                                         == false)

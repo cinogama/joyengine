@@ -1,6 +1,6 @@
 import woo::std;
-
 import je;
+import pkg::worst;
 import builtin::api::serialize::main;
 
 namespace jeapi::loader
@@ -14,9 +14,10 @@ namespace jeapi::loader
         {
             return je::file::readall(wpath)
                 =>> \dat = dat->dict::deserialize;
+                =>> \dat = dat: dynamic->trycast:<serialize::EntityData::EntityDataRawType>;
                 =>> \dat = 
                     jeapi::serialize::prefab::instantiate(
-                        w, dat->> \k, v = (k: string, v);, false)
+                        w, dat: serialize::EntityData, false)
                     ;
                 ->> \e = entityloader
                     {

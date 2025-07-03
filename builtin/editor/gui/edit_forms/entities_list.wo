@@ -10,6 +10,7 @@ import je::towoo::components;
 import je::towoo::types;
 
 import pkg::math;
+import pkg::worst;
 import builtin::editor::gui::form::input;
 import builtin::editor::gui::form::ask;
 import builtin::editor::gui::form::msg;
@@ -363,7 +364,7 @@ namespace editor::gui::edit_forms
         {
             do euid
                 ->> \uid = uid->justdo(func(e){
-                        match (jeapi::serialize::entity::dump(e, false)->>\dat = dat as dict<string, dynamic>: string;)
+                        match (jeapi::serialize::entity::dump(e, false)->>\dat = dat as jeapi::serialize::EntityData: string;)
                         {
                         value(json)?
                             SetClipboardText(json);
@@ -378,7 +379,8 @@ namespace editor::gui::edit_forms
         if (MenuItem("粘贴"))
         {
             do dict::deserialize(GetClipboardText())
-                ->> \d = jeapi::serialize::entity::instantiate(w, d->>\k,v = (k: string, v);, true)
+                =>> \d = d: dynamic->trycast:<jeapi::serialize::EntityData::EntityDataRawType>;
+                ->> \d = jeapi::serialize::entity::instantiate(w, d: jeapi::serialize::EntityData, true)
                     ->> func(e)
                     {
                         // 如果成功创建实体，在此重置实体的 Transform::Anchor 组件（如果有的话）

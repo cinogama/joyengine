@@ -7,6 +7,7 @@ import je;
 import je::internal;
 
 import pkg::iterator;
+import pkg::worst;
 
 import builtin::api::gui::errmsg;
 
@@ -26,6 +27,15 @@ namespace jeapi::serialize
         return tinfo;
     }
 
+    public using EntityData = EntityDataRawType
+    {
+        public alias EntityDataRawType = dict<string, dynamic>;
+    }
+    public using WorldData = WorldDataRawType
+    {
+        public alias WorldDataRawType = dict<string, dynamic>;
+    }
+
     namespace prefab
     {
         public func dump(e: je::entity)
@@ -34,7 +44,7 @@ namespace jeapi::serialize
             {
             value(path)?
                 {
-                    let raw_dat = entity::raw_entity(e, false);
+                    let raw_dat = entity::raw_entity(e, false, true);
                     match (je::file::readall(path)
                         =>> \dat = dat->dict::deserialize
                             =>> \d = d->get("prefab": dynamic)
@@ -76,7 +86,7 @@ namespace jeapi::serialize
             }
             return true;
         }
-        public func check_component_need_to_sync(cname: string)
+        public func is_no_data_sync_component_typename(cname: string)
         {
             static let no_sync_data_component = {
                 ["Transform::LocalPosition"] = do nil,
@@ -86,9 +96,9 @@ namespace jeapi::serialize
             };
             return no_sync_data_component->contain(cname);
         }
-        func dump_for_prefab_instance(p: string, dat: dict<string, dynamic>)
+        func dump_for_prefab_instance(p: string, dat: EntityData)
         {
-            let result = dat->to_map;
+            let result = dat: EntityData::EntityDataRawType->to_map;
 
             result->set("prefab", p: dynamic);
 
@@ -113,9 +123,8 @@ namespace jeapi::serialize
 
             let prefab_data = prefab::load(p);
             match (prefab_data
-                =>> \d = d->get("components")
-                    ->> \d = d->unsafe::cast:<dict<string, dict<string, string>>>;
-                    ;)
+                =>> \d = d: EntityData::EntityDataRawType->get("components");
+                    =>> \d = d->trycast:<dict<string, dict<string, string>>>;)
             {
             value(prefab_component_dat)?
                 {
@@ -124,14 +133,12 @@ namespace jeapi::serialize
                     {
                         if (components->contain(c))
                         {
-                            let no_sync_this_component_data = 
-                                check_component_need_to_sync(c);
-
                             let result_ms = components[c];
                             for (let (m, v) : ms)
                             {
-                                if (no_sync_this_component_data 
-                                    || result_ms->get(m)->> \vv = vv == v;-> or(false))
+                                // Always safe member for NO-SYNC component to keep data.
+                                if (!prefab::is_no_data_sync_component_typename(c) &&
+                                    result_ms->get(m)->> \vv = vv == v;-> or(false))
                                     assert(result_ms->remove(m));
                             }
                             if (result_ms->empty)
@@ -147,9 +154,8 @@ namespace jeapi::serialize
             }
             // 比较一下纹理和着色器是否一致，若一致则无视
             match (prefab_data
-                =>> \d = d->get("shaders")
-                ->> \d = d->unsafe::cast:<array<array<dynamic>>>;
-                ;)
+                =>> \d = d: EntityData::EntityDataRawType->get("shaders");
+                =>> \d = d->trycast:<array<array<dynamic>>>;)
             {
             value(prefab_shader_dat)?
                 {
@@ -171,9 +177,8 @@ namespace jeapi::serialize
             none?;
             }
             match (prefab_data
-                =>> \d = d->get("textures")
-                ->> \d = d->unsafe::cast:<dict<int, string>>;
-                ;)
+                =>> \d = d: EntityData::EntityDataRawType->get("textures");
+                =>> \d = d->trycast:<dict<int, string>>;)
             {
             value(prefab_texture_dat)?
                 {
@@ -195,7 +200,7 @@ namespace jeapi::serialize
             none?;
             }
             match (prefab_data
-                =>> \d = d->get("shape")
+                =>> \d = d: EntityData::EntityDataRawType->get("shape")
                 ->> \d = d: string;
                 ;)
             {
@@ -205,9 +210,9 @@ namespace jeapi::serialize
             none?;
             }
             
-            return result->unsafe::cast:<dict<string, dynamic>>;
+            return result->unsafe::asdict: EntityData;
         }
-        func try_dump_may_prefab_instance(e: je::entity, dat: dict<string, dynamic>)
+        func try_dump_may_prefab_instance(e: je::entity, dat: EntityData)
         {
             match (e->internal::get_prefab_path)
             {
@@ -217,9 +222,9 @@ namespace jeapi::serialize
                 return dat;
             }
         }
-        func combine_prefab_data(a: dict<string, dynamic>, b: dict<string, dynamic>)
+        func combine_prefab_data(a: EntityData, b: EntityData)
         {
-            let d = a->to_map;
+            let d = a: EntityData::EntityDataRawType->to_map;
 
             let base_components = d->get_or("components", {}: dynamic) as dict<dynamic, dynamic>
                     ->> \k, v = (k: string, v as dict<dynamic, dynamic>
@@ -228,9 +233,9 @@ namespace jeapi::serialize
                         ;
                     ->  to_map;
 
-            if (b->contain("name"))
+            if (b: EntityData::EntityDataRawType->contain("name"))
                 d->set("name", b["name"]);
-            if (b->contain("components"))
+            if (b: EntityData::EntityDataRawType->contain("components"))
             {
                 let components = b["components"] as dict<dynamic, dynamic>
                     ->> \k, v = (k as string, member_dats)
@@ -245,20 +250,19 @@ namespace jeapi::serialize
                         members->set(m, v);
                 }
             }
-            if (b->contain("removed_components"))
+            if (b: EntityData::EntityDataRawType->contain("removed_components"))
             {
                 for (let c: b["removed_components"] as array<dynamic>)
                     do base_components->remove(c: string);
             }
             d->set("components", base_components: dynamic);
-            do b->get("textures")->>\texs = d->set("textures", texs);;
-            do b->get("shaders")->>\shads = d->set("shaders", shads);;
-            do b->get("shape")->>\shap = d->set("shape", shap);;
+            do b: EntityData::EntityDataRawType->get("textures")->>\texs = d->set("textures", texs);;
+            do b: EntityData::EntityDataRawType->get("shaders")->>\shads = d->set("shaders", shads);;
+            do b: EntityData::EntityDataRawType->get("shape")->>\shap = d->set("shape", shap);;
 
-            return d as map<string, dynamic>
-                ->  unsafe::cast:<dict<string, dynamic>>;
+            return d->unsafe::asdict: EntityData;
         }
-        public func load(path: string)=> option<dict<string, dynamic>>
+        public func load(path: string)=> option<EntityData>
         {
             match (je::file::readall(path)
                 =>> \dat = dat->dict::deserialize
@@ -271,8 +275,8 @@ namespace jeapi::serialize
                 {
                     let parent_prefab = dat->get("prefab")
                         =>> \p = prefab::load(p: string);
-                        ->  or({});
-                    return option::value(combine_prefab_data(parent_prefab, dat));
+                        ->  or({}: EntityData);
+                    return option::value(combine_prefab_data(parent_prefab, dat: EntityData));
                 }
             none?
                 return option::none;
@@ -281,7 +285,7 @@ namespace jeapi::serialize
         }
         public func instantiate(
             w: je::world, 
-            entity_dat: dict<string, dynamic>, 
+            entity_dat: EntityData, 
             in_editor: bool)
         {
             return entity::_load_entity_or_prefab(w, entity_dat, in_editor, je::world::add_prefab);
@@ -345,7 +349,7 @@ namespace jeapi::serialize
                     ;
                 ;
         }
-        func raw_entity(saving_entity: je::entity, need_euid: bool)=> option<dict<string, dynamic>>
+        func raw_entity(saving_entity: je::entity, need_euid: bool, drop_no_keep_component_meber: bool)=> option<EntityData>
         {
             return
                 saving_entity
@@ -356,15 +360,18 @@ namespace jeapi::serialize
                             component_instance = saving_entity->get_component(t);
                     ->> \tc = (t->name, collect_members)
                         where 
-                            collect_members = c->get_members()
-                                ->> \(name, type, addr) = (
+                            collect_members = 
+                                drop_no_keep_component_meber && prefab::is_no_data_sync_component_typename(t->name)
+                                ? {}
+                                | c->get_members()
+                                    ->> \(name, type, addr) = (
                                         name, 
                                         towoo::unsafe::dynamic_parser::saving(type, addr)
                                             ->or_do(func(){
                                                 logerr(F"Unable to save '{name}' of '{t->name}'.");
                                                 return "<?>";
                                             }))
-                                    ;
+                                        ;
                                 ->  mapping,
                                 (t, c) = tc;
                     ->  mapping
@@ -409,19 +416,22 @@ namespace jeapi::serialize
                             ->  unmapping // remove all repeated elems.
                             ->> \idn = idn[0];
                         ;
-                    ->> \dat = need_euid
-                        ? dat->apply(
-                            "euid", 
-                            saving_entity
-                                ->internal::get_entity_uid
-                                ->or(0: handle: je::entity::internal::euid_t): handle: int: dynamic)
-                        | dat
+                    ->> \dat = 
+                        (
+                            need_euid
+                            ? dat->apply(
+                                "euid", 
+                                saving_entity
+                                    ->internal::get_entity_uid
+                                    ->or(0: handle: je::entity::internal::euid_t): handle: int: dynamic)
+                            | dat
+                        ): EntityData
                         ;
                     ;
         }
-        public func dump(saving_entity: je::entity, need_euid: bool)=> option<dict<string, dynamic>>
+        public func dump(saving_entity: je::entity, need_euid: bool)=> option<EntityData>
         {
-            return raw_entity(saving_entity, need_euid)
+            return raw_entity(saving_entity, need_euid, false)
                 ->> \dat = prefab::try_dump_may_prefab_instance(saving_entity, dat);
                 ;
         }
@@ -469,18 +479,18 @@ namespace jeapi::serialize
 
         func _load_entity_or_prefab(
             w: je::world, 
-            mut entity_dat: dict<string, dynamic>, 
+            mut entity_dat: EntityData, 
             in_editor: bool, 
             f: (je::world, array<je::typeinfo>)=> je::entity)=> option<je::entity>
         {
-            let prefab_path = entity_dat->get("prefab")->>\path = path: string;;
+            let prefab_path = entity_dat: EntityData::EntityDataRawType->get("prefab")->>\path = path: string;;
             match (prefab_path=>>\path = prefab::load(path);)
             {
             value(prefab_data)?
                 entity_dat = prefab::combine_prefab_data(prefab_data, entity_dat);
             none?;
             }
-            let component_types_dat = entity_dat
+            let component_types_dat = entity_dat: EntityData::EntityDataRawType
                 ->  get("components")
                 ->> \cs = cs as dict<dynamic, dynamic>
                     ->  unmapping
@@ -499,7 +509,7 @@ namespace jeapi::serialize
                 return option::none;
 
             // 开始加载shader
-            let shaders_and_dat = entity_dat->get("shaders")
+            let shaders_and_dat = entity_dat: EntityData::EntityDataRawType->get("shaders")
                 ->> func(shaders: dynamic)
                     {
                         let shads = []mut: vec<(option<graphic::shader>, string, dict<dynamic, dynamic>)>;
@@ -577,7 +587,7 @@ namespace jeapi::serialize
             }
 
             // 开始加载texture
-            do entity_dat->get("textures")
+            do entity_dat: EntityData::EntityDataRawType->get("textures")
                 ->> func(textures)
                     {
                         for (let (passid, path) : textures: dict<dynamic, dynamic>)
@@ -587,7 +597,7 @@ namespace jeapi::serialize
                     };
 
             // 加载vertex
-            do entity_dat->get("shape")
+            do entity_dat: EntityData::EntityDataRawType->get("shape")
                 =>> \shape = vertex_path != "" 
                     ? graphic::vertex::load(w->get_universe->option::value, vertex_path)
                     | option::none
@@ -597,7 +607,7 @@ namespace jeapi::serialize
                 ;
 
             if (in_editor)
-                do entity_dat
+                do entity_dat: EntityData::EntityDataRawType
                     ->  get("name")
                     ->> \n = entity_instance->internal::set_name(n as string);;
 
@@ -606,7 +616,7 @@ namespace jeapi::serialize
 
         public func instantiate(
             w: je::world, 
-            entity_dat: dict<string, dynamic>, 
+            entity_dat: EntityData, 
             in_editor: bool)
         {
             return _load_entity_or_prefab(w, entity_dat, in_editor, je::world::add_entity);
@@ -623,7 +633,7 @@ namespace jeapi::serialize
                 -> forall(\e = entity::has_bad_shader(e);)
                 ;
         }
-        public func dump(w: je::world, need_euid: bool)=> result<dict<string, dynamic>, array<je::entity>>
+        public func dump(w: je::world, need_euid: bool)=> result<WorldData, array<je::entity>>
         {
             let bad_shader_entity = varify_all_shader_is_valid_in_world(w);
             if (!bad_shader_entity->empty)
@@ -651,32 +661,32 @@ namespace jeapi::serialize
                 ["entities"] = entities_json_list: dynamic,
                 ["systems"] = editing_systems_type_list: dynamic,
                 // ["runtime_systems"] = runtime_systems_type_list: dynamic,
-            });
+            }: WorldData);
         }
-        public func instantiate_entities(w: je::world, dat: dict<string, dynamic>, in_editor: bool)
+        public func instantiate_entities(w: je::world, dat: WorldData, in_editor: bool)
         {
-            do dat->get("entities")
+            do dat: WorldData::WorldDataRawType->get("entities")
                 ->> \es = es as array<dynamic>
                     ->> \edat = entity::instantiate(w, entity_dat, in_editor)
-                        where entity_dat = edat as dict<dynamic, dynamic>->>\k, v = (k as string, v);
+                        where entity_dat = edat->trycast:<EntityData::EntityDataRawType>->unwrap: EntityData;
                         ;
                     ;
                 ;
         }
-        public func instantiate_systems(w: je::world, dat: dict<string, dynamic>, in_editor: bool)
+        public func instantiate_systems(w: je::world, dat: WorldData, in_editor: bool)
         {
             if (in_editor)
             {
-                do dat->get("name")->>\name = w->set_name(name as string);;
+                do dat: WorldData::WorldDataRawType->get("name")->>\name = w->set_name(name as string);;
                 // 仅用于检查
-                do dat->get("runtime_systems")
+                do dat: WorldData::WorldDataRawType->get("runtime_systems")
                     ->> \d = d as array<dynamic>
                         ->> \tname = _typeinfo_or_warning(tname as string);
                         ;
                     ;
             }
             else
-                do dat->get("runtime_systems")
+                do dat: WorldData::WorldDataRawType->get("runtime_systems")
                     ->> \d = d as array<dynamic>
                         ->> \tname = type_may_none
                             ->> \type = w->add_system(type);
@@ -684,7 +694,7 @@ namespace jeapi::serialize
                             ;
                         ;
                     ;
-            do dat->get("systems")
+            do dat: WorldData::WorldDataRawType->get("systems")
                 ->> \d = d as array<dynamic>
                     ->> \tname = type_may_none
                         ->> \type = w->add_system(type);
@@ -693,7 +703,7 @@ namespace jeapi::serialize
                     ;
                 ;
         }
-        public func instantiate(u: je::universe, dat: dict<string, dynamic>, in_editor: bool)=> je::world
+        public func instantiate(u: je::universe, dat: WorldData, in_editor: bool)=> je::world
         {
             let w = u->je::world::create;
 
