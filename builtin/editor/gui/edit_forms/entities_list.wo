@@ -363,7 +363,7 @@ namespace editor::gui::edit_forms
         {
             do euid
                 ->> \uid = uid->justdo(func(e){
-                        match (jeapi::serialize::entity(e, false)->>\dat = dat as dict<string, dynamic>: string;)
+                        match (jeapi::serialize::entity::dump(e, false)->>\dat = dat as dict<string, dynamic>: string;)
                         {
                         value(json)?
                             SetClipboardText(json);
@@ -378,7 +378,7 @@ namespace editor::gui::edit_forms
         if (MenuItem("粘贴"))
         {
             do dict::deserialize(GetClipboardText())
-                ->> \d = jeapi::deserialize::entity(w, d->>\k,v = (k: string, v);, true)
+                ->> \d = jeapi::serialize::entity::instantiate(w, d->>\k,v = (k: string, v);, true)
                     ->> func(e)
                     {
                         // 如果成功创建实体，在此重置实体的 Transform::Anchor 组件（如果有的话）

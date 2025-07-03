@@ -521,7 +521,12 @@ for (;;)
 
                     if (jeapi::gui::widget::IconButton(create_project_icon, "创建新项目", (64., 64.), option::none))
                     {
-                        launch(\=open_path_to_do_sth(\p: option<fsys::path_t> = do p->> \path = create_project_at(path, u, editor_configs, open);;,););
+                        launch(
+                            \=open_path_to_do_sth(
+                                \p: option<fsys::path_t> = 
+                                    do p->> \path = create_project_at(path, u, editor_configs, open);
+                                ;,)
+                            ;);
                     }
                     if (jeapi::gui::widget::IconButton(load_project_icon, "加载一个项目", (64., 64.), option::none))
                     {

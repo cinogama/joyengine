@@ -175,7 +175,7 @@ namespace editor::gui::edit_forms
         {
             return cached_prefab_data->get_or_set_do(path, func()
                 {
-                    return jeapi::deserialize::prefab::load_prefab(path);
+                    return jeapi::serialize::prefab::load(path);
                 });
         }
         public func reset(path: string)
@@ -240,7 +240,7 @@ namespace editor::gui::edit_forms
                                                 {
                                                     if (op)
                                                     {
-                                                        match (jeapi::serialize::prefab::update_prefab(cur_e))
+                                                        match (jeapi::serialize::prefab::dump(cur_e))
                                                         {
                                                         value(updated_prefab_data)?
                                                             {

@@ -37,7 +37,7 @@ namespace editor
         }
         public func load_world(self: Environment, dat: dict<string, dynamic>)
         {
-            let w = self.m_universe->jeapi::deserialize::world(dat, true);
+            let w = self.m_universe->jeapi::serialize::world::instantiate(dat, true);
             w->set_able(true);
 
             return w;

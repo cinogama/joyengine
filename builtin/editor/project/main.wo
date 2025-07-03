@@ -206,8 +206,8 @@ namespace editor
                     wdat_map->get_or("systems", []: dynamic) as array<dynamic>
                 );
                 wdat_map->set("systems", syss: dynamic);
-                jeapi::deserialize::world(self->get_env->get_universe, wdat_map->unsafe::cast:< typeof(wdat)>, true)
-                    -> set_able(true);
+                set_able(true) <| jeapi::serialize::world::instantiate(
+                    self->get_env->get_universe, wdat_map->unsafe::cast:< typeof(wdat)>, true);
             }
             self.m_debug_context = option::value(context);
 
@@ -944,7 +944,7 @@ namespace editor
         }
         public func serialize_entity(_: Project, e: je::entity)
         {
-            return jeapi::serialize::entity(e, false);
+            return jeapi::serialize::entity::dump(e, false);
         }
         public func get_debug_camera_info(_: Project, w: je::world)
         {
@@ -1021,7 +1021,7 @@ namespace editor
         public func serialize_world(self: Project, w: je::world, contain_debug_camera: bool)
         {
             return self->get_project_world(w)
-                =>> \pw = jeapi::serialize::world(w, true)->okay
+                =>> \pw = jeapi::serialize::world::dump(w, true)->okay
                     ->> func (dat)
                         {
                             let mdat = dat->to_map;

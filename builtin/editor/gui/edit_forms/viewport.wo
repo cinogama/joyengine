@@ -451,7 +451,7 @@ namespace editor::gui::edit_forms
                                         if (debug_world
                                                 =>> func(w)
                                                     {
-                                                        let e = jeapi::deserialize::entity(
+                                                        let e = jeapi::serialize::entity::instantiate(
                                                         w, 
                                                         {
                                                             ["prefab"] = proj->make_path_normalize(filepath): dynamic

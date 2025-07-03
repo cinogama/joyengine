@@ -25,11 +25,11 @@ namespace jeapi::loader
         }
         public func instance_entity(self: worldloader)
         {
-            jeapi::deserialize::world_entitys(self.__m_world, self.__m_data, false);
+            jeapi::serialize::world::instantiate_entities(self.__m_world, self.__m_data, false);
         }
         public func instance_system(self: worldloader)
         {
-            jeapi::deserialize::world_systems(self.__m_world, self.__m_data, false);
+            jeapi::serialize::world::instantiate_systems(self.__m_world, self.__m_data, false);
         }
         public func get_world(self: worldloader)
         {

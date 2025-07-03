@@ -14,9 +14,9 @@ namespace jeapi::loader
         {
             return je::file::readall(wpath)
                 =>> \dat = dat->dict::deserialize;
-                =>> \dat = jeapi::deserialize::prefab(w, dat
-                    ->> \k, v = (k: string, v);,
-                    false)
+                =>> \dat = 
+                    jeapi::serialize::prefab::instantiate(
+                        w, dat->> \k, v = (k: string, v);, false)
                     ;
                 ->> \e = entityloader
                     {

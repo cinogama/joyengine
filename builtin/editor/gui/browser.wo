@@ -1611,7 +1611,7 @@ namespace $$MODULE_NAME$$
                 {
                     let eid = drag_uid as string: handle: jeapi::debug::Eeid;
                     eid->justdo(func(e){
-                        match (jeapi::serialize::entity(e, false)->>\dat = dat: string;)
+                        match (jeapi::serialize::entity::dump(e, false)->>\dat = dat: string;)
                         {
                         value(entity_json)?
                             {
