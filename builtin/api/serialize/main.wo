@@ -14,252 +14,200 @@ using je;
 
 namespace jeapi
 {
-    namespace prefab_manager
-    {
-        func combine_prefab_data(a: dict<string, dynamic>, b: dict<string, dynamic>)
-        {
-            let d = a->to_map;
-
-            let base_components = d->get_or("components", {}: dynamic) as dict<dynamic, dynamic>
-                    ->> \k, v = (k: string, v as dict<dynamic, dynamic>
-                        ->> \k, v = (k: string, v: string);
-                        ->  to_map)
-                        ;
-                    ->  to_map;
-
-            if (b->contain("name"))
-                d->set("name", b["name"]);
-            if (b->contain("components"))
-            {
-                let components = b["components"] as dict<dynamic, dynamic>
-                    ->> \k, v = (k as string, member_dats)
-                        where member_dats = v as dict<dynamic, dynamic>
-                            ->> \k, v = (k as string, v as string);
-                        ;
-                    ;
-                for (let (c, ms) : components)
-                {
-                    let members = base_components->get_or_set(c, {}mut);
-                    for (let (m, v) : ms)
-                        members->set(m, v);
-                }
-            }
-            if (b->contain("removed_components"))
-            {
-                for (let c: b["removed_components"] as array<dynamic>)
-                    do base_components->remove(c: string);
-            }
-            d->set("components", base_components: dynamic);
-            do b->get("textures")->>\texs = d->set("textures", texs);;
-            do b->get("shaders")->>\shads = d->set("shaders", shads);;
-            do b->get("shape")->>\shap = d->set("shape", shap);;
-
-            return d as map<string, dynamic>
-                ->  unsafe::cast:<dict<string, dynamic>>;
-        }
-        public func update_prefab(e: je::entity)
-        {
-            match (e->internal::get_prefab_path)
-            {
-            value(path)?
-                {
-                    let raw_dat = serialize::raw_entity(e, false);
-                    match (je::file::readall(path)
-                        =>> \dat = dat->dict::deserialize
-                            =>> \d = d->get("prefab": dynamic)
-                                ->> \v = v: string;
-                                ;
-                            ;
-                    )
-                    {
-                    value(parent_prefab_path)?
-                        return raw_dat->>\dat = dump_prefab_dat(parent_prefab_path, dat);;
-                    none?
-                        return raw_dat;
-                    }
-                }
-            none?
-                return option::none;
-            }
-        }
-        public func load_prefab(path: string)=> option<dict<string, dynamic>>
-        {
-            match (je::file::readall(path)
-                =>> \dat = dat->dict::deserialize
-                    ->> \d = d
-                        ->> \k, v = (k: string, v);
-                        ;
-                    ;)
-            {
-            value(dat)?
-                {
-                    let parent_prefab = dat->get("prefab")
-                        =>> \p = load_prefab(p: string);
-                        ->  or({});
-                    return option::value(combine_prefab_data(parent_prefab, dat));
-                }
-            none?
-                return option::none;
-            }
-
-        }
-        func _is_same_shader(a: array<dynamic>, b: array<dynamic>)
-        {
-            if (a[0]: string == b[0]: string)
-            {
-                let am = a[1]->unsafe::cast:<dict<string, dynamic>>;
-                let bm = b[1]->unsafe::cast:<dict<string, dynamic>>;
-
-                if (am->len != bm->len)
-                    return false;
-
-                for (let (m, val): am)
-                {
-                    if (bm->contain(m) == false)
-                        return false;
-                    
-                    let bval = bm[m];
-                    if (val: string != bval: string)
-                        return false;
-                }
-            }
-            return true;
-        }
-        public func dump_prefab_dat(p: string, dat: dict<string, dynamic>)
-        {
-            let result = dat->to_map;
-
-            result->set("prefab", p: dynamic);
-
-            let components = result->get("components")
-                ->> \d=d->unsafe::cast:<dict<string, dict<string, string>>>
-                    ->> \k, v = (k, v->to_map);
-                    ->  to_map
-                    ;
-                ->  or({}mut);
-
-            let shaders = result->get("shaders")
-                ->> \d = d->unsafe::cast:<array<array<dynamic>>>;
-                ->  or([])
-                ;
-            let textures = result->get("textures")
-                ->> \d = d->unsafe::cast:<dict<int, string>>;
-                ->  or({})
-                ;
-            let shape = result->get("shape")
-                ->> \d = d as string;
-                -> or("");
-
-            let prefab_data = load_prefab(p);
-            match (prefab_data
-                =>> \d = d->get("components")
-                    ->> \d = d->unsafe::cast:<dict<string, dict<string, string>>>;
-                    ;)
-            {
-            value(prefab_component_dat)?
-                {
-                    let removed_component = []mut: vec<string>;
-                    for (let (c, ms) : prefab_component_dat)
-                    {
-                        let always_keep_member = c->begin_with("Transform::");
-                        if (components->contain(c))
-                        {
-                            let result_ms = components[c];
-                            for (let (m, v) : ms)
-                            {
-                                if (result_ms->get(m)
-                                     // always_keep_member: 确保变换组件的数据独立
-                                    ->> \vv = !always_keep_member && vv == v;
-                                    -> or(false))
-                                    assert(result_ms->remove(m));
-                            }
-                            if (result_ms->empty)
-                                assert(components->remove(c));
-                        }
-                        else
-                            removed_component->add(c);
-                    }
-                    result->set("components", components: dynamic);
-                    result->set("removed_components", removed_component: dynamic);
-                }
-            none?;
-            }
-            // 比较一下纹理和着色器是否一致，若一致则无视
-            match (prefab_data
-                =>> \d = d->get("shaders")
-                ->> \d = d->unsafe::cast:<array<array<dynamic>>>;
-                ;)
-            {
-            value(prefab_shader_dat)?
-                {
-                    let mut remove_shaders = true;
-                    if (prefab_shader_dat->len == shaders->len)
-                    {
-                        for (let (idx, pshad) : prefab_shader_dat->iter |> iterator::enumerate)
-                        {
-                            if (!_is_same_shader(shaders[idx], pshad))
-                            {
-                                remove_shaders = false;
-                                break;
-                            }
-                        }
-                        if (remove_shaders)
-                            do result->remove("shaders");
-                    }
-                }
-            none?;
-            }
-            match (prefab_data
-                =>> \d = d->get("textures")
-                ->> \d = d->unsafe::cast:<dict<int, string>>;
-                ;)
-            {
-            value(prefab_texture_dat)?
-                {
-                    let mut remove_textures = true;
-                    if (prefab_texture_dat->len == textures->len)
-                    {
-                        for (let (idx, ptex) : prefab_texture_dat)
-                        {
-                            if (textures->contain(idx) == false || textures[idx] != ptex)
-                            {
-                                remove_textures = false;
-                                break;
-                            }
-                        }
-                        if (remove_textures)
-                            do result->remove("textures");
-                    }
-                }
-            none?;
-            }
-            match (prefab_data
-                =>> \d = d->get("shape")
-                ->> \d = d: string;
-                ;)
-            {
-            value(prefab_shape)?
-                if (shape == prefab_shape)
-                    do result->remove("shape");
-            none?;
-            }
-            
-            return result->unsafe::cast:<dict<string, dynamic>>;
-        }
-        public func try_dump_prefab_dat(e: je::entity, dat: dict<string, dynamic>)
-        {
-            match (e->internal::get_prefab_path)
-            {
-            value(prefab)?
-                return dump_prefab_dat(prefab, dat);
-            none?
-                return dat;
-            }
-            
-        }
-    }
     namespace serialize
-    {        
+    {
+        namespace prefab
+        {
+            public func update_prefab(e: je::entity)
+            {
+                match (e->internal::get_prefab_path)
+                {
+                value(path)?
+                    {
+                        let raw_dat = serialize::raw_entity(e, false);
+                        match (je::file::readall(path)
+                            =>> \dat = dat->dict::deserialize
+                                =>> \d = d->get("prefab": dynamic)
+                                    ->> \v = v: string;
+                                    ;
+                                ;
+                        )
+                        {
+                        value(parent_prefab_path)?
+                            return raw_dat->>\dat = dump_prefab_dat(parent_prefab_path, dat);;
+                        none?
+                            return raw_dat;
+                        }
+                    }
+                none?
+                    return option::none;
+                }
+            }
+            func _is_same_shader(a: array<dynamic>, b: array<dynamic>)
+            {
+                if (a[0]: string == b[0]: string)
+                {
+                    let am = a[1]->unsafe::cast:<dict<string, dynamic>>;
+                    let bm = b[1]->unsafe::cast:<dict<string, dynamic>>;
+
+                    if (am->len != bm->len)
+                        return false;
+
+                    for (let (m, val): am)
+                    {
+                        if (bm->contain(m) == false)
+                            return false;
+                        
+                        let bval = bm[m];
+                        if (val: string != bval: string)
+                            return false;
+                    }
+                }
+                return true;
+            }
+            public func check_component_need_to_sync(cname: string)
+            {
+                static let no_sync_data_component = {
+                    ["Transform::LocalPosition"] = do nil,
+                    ["Transform::LocalRotation"] = do nil,
+                    ["Transform::Anchor"] = do nil,
+                    ["Transform::LocalToParent"] = do nil,
+                };
+                return no_sync_data_component->contain(cname);
+            }
+            public func dump_prefab_dat(p: string, dat: dict<string, dynamic>)
+            {
+                let result = dat->to_map;
+
+                result->set("prefab", p: dynamic);
+
+                let components = result->get("components")
+                    ->> \d=d->unsafe::cast:<dict<string, dict<string, string>>>
+                        ->> \k, v = (k, v->to_map);
+                        ->  to_map
+                        ;
+                    ->  or({}mut);
+
+                let shaders = result->get("shaders")
+                    ->> \d = d->unsafe::cast:<array<array<dynamic>>>;
+                    ->  or([])
+                    ;
+                let textures = result->get("textures")
+                    ->> \d = d->unsafe::cast:<dict<int, string>>;
+                    ->  or({})
+                    ;
+                let shape = result->get("shape")
+                    ->> \d = d as string;
+                    -> or("");
+
+                let prefab_data = deserialize::prefab::load_prefab(p);
+                match (prefab_data
+                    =>> \d = d->get("components")
+                        ->> \d = d->unsafe::cast:<dict<string, dict<string, string>>>;
+                        ;)
+                {
+                value(prefab_component_dat)?
+                    {
+                        let removed_component = []mut: vec<string>;
+                        for (let (c, ms) : prefab_component_dat)
+                        {
+                            if (components->contain(c))
+                            {
+                                let no_sync_this_component_data = 
+                                    check_component_need_to_sync(c);
+
+                                let result_ms = components[c];
+                                for (let (m, v) : ms)
+                                {
+                                    if (no_sync_this_component_data 
+                                        || result_ms->get(m)->> \vv = vv == v;-> or(false))
+                                        assert(result_ms->remove(m));
+                                }
+                                if (result_ms->empty)
+                                    assert(components->remove(c));
+                            }
+                            else
+                                removed_component->add(c);
+                        }
+                        result->set("components", components: dynamic);
+                        result->set("removed_components", removed_component: dynamic);
+                    }
+                none?;
+                }
+                // 比较一下纹理和着色器是否一致，若一致则无视
+                match (prefab_data
+                    =>> \d = d->get("shaders")
+                    ->> \d = d->unsafe::cast:<array<array<dynamic>>>;
+                    ;)
+                {
+                value(prefab_shader_dat)?
+                    {
+                        let mut remove_shaders = true;
+                        if (prefab_shader_dat->len == shaders->len)
+                        {
+                            for (let (idx, pshad) : prefab_shader_dat->iter |> iterator::enumerate)
+                            {
+                                if (!_is_same_shader(shaders[idx], pshad))
+                                {
+                                    remove_shaders = false;
+                                    break;
+                                }
+                            }
+                            if (remove_shaders)
+                                do result->remove("shaders");
+                        }
+                    }
+                none?;
+                }
+                match (prefab_data
+                    =>> \d = d->get("textures")
+                    ->> \d = d->unsafe::cast:<dict<int, string>>;
+                    ;)
+                {
+                value(prefab_texture_dat)?
+                    {
+                        let mut remove_textures = true;
+                        if (prefab_texture_dat->len == textures->len)
+                        {
+                            for (let (idx, ptex) : prefab_texture_dat)
+                            {
+                                if (textures->contain(idx) == false || textures[idx] != ptex)
+                                {
+                                    remove_textures = false;
+                                    break;
+                                }
+                            }
+                            if (remove_textures)
+                                do result->remove("textures");
+                        }
+                    }
+                none?;
+                }
+                match (prefab_data
+                    =>> \d = d->get("shape")
+                    ->> \d = d: string;
+                    ;)
+                {
+                value(prefab_shape)?
+                    if (shape == prefab_shape)
+                        do result->remove("shape");
+                none?;
+                }
+                
+                return result->unsafe::cast:<dict<string, dynamic>>;
+            }
+            public func try_dump_prefab_dat(e: je::entity, dat: dict<string, dynamic>)
+            {
+                match (e->internal::get_prefab_path)
+                {
+                value(prefab)?
+                    return dump_prefab_dat(prefab, dat);
+                none?
+                    return dat;
+                }
+                
+            }
+        }
         func has_bad_shader(e: je::entity)
         {
             static let BadShadersUniform = je::typeinfo::load("Editor::BadShadersUniform")->unwrap();
@@ -401,7 +349,7 @@ namespace jeapi
         public func entity(saving_entity: je::entity, need_euid: bool)=> option<dict<string, dynamic>>
         {
             return raw_entity(saving_entity, need_euid)
-                ->> \dat = prefab_manager::try_dump_prefab_dat(saving_entity, dat);
+                ->> \dat = prefab::try_dump_prefab_dat(saving_entity, dat);
                 ;
         }
         public func world(w: je::world, need_euid: bool)=> result<dict<string, dynamic>, array<je::entity>>
@@ -435,9 +383,75 @@ namespace jeapi
             });
         }
     }
-
     namespace deserialize
     {
+        namespace prefab
+        {
+            func combine_prefab_data(a: dict<string, dynamic>, b: dict<string, dynamic>)
+            {
+                let d = a->to_map;
+
+                let base_components = d->get_or("components", {}: dynamic) as dict<dynamic, dynamic>
+                        ->> \k, v = (k: string, v as dict<dynamic, dynamic>
+                            ->> \k, v = (k: string, v: string);
+                            ->  to_map)
+                            ;
+                        ->  to_map;
+
+                if (b->contain("name"))
+                    d->set("name", b["name"]);
+                if (b->contain("components"))
+                {
+                    let components = b["components"] as dict<dynamic, dynamic>
+                        ->> \k, v = (k as string, member_dats)
+                            where member_dats = v as dict<dynamic, dynamic>
+                                ->> \k, v = (k as string, v as string);
+                            ;
+                        ;
+                    for (let (c, ms) : components)
+                    {
+                        let members = base_components->get_or_set(c, {}mut);
+                        for (let (m, v) : ms)
+                            members->set(m, v);
+                    }
+                }
+                if (b->contain("removed_components"))
+                {
+                    for (let c: b["removed_components"] as array<dynamic>)
+                        do base_components->remove(c: string);
+                }
+                d->set("components", base_components: dynamic);
+                do b->get("textures")->>\texs = d->set("textures", texs);;
+                do b->get("shaders")->>\shads = d->set("shaders", shads);;
+                do b->get("shape")->>\shap = d->set("shape", shap);;
+
+                return d as map<string, dynamic>
+                    ->  unsafe::cast:<dict<string, dynamic>>;
+            }
+
+            public func load_prefab(path: string)=> option<dict<string, dynamic>>
+            {
+                match (je::file::readall(path)
+                    =>> \dat = dat->dict::deserialize
+                        ->> \d = d
+                            ->> \k, v = (k: string, v);
+                            ;
+                        ;)
+                {
+                value(dat)?
+                    {
+                        let parent_prefab = dat->get("prefab")
+                            =>> \p = load_prefab(p: string);
+                            ->  or({});
+                        return option::value(combine_prefab_data(parent_prefab, dat));
+                    }
+                none?
+                    return option::none;
+                }
+
+            }
+        }
+
         func restore_shader_of_entity<ResourceT>(shad: ResourceT, uname: string, val: array<dynamic>)
         {
             assert(val->len > 0);
@@ -498,10 +512,10 @@ namespace jeapi
             f: (je::world, array<je::typeinfo>)=> je::entity)=> option<je::entity>
         {
             let prefab_path = entity_dat->get("prefab")->>\path = path: string;;
-            match (prefab_path=>>\path = prefab_manager::load_prefab(path);)
+            match (prefab_path=>>\path = prefab::load_prefab(path);)
             {
             value(prefab_data)?
-                entity_dat = prefab_manager::combine_prefab_data(prefab_data, entity_dat);
+                entity_dat = prefab::combine_prefab_data(prefab_data, entity_dat);
             none?;
             }
             let component_types_dat = entity_dat
