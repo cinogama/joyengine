@@ -338,7 +338,12 @@ namespace editor::gui::edit_forms
                                         ->> \k, v = (k as string, v);
                                         ;
                                     
-                                    LOADED_WORLDS_MAPPING->set(path, jeapi::deserialize::world(RUNTIME_UNIVERSE, world_dat, false));
+                                    LOADED_WORLDS_MAPPING->set(
+                                        path, 
+                                        jeapi::serialize::world::instantiate(
+                                            RUNTIME_UNIVERSE, 
+                                            world_dat: jeapi::serialize::WorldData,
+                                            false));
                                 }
 
                                 let LOADED_MODULE_HANDLES = []mut: vec<handle>;
