@@ -86,5 +86,5 @@ set_target_properties(joyengineecs4w PROPERTIES
         -s MIN_SAFARI_VERSION=150000 \
         -s MIN_CHROME_VERSION=85 \
         -s MIN_FIREFOX_VERSION=79 \
-        -s EXPORTED_RUNTIME_METHODS=[\"cwrap\"] \
+        -s EXPORTED_RUNTIME_METHODS=[\"cwrap\",\"requestFullscreen\"] \
         ${JE4_PRELOAD_FLAGS}")

@@ -108,7 +108,7 @@
         <div style="margin-left: auto; margin-right: 10px;">
             <div id="toggleNavButton"
                 style="width: 40px; height: 40px; background-color: #3d9eec; border-radius: 5px; cursor: pointer;"
-                onclick="toggleFullScreenState()">
+                onclick="Module.requestFullscreen(false, true)">
                 <img id="fullscreenIcon" src="./icon/fullscreen.svg" alt="Fullscreen Icon"
                     style="width: 100%; height: 100%;">
             </div>
@@ -151,18 +151,13 @@
             return parseInt(progressBar.style.width);
         }
         function setProgressAlpha(alpha) {
-            progressBarContainer.style.opacity = alpha;
+            progressBarContainer.style.opacity =
+                alpha > 1.0 ? 1.0 : alpha < 0.0 ? 0.0 : alpha;
         }
-
         function adjustHeight() {
             const content = document.querySelector('div.joyengineecs_border');
             content.style.height = `${window.innerHeight}px`;
         }
-
-        // Adjust height on initial load and on window resize
-        window.addEventListener('load', adjustHeight);
-        window.addEventListener('resize', adjustHeight);
-
         var Module = {
             print: (function () {
                 // Do nothing.
@@ -196,14 +191,14 @@
                 Module.setStatus.last.time = now;
                 Module.setStatus.last.text = text;
                 if (m) {
-                    setProgressAlpha(1);
+                    setProgressAlpha(1.0);
                     setProgress(parseInt(m[2]) * 100 / parseInt(m[4]));
                 } else {
                     setProgress(100);
 
-                    setProgressAlpha(1);
+                    setProgressAlpha(1.0);
                     setTimeout(() => {
-                        let alpha = 1;
+                        let alpha = 1.5;
                         const fadeOutInterval = setInterval(() => {
                             alpha -= 0.05;
                             setProgressAlpha(alpha);
@@ -223,8 +218,9 @@
                     : 'All downloads complete.');
             }
         };
-
-        Module.setStatus('Downloading...');
+        // Adjust height on initial load and on window resize
+        window.addEventListener('load', adjustHeight);
+        window.addEventListener('resize', adjustHeight);
         window.onerror = (event) => {
             alert('Exception thrown, see JavaScript console:\n  ' + event);
             Module.setStatus = (text) => {
@@ -232,10 +228,8 @@
             };
         };
 
-        function toggleFullScreenState() {
-            Module.requestFullscreen(false, true);
-        }
-
+        Module.setStatus('Downloading...');
+       
     </script>
     <script async type="text/javascript" src="joyengineecs4w.js"></script>
 </body>
