@@ -34,7 +34,7 @@
             align-items: center;
             width: 100%;
             height: 100vh;
-            /* Subtract the height of the bottom bar */
+            /* Subtract the height of the top bar */
             margin: 0;
             padding: 0;
             box-sizing: border-box;
@@ -95,7 +95,7 @@
         </div>
     </div>
 
-    <div class="switch_top_bar" onclick="toggleBottomBar()"></div>
+    <div class="switch_top_bar" onclick="toggleTopBar()"></div>
     <div class="top_bar">
         <div style="display: flex; align-items: center;">
             <img src="./icon/cinoicon_light.png" alt="Cino Icon"
@@ -116,29 +116,39 @@
     </div>
 
     <script type='text/javascript'>
-        function hideBottomBar() {
+        function hideTopBar() {
             document.querySelector('.top_bar').style.display = 'none';
 
-            const switchBottomBar = document.querySelector('.switch_top_bar');
-            switchBottomBar.style.top = '0';
+            const switchTopBar = document.querySelector('.switch_top_bar');
+            switchTopBar.style.top = '0';
         }
-        function showBottomBar() {
+        function showTopBar() {
             document.querySelector('.top_bar').style.display = 'flex';
 
-            const switchBottomBar = document.querySelector('.switch_top_bar');
-            switchBottomBar.style.top = ''; // 恢复默认值
+            const switchTopBar = document.querySelector('.switch_top_bar');
+            switchTopBar.style.top = ''; // 恢复默认值
         }
 
-        function toggleBottomBar() {
-            const bottomBar = document.querySelector('.top_bar');
-            const isHidden = bottomBar.style.display === 'none';
+        let toggleTopBarCalled = false;
+
+        function toggleTopBar() {
+            toggleTopBarCalled = true;
+            const topBar = document.querySelector('.top_bar');
+            const isHidden = topBar.style.display === 'none';
 
             if (isHidden) {
-                showBottomBar();
+                showTopBar();
             } else {
-                hideBottomBar();
+                hideTopBar();
             }
         }
+
+        // Auto hide top bar after 3 seconds if not toggled
+        setTimeout(() => {
+            if (!toggleTopBarCalled) {
+                hideTopBar();
+            }
+        }, 3000);
 
         const progressBar = document.getElementById('progressBar');
         const progressBarContainer = document.getElementById('progressBarContainer');
