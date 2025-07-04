@@ -57,14 +57,13 @@
             padding-left: 10px;
             box-sizing: border-box;
             position: fixed;
-            /* Changed to fixed positioning */
             top: 0;
-            /* Positioned at the bottom of the viewport */
             left: 0;
             border-bottom-left-radius: 10px;
             border-bottom-right-radius: 10px;
             z-index: 1000;
-            /* Ensure it stays on top of other content */
+            transform: translateY(0);
+            transition: transform 0.1s ease-out;
         }
 
         div.switch_top_bar {
@@ -95,7 +94,7 @@
         </div>
     </div>
 
-    <div class="switch_top_bar" onclick="toggleTopBar()"></div>
+    <div class="switch_top_bar" onclick="Module.toggleTopBar()"></div>
     <div class="top_bar">
         <div style="display: flex; align-items: center;">
             <img src="./icon/cinoicon_light.png" alt="Cino Icon"
@@ -116,130 +115,115 @@
     </div>
 
     <script type='text/javascript'>
-        function hideTopBar() {
-            document.querySelector('.top_bar').style.display = 'none';
-
-            const switchTopBar = document.querySelector('.switch_top_bar');
-            switchTopBar.style.top = '0';
-        }
-        function showTopBar() {
-            document.querySelector('.top_bar').style.display = 'flex';
-
-            const switchTopBar = document.querySelector('.switch_top_bar');
-            switchTopBar.style.top = ''; // 恢复默认值
-        }
-
-        let toggleTopBarCalled = false;
-
-        function toggleTopBar() {
-            toggleTopBarCalled = true;
-            const topBar = document.querySelector('.top_bar');
-            const isHidden = topBar.style.display === 'none';
-
-            if (isHidden) {
-                showTopBar();
-            } else {
-                hideTopBar();
-            }
-        }
-
-        // Auto hide top bar after 3 seconds if not toggled
-        setTimeout(() => {
-            if (!toggleTopBarCalled) {
-                hideTopBar();
-            }
-        }, 3000);
-
-        const progressBar = document.getElementById('progressBar');
-        const progressBarContainer = document.getElementById('progressBarContainer');
-        var canvas = document.getElementById('canvas');
-
-        function setProgress(progress) {
-            progressBar.style.width = progress + '%';
-        }
-        function getProgress() {
-            return parseInt(progressBar.style.width);
-        }
-        function setProgressAlpha(alpha) {
-            progressBarContainer.style.opacity =
-                alpha > 1.0 ? 1.0 : alpha < 0.0 ? 0.0 : alpha;
-        }
-        function adjustHeight() {
-            const content = document.querySelector('div.joyengineecs_border');
-            content.style.height = `${window.innerHeight}px`;
-        }
         var Module = {
-            print: (function () {
-                // Do nothing.
-            })(),
-            canvas: (() => {
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
+            canvas: document.getElementById('canvas'),
+            totalDependencies: 0,
+            toggleTopBarCalled: false,
+            print: () => { },
+            setStatus: function (text) {
+                const progressBar = document.getElementById('progressBar');
+                const progressBarContainer = document.getElementById('progressBarContainer');
+                function setProgress(progress) {
+                    progressBar.style.width = progress + '%';
+                }
+                function getProgress() {
+                    return parseInt(progressBar.style.width);
+                }
+                function setProgressAlpha(alpha) {
+                    progressBarContainer.style.opacity =
+                        alpha > 1.0 ? 1.0 : alpha < 0.0 ? 0.0 : alpha;
+                }
 
-                // As a default initial behavior, pop up an alert when webgl context is lost. To make your
-                // application robust, you may want to override this behavior before shipping!
-                // See http://www.khronos.org/registry/webgl/specs/latest/1.0/#5.15.2
-                canvas.addEventListener("webglcontextlost",
-                    (e) => {
-                        alert('WebGL context lost. You will need to reload the page.');
-                        e.preventDefault();
-                    },
-                    false);
+                if (text == "") {
+                    let alpha = 1.5;
+                    const fadeOutInterval = setInterval(() => {
+                        alpha -= 0.1;
+                        setProgressAlpha(alpha);
 
-                return canvas;
-            })(),
-            setStatus: (text) => {
-                console.log('status: ' + text);
+                        if (getProgress() != 100 || alpha <= 0) {
+                            clearInterval(fadeOutInterval);
+                        }
+                    }, 50);
 
-                Module.setStatus.last ??= { time: Date.now(), text: '' };
-                if (text === Module.setStatus.last.text) return;
-                var m = text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
-                var now = Date.now();
-                if (m && now - Module.setStatus.last.time < 30)
+                    // All jobs are done.
                     return;
-
-                Module.setStatus.last.time = now;
-                Module.setStatus.last.text = text;
+                }
+                var m = text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
                 if (m) {
                     setProgressAlpha(1.0);
                     setProgress(parseInt(m[2]) * 100 / parseInt(m[4]));
                 } else {
                     setProgress(100);
-
                     setProgressAlpha(1.0);
-                    setTimeout(() => {
-                        let alpha = 1.5;
-                        const fadeOutInterval = setInterval(() => {
-                            alpha -= 0.05;
-                            setProgressAlpha(alpha);
-
-                            if (getProgress() != 100 || alpha <= 0) {
-                                clearInterval(fadeOutInterval);
-                            }
-                        }, 30);
-                    }, 500);
                 }
             },
-            totalDependencies: 0,
-            monitorRunDependencies: (left) => {
+            monitorRunDependencies: function (left) {
                 this.totalDependencies = Math.max(this.totalDependencies, left);
                 Module.setStatus(left
                     ? 'Preparing... (' + (this.totalDependencies - left) + '/' + this.totalDependencies + ')'
                     : 'All downloads complete.');
+            },
+            hideTopBar: function () {
+                const topBar = document.querySelector('.top_bar');
+                topBar.style.transform = 'translateY(-100%)';
+
+                const switchTopBar = document.querySelector('.switch_top_bar');
+                switchTopBar.style.top = '0';
+                switchTopBar.style.transition = 'top 0.1s ease-out';
+            },
+            showTopBar: function () {
+                const topBar = document.querySelector('.top_bar');
+                topBar.style.transform = 'translateY(0)';
+
+                const switchTopBar = document.querySelector('.switch_top_bar');
+                switchTopBar.style.top = '45px';
+                switchTopBar.style.transition = 'top 0.1s ease-out';
+            },
+            toggleTopBar: function () {
+                Module.toggleTopBarCalled = true;
+                const topBar = document.querySelector('.top_bar');
+                const isHidden = topBar.style.transform === 'translateY(-100%)';
+
+                if (isHidden) {
+                    Module.showTopBar();
+                } else {
+                    Module.hideTopBar();
+                }
             }
         };
+        // Initialize top bar state
+        document.querySelector('.top_bar').style.transform = 'translateY(0)';
+        document.querySelector('.switch_top_bar').style.transition = 'top 0.1s ease-out';
+        // Initialize canvas size
+        Module.canvas.width = window.innerWidth;
+        Module.canvas.height = window.innerHeight;
+
+        // As a default initial behavior, pop up an alert when webgl context is lost. To make your
+        // application robust, you may want to override this behavior before shipping!
+        // See http://www.khronos.org/registry/webgl/specs/latest/1.0/#5.15.2
+        Module.canvas.addEventListener("webglcontextlost",
+            (e) => {
+                alert('WebGL context lost. You will need to reload the page.');
+                e.preventDefault();
+            },
+            false);
         // Adjust height on initial load and on window resize
-        window.addEventListener('load', adjustHeight);
-        window.addEventListener('resize', adjustHeight);
+        const content = document.querySelector('div.joyengineecs_border');
+        window.addEventListener('load', () => content.style.height = `${window.innerHeight}px`);
+        window.addEventListener('resize', () => content.style.height = `${window.innerHeight}px`);
         window.onerror = (event) => {
             alert('Exception thrown, see JavaScript console:\n  ' + event);
             Module.setStatus = (text) => {
                 if (text) console.error('[post-exception status] ' + text);
             };
         };
+        // Auto hide top bar after 3 seconds if not toggled
+        setTimeout(() => {
+            if (!Module.toggleTopBarCalled) {
+                Module.hideTopBar();
+            }
+        }, 3000);
 
-        Module.setStatus('Downloading...');
-       
     </script>
     <script async type="text/javascript" src="joyengineecs4w.js"></script>
 </body>
