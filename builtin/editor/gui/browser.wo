@@ -833,9 +833,12 @@ using $NEW_PRODUCER_NAME$ = struct{}
                 {
                     jeapi::gui::form::input("创建世界", F"将在{cur_creating_path}创建新世界：",
                         "Newworld",
-                        \new_world_name = launch(
-                            \= edit_forms::show_world_creator(context, new! edit_forms::WorldContext(
-                                context->get_project(), new_world_name, fsys::normalize(F"{cur_creating_path}/{new_world_name}.je4world"),
+                        func(new_world_name)
+                        {
+                            let world_context = new! edit_forms::WorldContext(
+                                context->get_project(), 
+                                new_world_name, 
+                                fsys::normalize(F"{cur_creating_path}/{new_world_name}.je4world"),
                                 func (w)
                                 {
                                     if (context->get_project()->serialize_world(w, true)
@@ -851,9 +854,9 @@ using $NEW_PRODUCER_NAME$ = struct{}
                                     }
                                     force_update();
                                     return true;
-                                }
-                            )););
-                        ); 
+                                });
+                            launch(\= edit_forms::show_world_creator(context, world_context););
+                        }); 
                 }
                 if (MenuItem("瓦片地图"))
                 {
