@@ -21,6 +21,7 @@ option(JE4_BUILD_SHARED_CORE                "Build shared engine core library." 
 # for example, if you only use OpenGL, the hlsl and spir-v will NOT be generated 
 # and NOR loaded, it can reduce the size of the final binary.
 option(JE4_BUILD_FOR_RUNTIME_TARGET_ONLY    "Build for runtime target only." OFF)
+option(JE4_ENABLE_WIN32_CONSOLE             "Enable console in windows." OFF)
 
 option(JE4_ENABLE_DX11_GAPI         "Enable DX11 Graphic api"           OFF)
 option(JE4_ENABLE_OPENGL330_GAPI    "Enable OpenGL 3.3 Graphic API"     OFF)
@@ -287,12 +288,14 @@ endif()
 add_executable(jedriver ${jedriver_src} "include/jeecs.hpp")
 
 # No command line console for jedriver, it is a GUI application.
-if (MSVC)
-    set_target_properties(jedriver PROPERTIES
-        LINK_FLAGS "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup")
-elseif (MINGW)
-    set_target_properties(jedriver PROPERTIES
-        LINK_FLAGS "-mwindows")
+if (NOT JE4_ENABLE_WIN32_CONSOLE)
+    if (MSVC)
+        set_target_properties(jedriver PROPERTIES
+            LINK_FLAGS "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup")
+    elseif (MINGW)
+        set_target_properties(jedriver PROPERTIES
+            LINK_FLAGS "-mwindows")
+    endif()
 endif()
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)

@@ -522,7 +522,7 @@ namespace jeecs::graphic::api::vk130
 
             void flush_descriptor_set_allocator(swapchain_image_content* swapchain_image)
             {
-                for (auto* used_set : swapchain_image->m_using_descriptor_sets[DESC_SET_TYPE])
+                for (VkDescriptorSet used_set : swapchain_image->m_using_descriptor_sets[DESC_SET_TYPE])
                     m_free_sets.push_back(used_set);
 
                 swapchain_image->m_using_descriptor_sets[DESC_SET_TYPE].clear();
