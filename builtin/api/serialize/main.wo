@@ -367,10 +367,7 @@ namespace jeapi::serialize
                                     ->> \(name, type, addr) = (
                                         name, 
                                         towoo::unsafe::dynamic_parser::saving(type, addr)
-                                            ->or_do(func(){
-                                                logerr(F"Unable to save '{name}' of '{t->name}'.");
-                                                return "<?>";
-                                            }))
+                                            ->or("<?>"))
                                         ;
                                 ->  mapping,
                                 (t, c) = tc;
@@ -551,10 +548,9 @@ namespace jeapi::serialize
                 ->> \(ctype, dat) = compmaynotfound
                         ->> \comp = comp->get_members
                             ->> \(mname, mtype, mvalue) = dat->get(mname)
-                                ->> func(mdat){
-                                    if (!towoo::unsafe::dynamic_parser::restoring(mtype, mvalue, mdat as string))
-                                        logerr(F"Unable to restore '{mname}' of '{ctype->name}'.");
-                                    }
+                                ->> \mdat = 
+                                    do towoo::unsafe::dynamic_parser::restoring(mtype, mvalue, mdat as string)
+                                    ;
                                 ;
                             ;
                     where compmaynotfound = entity_instance->get_component(ctype)
