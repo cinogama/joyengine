@@ -12,6 +12,7 @@ import je::towoo::types;
 import pkg::try;
 import pkg::worst;
 import pkg::fsys;
+import pkg::iterator;
 
 import builtin::api::gui::file;
 import builtin::api::serialize::main;
@@ -297,7 +298,7 @@ namespace editor::gui::edit_forms
                                 let grouped_components = {}mut: ::map<string, vec<(je::typeinfo, je::component)>>;
                                 for (let (ctype, component): cur_e->internal::get_components)
                                 {
-                                    let names = ctype->name->split("::");
+                                    let names = ctype->name->split("::") |> iterator::collect;
                                     let groupname = names->len >= 2 ? names[0] | "<无>";
                                     
                                     grouped_components->get_or_set(groupname, []mut)
@@ -344,7 +345,11 @@ namespace editor::gui::edit_forms
                                         {
                                             // 嘿，我知道这个长长的东西很诡异，但是这个的功能只是把类型名的开头去掉，剩下的部分中间用"::"连接拼起来
                                             let component_name = ctype->name;
-                                            if (TreeNodeEx(component_name->split("::")->sub(1)->reduce(\l, r= l + "::" + r;)->or_do(\= component_name;),
+                                            if (TreeNodeEx(
+                                                component_name->split("::") 
+                                                    |> iterator::skip(1) 
+                                                    |> iterator::reduce(\l, r= l + "::" + r;)
+                                                    -> or_do(\= component_name;),
                                                 tree_attrib + TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen))
                                             {
                                                 jeapi::gui::context_menu(func(){

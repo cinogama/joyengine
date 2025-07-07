@@ -39,11 +39,12 @@ namespace editor::gui::workflow
                 let purename = fsys::purename(np);
                 try! relative = fsys::relative(fsys::parent(np), workflow_node_path);
 
-                let node_namespace = relative->split("/")-> forall(\p = p != "" && p  != ".";);
                 nodes->add(
                     NodeInfo{
                         m_name = purename, 
-                        m_namespace = node_namespace, 
+                        m_namespace = relative->split("/") 
+                            |> iterator::filter(\p = p != "" && p  != ".";)
+                            |> iterator::collect, 
                         m_path = np,
                         });
                 return_ok!;
