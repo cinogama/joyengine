@@ -441,7 +441,7 @@ func copy_engine_and_editor_builtin_files()
     try! _ = copy_entier_dir(
         current_workpath / "je", 
         build_path, 
-        \p = path_str->end_with("towoo/types.wo") && path_str->end_with("towoo/components.wo") 
+        \p = !path_str->end_with("towoo/types.wo") && !path_str->end_with("towoo/components.wo") 
             where path_str = p->to_string->lower
         ;);
     try! _ = copy_entier_dir(current_workpath / "builtin", build_path, \_ = true;);
