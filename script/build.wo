@@ -36,7 +36,11 @@ func copy_file_consider_last_modified_time(
             -> map_err(\eno = F"Unable to get last write time of {target_file_path->to_string()}: {eno}";);
         
         if (atime != btime)
+        {
+            try! _ = remove(target_file_path)
+                -> map_err(\eno = F"Unable to remove {target_file_path->to_string()}: {eno}";);
             need_copy = true;
+        }
     }
 
     if (need_copy)
