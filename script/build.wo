@@ -496,9 +496,9 @@ ok(_)?
         std::println("Done.");
         return 0;
     }
-err(_)?
+err(msg)?
     {
-        std::println("Failed.");
-        return -1;
+        std::println(F"Failed: {msg}.");
+        return -1
     }
 }
