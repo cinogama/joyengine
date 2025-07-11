@@ -12,7 +12,6 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 ##############################################################################
 
 option(JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD  "Install pkgs by baozi when building."  ON)
-option(JE4_COPYING_BUILTIN_FILES            "Copy builtin files to build."          ON)
 option(JE4_STATIC_LINK_MODULE_AND_PKGS      "Static link packages into engine."     ON)
 option(JE4_BUILD_SHARED_CORE                "Build shared engine core library."     ON)
 
@@ -32,6 +31,67 @@ option(JE4_ENABLE_METAL_GAPI        "Enable Metal Graphic API"          OFF)
 
 set(JE4_SPECIFY_OPENAL_LIB_NAME "" CACHE STRING "Specified openal library name, if empty-string, use openal-soft")
 set(JE4_IGNORED_WOOLANG_PKG_LIST "" CACHE STRING "Woolang package in this list will be ignored")
+
+##############################################################################
+# Install packages by baozi before build script,
+
+if (JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD)
+    set (WO_CMAKE_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
+    string (TOUPPER ${WO_CMAKE_BUILD_TYPE} WO_CMAKE_BUILD_TYPE_UPPER_CASE)
+
+    if ("${WO_CMAKE_BUILD_TYPE_UPPER_CASE}" STREQUAL "DEBUG")
+        set(JE4_FETCHING_BAOZI_CMDLINE "baozi install -source -nonative -profile debug")
+    else ()
+        set(JE4_FETCHING_BAOZI_CMDLINE "baozi install -source -nonative")
+    endif ()
+    
+    message(STATUS "Fetching woolang packages.")
+    
+    if (WIN32)
+        execute_process(
+            COMMAND cmd /c ${JE4_FETCHING_BAOZI_CMDLINE} 
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            RESULT_VARIABLE JE4_CMAKE_STATUS_PACAKGE_INSTALL)
+    else()
+        execute_process(
+            COMMAND sh -c "${JE4_FETCHING_BAOZI_CMDLINE}"
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            RESULT_VARIABLE JE4_CMAKE_STATUS_PACAKGE_INSTALL)
+    endif()
+
+    if (JE4_CMAKE_STATUS_PACAKGE_INSTALL EQUAL 0)
+        message(STATUS "Woolang packages installed successfully.")
+    else()
+        message(FATAL_ERROR "Failed to install woolang packages(${JE4_CMAKE_STATUS_PACAKGE_INSTALL}), please check the error message above.")
+    endif()
+else()
+    message(STATUS "JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD is disabled.")
+endif()
+
+set (JE4_BUILD_SCRIPT_CMDS "")
+
+if (JE4_STATIC_LINK_MODULE_AND_PKGS)
+     list(APPEND JE4_BUILD_SCRIPT_CMDS "-static-link-pkgs")
+endif()
+if (JE4_ENABLE_OPENGLES300_GAPI AND WIN32)
+    list(APPEND JE4_BUILD_SCRIPT_CMDS "-gles-win32")
+endif()
+if (JE4_ENABLE_WEBGL20_GAPI)
+    list(APPEND JE4_BUILD_SCRIPT_CMDS "-webgl")
+endif()
+
+# Execute build script.
+
+execute_process(
+    COMMAND woolang ./script/build.wo --enable-halt-when-panic 1 ${JE4_BUILD_SCRIPT_CMDS} 
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    RESULT_VARIABLE JE4_CMAKE_STATUS_BUILD_SCRIPT)
+
+if (JE4_CMAKE_STATUS_BUILD_SCRIPT EQUAL 0)
+    message(STATUS "Build script executed successfully.")
+else()
+    message(FATAL_ERROR "Failed to execute build script(${JE4_CMAKE_STATUS_BUILD_SCRIPT}), please check the error message above.")
+endif()
 
 ##############################################################################
 
@@ -103,77 +163,6 @@ if (JE4_ENABLE_DX11_GAPI
     if (NOT ANDROID)
         set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glfw" FORCE)
         add_subdirectory("3rd/glfw")
-    endif()
-endif()
-
-##############################################################################
-
-if (JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD)
-    set (WO_CMAKE_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
-    string (TOUPPER ${WO_CMAKE_BUILD_TYPE} WO_CMAKE_BUILD_TYPE_UPPER_CASE)
-
-    if ("${WO_CMAKE_BUILD_TYPE_UPPER_CASE}" STREQUAL "DEBUG")
-        set(JE4_FETCHING_BAOZI_CMDLINE "baozi install -source -nonative -profile debug")
-    else ()
-        set(JE4_FETCHING_BAOZI_CMDLINE "baozi install -source -nonative")
-    endif ()
-    
-    message(STATUS "Fetching woolang packages.")
-    
-    if (WIN32)
-        execute_process(
-            COMMAND cmd /c ${JE4_FETCHING_BAOZI_CMDLINE} 
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-    else()
-        execute_process(
-            COMMAND sh -c "${JE4_FETCHING_BAOZI_CMDLINE}"
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-    endif()
-else()
-    message(STATUS "JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD is disabled.")
-endif()
-
-set (JE4_BUILD_SCRIPT_CMDS "")
-
-if (JE4_STATIC_LINK_MODULE_AND_PKGS)
-     list(APPEND JE4_BUILD_SCRIPT_CMDS "-static-link-pkgs")
-endif()
-if (JE4_ENABLE_OPENGLES300_GAPI AND WIN32)
-    list(APPEND JE4_BUILD_SCRIPT_CMDS "-gles-win32")
-endif()
-if (JE4_ENABLE_WEBGL20_GAPI)
-    list(APPEND JE4_BUILD_SCRIPT_CMDS "-webgl")
-endif()
-
-##############################################################################
-# Execute build work script.
-execute_process(
-    COMMAND woolang ./script/build.wo ${JE4_BUILD_SCRIPT_CMDS} 
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-
-if (JE4_COPYING_BUILTIN_FILES)
-    if(${CMAKE_HOST_SYSTEM_NAME} MATCHES "Windows")
-        add_custom_target(COPY_ALL_FILES
-            COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}\\je\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\\je\\\" /Y /S /I /D
-            COMMAND if exist \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\\je\\towoo\\types.wo\" del \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\\je\\towoo\\types.wo\"
-            COMMAND if exist \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\\je\\towoo\\components.wo\" del \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\\je\\towoo\\components.wo\"
-            COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}\\builtin\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\\builtin\\\" /Y /S /I /D
-            COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}\\include\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\\builtin\\include\" /Y /S /I /D
-            COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}\\3rd\\woolang\\include\\wo.h\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\\builtin\\include\" /Y /I /D
-            COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}\\3rd\\rcedit-x64.exe\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\\builtin\" /Y /I /D
-            COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}\\3rd\\rcedit-x86.exe\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\\builtin\" /Y /I /D
-        )
-    else()
-        add_custom_target(COPY_ALL_FILES 
-            COMMAND cp \"${CMAKE_CURRENT_SOURCE_DIR}/je\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/je\" -r
-            COMMAND test -f \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/je/towoo/types.wo\" && rm \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/je/towoo/types.wo\" || true
-            COMMAND test -f \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/je/towoo/components.wo\" && rm \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/je/towoo/components.wo\" || true
-            COMMAND cp \"${CMAKE_CURRENT_SOURCE_DIR}/builtin\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/builtin\" -r
-            COMMAND cp \"${CMAKE_CURRENT_SOURCE_DIR}/include\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/builtin/include\" -r
-            COMMAND cp \"${CMAKE_CURRENT_SOURCE_DIR}/3rd/woolang/include/wo.h\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/builtin/include\"
-            COMMAND echo "COPY_RCEDIT64_FILES is only used for win32"
-            COMMAND echo "COPY_RCEDIT64_FILES is only used for win32"
-        )
     endif()
 endif()
 
@@ -308,9 +297,6 @@ else()
     message(FATAL_ERROR "Unknown platform")
 endif()
 
-if (JE4_COPYING_BUILTIN_FILES)
-    add_dependencies(jedriver COPY_ALL_FILES)
-endif()
 target_link_libraries(jedriver PRIVATE 
     joyengine_configs
     joyecs

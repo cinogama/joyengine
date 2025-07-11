@@ -14,6 +14,71 @@ let current_workpath = fsys::workpath();
 let third_party_located_path = current_workpath / "3rd";
 let build_path = current_workpath / "build";
 
+func copy_file_consider_last_modified_time(
+    source_path: fsys::path_t, target_path_to_place_dir: fsys::path_t, filter_func: (fsys::path_t)=> bool)=> result<void, string>
+{
+    if (! isfile(source_path))
+        throw! F"Source file {source_path->to_string()} does not exist or not a file.";
+    if (! isdir(target_path_to_place_dir))
+        throw! F"Target directory {target_path_to_place_dir->to_string()} does not exist or not a dir.";
+
+    let target_file_path = target_path_to_place_dir / filename(source_path);
+    if (isdir(target_file_path))
+        throw! F"Target path {target_file_path->to_string()} is a directory, not a file.";
+
+    let mut need_copy = !exist(target_file_path);
+
+    if (!need_copy)
+    {
+        try! atime = lastwrite(source_path)
+            -> map_err(\eno = F"Unable to get last write time of {source_path->to_string()}: {eno}";);
+        try! btime = lastwrite(target_file_path)
+            -> map_err(\eno = F"Unable to get last write time of {target_file_path->to_string()}: {eno}";);
+        
+        if (atime != btime)
+            need_copy = true;
+    }
+
+    if (need_copy)
+    {
+        if (filter_func(source_path))
+        {
+            std::println(F"Copying file {source_path->to_string()} to {target_file_path->to_string()}.");
+            try! _ = copy(source_path, target_file_path)
+                -> map_err(\eno = F"Unable to copy {source_path->to_string()} to {target_file_path->to_string()}: {eno}";); 
+        }
+        else
+            std::println(
+                F"File {source_path->to_string()} does not match filter, skipping copy to {target_file_path->to_string()}.");
+    }
+    else
+        std::println(
+            F"File {source_path->to_string()} is already up to date, skipping copy to {target_file_path->to_string()}.");
+
+    return_ok!;
+}
+func copy_entier_dir(source_dir: fsys::path_t, target_path_to_place_dir: fsys::path_t, filter_func: (fsys::path_t)=> bool)=> result<void, string>
+{
+    if (! isdir(source_dir))
+        throw! F"Source directory {source_dir->to_string()} does not exist or not a dir.";
+    if (! isdir(target_path_to_place_dir))
+        throw! F"Target directory {target_path_to_place_dir->to_string()} does not exist or not a dir.";
+
+    let this_target_path = target_path_to_place_dir / filename(source_dir);
+    do mkdir(this_target_path);
+
+    try! walker = walk(source_dir)
+        -> map_err(\eno = F"Unable to walk source directory {source_dir->to_string()}: {eno}";); 
+
+    for (let p : walker)
+    {
+        try! _ = isdir(p) 
+            ? copy_entier_dir(p, this_target_path, filter_func) 
+            | copy_file_consider_last_modified_time(p, this_target_path, filter_func);
+    }
+    return_ok!;
+}
+
 func copy_all_licenses()
 {
     return try!
@@ -35,7 +100,7 @@ func copy_all_licenses()
                     do mkdir(parent(target_path));
                     do copy(p, target_path);
 
-                    std::println("copy license file: ", p->to_string());
+                    std::println("Copy license file: ", p->to_string());
                 }
             }
         }
@@ -371,6 +436,29 @@ void je_extern_lib_3rd_pkgs_finish()
     return_ok!;
 }
 
+func copy_engine_and_editor_builtin_files()
+{
+    try! _ = copy_entier_dir(
+        current_workpath / "je", 
+        build_path, 
+        \p = path_str->end_with("towoo/types.wo") && path_str->end_with("towoo/components.wo") 
+            where path_str = p->to_string->lower
+        ;);
+    try! _ = copy_entier_dir(current_workpath / "builtin", build_path, \_ = true;);
+    try! _ = copy_entier_dir(current_workpath / "include", build_path / "builtin", \_ = true;);
+    try! _ = copy_entier_dir(current_workpath / "3rd" / "woolang" / "include", build_path / "builtin", \_ = true;);
+    try! _ = copy_file_consider_last_modified_time(
+        current_workpath / "3rd" / "rcedit-x64.exe",
+        build_path / "builtin",
+        \_ = true;);
+    try! _ = copy_file_consider_last_modified_time(
+        current_workpath / "3rd" / "rcedit-x86.exe",
+        build_path / "builtin",
+        \_ = true;);
+
+    return_ok!;
+}
+
 func main()
 {
     let mut copy_gles_emu = false;
@@ -396,6 +484,7 @@ func main()
     try! _ = generate_je_3rd_pkg_decls(skip_process_and_socket);
     try! _ = generate_je_static_module_decls();
     try! _ = copy_all_licenses();
+    try! _ = copy_engine_and_editor_builtin_files();
 
     return_ok!;
 }
