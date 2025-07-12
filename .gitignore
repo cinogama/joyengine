@@ -362,4 +362,7 @@ _deps
 /3rd/pkg/*
 /module/*
 /src/jeecs_commit_sha.hpp
+/src/jeecs_extern_library_module.hpp
+/src/jeecs_extern_library_woo_api.hpp
+/src/jeecs_extern_library_3rd_pkg.hpp
 

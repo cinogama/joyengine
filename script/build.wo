@@ -238,12 +238,8 @@ func generate_je_api_decls()=> result<void, string>
             result += F"WO_API wo_api {f}(wo_vm vm, wo_value args);\n";
     
     result += @"
-wo_dylib_handle_t _je_api_lib_handle = nullptr;
-
-void je_extern_lib_woo_api_init()
+wo_dylib_handle_t je_extern_lib_woo_api_init_impl()
 {
-    assert(_je_api_lib_handle == nullptr);
-
     wo_extern_lib_func_t je_fs[] = {
 "@;
 
@@ -254,20 +250,18 @@ void je_extern_lib_woo_api_init()
     result += 
 @"      WO_EXTERN_LIB_FUNC_END,
     };
-    _je_api_lib_handle = wo_fake_lib("libjoyecs", je_fs, nullptr);
+    return wo_fake_lib("libjoyecs", je_fs, nullptr);
 }
 
-void je_extern_lib_woo_api_finish()
+void je_extern_lib_woo_api_finish_impl(wo_dylib_handle_t handle_to_free)
 {
-    assert(_je_api_lib_handle != nullptr);
-
-    wo_unload_lib(_je_api_lib_handle, WO_DYLIB_UNREF_AND_BURY);
-    _je_api_lib_handle = nullptr;
+    assert(handle_to_free != nullptr);
+    wo_unload_lib(handle_to_free, WO_DYLIB_UNREF_AND_BURY);
 }
 "@;
 
-    if (!writeall(current_workpath / "src" / "jeecs_extern_library_woo_api.cpp", result))
-        throw! F"Failed to update jeecs_extern_library_woo_api.cpp.";
+    if (!writeall(current_workpath / "src" / "jeecs_extern_library_woo_api.hpp", result))
+        throw! F"Failed to update jeecs_extern_library_woo_api.hpp.";
     return_ok!;
 }
 
@@ -308,10 +302,9 @@ extern "C"
 }
 #endif
 
-std::vector<wo_dylib_handle_t> _je_static_module_lib_handle;
-void je_extern_lib_module_init()
+void je_extern_lib_module_init_impl(std::vector<wo_dylib_handle_t>* out_lib_handles)
 {
-    assert(_je_static_module_lib_handle.empty());
+    assert(out_lib_handles != nullptr && out_lib_handles->empty());
 #if JE4_STATIC_LINK_MODULE_AND_PKGS
 "@;
 
@@ -321,7 +314,7 @@ void je_extern_lib_module_init()
         result += F"        wo_extern_lib_func_t\{\"jeecs_module_entry\", (void*)&jestatic_module_{mname}_entry\},\n";
         result += F"        wo_extern_lib_func_t\{\"jeecs_module_leave\", (void*)&jestatic_module_{mname}_leave\},\n";
         result += F"        WO_EXTERN_LIB_FUNC_END,\n    };\n";
-        result += F"    _je_static_module_lib_handle.push_back(\n"
+        result += F"    out_lib_handles->push_back(\n"
                 + F"        wo_fake_lib(\"{mname}\", {mname}_fs, nullptr));\n\n";
     }
 
@@ -329,19 +322,20 @@ void je_extern_lib_module_init()
 #endif
 }
 
-void je_extern_lib_module_finish()
+void je_extern_lib_module_finish_impl(std::vector<wo_dylib_handle_t>* inout_lib_handles)
 {
-    for (auto* lib : _je_static_module_lib_handle)
+    assert(inout_lib_handles != nullptr);
+    for (auto* lib : *inout_lib_handles)
     {
         assert(lib != nullptr);
         wo_unload_lib(lib, WO_DYLIB_UNREF_AND_BURY);
     }
-    _je_static_module_lib_handle.clear();
+    inout_lib_handles->clear();
 }
 "@;
 
-    if (!writeall(current_workpath / "src" / "jeecs_extern_library_module.cpp", result))
-        throw! F"Failed to update jeecs_extern_library_module.cpp.";
+    if (!writeall(current_workpath / "src" / "jeecs_extern_library_module.hpp", result))
+        throw! F"Failed to update jeecs_extern_library_module.hpp.";
 
     return result::ok(do nil);
 }
@@ -399,10 +393,9 @@ func generate_je_3rd_pkg_decls(skip_process_and_socket: bool)=> result<void, str
     result += @"
 #endif
 
-std::vector<wo_dylib_handle_t> _je_3rd_pkg_lib_handle;
-void je_extern_lib_3rd_pkgs_init()
+void je_extern_lib_3rd_pkgs_init_impl(std::vector<wo_dylib_handle_t>* out_lib_handles)
 {
-    assert(_je_3rd_pkg_lib_handle.empty()); 
+    assert(out_lib_handles != nullptr && out_lib_handles->empty()); 
 
 #if JE4_STATIC_LINK_MODULE_AND_PKGS
 "@;
@@ -414,7 +407,7 @@ void je_extern_lib_3rd_pkgs_init()
             result += F"        wo_extern_lib_func_t\{\"{symbolname}\", (void*)&{funcname}\},\n";
 
         result += F"        WO_EXTERN_LIB_FUNC_END,\n    };\n";
-        result += F"    _je_3rd_pkg_lib_handle.push_back(\n"
+        result += F"    out_lib_handles->push_back(\n"
                 + F"        wo_fake_lib(\"{libname}\", {libname}_fs, nullptr));\n\n";
     }
 
@@ -422,21 +415,21 @@ void je_extern_lib_3rd_pkgs_init()
 #endif    
 }
 
-void je_extern_lib_3rd_pkgs_finish()
+void je_extern_lib_3rd_pkgs_finish_impl(std::vector<wo_dylib_handle_t>* inout_lib_handles)
 {
 "@;
     result += @"
-    for (auto* lib : _je_3rd_pkg_lib_handle)
+    for (auto* lib : *inout_lib_handles)
     {
         assert(lib != nullptr);
         wo_unload_lib(lib, WO_DYLIB_UNREF_AND_BURY);
     }
-    _je_3rd_pkg_lib_handle.clear();
+    inout_lib_handles->clear();
 }
 "@;
 
-    if (!writeall(current_workpath / "src" / "jeecs_extern_library_3rd_pkg.cpp", result))
-        throw! F"Failed to update jeecs_extern_library_3rd_pkg.cpp.";
+    if (!writeall(current_workpath / "src" / "jeecs_extern_library_3rd_pkg.hpp", result))
+        throw! F"Failed to update jeecs_extern_library_3rd_pkg.hpp.";
     return_ok!;
 }
 
