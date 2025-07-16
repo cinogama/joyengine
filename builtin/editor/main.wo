@@ -51,7 +51,7 @@ using Path = struct {
 
         if (std::platform::os == std::platform::os_type::WIN32)
         {
-            for (let mut ch = "A"->getch(0); ch <= "Z"->getch(0); ch += 1: char)
+            for (let mut ch = 'A'; ch <= 'Z'; ch += 1: char)
                 arr->add([ch]->str + ":/");
         }
 
