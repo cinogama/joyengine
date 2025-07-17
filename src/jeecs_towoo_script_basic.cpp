@@ -241,7 +241,7 @@ namespace jeecs
                                             wo_value component_st = s + 2 + cmpid;
                                             switch (work.m_dependence.m_requirements[cmpid].m_require)
                                             {
-                                            case jeecs::requirement::type::CONTAIN:
+                                            case jeecs::requirement::type::CONTAINS:
                                             {
                                                 create_component_struct(component_st, m_job_vm, component, typeinfo);
                                                 break;

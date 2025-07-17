@@ -78,7 +78,7 @@ let registered_custom_methods = {}mut: map<string, (string, string)>;
 
 public func custom_method<ShaderResultT>(name: string, glsl_src: string, hlsl_src: string)
 {
-    if (registered_custom_methods->contain(name))
+    if (registered_custom_methods->contains(name))
         return std::halt(F"Custom method '{name}' has been registered.");
 
     registered_custom_methods->set(name, (glsl_src, hlsl_src));

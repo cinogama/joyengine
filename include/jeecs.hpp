@@ -6297,7 +6297,7 @@ namespace jeecs
     {
         enum type : uint8_t
         {
-            CONTAIN, // Must have spcify component
+            CONTAINS, // Must have spcify component
             MAYNOT,  // May have or not have
             ANYOF,   // Must have one of 'ANYOF' components
             EXCEPT,  // Must not contain spcify component
@@ -6446,9 +6446,9 @@ namespace jeecs
                     // First argument is game_entity, skip this argument
                 }
                 else if constexpr (std::is_reference<CurRequireT>::value)
-                    // Reference, means CONTAIN
+                    // Reference, means CONTAINS
                     dep.m_requirements.push_front(
-                        requirement(requirement::type::CONTAIN, 0,
+                        requirement(requirement::type::CONTAINS, 0,
                                     typing::type_info::id<jeecs::typing::origin_t<CurRequireT>>()));
                 else if constexpr (std::is_pointer<CurRequireT>::value)
                     // Pointer, means MAYNOT
@@ -6494,7 +6494,7 @@ namespace jeecs
                     debug::logwarn("Repeat or conflict when containing component '%s'.",
                                    typing::type_info::of<CurRequireT>()->m_typename);
 #endif
-            dep.m_requirements.push_back(requirement(requirement::type::CONTAIN, 0, id));
+            dep.m_requirements.push_back(requirement(requirement::type::CONTAINS, 0, id));
             if constexpr (sizeof...(Ts) > 0)
                 _apply_contain<Ts...>(dep);
         }
@@ -6731,7 +6731,7 @@ namespace jeecs
             }
         }
         template <typename... Ts>
-        inline void contain() noexcept
+        inline void contains() noexcept
         {
             if (m_first_time_to_work)
             {

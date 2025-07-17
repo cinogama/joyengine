@@ -848,7 +848,7 @@ namespace jeecs_impl
             {
                 switch (requirement.m_require)
                 {
-                case jeecs::requirement::type::CONTAIN:
+                case jeecs::requirement::type::CONTAINS:
                     contain_set.insert(requirement.m_type);
                     break;
                 case jeecs::requirement::type::MAYNOT:
@@ -862,7 +862,7 @@ namespace jeecs_impl
                 }
             }
 
-            static auto contain = [](const types_set &a, const types_set &b)
+            static auto contains = [](const types_set &a, const types_set &b)
             {
                 for (auto type_id : b)
                     if (a.find(type_id) == a.end())
@@ -897,7 +897,7 @@ namespace jeecs_impl
                 std::shared_lock sg1(_m_arch_types_mapping_mx);
                 for (auto &[typeset, arch] : _m_arch_types_mapping)
                 {
-                    if (contain(typeset, contain_set) && contain_all_any(typeset, anyof_sets) && except(typeset, except_set))
+                    if (contains(typeset, contain_set) && contain_all_any(typeset, anyof_sets) && except(typeset, except_set))
                     {
                         // Current arch is matched!
                         dependence->m_archs.push_back(arch->create_chunk_info(dependence));

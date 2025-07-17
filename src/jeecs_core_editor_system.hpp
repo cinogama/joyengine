@@ -1233,7 +1233,7 @@ public let frag =
                     } });
 
             // Move walker(root)
-            selector.contain<Editor::EditorWalker>();
+            selector.contains<Editor::EditorWalker>();
             selector.except<Camera::Projection>();
             selector.exec(&DefaultEditorSystem::MoveWalker);
 
@@ -1246,7 +1246,7 @@ public let frag =
             std::optional<EditorGizmoContext> enable_draw_gizmo_at_framebuf = std::nullopt;
 
             // Move walker(camera)
-            selector.contain<Editor::EditorWalker>();
+            selector.contains<Editor::EditorWalker>();
             selector.exec([this, &enable_draw_gizmo_at_framebuf](
                               Transform::LocalRotation &rotation,
                               Camera::Projection &proj,
@@ -1468,7 +1468,7 @@ public let frag =
                     } });
 
             selector.except<Editor::Invisable>();
-            selector.contain<Light2D::Parallel>();
+            selector.contains<Light2D::Parallel>();
             selector.exec([&](game_entity e, Transform::Translation &trans)
                           {
                     if (_gizmo_mask & gizmo_mode::LIGHT2D)
@@ -1640,13 +1640,13 @@ public let frag =
 
             // Select entity
             selector.except<Editor::Invisable, Light2D::Point, Light2D::Parallel, Light2D::Range>();
-            selector.contain<Renderer::Shaders, Renderer::Shape>();
+            selector.contains<Renderer::Shaders, Renderer::Shape>();
             selector.exec(&DefaultEditorSystem::SelectEntity);
 
             // Create & create mover!
             selector.exec(&DefaultEditorSystem::UpdateAndCreateMover);
 
-            selector.contain<Editor::EntitySelectBox>();
+            selector.contains<Editor::EntitySelectBox>();
             selector.exec([this](
                               Transform::Translation &trans,
                               Transform::LocalScale &localScale,

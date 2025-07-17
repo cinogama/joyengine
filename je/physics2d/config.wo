@@ -14,7 +14,7 @@ namespace je::physics2d::config
     {
         public enum Requirement
         {
-            CONTAIN,        // Must have spcify component
+            CONTAINS,        // Must have spcify component
             MAYNOT,         // May have or not have
             ANYOF,          // Must have one of 'ANYOF' components
             EXCEPT,         // Must not contain spcify component
@@ -81,7 +81,7 @@ namespace je::physics2d::config
                     return "";
                 }
 
-                types->add((typename, mode->or("CONTAIN")));
+                types->add((typename, mode->or("CONTAINS")));
                 typename = "";
                 break;
             }
@@ -108,14 +108,14 @@ namespace je::physics2d::config
                 }
                 mode = option::value("EXCEPT");
             }
-            else if (token == "contain")
+            else if (token == "contains")
             {
                 if (mode->is_value)
                 {
                     lexer->error(F"Duplicately marked attributes have been previously marked as `{mode->unwrap}`");
                     return "";
                 }
-                mode = option::value("CONTAIN");
+                mode = option::value("CONTAINS");
             }
             else
                 typename += token;

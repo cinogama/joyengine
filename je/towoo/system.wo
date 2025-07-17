@@ -15,7 +15,7 @@ namespace je::towoo::system
     };
     public enum require_type
     {
-        CONTAIN,        // Must have spcify component
+        CONTAINS,        // Must have spcify component
         MAYNOT,         // May have or not have
         ANYOF,          // Must have one of 'ANYOF' components
         EXCEPT,         // Must not contain spcify component
@@ -59,9 +59,9 @@ namespace je::towoo::system
                 m_is_single_work = iswork,
             };
         }
-        public func contain<CompT>(self: ToWooSystemFuncJob, is_arg: bool)
+        public func contains<CompT>(self: ToWooSystemFuncJob, is_arg: bool)
         {
-            self.m_requirement->add((require_type::CONTAIN, self.m_require_group, typeof:<CompT>::type::typeinfo));
+            self.m_requirement->add((require_type::CONTAINS, self.m_require_group, typeof:<CompT>::type::typeinfo));
             self.m_require_group += 1;
             if (is_arg)
                 self.m_argument_count += 1;
@@ -248,9 +248,9 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
         arguments->add((name, type, maynot));
     }
 
-    // Read contain, except, anyof
+    // Read contains, except, anyof
     let requirements = struct{
-        contain = []mut: vec<string>,
+        contains = []mut: vec<string>,
         except = []mut: vec<string>,
         anyof = []mut: vec<array<string>>,
     };
@@ -278,10 +278,10 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
         let require = lexer->next;
         if (require == "{")
             break;
-        else if (require == "contain")
+        else if (require == "contains")
         {
             for (let t : read_type_list())
-                requirements.contain->add(t);
+                requirements.contains->add(t);
         }
         else if (require == "except")
         {
@@ -294,7 +294,7 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
         }
         else
         {
-            lexer->error("Unexpected token, here should be 'contain', 'except', 'anyof' or '{'.");
+            lexer->error("Unexpected token, here should be 'contains', 'except', 'anyof' or '{'.");
             return "";
         }
     }
@@ -306,10 +306,10 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
         if (maynot)
             result += F"->maynot:<{type}>(\x29";
         else
-            result += F"->contain:<{type}>(true\x29";
+            result += F"->contains:<{type}>(true\x29";
     }
-    for (let type : requirements.contain)
-        result += F"->contain:<{type}>(false\x29";
+    for (let type : requirements.contains)
+        result += F"->contains:<{type}>(false\x29";
     for (let type : requirements.except)
         result += F"->except:<{type}>(\x29";
     for (let req : requirements.anyof)
