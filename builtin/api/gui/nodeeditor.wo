@@ -661,7 +661,7 @@ namespace jeapi::gui
                 {
                 value((mut a, mut b))?
                 {
-                    if (!self.inputpins->contain(a))
+                    if (!self.inputpins->contains(a))
                     {
                         let tmp = a;
                         a = b;
@@ -802,7 +802,7 @@ namespace jeapi::gui
                             {
                             value(pin)?
                             {
-                                if (self.inputpins->contain(pin))
+                                if (self.inputpins->contains(pin))
                                 {
                                     let inpin = self.inputpins[pin];
                                     for (let outpin : node.outputs)
@@ -814,7 +814,7 @@ namespace jeapi::gui
                                         }
                                     }
                                 }
-                                else if (self.outputpins->contain(pin))
+                                else if (self.outputpins->contains(pin))
                                 {
                                     let outpin = self.outputpins[pin];
                                     for (let inpin : node.inputs)
@@ -873,12 +873,12 @@ namespace jeapi::gui
             let mut typename = option::none: option<string>;
             let mut isinput = false;
 
-            if (self.inputpins->contain(pinid))
+            if (self.inputpins->contains(pinid))
             {
                 typename = option::value(self.inputpins[pinid].typeval->typename());
                 isinput = true;
             }
-            else if (self.outputpins->contain(pinid))
+            else if (self.outputpins->contains(pinid))
             {
                 typename = option::value(self.outputpins[pinid].typeval->typename());
                 isinput = false;

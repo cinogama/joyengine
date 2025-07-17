@@ -411,7 +411,7 @@ namespace editor::gui::tilemap
             {
             value(d)?
                 {
-                    if (d->contain(way))
+                    if (d->contains(way))
                         return d[way];
                     
                     let texpath = context->get_project->parse_path_normalize(self.texture->path->unwrap);
@@ -1351,7 +1351,7 @@ namespace editor::gui::tilemap
             let result_images = {}mut: map<int, image>;
             let get_target_image = func(layer: int)
                 {
-                    if (result_images->contain(layer))
+                    if (result_images->contains(layer))
                         return result_images[layer];
 
                     let img = new! image(width * tile_reso, height * tile_reso);
@@ -1440,9 +1440,9 @@ namespace editor::gui::tilemap
             };
             let GET_CHUNK = func(cx: int, cy: int)
             {
-                if (!chunks->contain(cx))
+                if (!chunks->contains(cx))
                     chunks->set(cx, {}mut);
-                if (!chunks[cx]->contain(cy))
+                if (!chunks[cx]->contains(cy))
                     chunks[cx]->set(cy, 
                         Chunk
                         {
@@ -1453,7 +1453,7 @@ namespace editor::gui::tilemap
             };
             let GET_CHUNK_LAYER = func(chunk: Chunk, layer: int)
             {
-                if (!chunk.m_layers->contain(layer))
+                if (!chunk.m_layers->contains(layer))
                     chunk.m_layers->set(layer, Layer{
                         m_image = new! image(chunksize * tile_reso, chunksize * tile_reso),
                         m_walkable = array::create(chunksize * chunksize, mut (layer != 0)),
@@ -1660,7 +1660,7 @@ namespace editor::gui::tilemap
                             let chunks_pos_info = {}mut: ::map<int, ::map<int, string>>;
                             for (let chunk: saved_chunks)
                             {
-                                if (!chunks_pos_info->contain(chunk.m_position.0))
+                                if (!chunks_pos_info->contains(chunk.m_position.0))
                                     chunks_pos_info->set(chunk.m_position.0, {}mut);
 
                                 chunks_pos_info[chunk.m_position.0]->set(chunk.m_position.1, F"chunk_{chunk.m_position.0}_{chunk.m_position.1}.je4chunk");

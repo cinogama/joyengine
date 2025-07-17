@@ -55,7 +55,7 @@ namespace jeapi::gui
                     if (_showing_forms->apply(
                         func(m)
                         {
-                            let contained = m->contain(self.name);
+                            let contained = m->contains(self.name);
                             m[self.name] = do nil;
 
                             return contained;

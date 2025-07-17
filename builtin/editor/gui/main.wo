@@ -126,7 +126,7 @@ namespace editor::gui
 
         public func register_editor_form_controlor(self: EditorContext, name: string)
         {
-            if (self.m_editor_form_controlor->contain(name))
+            if (self.m_editor_form_controlor->contains(name))
                 return result::err(F"{name}已经注册");
 
             self.m_editor_form_controlor->set(name, EditorFormControlor{

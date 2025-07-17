@@ -215,7 +215,7 @@ namespace editor::gui
         let mut icon = FILE_TYPE_ICONS->get(_path.externname);
         if (IMAGE_FILE_EXTERN_NAMES->find(_path.externname)->is_value)
         {
-            if (!cached_image_file_mip_map->contain(_path.path))
+            if (!cached_image_file_mip_map->contains(_path.path))
             {
                 let proj = context->get_project;
                 let wrapped_path = proj->make_path_normalize(_path.path);

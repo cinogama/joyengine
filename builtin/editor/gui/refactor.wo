@@ -406,7 +406,7 @@ namespace editor::gui
 
                                 has_any_file_to_update = true;
 
-                                match (CheckBox(F"{path->to_string()}", checked_files->contain(replace_content)))
+                                match (CheckBox(F"{path->to_string()}", checked_files->contains(replace_content)))
                                 {
                                 value(checked)?
                                     if (checked)

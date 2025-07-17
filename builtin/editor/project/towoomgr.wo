@@ -53,7 +53,7 @@ namespace editor
                     ok(last_modify_time)?
                     {
                         let file_purename = pure_component_or_system_name(purename(p));
-                        if (_repeat_checker->contain(file_purename))
+                        if (_repeat_checker->contains(file_purename))
                         {
                             let warn_msg = F"发现同名的ToWoo：`{p}` 和 `{_repeat_checker[file_purename]}`，\n这可能导致错误的行为，请检查并排除。";
 
@@ -79,9 +79,9 @@ namespace editor
             {
                 if (filename(p)->lower->end_with(".jesystem.wo"))
                 {
-                    if (fullupdate || fetched_scripts->contain(p) == false || fetched_scripts[p] != c)
+                    if (fullupdate || fetched_scripts->contains(p) == false || fetched_scripts[p] != c)
                     {
-                        if (fetched_scripts->contain(p) == false)
+                        if (fetched_scripts->contains(p) == false)
                             self.m_removing_system->set(pure_component_or_system_name(purename(p)), t);
                     }
                     else
@@ -101,9 +101,9 @@ namespace editor
             {
                 if (filename(p)->lower->end_with(".jecomponent.wo"))
                 {
-                    if (fullupdate || fetched_scripts->contain(p) == false || fetched_scripts[p] != c)
+                    if (fullupdate || fetched_scripts->contains(p) == false || fetched_scripts[p] != c)
                     {
-                        if (fetched_scripts->contain(p) == false)
+                        if (fetched_scripts->contains(p) == false)
                             self.m_removing_component->set(pure_component_or_system_name(purename(p)), t);
                     }
                     else
@@ -137,7 +137,7 @@ namespace editor
                 none?
                     {
                         self.m_bad_towoo_script->add(p);
-                        if (self.m_loaded_towoo->contain(p))
+                        if (self.m_loaded_towoo->contains(p))
                             new_scripts->set(p, (c, self.m_loaded_towoo[p][1]));
                     }
                 }
@@ -155,7 +155,7 @@ namespace editor
                 none?
                     {
                         self.m_bad_towoo_script->add(p);
-                        if (self.m_loaded_towoo->contain(p))
+                        if (self.m_loaded_towoo->contains(p))
                             new_scripts->set(p, (c, self.m_loaded_towoo[p][1]));
                     }
                 }
@@ -201,7 +201,7 @@ namespace editor
             {
                 for (let (p, (c, _)) : self.m_loaded_towoo)
                 {
-                    if (fetched_scripts->contain(p) == false || fetched_scripts[p] != c)
+                    if (fetched_scripts->contains(p) == false || fetched_scripts[p] != c)
                         return true;
                 }
                 return false;

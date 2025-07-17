@@ -173,7 +173,7 @@ func scan_extern_function_in_path(i, skip_process_and_socket)
         if (skip_process_and_socket && (libname == "libprocess" || libname == "libsocket"))
             continue;
 
-        if (!result->contain(libname))
+        if (!result->contains(libname))
             result[libname] = {}mut;
 
         std::println(F"Found {libname}::{funcname}");

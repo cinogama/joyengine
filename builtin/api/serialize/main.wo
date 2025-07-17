@@ -76,7 +76,7 @@ namespace jeapi::serialize
 
                 for (let (m, val): am)
                 {
-                    if (bm->contain(m) == false)
+                    if (bm->contains(m) == false)
                         return false;
                     
                     let bval = bm[m];
@@ -94,7 +94,7 @@ namespace jeapi::serialize
                 ["Transform::Anchor"] = do nil,
                 ["Transform::LocalToParent"] = do nil,
             };
-            return no_sync_data_component->contain(cname);
+            return no_sync_data_component->contains(cname);
         }
         func dump_for_prefab_instance(p: string, dat: EntityData)
         {
@@ -131,7 +131,7 @@ namespace jeapi::serialize
                     let removed_component = []mut: vec<string>;
                     for (let (c, ms) : prefab_component_dat)
                     {
-                        if (components->contain(c))
+                        if (components->contains(c))
                         {
                             let result_ms = components[c];
                             for (let (m, v) : ms)
@@ -187,7 +187,7 @@ namespace jeapi::serialize
                     {
                         for (let (idx, ptex) : prefab_texture_dat)
                         {
-                            if (textures->contain(idx) == false || textures[idx] != ptex)
+                            if (textures->contains(idx) == false || textures[idx] != ptex)
                             {
                                 remove_textures = false;
                                 break;
@@ -233,9 +233,9 @@ namespace jeapi::serialize
                         ;
                     ->  to_map;
 
-            if (b: EntityData::EntityDataRawType->contain("name"))
+            if (b: EntityData::EntityDataRawType->contains("name"))
                 d->set("name", b["name"]);
-            if (b: EntityData::EntityDataRawType->contain("components"))
+            if (b: EntityData::EntityDataRawType->contains("components"))
             {
                 let components = b["components"] as dict<dynamic, dynamic>
                     ->> \k, v = (k as string, member_dats)
@@ -250,7 +250,7 @@ namespace jeapi::serialize
                         members->set(m, v);
                 }
             }
-            if (b: EntityData::EntityDataRawType->contain("removed_components"))
+            if (b: EntityData::EntityDataRawType->contains("removed_components"))
             {
                 for (let c: b["removed_components"] as array<dynamic>)
                     do base_components->remove(c: string);

@@ -521,7 +521,7 @@ namespace editor::gui::animation2d
                             jeapi::gui::form::input("新建动画", "请输入动画名称", "NewAction", 
                                 func(name)
                                 {
-                                    if (animation_context.m_animations->contain(name))
+                                    if (animation_context.m_animations->contains(name))
                                         jeapi::gui::form::errmsg("无法创建动画", F"名为{name}的动画已经存在");
                                     if (name == "")
                                         jeapi::gui::form::errmsg("无法创建动画", "动画名不能为空");
@@ -618,7 +618,7 @@ namespace editor::gui::animation2d
                                     {
                                         if (newname != action_name)
                                         {
-                                            if (animation_context.m_animations->contain(newname))
+                                            if (animation_context.m_animations->contains(newname))
                                                 jeapi::gui::form::errmsg("无法创建动画", F"名为{newname}的动画已经存在");
                                             if (newname == "")
                                                 jeapi::gui::form::errmsg("无法创建动画", "动画名不能为空");
