@@ -49,15 +49,15 @@ namespace editor::gui::edit_forms
         {
             match (je::graphic::shader::load(e->get_world->get_universe->option::value, "@/resource/shader/CameraDefer2DPass.shader"))
             {
-            value(shader)? 
+                value(shader)?
                 {
                     do e->towoo::add_component :<Light2D::CameraPostPass>;
                     let shaders = e->towoo::add_component :<Renderer::Shaders>;
-
+                    
                     do shaders->>\shad = shad->set_shaders([shader]);;
-                }                
-            none? jeapi::gui::form::errmsg("加载着色器失败", "无法加载文件@/resource/shader/CameraDefer2DPass.shader作为着色器");
-            }                 
+                }
+                none? jeapi::gui::form::errmsg("加载着色器失败", "无法加载文件@/resource/shader/CameraDefer2DPass.shader作为着色器");
+            }
         }
         else
         {
@@ -65,499 +65,499 @@ namespace editor::gui::edit_forms
             do e->towoo::remove_component :<Renderer::Shaders>;
         }
     }
-
-
+    
+    
     public func show_viewport(context: EditorContext, open: std::mutable<bool>)
     {
         if (open->get)
         {
             let proj = context->get_project;
-
+            
             // 坏！不过之后再来改吧
             static let mut windows_moveable = true;
             je::gui::SetNextWindowSizeConstraints((300., 200.), (2000., 1100.));
             open->set(true);
-
-            match (BeginAttrOpen("调试器视口", 
-                WindowsAttribute::ImGuiWindowFlags_MenuBar
-                + WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus
-                + (windows_moveable 
-                    ? WindowsAttribute::ImGuiWindowFlags_None
-                    | WindowsAttribute::ImGuiWindowFlags_NoMove)))
+            
+            match (BeginAttrOpen("调试器视口",
+                    WindowsAttribute::ImGuiWindowFlags_MenuBar
+                        + WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus
+                            + (windows_moveable
+                                    ? WindowsAttribute::ImGuiWindowFlags_None
+                                    | WindowsAttribute::ImGuiWindowFlags_NoMove)))
             {
-            value(show)?
-                if (show)
-                {
-                    let debug_world = proj->get_editing_world;
-                    let debug_camera_root = debug_world
-                        =>> \w = get_debug_camera_root(w);
-                        ;
-                    let debug_camera_entity = debug_world
-                        =>> \w = get_debug_camera(w);
-                        ;
-
-                    if (BeginMenuBar())
+                value(show)?
+                    if (show)
                     {
-                        if (! proj->is_debugging)
+                        let debug_world = proj->get_editing_world;
+                        let debug_camera_root = debug_world
+                            =>> \w = get_debug_camera_root(w);
+                            ;
+                        let debug_camera_entity = debug_world
+                            =>> \w = get_debug_camera(w);
+                            ;
+                            
+                        if (BeginMenuBar())
                         {
-                            if (MenuItemShortcut("调试运行", "Ctrl + P") 
-                                || (IsWindowFocused() && jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_LeftCtrl, ImGuiKey::ImGuiKey_P])))
+                            if (! proj->is_debugging)
                             {
-                                do context->start_debug()->error->>\e = jeapi::gui::form::errmsg("失败", F"开始调试失败, {e}");;
-                                je::loginfo("=======================调试开始=======================");
-                                launch(func(){
-                                    if (proj->is_debugging)
-                                    {
-                                        if (BeginAttr("调试工具", 
-                                            WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
-                                            + WindowsAttribute::ImGuiWindowFlags_NoDocking
-                                            + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
-                                        {
-                                            do DragFloat("时间缩放", proj->get_env->get_universe->get_timescale, 0.1, 0.0, 16.0)
-                                                ->> \val = proj->get_env->get_universe->set_timescale(val);
-                                                ;
-                                            if (Button("终止当前调试") || jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_LeftCtrl, ImGuiKey::ImGuiKey_Escape]))
-                                            {
-                                                proj->get_env->get_universe->set_timescale(1.);
-                                                do context->stop_debug()->error->>\e = jeapi::gui::form::errmsg("失败", F"终止调试失败, {e}");;
-                                                je::loginfo("=======================调试结束=======================");
-                                            }
-                                        }
-                                        End();
-                                        return true;
-                                    }
-                                    return false;
-                                });
-                            }
-                        }
-                        else
-                        {
-                            if (MenuItem("终止调试"))
-                                do context->stop_debug()->error->>\e = jeapi::gui::form::errmsg("失败", F"终止调试失败, {e}");;
-                        }
-                        if (MenuItemEnabled("3D/2D编辑模式", debug_camera_entity->is_value))
-                        {
-                            update_camera_2d3d_mode(debug_camera_entity->unwrap, 
-                                !debug_camera_entity->unwrap->towoo::get_component :<Camera::OrthoProjection>->is_value);
-                        }
-                        if (MenuItemEnabled("开启/关闭2D光照预览", debug_camera_entity->is_value))
-                        {
-                            update_camera_2dlight_mode(debug_camera_entity->unwrap,
-                                !debug_camera_entity->unwrap->towoo::get_component :<Light2D::CameraPostPass>->is_value);
-                        }
-                        static let MOVER_MODE = {
-                            [je::internal::mover_mode::NOSPECIFY] = "未指定",
-                            [je::internal::mover_mode::SELECTION] = "仅选中",
-                            [je::internal::mover_mode::MOVEMENT] = "移动",
-                            [je::internal::mover_mode::ROTATION] = "旋转",
-                            [je::internal::mover_mode::SCALE] = "缩放",
-                            };
-                        static let COORD_MODE = {
-                            [je::internal::coord_mode::GLOBAL] = "全局坐标系",
-                            [je::internal::coord_mode::LOCAL] = "局部坐标系",
-                            };
-
-                        let mut mover_mode = debug_world->>\w = je::internal::get_editing_mover_mode(w);->or(je::internal::mover_mode::SELECTION);
-                        let mut coord_mode = debug_world->>\w = je::internal::get_editing_coord_mode(w);->or(je::internal::coord_mode::GLOBAL);
-
-                        if (jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_Tab, ImGuiKey::ImGuiKey_C]))
-                            mover_mode = je::internal::mover_mode::SELECTION;
-                        else if (jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_Tab, ImGuiKey::ImGuiKey_T]))
-                            mover_mode = je::internal::mover_mode::MOVEMENT;
-                        else if (jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_Tab, ImGuiKey::ImGuiKey_R]))
-                            mover_mode = je::internal::mover_mode::ROTATION;
-                        else if (jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_Tab, ImGuiKey::ImGuiKey_S]))
-                            mover_mode = je::internal::mover_mode::SCALE;
-                        else if (jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_Tab, ImGuiKey::ImGuiKey_G]))
-                            coord_mode = je::internal::coord_mode::GLOBAL;
-                        else if (jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_Tab, ImGuiKey::ImGuiKey_L]))
-                            coord_mode = je::internal::coord_mode::LOCAL;
-                        else if (jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_Tab]))
-                        {
-                            static let mut last_click_time = 0.;
-                            if (std::time() - last_click_time <= 0.2)
-                            {
-                                if ((mover_mode +:= 1: je::internal::mover_mode) > je::internal::mover_mode::SCALE)
-                                    mover_mode = je::internal::mover_mode::SELECTION;
-                            }
-                            last_click_time = std::time();
-                        }
-
-                        if (BeginMenuEnabled(F"{MOVER_MODE[mover_mode]}|{COORD_MODE[coord_mode]}", debug_camera_entity->is_value))
-                        {   
-                            if (MenuItemShortcutSelectedEnabled("仅选中", "Tab + C", mover_mode == je::internal::mover_mode::SELECTION, debug_camera_entity->is_value)->is_value)
-                                mover_mode = je::internal::mover_mode::SELECTION;
-                            if (MenuItemShortcutSelectedEnabled("移动", "Tab + T", mover_mode == je::internal::mover_mode::MOVEMENT, debug_camera_entity->is_value)->is_value)
-                                mover_mode = je::internal::mover_mode::MOVEMENT;
-                            if (MenuItemShortcutSelectedEnabled("旋转", "Tab + R", mover_mode == je::internal::mover_mode::ROTATION, debug_camera_entity->is_value)->is_value)
-                                mover_mode = je::internal::mover_mode::ROTATION;
-                            if (MenuItemShortcutSelectedEnabled("缩放", "Tab + S", mover_mode == je::internal::mover_mode::SCALE, debug_camera_entity->is_value)->is_value)
-                                mover_mode = je::internal::mover_mode::SCALE;
-                            Separator();
-                            if (MenuItemShortcutSelectedEnabled("全局坐标系", "Tab + G", coord_mode == je::internal::coord_mode::GLOBAL, debug_camera_entity->is_value)->is_value)
-                                coord_mode = je::internal::coord_mode::GLOBAL;
-                            if (MenuItemShortcutSelectedEnabled("局部坐标系", "Tab + L", coord_mode == je::internal::coord_mode::LOCAL, debug_camera_entity->is_value)->is_value)
-                                coord_mode = je::internal::coord_mode::LOCAL;
-                            Separator();
-                            if (MenuItem("重置视口摄像机"))
-                            {
-                                mover_mode = je::internal::mover_mode::SELECTION;
-                                coord_mode = je::internal::coord_mode::GLOBAL;
-
-                                func reset_entity_trans(e)
+                                if (MenuItemShortcut("调试运行", "Ctrl + P")
+                                        || (IsWindowFocused() && jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_LeftCtrl, ImGuiKey::ImGuiKey_P])))
                                 {
-                                    let lp = e->towoo::get_component:<Transform::LocalPosition>;
-                                    let lr = e->towoo::get_component:<Transform::LocalRotation>;
-
-                                    do lp->> \lp = lp.pos->set <| (0., 0., 0.): vec3;;
-                                    do lr->> \lr = lr.rot->set <| quat::ident;;
+                                    do context->start_debug()->error->>\e = jeapi::gui::form::errmsg("失败", F"开始调试失败, {e}");;
+                                    je::loginfo("=======================调试开始=======================");
+                                    launch(func(){
+                                            if (proj->is_debugging)
+                                            {
+                                                if (BeginAttr("调试工具",
+                                                        WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
+                                                            + WindowsAttribute::ImGuiWindowFlags_NoDocking
+                                                                + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
+                                                {
+                                                    do DragFloat("时间缩放", proj->get_env->get_universe->get_timescale, 0.1, 0.0, 16.0)
+                                                        ->> \val = proj->get_env->get_universe->set_timescale(val);
+                                                        ;
+                                                    if (Button("终止当前调试") || jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_LeftCtrl, ImGuiKey::ImGuiKey_Escape]))
+                                                    {
+                                                        proj->get_env->get_universe->set_timescale(1.);
+                                                        do context->stop_debug()->error->>\e = jeapi::gui::form::errmsg("失败", F"终止调试失败, {e}");;
+                                                        je::loginfo("=======================调试结束=======================");
+                                                    }
+                                                }
+                                                End();
+                                                return true;
+                                            }
+                                            return false;
+                                        });
                                 }
-
-                                do debug_camera_entity->> \e = reset_entity_trans(e);;
-                                do debug_camera_root->> \e = reset_entity_trans(e);;
-
                             }
-                            EndMenu();
-                        }
-
-                        if (BeginMenuEnabled("GIZMO", debug_camera_entity->is_value))
-                        {
-                            let mut gizmo = std::mutable::create(debug_world->>\w = je::internal::get_editing_gizmo_mode(w);->or(je::internal::gizmo_mode::ALL): int);
-                            let update_gizmo_option = func(item: je::internal::gizmo_mode, able: bool)
+                            else
+                            {
+                                if (MenuItem("终止调试"))
+                                    do context->stop_debug()->error->>\e = jeapi::gui::form::errmsg("失败", F"终止调试失败, {e}");;
+                            }
+                            if (MenuItemEnabled("3D/2D编辑模式", debug_camera_entity->is_value))
+                            {
+                                update_camera_2d3d_mode(debug_camera_entity->unwrap,
+                                    !debug_camera_entity->unwrap->towoo::get_component :<Camera::OrthoProjection>->is_value);
+                            }
+                            if (MenuItemEnabled("开启/关闭2D光照预览", debug_camera_entity->is_value))
+                            {
+                                update_camera_2dlight_mode(debug_camera_entity->unwrap,
+                                    !debug_camera_entity->unwrap->towoo::get_component :<Light2D::CameraPostPass>->is_value);
+                            }
+                            static let MOVER_MODE = {
+                                [je::internal::mover_mode::NOSPECIFY] = "未指定",
+                                [je::internal::mover_mode::SELECTION] = "仅选中",
+                                [je::internal::mover_mode::MOVEMENT] = "移动",
+                                [je::internal::mover_mode::ROTATION] = "旋转",
+                                [je::internal::mover_mode::SCALE] = "缩放",
+                            };
+                            static let COORD_MODE = {
+                                [je::internal::coord_mode::GLOBAL] = "全局坐标系",
+                                [je::internal::coord_mode::LOCAL] = "局部坐标系",
+                            };
+                            
+                            let mut mover_mode = debug_world->>\w = je::internal::get_editing_mover_mode(w);->or(je::internal::mover_mode::SELECTION);
+                            let mut coord_mode = debug_world->>\w = je::internal::get_editing_coord_mode(w);->or(je::internal::coord_mode::GLOBAL);
+                            
+                            if (jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_Tab, ImGuiKey::ImGuiKey_C]))
+                                mover_mode = je::internal::mover_mode::SELECTION;
+                            else if (jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_Tab, ImGuiKey::ImGuiKey_T]))
+                                mover_mode = je::internal::mover_mode::MOVEMENT;
+                            else if (jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_Tab, ImGuiKey::ImGuiKey_R]))
+                                mover_mode = je::internal::mover_mode::ROTATION;
+                            else if (jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_Tab, ImGuiKey::ImGuiKey_S]))
+                                mover_mode = je::internal::mover_mode::SCALE;
+                            else if (jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_Tab, ImGuiKey::ImGuiKey_G]))
+                                coord_mode = je::internal::coord_mode::GLOBAL;
+                            else if (jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_Tab, ImGuiKey::ImGuiKey_L]))
+                                coord_mode = je::internal::coord_mode::LOCAL;
+                            else if (jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_Tab]))
+                            {
+                                static let mut last_click_time = 0.;
+                                if (std::time() - last_click_time <= 0.2)
+                                {
+                                    if ((mover_mode +:= 1: je::internal::mover_mode) > je::internal::mover_mode::SCALE)
+                                        mover_mode = je::internal::mover_mode::SELECTION;
+                                }
+                                last_click_time = std::time();
+                            }
+                            
+                            if (BeginMenuEnabled(F"{MOVER_MODE[mover_mode]}|{COORD_MODE[coord_mode]}", debug_camera_entity->is_value))
+                            {
+                                if (MenuItemShortcutSelectedEnabled("仅选中", "Tab + C", mover_mode == je::internal::mover_mode::SELECTION, debug_camera_entity->is_value)->is_value)
+                                    mover_mode = je::internal::mover_mode::SELECTION;
+                                if (MenuItemShortcutSelectedEnabled("移动", "Tab + T", mover_mode == je::internal::mover_mode::MOVEMENT, debug_camera_entity->is_value)->is_value)
+                                    mover_mode = je::internal::mover_mode::MOVEMENT;
+                                if (MenuItemShortcutSelectedEnabled("旋转", "Tab + R", mover_mode == je::internal::mover_mode::ROTATION, debug_camera_entity->is_value)->is_value)
+                                    mover_mode = je::internal::mover_mode::ROTATION;
+                                if (MenuItemShortcutSelectedEnabled("缩放", "Tab + S", mover_mode == je::internal::mover_mode::SCALE, debug_camera_entity->is_value)->is_value)
+                                    mover_mode = je::internal::mover_mode::SCALE;
+                                Separator();
+                                if (MenuItemShortcutSelectedEnabled("全局坐标系", "Tab + G", coord_mode == je::internal::coord_mode::GLOBAL, debug_camera_entity->is_value)->is_value)
+                                    coord_mode = je::internal::coord_mode::GLOBAL;
+                                if (MenuItemShortcutSelectedEnabled("局部坐标系", "Tab + L", coord_mode == je::internal::coord_mode::LOCAL, debug_camera_entity->is_value)->is_value)
+                                    coord_mode = je::internal::coord_mode::LOCAL;
+                                Separator();
+                                if (MenuItem("重置视口摄像机"))
+                                {
+                                    mover_mode = je::internal::mover_mode::SELECTION;
+                                    coord_mode = je::internal::coord_mode::GLOBAL;
+                                    
+                                    func reset_entity_trans(e)
+                                    {
+                                        let lp = e->towoo::get_component:<Transform::LocalPosition>;
+                                        let lr = e->towoo::get_component:<Transform::LocalRotation>;
+                                        
+                                        do lp->> \lp = lp.pos->set <| (0., 0., 0.): vec3;;
+                                        do lr->> \lr = lr.rot->set <| quat::ident;;
+                                    }
+                                    
+                                    do debug_camera_entity->> \e = reset_entity_trans(e);;
+                                    do debug_camera_root->> \e = reset_entity_trans(e);;
+                                    
+                                }
+                                EndMenu();
+                            }
+                            
+                            if (BeginMenuEnabled("GIZMO", debug_camera_entity->is_value))
+                            {
+                                let mut gizmo = std::mutable::create(debug_world->>\w = je::internal::get_editing_gizmo_mode(w);->or(je::internal::gizmo_mode::ALL): int);
+                                let update_gizmo_option = func(item: je::internal::gizmo_mode, able: bool)
                                 {
                                     if (able)
                                         gizmo->set(gizmo->get->bor(item: int));
                                     else
                                         gizmo->set(gizmo->get->band(item: int->bnot));
                                 };
-
-                            do MenuItemSelected("摄像机", 0 != gizmo->get->band(je::internal::gizmo_mode::CAMERA: int))
-                                ->> \selected = update_gizmo_option(je::internal::gizmo_mode::CAMERA, selected);
-                                ;    
-                            do MenuItemSelected("视椎体", 0 != gizmo->get->band(je::internal::gizmo_mode::CAMERA_VISUAL_CONE: int))
-                                ->> \selected = update_gizmo_option(je::internal::gizmo_mode::CAMERA_VISUAL_CONE, selected);
-                                ;
-                            do MenuItemSelected("2D光源", 0 != gizmo->get->band(je::internal::gizmo_mode::LIGHT2D: int))
-                                ->> \selected = update_gizmo_option(je::internal::gizmo_mode::LIGHT2D, selected);
-                                ;
-                            do MenuItemSelected("2D碰撞体", 0 != gizmo->get->band(je::internal::gizmo_mode::PHYSICS2D_COLLIDER: int))
-                                ->> \selected = update_gizmo_option(je::internal::gizmo_mode::PHYSICS2D_COLLIDER, selected);
-                                ;
-                            do MenuItemSelected("高亮选中", 0 != gizmo->get->band(je::internal::gizmo_mode::SELECTING_HIGHLIGHT: int))
-                                ->> \selected = update_gizmo_option(je::internal::gizmo_mode::SELECTING_HIGHLIGHT, selected);
-                                ;
-                               
-                            Separator();
-
-                            if (MenuItem("全选"))
-                                gizmo->set(je::internal::gizmo_mode::ALL: int);
-                            if (MenuItem("全不选"))
-                                gizmo->set(je::internal::gizmo_mode::NONE: int);
-
-                            do debug_world->>\w = je::internal::set_editing_gizmo_mode(w, gizmo->get: je::internal::gizmo_mode);;
-                            EndMenu();
-                        }
-
-                        let towoo_context = proj->get_towoo_context();
-                        let bad_scripts = towoo_context->get_bad_scripts();
-                        let removing_comps = towoo_context->get_removing_components();
-                        let removing_syss = towoo_context->get_removing_systems();
-
-                        let mut menu_name = "ToWoo";
-
-                        if (!bad_scripts->empty)
-                            menu_name += F" {bad_scripts->len}错误";
-                        if (!removing_comps->empty)
-                            menu_name += F" {removing_comps->len}丢失组件";
-                        if (!removing_syss->empty)
-                            menu_name += F" {removing_syss->len}丢失系统";
-  
-                        if (BeginMenu(menu_name))
-                        {
-                            if (MenuItem("重新载入所有脚本"))
-                                proj->update_towoo(true);
-
-                            Separator();
-
+                                
+                                do MenuItemSelected("摄像机", 0 != gizmo->get->band(je::internal::gizmo_mode::CAMERA: int))
+                                    ->> \selected = update_gizmo_option(je::internal::gizmo_mode::CAMERA, selected);
+                                    ;
+                                do MenuItemSelected("视椎体", 0 != gizmo->get->band(je::internal::gizmo_mode::CAMERA_VISUAL_CONE: int))
+                                    ->> \selected = update_gizmo_option(je::internal::gizmo_mode::CAMERA_VISUAL_CONE, selected);
+                                    ;
+                                do MenuItemSelected("2D光源", 0 != gizmo->get->band(je::internal::gizmo_mode::LIGHT2D: int))
+                                    ->> \selected = update_gizmo_option(je::internal::gizmo_mode::LIGHT2D, selected);
+                                    ;
+                                do MenuItemSelected("2D碰撞体", 0 != gizmo->get->band(je::internal::gizmo_mode::PHYSICS2D_COLLIDER: int))
+                                    ->> \selected = update_gizmo_option(je::internal::gizmo_mode::PHYSICS2D_COLLIDER, selected);
+                                    ;
+                                do MenuItemSelected("高亮选中", 0 != gizmo->get->band(je::internal::gizmo_mode::SELECTING_HIGHLIGHT: int))
+                                    ->> \selected = update_gizmo_option(je::internal::gizmo_mode::SELECTING_HIGHLIGHT, selected);
+                                    ;
+                                    
+                                Separator();
+                                
+                                if (MenuItem("全选"))
+                                    gizmo->set(je::internal::gizmo_mode::ALL: int);
+                                if (MenuItem("全不选"))
+                                    gizmo->set(je::internal::gizmo_mode::NONE: int);
+                                    
+                                do debug_world->>\w = je::internal::set_editing_gizmo_mode(w, gizmo->get: je::internal::gizmo_mode);;
+                                EndMenu();
+                            }
+                            
+                            let towoo_context = proj->get_towoo_context();
+                            let bad_scripts = towoo_context->get_bad_scripts();
+                            let removing_comps = towoo_context->get_removing_components();
+                            let removing_syss = towoo_context->get_removing_systems();
+                            
+                            let mut menu_name = "ToWoo";
+                            
                             if (!bad_scripts->empty)
-                            {
-                                do MenuItemEnabled("编译错误", false);
-                                for (let p : bad_scripts)
-                                {
-                                    if (MenuItem(ToWooContext::pure_component_or_system_name(fsys::purename(p))))
-                                        jeapi::gui::widget::invoke_click_file_callback(proj->make_path_normalize(p));
-                                }
-
-                                Separator();
-                            }
+                                menu_name += F" {bad_scripts->len}错误";
                             if (!removing_comps->empty)
-                            {
-                                do MenuItemEnabled("丢失组件", false);
-                                for (let p : removing_comps)
-                                {
-                                    do MenuItem(p);
-                                }
-                                Separator();
-                            }
+                                menu_name += F" {removing_comps->len}丢失组件";
                             if (!removing_syss->empty)
+                                menu_name += F" {removing_syss->len}丢失系统";
+                                
+                            if (BeginMenu(menu_name))
                             {
-                                do MenuItemEnabled("丢失系统", false);
-                                for (let p : removing_syss)
+                                if (MenuItem("重新载入所有脚本"))
+                                    proj->update_towoo(true);
+                                    
+                                Separator();
+                                
+                                if (!bad_scripts->empty)
                                 {
-                                    do MenuItem(p);
+                                    do MenuItemEnabled("编译错误", false);
+                                    for (let p : bad_scripts)
+                                    {
+                                        if (MenuItem(ToWooContext::pure_component_or_system_name(fsys::purename(p))))
+                                            jeapi::gui::widget::invoke_click_file_callback(proj->make_path_normalize(p));
+                                    }
+                                    
+                                    Separator();
+                                }
+                                if (!removing_comps->empty)
+                                {
+                                    do MenuItemEnabled("丢失组件", false);
+                                    for (let p : removing_comps)
+                                    {
+                                        do MenuItem(p);
+                                    }
+                                    Separator();
+                                }
+                                if (!removing_syss->empty)
+                                {
+                                    do MenuItemEnabled("丢失系统", false);
+                                    for (let p : removing_syss)
+                                    {
+                                        do MenuItem(p);
+                                    }
+                                    Separator();
+                                }
+                                
+                                do MenuItemEnabled("组件", false);
+                                for (let (p, _): towoo_context->get_loaded_towoo)
+                                {
+                                    if (fsys::filename(p)->lower->end_with(".jecomponent.wo"))
+                                        if (MenuItem(ToWooContext::pure_component_or_system_name(fsys::purename(p))))
+                                            jeapi::gui::widget::invoke_click_file_callback(proj->make_path_normalize(p));
                                 }
                                 Separator();
-                            }
-
-                            do MenuItemEnabled("组件", false);
-                            for (let (p, _): towoo_context->get_loaded_towoo)
-                            {
-                                if (fsys::filename(p)->lower->end_with(".jecomponent.wo"))
-                                    if (MenuItem(ToWooContext::pure_component_or_system_name(fsys::purename(p))))
-                                        jeapi::gui::widget::invoke_click_file_callback(proj->make_path_normalize(p));
-                            }
-                            Separator();
-                            do MenuItemEnabled("系统", false);
-                            for (let (p, _): towoo_context->get_loaded_towoo)
-                            {
-                                if (fsys::filename(p)->lower->end_with(".jesystem.wo"))
-                                    if (MenuItem(ToWooContext::pure_component_or_system_name(fsys::purename(p))))
-                                        jeapi::gui::widget::invoke_click_file_callback(proj->make_path_normalize(p));
-                            }
-                            EndMenu();
-                        }
-
-                        do debug_world->>
-                            func(w)
-                            {
-                                je::internal::set_editing_mover_mode(w, mover_mode);
-                                je::internal::set_editing_coord_mode(w, coord_mode);
-                            };
-
-                        EndMenuBar();
-                    }
-
-                    match(debug_camera_entity)
-                    {
-                    value(camera_entity)?
-                        {
-                            let (available_width, available_height) = GetContentRegionAvail();
-                            let mut need_update_frame = false;
-                            match (je::internal::get_framebuf_texture(camera_entity, 0))
-                            {
-                            value(frametex)?
+                                do MenuItemEnabled("系统", false);
+                                for (let (p, _): towoo_context->get_loaded_towoo)
                                 {
-                                    let (wx, wy) = GetWindowPos();
-                                    let (lupx, lupy) = GetCursorPos();
-
-                                    ImageSize(frametex, available_width, available_height);
-
-                                    if (IsWindowFocused())
+                                    if (fsys::filename(p)->lower->end_with(".jesystem.wo"))
+                                        if (MenuItem(ToWooContext::pure_component_or_system_name(fsys::purename(p))))
+                                            jeapi::gui::widget::invoke_click_file_callback(proj->make_path_normalize(p));
+                                }
+                                EndMenu();
+                            }
+                            
+                            do debug_world->>
+                                func(w)
+                                {
+                                    je::internal::set_editing_mover_mode(w, mover_mode);
+                                    je::internal::set_editing_coord_mode(w, coord_mode);
+                                };
+                                
+                            EndMenuBar();
+                        }
+                        
+                        match(debug_camera_entity)
+                        {
+                            value(camera_entity)?
+                            {
+                                let (available_width, available_height) = GetContentRegionAvail();
+                                let mut need_update_frame = false;
+                                match (je::internal::get_framebuf_texture(camera_entity, 0))
+                                {
+                                    value(frametex)?
                                     {
-                                        // NOTE: 因为引擎只关注主窗口，而编辑器系统只能获取主窗口的输入；
-                                        // 此处需要将编辑器关注的鼠标/键盘状态从GUI同步到引擎IO
-
-                                        // TODO: 需要把整个编辑器系统迁移到woolang实现
-
-                                        je::input::internal::update_key_state(je::keycode::W, IsKeyDown(ImGuiKey::ImGuiKey_W));
-                                        je::input::internal::update_key_state(je::keycode::S, IsKeyDown(ImGuiKey::ImGuiKey_S));
-                                        je::input::internal::update_key_state(je::keycode::A, IsKeyDown(ImGuiKey::ImGuiKey_A));
-                                        je::input::internal::update_key_state(je::keycode::D, IsKeyDown(ImGuiKey::ImGuiKey_D));
+                                        let (wx, wy) = GetWindowPos();
+                                        let (lupx, lupy) = GetCursorPos();
                                         
-                                        je::input::internal::update_key_state(je::keycode::TAB, IsKeyDown(ImGuiKey::ImGuiKey_Tab));
-                                        je::input::internal::update_key_state(je::keycode::L_CTRL, IsKeyDown(ImGuiKey::ImGuiKey_LeftCtrl));
-                                        je::input::internal::update_key_state(je::keycode::L_SHIFT, IsKeyDown(ImGuiKey::ImGuiKey_LeftShift));
-
-                                        je::input::internal::update_mouse_state(0, je::mousecode::LEFT, IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Left));
-                                        je::input::internal::update_mouse_state(0, je::mousecode::RIGHT, IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Right));
-
-                                        let (wheelx, wheely) = je::input::wheel(0);
-                                        let (guiwheelx, guiwheely) = GetMouseWheel();
-                                        je::input::internal::update_wheel(0, wheelx + guiwheelx, wheely + guiwheely); 
-                                    }
-
-                                    let (mx, my) = GetMousePos();
-                                    je::internal::update_editor_mouse_pos(mx - lupx - wx, my - lupy - wy);
-
-                                    static let mut mouse_hovered_flag = false;
-                                    if (IsItemHovered() || mouse_hovered_flag)
-                                    {
-                                        // 在渲染区域内！
-                                        windows_moveable = false;
-                                        je::internal::enable_editor_system(true);
-                              
-                                        static let mut right_key_down_time = 0.,
+                                        ImageSize(frametex, available_width, available_height);
+                                        
+                                        if (IsWindowFocused())
+                                        {
+                                            // NOTE: 因为引擎只关注主窗口，而编辑器系统只能获取主窗口的输入；
+                                            // 此处需要将编辑器关注的鼠标/键盘状态从GUI同步到引擎IO
+                                            
+                                            // TODO: 需要把整个编辑器系统迁移到woolang实现
+                                            
+                                            je::input::internal::update_key_state(je::keycode::W, IsKeyDown(ImGuiKey::ImGuiKey_W));
+                                            je::input::internal::update_key_state(je::keycode::S, IsKeyDown(ImGuiKey::ImGuiKey_S));
+                                            je::input::internal::update_key_state(je::keycode::A, IsKeyDown(ImGuiKey::ImGuiKey_A));
+                                            je::input::internal::update_key_state(je::keycode::D, IsKeyDown(ImGuiKey::ImGuiKey_D));
+                                            
+                                            je::input::internal::update_key_state(je::keycode::TAB, IsKeyDown(ImGuiKey::ImGuiKey_Tab));
+                                            je::input::internal::update_key_state(je::keycode::L_CTRL, IsKeyDown(ImGuiKey::ImGuiKey_LeftCtrl));
+                                            je::input::internal::update_key_state(je::keycode::L_SHIFT, IsKeyDown(ImGuiKey::ImGuiKey_LeftShift));
+                                            
+                                            je::input::internal::update_mouse_state(0, je::mousecode::LEFT, IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Left));
+                                            je::input::internal::update_mouse_state(0, je::mousecode::RIGHT, IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Right));
+                                            
+                                            let (wheelx, wheely) = je::input::wheel(0);
+                                            let (guiwheelx, guiwheely) = GetMouseWheel();
+                                            je::input::internal::update_wheel(0, wheelx + guiwheelx, wheely + guiwheely);
+                                        }
+                                        
+                                        let (mx, my) = GetMousePos();
+                                        je::internal::update_editor_mouse_pos(mx - lupx - wx, my - lupy - wy);
+                                        
+                                        static let mut mouse_hovered_flag = false;
+                                        if (IsItemHovered() || mouse_hovered_flag)
+                                        {
+                                            // 在渲染区域内！
+                                            windows_moveable = false;
+                                            je::internal::enable_editor_system(true);
+                                            
+                                            static let mut right_key_down_time = 0.,
                                             mut mouse_click_x = 0.,
                                             mut mouse_click_y = 0.;
-
-                                        if (je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Left))
-                                            mouse_hovered_flag = true;
-
-                                        if (je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Right))
-                                        {
-                                            if (!mouse_hovered_flag)
-                                            {
-                                                right_key_down_time = std::time();
-                                                mouse_click_x = mx;
-                                                mouse_click_y = my;
-                                            }
+                                            
+                                            if (je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Left))
+                                                mouse_hovered_flag = true;
                                                 
-                                            mouse_hovered_flag = true;
+                                            if (je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Right))
+                                            {
+                                                if (!mouse_hovered_flag)
+                                                {
+                                                    right_key_down_time = std::time();
+                                                    mouse_click_x = mx;
+                                                    mouse_click_y = my;
+                                                }
+                                                
+                                                mouse_hovered_flag = true;
+                                            }
+                                            else
+                                            {
+                                                mouse_hovered_flag = false;
+                                                
+                                                if (std::time() - right_key_down_time < 0.2
+                                                        && (mouse_click_x - mx, mouse_click_y - my): vec2->length < 5.)
+                                                    OpenPopup("RightClickContextMenu");
+                                            }
                                         }
                                         else
                                         {
-                                            mouse_hovered_flag = false;
-
-                                            if (std::time() - right_key_down_time < 0.2
-                                                && (mouse_click_x - mx, mouse_click_y - my): vec2->length < 5.)
-                                                OpenPopup("RightClickContextMenu");
+                                            windows_moveable = true;
+                                            je::internal::enable_editor_system(false);
                                         }
+                                        
+                                        let (frame_tex_width, frame_tex_height) = frametex->size;
+                                        if (frame_tex_width != available_width: int
+                                                || frame_tex_height != available_height: int)
+                                            need_update_frame = true;
                                     }
-                                    else
-                                    {
-                                        windows_moveable = true;
-                                        je::internal::enable_editor_system(false);
-                                    }
-
-                                    let (frame_tex_width, frame_tex_height) = frametex->size;
-                                    if (frame_tex_width != available_width: int 
-                                        || frame_tex_height != available_height: int)
+                                    none?
                                         need_update_frame = true;
                                 }
-                            none?
-                                need_update_frame = true;
-                            }
-
-                            if (need_update_frame)
-                            {
-                                if (available_width: int > 0 && available_height: int > 0)
-                                    camera_entity->je::internal::apply_camera_framebuf_setting(
-                                        available_width: int, available_height: int);
-                            }
-
-                            if (BeginPopup("RightClickContextMenu"))
-                            {
-                                entity_edit_context_menu(context, debug_world->unwrap, context->get_editing_entity);
-                                EndPopup();
-                            }
-
-                            match (jeapi::gui::widget::accept_file_for_current_widget())
-                            {
-                            value(path)?
+                                
+                                if (need_update_frame)
                                 {
-                                    let filepath = proj->parse_path_normalize(path);
-                                    if (fsys::extension(filepath)->lower == ".je4entity")
+                                    if (available_width: int > 0 && available_height: int > 0)
+                                        camera_entity->je::internal::apply_camera_framebuf_setting(
+                                            available_width: int, available_height: int);
+                                }
+                                
+                                if (BeginPopup("RightClickContextMenu"))
+                                {
+                                    entity_edit_context_menu(context, debug_world->unwrap, context->get_editing_entity);
+                                    EndPopup();
+                                }
+                                
+                                match (jeapi::gui::widget::accept_file_for_current_widget())
+                                {
+                                    value(path)?
                                     {
-                                        if (debug_world
-                                                =>> func(w)
+                                        let filepath = proj->parse_path_normalize(path);
+                                        if (fsys::extension(filepath)->lower == ".je4entity")
+                                        {
+                                            if (debug_world
+                                                    =>> func(w)
                                                     {
                                                         let e = jeapi::serialize::entity::instantiate(
-                                                            w, 
+                                                            w,
                                                             {
                                                                 ["prefab"] = proj->make_path_normalize(filepath): dynamic
-                                                            }: jeapi::serialize::EntityData,
+                                                                }: jeapi::serialize::EntityData,
                                                             true);
-
+                                                            
                                                         do e->>\e = set_new_created_entity_pos(w, e);;
                                                         return e;
                                                     }
-                                                ->  is_value == false)
-                                        {
-                                            jeapi::gui::form::errmsg("失败", "加载实体失败");
-                                        }  
-                                    }
-                                    if (editor::gui::IMAGE_FILE_EXTERN_NAMES->find(fsys::extension(filepath)->lower)->is_value)
-                                    {
-                                        match (je::graphic::texture::load(context->get_project->get_env->get_universe->option::value, path))
-                                        {
-                                        value(tex)?
+                                                    ->  is_value == false)
                                             {
-                                                let entity_create_context = struct{
-                                                    pixel_per_unit = mut 16,
-                                                };
-                                                launch(
-                                                    func()
-                                                    {
-                                                        let mut open = true;
-                                                        match (BeginAttrOpen("从纹理创建实体", 
-                                                            WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
-                                                            + WindowsAttribute::ImGuiWindowFlags_NoDocking
-                                                            + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
-                                                        {
-                                                        value(show)?
-                                                            if (show)
-                                                            {
-                                                                Text(F"从纹理 `{path}` 创建实体");
-                                                                Text("单位像素数");
-                                                                SameLine();
-                                                                do InputInt("##pixel_per_unit", entity_create_context.pixel_per_unit)
-                                                                    ->> \newval = entity_create_context.pixel_per_unit = newval > 0 ? newval | 1;
-                                                                    ;
-                                                                
-                                                                if (Button("创建"))
-                                                                {
-                                                                    match (editor::gui::edit_forms::fast_create_entity(
-                                                                        context, 
-                                                                        debug_world->unwrap, 
-                                                                        fsys::purename(filepath), 
-                                                                        [
-                                                                            "Transform::LocalPosition",
-                                                                            "Transform::LocalRotation",
-                                                                            "Transform::LocalScale",
-                                                                            "Transform::LocalToWorld",
-                                                                            "Transform::Translation",
-                                                                            "Renderer::Shape",
-                                                                            "Renderer::Shaders",
-                                                                            "Renderer::Textures",
-                                                                        ]))
-                                                                    {
-                                                                    value(e)?
-                                                                        {
-                                                                            let default_shader = je::graphic::shader::load(e->get_world->get_universe->option::value, "@/resource/shader/Unlit.shader")->unwrap;
-                                                                            e->set_shaders([default_shader]);
-                                                                            e->bind_texture(0, option::value(tex));
-
-                                                                            let localscale = e->towoo::get_component :<Transform::LocalScale>()->unwrap;
-                                                                            let (px, py) = tex->size;
-                                                                            localscale.scale->set(
-                                                                                (px: real / entity_create_context.pixel_per_unit: real, 
-                                                                                py: real / entity_create_context.pixel_per_unit: real, 
-                                                                                1.): vec3);
-                                                                        }
-                                                                    none?
-                                                                        jeapi::gui::form::errmsg("失败", "从纹理创建实体失败");
-                                                                    }
-                                                                    open = false;
-                                                                }
-                                                                if (Button("取消"))
-                                                                {
-                                                                    open = false;
-                                                                }
-                                                            }
-                                                        none?
-                                                            open = false;
-                                                        }
-                                                        End();
-
-                                                        return open;
-                                                    });
+                                                jeapi::gui::form::errmsg("失败", "加载实体失败");
                                             }
-                                        none?
-                                            jeapi::gui::form::errmsg("失败", "从纹理创建实体失败");
+                                        }
+                                        if (editor::gui::IMAGE_FILE_EXTERN_NAMES->find(fsys::extension(filepath)->lower)->is_value)
+                                        {
+                                            match (je::graphic::texture::load(context->get_project->get_env->get_universe->option::value, path))
+                                            {
+                                                value(tex)?
+                                                {
+                                                    let entity_create_context = struct{
+                                                        pixel_per_unit = mut 16,
+                                                    };
+                                                    launch(
+                                                        func()
+                                                        {
+                                                            let mut open = true;
+                                                            match (BeginAttrOpen("从纹理创建实体",
+                                                                    WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
+                                                                        + WindowsAttribute::ImGuiWindowFlags_NoDocking
+                                                                            + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
+                                                            {
+                                                                value(show)?
+                                                                    if (show)
+                                                                    {
+                                                                        Text(F"从纹理 `{path}` 创建实体");
+                                                                        Text("单位像素数");
+                                                                        SameLine();
+                                                                        do InputInt("##pixel_per_unit", entity_create_context.pixel_per_unit)
+                                                                            ->> \newval = entity_create_context.pixel_per_unit = newval > 0 ? newval | 1;
+                                                                            ;
+                                                                            
+                                                                        if (Button("创建"))
+                                                                        {
+                                                                            match (editor::gui::edit_forms::fast_create_entity(
+                                                                                    context,
+                                                                                    debug_world->unwrap,
+                                                                                    fsys::purename(filepath),
+                                                                                    [
+                                                                                        "Transform::LocalPosition",
+                                                                                        "Transform::LocalRotation",
+                                                                                        "Transform::LocalScale",
+                                                                                        "Transform::LocalToWorld",
+                                                                                        "Transform::Translation",
+                                                                                        "Renderer::Shape",
+                                                                                        "Renderer::Shaders",
+                                                                                        "Renderer::Textures",
+                                                                                    ]))
+                                                                            {
+                                                                                value(e)?
+                                                                                {
+                                                                                    let default_shader = je::graphic::shader::load(e->get_world->get_universe->option::value, "@/resource/shader/Unlit.shader")->unwrap;
+                                                                                    e->set_shaders([default_shader]);
+                                                                                    e->bind_texture(0, option::value(tex));
+                                                                                    
+                                                                                    let localscale = e->towoo::get_component :<Transform::LocalScale>()->unwrap;
+                                                                                    let (px, py) = tex->size;
+                                                                                    localscale.scale->set(
+                                                                                        (px: real / entity_create_context.pixel_per_unit: real,
+                                                                                            py: real / entity_create_context.pixel_per_unit: real,
+                                                                                            1.): vec3);
+                                                                                }
+                                                                                none?
+                                                                                    jeapi::gui::form::errmsg("失败", "从纹理创建实体失败");
+                                                                            }
+                                                                            open = false;
+                                                                        }
+                                                                        if (Button("取消"))
+                                                                        {
+                                                                            open = false;
+                                                                        }
+                                                                    }
+                                                                none?
+                                                                    open = false;
+                                                            }
+                                                            End();
+                                                            
+                                                            return open;
+                                                        });
+                                                }
+                                                none?
+                                                    jeapi::gui::form::errmsg("失败", "从纹理创建实体失败");
+                                            }
                                         }
                                     }
+                                    none?;
                                 }
-                            none?;
                             }
+                            none?
+                                Text("没有编辑中的场景");
                         }
-                    none?
-                        Text("没有编辑中的场景");
                     }
-                }
-            none?
-                open->set(false);
+                none?
+                    open->set(false);
             }
-
+            
             End();
         }
     }

@@ -14,7 +14,7 @@ using je::graphic;
 namespace jeapi::gui::form
 {
     public func msg(
-        title: string, 
+        title: string,
         text: string)
     {
         do form::create(F"{title}", false,
@@ -27,6 +27,6 @@ namespace jeapi::gui::form
             -> show
             ;
     }
-
+    
     public let errmsg = jeapi::gui::errmsg;
 }

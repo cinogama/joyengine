@@ -9,5 +9,5 @@ using je::gui;
 
 namespace jeapi::gui
 {
-    
+
 }

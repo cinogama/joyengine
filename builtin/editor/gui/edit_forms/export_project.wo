@@ -33,7 +33,7 @@ namespace editor::gui::edit_forms
         m_start_up_worlds: array<string>,
         m_rule: (bool, fsys::path_t, string)=> Action,
         m_resolution: (int, int),
-
+        
         m_pack_output_log_mx: thread::mutex,
         m_pack_output_log: vec<string>,
         m_finished: mut bool,
@@ -59,140 +59,140 @@ namespace editor::gui::edit_forms
             );
         }
     }
-
+    
     func _default_rule(saving_woolang_pdi: bool, originpath: fsys::path_t, packpath: string)=> Action
     {
         // 如果是文件，才考虑打包
         if (fsys::isfile(originpath))
-        {            
+        {
             if (originpath->to_string->find("/.")->is_value)
                 return Action::SKIP; // 跳过所有以 `.` 开头的文件、目录
-
+                
             if (fsys::extension(originpath)->lower == ".je4project")
                 return Action::SKIP;  // 跳过项目文件
                 
             if (fsys::extension(originpath)->lower == ".dmp")
                 return Action::SKIP;  // 跳过崩溃转储文件
-
+                
             if (fsys::extension(originpath)->lower == ".je4tilemap")
                 return Action::SKIP;  // 跳过tilemap文件
-
+                
             if (fsys::extension(originpath)->lower == ".je4tileset")
                 return Action::SKIP;  // 跳过tileset文件
-
+                
             if (fsys::extension(originpath)->lower == ".dmp")
                 return Action::SKIP;  // 跳过崩溃转储文件
-
+                
             if (fsys::extension(originpath)->lower == ".je4cache")
                 return Action::SKIP;  // 跳过构造缓存文件
-
+                
             if (fsys::extension(originpath)->lower == ".je4lock")
                 return Action::SKIP;  // 跳过项目文件
-
+                
             if (fsys::extension(originpath)->lower == ".je4style")
                 return Action::SKIP;  // 跳过样式文件
-
+                
             if (fsys::extension(originpath)->lower == ".shader")
                 return Action::ACTION(func(pconfig, _){
-                    pconfig->log(F"正在编译着色器：{packpath}");
-                    match (je::graphic::shader::load(option::none, originpath->to_string))
-                    {
-                    value(_)?
-                        return [(originpath->to_string + ".je4cache", packpath + ".je4cache")];
-                    none?
+                        pconfig->log(F"正在编译着色器：{packpath}");
+                        match (je::graphic::shader::load(option::none, originpath->to_string))
                         {
-                            pconfig->log(F"无法编译着色器，跳过：{packpath}");
-                            return [];
+                            value(_)?
+                                return [(originpath->to_string + ".je4cache", packpath + ".je4cache")];
+                            none?
+                            {
+                                pconfig->log(F"无法编译着色器，跳过：{packpath}");
+                                return [];
+                            }
                         }
-                    }
-                });
-            
-            
+                    });
+                    
+                    
             if (fsys::extension(originpath)->lower == ".wo")
             {
                 if (fsys::filename(originpath)->lower->end_with(".je.wo"))
                     return Action::SKIP;  // 跳过工具脚本
                 if (fsys::filename(originpath)->lower->end_with(".image.wo"))
                     return Action::SKIP;  // 跳过图像处理脚本
-
+                    
                 return Action::ACTION(func(pconfig, fimg){
-                    pconfig->log(F"正在编译脚本：{packpath}");
-                    match (vm::load(originpath->to_string))
-                    {
-                    ok(vminstance)?
+                        pconfig->log(F"正在编译脚本：{packpath}");
+                        match (vm::load(originpath->to_string))
                         {
-                            assert(
-                                vminstance->save_binary(saving_woolang_pdi)...
-                                    -> \bindata, binlen = fimg->pack_buffer(bindata->ptr, binlen, packpath);
-                            );
-                            return [];
-                        }
-                    err(_)?
-                        {
-                            pconfig->log(F"无法编译脚本，原样传输：{packpath}");
-                            return [(originpath->to_string, packpath)];
+                            ok(vminstance)?
+                            {
+                                assert(
+                                    vminstance->save_binary(saving_woolang_pdi)...
+                                        -> \bindata, binlen = fimg->pack_buffer(bindata->ptr, binlen, packpath);
+                                        );
+                                return [];
+                            }
+                            err(_)?
+                            {
+                                pconfig->log(F"无法编译脚本，原样传输：{packpath}");
+                                return [(originpath->to_string, packpath)];
+                            }
+                            
                         }
                         
-                    }
-                    
-                });
+                    });
             }
-
+            
             if (packpath->lower->find(".je4module/")->is_value)
                 return Action::SKIP;  // 跳过C++工程文件
-            
+                
             if (fsys::extension(originpath)->lower == ".dll" ||
-                fsys::extension(originpath)->lower == ".so" ||
-                fsys::extension(originpath)->lower == ".dylib")
+                    fsys::extension(originpath)->lower == ".so" ||
+                        fsys::extension(originpath)->lower == ".dylib")
                 return Action::ORIGIN; // 原样复制到打包路径
-
+                
             return Action::PACK;
         }
-
+        
         return Action::SKIP;
     }
     func _export_logic(saving_woolang_pdi: bool, proj: Project, config: pack_config)
     {
         config->log("开始打包……");
-
+        
         let normalized_path = proj->get_path;
- 
+        
         // 1. 删掉 .export 目录下的内容
         config->log("正在删除 .export 目录");
         do fsys::remove(normalized_path/".export")->unwrap;
-
+        
         config->log("开始整理打包文件……");
-
+        
         // 1.2 创建路径，准备打包
         let export_path = normalized_path/".export";
         do fsys::mkdir(export_path);
         let fimg = new! je::internal::fimage_packer(export_path->to_string, config.m_image_size * 1024 * 1024);
-     
+        
         // 2.1 遍历可执行文件所在路径，记录下所有文件的原始路径和最终路径
         let exe_located_path = fsys::parent(fsys::normalize(std::args()[0]));
         match (fsys::allsubpath(exe_located_path / "builtin"))
         {
-        ok(subpaths)?
+            ok(subpaths)?
             {
                 for (let path : subpaths)
                 {
                     // 将引擎内置的着色器缓存打包进镜像
-                    if (path->fsys::isfile() 
-                        && path->to_string->lower->end_with(".shader.je4cache"))
+                    if (path->fsys::isfile()
+                            && path->to_string->lower->end_with(".shader.je4cache"))
                     {
                         let relpath = fsys::relative(path, exe_located_path)->unwrap();
                         assert(fimg->pack(path->to_string, "!/" + relpath));
                     }
                 }
             }
-        err(errdat)?
-            return result::err(errdat);
+            err(errdat)?
+                return result::err(errdat);
         }
         
         // 2.2. 遍历所有目录，记录下所有文件的原始路径和最终路径
         match (fsys::allsubpath(normalized_path))
         {
-        ok(subpaths)?
+            ok(subpaths)?
             {
                 let bind_wrap_path = func(subpath: fsys::path_t){
                     return (subpath, proj->make_path_normalize(subpath));
@@ -203,11 +203,11 @@ namespace editor::gui::edit_forms
                     {
                         let (subpath, packpath) = paths;
                         let action = config.m_rule(saving_woolang_pdi, subpath, packpath);
-
+                        
                         return [(subpath, (packpath, action))];
                     }
                     ->  mapping;
-                
+                    
                 // 0. 重新编译所有C++项目，只编译到输出目录中
                 // P.S. 这个序号真牛逼，人家都是1 2 3，这里是1 2 0 哈哈哈
                 do thread::create(func()
@@ -235,9 +235,9 @@ namespace editor::gui::edit_forms
                             let dll_module_path = compile_results
                                 ->  unmapping
                                 ->> \kv = (kv[1][0], bind_wrap_path(kv[1][0]->get_build_dll_path(
-                                    std::platform::runtime_type::RELEASE)->unwrap)); // 必须有
+                                                std::platform::runtime_type::RELEASE)->unwrap)); // 必须有
                                 ;
-
+                                
                             let copy_origin = func(opath: fsys::path_t, ppath: string)
                             {
                                 assert(ppath[0] == '@');
@@ -246,34 +246,34 @@ namespace editor::gui::edit_forms
                                 do fsys::mkdir(parent_target_ppath);
                                 return fsys::copy(opath, target_ppath);
                             };
-
+                            
                             // 1.2 开始打包
                             do fsys::mkdir(export_path/"builtin");
                             do fsys::writeall(export_path/"builtin"/".keepme", "");
-
+                            
                             for (let (_, (opath, ppath)) : dll_module_path)
                             {
                                 config->log(F"复制 {ppath}");
-
+                                
                                 // assert(fimg->pack(opath, ppath));
                                 do copy_origin(opath, ppath)->unwrap;
                             }
-
+                            
                             for (let (opath, (ppath, method)) : all_need_pack_files)
                             {
                                 match (method)
                                 {
-                                PACK?
+                                    PACK?
                                     {
                                         config->log(F"打包 {ppath}");
                                         assert(fimg->pack(opath->to_string, ppath));
                                     }
-                                ORIGIN?
+                                    ORIGIN?
                                     {
                                         config->log(F"复制 {ppath}");
                                         do copy_origin(opath, ppath)->unwrap;
                                     }
-                                ACTION(action)?
+                                    ACTION(action)?
                                     {
                                         for (let (aopath, appath): action(config, fimg))
                                         {
@@ -281,40 +281,40 @@ namespace editor::gui::edit_forms
                                             assert(fimg->pack(aopath, appath));
                                         }
                                     }
-                                SKIP?
-                                    config->log(F"跳过 {ppath}");
+                                    SKIP?
+                                        config->log(F"跳过 {ppath}");
                                 }
                             }
-
+                            
                             // 1.3 将引擎本体移动至打包目录
                             config->log(F"正在复制引擎运行时");
                             do fsys::copy(fsys::normalize(std::args()[0]), export_path/F"{proj->get_name}.exe")->unwrap;
-
+                            
                             if (fsys::isfile(fsys::workpath() / "icon.ico"))
                             {
-                                do new! process(F"{std::host_path()}/builtin/rcedit-x64.exe", 
+                                do new! process(F"{std::host_path()}/builtin/rcedit-x64.exe",
                                     [
                                         F"{std::host_path()}/builtin/rcedit-x64.exe",
-                                        (export_path / F"{proj->get_name}.exe")->to_string, 
-                                        "--set-icon", 
+                                        (export_path / F"{proj->get_name}.exe")->to_string,
+                                        "--set-icon",
                                         (fsys::workpath() / "icon.ico")->to_string,
                                     ])
                                     ->> \proc = proc->wait;
                                     ;
                             }
-
+                            
                             do CxxProject::get_dylib_files_by_config(std::platform::runtime_type::RELEASE)
-                                ->> \libpath = 
-                                    do fsys::copy(
-                                        fsys::normalize(
-                                            F"{std::host_path()}/{libpath}"), 
+                                ->> \libpath =
+                                        do fsys::copy(
+                                            fsys::normalize(
+                                                F"{std::host_path()}/{libpath}"),
                                             export_path / libpath)->unwrap
                                     ;
                                 ;
                             do fsys::copy(
-                                fsys::normalize(F"{std::host_path()}/OpenAL32.dll"), 
+                                fsys::normalize(F"{std::host_path()}/OpenAL32.dll"),
                                 export_path / "OpenAL32.dll")->unwrap;
-                            
+                                
                             // 1.4 将启动脚本编译后打入镜像
                             config->log(F"正在打包启动脚本");
                             let boot_up_script = @"
@@ -400,7 +400,7 @@ namespace editor::gui::edit_forms
                                 for (let libhandle : LOADED_MODULE_HANDLES)
                                     je::unload_module(libhandle);                               
                             "@;
-
+                                
                             // 1.4.1 生成加载动态库相关代码
                             config->log(F"正在生成装载动态库的脚本");
                             let mut dylib_loader = "";
@@ -408,19 +408,19 @@ namespace editor::gui::edit_forms
                             {
                                 // TODO: 根据情况，从镜像文件中释出相关文件
                                 assert(ppath[0] == '@');
-
-                                let runtime_loading_code = 
-                                    "LOADED_MODULE_HANDLES->add(" 
-                                    + "je::load_module($MODULENAME$, std::host_path() + $MODULERPATH$)->unwrap"
-                                    + ");";
-
+                                
+                                let runtime_loading_code =
+                                    "LOADED_MODULE_HANDLES->add("
+                                        + "je::load_module($MODULENAME$, std::host_path() + $MODULERPATH$)->unwrap"
+                                            + ");";
+                                            
                                 dylib_loader +=
                                     runtime_loading_code
-                                        ->replace("$MODULENAME$", minstance.name->enstring)
-                                        ->replace("$MODULERPATH$", ppath->sub(1)->enstring)
-                                    + "\n";
+                                    ->replace("$MODULENAME$", minstance.name->enstring)
+                                    ->replace("$MODULERPATH$", ppath->sub(1)->enstring)
+                                        + "\n";
                             }
-
+                            
                             // 1.4.2 加载ToWoo类型
                             let loading_towoo_components = proj->get_all_towoo_scripts_name_and_path
                                 ->  forall(\_, paths = fsys::filename(paths[0])->lower->end_with(".jecomponent.wo");)
@@ -438,7 +438,7 @@ namespace editor::gui::edit_forms
                                     ;
                                 ->  reduce(\l, r = l + r;)
                                 ->  or("");
-
+                                
                             // 1.4.3 应用项目设置
                             config->log(F"正在生成应用项目设置的脚本");
                             let mut proj_config = "";
@@ -446,7 +446,7 @@ namespace editor::gui::edit_forms
                             {
                                 proj_config += pconfig->apply + "\n";
                             }
-
+                            
                             // 1.4.4 加载和序列化世界
                             config->log(F"正在生成加载世界的脚本");
                             let mut load_world_instance = "";
@@ -454,10 +454,10 @@ namespace editor::gui::edit_forms
                             {
                                 load_world_instance += F"LOAD_WORLD({startup_world_path->enstring});\n";
                             }
-  
+                            
                             // 1.4.5 加载入口脚本
                             let load_entry_script = "";
-
+                            
                             let final_boot_script = boot_up_script
                                 ->replace("$LOAD_DYLIB_MODULES$", dylib_loader)
                                 ->replace("$LOAD_TOWOO_COMPONENT$", loading_towoo_components)
@@ -468,34 +468,34 @@ namespace editor::gui::edit_forms
                                 ->replace("$LOAD_TYPE_LOADER$", "match (je::towoo::unsafe::dynamic_parser::update_all(\"@/editor.wo\")){ok(_)?;err(msg)?je::logerr(msg);}")
                                 ->replace("$APPLY_RESOLUTION$", F"je::internal::set_window_size({config.m_resolution[0]}, {config.m_resolution[1]});")
                                 ->replace("$APPLY_TITLE$", F"je::internal::set_window_title({proj->get_name->enstring});");
-
-                            let (start_up_script_binary, start_up_script_binary_sz) = 
+                                
+                            let (start_up_script_binary, start_up_script_binary_sz) =
                                 new! vm("@/builtin/main.wo", final_boot_script: buffer)
-                                    ->unwrap
-                                    ->save_binary(saving_woolang_pdi);
-
+                                ->unwrap
+                                ->save_binary(saving_woolang_pdi);
+                                
                             assert(fimg->pack_buffer(start_up_script_binary->ptr, start_up_script_binary_sz, "@/builtin/main.wo"));
-
+                            
                             // 2. 结束，保存镜像
                             fimg->finish();
-
+                            
                             config->log(F"正在复制引擎使用的第三方许可证");
                             match (fsys::copy(fsys::parent(fsys::normalize(std::args()[0])) / "licenses", export_path/"licenses"))
                             {
-                            err(errnumber)?
-                                config->log(F"无法复制引擎使用的第三方许可证，错误码：{errnumber}");
-                            ok(_)?;
+                                err(errnumber)?
+                                    config->log(F"无法复制引擎使用的第三方许可证，错误码：{errnumber}");
+                                ok(_)?;
                             }
-
+                            
                             config->log("打包完成");
-
+                            
                             config.m_finished = true;
                         }
                     });
                 return result::ok(do nil);
             }
-        err(errdat)?
-            return result::err(errdat);
+            err(errdat)?
+                return result::err(errdat);
         }
     }
     public func show_export_project(context: EditorContext)
@@ -511,202 +511,202 @@ namespace editor::gui::edit_forms
         let reso_config = new! std::mutable((1366, 768));
         let pack_config_instance = new! std::mutable(option::none: option<pack_config>);
         let saving_debug_info = new! std::mutable(false);
-
+        
         context->launch_editor_form(func(step: std::mutable<int>){
-            let mut open = true;
-            if (BeginAttr("项目导出向导", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
-            {                
-                let (cur_width, _) = GetContentRegionAvail();
-
-                let current_step_count = step->get;
-                if (current_step_count == 0)
+                let mut open = true;
+                if (BeginAttr("项目导出向导", WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize))
                 {
-                    TextDisabled("即将开始……");
-                    Separator();
-
-                    do BeginChildSize("SUBFORM.", 500., 300.);
-
-                    Text("欢迎使用JoyEngineECS 项目导出向导");
-                    Text("向导将引导您完成接下来一系列的配置操作");
-                    Text("注意：导出操作将删除项目目录下的 .export 目录中的全部内容");
+                    let (cur_width, _) = GetContentRegionAvail();
                     
-                    EndChild();
-                    
-                    if (ButtonSize("我已确认准备就绪，继续下一步", (cur_width, 0.)))
-                        step->set(current_step_count + 1);
-                    if (ButtonSize("取消导出", (cur_width, 0.)))
-                        open = false;
-                }
-                if (current_step_count == 1)
-                {
-                    TextDisabled("第一步 选择启动时加载的世界");
-                    Separator();
-
-                    do BeginChildSize("SUBFORM.", 500., 300.);
-
-                    Text("请在下方勾选导出项目启动时，需要自动加载的世界");
-
-                    do BeginChild("SUBFORM.2");
-                    do selecting_all_worlds_file
-                        ->> \path_and_checked = do CheckBox(path_and_checked.0, immut path_and_checked.1)
-                                ->> \opt = path_and_checked[1] = opt;
+                    let current_step_count = step->get;
+                    if (current_step_count == 0)
+                    {
+                        TextDisabled("即将开始……");
+                        Separator();
+                        
+                        do BeginChildSize("SUBFORM.", 500., 300.);
+                        
+                        Text("欢迎使用JoyEngineECS 项目导出向导");
+                        Text("向导将引导您完成接下来一系列的配置操作");
+                        Text("注意：导出操作将删除项目目录下的 .export 目录中的全部内容");
+                        
+                        EndChild();
+                        
+                        if (ButtonSize("我已确认准备就绪，继续下一步", (cur_width, 0.)))
+                            step->set(current_step_count + 1);
+                        if (ButtonSize("取消导出", (cur_width, 0.)))
+                            open = false;
+                    }
+                    if (current_step_count == 1)
+                    {
+                        TextDisabled("第一步 选择启动时加载的世界");
+                        Separator();
+                        
+                        do BeginChildSize("SUBFORM.", 500., 300.);
+                        
+                        Text("请在下方勾选导出项目启动时，需要自动加载的世界");
+                        
+                        do BeginChild("SUBFORM.2");
+                        do selecting_all_worlds_file
+                            ->> \path_and_checked = do CheckBox(path_and_checked.0, immut path_and_checked.1)
+                                    ->> \opt = path_and_checked[1] = opt;
+                                ;
                             ;
-                        ;
-                    EndChild();
-                    EndChild();
-                    
-                    if (ButtonSize("下一步", (cur_width, 0.)))
-                        step->set(current_step_count + 1);
-                    if (ButtonSize("上一步", (cur_width, 0.)))
-                        step->set(current_step_count - 1);
-                }
-                if (current_step_count == 2)
-                {
-                    TextDisabled("第二步 导出画面设置");
-                    Separator();
-
-                    do BeginChildSize("SUBFORM.", 500., 300.);
-
-                    Text("请选择启动时默认渲染的画面分辨率");
-                    Text("* 默认为 1366x768");
-
-                    static let reso_list = [
-                        ("1280x720 [16:9]", (1280, 720)),
-                        ("1366x768 [16:9]", (1366, 768)),
-                        ("1920x1080 [16:9]", (1920, 1080)),
-                        ("2560x1440 [16:9]", (2560, 1440)),
-                        ("3840x2160 [16:9]", (3840, 2160)),
-
-                        ("800x600 [4:3]", (800, 600)),
-                        ("1024x768 [4:3]", (1024, 768)),
-                        ("1400x1050 [4:3]", (1400, 1050)),
-                        ("1920x1440 [4:3]", (1920, 1440)),
-                    ];
-
-                    do Combo("##RESO_LIST.", reso_list->>\RR = RR[0];, option::value(reso_option_index->get))
-                        ->> func(idx)
+                        EndChild();
+                        EndChild();
+                        
+                        if (ButtonSize("下一步", (cur_width, 0.)))
+                            step->set(current_step_count + 1);
+                        if (ButtonSize("上一步", (cur_width, 0.)))
+                            step->set(current_step_count - 1);
+                    }
+                    if (current_step_count == 2)
+                    {
+                        TextDisabled("第二步 导出画面设置");
+                        Separator();
+                        
+                        do BeginChildSize("SUBFORM.", 500., 300.);
+                        
+                        Text("请选择启动时默认渲染的画面分辨率");
+                        Text("* 默认为 1366x768");
+                        
+                        static let reso_list = [
+                            ("1280x720 [16:9]", (1280, 720)),
+                            ("1366x768 [16:9]", (1366, 768)),
+                            ("1920x1080 [16:9]", (1920, 1080)),
+                            ("2560x1440 [16:9]", (2560, 1440)),
+                            ("3840x2160 [16:9]", (3840, 2160)),
+                            
+                            ("800x600 [4:3]", (800, 600)),
+                            ("1024x768 [4:3]", (1024, 768)),
+                            ("1400x1050 [4:3]", (1400, 1050)),
+                            ("1920x1440 [4:3]", (1920, 1440)),
+                        ];
+                        
+                        do Combo("##RESO_LIST.", reso_list->>\RR = RR[0];, option::value(reso_option_index->get))
+                            ->> func(idx)
                             {
                                 reso_option_index->set(idx);
                                 reso_config->set(reso_list[idx][1]);
                             }
                         ;
-
-                    EndChild();
-                    
-                    if (ButtonSize("下一步", (cur_width, 0.)))
-                        step->set(current_step_count + 1);
-                    if (ButtonSize("上一步", (cur_width, 0.)))
-                        step->set(current_step_count - 1);
-                }
-                if (current_step_count == 3)
-                {
-                    TextDisabled("第三步 导出镜像设置");
-                    Separator();
-
-                    do BeginChildSize("SUBFORM.", 500., 300.);
-                    Text("请为打包镜像设置分包大小，单位为MB");
-                    Text("* 默认为 128MB");
-                    
-                    do InputInt("##IMAGESZ.", pack_image_file_size->get)
-                        ->> func(n)
+                        
+                        EndChild();
+                        
+                        if (ButtonSize("下一步", (cur_width, 0.)))
+                            step->set(current_step_count + 1);
+                        if (ButtonSize("上一步", (cur_width, 0.)))
+                            step->set(current_step_count - 1);
+                    }
+                    if (current_step_count == 3)
+                    {
+                        TextDisabled("第三步 导出镜像设置");
+                        Separator();
+                        
+                        do BeginChildSize("SUBFORM.", 500., 300.);
+                        Text("请为打包镜像设置分包大小，单位为MB");
+                        Text("* 默认为 128MB");
+                        
+                        do InputInt("##IMAGESZ.", pack_image_file_size->get)
+                            ->> func(n)
                             {
                                 if (n > 0)
                                     pack_image_file_size->set(n);
                             }
                         ;
-
-                    EndChild();
-                    
-                    if (ButtonSize("下一步", (cur_width, 0.)))
-                        step->set(current_step_count + 1);
-                    if (ButtonSize("上一步", (cur_width, 0.)))
-                        step->set(current_step_count - 1);
-                }
-                if (current_step_count == 4)
-                {
-                    TextDisabled("第四步 关于调试符号");
-                    Separator();
-
-                    do BeginChildSize("SUBFORM.", 500., 300.);
-
-                    Text("请设置是否需要为Woolang脚本保留调试信息");
-                    Text("* 保存调试信息需要额外的存储空间");
-                    
-                    Separator();
-
-                    do CheckBox("编译Woolang脚本时保存调试信息", saving_debug_info->get)
-                        ->> \opt = saving_debug_info->set(opt);
-                        ;
-                  
-                    EndChild();
-                    
-                    if (ButtonSize("下一步", (cur_width, 0.)))
-                        step->set(current_step_count + 1);
-                    if (ButtonSize("上一步", (cur_width, 0.)))
-                        step->set(current_step_count - 1);
-                }
-                if (current_step_count == 5)
-                {
-                    TextDisabled("导出操作确认");
-                    Separator();
-
-                    do BeginChildSize("SUBFORM.", 500., 300.);
-                    Text("打包导出的全部配置已经准备就绪");
-                    Text("按下确认开始打包");
-
-                    Separator();
-                    Text("* 请再次确认 .export 目录是否有文件尚未备份！");
-                    
-                    EndChild();
-                    
-                    if (ButtonSize("开始打包", (cur_width, 0.)))
-                    {
-                        let conf = pack_config{
-                            m_pack_dll_into_image = false,
-                            m_image_size = pack_image_file_size->get,
-                            m_start_up_worlds = selecting_all_worlds_file
-                                ->  forall(\path_and_checked = path_and_checked[1];)
-                                ->> \path_and_checked = path_and_checked[0];,
-                            m_rule = _default_rule,
-                            m_resolution = reso_config->get,
-
-                            m_pack_output_log_mx = new! thread::mutex(),
-                            m_pack_output_log = []mut,
-                            m_finished = mut false,
-                        };
-                        do _export_logic(saving_debug_info->get, context->get_project, conf)->unwrap;
-                        pack_config_instance->set(option::value(conf));
-                        step->set(current_step_count + 1);
+                        
+                        EndChild();
+                        
+                        if (ButtonSize("下一步", (cur_width, 0.)))
+                            step->set(current_step_count + 1);
+                        if (ButtonSize("上一步", (cur_width, 0.)))
+                            step->set(current_step_count - 1);
                     }
-                    if (ButtonSize("上一步", (cur_width, 0.)))
-                        step->set(current_step_count - 1);
-                }
-                if (current_step_count == 6)
-                {
-                    TextDisabled("正在导出……");
-                    Separator();
-
-                    do BeginChildSize("SUBFORM.", 500., 300.);
-                    
-                    let (avail_width, avail_height) = GetContentRegionAvail();
-                    if (BeginListBox("##", avail_width, avail_height))
+                    if (current_step_count == 4)
                     {
-                        pack_config_instance->get->unwrap->rwalk_through_logs(\msg =do Selectable(msg););
-                        EndListBox();
+                        TextDisabled("第四步 关于调试符号");
+                        Separator();
+                        
+                        do BeginChildSize("SUBFORM.", 500., 300.);
+                        
+                        Text("请设置是否需要为Woolang脚本保留调试信息");
+                        Text("* 保存调试信息需要额外的存储空间");
+                        
+                        Separator();
+                        
+                        do CheckBox("编译Woolang脚本时保存调试信息", saving_debug_info->get)
+                            ->> \opt = saving_debug_info->set(opt);
+                            ;
+                            
+                        EndChild();
+                        
+                        if (ButtonSize("下一步", (cur_width, 0.)))
+                            step->set(current_step_count + 1);
+                        if (ButtonSize("上一步", (cur_width, 0.)))
+                            step->set(current_step_count - 1);
                     }
-                    
-                    EndChild();
-                    
-                    if (pack_config_instance->get->unwrap.m_finished)
+                    if (current_step_count == 5)
                     {
-                        if (ButtonSize("完成", (cur_width, 0.)))
-                            open = false;
+                        TextDisabled("导出操作确认");
+                        Separator();
+                        
+                        do BeginChildSize("SUBFORM.", 500., 300.);
+                        Text("打包导出的全部配置已经准备就绪");
+                        Text("按下确认开始打包");
+                        
+                        Separator();
+                        Text("* 请再次确认 .export 目录是否有文件尚未备份！");
+                        
+                        EndChild();
+                        
+                        if (ButtonSize("开始打包", (cur_width, 0.)))
+                        {
+                            let conf = pack_config{
+                                m_pack_dll_into_image = false,
+                                m_image_size = pack_image_file_size->get,
+                                m_start_up_worlds = selecting_all_worlds_file
+                                    ->  forall(\path_and_checked = path_and_checked[1];)
+                                    ->> \path_and_checked = path_and_checked[0];,
+                                m_rule = _default_rule,
+                                m_resolution = reso_config->get,
+                                
+                                m_pack_output_log_mx = new! thread::mutex(),
+                                m_pack_output_log = []mut,
+                                m_finished = mut false,
+                            };
+                            do _export_logic(saving_debug_info->get, context->get_project, conf)->unwrap;
+                            pack_config_instance->set(option::value(conf));
+                            step->set(current_step_count + 1);
+                        }
+                        if (ButtonSize("上一步", (cur_width, 0.)))
+                            step->set(current_step_count - 1);
                     }
-
+                    if (current_step_count == 6)
+                    {
+                        TextDisabled("正在导出……");
+                        Separator();
+                        
+                        do BeginChildSize("SUBFORM.", 500., 300.);
+                        
+                        let (avail_width, avail_height) = GetContentRegionAvail();
+                        if (BeginListBox("##", avail_width, avail_height))
+                        {
+                            pack_config_instance->get->unwrap->rwalk_through_logs(\msg =do Selectable(msg););
+                            EndListBox();
+                        }
+                        
+                        EndChild();
+                        
+                        if (pack_config_instance->get->unwrap.m_finished)
+                        {
+                            if (ButtonSize("完成", (cur_width, 0.)))
+                                open = false;
+                        }
+                        
+                    }
                 }
-            }
-            End();
-            return open;
-        }, (new! std::mutable(0),));
+                End();
+                return open;
+            }, (new! std::mutable(0),));
     }
 }

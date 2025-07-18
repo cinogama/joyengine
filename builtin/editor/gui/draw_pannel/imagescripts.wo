@@ -13,7 +13,7 @@ import builtin::editor::project::main;
 namespace editor::gui::drawpannel
 {
     let mut image_effect_scripts = {}: dict<string, fsys::path_t>;
-
+    
     public func get_all_scripts_name()
     {
         return image_effect_scripts->unmapping->>\name_vm = name_vm[0];;
@@ -25,11 +25,11 @@ namespace editor::gui::drawpannel
         {
             try! vmm = vm::load(path->to_string);
             do vmm->jit;
-
+            
             try! _ = vmm->run()
                 -> ok_or(F"脚本 {path->to_string} 执行失败")
                 ;
-
+                
             return_ok! ApplyScriptHost{vmm = vmm};
         }
         public func close(self: ApplyScriptHost)
@@ -44,42 +44,42 @@ namespace editor::gui::drawpannel
             return_ok!;
         }
     }
-
+    
     public func open_image_effect_host(name: string)
     {
         try! path = image_effect_scripts->get(name)
             -> ok_or(F"未找到名为 {name} 的图像处理脚本")
             ;
-
+            
         return ApplyScriptHost::create(path);
     }
-
+    
     public func apply_script(name: string, ts: je::graphic::texture, lbpos: (int, int), range: (int, int))
     {
         try! host = open_image_effect_host(name);
         do host-> std::use(func(host)
-        {
-            do host->apply(ts, lbpos, range);
-        });
-
+            {
+                do host->apply(ts, lbpos, range);
+            });
+            
         return_ok!;
     }
     public func update_and_get_scripts(proj: Project)
     {
         let r = {}mut: map<string, fsys::path_t>;
-
+        
         for (let path : fsys::allsubpath(fsys::normalize(std::host_path()))
                 -> or([])
                 -> connect(fsys::allsubpath(proj->get_path)
-                    -> or([]))
-            )
+                        -> or([]))
+                )
         {
             if (!path->to_string->lower->end_with(".image.wo"))
                 continue;
-
+                
             r->set(fsys::purename(path), path);
         }
-
+        
         image_effect_scripts = r->unsafe::asdict;
     }
 }

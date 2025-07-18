@@ -36,20 +36,20 @@ namespace editor::gui
             return false;
         }
     }
-
+    
     using EditorContext = struct {
         m_stopped: mut bool,
         m_project: Project,
-
+        
         // 这玩意儿存着被选中的实体索引，用于对此实体执行安全操作。
         m_editing_entity_euid: mut option<jeapi::debug::Eeid>,
-
+        
         // 这里放着必须照顺序执行的事务委托
         m_fix_update_jobs: vec<()=>bool>,
-
+        
         // 这里放编辑器窗口的控制器，这样可以批量开启或关闭
         m_editor_form_controlor: map<string, EditorContext::EditorFormControlor>,
-
+        
         m_towoo_system_update_timer: Timer,
     }
     {
@@ -73,12 +73,12 @@ namespace editor::gui
             {
                 match (c.m_old_state)
                 {
-                none?
+                    none?
                     {
                         c.m_old_state = option::value(c.m_open->get());
                         c.m_open->set(false);
                     }
-                _?;
+                    _?;
                 }
             }
         }
@@ -88,77 +88,77 @@ namespace editor::gui
             {
                 match (c.m_old_state)
                 {
-                value(stat)?
+                    value(stat)?
                     {
                         c.m_old_state = option::none;
                         c.m_open->set(stat);
                     }
-                _?;
+                    _?;
                 }
             }
         }
-
+        
         public func start_debug(self: EditorContext)
         {
             match (self->get_project->start_debug())
             {
-            err(msg)? return result::err(msg);
-            ok(_)?
+                err(msg)? return result::err(msg);
+                ok(_)?
                 {
                     self->begin_debug_and_hide_all_editor_form();
                     return result::ok(do nil);
                 }
             }
         }
-
+        
         public func stop_debug(self: EditorContext)
         {
             match (self->get_project->stop_debug())
             {
-            err(msg)? return result::err(msg);
-            ok(_)?
+                err(msg)? return result::err(msg);
+                ok(_)?
                 {
                     self->end_debug_and_restore_all_editor_form();
                     return result::ok(do nil);
                 }
             }
         }
-
+        
         public func register_editor_form_controlor(self: EditorContext, name: string)
         {
             if (self.m_editor_form_controlor->contains(name))
                 return result::err(F"{name}已经注册");
-
+                
             self.m_editor_form_controlor->set(name, EditorFormControlor{
-                m_open = new! std::mutable(true),
-                m_old_state = mut option::none,
-            });
+                    m_open = new! std::mutable(true),
+                    m_old_state = mut option::none,
+                });
             return result::ok(self.m_editor_form_controlor[name].m_open);
         }
-
+        
         // 由 main_menu 负责调用此函数，更新api和实体请求
         public func update_api(self: EditorContext)
         {
-            match (self.m_editing_entity_euid := 
-                jeapi::debug::Eeid::editor::editing())
+            match (self.m_editing_entity_euid :=
+                    jeapi::debug::Eeid::editor::editing())
             {
-            value(eid)? 
-                eid->dosth(func(oentity){
-                    if (oentity->is_value == false)
-                        self->set_editing_entity(option::none);
-                }); 
-            none?;
+                value(eid)?
+                    eid->dosth(func(oentity){
+                            if (oentity->is_value == false)
+                                self->set_editing_entity(option::none);
+                        });
+                none?;
             }
-
+            
             // 在此处运行和更新固定更新逻辑
             self.m_fix_update_jobs->copy(self.m_fix_update_jobs
-                =>> \job_delegate = job_delegate() ? [job_delegate]mut | []mut;
-                );
-
+                    =>> \job_delegate = job_delegate() ? [job_delegate]mut | []mut;
+                    );
+                    
             // 更新一下对实体的请求
             jeapi::debug::update_safety_entity_operation_requests(
                 self->get_project->get_env->get_universe);
-
+                
             // 整个timer，定时检查一下towoo系统
             if (self.m_towoo_system_update_timer->update)
             {
@@ -174,7 +174,7 @@ namespace editor::gui
             return self.m_project;
         }
         public func fixed_launch_editor_form<FT, ArgTs>(self: EditorContext, f: FT, args: ArgTs)
-            where f(args...) is bool || f(args...) is void;
+        where f(args...) is bool || f(args...) is void;
         {
             if (f(args...) is bool)
                 self.m_fix_update_jobs->add(\=f(args...););
@@ -182,18 +182,18 @@ namespace editor::gui
                 self.m_fix_update_jobs->add(func(){f(args...); return true;});
         }
         public func launch_editor_form<FT, ArgTs>(self: EditorContext, f: FT, args: ArgTs)
-            where f(args...) is bool || f(args...) is void;
+        where f(args...) is bool || f(args...) is void;
         {
             je::gui::launch(func(){
-                let result = f(args...);
-
-                if (self->is_stopped)
-                    return false;
-                else if (result is bool)
-                    return result;
-
-                return true;
-            });
+                    let result = f(args...);
+                    
+                    if (self->is_stopped)
+                        return false;
+                    else if (result is bool)
+                        return result;
+                        
+                    return true;
+                });
         }
         public func set_editing_entity(self: EditorContext, e: option<je::entity>)
         {
@@ -212,18 +212,18 @@ namespace editor::gui
                 ->  or_do(\= f(option::none);)
                 ;
         }
-
+        
         public func get_logs(_: EditorContext)
         {
             return je::internal::getlogs();
         }
     }
-
+    
     public func edit_project(proj: Project)
     {
         // 这又是个傻逼函数，传入一个项目实例，为这个项目实例创建基本运行环境
         // 然后启一堆编辑窗口，直到项目被关闭
-
+        
         // 创建基础运行环境
         let context = EditorContext{
             m_stopped = mut false,
@@ -233,14 +233,14 @@ namespace editor::gui
             m_editor_form_controlor = {}mut,
             m_towoo_system_update_timer = new! Timer(5.),
         };
-
+        
         // 开启主菜单
         show_main_menu(context);
         show_edit_forms(context);
-
+        
         // 等待，直到项目被关闭
         proj->wait;
-
+        
         // 释放模块
         proj->free_modules_after_close();
         

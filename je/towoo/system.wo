@@ -20,7 +20,7 @@ namespace je::towoo::system
         ANYOF,          // Must have one of 'ANYOF' components
         EXCEPT,         // Must not contain spcify component
     }
-
+    
     let mut _current_job_type = job_type::PRE_UPDATE;
     public func _set_current_job_type(t: job_type)
     {
@@ -37,7 +37,7 @@ namespace je::towoo::system
             std::halt("The order of work is incorrect.");
         }
     }
-
+    
     using ToWooSystemFuncJob = struct
     {
         m_function: dynamic,
@@ -88,18 +88,18 @@ namespace je::towoo::system
             return self;
         }
     }
-
+    
     let regitered_works = []mut: vec<ToWooSystemFuncJob>;
-
+    
     public func register_job_function<FT>(jobfunc: FT)
-        where std::declval:<nothing>() is typeof(jobfunc([]...));
+    where std::declval:<nothing>() is typeof(jobfunc([]...));
     {
         let j = ToWooSystemFuncJob::create(jobfunc: dynamic, false);
         regitered_works->add(j);
         return j;
     }
     public func register_work_function<FT>(jobfunc: FT)
-        where std::declval:<nothing>() is typeof(jobfunc([]...));
+    where std::declval:<nothing>() is typeof(jobfunc([]...));
     {
         let j = ToWooSystemFuncJob::create(jobfunc: dynamic, true);
         regitered_works->add(j);
@@ -109,16 +109,16 @@ namespace je::towoo::system
 extern func _init_towoo_system(registering_system_type: je::typeinfo)
 {
     using je::towoo::system;
-
+    
     extern("libjoyecs", "wojeapi_towoo_register_system_job")
-    func _register_towoo_system_job(
-        registering_system_type: je::typeinfo,
-        fn: dynamic, 
-        job_queue: job_type,
-        req: array<(require_type, int, je::typeinfo)>,
-        argument_count: int,
-        is_single_work: bool)=> void;
-
+        func _register_towoo_system_job(
+            registering_system_type: je::typeinfo,
+            fn: dynamic,
+            job_queue: job_type,
+            req: array<(require_type, int, je::typeinfo)>,
+            argument_count: int,
+            is_single_work: bool)=> void;
+            
     for (let workinfo : regitered_works)
     {
         _register_towoo_system_job(
@@ -145,10 +145,10 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
 #macro work
 {
     /*
-        work! JobName()
-        {
-            // BODY
-        }
+    work! JobName()
+    {
+    // BODY
+    }
     */
     let job_func_name = lexer->next;
     if (job_func_name == "")
@@ -156,7 +156,7 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
         lexer->error("Unexpected EOF");
         return "";
     }
-
+    
     if (lexer->next != "(")
     {
         lexer->error("Unexpected token, here should be '('.");
@@ -172,54 +172,54 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
         lexer->error("Unexpected token, here should be '{'.");
         return "";
     }
-
+    
     let mut result = F"do je::towoo::system::register_work_function({job_func_name});";
     result += F"func {job_func_name}(context: typeof(create(std::declval:<je::world>())))\{do context;";
-
+    
     return result;
 }
 #macro system
 {
     /*
-        system! JobName(
-            localpos: Transform::LocalPosition
-            color: Renderer::Color?
-            textures: Renderer::Textures?
-            )
-            except Transform::LocalToParent, Transform::LocalToParent;
-            anyof Renderer::Color, Renderer::Textures;
-        {
-            // BODY
-        }
+    system! JobName(
+    localpos: Transform::LocalPosition
+    color: Renderer::Color?
+    textures: Renderer::Textures?
+    )
+    except Transform::LocalToParent, Transform::LocalToParent;
+    anyof Renderer::Color, Renderer::Textures;
+    {
+    // BODY
+    }
     */
-
+    
     let job_func_name = lexer->next;
     if (job_func_name == "")
     {
         lexer->error("Unexpected EOF");
         return "";
     }
-
+    
     if (lexer->next != "(")
     {
         lexer->error("Unexpected token, here should be '('.");
         return "";
     }
-
+    
     let read_component_type = func()
+    {
+        let mut result = "";
+        for (;;)
         {
-            let mut result = "";
-            for (;;)
-            {
-                let token = lexer->peek;
-                if (token == "\x29" || token == ";" || token == "," || token == "?" || token == "")
-                    break;
-
-                result += lexer->next;
-            }
-            return result;
-        };
-
+            let token = lexer->peek;
+            if (token == "\x29" || token == ";" || token == "," || token == "?" || token == "")
+                break;
+                
+            result += lexer->next;
+        }
+        return result;
+    };
+    
     let arguments = []mut: vec<(string, string, /*may not?*/bool)>;
     // Read arguments here.
     for (;;)
@@ -229,7 +229,7 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
             continue;
         else if (name == "\x29" || name == "")
             break;
-        
+            
         if (lexer->next != ":")
         {
             lexer->error("Unexpected token, here should be ':'.");
@@ -241,38 +241,38 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
             lexer->error("Missing 'type' here.");
             return "";
         }
-
+        
         let maynot = lexer->peek == "?";
         if (maynot)
             do lexer->next;
         arguments->add((name, type, maynot));
     }
-
+    
     // Read contains, except, anyof
     let requirements = struct{
         contains = []mut: vec<string>,
         except = []mut: vec<string>,
         anyof = []mut: vec<array<string>>,
     };
-
+    
     let read_type_list = func()
+    {
+        let types = []mut: vec<string>;
+        for (;;)
         {
-            let types = []mut: vec<string>;
-            for (;;)
-            {
-                let t = read_component_type();
-                if (t != "")
-                    types->add(t);
-
-                let token = lexer->next;
-                if (token == ",")
-                    continue;
-                else if (token == ";" || token == "")
-                    break;
-            }
-            return types;
-        };
-
+            let t = read_component_type();
+            if (t != "")
+                types->add(t);
+                
+            let token = lexer->next;
+            if (token == ",")
+                continue;
+            else if (token == ";" || token == "")
+                break;
+        }
+        return types;
+    };
+    
     for (;;)
     {
         let require = lexer->next;
@@ -298,7 +298,7 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
             return "";
         }
     }
-
+    
     // OK Generate!
     let mut result = F"do je::towoo::system::register_job_function({job_func_name}\x29";
     for (let (_, type, maynot) : arguments)

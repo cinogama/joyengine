@@ -15,8 +15,8 @@ namespace editor::Project
     }
     {
         public func create<T>(
-            val: T, 
-            widget: (T)=>option<T>, 
+            val: T,
+            widget: (T)=>option<T>,
             callback: (T, T)=>bool,
             to_string: (T)=>string,
             parse: (string)=>option<T>,
@@ -38,7 +38,7 @@ namespace editor::Project
             self.m_value = newval;
             return true;
         }
-
+        
         public func edit<T>(self: Config<T>)
         {
             return self.m_widget(self.m_value)
@@ -60,9 +60,9 @@ namespace editor::Project
             return self.m_apply(self.m_value);
         }
     }
-
+    
     // 这是一个类接口对象，用于包装Project::Config<T>
-
+    
     interface! IConfig
     {
         public func to_string(self)=> string;

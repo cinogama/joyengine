@@ -3,10 +3,10 @@ import woo::std;
 import je;
 
 namespace je::gui
-{    
+{
     public alias ImVec2 = (real, real);
     public alias Color32RGBA = (int, int, int, int);
-
+    
     public enum WindowsAttribute
     {
         ImGuiWindowFlags_None                   = 0,
@@ -36,7 +36,7 @@ namespace je::gui
         //ImGuiWindowFlags_NoDecoration           = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse,
         //ImGuiWindowFlags_NoInputs               = ImGuiWindowFlags_NoMouseInputs | ImGuiWindowFlags_NoNavInputs | ImGuiWindowFlags_NoNavFocus,
     }
-
+    
     public enum TreeNodeAttribute
     {
         ImGuiTreeNodeFlags_None                 = 0,
@@ -57,100 +57,100 @@ namespace je::gui
         // ImGuiTreeNodeFlags_NoScrollOnOpen     = 0x0000'4000,  // FIXME: TODO: Disable automatic scroll on TreePop() if node got just open and contents is not visible
         // ImGuiTreeNodeFlags_CollapsingHeader     = ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_NoAutoOpenOnLog
     };
-
+    
     public enum ImGuiMouseButton
     {
         ImGuiMouseButton_Left = 0,
         ImGuiMouseButton_Right = 1,
         ImGuiMouseButton_Middle = 2,
         ImGuiMouseButton_COUNT = 5
-    };
-
+        };
+        
     extern("libjoyecs", "je_gui_job_vm_handle")
-    public func JobID()=> handle;
-
+        public func JobID()=> handle;
+        
     extern("libjoyecs", "je_gui_set_clip_board_text")
-    public func SetClipboardText(text: string)=> void;
+        public func SetClipboardText(text: string)=> void;
     extern("libjoyecs", "je_gui_get_clip_board_text")
-    public func GetClipboardText()=> string;
-
+        public func GetClipboardText()=> string;
+        
     extern("libjoyecs", "je_gui_get_main_viewport_pos")
-    public func GetMainViewportPos()=> ImVec2;
+        public func GetMainViewportPos()=> ImVec2;
     extern("libjoyecs", "je_gui_get_window_pos")
-    public func GetWindowPos()=> ImVec2;
+        public func GetWindowPos()=> ImVec2;
     extern("libjoyecs", "je_gui_get_mouse_pos")
-    public func GetMousePos()=> ImVec2;
+        public func GetMousePos()=> ImVec2;
     extern("libjoyecs", "je_gui_get_mouse_wheel")
-    public func GetMouseWheel()=> ImVec2;
+        public func GetMouseWheel()=> ImVec2;
     extern("libjoyecs", "je_gui_get_mouse_delta_pos")
-    public func GetMouseDeltaPos()=> ImVec2;
+        public func GetMouseDeltaPos()=> ImVec2;
     extern("libjoyecs", "je_gui_get_cursor_pos")
-    public func GetCursorPos()=> ImVec2;
+        public func GetCursorPos()=> ImVec2;
     extern("libjoyecs", "je_gui_get_item_rect_size")
-    public func GetItemRectSize()=> ImVec2;
-
+        public func GetItemRectSize()=> ImVec2;
+        
     extern("libjoyecs", "je_gui_get_item_rect")
-    public func GetItemRect()=> (ImVec2, ImVec2);
-
+        public func GetItemRect()=> (ImVec2, ImVec2);
+        
     extern("libjoyecs", "je_gui_begin")
-    public func Begin(title:string)=> bool;
+        public func Begin(title:string)=> bool;
     extern("libjoyecs", "je_gui_begin_attr")
-    public func BeginAttr(title:string, attribute:WindowsAttribute)=> bool;
+        public func BeginAttr(title:string, attribute:WindowsAttribute)=> bool;
     extern("libjoyecs", "je_gui_begin_open")
-    public func BeginAttrOpen(title:string, attribute:WindowsAttribute)=> option<bool>;
+        public func BeginAttrOpen(title:string, attribute:WindowsAttribute)=> option<bool>;
     public func BeginOpen(title:string)
     {
         return BeginAttrOpen(title, WindowsAttribute::ImGuiWindowFlags_None);
     }
-
+    
     extern("libjoyecs", "je_gui_end")
-    public func End()=> void;
-
+        public func End()=> void;
+        
     extern("libjoyecs", "je_gui_begin_child")
-    public func BeginChild(title:string)=> bool;
+        public func BeginChild(title:string)=> bool;
     extern("libjoyecs", "je_gui_begin_child_attr")
-    public func BeginChildAttr(title:string, attr: WindowsAttribute)=> bool;
+        public func BeginChildAttr(title:string, attr: WindowsAttribute)=> bool;
     extern("libjoyecs", "je_gui_begin_child_size")
-    public func BeginChildSize(title:string, sizex: real, sizey: real)=> bool;
-
+        public func BeginChildSize(title:string, sizex: real, sizey: real)=> bool;
+        
     extern("libjoyecs", "je_gui_is_window_focused")
-    public func IsWindowFocused()=> bool;
-
+        public func IsWindowFocused()=> bool;
+        
     extern("libjoyecs", "je_gui_end_child")
-    public func EndChild()=> void;
-
+        public func EndChild()=> void;
+        
     extern("libjoyecs", "je_gui_progress_bar")
-    public func ProgressBar(f: real)=> void;
-
+        public func ProgressBar(f: real)=> void;
+        
     extern("libjoyecs", "je_gui_progress_bar_size")
-    public func ProgressBarSize(f: real, size: (real, real))=> void;
-
+        public func ProgressBarSize(f: real, size: (real, real))=> void;
+        
     extern("libjoyecs", "je_gui_text")
-    public func Text(msg:string)=> void;
+        public func Text(msg:string)=> void;
     extern("libjoyecs", "je_gui_text_disabled")
-    public func TextDisabled(msg:string)=> void;
-
+        public func TextDisabled(msg:string)=> void;
+        
     extern("libjoyecs", "je_gui_button")
-    public func Button(msg:string)=> bool;
+        public func Button(msg:string)=> bool;
     extern("libjoyecs", "je_gui_button_size")
-    public func ButtonSize(msg:string, size: ImVec2)=> bool;
-
+        public func ButtonSize(msg:string, size: ImVec2)=> bool;
+        
     extern("libjoyecs", "je_gui_invisible_button")
-    public func InvisibleButton(msg:string, size: ImVec2)=> bool;
-
+        public func InvisibleButton(msg:string, size: ImVec2)=> bool;
+        
     extern("libjoyecs", "je_gui_begin_main_menu_bar")
-    public func BeginMainMenuBar()=> bool;
-
+        public func BeginMainMenuBar()=> bool;
+        
     extern("libjoyecs", "je_gui_menu_item")
-    public func MenuItem(text:string)=> bool;
+        public func MenuItem(text:string)=> bool;
     extern("libjoyecs", "je_gui_menu_item_shortcut")
-    public func MenuItemShortcut(text:string, shortcut:string)=> bool;
+        public func MenuItemShortcut(text:string, shortcut:string)=> bool;
     extern("libjoyecs", "je_gui_menu_item_enabled")
-    public func MenuItemEnabled(text:string, enable:bool)=> bool;
+        public func MenuItemEnabled(text:string, enable:bool)=> bool;
     extern("libjoyecs", "je_gui_menu_item_shortcut_enabled")
-    public func MenuItemShortcutEnabled(text:string, shortcut:string, enable:bool)=> bool;
+        public func MenuItemShortcutEnabled(text:string, shortcut:string, enable:bool)=> bool;
     extern("libjoyecs", "je_gui_menu_item_selected")
-    public func MenuItemShortcutSelectedEnabled(text:string, shortcut:string, selected:bool, enable:bool)=> option<bool /*selected*/>;
+        public func MenuItemShortcutSelectedEnabled(text:string, shortcut:string, selected:bool, enable:bool)=> option<bool /*selected*/>;
     public func MenuItemSelectedEnabled(text:string, selected:bool, enable:bool)=> option<bool /*selected*/>
     {
         return MenuItemShortcutSelectedEnabled(text, "", selected, enable);
@@ -159,79 +159,79 @@ namespace je::gui
     {
         return MenuItemShortcutSelectedEnabled(text, "", selected, true);
     }
-
+    
     extern("libjoyecs", "je_gui_end_main_menu_bar")
-    public func EndMainMenuBar()=> void;
-
+        public func EndMainMenuBar()=> void;
+        
     extern("libjoyecs", "je_gui_begin_menu_bar")
-    public func BeginMenuBar()=> bool;
-
+        public func BeginMenuBar()=> bool;
+        
     extern("libjoyecs", "je_gui_end_menu_bar")
-    public func EndMenuBar()=> void;
-
+        public func EndMenuBar()=> void;
+        
     extern("libjoyecs", "je_gui_begin_menu")
-    public func BeginMenu(text:string)=> bool;
+        public func BeginMenu(text:string)=> bool;
     extern("libjoyecs", "je_gui_begin_menu_enabled")
-    public func BeginMenuEnabled(text:string, enable:bool)=> bool;
-
+        public func BeginMenuEnabled(text:string, enable:bool)=> bool;
+        
     extern("libjoyecs", "je_gui_listbox")
-    public func ListBox(label:string, items:array<string>)=> option<int>;
+        public func ListBox(label:string, items:array<string>)=> option<int>;
     extern("libjoyecs", "je_gui_listbox_select")
-    public func ListBoxSelect(label:string, items:array<string>, select_item:int)=> option<int>;
+        public func ListBoxSelect(label:string, items:array<string>, select_item:int)=> option<int>;
     extern("libjoyecs", "je_gui_listbox_select_height")
-    public func ListBoxSelectHeight(label:string, items:array<string>, select_item:int, height_count:int)=> option<int>;
+        public func ListBoxSelectHeight(label:string, items:array<string>, select_item:int, height_count:int)=> option<int>;
     extern("libjoyecs", "je_gui_listbox_withsize")
-    public func ListBoxSelectSize(label:string, items:array<string>, select_item:int, width:real, height:real)=> option<int>;
-
+        public func ListBoxSelectSize(label:string, items:array<string>, select_item:int, width:real, height:real)=> option<int>;
+        
     extern("libjoyecs", "je_gui_begin_listbox")
-    public func BeginListBox(label:string, width:real, height:real)=>bool;
+        public func BeginListBox(label:string, width:real, height:real)=>bool;
     extern("libjoyecs", "je_gui_begin_selectable")
-    public func Selectable(label:string)=>bool;
+        public func Selectable(label:string)=>bool;
     extern("libjoyecs", "je_gui_begin_selectable_selected")
-    public func SelectableSelected(label:string, selected:bool)=>bool;
+        public func SelectableSelected(label:string, selected:bool)=>bool;
     extern("libjoyecs", "je_gui_end_listbox")
-    public func EndListBox()=> void;
-
+        public func EndListBox()=> void;
+        
     extern("libjoyecs", "je_gui_sameline")
-    public func SameLine()=>void;
-
+        public func SameLine()=>void;
+        
     extern("libjoyecs", "je_gui_begingroup")
-    public func BeginGroup()=>void;
+        public func BeginGroup()=>void;
     extern("libjoyecs", "je_gui_endgroup")
-    public func EndGroup()=>void;
-
+        public func EndGroup()=>void;
+        
     extern("libjoyecs", "je_gui_treenode")
-    public func TreeNode(label:string)=>bool;
+        public func TreeNode(label:string)=>bool;
     extern("libjoyecs", "je_gui_treenodeex")
-    public func TreeNodeEx(label:string, attrib: TreeNodeAttribute)=>bool;
+        public func TreeNodeEx(label:string, attrib: TreeNodeAttribute)=>bool;
     extern("libjoyecs", "je_gui_treepop")
-    public func TreePop()=>void;
-
+        public func TreePop()=>void;
+        
     extern("libjoyecs", "je_gui_is_itemclicked")
-    public func IsItemClicked(button: ImGuiMouseButton)=> bool;
-
+        public func IsItemClicked(button: ImGuiMouseButton)=> bool;
+        
     public func IsItemClickedLeft()
     {
         return IsItemClicked(ImGuiMouseButton::ImGuiMouseButton_Left);
     }
-
+    
     extern("libjoyecs", "je_gui_is_itemtoggledopen")
-    public func IsItemToggledOpen()=> bool;
+        public func IsItemToggledOpen()=> bool;
     extern("libjoyecs", "je_gui_is_itemhovered")
-    public func IsItemHovered()=> bool;
+        public func IsItemHovered()=> bool;
     extern("libjoyecs", "je_gui_is_mousehoveringrect")
-    public func IsMouseHoveringRect(p0: (real, real), p1: (real, real))=> bool;
-
+        public func IsMouseHoveringRect(p0: (real, real), p1: (real, real))=> bool;
+        
     extern("libjoyecs", "je_gui_is_item_active")
-    public func IsItemActive()=> bool;
-
+        public func IsItemActive()=> bool;
+        
     extern("libjoyecs", "je_gui_is_mouse_dragging")
-    public func IsMouseDragging(attr: ImGuiMouseButton)=> bool;
+        public func IsMouseDragging(attr: ImGuiMouseButton)=> bool;
     extern("libjoyecs", "je_gui_is_mouse_down")
-    public func IsMouseDown(attr: ImGuiMouseButton)=> bool;
+        public func IsMouseDown(attr: ImGuiMouseButton)=> bool;
     extern("libjoyecs", "je_gui_is_mouse_released")
-    public func IsMouseReleased(attr: ImGuiMouseButton)=> bool;
-
+        public func IsMouseReleased(attr: ImGuiMouseButton)=> bool;
+        
     public enum ImGuiKey
     {
         // Keyboard
@@ -285,7 +285,7 @@ namespace je::gui
         ImGuiKey_KeypadAdd,
         ImGuiKey_KeypadEnter,
         ImGuiKey_KeypadEqual,
-
+        
         // Gamepad (some of those are analog values, 0.0f to 1.0f)                          // NAVIGATION ACTION
         // (download controller mapping PNG/PSD at http://dearimgui.com/controls_sheets)
         ImGuiKey_GamepadStart,          // Menu (Xbox)      + (Switch)   Start/Options (PS)
@@ -312,15 +312,15 @@ namespace je::gui
         ImGuiKey_GamepadRStickRight,    // [Analog]
         ImGuiKey_GamepadRStickUp,       // [Analog]
         ImGuiKey_GamepadRStickDown,     // [Analog]
-
+        
         // Aliases: Mouse Buttons (auto-submitted from AddMouseButtonEvent() calls)
         // - This is mirroring the data also written to io.MouseDown[], io.MouseWheel, in a format allowing them to be accessed via standard key API.
         ImGuiKey_MouseLeft, ImGuiKey_MouseRight, ImGuiKey_MouseMiddle, ImGuiKey_MouseX1, ImGuiKey_MouseX2, ImGuiKey_MouseWheelX, ImGuiKey_MouseWheelY,
-
+        
         // [Internal] Reserved for mod storage
         ImGuiKey_ReservedForModCtrl, ImGuiKey_ReservedForModShift, ImGuiKey_ReservedForModAlt, ImGuiKey_ReservedForModSuper,
         ImGuiKey_COUNT,
-
+        
         // Keyboard Modifiers (explicitly submitted by backend via AddKeyEvent() calls)
         // - This is mirroring the data also written to io.KeyCtrl, io.KeyShift, io.KeyAlt, io.KeySuper, in a format allowing
         //   them to be accessed via standard key API, allowing calls such as IsKeyPressed(), IsKeyReleased(), querying duration etc.
@@ -337,23 +337,23 @@ namespace je::gui
         ImGuiMod_Shortcut               = 0x0800, // 1 << 11, // Alias for Ctrl (non-macOS) _or_ Super (macOS).
         ImGuiMod_Mask_                  = 0xF800,  // 5-bits
     }
-
+    
     extern("libjoyecs", "je_gui_is_key_down")
-    public func IsKeyDown(attr: ImGuiKey)=> bool;
-
+        public func IsKeyDown(attr: ImGuiKey)=> bool;
+        
     extern("libjoyecs", "je_gui_set_tooltip")
-    public func SetTooltip(msg: string)=> bool;
-
+        public func SetTooltip(msg: string)=> bool;
+        
     extern("libjoyecs", "je_gui_beginpopup_contextitem_label")
-    public func BeginPopupContextItemLabel(label:string)=>bool;
+        public func BeginPopupContextItemLabel(label:string)=>bool;
     extern("libjoyecs", "je_gui_beginpopup_contextitem")
-    public func BeginPopupContextItem()=>bool;
-
+        public func BeginPopupContextItem()=>bool;
+        
     extern("libjoyecs", "je_gui_beginpopup_contextwindow_label")
-    public func BeginPopupContextWindowLabel(label:string)=>bool;
+        public func BeginPopupContextWindowLabel(label:string)=>bool;
     extern("libjoyecs", "je_gui_beginpopup_contextwindow")
-    public func BeginPopupContextWindow()=>bool;
-
+        public func BeginPopupContextWindow()=>bool;
+        
     public enum TabBarAttribute
     {
         ImGuiTabBarFlags_None                           = 0,
@@ -368,7 +368,7 @@ namespace je::gui
         // ImGuiTabBarFlags_FittingPolicyMask_             = ImGuiTabBarFlags_FittingPolicyResizeDown | ImGuiTabBarFlags_FittingPolicyScroll,
         // ImGuiTabBarFlags_FittingPolicyDefault_          = ImGuiTabBarFlags_FittingPolicyResizeDown
     }
-
+    
     public enum TabItemAttribute
     {
         ImGuiTabItemFlags_None                          = 0,
@@ -380,22 +380,22 @@ namespace je::gui
         ImGuiTabItemFlags_NoReorder                     = 32,   // Disable reordering this tab or having another tab cross over this tab
         ImGuiTabItemFlags_Leading                       = 64,   // Enforce the tab position to the left of the tab bar (after the tab list popup button)
         ImGuiTabItemFlags_Trailing                      = 128    // Enforce the tab position to the right of the tab bar (before the scrolling buttons)
-    }
-
+        }
+        
     extern("libjoyecs", "je_gui_begintabbar")
-    public func BeginTabBarAttr(label: string, attr: TabBarAttribute)=> bool;
+        public func BeginTabBarAttr(label: string, attr: TabBarAttribute)=> bool;
     public func BeginTabBar(label: string)
     {
         return BeginTabBarAttr(label, TabBarAttribute::ImGuiTabBarFlags_None);
-    } 
+    }
     extern("libjoyecs", "je_gui_endtabbar")
-    public func EndTabBar()=> void;
-
+        public func EndTabBar()=> void;
+        
     extern("libjoyecs", "je_gui_begintabitem")
-    public func BeginTabItemAttr(label: string, attr: TabItemAttribute)=> bool;
+        public func BeginTabItemAttr(label: string, attr: TabItemAttribute)=> bool;
     extern("libjoyecs", "je_gui_begintabitem_open")
-    public func BeginTabItemAttrOpen(label: string, attr: TabItemAttribute)=> (bool /* show */, bool /* open */);
-
+        public func BeginTabItemAttrOpen(label: string, attr: TabItemAttribute)=> (bool /* show */, bool /* open */);
+        
     public func BeginTabItem(label: string)
     {
         return BeginTabItemAttr(label, TabItemAttribute::ImGuiTabItemFlags_None);
@@ -404,54 +404,54 @@ namespace je::gui
     {
         return BeginTabItemAttrOpen(label, TabItemAttribute::ImGuiTabItemFlags_None);
     }
-
-    extern("libjoyecs", "je_gui_endtabitem")
-    public func EndTabItem()=> void;
     
+    extern("libjoyecs", "je_gui_endtabitem")
+        public func EndTabItem()=> void;
+        
     public enum PopupAttribute
     {
         NONE
-    }
-
+        }
+        
     extern("libjoyecs", "je_gui_openpopup_on_item_click")
-    public func OpenPopupOnItemClick()=>void;
+        public func OpenPopupOnItemClick()=>void;
     extern("libjoyecs", "je_gui_openpopup_on_item_click_attr")
-    public func OpenPopupOnItemClickAttr(flag:PopupAttribute)=>void;
+        public func OpenPopupOnItemClickAttr(flag:PopupAttribute)=>void;
     extern("libjoyecs", "je_gui_openpopup_on_item_click_label")
-    public func OpenPopupOnItemClickLabel(label:string)=>void;
+        public func OpenPopupOnItemClickLabel(label:string)=>void;
     extern("libjoyecs", "je_gui_openpopup_on_item_click_label_attr")
-    public func OpenPopupOnItemClickLabelAttr(label:string, flag:PopupAttribute)=>void;
-
+        public func OpenPopupOnItemClickLabelAttr(label:string, flag:PopupAttribute)=>void;
+        
     extern("libjoyecs", "je_gui_openpopup")
-    public func OpenPopup(label:string)=>void;     
-
+        public func OpenPopup(label:string)=>void;
+        
     extern("libjoyecs", "je_gui_beginpopup")
-    public func BeginPopup(label:string)=>bool;
-
+        public func BeginPopup(label:string)=>bool;
+        
     extern("libjoyecs", "je_gui_endpopup")
-    public func EndPopup()=>void;
-
+        public func EndPopup()=>void;
+        
     extern("libjoyecs", "je_gui_push_id")
-    public func PushIDInt(id:int)=>void;
-
+        public func PushIDInt(id:int)=>void;
+        
     extern("libjoyecs", "je_gui_push_id_str")
-    public func PushIDStr(id:string)=>void;
-
+        public func PushIDStr(id:string)=>void;
+        
     extern("libjoyecs", "je_gui_pop_id")
-    public func PopID()=>void;
-
+        public func PopID()=>void;
+        
     extern("libjoyecs", "je_gui_get_id")
-    public func GetID(name: string)=>int;
-
+        public func GetID(name: string)=>int;
+        
     extern("libjoyecs", "je_gui_checkbox")
-    public func CheckBox(label: string, checked: bool)=> option<bool>;
-
+        public func CheckBox(label: string, checked: bool)=> option<bool>;
+        
     extern("libjoyecs", "je_gui_colorpicker4")
-    public func ColorPicker4(label:string, color: (real, real, real, real))=> option<(real, real, real, real)>;
-
+        public func ColorPicker4(label:string, color: (real, real, real, real))=> option<(real, real, real, real)>;
+        
     extern("libjoyecs", "je_gui_colorbutton")
-    public func ColorButton(label:string, color: (real, real, real, real))=> bool;
-
+        public func ColorButton(label:string, color: (real, real, real, real))=> bool;
+        
     public enum ImGuiInputTextFlags
     {
         ImGuiInputTextFlags_None                = 0,
@@ -476,87 +476,87 @@ namespace je::gui
         ImGuiInputTextFlags_CallbackResize      = 0x00040000,  // Callback on buffer capacity changes request (beyond 'buf_size' parameter value), allowing the string to grow. Notify when the string wants to be resized (for string types which hold a cache of their Size). You will be provided a new BufSize in the callback and NEED to honor it. (see misc/cpp/imgui_stdlib.h for an example of using this)
         ImGuiInputTextFlags_CallbackEdit        = 0x00080000,  // Callback on any edit (note that InputText() already returns true on edit, the callback is useful mainly to manipulate the underlying buffer while focus is active)
         ImGuiInputTextFlags_EscapeClearsAll     = 0x00100000,  // Escape key clears content if not empty, and deactivate otherwise (contrast to default behavior of Escape to revert)
-
+        
         // Obsolete names
         //ImGuiInputTextFlags_AlwaysInsertMode  = ImGuiInputTextFlags_AlwaysOverwrite   // [renamed in 1.82] name was not matching behavior
     };
-
+    
     extern("libjoyecs", "je_gui_input_text_box")
-    public func InputText(label:string, buffer: string)=> option<string>;
-
+        public func InputText(label:string, buffer: string)=> option<string>;
+        
     extern("libjoyecs", "je_gui_input_text_attr_box")
-    public func InputTextAttr(label:string, buffer: string, flag: ImGuiInputTextFlags)=> option<string>;
-
+        public func InputTextAttr(label:string, buffer: string, flag: ImGuiInputTextFlags)=> option<string>;
+        
     extern("libjoyecs", "je_gui_drag_float")
-    public func DragFloat(label: string, value: real, step: real, min: real, max: real)=> option<real>;
-
+        public func DragFloat(label: string, value: real, step: real, min: real, max: real)=> option<real>;
+        
     extern("libjoyecs", "je_gui_input_float_box")
-    public func InputFloat(label: string, value: real)=> option<real>;
+        public func InputFloat(label: string, value: real)=> option<real>;
     extern("libjoyecs", "je_gui_input_float_format_box")
-    public func InputFloatFormat(label: string, value: real, format: string)=> option<real>;
-
+        public func InputFloatFormat(label: string, value: real, format: string)=> option<real>;
+        
     extern("libjoyecs", "je_gui_input_int_box")
-    public func InputInt(label: string, value: int)=> option<int>;
-
+        public func InputInt(label: string, value: int)=> option<int>;
+        
     extern("libjoyecs", "je_gui_input_int2_box")
-    public func InputInt2(label: string, x: int, y: int)=> option<(int, int)>;
-
+        public func InputInt2(label: string, x: int, y: int)=> option<(int, int)>;
+        
     extern("libjoyecs", "je_gui_input_int3_box")
-    public func InputInt3(label: string, x: int, y: int, z: int)=> option<(int, int, int)>;
-
+        public func InputInt3(label: string, x: int, y: int, z: int)=> option<(int, int, int)>;
+        
     extern("libjoyecs", "je_gui_input_int4_box")
-    public func InputInt4(label: string, x: int, y: int, z: int, w: int)=> option<(int, int, int, int)>;
-
+        public func InputInt4(label: string, x: int, y: int, z: int, w: int)=> option<(int, int, int, int)>;
+        
     extern("libjoyecs", "je_gui_input_float2_box")
-    public func InputFloat2(label: string, x: real, y: real)=> option<(real, real)>;
+        public func InputFloat2(label: string, x: real, y: real)=> option<(real, real)>;
     extern("libjoyecs", "je_gui_input_float2_format_box")
-    public func InputFloat2Format(label: string, x: real, y: real, format: string)=> option<(real, real)>;
-
+        public func InputFloat2Format(label: string, x: real, y: real, format: string)=> option<(real, real)>;
+        
     extern("libjoyecs", "je_gui_input_float3_box")
-    public func InputFloat3(label: string, x: real, y: real, z: real)=> option<(real, real, real)>;
+        public func InputFloat3(label: string, x: real, y: real, z: real)=> option<(real, real, real)>;
     extern("libjoyecs", "je_gui_input_float3_format_box")
-    public func InputFloat3Format(label: string, x: real, y: real, z: real, format: string)=> option<(real, real, real)>;
-
+        public func InputFloat3Format(label: string, x: real, y: real, z: real, format: string)=> option<(real, real, real)>;
+        
     extern("libjoyecs", "je_gui_input_float4_box")
-    public func InputFloat4(label: string, x: real, y: real, z: real, w: real)=> option<(real, real, real, real)>;
+        public func InputFloat4(label: string, x: real, y: real, z: real, w: real)=> option<(real, real, real, real)>;
     extern("libjoyecs", "je_gui_input_float4_format_box")
-    public func InputFloat4Format(label: string, x: real, y: real, z: real, w: real, format: string)=> option<(real, real, real, real)>;
-
+        public func InputFloat4Format(label: string, x: real, y: real, z: real, w: real, format: string)=> option<(real, real, real, real)>;
+        
     extern("libjoyecs", "je_gui_input_text_multiline")
-    public func InputTextMultiline(label:string, buffer: string)=> option<string>;
+        public func InputTextMultiline(label:string, buffer: string)=> option<string>;
     extern("libjoyecs", "je_gui_input_text_multiline_size")
-    public func InputTextMultilineSize(label:string, buffer: string, width:real, height:real)=> option<string>;
-
+        public func InputTextMultilineSize(label:string, buffer: string, width:real, height:real)=> option<string>;
+        
     extern("libjoyecs", "je_gui_combo")
-    public func Combo(label:string, items: array<string>, select_item: option<int>)=> option<int>;
-
+        public func Combo(label:string, items: array<string>, select_item: option<int>)=> option<int>;
+        
     extern("libjoyecs", "je_gui_end_menu")
-    public func EndMenu()=> void;
-
+        public func EndMenu()=> void;
+        
     extern("libjoyecs", "je_gui_separator")
-    public func Separator()=> void;
-
+        public func Separator()=> void;
+        
     extern("libjoyecs", "je_gui_image")
-    public func Image(tex: je::graphic::texture)=> void;
+        public func Image(tex: je::graphic::texture)=> void;
     extern("libjoyecs", "je_gui_image_scale")
-    public func ImageScale(tex: je::graphic::texture, scale: real)=> void;
+        public func ImageScale(tex: je::graphic::texture, scale: real)=> void;
     extern("libjoyecs", "je_gui_image_size")
-    public func ImageSize(tex: je::graphic::texture, width: real, height: real)=> void;
+        public func ImageSize(tex: je::graphic::texture, width: real, height: real)=> void;
     extern("libjoyecs", "je_gui_image_size_color")
-    public func ImageSizeColor(tex: je::graphic::texture, width: real, height: real, color: Color32RGBA)=> void;
-
+        public func ImageSizeColor(tex: je::graphic::texture, width: real, height: real, color: Color32RGBA)=> void;
+        
     extern("libjoyecs", "je_gui_push_item_width")
-    public func PushItemWidth(width: real)=> void;
-
+        public func PushItemWidth(width: real)=> void;
+        
     extern("libjoyecs", "je_gui_pop_item_width")
-    public func PopItemWidth()=> void;
-
+        public func PopItemWidth()=> void;
+        
     extern("libjoyecs", "je_gui_push_clip_rect")
-    public func PushClipRect(from: ImVec2, to: ImVec2)=> void;
-
+        public func PushClipRect(from: ImVec2, to: ImVec2)=> void;
+        
     extern("libjoyecs", "je_gui_pop_clip_rect")
-    public func PopClipRect()=> void;
-
+        public func PopClipRect()=> void;
+        
     public enum ImGuiCol
     {
         ImGuiCol_Text,
@@ -615,71 +615,71 @@ namespace je::gui
         ImGuiCol_NavWindowingDimBg,     // Darken/colorize entire screen behind the CTRL+TAB window list, when active
         ImGuiCol_ModalWindowDimBg,      // Darken/colorize entire screen behind a modal window, when one is active
         ImGuiCol_COUNT
-    };
-
+        };
+        
     extern("libjoyecs", "je_gui_push_style_color")
-    public func PushStyleColor(item: ImGuiCol, col: Color32RGBA)=> void;
-
+        public func PushStyleColor(item: ImGuiCol, col: Color32RGBA)=> void;
+        
     extern("libjoyecs", "je_gui_pop_style_color")
-    public func PopStyleColor(n: int)=> void;
-
+        public func PopStyleColor(n: int)=> void;
+        
     using DrawListT = handle
     {
         extern("libjoyecs", "je_gui_draw_list_add_text")
-        public func AddText(self: DrawListT, pos: ImVec2, color: Color32RGBA, text: string)=> void;
-
+            public func AddText(self: DrawListT, pos: ImVec2, color: Color32RGBA, text: string)=> void;
+            
         extern("libjoyecs", "je_gui_draw_list_add_image")
-        public func AddImage(self: DrawListT, from: ImVec2, to: ImVec2, tex: graphic::texture, color: Color32RGBA)=> void;
-
+            public func AddImage(self: DrawListT, from: ImVec2, to: ImVec2, tex: graphic::texture, color: Color32RGBA)=> void;
+            
         extern("libjoyecs", "je_gui_draw_list_add_line")
-        public func AddLine(self: DrawListT, from: ImVec2, to: ImVec2, color: Color32RGBA, board: real)=> void;
-
+            public func AddLine(self: DrawListT, from: ImVec2, to: ImVec2, color: Color32RGBA, board: real)=> void;
+            
         extern("libjoyecs", "je_gui_draw_list_add_rect")
-        public func AddRect(self: DrawListT, from: ImVec2, to: ImVec2, color: Color32RGBA, board: real)=> void;
-
+            public func AddRect(self: DrawListT, from: ImVec2, to: ImVec2, color: Color32RGBA, board: real)=> void;
+            
         extern("libjoyecs", "je_gui_draw_list_add_rect_filled")
-        public func AddRectFilled(self: DrawListT, from: ImVec2, to: ImVec2, color: Color32RGBA)=> void;
-
+            public func AddRectFilled(self: DrawListT, from: ImVec2, to: ImVec2, color: Color32RGBA)=> void;
+            
         extern("libjoyecs", "je_gui_draw_list_add_triangle")
-        public func AddTriangle(self: DrawListT, p1: ImVec2, p2: ImVec2, p3: ImVec2, color: Color32RGBA, board: real)=> void;
-
+            public func AddTriangle(self: DrawListT, p1: ImVec2, p2: ImVec2, p3: ImVec2, color: Color32RGBA, board: real)=> void;
+            
         extern("libjoyecs", "je_gui_draw_list_add_triangle_filled")
-        public func AddTriangleFilled(self: DrawListT, p1: ImVec2, p2: ImVec2, p3: ImVec2, color: Color32RGBA)=> void;
-        
+            public func AddTriangleFilled(self: DrawListT, p1: ImVec2, p2: ImVec2, p3: ImVec2, color: Color32RGBA)=> void;
+            
         extern("libjoyecs", "je_gui_draw_list_add_circle")
-        public func AddCircle(self: DrawListT, center: ImVec2, r: real, color: Color32RGBA, board: real)=> void;
-
+            public func AddCircle(self: DrawListT, center: ImVec2, r: real, color: Color32RGBA, board: real)=> void;
+            
         extern("libjoyecs", "je_gui_draw_list_add_filled_circle")
-        public func AddCircleFilled(self: DrawListT, center: ImVec2, r: real, color: Color32RGBA)=> void;
-
+            public func AddCircleFilled(self: DrawListT, center: ImVec2, r: real, color: Color32RGBA)=> void;
+            
         extern("libjoyecs", "je_gui_draw_list_add_bezier_quad")
-        public func AddBezierQuadratic(self: DrawListT, p1: ImVec2, p2: ImVec2, p3: ImVec2, color: Color32RGBA, board: real)=> void;
-
+            public func AddBezierQuadratic(self: DrawListT, p1: ImVec2, p2: ImVec2, p3: ImVec2, color: Color32RGBA, board: real)=> void;
+            
         extern("libjoyecs", "je_gui_draw_list_add_bezier_cubic")
-        public func AddBezierCubic(self: DrawListT, p1: ImVec2, p2: ImVec2, p3: ImVec2, p4: ImVec2, color: Color32RGBA, board: real)=> void;
+            public func AddBezierCubic(self: DrawListT, p1: ImVec2, p2: ImVec2, p3: ImVec2, p4: ImVec2, color: Color32RGBA, board: real)=> void;
     }
     extern("libjoyecs", "je_gui_get_window_draw_list")
-    public func GetWindowDrawList()=> DrawListT;
-
+        public func GetWindowDrawList()=> DrawListT;
+        
     extern("libjoyecs", "je_gui_imagebutton")
-    public func ImageButton(label: string, tex: je::graphic::texture)=> bool;
+        public func ImageButton(label: string, tex: je::graphic::texture)=> bool;
     extern("libjoyecs", "je_gui_imagebutton_scale")
-    public func ImageButtonScale(label: string, tex: je::graphic::texture, scale: real)=> bool;
+        public func ImageButtonScale(label: string, tex: je::graphic::texture, scale: real)=> bool;
     extern("libjoyecs", "je_gui_imagebutton_size")
-    public func ImageButtonSize(label: string, tex: je::graphic::texture, width: real, height: real)=> bool;
-
+        public func ImageButtonSize(label: string, tex: je::graphic::texture, width: real, height: real)=> bool;
+        
     extern("libjoyecs", "je_gui_content_region_avail")
-    public func GetContentRegionAvail()=> ImVec2;
-
+        public func GetContentRegionAvail()=> ImVec2;
+        
     extern("libjoyecs", "je_gui_set_next_window_size_constraints")
-    public func SetNextWindowSizeConstraints(minsz: ImVec2, maxsz: ImVec2)=> void;
-
+        public func SetNextWindowSizeConstraints(minsz: ImVec2, maxsz: ImVec2)=> void;
+        
     extern("libjoyecs", "je_gui_set_next_window_size")
-    public func SetNextWindowSize(sz: ImVec2)=> void;
-
+        public func SetNextWindowSize(sz: ImVec2)=> void;
+        
     extern("libjoyecs", "je_gui_set_next_window_pos")
-    public func SetNextWindowPos(pos: ImVec2)=> void;
-
+        public func SetNextWindowPos(pos: ImVec2)=> void;
+        
     public enum DragAttribute
     {
         ImGuiDragDropFlags_None                         = 0,
@@ -696,16 +696,16 @@ namespace je::gui
         ImGuiDragDropFlags_AcceptNoPreviewTooltip       = 0x0100,  // Request hiding the BeginDragDropSource tooltip from the BeginDragDropTarget site.
         // ImGuiDragDropFlags_AcceptPeekOnly               = ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect  // For peeking ahead and inspecting the payload before delivery.
     }
-
+    
     extern("libjoyecs", "je_gui_begin_drag_drop_source")
-    public func BeginDragDropSource()=> bool;
+        public func BeginDragDropSource()=> bool;
     extern("libjoyecs", "je_gui_begin_drag_drop_source_attr")
-    public func BeginDragDropSourceAttr(attrib: DragAttribute)=> bool;
+        public func BeginDragDropSourceAttr(attrib: DragAttribute)=> bool;
     extern("libjoyecs", "je_gui_set_drag_drop_payload")
-    public func SetDragDropPayload(type: string, data: string)=> bool;
+        public func SetDragDropPayload(type: string, data: string)=> bool;
     extern("libjoyecs", "je_gui_end_drag_drop_source")
-    public func EndDragDropSource()=> void;
-
+        public func EndDragDropSource()=> void;
+        
     public func DragItem(type: string, payload: string, holddo: ()=>void)
     {
         if (BeginDragDropSource())
@@ -715,14 +715,14 @@ namespace je::gui
             do EndDragDropSource();
         }
     }
-
+    
     extern("libjoyecs", "je_gui_begin_drag_drop_target")
-    public func BeginDragDropTarget()=> bool;
+        public func BeginDragDropTarget()=> bool;
     extern("libjoyecs", "je_gui_accept_drag_drop_payload")
-    public func AcceptDragDropPayload(type: string)=> option<string>;
+        public func AcceptDragDropPayload(type: string)=> option<string>;
     extern("libjoyecs", "je_gui_end_accept_drop_source")
-    public func EndDragDropTarget()=> void;
-
+        public func EndDragDropTarget()=> void;
+        
     public func AcceptDrag(types: array<string>)=> option<(string, string)>
     {
         if (BeginDragDropTarget())
@@ -730,48 +730,48 @@ namespace je::gui
             let drag_result = types
                 ->> \type = (type, AcceptDragDropPayload(type));
                 ->  forall(\accept_type_result = accept_result->is_value
-                    where (_, accept_result) = accept_type_result;)
+                        where (_, accept_result) = accept_type_result;)
                 ->  get(0)
                 ->> \e = (e[0], e[1]->unwrap);
                 ;
-
+                
             EndDragDropTarget();
-
+            
             return drag_result;
         }
         return option::none;
     }
-
+    
     extern("libjoyecs", "je_gui_set_next_item_open")
-    public func SetNextItemOpen(open: bool)=> void;
-
+        public func SetNextItemOpen(open: bool)=> void;
+        
     extern("libjoyecs", "je_gui_begin_tool_tip")
-    public func BeginTooltip()=> void;
-
+        public func BeginTooltip()=> void;
+        
     extern("libjoyecs", "je_gui_end_tool_tip")
-    public func EndTooltip()=> void;
-
+        public func EndTooltip()=> void;
+        
     extern("libjoyecs", "je_gui_begin_disabled")
-    public func BeginDisabled(able: bool) => void;
-
+        public func BeginDisabled(able: bool) => void;
+        
     extern("libjoyecs", "je_gui_end_disabled")
-    public func EndDisabled() => void;
-
+        public func EndDisabled() => void;
+        
     extern("libjoyecs", "je_gui_style_get_config_color")
-    public func GetStyleColor(item: ImGuiCol)=> (real, real, real, real);    
-
+        public func GetStyleColor(item: ImGuiCol)=> (real, real, real, real);
+        
     extern("libjoyecs", "je_gui_style_set_config_color")
-    public func SetStyleColor(item: ImGuiCol, col: (real, real, real, real))=>void;  
-
+        public func SetStyleColor(item: ImGuiCol, col: (real, real, real, real))=>void;
+        
     extern("libjoyecs", "je_gui_style_set_config_color_dark")
-    public func SetStyleColorDark()=>void;  
-
+        public func SetStyleColorDark()=>void;
+        
     extern("libjoyecs", "je_gui_style_set_config_color_classic")
-    public func SetStyleColorClassic()=>void; 
-
+        public func SetStyleColorClassic()=>void;
+        
     extern("libjoyecs", "je_gui_style_set_config_color_light")
-    public func SetStyleColorLight()=>void; 
-
+        public func SetStyleColorLight()=>void;
+        
     public enum DockNodeFlags
     {
         ImGuiDockNodeFlags_None                         = 0,
@@ -784,13 +784,13 @@ namespace je::gui
         ImGuiDockNodeFlags_AutoHideTabBar               = 0x00000040,   //       // Tab bar will automatically hide when there is a single window in the dock node.
         ImGuiDockNodeFlags_NoUndocking                  = 0x00000080,   //       // Disable undocking this node.
     };
-
+    
     extern("libjoyecs", "je_gui_dock_space")
-    public func DockSpace(id: int, size: ImVec2, attrib: DockNodeFlags)=> void;
-
+        public func DockSpace(id: int, size: ImVec2, attrib: DockNodeFlags)=> void;
+        
     extern("libjoyecs", "je_gui_dock_space_over_viewport")
-    public func DockSpaceOverViewport()=> void;
-
+        public func DockSpaceOverViewport()=> void;
+        
     public enum StyleVar
     {
         // Enum name --------------------- // Member in ImGuiStyle structure (see ImGuiStyle for descriptions)
@@ -825,123 +825,123 @@ namespace je::gui
         ImGuiStyleVar_SeparatorTextPadding,// ImVec2    SeparatorTextPadding
         ImGuiStyleVar_DockingSeparatorSize,// float     DockingSeparatorSize
         ImGuiStyleVar_COUNT
-    };
-
+        };
+        
     extern("libjoyecs", "je_gui_push_style_real")
-    public func PushStyleReal(style: StyleVar, val: real)=> void;
+        public func PushStyleReal(style: StyleVar, val: real)=> void;
     extern("libjoyecs", "je_gui_push_style_vec2")
-    public func PushStyleVec2(style: StyleVar, val: ImVec2)=> void;
-
+        public func PushStyleVec2(style: StyleVar, val: ImVec2)=> void;
+        
     extern("libjoyecs", "je_gui_pop_style_var")
-    public func PopStyleVar(n: int)=> void;
-
+        public func PopStyleVar(n: int)=> void;
+        
     extern("libjoyecs", "je_gui_set_window_font_scale")
-    public func SetWindowFontScale(factor: real)=> void;
-
+        public func SetWindowFontScale(factor: real)=> void;
+        
     extern("libjoyecs", "je_gui_dummy")
-    public func Dummy(sz: ImVec2)=> void;
-
+        public func Dummy(sz: ImVec2)=> void;
+        
     using CodeEditorContext = gchandle
     {
-	    public enum PaletteIndex
-	    {
-		    Default,
-		    Keyword,
-		    Number,
-		    String,
-		    CharLiteral,
-		    Punctuation,
-		    Preprocessor,
-		    Identifier,
-		    KnownIdentifier,
+        public enum PaletteIndex
+        {
+            Default,
+            Keyword,
+            Number,
+            String,
+            CharLiteral,
+            Punctuation,
+            Preprocessor,
+            Identifier,
+            KnownIdentifier,
             Type,
-		    PreprocIdentifier,
-		    Comment,
-		    MultiLineComment,
-		    Background,
-		    Cursor,
-		    Selection,
-		    ErrorMarker,
-		    Breakpoint,
-		    LineNumber,
-		    CurrentLineFill,
-		    CurrentLineFillInactive,
-		    CurrentLineEdge,
-		    Max
-	    };
+            PreprocIdentifier,
+            Comment,
+            MultiLineComment,
+            Background,
+            Cursor,
+            Selection,
+            ErrorMarker,
+            Breakpoint,
+            LineNumber,
+            CurrentLineFill,
+            CurrentLineFillInactive,
+            CurrentLineEdge,
+            Max
+            };
         using LanguageDefinition = gchandle
         {
             extern("libjoyecs", "je_gui_code_editor_language_definition_create")
-            public func create(name: string)=> LanguageDefinition;
-
+                public func create(name: string)=> LanguageDefinition;
+                
             extern("libjoyecs", "je_gui_code_editor_language_definition_add_keyword")
-            public func AddKeyword(
-                self: LanguageDefinition, keyword: string)=> void;
-
+                public func AddKeyword(
+                    self: LanguageDefinition, keyword: string)=> void;
+                    
             extern("libjoyecs", "je_gui_code_editor_language_definition_add_identifier")
-            public func AddIdentifier(
-                self: LanguageDefinition, 
-                ident: string, 
-                declare: string, 
-                row: int, 
-                col: int)=> void;
-
+                public func AddIdentifier(
+                    self: LanguageDefinition,
+                    ident: string,
+                    declare: string,
+                    row: int,
+                    col: int)=> void;
+                    
             extern("libjoyecs", "je_gui_code_editor_language_definition_add_token_regex")
-            public func AddTokenRegex(
-                self: LanguageDefinition, 
-                regex: string, 
-                pidx: PaletteIndex)=> void;
-
+                public func AddTokenRegex(
+                    self: LanguageDefinition,
+                    regex: string,
+                    pidx: PaletteIndex)=> void;
+                    
             extern("libjoyecs", "je_gui_code_editor_language_definition_set_mlcomment")
-            public func SetMultilineComment(
-                self: LanguageDefinition, begin: string, end: string)=> void;
-
+                public func SetMultilineComment(
+                    self: LanguageDefinition, begin: string, end: string)=> void;
+                    
             extern("libjoyecs", "je_gui_code_editor_language_definition_set_slcomment")
-            public func SetSingleLineComment(
-                self: LanguageDefinition, text: string)=> void;
-
+                public func SetSingleLineComment(
+                    self: LanguageDefinition, text: string)=> void;
+                    
             extern("libjoyecs", "je_gui_code_editor_language_definition_set_case_sensitive")
-            public func SetCaseSensitive(
-                self: LanguageDefinition, able: bool)=> void;
-
+                public func SetCaseSensitive(
+                    self: LanguageDefinition, able: bool)=> void;
+                    
             extern("libjoyecs", "je_gui_code_editor_language_definition_set_auto_indentation")
-            public func SetAutoIndentation(
-                self: LanguageDefinition, able: bool)=> void;
-
+                public func SetAutoIndentation(
+                    self: LanguageDefinition, able: bool)=> void;
+                    
             extern("libjoyecs", "je_gui_code_editor_language_definition_set_preproc_char")
-            public func SetPreprocChar(
-                self: LanguageDefinition, ch: cchar)=> void;
+                public func SetPreprocChar(
+                    self: LanguageDefinition, ch: cchar)=> void;
         }
-
+        
         extern("libjoyecs", "je_gui_code_editor_create")
             public func create()=> CodeEditorContext;
-
+            
         extern("libjoyecs", "je_gui_code_editor_get_text")
             public func GetText(self: CodeEditorContext)=> string;
         extern("libjoyecs", "je_gui_code_editor_set_text")
             public func SetText(self: CodeEditorContext, text: string)=> void;
-
+            
         extern("libjoyecs", "je_gui_code_editor_set_language_definition")
             public func SetLanguageDefinition(self: CodeEditorContext, ldef: LanguageDefinition)=> void;
-
+            
         extern("libjoyecs", "je_gui_code_editor_undoable")
             public func CanUndo(self: CodeEditorContext)=> bool;
         extern("libjoyecs", "je_gui_code_editor_redoable")
             public func CanRedo(self: CodeEditorContext)=> bool;
-
+            
         extern("libjoyecs", "je_gui_code_editor_undo")
             public func Undo(self: CodeEditorContext)=> void;
         extern("libjoyecs", "je_gui_code_editor_redo")
             public func Redo(self: CodeEditorContext)=> void;
-
+            
         extern("libjoyecs", "je_gui_code_editor_get_cursor_pos")
             public func GetCursorPosition(self: CodeEditorContext)=> (int, int);
         extern("libjoyecs", "je_gui_code_editor_set_cursor_pos")
             public func SetCursorPosition(self: CodeEditorContext, pos: (int, int))=> void;
-    
+            
         extern("libjoyecs", "je_gui_code_editor_insert_text")
             public func InsertText(self: CodeEditorContext, text: string)=> void;
-
+            
         extern("libjoyecs", "je_gui_code_editor_copy")
             public func Copy(self: CodeEditorContext)=> void;
         extern("libjoyecs", "je_gui_code_editor_cut")
@@ -955,7 +955,7 @@ namespace je::gui
         public func CodeEditor(ctx: CodeEditorContext, label: string)=> void;
     extern("libjoyecs", "je_gui_code_editor_show_size")
         public func CodeEditorSize(ctx: CodeEditorContext, label: string, sz: ImVec2, board: bool)=> void;
-
+        
     namespace node_editor
     {
         using EditorContext = gchandle
@@ -965,86 +965,86 @@ namespace je::gui
                 return self: gchandle->close;
             }
         }
-
+        
         public using NodeId = int;
         public using PinId = int;
         public using LinkId = int;
-
+        
         extern("libjoyecs", "je_gui_node_editor_context_create")
-        public func CreateContext()=> EditorContext;
-
+            public func CreateContext()=> EditorContext;
+            
         extern("libjoyecs", "je_gui_node_editor_begin")
-        public func Begin(label: string, ctx: EditorContext)=> void;    
-
+            public func Begin(label: string, ctx: EditorContext)=> void;
+            
         extern("libjoyecs", "je_gui_node_editor_end")
-        public func End()=> void;
-
+            public func End()=> void;
+            
         extern("libjoyecs", "je_gui_node_editor_begin_node")
-        public func BeginNode(id: NodeId)=> void;
-
-        extern("libjoyecs", "je_gui_node_editor_end_node")  
-        public func EndNode()=> void;
-
+            public func BeginNode(id: NodeId)=> void;
+            
+        extern("libjoyecs", "je_gui_node_editor_end_node")
+            public func EndNode()=> void;
+            
         extern("libjoyecs", "je_gui_node_editor_begin_input_pin")
-        public func BeginInputPin(id: PinId)=> void;
-
+            public func BeginInputPin(id: PinId)=> void;
+            
         extern("libjoyecs", "je_gui_node_editor_begin_output_pin")
-        public func BeginOutputPin(id: PinId)=> void;
-
+            public func BeginOutputPin(id: PinId)=> void;
+            
         extern("libjoyecs", "je_gui_node_editor_end_pin")
-        public func EndPin()=> void;
-
+            public func EndPin()=> void;
+            
         extern("libjoyecs", "je_gui_node_editor_pin_pivot_rect")
-        public func PinPivotRect(a: ImVec2, b: ImVec2)=> void;
-
+            public func PinPivotRect(a: ImVec2, b: ImVec2)=> void;
+            
         extern("libjoyecs", "je_gui_node_editor_pin_rect")
-        public func PinRect(a: ImVec2, b: ImVec2)=> void;
-
+            public func PinRect(a: ImVec2, b: ImVec2)=> void;
+            
         extern("libjoyecs", "je_gui_node_editor_link")
-        public func Link(linkid: LinkId, output_pinid: PinId, input_pinid: PinId, color: Color32RGBA, board: real)=> void;
-
+            public func Link(linkid: LinkId, output_pinid: PinId, input_pinid: PinId, color: Color32RGBA, board: real)=> void;
+            
         extern("libjoyecs", "je_gui_node_editor_begin_create")
-        public func BeginCreate(color: Color32RGBA, board: real)=> bool;
-
+            public func BeginCreate(color: Color32RGBA, board: real)=> bool;
+            
         extern("libjoyecs", "je_gui_node_editor_end_create")
-        public func EndCreate()=> void;
-
+            public func EndCreate()=> void;
+            
         extern("libjoyecs", "je_gui_node_editor_begin_delete")
-        public func BeginDelete()=> bool;
-
+            public func BeginDelete()=> bool;
+            
         extern("libjoyecs", "je_gui_node_editor_end_delete")
-        public func EndDelete()=> void;
-
+            public func EndDelete()=> void;
+            
         extern("libjoyecs", "je_gui_node_editor_accept_new_item")
-        public func AcceptNewItem()=> bool;
-
+            public func AcceptNewItem()=> bool;
+            
         extern("libjoyecs", "je_gui_node_editor_reject_new_item")
-        public func RejectNewItem()=> void;
-
+            public func RejectNewItem()=> void;
+            
         extern("libjoyecs", "je_gui_node_editor_accept_new_item_color")
-        public func AcceptNewItemColor(color: Color32RGBA, board: real)=> bool;
-
+            public func AcceptNewItemColor(color: Color32RGBA, board: real)=> bool;
+            
         extern("libjoyecs", "je_gui_node_editor_reject_new_item_color")
-        public func RejectNewItemColor(color: Color32RGBA, board: real)=> void;
-
+            public func RejectNewItemColor(color: Color32RGBA, board: real)=> void;
+            
         extern("libjoyecs", "je_gui_node_editor_accept_deleted_item")
-        public func AcceptDeletedItem()=> bool;
-
+            public func AcceptDeletedItem()=> bool;
+            
         extern("libjoyecs", "je_gui_node_editor_reject_deleted_item")
-        public func RejectDeletedItem()=> void;
-
+            public func RejectDeletedItem()=> void;
+            
         extern("libjoyecs", "je_gui_node_editor_query_new_link")
-        public func QueryNewLink()=> option<(PinId, PinId)>;
-
+            public func QueryNewLink()=> option<(PinId, PinId)>;
+            
         extern("libjoyecs", "je_gui_node_editor_query_new_node")
-        public func QueryNewNode()=> option<PinId>;
-
+            public func QueryNewNode()=> option<PinId>;
+            
         extern("libjoyecs", "je_gui_node_editor_query_deleted_node")
-        public func QueryDeletedNode()=> option<NodeId>;
-
+            public func QueryDeletedNode()=> option<NodeId>;
+            
         extern("libjoyecs", "je_gui_node_editor_query_deleted_link")
-        public func QueryDeletedLink()=> option<LinkId>;
-
+            public func QueryDeletedLink()=> option<LinkId>;
+            
         public enum StyleColor
         {
             StyleColor_Bg,
@@ -1066,84 +1066,84 @@ namespace je::gui
             StyleColor_FlowMarker,
             StyleColor_GroupBg,
             StyleColor_GroupBorder,
-
+            
             StyleColor_Count
-        }
-
+            }
+            
         extern("libjoyecs", "je_gui_node_editor_push_style_color")
-        public func PushStyleColor(style: StyleColor, color: Color32RGBA)=> void;
-
+            public func PushStyleColor(style: StyleColor, color: Color32RGBA)=> void;
+            
         extern("libjoyecs", "je_gui_node_editor_pop_style_color")
-        public func PopStyleColor(n: int)=> void;
-
+            public func PopStyleColor(n: int)=> void;
+            
         extern("libjoyecs", "je_gui_node_editor_delete_node")
-        public func DeleteNode(id: NodeId)=> bool;
-
+            public func DeleteNode(id: NodeId)=> bool;
+            
         extern("libjoyecs", "je_gui_node_editor_get_node_position")
-        public func GetNodePosition(id: NodeId)=> (real, real);
-
+            public func GetNodePosition(id: NodeId)=> (real, real);
+            
         extern("libjoyecs", "je_gui_node_editor_set_node_position")
-        public func SetNodePosition(id: NodeId, pos: (real, real))=> void;
-
+            public func SetNodePosition(id: NodeId, pos: (real, real))=> void;
+            
         extern("libjoyecs", "je_gui_node_editor_delete_link")
-        public func DeleteLink(id: LinkId)=> bool;
-
+            public func DeleteLink(id: LinkId)=> bool;
+            
         extern("libjoyecs", "je_gui_node_editor_get_hovered_node")
-        public func GetHoveredNode()=> option<NodeId>;
-
+            public func GetHoveredNode()=> option<NodeId>;
+            
         extern("libjoyecs", "je_gui_node_editor_get_hovered_pin")
-        public func GetHoveredPin()=> option<PinId>;
-
+            public func GetHoveredPin()=> option<PinId>;
+            
         extern("libjoyecs", "je_gui_node_editor_get_hovered_link")
-        public func GetHoveredLink()=> option<LinkId>;
-
+            public func GetHoveredLink()=> option<LinkId>;
+            
         extern("libjoyecs", "je_gui_node_editor_is_node_selected")
-        public func IsNodeSelected()=> option<LinkId>;
-
+            public func IsNodeSelected()=> option<LinkId>;
+            
         extern("libjoyecs", "je_gui_node_editor_canvas_to_screen")
-        public func CanvasToScreen(pos: (real, real))=> (real, real);
-
+            public func CanvasToScreen(pos: (real, real))=> (real, real);
+            
         extern("libjoyecs", "je_gui_node_editor_screen_to_canvas")
-        public func ScreenToCanvas(pos: (real, real))=> (real, real);
-
+            public func ScreenToCanvas(pos: (real, real))=> (real, real);
+            
         extern("libjoyecs", "je_gui_node_editor_suspend")
-        public func Suspend()=> void;
-
+            public func Suspend()=> void;
+            
         extern("libjoyecs", "je_gui_node_editor_resume")
-        public func Resume()=> void;
+            public func Resume()=> void;
     }
-
+    
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+    
     extern("libjoyecs", "je_gui_launch")
-    public func launch_coroutine(coloop: ()=> void)=> void;
-
+        public func launch_coroutine(coloop: ()=> void)=> void;
+        
     namespace unsafe
     {
         extern("libjoyecs", "je_gui_stop_all_work")
-        public func shutdown()=> void;
+            public func shutdown()=> void;
     }
-
+    
     public func launch(gui_func: ()=> bool)=> void
     {
         return launch_coroutine(func(){
-            while (gui_func())
-                std::yield();
-        });
+                while (gui_func())
+                    std::yield();
+            });
     }
-
+    
     namespace input
     {
         extern("libjoyecs", "je_gui_get_input_state")
-        public func keystate(kcode: ImGuiKey)=> (bool, bool);
+            public func keystate(kcode: ImGuiKey)=> (bool, bool);
     }
     
     extern("libjoyecs", "je_gui_register_exit_callback")
-    public func register_exit_callback(callback: ()=> bool)=> void;
-    
+        public func register_exit_callback(callback: ()=> bool)=> void;
+        
     extern("libjoyecs", "je_gui_unregister_exit_callback")
-    public func unregister_exit_callback()=> void;
-
+        public func unregister_exit_callback()=> void;
+        
     extern("libjoyecs", "je_gui_set_font")
-    public func set_font(font: option<string>, latin_font: option<string>, size: int)=> void;
+        public func set_font(font: option<string>, latin_font: option<string>, size: int)=> void;
 }

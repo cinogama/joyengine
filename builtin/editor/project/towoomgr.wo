@@ -21,7 +21,7 @@ namespace editor
         m_project_path: path_t,
         m_loaded_towoo: mut dict<path_t, (fsys::unix1970_time_t, je::typeinfo)>,
         m_bad_towoo_script: vec<path_t>,
-
+        
         m_removing_component: map<string, je::typeinfo>,
         m_removing_system: map<string, je::typeinfo>,
     }
@@ -34,10 +34,10 @@ namespace editor
         {
             match (name->find("."))
             {
-            value(idx)?
-                return name->sub_len(0, idx);
-            none?
-                return name;
+                value(idx)?
+                    return name->sub_len(0, idx);
+                none?
+                    return name;
             }
         }
         func fetch_file(self: ToWooContext, type: string)
@@ -50,23 +50,23 @@ namespace editor
                 {
                     match (lastwrite(p))
                     {
-                    ok(last_modify_time)?
-                    {
-                        let file_purename = pure_component_or_system_name(purename(p));
-                        if (_repeat_checker->contains(file_purename))
+                        ok(last_modify_time)?
                         {
-                            let warn_msg = F"发现同名的ToWoo：`{p}` 和 `{_repeat_checker[file_purename]}`，\n这可能导致错误的行为，请检查并排除。";
-
-                            je::logwarn(warn_msg);
-                            jeapi::gui::form::errmsg("同名ToWoo提示", warn_msg);
+                            let file_purename = pure_component_or_system_name(purename(p));
+                            if (_repeat_checker->contains(file_purename))
+                            {
+                                let warn_msg = F"发现同名的ToWoo：`{p}` 和 `{_repeat_checker[file_purename]}`，\n这可能导致错误的行为，请检查并排除。";
+                                
+                                je::logwarn(warn_msg);
+                                jeapi::gui::form::errmsg("同名ToWoo提示", warn_msg);
+                            }
+                            else
+                            {
+                                _repeat_checker->set(file_purename, p);
+                                fetched_scripts->set(p, last_modify_time);
+                            }
                         }
-                        else
-                        {
-                            _repeat_checker->set(file_purename, p);
-                            fetched_scripts->set(p, last_modify_time);
-                        }
-                    }
-                    err(_)?;
+                        err(_)?;
                     }
                 }
             }
@@ -119,12 +119,12 @@ namespace editor
         public func update(self: ToWooContext, force: bool)
         {
             let new_scripts = {}mut: map<path_t, (unix1970_time_t, je::typeinfo)>;
-
+            
             let fetched_components = self->update_component(new_scripts, force);
             let fetched_system = self->update_system(new_scripts, force);
-
+            
             self.m_bad_towoo_script->clear;
-
+            
             for (let (p, c) : fetched_components)
             {
                 // TODO: 文件系统特性(大小写问题)，考虑更正确的姿势
@@ -132,9 +132,9 @@ namespace editor
                 do self.m_removing_component->remove(pure_component_or_system_name(purename(p)));
                 match (towoo::update_component(pure_component_or_system_name(purename(p)), p->to_string))
                 {
-                value(t)?
-                    new_scripts->set(p, (c, t));
-                none?
+                    value(t)?
+                        new_scripts->set(p, (c, t));
+                    none?
                     {
                         self.m_bad_towoo_script->add(p);
                         if (self.m_loaded_towoo->contains(p))
@@ -150,9 +150,9 @@ namespace editor
                 do self.m_removing_system->remove(pure_component_or_system_name(purename(p)));
                 match (towoo::update_system(pure_component_or_system_name(purename(p)), p->to_string))
                 {
-                value(t)?
-                    new_scripts->set(p, (c, t));
-                none?
+                    value(t)?
+                        new_scripts->set(p, (c, t));
+                    none?
                     {
                         self.m_bad_towoo_script->add(p);
                         if (self.m_loaded_towoo->contains(p))
@@ -171,10 +171,10 @@ namespace editor
                 {
                     match (lastwrite(p))
                     {
-                    ok(last_modify_time)?
-                        if (last_modify_time != c)
-                            return true;
-                    err(_)?;
+                        ok(last_modify_time)?
+                            if (last_modify_time != c)
+                                return true;
+                        err(_)?;
                     }
                 }
             }
@@ -186,14 +186,14 @@ namespace editor
             for (let p : allsubpath(self.m_project_path)->or([]))
             {
                 if (isfile(p) && (
-                    filename(p)->lower->end_with(".jesystem.wo")
-                    || filename(p)->lower->end_with(".jecomponent.wo")))
+                        filename(p)->lower->end_with(".jesystem.wo")
+                            || filename(p)->lower->end_with(".jecomponent.wo")))
                 {
                     match (lastwrite(p))
                     {
-                    ok(last_modify_time)?
-                        fetched_scripts->set(p, last_modify_time);
-                    err(_)?;
+                        ok(last_modify_time)?
+                            fetched_scripts->set(p, last_modify_time);
+                        err(_)?;
                     }
                 }
             }
@@ -228,10 +228,10 @@ namespace editor
                 else if (filename(p)->lower->end_with(".jesystem.wo"))
                     towoo::unregister_system(tinfo);
             }
-
+            
             for (let (_, t) : self.m_removing_component)
                 towoo::unregister_component(t);
-
+                
             for (let (_, t) : self.m_removing_system)
                 towoo::unregister_system(t);
         }

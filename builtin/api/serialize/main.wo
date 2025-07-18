@@ -21,12 +21,12 @@ namespace jeapi::serialize
         if (!tinfo->is_value)
         {
             je::logerr(F"无法找到{typename}，请检查是否有模块未加载成功");
-            jeapi::gui::errmsg("找不到类型", 
+            jeapi::gui::errmsg("找不到类型",
                 F"无法找到{typename}，请检查是否有模块未加载成功");
         }
         return tinfo;
     }
-
+    
     public using EntityData = EntityDataRawType
     {
         public alias EntityDataRawType = dict<string, dynamic>;
@@ -35,33 +35,33 @@ namespace jeapi::serialize
     {
         public alias WorldDataRawType = dict<string, dynamic>;
     }
-
+    
     namespace prefab
     {
         public func dump(e: je::entity)
         {
             match (e->internal::get_prefab_path)
             {
-            value(path)?
+                value(path)?
                 {
                     let raw_dat = entity::raw_entity(e, false, true);
                     match (je::file::readall(path)
-                        =>> \dat = dat->dict::deserialize
-                            =>> \d = d->get("prefab": dynamic)
-                                ->> \v = v: string;
+                            =>> \dat = dat->dict::deserialize
+                                    =>> \d = d->get("prefab": dynamic)
+                                            ->> \v = v: string;
+                                        ;
                                 ;
-                            ;
-                    )
+                            )
                     {
-                    value(parent_prefab_path)?
-                        return raw_dat
+                        value(parent_prefab_path)?
+                            return raw_dat
                             ->> \dat = dump_for_prefab_instance(parent_prefab_path, dat);;
-                    none?
-                        return raw_dat;
+                        none?
+                            return raw_dat;
                     }
                 }
-            none?
-                return option::none;
+                none?
+                    return option::none;
             }
         }
         func _is_same_shader(a: array<dynamic>, b: array<dynamic>)
@@ -70,15 +70,15 @@ namespace jeapi::serialize
             {
                 let am = a[1]->unsafe::cast:<dict<string, dynamic>>;
                 let bm = b[1]->unsafe::cast:<dict<string, dynamic>>;
-
+                
                 if (am->len != bm->len)
                     return false;
-
+                    
                 for (let (m, val): am)
                 {
                     if (bm->contains(m) == false)
                         return false;
-                    
+                        
                     let bval = bm[m];
                     if (val: string != bval: string)
                         return false;
@@ -99,16 +99,16 @@ namespace jeapi::serialize
         func dump_for_prefab_instance(p: string, dat: EntityData)
         {
             let result = dat: EntityData::EntityDataRawType->to_map;
-
+            
             result->set("prefab", p: dynamic);
-
+            
             let components = result->get("components")
                 ->> \d=d->unsafe::cast:<dict<string, dict<string, string>>>
-                    ->> \k, v = (k, v->to_map);
-                    ->  to_map
+                        ->> \k, v = (k, v->to_map);
+                        ->  to_map
                     ;
                 ->  or({}mut);
-
+                
             let shaders = result->get("shaders")
                 ->> \d = d->unsafe::cast:<array<array<dynamic>>>;
                 ->  or([])
@@ -120,13 +120,13 @@ namespace jeapi::serialize
             let shape = result->get("shape")
                 ->> \d = d as string;
                 -> or("");
-
+                
             let prefab_data = prefab::load(p);
             match (prefab_data
-                =>> \d = d: EntityData::EntityDataRawType->get("components");
+                    =>> \d = d: EntityData::EntityDataRawType->get("components");
                     =>> \d = d->trycast:<dict<string, dict<string, string>>>;)
             {
-            value(prefab_component_dat)?
+                value(prefab_component_dat)?
                 {
                     let removed_component = []mut: vec<string>;
                     for (let (c, ms) : prefab_component_dat)
@@ -138,7 +138,7 @@ namespace jeapi::serialize
                             {
                                 // Always safe member for NO-SYNC component to keep data.
                                 if (!prefab::is_no_data_sync_component_typename(c) &&
-                                    result_ms->get(m)->> \vv = vv == v;-> or(false))
+                                        result_ms->get(m)->> \vv = vv == v;-> or(false))
                                     assert(result_ms->remove(m));
                             }
                             if (result_ms->empty)
@@ -150,14 +150,14 @@ namespace jeapi::serialize
                     result->set("components", components: dynamic);
                     result->set("removed_components", removed_component: dynamic);
                 }
-            none?;
+                none?;
             }
             // 比较一下纹理和着色器是否一致，若一致则无视
             match (prefab_data
-                =>> \d = d: EntityData::EntityDataRawType->get("shaders");
-                =>> \d = d->trycast:<array<array<dynamic>>>;)
+                    =>> \d = d: EntityData::EntityDataRawType->get("shaders");
+                    =>> \d = d->trycast:<array<array<dynamic>>>;)
             {
-            value(prefab_shader_dat)?
+                value(prefab_shader_dat)?
                 {
                     let mut remove_shaders = true;
                     if (prefab_shader_dat->len == shaders->len)
@@ -174,13 +174,13 @@ namespace jeapi::serialize
                             do result->remove("shaders");
                     }
                 }
-            none?;
+                none?;
             }
             match (prefab_data
-                =>> \d = d: EntityData::EntityDataRawType->get("textures");
-                =>> \d = d->trycast:<dict<int, string>>;)
+                    =>> \d = d: EntityData::EntityDataRawType->get("textures");
+                    =>> \d = d->trycast:<dict<int, string>>;)
             {
-            value(prefab_texture_dat)?
+                value(prefab_texture_dat)?
                 {
                     let mut remove_textures = true;
                     if (prefab_texture_dat->len == textures->len)
@@ -197,17 +197,17 @@ namespace jeapi::serialize
                             do result->remove("textures");
                     }
                 }
-            none?;
+                none?;
             }
             match (prefab_data
-                =>> \d = d: EntityData::EntityDataRawType->get("shape")
-                ->> \d = d: string;
-                ;)
+                    =>> \d = d: EntityData::EntityDataRawType->get("shape")
+                            ->> \d = d: string;
+                        ;)
             {
-            value(prefab_shape)?
-                if (shape == prefab_shape)
-                    do result->remove("shape");
-            none?;
+                value(prefab_shape)?
+                    if (shape == prefab_shape)
+                        do result->remove("shape");
+                none?;
             }
             
             return result->unsafe::asdict: EntityData;
@@ -216,23 +216,24 @@ namespace jeapi::serialize
         {
             match (e->internal::get_prefab_path)
             {
-            value(prefab)?
-                return dump_for_prefab_instance(prefab, dat);
-            none?
-                return dat;
+                value(prefab)?
+                    return dump_for_prefab_instance(prefab, dat);
+                none?
+                    return dat;
             }
         }
         func combine_prefab_data(a: EntityData, b: EntityData)
         {
             let d = a: EntityData::EntityDataRawType->to_map;
-
+            
             let base_components = d->get_or("components", {}: dynamic) as dict<dynamic, dynamic>
-                    ->> \k, v = (k: string, v as dict<dynamic, dynamic>
-                        ->> \k, v = (k: string, v: string);
-                        ->  to_map)
-                        ;
-                    ->  to_map;
-
+                ->> \k, v = (
+                        k: string, v as dict<dynamic, dynamic>
+                            ->> \k, v = (k: string, v: string);
+                            ->  to_map)
+                ;
+                ->  to_map;
+                
             if (b: EntityData::EntityDataRawType->contains("name"))
                 d->set("name", b["name"]);
             if (b: EntityData::EntityDataRawType->contains("components"))
@@ -259,33 +260,33 @@ namespace jeapi::serialize
             do b: EntityData::EntityDataRawType->get("textures")->>\texs = d->set("textures", texs);;
             do b: EntityData::EntityDataRawType->get("shaders")->>\shads = d->set("shaders", shads);;
             do b: EntityData::EntityDataRawType->get("shape")->>\shap = d->set("shape", shap);;
-
+            
             return d->unsafe::asdict: EntityData;
         }
         public func load(path: string)=> option<EntityData>
         {
             match (je::file::readall(path)
-                =>> \dat = dat->dict::deserialize
-                    ->> \d = d
-                        ->> \k, v = (k: string, v);
-                        ;
-                    ;)
+                    =>> \dat = dat->dict::deserialize
+                            ->> \d = d
+                                    ->> \k, v = (k: string, v);
+                                ;
+                        ;)
             {
-            value(dat)?
+                value(dat)?
                 {
                     let parent_prefab = dat->get("prefab")
                         =>> \p = prefab::load(p: string);
                         ->  or({}: EntityData);
                     return option::value(combine_prefab_data(parent_prefab, dat: EntityData));
                 }
-            none?
-                return option::none;
+                none?
+                    return option::none;
             }
-
+            
         }
         public func instantiate(
-            w: je::world, 
-            entity_dat: EntityData, 
+            w: je::world,
+            entity_dat: EntityData,
             in_editor: bool)
         {
             return entity::_load_entity_or_prefab(w, entity_dat, in_editor, je::world::add_prefab);
@@ -298,7 +299,7 @@ namespace jeapi::serialize
             static let BadShadersUniform = je::typeinfo::load("Editor::BadShadersUniform")->unwrap();
             return e->get_component(BadShadersUniform)->is_value;
         }
-
+        
         alias texture_inform = string;
         func get_entity_texture_passes(saving_entity: je::entity)=> dict<int, option<texture_inform>>
         {
@@ -307,7 +308,7 @@ namespace jeapi::serialize
                 ->> \pass, tex = (pass, tex->path);
                 ;
         }
-
+        
         alias ShaderUniformVariablesDictT = dict<string, array<dynamic>>;
         //                          uniform_name uniform_vals
         func get_entity_shaders_informs(saving_entity: je::entity)=> array<(string, ShaderUniformVariablesDictT)>
@@ -316,36 +317,36 @@ namespace jeapi::serialize
             return saving_entity-> get_shaders
                 ->> \shad = (shad->path, shad_uniforms_dats())
                     where shad_uniforms_dats = func()
+                    {
+                        let result = {}mut: map<string, array<dynamic>>;
+                        for(let (name, uniform_val) : shad->get_uniforms())
                         {
-                            let result = {}mut: map<string, array<dynamic>>;
-                            for(let (name, uniform_val) : shad->get_uniforms())
+                            if (name->begin_with("JOYENGINE_"))
+                                continue; // 引擎的内置shader-uniform变量，跳过
+                            match (uniform_val)
                             {
-                                if (name->begin_with("JOYENGINE_"))
-                                    continue; // 引擎的内置shader-uniform变量，跳过
-                                match (uniform_val)
-                                {
-                                    integer(n)? 
-                                        result->set(name, [n: dynamic]);
-                                    integer2((x, y))?
-                                        result->set(name, [x: dynamic, y: dynamic]);
-                                    integer3((x, y, z))?
-                                        result->set(name, [x: dynamic, y: dynamic, z: dynamic]);
-                                    integer4((x, y, z, w))?
-                                        result->set(name, [x: dynamic, y: dynamic, z: dynamic, w: dynamic]);
-                                    float(x)?
-                                        result->set(name, [x: dynamic]);
-                                    float2((x, y))?
-                                        result->set(name, [x: dynamic, y: dynamic]);
-                                    float3((x, y, z))?
-                                        result->set(name, [x: dynamic, y: dynamic, z: dynamic]);
-                                    float4((x, y, z, w))?
-                                        result->set(name, [x: dynamic, y: dynamic, z: dynamic, w: dynamic]);
-                                    texture(_)? /* do nothing */;
-                                    others? /* do nothing */;
-                                }
+                                integer(n)?
+                                    result->set(name, [n: dynamic]);
+                                integer2((x, y))?
+                                    result->set(name, [x: dynamic, y: dynamic]);
+                                integer3((x, y, z))?
+                                    result->set(name, [x: dynamic, y: dynamic, z: dynamic]);
+                                integer4((x, y, z, w))?
+                                    result->set(name, [x: dynamic, y: dynamic, z: dynamic, w: dynamic]);
+                                float(x)?
+                                    result->set(name, [x: dynamic]);
+                                float2((x, y))?
+                                    result->set(name, [x: dynamic, y: dynamic]);
+                                float3((x, y, z))?
+                                    result->set(name, [x: dynamic, y: dynamic, z: dynamic]);
+                                float4((x, y, z, w))?
+                                    result->set(name, [x: dynamic, y: dynamic, z: dynamic, w: dynamic]);
+                                texture(_)? /* do nothing */;
+                                others? /* do nothing */;
                             }
-                            return result->to_dict;
                         }
+                        return result->to_dict;
+                    }
                     ;
                 ;
         }
@@ -353,78 +354,78 @@ namespace jeapi::serialize
         {
             return
                 saving_entity
-                    ->  internal::get_components_types()
-                    ->  forall(\t = !t->name->begin_with("Editor::");)
-                    =>> \t = component_instance->is_value ? [(t, component_instance->unwrap)] | []
-                        where
-                            component_instance = saving_entity->get_component(t);
-                    ->> \tc = (t->name, collect_members)
-                        where 
-                            collect_members = 
-                                drop_no_keep_component_meber && prefab::is_no_data_sync_component_typename(t->name)
+                ->  internal::get_components_types()
+                ->  forall(\t = !t->name->begin_with("Editor::");)
+                =>> \t = component_instance->is_value ? [(t, component_instance->unwrap)] | []
+                    where
+                        component_instance = saving_entity->get_component(t);
+                ->> \tc = (t->name, collect_members)
+                    where
+                        collect_members =
+                            drop_no_keep_component_meber && prefab::is_no_data_sync_component_typename(t->name)
                                 ? {}
-                                | c->get_members()
-                                    ->> \(name, type, addr) = (
-                                        name, 
-                                        towoo::unsafe::dynamic_parser::saving(type, addr)
-                                            ->or("<?>"))
-                                        ;
-                                ->  mapping,
-                                (t, c) = tc;
-                    ->  mapping
+                        | c->get_members()
+                        ->> \(name, type, addr) = (
+                                name,
+                                towoo::unsafe::dynamic_parser::saving(type, addr)
+                                    ->or("<?>"))
+                        ;
+                        ->  mapping,
+                    (t, c) = tc;
+                ->  mapping
                     // 如果一个实体没有任何组件，那么就等于不存在，实际上编辑器应该避免只有编辑器
-                    // 组件的实体出现在世界中，但是如果真的发生了，那么就视为option::none;
-                    ->  \m = m->empty? option::none | option::value(m);
-                    ->> \m = 
-                        {
-                            ["name"] = saving_entity->internal::name: dynamic, 
-                            ["components"] = m: dynamic,
-                            // 如果纹理是内置的，也就是说这个纹理实际上没有路径，那么跳过它
-                            ["textures"] = saving_entity->get_entity_texture_passes
-                                =>> \k, v = used_texture_id_pass->find(k)->is_value && v->is_value 
-                                    ? {[k] = v->unwrap} 
+            // 组件的实体出现在世界中，但是如果真的发生了，那么就视为option::none;
+                ->  \m = m->empty? option::none | option::value(m);
+                ->> \m =
+                    {
+                        ["name"] = saving_entity->internal::name: dynamic,
+                        ["components"] = m: dynamic,
+                        // 如果纹理是内置的，也就是说这个纹理实际上没有路径，那么跳过它
+                        ["textures"] = saving_entity->get_entity_texture_passes
+                            =>> \k, v = used_texture_id_pass->find(k)->is_value && v->is_value
+                                    ? {[k] = v->unwrap}
                                     | {}
-                                    ; 
+                                ;
                                 : dynamic,
-                            ["shaders"] = saving_entity->get_entity_shaders_informs->>\(sname, sdata) = [sname: dynamic, sdata: dynamic];: dynamic,
-                            ["shape"] = saving_entity->get_shape=>>\shape = shape->path;->or(""): dynamic,
-                        }
-                        where used_texture_id_pass = saving_entity->get_shaders()
-                            =>> \shader = shader->get_uniforms()
-                                    ->  unmapping
-                                    =>> \nv = nv...
+                        ["shaders"] = saving_entity->get_entity_shaders_informs->>\(sname, sdata) = [sname: dynamic, sdata: dynamic];: dynamic,
+                        ["shape"] = saving_entity->get_shape=>>\shape = shape->path;->or(""): dynamic,
+                    }
+                    where used_texture_id_pass = saving_entity->get_shaders()
+                        =>> \shader = shader->get_uniforms()
+                                ->  unmapping
+                                =>> \nv = nv...
                                         ->  func(name, uniformval)
+                                        {
+                                            if (!name->begin_with("JOYENGINE_"))
                                             {
-                                                if (!name->begin_with("JOYENGINE_"))
+                                                match (uniformval)
                                                 {
-                                                    match (uniformval)
-                                                    {
                                                     texture(id)?
                                                         return [id];
                                                     _?;
-                                                    }
                                                 }
-                                                return [];
                                             }
-                                        ;
-                                ;
-                            ->> \id = (id, nil);
-                            ->  mapping
-                            ->  unmapping // remove all repeated elems.
-                            ->> \idn = idn[0];
-                        ;
-                    ->> \dat = 
+                                            return [];
+                                        }
+                                    ;
+                            ;
+                        ->> \id = (id, nil);
+                        ->  mapping
+                        ->  unmapping // remove all repeated elems.
+                        ->> \idn = idn[0];
+                    ;
+                ->> \dat =
                         (
                             need_euid
-                            ? dat->apply(
-                                "euid", 
-                                saving_entity
-                                    ->internal::get_entity_uid
-                                    ->or(0: handle: je::entity::internal::euid_t): handle: int: dynamic)
-                            | dat
-                        ): EntityData
-                        ;
+                                ? dat->apply(
+                                    "euid",
+                                    saving_entity
+                                        ->internal::get_entity_uid
+                                        ->or(0: handle: je::entity::internal::euid_t): handle: int: dynamic)
+                                | dat
+                                ): EntityData
                     ;
+                ;
         }
         public func dump(saving_entity: je::entity, need_euid: bool)=> option<EntityData>
         {
@@ -432,7 +433,7 @@ namespace jeapi::serialize
                 ->> \dat = prefab::try_dump_may_prefab_instance(saving_entity, dat);
                 ;
         }
-
+        
         func restore_shader_of_entity<ResourceT>(shad: ResourceT, uname: string, val: array<dynamic>)
         {
             assert(val->len > 0);
@@ -473,94 +474,94 @@ namespace jeapi::serialize
             else
                 shad->store_uniform_dat_for_bad_shader_update(uname, val);
         }
-
+        
         func _load_entity_or_prefab(
-            w: je::world, 
-            mut entity_dat: EntityData, 
-            in_editor: bool, 
+            w: je::world,
+            mut entity_dat: EntityData,
+            in_editor: bool,
             f: (je::world, array<je::typeinfo>)=> je::entity)=> option<je::entity>
         {
             let prefab_path = entity_dat: EntityData::EntityDataRawType->get("prefab")->>\path = path: string;;
             match (prefab_path=>>\path = prefab::load(path);)
             {
-            value(prefab_data)?
-                entity_dat = prefab::combine_prefab_data(prefab_data, entity_dat);
-            none?;
+                value(prefab_data)?
+                    entity_dat = prefab::combine_prefab_data(prefab_data, entity_dat);
+                none?;
             }
             let component_types_dat = entity_dat: EntityData::EntityDataRawType
                 ->  get("components")
                 ->> \cs = cs as dict<dynamic, dynamic>
-                    ->  unmapping
-                    ->> \kv = (kv[0] as string, kv[1] as dict<dynamic, dynamic>);
-                    ->> \td = (_typeinfo_or_warning(td[0]), 
-                            td[1]->unmapping
-                                ->> \p = (p[0] as string, p[1] as string);
-                                ->  mapping)
+                        ->  unmapping
+                        ->> \kv = (kv[0] as string, kv[1] as dict<dynamic, dynamic>);
+                        ->> \td = (_typeinfo_or_warning(td[0]),
+                                td[1]->unmapping
+                                    ->> \p = (p[0] as string, p[1] as string);
+                                    ->  mapping)
                         ;
-                    ->  forall(\td = td[0]->is_value;)
-                    ->> \td = (td[0]->unwrap, td[1]);
+                        ->  forall(\td = td[0]->is_value;)
+                        ->> \td = (td[0]->unwrap, td[1]);
                     ;
                 ->  or([]);
-
+                
             if (component_types_dat->empty)
                 return option::none;
-
+                
             // 开始加载shader
             let shaders_and_dat = entity_dat: EntityData::EntityDataRawType->get("shaders")
                 ->> func(shaders: dynamic)
+                {
+                    let shads = []mut: vec<(option<graphic::shader>, string, dict<dynamic, dynamic>)>;
+                    for (let shader_path_dat_pair : shaders: array<dynamic>)
                     {
-                        let shads = []mut: vec<(option<graphic::shader>, string, dict<dynamic, dynamic>)>;
-                        for (let shader_path_dat_pair : shaders: array<dynamic>)
-                        {
-                            let spath = shader_path_dat_pair: array<dynamic>[0] as string;
-                            let s = graphic::shader::load(w->get_universe->option::value, spath);
-                            shads->add((s, spath, shader_path_dat_pair: array<dynamic>[1] as dict<dynamic, dynamic>));
-                        }
-                        return shads->to_array;
+                        let spath = shader_path_dat_pair: array<dynamic>[0] as string;
+                        let s = graphic::shader::load(w->get_universe->option::value, spath);
+                        shads->add((s, spath, shader_path_dat_pair: array<dynamic>[1] as dict<dynamic, dynamic>));
                     }
+                    return shads->to_array;
+                }
                 ->> func(arr)
-                    {
-                        if (! arr->forall(\d = d[0]->is_value == false;)->empty)
-                            return result::err(arr->>\d = (d[1], d[2]););
-                        else
-                            return result::ok(arr->>\d = (d[0]->unwrap, d[2]););
-                    }
-                ;
-
+                {
+                    if (! arr->forall(\d = d[0]->is_value == false;)->empty)
+                        return result::err(arr->>\d = (d[1], d[2]););
+                    else
+                        return result::ok(arr->>\d = (d[0]->unwrap, d[2]););
+                }
+            ;
+            
             let entity_instance = f(
                 w, component_types_dat
                     ->> \tp = tp[0];
-                    // 检查加载的shader是否有非法的，如果有，那么实体要带上一个BadShadersUniform组件
+                        // 检查加载的shader是否有非法的，如果有，那么实体要带上一个BadShadersUniform组件
                     ->  connect(in_editor && shaders_and_dat->>\r=r->is_err;->or(false)
-                            ? [je::typeinfo::load("Editor::BadShadersUniform")->unwrap] 
+                            ? [je::typeinfo::load("Editor::BadShadersUniform")->unwrap]
                             | [])
                     ->  connect(in_editor ? [je::typeinfo::load("Editor::Name")->unwrap] | [])
                     ->  connect(in_editor && prefab_path->is_value ? [je::typeinfo::load("Editor::Prefab")->unwrap] | [] )
-                );
-
+                    );
+                    
             if (in_editor && prefab_path->is_value)
             {
                 entity_instance->internal::set_prefab_path(prefab_path->unwrap);
             }
-
+            
             // 开始应用数据
             do component_types_dat
                 ->> \(ctype, dat) = compmaynotfound
                         ->> \comp = comp->get_members
-                            ->> \(mname, mtype, mvalue) = dat->get(mname)
-                                ->> \mdat = 
-                                    do towoo::unsafe::dynamic_parser::restoring(mtype, mvalue, mdat as string)
+                                ->> \(mname, mtype, mvalue) = dat->get(mname)
+                                        ->> \mdat =
+                                                do towoo::unsafe::dynamic_parser::restoring(mtype, mvalue, mdat as string)
+                                            ;
                                     ;
-                                ;
                             ;
-                    where compmaynotfound = entity_instance->get_component(ctype)
+                        where compmaynotfound = entity_instance->get_component(ctype)
                     ;
                 ;
             // 考虑一下异步加载？
             // 开始加载shader
             match (shaders_and_dat->or(result::ok([])))
             {
-            ok(dats)?
+                ok(dats)?
                 {
                     for (let (shad, uniform_vars) : dats)
                     {
@@ -569,58 +570,58 @@ namespace jeapi::serialize
                     }
                     entity_instance->set_shaders(dats->>\shad_and_uvars = shad_and_uvars[0];);
                 }
-            err(dats)?
-                if (in_editor)
-                {
-                    for (let (path, uniform_vars) : dats)
+                err(dats)?
+                    if (in_editor)
                     {
-                        let badshad = entity_instance->internal::store_name_for_bad_shader_update(path);
-
-                        for (let (uname, uval): uniform_vars)
-                            restore_shader_of_entity(badshad, uname as string, uval as array<dynamic>);
+                        for (let (path, uniform_vars) : dats)
+                        {
+                            let badshad = entity_instance->internal::store_name_for_bad_shader_update(path);
+                            
+                            for (let (uname, uval): uniform_vars)
+                                restore_shader_of_entity(badshad, uname as string, uval as array<dynamic>);
+                        }
                     }
-                }
             }
-
+            
             // 开始加载texture
             do entity_dat: EntityData::EntityDataRawType->get("textures")
                 ->> func(textures)
-                    {
-                        for (let (passid, path) : textures: dict<dynamic, dynamic>)
-                            do graphic::texture::load(w->get_universe->option::value, path as string)
-                                ->> \tex = entity_instance->bind_texture(passid as int, option::value(tex));
-                                ;
-                    };
-
+                {
+                    for (let (passid, path) : textures: dict<dynamic, dynamic>)
+                        do graphic::texture::load(w->get_universe->option::value, path as string)
+                        ->> \tex = entity_instance->bind_texture(passid as int, option::value(tex));
+                        ;
+                };
+                
             // 加载vertex
             do entity_dat: EntityData::EntityDataRawType->get("shape")
-                =>> \shape = vertex_path != "" 
-                    ? graphic::vertex::load(w->get_universe->option::value, vertex_path)
-                    | option::none
-                    where vertex_path = shape as string
+                =>> \shape = vertex_path != ""
+                        ? graphic::vertex::load(w->get_universe->option::value, vertex_path)
+                        | option::none
+                        where vertex_path = shape as string
                     ;
                 ->> \vertex = entity_instance->set_shape(option::value(vertex));
                 ;
-
+                
             if (in_editor)
                 do entity_dat: EntityData::EntityDataRawType
-                    ->  get("name")
-                    ->> \n = entity_instance->internal::set_name(n as string);;
-
+                ->  get("name")
+                ->> \n = entity_instance->internal::set_name(n as string);;
+                
             return option::value(entity_instance);
         }
-
+        
         public func instantiate(
-            w: je::world, 
-            entity_dat: EntityData, 
+            w: je::world,
+            entity_dat: EntityData,
             in_editor: bool)
         {
             return _load_entity_or_prefab(w, entity_dat, in_editor, je::world::add_entity);
         }
     }
-
+    
     namespace world
-    {        
+    {
         func varify_all_shader_is_valid_in_world(w: je::world)
         {
             // 检查所有世界中所有实体是否有非法的shader？
@@ -634,40 +635,40 @@ namespace jeapi::serialize
             let bad_shader_entity = varify_all_shader_is_valid_in_world(w);
             if (!bad_shader_entity->empty)
                 return result::err(bad_shader_entity);
-
+                
             static let INVISABLE = je::typeinfo::load("Editor::Invisable")->unwrap;
-
+            
             alias entity_info_t = dict<string, dynamic>;
-
-            let entities_json_list = 
+            
+            let entities_json_list =
                 w->get_all_entities([])
                     // 跳过编辑器上的不可见实体
-                    ->  forall(\e = e->get_component(INVISABLE)->is_none;)
-                    =>> \e = oe->is_value ? [oe->unwrap] | [] where oe = entity::dump(e, need_euid);
-                    ;
-
-            let editing_systems_type_list = 
+                ->  forall(\e = e->get_component(INVISABLE)->is_none;)
+                =>> \e = oe->is_value ? [oe->unwrap] | [] where oe = entity::dump(e, need_euid);
+                ;
+                
+            let editing_systems_type_list =
                 w->get_all_systems
-                    ->> \st = st->name;
-                    ->  forall(\n = !n->begin_with("Editor::");)
-                    ;
-                    
+                ->> \st = st->name;
+                ->  forall(\n = !n->begin_with("Editor::");)
+                ;
+                
             return result::ok({
-                ["name"] = w->name: dynamic,
-                ["entities"] = entities_json_list: dynamic,
-                ["systems"] = editing_systems_type_list: dynamic,
-                // ["runtime_systems"] = runtime_systems_type_list: dynamic,
-            }: WorldData);
+                    ["name"] = w->name: dynamic,
+                    ["entities"] = entities_json_list: dynamic,
+                    ["systems"] = editing_systems_type_list: dynamic,
+                    // ["runtime_systems"] = runtime_systems_type_list: dynamic,
+                }: WorldData);
         }
         public func instantiate_entities(w: je::world, dat: WorldData, in_editor: bool)
         {
             do dat: WorldData::WorldDataRawType->get("entities")
                 ->> \es = es as array<dynamic>
-                    ->> \edat = entity::instantiate(w, entity_dat, in_editor)
-                        where entity_dat = edat->trycast:<EntityData::EntityDataRawType>->unwrap: EntityData;
-                        ;
+                        ->> \edat = entity::instantiate(w, entity_dat, in_editor)
+                            where entity_dat = edat->trycast:<EntityData::EntityDataRawType>->unwrap: EntityData;
                     ;
                 ;
+            ;
         }
         public func instantiate_systems(w: je::world, dat: WorldData, in_editor: bool)
         {
@@ -677,37 +678,36 @@ namespace jeapi::serialize
                 // 仅用于检查
                 do dat: WorldData::WorldDataRawType->get("runtime_systems")
                     ->> \d = d as array<dynamic>
-                        ->> \tname = _typeinfo_or_warning(tname as string);
+                            ->> \tname = _typeinfo_or_warning(tname as string);
                         ;
                     ;
             }
             else
                 do dat: WorldData::WorldDataRawType->get("runtime_systems")
-                    ->> \d = d as array<dynamic>
+                ->> \d = d as array<dynamic>
                         ->> \tname = type_may_none
-                            ->> \type = w->add_system(type);
-                            where type_may_none = _typeinfo_or_warning(tname as string)
+                                ->> \type = w->add_system(type);
+                                where type_may_none = _typeinfo_or_warning(tname as string)
                             ;
-                        ;
                     ;
+                ;
             do dat: WorldData::WorldDataRawType->get("systems")
                 ->> \d = d as array<dynamic>
-                    ->> \tname = type_may_none
-                        ->> \type = w->add_system(type);
-                        where type_may_none = _typeinfo_or_warning(tname as string)
-                        ;
+                        ->> \tname = type_may_none
+                                ->> \type = w->add_system(type);
+                                where type_may_none = _typeinfo_or_warning(tname as string)
+                            ;
                     ;
                 ;
         }
         public func instantiate(u: je::universe, dat: WorldData, in_editor: bool)=> je::world
         {
             let w = u->je::world::create;
-
+            
             instantiate_entities(w, dat, in_editor);
             instantiate_systems(w, dat, in_editor);
-
+            
             return w;
         }
     }
 }
-

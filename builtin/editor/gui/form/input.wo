@@ -14,13 +14,13 @@ using je::gui;
 namespace jeapi::gui::form
 {
     public func input(
-        title: string, 
-        text: string, 
-        defaultval: string, 
+        title: string,
+        text: string,
+        defaultval: string,
         okevent: (string)=> void)
     {
         let inputval = std::mutable::create(defaultval);
-
+        
         do form::create(F"{title}", false,
             func(f)
             {
@@ -31,7 +31,7 @@ namespace jeapi::gui::form
                 SameLine();
                 if (Button("还原"))
                     inputval->set(defaultval);
-
+                    
                 if (Button("确定") || (IsWindowFocused() && inputmgr::keypush(ImGuiKey::ImGuiKey_Enter)))
                 {
                     okevent(inputval->get);
@@ -45,13 +45,13 @@ namespace jeapi::gui::form
             ;
     }
     public func multiinput(
-        title: string, 
-        text: string, 
-        defaultval: string, 
+        title: string,
+        text: string,
+        defaultval: string,
         okevent: (string)=> void)
     {
         let inputval = std::mutable::create(defaultval);
-
+        
         do form::create(F"{title}", false,
             func(f)
             {

@@ -12,8 +12,8 @@ using je::gui;
 namespace jeapi::gui::form
 {
     public func ask(
-        title: string, 
-        text: string, 
+        title: string,
+        text: string,
         okevent: (bool)=> void)
     {
         do form::create(F"{title}", false,

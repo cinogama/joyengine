@@ -12,53 +12,53 @@ namespace jeapi::gui::widget
     public func accept_file_for_current_widget()=> option<string>
     {
         using je::gui;
-
+        
         if(BeginDragDropTarget())
         {
             let some_data_drag = AcceptDragDropPayload("JEDITOR_FILE_PATH");
             EndDragDropTarget();
-
+            
             match (some_data_drag)
             {
-            value(data)?
-                return option::value(data);
-            none?
+                value(data)?
+                    return option::value(data);
+                none?
                 ;
             }
         }
         return option::none;
     }
-
+    
     let mut registered_click_file_button_callback = option::none: option<(string)=>void>;
     
     public func invoke_click_file_callback(wpath: string)
     {
         match (registered_click_file_button_callback)
         {
-        value(c)? c(wpath);
-        none?;
+            value(c)? c(wpath);
+            none?;
         }
     }
-
+    
     public func register_click_file_callback(c: (string)=> void)
     {
         registered_click_file_button_callback = option::value(c);
     }
-
+    
     public func File(name: string, path: string, menu_functions: ()=> void)
     {
         using je::gui;
-
+        
         let fnd = name->find("##")->or(-1);
-
+        
         Text(fnd == -1 ? name | name->sub_len(0, fnd));
         SameLine();
         if (Button((path == ""? "<空>" | path) + F"##{name}"))
             invoke_click_file_callback(path);
-
+            
         let is_hovered = IsItemHovered();
         let mut drag_result = accept_file_for_current_widget();
-
+        
         if (BeginPopupContextItem())
         {
             if (MenuItem("找到所在目录"))
@@ -68,19 +68,19 @@ namespace jeapi::gui::widget
             Separator();
             if (MenuItem("清除"))
                 drag_result = option::value("");
-
+                
             menu_functions();
-
+            
             EndPopup();
         }
-
+        
         if (is_hovered)
         {
             BeginTooltip();
             Text(path);
             EndTooltip();
         }
-
+        
         return drag_result;
     }
 }

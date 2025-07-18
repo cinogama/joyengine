@@ -20,37 +20,37 @@ namespace editor::gui::workflow
     public func open(path: fsys::path_t, context: EditorContext)
     {
         let workflow_node_path = context->get_project->get_path / "resource" / "workflow" / "node";
-
+        
         using NodeInfo = struct{
             m_name: string,
             m_namespace: array<string>,
             m_path: fsys::path_t,
         };
-
+        
         let nodes = []mut: vec<NodeInfo>;
-
+        
         for (let np : fsys::recursive_walk(workflow_node_path)->iterator::iter_result)
         {
             if (!fsys::isfile(np) || fsys::extension(np)->lower != ".wo")
                 continue;
-
+                
             do try!
             {
                 let purename = fsys::purename(np);
                 try! relative = fsys::relative(fsys::parent(np), workflow_node_path);
-
+                
                 nodes->add(
                     NodeInfo{
-                        m_name = purename, 
-                        m_namespace = relative->split("/") 
+                        m_name = purename,
+                        m_namespace = relative->split("/")
                             |> iterator::filter(\p = p != "" && p  != ".";)
-                            |> iterator::collect, 
+                            |> iterator::collect,
                         m_path = np,
-                        });
+                    });
                 return_ok!;
             };
         }
-
+        
         let mut source = @"
 import woo::std;
 import je;
@@ -70,36 +70,36 @@ namespace Editor
     }
 }
 "@;
-
+            
         alias dyn_map = map<dynamic, dynamic>;
         let node_type_map = {}mut: dyn_map;
         for (let n : nodes)
         {
-            source += "import resource::workflow::node::" 
+            source += "import resource::workflow::node::"
                 + n.m_namespace->reduce(\l,r = l + "::" + r;)
-                    ->> \v = v + "::";
-                    -> or("") 
-                + n.m_name
-                + ";\n"
-                ;
-            
+                ->> \v = v + "::";
+                -> or("")
+                    + n.m_name
+                        + ";\n"
+                        ;
+                        
             let mut write_node_map = node_type_map: dynamic;
             for (let name : n.m_namespace)
                 write_node_map = write_node_map->unsafe::cast:<dyn_map>->get_or_set(name: dynamic, {}mut: dynamic);
-
-            write_node_map->unsafe::cast:<dyn_map>->set(n.m_name: dynamic, nil: dynamic);            
+                
+            write_node_map->unsafe::cast:<dyn_map>->set(n.m_name: dynamic, nil: dynamic);
         }
         source += "import builtin::api::gui::form;\n";
         source += "import builtin::api::gui::nodeeditor;\n";
         source += "import builtin::editor::gui::form::ask;\n";
         source += "import builtin::editor::gui::form::msg;\n";
         source += "import pkg::fsys;\n";
-
+        
         source += "using jeapi::gui::node_editor;\n";
-
+        
         source += "func main(){\n";
         source += "    let nodedict = {\n";
-
+        
         func generate_node_dict(node_map: dyn_map)=> string
         {
             let mut source = "";
@@ -118,7 +118,7 @@ namespace Editor
                 }
             }
             return source;
-        }     
+        }
         source += generate_node_dict(node_type_map);
         source += "    };\n";
         source += F"    let doc_path = fsys::normalize(" + path->to_string->enstring + ");\n";
@@ -128,7 +128,7 @@ namespace Editor
         source += @"    func(_){
             node_editor->update();
         }"@;
-        source += "        );\n";
+            source += "        );\n";
         source += "    form->set_docking(true);\n";
         source += "    form->set_autoresize(false);\n";
         source += @"   form->set_callback_close(func(){
@@ -146,7 +146,7 @@ namespace Editor
             });
             return false;
         });"@;
-        source += "\n";
+            source += "\n";
         source += "    form->set_size_constraint(300., 200., 3000., 3000.);\n";
         source += "    if (!form->show())\n";
         source += "         jeapi::gui::form::errmsg(\"打开失败\", doc_path->to_string + \"已在编辑中，不能重复打开\");\n";
@@ -157,7 +157,7 @@ namespace Editor
         {
             try! vm = vm::create(path->to_string + ".wo", source: buffer);
             do vm->run();
-            do vm->invoke("Editor::set_universe", 
+            do vm->invoke("Editor::set_universe",
                 [context->get_project->get_env->get_universe: dynamic]);
             return_ok!;
         }

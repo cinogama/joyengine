@@ -86,7 +86,7 @@ namespace editor::gui
         [ImGuiCol_NavWindowingDimBg]      = ("ImGuiCol_NavWindowingDimBg", "没有此配置项的描述"),,
         [ImGuiCol_ModalWindowDimBg]       = ("ImGuiCol_ModalWindowDimBg", "没有此配置项的描述"),,
     };
-
+    
     // NOTE: 实际上这部分应该写在独立的文件里，但是懒，先放这儿吧
     func style_editor(context: EditorContext)
     {
@@ -97,7 +97,7 @@ namespace editor::gui
                 SetNextWindowSizeConstraints((700., 550.), (700., 550.));
                 match (BeginOpen(F"样式编辑器"))
                 {
-                value(show_val)?
+                    value(show_val)?
                     {
                         if (show_val)
                         {
@@ -121,39 +121,39 @@ namespace editor::gui
                                         ->> \c = SetStyleColor(item, c);;
                                     EndPopup();
                                 }
-
+                                
                                 TextDisabled(desc);
                                 Separator();
                             }
                         }
                     }
-                none?
-                    ask("是否保存配色", "即将关闭，是否保存编辑器样式和颜色配置文件？", 
-                        func(check)
-                        {
-                            formopen->set(false);
-                            if (check)
+                    none?
+                        ask("是否保存配色", "即将关闭，是否保存编辑器样式和颜色配置文件？",
+                            func(check)
                             {
-                                if (! fsys::writeall(context->get_project->get_path / "editor.je4style",
-                                    dump_current_style_color(): string))
-                                    errmsg("保存样式失败", "无法写入文件：'" + (context->get_project->get_path / "editor.je4style")->to_string + "'");
-                            }
-                            else
-                                restore_config(origin_style);
-                        });
+                                formopen->set(false);
+                                if (check)
+                                {
+                                    if (! fsys::writeall(context->get_project->get_path / "editor.je4style",
+                                            dump_current_style_color(): string))
+                                        errmsg("保存样式失败", "无法写入文件：'" + (context->get_project->get_path / "editor.je4style")->to_string + "'");
+                                }
+                                else
+                                    restore_config(origin_style);
+                            });
                 }
-
+                
                 End();
                 return formopen->get;
             });
     }
-
+    
     private func _save_world(context: EditorContext)
     {
         let proj = context->get_project;
         if (proj->get_editing_world->>\w = proj->save_world(w);->or(false) == false)
         {
-            jeapi::gui::form::errmsg("错误", "保存当前世界失败"); 
+            jeapi::gui::form::errmsg("错误", "保存当前世界失败");
         }
     }
     private func _save_project(context: EditorContext)
@@ -164,7 +164,7 @@ namespace editor::gui
         else
             jeapi::gui::form::errmsg("失败", "项目保存未能完成");
     }
-
+    
     let mut display_debug_entity = false;
     public func get_is_albe_to_display_debug_entity()
     {
@@ -174,102 +174,102 @@ namespace editor::gui
     {
         display_debug_entity = opt;
     }
-
+    
     public func show_main_menu(context: EditorContext)
     {
         context->launch_editor_form(func(){
-            context->update_api();
-
-            if (jeapi::gui::inputmgr::keyspush([
-                ImGuiKey::ImGuiKey_LeftCtrl, 
-                ImGuiKey::ImGuiKey_LeftShift, 
-                ImGuiKey::ImGuiKey_O]))
-                context->hide_all_editor_form();
-            else if (jeapi::gui::inputmgr::keyspush([
-                ImGuiKey::ImGuiKey_LeftCtrl, 
-                ImGuiKey::ImGuiKey_O]))
-                context->show_all_editor_form();
-
-            if (!context->get_project->is_debugging)
-            {
-                if (BeginMainMenuBar())
+                context->update_api();
+                
+                if (jeapi::gui::inputmgr::keyspush([
+                            ImGuiKey::ImGuiKey_LeftCtrl,
+                            ImGuiKey::ImGuiKey_LeftShift,
+                            ImGuiKey::ImGuiKey_O]))
+                    context->hide_all_editor_form();
+                else if (jeapi::gui::inputmgr::keyspush([
+                            ImGuiKey::ImGuiKey_LeftCtrl,
+                            ImGuiKey::ImGuiKey_O]))
+                    context->show_all_editor_form();
+                    
+                if (!context->get_project->is_debugging)
                 {
-                    if (BeginMenu("JoyEngine"))
+                    if (BeginMainMenuBar())
                     {
-                        if (MenuItem("编辑器样式"))
+                        if (BeginMenu("JoyEngine"))
                         {
-                            style_editor(context);
+                            if (MenuItem("编辑器样式"))
+                            {
+                                style_editor(context);
+                            }
+                            Separator();
+                            if (MenuItem("退出编辑器"))
+                                do ask_for_saving_proj_when_exit(context->get_project);
+                                
+                            EndMenu();
                         }
-                        Separator();
-                        if (MenuItem("退出编辑器"))
-                            do ask_for_saving_proj_when_exit(context->get_project);
-
-                        EndMenu();
-                    }
-                    if (BeginMenu("文件"))
-                    {
-                        if (MenuItem("保存当前世界"))
-                            _save_world(context);
-
-                        EndMenu();
-                    }
-                    if (BeginMenu("项目"))
-                    {
-                        if (MenuItemShortcut("保存项目", "Ctrl + S"))
-                            _save_project(context);
-
-                        if (MenuItem("项目设置"))
+                        if (BeginMenu("文件"))
                         {
-                            context->launch_editor_form(func(){
-                                je::gui::SetNextWindowSizeConstraints((500., 300.), (500., 600.));
-                                let mut open = true;
-                                match (BeginOpen("项目设置"))
-                                {
-                                value(show_val)?
-                                    if (show_val)
-                                    {
-                                        for (let (_, iconfig) : context->get_project->get_configs)
+                            if (MenuItem("保存当前世界"))
+                                _save_world(context);
+                                
+                            EndMenu();
+                        }
+                        if (BeginMenu("项目"))
+                        {
+                            if (MenuItemShortcut("保存项目", "Ctrl + S"))
+                                _save_project(context);
+                                
+                            if (MenuItem("项目设置"))
+                            {
+                                context->launch_editor_form(func(){
+                                        je::gui::SetNextWindowSizeConstraints((500., 300.), (500., 600.));
+                                        let mut open = true;
+                                        match (BeginOpen("项目设置"))
                                         {
-                                            do iconfig->edit();
-                                            Separator();
+                                            value(show_val)?
+                                                if (show_val)
+                                                {
+                                                    for (let (_, iconfig) : context->get_project->get_configs)
+                                                    {
+                                                        do iconfig->edit();
+                                                        Separator();
+                                                    }
+                                                }
+                                            none?
+                                                open = false;
+                                        }
+                                        End();
+                                        return open;
+                                    }, ());
+                            }
+                            Separator();
+                            if (MenuItem("导出"))
+                            {
+                                edit_forms::show_export_project(context);
+                            }
+                            EndMenu();
+                        }
+                        if (BeginMenu("工具"))
+                        {
+                            let scripts = tools::get_available_tool_scripts();
+                            if (scripts->empty())
+                                do MenuItemEnabled("空", false);
+                            else
+                                for (let script_name : scripts)
+                                    if (MenuItem(script_name))
+                                    {
+                                        match (tools::run_tool_script(context, script_name, context->get_project))
+                                        {
+                                            err(msg_val)?
+                                                jeapi::gui::form::errmsg("失败", F"运行脚本失败：{msg_val}");
+                                            ok(_)?;
                                         }
                                     }
-                                none?
-                                    open = false;
-                                }
-                                End();
-                                return open;
-                            }, ());
-                        }
-                        Separator();
-                        if (MenuItem("导出"))
-                        {
-                            edit_forms::show_export_project(context);
-                        }
-                        EndMenu();
-                    }
-                    if (BeginMenu("工具"))
-                    {
-                        let scripts = tools::get_available_tool_scripts();
-                        if (scripts->empty())
-                            do MenuItemEnabled("空", false);
-                        else
-                            for (let script_name : scripts)
-                                if (MenuItem(script_name))
-                                {
-                                    match (tools::run_tool_script(context, script_name, context->get_project))
-                                    {
-                                    err(msg_val)?
-                                        jeapi::gui::form::errmsg("失败", F"运行脚本失败：{msg_val}");
-                                    ok(_)?;
-                                    }
-                                }
-                        Separator();
-                        if (MenuItem("重新获取脚本"))
-                            tools::update_tool_scripts(context->get_project);
-
-                        if (MenuItem("脚本编辑器..."))
-                        {
+                            Separator();
+                            if (MenuItem("重新获取脚本"))
+                                tools::update_tool_scripts(context->get_project);
+                                
+                            if (MenuItem("脚本编辑器..."))
+                            {
                             let DEFAULT_SCRIPT_SRC = 
 @"// 编辑器脚本
 import woo::std;
@@ -286,66 +286,66 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
     
 }
 "@;
-                            new! ScriptEditor(context, DEFAULT_SCRIPT_SRC, "编辑器", true)
-                                ->set_callback(func(vmm)
-                                {
-                                    let proj = context->get_project;
-
-                                    let invoke_entry = func(opentity: option<je::entity>)
-                                    {
-                                        if (!vmm->invoke("main", [
-                                                proj->get_env->get_universe as je::universe: dynamic,
-                                                proj->get_editing_world as option<je::world>: dynamic,
-                                                opentity: dynamic,
-                                            ])->is_value)
+                                    new! ScriptEditor(context, DEFAULT_SCRIPT_SRC, "编辑器", true)
+                                    ->set_callback(func(vmm)
                                         {
-                                            jeapi::gui::form::errmsg("错误", "脚本运行时发生错误");
-                                        }
-                                    };
-
-                                    match (context->get_editing_entity)
-                                    {
-                                    value(euid)?
-                                        euid->dosth(invoke_entry);
-                                    none? 
-                                        invoke_entry(option::none);
-                                    }
-                                    return option::value(nil: dynamic);
-                                });
-                        }
+                                            let proj = context->get_project;
+                                            
+                                            let invoke_entry = func(opentity: option<je::entity>)
+                                            {
+                                                if (!vmm->invoke("main", [
+                                                            proj->get_env->get_universe as je::universe: dynamic,
+                                                            proj->get_editing_world as option<je::world>: dynamic,
+                                                            opentity: dynamic,
+                                                        ])->is_value)
+                                                {
+                                                    jeapi::gui::form::errmsg("错误", "脚本运行时发生错误");
+                                                }
+                                            };
+                                            
+                                            match (context->get_editing_entity)
+                                            {
+                                                value(euid)?
+                                                    euid->dosth(invoke_entry);
+                                                none?
+                                                    invoke_entry(option::none);
+                                            }
+                                            return option::value(nil: dynamic);
+                                        });
+                            }
                             
-                        EndMenu();
+                            EndMenu();
+                        }
+                        if (BeginMenu("帮助"))
+                        {
+                            if (MenuItem("关于"))
+                                jeapi::welcome::show_about();
+                            Separator();
+                            do MenuItemSelected("显示隐藏实体及组件", get_is_albe_to_display_debug_entity())
+                                ->> \select = set_is_albe_to_display_debug_entity(select);
+                                ;
+                            EndMenu();
+                        }
+                        if (context->get_project->is_in_safe_mode)
+                        {
+                            let show_red = std::time(): int % 2 == 0;
+                            
+                            if (show_red)
+                                PushStyleColor(ImGuiCol::ImGuiCol_Text, (255, 0, 0, 255));
+                                
+                            do MenuItem("* 处于安全模式中");
+                            
+                            if (show_red)
+                                PopStyleColor(1);
+                        }
+                        EndMainMenuBar();
                     }
-                    if (BeginMenu("帮助"))
-                    {
-                        if (MenuItem("关于"))
-                            jeapi::welcome::show_about();
-                        Separator();
-                        do MenuItemSelected("显示隐藏实体及组件", get_is_albe_to_display_debug_entity())
-                            ->> \select = set_is_albe_to_display_debug_entity(select);
-                            ;
-                        EndMenu();
-                    }
-                    if (context->get_project->is_in_safe_mode)
-                    {
-                        let show_red = std::time(): int % 2 == 0;
-                        
-                        if (show_red)
-                            PushStyleColor(ImGuiCol::ImGuiCol_Text, (255, 0, 0, 255));
-
-                        do MenuItem("* 处于安全模式中");
-
-                        if (show_red)
-                            PopStyleColor(1);
-                    }
-                    EndMainMenuBar();
+                    
+                    if (jeapi::gui::inputmgr::keyspush([
+                                ImGuiKey::ImGuiKey_LeftCtrl,
+                                ImGuiKey::ImGuiKey_S]))
+                        _save_project(context);
                 }
-
-                if (jeapi::gui::inputmgr::keyspush([
-                    ImGuiKey::ImGuiKey_LeftCtrl, 
-                    ImGuiKey::ImGuiKey_S]))
-                    _save_project(context);
-            }
-        }, ());
+            }, ());
     }
 }

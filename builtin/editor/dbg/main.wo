@@ -31,44 +31,44 @@ namespace jeapi::debug
         public func justdo(self: Eeid, f: (je::entity)=>void)
         {
             self->dosth(func(oe){
-                match (oe)
-                {
-                value(e)? f(e);
-                none? gui::form::errmsg("失败", F"操作无法完成，不存在的实体：\n{self}");
-                }
-            });
+                    match (oe)
+                    {
+                        value(e)? f(e);
+                        none? gui::form::errmsg("失败", F"操作无法完成，不存在的实体：\n{self}");
+                    }
+                });
         }
     }
-
+    
     public using EntityChilds = struct{
-        public e: je::entity, 
+        public e: je::entity,
         public uid: Eeid,
         public childs: array<EntityChilds>
-    };
-
+        };
+        
     public func get_entity_editor_id(entity: je::entity)=> option<Eeid>
     {
         return entity->internal::get_entity_uid->>\eid = eid: handle: Eeid;;
     }
     
     alias OperationCallback = (option<je::entity>)=>void;
-
+    
     let request_list = {}mut: map<Eeid, vec<OperationCallback>>;
     func safety_entity_operation(euid: Eeid, operation: OperationCallback)
     {
         // 将UID放进处理队列中，如果实际上没有找到此实体，那么就弹窗报警
         request_list->get_or_set(euid, []mut)->add(operation);
     }
-
+    
     public func update_safety_entity_operation_requests(universe: je::universe)
     {
         // 找个地方每帧/几帧调用一下
         if (request_list->empty)
             return;
-
+            
         let current_request = {}mut: typeof(request_list);
         current_request->swap(request_list);
-
+        
         // 获取所有的世界，并从中获取所有的实体
         do universe->get_all_worlds
             =>> \w = w->get_all_entities([]);
@@ -76,42 +76,42 @@ namespace jeapi::debug
             {
                 match (get_entity_editor_id(e))
                 {
-                value(euid)?
-                    do current_request->get(euid)
+                    value(euid)?
+                        do current_request->get(euid)
                         ->> \jobs = jobs
-                            ->> \job = job(option::value(e));;
+                                ->> \job = job(option::value(e));;
                         ->> \_ = current_request->remove(euid);
                         ;
-                none?;
+                    none?;
                 }
             };
-
+            
         for (let (_, jobs) : current_request)
         {
             do jobs->> \job = job(option::none);;
             // gui::form::errmsg("失败", F"操作无法完成，不存在的实体：\n{euid}");;
         }
     }
-
-     // 从世界中获取带有层级关系的实体
+    
+    // 从世界中获取带有层级关系的实体
     func get_entity_and_childs(all_entities: array<je::entity>)=> array<EntityChilds>
     {
         // NOTE: 之前这里原本是用实体迭代器实现的，但是由于实在是太慢了，于是这儿
         // 现在开始改成O(n)的重写一遍。
-
+        
         let root_entity = []mut: vec<EntityChilds>;
         let anchored_entity = {}mut: map<string, EntityChilds>;
         let pending_entity = []mut: vec<EntityChilds>;
-
+        
         for (let e: all_entities)
         {
             match (get_entity_editor_id(e))
             {
-            none? continue;
-            value(eid)?
+                none? continue;
+                value(eid)?
                 {
                     let ech = EntityChilds{
-                        e = e, 
+                        e = e,
                         uid = eid,
                         childs = [],
                     };
@@ -119,56 +119,56 @@ namespace jeapi::debug
                     // 将当前实体塞进anchored_entity，用于保证所有实体都能找到妈妈（bushi
                     match (e->internal::get_anchor_uid)
                     {
-                    value(uid)?
-                        anchored_entity->set(uid, ech);
-                    none?;
+                        value(uid)?
+                            anchored_entity->set(uid, ech);
+                        none?;
                     }
-
+                    
                     // 获取当前实体的“父实体”，如果没有则将当前实体塞进root_entity
                     match (e->internal::get_parent_anchor_uid)
                     {
-                    none?
-                        root_entity->add(ech);
-                    value(uid)?
+                        none?
+                            root_entity->add(ech);
+                        value(uid)?
                         {
                             match (anchored_entity->get(uid))
                             {
-                            value(parentech)?
-                                parentech.childs as array<EntityChilds>
+                                value(parentech)?
+                                    parentech.childs as array<EntityChilds>
                                     ->  unsafe::cast :<vec<EntityChilds>>
                                     ->  add(ech)
                                     ;
-                            none?
-                                // 在anchored_entity里面没找到uid对应的父实体，则放到待定集，最后再处理
+                                none?
+                                    // 在anchored_entity里面没找到uid对应的父实体，则放到待定集，最后再处理
                                 pending_entity->add(ech);
                             }
                         }
                     }
                 }
-
+                
             }
         }
-
+        
         // OK 所有实体过了一遍了，处理待定集的实体
         for (let pending_ech : pending_entity)
         {
             match (anchored_entity->get(pending_ech.e->internal::get_parent_anchor_uid->unwrap))
             {
-            value(parentech)?
-                parentech.childs as array<EntityChilds>
+                value(parentech)?
+                    parentech.childs as array<EntityChilds>
                     ->  unsafe::cast :<vec<EntityChilds>>
                     ->  add(pending_ech)
                     ;
-            none?
-                // 完全不存在！视为是根实体
+                none?
+                    // 完全不存在！视为是根实体
                 // TODO: 直接转成普通实体？
                 root_entity->add(pending_ech);
             }
         }
-
+        
         return root_entity->unsafe::cast :<array<EntityChilds>>;
     }
-
+    
     public func get_all_entities_layer_from_world(world: je::world)
     {
         return get_entity_and_childs(world->get_all_entities([]));
@@ -178,13 +178,13 @@ namespace jeapi::debug
         func find_entity(es: array<EntityChilds>, eid: Eeid)=> option<EntityChilds>
         {
             for (let e : es)
-            {                
+            {
                 if (e.uid == eid)
                     return option::value(e);
                 match (find_entity(e.childs, eid))
                 {
-                value(e)? return option::value(e);
-                none?;
+                    value(e)? return option::value(e);
+                    none?;
                 }
             }
             return option::none;

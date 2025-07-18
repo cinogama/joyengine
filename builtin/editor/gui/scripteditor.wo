@@ -24,7 +24,7 @@ using je::gui;
 namespace editor::gui
 {
     public let WOOLANG_LANGUAGE_DEFINITION = func(){
-
+    
         let def = CodeEditorContext::LanguageDefinition::create("woolang");
         let keywords = [
             "import", "nil", "true", "false", "while", "for", "if", "else",
@@ -32,10 +32,10 @@ namespace editor::gui
             "extern", "public", "private", "protected", "static", "enum", "as",
             "is", "typeof", "break", "continue", "where", "operator", "union",
             "match", "struct", "typeid", "do"
-        ];
+            ];
         for (let k : keywords)
             def->AddKeyword(k);
-
+            
         let regexs = [
             (@"@?\"(\\.|[^\"])*\""@ + "@?", CodeEditorContext::PaletteIndex::String),
             (@"\'[^\']\'"@, CodeEditorContext::PaletteIndex::String),
@@ -46,29 +46,29 @@ namespace editor::gui
             ("(dynamic|nothing|void|int|real|handle|string|array|vec|dict|map|gchandle|option|result|cchar|bool|char)", CodeEditorContext::PaletteIndex::Type),
             ("[a-zA-Z_][a-zA-Z0-9_]*", CodeEditorContext::PaletteIndex::Identifier),
             ("[\\[\\]\\{\\}\\!\\%\\^\\&\\*\\(\\)\\-\\+\\=\\|\\<\\>\\?\\/\\;\\,\\.\\:]", CodeEditorContext::PaletteIndex::Punctuation)
-        ];
-
+            ];
+            
         for (let (r, i) : regexs)
             def->AddTokenRegex(r, i);
-
+            
         def->SetMultilineComment("/*", "*/");
         def->SetSingleLineComment("//");
-
+        
         return def;
-
+        
     }();
-
+    
     using ScriptEditor = struct{
         m_title: string,
         m_source: CodeEditorContext,
         m_project: Project,
-
+        
         m_history: vec<History>,
         m_history_index: mut int,
-
+        
         m_current_edit_state: mut option<History>,
         m_enable_undo: bool,
-
+        
         m_hook_callback: mut (vm)=> option<dynamic>,
     }
     {
@@ -81,18 +81,18 @@ namespace editor::gui
             func create(proj: Project, script: string)
             {
                 try! data = proj->dump_all_world;
-
+                
                 return result::ok(History{
-                    m_abs = script->sub_len(0, 20),
-                    m_script = script,
-                    m_data = data,
-                });
+                        m_abs = script->sub_len(0, 20),
+                        m_script = script,
+                        m_data = data,
+                    });
             }
         }
-    
+        
         public func create(
-            editorctx: EditorContext, 
-            template_script: string, 
+            editorctx: EditorContext,
+            template_script: string,
             title: string,
             enable_undo: bool)
         {
@@ -100,13 +100,13 @@ namespace editor::gui
                 m_title = title,
                 m_source = CodeEditorContext::create(),
                 m_project = editorctx->get_project,
-
+                
                 m_history = []mut,
                 m_history_index = mut 0,
                 m_enable_undo = enable_undo,
-
+                
                 m_current_edit_state = mut option::none,
-
+                
                 m_hook_callback = mut \_ = option::value(nil: dynamic);,
             };
             self.m_source->SetLanguageDefinition(WOOLANG_LANGUAGE_DEFINITION);
@@ -131,15 +131,15 @@ namespace editor::gui
                 if (MenuItemEnabled("撤销到此步之前", self.m_enable_undo))
                 {
                     // 如果从最新状态切回旧历史，那么保存当前状态
-                    if (self.m_history_index == self.m_history->len && 
-                        self.m_history_index != index)
+                    if (self.m_history_index == self.m_history->len &&
+                            self.m_history_index != index)
                     {
-                        self.m_current_edit_state = 
+                        self.m_current_edit_state =
                             new! History(self.m_project, self.m_source->GetText)->okay;
                     }
-
+                    
                     self.m_history_index = index;
-
+                    
                     if (index < self.m_history->len)
                     {
                         self->restore_history(self.m_history[index]);
@@ -149,12 +149,12 @@ namespace editor::gui
                         assert(index == self.m_history->len);
                         match (self.m_current_edit_state)
                         {
-                        value(history)? 
+                            value(history)?
                             {
                                 self->restore_history(history);
                                 self.m_current_edit_state = option::none;
                             }
-                        none?;
+                            none?;
                         }
                     }
                     
@@ -170,8 +170,8 @@ namespace editor::gui
                 {
                     match (self->run_script)
                     {
-                    ok(_)?;
-                    err(msg)? jeapi::gui::form::errmsg("无法执行脚本", msg);
+                        ok(_)?;
+                        err(msg)? jeapi::gui::form::errmsg("无法执行脚本", msg);
                     }
                 }
                 EndMenuBar();
@@ -181,13 +181,13 @@ namespace editor::gui
         {
             BeginGroup();
             let (_, h) = GetContentRegionAvail();
-
+            
             // 在此展示历史记录，可用于预览和撤回
             if (BeginListBox("##history", 200., h))
             {
                 for (let (index, history) : self.m_history->iter |> iterator::enumerate)
                 {
-                    let clicked = SelectableSelected(F"{history.m_abs->replace("\n", "")}...##{index}", 
+                    let clicked = SelectableSelected(F"{history.m_abs->replace("\n", "")}...##{index}",
                         self.m_history_index == index);
                     let is_hovered = IsItemHovered();
                     if (is_hovered)
@@ -199,14 +199,14 @@ namespace editor::gui
                     }
                     if (clicked)
                         self.m_source->SetText <| history.m_script;
-
+                        
                     self->history_menu(index);
                 }
-
-                do SelectableSelected("正在编辑...", 
+                
+                do SelectableSelected("正在编辑...",
                     self.m_history_index == self.m_history->len);
                 self->history_menu(self.m_history->len);
-
+                
                 EndListBox();
             }
             EndGroup();
@@ -216,7 +216,7 @@ namespace editor::gui
             SetWindowFontScale(1.2);
             CodeEditorSize(self.m_source, "##script", GetContentRegionAvail(), true);
             SetWindowFontScale(1.0);
-
+            
             if (BeginPopupContextItemLabel("##script"))
             {
                 if (MenuItemShortcutEnabled("复制", "Ctrl+C", true))
@@ -225,22 +225,22 @@ namespace editor::gui
                     self.m_source->Paste();
                 if (MenuItemShortcutEnabled("剪切", "Ctrl+X", true))
                     self.m_source->Cut();
-
+                    
                 Separator();
-
+                
                 if (MenuItemShortcutEnabled("撤销", "Ctrl+Z", self.m_source->CanUndo))
                     self.m_source->Undo();
                 if (MenuItemShortcutEnabled("重做", "Ctrl+Y", self.m_source->CanRedo))
                     self.m_source->Redo();
-
+                    
                 Separator();
-
+                
                 func _do_InsertText(text: string)
                 {
                     SetClipboardText(text);
                     self.m_source->Paste();
                 }
-
+                
                 if (BeginMenu("快速代码"))
                 {
                     if (BeginMenu("调试"))
@@ -267,9 +267,9 @@ namespace editor::gui
                         }
                         EndMenu();
                     }
-
+                    
                     Separator();
-
+                    
                     if (BeginMenu("GUI"))
                     {
                         if (MenuItem("消息框"))
@@ -277,59 +277,59 @@ namespace editor::gui
                             self.m_source->SetCursorPosition((self.m_source->GetCursorPosition.0, 0));
                             _do_InsertText(
                                 "import builtin::editor::gui::form::msg;\n"
-                                + "jeapi::gui::form::msg(\"标题\", \"内容\");");
+                                    + "jeapi::gui::form::msg(\"标题\", \"内容\");");
                         }
                         if (MenuItem("错误框"))
                         {
                             self.m_source->SetCursorPosition((self.m_source->GetCursorPosition.0, 0));
                             _do_InsertText(
                                 "import builtin::editor::gui::form::msg;\n"
-                                + "jeapi::gui::form::errmsg(\"标题\", \"内容\");");
+                                    + "jeapi::gui::form::errmsg(\"标题\", \"内容\");");
                         }
                         if (MenuItem("输入框 *"))
                         {
                             self.m_source->SetCursorPosition((self.m_source->GetCursorPosition.0, 0));
                             _do_InsertText(
                                 "import builtin::editor::gui::form::input;\n"
-                                + "jeapi::gui::form::input(\"标题\", \"内容\", \"默认值\",\n"
-                                + "    func (content)\n"
-                                + "    {\n"
-                                + "        do content;\n"
-                                + "    }\n"
-                                + ");\n");
+                                    + "jeapi::gui::form::input(\"标题\", \"内容\", \"默认值\",\n"
+                                        + "    func (content)\n"
+                                            + "    {\n"
+                                                + "        do content;\n"
+                                                    + "    }\n"
+                                                        + ");\n");
                         }
                         if (MenuItem("确认框 *"))
                         {
                             self.m_source->SetCursorPosition((self.m_source->GetCursorPosition.0, 0));
                             _do_InsertText(
                                 "import builtin::editor::gui::form::ask;\n"
-                                + "jeapi::gui::form::ask(\"标题\", \"内容\",\n"
-                                + "    func (is_ok)\n"
-                                + "    {\n"
-                                + "        if (is_ok)\n"
-                                + "        {\n"
-                                + "            // 确认\n"
-                                + "        }\n"
-                                + "    }\n"
-                                + ");\n");
+                                    + "jeapi::gui::form::ask(\"标题\", \"内容\",\n"
+                                        + "    func (is_ok)\n"
+                                            + "    {\n"
+                                                + "        if (is_ok)\n"
+                                                    + "        {\n"
+                                                        + "            // 确认\n"
+                                                            + "        }\n"
+                                                                + "    }\n"
+                                                                    + ");\n");
                         }
                         if (MenuItem("新窗体 *"))
                         {
                             self.m_source->SetCursorPosition((self.m_source->GetCursorPosition.0, 0));
                             _do_InsertText(
                                 "import builtin::api::gui::form;\n"
-                                + "do show <| jeapi::gui::form::create(\"标题\", true /* 唯一窗体？ */,\n"
-                                + "    func (_)\n"
-                                + "    {\n"
-                                + "        je::gui::Text(\"Helloworld 新窗体\");\n"
-                                + "    }\n"
-                                + ");\n");
+                                    + "do show <| jeapi::gui::form::create(\"标题\", true /* 唯一窗体？ */,\n"
+                                        + "    func (_)\n"
+                                            + "    {\n"
+                                                + "        je::gui::Text(\"Helloworld 新窗体\");\n"
+                                                    + "    }\n"
+                                                        + ");\n");
                         }
                         EndMenu();
                     }
-
+                    
                     Separator();
-
+                    
                     if (BeginMenu("全局上下文（Universe）"))
                     {
                         if (MenuItem("获取所有世界"))
@@ -382,9 +382,9 @@ namespace editor::gui
                         {
                             _do_InsertText("->name()");
                         }
-
+                        
                         Separator();
-
+                        
                         if (MenuItem("添加组件（ToWoo）"))
                         {
                             _do_InsertText("->towoo::add_component:<_>()");
@@ -403,8 +403,8 @@ namespace editor::gui
                     {
                         let component_types = typeinfo::get_all_components_types();
                         for (let name : component_types
-                            ->> \t = t->name;
-                            -> std::sort(\ln, rn = ln < rn;))
+                                ->> \t = t->name;
+                                -> std::sort(\ln, rn = ln < rn;))
                         {
                             if (BeginMenu(name))
                             {
@@ -412,7 +412,7 @@ namespace editor::gui
                                     _do_InsertText(name);
                                 if (MenuItem("类型"))
                                     _do_InsertText(F"{name}::type::typeinfo");
-
+                                    
                                 EndMenu();
                             }
                         }
@@ -422,8 +422,8 @@ namespace editor::gui
                     {
                         let system_types = typeinfo::get_all_systems_types();
                         for (let name : system_types
-                            ->> \t = t->name;
-                            -> std::sort(\ln, rn = ln < rn;))
+                                ->> \t = t->name;
+                                -> std::sort(\ln, rn = ln < rn;))
                         {
                             if (BeginMenu(name))
                             {
@@ -431,7 +431,7 @@ namespace editor::gui
                                     _do_InsertText(name);
                                 if (MenuItem("类型"))
                                     _do_InsertText(F"je::typeinfo::load({name->enstring})->unwrap");
-
+                                    
                                 EndMenu();
                             }
                         }
@@ -439,7 +439,7 @@ namespace editor::gui
                     }
                     EndMenu();
                 }
-
+                
                 EndPopup();
             }
         }
@@ -447,14 +447,14 @@ namespace editor::gui
         {
             try! history = new! History(self.m_project, self.m_source->GetText);
             try! vmm = vm::create(F"_jeditor_{JobID()}.wo", self.m_source->GetText: buffer);
-
+            
             assert(self.m_history->shrink(self.m_history_index));
             self.m_history->add(history);
             self.m_history_index += 1;
-
+            
             do vmm->jit;
             if (!vmm->run->is_value
-             || !self.m_hook_callback(vmm)->is_value)
+                    || !self.m_hook_callback(vmm)->is_value)
             {
                 return result::err("运行脚本时发生错误");
             }
@@ -463,25 +463,25 @@ namespace editor::gui
         func show(self: ScriptEditor)
         {
             let mut exist = true;
-
+            
             je::gui::SetNextWindowSizeConstraints((350., 200.), (3500., 2000.));
             match (BeginAttrOpen(
-                F"脚本-{self.m_title}##{JobID()}",
-                WindowsAttribute::ImGuiWindowFlags_MenuBar))
+                    F"脚本-{self.m_title}##{JobID()}",
+                    WindowsAttribute::ImGuiWindowFlags_MenuBar))
             {
-            value(show)?
-                if (show)
-                {
-                    self->main_menu;
-                    self->history_list;
-                    SameLine();
-                    self->script_box;
-                }
-            none?
-                exist = false;
+                value(show)?
+                    if (show)
+                    {
+                        self->main_menu;
+                        self->history_list;
+                        SameLine();
+                        self->script_box;
+                    }
+                none?
+                    exist = false;
             }
             End();
-            return exist;            
+            return exist;
         }
     }
 }

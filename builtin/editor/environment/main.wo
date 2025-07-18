@@ -9,8 +9,8 @@ import builtin::api::serialize::main;
 
 namespace editor
 {
-    public using Environment = struct{ 
-        m_universe: je::universe, 
+    public using Environment = struct{
+        m_universe: je::universe,
     }
     {
         public func create()
@@ -39,7 +39,7 @@ namespace editor
         {
             let w = self.m_universe->jeapi::serialize::world::instantiate(dat, true);
             w->set_able(true);
-
+            
             return w;
         }
         public func get_universe(self: Environment)

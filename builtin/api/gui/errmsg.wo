@@ -12,7 +12,7 @@ using je::gui;
 namespace jeapi::gui
 {
     public func errmsg(
-        title: string, 
+        title: string,
         text: string)
     {
         let boom_icon = je::graphic::texture::create(7, 7);
@@ -20,27 +20,27 @@ namespace jeapi::gui
         for (let mut ix = 0; ix < 7; ix += 1)
             for (let mut iy = 0; iy < 7; iy += 1)
                 boom_icon->pix((ix, iy))->set_color((0.8, 0.75, 0., 1.));
-
+                
         let black_color = (0.1, 0.1, 0.1, 1.);
         boom_icon->pix((3, 5))->set_color(black_color);
         boom_icon->pix((3, 4))->set_color(black_color);
         boom_icon->pix((3, 3))->set_color(black_color);
-        boom_icon->pix((3, 1))->set_color(black_color);        
-
+        boom_icon->pix((3, 1))->set_color(black_color);
+        
         let f = form::create(F"{title}", false,
             func(f)
             {
                 ImageSize(boom_icon, 32., 32.);
-
+                
                 SameLine();
-
+                
                 Text(text);
-
+                
                 if (Button("确认"))
                     f->close();
             });
-
-        f->set_closeable(false);   
+            
+        f->set_closeable(false);
         do f->show;
     }
 }

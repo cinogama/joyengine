@@ -10,19 +10,19 @@ namespace jeapi::gui::inputmgr
         let (_, curframe) = je::gui::input::keystate(key);
         return curframe;
     }
-
+    
     private func keydown_at_last_frame(key: je::gui::ImGuiKey)
     {
         let (lastframe, _) = je::gui::input::keystate(key);
         return lastframe;
     }
-
+    
     public func keypush(key: je::gui::ImGuiKey)
     {
         return keydown_at_last_frame(key)
             && !keydown(key);
     }
-
+    
     public func keyspush(keys: array<je::gui::ImGuiKey>)
     {
         if (keys->>keydown_at_last_frame->reduce(\l, r = l && r;)->or(false))

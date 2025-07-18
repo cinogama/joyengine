@@ -47,20 +47,20 @@ namespace editor::gui::drawpannel::tools
         let range = (
             math::abs(pos1.0 - pos2.0) + 1,
             math::abs(pos1.1 - pos2.1) + 1);
-
+            
         return (lbpos, range);
     }
-
+    
     func draw_line(target: graphic::texture, color: color4_t, p1: (int, int), p2: (int, int))
     {
         // 以下代码主体来自 神奇的JoyEngineCSP，有大量屎山代码！
         let ((mut x1, mut y1), (mut x2, mut y2)) = (p1, p2);
-
+        
         if (
-            (x1 > x2 && y2 > y1 && (y2 - y1) <= (x1 - x2)) 
-            || (x1 < x2 && y1 > y2 && (x2 - x1) < (y1 - y2)) 
-            || (x2 <= x1 && y1 >= y2)
-        )
+            (x1 > x2 && y2 > y1 && (y2 - y1) <= (x1 - x2))
+                || (x1 < x2 && y1 > y2 && (x2 - x1) < (y1 - y2))
+                || (x2 <= x1 && y1 >= y2)
+                )
         {
             let t1 = x1;
             x1 = x2;
@@ -69,60 +69,60 @@ namespace editor::gui::drawpannel::tools
             y1 = y2;
             y2 = t2;
         }
-
+        
         target->pix((x1, y1))->set_color(color);
         target->pix((x2, y2))->set_color(color);
-            
+        
         let mut dx = math::abs(x2 - x1), mut dy = math::abs(y2 - y1);
         if (dx == 0 && dy == 0)
             return;
-
+            
         let mut flag = false;
         if (dx < dy)
         {
             flag = true;
-
+            
             let t1 = x1;
             x1 = y1;
             y1 = t1;
-
+            
             let t2 = x2;
             x2 = y2;
             y2 = t2;
-
+            
             let t3 = dx;
             dx = dy;
             dy = t3;
         }
-
+        
         let tx = (x2 - x1 > 0) ? 1 | -1;
         let ty = (y2 - y1 > 0) ? 1 | -1;
-
+        
         let mut curx = x1 + 1;
         let mut cury = y1;
-
+        
         let dS = 2 * dy;
         let dT = 2 * (dy - dx);
         let mut d = dS - dx;
-
+        
         while (curx != x2)
         {
             if (d < 0)
                 d += dS;
             else
             {
-                cury += ty; 
+                cury += ty;
                 d += dT;
             }
-
+            
             if (flag)
                 target->pix((cury, curx))->set_color(color);
             else
                 target->pix((curx, cury))->set_color(color);
-
+                
             curx += tx;
         }
-
+        
     }
     public using Pen = struct{
         m_last_draw_pos: mut (int, int),
@@ -256,7 +256,7 @@ namespace editor::gui::drawpannel::tools
             self.m_snapshot = option::value(new! TextureSnapshot(target));
             self.m_first_pos = pos;
             self.m_last_pos = pos;
-
+            
             target->pix(pos)->set_color(color);
         }
         public func OnMouseHold(self: FilledRect, target: graphic::texture, color: color4_t, pos: (int, int))
@@ -265,7 +265,7 @@ namespace editor::gui::drawpannel::tools
             {
                 self.m_snapshot->unwrap->restore();
                 self.m_last_pos = pos;
-
+                
                 let (lbpos, range) = get_standard_range_by_two_pos(self.m_first_pos, self.m_last_pos);
                 for (let mut x = 0; x < range.0; x += 1)
                 {
@@ -311,15 +311,15 @@ namespace editor::gui::drawpannel::tools
             {
                 self.m_snapshot->unwrap->restore();
                 self.m_last_pos = pos;
-
+                
                 // 使用中点椭圆算法画圆
                 let (lbpos, range) = get_standard_range_by_two_pos(self.m_first_pos, self.m_last_pos);
                 let (rx, ry) = (range.0: real / 2., range.1: real / 2.);
-                let (cx, cy) = (lbpos.0: real + rx, lbpos.1: real + ry);                
-
+                let (cx, cy) = (lbpos.0: real + rx, lbpos.1: real + ry);
+                
                 let my_round = \v: real = (v - 0.5): int;;
                 let my_round2 = \v: real = (v + 0.5): int;;
-
+                
                 let mut x = 0.;
                 let mut y = ry;
                 let mut p1 = ry * ry - rx * rx * ry + (rx * rx) / 4.;
@@ -329,7 +329,7 @@ namespace editor::gui::drawpannel::tools
                     target->pix((my_round2(cx - x), my_round(cy + y)))->set_color(color);
                     target->pix((my_round(cx + x), my_round2(cy - y)))->set_color(color);
                     target->pix((my_round2(cx - x), my_round2(cy - y)))->set_color(color);
-
+                    
                     if (p1 < 0.)
                     {
                         x += 1.;
@@ -342,7 +342,7 @@ namespace editor::gui::drawpannel::tools
                         p1 += 2. * ry * ry * x - 2. * rx * rx * y + ry * ry;
                     }
                 }
-
+                
                 let mut p2 = ry * ry * (x + 0.5) * (x + 0.5) + rx * rx * (y - 1.) * (y - 1.) - rx * rx * ry * ry;
                 while (y >= 0.)
                 {
@@ -350,7 +350,7 @@ namespace editor::gui::drawpannel::tools
                     target->pix((my_round2(cx - x), my_round(cy + y)))->set_color(color);
                     target->pix((my_round(cx + x), my_round2(cy - y)))->set_color(color);
                     target->pix((my_round2(cx - x), my_round2(cy - y)))->set_color(color);
-
+                    
                     if (p2 > 0.)
                     {
                         y -= 1.;
@@ -392,7 +392,7 @@ namespace editor::gui::drawpannel::tools
             self.m_snapshot = option::value(new! TextureSnapshot(target));
             self.m_first_pos = pos;
             self.m_last_pos = pos;
-
+            
             target->pix(pos)->set_color(color);
         }
         public func OnMouseHold(self: FilledCircle, target: graphic::texture, color: color4_t, pos: (int, int))
@@ -401,17 +401,17 @@ namespace editor::gui::drawpannel::tools
             {
                 self.m_snapshot->unwrap->restore();
                 self.m_last_pos = pos;
-
+                
                 let (lbpos, range) = get_standard_range_by_two_pos(self.m_first_pos, self.m_last_pos);
                 // let (cx, cy) = (lbpos.0 + range.0 / 2, lbpos.1 + range.1 / 2);
                 let (rx, ry) = (range.0: real / 2., range.1: real / 2.);
-
+                
                 for (let mut x = 0; x < range.0; x += 1)
                 {
                     for (let mut y = 0; y < range.1; y += 1)
                     {
-                        if (math::pow(x: real + 0.5 - rx, 2.) / math::pow(rx, 2.) 
-                            + math::pow(y: real + 0.5 - ry, 2.) / math::pow(ry, 2.) <= 1.)
+                        if (math::pow(x: real + 0.5 - rx, 2.) / math::pow(rx, 2.)
+                                + math::pow(y: real + 0.5 - ry, 2.) / math::pow(ry, 2.) <= 1.)
                         {
                             target->pix((lbpos.0 + x, lbpos.1 + y))->set_color(color);
                         }
@@ -438,18 +438,18 @@ namespace editor::gui::drawpannel::tools
             if (x >= 0 && x < w && y >= 0 && y < h)
             {
                 let filling_place_color = target->pix((x, y))->get_color();
-                let is_same_color = 
+                let is_same_color =
                     \c1: color4_t, c2: color4_t = isequ(c1[0], c2[0]) && isequ(c1[1], c2[1]) && isequ(c1[2], c2[2]) && isequ(c1[3], c2[3])
                         where isequ = \a: real, b: real = clamp0255(math::round(a * 255.)) == clamp0255(math::round(b * 255.));
-                            , clamp0255 = 
-                                \n: int = n < 0 
-                                    ? 0 
-                                    | (n > 255
-                                        ? 255
-                                        | n)
-                                ;
+                            , clamp0255 =
+                                \n: int = n < 0
+                                        ? 0
+                                        | (n > 255
+                                                ? 255
+                                                | n)
+                                    ;
+                            ;
                     ;
-                ;
                 if (! is_same_color(filling_place_color, color))
                 {
                     let filling_stack = [(x, y)]mut;
@@ -469,7 +469,7 @@ namespace editor::gui::drawpannel::tools
                             }
                         }
                     }
-
+                    
                 }
             }
         }
@@ -481,7 +481,7 @@ namespace editor::gui::drawpannel::tools
         m_snapshot: mut option<TextureSnapshot>,
         m_first_pos: mut (int, int),
         m_last_pos: mut (int, int),
-
+        
         m_magic_scripts: option<ApplyScriptHost>,
     }
     {
@@ -491,18 +491,18 @@ namespace editor::gui::drawpannel::tools
         }
         public func create(host: result<ApplyScriptHost, string>)
         {
-            match (host) 
+            match (host)
             {
-            err(msg)?
-                jeapi::gui::form::errmsg("失败", msg);
-            ok(_)?;
+                err(msg)?
+                    jeapi::gui::form::errmsg("失败", msg);
+                ok(_)?;
             }
-
+            
             return MagicRange{
                 m_snapshot = mut option::none,
                 m_first_pos = mut (-1, -1),
                 m_last_pos = mut (-1, -1),
-
+                
                 m_magic_scripts = host->okay,
             };
         }
@@ -511,15 +511,15 @@ namespace editor::gui::drawpannel::tools
             self.m_snapshot = option::value(new! TextureSnapshot(target));
             self.m_first_pos = pos;
             self.m_last_pos = pos;
-
+            
             if (self.m_magic_scripts->is_value)
             {
                 match (self.m_magic_scripts->unwrap
-                    ->apply(target, get_standard_range_by_two_pos(self.m_first_pos, self.m_last_pos)...))
+                        ->apply(target, get_standard_range_by_two_pos(self.m_first_pos, self.m_last_pos)...))
                 {
-                ok(_)?;
-                err(info)?
-                    je::logwarn(info);
+                    ok(_)?;
+                    err(info)?
+                        je::logwarn(info);
                 }
             }
         }
@@ -529,15 +529,15 @@ namespace editor::gui::drawpannel::tools
             {
                 self.m_snapshot->unwrap->restore();
                 self.m_last_pos = pos;
-
+                
                 if (self.m_magic_scripts->is_value)
                 {
                     match (self.m_magic_scripts->unwrap
-                        ->apply(target, get_standard_range_by_two_pos(self.m_first_pos, self.m_last_pos)...))
+                            ->apply(target, get_standard_range_by_two_pos(self.m_first_pos, self.m_last_pos)...))
                     {
-                    ok(_)?;
-                    err(info)?
-                        je::logwarn(info);
+                        ok(_)?;
+                        err(info)?
+                            je::logwarn(info);
                     }
                 }
             }

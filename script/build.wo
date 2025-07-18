@@ -21,20 +21,20 @@ func copy_file_consider_last_modified_time(
         throw! F"Source file {source_path->to_string()} does not exist or not a file.";
     if (! isdir(target_path_to_place_dir))
         throw! F"Target directory {target_path_to_place_dir->to_string()} does not exist or not a dir.";
-
+        
     let target_file_path = target_path_to_place_dir / filename(source_path);
     if (isdir(target_file_path))
         throw! F"Target path {target_file_path->to_string()} is a directory, not a file.";
-
+        
     let mut need_copy = !exist(target_file_path);
-
+    
     if (!need_copy)
     {
         try! atime = lastwrite(source_path)
             -> map_err(\eno = F"Unable to get last write time of {source_path->to_string()}: {eno}";);
         try! btime = lastwrite(target_file_path)
             -> map_err(\eno = F"Unable to get last write time of {target_file_path->to_string()}: {eno}";);
-        
+            
         if (atime != btime)
         {
             try! _ = remove(target_file_path)
@@ -42,14 +42,14 @@ func copy_file_consider_last_modified_time(
             need_copy = true;
         }
     }
-
+    
     if (need_copy)
     {
         if (filter_func(source_path))
         {
             std::println(F"Copying file {source_path->to_string()} to {target_file_path->to_string()}.");
             try! _ = copy(source_path, target_file_path)
-                -> map_err(\eno = F"Unable to copy {source_path->to_string()} to {target_file_path->to_string()}: {eno}";); 
+                -> map_err(\eno = F"Unable to copy {source_path->to_string()} to {target_file_path->to_string()}: {eno}";);
         }
         else
             std::println(
@@ -58,7 +58,7 @@ func copy_file_consider_last_modified_time(
     else
         std::println(
             F"File {source_path->to_string()} is already up to date, skipping copy to {target_file_path->to_string()}.");
-
+            
     return_ok!;
 }
 func copy_entier_dir(source_dir: fsys::path_t, target_path_to_place_dir: fsys::path_t, filter_func: (fsys::path_t)=> bool)=> result<void, string>
@@ -67,17 +67,17 @@ func copy_entier_dir(source_dir: fsys::path_t, target_path_to_place_dir: fsys::p
         throw! F"Source directory {source_dir->to_string()} does not exist or not a dir.";
     if (! isdir(target_path_to_place_dir))
         throw! F"Target directory {target_path_to_place_dir->to_string()} does not exist or not a dir.";
-
+        
     let this_target_path = target_path_to_place_dir / filename(source_dir);
     do mkdir(this_target_path);
-
+    
     try! walker = walk(source_dir)
-        -> map_err(\eno = F"Unable to walk source directory {source_dir->to_string()}: {eno}";); 
-
+        -> map_err(\eno = F"Unable to walk source directory {source_dir->to_string()}: {eno}";);
+        
     for (let p : walker)
     {
-        try! _ = isdir(p) 
-            ? copy_entier_dir(p, this_target_path, filter_func) 
+        try! _ = isdir(p)
+            ? copy_entier_dir(p, this_target_path, filter_func)
             | copy_file_consider_last_modified_time(p, this_target_path, filter_func);
     }
     return_ok!;
@@ -88,22 +88,22 @@ func copy_all_licenses()
     return try!
     {
         try! third_party_paths = subpath(third_party_located_path);
-
+        
         for (let _3rd_path : third_party_paths->iter |> filter(\path = isdir(path);))
         {
             try! subpath_of_3rd = allsubpath(_3rd_path);
             for (let p : subpath_of_3rd)
             {
                 if (isfile(p) && (
-                    filename(p)->lower->find("license")->is_value
-                    || filename(p)->lower->find("copying")->is_value))
+                        filename(p)->lower->find("license")->is_value
+                            || filename(p)->lower->find("copying")->is_value))
                 {
                     let relpath = p->to_string()->sub(third_party_located_path->to_string->len);
-
+                    
                     let target_path = build_path / "licenses" / relpath;
                     do mkdir(parent(target_path));
                     do copy(p, target_path);
-
+                    
                     std::println("Copy license file: ", p->to_string());
                 }
             }
@@ -130,7 +130,7 @@ func copy_opengles_emu_env_libs()=> result<void, string>
         ;
     do mkdir(build_path / "openglessl");
     do copy(gles_env_path / "openglessl", build_path / "openglessl");
-
+    
     return_ok!;
 }
 
@@ -139,19 +139,19 @@ func copy_pkgs(copy_src_only: bool)=> result<void, string>
     let source_path = current_workpath / "pkg";
     let target_path = build_path / "pkg";
     do mkdir(target_path);
-
+    
     for (let path : recursive_walk(current_workpath / "pkg") |> iterator::iter_result)
     {
         if (isfile(path))
         {
             try! relative_path = relative(path, source_path)
                 -> map_err(\eno = F"Failed to get relative path: {eno}.";);
-
+                
             do mkdir(parent(target_path / relative_path));
-
+            
             if (copy_src_only && extension(path)->lower != ".wo")
                 continue;
-
+                
             do copy(path, target_path / relative_path);
         }
     }
@@ -161,21 +161,21 @@ func copy_pkgs(copy_src_only: bool)=> result<void, string>
 func scan_extern_function_in_path(i, skip_process_and_socket)
 {
     let r = regex::expr:<{@"extern\s*\(\s*\"(.*?)\"\s*,\s*\"(.*?)\""@}>;
-    let iter = i 
+    let iter = i
         |> filter_map(\p = isfile(p) ? readall(p) | option::none;)
         |> flat_map(\p = r->search(p);)
         |> map(\match_result = (match_result.1[1], match_result.1[2]);)
         ;
-
+        
     let result = {}mut: map<string, mut map<string, mut void>>;
     for (let (libname, funcname) : iter)
     {
         if (skip_process_and_socket && (libname == "libprocess" || libname == "libsocket"))
             continue;
-
+            
         if (!result->contains(libname))
             result[libname] = {}mut;
-
+            
         std::println(F"Found {libname}::{funcname}");
         result[libname][funcname] = do nil;
     }
@@ -186,10 +186,10 @@ func scan_pkg_entry_leave_function_in_path(i, skip_process_and_socket)
 {
     let entrys = {}mut: map<string, void>;
     let leaves = {}mut: map<string, void>;
-
+    
     let entry_r = regex::expr:<{@"\s+wolib_entry\s*\("@}>;
     let leave_r = regex::expr:<{@"\s+wolib_exit\s*\("@}>;
-
+    
     for (let pkg_dir : i)
     {
         if (isdir(pkg_dir))
@@ -197,11 +197,11 @@ func scan_pkg_entry_leave_function_in_path(i, skip_process_and_socket)
             let pkgname = filename(pkg_dir);
             if (skip_process_and_socket && (pkgname == "process" || pkgname == "socket"))
                 continue;
-
-            for (let content : recursive_walk(pkg_dir) 
-                |> iter_result
-                |> filter(\p = isfile(p) && ext == ".cpp" || ext == ".c" where ext = extension(p)->lower;)
-                |> filter_map(\p = readall(p);))
+                
+            for (let content : recursive_walk(pkg_dir)
+                    |> iter_result
+                    |> filter(\p = isfile(p) && ext == ".cpp" || ext == ".c" where ext = extension(p)->lower;)
+                    |> filter_map(\p = readall(p);))
             {
                 if (!entry_r->search(content) |> collect -> empty)
                 {
@@ -216,7 +216,7 @@ func scan_pkg_entry_leave_function_in_path(i, skip_process_and_socket)
             }
         }
     }
-
+    
     return (entrys->keys, leaves->keys);
 }
 
@@ -224,7 +224,7 @@ func generate_je_api_decls()=> result<void, string>
 {
     let libfuncs = scan_extern_function_in_path(
         recursive_walk(current_workpath / "je")->iterator::iter_result, false);
-
+        
     let mut result = 
 @"// THIS FILE IS AUTO GENERATED BY /script/build.wo
 
@@ -233,20 +233,20 @@ func generate_je_api_decls()=> result<void, string>
 #include "jeecs.hpp"
 
 "@;
-    for (let (_, funcs) : libfuncs)
+        for (let (_, funcs) : libfuncs)
         for (let f : funcs)
             result += F"WO_API wo_api {f}(wo_vm vm, wo_value args);\n";
-    
+            
     result += @"
 wo_dylib_handle_t je_extern_lib_woo_api_init_impl()
 {
     wo_extern_lib_func_t je_fs[] = {
 "@;
-
-   for (let (_, funcs) : libfuncs)
+        
+    for (let (_, funcs) : libfuncs)
         for (let f : funcs)
             result += F"        wo_extern_lib_func_t\{\"{f}\", (void*)&{f}\},\n";
-
+            
     result += 
 @"      WO_EXTERN_LIB_FUNC_END,
     };
@@ -259,7 +259,7 @@ void je_extern_lib_woo_api_finish_impl(wo_dylib_handle_t handle_to_free)
     wo_unload_lib(handle_to_free, WO_DYLIB_UNREF_AND_BURY);
 }
 "@;
-
+        
     if (!writeall(current_workpath / "src" / "jeecs_extern_library_woo_api.hpp", result))
         throw! F"Failed to update jeecs_extern_library_woo_api.hpp.";
     return_ok!;
@@ -269,17 +269,17 @@ func generate_je_static_module_decls()=> result<void, string>
 {
     let module_name_regex = regex::expr:<{@"(.*)\.je4module"@}>;
     let module_name_list = []mut: vec<string>;
-
+    
     for (let p : walk(current_workpath / "module")->iterator::iter_result)
     {
-        if (module_name_regex->test(filename(p)) 
-            && isdir(p) 
-            && exist(p / "CMakeLists.txt"))
+        if (module_name_regex->test(filename(p))
+                && isdir(p)
+                && exist(p / "CMakeLists.txt"))
         {
             module_name_list->add(purename(p));
         }
     }
-
+    
     let mut result = 
 @"// THIS FILE IS AUTO GENERATED BY /script/build.wo
 
@@ -291,13 +291,13 @@ func generate_je_static_module_decls()=> result<void, string>
 extern "C"
 {
 "@;
-
+        
     for (let mname : module_name_list)
     {
         result += F"JE_EXPORT void jestatic_module_{mname}_entry(wo_dylib_handle_t lib_instance);\n";
         result += F"JE_EXPORT void jestatic_module_{mname}_leave();\n";
     }
-
+    
     result += @"
 }
 #endif
@@ -307,7 +307,7 @@ void je_extern_lib_module_init_impl(std::vector<wo_dylib_handle_t>* out_lib_hand
     assert(out_lib_handles != nullptr && out_lib_handles->empty());
 #if JE4_STATIC_LINK_MODULE_AND_PKGS
 "@;
-
+        
     for (let mname : module_name_list)
     {
         result += F"    wo_extern_lib_func_t {mname}_fs[] = \{\n";
@@ -315,9 +315,9 @@ void je_extern_lib_module_init_impl(std::vector<wo_dylib_handle_t>* out_lib_hand
         result += F"        wo_extern_lib_func_t\{\"jeecs_module_leave\", (void*)&jestatic_module_{mname}_leave\},\n";
         result += F"        WO_EXTERN_LIB_FUNC_END,\n    };\n";
         result += F"    out_lib_handles->push_back(\n"
-                + F"        wo_fake_lib(\"{mname}\", {mname}_fs, nullptr));\n\n";
+            + F"        wo_fake_lib(\"{mname}\", {mname}_fs, nullptr));\n\n";
     }
-
+    
     result += @"
 #endif
 }
@@ -333,10 +333,10 @@ void je_extern_lib_module_finish_impl(std::vector<wo_dylib_handle_t>* inout_lib_
     inout_lib_handles->clear();
 }
 "@;
-
+        
     if (!writeall(current_workpath / "src" / "jeecs_extern_library_module.hpp", result))
         throw! F"Failed to update jeecs_extern_library_module.hpp.";
-
+        
     return result::ok(do nil);
 }
 
@@ -347,13 +347,13 @@ func generate_je_3rd_pkg_decls(skip_process_and_socket: bool)=> result<void, str
             |> filter(\p = extension(p)->lower == ".wo";), skip_process_and_socket)
         ->> \libname, funcnames = (libname, funcname_symbolname->to_vec)
             where funcname_symbolname = funcnames->> \fname = (fname, fname);
-            ;
         ;
-
+        ;
+        
     let (libentry, libleave) = scan_pkg_entry_leave_function_in_path(
         walk(current_workpath / "3rd" / "pkg")->iterator::iter_result,
         skip_process_and_socket);
-
+        
     let mut result = 
 @"// THIS FILE IS AUTO GENERATED BY /script/build.wo
 
@@ -363,33 +363,33 @@ func generate_je_3rd_pkg_decls(skip_process_and_socket: bool)=> result<void, str
 
 #if JE4_STATIC_LINK_MODULE_AND_PKGS
 "@;
-
+        
     for (let (_, funcnames) : libfuncs)
     {
         for (let (funcname, _) : funcnames)
             result += F"WO_API wo_api {funcname}(wo_vm vm, wo_value args);\n";
-
+            
         result += "\n";
     }
-
+    
     result += "\n";
-
+    
     for (let pkgname : libentry)
     {
         let entry_func_name = F"je_static_wo_pkg_{pkgname}_entry";
         result += F"WO_API void {entry_func_name}(wo_dylib_handle_t lib_instance);\n";
         libfuncs["lib" + pkgname]->add((entry_func_name, "wolib_entry"));
     }
-
+    
     result += "\n";
-
+    
     for (let pkgname : libleave)
     {
         let exit_func_name = F"je_static_wo_pkg_{pkgname}_exit";
         result += F"WO_API void {exit_func_name}();\n";
         libfuncs["lib" + pkgname]->add((exit_func_name, "wolib_exit"));
     }
-
+    
     result += @"
 #endif
 
@@ -399,18 +399,18 @@ void je_extern_lib_3rd_pkgs_init_impl(std::vector<wo_dylib_handle_t>* out_lib_ha
 
 #if JE4_STATIC_LINK_MODULE_AND_PKGS
 "@;
-
+        
     for (let (libname, funcnames) : libfuncs)
     {
         result += F"    wo_extern_lib_func_t {libname}_fs[] = \{\n";
         for (let (funcname, symbolname) : funcnames)
             result += F"        wo_extern_lib_func_t\{\"{symbolname}\", (void*)&{funcname}\},\n";
-
+            
         result += F"        WO_EXTERN_LIB_FUNC_END,\n    };\n";
         result += F"    out_lib_handles->push_back(\n"
-                + F"        wo_fake_lib(\"{libname}\", {libname}_fs, nullptr));\n\n";
+            + F"        wo_fake_lib(\"{libname}\", {libname}_fs, nullptr));\n\n";
     }
-
+    
     result += @"
 #endif    
 }
@@ -427,7 +427,7 @@ void je_extern_lib_3rd_pkgs_finish_impl(std::vector<wo_dylib_handle_t>* inout_li
     inout_lib_handles->clear();
 }
 "@;
-
+        
     if (!writeall(current_workpath / "src" / "jeecs_extern_library_3rd_pkg.hpp", result))
         throw! F"Failed to update jeecs_extern_library_3rd_pkg.hpp.";
     return_ok!;
@@ -436,9 +436,9 @@ void je_extern_lib_3rd_pkgs_finish_impl(std::vector<wo_dylib_handle_t>* inout_li
 func copy_engine_and_editor_builtin_files()
 {
     try! _ = copy_entier_dir(
-        current_workpath / "je", 
-        build_path, 
-        \p = !path_str->end_with("towoo/types.wo") && !path_str->end_with("towoo/components.wo") 
+        current_workpath / "je",
+        build_path,
+        \p = !path_str->end_with("towoo/types.wo") && !path_str->end_with("towoo/components.wo")
             where path_str = p->to_string->lower
         ;);
     try! _ = copy_entier_dir(current_workpath / "builtin", build_path, \_ = true;);
@@ -452,7 +452,7 @@ func copy_engine_and_editor_builtin_files()
         current_workpath / "3rd" / "rcedit-x86.exe",
         build_path / "builtin",
         \_ = true;);
-
+        
     return_ok!;
 }
 
@@ -461,7 +461,7 @@ func main()
     let mut copy_gles_emu = false;
     let mut copy_pkg_src_only = false;
     let mut skip_process_and_socket = false;
-
+    
     for (let cmd : std::args())
     {
         if (cmd == "-static-link-pkgs")
@@ -471,7 +471,7 @@ func main()
         else if (cmd == "-webgl")
             skip_process_and_socket = true;
     }
-
+    
     try! _ = copy_pkgs(copy_pkg_src_only);
     if (copy_gles_emu)
     {
@@ -482,18 +482,18 @@ func main()
     try! _ = generate_je_static_module_decls();
     try! _ = copy_all_licenses();
     try! _ = copy_engine_and_editor_builtin_files();
-
+    
     return_ok!;
 }
 
 match (main())
 {
-ok(_)?
+    ok(_)?
     {
         std::println("Done.");
         return 0;
     }
-err(msg)?
+    err(msg)?
     {
         std::println(F"Failed: {msg}.");
         return -1;

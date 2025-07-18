@@ -15,15 +15,15 @@ namespace jeapi::loader
             return je::file::readall(wpath)
                 =>> \dat = dat->dict::deserialize;
                 =>> \dat = dat: dynamic->trycast:<serialize::EntityData::EntityDataRawType>;
-                =>> \dat = 
-                    jeapi::serialize::prefab::instantiate(
-                        w, dat: serialize::EntityData, false)
+                =>> \dat =
+                        jeapi::serialize::prefab::instantiate(
+                            w, dat: serialize::EntityData, false)
                     ;
                 ->> \e = entityloader
                     {
                         __m_world = w,
                         __m_prefab = e
-                    };
+                        };
                 ;
         }
         public func instance(self: entityloader)

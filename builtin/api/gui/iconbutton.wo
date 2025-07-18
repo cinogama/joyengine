@@ -27,12 +27,12 @@ namespace jeapi::gui::widget
                         EndPopup();
                     }
                 };
-
+                
             SameLine();
             Text(text);
         }
         EndGroup();
-
+        
         return clicked;
     }
 }
