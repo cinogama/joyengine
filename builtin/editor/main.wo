@@ -524,15 +524,16 @@ for (;;)
                         if (jeapi::gui::widget::IconButton(create_project_icon, "创建新项目", (64., 64.), option::none))
                         {
                             launch(
-                                \=open_path_to_do_sth(
-                                        \p: option<fsys::path_t> =
-                                                do p->> \path = create_project_at(path, u, editor_configs, open);
-                                            ;,)
+                                \ = open_path_to_do_sth(
+                                        \p = do p->> \path = create_project_at(path, u, editor_configs, open);;)
                                 ;);
                         }
                         if (jeapi::gui::widget::IconButton(load_project_icon, "加载一个项目", (64., 64.), option::none))
                         {
-                            launch(\=open_path_to_do_sth(\p: option<fsys::path_t> = do p->> \path = open_project_at(path, u, editor_configs, open);;,););
+                            launch(
+                                \= open_path_to_do_sth(
+                                        \p = do p->> \path = open_project_at(path, u, editor_configs, open);;,)
+                                ;);
                         }
                         
                         TextDisabled("历史项目");
@@ -561,8 +562,10 @@ for (;;)
                                                         {
                                                             do historys->remove(index);
                                                             assert(
-                                                                fsys::writeall(fsys::normalize(std::host_path())/ "builtin" / "editor.dat.je4cache", editor_configs->serialize->unwrap)
-                                                                );
+                                                                fsys::writeall(
+                                                                    fsys::normalize(
+                                                                        std::host_path())/ "builtin" / "editor.dat.je4cache",
+                                                                    editor_configs->serialize->unwrap));
                                                         }
                                                     none?;
                                                 }
@@ -570,13 +573,24 @@ for (;;)
                                         });
                                 }
                             };
-                            if (jeapi::gui::widget::IconButton(load_project_icon, F"{dat[0]} ({dat[1]})", (16., 16.), option::value(context_menu_func)))
-                                open_project_at(fsys::normalize(dat[1]), u, editor_configs, open);
+                            if (jeapi::gui::widget::IconButton(
+                                    load_project_icon,
+                                    F"{dat[0]} ({dat[1]})",
+                                    (16., 16.),
+                                    option::value(context_menu_func)))
+                            {
+                                open_project_at(
+                                    fsys::normalize(dat[1]),
+                                    u,
+                                    editor_configs,
+                                    open);
+                            }
                         }
                         
                         EndChild();
                         
-                        if (jeapi::gui::widget::IconButton(exit_editor_icon, "退出编辑器", (64., 64.), option::none))
+                        if (jeapi::gui::widget::IconButton(
+                                exit_editor_icon, "退出编辑器", (64., 64.), option::none))
                         {
                             u->close();
                             open->set(false);
