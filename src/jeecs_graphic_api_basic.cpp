@@ -996,9 +996,10 @@ jegl_resource *jegl_create_texture(size_t width, size_t height, jegl_texture::fo
 
     if ((format & jegl_texture::format::FORMAT_MASK) == 0)
     {
-        texture->m_raw_texture_data->m_pixels = (jegl_texture::pixel_data_t *)malloc(width * height * format);
-        assert(texture->m_raw_texture_data->m_pixels);
+        texture->m_raw_texture_data->m_pixels = 
+            (jegl_texture::pixel_data_t *)malloc(width * height * format);
 
+        assert(texture->m_raw_texture_data->m_pixels != nullptr);
         memset(texture->m_raw_texture_data->m_pixels, 0, width * height * format);
     }
     else
