@@ -9145,10 +9145,7 @@ namespace jeecs
                         if (field == U"color")
                         {
                             char color[9] = "00000000";
-
-                            size_t idx = 0;
-                            while (u8value[idx])
-                                color[idx] = u8value[idx];
+                            strncpy(color, u8value, 8);
 
                             unsigned int colordata = strtoul(color, NULL, 16);
 
