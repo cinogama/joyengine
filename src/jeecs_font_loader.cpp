@@ -7,24 +7,6 @@
 struct je_stb_font_data
 {
     stbtt_fontinfo m_font;
-    uint8_t* m_font_file_buf;
-
-    float m_scale_x;
-    float m_scale_y;
-
-    size_t m_board_size_x;
-    size_t m_board_size_y;
-
-    int32_t m_ascent;
-    int32_t m_descent;
-    int32_t m_line_gap;
-    int32_t m_line_space;
-
-    float m_x_scale_for_pix;
-    float m_y_scale_for_pix;
-
-    je_font_char_updater_t m_updater;
-
     std::mutex m_character_set_mx;
     std::map<char32_t, jeecs::graphic::character> m_character_set;
 };
@@ -37,52 +19,59 @@ je_font* je_font_load(
     size_t board_blank_size_y,
     je_font_char_updater_t char_texture_updater)
 {
-    je_stb_font_data* fontdata = new je_stb_font_data;
-    fontdata->m_font_file_buf = nullptr;
+    je_font* font = new je_font;
+    font->m_stb_font_data = new je_stb_font_data;
+
+    font->m_path = strdup(font_path);
+    font->m_font_file_buf = nullptr;
 
     if (auto* file = jeecs_file_open(font_path))
     {
-        fontdata->m_font_file_buf = (uint8_t*)malloc(file->m_file_length);
+        font->m_font_file_buf = (uint8_t*)malloc(file->m_file_length);
         jeecs_file_read(
-            fontdata->m_font_file_buf,
+            font->m_font_file_buf,
             sizeof(uint8_t),
             file->m_file_length,
             file);
 
         jeecs_file_close(file);
 
-        fontdata->m_scale_x = scalex;
-        fontdata->m_scale_y = scaley;
-        fontdata->m_board_size_x = board_blank_size_x;
-        fontdata->m_board_size_y = board_blank_size_y;
-        fontdata->m_updater = char_texture_updater;
+        font->m_scale_x = scalex;
+        font->m_scale_y = scaley;
+        font->m_board_size_x = board_blank_size_x;
+        font->m_board_size_y = board_blank_size_y;
+        font->m_updater = char_texture_updater;
 
-        stbtt_InitFont(&fontdata->m_font, fontdata->m_font_file_buf,
-            stbtt_GetFontOffsetForIndex(fontdata->m_font_file_buf, 0));
+        stbtt_InitFont(&font->m_stb_font_data->m_font, font->m_font_file_buf,
+            stbtt_GetFontOffsetForIndex(font->m_font_file_buf, 0));
 
         int ascent, descent, line_gap;
-        stbtt_GetFontVMetrics(&fontdata->m_font, &ascent, &descent, &line_gap);
+        stbtt_GetFontVMetrics(&font->m_stb_font_data->m_font, &ascent, &descent, &line_gap);
 
-        fontdata->m_ascent = (int32_t)ascent;
-        fontdata->m_descent = (int32_t)descent;
-        fontdata->m_line_gap = (int32_t)line_gap;
+        font->m_ascent = (int32_t)ascent;
+        font->m_descent = (int32_t)descent;
+        font->m_line_gap = (int32_t)line_gap;
 
         // https://www.ffutop.com/posts/2024-06-19-freetype-glyph/
-        fontdata->m_line_space = fontdata->m_ascent - fontdata->m_descent + fontdata->m_line_gap;
+        font->m_line_space = font->m_ascent - font->m_descent + font->m_line_gap;
 
-        fontdata->m_x_scale_for_pix =
-            stbtt_ScaleForPixelHeight(&fontdata->m_font, fontdata->m_scale_x);
-        fontdata->m_y_scale_for_pix =
-            stbtt_ScaleForPixelHeight(&fontdata->m_font, fontdata->m_scale_y);
+        font->m_x_scale_for_pix =
+            stbtt_ScaleForPixelHeight(&font->m_stb_font_data->m_font, font->m_scale_x);
+        font->m_y_scale_for_pix =
+            stbtt_ScaleForPixelHeight(&font->m_stb_font_data->m_font, font->m_scale_y);
     }
     else
     {
-        assert(fontdata->m_font_file_buf == nullptr);
-        delete fontdata;
-        fontdata = nullptr;
+        assert(font->m_font_file_buf == nullptr);
+
+        free(const_cast<char*>(font->m_path));
+
+        delete font->m_stb_font_data;
+        delete font;
+        font = nullptr;
     }
 
-    return fontdata;
+    return font;
 }
 
 void je_font_free(je_font* font)
@@ -91,6 +80,9 @@ void je_font_free(je_font* font)
     {
         assert(font->m_font_file_buf);
         free(font->m_font_file_buf);
+        free(const_cast<char*>(font->m_path));
+
+        delete font->m_stb_font_data;
         delete font;
     }
 }
@@ -100,17 +92,17 @@ const jeecs::graphic::character* je_font_get_char(
 {
     assert(font != nullptr);
 
-    std::lock_guard g1(font->m_character_set_mx);
+    std::lock_guard g1(font->m_stb_font_data->m_character_set_mx);
 
-    if (auto fnd = font->m_character_set.find(unicode32_char);
-        fnd != font->m_character_set.end())
+    if (auto fnd = font->m_stb_font_data->m_character_set.find(unicode32_char);
+        fnd != font->m_stb_font_data->m_character_set.end())
         return &fnd->second;
 
     /////////////////////////////////////////////////
     int x0, y0, x1, y1, advance, lsb, pixel_w, pixel_h;
 
     stbtt_GetCodepointHMetrics(
-        &font->m_font,
+        &font->m_stb_font_data->m_font,
         static_cast<int>(unicode32_char),
         &advance,
         &lsb);
@@ -118,7 +110,7 @@ const jeecs::graphic::character* je_font_get_char(
     unsigned char* ch_tex_buffer = nullptr;
 
     if (stbtt_GetCodepointBox(
-        &font->m_font,
+        &font->m_stb_font_data->m_font,
         static_cast<int>(unicode32_char),
         &x0,
         &y0,
@@ -126,7 +118,7 @@ const jeecs::graphic::character* je_font_get_char(
         &y1))
     {
         ch_tex_buffer = stbtt_GetCodepointBitmap(
-            &font->m_font,
+            &font->m_stb_font_data->m_font,
             font->m_x_scale_for_pix,
             font->m_y_scale_for_pix,
             static_cast<int>(unicode32_char),
@@ -147,7 +139,7 @@ const jeecs::graphic::character* je_font_get_char(
     int texture_pixel_height = pixel_h + 2 * (int)font->m_board_size_y;
 
     jeecs::graphic::character& ch =
-        font->m_character_set.insert(
+        font->m_stb_font_data->m_character_set.insert(
             std::make_pair(
                 static_cast<int>(unicode32_char),
                 jeecs::graphic::character{

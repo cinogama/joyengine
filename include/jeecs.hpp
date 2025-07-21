@@ -2565,13 +2565,13 @@ jegl_load_vertex [基本接口]
 从指定路径加载一个顶点（模型）资源，加载的路径规则与 jeecs_file_open 相同
     * 若指定的文件不存在或不是一个合法的模型，则返回nullptr
     * 所有的图形资源都通过 jegl_close_resource 关闭并等待图形线程释放
-    * 使用此方法加载的模型，其顶点数据格式如下所示：
-        顶点坐标    3 * f32
-        UV映射坐标  2 * f32
-        法线方向向量  3 * f32
-        骨骼索引    4 * i32
-        骨骼权重    4 * f32
-    * 对于绑定骨骼数量小于4的顶点，其空余位置的骨骼索引被 0 填充，权重为 0.f
+    * 使用此方法加载的模型，始终按照三角面排布，其顶点数据格式如下所示：
+        顶点坐标        3 * f32
+        UV映射坐标      2 * f32
+        法线方向        3 * f32
+        骨骼索引        4 * i32
+        骨骼权重        4 * f32
+    * 对于绑定骨骼数量小于4的顶点，保证空余位置的骨骼索引被 0 填充，权重为 0.f
 请参见：
     jeecs_file_open
     jegl_close_resource
@@ -2609,8 +2609,30 @@ JE_API jegl_resource* jegl_create_framebuf(
     const jegl_texture::format* attachment_formats,
     size_t attachment_count);
 
-typedef struct je_stb_font_data je_font;
+struct je_stb_font_data;
 typedef void (*je_font_char_updater_t)(jegl_texture::pixel_data_t*, size_t, size_t);
+
+struct je_font
+{
+    const char* m_path;
+    uint8_t* m_font_file_buf;
+
+    float m_scale_x;
+    float m_scale_y;
+    size_t m_board_size_x;
+    size_t m_board_size_y;
+    je_font_char_updater_t m_updater;
+
+    int32_t m_ascent;
+    int32_t m_descent;
+    int32_t m_line_gap;
+    int32_t m_line_space;
+
+    float m_x_scale_for_pix;
+    float m_y_scale_for_pix;
+
+    je_stb_font_data* m_stb_font_data;
+};
 
 /*
 je_font_load [基本接口]
@@ -8904,13 +8926,9 @@ namespace jeecs
 
             je_font* m_font;
 
-        public:
-            const size_t m_size;
-            const basic::string m_path;
-
         private:
-            font(je_font* font_resource, size_t size, const char* path) noexcept
-                : m_font(font_resource), m_size(size), m_path(path)
+            font(je_font* font_resource) noexcept
+                : m_font(font_resource)
             {
             }
 
@@ -8922,14 +8940,17 @@ namespace jeecs
                 je_font_char_updater_t char_texture_updater = nullptr)
             {
                 auto* font_res = je_font_load(
-                    fontfile.c_str(), (float)size, (float)size,
-                    board_size, board_size, char_texture_updater);
+                    fontfile.c_str(), 
+                    (float)size,
+                    (float)size,
+                    board_size, 
+                    board_size, 
+                    char_texture_updater);
 
                 if (font_res != nullptr)
-                    return basic::resource<font>(new font(font_res, size, fontfile.c_str()));
+                    return basic::resource<font>(new font(font_res));
                 return std::nullopt;
             }
-
             ~font()
             {
                 je_font_free(m_font);
@@ -8949,11 +8970,17 @@ namespace jeecs
             {
                 return text_texture_impl(*this, wo_str_to_u32str(text.c_str()));
             }
+
+            je_font* resource() const noexcept
+            {
+                return m_font;
+            }
         private:
             inline static basic::resource<texture> text_texture_impl(
                 font& font_base,
                 const std::u32string& text) noexcept
             {
+                const auto* base_font_resource = font_base.resource();
                 const auto walk_through_all_character =
                     [&text](
                         const std::function<void(std::u32string_view, std::u32string_view)>& callback_attr,
@@ -9008,7 +9035,7 @@ namespace jeecs
                         }
                     };
 
-                using font_and_size_pair_t = std::pair<std::string, int>;
+                using font_and_size_pair_t = std::pair<std::string, size_t>;
                 std::map<font_and_size_pair_t, basic::resource<font>>
                     FONT_POOL;
                 float       TEXT_SCALE = 1.0f;
@@ -9035,15 +9062,22 @@ namespace jeecs
                             else
                             {
                                 const auto font_pair = std::make_pair(
-                                    font_base.m_path.cpp_str(),
-                                    static_cast<int>(round(TEXT_SCALE * font_base.m_size)));
+                                    base_font_resource->m_path,
+                                    static_cast<size_t>(round(TEXT_SCALE * base_font_resource->m_scale_x)));
 
                                 auto font_fnd = FONT_POOL.find(font_pair);
                                 if (font_fnd == FONT_POOL.end())
                                 {
-                                    auto loaded_font = font::load(font_pair.first, font_pair.second);
+                                    auto loaded_font = font::load(
+                                        font_pair.first,
+                                        font_pair.second,
+                                        base_font_resource->m_board_size_x,
+                                        base_font_resource->m_updater);
+
                                     if (!loaded_font.has_value())
-                                        debug::logerr("Failed to open font: '%s'.", font_base.m_path.c_str());
+                                        debug::logerr(
+                                            "Failed to open font: '%s'.", 
+                                            base_font_resource->m_path);
                                     else
                                         TEXT_FONT_CURRENT = FONT_POOL.insert(
                                             std::make_pair(
@@ -9077,15 +9111,13 @@ namespace jeecs
                                     + character_info->m_baseline_offset_x
                                     + static_cast<int>(
                                         TEXT_OFFSET.x
-                                        * static_cast<float>(
-                                            font_base.m_size));
+                                        * base_font_resource->m_scale_x);
                                 const int py_min =
                                     next_ch_y
                                     + character_info->m_baseline_offset_y
                                     + static_cast<int>(
                                         TEXT_OFFSET.y
-                                        * static_cast<float>(
-                                            font_base.m_size));
+                                        * base_font_resource->m_scale_x);
 
                                 const int px_max =
                                     next_ch_x
@@ -9093,16 +9125,14 @@ namespace jeecs
                                     + character_info->m_baseline_offset_x
                                     + static_cast<int>(
                                         TEXT_OFFSET.x
-                                        * static_cast<float>(
-                                            font_base.m_size));
+                                        * base_font_resource->m_scale_x);
                                 const int py_max =
                                     next_ch_y
                                     + character_info->m_height
                                     + character_info->m_baseline_offset_y
                                     + static_cast<int>(
                                         TEXT_OFFSET.y
-                                        * static_cast<float>(
-                                            font_base.m_size));
+                                        * base_font_resource->m_scale_x);
 
                                 min_px = min_px > px_min ? px_min : min_px;
                                 min_py = min_py > py_min ? py_min : min_py;
@@ -9166,8 +9196,9 @@ namespace jeecs
                             {
                                 const auto& font_in_pool = FONT_POOL.at(
                                     std::make_pair(
-                                        font_base.m_path.cpp_str(),
-                                        static_cast<int>(round(TEXT_SCALE * font_base.m_size))));
+                                        base_font_resource->m_path,
+                                        static_cast<size_t>(
+                                            round(TEXT_SCALE * base_font_resource->m_scale_x))));
 
                                 TEXT_FONT_CURRENT = font_in_pool.get();
                             }
@@ -9248,8 +9279,8 @@ namespace jeecs
                                                     + character_info->m_baseline_offset_x
                                                     + static_cast<int>(
                                                         TEXT_OFFSET.x
-                                                        * static_cast<float>(
-                                                            font_base.m_size));
+                                                        * base_font_resource->m_scale_x);
+
                                                 const auto y =
                                                     correct_y
                                                     + next_ch_y
@@ -9257,8 +9288,7 @@ namespace jeecs
                                                     + character_info->m_baseline_offset_y
                                                     + static_cast<int>(
                                                         TEXT_OFFSET.y
-                                                        * static_cast<float>(
-                                                            font_base.m_size));
+                                                        * base_font_resource->m_scale_x);
 
                                                 auto pdst = new_texture->pix(
                                                     static_cast<size_t>(x), static_cast<size_t>(y));
