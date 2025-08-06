@@ -26,12 +26,13 @@ namespace editor::gui
     public let WOOLANG_LANGUAGE_DEFINITION = func(){
     
         let def = CodeEditorContext::LanguageDefinition::create("woolang");
-        let keywords = [
-            "import", "nil", "true", "false", "while", "for", "if", "else",
-            "let", "mut", "immut", "func", "return", "using", "alias", "namespace",
-            "extern", "public", "private", "protected", "static", "enum", "as",
-            "is", "typeof", "break", "continue", "where", "operator", "union",
-            "match", "struct", "typeid", "do"
+        let keywords =
+            [
+                "import", "nil", "true", "false", "while", "for", "if", "else",
+                "let", "mut", "immut", "func", "return", "using", "alias", "namespace",
+                "extern", "public", "private", "protected", "static", "enum", "as",
+                "is", "typeof", "break", "continue", "where", "operator", "union",
+                "match", "struct", "typeid", "do", "defer",
             ];
         for (let k : keywords)
             def->AddKeyword(k);
