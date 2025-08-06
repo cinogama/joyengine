@@ -256,7 +256,7 @@ namespace editor::gui::animation2d
                     
                     return DataValue::QUAT4((x, y, z, w):quat->euler_angle: (real, real, real));
                 }
-                std::panic(F"Unknown type: {value_type}");
+                return std::panic(F"Unknown type: {value_type}");
             }
             
             // 0. 读取魔数
