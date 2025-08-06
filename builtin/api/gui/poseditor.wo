@@ -17,7 +17,7 @@ namespace jeapi::gui::widget
         adsorption_accuracy: real,
         line_liner: (array<array<(real, real)>>, int)=> array<((real, real), (real, real))>
         )
-        => option<array<array<(real, real)>>>
+    => option<array<array<(real, real)>>>
     {
         static let mut scale = 1.0;
         static let mut offset_x = 0.0, mut offset_y = 0.0;
@@ -112,8 +112,8 @@ namespace jeapi::gui::widget
                     value(context)?
                     {
                         if (context.moving_job_tag == tag
-                                && context.moving_group_index == group_index
-                                && context.moving_point_index == index)
+                            && context.moving_group_index == group_index
+                            && context.moving_point_index == index)
                         {
                             // 正在移动这个点
                             updated = true;
@@ -155,7 +155,7 @@ namespace jeapi::gui::widget
             }
             
             new_position_groups->add(new_position as vec<(real, real)>
-                    ->unsafe::cast:<array<(real, real)>>);
+                ->unsafe::cast:<array<(real, real)>>);
         }
         
         if (is_hovered_on_zone && has_hovered_point == false && moving_point_context->is_value() == false)
@@ -179,7 +179,7 @@ namespace jeapi::gui::widget
         
         return updated
             ? option::value(new_position_groups as vec<array<(real, real)>>
-                    ->unsafe::cast:<array<array<(real, real)>>>)
+                ->unsafe::cast:<array<array<(real, real)>>>)
             | option::none;
     }
 }

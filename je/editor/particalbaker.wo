@@ -6,7 +6,7 @@ import je;
 using _EditorContext = struct{
     m_last_update_time: mut real,
     m_frame_index: mut int,
-    m_enable_bake: mut bool, 
+    m_enable_bake: mut bool,
     
     m_target_launch_count: mut int,
     m_solved_launch_count: mut int,
@@ -50,28 +50,28 @@ func draw(mut frame: int, pos: (real, real), color: (real, real, real, real))
     let fcount = partical_context.m_frame_count;
     while (frame < 0)
         frame += fcount;
-
+        
     let (w, h) = partical_context.m_frame_size;
     let (ipx, ipy) = pos...
         -> \px, py = (px + 1., py + 1.);
         -> u2p...
         -> \px, py = (math::round(px), math::round(py));
         ;
-
+        
     if (ipx >= 0 && ipx < w && ipy >= 0 && ipy < h)
     {
         let pix = baking_cache[frame % fcount]->pix((ipx, ipy));
         let (or, og, ob, oa) = pix->get_color();
         let (r, g, b, a) = color;
         let cr = clamp(r), cg = clamp(g), cb = clamp(b), ca = clamp(a);
-
+        
         // Mix
         pix->set_color((
-            or * (1. - ca) + cr * ca,
-            og * (1. - ca) + cg * ca,
-            ob * (1. - ca) + cb * ca,
-            oa * (1. - ca) + ca * ca,
-        ));
+                or * (1. - ca) + cr * ca,
+                og * (1. - ca) + cg * ca,
+                ob * (1. - ca) + cb * ca,
+                oa * (1. - ca) + ca * ca,
+            ));
     }
 }
 public func deltatime()
@@ -97,7 +97,7 @@ func _launch<VoidT>(frame_place: int, partical_count: int)
             let fid = f + frame_place;
             let poses = position(fid, user_data) as array<(real, real)>;
             let col = color(fid, user_data) as (real, real, real, real);
-
+            
             // Apply!
             for (let pos : poses)
                 draw(fid, pos, col);
@@ -107,18 +107,18 @@ func _launch<VoidT>(frame_place: int, partical_count: int)
 func _start_baking_impl<VoidT>(context: ParticalContext, econtext: _EditorContext)
 {
     partical_context = context;
-
+    
     for (let mut i = 0; i < partical_context.m_frame_count; i += 1)
     {
         using je::graphic;
-
+        
         let new_tex_cache = texture::create(partical_context.m_frame_size...);
         baking_cache->unsafe::cast:<vec<texture>>->add(new_tex_cache);
     }
-        
-
+    
+    
     assert(baking_cache->len == partical_context.m_frame_count);
-
+    
     context.m_frames_caches = baking_cache;
     launcher(partical_context.m_frame_count);
     
@@ -128,11 +128,11 @@ func _start_baking_impl<VoidT>(context: ParticalContext, econtext: _EditorContex
         _launch:<VoidT>(baking_launch_record[i]...);
         econtext.m_target_launch_count = baking_launch_record->len;
         econtext.m_solved_launch_count = i + 1;
-
+        
         if (econtext.m_enable_bake)
             break;
     }
-
+    
     // Make sure ok, force update all texture.
     for (let t : baking_cache)
         t->pix((0, 0))->set_color(t->pix((0, 0))->get_color());

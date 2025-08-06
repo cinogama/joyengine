@@ -47,7 +47,7 @@ namespace editor::gui::edit_forms
                 let target_pos = ct
                     ->> \cti = cti->get_global_pos + camera_rot * (0., 0., 1.): vec3
                         where camera_rot = cti->get_global_rot
-                    ;
+                        ;
                     ->  or((0., 0., 0.): vec3)
                     ;
                 do ep->>\epi = epi.pos->set(target_pos);;
@@ -210,7 +210,7 @@ namespace editor::gui::edit_forms
         
         do typenames
             ->> \n = _get_entity_name_and_scope(n)...
-                    ->  \pname, pscope = scoped_type->get_or_set(pscope, []mut)->add((n, pscope, pname));
+                ->  \pname, pscope = scoped_type->get_or_set(pscope, []mut)->add((n, pscope, pname));
                 ;
             ;
             
@@ -219,8 +219,8 @@ namespace editor::gui::edit_forms
         {
             let tree_attrib = TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow
                 + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick
-                    + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
-                    
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
+                
             PushStyleColor(ImGuiCol::ImGuiCol_Text, (50, 150, 100, 255));
             let show_group = TreeNodeEx(pscope == "" ? "<无>" | pscope, tree_attrib);
             PopStyleColor(1);
@@ -256,9 +256,9 @@ namespace editor::gui::edit_forms
             {
                 value(data)?
                     // 有组件被拖动至此
-                context->add_components(data);
+                    context->add_components(data);
                 none?
-                ;
+                    ;
             }
             EndDragDropTarget();
         }
@@ -280,9 +280,9 @@ namespace editor::gui::edit_forms
             {
                 value(data)?
                     // 有组件被拖动至此
-                context->remove_components(data);
+                    context->remove_components(data);
                 none?
-                ;
+                    ;
             }
             EndDragDropTarget();
         }
@@ -297,7 +297,7 @@ namespace editor::gui::edit_forms
             let menu_button_text = context.edit_entity->is_value ? "应用" | "创建";
             
             if (MenuItemEnabled(menu_button_text, context.name != ""
-                        && !context.has_append_types->empty))
+                    && !context.has_append_types->empty))
             {
                 // TODO: 实例化实体，至少要有一个组件
                 create_entity = true;
@@ -474,8 +474,8 @@ namespace editor::gui::edit_forms
         je::gui::SetNextWindowSizeConstraints((500., 300.), (2000., 1000.));
         let mut open = true;
         match (BeginAttrOpen(entity_context.edit_entity->is_value
-                    ? F"编辑实体##{JobID()}"
-                    | F"创建新实体##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar))
+                ? F"编辑实体##{JobID()}"
+                | F"创建新实体##{JobID()}", WindowsAttribute::ImGuiWindowFlags_MenuBar))
         {
             value(show)?
                 if (show)

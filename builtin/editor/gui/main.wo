@@ -140,7 +140,7 @@ namespace editor::gui
         public func update_api(self: EditorContext)
         {
             match (self.m_editing_entity_euid :=
-                    jeapi::debug::Eeid::editor::editing())
+                jeapi::debug::Eeid::editor::editing())
             {
                 value(eid)?
                     eid->dosth(func(oentity){
@@ -152,9 +152,9 @@ namespace editor::gui
             
             // 在此处运行和更新固定更新逻辑
             self.m_fix_update_jobs->copy(self.m_fix_update_jobs
-                    =>> \job_delegate = job_delegate() ? [job_delegate]mut | []mut;
-                    );
-                    
+                =>> \job_delegate = job_delegate() ? [job_delegate]mut | []mut;
+                );
+                
             // 更新一下对实体的请求
             jeapi::debug::update_safety_entity_operation_requests(
                 self->get_project->get_env->get_universe);
@@ -174,7 +174,7 @@ namespace editor::gui
             return self.m_project;
         }
         public func fixed_launch_editor_form<FT, ArgTs>(self: EditorContext, f: FT, args: ArgTs)
-        where f(args...) is bool || f(args...) is void;
+            where f(args...) is bool || f(args...) is void;
         {
             if (f(args...) is bool)
                 self.m_fix_update_jobs->add(\=f(args...););
@@ -182,7 +182,7 @@ namespace editor::gui
                 self.m_fix_update_jobs->add(func(){f(args...); return true;});
         }
         public func launch_editor_form<FT, ArgTs>(self: EditorContext, f: FT, args: ArgTs)
-        where f(args...) is bool || f(args...) is void;
+            where f(args...) is bool || f(args...) is void;
         {
             je::gui::launch(func(){
                     let result = f(args...);

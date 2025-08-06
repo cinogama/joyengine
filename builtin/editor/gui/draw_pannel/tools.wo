@@ -58,9 +58,9 @@ namespace editor::gui::drawpannel::tools
         
         if (
             (x1 > x2 && y2 > y1 && (y2 - y1) <= (x1 - x2))
-                || (x1 < x2 && y1 > y2 && (x2 - x1) < (y1 - y2))
-                || (x2 <= x1 && y1 >= y2)
-                )
+            || (x1 < x2 && y1 > y2 && (x2 - x1) < (y1 - y2))
+            || (x2 <= x1 && y1 >= y2)
+            )
         {
             let t1 = x1;
             x1 = x2;
@@ -411,7 +411,7 @@ namespace editor::gui::drawpannel::tools
                     for (let mut y = 0; y < range.1; y += 1)
                     {
                         if (math::pow(x: real + 0.5 - rx, 2.) / math::pow(rx, 2.)
-                                + math::pow(y: real + 0.5 - ry, 2.) / math::pow(ry, 2.) <= 1.)
+                            + math::pow(y: real + 0.5 - ry, 2.) / math::pow(ry, 2.) <= 1.)
                         {
                             target->pix((lbpos.0 + x, lbpos.1 + y))->set_color(color);
                         }
@@ -443,12 +443,12 @@ namespace editor::gui::drawpannel::tools
                         where isequ = \a: real, b: real = clamp0255(math::round(a * 255.)) == clamp0255(math::round(b * 255.));
                             , clamp0255 =
                                 \n: int = n < 0
-                                        ? 0
-                                        | (n > 255
-                                                ? 255
-                                                | n)
+                                    ? 0
+                                    | (n > 255
+                                        ? 255
+                                        | n)
                                     ;
-                            ;
+                        ;
                     ;
                 if (! is_same_color(filling_place_color, color))
                 {
@@ -515,7 +515,7 @@ namespace editor::gui::drawpannel::tools
             if (self.m_magic_scripts->is_value)
             {
                 match (self.m_magic_scripts->unwrap
-                        ->apply(target, get_standard_range_by_two_pos(self.m_first_pos, self.m_last_pos)...))
+                    ->apply(target, get_standard_range_by_two_pos(self.m_first_pos, self.m_last_pos)...))
                 {
                     ok(_)?;
                     err(info)?
@@ -533,7 +533,7 @@ namespace editor::gui::drawpannel::tools
                 if (self.m_magic_scripts->is_value)
                 {
                     match (self.m_magic_scripts->unwrap
-                            ->apply(target, get_standard_range_by_two_pos(self.m_first_pos, self.m_last_pos)...))
+                        ->apply(target, get_standard_range_by_two_pos(self.m_first_pos, self.m_last_pos)...))
                     {
                         ok(_)?;
                         err(info)?

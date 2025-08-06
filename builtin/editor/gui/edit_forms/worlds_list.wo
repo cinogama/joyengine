@@ -65,8 +65,8 @@ namespace editor::gui::edit_forms
                                 {
                                     if (MenuItemEnabled("编辑", !is_debugging))
                                         if (! WorldContext::edit(context->get_project(), world)
-                                                ->> \wcontext = launch(\=show_world_creator(context, wcontext););
-                                                ->  is_value)
+                                            ->> \wcontext = launch(\=show_world_creator(context, wcontext););
+                                            ->  is_value)
                                         {
                                             std::panic("TODO, 选中的世界居然不存在嗝");
                                         }

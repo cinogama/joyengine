@@ -45,7 +45,7 @@ namespace jeapi::loader
                 func create(chunk_layer_path: string, layer: int)
                 {
                     match (file::readall(chunk_layer_path)
-                            =>> \dat = dat->dict::deserialize;)
+                        =>> \dat = dat->dict::deserialize;)
                     {
                         value(dat)?
                         {
@@ -54,7 +54,7 @@ namespace jeapi::loader
                             try! wkable = dat->get("walkable": dynamic)
                                 =>> \v = v->trycast:<array<dynamic>>;
                                 ->> \v = v
-                                        ->> \e = e->or(false);
+                                    ->> \e = e->or(false);
                                     ;
                                 ;
                                 
@@ -127,9 +127,9 @@ namespace jeapi::loader
             func create(chunk_path: string)
             {
                 match (file::readall(chunk_path)
-                        =>> \dat = dat->dict::deserialize;
-                        =>> \dat = dat->get("layers": dynamic);
-                        =>> \dat = dat->trycast:<dict<dynamic, dynamic>>;)
+                    =>> \dat = dat->dict::deserialize;
+                    =>> \dat = dat->get("layers": dynamic);
+                    =>> \dat = dat->trycast:<dict<dynamic, dynamic>>;)
                 {
                     value(dat)?
                     {

@@ -203,7 +203,7 @@ are generated using Bison and comply with GPLv3 with special bison exception."@
                 do f: gchandle->close();
             }
             none?
-            ;
+                ;
         }
         
         je::log(F"{je::internal::build_version_info()} (C)Cinogama project. 2022.");

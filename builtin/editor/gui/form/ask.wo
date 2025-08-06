@@ -35,7 +35,7 @@ namespace jeapi::gui::form
                 if (Button("取消") || (IsWindowFocused() && inputmgr::keyspush([ImGuiKey::ImGuiKey_LeftCtrl, ImGuiKey::ImGuiKey_Backspace])))
                     f->close();
             })
-            -> show
-            ;
+        -> show
+        ;
     }
 }

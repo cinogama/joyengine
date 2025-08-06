@@ -57,13 +57,13 @@ namespace editor::gui::edit_forms
             
             for (let sys : all_systems)
                 // 不显示所有编辑器/图形系统
-            if (!sys->name()->begin_with("Editor::"))
-                if (sys->name()->begin_with("Translation::"))
-                    // 默认添加Translation相关系统
-            context.has_active_types->add(sys);
+                if (!sys->name()->begin_with("Editor::"))
+                    if (sys->name()->begin_with("Translation::"))
+                        // 默认添加Translation相关系统
+                        context.has_active_types->add(sys);
             else if (sys->name()->begin_with("Tickline::"))
                 // 默认添加Tickline相关系统
-            context.has_append_types->add(sys);
+                context.has_append_types->add(sys);
             else
                 context.not_append_types->add(sys);
                 
@@ -97,9 +97,9 @@ namespace editor::gui::edit_forms
             
             for (let sys : all_systems)
                 // 不显示所有编辑器/图形系统
-            if (!sys->name()->begin_with("Editor::"))
-                context.not_append_types->add(sys);
-                
+                if (!sys->name()->begin_with("Editor::"))
+                    context.not_append_types->add(sys);
+                    
             // 处理一下已经创建/添加的系统
             for (let actived_sys : world->get_all_systems())
                 if (!actived_sys->name()->begin_with("Editor::"))
@@ -111,7 +111,7 @@ namespace editor::gui::edit_forms
                     for (let actived_sys : runtime_systems)
                         context->append(actived_sys->name());
                 none?
-                ;
+                    ;
             }
             
             context->_sort();
@@ -213,9 +213,9 @@ namespace editor::gui::edit_forms
             {
                 value(data)?
                     // 有组件被拖动至此
-                context->active(data);
+                    context->active(data);
                 none?
-                ;
+                    ;
             }
             EndDragDropTarget();
         }
@@ -236,9 +236,9 @@ namespace editor::gui::edit_forms
             {
                 value(data)?
                     // 有组件被拖动至此
-                context->append(data);
+                    context->append(data);
                 none?
-                ;
+                    ;
             }
             EndDragDropTarget();
         }
@@ -259,9 +259,9 @@ namespace editor::gui::edit_forms
             {
                 value(data)?
                     // 有组件被拖动至此
-                context->unuse(data);
+                    context->unuse(data);
                 none?
-                ;
+                    ;
             }
             EndDragDropTarget();
         }
@@ -357,7 +357,7 @@ namespace editor::gui::edit_forms
                                 // 系统被移除
                                 do active_systems
                                     ->forall(\t: je::typeinfo = world_context.not_append_types->find(t)->is_value
-                                                || world_context.has_append_types->find(t)->is_value;)
+                                            || world_context.has_append_types->find(t)->is_value;)
                                     ->map(\t: je::typeinfo=world->remove_system(t););
                                 world->set_name(world_context.name);
                             }

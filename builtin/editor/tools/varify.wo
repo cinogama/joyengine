@@ -12,7 +12,7 @@ namespace jeapi::varify
     }
     {
         using je::internal;
-
+        
         public func current()
         {
             return EngineVersionInfo{
@@ -34,7 +34,7 @@ namespace jeapi::varify
                         ;
                     ;
                 ;
-
+                
         }
         public func serialize(self: EngineVersionInfo)
         {

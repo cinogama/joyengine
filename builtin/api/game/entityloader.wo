@@ -16,8 +16,8 @@ namespace jeapi::loader
                 =>> \dat = dat->dict::deserialize;
                 =>> \dat = dat: dynamic->trycast:<serialize::EntityData::EntityDataRawType>;
                 =>> \dat =
-                        jeapi::serialize::prefab::instantiate(
-                            w, dat: serialize::EntityData, false)
+                    jeapi::serialize::prefab::instantiate(
+                        w, dat: serialize::EntityData, false)
                     ;
                 ->> \e = entityloader
                     {

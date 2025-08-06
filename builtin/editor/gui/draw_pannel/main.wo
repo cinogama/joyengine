@@ -110,7 +110,7 @@ namespace editor::gui::drawpannel
             self.m_current += 1;
             if (self.m_current < self.m_history->len)
                 // 新添加快照将覆盖后续所有
-            assert(self.m_history->shrink(self.m_current)); // 必须成功
+                assert(self.m_history->shrink(self.m_current)); // 必须成功
             self.m_history->add(snapshot);
         }
         func undo(self: HistoryManager)
@@ -193,7 +193,7 @@ namespace editor::gui::drawpannel
             ("圆框", \=new! IDrawtool(new! tools::Circle());),
             ("圆", \=new! IDrawtool(new! tools::FilledCircle());),
             ("填充", \=new! IDrawtool((): tools::Fill);),
-            // ("划区", \=new! IDrawtool(new! tools::MagicRange());),
+        // ("划区", \=new! IDrawtool(new! tools::MagicRange());),
         ]mut;
         
         for (let name : get_all_scripts_name()->std::sort(\l, r = l < r;))
@@ -289,8 +289,8 @@ namespace editor::gui::drawpannel
                                                                                 for (let mut ix = 0; ix < math::min(image_new_sz[0], image_old_sz[0]); ix += 1)
                                                                                     for (let mut iy = 0; iy < math::min(image_new_sz[1], image_old_sz[1]); iy += 1)
                                                                                         new_texture->pix((ix, image_new_sz[1] - iy - 1))
-                                                                                    ->set_color((immut texture)->pix((ix, image_old_sz[0] - iy - 1))->get_color());
-                                                                                    
+                                                                                            ->set_color((immut texture)->pix((ix, image_old_sz[0] - iy - 1))->get_color());
+                                                                                            
                                                                                 images[index][1] = new_texture;
                                                                                 do (immut texture)->path->>\path = new_texture->bind_path(path);;
                                                                                 
@@ -482,7 +482,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                                 if (IsItemActive() || IsItemHovered())
                                 {
                                     if (IsKeyDown(ImGuiKey::ImGuiKey_LeftCtrl)
-                                            && IsMouseDragging(ImGuiMouseButton::ImGuiMouseButton_Left))
+                                        && IsMouseDragging(ImGuiMouseButton::ImGuiMouseButton_Left))
                                     {
                                         let (mousedelta_x, mousedelta_y) = GetMouseDeltaPos();
                                         draw_context.offset_x += mousedelta_x;
@@ -557,8 +557,8 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                                 let mepixy = tex_height - 1 - mpixy: int;
                                 
                                 if (je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Middle)
-                                        && mepixx >= 0 && mepixx < tex_width
-                                        && mepixy >= 0 && mepixy < tex_height)
+                                    && mepixx >= 0 && mepixx < tex_width
+                                    && mepixy >= 0 && mepixy < tex_height)
                                     draw_context.maincolor = (immut texture)->pix((mepixx, mepixy))->get_color;
                                     
                                 // 对接绘制工具，针对鼠标刚刚点下、按住、和松开分别回调
@@ -576,7 +576,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                                             first_click = false;
                                     }
                                     if (je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Left)
-                                            || je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Right))
+                                        || je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Right))
                                     {
                                         draw_context.mousedown = true;
                                         if (first_click)
@@ -629,14 +629,14 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                             let genuidpath = \ = projpath/"resource"/"texture"/F"{je::uid()}.png";;
                             let mut name = genuidpath();
                             for (; fsys::exist(name); name = genuidpath())
-                            ;
+                                ;
                             return name;
                         }
                     )
                     ->  \path = (fsys::extension(path)->lower == ".png"
-                                ? path
-                                | fsys::parent(path)/F"{fsys::purename(path)}.png")->to_string
-                    ;
+                            ? path
+                            | fsys::parent(path)/F"{fsys::purename(path)}.png")->to_string
+                        ;
                     ;
                     
                 saving_image_action->add(func()
@@ -652,7 +652,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                                                     //       照理来说应该区分出类型再分别处理
                                                     context->get_project->make_path_normalize(fsys::normalize(saving_path))));
                                         )
-                                ;
+                                    ;
                                 ;
                         }
                     });
@@ -753,22 +753,22 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
         // 这个大大的傻逼代码作用是获取当前实体使用的所有纹理通道
         let used_texture_id_pass = e->get_shaders()
             =>> \shader = shader->get_uniforms()
-                    ->  unmapping
-                    =>> \nv = nv...
-                            ->  func(name, uniformval)
+                ->  unmapping
+                =>> \nv = nv...
+                    ->  func(name, uniformval)
+                    {
+                        if (!name->begin_with("JOYENGINE_"))
+                        {
+                            match (uniformval)
                             {
-                                if (!name->begin_with("JOYENGINE_"))
-                                {
-                                    match (uniformval)
-                                    {
-                                        texture(id)?
-                                            return [id];
-                                        _?;
-                                    }
-                                }
-                                return [];
+                                texture(id)?
+                                    return [id];
+                                _?;
                             }
-                        ;
+                        }
+                        return [];
+                    }
+                    ;
                 ;
             ->> \id = (id, nil);
             ->  mapping
@@ -806,7 +806,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
         let id_tex_list = used_texture_id_pass
             ->> \id = (id, mut tex, mut tex->path)
                 where tex = textures->get(id)-> or_do(create_and_copy_0pass_texture)
-            ;
+                ;
             ;
         let tools = create_all_draw_tools();
         let drawcontext = DrawContextT{
@@ -828,7 +828,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                 ->> \id_text = (id_text[1], (id_text[0], new! HistoryManager(id_text[1])));
                 ->  mapping
                 ->  to_map
-                    ,
+                ,
             openform = mut true,
             
             block_size = (mut 16, mut 16),

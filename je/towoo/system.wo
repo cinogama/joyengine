@@ -92,14 +92,14 @@ namespace je::towoo::system
     let regitered_works = []mut: vec<ToWooSystemFuncJob>;
     
     public func register_job_function<FT>(jobfunc: FT)
-    where std::declval:<nothing>() is typeof(jobfunc([]...));
+        where std::declval:<nothing>() is typeof(jobfunc([]...));
     {
         let j = ToWooSystemFuncJob::create(jobfunc: dynamic, false);
         regitered_works->add(j);
         return j;
     }
     public func register_work_function<FT>(jobfunc: FT)
-    where std::declval:<nothing>() is typeof(jobfunc([]...));
+        where std::declval:<nothing>() is typeof(jobfunc([]...));
     {
         let j = ToWooSystemFuncJob::create(jobfunc: dynamic, true);
         regitered_works->add(j);

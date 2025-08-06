@@ -63,11 +63,11 @@ namespace je
         
     extern("libjoyecs", "wojeapi_startup_coroutine")
         public func start_coroutine<FT, ArgTs>(f: FT, args: ArgTs)=> void
-        where f(args...) is void;
-        
-    using singleton<T> = struct{
-        instantiate: ()=>_singleton_instantiate<T>,
-    }
+            where f(args...) is void;
+            
+        using singleton<T> = struct{
+            instantiate: ()=>_singleton_instantiate<T>,
+        }
     {
         using _singleton_instantiate<T> = gchandle
         {
@@ -567,7 +567,7 @@ namespace je
                                                                     effect_kind::UNKOWN;
                                                                     
             public func create<EffectT>()=> effect<EffectT>
-            where kind:<EffectT> != effect_kind::UNKOWN;
+                where kind:<EffectT> != effect_kind::UNKOWN;
             {
                 extern("libjoyecs", "wojeapi_audio_effect_create")
                     func _create<EffectT>(kind: effect_kind)=> effect<EffectT>;
@@ -886,14 +886,14 @@ namespace je
                 func _set_uniform_float4(shad: shader, name: string, x: real, y: real, z: real, w: real)=> void;
                 
             public func set_uniform<T>(self: shader, name: string, val: T)
-            where val is int
-                    || val is (int, int)
-                    || val is (int, int, int)
-                    || val is (int, int, int, int)
-                    || val is real
-                    || val is (real, real)
-                    || val is (real, real, real)
-                    || val is (real, real, real, real);
+                where val is int
+                || val is (int, int)
+                || val is (int, int, int)
+                || val is (int, int, int, int)
+                || val is real
+                || val is (real, real)
+                || val is (real, real, real)
+                || val is (real, real, real, real);
             {
                 if (val is int)
                     _set_uniform_int(self, name, val);

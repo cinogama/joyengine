@@ -70,13 +70,13 @@ namespace editor
             
             return libname
                 + (std::platform::bitwidth == 32 ? "32" | "")
-                    + (isdebug ? "_debug" | "")
-                        + (std::platform::os == std::platform::os_type::WIN32
-                                ? ".lib"
-                                | std::platform::os == std::platform::os_type::MACOS
-                                    ? ".a"
-                                | ".so")
-                        ;
+                + (isdebug ? "_debug" | "")
+                + (std::platform::os == std::platform::os_type::WIN32
+                    ? ".lib"
+                    | std::platform::os == std::platform::os_type::MACOS
+                    ? ".a"
+                    | ".so")
+                ;
         }
         func _lib_append_suffix(libname: string, rttype: std::platform::runtime_type)
         {
@@ -84,13 +84,13 @@ namespace editor
             
             return libname
                 + (std::platform::bitwidth == 32 ? "32" | "")
-                    + (isdebug ? "_debug" | "")
-                        + (std::platform::os == std::platform::os_type::WIN32
-                                ? ".dll"
-                                | std::platform::os == std::platform::os_type::MACOS
-                                    ? ".dylib"
-                                | ".so")
-                        ;
+                + (isdebug ? "_debug" | "")
+                + (std::platform::os == std::platform::os_type::WIN32
+                    ? ".dll"
+                    | std::platform::os == std::platform::os_type::MACOS
+                    ? ".dylib"
+                    | ".so")
+                ;
         }
         public func get_dylib_files_by_config(rttype: std::platform::runtime_type)
         {
@@ -122,11 +122,11 @@ namespace editor
             for (let p : walk(ENGINE_CORE_LIBRARYS_LOCATE_PATH)->iterator::iter_result)
             {
                 if (isfile(p) &&
-                        (extension(p)->lower == ".lib"
-                                || extension(p)->lower == ".so"
-                                || extension(p)->lower == ".dylib")
-                        && (filename(p)->lower->begin_with("libjoyecs")
-                                ||filename(p)->lower->begin_with("libwoo")))
+                    (extension(p)->lower == ".lib"
+                        || extension(p)->lower == ".so"
+                        || extension(p)->lower == ".dylib")
+                    && (filename(p)->lower->begin_with("libjoyecs")
+                        ||filename(p)->lower->begin_with("libwoo")))
                 {
                     try! _ = copy(p, cxx_proj_path/".engine"/"library"/filename(p))
                         -> map_err(\errno = F"复制文件：`{p}` 失败({errno})";)
@@ -308,30 +308,30 @@ endif()
             
             return
                 subpath(runtime_dll_path)
-                ->  okay
-                =>> \child_path = child_path
+                    ->  okay
+                    =>> \child_path = child_path
                         ->  forall(\path = isdir(path);)
                         ->> \path = filename(path): int;
                         ->  reduce(\l, r = l > r ? l | r;);
-                ;
+                    ;
         }
         func get_current_runtime_path(runtime_dll_path: fsys::path_t)
         {
             using fsys;
             return
                 get_current_runtime_id(runtime_dll_path)
-                ->map(\id = runtime_dll_path / id as int: string;)
-                ;
+                    ->map(\id = runtime_dll_path / id as int: string;)
+                    ;
         }
         func get_newest_runtime_path(runtime_dll_path: fsys::path_t)
         {
             using fsys;
             let newest_path =
                 get_current_runtime_id(runtime_dll_path)
-                -> map(\id: int = id + 1;)
-                -> or(0)
-                -> \id: int = runtime_dll_path / id: string;
-                ;
+                    -> map(\id: int = id + 1;)
+                    -> or(0)
+                    -> \id: int = runtime_dll_path / id: string;
+                    ;
             assert(!exist(newest_path));
             do mkdir(newest_path)->unwrap;
             assert(exist(newest_path));
@@ -372,7 +372,7 @@ endif()
                 value(p)?
                     assert(move(p, newest_runtime_path/filename(p))->is_ok);
                 none?
-                ; // 没有pdb就算了，可能是release
+                    ; // 没有pdb就算了，可能是release
             }
         }
         
@@ -403,10 +403,10 @@ endif()
                 {
                     let engine_version_is_same = vdat->get("engine_version")
                         =>> \v = v: string
-                                ->  dict::deserialize
-                                ->> \dat = dat
-                                        ->> \k, v = (k: string, v: string);
-                                    ;
+                            ->  dict::deserialize
+                            ->> \dat = dat
+                                ->> \k, v = (k: string, v: string);
+                                ;
                             ;
                         =>> \v = EngineVersionInfo::restore(v);
                         ->> \v = v->isequal(EngineVersionInfo::current());
@@ -418,8 +418,8 @@ endif()
                         
                     let sources = vdat->get("sources")
                         =>> \srcs = srcs is dict<dynamic, dynamic>
-                                ? option::value(srcs as dict<dynamic, dynamic>->>\k, v = (k: string, v: int);)
-                                | option::none
+                            ? option::value(srcs as dict<dynamic, dynamic>->>\k, v = (k: string, v: int);)
+                            | option::none
                             ;
                         ;
                     match (sources=>>\srcs = fsys::allsubpath(self.path)->okay->>\subpaths = (subpaths, srcs);;)
@@ -433,9 +433,9 @@ endif()
                                 {
                                     let file_extension = fsys::extension(path)->lower;
                                     if (file_extension == ".cpp"
-                                            || file_extension == ".hpp"
-                                            || file_extension == ".c"
-                                            || file_extension == ".h")
+                                        || file_extension == ".hpp"
+                                        || file_extension == ".c"
+                                        || file_extension == ".h")
                                     {
                                         let wpath = self.project->make_path_normalize(path);
                                         let crc64 = je::internal::crc64file(path->to_string());
@@ -465,9 +465,9 @@ endif()
                 {
                     let file_extension = fsys::extension(path)->lower;
                     if (file_extension == ".cpp"
-                            || file_extension == ".hpp"
-                            || file_extension == ".c"
-                            || file_extension == ".h")
+                        || file_extension == ".hpp"
+                        || file_extension == ".c"
+                        || file_extension == ".h")
                     {
                         let wpath = self.project->make_path_normalize(path);
                         let crc64 = je::internal::crc64file(path->to_string());
@@ -504,10 +504,10 @@ endif()
                         // 获取最新的模块版本，将其保留并重命名为0，删除其他全部版本
                         do get_current_runtime_id(created_module->get_runtime_path(rttype))
                             ->map(\newest_id: int =
-                                        subpath(created_module->get_runtime_path(rttype))
+                                    subpath(created_module->get_runtime_path(rttype))
                                         ->map(\child_paths = child_paths
-                                                    ->forall(\path = !isdir(path) || newest_id != filename(path): int;)
-                                                    ->map(\path = remove(path)->unwrap;)
+                                                ->forall(\path = !isdir(path) || newest_id != filename(path): int;)
+                                                ->map(\path = remove(path)->unwrap;)
                                                 ;)
                                     ;)
                             ;
@@ -523,11 +523,11 @@ endif()
                     
                     let founding_newest_result =
                         get_current_runtime_path(created_module->get_runtime_path(rttype))
-                        ->> \dllpath =
+                            ->> \dllpath =
                                 filename(dllpath) == "0"
                                     ? result::ok(dllpath)
-                                | move(dllpath, created_module->get_runtime_path(rttype)/"0");
-                        ->  or(result::err(0: fsys::errno_t));
+                                    | move(dllpath, created_module->get_runtime_path(rttype)/"0");
+                            ->  or(result::err(0: fsys::errno_t));
                     match (founding_newest_result)
                     {
                         err(no)?
@@ -548,7 +548,7 @@ endif()
                         else
                             throw! F"清理模块失败({founding_newest_result->error->unwrap})";
                         _?
-                        ;
+                            ;
                     }
                     
                     if (!created_module->load_library_of_platform(rttype)->is_value)
@@ -682,18 +682,18 @@ endif()
             
             let components = subpath(self.path/"components")
                 ->> \childs = childs
-                        ->  forall(\f = extension(f)->lower == ".hpp";)
-                        ->> \f = fname->sub_len(0, fname->len - 4)
-                            where fname = filename(f)
+                    ->  forall(\f = extension(f)->lower == ".hpp";)
+                    ->> \f = fname->sub_len(0, fname->len - 4)
+                        where fname = filename(f)
                         ;
                     ;
                 ->or([]);
                 
             let systems = subpath(self.path/"systems")
                 ->> \childs = childs
-                        ->  forall(\f = extension(f)->lower == ".hpp";)
-                        ->> \f = fname->sub_len(0, fname->len - 4)
-                            where fname = filename(f)
+                    ->  forall(\f = extension(f)->lower == ".hpp";)
+                    ->> \f = fname->sub_len(0, fname->len - 4)
+                        where fname = filename(f)
                         ;
                     ;
                 ->or([]);
@@ -724,33 +724,33 @@ $$REGISTER_SYSTEM_TYPES$$
 "@;
                 let import_component_headers =
                 components
-                ->map(\f: string = F"#include \"{f}.hpp\"";)
-                ->reduce(\l: string, r: string = l + "\n" + r;)
-                ->or("");
+                    ->map(\f: string = F"#include \"{f}.hpp\"";)
+                    ->reduce(\l: string, r: string = l + "\n" + r;)
+                    ->or("");
             let import_system_headers =
                 systems
-                ->map(\f: string = F"#include \"{f}.hpp\"";)
-                ->reduce(\l: string, r: string = l + "\n" + r;)
-                ->or("");
-                
+                    ->map(\f: string = F"#include \"{f}.hpp\"";)
+                    ->reduce(\l: string, r: string = l + "\n" + r;)
+                    ->or("");
+                    
             let register_component_types =
                 components
-                ->map(\f: string = F"        typing::type_info::register_type<{self.name}::{f}>(guard, \"{self.name}::{f}\");";)
-                ->reduce(\l: string, r: string = l + "\n" + r;)
-                ->or("");
+                    ->map(\f: string = F"        typing::type_info::register_type<{self.name}::{f}>(guard, \"{self.name}::{f}\");";)
+                    ->reduce(\l: string, r: string = l + "\n" + r;)
+                    ->or("");
             let register_system_types =
                 systems
-                ->map(\f: string = F"        typing::type_info::register_type<{self.name}::{f}>(guard, \"{self.name}::{f}\");";)
-                ->reduce(\l: string, r: string = l + "\n" + r;)
-                ->or("");
-                
+                    ->map(\f: string = F"        typing::type_info::register_type<{self.name}::{f}>(guard, \"{self.name}::{f}\");";)
+                    ->reduce(\l: string, r: string = l + "\n" + r;)
+                    ->or("");
+                    
             let loader_src =
                 loader_header
-                ->replace("$$INCLUDE_COMPONENT_HEADERS$$", import_component_headers)
-                ->replace("$$INCLUDE_SYSTEM_HEADERS$$", import_system_headers)
-                ->replace("$$REGISTER_COMPONENT_TYPES$$", register_component_types)
-                ->replace("$$REGISTER_SYSTEM_TYPES$$", register_system_types);
-                
+                    ->replace("$$INCLUDE_COMPONENT_HEADERS$$", import_component_headers)
+                    ->replace("$$INCLUDE_SYSTEM_HEADERS$$", import_system_headers)
+                    ->replace("$$REGISTER_COMPONENT_TYPES$$", register_component_types)
+                    ->replace("$$REGISTER_SYSTEM_TYPES$$", register_system_types);
+                    
             if (!writeall(self.path/"loader.hpp", loader_src))
             {
                 do context->>\context = context.display_msg = F"无法写入'{self.path}/loader.hpp'";;
@@ -796,8 +796,8 @@ $$REGISTER_SYSTEM_TYPES$$
             
             do context
                 ->> \context =
-                        context.massive_msg = option::value(
-                            compile_result->or("没有找到编译日志，查看控制台获取更多信息"))
+                    context.massive_msg = option::value(
+                        compile_result->or("没有找到编译日志，查看控制台获取更多信息"))
                     ;
                 ;
                 

@@ -142,8 +142,8 @@ namespace editor::gui::edit_forms
                 return Action::SKIP;  // 跳过C++工程文件
                 
             if (fsys::extension(originpath)->lower == ".dll" ||
-                    fsys::extension(originpath)->lower == ".so" ||
-                        fsys::extension(originpath)->lower == ".dylib")
+                fsys::extension(originpath)->lower == ".so" ||
+                    fsys::extension(originpath)->lower == ".dylib")
                 return Action::ORIGIN; // 原样复制到打包路径
                 
             return Action::PACK;
@@ -178,7 +178,7 @@ namespace editor::gui::edit_forms
                 {
                     // 将引擎内置的着色器缓存打包进镜像
                     if (path->fsys::isfile()
-                            && path->to_string->lower->end_with(".shader.je4cache"))
+                        && path->to_string->lower->end_with(".shader.je4cache"))
                     {
                         let relpath = fsys::relative(path, exe_located_path)->unwrap();
                         assert(fimg->pack(path->to_string, "!/" + relpath));
@@ -206,8 +206,8 @@ namespace editor::gui::edit_forms
                         
                         return [(subpath, (packpath, action))];
                     }
-                    ->  mapping;
-                    
+                ->  mapping;
+                
                 // 0. 重新编译所有C++项目，只编译到输出目录中
                 // P.S. 这个序号真牛逼，人家都是1 2 3，这里是1 2 0 哈哈哈
                 do thread::create(func()
@@ -236,8 +236,8 @@ namespace editor::gui::edit_forms
                                 ->  unmapping
                                 ->> \kv = (kv[1][0], bind_wrap_path(kv[1][0]->get_build_dll_path(
                                                 std::platform::runtime_type::RELEASE)->unwrap)); // 必须有
-                                ;
-                                
+                                    ;
+                                    
                             let copy_origin = func(opath: fsys::path_t, ppath: string)
                             {
                                 assert(ppath[0] == '@');
@@ -299,16 +299,16 @@ namespace editor::gui::edit_forms
                                         "--set-icon",
                                         (fsys::workpath() / "icon.ico")->to_string,
                                     ])
-                                    ->> \proc = proc->wait;
-                                    ;
+                                ->> \proc = proc->wait;
+                                ;
                             }
                             
                             do CxxProject::get_dylib_files_by_config(std::platform::runtime_type::RELEASE)
                                 ->> \libpath =
-                                        do fsys::copy(
-                                            fsys::normalize(
-                                                F"{std::host_path()}/{libpath}"),
-                                            export_path / libpath)->unwrap
+                                    do fsys::copy(
+                                        fsys::normalize(
+                                            F"{std::host_path()}/{libpath}"),
+                                        export_path / libpath)->unwrap
                                     ;
                                 ;
                             do fsys::copy(
@@ -412,12 +412,12 @@ namespace editor::gui::edit_forms
                                 let runtime_loading_code =
                                     "LOADED_MODULE_HANDLES->add("
                                         + "je::load_module($MODULENAME$, std::host_path() + $MODULERPATH$)->unwrap"
-                                            + ");";
-                                            
+                                        + ");";
+                                        
                                 dylib_loader +=
                                     runtime_loading_code
-                                    ->replace("$MODULENAME$", minstance.name->enstring)
-                                    ->replace("$MODULERPATH$", ppath->sub(1)->enstring)
+                                        ->replace("$MODULENAME$", minstance.name->enstring)
+                                        ->replace("$MODULERPATH$", ppath->sub(1)->enstring)
                                         + "\n";
                             }
                             
@@ -426,7 +426,7 @@ namespace editor::gui::edit_forms
                                 ->  forall(\_, paths = fsys::filename(paths[0])->lower->end_with(".jecomponent.wo");)
                                 ->  unmapping
                                 ->> \(name, (_, path)) = F"LOADED_TOWOO_COMPONENT_TYPES->add(je::towoo::update_component({
-                                        name->enstring}, {path->enstring})->unwrap);\n"
+                                    name->enstring}, {path->enstring})->unwrap);\n"
                                     ;
                                 ->  reduce(\l, r = l + r;)
                                 ->  or("");
@@ -434,7 +434,7 @@ namespace editor::gui::edit_forms
                                 ->  forall(\_, paths = fsys::filename(paths[0])->lower->end_with(".jesystem.wo");)
                                 ->  unmapping
                                 ->> \(name, (_, path)) = F"LOADED_TOWOO_SYSTEM_TYPES->add(je::towoo::update_system({
-                                        name->enstring}, {path->enstring})->unwrap);\n"
+                                    name->enstring}, {path->enstring})->unwrap);\n"
                                     ;
                                 ->  reduce(\l, r = l + r;)
                                 ->  or("");
@@ -471,9 +471,9 @@ namespace editor::gui::edit_forms
                                 
                             let (start_up_script_binary, start_up_script_binary_sz) =
                                 new! vm("@/builtin/main.wo", final_boot_script: buffer)
-                                ->unwrap
-                                ->save_binary(saving_woolang_pdi);
-                                
+                                    ->unwrap
+                                    ->save_binary(saving_woolang_pdi);
+                                    
                             assert(fimg->pack_buffer(start_up_script_binary->ptr, start_up_script_binary_sz, "@/builtin/main.wo"));
                             
                             // 2. 结束，保存镜像
@@ -549,7 +549,7 @@ namespace editor::gui::edit_forms
                         do BeginChild("SUBFORM.2");
                         do selecting_all_worlds_file
                             ->> \path_and_checked = do CheckBox(path_and_checked.0, immut path_and_checked.1)
-                                    ->> \opt = path_and_checked[1] = opt;
+                                ->> \opt = path_and_checked[1] = opt;
                                 ;
                             ;
                         EndChild();

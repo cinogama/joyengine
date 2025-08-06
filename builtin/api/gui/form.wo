@@ -42,8 +42,8 @@ namespace jeapi::gui
                 _attribute = mut
                     WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
                         + WindowsAttribute::ImGuiWindowFlags_NoDocking
-                            + WindowsAttribute::ImGuiWindowFlags_NoCollapse,
-            };
+                        + WindowsAttribute::ImGuiWindowFlags_NoCollapse,
+                };
         }
         
         public func show(self: form)

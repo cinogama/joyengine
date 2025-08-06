@@ -81,9 +81,9 @@ namespace editor::gui::edit_forms
             match (BeginAttrOpen("调试器视口",
                     WindowsAttribute::ImGuiWindowFlags_MenuBar
                         + WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus
-                            + (windows_moveable
-                                    ? WindowsAttribute::ImGuiWindowFlags_None
-                                    | WindowsAttribute::ImGuiWindowFlags_NoMove)))
+                        + (windows_moveable
+                            ? WindowsAttribute::ImGuiWindowFlags_None
+                            | WindowsAttribute::ImGuiWindowFlags_NoMove)))
             {
                 value(show)?
                     if (show)
@@ -101,7 +101,7 @@ namespace editor::gui::edit_forms
                             if (! proj->is_debugging)
                             {
                                 if (MenuItemShortcut("调试运行", "Ctrl + P")
-                                        || (IsWindowFocused() && jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_LeftCtrl, ImGuiKey::ImGuiKey_P])))
+                                    || (IsWindowFocused() && jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_LeftCtrl, ImGuiKey::ImGuiKey_P])))
                                 {
                                     do context->start_debug()->error->>\e = jeapi::gui::form::errmsg("失败", F"开始调试失败, {e}");;
                                     je::loginfo("=======================调试开始=======================");
@@ -111,7 +111,7 @@ namespace editor::gui::edit_forms
                                                 if (BeginAttr("调试工具",
                                                         WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
                                                             + WindowsAttribute::ImGuiWindowFlags_NoDocking
-                                                                + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
+                                                            + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
                                                 {
                                                     do DragFloat("时间缩放", proj->get_env->get_universe->get_timescale, 0.1, 0.0, 16.0)
                                                         ->> \val = proj->get_env->get_universe->set_timescale(val);
@@ -409,7 +409,7 @@ namespace editor::gui::edit_forms
                                                 mouse_hovered_flag = false;
                                                 
                                                 if (std::time() - right_key_down_time < 0.2
-                                                        && (mouse_click_x - mx, mouse_click_y - my): vec2->length < 5.)
+                                                    && (mouse_click_x - mx, mouse_click_y - my): vec2->length < 5.)
                                                     OpenPopup("RightClickContextMenu");
                                             }
                                         }
@@ -421,7 +421,7 @@ namespace editor::gui::edit_forms
                                         
                                         let (frame_tex_width, frame_tex_height) = frametex->size;
                                         if (frame_tex_width != available_width: int
-                                                || frame_tex_height != available_height: int)
+                                            || frame_tex_height != available_height: int)
                                             need_update_frame = true;
                                     }
                                     none?
@@ -449,19 +449,19 @@ namespace editor::gui::edit_forms
                                         if (fsys::extension(filepath)->lower == ".je4entity")
                                         {
                                             if (debug_world
-                                                    =>> func(w)
-                                                    {
-                                                        let e = jeapi::serialize::entity::instantiate(
-                                                            w,
-                                                            {
-                                                                ["prefab"] = proj->make_path_normalize(filepath): dynamic
-                                                                }: jeapi::serialize::EntityData,
-                                                            true);
-                                                            
-                                                        do e->>\e = set_new_created_entity_pos(w, e);;
-                                                        return e;
-                                                    }
-                                                    ->  is_value == false)
+                                                =>> func(w)
+                                                {
+                                                    let e = jeapi::serialize::entity::instantiate(
+                                                        w,
+                                                        {
+                                                            ["prefab"] = proj->make_path_normalize(filepath): dynamic
+                                                            }: jeapi::serialize::EntityData,
+                                                        true);
+                                                        
+                                                    do e->>\e = set_new_created_entity_pos(w, e);;
+                                                    return e;
+                                                }
+                                                ->  is_value == false)
                                             {
                                                 jeapi::gui::form::errmsg("失败", "加载实体失败");
                                             }
@@ -482,7 +482,7 @@ namespace editor::gui::edit_forms
                                                             match (BeginAttrOpen("从纹理创建实体",
                                                                     WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
                                                                         + WindowsAttribute::ImGuiWindowFlags_NoDocking
-                                                                            + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
+                                                                        + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
                                                             {
                                                                 value(show)?
                                                                     if (show)

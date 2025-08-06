@@ -82,9 +82,11 @@ namespace je
             {
                 return self->get_components_types()
                     // If current entity died, we can still get types from chunk, but
-                // failed to get component instance. Check here.
-                    =>> \tid = comp->is_value ? [(tid, comp->unwrap)] | []
-                        where comp = self->get_component(tid);
+                    // failed to get component instance. Check here.
+                    =>> \tid =
+                        comp->is_value ? [(tid, comp->unwrap)] | []
+                            where comp = self->get_component(tid)
+                        ;
                     ->  mapping;
             }
             
@@ -139,14 +141,15 @@ namespace je
                     func _set_uniform_float4(shadhandle: bad_shader_handle_t, name: string, x: real, y: real, z: real, w: real)=> void;
                     
                 public func store_uniform_dat_for_bad_shader_update<T>(shadhandle: bad_shader_handle_t, name: string, val: T)
-                where val is int
-                        || val is (int, int)
-                        || val is (int, int, int)
-                        || val is (int, int, int, int)
-                        || val is real
-                        || val is (real, real)
-                        || val is (real, real, real)
-                        || val is (real, real, real, real);
+                    where
+                    val is int
+                    || val is (int, int)
+                    || val is (int, int, int)
+                    || val is (int, int, int, int)
+                    || val is real
+                    || val is (real, real)
+                    || val is (real, real, real)
+                    || val is (real, real, real, real);
                 {
                     if (val is int)
                         _set_uniform_int(shadhandle, name, val);

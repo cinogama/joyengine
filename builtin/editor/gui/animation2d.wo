@@ -149,12 +149,12 @@ namespace editor::gui::animation2d
     }
     
     func lerp(a, b, deg: real)
-    where std::type_traits::is_same :<typeof(a),typeof(b)>
+        where std::type_traits::is_same :<typeof(a),typeof(b)>
         , a is int
-            || a is real
-            || a is (real, real)
-            || a is (real, real, real)
-            || a is (real, real, real, real)
+        || a is real
+        || a is (real, real)
+        || a is (real, real, real)
+        || a is (real, real, real, real)
         ;
     {
         if (a is int)
@@ -343,8 +343,8 @@ namespace editor::gui::animation2d
                 result = result
                     ->appendi64(action_data.m_frames->len)
                     ->appendi64(action_name->byte_len)
-                        + action_name as string : buffer;
-                        
+                    + action_name as string : buffer;
+                    
                 for (let frame: action_data.m_frames)
                 {
                     // 3. 保存一帧的持续时间，以及组件数据和一致变量数据
@@ -698,15 +698,15 @@ namespace editor::gui::animation2d
                                                                         selecting_member_id->set(option::none);
                                                                     }
                                                                     none?
-                                                                    ;
+                                                                        ;
                                                                 }
                                                                 
                                                                 let members =
                                                                     selecting_id->get
-                                                                    =>> \idx = all_components->get(idx);
-                                                                    ->> \t = t->get_members_info;
-                                                                    ->  or([]);
-                                                                    
+                                                                        =>> \idx = all_components->get(idx);
+                                                                        ->> \t = t->get_members_info;
+                                                                        ->  or([]);
+                                                                        
                                                                 SameLine();
                                                                 
                                                                 do Combo(
@@ -738,11 +738,11 @@ namespace editor::gui::animation2d
                                                                 {
                                                                     value((member_name, member_type))?
                                                                         if (member_type != je::typeinfo::int &&
-                                                                                member_type != je::typeinfo::float &&
-                                                                                    member_type != je::typeinfo::float2 &&
-                                                                                        member_type != je::typeinfo::float3 &&
-                                                                                            member_type != je::typeinfo::float4 &&
-                                                                                                member_type != je::typeinfo::quat)
+                                                                            member_type != je::typeinfo::float &&
+                                                                                member_type != je::typeinfo::float2 &&
+                                                                                    member_type != je::typeinfo::float3 &&
+                                                                                        member_type != je::typeinfo::float4 &&
+                                                                                            member_type != je::typeinfo::quat)
                                                                             TextDisabled(F"不能作为动画控制值，需要为int、float、vec2、vec3、vec4或quat，但是这里是{member_type->name}");
                                                                     else
                                                                     {
@@ -1109,7 +1109,7 @@ namespace editor::gui::animation2d
                     SameLine();
                     do InputFloatFormat("##frame_time", selected_frame->>\f = f.m_time;->or(0.), "%.6f")
                         ->> \nv = selected_frame
-                                ->> \f = f.m_time = nv;
+                            ->> \f = f.m_time = nv;
                             ;
                         ;
                         
@@ -1138,7 +1138,7 @@ namespace editor::gui::animation2d
                                                             fm.m_component_dats->swap(
                                                                 fm.m_component_dats->forall(
                                                                     \dcdata = dcdata.m_component_name != cdata.m_component_name
-                                                                            || dcdata.m_member_name != cdata.m_member_name
+                                                                        || dcdata.m_member_name != cdata.m_member_name
                                                                         ;)
                                                                 );
                                                     }
@@ -1180,7 +1180,7 @@ namespace editor::gui::animation2d
                                                             fm.m_uniform_dats->swap(
                                                                 fm.m_uniform_dats->forall(
                                                                     \dudata = dudata.m_uniform_name != udata.m_uniform_name
-                                                                    ;)
+                                                                        ;)
                                                                 );
                                                     else
                                                         do f.m_uniform_dats->remove(uindex);

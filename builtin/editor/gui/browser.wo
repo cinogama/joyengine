@@ -319,15 +319,15 @@ namespace editor::gui
             // 当前目录的子项目尚未获取，在这里获取一下塞进去
             let sublist =
                 fsys::subpath(self.path)
-                ->unwrap
-                ->map(\current_subpath = PathInfo{
-                            path = current_subpath,
-                            name = fsys::filename(current_subpath),
-                            externname = fsys::extension(current_subpath)->lower,
-                            type = new! std::mutable(fsys::isdir(current_subpath)?
+                    ->unwrap
+                    ->map(\current_subpath = PathInfo{
+                                path = current_subpath,
+                                name = fsys::filename(current_subpath),
+                                externname = fsys::extension(current_subpath)->lower,
+                                type = new! std::mutable(fsys::isdir(current_subpath)?
                                     PathType::dir(option::none) | PathType::file),
-                        };);
-                        
+                            };);
+                            
             self.type->set(PathType::dir(option::value(sublist)));
             return sublist;
         }
@@ -336,7 +336,7 @@ namespace editor::gui
             static let registed_open_method = {
                 [".je4world"] =
                     \p: PathInfo, context: EditorContext =
-                            context->get_project->load_world(p.path)
+                        context->get_project->load_world(p.path)
                             =>> \w =context->get_project->reset_editing_world(w);
                             ->  error
                         ;,
@@ -423,8 +423,8 @@ namespace editor::gui
             current_work_path = path->to_string();
         else
             // 刷新！
-        jeapi::gui::form::errmsg("无效的路径", F"无效的路径：{path->to_string()}");
-        
+            jeapi::gui::form::errmsg("无效的路径", F"无效的路径：{path->to_string()}");
+            
     }
     
     enum Action
@@ -447,25 +447,25 @@ namespace editor::gui
     {
         let cur_creating_path = current_work_path;
         if (path
-                ->map(\_ = BeginPopupContextItem();)
-                ->or_do(\ = BeginPopupContextWindow();))
+            ->map(\_ = BeginPopupContextItem();)
+            ->or_do(\ = BeginPopupContextWindow();))
         {
             if (BeginMenu("新建..."))
             {
                 if (MenuItem(F"空目录"))
                     jeapi::gui::form::input("新建空目录", F"在{cur_creating_path}新建空目录", "NewDir",
                         \dirname: string = fsys::mkdir(fsys::normalize(cur_creating_path) / dirname)
-                                ->map(\_ = force_update();)
-                                ->or_do(\errid = jeapi::gui::form::errmsg("失败", F"创建目录失败{errid}");););
+                            ->map(\_ = force_update();)
+                            ->or_do(\errid = jeapi::gui::form::errmsg("失败", F"创建目录失败{errid}");););
                 Separator();
                 if (MenuItem("空文件"))
                 {
                     jeapi::gui::form::input("新建空文件", F"在{cur_creating_path}新建空文件", "NewFile.txt",
                         \filename: string = fsys::exist(file_path)
-                                ? jeapi::gui::form::errmsg("创建空文件失败", "同名文件已经存在")
-                                | write_file_if_not_exist(file_path, "")
-                                    ? force_update()
-                                | jeapi::gui::form::errmsg("创建空文件失败", "无法创建文件，可能是文件名非法或磁盘已满")
+                            ? jeapi::gui::form::errmsg("创建空文件失败", "同名文件已经存在")
+                            | write_file_if_not_exist(file_path, "")
+                            ? force_update()
+                            | jeapi::gui::form::errmsg("创建空文件失败", "无法创建文件，可能是文件名非法或磁盘已满")
                                 where file_path = fsys::normalize(cur_creating_path) / filename;);
                 }
                 if (MenuItem("Woolang 脚本"))
@@ -482,10 +482,10 @@ je::log("Helloworld");
 "@;
                         jeapi::gui::form::input("新建Woolang 脚本", F"在{cur_creating_path}新建Woolang 脚本", "NewScript",
                         \filename: string = fsys::exist(file_path)
-                                ? jeapi::gui::form::errmsg("创建Woolang 脚本失败", "同名文件已经存在")
-                                | write_file_if_not_exist(file_path, F"// {filename}.wo\n{default_empty_script}")
-                                    ? force_update()
-                                | jeapi::gui::form::errmsg("创建Woolang 脚本失败", "无法创建文件，可能是文件名非法或磁盘已满")
+                            ? jeapi::gui::form::errmsg("创建Woolang 脚本失败", "同名文件已经存在")
+                            | write_file_if_not_exist(file_path, F"// {filename}.wo\n{default_empty_script}")
+                            ? force_update()
+                            | jeapi::gui::form::errmsg("创建Woolang 脚本失败", "无法创建文件，可能是文件名非法或磁盘已满")
                                 where file_path = fsys::normalize(cur_creating_path) / (filename + ".wo"););
                 }
                 if (MenuItem("ToWoo Component 声明"))
@@ -502,10 +502,10 @@ component!
 "@;
                         jeapi::gui::form::input("新建ToWoo Component 声明", F"在{cur_creating_path}新建ToWoo Component 脚本", "NewToWooComponent",
                         \filename: string = fsys::exist(file_path)
-                                ? jeapi::gui::form::errmsg("创建ToWoo Component 声明失败", "同名文件已经存在")
-                                | write_file_if_not_exist(file_path, F"// {filename}.jecomponent.wo\n{default_empty_script}")
-                                    ? func(){context->get_project->try_update_towoo(false);force_update();}()
-                                | jeapi::gui::form::errmsg("创建ToWoo Component 声明失败", "无法创建文件，可能是文件名非法或磁盘已满")
+                            ? jeapi::gui::form::errmsg("创建ToWoo Component 声明失败", "同名文件已经存在")
+                            | write_file_if_not_exist(file_path, F"// {filename}.jecomponent.wo\n{default_empty_script}")
+                            ? func(){context->get_project->try_update_towoo(false);force_update();}()
+                            | jeapi::gui::form::errmsg("创建ToWoo Component 声明失败", "无法创建文件，可能是文件名非法或磁盘已满")
                                 where file_path = fsys::normalize(cur_creating_path) / (filename + ".jecomponent.wo"););
                 }
                 if (MenuItem("ToWoo System 脚本"))
@@ -556,10 +556,10 @@ LATE_UPDATE!
 "@;
                         jeapi::gui::form::input("新建ToWoo System 脚本", F"在{cur_creating_path}新建ToWoo System 脚本", "NewToWooSystem",
                         \filename: string = fsys::exist(file_path)
-                                ? jeapi::gui::form::errmsg("创建ToWoo System 脚本失败", "同名文件已经存在")
-                                | write_file_if_not_exist(file_path, F"// {filename}.jesystem.wo\n{default_empty_script}")
-                                    ? func(){context->get_project->try_update_towoo(false);force_update();}()
-                                | jeapi::gui::form::errmsg("创建ToWoo System 脚本失败", "无法创建文件，可能是文件名非法或磁盘已满")
+                            ? jeapi::gui::form::errmsg("创建ToWoo System 脚本失败", "同名文件已经存在")
+                            | write_file_if_not_exist(file_path, F"// {filename}.jesystem.wo\n{default_empty_script}")
+                            ? func(){context->get_project->try_update_towoo(false);force_update();}()
+                            | jeapi::gui::form::errmsg("创建ToWoo System 脚本失败", "无法创建文件，可能是文件名非法或磁盘已满")
                                 where file_path = fsys::normalize(cur_creating_path) / (filename + ".jesystem.wo"););
                 }
                 if (MenuItem("Physics2D 组配置"))
@@ -578,10 +578,10 @@ PHYSICS2D_COLLISIONS!
 "@;
                         jeapi::gui::form::input("新建Physics2D 组配置", F"在{cur_creating_path}新建Physics2D 组配置", "group",
                         \filename: string = fsys::exist(file_path)
-                                ? jeapi::gui::form::errmsg("创建Physics2D 组配置失败", "同名文件已经存在")
-                                | write_file_if_not_exist(file_path, F"// {filename}.jephysics2d.wo\n{default_empty_script}")
-                                    ? force_update()
-                                | jeapi::gui::form::errmsg("创建Physics2D 组配置失败", "无法创建文件，可能是文件名非法或磁盘已满")
+                            ? jeapi::gui::form::errmsg("创建Physics2D 组配置失败", "同名文件已经存在")
+                            | write_file_if_not_exist(file_path, F"// {filename}.jephysics2d.wo\n{default_empty_script}")
+                            ? force_update()
+                            | jeapi::gui::form::errmsg("创建Physics2D 组配置失败", "无法创建文件，可能是文件名非法或磁盘已满")
                                 where file_path = fsys::normalize(cur_creating_path) / (filename + ".jephysics2d.wo"););
                 }
                 if (MenuItem("编辑器工具脚本"))
@@ -599,10 +599,10 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
 "@;
                         jeapi::gui::form::input("新建编辑器工具脚本", F"在{cur_creating_path}新建编辑器工具脚本", "NewScript",
                         \filename: string = fsys::exist(file_path)
-                                ? jeapi::gui::form::errmsg("创建编辑器工具脚本失败", "同名文件已经存在")
-                                | write_file_if_not_exist(file_path, F"// {filename}.je.wo\n{default_empty_script}")
-                                    ? force_update()
-                                | jeapi::gui::form::errmsg("创建编辑器工具脚本失败", "无法创建文件，可能是文件名非法或磁盘已满")
+                            ? jeapi::gui::form::errmsg("创建编辑器工具脚本失败", "同名文件已经存在")
+                            | write_file_if_not_exist(file_path, F"// {filename}.je.wo\n{default_empty_script}")
+                            ? force_update()
+                            | jeapi::gui::form::errmsg("创建编辑器工具脚本失败", "无法创建文件，可能是文件名非法或磁盘已满")
                                 where file_path = fsys::normalize(cur_creating_path) / (filename + ".je.wo"););
                 }
                 if (BeginMenu("Workflow"))
@@ -611,10 +611,10 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                     {
                         jeapi::gui::form::input("新建 Workflow 图", F"在{cur_creating_path}新建 Workflow 图", "NewWorkflow",
                             \filename: string = fsys::exist(file_path)
-                                    ? jeapi::gui::form::errmsg("创建Workflow 图失败", "同名文件已经存在")
-                                    | write_file_if_not_exist(file_path, "{}")
-                                        ? force_update()
-                                    | jeapi::gui::form::errmsg("创建Workflow图失败", "无法创建文件，可能是文件名非法或磁盘已满")
+                                ? jeapi::gui::form::errmsg("创建Workflow 图失败", "同名文件已经存在")
+                                | write_file_if_not_exist(file_path, "{}")
+                                ? force_update()
+                                | jeapi::gui::form::errmsg("创建Workflow图失败", "无法创建文件，可能是文件名非法或磁盘已满")
                                     where file_path = fsys::normalize(cur_creating_path) / (filename + ".je4workflow"););
                     }
                     Separator();
@@ -842,12 +842,12 @@ using $NEW_PRODUCER_NAME$ = struct{}
                                 func (w)
                                 {
                                     if (context->get_project()->serialize_world(w, true)
-                                            ->> \wdat = write_file_if_not_exist(
-                                                    fsys::normalize(F"{cur_creating_path}/{new_world_name}.je4world"),
-                                                    wdat as jeapi::serialize::WorldData: string)
+                                        ->> \wdat = write_file_if_not_exist(
+                                                fsys::normalize(F"{cur_creating_path}/{new_world_name}.je4world"),
+                                                wdat as jeapi::serialize::WorldData: string)
                                             ;
-                                            ->  or(false)
-                                                == false)
+                                        ->  or(false)
+                                        == false)
                                     {
                                         jeapi::gui::form::errmsg("创建世界失败", "无法创建文件，可能是文件名非法或磁盘已满");
                                         return false;
@@ -862,10 +862,10 @@ using $NEW_PRODUCER_NAME$ = struct{}
                 {
                     jeapi::gui::form::input("新建瓦片地图", F"在{cur_creating_path}新建瓦片地图", "NewTileMap",
                         \filename: string = fsys::exist(file_path)
-                                ? jeapi::gui::form::errmsg("新建瓦片地图失败", "同名文件已经存在")
-                                | write_file_if_not_exist(file_path, "{}")
-                                    ? func(){context->get_project->try_update_towoo(false);force_update();}()
-                                | jeapi::gui::form::errmsg("新建瓦片地图失败失败", "无法创建文件，可能是文件名非法或磁盘已满")
+                            ? jeapi::gui::form::errmsg("新建瓦片地图失败", "同名文件已经存在")
+                            | write_file_if_not_exist(file_path, "{}")
+                            ? func(){context->get_project->try_update_towoo(false);force_update();}()
+                            | jeapi::gui::form::errmsg("新建瓦片地图失败失败", "无法创建文件，可能是文件名非法或磁盘已满")
                                 where file_path = fsys::normalize(cur_creating_path) / (filename + ".je4tilemap"););
                 }
                 Separator();
@@ -926,7 +926,7 @@ using $NEW_PRODUCER_NAME$ = struct{}
                             jeapi::gui::form::input("创建着色器", F"将在{cur_creating_path}创建{shader_display_name}：",
                                 shader_path_name,
                                 \shader_name: string =
-                                        fsys::readall(fsys::normalize(F"{std::host_path()}/builtin/shader/{shader_path_name}.shader"))
+                                    fsys::readall(fsys::normalize(F"{std::host_path()}/builtin/shader/{shader_path_name}.shader"))
                                         ->> \src = create_shader_at(shader_name, src);
                                         ->  or_do(\ = je::logerr(F"打开内置着色器文件{shader_path_name}失败，请检查编辑器目录");)
                                     ;
@@ -973,8 +973,8 @@ using $NEW_PRODUCER_NAME$ = struct{}
                     // 创建C++模块，就跟JoyEngineCSP差不多
                     jeapi::gui::form::input("创建C++模块", F"将在{cur_creating_path}创建，请为项目命名：", "CppModule",
                         \module_name: string = CxxProject::start(module_name, cur_creating_path, context->get_project)
-                                ->> \ _ = force_update();
-                                ->or_do(\reason = jeapi::gui::form::errmsg("创建C++模块失败", reason);)
+                            ->> \ _ = force_update();
+                            ->or_do(\reason = jeapi::gui::form::errmsg("创建C++模块失败", reason);)
                             ;
                         );
                 }
@@ -1010,8 +1010,8 @@ using $NEW_PRODUCER_NAME$ = struct{}
         let normalized_path = path;
         let pure_path =
             \p: string = p->begin_with(normalized_path->to_string())
-                    ? p->sub(normalized_path->to_string()->len)
-                    | p
+                ? p->sub(normalized_path->to_string()->len)
+                | p
                 ;
             ;
             
@@ -1019,10 +1019,10 @@ using $NEW_PRODUCER_NAME$ = struct{}
             -> allsubpath()
             -> okay
             =>> \childs = childs
-                    ->> \child = isfile(child)
-                            ? fsys::filename(fsys::normalize(pchild)) + crc64file(child->to_string)->unwrap: string
-                            | pchild
-                            where pchild = pure_path(child->to_string);
+                ->> \child = isfile(child)
+                    ? fsys::filename(fsys::normalize(pchild)) + crc64file(child->to_string)->unwrap: string
+                    | pchild
+                        where pchild = pure_path(child->to_string);
                     ->  reduce(\l, r = l + r;)
                     ->> \str = crc64str(str);
                 ;
@@ -1063,8 +1063,8 @@ using $NEW_PRODUCER_NAME$ = struct{}
         return context->get_project->get_env->get_universe
             ->  get_all_worlds
             =>> \w: je::world = w
-                    ->  get_all_entities([])
-                    ->> dowhat
+                ->  get_all_entities([])
+                ->> dowhat
                 ;
             ->  reduce(\l, r = l && r;)
             ->  or(false)
@@ -1136,18 +1136,18 @@ using $NEW_PRODUCER_NAME$ = struct{}
             {
                 let components = fsys::subpath(path.path/"components")
                     ->map(\s = s
-                                ->forall(\f = fsys::extension(f) == ".hpp";)
-                                ->map(\f = fname->sub_len(0, fname->len - 4)
-                                        where fname = fsys::filename(f);)
+                            ->forall(\f = fsys::extension(f) == ".hpp";)
+                            ->map(\f = fname->sub_len(0, fname->len - 4)
+                                    where fname = fsys::filename(f);)
                             ;)
                     ->or([])
                     ->to_vec;
                 let systems = fsys::subpath(path.path/"systems")
                     ->okay
                     ->map(\s = s
-                                ->forall(\f = fsys::extension(f) == ".hpp";)
-                                ->map(\f = fname->sub_len(0, fname->len - 4)
-                                        where fname = fsys::filename(f);)
+                            ->forall(\f = fsys::extension(f) == ".hpp";)
+                            ->map(\f = fname->sub_len(0, fname->len - 4)
+                                    where fname = fsys::filename(f);)
                             ;)
                     ->or([])
                     ->to_vec;
@@ -1279,12 +1279,12 @@ namespace $$MODULE_NAME$$
                                                                 system_header
                                                                     ->replace("$$MODULE_NAME$$", module_name)
                                                                     ->replace("$$SYSTEM_NAME$$", system_name))
-                                                                ||
-                                                                    !fsys::writeall(path.path/"systems"/F"{system_name}.cpp",
-                                                                        system_src
-                                                                            ->replace("$$MODULE_NAME$$", module_name)
-                                                                            ->replace("$$SYSTEM_NAME$$", system_name))
-                                                                    )
+                                                            ||
+                                                            !fsys::writeall(path.path/"systems"/F"{system_name}.cpp",
+                                                                system_src
+                                                                    ->replace("$$MODULE_NAME$$", module_name)
+                                                                    ->replace("$$SYSTEM_NAME$$", system_name))
+                                                            )
                                                         {
                                                             do fsys::remove(path.path/"systems"/F"{system_name}.hpp")->unwrap;
                                                             do fsys::remove(path.path/"systems"/F"{system_name}.cpp")->unwrap;
@@ -1294,8 +1294,8 @@ namespace $$MODULE_NAME$$
                                                         else
                                                         {
                                                             jeapi::gui::form::errmsg("创建系统成功", "系统已创建到\n"
-                                                                    + F"{path.path}/systems/{system_name}.hpp\n"
-                                                                        + F"{path.path}/systems/{system_name}.cpp");
+                                                                + F"{path.path}/systems/{system_name}.hpp\n"
+                                                                + F"{path.path}/systems/{system_name}.cpp");
                                                             systems->add(system_name);
                                                         }
                                                     });
@@ -1349,7 +1349,7 @@ namespace $$MODULE_NAME$$
                                                         else
                                                         {
                                                             jeapi::gui::form::errmsg("创建组件成功", "组件已创建到\n"
-                                                                    + F"{path.path}/components/{component_name}.hpp");
+                                                                + F"{path.path}/components/{component_name}.hpp");
                                                             components->add(component_name);
                                                         }
                                                     });
@@ -1447,21 +1447,21 @@ namespace $$MODULE_NAME$$
         {
             jeapi::gui::form::input("重命名", F"请输入{path.path}的新名称", path.name,
                 \new_name = editor::gui::refactor(context, path.path, fsys::parent(path.path)/new_name)
-                        -> or_do(\errid = jeapi::gui::form::errmsg("失败", F"重命名失败({errid})");)
+                    -> or_do(\errid = jeapi::gui::form::errmsg("失败", F"重命名失败({errid})");)
                     ;);
-            // \new_name: string = fsys::move(path.path, fsys::parent(path.path)/new_name)
-            //     ->> func(_){context->get_project->try_update_towoo(false);force_update();}
-            //     ->or_do(\errid = jeapi::gui::form::errmsg("失败", F"重命名失败({errid})");););
+        // \new_name: string = fsys::move(path.path, fsys::parent(path.path)/new_name)
+        //     ->> func(_){context->get_project->try_update_towoo(false);force_update();}
+        //     ->or_do(\errid = jeapi::gui::form::errmsg("失败", F"重命名失败({errid})");););
         }
         if (MenuItemEnabled("移动到...", is_modifiable_file))
         {
             jeapi::gui::form::input("移动到……", F"请输入{path.path}的路径", path.path->to_string,
                 \new_path = editor::gui::refactor(context, path.path, fsys::normalize(new_path))
-                        -> or_do(\errid = jeapi::gui::form::errmsg("失败", F"重命名失败({errid})");)
+                    -> or_do(\errid = jeapi::gui::form::errmsg("失败", F"重命名失败({errid})");)
                     ;);
-            // \new_path: string = fsys::move(path.path, fsys::normalize(new_path))
-            //     ->> func(_){context->get_project->try_update_towoo(false);force_update();}
-            //     ->or_do(\errid = jeapi::gui::form::errmsg("失败", F"重命名失败({errid})");););
+        // \new_path: string = fsys::move(path.path, fsys::normalize(new_path))
+        //     ->> func(_){context->get_project->try_update_towoo(false);force_update();}
+        //     ->or_do(\errid = jeapi::gui::form::errmsg("失败", F"重命名失败({errid})");););
         }
         if (MenuItemEnabled("删除", is_modifiable_file))
         {
@@ -1544,8 +1544,8 @@ namespace $$MODULE_NAME$$
             func compare_method (a: PathInfo, b: PathInfo)
             {
                 func is_dir(p){match(p.type->get){dir(_)?return true;file?return false;}}
-                if (is_dir(a))
-                    return !is_dir(b);
+                    if (is_dir(a))
+                        return !is_dir(b);
                 else if (is_dir(b))
                     return false;
                     
@@ -1556,17 +1556,17 @@ namespace $$MODULE_NAME$$
             
             now_item_in_path =
                 fsys::subpath(fsys::normalize(current_work_path))
-                ->  unwrap
-                ->> \subpath = PathInfo{
-                        path = subpath,
-                        name = fsys::filename(subpath),
-                        externname = fsys::extension(subpath)->lower,
-                        type = new! std::mutable(fsys::isdir(subpath)
+                    ->  unwrap
+                    ->> \subpath = PathInfo{
+                            path = subpath,
+                            name = fsys::filename(subpath),
+                            externname = fsys::extension(subpath)->lower,
+                            type = new! std::mutable(fsys::isdir(subpath)
                                 ? PathType::dir(option::none)
                                 | PathType::file),
-                    };
-                ->std::sort(compare_method)
-                ;
+                        };
+                    ->std::sort(compare_method)
+                    ;
         }
         
         do BeginChild("files_list");
@@ -1584,7 +1584,7 @@ namespace $$MODULE_NAME$$
                 {
                     do item->indir(\_ = set_current_work_path(item.path);)
                         ->infile(\ = do item->get_open_method()(item, context)
-                                    ->> \err = jeapi::gui::form::errmsg("失败", F"打开文件失败:\n{err}");
+                                ->> \err = jeapi::gui::form::errmsg("失败", F"打开文件失败:\n{err}");
                                 ;);
                                 
                 }
@@ -1646,7 +1646,7 @@ namespace $$MODULE_NAME$$
                                         if (prefab_data->is_value)
                                         {
                                             if (prefab_data->unwrap.path->get == context->get_project->make_path_normalize(filepath)
-                                                    || false == fsys::isfile(context->get_project->parse_path_normalize(prefab_data->unwrap.path->get)))
+                                                || false == fsys::isfile(context->get_project->parse_path_normalize(prefab_data->unwrap.path->get)))
                                             {
                                                 create = false;
                                                 jeapi::gui::form::errmsg("无法创建预设体", "变体原所属的预设体丢失");
@@ -1667,7 +1667,7 @@ namespace $$MODULE_NAME$$
                         });
                 }
                 none?
-                ;
+                    ;
             }
             EndDragDropTarget();
         }
@@ -1706,7 +1706,7 @@ namespace $$MODULE_NAME$$
                 {
                     let mut attribute = TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow
                         + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick
-                            + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
+                        + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth;
                     if (current_work_path == path.path->to_string)
                         attribute += TreeNodeAttribute::ImGuiTreeNodeFlags_Selected;
                         
@@ -1723,10 +1723,10 @@ namespace $$MODULE_NAME$$
                     }
                     else
                         // 如果目录被折叠起来，则删除缓存，等待下次展开时重新获取
-                    path.type->set(PathType::dir(option::none));
+                        path.type->set(PathType::dir(option::none));
                 }
                 file?
-                ; // path_tree只显示目录，跳过文件
+                    ; // path_tree只显示目录，跳过文件
             }
         }
         

@@ -8,7 +8,7 @@ namespace je::physics2d::config
     using CollideGroupInfo = struct{
         m_filter_components: vec<(je::typeinfo, CollideGroupInfo::Requirement)>,
         m_collide_mask: mut int,
-
+        
         m_self_gid: int,
     }
     {
@@ -19,17 +19,17 @@ namespace je::physics2d::config
             ANYOF,          // Must have one of 'ANYOF' components
             EXCEPT,         // Must not contain spcify component
         }
-
+        
         public let groups = []mut: vec<CollideGroupInfo>;
-
+        
         public func create()
         {
             let self = CollideGroupInfo{
-                m_filter_components = []mut, 
+                m_filter_components = []mut,
                 m_collide_mask = mut 0,
                 m_self_gid = groups->len,
             };
-
+            
             groups->add(self);
             return self;
         }
@@ -50,12 +50,12 @@ namespace je::physics2d::config
     /*
     PHYSICS2D_GROUP! GroupName
     {
-        ComponentA,
-        ComponentB,
+    ComponentA,
+    ComponentB,
     }
     */
     using std::token_type;
-
+    
     let group_name = lexer->expect_token(l_identifier)->or("<Empty>");
     if (lexer->next != "{")
     {
@@ -64,64 +64,64 @@ namespace je::physics2d::config
     }
     
     let types = []mut: vec<(string, string)>;
-
+    
     parse_filter_components@
-    for (;;)
-    {
-        let mut typename = "";
-        let mut mode = option::none: option<string>;
         for (;;)
         {
-            let token = lexer->next;
-            if (token == ";")
+            let mut typename = "";
+            let mut mode = option::none: option<string>;
+            for (;;)
             {
-                if (typename == "")
+                let token = lexer->next;
+                if (token == ";")
                 {
-                    lexer->error("Unexpected '}', should be typename.");
+                    if (typename == "")
+                    {
+                        lexer->error("Unexpected '}', should be typename.");
+                        return "";
+                    }
+                    
+                    types->add((typename, mode->or("CONTAINS")));
+                    typename = "";
+                    break;
+                }
+                else if (token == "}")
+                {
+                    if (typename != "")
+                    {
+                        lexer->error("Unexpected '}', should be ';'.");
+                        return "";
+                    }
+                    break parse_filter_components;
+                }
+                else if (token == "")
+                {
+                    lexer->error("Unexpected EOF.");
                     return "";
                 }
-
-                types->add((typename, mode->or("CONTAINS")));
-                typename = "";
-                break;
-            }
-            else if (token == "}")
-            {
-                if (typename != "")
+                else if (token == "except")
                 {
-                    lexer->error("Unexpected '}', should be ';'.");
-                    return "";
+                    if (mode->is_value)
+                    {
+                        lexer->error(F"Duplicately marked attributes have been previously marked as `{mode->unwrap}`");
+                        return "";
+                    }
+                    mode = option::value("EXCEPT");
                 }
-                break parse_filter_components;
-            }
-            else if (token == "")
-            {
-                lexer->error("Unexpected EOF.");
-                return "";
-            }
-            else if (token == "except")
-            {
-                if (mode->is_value)
+                else if (token == "contains")
                 {
-                    lexer->error(F"Duplicately marked attributes have been previously marked as `{mode->unwrap}`");
-                    return "";
+                    if (mode->is_value)
+                    {
+                        lexer->error(F"Duplicately marked attributes have been previously marked as `{mode->unwrap}`");
+                        return "";
+                    }
+                    mode = option::value("CONTAINS");
                 }
-                mode = option::value("EXCEPT");
+                else
+                    typename += token;
             }
-            else if (token == "contains")
-            {
-                if (mode->is_value)
-                {
-                    lexer->error(F"Duplicately marked attributes have been previously marked as `{mode->unwrap}`");
-                    return "";
-                }
-                mode = option::value("CONTAINS");
-            }
-            else
-                typename += token;
         }
-    }
-
+        
     let mut result = F"let {group_name} = je::physics2d::config::CollideGroupInfo::create();";
     for (let (typename, mode) : types)
     {
@@ -138,11 +138,11 @@ namespace je::physics2d::config
         lexer->error("Unexpected token, should be '{'.");
         return "";
     }
-
+    
     let mut groups = []mut: vec<vec<string>>;
     let mut group = []mut: vec<string>;
     let mut typename = "";
-
+    
     for (;;)
     {
         let token = lexer->next;
@@ -179,7 +179,7 @@ namespace je::physics2d::config
         else
             typename += token;
     }
-
+    
     let mut result = "";
     for (let group_list : groups)
     {

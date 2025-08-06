@@ -32,9 +32,9 @@ namespace je::gui
         ImGuiWindowFlags_NoNavFocus             = 0x00080000,  // No focusing toward this window with gamepad/keyboard navigation (e.g. skipped by CTRL+TAB)
         ImGuiWindowFlags_UnsavedDocument        = 0x00100000,  // Display a dot next to the title. When used in a tab/docking context, tab is selected when clicking the X + closure is not assumed (will wait for user to stop submitting the tab). Otherwise closure is assumed when pressing the X, so if you keep submitting the tab may reappear at end of tab bar.
         ImGuiWindowFlags_NoDocking              = 0x00200000,  // Disable docking of this window
-        //ImGuiWindowFlags_NoNav                  = ImGuiWindowFlags_NoNavInputs | ImGuiWindowFlags_NoNavFocus,
-        //ImGuiWindowFlags_NoDecoration           = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse,
-        //ImGuiWindowFlags_NoInputs               = ImGuiWindowFlags_NoMouseInputs | ImGuiWindowFlags_NoNavInputs | ImGuiWindowFlags_NoNavFocus,
+    //ImGuiWindowFlags_NoNav                  = ImGuiWindowFlags_NoNavInputs | ImGuiWindowFlags_NoNavFocus,
+    //ImGuiWindowFlags_NoDecoration           = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse,
+    //ImGuiWindowFlags_NoInputs               = ImGuiWindowFlags_NoMouseInputs | ImGuiWindowFlags_NoNavInputs | ImGuiWindowFlags_NoNavFocus,
     }
     
     public enum TreeNodeAttribute
@@ -54,8 +54,8 @@ namespace je::gui
         ImGuiTreeNodeFlags_SpanAvailWidth       = 0x0000'0800,  // Extend hit box to the right-most edge, even if not framed. This is not the default in order to allow adding other items on the same line. In the future we may refactor the hit system to be front-to-back, allowing natural overlaps and then this can become the default.
         ImGuiTreeNodeFlags_SpanFullWidth        = 0x0000'1000,  // Extend hit box to the left-most and right-most edges (bypass the indented area).
         ImGuiTreeNodeFlags_NavLeftJumpsBackHere = 0x0000'2000,  // (WIP) Nav: left direction may move to this TreeNode() from any of its child (items submitted between TreeNode and TreePop)
-        // ImGuiTreeNodeFlags_NoScrollOnOpen     = 0x0000'4000,  // FIXME: TODO: Disable automatic scroll on TreePop() if node got just open and contents is not visible
-        // ImGuiTreeNodeFlags_CollapsingHeader     = ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_NoAutoOpenOnLog
+        ImGuiTreeNodeFlags_NoScrollOnOpen     = 0x0000'4000,  // FIXME: TODO: Disable automatic scroll on TreePop() if node got just open and contents is not visible
+        ImGuiTreeNodeFlags_CollapsingHeader     = ImGuiTreeNodeFlags_Framed + ImGuiTreeNodeFlags_NoTreePushOnOpen + ImGuiTreeNodeFlags_NoAutoOpenOnLog,
     };
     
     public enum ImGuiMouseButton
@@ -365,8 +365,8 @@ namespace je::gui
         ImGuiTabBarFlags_NoTooltip                      = 32,   // Disable tooltips when hovering a tab
         ImGuiTabBarFlags_FittingPolicyResizeDown        = 64,   // Resize tabs when they don't fit
         ImGuiTabBarFlags_FittingPolicyScroll            = 128,   // Add scroll buttons when tabs don't fit
-        // ImGuiTabBarFlags_FittingPolicyMask_             = ImGuiTabBarFlags_FittingPolicyResizeDown | ImGuiTabBarFlags_FittingPolicyScroll,
-        // ImGuiTabBarFlags_FittingPolicyDefault_          = ImGuiTabBarFlags_FittingPolicyResizeDown
+        ImGuiTabBarFlags_FittingPolicyMask_             = ImGuiTabBarFlags_FittingPolicyResizeDown + ImGuiTabBarFlags_FittingPolicyScroll,
+        ImGuiTabBarFlags_FittingPolicyDefault_          = ImGuiTabBarFlags_FittingPolicyResizeDown,
     }
     
     public enum TabItemAttribute
@@ -379,9 +379,9 @@ namespace je::gui
         ImGuiTabItemFlags_NoTooltip                     = 16,   // Disable tooltip for the given tab
         ImGuiTabItemFlags_NoReorder                     = 32,   // Disable reordering this tab or having another tab cross over this tab
         ImGuiTabItemFlags_Leading                       = 64,   // Enforce the tab position to the left of the tab bar (after the tab list popup button)
-        ImGuiTabItemFlags_Trailing                      = 128    // Enforce the tab position to the right of the tab bar (before the scrolling buttons)
-        }
-        
+        ImGuiTabItemFlags_Trailing                      = 128,    // Enforce the tab position to the right of the tab bar (before the scrolling buttons)
+    }
+    
     extern("libjoyecs", "je_gui_begintabbar")
         public func BeginTabBarAttr(label: string, attr: TabBarAttribute)=> bool;
     public func BeginTabBar(label: string)
@@ -477,8 +477,8 @@ namespace je::gui
         ImGuiInputTextFlags_CallbackEdit        = 0x00080000,  // Callback on any edit (note that InputText() already returns true on edit, the callback is useful mainly to manipulate the underlying buffer while focus is active)
         ImGuiInputTextFlags_EscapeClearsAll     = 0x00100000,  // Escape key clears content if not empty, and deactivate otherwise (contrast to default behavior of Escape to revert)
         
-        // Obsolete names
-        //ImGuiInputTextFlags_AlwaysInsertMode  = ImGuiInputTextFlags_AlwaysOverwrite   // [renamed in 1.82] name was not matching behavior
+    // Obsolete names
+    //ImGuiInputTextFlags_AlwaysInsertMode  = ImGuiInputTextFlags_AlwaysOverwrite   // [renamed in 1.82] name was not matching behavior
     };
     
     extern("libjoyecs", "je_gui_input_text_box")
@@ -694,7 +694,7 @@ namespace je::gui
         ImGuiDragDropFlags_AcceptBeforeDelivery         = 0x0040,  // AcceptDragDropPayload() will returns true even before the mouse button is released. You can then call IsDelivery() to test if the payload needs to be delivered.
         ImGuiDragDropFlags_AcceptNoDrawDefaultRect      = 0x0080,  // Do not draw the default highlight rectangle when hovering over target.
         ImGuiDragDropFlags_AcceptNoPreviewTooltip       = 0x0100,  // Request hiding the BeginDragDropSource tooltip from the BeginDragDropTarget site.
-        // ImGuiDragDropFlags_AcceptPeekOnly               = ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect  // For peeking ahead and inspecting the payload before delivery.
+        ImGuiDragDropFlags_AcceptPeekOnly               = ImGuiDragDropFlags_AcceptBeforeDelivery + ImGuiDragDropFlags_AcceptNoDrawDefaultRect,  // For peeking ahead and inspecting the payload before delivery.
     }
     
     extern("libjoyecs", "je_gui_begin_drag_drop_source")
@@ -731,10 +731,10 @@ namespace je::gui
                 ->> \type = (type, AcceptDragDropPayload(type));
                 ->  forall(\accept_type_result = accept_result->is_value
                         where (_, accept_result) = accept_type_result;)
-                ->  get(0)
-                ->> \e = (e[0], e[1]->unwrap);
-                ;
-                
+                    ->  get(0)
+                    ->> \e = (e[0], e[1]->unwrap);
+                    ;
+                    
             EndDragDropTarget();
             
             return drag_result;
@@ -824,9 +824,9 @@ namespace je::gui
         ImGuiStyleVar_SeparatorTextAlign,  // ImVec2    SeparatorTextAlign
         ImGuiStyleVar_SeparatorTextPadding,// ImVec2    SeparatorTextPadding
         ImGuiStyleVar_DockingSeparatorSize,// float     DockingSeparatorSize
-        ImGuiStyleVar_COUNT
-        };
-        
+        ImGuiStyleVar_COUNT,
+    };
+    
     extern("libjoyecs", "je_gui_push_style_real")
         public func PushStyleReal(style: StyleVar, val: real)=> void;
     extern("libjoyecs", "je_gui_push_style_vec2")
@@ -867,8 +867,8 @@ namespace je::gui
             CurrentLineFill,
             CurrentLineFillInactive,
             CurrentLineEdge,
-            Max
-            };
+            Max,
+        };
         using LanguageDefinition = gchandle
         {
             extern("libjoyecs", "je_gui_code_editor_language_definition_create")
@@ -1067,9 +1067,9 @@ namespace je::gui
             StyleColor_GroupBg,
             StyleColor_GroupBorder,
             
-            StyleColor_Count
-            }
-            
+            StyleColor_Count,
+        }
+        
         extern("libjoyecs", "je_gui_node_editor_push_style_color")
             public func PushStyleColor(style: StyleColor, color: Color32RGBA)=> void;
             

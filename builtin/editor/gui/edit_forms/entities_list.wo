@@ -372,7 +372,7 @@ namespace editor::gui::edit_forms
                                     jeapi::gui::form::errmsg("失败", "无法复制当前实体");
                             }
                         })
-                ;
+                    ;
                 ;
                 
         }
@@ -381,16 +381,16 @@ namespace editor::gui::edit_forms
             do dict::deserialize(GetClipboardText())
                 =>> \d = d: dynamic->trycast:<jeapi::serialize::EntityData::EntityDataRawType>;
                 ->> \d = jeapi::serialize::entity::instantiate(w, d: jeapi::serialize::EntityData, true)
-                        ->> func(e)
+                    ->> func(e)
+                    {
+                        // 如果成功创建实体，在此重置实体的 Transform::Anchor 组件（如果有的话）
+                        static let Anchor = je::typeinfo::load("Transform::Anchor")->unwrap;
+                        if (e->get_component(Anchor)->is_value)
                         {
-                            // 如果成功创建实体，在此重置实体的 Transform::Anchor 组件（如果有的话）
-                            static let Anchor = je::typeinfo::load("Transform::Anchor")->unwrap;
-                            if (e->get_component(Anchor)->is_value)
-                            {
-                                e->remove_component(Anchor);
-                                do e->add_component(Anchor);
-                            }
+                            e->remove_component(Anchor);
+                            do e->add_component(Anchor);
                         }
+                    }
                     ;
                 ;
         }
@@ -400,8 +400,8 @@ namespace editor::gui::edit_forms
             do euid
                 ->> \uid = launch(
                         \ = show_entity_creator(context, econtext);)
-                    where econtext = EntityContext::edit(uid)
-                ;
+                        where econtext = EntityContext::edit(uid)
+                    ;
                 ;
         }
         if (MenuItemEnabled("绘制", has_editing_entity))
@@ -422,7 +422,7 @@ namespace editor::gui::edit_forms
                                     uid->justdo(\e = e->internal::set_name(newname););
                                 });
                         })
-                ;
+                    ;
                 ;
         }
         Separator();
@@ -451,7 +451,7 @@ namespace editor::gui::edit_forms
                                     }
                                 });
                         })
-                ;
+                    ;
                 ;
         }
     }
@@ -459,13 +459,13 @@ namespace editor::gui::edit_forms
     {
         let treenode_attribute =
             (e.childs->empty
-                    ? TreeNodeAttribute::ImGuiTreeNodeFlags_Leaf
-                    | TreeNodeAttribute::ImGuiTreeNodeFlags_None)
-                + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow
-                    + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick
-                        + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
-                            // 如果当前实体被选中，那么高亮
-        + (context->get_editing_entity()->>\eeid = eeid == e.uid;->or(false)
+                ? TreeNodeAttribute::ImGuiTreeNodeFlags_Leaf
+                | TreeNodeAttribute::ImGuiTreeNodeFlags_None)
+            + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow
+            + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick
+            + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
+            // 如果当前实体被选中，那么高亮
+            + (context->get_editing_entity()->>\eeid = eeid == e.uid;->or(false)
                 ? TreeNodeAttribute::ImGuiTreeNodeFlags_Selected
                 | TreeNodeAttribute::ImGuiTreeNodeFlags_None);
         ;
@@ -475,8 +475,8 @@ namespace editor::gui::edit_forms
             
         if (!get_is_albe_to_display_debug_entity() && e.e->get_component(Invisable)->is_value)
             // 不可见实体，不准看！
-        return;
-        
+            return;
+            
         let is_variant_or_prefab = e.e->towoo::get_component:<Editor::Prefab>->is_value;
         
         if (is_variant_or_prefab)
@@ -507,7 +507,7 @@ namespace editor::gui::edit_forms
                             );
                     }
                 none?
-                ;
+                    ;
             }
             EndDragDropTarget();
         }

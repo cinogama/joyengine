@@ -23,7 +23,7 @@ namespace jeapi::gui::widget
                 value(data)?
                     return option::value(data);
                 none?
-                ;
+                    ;
             }
         }
         return option::none;

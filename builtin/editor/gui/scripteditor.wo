@@ -132,7 +132,7 @@ namespace editor::gui
                 {
                     // 如果从最新状态切回旧历史，那么保存当前状态
                     if (self.m_history_index == self.m_history->len &&
-                            self.m_history_index != index)
+                        self.m_history_index != index)
                     {
                         self.m_current_edit_state =
                             new! History(self.m_project, self.m_source->GetText)->okay;
@@ -292,11 +292,11 @@ namespace editor::gui
                             _do_InsertText(
                                 "import builtin::editor::gui::form::input;\n"
                                     + "jeapi::gui::form::input(\"标题\", \"内容\", \"默认值\",\n"
-                                        + "    func (content)\n"
-                                            + "    {\n"
-                                                + "        do content;\n"
-                                                    + "    }\n"
-                                                        + ");\n");
+                                    + "    func (content)\n"
+                                    + "    {\n"
+                                    + "        do content;\n"
+                                    + "    }\n"
+                                    + ");\n");
                         }
                         if (MenuItem("确认框 *"))
                         {
@@ -304,14 +304,14 @@ namespace editor::gui
                             _do_InsertText(
                                 "import builtin::editor::gui::form::ask;\n"
                                     + "jeapi::gui::form::ask(\"标题\", \"内容\",\n"
-                                        + "    func (is_ok)\n"
-                                            + "    {\n"
-                                                + "        if (is_ok)\n"
-                                                    + "        {\n"
-                                                        + "            // 确认\n"
-                                                            + "        }\n"
-                                                                + "    }\n"
-                                                                    + ");\n");
+                                    + "    func (is_ok)\n"
+                                    + "    {\n"
+                                    + "        if (is_ok)\n"
+                                    + "        {\n"
+                                    + "            // 确认\n"
+                                    + "        }\n"
+                                    + "    }\n"
+                                    + ");\n");
                         }
                         if (MenuItem("新窗体 *"))
                         {
@@ -319,11 +319,11 @@ namespace editor::gui
                             _do_InsertText(
                                 "import builtin::api::gui::form;\n"
                                     + "do show <| jeapi::gui::form::create(\"标题\", true /* 唯一窗体？ */,\n"
-                                        + "    func (_)\n"
-                                            + "    {\n"
-                                                + "        je::gui::Text(\"Helloworld 新窗体\");\n"
-                                                    + "    }\n"
-                                                        + ");\n");
+                                    + "    func (_)\n"
+                                    + "    {\n"
+                                    + "        je::gui::Text(\"Helloworld 新窗体\");\n"
+                                    + "    }\n"
+                                    + ");\n");
                         }
                         EndMenu();
                     }
@@ -403,8 +403,8 @@ namespace editor::gui
                     {
                         let component_types = typeinfo::get_all_components_types();
                         for (let name : component_types
-                                ->> \t = t->name;
-                                -> std::sort(\ln, rn = ln < rn;))
+                            ->> \t = t->name;
+                            -> std::sort(\ln, rn = ln < rn;))
                         {
                             if (BeginMenu(name))
                             {
@@ -422,8 +422,8 @@ namespace editor::gui
                     {
                         let system_types = typeinfo::get_all_systems_types();
                         for (let name : system_types
-                                ->> \t = t->name;
-                                -> std::sort(\ln, rn = ln < rn;))
+                            ->> \t = t->name;
+                            -> std::sort(\ln, rn = ln < rn;))
                         {
                             if (BeginMenu(name))
                             {
@@ -454,7 +454,7 @@ namespace editor::gui
             
             do vmm->jit;
             if (!vmm->run->is_value
-                    || !self.m_hook_callback(vmm)->is_value)
+                || !self.m_hook_callback(vmm)->is_value)
             {
                 return result::err("运行脚本时发生错误");
             }

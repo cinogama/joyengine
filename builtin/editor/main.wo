@@ -74,16 +74,16 @@ using Path = struct {
         {
             let arr =
                 fsys::subpath(path.path)
-                ->  unwrap
-                ->  forall(\child_path = fsys::isdir(child_path);)
-                ->> \child_path = Path
-                    {
-                        name = fsys::filename(child_path),
-                        path = child_path,
-                        childs = mut option::none
-                        }
+                    ->  unwrap
+                    ->  forall(\child_path = fsys::isdir(child_path);)
+                    ->> \child_path = Path
+                        {
+                            name = fsys::filename(child_path),
+                            path = child_path,
+                            childs = mut option::none
+                            }
+                        ;
                     ;
-                ;
             path.childs = option::value(arr);
         }
         
@@ -96,12 +96,12 @@ using Path = struct {
         let show_child = TreeNodeEx(path.name,
             TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow
                 + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick
-                    + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
-                        + selected_path
+                + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
+                + selected_path
                 ->map(\p = p->to_string == path.path->to_string;)
                 ->or(false)
                 ->\b: bool =
-                        b   ? TreeNodeAttribute::ImGuiTreeNodeFlags_Selected
+                    b   ? TreeNodeAttribute::ImGuiTreeNodeFlags_Selected
                         | TreeNodeAttribute::ImGuiTreeNodeFlags_None;);
                         
         if (IsItemClickedLeft() && !IsItemToggledOpen())
@@ -115,7 +115,7 @@ using Path = struct {
                     value(result)?
                         selected_path = option::value(result);
                     none?
-                    ;
+                        ;
                 }
                 
             TreePop();
@@ -190,9 +190,9 @@ func save_editor_data_after_exit(dat: dict<dynamic, dynamic>, proj_name: string,
     let newdat = dat->to_map();
     newdat->set("form_size": dynamic, [win_w, win_h]: dynamic);
     newdat->set("history": dynamic, project_histories
-            ->forall(\record = record[1] != proj_path->to_string;)
-            ->inlay(0, [proj_name, proj_path->to_string]): dynamic);
-            
+        ->forall(\record = record[1] != proj_path->to_string;)
+        ->inlay(0, [proj_name, proj_path->to_string]): dynamic);
+        
     assert(
         fsys::writeall(fsys::normalize(std::host_path()) / "builtin" / "editor.dat.je4cache", newdat->serialize->unwrap)
         );
@@ -347,36 +347,36 @@ func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: di
                     
                     action_after_guide_form_closed =
                         func(){
-                        try! p = editor::Project::create(projname, regular_path);
-                        
-                        apply_editor_data_when_start_up_project(editordat);
-                        assert(p->save_project());
-                        
-                        // 在此处创建资源目录，包含一些基本的资源和未来自动创建的资源
-                        do fsys::mkdir(p->get_path/"resource");
-                        do fsys::mkdir(p->get_path/"resource"/"texture");
-                        do fsys::mkdir(p->get_path/"resource"/"workflow");
-                        do fsys::mkdir(p->get_path/"resource"/"workflow"/"node");
-                        do fsys::mkdir(p->get_path/"resource"/"workflow"/"type");
-                        do fsys::mkdir(p->get_path/"resource"/"workflow"/"producer");
-                        do fsys::writeall(p->get_path/"resource"/"workflow"/"node"/".gitkeepme", "");
-                        do fsys::writeall(p->get_path/"resource"/"workflow"/"type"/".gitkeepme", "");
-                        do fsys::writeall(p->get_path/"resource"/"workflow"/"producer"/".gitkeepme", "");
-                        
+                            try! p = editor::Project::create(projname, regular_path);
+                            
+                            apply_editor_data_when_start_up_project(editordat);
+                            assert(p->save_project());
+                            
+                            // 在此处创建资源目录，包含一些基本的资源和未来自动创建的资源
+                            do fsys::mkdir(p->get_path/"resource");
+                            do fsys::mkdir(p->get_path/"resource"/"texture");
+                            do fsys::mkdir(p->get_path/"resource"/"workflow");
+                            do fsys::mkdir(p->get_path/"resource"/"workflow"/"node");
+                            do fsys::mkdir(p->get_path/"resource"/"workflow"/"type");
+                            do fsys::mkdir(p->get_path/"resource"/"workflow"/"producer");
+                            do fsys::writeall(p->get_path/"resource"/"workflow"/"node"/".gitkeepme", "");
+                            do fsys::writeall(p->get_path/"resource"/"workflow"/"type"/".gitkeepme", "");
+                            do fsys::writeall(p->get_path/"resource"/"workflow"/"producer"/".gitkeepme", "");
+                            
                             do fsys::writeall(p->get_path/"resource"/"texture"/"readme.md", 
 @"# Texture 目录
 ---
 此目录用于保存引擎自动生成的图像资源
 "@);
+                                do fsys::copy(
+                                    fsys::normalize(F"{std::host_path()}/builtin/shader"),
+                                fsys::normalize(F"{p->get_path}/resource/shader"));
                             do fsys::copy(
-                            fsys::normalize(F"{std::host_path()}/builtin/shader"),
-                            fsys::normalize(F"{p->get_path}/resource/shader"));
-                        do fsys::copy(
-                            fsys::normalize(F"{std::host_path()}/builtin/font"),
-                            fsys::normalize(F"{p->get_path}/resource/font"));
-                        do fsys::copy(
-                            fsys::normalize(F"{std::host_path()}/builtin/script/editor.wo"),
-                            fsys::normalize(F"{p->get_path}"));
+                                fsys::normalize(F"{std::host_path()}/builtin/font"),
+                                fsys::normalize(F"{p->get_path}/resource/font"));
+                            do fsys::copy(
+                                fsys::normalize(F"{std::host_path()}/builtin/script/editor.wo"),
+                                fsys::normalize(F"{p->get_path}"));
                             do fsys::writeall(p->get_path / ".gitignore", 
 @"# JoyEngine ECS git ignore config.
 
@@ -411,23 +411,23 @@ project.je4project text eol=lf
 *.je4chunklist text eol=lf
 CMakeLists.txt text eol=lf
 "@);
-                            match (je::towoo::unsafe::dynamic_parser::update_all("@/editor.wo"))
-                        {
-                            ok(_)?;
-                            err(msg)?
+                                match (je::towoo::unsafe::dynamic_parser::update_all("@/editor.wo"))
                             {
-                                p->close();
-                                return result::err(msg);
+                                ok(_)?;
+                                err(msg)?
+                                {
+                                    p->close();
+                                    return result::err(msg);
+                                }
                             }
+                            
+                            je::gui::register_exit_callback(\=ask_for_saving_proj_when_exit(p););
+                            editor::gui::edit_project(p);
+                            save_editor_data_after_exit(editordat, p->get_name, p->get_path);
+                            je::gui::unregister_exit_callback();
+                            
+                            return result::ok(\=p->get_towoo_context_for_exit->close;);
                         }
-                        
-                        je::gui::register_exit_callback(\=ask_for_saving_proj_when_exit(p););
-                        editor::gui::edit_project(p);
-                        save_editor_data_after_exit(editordat, p->get_name, p->get_path);
-                        je::gui::unregister_exit_callback();
-                        
-                        return result::ok(\=p->get_towoo_context_for_exit->close;);
-                    }
                     ;
                 }
             }
@@ -443,8 +443,8 @@ func open_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict
         return jeapi::gui::form::errmsg("失败", F"加载项目失败，找不到项目文件{proj_path}");
         
     match (fsys::readall(proj_path)
-            =>> \d = dict::deserialize(d);
-            =>> \d = d: dynamic->trycast:<dict<string, dynamic>>;)
+        =>> \d = dict::deserialize(d);
+        =>> \d = d: dynamic->trycast:<dict<string, dynamic>>;)
     {
         value(dat)?
         {
@@ -491,16 +491,17 @@ for (;;)
         je::internal::init_graphic_pipeline_for_editor(u->get_universe());
         
         if (std::platform::os != std::platform::os_type::WIN32 ||
-                editor::CxxProject::is_builder_ready())
+            editor::CxxProject::is_builder_ready())
         {
-            launch(func(){
+            launch(
+                func(){
                     let open = new! std::mutable(true);
                     
                     if (BeginAttr("JoyEngineECS 项目导航",
                             WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
                                 + WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus
-                                    + WindowsAttribute::ImGuiWindowFlags_NoDocking
-                                        + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
+                                + WindowsAttribute::ImGuiWindowFlags_NoDocking
+                                + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
                     {
                         Text("欢迎使用JoyEngine");
                         SameLine();
@@ -526,14 +527,14 @@ for (;;)
                             launch(
                                 \ = open_path_to_do_sth(
                                         \p = do p->> \path = create_project_at(path, u, editor_configs, open);;)
-                                ;);
+                                    ;);
                         }
                         if (jeapi::gui::widget::IconButton(load_project_icon, "加载一个项目", (64., 64.), option::none))
                         {
                             launch(
                                 \= open_path_to_do_sth(
                                         \p = do p->> \path = open_project_at(path, u, editor_configs, open);;,)
-                                ;);
+                                    ;);
                         }
                         
                         TextDisabled("历史项目");
@@ -610,8 +611,8 @@ for (;;)
                     if (BeginAttr("JoyEngineECS 项目导航",
                             WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
                                 + WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus
-                                    + WindowsAttribute::ImGuiWindowFlags_NoDocking
-                                        + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
+                                + WindowsAttribute::ImGuiWindowFlags_NoDocking
+                                + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
                     {
                         Text("启动引擎时发现项目所需使用的构建工具未准备就绪");
                         Text("* 项目中的C++模块需要使用构建工具进行编译");

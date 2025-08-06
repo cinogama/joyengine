@@ -69,10 +69,10 @@ namespace editor::gui::drawpannel
         let r = {}mut: map<string, fsys::path_t>;
         
         for (let path : fsys::allsubpath(fsys::normalize(std::host_path()))
-                -> or([])
-                -> connect(fsys::allsubpath(proj->get_path)
-                        -> or([]))
-                )
+            -> or([])
+            -> connect(fsys::allsubpath(proj->get_path)
+                -> or([]))
+            )
         {
             if (!path->to_string->lower->end_with(".image.wo"))
                 continue;

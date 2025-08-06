@@ -391,10 +391,10 @@ namespace editor::gui::tilemap
             
             try! tiletexture =
                 graphic::texture::load(option::none, context->get_project->make_path_normalize(imgpath))
-                ->  or_bind(\=_create_clip_texture(context, imgpath, maintex, ix, iy, xcount, ycount);)
-                ->> \t = result::ok(t): result<graphic::texture, string>;
-                ->  or(result::err("无法加载或创建Tile纹理"))
-                ;
+                    ->  or_bind(\=_create_clip_texture(context, imgpath, maintex, ix, iy, xcount, ycount);)
+                    ->> \t = result::ok(t): result<graphic::texture, string>;
+                    ->  or(result::err("无法加载或创建Tile纹理"))
+                    ;
             return result::ok(Tile{
                     maintex = maintex,
                     texture = tiletexture,
@@ -431,7 +431,7 @@ namespace editor::gui::tilemap
                             return tex;
                         }
                         none?
-                        ;
+                            ;
                     }
                     
                     let tileimage = new! image(tile_w, tile_h);
@@ -753,7 +753,7 @@ namespace editor::gui::tilemap
                         self.m_layerd_tiles->get_or_set(layer, {}mut)->get_or_set(x, {}mut)->set(y, tile);
                     }
                     none?
-                    ; // 已经报过错了，这里就简单忽略
+                        ; // 已经报过错了，这里就简单忽略
                 }
             }
         }
@@ -769,7 +769,7 @@ namespace editor::gui::tilemap
         func apply_draw_tile(self: TileEditContext, x: int, y: int)
         {
             do self->get_selected_tile->> \tile =
-                    self.m_layerd_tiles->get_or_set(self.m_drawing_layer, {}mut)->get_or_set(x, {}mut)->set(y, tile);;
+                self.m_layerd_tiles->get_or_set(self.m_drawing_layer, {}mut)->get_or_set(x, {}mut)->set(y, tile);;
         }
         func clear_draw_tile(self: TileEditContext, x: int, y: int)
         {
@@ -805,7 +805,7 @@ namespace editor::gui::tilemap
                                         create_context.m_tile_y_count = math::max(1, y / 16);
                                     }
                                     none?
-                                    ;
+                                        ;
                                 }
                                 
                                 BeginGroup();
@@ -1190,7 +1190,7 @@ namespace editor::gui::tilemap
                         
                         // Move
                         if (je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Left)
-                                || je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Right))
+                            || je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Right))
                         {
                             let (mousedelta_x, mousedelta_y) = GetMouseDeltaPos();
                             self.m_offset =
@@ -1239,9 +1239,9 @@ namespace editor::gui::tilemap
             let xys = self.m_layerd_tiles
                 ->  unmapping
                 =>> \layer_tiles = layer_tiles[1]->unmapping
-                        =>> \x_tiles = x_tiles[1]->unmapping
-                                =>> \y_tiles = [(x_tiles[0], y_tiles[0])];
-                            ;
+                    =>> \x_tiles = x_tiles[1]->unmapping
+                        =>> \y_tiles = [(x_tiles[0], y_tiles[0])];
+                        ;
                     ;
                 ;
                 
@@ -1288,7 +1288,7 @@ namespace editor::gui::tilemap
                     let RANDOMABLE_WAYS_1 = WrapingTileWay::UP + WrapingTileWay::DOWN + WrapingTileWay::LEFT + WrapingTileWay::RIGHT;
                     let RANDOMABLE_WAYS_2 = RANDOMABLE_WAYS_1 + WrapingTileWay::LEFTUP + WrapingTileWay::RIGHTUP + WrapingTileWay::LEFTDOWN + WrapingTileWay::RIGHTDOWN;
                     let RANDOM_METHOD = tile.non_periodic_expansion && (tile.auto_wrap->is_value == false ||
-                            tile_way == RANDOMABLE_WAYS_0 || tile_way == RANDOMABLE_WAYS_1 || tile_way == RANDOMABLE_WAYS_2)
+                        tile_way == RANDOMABLE_WAYS_0 || tile_way == RANDOMABLE_WAYS_1 || tile_way == RANDOMABLE_WAYS_2)
                         ? fake_random(layer, x, y)
                         | 0;
                     let RANDOM_ROTATION = func(x: real, y: real){
@@ -1304,14 +1304,14 @@ namespace editor::gui::tilemap
                         \ux: real, uy: real = tile_texture->pix((ipx, ipy))->get_color
                             where ipx = clamp(px, 0, tile_texture_w - 1)
                                 , ipy = clamp(py, 0, tile_texture_h - 1)
-                                    , clamp =
-                                        \v: int, min_val: int, max_val: int =
-                                                v < min_val ? min_val | v > max_val ? max_val | v
-                                            ;
-                                            , px = math::round(nx * tile_texture_w: real)
-                                                , py = math::round(ny * tile_texture_h: real)
-                                                    , (nx, ny) = RANDOM_ROTATION(ux, uy)
-                                                ;
+                                , clamp =
+                                    \v: int, min_val: int, max_val: int =
+                                        v < min_val ? min_val | v > max_val ? max_val | v
+                                        ;
+                                    , px = math::round(nx * tile_texture_w: real)
+                                    , py = math::round(ny * tile_texture_h: real)
+                                    , (nx, ny) = RANDOM_ROTATION(ux, uy)
+                            ;
                         ;
                         
                     // 注意这里的tile坐标x y，在计算对应到结果图上的时候，y轴需要做一次翻转
@@ -1372,7 +1372,7 @@ namespace editor::gui::tilemap
                     let RANDOMABLE_WAYS_1 = WrapingTileWay::UP + WrapingTileWay::DOWN + WrapingTileWay::LEFT + WrapingTileWay::RIGHT;
                     let RANDOMABLE_WAYS_2 = RANDOMABLE_WAYS_1 + WrapingTileWay::LEFTUP + WrapingTileWay::RIGHTUP + WrapingTileWay::LEFTDOWN + WrapingTileWay::RIGHTDOWN;
                     let RANDOM_METHOD = tile.non_periodic_expansion && (tile.auto_wrap->is_value == false ||
-                            tile_way == RANDOMABLE_WAYS_0 || tile_way == RANDOMABLE_WAYS_1 || tile_way == RANDOMABLE_WAYS_2)
+                        tile_way == RANDOMABLE_WAYS_0 || tile_way == RANDOMABLE_WAYS_1 || tile_way == RANDOMABLE_WAYS_2)
                         ? fake_random(layer, x, y)
                         | 0;
                     let RANDOM_ROTATION = func(x: real, y: real){
@@ -1388,14 +1388,14 @@ namespace editor::gui::tilemap
                         \ux: real, uy: real = tile_texture->pix((ipx, ipy))->get_color
                             where ipx = clamp(px, 0, tile_texture_w - 1)
                                 , ipy = clamp(py, 0, tile_texture_h - 1)
-                                    , clamp =
-                                        \v: int, min_val: int, max_val: int =
-                                                v < min_val ? min_val | v > max_val ? max_val | v
-                                            ;
-                                            , px = math::round(nx * tile_texture_w: real)
-                                                , py = math::round(ny * tile_texture_h: real)
-                                                    , (nx, ny) = RANDOM_ROTATION(ux, uy)
-                                                ;
+                                , clamp =
+                                    \v: int, min_val: int, max_val: int =
+                                        v < min_val ? min_val | v > max_val ? max_val | v
+                                        ;
+                                    , px = math::round(nx * tile_texture_w: real)
+                                    , py = math::round(ny * tile_texture_h: real)
+                                    , (nx, ny) = RANDOM_ROTATION(ux, uy)
+                            ;
                         ;
                         
                     // 注意这里的tile坐标x y，在计算对应到结果图上的时候，y轴需要做一次翻转
@@ -1477,7 +1477,7 @@ namespace editor::gui::tilemap
                     let RANDOMABLE_WAYS_1 = WrapingTileWay::UP + WrapingTileWay::DOWN + WrapingTileWay::LEFT + WrapingTileWay::RIGHT;
                     let RANDOMABLE_WAYS_2 = RANDOMABLE_WAYS_1 + WrapingTileWay::LEFTUP + WrapingTileWay::RIGHTUP + WrapingTileWay::LEFTDOWN + WrapingTileWay::RIGHTDOWN;
                     let RANDOM_METHOD = tile.non_periodic_expansion && (tile.auto_wrap->is_value == false ||
-                            tile_way == RANDOMABLE_WAYS_0 || tile_way == RANDOMABLE_WAYS_1 || tile_way == RANDOMABLE_WAYS_2)
+                        tile_way == RANDOMABLE_WAYS_0 || tile_way == RANDOMABLE_WAYS_1 || tile_way == RANDOMABLE_WAYS_2)
                         ? fake_random(layer, x, y)
                         | 0;
                         
@@ -1494,14 +1494,14 @@ namespace editor::gui::tilemap
                         \ux: real, uy: real = tile_texture->pix((ipx, ipy))->get_color
                             where ipx = clamp(px, 0, tile_texture_w - 1)
                                 , ipy = clamp(py, 0, tile_texture_h - 1)
-                                    , clamp =
-                                        \v: int, min_val: int, max_val: int =
-                                                v < min_val ? min_val | v > max_val ? max_val | v
-                                            ;
-                                            , px = math::round(nx * tile_texture_w: real)
-                                                , py = math::round(ny * tile_texture_h: real)
-                                                    , (nx, ny) = RANDOM_ROTATION(ux, uy)
-                                                ;
+                                , clamp =
+                                    \v: int, min_val: int, max_val: int =
+                                        v < min_val ? min_val | v > max_val ? max_val | v
+                                        ;
+                                    , px = math::round(nx * tile_texture_w: real)
+                                    , py = math::round(ny * tile_texture_h: real)
+                                    , (nx, ny) = RANDOM_ROTATION(ux, uy)
+                            ;
                         ;
                         
                     // 注意这里的tile坐标x y，在计算对应到结果图上的时候，y轴需要做一次翻转
@@ -1557,7 +1557,7 @@ namespace editor::gui::tilemap
                             
                             do InputInt("瓦片像素", export_image.m_tile_pcount)
                                 ->> \neww = export_image.m_tile_pcount =
-                                        neww > 0 ? neww | immut export_image.m_tile_pcount
+                                    neww > 0 ? neww | immut export_image.m_tile_pcount
                                     ;
                                 ;
                                 
@@ -1569,7 +1569,7 @@ namespace editor::gui::tilemap
                                 ;
                             do CheckBox("导出分块纹理", export_image.m_export_chunk_image->is_value)
                                 ->> \newv = export_image.m_export_chunk_image =
-                                        newv ? option::value(16) | option::none
+                                    newv ? option::value(16) | option::none
                                     ;
                                 ;
                             match (export_image.m_export_chunk_image)
@@ -1579,7 +1579,7 @@ namespace editor::gui::tilemap
                                     do InputInt("区块大小", val)
                                         ->> \val = export_image.m_export_chunk_image = option::value(v)
                                             where v = val <= 0 ? 1 | val
-                                        ;
+                                            ;
                                         ;
                                     TextDisabled("* 警告：将导出到对应chunks目录下，此目录中的所有文件将会被删除");
                                 }
@@ -1587,9 +1587,9 @@ namespace editor::gui::tilemap
                             }
                             
                             BeginDisabled(false == (export_image.m_export_full_image ||
-                                        export_image.m_export_layer_image ||
-                                            export_image.m_export_chunk_image->is_value));
-                                            
+                                    export_image.m_export_layer_image ||
+                                        export_image.m_export_chunk_image->is_value));
+                                        
                             if (Button("创建"))
                             {
                                 open = false;
@@ -1666,11 +1666,11 @@ namespace editor::gui::tilemap
                                             chunks_pos_info[chunk.m_position.0]->set(chunk.m_position.1, F"chunk_{chunk.m_position.0}_{chunk.m_position.1}.je4chunk");
                                             
                                             if (!\dat = fsys::writeall(target_chunk_path / F"chunk_{chunk.m_position.0}_{chunk.m_position.1}.je4chunk", dat);
-                                                    <| {
+                                                <| {
                                                     ["layers"] = chunk.m_image_layers
-                                                        ->> \layerid = (layerid, F"chunk_{chunk.m_position.0}_{chunk.m_position.1}_{layerid}.je4chunk");
-                                                        ->  mapping
-                                                        }: string)
+                                                    ->> \layerid = (layerid, F"chunk_{chunk.m_position.0}_{chunk.m_position.1}_{layerid}.je4chunk");
+                                                    ->  mapping
+                                                    }: string)
                                             {
                                                 jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_chunk_path->to_string}");
                                             }

@@ -14,13 +14,13 @@ func main_impl<VoidT>(target_texture: je::graphic::texture, (lx, ly): (int, int)
 {
     if (!entry(target_texture, (lx, ly), (rw, rh)))
         return;
-
+        
     let result_pixels = array::create(rw * rh, mut (0.,0.,0.,0.));
-
+    
     for (let mut y = 0; y < rh; y += 1)
         for (let mut x = 0; x < rw; x += 1)
             result_pixels[y * rw + x] = pixel(target_texture, x + lx, y + ly);
-
+            
     for (let mut y = 0; y < rh; y += 1)
         for (let mut x = 0; x < rw; x += 1)
             target_texture->pix((x + lx, y + ly))->set_color(result_pixels[y * rw + x]);

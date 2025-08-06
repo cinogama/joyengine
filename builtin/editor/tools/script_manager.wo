@@ -23,51 +23,51 @@ namespace editor::tools
     {
         match (_available_tool_scripts->get(script))
         {
-        none?
-            return result::err("没有找到此脚本");
-        value(path)?
+            none?
+                return result::err("没有找到此脚本");
+            value(path)?
             {
                 match (vm::load(path->to_string()))
                 {
-                err(msg)?
-                    return result::err(F"运行脚本失败：{msg}");
-                ok(vmm)?
+                    err(msg)?
+                        return result::err(F"运行脚本失败：{msg}");
+                    ok(vmm)?
                     {
-                        let invoke_script = 
+                        let invoke_script =
                             func(opentity: option<je::entity>)
                             {
                                 do vmm->jit;
                                 do vmm->run;
                                 do vmm->invoke("main", [
-                                    proj->get_env->get_universe as je::universe: dynamic,
-                                    proj->get_editing_world as option<je::world>: dynamic,
-                                    opentity as option<je::entity>: dynamic,
+                                        proj->get_env->get_universe as je::universe: dynamic,
+                                        proj->get_editing_world as option<je::world>: dynamic,
+                                        opentity as option<je::entity>: dynamic,
                                     ]);
                                 do vmm->close();
                             };
                         match (ctx->get_editing_entity)
                         {
-                        value(euid)? euid->dosth(invoke_script);
-                        none? invoke_script(option::none);
+                            value(euid)? euid->dosth(invoke_script);
+                            none? invoke_script(option::none);
                         }
                         return result::ok(nil: void);
                     }
-                }             
+                }
             }
         }
     }
     public func update_tool_scripts(project: Project)
     {
         let new_path_results = {}mut: map<string, fsys::path_t>;
-
+        
         match (fsys::allsubpath(project->get_path)
             =>> \p = fsys::allsubpath(fsys::normalize(std::host_path()))
                 ->> \ep = p->connect(ep);
                 ;)
         {
-        err(errno)?
-            jeapi::gui::form::errmsg("失败", F"获取项目中的工具脚本失败({errno})");
-        ok(subpaths)?
+            err(errno)?
+                jeapi::gui::form::errmsg("失败", F"获取项目中的工具脚本失败({errno})");
+            ok(subpaths)?
             {
                 for (let path : subpaths)
                 {
@@ -79,8 +79,8 @@ namespace editor::tools
                 }
             }
         }
-
-        _available_tool_scripts = 
+        
+        _available_tool_scripts =
             new_path_results as map<string, fsys::path_t>->unsafe::cast:<dict<string, fsys::path_t>>;
     }
 }

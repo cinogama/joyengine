@@ -24,8 +24,8 @@ namespace jeapi::gui::form
                 if (Button("确认") || (IsWindowFocused() && inputmgr::keypush(ImGuiKey::ImGuiKey_Enter)))
                     f->close();
             })
-            -> show
-            ;
+        -> show
+        ;
     }
     
     public let errmsg = jeapi::gui::errmsg;

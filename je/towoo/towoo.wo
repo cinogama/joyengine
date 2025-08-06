@@ -38,17 +38,17 @@ namespace je
             private func _remove_component<T>(self: entity, tid: je::typeinfo)=> void;
             
         public func add_component<T>(self: entity)=> option<T>
-        where typeof:<T>::type::typeinfo is je::typeinfo;
+            where typeof:<T>::type::typeinfo is je::typeinfo;
         {
             return _add_component:<T>(self, typeof:<T>::type::typeinfo);
         }
         public func get_component<T>(self: entity)=> option<T>
-        where typeof:<T>::type::typeinfo is je::typeinfo;
+            where typeof:<T>::type::typeinfo is je::typeinfo;
         {
             return _get_component:<T>(self, typeof:<T>::type::typeinfo);
         }
         public func remove_component<T>(self: entity)=> void
-        where typeof:<T>::type::typeinfo is je::typeinfo;
+            where typeof:<T>::type::typeinfo is je::typeinfo;
         {
             _remove_component:<T>(self, typeof:<T>::type::typeinfo);
         }
@@ -80,7 +80,7 @@ namespace je
             public func atan2(y: real, x: real)=> real;
             
         public func abs<T>(a: T)
-        where a is int || a is real;
+            where a is int || a is real;
         {
             if (a < 0: T)
                 return -a;
@@ -97,13 +97,13 @@ namespace je
         }
         
         public func lerp<T>(a: T, b: T, deg: real)
-        where typeid:<typeof(a * deg)> != 0;
+            where typeid:<typeof(a * deg)> != 0;
         {
             return a * (1. - deg) + b * deg;
         }
         
         public func clamp<T>(a: T, min: T, max: T)
-        where typeid:<typeof(a < a)> != 0;
+            where typeid:<typeof(a < a)> != 0;
         {
             if (a < min)
                 return min;
@@ -129,7 +129,7 @@ namespace vec2
         return (a[0] - b[0], a[1] - b[1]): vec2;
     }
     public func operator * (a: vec2, b)
-    where b is vec2 || b is real;
+        where b is vec2 || b is real;
     {
         if (b is vec2)
             return (a[0] * b[0], a[1] * b[1]): vec2;
@@ -137,7 +137,7 @@ namespace vec2
             return (a[0] * b, a[1] * b): vec2;
     }
     public func operator / (a: vec2, b)
-    where b is vec2 || b is real;
+        where b is vec2 || b is real;
     {
         if (b is vec2)
             return (a[0] / b[0], a[1] / b[1]): vec2;
@@ -173,7 +173,7 @@ namespace vec3
         return (a[0] - b[0], a[1] - b[1], a[2] - b[2]): vec3;
     }
     public func operator * (a: vec3, b)
-    where b is vec3 || b is real;
+        where b is vec3 || b is real;
     {
         if (b is vec3)
             return (a[0] * b[0], a[1] * b[1], a[2] * b[2]): vec3;
@@ -181,7 +181,7 @@ namespace vec3
             return (a[0] * b, a[1] * b, a[2] * b): vec3;
     }
     public func operator / (a: vec3, b)
-    where b is vec3 || b is real;
+        where b is vec3 || b is real;
     {
         if (b is vec3)
             return (a[0] / b[0], a[1] / b[1], a[2] / b[2]): vec3;
@@ -226,7 +226,7 @@ namespace vec4
         return (a[0] - b[0], a[1] - b[1], a[2] - b[2], a[3] - b[3]): vec4;
     }
     public func operator * (a: vec4, b)
-    where b is vec4 || b is real;
+        where b is vec4 || b is real;
     {
         if (b is vec4)
             return (a[0] * b[0], a[1] * b[1], a[2] * b[2], a[3] * b[3]): vec4;
@@ -234,7 +234,7 @@ namespace vec4
             return (a[0] * b, a[1] * b, a[2] * b, a[3] * b): vec4;
     }
     public func operator / (a: vec4, b)
-    where b is vec4 || b is real;
+        where b is vec4 || b is real;
     {
         if (b is vec4)
             return (a[0] / b[0], a[1] / b[1], a[2] / b[2], a[3] / b[3]): vec4;
@@ -271,7 +271,7 @@ namespace ivec2
         return (a[0] - b[0], a[1] - b[1]): ivec2;
     }
     public func operator * (a: ivec2, b)
-    where b is ivec2 || b is int;
+        where b is ivec2 || b is int;
     {
         if (b is ivec2)
             return (a[0] * b[0], a[1] * b[1]): ivec2;
@@ -279,7 +279,7 @@ namespace ivec2
             return (a[0] * b, a[1] * b): ivec2;
     }
     public func operator / (a: ivec2, b)
-    where b is ivec2 || b is int;
+        where b is ivec2 || b is int;
     {
         if (b is ivec2)
             return (a[0] / b[0], a[1] / b[1]): ivec2;
@@ -361,7 +361,7 @@ namespace quat
         public func slerp(a: quat, b: quat, t: real)=> quat;
         
     public func operator * (self: quat, b)
-    where b is vec3 || b is quat;
+        where b is vec3 || b is quat;
     {
         if (b is vec3)
         {
@@ -369,7 +369,7 @@ namespace quat
             let u = (self[0], self[1], self[2]): vec3;
             return u * (2. * u->dot(b))
                 + b * (w * w - u->dot(u))
-                    + u->cross(b) * (2. * w);
+                + u->cross(b) * (2. * w);
         }
         else
         {
@@ -455,14 +455,14 @@ namespace Renderer
     {
         extern("libjoyecs", "wojeapi_towoo_renderer_shaders_set_uniform")
             public func set_uniform<T>(self: Shaders, name: string, val: T)=> void
-            where val is int
-                || val is real
-                || val is vec2
-                || val is vec3
-                || val is vec4;
-        extern("libjoyecs", "wojeapi_towoo_renderer_shaders_set_shaders")
-            public func set_shaders(self: Shaders, shaders: array<je::graphic::shader>)=> void;
-            
+                where val is int
+            || val is real
+            || val is vec2
+            || val is vec3
+            || val is vec4;
+            extern("libjoyecs", "wojeapi_towoo_renderer_shaders_set_shaders")
+                public func set_shaders(self: Shaders, shaders: array<je::graphic::shader>)=> void;
+                
         extern("libjoyecs", "wojeapi_towoo_renderer_shaders_get_shaders")
             public func get_shaders(self: Shaders)=> array<je::graphic::shader>;
     }

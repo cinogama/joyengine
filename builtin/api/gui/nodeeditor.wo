@@ -202,7 +202,7 @@ namespace jeapi::gui
         }
         {
             func create<T>(val: T, pin: _InputPin, ctx: node_editor)
-            where require!(T: ITyped);
+                where require!(T: ITyped);
             {
                 return Input
                 {
@@ -368,37 +368,37 @@ namespace jeapi::gui
         }
         func _generate_node_dict_item(self: node_editor, item: NodeDictItem, out_flat_map: map<string, _NodeInfo>)
             => _NodeInfoDictItem
-        {
-            match (item)
             {
-                Node(generator)?
+                match (item)
                 {
-                    let ninstance = self->_generate_node_impl(generator);
-                    let info = _NodeInfo{
-                        name = ninstance.instance->name(),
-                        input_types = ninstance.inputs->>\i = i.typeval->typename();,
-                        output_types = ninstance.outputs->>\o = o.typeval->typename();,
-                        generator = generator,
-                    };
-                    out_flat_map->set(info.name, info);
-                    return _NodeInfoDictItem::Node(info);
-                }
-                Dict(d)?
-                {
-                    return _NodeInfoDictItem::Dict(self->_generate_node_dict(d, out_flat_map));
+                    Node(generator)?
+                    {
+                        let ninstance = self->_generate_node_impl(generator);
+                        let info = _NodeInfo{
+                            name = ninstance.instance->name(),
+                            input_types = ninstance.inputs->>\i = i.typeval->typename();,
+                            output_types = ninstance.outputs->>\o = o.typeval->typename();,
+                            generator = generator,
+                        };
+                        out_flat_map->set(info.name, info);
+                        return _NodeInfoDictItem::Node(info);
+                    }
+                    Dict(d)?
+                    {
+                        return _NodeInfoDictItem::Dict(self->_generate_node_dict(d, out_flat_map));
+                    }
                 }
             }
-        }
         func _generate_node_dict(self: node_editor, nodedict: NodeDict, out_flat_map: map<string, _NodeInfo>)
             => _NodeInfoDict
-        {
-            let result = {}mut: map<string, _NodeInfoDictItem>;
-            for (let (name, item) : nodedict)
             {
-                result->set(name, self->_generate_node_dict_item(item, out_flat_map));
+                let result = {}mut: map<string, _NodeInfoDictItem>;
+                for (let (name, item) : nodedict)
+                {
+                    result->set(name, self->_generate_node_dict_item(item, out_flat_map));
+                }
+                return result->unsafe::asdict;
             }
-            return result->unsafe::asdict;
-        }
         public func _restore_and_create_node(self: node_editor, data: string)
         {
             return try!
@@ -670,17 +670,17 @@ namespace jeapi::gui
                         
                         let mut accept = false;
                         match (self.inputpins->get(a)
-                                =>> \inpin = self.outputpins->get(b)
-                                        ->> \outpin = (inpin, outpin);
-                                    ;)
+                            =>> \inpin = self.outputpins->get(b)
+                                ->> \outpin = (inpin, outpin);
+                                ;)
                         {
                             value((inpin, outpin))?
                             {
                                 // 此处检查类型
                                 // TODO: 成环检测？
                                 if (inpin.nodeid != outpin.nodeid &&
-                                        inpin.typeval->typename() == outpin.typeval->typename() &&
-                                            self->_check_loop_linked(a, b) == false)
+                                    inpin.typeval->typename() == outpin.typeval->typename() &&
+                                        self->_check_loop_linked(a, b) == false)
                                 {
                                     accept = true;
                                     
@@ -771,8 +771,8 @@ namespace jeapi::gui
                                 {
                                     value(outpin)?
                                         do outpin.linked_pins->find(aid)
-                                        ->> \idx = outpin.linked_pins->remove(idx);
-                                        ;
+                                            ->> \idx = outpin.linked_pins->remove(idx);
+                                            ;
                                     none?;
                                 }
                             }
@@ -846,52 +846,52 @@ namespace jeapi::gui
         }
         func _filter_new_node_dict_impl(self: node_editor, typename: string, isinput: bool, d: _NodeInfoDict)
             => _NodeInfoDict
-        {
-            let result = {}mut: map<string, _NodeInfoDictItem>;
-            for (let (name, item) : d)
             {
-                match (item)
+                let result = {}mut: map<string, _NodeInfoDictItem>;
+                for (let (name, item) : d)
                 {
-                    Node(info)?
-                        if (isinput
+                    match (item)
+                    {
+                        Node(info)?
+                            if (isinput
                                 ? info.output_types->find(typename)->is_value
                                 | info.input_types->find(typename)->is_value)
-                            result->set(name, item);
-                    Dict(subd)?
-                    {
-                        let r = self->_filter_new_node_dict_impl(typename, isinput, subd);
-                        if (! r->empty)
-                            result->set(name, _NodeInfoDictItem::Dict(r));
+                                result->set(name, item);
+                        Dict(subd)?
+                        {
+                            let r = self->_filter_new_node_dict_impl(typename, isinput, subd);
+                            if (! r->empty)
+                                result->set(name, _NodeInfoDictItem::Dict(r));
+                        }
                     }
                 }
+                return result->unsafe::asdict;
             }
-            return result->unsafe::asdict;
-        }
         func _filter_new_node_dict(self: node_editor, pinid: PinId, d: _NodeInfoDict)
             => _NodeInfoDict
-        {
-            let mut typename = option::none: option<string>;
-            let mut isinput = false;
-            
-            if (self.inputpins->contains(pinid))
             {
-                typename = option::value(self.inputpins[pinid].typeval->typename());
-                isinput = true;
+                let mut typename = option::none: option<string>;
+                let mut isinput = false;
+                
+                if (self.inputpins->contains(pinid))
+                {
+                    typename = option::value(self.inputpins[pinid].typeval->typename());
+                    isinput = true;
+                }
+                else if (self.outputpins->contains(pinid))
+                {
+                    typename = option::value(self.outputpins[pinid].typeval->typename());
+                    isinput = false;
+                }
+                
+                match (typename)
+                {
+                    value(typename)?
+                        return self->_filter_new_node_dict_impl(typename, isinput, d);
+                    none?
+                        return {};
+                }
             }
-            else if (self.outputpins->contains(pinid))
-            {
-                typename = option::value(self.outputpins[pinid].typeval->typename());
-                isinput = false;
-            }
-            
-            match (typename)
-            {
-                value(typename)?
-                    return self->_filter_new_node_dict_impl(typename, isinput, d);
-                none?
-                    return {};
-            }
-        }
         func _menu_show_new_nodes(self: node_editor)
         {
             let mut d = self.node_info_dic->or({});
@@ -1011,9 +1011,9 @@ namespace jeapi::gui
                             
                             let check_producers =
                                 \= collected_producers
-                                        ->> \p = p.producer->finished();
-                                        -> reduce(\l, r = l || r;)
-                                        -> or(true)
+                                    ->> \p = p.producer->finished();
+                                    -> reduce(\l, r = l || r;)
+                                    -> or(true)
                                     ;
                                 ;
                                 
@@ -1086,9 +1086,9 @@ namespace jeapi::gui
                 GetHoveredLink(),
                 GetHoveredPin(),
             );
-            // _last_hoverd_node: mut option<NodeId>,
-            // _last_hoverd_link: mut option<LinkId>,
-            // _last_hoverd_pin: mut option<PinId>,
+        // _last_hoverd_node: mut option<NodeId>,
+        // _last_hoverd_link: mut option<LinkId>,
+        // _last_hoverd_pin: mut option<PinId>,
         }
         public func update(self: node_editor)
         {
@@ -1124,16 +1124,16 @@ namespace jeapi::gui
         }
         
         func alloc_id<T>(self: node_editor)
-        where std::type_traits::is_same:<T, NodeId>
-                || std::type_traits::is_same:<T, PinId>
-                || std::type_traits::is_same:<T, LinkId>;
+            where std::type_traits::is_same:<T, NodeId>
+            || std::type_traits::is_same:<T, PinId>
+            || std::type_traits::is_same:<T, LinkId>;
         {
             self.allocated_id += 1;
             return self.allocated_id: T;
         }
         
         public func add_producer<ProducerT>(self: node_editor, name: string)
-        where require!(ProducerT: IProducer);
+            where require!(ProducerT: IProducer);
         {
             let producer = typeof:<ProducerT>::create();
             
@@ -1150,7 +1150,7 @@ namespace jeapi::gui
             return producer;
         }
         public func add_input<TypeT>(self: node_editor, name: string)
-        where require!(TypeT: ITyped);
+            where require!(TypeT: ITyped);
         {
             let val = typeof:<TypeT>::create();
             
@@ -1168,7 +1168,7 @@ namespace jeapi::gui
             return Input::create(val, _pin, self);
         }
         public func add_output<TypeT>(self: node_editor, name: string)
-        where require!(TypeT: ITyped);
+            where require!(TypeT: ITyped);
         {
             let val = typeof:<TypeT>::create();
             
@@ -1202,7 +1202,7 @@ namespace jeapi::gui
                 \ = SetNodePosition(node.id, pos););
         }
         public func add_node<NodeT>(self: node_editor)
-        where require!(NodeT: INode);
+            where require!(NodeT: INode);
         {
             let mut node = mutable::create(option::none: option<NodeT>);
             

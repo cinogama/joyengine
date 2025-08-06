@@ -79,10 +79,10 @@ namespace Editor
                 + n.m_namespace->reduce(\l,r = l + "::" + r;)
                 ->> \v = v + "::";
                 -> or("")
-                    + n.m_name
-                        + ";\n"
-                        ;
-                        
+                + n.m_name
+                + ";\n"
+                ;
+                
             let mut write_node_map = node_type_map: dynamic;
             for (let name : n.m_namespace)
                 write_node_map = write_node_map->unsafe::cast:<dyn_map>->get_or_set(name: dynamic, {}mut: dynamic);
