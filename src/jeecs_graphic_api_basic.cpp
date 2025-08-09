@@ -1035,17 +1035,16 @@ jegl_resource *jegl_load_shader_source(const char *path, const char *src, bool i
 
     wo_run(vmm);
 
-    wo_integer_t generate_shader_func;
-    [[maybe_unused]] wo_handle_t generate_shader_jit_func;
+    wo_unref_value generate_shader_func;
 
-    if (!wo_extern_symb(vmm, "shader::generate", &generate_shader_func, &generate_shader_jit_func))
+    if (!wo_extern_symb(&generate_shader_func, vmm, "shader::generate"))
     {
         jeecs::debug::logerr("Fail to load shader: %s. you should import je::shader.", path);
         wo_close_vm(vmm);
         return nullptr;
     }
 
-    if (wo_value retval = wo_invoke_rsfunc(vmm, generate_shader_func, 0, nullptr, nullptr))
+    if (wo_value retval = wo_invoke_value(vmm, &generate_shader_func, 0, nullptr, nullptr))
     {
         void *shader_graph = wo_pointer(retval);
 

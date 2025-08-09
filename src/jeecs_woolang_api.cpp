@@ -5,8 +5,6 @@
 #include <list>
 #include <optional>
 
-wo_integer_t _je_wo_extern_symb_rsfunc(wo_vm vm, wo_string_t name);
-
 std::atomic_flag _jewo_log_buffer_mx = {};
 std::list<std::pair<int, std::string>> _jewo_log_buffer;
 
@@ -1512,7 +1510,7 @@ WO_API wo_api wojeapi_texture_set_pixel_color(wo_vm vm, wo_value args)
 WO_API wo_api wojeapi_font_open(wo_vm vm, wo_value args)
 {
     auto loaded_font = jeecs::graphic::font::load(
-        wo_string(args + 0), 
+        wo_string(args + 0),
         (size_t)wo_int(args + 1));
 
     if (loaded_font.has_value())
@@ -2146,8 +2144,8 @@ WO_API wo_api wojeapi_towoo_update_component(wo_vm vm, wo_value args)
         if (result)
         {
             // Invoke "_init_towoo_component", if failed... boom!
-            wo_integer_t initfunc = _je_wo_extern_symb_rsfunc(cvm, "_init_towoo_component");
-            if (initfunc == 0)
+            wo_unref_value initfunc;
+            if (wo_extern_symb(&initfunc, cvm, "_init_towoo_component") == WO_FALSE)
             {
                 jeecs::debug::logerr("Failed to register: '%s' cannot find '_init_towoo_component' in '%s', "
                     "forget to import je/towoo/component.wo ?",
@@ -2166,7 +2164,7 @@ WO_API wo_api wojeapi_towoo_update_component(wo_vm vm, wo_value args)
                 {
                     wo_value cvm_s = wo_reserve_stack(cvm, 1, nullptr);
                     wo_set_string(cvm_s + 0, cvm, component_name);
-                    auto* retval = wo_invoke_rsfunc(cvm, initfunc, 1, nullptr, &cvm_s);
+                    auto* retval = wo_invoke_value(cvm, &initfunc, 1, nullptr, &cvm_s);
                     wo_pop_stack(cvm, 1);
 
                     if (nullptr == retval)
@@ -2347,9 +2345,9 @@ WO_API wo_api wojeapi_clear_singletons(wo_vm vm, wo_value args)
 
 struct dynamic_parser_impl_t
 {
-    wo_integer_t m_saving;
-    wo_integer_t m_restoring;
-    wo_integer_t m_edit;
+    wo_unref_value m_saving;
+    wo_unref_value m_restoring;
+    wo_unref_value m_edit;
 
     const jeecs::typing::typeinfo_script_parser*
         m_script_parser;
@@ -2388,20 +2386,23 @@ void _je_dynamic_parser_update_types()
             {
                 std::string script_woolang_typename = script_parser->m_woolang_typename;
 
-                wo_integer_t saving_func = _je_wo_extern_symb_rsfunc(_je_dynamic_parser_vm, (script_woolang_typename + "::parser::saving").c_str());
-                wo_integer_t restoring_func = _je_wo_extern_symb_rsfunc(_je_dynamic_parser_vm, (script_woolang_typename + "::parser::restoring").c_str());
-                wo_integer_t edit_func = _je_wo_extern_symb_rsfunc(_je_dynamic_parser_vm, (script_woolang_typename + "::parser::edit").c_str());
+                wo_unref_value saving_func;
+                wo_unref_value restoring_func;
+                wo_unref_value edit_func;
 
-                if (saving_func != 0 || restoring_func != 0 || edit_func != 0)
+                if (wo_extern_symb(&saving_func, _je_dynamic_parser_vm, (script_woolang_typename + "::parser::saving").c_str()) == WO_TRUE
+                    && wo_extern_symb(&restoring_func, _je_dynamic_parser_vm, (script_woolang_typename + "::parser::restoring").c_str()) == WO_TRUE
+                    && wo_extern_symb(&edit_func, _je_dynamic_parser_vm, (script_woolang_typename + "::parser::edit").c_str()) == WO_TRUE)
                 {
+                    auto p = std::make_unique<dynamic_parser_impl_t>();
+
+                    wo_set_val(&p->m_saving, &saving_func);
+                    wo_set_val(&p->m_restoring, &restoring_func);
+                    wo_set_val(&p->m_edit, &edit_func);
+                    p->m_script_parser = script_parser;
+
                     _je_dynamic_parser_impls.insert(
-                        std::make_pair(
-                            (*cur_type)->m_id, std::make_unique<dynamic_parser_impl_t>(
-                                dynamic_parser_impl_t{
-                                    saving_func,
-                                    restoring_func,
-                                    edit_func,
-                                    script_parser })));
+                        std::make_pair((*cur_type)->m_id, std::move(p)));
                 }
             }
 
@@ -2497,15 +2498,13 @@ WO_API wo_api wojeapi_dynamic_parser_saving(wo_vm vm, wo_value args)
         auto* val = wo_pointer(args + 1);
         auto& parser = fnd->second;
 
-        assert(parser->m_saving != 0);
-
         wo_value value = s + 0;
         parser->m_script_parser->m_script_parse_c2w(val, vm, value);
 
         wo_value _je_dynamic_parser_vm_s = wo_reserve_stack(_je_dynamic_parser_vm, 1, nullptr);
         wo_set_val(_je_dynamic_parser_vm_s + 0, value);
-        wo_value result = wo_invoke_rsfunc(
-            _je_dynamic_parser_vm, parser->m_saving, 1, nullptr, &_je_dynamic_parser_vm_s);
+        wo_value result = wo_invoke_value(
+            _je_dynamic_parser_vm, &parser->m_saving, 1, nullptr, &_je_dynamic_parser_vm_s);
 
         wo_pop_stack(_je_dynamic_parser_vm, 1);
 
@@ -2529,13 +2528,11 @@ WO_API wo_api wojeapi_dynamic_parser_restoring(wo_vm vm, wo_value args)
         void* val = wo_pointer(args + 1);
         auto& parser = fnd->second;
 
-        assert(parser->m_restoring != 0);
-
         wo_value _je_dynamic_parser_vm_s = wo_reserve_stack(_je_dynamic_parser_vm, 1, nullptr);
         wo_set_val(_je_dynamic_parser_vm_s + 0, args + 2);
 
-        wo_value result = wo_invoke_rsfunc(
-            _je_dynamic_parser_vm, parser->m_restoring, 1, nullptr, &_je_dynamic_parser_vm_s);
+        wo_value result = wo_invoke_value(
+            _je_dynamic_parser_vm, &parser->m_restoring, 1, nullptr, &_je_dynamic_parser_vm_s);
 
         wo_pop_stack(_je_dynamic_parser_vm, 1);
 
@@ -2566,8 +2563,6 @@ WO_API wo_api wojeapi_dynamic_parser_edit(wo_vm vm, wo_value args)
 
         auto& parser = fnd->second;
 
-        assert(parser->m_edit != 0);
-
         wo_value value = s + 0;
         parser->m_script_parser->m_script_parse_c2w(val, vm, value);
 
@@ -2577,8 +2572,8 @@ WO_API wo_api wojeapi_dynamic_parser_edit(wo_vm vm, wo_value args)
         wo_set_val(_je_dynamic_parser_vm_s + 0, value);
         wo_set_string(_je_dynamic_parser_vm_s + 1, _je_dynamic_parser_vm, tag);
 
-        wo_value result = wo_invoke_rsfunc(
-            _je_dynamic_parser_vm, parser->m_edit, 2, nullptr, &_je_dynamic_parser_vm_s);
+        wo_value result = wo_invoke_value(
+            _je_dynamic_parser_vm, &parser->m_edit, 2, nullptr, &_je_dynamic_parser_vm_s);
 
         wo_pop_stack(_je_dynamic_parser_vm, 2);
 
