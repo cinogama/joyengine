@@ -42,6 +42,9 @@ namespace jeapi::welcome
                         if (show)
                         {
                             Text(je::internal::build_version_info());
+
+                            let (a, b, c, d) = std::platform::version;
+                            Text(F"Powered by woolang {a}.{b}.{c}.{d}");
                             Separator();
                             
                             Text("第三方组件及开源许可");
@@ -80,7 +83,7 @@ namespace jeapi::welcome
                             TextDisabled("Assimp is licensed under the BSD License");
                             
                             Text("Woolang https://github.com/cinogama/woolang");
-                            TextDisabled("Copyright (c) 2021-2023 Cinogama project.");
+                            TextDisabled("Copyright (c) 2021- Cinogama project.");
                             TextDisabled("Woolang is licensed under the Apache License v2.0");
                             
                             Text("使用下面这些库为 OpenGL3.3 提供支持：");
