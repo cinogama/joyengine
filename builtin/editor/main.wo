@@ -32,7 +32,7 @@ jeapi::welcome::display_copyright_msg();
 
 // Debug.
 crashhandler::init();
-// je::internal::register_panic_hook(jeapi::gui::form::panic);
+je::internal::register_panic_hook(jeapi::gui::form::panic);
 
 using je::gui;
 
