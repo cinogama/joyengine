@@ -34,7 +34,7 @@ using fout = struct {
 public func vert(v: vin)
 {
     let vpos = je_mv * vec4(v.vertex, 1.);
-    let vnorm = v.normal * je_mv->float3x3;
+    let vnorm = normalize(je_mv->float3x3 * v.normal);
     return v2f{
         pos = je_p * vpos,
         vpos = vpos->xyz / vpos->w,

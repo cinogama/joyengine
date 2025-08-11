@@ -2,15 +2,15 @@
 
 #include "jeecs_graphic_shader_wrapper.hpp"
 
-using calc_func_t = std::function<jegl_shader_value *(size_t, jegl_shader_value **)>;
+using calc_func_t = std::function<jegl_shader_value* (size_t, jegl_shader_value**)>;
 using operation_t = std::variant<jegl_shader_value::type_base_t, calc_func_t>;
 
 #define reduce_method [](size_t argc, jegl_shader_value **args) -> jegl_shader_value *
 
 const std::vector<std::pair<std::string, std::vector<operation_t>>> _operation_table =
-    {
-        {"+", {jegl_shader_value::INTEGER, jegl_shader_value::INTEGER,
-               reduce_method{return new jegl_shader_value(args[0]->m_integer + args[1]->m_integer);
+{
+    {"+", {jegl_shader_value::INTEGER, jegl_shader_value::INTEGER,
+           reduce_method{return new jegl_shader_value(args[0]->m_integer + args[1]->m_integer);
 }
 }
 }
@@ -261,9 +261,9 @@ const std::vector<std::pair<std::string, std::vector<operation_t>>> _operation_t
 }
 }
 ,
-    //
-    {"float", {jegl_shader_value::FLOAT,
-               reduce_method{return new jegl_shader_value(args[0]->m_float);
+//
+{"float", {jegl_shader_value::FLOAT,
+           reduce_method{return new jegl_shader_value(args[0]->m_float);
 }
 }
 }
@@ -274,9 +274,9 @@ const std::vector<std::pair<std::string, std::vector<operation_t>>> _operation_t
 }
 }
 ,
-    //
-    {"float2", {jegl_shader_value::FLOAT, jegl_shader_value::FLOAT,
-                reduce_method{return new jegl_shader_value(args[0]->m_float, args[1]->m_float);
+//
+{"float2", {jegl_shader_value::FLOAT, jegl_shader_value::FLOAT,
+            reduce_method{return new jegl_shader_value(args[0]->m_float, args[1]->m_float);
 }
 }
 }
@@ -287,9 +287,9 @@ const std::vector<std::pair<std::string, std::vector<operation_t>>> _operation_t
 }
 }
 ,
-    //
-    {"float3", {jegl_shader_value::FLOAT, jegl_shader_value::FLOAT, jegl_shader_value::FLOAT,
-                reduce_method{return new jegl_shader_value(args[0]->m_float, args[1]->m_float, args[2]->m_float);
+//
+{"float3", {jegl_shader_value::FLOAT, jegl_shader_value::FLOAT, jegl_shader_value::FLOAT,
+            reduce_method{return new jegl_shader_value(args[0]->m_float, args[1]->m_float, args[2]->m_float);
 }
 }
 }
@@ -312,9 +312,9 @@ const std::vector<std::pair<std::string, std::vector<operation_t>>> _operation_t
 }
 }
 ,
-    //
-    {"float4", {jegl_shader_value::FLOAT, jegl_shader_value::FLOAT, jegl_shader_value::FLOAT, jegl_shader_value::FLOAT,
-                reduce_method{return new jegl_shader_value(args[0]->m_float, args[1]->m_float, args[2]->m_float, args[3]->m_float);
+//
+{"float4", {jegl_shader_value::FLOAT, jegl_shader_value::FLOAT, jegl_shader_value::FLOAT, jegl_shader_value::FLOAT,
+            reduce_method{return new jegl_shader_value(args[0]->m_float, args[1]->m_float, args[2]->m_float, args[3]->m_float);
 }
 }
 }
@@ -400,10 +400,10 @@ return new jegl_shader_value(matdata, jegl_shader_value::FLOAT4x4);
 }
 }
 ,
-    //
-    {"float3x3", {jegl_shader_value::FLOAT3, jegl_shader_value::FLOAT3, jegl_shader_value::FLOAT3,
-                  reduce_method{
-                      float matdata[9];
+//
+{"float3x3", {jegl_shader_value::FLOAT3, jegl_shader_value::FLOAT3, jegl_shader_value::FLOAT3,
+              reduce_method{
+                  float matdata[9];
 matdata[0] = args[0]->m_float3[0];
 matdata[1] = args[0]->m_float3[1];
 matdata[2] = args[0]->m_float3[2];
@@ -432,10 +432,10 @@ return new jegl_shader_value(matdata, jegl_shader_value::FLOAT3x3);
 }
 }
 ,
-    //
-    {"*", {jegl_shader_value::FLOAT4x4, jegl_shader_value::FLOAT4,
-           reduce_method{
-               float result[4] = {};
+//
+{"*", {jegl_shader_value::FLOAT4x4, jegl_shader_value::FLOAT4,
+       reduce_method{
+           float result[4] = {};
 jeecs::math::mat4xvec4(result, args[0]->m_float4x4, args[1]->m_float4);
 return new jegl_shader_value(result[0], result[1], result[2], result[3]);
 }
@@ -455,15 +455,15 @@ return new jegl_shader_value(result[0], result[1], result[2], result[3]);
            reduce_method{
                float result[4][4] = {};
 jeecs::math::mat4xmat4(result, args[0]->m_float4x4, args[1]->m_float4x4);
-return new jegl_shader_value((float *)&result, jegl_shader_value::FLOAT4x4);
+return new jegl_shader_value((float*)&result, jegl_shader_value::FLOAT4x4);
 }
 }
 }
 ,
-    //
-    {"*", {jegl_shader_value::FLOAT3x3, jegl_shader_value::FLOAT3,
-           reduce_method{
-               float result[3] = {};
+//
+{"*", {jegl_shader_value::FLOAT3x3, jegl_shader_value::FLOAT3,
+       reduce_method{
+           float result[3] = {};
 jeecs::math::mat3xvec3(result, args[0]->m_float3x3, args[1]->m_float3);
 return new jegl_shader_value(result[0], result[1], result[2]);
 }
@@ -483,14 +483,14 @@ return new jegl_shader_value(result[0], result[1], result[2]);
            reduce_method{
                float result[3][3] = {};
 jeecs::math::mat3xmat3(result, args[0]->m_float3x3, args[1]->m_float3x3);
-return new jegl_shader_value((float *)&result, jegl_shader_value::FLOAT3x3);
+return new jegl_shader_value((float*)&result, jegl_shader_value::FLOAT3x3);
 }
 }
 }
 ,
-    //
-    {"texture", {jegl_shader_value::TEXTURE2D, jegl_shader_value::FLOAT2,
-                 reduce_method{return nullptr;
+//
+{"texture", {jegl_shader_value::TEXTURE2D, jegl_shader_value::FLOAT2,
+             reduce_method{return nullptr;
 }
 }
 }
@@ -1139,6 +1139,22 @@ return new jegl_shader_value((float *)&result, jegl_shader_value::FLOAT3x3);
 }
 }
 ,
+    { "ddx", {jegl_shader_value::FLOAT4,
+              reduce_method{return nullptr; }} },
+    { "ddx", {jegl_shader_value::FLOAT3,
+              reduce_method{return nullptr; }} },
+    { "ddx", {jegl_shader_value::FLOAT2,
+              reduce_method{return nullptr; }} },
+    { "ddx", {jegl_shader_value::FLOAT,
+              reduce_method{return nullptr; }} },
+    { "ddy", {jegl_shader_value::FLOAT4,
+              reduce_method{return nullptr; }} },
+    { "ddy", {jegl_shader_value::FLOAT3,
+              reduce_method{return nullptr; }} },
+    { "ddy", {jegl_shader_value::FLOAT2,
+              reduce_method{return nullptr; }} },
+    { "ddy", {jegl_shader_value::FLOAT,
+              reduce_method{return nullptr; }} },
 }
 ;
 
