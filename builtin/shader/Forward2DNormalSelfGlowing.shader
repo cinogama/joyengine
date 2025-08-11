@@ -11,6 +11,7 @@ CULL    (NONE);
 VAO_STRUCT! vin {
     vertex  : float3,
     uv      : float2,
+    normal  : float3,
 };
 
 using v2f = struct {
@@ -41,13 +42,19 @@ func vtangent(normal: float3)
 public func vert(v: vin)
 {
     let vspace_position = je_mv * vec4(v.vertex, 1.);
+
+    let N = vtangent(v.normal);
+    let T0 = vtangent(float3::const(1., 0., 0.));
+    let T = normalize(T0 - dot(T0, N) * N);
+    let B = normalize(cross(N, T));
+
     return v2f{
         pos = je_p * vspace_position,
         vpos = vspace_position->xyz / vspace_position->w,
         uv = uvtrans(v.uv, je_tiling, je_offset),
-        vtangent_x = vtangent(float3::const(1., 0., 0.)),
-        vtangent_y = vtangent(float3::const(0., 1., 0.)),
-        vtangent_z = vtangent(float3::const(0., 0., -1.)),
+        vtangent_x = T,
+        vtangent_y = B,
+        vtangent_z = N,
     };
 }
 

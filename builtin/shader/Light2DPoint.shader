@@ -108,15 +108,15 @@ public func frag(vf: v2f)
 
     let fade_factor = pow(1. - uvdistance, decay);
 
-    let color_intensity = je_color->xyz * je_color->w * shadow_factor;
-
-    let result = color_intensity 
-        * fade_factor / (fgdistance + 1.0)
-        * step(pixvpos->z, vposition->z);
+    let color_intensity = 
+        je_color->xyz 
+        * je_color->w 
+        * shadow_factor 
+        * fade_factor / (fgdistance + 1.0);
 
     return fout{
         color = vec4(
-            result + apply_point_light_effect(
+            color_intensity * apply_point_light_effect(
                 vposition,
                 vnormalize,
                 vf.light_vpos,

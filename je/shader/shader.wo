@@ -1060,6 +1060,16 @@ public func log10<T>(a: T)
 {
     return apply_operation:<result_gl_t<T>>("log10", a);
 }
+public func ddx<T>(a: T)
+    where is_vec_1_4:<T>;
+{
+    return apply_operation:<result_gl_t<T>>("ddx", a);
+}
+public func ddy<T>(a: T)
+    where is_vec_1_4:<T>;
+{
+    return apply_operation:<result_gl_t<T>>("ddy", a);
+}
 
 public func distance<T>(a: T, b: T)=> float
     where is_vec_1_4:<T> && !(is_float:<T>);
