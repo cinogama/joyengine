@@ -827,15 +827,15 @@ namespace jeecs::graphic::api::dx11
                 blend_describe.AlphaToCoverageEnable = FALSE;
                 // OpenGL咋没这么牛逼的选项呢…… 只能含泪关掉
                 blend_describe.IndependentBlendEnable = FALSE;
-                blend_describe.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
-                blend_describe.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+
                 blend_describe.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
                 if (resource->m_raw_shader_data->m_blend_src_mode == jegl_shader::blend_method::ONE &&
                     resource->m_raw_shader_data->m_blend_dst_mode == jegl_shader::blend_method::ZERO)
                     blend_describe.RenderTarget[0].BlendEnable = FALSE;
                 else
                     blend_describe.RenderTarget[0].BlendEnable = TRUE;
-                auto parse_dx11_enum = [](jegl_shader::blend_method method)
+
+                auto parse_dx11_enum_blend_method = [](jegl_shader::blend_method method)
                     {
                         switch (method)
                         {
@@ -864,8 +864,37 @@ namespace jeecs::graphic::api::dx11
                             return D3D11_BLEND_ONE;
                         }
                     };
-                blend_describe.RenderTarget[0].SrcBlend = blend_describe.RenderTarget[0].SrcBlendAlpha = parse_dx11_enum(resource->m_raw_shader_data->m_blend_src_mode);
-                blend_describe.RenderTarget[0].DestBlend = blend_describe.RenderTarget[0].DestBlendAlpha = parse_dx11_enum(resource->m_raw_shader_data->m_blend_dst_mode);
+                auto parse_dx11_enum_blend_equation = [](jegl_shader::blend_equation eq)
+                    {
+                        switch (eq)
+                        {
+                        case jegl_shader::blend_equation::ADD:
+                            return D3D11_BLEND_OP_ADD;
+                        case jegl_shader::blend_equation::SUBTRACT:
+                            return D3D11_BLEND_OP_SUBTRACT;
+                        case jegl_shader::blend_equation::REVERSE_SUBTRACT:
+                            return D3D11_BLEND_OP_REV_SUBTRACT;
+                        case jegl_shader::blend_equation::MIN:
+                            return D3D11_BLEND_OP_MIN;
+                        case jegl_shader::blend_equation::MAX:
+                            return D3D11_BLEND_OP_MAX;
+                        default:
+                            jeecs::debug::logerr("Invalid blend equation.");
+                            return D3D11_BLEND_OP_ADD;
+                        }
+                    };
+
+                blend_describe.RenderTarget[0].BlendOp
+                    = blend_describe.RenderTarget[0].BlendOpAlpha
+                    = parse_dx11_enum_blend_equation(
+                        resource->m_raw_shader_data->m_blend_equation);
+
+                blend_describe.RenderTarget[0].SrcBlend
+                    = blend_describe.RenderTarget[0].SrcBlendAlpha
+                    = parse_dx11_enum_blend_method(resource->m_raw_shader_data->m_blend_src_mode);
+                blend_describe.RenderTarget[0].DestBlend
+                    = blend_describe.RenderTarget[0].DestBlendAlpha
+                    = parse_dx11_enum_blend_method(resource->m_raw_shader_data->m_blend_dst_mode);
                 JERCHECK(context->m_dx_device->CreateBlendState(
                     &blend_describe, blob->m_blend.GetAddressOf()));
 

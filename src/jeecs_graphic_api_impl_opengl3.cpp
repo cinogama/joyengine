@@ -41,6 +41,7 @@ namespace jeecs::graphic::api::gl3
 
         jegl_shader::depth_test_method ACTIVE_DEPTH_MODE = jegl_shader::depth_test_method::INVALID;
         jegl_shader::depth_mask_method ACTIVE_MASK_MODE = jegl_shader::depth_mask_method::INVALID;
+        jegl_shader::blend_equation ACTIVE_BLEND_EQUATION = jegl_shader::blend_equation::INVALID;
         jegl_shader::blend_method ACTIVE_BLEND_SRC_MODE = jegl_shader::blend_method::INVALID;
         jegl_shader::blend_method ACTIVE_BLEND_DST_MODE = jegl_shader::blend_method::INVALID;
         jegl_shader::cull_mode ACTIVE_CULL_MODE = jegl_shader::cull_mode::INVALID;
@@ -385,7 +386,7 @@ namespace jeecs::graphic::api::gl3
         delete context;
     }
     void gl_set_uniform(
-        jegl_context::userdata_t ctx, 
+        jegl_context::userdata_t ctx,
         uint32_t location,
         jegl_shader::uniform_type type,
         const void* val)
@@ -935,9 +936,9 @@ namespace jeecs::graphic::api::gl3
                     ++attachment;
 
                 glFramebufferTexture2D(
-                    GL_FRAMEBUFFER, 
-                    using_attachment, 
-                    buffer_texture_type, 
+                    GL_FRAMEBUFFER,
+                    using_attachment,
+                    buffer_texture_type,
                     frame_texture->m_handle.m_uint1,
                     0);
             }
@@ -1031,6 +1032,36 @@ namespace jeecs::graphic::api::gl3
                 glDepthMask(GL_TRUE);
             else
                 glDepthMask(GL_FALSE);
+        }
+    }
+    void _gl_update_blend_equation_method(
+        jegl_gl3_context* ctx, jegl_shader::blend_equation equation)
+    {
+        assert(equation != jegl_shader::blend_equation::INVALID);
+        if (ctx->ACTIVE_BLEND_EQUATION != equation)
+        {
+            ctx->ACTIVE_BLEND_EQUATION = equation;
+            switch (equation)
+            {
+            case jegl_shader::blend_equation::ADD:
+                glBlendEquation(GL_FUNC_ADD);
+                break;
+            case jegl_shader::blend_equation::SUBTRACT:
+                glBlendEquation(GL_FUNC_SUBTRACT);
+                break;
+            case jegl_shader::blend_equation::REVERSE_SUBTRACT:
+                glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
+                break;
+            case jegl_shader::blend_equation::MIN:
+                glBlendEquation(GL_MIN);
+                break;
+            case jegl_shader::blend_equation::MAX:
+                glBlendEquation(GL_MAX);
+                break;
+            default:
+                jeecs::debug::logerr("Invalid blend equation method.");
+                break;
+            }
         }
     }
     void _gl_update_blend_mode_method(
@@ -1164,6 +1195,7 @@ namespace jeecs::graphic::api::gl3
         {
             _gl_update_depth_test_method(context, resource->m_raw_shader_data->m_depth_test);
             _gl_update_depth_mask_method(context, resource->m_raw_shader_data->m_depth_mask);
+            _gl_update_blend_equation_method(context, resource->m_raw_shader_data->m_blend_equation);
             _gl_update_blend_mode_method(
                 context,
                 resource->m_raw_shader_data->m_blend_src_mode,

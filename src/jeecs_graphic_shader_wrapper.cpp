@@ -669,10 +669,12 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args)
     wo_struct_get(elem, args + 3, 2);
     wrapper->shader_config.m_depth_mask = (jegl_shader::depth_mask_method)wo_int(elem);
     wo_struct_get(elem, args + 3, 3);
-    wrapper->shader_config.m_blend_src = (jegl_shader::blend_method)wo_int(elem);
+    wrapper->shader_config.m_blend_equation = (jegl_shader::blend_equation)wo_int(elem);
     wo_struct_get(elem, args + 3, 4);
-    wrapper->shader_config.m_blend_dst = (jegl_shader::blend_method)wo_int(elem);
+    wrapper->shader_config.m_blend_src = (jegl_shader::blend_method)wo_int(elem);
     wo_struct_get(elem, args + 3, 5);
+    wrapper->shader_config.m_blend_dst = (jegl_shader::blend_method)wo_int(elem);
+    wo_struct_get(elem, args + 3, 6);
     wrapper->shader_config.m_cull_mode = (jegl_shader::cull_mode)wo_int(elem);
 
     size_t ubo_count = (size_t)wo_arr_len(args + 4);
@@ -977,6 +979,7 @@ jegl_resource *_jegl_load_shader_cache(jeecs_file *cache_file, const char *path)
     // 2. read shader config
     jeecs_file_read(&_shader->m_depth_test, sizeof(jegl_shader::depth_test_method), 1, cache_file);
     jeecs_file_read(&_shader->m_depth_mask, sizeof(jegl_shader::depth_mask_method), 1, cache_file);
+    jeecs_file_read(&_shader->m_blend_equation, sizeof(jegl_shader::blend_equation), 1, cache_file);
     jeecs_file_read(&_shader->m_blend_src_mode, sizeof(jegl_shader::blend_method), 1, cache_file);
     jeecs_file_read(&_shader->m_blend_dst_mode, sizeof(jegl_shader::blend_method), 1, cache_file);
     jeecs_file_read(&_shader->m_cull_mode, sizeof(jegl_shader::cull_mode), 1, cache_file);
@@ -1151,6 +1154,7 @@ void _jegl_create_shader_cache(jegl_resource *shader_resource, wo_integer_t virt
         */
         jeecs_write_cache_file(&raw_shader_data->m_depth_test, sizeof(jegl_shader::depth_test_method), 1, cachefile);
         jeecs_write_cache_file(&raw_shader_data->m_depth_mask, sizeof(jegl_shader::depth_mask_method), 1, cachefile);
+        jeecs_write_cache_file(&raw_shader_data->m_blend_equation, sizeof(jegl_shader::blend_equation), 1, cachefile);
         jeecs_write_cache_file(&raw_shader_data->m_blend_src_mode, sizeof(jegl_shader::blend_method), 1, cachefile);
         jeecs_write_cache_file(&raw_shader_data->m_blend_dst_mode, sizeof(jegl_shader::blend_method), 1, cachefile);
         jeecs_write_cache_file(&raw_shader_data->m_cull_mode, sizeof(jegl_shader::cull_mode), 1, cachefile);
@@ -1245,6 +1249,7 @@ void jegl_shader_generate_glsl(void *shader_generator, jegl_shader *write_to_sha
     write_to_shader->m_enable_to_shared = shader_wrapper_ptr->shader_config.m_enable_shared;
     write_to_shader->m_depth_test = shader_wrapper_ptr->shader_config.m_depth_test;
     write_to_shader->m_depth_mask = shader_wrapper_ptr->shader_config.m_depth_mask;
+    write_to_shader->m_blend_equation = shader_wrapper_ptr->shader_config.m_blend_equation;
     write_to_shader->m_blend_src_mode = shader_wrapper_ptr->shader_config.m_blend_src;
     write_to_shader->m_blend_dst_mode = shader_wrapper_ptr->shader_config.m_blend_dst;
     write_to_shader->m_cull_mode = shader_wrapper_ptr->shader_config.m_cull_mode;

@@ -46,19 +46,16 @@ func multi_sampling_for_bias_shadow(
     let mut shadow_factor = float::zero;
 
     let bias = [
-        (0., 1.),
-        (-1., 0.),    
-        (0., 0.),     
-        (1., 0.),
-        (0., -1.),
+        (0., 1., 0.25),
+        (-1., 0., 0.25),
+        (1., 0., 0.25),
+        (0., -1., 0.25),
     ];
 
     let bias_step = float2::const(1.5, 1.5) / je_light2d_resolution;
-    for (let (x, y) : bias)
+    for (let (x, y, f) : bias)
     {
-        shadow_factor = max(
-            shadow_factor,
-            texture(shadow, uv + bias_step * vec2(x, y))->x);
+        shadow_factor += f * texture(shadow, uv + bias_step * vec2(x, y))->x;
     }
     return shadow_factor;
 }

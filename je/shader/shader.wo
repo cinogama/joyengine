@@ -789,6 +789,7 @@ namespace shader
         shared    : mut bool,
         ztest     : mut ZConfig,
         zwrite    : mut GConfig,
+        blend_equation: mut BlendEquation,
         blend_src : mut BlendConfig,
         blend_dst : mut BlendConfig,
         cull      : mut CullConfig
@@ -798,6 +799,7 @@ namespace shader
         shared = mut false,
         ztest = mut LESS,
         zwrite = mut ENABLE,
+        blend_equation = mut ADD,
         blend_src = mut ONE,
         blend_dst = mut ZERO,
         cull = mut NONE,
@@ -1127,9 +1129,14 @@ enum GConfig
     DISABLE = 0,
     ENABLE
 }
-public let DISABLE = GConfig::DISABLE;
-public let ENABLE = GConfig::ENABLE;
-
+enum BlendEquation
+{
+    ADD = 0,      /* DEFAULT */
+    SUBTRACT,
+    REVERSE_SUBTRACT,
+    MIN,
+    MAX,
+}
 enum BlendConfig
 {
     ZERO = 0,       /* DEFAULT SRC = ONE, DST = ZERO (DISABLE BLEND.) */
@@ -1147,6 +1154,21 @@ enum BlendConfig
     ONE_MINUS_DST_ALPHA,
     ONE_MINUS_DST_COLOR,
 }
+enum CullConfig
+{
+    NONE = 0,       /* DEFAULT */
+    FRONT,
+    BACK,
+}
+
+public let DISABLE = GConfig::DISABLE;
+public let ENABLE = GConfig::ENABLE;
+
+public let ADD = BlendEquation::ADD;
+public let SUBTRACT = BlendEquation::SUBTRACT;
+public let REVERSE_SUBTRACT = BlendEquation::REVERSE_SUBTRACT;
+public let MIN = BlendEquation::MIN;
+public let MAX = BlendEquation::MAX;
 
 public let ZERO = BlendConfig::ZERO;
 public let ONE = BlendConfig::ONE;
@@ -1158,13 +1180,6 @@ public let DST_COLOR = BlendConfig::DST_COLOR;
 public let DST_ALPHA = BlendConfig::DST_ALPHA;
 public let ONE_MINUS_DST_ALPHA = BlendConfig::ONE_MINUS_DST_ALPHA;
 public let ONE_MINUS_DST_COLOR = BlendConfig::ONE_MINUS_DST_COLOR;
-
-enum CullConfig
-{
-    NONE = 0,       /* DEFAULT */
-    FRONT,
-    BACK,
-}
 
 public let NONE = CullConfig::NONE;
 public let FRONT = CullConfig::FRONT;
@@ -1183,6 +1198,11 @@ public func ZTEST(zconfig: ZConfig)
 public func ZWRITE(zwrite: GConfig)
 {
     shader::configs.zwrite = zwrite;
+}
+
+public func BLEND_EQUATION(equation: BlendEquation)
+{
+    shader::configs.blend_equation = equation;
 }
 
 public func BLEND(src: BlendConfig, dst: BlendConfig)

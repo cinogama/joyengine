@@ -385,6 +385,7 @@ struct shader_configs
     bool m_enable_shared;
     jegl_shader::depth_test_method m_depth_test;
     jegl_shader::depth_mask_method m_depth_mask;
+    jegl_shader::blend_equation m_blend_equation;
     jegl_shader::blend_method m_blend_src, m_blend_dst;
     jegl_shader::cull_mode m_cull_mode;
 };

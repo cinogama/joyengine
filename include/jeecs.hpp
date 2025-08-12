@@ -2065,6 +2065,16 @@ struct jegl_shader
         DISABLE,
         ENABLE, /* DEFAULT */
     };
+    enum class blend_equation : int8_t
+    {
+        INVALID = -1,
+
+        ADD, /* DEFAULT */
+        SUBTRACT,
+        REVERSE_SUBTRACT,
+        MIN,
+        MAX,
+    };
     enum class blend_method : int8_t
     {
         INVALID = -1,
@@ -2122,6 +2132,7 @@ struct jegl_shader
     bool m_enable_to_shared;
     depth_test_method m_depth_test;
     depth_mask_method m_depth_mask;
+    blend_equation m_blend_equation;
     blend_method m_blend_src_mode, m_blend_dst_mode;
     cull_mode m_cull_mode;
 

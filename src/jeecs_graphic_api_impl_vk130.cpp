@@ -2384,88 +2384,69 @@ namespace jeecs::graphic::api::vk130
             shader_blob->m_color_blend_attachment_state = {};
             if (resource->m_raw_shader_data->m_blend_src_mode == jegl_shader::blend_method::ONE &&
                 resource->m_raw_shader_data->m_blend_dst_mode == jegl_shader::blend_method::ZERO)
-            {
                 shader_blob->m_color_blend_attachment_state.blendEnable = VK_FALSE;
-            }
             else
-            {
                 shader_blob->m_color_blend_attachment_state.blendEnable = VK_TRUE;
-            }
 
-            switch (resource->m_raw_shader_data->m_blend_src_mode)
-            {
-            case jegl_shader::blend_method::ZERO:
-                shader_blob->m_color_blend_attachment_state.srcColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ZERO;
-                break;
-            case jegl_shader::blend_method::ONE:
-                shader_blob->m_color_blend_attachment_state.srcColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ONE;
-                break;
-            case jegl_shader::blend_method::SRC_COLOR:
-                shader_blob->m_color_blend_attachment_state.srcColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_SRC_COLOR;
-                break;
-            case jegl_shader::blend_method::SRC_ALPHA:
-                shader_blob->m_color_blend_attachment_state.srcColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_SRC_ALPHA;
-                break;
-            case jegl_shader::blend_method::ONE_MINUS_SRC_ALPHA:
-                shader_blob->m_color_blend_attachment_state.srcColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-                break;
-            case jegl_shader::blend_method::ONE_MINUS_SRC_COLOR:
-                shader_blob->m_color_blend_attachment_state.srcColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
-                break;
-            case jegl_shader::blend_method::DST_COLOR:
-                shader_blob->m_color_blend_attachment_state.srcColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_DST_COLOR;
-                break;
-            case jegl_shader::blend_method::DST_ALPHA:
-                shader_blob->m_color_blend_attachment_state.srcColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_DST_ALPHA;
-                break;
-            case jegl_shader::blend_method::ONE_MINUS_DST_ALPHA:
-                shader_blob->m_color_blend_attachment_state.srcColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
-                break;
-            case jegl_shader::blend_method::ONE_MINUS_DST_COLOR:
-                shader_blob->m_color_blend_attachment_state.srcColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
-                break;
-            }
-            switch (resource->m_raw_shader_data->m_blend_dst_mode)
-            {
-            case jegl_shader::blend_method::ZERO:
-                shader_blob->m_color_blend_attachment_state.dstColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ZERO;
-                break;
-            case jegl_shader::blend_method::ONE:
-                shader_blob->m_color_blend_attachment_state.dstColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ONE;
-                break;
-            case jegl_shader::blend_method::SRC_COLOR:
-                shader_blob->m_color_blend_attachment_state.dstColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_SRC_COLOR;
-                break;
-            case jegl_shader::blend_method::SRC_ALPHA:
-                shader_blob->m_color_blend_attachment_state.dstColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_SRC_ALPHA;
-                break;
-            case jegl_shader::blend_method::ONE_MINUS_SRC_ALPHA:
-                shader_blob->m_color_blend_attachment_state.dstColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-                break;
-            case jegl_shader::blend_method::ONE_MINUS_SRC_COLOR:
-                shader_blob->m_color_blend_attachment_state.dstColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
-                break;
-            case jegl_shader::blend_method::DST_COLOR:
-                shader_blob->m_color_blend_attachment_state.dstColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_DST_COLOR;
-                break;
-            case jegl_shader::blend_method::DST_ALPHA:
-                shader_blob->m_color_blend_attachment_state.dstColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_DST_ALPHA;
-                break;
-            case jegl_shader::blend_method::ONE_MINUS_DST_ALPHA:
-                shader_blob->m_color_blend_attachment_state.dstColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
-                break;
-            case jegl_shader::blend_method::ONE_MINUS_DST_COLOR:
-                shader_blob->m_color_blend_attachment_state.dstColorBlendFactor = VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
-                break;
-            }
+            auto parse_vk_enum_blend_method = [](jegl_shader::blend_method method)
+                {
+                    switch (method)
+                    {
+                    case jegl_shader::blend_method::ZERO:
+                        return VkBlendFactor::VK_BLEND_FACTOR_ZERO;
+                    case jegl_shader::blend_method::ONE:
+                        return VkBlendFactor::VK_BLEND_FACTOR_ONE;
+                    case jegl_shader::blend_method::SRC_COLOR:
+                        return VkBlendFactor::VK_BLEND_FACTOR_SRC_COLOR;
+                    case jegl_shader::blend_method::SRC_ALPHA:
+                        return VkBlendFactor::VK_BLEND_FACTOR_SRC_ALPHA;
+                    case jegl_shader::blend_method::ONE_MINUS_SRC_ALPHA:
+                        return VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+                    case jegl_shader::blend_method::ONE_MINUS_SRC_COLOR:
+                        return VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
+                    case jegl_shader::blend_method::DST_COLOR:
+                        return VkBlendFactor::VK_BLEND_FACTOR_DST_COLOR;
+                    case jegl_shader::blend_method::DST_ALPHA:
+                        return VkBlendFactor::VK_BLEND_FACTOR_DST_ALPHA;
+                    case jegl_shader::blend_method::ONE_MINUS_DST_ALPHA:
+                        return VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+                    case jegl_shader::blend_method::ONE_MINUS_DST_COLOR:
+                        return VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
+                    default:
+                        jeecs::debug::logerr("Invalid blend src method.");
+                        return VkBlendFactor::VK_BLEND_FACTOR_ONE;
+                    }
+                };
+            auto parse_vk_enum_blend_equation = [](jegl_shader::blend_equation equation)
+                {
+                    switch (equation)
+                    {
+                    case jegl_shader::blend_equation::ADD:
+                        return VkBlendOp::VK_BLEND_OP_ADD;
+                    case jegl_shader::blend_equation::SUBTRACT:
+                        return VkBlendOp::VK_BLEND_OP_SUBTRACT;
+                    case jegl_shader::blend_equation::REVERSE_SUBTRACT:
+                        return VkBlendOp::VK_BLEND_OP_REVERSE_SUBTRACT;
+                    case jegl_shader::blend_equation::MIN:
+                        return VkBlendOp::VK_BLEND_OP_MIN;
+                    case jegl_shader::blend_equation::MAX:
+                        return VkBlendOp::VK_BLEND_OP_MAX;
+                    default:
+                        jeecs::debug::logerr("Invalid blend equation.");
+                        return VkBlendOp::VK_BLEND_OP_ADD;
+                    }
+                };
 
-            shader_blob->m_color_blend_attachment_state.srcAlphaBlendFactor =
-                shader_blob->m_color_blend_attachment_state.srcColorBlendFactor;
-            shader_blob->m_color_blend_attachment_state.dstAlphaBlendFactor =
-                shader_blob->m_color_blend_attachment_state.dstColorBlendFactor;
+            shader_blob->m_color_blend_attachment_state.srcAlphaBlendFactor
+                = shader_blob->m_color_blend_attachment_state.srcColorBlendFactor
+                = parse_vk_enum_blend_method(resource->m_raw_shader_data->m_blend_src_mode);
+            shader_blob->m_color_blend_attachment_state.dstAlphaBlendFactor
+                = shader_blob->m_color_blend_attachment_state.dstColorBlendFactor
+                = parse_vk_enum_blend_method(resource->m_raw_shader_data->m_blend_dst_mode);
 
-            shader_blob->m_color_blend_attachment_state.colorBlendOp = VkBlendOp::VK_BLEND_OP_ADD;
-            shader_blob->m_color_blend_attachment_state.alphaBlendOp = VkBlendOp::VK_BLEND_OP_ADD;
+            shader_blob->m_color_blend_attachment_state.colorBlendOp 
+                = shader_blob->m_color_blend_attachment_state.alphaBlendOp 
+                = parse_vk_enum_blend_equation(resource->m_raw_shader_data->m_blend_equation);
 
             shader_blob->m_color_blend_attachment_state.colorWriteMask =
                 VkColorComponentFlagBits::VK_COLOR_COMPONENT_R_BIT |

@@ -954,8 +954,10 @@ public func vert(v: vin)
 public func frag(_: v2f)
 {
     // NOTE: je_local_scale->x is shadow factor here.
+    let shadow_factor = je_local_scale->x;
     return fout{
-        shadow_factor = vec4(float3::one, je_local_scale->x)
+        shadow_factor = vec4(
+            shadow_factor, shadow_factor, shadow_factor, shadow_factor),
     };
 }
 )")
@@ -996,8 +998,10 @@ public func vert(v: vin)
 public func frag(_: v2f)
 {
     // NOTE: je_local_scale->x is shadow factor here.
+    let shadow_factor = je_local_scale->x;
     return fout{
-        shadow_factor = vec4(float3::one, je_local_scale->x)
+        shadow_factor = vec4(
+            shadow_factor, shadow_factor, shadow_factor, shadow_factor),
     };
 }
 )")
@@ -1037,8 +1041,10 @@ public func vert(v: vin)
 public func frag(_: v2f)
 {
     // NOTE: je_local_scale->x is shadow factor here.
+    let shadow_factor = je_local_scale->x;
     return fout{
-        shadow_factor = vec4(float3::one, je_local_scale->x)
+        shadow_factor = vec4(
+            shadow_factor, shadow_factor, shadow_factor, shadow_factor),
     };
 }
 )")
@@ -1078,8 +1084,10 @@ public func vert(v: vin)
 public func frag(_: v2f)
 {
     // NOTE: je_local_scale->x is shadow factor here.
+    let shadow_factor = je_local_scale->x;
     return fout{
-        shadow_factor = vec4(float3::one, je_local_scale->x)
+        shadow_factor = vec4(
+            shadow_factor, shadow_factor, shadow_factor, shadow_factor),
     };
 }
 )")
@@ -1137,8 +1145,10 @@ public func frag(vf: v2f)
             je_local_scale,     // NOTE: je_local_scale->x is shadow factor here.
             texture(Main, vf.uv)->w));
 
+    let shadow_factor = final_shadow->x;
     return fout{
-        shadow_factor = vec4(float3::one, final_shadow->x)
+        shadow_factor = vec4(
+            shadow_factor, shadow_factor, shadow_factor, shadow_factor),
     };
 }
 )")
@@ -1147,7 +1157,8 @@ public func frag(vf: v2f)
 import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
-BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
+BLEND_EQUATION(MAX);
+BLEND   (ONE, ONE);
 // MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
 CULL    (NONE);
 
@@ -1192,8 +1203,10 @@ public func frag(vf: v2f)
             je_local_scale,     // NOTE: je_local_scale->x is shadow factor here.
             texture(Main, vf.uv)->w));
 
+    let shadow_factor = final_shadow->x;
     return fout{
-        shadow_factor = vec4(float3::one, final_shadow->x)
+        shadow_factor = vec4(
+            shadow_factor, shadow_factor, shadow_factor, shadow_factor),
     };
 }
 )")
@@ -1247,8 +1260,10 @@ public func frag(vf: v2f)
             je_local_scale,     // NOTE: je_local_scale->x is shadow factor here.
             texture(Main, vf.uv)->w));
 
+    let shadow_factor = final_shadow->x;
     return fout{
-        shadow_factor = vec4(float3::one, final_shadow->x)
+        shadow_factor = vec4(
+            shadow_factor, shadow_factor, shadow_factor, shadow_factor),
     };
 }
 )")
@@ -1299,8 +1314,10 @@ public func frag(vf: v2f)
             je_local_scale,     // NOTE: je_local_scale->x is shadow factor here.
             texture(Main, vf.uv)->w));
 
+    let shadow_factor = final_shadow->x;
     return fout{
-        shadow_factor = vec4(float3::one, final_shadow->x)
+        shadow_factor = vec4(
+            shadow_factor, shadow_factor, shadow_factor, shadow_factor),
     };
 }
 )")
@@ -1341,8 +1358,10 @@ public func frag(vf: v2f)
     let Main = uniform_texture:<texture2d>("Main", nearest_clamp, 0);
     let final_shadow = alphatest(vec4(je_color->xyz, texture(Main, vf.uv)->w));
 
+    let shadow_factor = final_shadow->x;
     return fout{
-        shadow_factor = vec4(final_shadow->x, final_shadow->x, final_shadow->x, float::one)
+        shadow_factor = vec4(
+            shadow_factor, shadow_factor, shadow_factor, float::one)
     };
 }
 )")
