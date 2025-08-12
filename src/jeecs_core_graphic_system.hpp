@@ -32,38 +32,11 @@ namespace jeecs
         JECS_DISABLE_MOVE_AND_COPY(DefaultResources);
 
         inline static const float default_shape_quad_data[] = {
-            -0.5f,
-            0.5f,
-            0.0f,
-            0.0f,
-            1.0f,
-            0.0f,
-            0.0f,
-            -1.0f,
-            -0.5f,
-            -0.5f,
-            0.0f,
-            0.0f,
-            0.0f,
-            0.0f,
-            0.0f,
-            -1.0f,
-            0.5f,
-            0.5f,
-            0.0f,
-            1.0f,
-            1.0f,
-            0.0f,
-            0.0f,
-            -1.0f,
-            0.5f,
-            -0.5f,
-            0.0f,
-            1.0f,
-            0.0f,
-            0.0f,
-            0.0f,
-            -1.0f,
+            /* vpos, vuv, vnormal, vtangent */
+            -0.5f,  0.5f, 0.0f,  0.0f, 1.0f,  0.0f, 0.0f, -1.0f,  1.0f, 0.0f, 0.0f,
+            -0.5f, -0.5f, 0.0f,  0.0f, 0.0f,  0.0f, 0.0f, -1.0f,  1.0f, 0.0f, 0.0f,
+             0.5f,  0.5f, 0.0f,  1.0f, 1.0f,  0.0f, 0.0f, -1.0f,  1.0f, 0.0f, 0.0f,
+             0.5f, -0.5f, 0.0f,  1.0f, 0.0f,  0.0f, 0.0f, -1.0f,  1.0f, 0.0f, 0.0f,
         };
 
         DefaultResources()
@@ -76,6 +49,7 @@ namespace jeecs
                       {
                           {jegl_vertex::data_type::FLOAT32, 3},
                           {jegl_vertex::data_type::FLOAT32, 2},
+                          {jegl_vertex::data_type::FLOAT32, 3},
                           {jegl_vertex::data_type::FLOAT32, 3},
                       })
                       .value() },
@@ -784,37 +758,34 @@ public let frag =
                             continue;
                     }
 
-                    auto& drawing_shape =
+                    const float(&MAT4_MODEL)[4][4] = rendentity.translation->object2world;
+                    math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
+                    math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
+
+                    const auto& drawing_shape =
                         rendentity.shape->vertex.has_value()
                         ? rendentity.shape->vertex.value()
                         : m_default_resources.default_shape_quad;
-
                     auto& drawing_shaders =
                         rendentity.shaders->shaders.empty() == false
                         ? rendentity.shaders->shaders
                         : m_default_resources.default_shaders_list;
 
-                    constexpr jeecs::math::vec2 default_tiling(1.f, 1.f), default_offset(0.f, 0.f);
+                    // Bind texture here
                     const jeecs::math::vec2
                         * _using_tiling = &default_tiling,
                         * _using_offset = &default_offset;
 
-                    assert(rendentity.translation);
+                    auto texture_group = jegl_rchain_allocate_texture_group(rend_chain);
 
-                    const float(&MAT4_MODEL)[4][4] = rendentity.translation->object2world;
-                    math::mat4xmat4(MAT4_MVP, MAT4_VP, MAT4_MODEL);
-                    math::mat4xmat4(MAT4_MV, MAT4_VIEW, MAT4_MODEL);
-
-                    auto rchain_texture_group = jegl_rchain_allocate_texture_group(rend_chain);
-
-                    jegl_rchain_bind_texture(rend_chain, rchain_texture_group, 0, m_default_resources.default_texture->resource());
+                    jegl_rchain_bind_texture(rend_chain, texture_group, 0, m_default_resources.default_texture->resource());
                     if (rendentity.textures)
                     {
                         _using_tiling = &rendentity.textures->tiling;
                         _using_offset = &rendentity.textures->offset;
 
                         for (auto& texture : rendentity.textures->textures)
-                            jegl_rchain_bind_texture(rend_chain, rchain_texture_group, texture.m_pass_id, texture.m_texture->resource());
+                            jegl_rchain_bind_texture(rend_chain, texture_group, texture.m_pass_id, texture.m_texture->resource());
                     }
                     for (auto& shader_pass : drawing_shaders)
                     {
@@ -822,12 +793,13 @@ public let frag =
                         if (!shader_pass->m_builtin)
                             using_shader = &m_default_resources.default_shader;
 
-                        auto* rchain_draw_action = jegl_rchain_draw(rend_chain, (*using_shader)->resource(), drawing_shape->resource(), rchain_texture_group);
+                        auto* rchain_draw_action = jegl_rchain_draw(rend_chain, (*using_shader)->resource(), drawing_shape->resource(), texture_group);
+
                         auto* builtin_uniform = (*using_shader)->m_builtin;
 
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, MAT4_MODEL);
-                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mvp, float4x4, MAT4_MVP);
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mv, float4x4, MAT4_MV);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, mvp, float4x4, MAT4_MVP);
 
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, local_scale, float3,
                             rendentity.translation->local_scale.x,
@@ -1278,7 +1250,7 @@ public func frag(vf: v2f)
     };
 }
 )")
-                                                              .value() },
+                                                                 .value() },
                 _defer_light2d_shadow_sprite_parallel_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_parallel_sprite.shader", R"(
 import je::shader;
 ZTEST   (ALWAYS);
@@ -1330,7 +1302,7 @@ public func frag(vf: v2f)
     };
 }
 )")
-                                                                 .value() },
+                                                     .value() },
                 _defer_light2d_shadow_sub_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_sub.shader", R"(
 import je::shader;
 ZTEST   (ALWAYS);
@@ -1889,7 +1861,8 @@ public func frag(vf: v2f)
                             auto& light2d_shadow_aim_buffer = lightarch.shadowbuffer->buffer.value();
                             jegl_rendchain* light2d_shadow_rend_chain = jegl_branch_new_chain(
                                 current_camera.branchPipeline,
-                                light2d_shadow_aim_buffer->resource(), 0, 0,
+                                light2d_shadow_aim_buffer->resource(),
+                                0, 0,
                                 light2d_shadow_aim_buffer->width(),
                                 light2d_shadow_aim_buffer->height());
 
@@ -2429,6 +2402,7 @@ public func frag(vf: v2f)
 
                             auto* rchain_draw_action = jegl_rchain_draw(
                                 light2d_light_effect_rend_chain, (*using_shader)->resource(), drawing_shape->resource(), texture_group);
+
                             auto* builtin_uniform = (*using_shader)->m_builtin;
 
                             JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, MAT4_MODEL);
@@ -2563,8 +2537,6 @@ public func frag(vf: v2f)
 
                         auto* builtin_uniform = (*using_shader)->m_builtin;
 
-                        auto* post_light_target_frame_buffer = current_camera.light2DPostPass->post_light_target.value().get();
-
                         JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, light2d_resolution, float2,
                             (float)post_light_target_frame_buffer->width(),
                             (float)post_light_target_frame_buffer->height());
@@ -2628,6 +2600,25 @@ public func frag(vf: v2f)
 
                                                 cdata.m_entity_cache = e;
 
+                                                assert(cdata.m_component_type != nullptr && cdata.m_member_info != nullptr);
+
+                                                auto* component_addr = je_ecs_world_entity_get_component(&e, cdata.m_component_type->m_id);
+                                                if (component_addr == nullptr)
+                                                    // 没有这个组件，忽略之
+                                                    continue;
+
+                                                auto* member_addr = (void*)(cdata.m_member_info->m_member_offset + (intptr_t)component_addr);
+
+                                                // 在这里做好缓存和检查，不要每次都重新获取组件地址和检查类型
+                                                cdata.m_member_addr_cache = member_addr;
+
+                                                switch (cdata.m_member_value.m_type)
+                                                {
+                                                case Animation::FrameAnimation::animation_list::frame_data::data_value::type::INT:
+                                                    if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<int>())
+                                                    {
+                                                        jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'int', but member is '%s'.",
+                                                            cdata.m_component_type->m_typename,
                                                 assert(cdata.m_component_type != nullptr && cdata.m_member_info != nullptr);
 
                                                 auto* component_addr = je_ecs_world_entity_get_component(&e, cdata.m_component_type->m_id);

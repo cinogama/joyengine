@@ -8661,7 +8661,9 @@ namespace jeecs
             }
 
         public:
-            static std::optional<basic::resource<vertex>> load(jegl_context* context, const std::string& str)
+            static std::optional<basic::resource<vertex>> load(
+                jegl_context* context, 
+                const std::string& str)
             {
                 auto* res = jegl_load_vertex(context, str.c_str());
                 if (res != nullptr)

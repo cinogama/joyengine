@@ -1196,18 +1196,20 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
 
     struct jegl_standard_model_vertex_t
     {
-        float m_vertex[3];
-        float m_texcoord[2];
-        float m_normal[3];
+        jeecs::math::vec3 m_vertex;
+        jeecs::math::vec2 m_texcoord;
+        jeecs::math::vec3 m_normal;
+        jeecs::math::vec3 m_tangent;
 
         int32_t m_bone_id[4];
         float m_bone_weight[4];
     };
-    static_assert(sizeof(jegl_standard_model_vertex_t) == 64);
+    static_assert(sizeof(jegl_standard_model_vertex_t) == 76);
 
     const jegl_vertex::data_layout jegl_standard_model_vertex_format[] = {
         {jegl_vertex::data_type::FLOAT32, 3},
         {jegl_vertex::data_type::FLOAT32, 2},
+        {jegl_vertex::data_type::FLOAT32, 3},
         {jegl_vertex::data_type::FLOAT32, 3},
         {jegl_vertex::data_type::INT32, 4},
         {jegl_vertex::data_type::FLOAT32, 4},
@@ -1232,7 +1234,8 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
             auto* mesh = scene->mMeshes[current_node->mMeshes[i]];
             const size_t current_model_vertex_offset = vertex_datas.size();
 
-            const auto* texcrood_0 = mesh->mTextureCoords[0];
+            const bool has_texcrood_0 = mesh->HasTextureCoords(0);
+            const bool has_normals = mesh->HasNormals();
 
             for (size_t index = 0; index < mesh->mNumVertices; ++index)
             {
@@ -1240,17 +1243,24 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
                 auto& normal = mesh->mNormals[index];
 
                 jegl_standard_model_vertex_t model_vertex = {};
-                model_vertex.m_vertex[0] = vertex.x;
-                model_vertex.m_vertex[1] = vertex.y;
-                model_vertex.m_vertex[2] = vertex.z;
-                if (texcrood_0 != nullptr)
+                model_vertex.m_vertex = jeecs::math::vec3(
+                    vertex.x,
+                    vertex.y,
+                    vertex.z);
+
+                if (has_texcrood_0)
                 {
-                    model_vertex.m_texcoord[0] = texcrood_0[index].x;
-                    model_vertex.m_texcoord[1] = texcrood_0[index].y;
+                    model_vertex.m_texcoord = jeecs::math::vec2(
+                        mesh->mTextureCoords[0][index].x,
+                        mesh->mTextureCoords[0][index].y);
                 }
-                model_vertex.m_normal[0] = normal.x;
-                model_vertex.m_normal[1] = normal.y;
-                model_vertex.m_normal[2] = normal.z;
+                if (has_normals)
+                {
+                    model_vertex.m_normal = jeecs::math::vec3(
+                        normal.x,
+                        normal.y,
+                        normal.z);
+                }
 
                 model_vertex.m_bone_id[0] = -1;
                 model_vertex.m_bone_id[1] = -1;
@@ -1264,10 +1274,39 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
                 auto& face = mesh->mFaces[f];
                 assert(face.mNumIndices == 3);
 
-                for (size_t fvertex_index = 0; fvertex_index < face.mNumIndices; ++fvertex_index)
-                    index_datas.push_back(face.mIndices[fvertex_index] + current_model_vertex_offset);
-            }
+                auto p0idx = face.mIndices[0] + current_model_vertex_offset;
+                auto p1idx = face.mIndices[1] + current_model_vertex_offset;
+                auto p2idx = face.mIndices[2] + current_model_vertex_offset;
 
+                index_datas.push_back(p0idx);
+                index_datas.push_back(p1idx);
+                index_datas.push_back(p2idx);
+
+                // NOTE: 在此计算切线向量，需要注意，尽管模型中的面共用顶点，但是我们可以认为切线向量是近似一致的
+                //  我们不需要权衡一个顶点所属的所有面的切线向量，只需要取一个近似值即可
+                //  不使用模型自带的切线。
+
+                auto& p0 = vertex_datas[p0idx];
+                auto& p1 = vertex_datas[p1idx];
+                auto& p2 = vertex_datas[p2idx];
+
+                const auto edge10 = p1.m_vertex - p0.m_vertex;
+                const auto edge20 = p2.m_vertex - p0.m_vertex;
+
+                const auto duv10 = p1.m_texcoord - p0.m_texcoord;
+                const auto duv20 = p2.m_texcoord - p0.m_texcoord;
+
+                const float normalize_factor = 1.0f / (duv10.x * duv20.y - duv20.x * duv10.y);
+                const jeecs::math::vec3 tangent =
+                    (jeecs::math::vec3(
+                        duv20.y * edge10.x - duv10.y * edge20.x,
+                        duv20.y * edge10.y - duv10.y * edge20.y,
+                        duv20.y * edge10.z - duv10.y * edge20.z) * normalize_factor).unit();
+
+                vertex_datas[p0idx].m_tangent += tangent;
+                vertex_datas[p1idx].m_tangent += tangent;
+                vertex_datas[p2idx].m_tangent += tangent;
+            }
             for (size_t bone_idx = 0; bone_idx < mesh->mNumBones; ++bone_idx)
             {
                 jegl_vertex::bone_data* bone_data =
@@ -1305,7 +1344,8 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
                     size_t min_weight_index = 0;
                     for (size_t i = 1; i < 4; ++i)
                     {
-                        if (vertex.m_vertex[i] == -1 || abs(vertex.m_bone_weight[i]) < abs(vertex.m_bone_weight[min_weight_index]))
+                        if (vertex.m_bone_id[i] == -1
+                            || abs(vertex.m_bone_weight[i]) < abs(vertex.m_bone_weight[min_weight_index]))
                             min_weight_index = i;
                     }
 
@@ -1321,6 +1361,9 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
 
     for (auto& vdata : vertex_datas)
     {
+        // Normalize tangent vector
+        vdata.m_tangent = vdata.m_tangent.unit(); 
+
         for (size_t i = 0; i < 4; ++i)
         {
             if (vdata.m_bone_id[i] == -1)
@@ -1416,7 +1459,8 @@ jegl_resource* jegl_create_vertex(
     vertex->m_raw_vertex_data->m_indexs = index_buffer;
     vertex->m_raw_vertex_data->m_index_count = index_count;
 
-    jegl_vertex::data_layout* formats = (jegl_vertex::data_layout*)je_mem_alloc(format_count * sizeof(jegl_vertex::data_layout));
+    jegl_vertex::data_layout* formats =
+        (jegl_vertex::data_layout*)je_mem_alloc(format_count * sizeof(jegl_vertex::data_layout));
     memcpy(formats, format,
         format_count * sizeof(jegl_vertex::data_layout));
     vertex->m_raw_vertex_data->m_formats = formats;
@@ -1455,7 +1499,9 @@ jegl_resource* jegl_create_vertex(
         }
     }
     else
-        jeecs::debug::logwarn("Position data of vertex(%p) mismatch, first data should be position and with length '3'", vertex);
+        jeecs::debug::logwarn(
+            "Position data of vertex(%p) mismatch, first data should be position and with length '3'",
+            vertex);
 
     vertex->m_raw_vertex_data->m_x_min = x_min;
     vertex->m_raw_vertex_data->m_x_max = x_max;
@@ -1560,7 +1606,7 @@ bool jegl_bind_shader(jegl_resource* shader)
 
     if (!_current_graphic_thread->m_apis->bind_shader(_current_graphic_thread->m_userdata, shader))
         return false;
-    
+
     auto uniform_vars = shader->m_raw_shader_data != nullptr
         ? shader->m_raw_shader_data->m_custom_uniforms
         : nullptr;

@@ -12,6 +12,7 @@ VAO_STRUCT! vin {
     vertex  : float3,
     uv      : float2,
     normal  : float3,
+    tangent : float3,
 };
 
 using v2f = struct {
@@ -44,7 +45,7 @@ public func vert(v: vin)
     let vspace_position = je_mv * vec4(v.vertex, 1.);
 
     let N = vtangent(v.normal);
-    let T0 = vtangent(float3::const(1., 0., 0.));
+    let T0 = vtangent(v.tangent);
     let T = normalize(T0 - dot(T0, N) * N);
     let B = normalize(cross(N, T));
 
