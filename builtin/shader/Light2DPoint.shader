@@ -116,7 +116,7 @@ public func frag(vf: v2f)
 
     return fout{
         color = vec4(
-            color_intensity * apply_point_light_effect(
+            color_intensity + apply_point_light_effect(
                 vposition,
                 vnormalize,
                 vf.light_vpos,
