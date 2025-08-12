@@ -63,26 +63,13 @@ func multi_sampling_for_bias_shadow(
 }
 
 SHADER_FUNCTION!
-func apply_point_light_effect(
-    fragment_vpos   : float3,
+func apply_light_normal_effect(
     fragment_vnorm  : float3,
-    light_vpos      : float3,
-    light_fade      : float,
-    shadow_factor   : float
+    light_vdir      : float3
 )
 {
-    let f2l = fragment_vpos - light_vpos;
-    let ldistance = length(f2l);
-    let ldirection = normalize(f2l);
-
-    let point_light_factor = 
-        fragment_vnorm->dot(ldirection->negative) / (ldistance + 1.);
-
-    return shadow_factor 
-        * light_fade
-        * max(float::zero, point_light_factor) 
-        * je_color->w
-        * je_color->xyz;
+    let matched_light_factor = fragment_vnorm->dot(light_vdir->negative);
+    return max(float::zero, matched_light_factor) ;
 }
 
 // let Albedo       = je_light2d_defer_albedo;
@@ -106,20 +93,17 @@ public func frag(vf: v2f)
 
     let fade_factor = pow(vf.strength, decay);
 
-    let color_intensity = je_color->xyz * je_color->w * shadow_factor;
-
-    let result = color_intensity 
-        * fade_factor / (fgdistance + 1.0)
-        * step(pixvpos->z, vposition->z);
+    let color_intensity = 
+        je_color->xyz 
+        * je_color->w 
+        * shadow_factor
+        * fade_factor / (fgdistance + 1.0);
 
     return fout{
         color = vec4(
-            result + apply_point_light_effect(
-                vposition,
+            color_intensity * apply_light_normal_effect(
                 vnormalize,
-                vf.light_vpos,
-                fade_factor,
-                shadow_factor),
+                normalize(vposition - vf.light_vpos)),
             0.),
     };
 }

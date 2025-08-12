@@ -58,18 +58,13 @@ func multi_sampling_for_bias_shadow(
 }
 
 SHADER_FUNCTION!
-func apply_parallel_light_effect(
+func apply_light_normal_effect(
     fragment_vnorm  : float3,
     light_vdir      : float3,
-    shadow_factor   : float
 )
 {
-    let parallel_light_factor = fragment_vnorm->dot(light_vdir->negative);
-
-    return shadow_factor 
-        * max(float::zero, parallel_light_factor) 
-        * je_color->w
-        * je_color->xyz;
+    let matched_light_factor = fragment_vnorm->dot(light_vdir->negative);
+    return max(float::zero, matched_light_factor) ;
 }
 
 //let Albedo      = je_light2d_defer_albedo;
@@ -88,12 +83,16 @@ public func frag(vf: v2f)
     let vnormalize = normalize(
         texture(VNormalize, uv)->xyz - vec3(0., 0., normal_z_offset));
 
+    let color_intensity = 
+        je_color->xyz 
+        * je_color->w 
+        * shadow_factor;
+
     return fout{
         color = vec4(
-            apply_parallel_light_effect(
+            color_intensity * apply_light_normal_effect(
                 vnormalize,
-                vf.light_vdir,
-                shadow_factor),
+                vf.light_vdir),
             0.),
     };
 }
