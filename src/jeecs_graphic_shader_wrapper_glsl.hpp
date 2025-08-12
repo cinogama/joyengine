@@ -191,13 +191,22 @@ namespace jeecs
                             apply += std::to_string(value->m_float);
                             break;
                         case jegl_shader_value::type::FLOAT2:
-                            apply += "vec2(" + std::to_string(value->m_float2[0]) + "," + std::to_string(value->m_float2[1]) + ")";
+                            apply += "vec2(" + 
+                                std::to_string(value->m_float2[0]) + "," + 
+                                std::to_string(value->m_float2[1]) + ")";
                             break;
                         case jegl_shader_value::type::FLOAT3:
-                            apply += "vec3(" + std::to_string(value->m_float3[0]) + "," + std::to_string(value->m_float3[1]) + "," + std::to_string(value->m_float3[2]) + ")";
+                            apply += "vec3(" + 
+                                std::to_string(value->m_float3[0]) + "," + 
+                                std::to_string(value->m_float3[1]) + "," + 
+                                std::to_string(value->m_float3[2]) + ")";
                             break;
                         case jegl_shader_value::type::FLOAT4:
-                            apply += "vec4(" + std::to_string(value->m_float4[0]) + "," + std::to_string(value->m_float4[1]) + "," + std::to_string(value->m_float4[2]) + "," + std::to_string(value->m_float4[3]) + ")";
+                            apply += "vec4(" + 
+                                std::to_string(value->m_float4[0]) + "," + 
+                                std::to_string(value->m_float4[1]) + "," + 
+                                std::to_string(value->m_float4[2]) + "," + 
+                                std::to_string(value->m_float4[3]) + ")";
                             break;
                         case jegl_shader_value::type::FLOAT2x2:
                         {
@@ -340,7 +349,9 @@ namespace jeecs
                 for (auto& outvarname : outvalue)
                 {
                     size_t oid = outid++;
-                    io_declear += "layout(location = " + std::to_string(oid) + ") out " + get_value_typename(outvarname.first) + " _out_" + std::to_string(oid) + ";\n";
+                    io_declear += "layout(location = " + std::to_string(oid) + ") out " 
+                        + get_value_typename(outvarname.first) 
+                        + " _out_" + std::to_string(oid) + ";\n";
                 }
 
                 body_result = "\nvoid main()\n{\n" + body_result + "\n    // value out:\n";

@@ -229,13 +229,22 @@ namespace jeecs
                             apply += std::to_string(value->m_float);
                             break;
                         case jegl_shader_value::type::FLOAT2:
-                            apply += "float2(" + std::to_string(value->m_float2[0]) + "," + std::to_string(value->m_float2[1]) + ")";
+                            apply += "float2(" 
+                                + std::to_string(value->m_float2[0])  + "," 
+                                + std::to_string(value->m_float2[1]) + ")";
                             break;
                         case jegl_shader_value::type::FLOAT3:
-                            apply += "float3(" + std::to_string(value->m_float3[0]) + "," + std::to_string(value->m_float3[1]) + "," + std::to_string(value->m_float3[2]) + ")";
+                            apply += "float3(" 
+                                + std::to_string(value->m_float3[0]) + "," 
+                                + std::to_string(value->m_float3[1]) + "," 
+                                + std::to_string(value->m_float3[2]) + ")";
                             break;
                         case jegl_shader_value::type::FLOAT4:
-                            apply += "float4(" + std::to_string(value->m_float4[0]) + "," + std::to_string(value->m_float4[1]) + "," + std::to_string(value->m_float4[2]) + "," + std::to_string(value->m_float4[3]) + ")";
+                            apply += "float4(" 
+                                + std::to_string(value->m_float4[0]) + "," 
+                                + std::to_string(value->m_float4[1]) + "," 
+                                + std::to_string(value->m_float4[2]) + "," 
+                                + std::to_string(value->m_float4[3]) + ")";
                             break;
                         case jegl_shader_value::type::FLOAT2x2:
                         {
@@ -340,7 +349,12 @@ namespace jeecs
                     {
                         if ((uinfo.m_used_in_vertex && in_vertex) || (uinfo.m_used_in_fragment && !in_vertex))
                         {
-                            *out_utexture += attrib_binding(uinfo.m_value->m_uniform_texture_channel, 2) + get_typename(value_type) + " " + name + ": register(t" + std::to_string(uinfo.m_value->m_uniform_texture_channel) + ");\n";
+                            *out_utexture += 
+                                attrib_binding(uinfo.m_value->m_uniform_texture_channel, 2) 
+                                + get_typename(value_type) 
+                                + " " 
+                                + name 
+                                + ": register(t" + std::to_string(uinfo.m_value->m_uniform_texture_channel) + ");\n";
                         }
                     }
                     else
@@ -374,7 +388,10 @@ namespace jeecs
                 for (auto *sampler : wrap->decleared_samplers)
                 {
                     sampler_decl +=
-                        attrib_binding(sampler->m_sampler_id, 3) + "SamplerState sampler_" + std::to_string(sampler->m_sampler_id) + ": register(s" + std::to_string(sampler->m_sampler_id) + ");\n";
+                        attrib_binding(sampler->m_sampler_id, 3) 
+                        + "SamplerState sampler_" 
+                        + std::to_string(sampler->m_sampler_id) 
+                        + ": register(s" + std::to_string(sampler->m_sampler_id) + ");\n";
                 }
 
                 std::string built_in_srcs = generate_builtin_codes(wrap, &contex);
@@ -432,7 +449,14 @@ namespace jeecs
                 std::map<size_t, std::string> in_value_wraper;
                 for (auto &indecl : contex._in_value)
                 {
-                    in_value_wraper[indecl.second.first] = attrib_location(indecl.second.first) + "    " + get_value_typename(indecl.first) + " _in_" + std::to_string(indecl.second.first) + ": " + vertex_in_semantics[indecl.second.first] + ";\n";
+                    in_value_wraper[indecl.second.first] = 
+                        attrib_location(indecl.second.first) 
+                        + "    " 
+                        + get_value_typename(indecl.first) 
+                        + " _in_" + std::to_string(indecl.second.first) 
+                        + ": " 
+                        + vertex_in_semantics[indecl.second.first] 
+                        + ";\n";
                 }
 
                 for (auto &codegendata : in_value_wraper)
@@ -488,7 +512,10 @@ namespace jeecs
                 {
                     if (outid == 0)
                     {
-                        body_result += "    float4 _je_position = (" + outvarname.second + " + float4(0.0, 0.0, " + outvarname.second + ".w, 0.0)) * float4(1.0, 1.0, 0.5, 1.0);\n";
+                        body_result += 
+                            "    float4 _je_position = (" 
+                            + outvarname.second 
+                            + " + float4(0.0, 0.0, " + outvarname.second + ".w, 0.0)) * float4(1.0, 1.0, 0.5, 1.0);\n";
                         body_result += "    vout.vout_position = _je_position;\n";
                         body_result += "    vout._v2f_" + std::to_string(outid) + " = _je_position;\n";
                     }
@@ -526,7 +553,10 @@ namespace jeecs
                 for (auto *sampler : wrap->decleared_samplers)
                 {
                     sampler_decl +=
-                        attrib_binding(sampler->m_sampler_id, 3) + "SamplerState sampler_" + std::to_string(sampler->m_sampler_id) + ": register(s" + std::to_string(sampler->m_sampler_id) + ");\n";
+                        attrib_binding(sampler->m_sampler_id, 3) 
+                        + "SamplerState sampler_" 
+                        + std::to_string(sampler->m_sampler_id) 
+                        + ": register(s" + std::to_string(sampler->m_sampler_id) + ");\n";
                 }
 
                 std::string built_in_srcs = generate_builtin_codes(wrap, &contex);
@@ -589,7 +619,10 @@ namespace jeecs
                 {
                     auto oid = outid++;
                     io_declear +=
-                        "    " + get_value_typename(outvarname.first) + " _out_" + std::to_string(oid) + ": SV_TARGET" + std::to_string(oid) + ";\n";
+                        "    " 
+                        + get_value_typename(outvarname.first) 
+                        + " _out_" + std::to_string(oid) 
+                        + ": SV_TARGET" + std::to_string(oid) + ";\n";
                 }
                 io_declear += "};\n";
 
