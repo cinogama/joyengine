@@ -35,7 +35,8 @@ WO_API wo_api wojeapi_startup_thread(wo_vm vm, wo_value args)
     _je_thread* thread_instance = new _je_thread();
     thread_instance->m_finished.store(false);
     thread_instance->m_thread =
-        new std::thread([=]
+        new std::thread(
+            [=]
             {
                 wo_invoke_value(co_vmm, cofunc, 0, nullptr, nullptr);
                 thread_instance->m_finished.store(true);

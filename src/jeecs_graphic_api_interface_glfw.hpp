@@ -46,7 +46,7 @@ namespace jeecs::graphic
     public:
         static void glfw_callback_windows_size_changed(GLFWwindow *fw, int x, int y)
         {
-            glfw *context = std::launder(reinterpret_cast<glfw *>(glfwGetWindowUserPointer(fw)));
+            glfw *context = reinterpret_cast<glfw *>(glfwGetWindowUserPointer(fw));
 
             je_io_update_window_size(x, y);
 

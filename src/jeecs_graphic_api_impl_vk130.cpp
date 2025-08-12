@@ -3885,11 +3885,17 @@ namespace jeecs::graphic::api::vk130
         context->cmd_draw_vertex(std::launder(reinterpret_cast<jevk13_vertex*>(vertex->m_handle.m_ptr)));
     }
 
-    void bind_shader(jegl_context::userdata_t ctx, jegl_resource* shader)
+    bool bind_shader(jegl_context::userdata_t ctx, jegl_resource* shader)
     {
         jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
 
-        context->cmd_bind_shader_pipeline(std::launder(reinterpret_cast<jevk13_shader*>(shader->m_handle.m_ptr)));
+        auto* shader_instance = reinterpret_cast<jevk13_shader*>(shader->m_handle.m_ptr);
+        if (shader_instance != nullptr)
+        {
+            context->cmd_bind_shader_pipeline(shader_instance);
+            return true;
+        }
+        return false;
     }
     void bind_uniform_buffer(jegl_context::userdata_t ctx, jegl_resource* uniformbuf)
     {

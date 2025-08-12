@@ -1428,13 +1428,16 @@ namespace jeecs::graphic::api::dx11
         {
         case jegl_resource::type::SHADER:
         {
-            auto* shader = std::launder(reinterpret_cast<jedx11_shader*>(resource->m_handle.m_ptr));
-            if (shader->m_uniform_buffer_size != 0)
+            auto* shader = reinterpret_cast<jedx11_shader*>(resource->m_handle.m_ptr);
+            if (shader != nullptr)
             {
-                assert(shader->m_uniform_cpu_buffers != nullptr);
-                free(shader->m_uniform_cpu_buffers);
+                if (shader->m_uniform_buffer_size != 0)
+                {
+                    assert(shader->m_uniform_cpu_buffers != nullptr);
+                    free(shader->m_uniform_cpu_buffers);
+                }
+                delete shader;
             }
-            delete shader;
             break;
         }
         case jegl_resource::type::TEXTURE:
@@ -1507,11 +1510,14 @@ namespace jeecs::graphic::api::dx11
         context->m_dx_context->DrawIndexed(vertex->m_count, 0, 0);
     }
 
-    void dx11_bind_shader(jegl_context::userdata_t ctx, jegl_resource* shader)
+    bool dx11_bind_shader(jegl_context::userdata_t ctx, jegl_resource* shader)
     {
-        jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
+        jegl_dx11_context* context = reinterpret_cast<jegl_dx11_context*>(ctx);
 
-        auto* shader_instance = std::launder(reinterpret_cast<jedx11_shader*>(shader->m_handle.m_ptr));
+        auto* shader_instance = reinterpret_cast<jedx11_shader*>(shader->m_handle.m_ptr);
+        if (shader_instance == nullptr)
+            return false;
+
         context->m_current_target_shader = shader_instance;
 
         context->m_dx_context->VSSetShader(shader_instance->m_vertex.Get(), nullptr, 0);
@@ -1530,6 +1536,8 @@ namespace jeecs::graphic::api::dx11
             context->m_dx_context->PSSetSamplers(
                 sampler.m_sampler_id, 1, sampler.m_sampler.GetAddressOf());
         }
+
+        return true;
     }
 
     void dx11_bind_uniform_buffer(jegl_context::userdata_t ctx, jegl_resource* uniformbuf)
@@ -1640,7 +1648,6 @@ namespace jeecs::graphic::api::dx11
     void dx11_set_uniform(jegl_context::userdata_t ctx, uint32_t location, jegl_shader::uniform_type type, const void* val)
     {
         jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
-
         assert(context->m_current_target_shader != nullptr);
 
         if (location == jeecs::typing::INVALID_UINT32)
@@ -1650,24 +1657,27 @@ namespace jeecs::graphic::api::dx11
         assert(context->m_current_target_shader->m_uniform_buffer_size != 0);
         assert(context->m_current_target_shader->m_uniform_cpu_buffers != nullptr);
 
+        auto* write_buffer_addr = reinterpret_cast<void*>(
+            (intptr_t)context->m_current_target_shader->m_uniform_cpu_buffers + location);
+
         size_t data_size_byte_length = 0;
         switch (type)
         {
         case jegl_shader::INT:
         case jegl_shader::FLOAT:
-            memcpy(reinterpret_cast<void*>((intptr_t)context->m_current_target_shader->m_uniform_cpu_buffers + location), val, 4);
+            memcpy(write_buffer_addr, val, 4);
             break;
         case jegl_shader::FLOAT2:
-            memcpy(reinterpret_cast<void*>((intptr_t)context->m_current_target_shader->m_uniform_cpu_buffers + location), val, 8);
+            memcpy(write_buffer_addr, val, 8);
             break;
         case jegl_shader::FLOAT3:
-            memcpy(reinterpret_cast<void*>((intptr_t)context->m_current_target_shader->m_uniform_cpu_buffers + location), val, 12);
+            memcpy(write_buffer_addr, val, 12);
             break;
         case jegl_shader::FLOAT4:
-            memcpy(reinterpret_cast<void*>((intptr_t)context->m_current_target_shader->m_uniform_cpu_buffers + location), val, 16);
+            memcpy(write_buffer_addr, val, 16);
             break;
         case jegl_shader::FLOAT4X4:
-            memcpy(reinterpret_cast<void*>((intptr_t)context->m_current_target_shader->m_uniform_cpu_buffers + location), val, 64);
+            memcpy(write_buffer_addr, val, 64);
             break;
         default:
             jeecs::debug::logerr("Unknown uniform variable type to set.");

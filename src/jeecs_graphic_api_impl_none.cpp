@@ -64,8 +64,9 @@ namespace jeecs::graphic::api::none
     void bind_uniform_buffer(jegl_context::userdata_t, jegl_resource *)
     {
     }
-    void bind_shader(jegl_context::userdata_t, jegl_resource *)
+    bool bind_shader(jegl_context::userdata_t, jegl_resource *)
     {
+        return true;
     }
     void bind_texture(jegl_context::userdata_t, jegl_resource *, size_t)
     {

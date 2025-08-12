@@ -142,7 +142,9 @@ namespace jeecs::graphic::api::gl3
         JECS_DISABLE_MOVE_AND_COPY(jegl3_shader_blob);
 
         jegl3_shader_blob(GLuint vs, GLuint fs, jegl3_shader_blob_shared* s)
-            : m_vertex_shader(vs), m_fragment_shader(fs), m_shared_blob_data(jeecs::basic::resource<jegl3_shader_blob_shared>(s))
+            : m_vertex_shader(vs)
+            , m_fragment_shader(fs)
+            , m_shared_blob_data(jeecs::basic::resource<jegl3_shader_blob_shared>(s))
         {
         }
     };
@@ -382,7 +384,11 @@ namespace jeecs::graphic::api::gl3
         context->m_interface->shutdown(reboot);
         delete context;
     }
-    void gl_set_uniform(jegl_context::userdata_t ctx, uint32_t location, jegl_shader::uniform_type type, const void* val)
+    void gl_set_uniform(
+        jegl_context::userdata_t ctx, 
+        uint32_t location,
+        jegl_shader::uniform_type type,
+        const void* val)
     {
         if (location == jeecs::typing::INVALID_UINT32)
             return;
@@ -928,7 +934,12 @@ namespace jeecs::graphic::api::gl3
                 else
                     ++attachment;
 
-                glFramebufferTexture2D(GL_FRAMEBUFFER, using_attachment, buffer_texture_type, frame_texture->m_handle.m_uint1, 0);
+                glFramebufferTexture2D(
+                    GL_FRAMEBUFFER, 
+                    using_attachment, 
+                    buffer_texture_type, 
+                    frame_texture->m_handle.m_uint1,
+                    0);
             }
             std::vector<GLuint> glattachments;
             for (GLenum attachment_index = GL_COLOR_ATTACHMENT0; attachment_index < attachment; ++attachment_index)
@@ -1022,7 +1033,8 @@ namespace jeecs::graphic::api::gl3
                 glDepthMask(GL_FALSE);
         }
     }
-    void _gl_update_blend_mode_method(jegl_gl3_context* ctx, jegl_shader::blend_method src_mode, jegl_shader::blend_method dst_mode)
+    void _gl_update_blend_mode_method(
+        jegl_gl3_context* ctx, jegl_shader::blend_method src_mode, jegl_shader::blend_method dst_mode)
     {
         assert(src_mode != jegl_shader::blend_method::INVALID && dst_mode != jegl_shader::blend_method::INVALID);
         if (ctx->ACTIVE_BLEND_SRC_MODE != src_mode || ctx->ACTIVE_BLEND_DST_MODE != dst_mode)
@@ -1140,12 +1152,13 @@ namespace jeecs::graphic::api::gl3
         }
     }
 
-    void _gl_using_shader_program(jegl_gl3_context* context, jegl_resource* resource)
+    bool _gl_using_shader_program(jegl_gl3_context* context, jegl_resource* resource)
     {
         jegl_gl3_shader* shader_instance =
             reinterpret_cast<jegl_gl3_shader*>(resource->m_handle.m_ptr);
 
-        assert(shader_instance != nullptr);
+        if (shader_instance == nullptr)
+            return false;
 
         if (resource->m_raw_shader_data != nullptr)
         {
@@ -1159,6 +1172,8 @@ namespace jeecs::graphic::api::gl3
         }
         _gl_bind_shader_samplers(shader_instance);
         glUseProgram(shader_instance->instance);
+
+        return true;
     }
 
     void gl_using_resource(jegl_context::userdata_t ctx, jegl_resource* resource)
@@ -1270,10 +1285,10 @@ namespace jeecs::graphic::api::gl3
         }
     }
 
-    void gl_bind_shader(jegl_context::userdata_t context, jegl_resource* shader)
+    bool gl_bind_shader(jegl_context::userdata_t context, jegl_resource* shader)
     {
         jegl_gl3_context* ctx = std::launder(reinterpret_cast<jegl_gl3_context*>(context));
-        _gl_using_shader_program(ctx, shader);
+        return _gl_using_shader_program(ctx, shader);
     }
 
     void gl_bind_uniform_buffer(jegl_context::userdata_t, jegl_resource* uniformbuf)
@@ -1304,7 +1319,8 @@ namespace jeecs::graphic::api::gl3
             glDrawElements(vdata->m_method, vdata->m_pointcount, GL_UNSIGNED_INT, 0);
     }
 
-    void gl_set_rend_to_framebuffer(jegl_context::userdata_t ctx, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
+    void gl_set_rend_to_framebuffer(
+        jegl_context::userdata_t ctx, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
     {
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
 

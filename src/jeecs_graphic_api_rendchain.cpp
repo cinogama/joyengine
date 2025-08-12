@@ -435,80 +435,82 @@ void jegl_rchain_commit(jegl_rendchain *chain, jegl_context *glthread)
 
         last_used_texture = action.m_binding_texture_group_idx;
 
-        jegl_bind_shader(action.m_shader);
-        if (action.m_shader->m_raw_shader_data != nullptr)
+        if (jegl_bind_shader(action.m_shader))
         {
-            for (auto &uniform_index : action.m_binding_uniforms)
+            if (action.m_shader->m_raw_shader_data != nullptr)
             {
-                auto *uniform_data = chain->m_used_uniforms[uniform_index];
-
-                if (*uniform_data->m_binding_place_addr == jeecs::typing::PENDING_UNIFORM_LOCATION)
-                    continue;
-
-                switch (uniform_data->m_type)
+                for (auto& uniform_index : action.m_binding_uniforms)
                 {
-                case jegl_shader::uniform_type::INT:
-                    jegl_uniform_int(
-                        *uniform_data->m_binding_place_addr,
-                        uniform_data->m_int);
-                    break;
-                case jegl_shader::uniform_type::INT2:
-                    jegl_uniform_int2(
-                        *uniform_data->m_binding_place_addr,
-                        uniform_data->m_int2[0],
-                        uniform_data->m_int2[1]);
-                    break;
-                case jegl_shader::uniform_type::INT3:
-                    jegl_uniform_int3(
-                        *uniform_data->m_binding_place_addr,
-                        uniform_data->m_int3[0],
-                        uniform_data->m_int3[1],
-                        uniform_data->m_int3[2]);
-                    break;
-                case jegl_shader::uniform_type::INT4:
-                    jegl_uniform_int4(
-                        *uniform_data->m_binding_place_addr,
-                        uniform_data->m_int4[0],
-                        uniform_data->m_int4[1],
-                        uniform_data->m_int4[2],
-                        uniform_data->m_int4[3]);
-                    break;
-                case jegl_shader::uniform_type::FLOAT:
-                    jegl_uniform_float(
-                        *uniform_data->m_binding_place_addr,
-                        uniform_data->m_float);
-                    break;
-                case jegl_shader::uniform_type::FLOAT2:
-                    jegl_uniform_float2(
-                        *uniform_data->m_binding_place_addr,
-                        uniform_data->m_float2[0],
-                        uniform_data->m_float2[1]);
-                    break;
-                case jegl_shader::uniform_type::FLOAT3:
-                    jegl_uniform_float3(
-                        *uniform_data->m_binding_place_addr,
-                        uniform_data->m_float3[0],
-                        uniform_data->m_float3[1],
-                        uniform_data->m_float3[2]);
-                    break;
-                case jegl_shader::uniform_type::FLOAT4:
-                    jegl_uniform_float4(
-                        *uniform_data->m_binding_place_addr,
-                        uniform_data->m_float4[0],
-                        uniform_data->m_float4[1],
-                        uniform_data->m_float4[2],
-                        uniform_data->m_float4[3]);
-                    break;
-                case jegl_shader::uniform_type::FLOAT4X4:
-                    jegl_uniform_float4x4(
-                        *uniform_data->m_binding_place_addr,
-                        uniform_data->m_float4x4);
-                    break;
-                default:
-                    break;
+                    auto* uniform_data = chain->m_used_uniforms[uniform_index];
+
+                    if (*uniform_data->m_binding_place_addr == jeecs::typing::PENDING_UNIFORM_LOCATION)
+                        continue;
+
+                    switch (uniform_data->m_type)
+                    {
+                    case jegl_shader::uniform_type::INT:
+                        jegl_uniform_int(
+                            *uniform_data->m_binding_place_addr,
+                            uniform_data->m_int);
+                        break;
+                    case jegl_shader::uniform_type::INT2:
+                        jegl_uniform_int2(
+                            *uniform_data->m_binding_place_addr,
+                            uniform_data->m_int2[0],
+                            uniform_data->m_int2[1]);
+                        break;
+                    case jegl_shader::uniform_type::INT3:
+                        jegl_uniform_int3(
+                            *uniform_data->m_binding_place_addr,
+                            uniform_data->m_int3[0],
+                            uniform_data->m_int3[1],
+                            uniform_data->m_int3[2]);
+                        break;
+                    case jegl_shader::uniform_type::INT4:
+                        jegl_uniform_int4(
+                            *uniform_data->m_binding_place_addr,
+                            uniform_data->m_int4[0],
+                            uniform_data->m_int4[1],
+                            uniform_data->m_int4[2],
+                            uniform_data->m_int4[3]);
+                        break;
+                    case jegl_shader::uniform_type::FLOAT:
+                        jegl_uniform_float(
+                            *uniform_data->m_binding_place_addr,
+                            uniform_data->m_float);
+                        break;
+                    case jegl_shader::uniform_type::FLOAT2:
+                        jegl_uniform_float2(
+                            *uniform_data->m_binding_place_addr,
+                            uniform_data->m_float2[0],
+                            uniform_data->m_float2[1]);
+                        break;
+                    case jegl_shader::uniform_type::FLOAT3:
+                        jegl_uniform_float3(
+                            *uniform_data->m_binding_place_addr,
+                            uniform_data->m_float3[0],
+                            uniform_data->m_float3[1],
+                            uniform_data->m_float3[2]);
+                        break;
+                    case jegl_shader::uniform_type::FLOAT4:
+                        jegl_uniform_float4(
+                            *uniform_data->m_binding_place_addr,
+                            uniform_data->m_float4[0],
+                            uniform_data->m_float4[1],
+                            uniform_data->m_float4[2],
+                            uniform_data->m_float4[3]);
+                        break;
+                    case jegl_shader::uniform_type::FLOAT4X4:
+                        jegl_uniform_float4x4(
+                            *uniform_data->m_binding_place_addr,
+                            uniform_data->m_float4x4);
+                        break;
+                    default:
+                        break;
+                    }
                 }
             }
+            jegl_draw_vertex(action.m_vertex);
         }
-        jegl_draw_vertex(action.m_vertex);
     }
 }

@@ -2227,9 +2227,10 @@ struct jegl_graphic_api
     using using_resource_func_t = void (*)(jegl_context::userdata_t, jegl_resource*);
     using close_resource_func_t = void (*)(jegl_context::userdata_t, jegl_resource*);
 
-    using bind_resource_func_t = void (*)(jegl_context::userdata_t, jegl_resource*);
-    using draw_vertex_func_t = void (*)(jegl_context::userdata_t, jegl_resource*);
+    using bind_ubuffer_func_t = void (*)(jegl_context::userdata_t, jegl_resource*);
+    using bind_shader_func_t = bool (*)(jegl_context::userdata_t, jegl_resource*);
     using bind_texture_func_t = void (*)(jegl_context::userdata_t, jegl_resource*, size_t);
+    using draw_vertex_func_t = void (*)(jegl_context::userdata_t, jegl_resource*);
 
     using bind_framebuf_func_t = void (*)(jegl_context::userdata_t, jegl_resource*, size_t, size_t, size_t, size_t);
     using clear_color_func_t = void (*)(jegl_context::userdata_t, float[4]);
@@ -2345,7 +2346,7 @@ struct jegl_graphic_api
         * 约定：由于RendChain的延迟渲染特性，接口假定所有相同的 uniform_buffer 实例在一帧之内
             不会发生数据改动。
     */
-    bind_resource_func_t bind_uniform_buffer;
+    bind_ubuffer_func_t bind_uniform_buffer;
 
     /*
     jegl_graphic_api::bind_texture [成员]
@@ -2357,7 +2358,7 @@ struct jegl_graphic_api
     jegl_graphic_api::bind_shader [成员]
     绑定一个着色器作为当前渲染使用的着色器。
     */
-    bind_resource_func_t bind_shader;
+    bind_shader_func_t bind_shader;
 
     /*
     jegl_graphic_api::bind_framebuf [成员]
@@ -2836,8 +2837,10 @@ JE_API void jegl_bind_texture(jegl_resource* texture, size_t pass);
 jegl_bind_shader [基本接口]
     * 此函数只允许在图形线程内调用
     * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
+    * 当着色器发生内部错误（通常是引擎生成的shader代码无法被图形库正常编译）时，
+        绑定失败，返回false
 */
-JE_API void jegl_bind_shader(jegl_resource* shader);
+JE_API bool jegl_bind_shader(jegl_resource* shader);
 
 /*
 jegl_bind_uniform_buffer [基本接口]
