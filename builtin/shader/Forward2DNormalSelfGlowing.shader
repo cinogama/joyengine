@@ -45,9 +45,8 @@ public func vert(v: vin)
     let vspace_position = je_mv * vec4(v.vertex, 1.);
 
     let N = vtangent(v.normal);
-    let T0 = vtangent(v.tangent);
-    let T = normalize(T0 - dot(T0, N) * N);
-    let B = normalize(cross(N, T));
+    let T = vtangent(v.tangent);
+    let B = normalize(cross(T, N));
 
     return v2f{
         pos = je_p * vspace_position,
