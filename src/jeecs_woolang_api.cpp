@@ -5,11 +5,11 @@
 #include <list>
 #include <optional>
 
-std::atomic_flag _jewo_log_buffer_mx = {};
-std::list<std::pair<int, std::string>> _jewo_log_buffer;
+static std::atomic_flag _jewo_log_buffer_mx = {};
+static std::list<std::pair<int, std::string>> _jewo_log_buffer;
 
-std::mutex _jewo_all_alive_vm_threads_mx;
-std::unordered_set<wo_vm> _jewo_all_alive_vm_threads;
+static std::mutex _jewo_all_alive_vm_threads_mx;
+static std::unordered_set<wo_vm> _jewo_all_alive_vm_threads;
 
 struct _je_thread
 {
@@ -2246,104 +2246,6 @@ WO_API wo_api wojeapi_get_all_internal_scripts(wo_vm vm, wo_value args)
     return wo_ret_val(vm, result);
 }
 
-std::recursive_mutex _jewo_singleton_list_mx;
-struct _jewo_singleton
-{
-    wo_pin_value m_value;
-    std::recursive_mutex* m_mutex;
-
-    JECS_DISABLE_MOVE_AND_COPY(_jewo_singleton);
-
-    _jewo_singleton(wo_value value)
-        : m_mutex(new std::recursive_mutex())
-    {
-        m_value = wo_create_pin_value();
-        wo_pin_value_set(m_value, value);
-    }
-    ~_jewo_singleton()
-    {
-        wo_close_pin_value(m_value);
-        delete m_mutex;
-    }
-};
-std::unordered_map<std::string, jeecs::basic::resource<_jewo_singleton>> _jewo_singleton_list;
-
-std::optional<jeecs::basic::resource<_jewo_singleton>> _jewo_create_singleton(
-    wo_vm vm, const char* token, wo_value func, wo_value* inout_args)
-{
-    std::lock_guard g1(_jewo_singleton_list_mx);
-
-    auto fnd = _jewo_singleton_list.find(token);
-    if (fnd != _jewo_singleton_list.end())
-        return fnd->second;
-    else
-    {
-        wo_value ret = wo_invoke_value(vm, func, 0, inout_args, nullptr);
-        if (ret != nullptr)
-        {
-            return _jewo_singleton_list.insert(
-                std::make_pair(token, jeecs::basic::resource<_jewo_singleton>(
-                    new _jewo_singleton(ret))))
-                .first->second;
-        }
-    }
-    return std::nullopt;
-}
-void _jewo_clear_singletons()
-{
-    std::lock_guard g1(_jewo_singleton_list_mx);
-    _jewo_singleton_list.clear();
-}
-
-WO_API wo_api wojeapi_create_singleton(wo_vm vm, wo_value args)
-{
-    auto singleton = _jewo_create_singleton(vm, wo_string(args + 0), args + 1, &args);
-    if (singleton.has_value())
-    {
-        return wo_ret_gchandle(vm,
-            new jeecs::basic::resource<_jewo_singleton>(singleton.value()),
-            nullptr,
-            [](void* p)
-            {
-                delete std::launder(
-                    reinterpret_cast<
-                    jeecs::basic::resource<_jewo_singleton> *>(
-                        p));
-            });
-    }
-    return wo_ret_panic(vm, "Failed to create singleton: '%s': %s.",
-        wo_string(args + 0),
-        wo_get_runtime_error(vm));
-}
-WO_API wo_api wojeapi_apply_singleton(wo_vm vm, wo_value args)
-{
-    wo_value s = wo_reserve_stack(vm, 1, &args);
-
-    jeecs::basic::resource<_jewo_singleton> singleton =
-        *std::launder(
-            reinterpret_cast<
-            jeecs::basic::resource<_jewo_singleton> *>(
-                wo_pointer(args + 0)));
-    wo_value f = args + 1;
-
-    std::lock_guard g1(*(singleton->m_mutex));
-
-    auto val = s + 0;
-    wo_pin_value_get(val, singleton->m_value);
-
-    wo_value result = wo_invoke_value(vm, f, 1, &args, &s);
-    if (result == nullptr)
-        return wo_ret_panic(vm, "Failed to apply singleton: %s.",
-            wo_get_runtime_error(vm));
-
-    return wo_ret_val(vm, result);
-}
-WO_API wo_api wojeapi_clear_singletons(wo_vm vm, wo_value args)
-{
-    _jewo_clear_singletons();
-    return wo_ret_void(vm);
-}
-
 struct dynamic_parser_impl_t
 {
     wo_unref_value m_saving;
@@ -2354,28 +2256,36 @@ struct dynamic_parser_impl_t
         m_script_parser;
 };
 
-std::mutex _je_dynamic_parser_mx;
-wo_vm _je_dynamic_parser_vm = nullptr;
-std::unordered_map<jeecs::typing::typeid_t, std::unique_ptr<dynamic_parser_impl_t>>
-_je_dynamic_parser_impls;
+struct dynamic_parser_global_context_t
+{
+    using parser_table_t =
+        std::unordered_map<jeecs::typing::typeid_t, std::unique_ptr<dynamic_parser_impl_t>>;
+
+    std::mutex _je_dynamic_parser_mx;
+
+    parser_table_t _je_dynamic_parser_impls;
+    wo_vm _je_dynamic_parser_vm = nullptr;
+};
+static dynamic_parser_global_context_t _je_dynamic_parser_global_context;
+
 
 void _je_dynamic_parser_clear()
 {
-    if (_je_dynamic_parser_vm != nullptr)
+    if (_je_dynamic_parser_global_context._je_dynamic_parser_vm != nullptr)
     {
-        _je_dynamic_parser_impls.clear();
+        _je_dynamic_parser_global_context._je_dynamic_parser_impls.clear();
 
-        wo_close_vm(_je_dynamic_parser_vm);
-        _je_dynamic_parser_vm = nullptr;
+        wo_close_vm(_je_dynamic_parser_global_context._je_dynamic_parser_vm);
+        _je_dynamic_parser_global_context._je_dynamic_parser_vm = nullptr;
     }
 
-    assert(_je_dynamic_parser_impls.empty());
+    assert(_je_dynamic_parser_global_context._je_dynamic_parser_impls.empty());
 }
 void _je_dynamic_parser_update_types()
 {
-    if (_je_dynamic_parser_vm != nullptr)
+    if (_je_dynamic_parser_global_context._je_dynamic_parser_vm != nullptr)
     {
-        _je_dynamic_parser_impls.clear();
+        _je_dynamic_parser_global_context._je_dynamic_parser_impls.clear();
 
         auto** types = jedbg_get_all_registed_types();
 
@@ -2391,9 +2301,12 @@ void _je_dynamic_parser_update_types()
                 wo_unref_value restoring_func;
                 wo_unref_value edit_func;
 
-                if (wo_extern_symb(&saving_func, _je_dynamic_parser_vm, (script_woolang_typename + "::parser::saving").c_str()) == WO_TRUE
-                    && wo_extern_symb(&restoring_func, _je_dynamic_parser_vm, (script_woolang_typename + "::parser::restoring").c_str()) == WO_TRUE
-                    && wo_extern_symb(&edit_func, _je_dynamic_parser_vm, (script_woolang_typename + "::parser::edit").c_str()) == WO_TRUE)
+                if (wo_extern_symb(
+                    &saving_func, _je_dynamic_parser_global_context._je_dynamic_parser_vm, (script_woolang_typename + "::parser::saving").c_str()) == WO_TRUE
+                    && wo_extern_symb(
+                        &restoring_func, _je_dynamic_parser_global_context._je_dynamic_parser_vm, (script_woolang_typename + "::parser::restoring").c_str()) == WO_TRUE
+                    && wo_extern_symb(
+                        &edit_func, _je_dynamic_parser_global_context._je_dynamic_parser_vm, (script_woolang_typename + "::parser::edit").c_str()) == WO_TRUE)
                 {
                     auto p = std::make_unique<dynamic_parser_impl_t>();
 
@@ -2402,7 +2315,7 @@ void _je_dynamic_parser_update_types()
                     wo_set_val(&p->m_edit, &edit_func);
                     p->m_script_parser = script_parser;
 
-                    _je_dynamic_parser_impls.insert(
+                    _je_dynamic_parser_global_context._je_dynamic_parser_impls.insert(
                         std::make_pair((*cur_type)->m_id, std::move(p)));
                 }
             }
@@ -2414,7 +2327,7 @@ void _je_dynamic_parser_update_types()
     }
     else
     {
-        assert(_je_dynamic_parser_impls.empty());
+        assert(_je_dynamic_parser_global_context._je_dynamic_parser_impls.empty());
     }
 }
 std::optional<std::string> _je_dynamic_parser_update_all(const char* path)
@@ -2451,7 +2364,7 @@ std::optional<std::string> _je_dynamic_parser_update_all(const char* path)
     free(content);
 
     _je_dynamic_parser_clear();
-    _je_dynamic_parser_vm = newvm;
+    _je_dynamic_parser_global_context._je_dynamic_parser_vm = newvm;
     _je_dynamic_parser_update_types();
 
     return std::nullopt;
@@ -2461,7 +2374,7 @@ std::optional<std::string> _je_dynamic_parser_update_all(const char* path)
 
 WO_API wo_api wojeapi_dynamic_parser_update_script(wo_vm vm, wo_value args)
 {
-    std::lock_guard g1(_je_dynamic_parser_mx);
+    std::lock_guard g1(_je_dynamic_parser_global_context._je_dynamic_parser_mx);
 
     if (auto result = _je_dynamic_parser_update_all(wo_string(args + 0)))
         return wo_ret_err_string(vm, result.value().c_str());
@@ -2470,7 +2383,7 @@ WO_API wo_api wojeapi_dynamic_parser_update_script(wo_vm vm, wo_value args)
 
 WO_API wo_api wojeapi_dynamic_parser_update_type(wo_vm vm, wo_value args)
 {
-    std::lock_guard g1(_je_dynamic_parser_mx);
+    std::lock_guard g1(_je_dynamic_parser_global_context._je_dynamic_parser_mx);
 
     _je_dynamic_parser_update_types();
     return wo_ret_void(vm);
@@ -2478,7 +2391,7 @@ WO_API wo_api wojeapi_dynamic_parser_update_type(wo_vm vm, wo_value args)
 
 WO_API wo_api wojeapi_dynamic_parser_clear(wo_vm vm, wo_value args)
 {
-    std::lock_guard g1(_je_dynamic_parser_mx);
+    std::lock_guard g1(_je_dynamic_parser_global_context._je_dynamic_parser_mx);
 
     _je_dynamic_parser_clear();
     return wo_ret_void(vm);
@@ -2487,14 +2400,14 @@ WO_API wo_api wojeapi_dynamic_parser_clear(wo_vm vm, wo_value args)
 WO_API wo_api wojeapi_dynamic_parser_saving(wo_vm vm, wo_value args)
 {
     wo_value s = wo_reserve_stack(vm, 1, &args);
-    std::lock_guard g1(_je_dynamic_parser_mx);
+    std::lock_guard g1(_je_dynamic_parser_global_context._je_dynamic_parser_mx);
 
     auto* type = (const jeecs::typing::type_info*)wo_pointer(args + 0);
-    auto fnd = _je_dynamic_parser_impls.find(type->m_id);
+    auto fnd = _je_dynamic_parser_global_context._je_dynamic_parser_impls.find(type->m_id);
 
-    if (fnd != _je_dynamic_parser_impls.end())
+    if (fnd != _je_dynamic_parser_global_context._je_dynamic_parser_impls.end())
     {
-        assert(_je_dynamic_parser_vm != nullptr);
+        assert(_je_dynamic_parser_global_context._je_dynamic_parser_vm != nullptr);
 
         auto* val = wo_pointer(args + 1);
         auto& parser = fnd->second;
@@ -2502,12 +2415,18 @@ WO_API wo_api wojeapi_dynamic_parser_saving(wo_vm vm, wo_value args)
         wo_value value = s + 0;
         parser->m_script_parser->m_script_parse_c2w(val, vm, value);
 
-        wo_value _je_dynamic_parser_vm_s = wo_reserve_stack(_je_dynamic_parser_vm, 1, nullptr);
+        wo_value _je_dynamic_parser_vm_s = wo_reserve_stack(
+            _je_dynamic_parser_global_context._je_dynamic_parser_vm, 1, nullptr);
+
         wo_set_val(_je_dynamic_parser_vm_s + 0, value);
         wo_value result = wo_invoke_value(
-            _je_dynamic_parser_vm, &parser->m_saving, 1, nullptr, &_je_dynamic_parser_vm_s);
+            _je_dynamic_parser_global_context._je_dynamic_parser_vm, 
+            &parser->m_saving, 
+            1, 
+            nullptr, 
+            &_je_dynamic_parser_vm_s);
 
-        wo_pop_stack(_je_dynamic_parser_vm, 1);
+        wo_pop_stack(_je_dynamic_parser_global_context._je_dynamic_parser_vm, 1);
 
         if (result != nullptr)
             return wo_ret_option_val(vm, result);
@@ -2517,25 +2436,31 @@ WO_API wo_api wojeapi_dynamic_parser_saving(wo_vm vm, wo_value args)
 
 WO_API wo_api wojeapi_dynamic_parser_restoring(wo_vm vm, wo_value args)
 {
-    std::lock_guard g1(_je_dynamic_parser_mx);
+    std::lock_guard g1(_je_dynamic_parser_global_context._je_dynamic_parser_mx);
 
     auto* type = (const jeecs::typing::type_info*)wo_pointer(args + 0);
-    auto fnd = _je_dynamic_parser_impls.find(type->m_id);
+    auto fnd = _je_dynamic_parser_global_context._je_dynamic_parser_impls.find(type->m_id);
 
-    if (fnd != _je_dynamic_parser_impls.end())
+    if (fnd != _je_dynamic_parser_global_context._je_dynamic_parser_impls.end())
     {
-        assert(_je_dynamic_parser_vm != nullptr);
+        assert(_je_dynamic_parser_global_context._je_dynamic_parser_vm != nullptr);
 
         void* val = wo_pointer(args + 1);
         auto& parser = fnd->second;
 
-        wo_value _je_dynamic_parser_vm_s = wo_reserve_stack(_je_dynamic_parser_vm, 1, nullptr);
+        wo_value _je_dynamic_parser_vm_s = wo_reserve_stack(
+            _je_dynamic_parser_global_context._je_dynamic_parser_vm, 1, nullptr);
+
         wo_set_val(_je_dynamic_parser_vm_s + 0, args + 2);
 
         wo_value result = wo_invoke_value(
-            _je_dynamic_parser_vm, &parser->m_restoring, 1, nullptr, &_je_dynamic_parser_vm_s);
+            _je_dynamic_parser_global_context._je_dynamic_parser_vm, 
+            &parser->m_restoring, 
+            1, 
+            nullptr, 
+            &_je_dynamic_parser_vm_s);
 
-        wo_pop_stack(_je_dynamic_parser_vm, 1);
+        wo_pop_stack(_je_dynamic_parser_global_context._je_dynamic_parser_vm, 1);
 
         if (result != nullptr)
         {
@@ -2550,14 +2475,14 @@ WO_API wo_api wojeapi_dynamic_parser_edit(wo_vm vm, wo_value args)
 {
     wo_value s = wo_reserve_stack(vm, 1, &args);
 
-    std::lock_guard g1(_je_dynamic_parser_mx);
+    std::lock_guard g1(_je_dynamic_parser_global_context._je_dynamic_parser_mx);
 
     auto* type = (const jeecs::typing::type_info*)wo_pointer(args + 0);
-    auto fnd = _je_dynamic_parser_impls.find(type->m_id);
+    auto fnd = _je_dynamic_parser_global_context._je_dynamic_parser_impls.find(type->m_id);
 
-    if (fnd != _je_dynamic_parser_impls.end())
+    if (fnd != _je_dynamic_parser_global_context._je_dynamic_parser_impls.end())
     {
-        assert(_je_dynamic_parser_vm != nullptr);
+        assert(_je_dynamic_parser_global_context._je_dynamic_parser_vm != nullptr);
 
         auto* val = wo_pointer(args + 1);
         auto* tag = wo_string(args + 2);
@@ -2568,15 +2493,20 @@ WO_API wo_api wojeapi_dynamic_parser_edit(wo_vm vm, wo_value args)
         parser->m_script_parser->m_script_parse_c2w(val, vm, value);
 
         wo_value _je_dynamic_parser_vm_s = wo_reserve_stack(
-            _je_dynamic_parser_vm, 2, nullptr);
+            _je_dynamic_parser_global_context._je_dynamic_parser_vm, 2, nullptr);
 
         wo_set_val(_je_dynamic_parser_vm_s + 0, value);
-        wo_set_string(_je_dynamic_parser_vm_s + 1, _je_dynamic_parser_vm, tag);
+        wo_set_string(
+            _je_dynamic_parser_vm_s + 1, _je_dynamic_parser_global_context._je_dynamic_parser_vm, tag);
 
         wo_value result = wo_invoke_value(
-            _je_dynamic_parser_vm, &parser->m_edit, 2, nullptr, &_je_dynamic_parser_vm_s);
+            _je_dynamic_parser_global_context._je_dynamic_parser_vm,
+            &parser->m_edit, 
+            2,
+            nullptr,
+            &_je_dynamic_parser_vm_s);
 
-        wo_pop_stack(_je_dynamic_parser_vm, 2);
+        wo_pop_stack(_je_dynamic_parser_global_context._je_dynamic_parser_vm, 2);
 
         if (result != nullptr)
         {

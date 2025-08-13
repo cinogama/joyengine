@@ -21,8 +21,6 @@ void je_extern_lib_woo_api_finish();
 void je_extern_lib_3rd_pkgs_finish();
 void je_extern_lib_module_finish();
 
-void _jewo_clear_singletons();
-
 struct _je_static_context_t
 {
     wo_fail_handler_t _je_global_old_panic_handler = nullptr;
@@ -36,7 +34,7 @@ struct _je_static_context_t
 
     jeecs::typing::type_unregister_guard* _je_unregister_guard = nullptr;
 };
-_je_static_context_t _je_global_context;
+static _je_static_context_t _je_global_context;
 
 
 void jegl_set_host_graphic_api(jegl_graphic_api_entry api)
@@ -378,8 +376,6 @@ void je_finish()
         wo_register_fail_handler(_je_global_context._je_global_old_panic_handler);
         _je_global_context._je_global_old_panic_handler = nullptr;
     }
-
-    _jewo_clear_singletons();
 
     wo_finish([](void*)
         {

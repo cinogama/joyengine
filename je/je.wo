@@ -64,36 +64,6 @@ namespace je
     extern("libjoyecs", "wojeapi_startup_coroutine")
         public func start_coroutine<FT, ArgTs>(f: FT, args: ArgTs)=> void
             where f(args...) is void;
-            
-        using singleton<T> = struct{
-            instantiate: ()=>_singleton_instantiate<T>,
-        }
-    {
-        using _singleton_instantiate<T> = gchandle
-        {
-            extern("libjoyecs", "wojeapi_create_singleton")
-                private func create<T>(token: string, f: ()=>T)=> _singleton_instantiate<T>;
-                
-            extern("libjoyecs", "wojeapi_apply_singleton")
-                private func apply<T, R>(self: _singleton_instantiate<T>, f: (T)=> R)=> R;
-        }
-        public func create<T>(token: string, f: ()=>T)
-        {
-            return singleton:<T>{
-                instantiate = \ = _singleton_instantiate::create(token, f);,
-            };
-        }
-        public func apply<T, R>(self: singleton<T>, f: (T)=> R)=> R
-        {
-            return self.instantiate()->apply(f);
-        }
-        
-        namespace unsafe
-        {
-            extern("libjoyecs", "wojeapi_clear_singletons")
-                public func clear_all()=> void;
-        }
-    }
     
     using thread = gchandle
     {

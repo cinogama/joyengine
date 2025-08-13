@@ -3,6 +3,8 @@ import woo::std;
 import je;
 import je::gui;
 
+import pkg::singleton;
+
 using je;
 using je::gui;
 
@@ -23,8 +25,7 @@ namespace jeapi::gui
     }
     {
         let _showing_forms = singleton::create(
-            "JE_EDITOR_JEAPI_GUI_FORM_SHOWING_FORMS",
-            \ = {}mut: map<string, mut void>;);
+            "JE_EDITOR_JEAPI_GUI_FORM_SHOWING_FORMS", 0, \= {}mut: map<string, mut void>;);
             
         public func create(title: string, unique_form: bool, body: (form)=>void)
         {

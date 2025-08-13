@@ -14,6 +14,7 @@ import pkg::worst;
 import pkg::fsys;
 import pkg::process;
 import pkg::iterator;
+import pkg::singleton;
 
 import config;
 
@@ -191,7 +192,7 @@ namespace editor
                 return result::err("已经在调试中，不可重复调试");
                 
             // 调试开始之前再清除单例
-            je::singleton::unsafe::clear_all();
+            singleton::unsafe::reset_all_singleton();
             
             try! dumpped = self->dump_and_close_all_world();
             
