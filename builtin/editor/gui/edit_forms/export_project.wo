@@ -323,6 +323,7 @@ namespace editor::gui::edit_forms
                                 import je::internal;
                                 
                                 import woo::std;
+                                import pkg::singleton;
                                 
                                 import builtin::api::gui::panic;
                                 import builtin::api::serialize::main;
@@ -398,7 +399,10 @@ namespace editor::gui::edit_forms
                                     je::towoo::unregister_component(tinfo);
 
                                 for (let libhandle : LOADED_MODULE_HANDLES)
-                                    je::unload_module(libhandle);                               
+                                    je::unload_module(libhandle);       
+
+                                // 重置所有单例，确保一切照常释放和退出
+                                singleton::unsafe::reset_all_singleton();                        
                             "@;
                                 
                             // 1.4.1 生成加载动态库相关代码

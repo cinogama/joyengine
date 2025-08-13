@@ -9,6 +9,7 @@ import pkg::makenew;
 import pkg::iterator;
 import pkg::try;
 import pkg::worst;
+import pkg::singleton;
 
 import je;
 import je::gui;
@@ -475,197 +476,203 @@ func open_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict
     
 }
 
-for (;;)
+func editor_main_entry()
 {
-    let create_project_icon = je::graphic::texture::load(option::none, F"!/builtin/icon/Create.png")->unwrap;
-    let load_project_icon = je::graphic::texture::load(option::none, F"!/builtin/icon/Load.png")->unwrap;
-    let exit_editor_icon = je::graphic::texture::load(option::none, F"!/builtin/icon/Exit.png")->unwrap;
+    // 确保编辑器退出时释放所有单例，单例的生命周期太长了……
+    defer singleton::unsafe::reset_all_singleton();
     
-    action_after_guide_form_closed = \ = result::ok(\=do nil;);;
-    
-    let u = new! editor::Environment();
+    for (;;)
     {
-        let editor_configs = read_editor_data();
-        let historys = editor_configs->get_or("history": dynamic, []: dynamic) as array<dynamic>->unsafe::cast:< vec<array<string>> >;
+        let create_project_icon = je::graphic::texture::load(option::none, F"!/builtin/icon/Create.png")->unwrap;
+        let load_project_icon = je::graphic::texture::load(option::none, F"!/builtin/icon/Load.png")->unwrap;
+        let exit_editor_icon = je::graphic::texture::load(option::none, F"!/builtin/icon/Exit.png")->unwrap;
         
-        je::internal::init_graphic_pipeline_for_editor(u->get_universe());
+        action_after_guide_form_closed = \ = result::ok(\=do nil;);;
         
-        if (std::platform::os != std::platform::os_type::WIN32 ||
-            editor::CxxProject::is_builder_ready())
+        let u = new! editor::Environment();
         {
-            launch(
-                func(){
-                    let open = new! std::mutable(true);
-                    
-                    if (BeginAttr("JoyEngineECS 项目导航",
-                            WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
-                                + WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus
-                                + WindowsAttribute::ImGuiWindowFlags_NoDocking
-                                + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
-                    {
-                        Text("欢迎使用JoyEngine");
-                        SameLine();
-                        TextDisabled(F"({je::internal::build_version()})");
-                        if (IsItemHovered())
+            let editor_configs = read_editor_data();
+            let historys = editor_configs->get_or("history": dynamic, []: dynamic) as array<dynamic>->unsafe::cast:< vec<array<string>> >;
+            
+            je::internal::init_graphic_pipeline_for_editor(u->get_universe());
+            
+            if (std::platform::os != std::platform::os_type::WIN32 ||
+                editor::CxxProject::is_builder_ready())
+            {
+                launch(
+                    func(){
+                        let open = new! std::mutable(true);
+                        
+                        if (BeginAttr("JoyEngineECS 项目导航",
+                                WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
+                                    + WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus
+                                    + WindowsAttribute::ImGuiWindowFlags_NoDocking
+                                    + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
                         {
-                            BeginTooltip();
-                            
-                            Text(je::internal::build_version_info());
-                            Text("来自提交：");
+                            Text("欢迎使用JoyEngine");
                             SameLine();
-                            TextDisabled(je::internal::build_commit());
-                            
-                            EndTooltip();
-                        }
-                        SameLine();
-                        Text("，请选择一项以开始");
-                        
-                        Separator();
-                        
-                        if (jeapi::gui::widget::IconButton(create_project_icon, "创建新项目", (64., 64.), option::none))
-                        {
-                            launch(
-                                \ = open_path_to_do_sth(
-                                        \p = do p->> \path = create_project_at(path, u, editor_configs, open);;)
-                                    ;);
-                        }
-                        if (jeapi::gui::widget::IconButton(load_project_icon, "加载一个项目", (64., 64.), option::none))
-                        {
-                            launch(
-                                \= open_path_to_do_sth(
-                                        \p = do p->> \path = open_project_at(path, u, editor_configs, open);;,)
-                                    ;);
-                        }
-                        
-                        TextDisabled("历史项目");
-                        do BeginChildSize("##history", 0., 100.);
-                        
-                        for (let (index, dat) : historys->iter |> iterator::enumerate)
-                        {
-                            let context_menu_func = func()
+                            TextDisabled(F"({je::internal::build_version()})");
+                            if (IsItemHovered())
                             {
-                                if (MenuItem("加载此项目"))
-                                    open_project_at(fsys::normalize(dat[1]), u, editor_configs, open);
-                                if (MenuItem("打开项目所在路径"))
-                                    do std::shell(F"explorer \"{fsys::normalize(dat[1])->to_string->replace("/", "\\")}\"");
-                                Separator();
-                                if (MenuItem("从历史记录中移除"))
-                                {
-                                    jeapi::gui::form::ask("确认移除？", F"确认要将项目{dat[0]} ({dat[1]})\n从历史记录中移除吗？",
-                                        func(check)
-                                        {
-                                            if (check)
-                                            {
-                                                match (historys->get(index))
-                                                {
-                                                    value(removing_data)?
-                                                        if (removing_data[0] == dat[0] && removing_data[1] == dat[1])
-                                                        {
-                                                            do historys->remove(index);
-                                                            assert(
-                                                                fsys::writeall(
-                                                                    fsys::normalize(
-                                                                        std::host_path())/ "builtin" / "editor.dat.je4cache",
-                                                                    editor_configs->serialize->unwrap));
-                                                        }
-                                                    none?;
-                                                }
-                                            }
-                                        });
-                                }
-                            };
-                            if (jeapi::gui::widget::IconButton(
-                                    load_project_icon,
-                                    F"{dat[0]} ({dat[1]})",
-                                    (16., 16.),
-                                    option::value(context_menu_func)))
-                            {
-                                open_project_at(
-                                    fsys::normalize(dat[1]),
-                                    u,
-                                    editor_configs,
-                                    open);
+                                BeginTooltip();
+                                
+                                Text(je::internal::build_version_info());
+                                Text("来自提交：");
+                                SameLine();
+                                TextDisabled(je::internal::build_commit());
+                                
+                                EndTooltip();
                             }
+                            SameLine();
+                            Text("，请选择一项以开始");
+                            
+                            Separator();
+                            
+                            if (jeapi::gui::widget::IconButton(create_project_icon, "创建新项目", (64., 64.), option::none))
+                            {
+                                launch(
+                                    \ = open_path_to_do_sth(
+                                            \p = do p->> \path = create_project_at(path, u, editor_configs, open);;)
+                                        ;);
+                            }
+                            if (jeapi::gui::widget::IconButton(load_project_icon, "加载一个项目", (64., 64.), option::none))
+                            {
+                                launch(
+                                    \= open_path_to_do_sth(
+                                            \p = do p->> \path = open_project_at(path, u, editor_configs, open);;,)
+                                        ;);
+                            }
+                            
+                            TextDisabled("历史项目");
+                            do BeginChildSize("##history", 0., 100.);
+                            
+                            for (let (index, dat) : historys->iter |> iterator::enumerate)
+                            {
+                                let context_menu_func = func()
+                                {
+                                    if (MenuItem("加载此项目"))
+                                        open_project_at(fsys::normalize(dat[1]), u, editor_configs, open);
+                                    if (MenuItem("打开项目所在路径"))
+                                        do std::shell(F"explorer \"{fsys::normalize(dat[1])->to_string->replace("/", "\\")}\"");
+                                    Separator();
+                                    if (MenuItem("从历史记录中移除"))
+                                    {
+                                        jeapi::gui::form::ask("确认移除？", F"确认要将项目{dat[0]} ({dat[1]})\n从历史记录中移除吗？",
+                                            func(check)
+                                            {
+                                                if (check)
+                                                {
+                                                    match (historys->get(index))
+                                                    {
+                                                        value(removing_data)?
+                                                            if (removing_data[0] == dat[0] && removing_data[1] == dat[1])
+                                                            {
+                                                                do historys->remove(index);
+                                                                assert(
+                                                                    fsys::writeall(
+                                                                        fsys::normalize(
+                                                                            std::host_path())/ "builtin" / "editor.dat.je4cache",
+                                                                        editor_configs->serialize->unwrap));
+                                                            }
+                                                        none?;
+                                                    }
+                                                }
+                                            });
+                                    }
+                                };
+                                if (jeapi::gui::widget::IconButton(
+                                        load_project_icon,
+                                        F"{dat[0]} ({dat[1]})",
+                                        (16., 16.),
+                                        option::value(context_menu_func)))
+                                {
+                                    open_project_at(
+                                        fsys::normalize(dat[1]),
+                                        u,
+                                        editor_configs,
+                                        open);
+                                }
+                            }
+                            
+                            EndChild();
+                            
+                            if (jeapi::gui::widget::IconButton(
+                                    exit_editor_icon, "退出编辑器", (64., 64.), option::none))
+                            {
+                                u->close();
+                                open->set(false);
+                            }
+                            
+                            Separator();
+                            TextDisabled("(C)Cinogama project. 2022.");
                         }
+                        End();
                         
-                        EndChild();
-                        
-                        if (jeapi::gui::widget::IconButton(
-                                exit_editor_icon, "退出编辑器", (64., 64.), option::none))
+                        return open->get();
+                    });
+            }
+            else
+            {
+                launch(func(){
+                        if (BeginAttr("JoyEngineECS 项目导航",
+                                WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
+                                    + WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus
+                                    + WindowsAttribute::ImGuiWindowFlags_NoDocking
+                                    + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
                         {
-                            u->close();
-                            open->set(false);
+                            Text("启动引擎时发现项目所需使用的构建工具未准备就绪");
+                            Text("* 项目中的C++模块需要使用构建工具进行编译");
+                            Separator();
+                            Text("请确认以下事项已经完成，然后重启编辑器");
+                            
+                            let shine_text = func(text: string)
+                            {
+                                if ((std::time() * 2.): int % 2 == 0)
+                                    Text(text);
+                                else
+                                    TextDisabled(text);
+                            };
+                            shine_text("请特别关注‘注意’部分的内容");
+                            
+                            do BeginChildSize("##history", 600., 300.);
+                            Text("1. 请确认已经安装CMake 3.16或以上版本");
+                            Text("2. 请找到CMake的 cmake.exe 路径");
+                            TextDisabled("  * 以安装在C盘的为例，cmake.exe 路径可能为:");
+                            TextDisabled("    "); SameLine();
+                            do InputText("(仅供参考)", @"C:\Program Files\cmake-3.16.3-rc3-windows-x86_64\bin\cmake.exe"@);
+                            Text("3. 请设置环境变量 `CMAKE` 指向此路径");
+                            
+                            Separator();
+                            Text("注意：");
+                            Text("* 请确保上述所有路径中不包含多字节字符（包括但不限于中文、全角符号等）");
+                            EndChild();
+                            
+                            Separator();
+                            TextDisabled("(C)Cinogama project. 2022.");
                         }
+                        End();
                         
-                        Separator();
-                        TextDisabled("(C)Cinogama project. 2022.");
-                    }
-                    End();
-                    
-                    return open->get();
-                });
-        }
-        else
-        {
-            launch(func(){
-                    if (BeginAttr("JoyEngineECS 项目导航",
-                            WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
-                                + WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus
-                                + WindowsAttribute::ImGuiWindowFlags_NoDocking
-                                + WindowsAttribute::ImGuiWindowFlags_NoCollapse))
-                    {
-                        Text("启动引擎时发现项目所需使用的构建工具未准备就绪");
-                        Text("* 项目中的C++模块需要使用构建工具进行编译");
-                        Separator();
-                        Text("请确认以下事项已经完成，然后重启编辑器");
-                        
-                        let shine_text = func(text: string)
-                        {
-                            if ((std::time() * 2.): int % 2 == 0)
-                                Text(text);
-                            else
-                                TextDisabled(text);
-                        };
-                        shine_text("请特别关注‘注意’部分的内容");
-                        
-                        do BeginChildSize("##history", 600., 300.);
-                        Text("1. 请确认已经安装CMake 3.16或以上版本");
-                        Text("2. 请找到CMake的 cmake.exe 路径");
-                        TextDisabled("  * 以安装在C盘的为例，cmake.exe 路径可能为:");
-                        TextDisabled("    "); SameLine();
-                        do InputText("(仅供参考)", @"C:\Program Files\cmake-3.16.3-rc3-windows-x86_64\bin\cmake.exe"@);
-                        Text("3. 请设置环境变量 `CMAKE` 指向此路径");
-                        
-                        Separator();
-                        Text("注意：");
-                        Text("* 请确保上述所有路径中不包含多字节字符（包括但不限于中文、全角符号等）");
-                        EndChild();
-                        
-                        Separator();
-                        TextDisabled("(C)Cinogama project. 2022.");
-                    }
-                    End();
-                    
-                    return true;
-                });
+                        return true;
+                    });
+            }
+            
+            u->wait();
+            do u->get_universe->close();
         }
         
-        u->wait();
-        // 这个有点操蛋，到时候看一下怎么处理
-        do u->get_universe->close();
-    }
-    
-    match (action_after_guide_form_closed())
-    {
-        ok(act)?
+        match (action_after_guide_form_closed())
         {
-            act();;
-            break;
-        }
-        err(msg)?
-        {
-            je::logerr(F"无法打开指定项目：{msg}");
-            jeapi::gui::form::msg("打开项目失败", F"无法打开指定项目：{msg}");
+            ok(act)?
+            {
+                act();;
+                break;
+            }
+            err(msg)?
+            {
+                je::logerr(F"无法打开指定项目：{msg}");
+                jeapi::gui::form::msg("打开项目失败", F"无法打开指定项目：{msg}");
+            }
         }
     }
 }
+editor_main_entry();
