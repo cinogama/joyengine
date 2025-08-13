@@ -255,24 +255,25 @@ extern func _init_towoo_system(registering_system_type: je::typeinfo)
         anyof = []mut: vec<array<string>>,
     };
     
-    let read_type_list = func()
-    {
-        let types = []mut: vec<string>;
-        for (;;)
+    let read_type_list =
+        func()
         {
-            let t = read_component_type();
-            if (t != "")
-                types->add(t);
-                
-            let token = lexer->next;
-            if (token == ",")
-                continue;
-            else if (token == ";" || token == "")
-                break;
-        }
-        return types;
-    };
-    
+            let types = []mut: vec<string>;
+            for (;;)
+            {
+                let t = read_component_type();
+                if (t != "")
+                    types->add(t);
+                    
+                let token = lexer->next;
+                if (token == ",")
+                    continue;
+                else if (token == ";" || token == "")
+                    break;
+            }
+            return types;
+        };
+        
     for (;;)
     {
         let require = lexer->next;

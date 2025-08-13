@@ -63,8 +63,8 @@ namespace je
         
     extern("libjoyecs", "wojeapi_startup_coroutine")
         public func start_coroutine<FT, ArgTs>(f: FT, args: ArgTs)=> void
-            where f(args...) is void;
-    
+            where f(args...) is void;;
+            
     using thread = gchandle
     {
         namespace unsafe
@@ -260,8 +260,7 @@ namespace je
                 
             extern("libjoyecs", "wojeapi_input_gamepad_actived")
                 public func actived(self: gamepad)=> option<int>;
-                
-            //
+
             extern("libjoyecs", "wojeapi_input_gamepad_get_all")
                 public func get_all()=> array<gamepad>;
                 

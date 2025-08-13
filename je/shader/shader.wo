@@ -1656,13 +1656,9 @@ UNIFORM_BUFFER! JOYENGINE_DEFAULT = 0
 
 // Default uniform
 public let je_m = uniform("JOYENGINE_TRANS_M", float4x4::unit);
-
 public let je_mvp = uniform("JOYENGINE_TRANS_MVP", float4x4::unit);
 public let je_mv = uniform("JOYENGINE_TRANS_MV", float4x4::unit);
-
 public let je_local_scale = uniform("JOYENGINE_LOCAL_SCALE", float3::one);
-
 public let je_tiling = uniform("JOYENGINE_TEXTURE_TILING", float2::one);
 public let je_offset = uniform("JOYENGINE_TEXTURE_OFFSET", float2::zero);
-
 public let je_color = uniform("JOYENGINE_MAIN_COLOR", float4::one);
