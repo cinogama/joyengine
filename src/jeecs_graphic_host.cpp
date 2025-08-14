@@ -200,17 +200,19 @@ namespace jeecs
                 config.m_width = 640;
                 config.m_height = 480;
 
+#define JE_VERSION_WRAP(A, B, C) #A "." #B "." #C
+
                 if (host_graphic_api == jegl_using_dx11_apis)
                     config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " DirectX11)";
 #if defined(JE_ENABLE_GL330_GAPI) || defined(JE_ENABLE_GLES300_GAPI) || defined(JE_ENABLE_WEBGL20_GAPI)
                 else if (host_graphic_api == jegl_using_opengl3_apis)
-#ifdef JE_ENABLE_GL330_GAPI
+#   ifdef JE_ENABLE_GL330_GAPI
                     config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " OpenGl3.3)";
-#elif defined(JE_ENABLE_GLES300_GAPI)
+#   elif defined(JE_ENABLE_GLES300_GAPI)
                     config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " OpenGlES3.0)";
-#else
+#   else
                     config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " WebGL2.0)";
-#endif
+#   endif
 #endif
                 else if (host_graphic_api == jegl_using_vk130_apis)
                     config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " Vulkan1.3)";
@@ -220,6 +222,8 @@ namespace jeecs
                     config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " None)";
                 else
                     config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " Custom Graphic API)";
+
+#undef JE_VERSION_WRAP
 
                 config.m_enable_resize = true;
                 config.m_fps = 0;            // 使用垂直同步

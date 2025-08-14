@@ -403,7 +403,9 @@ void je_finish()
 
 const char* je_build_version()
 {
+#define JE_VERSION_WRAP(A, B, C) #A "." #B "." #C
     return "JoyEngine " JE_CORE_VERSION " " __TIMESTAMP__;
+#undef JE_VERSION_WRAP
 }
 
 const char* je_build_commit()

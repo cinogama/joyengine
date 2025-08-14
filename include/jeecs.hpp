@@ -1,5 +1,9 @@
 #pragma once
 
+#define JE_CORE_VERSION JE_VERSION_WRAP(4, 8, 6)
+
+#ifndef JE_MSVC_RC_INCLUDE
+
 #define _CRT_SECURE_NO_WARNINGS
 
 #ifndef __cplusplus
@@ -7,9 +11,6 @@
 #else
 
 #include "wo.h"
-
-#define JE_VERSION_WRAP(A, B, C) #A "." #B "." #C
-#define JE_CORE_VERSION JE_VERSION_WRAP(4, 8, 6)
 
 #define WO_FAIL_JE_FATAL_ERROR 0xD101
 #define WO_FAIL_JE_BAD_INIT_SHADER_VALUE 0xD102
@@ -11993,4 +11994,5 @@ namespace UserInterface::Origin
 #define double_click _doubleClick<jeecs::basic::hash_compile_time(__FILE__), __LINE__>
     }
 }
+#endif
 #endif
