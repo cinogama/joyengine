@@ -4,7 +4,7 @@
 
 #include "jeecs.hpp"
 
-#define JE_VERSION_WRAP(A, B, C, D) A,B,C,D
+#define JE_VERSION_WRAP(A, B, C) A,B,C,0
 
 1 VERSIONINFO
 FILEVERSION JE_CORE_VERSION
@@ -16,7 +16,7 @@ FILETYPE 0x1L
 FILESUBTYPE 0x0L
 
 #undef JE_VERSION_WRAP
-#define JE_VERSION_WRAP(A, B, C, D) #A "." #B "." #C "." #D
+#define JE_VERSION_WRAP(A, B, C) #A "." #B "." #C
 
 BEGIN
 BLOCK "StringFileInfo"
@@ -24,9 +24,9 @@ BEGIN
 BLOCK "080404b0"
 BEGIN
 VALUE "CompanyName", ""
-VALUE "FileDescription", "JoyEngine ø‚Œƒº˛"
+VALUE "FileDescription", "JoyEngine Â∫ìÊñá‰ª∂"
 VALUE "FileVersion", JE_CORE_VERSION
-VALUE "LegalCopyright", "∏˘æ› Apache –Ìø…÷§ 2.0 ∞Ê±æ ⁄»®"
+VALUE "LegalCopyright", "Ê†πÊçÆ Apache ËÆ∏ÂèØËØÅ 2.0 ÁâàÊú¨ÊéàÊùÉ"
 VALUE "InternalName", ""
 VALUE "OriginalFilename", ""
 VALUE "ProductName", "JoyEngineECS (JoyEngine 4.x)"
@@ -38,7 +38,7 @@ VALUE "CompanyName", ""
 VALUE "FileDescription", "JoyEngine library file."
 VALUE "FileVersion", JE_CORE_VERSION
 VALUE "LegalCopyright", "Licensed under the Apache License, Version 2.0"
-VALUE "InternalName", ""
+VALUE "InternalName", "joyecs"
 VALUE "OriginalFilename", ""
 VALUE "ProductName", "JoyEngineECS (JoyEngine 4.x)"
 VALUE "ProductVersion", JE_CORE_VERSION

@@ -10421,14 +10421,14 @@ namespace jeecs
                 static const char* JEScriptTypeDeclare()
                 {
                     return
-                        R"(namespace Light2D::Range
-{
-    public using light_shape = struct{
-        public m_point_count: int,
-        public m_strength: array<float>,
-        public m_positions: array<vec2>,
-    };
-})";
+                        "namespace Light2D::Range\n"
+                        "{\n"
+                        "    public using light_shape = struct{\n"
+                        "        public m_point_count: int,\n"
+                        "        public m_strength: array<float>,\n"
+                        "        public m_positions: array<vec2>,\n"
+                        "    };\n"
+                        "}";
                 }
                 void JEParseFromScriptType(wo_vm vm, wo_value v)
                 {
@@ -10583,10 +10583,10 @@ namespace jeecs
                 static const char* JEScriptTypeDeclare()
                 {
                     return
-                        R"(namespace Light2D::BlockShadow
-{
-    public using block_mesh = array<vec2>;
-})";
+                        "namespace Light2D::BlockShadow\n"
+                        "{\n"
+                        "    public using block_mesh = array<vec2>;\n"
+                        "}";
                 }
                 void JEParseFromScriptType(wo_vm vm, wo_value v)
                 {
@@ -10992,15 +10992,15 @@ namespace jeecs
                 static const char* JEScriptTypeDeclare()
                 {
                     return
-                        R"(namespace Animation::FrameAnimation
-{
-    public using animation_state = struct{
-        public m_path: string,
-        public m_animation: string,
-        public m_loop: bool,
-    };
-    public using animation_list = array<animation_state>;
-})";
+                        "namespace Animation::FrameAnimation\n"
+                        "{\n"
+                        "    public using animation_state = struct{\n"
+                        "        public m_path: string,\n"
+                        "        public m_animation: string,\n"
+                        "        public m_loop: bool,\n"
+                        "    };\n"
+                        "    public using animation_list = array<animation_state>;\n"
+                        "}";
                 }
                 void JEParseFromScriptType(wo_vm vm, wo_value v)
                 {
@@ -11785,20 +11785,19 @@ namespace jeecs
                 {
                     *v = (UserInterface::Origin::origin_center)wo_int(value);
                 },
-                "UserInterface::Origin::origin_center", R"(
-namespace UserInterface::Origin
-{
-    public enum origin_center
-    {
-        center  = 0,
-
-        left    = 1,
-        right   = 2,
-        top     = 4,
-        bottom  = 8,
-    }
-}
-)");
+                "UserInterface::Origin::origin_center",
+                "namespace UserInterface::Origin\n"
+                "{\n"
+                "    public enum origin_center\n"
+                "    {\n"
+                "        center  = 0,\n"
+                "\n"
+                "        left    = 1,\n"
+                "        right   = 2,\n"
+                "        top     = 4,\n"
+                "        bottom  = 8,\n"
+                "    }\n"
+                "}\n");
 
             je_towoo_update_api();
         }

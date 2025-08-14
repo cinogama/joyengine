@@ -187,6 +187,10 @@ set (jeecs_core_sources
     ${imgui_code_editor_srcs}
     "../include/jeecs.hpp")
 
+if (MSVC)
+    list(APPEND jeecs_core_sources resources.rc)
+endif()
+
 # Build engine shared/static library
 if (BUILD_SHARED_LIBS)
     add_library(joyecs SHARED ${jeecs_core_sources})
