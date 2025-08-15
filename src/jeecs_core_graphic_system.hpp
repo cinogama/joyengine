@@ -923,7 +923,8 @@ public let frag =
 import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
-BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
+BLEND_EQUATION(MAX);
+BLEND   (ONE, ONE);
 CULL    (BACK);
 
 VAO_STRUCT! vin
@@ -967,7 +968,8 @@ import je::shader;
 
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
-BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
+BLEND_EQUATION(MAX);
+BLEND   (ONE, ONE);
 CULL    (BACK);
 
 VAO_STRUCT! vin
@@ -1010,7 +1012,8 @@ public func frag(_: v2f)
 import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
-BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
+BLEND_EQUATION(MAX);
+BLEND   (ONE, ONE);
 CULL    (FRONT);
 
 VAO_STRUCT! vin
@@ -1053,7 +1056,8 @@ public func frag(_: v2f)
 import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
-BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
+BLEND_EQUATION(MAX);
+BLEND   (ONE, ONE);
 CULL    (FRONT);
 
 VAO_STRUCT! vin
@@ -1096,7 +1100,8 @@ public func frag(_: v2f)
 import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
-BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
+BLEND_EQUATION(MAX);
+BLEND   (ONE, ONE);
 // MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
 CULL    (NONE);
 
@@ -1215,7 +1220,8 @@ public func frag(vf: v2f)
 import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
-BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
+BLEND_EQUATION(MAX);
+BLEND   (ONE, ONE);
 // MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
 CULL    (NONE);
 
@@ -1272,7 +1278,8 @@ public func frag(vf: v2f)
 import je::shader;
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
-BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
+BLEND_EQUATION(MAX);
+BLEND   (ONE, ONE);
 // MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
 CULL    (NONE);
 
