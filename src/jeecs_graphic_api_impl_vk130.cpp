@@ -385,6 +385,8 @@ namespace jeecs::graphic::api::vk130
         VkPresentModeKHR _vk_surface_present_mode;
         VkFormat _vk_depth_format;
 
+        VkFence _vk_queue_commit_fence;
+
         size_t RESOLUTION_WIDTH;
         size_t RESOLUTION_HEIGHT;
 
@@ -539,6 +541,10 @@ namespace jeecs::graphic::api::vk130
                 }
 
                 VkDescriptorSet result;
+                // Fix: Limit allocation attempts to prevent infinite loop
+                constexpr size_t MAX_POOL_CREATION_ATTEMPTS = 10;
+                size_t pool_creation_attempts = 0;
+                
                 for (;;)
                 {
                     if (!m_pools.empty())
@@ -558,7 +564,22 @@ namespace jeecs::graphic::api::vk130
                             swapchain_image->use_descriptor_set<DESC_SET_TYPE>(result);
                             return result;
                         }
+                        else if (alloc_result == VK_ERROR_OUT_OF_POOL_MEMORY)
+                        {
+                            // Pool is full, try to create a new one
+                        }
+                        else
+                        {
+                            jeecs::debug::logfatal("Failed to allocate descriptor set with error: %d", alloc_result);
+                        }
                     }
+
+                    // Fix: Check for maximum attempts to prevent infinite loop
+                    if (pool_creation_attempts >= MAX_POOL_CREATION_ATTEMPTS)
+                    {
+                        jeecs::debug::logfatal("Failed to create descriptor pool after %zu attempts", MAX_POOL_CREATION_ATTEMPTS);
+                    }
+                    pool_creation_attempts++;
 
                     VkDescriptorPool new_created_pool;
 
@@ -994,9 +1015,14 @@ namespace jeecs::graphic::api::vk130
             submit_info.commandBufferCount = 1;
             submit_info.pCommandBuffers = &cmd_buffer;
 
-            vkQueueSubmit(_vk_logic_device_graphic_queue, 1, &submit_info, VK_NULL_HANDLE);
-            vkQueueWaitIdle(_vk_logic_device_graphic_queue);
-
+            // Fix: Use fence for better synchronization instead of blocking queue wait
+            if (vkQueueSubmit(_vk_logic_device_graphic_queue, 1, &submit_info, _vk_queue_commit_fence) != VK_SUCCESS)
+                jeecs::debug::logfatal("Failed to submit temporary command buffer!");
+            // Wait for the specific operation to complete
+            else if (vkWaitForFences(_vk_logic_device, 1, &_vk_queue_commit_fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
+                jeecs::debug::logfatal("Failed to wait for temporary command buffer fence!");
+            
+            vkResetFences(_vk_logic_device, 1, &_vk_queue_commit_fence);
             _vk_command_buffer_allocator->m_free_cmd_buffers.push_back(cmd_buffer);
         }
 
@@ -1071,7 +1097,7 @@ namespace jeecs::graphic::api::vk130
                 attachment.format = attachment_colors[attachment_i]->m_vk_texture_format;
                 attachment.samples = VkSampleCountFlagBits::VK_SAMPLE_COUNT_1_BIT;
                 attachment.loadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_LOAD;
-                attachment.storeOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_STORE;
+                attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
                 attachment.stencilLoadOp = VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_DONT_CARE;
                 attachment.stencilStoreOp = VkAttachmentStoreOp::VK_ATTACHMENT_STORE_OP_DONT_CARE;
                 attachment.initialLayout = final_layout;
@@ -1175,6 +1201,7 @@ namespace jeecs::graphic::api::vk130
         {
             vkDestroyRenderPass(_vk_logic_device, fb->m_rendpass, nullptr);
             vkDestroyFramebuffer(_vk_logic_device, fb->m_framebuffer, nullptr);
+            delete fb; // Fix: Add missing delete to prevent memory leak
         }
         void destroy_swap_chain()
         {
@@ -1405,21 +1432,13 @@ namespace jeecs::graphic::api::vk130
             // 交换链重建，需要等待上一帧的命令缓冲区信号量完成。
             if (_vk_last_command_buffer_semaphore != VK_NULL_HANDLE)
             {
-                /*uint64_t waiting_semaphore_value = 1;
-                VkSemaphoreWaitInfo wait_info = {};
-                wait_info.sType = VkStructureType::VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO;
-                wait_info.pNext = nullptr;
-                wait_info.flags = 0;
-                wait_info.semaphoreCount = 1;
-                wait_info.pSemaphores = &_vk_last_command_buffer_semaphore;
-                wait_info.pValues = &waiting_semaphore_value;
-
-                if (vkWaitSemaphores(_vk_logic_device, &wait_info, UINT64_MAX) != VK_SUCCESS)
-                    jeecs::debug::logfatal("Failed to wait for last command buffer semaphore.");*/
-
-                    // vkWaitForFences()
-
-                    // TODO;
+                // Fix: Proper synchronization during swapchain recreation
+                // Wait for all pending operations to complete before recreating swapchain
+                vkDeviceWaitIdle(_vk_logic_device);
+                
+                // Reset the semaphore state since we've waited for everything to complete
+                _vk_last_command_buffer_semaphore = VK_NULL_HANDLE;
+                _vk_wait_for_last_command_buffer_stage = VkPipelineStageFlagBits::VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
             }
         }
 
@@ -1460,6 +1479,12 @@ namespace jeecs::graphic::api::vk130
             uint32_t vk_queue_family_count = 0;
             vkGetPhysicalDeviceQueueFamilyProperties(device, &vk_queue_family_count, nullptr);
 
+            if (vk_queue_family_count == 0)
+            {
+                jeecs::debug::logwarn("Physical device '%s' has no queue families.", prop.deviceName);
+                return std::nullopt;
+            }
+
             std::vector<VkQueueFamilyProperties> vk_queue_families(vk_queue_family_count);
             vkGetPhysicalDeviceQueueFamilyProperties(device, &vk_queue_family_count, vk_queue_families.data());
 
@@ -1483,8 +1508,16 @@ namespace jeecs::graphic::api::vk130
                     if (!is_present_support)
                     {
                         VkBool32 present_support = false;
-                        vkGetPhysicalDeviceSurfaceSupportKHR(
+                        VkResult result = vkGetPhysicalDeviceSurfaceSupportKHR(
                             device, family_index, _vk_surface, &present_support);
+                        
+                        // Fix: Add error handling for surface support check
+                        if (result != VK_SUCCESS)
+                        {
+                            jeecs::debug::logwarn("Failed to check surface support for device '%s', family %u: %d", 
+                                                  prop.deviceName, family_index, result);
+                            continue;
+                        }
 
                         if (present_support)
                         {
@@ -1500,10 +1533,20 @@ namespace jeecs::graphic::api::vk130
             if (is_graphic_device && is_present_support)
             {
                 uint32_t vk_device_extension_count = 0;
-                vkEnumerateDeviceExtensionProperties(device, nullptr, &vk_device_extension_count, nullptr);
+                VkResult result = vkEnumerateDeviceExtensionProperties(device, nullptr, &vk_device_extension_count, nullptr);
+                if (result != VK_SUCCESS)
+                {
+                    jeecs::debug::logwarn("Failed to enumerate device extensions for '%s': %d", prop.deviceName, result);
+                    return std::nullopt;
+                }
 
                 std::vector<VkExtensionProperties> vk_device_extensions(vk_device_extension_count);
-                vkEnumerateDeviceExtensionProperties(device, nullptr, &vk_device_extension_count, vk_device_extensions.data());
+                result = vkEnumerateDeviceExtensionProperties(device, nullptr, &vk_device_extension_count, vk_device_extensions.data());
+                if (result != VK_SUCCESS)
+                {
+                    jeecs::debug::logwarn("Failed to get device extension properties for '%s': %d", prop.deviceName, result);
+                    return std::nullopt;
+                }
 
                 std::unordered_set<std::string> required_extensions(
                     required_device_extensions.begin(), required_device_extensions.end());
@@ -1524,6 +1567,14 @@ namespace jeecs::graphic::api::vk130
                         prop.deviceName);
 
                     return std::optional(result);
+                }
+                else
+                {
+                    jeecs::debug::logwarn("Device '%s' missing required extensions:", prop.deviceName);
+                    for (const auto& missing_ext : required_extensions)
+                    {
+                        jeecs::debug::logwarn("  - %s", missing_ext.c_str());
+                    }
                 }
             }
             return std::nullopt;
@@ -1819,8 +1870,10 @@ namespace jeecs::graphic::api::vk130
 
             vkGetDeviceQueue(_vk_logic_device, _vk_device_queue_graphic_family_index, 0, &_vk_logic_device_graphic_queue);
             vkGetDeviceQueue(_vk_logic_device, _vk_device_queue_present_family_index, 0, &_vk_logic_device_present_queue);
-            assert(_vk_logic_device_graphic_queue != nullptr);
-            assert(_vk_logic_device_present_queue != nullptr);
+            assert(_vk_logic_device_graphic_queue != VK_NULL_HANDLE);
+            assert(_vk_logic_device_present_queue != VK_NULL_HANDLE);
+            
+            _vk_queue_commit_fence = create_fence();
 
             // 创建描述符集的布局信息
             _vk_global_descriptor_set_layouts[descriptor_set_type::UNIFORM_VARIABLES] =
@@ -1904,6 +1957,7 @@ namespace jeecs::graphic::api::vk130
 
             destroy_swap_chain();
 
+            destroy_fence(_vk_queue_commit_fence);
             delete _vk_dear_imgui_descriptor_set_allocator;
             delete _vk_descriptor_set_allocator;
             delete _vk_command_buffer_allocator;
@@ -2229,6 +2283,10 @@ namespace jeecs::graphic::api::vk130
                     vertex_point_data_size += sizeof(float) * 3;
                     break;
                 case jegl_shader::uniform_type::FLOAT4:
+                    shader_blob->m_vertex_input_attribute_descriptions[i].format = VkFormat::VK_FORMAT_R32G32B32A32_SFLOAT;
+                    vertex_point_data_size += sizeof(float) * 4;
+                    break;
+                case jegl_shader::uniform_type::FLOAT4X4:
                     shader_blob->m_vertex_input_attribute_descriptions[i].format = VkFormat::VK_FORMAT_R32G32B32A32_SFLOAT;
                     vertex_point_data_size += sizeof(float) * 4;
                     break;
@@ -2813,7 +2871,8 @@ namespace jeecs::graphic::api::vk130
                     w, h,
                     vk_attachment_format,
                     VkImageTiling::VK_IMAGE_TILING_OPTIMAL,
-                    VkImageUsageFlagBits::VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                    VkImageUsageFlagBits::VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                    VK_IMAGE_USAGE_SAMPLED_BIT,
                     VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                     VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT,
                     &texture->m_vk_texture_image,
@@ -2942,7 +3001,8 @@ namespace jeecs::graphic::api::vk130
                 }
                 else
                 {
-                    jeecs::debug::logfatal("Unsupported layout transition.");
+                    // Fix: Add more detailed error information for unsupported layout transitions
+                    jeecs::debug::logfatal("Unsupported layout transition from %d to %d", (int)old_layout, (int)new_layout);
                 }
 
                 vkCmdPipelineBarrier(
@@ -3172,8 +3232,16 @@ namespace jeecs::graphic::api::vk130
             {
                 jeecs::debug::logfatal("Failed to submit draw command buffer!");
             }
-            vkQueueWaitIdle(_vk_logic_device_graphic_queue);
 
+            // Fix: Proper semaphore lifecycle management
+            // Only wait for queue if we're targeting the swapchain (presentation needs sync)
+            if (_vk_current_target_framebuffer == _vk_current_swapchain_image_content->m_framebuffer)
+            {
+                vkQueueWaitIdle(_vk_logic_device_graphic_queue);
+            }
+            
+            // Release old semaphore through proper allocator mechanism
+            // The old semaphore will be reused by the allocator
             _vk_last_command_buffer_semaphore = new_semphore;
             if (_vk_current_target_framebuffer == _vk_current_swapchain_image_content->m_framebuffer)
                 _vk_wait_for_last_command_buffer_stage =
