@@ -42,6 +42,7 @@ func multi_sampling_for_bias_shadow(
     let bias = [
         (0., 1., 0.25),
         (-1., 0., 0.25),
+        (0., 0., 0.75),
         (1., 0., 0.25),
         (0., -1., 0.25),
     ];
@@ -51,7 +52,7 @@ func multi_sampling_for_bias_shadow(
     {
         shadow_factor += f * texture(shadow, uv + bias_step * vec2(x, y))->x;
     }
-    return shadow_factor;
+    return min(shadow_factor, float::one);
 }
 
 SHADER_FUNCTION!
