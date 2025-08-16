@@ -87,13 +87,16 @@ public func launch(frame_place: int, partical_count: int)
 {
     baking_launch_record->add((frame_place, partical_count));
 }
-func _launch<VoidT>(frame_place: int, partical_count: int)
+func _launch<VoidT>(econtext: _EditorContext, frame_place: int, partical_count: int)
 {
     for (let mut i = 0; i < partical_count; i += 1)
     {
         let user_data = perparticle(frame_place);
         for (let mut f = 0; f < partical_context.m_frame_count * partical_context.m_repeat_round; f += 1)
         {
+            if (econtext.m_enable_bake)
+                return;
+
             let fid = f + frame_place;
             let poses = position(fid, user_data) as array<(real, real)>;
             let col = color(fid, user_data) as (real, real, real, real);
@@ -116,7 +119,6 @@ func _start_baking_impl<VoidT>(context: ParticalContext, econtext: _EditorContex
         baking_cache->unsafe::cast:<vec<texture>>->add(new_tex_cache);
     }
     
-    
     assert(baking_cache->len == partical_context.m_frame_count);
     
     context.m_frames_caches = baking_cache;
@@ -125,12 +127,13 @@ func _start_baking_impl<VoidT>(context: ParticalContext, econtext: _EditorContex
     econtext.m_target_launch_count = baking_launch_record->len;
     for (let mut i = 0; i < baking_launch_record->len; i += 1)
     {
-        _launch:<VoidT>(baking_launch_record[i]...);
         econtext.m_target_launch_count = baking_launch_record->len;
-        econtext.m_solved_launch_count = i + 1;
+        econtext.m_solved_launch_count = i;
+
+        _launch:<VoidT>(econtext, baking_launch_record[i]...);
         
         if (econtext.m_enable_bake)
-            break;
+            return;
     }
     
     // Make sure ok, force update all texture.

@@ -249,6 +249,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                                             jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本运行终止，可能存在错误，请检查日志");
                                             
                                         econtext.m_frame_index = 1;
+                                        econtext.m_solved_launch_count = 0;
                                         
                                         do new! thread(func(){
                                                 econtext.m_enable_bake = false;
@@ -371,7 +372,13 @@ public func color(_/*frame*/: int, context: PerparticleContext)
         }
         End();
         
-        return openform->get;
+        if (openform->get)
+            return true;
+        else
+        {
+            econtext.m_enable_bake = true;
+            return false;
+        }
     }
     public func show(
         _: EditorContext,
