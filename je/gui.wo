@@ -1115,7 +1115,7 @@ namespace je::gui
     
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
     
-    extern("libjoyecs", "je_gui_launch")
+    extern("libjoyecs", "je_gui_launch", slow)
         public func launch_coroutine(coloop: ()=> void)=> void;
         
     namespace unsafe
