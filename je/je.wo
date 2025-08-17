@@ -61,10 +61,6 @@ namespace je
     extern("libjoyecs", "wojeapi_smooth_deltatime")
         public func smooth_deltatime()=> real;
         
-    extern("libjoyecs", "wojeapi_startup_coroutine")
-        public func start_coroutine<FT, ArgTs>(f: FT, args: ArgTs)=> void
-            where f(args...) is void;;
-            
     using thread = gchandle
     {
         namespace unsafe

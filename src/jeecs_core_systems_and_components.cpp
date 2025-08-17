@@ -12,51 +12,21 @@
 
 WO_API wo_api wojeapi_deltatime(wo_vm vm, wo_value args)
 {
-    if (jeecs::ScriptRuntimeSystem::system_instance == nullptr)
-    {
-        jeecs::debug::logerr("You can only get delta time in world with Script::ScriptRuntimeSystem.");
-        return wo_ret_real(vm, 0.);
-    }
+    if (jeecs::script::current_script_game_system_instance == nullptr)
+        return wo_ret_panic(vm, "Cannot get deltatime from the outside of script game system.");
 
-    return wo_ret_real(vm, jeecs::ScriptRuntimeSystem::system_instance->deltatime());
+    return wo_ret_real(vm, jeecs::script::current_script_game_system_instance->deltatime());
 }
 
 WO_API wo_api wojeapi_smooth_deltatime(wo_vm vm, wo_value args)
 {
-    if (jeecs::ScriptRuntimeSystem::system_instance == nullptr)
+    if (jeecs::script::current_script_game_system_instance == nullptr)
     {
-        jeecs::debug::logerr("You can only get delta time in world with Script::ScriptRuntimeSystem.");
+        return wo_ret_panic(vm, "Cannot get smooth_deltatime from the outside of script game system.");
         return wo_ret_real(vm, 0.);
     }
 
-    return wo_ret_real(vm, jeecs::ScriptRuntimeSystem::system_instance->deltatimed());
-}
-
-WO_API wo_api wojeapi_startup_coroutine(wo_vm vm, wo_value args)
-{
-    if (jeecs::ScriptRuntimeSystem::system_instance == nullptr)
-    {
-        jeecs::debug::logerr("You can only start up coroutine in Script or another Coroutine.");
-        return wo_ret_void(vm);
-    }
-
-    // start_coroutine(workjob, (args))
-    wo_value arguments = args + 1;
-    auto argument_count = wo_struct_len(arguments);
-
-    wo_vm co_vmm = wo_borrow_vm(vm);
-    wo_value co_vmm_s = wo_reserve_stack(co_vmm, (size_t)argument_count, nullptr);
-
-    for (size_t i = 0; i < argument_count; --i)
-    {
-        wo_struct_get(co_vmm_s + i, arguments, (uint16_t)i);
-    }
-
-    wo_dispatch_value(co_vmm, args + 0, argument_count, nullptr, &co_vmm_s);
-
-    jeecs::ScriptRuntimeSystem::system_instance->dispatch_coroutine_vm(co_vmm);
-
-    return wo_ret_void(vm);
+    return wo_ret_real(vm, jeecs::script::current_script_game_system_instance->deltatimed());
 }
 
 const char *je_ecs_get_name_of_entity(const jeecs::game_entity *entity)
@@ -119,7 +89,6 @@ void _jeecs_entry_register_core_systems(jeecs::typing::type_unregister_guard *gu
     jeecs::typing::type_info::register_type<jeecs::UnlitGraphicPipelineSystem>(guard, "Graphic::UnlitGraphicPipelineSystem");
     jeecs::typing::type_info::register_type<jeecs::DeferLight2DGraphicPipelineSystem>(guard, "Graphic::DeferLight2DGraphicPipelineSystem");
 
-    jeecs::typing::type_info::register_type<jeecs::ScriptRuntimeSystem>(guard, "Script::ScriptRuntimeSystem");
     jeecs::typing::type_info::register_type<jeecs::AudioUpdatingSystem>(guard, "Audio::AudioUpdatingSystem");
     jeecs::typing::type_info::register_type<jeecs::VirtualGamepadInputSystem>(guard, "Input::VirtualGamepadInputSystem");
 }

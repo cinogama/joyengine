@@ -184,8 +184,7 @@ namespace jeecs
 
             void update_step_work(std::vector<towoo_step_work>& works)
             {
-                ScriptRuntimeSystem::system_instance =
-                    get_world().get_system<ScriptRuntimeSystem>();
+                script::current_script_game_system_instance = this;
 
                 if (m_job_vm == nullptr)
                     return;
@@ -280,7 +279,7 @@ namespace jeecs
                     }
                 }
 
-                ScriptRuntimeSystem::system_instance = nullptr;
+                script::current_script_game_system_instance = nullptr;
             }
 
             void OnEnable()
