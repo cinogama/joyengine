@@ -28,8 +28,7 @@ WO_API wo_api wojeapi_startup_thread(wo_vm vm, wo_value args)
 
     wo_value cofunc = co_s + 0;
 
-    wo_gc_write_barrier(args + 0);
-    wo_set_val(cofunc, args + 0);
+    wo_set_val_with_read_barrier(cofunc, co_vmm, args + 0);
 
     std::lock_guard g1(_jewo_all_alive_vm_threads_mx);
     _jewo_all_alive_vm_threads.insert(co_vmm);
