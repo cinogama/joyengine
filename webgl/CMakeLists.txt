@@ -12,8 +12,8 @@ set(JE4_BUILD_FOR_RUNTIME_TARGET_ONLY   ON  CACHE BOOL "Disable method and libra
 
 set(JE4_ENABLE_DX11_GAPI                OFF CACHE BOOL "Disable DX11 on WebGL" FORCE)
 set(JE4_ENABLE_OPENGL330_GAPI           OFF CACHE BOOL "Disable OpenGL 3.3 on WebGL" FORCE)
-set(JE4_ENABLE_OPENGLES300_GAPI         OFF CACHE BOOL "Enable OpenGLES 3.0 on WebGL" FORCE)
-set(JE4_ENABLE_WEBGL20_GAPI             ON CACHE BOOL "Disable WebGL 2.0 on WebGL" FORCE)
+set(JE4_ENABLE_OPENGLES300_GAPI         OFF CACHE BOOL "Disable OpenGLES 3.0 on WebGL" FORCE)
+set(JE4_ENABLE_WEBGL20_GAPI             ON CACHE BOOL "Enable WebGL 2.0 on WebGL" FORCE)
 set(JE4_ENABLE_VULKAN130_GAPI           OFF CACHE BOOL "Disable Vulkan1.3 on WebGL" FORCE)
 set(JE4_ENABLE_METAL_GAPI               OFF CACHE BOOL "Disable Metal on WebGL" FORCE)
 
