@@ -119,7 +119,7 @@ WO_API wo_api wojeapi_editor_register_panic_hook(wo_vm vm, wo_value args)
     wo_pin_value_set(_je_global_context._je_global_panic_hook_function, args + 0);
 
     if (_je_global_context._je_global_old_panic_handler == nullptr)
-        _je_global_context._je_global_old_panic_handler = 
+        _je_global_context._je_global_old_panic_handler =
         wo_register_fail_handler(_jedbg_hook_woolang_panic);
 
     return wo_ret_void(vm);
@@ -326,6 +326,8 @@ bool je_main_script_entry()
         {
             size_t writelen = fwrite(buffer, 1, binary_length, objdump);
             assert(writelen == binary_length);
+            (void)writelen;
+
             fclose(objdump);
         }
         auto api_src_crc64 = crc64_of_source_and_api();
@@ -334,6 +336,8 @@ bool je_main_script_entry()
         {
             size_t writecount = fwrite(&api_src_crc64, sizeof(api_src_crc64), 1, srccrc);
             assert(writecount == 1);
+            (void)writecount;
+
             fclose(srccrc);
         }
         wo_free_binary(buffer);

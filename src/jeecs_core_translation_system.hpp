@@ -34,7 +34,7 @@ namespace jeecs
             // 对于有L2W的组件，在此优先处理
             selector.except<LocalToParent>();
             selector.exec(
-                [this, &binded_trans](
+                [&binded_trans](
                     Anchor *anchor,
                     Translation &trans,
                     LocalToWorld &l2w,
@@ -132,7 +132,7 @@ namespace jeecs
             std::list<AnchoredOrigin> pending_anchor_information;
 
             selector.exec(
-                [this, &binded_origins, &pending_anchor_information](
+                [&binded_origins, &pending_anchor_information](
                     Anchor *anchor,
                     Transform::LocalToParent *l2p,
                     UserInterface::Origin &origin,

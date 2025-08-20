@@ -788,7 +788,11 @@ WO_API wo_api wojeapi_get_entity_chunk_info(wo_vm vm, wo_value args)
 {
     char buf[64];
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
-    sprintf(buf, "[%p:%zuv%zu]", entity->_m_in_chunk, entity->_m_id, entity->_m_version);
+
+    int result = snprintf(buf, sizeof(buf), "[%p:%zuv%zu]", entity->_m_in_chunk, entity->_m_id, entity->_m_version);
+    assert(result > 0 && result < (int)sizeof(buf));
+    (void)result;
+
     return wo_ret_string(vm, buf);
 }
 

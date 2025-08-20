@@ -82,7 +82,7 @@ struct jegl_shader_value
     };
 
     jegl_shader_value(int init_val)
-        : m_type((type)(type::INTEGER | type::INIT_VALUE)), m_integer(init_val), m_ref_count(0)
+        : m_type((type)(type::INTEGER | type::INIT_VALUE)), m_ref_count(0), m_integer(init_val)
     {
     }
     jegl_shader_value(int x, int y)
@@ -108,7 +108,7 @@ struct jegl_shader_value
     }
 
     jegl_shader_value(float init_val)
-        : m_type((type)(type::FLOAT | type::INIT_VALUE)), m_float(init_val), m_ref_count(0)
+        : m_type((type)(type::FLOAT | type::INIT_VALUE)), m_ref_count(0), m_float(init_val)
     {
     }
 
@@ -183,25 +183,38 @@ struct jegl_shader_value
 
     template <typename T, typename... TS>
     jegl_shader_value(type resulttype, const char *operat, T val, TS... args)
-        : m_type((type)(resulttype | type::CALC_VALUE)), m_opname(jeecs::basic::make_new_string(operat)), m_opnums_count(sizeof...(args) + 1), m_ref_count(0)
+        : m_type((type)(resulttype | type::CALC_VALUE))
+        , m_ref_count(0)
+        , m_opname(jeecs::basic::make_new_string(operat))
+        , m_opnums_count(sizeof...(args) + 1)
     {
         m_opnums = new jegl_shader_value *[m_opnums_count];
         set_used_val(0, val, args...);
     }
 
     jegl_shader_value(type resulttype, const char *operat, size_t opnum_count)
-        : m_type((type)(resulttype | type::CALC_VALUE)), m_opname(jeecs::basic::make_new_string(operat)), m_opnums_count(opnum_count), m_ref_count(0)
+        : m_type((type)(resulttype | type::CALC_VALUE))
+        , m_ref_count(0)
+        , m_opname(jeecs::basic::make_new_string(operat))
+        , m_opnums_count(opnum_count)
     {
         m_opnums = new jegl_shader_value *[m_opnums_count];
     }
 
     jegl_shader_value(type resulttype)
-        : m_type((type)(resulttype | type::CALC_VALUE | type::SHADER_IN_VALUE)), m_shader_in_index(0), m_ref_count(0)
+        : m_type((type)(resulttype | type::CALC_VALUE | type::SHADER_IN_VALUE))
+        , m_ref_count(0)
+        , m_shader_in_index(0)
     {
     }
 
     jegl_shader_value(type resulttype, const char *uniform_name, jegl_shader_value *init_val, bool is_predef)
-        : m_type((type)(resulttype | type::CALC_VALUE | (is_predef ? type::UNIFORM_BLOCK_VARIABLE : type::UNIFORM_VARIABLE))), m_unifrom_varname(jeecs::basic::make_new_string(uniform_name)), m_uniform_texture_channel(jeecs::typing::INVALID_UINT32), m_binded_sampler_id(jeecs::typing::INVALID_UINT32), m_ref_count(0), m_uniform_init_val_may_nil(init_val)
+        : m_type((type)(resulttype | type::CALC_VALUE | (is_predef ? type::UNIFORM_BLOCK_VARIABLE : type::UNIFORM_VARIABLE)))
+        , m_ref_count(0)
+        , m_unifrom_varname(jeecs::basic::make_new_string(uniform_name))
+        , m_uniform_texture_channel(jeecs::typing::INVALID_UINT32)
+        , m_binded_sampler_id(jeecs::typing::INVALID_UINT32)
+        , m_uniform_init_val_may_nil(init_val)
     {
         if (m_uniform_init_val_may_nil)
             m_uniform_init_val_may_nil->add_useref_count();

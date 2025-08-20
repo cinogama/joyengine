@@ -160,7 +160,6 @@ namespace jeecs
                 const Physics2D::World *world,
                 size_t simulate_round_count)
             {
-                bool updated = false;
                 b2Vec2 gravity_config_value = b2Vec2{world->gravity.x, world->gravity.y};
 
                 if (b2World_GetGravity(m_physics_world) != gravity_config_value)

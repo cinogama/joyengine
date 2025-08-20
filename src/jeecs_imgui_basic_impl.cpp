@@ -1629,7 +1629,6 @@ WO_API wo_api je_gui_unregister_exit_callback(wo_vm vm, wo_value args)
 WO_API wo_api je_gui_set_font(wo_vm vm, wo_value args)
 {
     wo_value s = wo_reserve_stack(vm, 1, &args);
-    size_t argc = (size_t)wo_argc(vm);
 
     wo_value elem = s + 0;
     const char* font_path = nullptr;

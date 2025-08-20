@@ -529,8 +529,8 @@ namespace jeecs
 
                 body_result += "    return vout;\n}\n";
 
-                return std::move(
-                    "// Vertex shader source\n" + unifrom_block + sampler_decl + io_declear + built_in_srcs + body_result);
+                return 
+                    "// Vertex shader source\n" + unifrom_block + sampler_decl + io_declear + built_in_srcs + body_result;
             }
             virtual std::string generate_fragment(shader_wrapper *wrap) override
             {
@@ -637,8 +637,8 @@ namespace jeecs
 
                 body_result += "    return fout;\n}\n";
 
-                return std::move(
-                    "// Fragment shader source\n" + unifrom_block + sampler_decl + io_declear + built_in_srcs + body_result);
+                return 
+                    "// Fragment shader source\n" + unifrom_block + sampler_decl + io_declear + built_in_srcs + body_result;
             }
         };
     }

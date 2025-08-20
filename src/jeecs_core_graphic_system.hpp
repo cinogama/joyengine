@@ -366,7 +366,7 @@ public let frag =
             selector.anyof<UserInterface::Absolute, UserInterface::Relatively>();
             selector.except<Light2D::Point, Light2D::Parallel, Light2D::Range>();
             selector.exec(
-                [this, &parent_origin_list](
+                [this](
                     Shaders& shads,
                     Textures* texs,
                     Shape& shape,
@@ -1660,7 +1660,6 @@ public func frag(vf: v2f)
                                                 {
                                                     for (size_t ipoint = 0; ipoint < range->shape.m_point_count; ++ipoint)
                                                     {
-                                                        math::vec2* pos;
                                                         if (ipoint == 0)
                                                             last_point_index = 0;
                                                         else if (ipoint % 2 == 1)
@@ -1669,7 +1668,6 @@ public func frag(vf: v2f)
                                                             last_point_index = range->shape.m_point_count - ipoint / 2;
 
                                                         append_point(range->shape.m_positions.at(last_point_index), 0);
-
                                                     }
                                                 }
                                                 else
@@ -1907,9 +1905,7 @@ public func frag(vf: v2f)
                                 lightarch.parallel != nullptr ? m_defer_light2d_host._defer_light2d_shadow_shape_parallel_pass : m_defer_light2d_host._defer_light2d_shadow_shape_point_pass;
                             const auto& sprite_shadow_pass =
                                 lightarch.parallel != nullptr ? m_defer_light2d_host._defer_light2d_shadow_sprite_parallel_pass : m_defer_light2d_host._defer_light2d_shadow_sprite_point_pass;
-
                             const auto& sub_shadow_pass = m_defer_light2d_host._defer_light2d_shadow_sub_pass;
-                            const size_t block_entity_count = m_2dblock_y_list.size();
 
                             std::list<block2d_arch*> block_in_current_layer;
 
@@ -1934,8 +1930,6 @@ public func frag(vf: v2f)
                                 if (lightarch.parallel != nullptr || l2b_distance <= block_range + light_range)
                                 {
                                     block_in_current_layer.push_back(&blockarch);
-
-                                    bool block_is_behind_light = false;
 
                                     bool light_is_above_block = lightarch.topdown == nullptr
                                         ? blockarch.translation->world_position.z >= lightarch.translation->world_position.z

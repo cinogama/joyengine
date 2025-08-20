@@ -1258,24 +1258,17 @@ WO_API wo_api wojeapi_towoo_renderer_shaders_set_uniform(wo_vm vm, wo_value args
         break;
     case WO_STRUCT_TYPE:
     {
-        wo_value v = s + 0;
         switch (wo_struct_len(val))
         {
         case 2:
-        {
             shaders.set_uniform(name, wo_vec2(val));
             break;
-        }
         case 3:
-        {
             shaders.set_uniform(name, wo_vec3(val));
             break;
-        }
         case 4:
-        {
             shaders.set_uniform(name, wo_vec4(val));
             break;
-        }
         default:
             return wo_ret_panic(vm, "Unknown value type when set_uniform.");
         }

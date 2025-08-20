@@ -33,14 +33,16 @@ namespace Assimp
             jeecs_file_close(m_file);
         }
 
-        virtual size_t Read(void* pvBuffer,
+        virtual size_t Read(
+            void* pvBuffer,
             size_t pSize,
             size_t pCount) override
         {
             return jeecs_file_read(pvBuffer, pSize, pCount, m_file);
         }
 
-        virtual size_t Write(const void* pvBuffer,
+        virtual size_t Write(
+            const void* pvBuffer,
             size_t pSize,
             size_t pCount) override
         {
@@ -48,12 +50,13 @@ namespace Assimp
             abort();
         }
 
-        virtual aiReturn Seek(size_t pOffset,
-            aiOrigin pOrigin)
+        virtual aiReturn Seek(
+            size_t pOffset,
+            aiOrigin pOrigin) override
         {
-            static_assert(aiOrigin::aiOrigin_CUR == je_read_file_seek_mode::JE_READ_FILE_CURRENT);
-            static_assert(aiOrigin::aiOrigin_END == je_read_file_seek_mode::JE_READ_FILE_END);
-            static_assert(aiOrigin::aiOrigin_SET == je_read_file_seek_mode::JE_READ_FILE_SET);
+            static_assert((int)aiOrigin::aiOrigin_CUR == (int)je_read_file_seek_mode::JE_READ_FILE_CURRENT);
+            static_assert((int)aiOrigin::aiOrigin_END == (int)je_read_file_seek_mode::JE_READ_FILE_END);
+            static_assert((int)aiOrigin::aiOrigin_SET == (int)je_read_file_seek_mode::JE_READ_FILE_SET);
 
             jeecs_file_seek(m_file, (int64_t)pOffset, (je_read_file_seek_mode)pOrigin);
             return aiReturn::aiReturn_SUCCESS;
@@ -80,7 +83,7 @@ namespace Assimp
         /** @brief Flush the contents of the file buffer (for writers)
          *  See fflush() for more details.
          */
-        virtual void Flush()
+        virtual void Flush() override
         {
             // ...
         }
@@ -297,8 +300,6 @@ struct _je_graphic_shared_context
             assert(resource != nullptr && resource->m_path != nullptr);
 
             std::lock_guard g1(share_smx);
-
-            auto current_version = _get_shared_blob_unload_counter(resource->m_path);
 
             auto fnd = context->_m_thread_notifier->_m_cached_resources.find(resource->m_path);
             if (fnd != context->_m_thread_notifier->_m_cached_resources.end() && fnd->second.m_resource->m_type == resource->m_type)

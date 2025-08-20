@@ -34,7 +34,6 @@ struct _je_gamepad_state
 
 struct _je_basic_io_state
 {
-
     std::shared_mutex _gamepads_mx;
     std::queue<je_io_gamepad_handle_t> _gamepads_free_slot;
     std::list<_je_gamepad_state> _gamepads;
@@ -220,7 +219,9 @@ je_io_gamepad_handle_t je_io_create_gamepad(
     else
     {
         char name[48];
-        sprintf(name, "Default virtual gamepad %p", gamepad);
+        int result = snprintf(name, sizeof(name), "Default virtual gamepad %p", gamepad);
+        assert(result > 0 && result < (int)sizeof(name));
+        (void)result;
 
         gamepad->_name = name;
     }
@@ -232,7 +233,9 @@ je_io_gamepad_handle_t je_io_create_gamepad(
         auto uuid_instance = jeecs::typing::uuid::generate();
 
         char uuid[48];
-        sprintf(uuid, "%016llX-%016llX", uuid_instance.a, uuid_instance.b);
+        int result = snprintf(uuid, sizeof(uuid), "%016llX-%016llX", uuid_instance.a, uuid_instance.b);
+        assert(result > 0 && result < (int)sizeof(uuid));
+        (void)result;
 
         gamepad->_guid = uuid;
     }

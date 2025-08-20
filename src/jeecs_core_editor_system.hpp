@@ -1175,7 +1175,7 @@ public let frag =
 
             if (const game_entity *current = _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr)
             {
-                if (auto *etrans = _inputs.selected_entity.value().get_component<Transform::Translation>())
+                if (auto *etrans = current->get_component<Transform::Translation>())
                 {
                     float distance =
                         _camera_ortho_porjection == nullptr
@@ -1493,8 +1493,6 @@ public let frag =
                           {
                     if (_gizmo_mask & gizmo_mode::PHYSICS2D_COLLIDER)
                     {
-                        auto* builtin_uniform = _gizmo_resources.m_gizmo_physics2d_collider_shader->m_builtin;
-
                         auto final_world_position = trans.world_position;
                         if (ppos != nullptr)
                             final_world_position += math::vec3(ppos->offset);

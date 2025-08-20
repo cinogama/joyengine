@@ -68,7 +68,7 @@ namespace jeecs
                             source_data->m_velocity[2] = velocity.z;
                         }); });
 
-            selector.exec([this](Audio::Source &source, Audio::Playing &playing)
+            selector.exec([](Audio::Source &source, Audio::Playing &playing)
                           {
                     if (!playing.buffer.has_resource())
                     {
