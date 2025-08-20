@@ -535,7 +535,7 @@ WO_API wo_api wojeapi_add_entity_to_world_with_components(wo_vm vm, wo_value arg
     std::vector<jeecs::typing::typeid_t> components;
 
     wo_value elem = s + 0;
-    for (wo_integer_t i = 0; i < wo_arr_len(components_list); ++i)
+    for (wo_size_t i = 0; i < wo_arr_len(components_list); ++i)
     {
         wo_arr_get(elem, components_list, i);
         components.push_back(((const jeecs::typing::type_info*)wo_pointer(elem))->m_id);
@@ -566,7 +566,7 @@ WO_API wo_api wojeapi_add_prefab_to_world_with_components(wo_vm vm, wo_value arg
     std::vector<jeecs::typing::typeid_t> components;
 
     wo_value elem = s + 0;
-    for (wo_integer_t i = 0; i < wo_arr_len(components_list); ++i)
+    for (wo_size_t i = 0; i < wo_arr_len(components_list); ++i)
     {
         wo_arr_get(elem, components_list, i);
         components.push_back(((const jeecs::typing::type_info*)wo_pointer(elem))->m_id);

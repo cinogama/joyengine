@@ -1287,7 +1287,7 @@ WO_API wo_api wojeapi_towoo_renderer_shaders_set_shaders(wo_vm vm, wo_value args
 
     shaders.shaders.clear();
     auto setting_shaders_len = wo_arr_len(args + 1);
-    for (wo_integer_t i = 0; i < setting_shaders_len; ++i)
+    for (wo_size_t i = 0; i < setting_shaders_len; ++i)
     {
         wo_arr_get(c, args + 1, i);
         shaders.shaders.push_back(

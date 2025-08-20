@@ -11911,9 +11911,9 @@ namespace jeecs
             return false;
         }
 
-        [[maybe_unused]] static void is_up(...);
-        [[maybe_unused]] static void first_down(...);
-        [[maybe_unused]] static void double_click(...); // just for fool ide
+        [[maybe_unused]] void is_up(...);
+        [[maybe_unused]] void first_down(...);
+        [[maybe_unused]] void double_click(...); // just for fool ide
 
         class gamepad
         {

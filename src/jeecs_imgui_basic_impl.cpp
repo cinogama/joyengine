@@ -1532,7 +1532,7 @@ WO_API wo_api je_gui_combo(wo_vm vm, wo_value args)
 
     std::vector<const char*> combo_items;
     wo_value elem = s + 0;
-    for (wo_integer_t i = 0; i < wo_arr_len(args + 1); ++i)
+    for (wo_size_t i = 0; i < wo_arr_len(args + 1); ++i)
     {
         wo_arr_get(elem, args + 1, i);
         combo_items.push_back(wo_string(elem));

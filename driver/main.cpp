@@ -13,6 +13,11 @@ extern "C"
     JE_EXPORT int AmdPowerXpressRequestHighPerformance = 0x00000001;
 }
 
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <optional>
+
 namespace jeecs
 {
     class main_thread_graphic_syncer_host

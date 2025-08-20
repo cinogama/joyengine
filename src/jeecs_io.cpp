@@ -233,7 +233,9 @@ je_io_gamepad_handle_t je_io_create_gamepad(
         auto uuid_instance = jeecs::typing::uuid::generate();
 
         char uuid[48];
-        int result = snprintf(uuid, sizeof(uuid), "%016llX-%016llX", uuid_instance.a, uuid_instance.b);
+        int result = snprintf(uuid, sizeof(uuid), "%016llX-%016llX", 
+            static_cast<long long unsigned int>(uuid_instance.a),
+            static_cast<long long unsigned int>(uuid_instance.b));
         assert(result > 0 && result < (int)sizeof(uuid));
         (void)result;
 
