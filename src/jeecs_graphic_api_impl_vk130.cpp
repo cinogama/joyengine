@@ -34,20 +34,17 @@
 namespace jeecs::graphic::api::vk130
 {
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
-
-#define VK_API_PLATFORM_API_LIST \
+#   define VK_API_PLATFORM_API_LIST \
     VK_API_DECL(vkCreateWin32SurfaceKHR)
-
 #elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
-
-#define VK_API_PLATFORM_API_LIST \
+#   define VK_API_PLATFORM_API_LIST \
     VK_API_DECL(vkCreateAndroidSurfaceKHR)
-
 #elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_LINUX
-
-#define VK_API_PLATFORM_API_LIST \
+#   define VK_API_PLATFORM_API_LIST \
     VK_API_DECL(vkCreateXlibSurfaceKHR)
-
+#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_MACOS
+#   define VK_API_PLATFORM_API_LIST \
+    VK_API_DECL(vkCreateMacOSSurfaceMVK)
 #else
 #error Unsupport platform.
 #endif
@@ -486,7 +483,7 @@ namespace jeecs::graphic::api::vk130
                 : m_main_context(main_contant), m_framebuffer(framebuffer), m_textures_only_for_free{ color_attachment, depth_attachment }
             {
             }
-            jegl_vk130_context::swapchain_image_content::~swapchain_image_content()
+            ~swapchain_image_content()
             {
                 m_main_context->destroy_frame_buffer(m_framebuffer);
 
@@ -548,7 +545,7 @@ namespace jeecs::graphic::api::vk130
                 // Fix: Limit allocation attempts to prevent infinite loop
                 constexpr size_t MAX_POOL_CREATION_ATTEMPTS = 10;
                 size_t pool_creation_attempts = 0;
-                
+
                 for (;;)
                 {
                     if (!m_pools.empty())
@@ -1025,7 +1022,7 @@ namespace jeecs::graphic::api::vk130
             // Wait for the specific operation to complete
             else if (vkWaitForFences(_vk_logic_device, 1, &_vk_queue_commit_fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
                 jeecs::debug::logfatal("Failed to wait for temporary command buffer fence!");
-            
+
             vkResetFences(_vk_logic_device, 1, &_vk_queue_commit_fence);
             _vk_command_buffer_allocator->m_free_cmd_buffers.push_back(cmd_buffer);
         }
@@ -1439,7 +1436,7 @@ namespace jeecs::graphic::api::vk130
                 // Fix: Proper synchronization during swapchain recreation
                 // Wait for all pending operations to complete before recreating swapchain
                 vkDeviceWaitIdle(_vk_logic_device);
-                
+
                 // Reset the semaphore state since we've waited for everything to complete
                 _vk_last_command_buffer_semaphore = VK_NULL_HANDLE;
                 _vk_wait_for_last_command_buffer_stage = VkPipelineStageFlagBits::VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
@@ -1514,12 +1511,12 @@ namespace jeecs::graphic::api::vk130
                         VkBool32 present_support = false;
                         VkResult result = vkGetPhysicalDeviceSurfaceSupportKHR(
                             device, family_index, _vk_surface, &present_support);
-                        
+
                         // Fix: Add error handling for surface support check
                         if (result != VK_SUCCESS)
                         {
-                            jeecs::debug::logwarn("Failed to check surface support for device '%s', family %u: %d", 
-                                                  prop.deviceName, family_index, result);
+                            jeecs::debug::logwarn("Failed to check surface support for device '%s', family %u: %d",
+                                prop.deviceName, family_index, result);
                             continue;
                         }
 
@@ -1734,6 +1731,17 @@ namespace jeecs::graphic::api::vk130
             {
                 jeecs::debug::logfatal("Failed to create vk130 xlib surface.");
             }
+#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_MACOS
+            VkMacOSSurfaceCreateInfoMVK surface_create_info = {};
+            surface_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_MACOS_SURFACE_CREATE_INFO_MVK;
+            surface_create_info.pNext = nullptr;
+            surface_create_info.flags = 0;
+            surface_create_info.pView = (void*)_vk_jegl_interface->interface_handle();
+            assert(vkCreateMacOSSurfaceMVK != nullptr);
+            if (VK_SUCCESS != vkCreateMacOSSurfaceMVK(_vk_instance, &surface_create_info, nullptr, &_vk_surface))
+            {
+                jeecs::debug::logfatal("Failed to create vk130 macos surface.");
+            }
 #endif
 #else
             if (VK_SUCCESS != glfwCreateWindowSurface(
@@ -1876,7 +1884,7 @@ namespace jeecs::graphic::api::vk130
             vkGetDeviceQueue(_vk_logic_device, _vk_device_queue_present_family_index, 0, &_vk_logic_device_present_queue);
             assert(_vk_logic_device_graphic_queue != VK_NULL_HANDLE);
             assert(_vk_logic_device_present_queue != VK_NULL_HANDLE);
-            
+
             _vk_queue_commit_fence = create_fence();
 
             // 创建描述符集的布局信息
@@ -2294,6 +2302,11 @@ namespace jeecs::graphic::api::vk130
                     shader_blob->m_vertex_input_attribute_descriptions[i].format = VkFormat::VK_FORMAT_R32G32B32A32_SFLOAT;
                     vertex_point_data_size += sizeof(float) * 4;
                     break;
+                default:
+                    jeecs::debug::logfatal(
+                        "Unsupported vertex input type '%d' in shader '%s'.",
+                        (int)resource->m_raw_shader_data->m_vertex_in[i].m_type,
+                        resource->m_path == nullptr ? "<builtin>" : resource->m_path);
                 }
             }
 
@@ -2369,6 +2382,12 @@ namespace jeecs::graphic::api::vk130
             case jegl_shader::cull_mode::NONE:
                 shader_blob->m_rasterization_state_create_info.cullMode = VkCullModeFlagBits::VK_CULL_MODE_NONE;
                 break;
+            default:
+                jeecs::debug::logfatal(
+                    "Unsupported cull mode '%d' in shader '%s'.",
+                    (int)resource->m_raw_shader_data->m_cull_mode,
+                    resource->m_path == nullptr ? "<builtin>" : resource->m_path);
+                break;
             }
             shader_blob->m_rasterization_state_create_info.frontFace = VkFrontFace::VK_FRONT_FACE_COUNTER_CLOCKWISE;
             shader_blob->m_rasterization_state_create_info.lineWidth = 1;
@@ -2402,6 +2421,12 @@ namespace jeecs::graphic::api::vk130
             case jegl_shader::depth_mask_method::ENABLE:
                 shader_blob->m_depth_stencil_state_create_info.depthWriteEnable = VK_TRUE;
                 break;
+            default:
+                jeecs::debug::logfatal(
+                    "Unsupported depth mask method '%d' in shader '%s'.",
+                    (int)resource->m_raw_shader_data->m_depth_mask,
+                    resource->m_path == nullptr ? "<builtin>" : resource->m_path);
+                break;
             }
 
             shader_blob->m_depth_stencil_state_create_info.depthTestEnable = VK_TRUE;
@@ -2433,6 +2458,12 @@ namespace jeecs::graphic::api::vk130
                 break;
             case jegl_shader::depth_test_method::ALWAYS:
                 shader_blob->m_depth_stencil_state_create_info.depthCompareOp = VkCompareOp::VK_COMPARE_OP_ALWAYS;
+                break;
+            default:
+                jeecs::debug::logfatal(
+                    "Unsupported depth test method '%d' in shader '%s'.",
+                    (int)resource->m_raw_shader_data->m_depth_test,
+                    resource->m_path == nullptr ? "<builtin>" : resource->m_path);
                 break;
             }
             shader_blob->m_depth_stencil_state_create_info.depthBoundsTestEnable = VK_FALSE;
@@ -2506,8 +2537,8 @@ namespace jeecs::graphic::api::vk130
                 = shader_blob->m_color_blend_attachment_state.dstColorBlendFactor
                 = parse_vk_enum_blend_method(resource->m_raw_shader_data->m_blend_dst_mode);
 
-            shader_blob->m_color_blend_attachment_state.colorBlendOp 
-                = shader_blob->m_color_blend_attachment_state.alphaBlendOp 
+            shader_blob->m_color_blend_attachment_state.colorBlendOp
+                = shader_blob->m_color_blend_attachment_state.alphaBlendOp
                 = parse_vk_enum_blend_equation(resource->m_raw_shader_data->m_blend_equation);
 
             shader_blob->m_color_blend_attachment_state.colorWriteMask =
@@ -2995,18 +3026,16 @@ namespace jeecs::graphic::api::vk130
                     source_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
                     destination_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
                 }
-                else if (old_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL && new_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+                else
                 {
+                    assert(old_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                        && new_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
                     barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
                     barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
                     source_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
                     destination_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-                }
-                else
-                {
-                    // Fix: Add more detailed error information for unsupported layout transitions
-                    jeecs::debug::logfatal("Unsupported layout transition from %d to %d", (int)old_layout, (int)new_layout);
                 }
 
                 vkCmdPipelineBarrier(
@@ -3015,7 +3044,8 @@ namespace jeecs::graphic::api::vk130
                     0,
                     0, nullptr,
                     0, nullptr,
-                    1, &barrier);
+                    1,
+                    &barrier);
             }
             end_temp_command_buffer_record(command_buffer);
         }
@@ -3094,6 +3124,9 @@ namespace jeecs::graphic::api::vk130
         {
             jegl_texture* texture_raw_data = resource->m_raw_texture_data;
             bool is_cube = 0 != (texture_raw_data->m_format & jegl_texture::format::CUBE);
+
+            // Support for cube textures is not implemented yet
+            (void)is_cube;
 
             if (texture_raw_data->m_format & jegl_texture::format::FRAMEBUF)
             {
@@ -3243,7 +3276,7 @@ namespace jeecs::graphic::api::vk130
             {
                 vkQueueWaitIdle(_vk_logic_device_graphic_queue);
             }
-            
+
             // Release old semaphore through proper allocator mechanism
             // The old semaphore will be reused by the allocator
             _vk_last_command_buffer_semaphore = new_semphore;
@@ -3371,8 +3404,8 @@ namespace jeecs::graphic::api::vk130
             vkCmdSetViewport(_vk_current_command_buffer, 0, 1, &viewport);
 
             VkRect2D scissor = {};
-            scissor.offset = { (int32_t)0, (int32_t)0 };
-            scissor.extent = { (uint32_t)framebuf->m_width, (uint32_t)framebuf->m_height };
+            scissor.offset = VkOffset2D{ (int32_t)0, (int32_t)0 };
+            scissor.extent = VkExtent2D{ (uint32_t)framebuf->m_width, (uint32_t)framebuf->m_height };
             vkCmdSetScissor(_vk_current_command_buffer, 0, 1, &scissor);
 
             vkCmdSetPrimitiveRestartEnable(_vk_current_command_buffer, VK_TRUE);
@@ -3383,7 +3416,9 @@ namespace jeecs::graphic::api::vk130
 
             for (size_t i = 0; i < _vk_current_target_framebuffer->m_color_attachments.size(); ++i)
             {
-                VkClearValue clear_color = { color[0], color[1], color[2], color[3] };
+                VkClearValue clear_color = {};
+                clear_color.color = VkClearColorValue{ { color[0], color[1], color[2], color[3] } };
+
                 VkClearAttachment clear_attachment = {};
                 clear_attachment.aspectMask = VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT;
                 clear_attachment.colorAttachment = (uint32_t)i;
@@ -4011,28 +4046,32 @@ namespace jeecs::graphic::api::vk130
         {
         case jegl_shader::INT:
         case jegl_shader::FLOAT:
-            memcpy(reinterpret_cast<void*>((intptr_t)context->_vk_current_binded_shader->m_uniform_cpu_buffer + location), val, 4);
+            data_size_byte_length = 4;
             break;
         case jegl_shader::INT2:
         case jegl_shader::FLOAT2:
-            memcpy(reinterpret_cast<void*>((intptr_t)context->_vk_current_binded_shader->m_uniform_cpu_buffer + location), val, 8);
+            data_size_byte_length = 8;
             break;
         case jegl_shader::INT3:
         case jegl_shader::FLOAT3:
-            memcpy(reinterpret_cast<void*>((intptr_t)context->_vk_current_binded_shader->m_uniform_cpu_buffer + location), val, 12);
+            data_size_byte_length = 12;
             break;
         case jegl_shader::INT4:
         case jegl_shader::FLOAT4:
-            memcpy(reinterpret_cast<void*>((intptr_t)context->_vk_current_binded_shader->m_uniform_cpu_buffer + location), val, 16);
+            data_size_byte_length = 16;
             break;
         case jegl_shader::FLOAT4X4:
-            memcpy(reinterpret_cast<void*>((intptr_t)context->_vk_current_binded_shader->m_uniform_cpu_buffer + location), val, 64);
+            data_size_byte_length = 64;
             break;
         default:
             jeecs::debug::logerr("Unknown uniform variable type to set.");
             break;
-            break;
         }
+
+        memcpy(
+            reinterpret_cast<void*>((intptr_t)context->_vk_current_binded_shader->m_uniform_cpu_buffer + location),
+            val,
+            data_size_byte_length);
     }
 }
 
