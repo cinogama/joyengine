@@ -361,6 +361,9 @@ namespace jeecs::graphic
                 glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
                 glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
                 glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_MACOS
+                glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
+#endif
                 glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
                 glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_NATIVE_CONTEXT_API);
                 break;
