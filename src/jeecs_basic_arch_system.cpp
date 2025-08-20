@@ -1220,13 +1220,12 @@ namespace jeecs_impl
         command_buffer _m_command_buffer;
         arch_manager _m_arch_manager;
 
-        std::string _m_name;
-
         bool _m_world_enabled;
 
         std::atomic_bool _m_destroying_flag;
         std::atomic_size_t _m_archmgr_updated_version;
 
+        std::string _m_name;
         system_container_t m_systems;
 
     private:
@@ -1235,7 +1234,13 @@ namespace jeecs_impl
 
     public:
         ecs_world(ecs_universe* universe)
-            : _m_universe(universe), _m_command_buffer(this), _m_name("<anonymous>"), _m_arch_manager(this), _m_world_enabled(false), _m_destroying_flag(false), _m_archmgr_updated_version(100)
+            : _m_universe(universe)
+            , _m_command_buffer(this)
+            , _m_arch_manager(this)
+            , _m_world_enabled(false)
+            , _m_destroying_flag(false)
+            , _m_archmgr_updated_version(100)
+            , _m_name("<anonymous>")
         {
             std::lock_guard g1(_m_alive_worlds_mx);
             _m_alive_worlds.insert(this);

@@ -1241,8 +1241,6 @@ WO_API wo_api wojeapi_towoo_renderer_textures_get_texture(wo_vm vm, wo_value arg
 
 WO_API wo_api wojeapi_towoo_renderer_shaders_set_uniform(wo_vm vm, wo_value args)
 {
-    wo_value s = wo_reserve_stack(vm, 1, &args);
-
     auto& shaders = wo_component<jeecs::Renderer::Shaders>(args + 0);
     const char* name = wo_string(args + 1);
     wo_value val = args + 2;
