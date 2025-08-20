@@ -56,3 +56,7 @@
     path = 3rd/ImGuiColorTextEdit
     url = https://git.cinogama.net/cinogamaproject/joyengineecs/ImGuiColorTextEdit.git
     branch = master
+[submodule "3rd/moltenvk"]
+	path = 3rd/moltenvk
+	url = https://git.cinogama.net/cinogamaproject/joyengineecs/moltenvk.git
+	branch = master
