@@ -285,7 +285,7 @@ namespace jeecs::graphic::api::gl3
 #endif
 
 #ifdef JE_ENABLE_GL330_GAPI
-#ifndef NDEBUG
+#if JE4_CURRENT_PLATFORM != JE4_PLATFORM_MACOS && !defined(NDEBUG)
         glEnable(GL_DEBUG_OUTPUT);
         glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
         glDebugMessageCallback(glDebugOutput, nullptr);
