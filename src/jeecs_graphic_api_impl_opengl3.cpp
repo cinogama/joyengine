@@ -856,7 +856,6 @@ namespace jeecs::graphic::api::gl3
             for (unsigned int i = 0; i < (unsigned int)resource->m_raw_vertex_data->m_format_count; i++)
             {
                 size_t format_size;
-                GLenum format_type;
 
                 glEnableVertexAttribArray(i);
 
@@ -1112,6 +1111,7 @@ namespace jeecs::graphic::api::gl3
                     break;
                 default:
                     jeecs::debug::logerr("Invalid blend src method.");
+                    src_factor = GL_ONE;
                     break;
                 }
                 switch (dst_mode)
@@ -1147,7 +1147,8 @@ namespace jeecs::graphic::api::gl3
                     dst_factor = GL_ONE_MINUS_DST_COLOR;
                     break;
                 default:
-                    jeecs::debug::logerr("Invalid blend src method.");
+                    jeecs::debug::logerr("Invalid blend dst method.");
+                    dst_factor = GL_ZERO;
                     break;
                 }
                 glEnable(GL_BLEND);

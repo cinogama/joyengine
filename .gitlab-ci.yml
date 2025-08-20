@@ -1,10 +1,6 @@
 # Linux x64/arm64 OpenGL
 build_linux_opengl:
   stage: build
-  # instead of calling g++ directly you can also use some build toolkit like make
-  # install the necessary build tools when needed
-  # before_script:
-  #   - apt update && apt -y install make autoconf
   script:
     - git submodule update --init --recursive --force
     - if [ ! -d build ]; then mkdir build; fi
@@ -33,10 +29,6 @@ build_linux_opengl:
 
 build_linux_a64_opengl:
   stage: build
-  # instead of calling g++ directly you can also use some build toolkit like make
-  # install the necessary build tools when needed
-  # before_script:
-  #   - apt update && apt -y install make autoconf
   script:
     - git submodule update --init --recursive --force
     - if [ ! -d build ]; then mkdir build; fi
@@ -66,10 +58,6 @@ build_linux_a64_opengl:
 
 build_linux_a64_opengl_static:
   stage: build
-  # instead of calling g++ directly you can also use some build toolkit like make
-  # install the necessary build tools when needed
-  # before_script:
-  #   - apt update && apt -y install make autoconf
   script:
     - git submodule update --init --recursive --force
     - if [ ! -d build ]; then mkdir build; fi
@@ -100,10 +88,6 @@ build_linux_a64_opengl_static:
 # Linux arm64 OpenGLES
 build_linux_opengles:
   stage: build
-  # instead of calling g++ directly you can also use some build toolkit like make
-  # install the necessary build tools when needed
-  # before_script:
-  #   - apt update && apt -y install make autoconf
   script:
     - git submodule update --init --recursive --force
     - if [ ! -d build ]; then mkdir build; fi
@@ -218,13 +202,8 @@ build_win64_dx11_opengles_vk_static:
   tags:
     - winserver22
 
-# MacOS x64 None(Only for building the core library.)
-build_macos_none:
+build_macos_opengl_vk:
   stage: build
-  # instead of calling g++ directly you can also use some build toolkit like make
-  # install the necessary build tools when needed
-  # before_script:
-  #   - apt update && apt -y install make autoconf
   script:
     - git submodule update --init --recursive --force
     - if [ ! -d build ]; then mkdir build; fi
@@ -235,9 +214,9 @@ build_macos_none:
       -DJE4_COPYING_BUILTIN_FILES=OFF
       -DJE4_STATIC_LINK_MODULE_AND_PKGS=OFF
       -DJE4_ENABLE_DX11_GAPI=OFF
-      -DJE4_ENABLE_OPENGL330_GAPI=OFF
+      -DJE4_ENABLE_OPENGL330_GAPI=ON
       -DJE4_ENABLE_OPENGLES300_GAPI=OFF
-      -DJE4_ENABLE_VULKAN130_GAPI=OFF
+      -DJE4_ENABLE_VULKAN130_GAPI=ON
       -DJE4_ENABLE_METAL_GAPI=OFF
     - if [ ! -d pkg ]; then mkdir pkg; fi
     - if [ ! -d builtin ]; then mkdir builtin; fi
