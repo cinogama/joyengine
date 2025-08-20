@@ -96,8 +96,7 @@ void je_log_init()
     std::lock_guard g1(log_context_instance_mx);
     je_log_context *ctx = new je_log_context;
     log_context_instance = ctx;
-    ctx->_gbar_log_thread = std::move(
-        std::thread(_je_log_work, ctx));
+    ctx->_gbar_log_thread = std::thread(_je_log_work, ctx);
 }
 
 void je_log_finish()

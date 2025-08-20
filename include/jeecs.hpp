@@ -5000,7 +5000,9 @@ namespace jeecs
             }
 
             string(string&& str) noexcept
-                : _c_str(str._c_str), _buf_len(str._buf_len), _str_len(str._str_len)
+                : _c_str(str._c_str)
+                , _str_len(str._str_len)
+                , _buf_len(str._buf_len)
             {
                 str._c_str = 0;
                 str._buf_len = 0;
@@ -5498,10 +5500,11 @@ namespace jeecs
 
             shared_pointer() = delete;
             explicit shared_pointer(T* v, void (*f)(T*) = &_default_free_func)
-                : m_resource(v), m_freer(f), m_count(nullptr)
+                : m_resource(v)
+                , m_count(_alloc_counter())
+                , m_freer(f)
             {
                 assert(m_resource != nullptr);
-                m_count = _alloc_counter();
             }
             shared_pointer(const shared_pointer& v) noexcept
             {
@@ -8683,7 +8686,7 @@ namespace jeecs
 
         public:
             static std::optional<basic::resource<vertex>> load(
-                jegl_context* context, 
+                jegl_context* context,
                 const std::string& str)
             {
                 auto* res = jegl_load_vertex(context, str.c_str());
@@ -8966,11 +8969,11 @@ namespace jeecs
                 je_font_char_updater_t char_texture_updater = nullptr)
             {
                 auto* font_res = je_font_load(
-                    fontfile.c_str(), 
+                    fontfile.c_str(),
                     (float)size,
                     (float)size,
-                    board_size, 
-                    board_size, 
+                    board_size,
+                    board_size,
                     char_texture_updater);
 
                 if (font_res != nullptr)
@@ -9002,6 +9005,41 @@ namespace jeecs
                 return m_font;
             }
         private:
+            struct parallel_pixel_index_iter
+            {
+                size_t id;
+                parallel_pixel_index_iter operator++()
+                {
+                    return { ++id };
+                }
+                parallel_pixel_index_iter operator++(int)
+                {
+                    return { id++ };
+                }
+                bool operator==(const parallel_pixel_index_iter& pindex) const
+                {
+                    return id == pindex.id;
+                }
+                bool operator!=(const parallel_pixel_index_iter& pindex) const
+                {
+                    return id != pindex.id;
+                }
+                size_t& operator*()
+                {
+                    return id;
+                }
+                ptrdiff_t operator-(const parallel_pixel_index_iter& another) const
+                {
+                    return ptrdiff_t(id - another.id);
+                }
+
+                typedef std::forward_iterator_tag iterator_category;
+                typedef size_t value_type;
+                typedef ptrdiff_t difference_type;
+                typedef const size_t* pointer;
+                typedef const size_t& reference;
+            };
+
             inline static basic::resource<texture> text_texture_impl(
                 font& font_base,
                 const std::u32string& text) noexcept
@@ -9102,7 +9140,7 @@ namespace jeecs
 
                                     if (!loaded_font.has_value())
                                         debug::logerr(
-                                            "Failed to open font: '%s'.", 
+                                            "Failed to open font: '%s'.",
                                             base_font_resource->m_path);
                                     else
                                         TEXT_FONT_CURRENT = FONT_POOL.insert(
@@ -9247,53 +9285,20 @@ namespace jeecs
                             }
                             else
                             {
-                                struct p_index
-                                {
-                                    size_t id;
-                                    p_index operator++()
-                                    {
-                                        return { ++id };
-                                    }
-                                    p_index operator++(int)
-                                    {
-                                        return { id++ };
-                                    }
-                                    bool operator==(const p_index& pindex) const
-                                    {
-                                        return id == pindex.id;
-                                    }
-                                    bool operator!=(const p_index& pindex) const
-                                    {
-                                        return id != pindex.id;
-                                    }
-                                    size_t& operator*()
-                                    {
-                                        return id;
-                                    }
-                                    ptrdiff_t operator-(const p_index& another) const
-                                    {
-                                        return ptrdiff_t(id - another.id);
-                                    }
-
-                                    typedef std::forward_iterator_tag iterator_category;
-                                    typedef size_t value_type;
-                                    typedef ptrdiff_t difference_type;
-                                    typedef const size_t* pointer;
-                                    typedef const size_t& reference;
-                                };
                                 std::for_each(
 #ifdef __cpp_lib_execution
                                     std::execution::par_unseq,
 #endif
-                                    p_index{ 0 }, p_index{ size_t(character_info->m_texture->height()) },
+                                    parallel_pixel_index_iter{ 0 }, 
+                                    parallel_pixel_index_iter{ size_t(character_info->m_texture->height()) },
                                     [&](size_t fy)
                                     {
                                         std::for_each(
 #ifdef __cpp_lib_execution
                                             std::execution::par_unseq,
 #endif
-                                            p_index{ 0 },
-                                            p_index{
+                                            parallel_pixel_index_iter{ 0 },
+                                            parallel_pixel_index_iter{
                                                 size_t(character_info->m_texture->width())
                                             },
                                             [&](size_t fx)
@@ -11908,9 +11913,9 @@ namespace jeecs
             return false;
         }
 
-        static void is_up(...);
-        static void first_down(...);
-        static void double_click(...); // just for fool ide
+        [[maybe_unused]] static void is_up(...);
+        [[maybe_unused]] static void first_down(...);
+        [[maybe_unused]] static void double_click(...); // just for fool ide
 
         class gamepad
         {

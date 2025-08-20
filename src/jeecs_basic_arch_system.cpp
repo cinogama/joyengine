@@ -61,7 +61,6 @@ namespace jeecs_impl
 {
     using types_set = std::set<jeecs::typing::typeid_t>;
 
-    constexpr jeecs::typing::entity_id_in_chunk_t INVALID_ENTITY_ID = SIZE_MAX;
     constexpr size_t CHUNK_SIZE = 16 * 1024; // 16K
 
     class command_buffer;
@@ -172,12 +171,13 @@ namespace jeecs_impl
 
             byte_t _m_chunk_buffer[CHUNK_SIZE];
 
+            jeecs::game_entity::meta* _m_entities_meta;
+
             const types_set *_m_types;
             const archtypes_map *_m_arch_typeinfo_mapping;
             const size_t _m_entity_count;
             const size_t _m_entity_size;
 
-            jeecs::game_entity::meta *_m_entities_meta;
             arch_type *_m_arch_type;
             mcmp_lockfree_fixed_loop_queue<jeecs::typing::entity_id_in_chunk_t>
                 _m_free_slots;
@@ -189,7 +189,12 @@ namespace jeecs_impl
             arch_chunk *last; // for atomic_list;
         public:
             arch_chunk(arch_type *_arch_type)
-                : _m_entity_count(_arch_type->_m_entity_count_per_chunk), _m_entity_size(_arch_type->_m_entity_size), _m_free_slots(_arch_type->_m_entity_count_per_chunk), _m_arch_typeinfo_mapping(&_arch_type->_m_arch_typeinfo_mapping), _m_types(&_arch_type->_m_types_set), _m_arch_type(_arch_type)
+                : _m_types(&_arch_type->_m_types_set)
+                , _m_arch_typeinfo_mapping(&_arch_type->_m_arch_typeinfo_mapping)
+                , _m_entity_count(_arch_type->_m_entity_count_per_chunk)
+                , _m_entity_size(_arch_type->_m_entity_size)
+                , _m_arch_type(_arch_type)
+                , _m_free_slots(_arch_type->_m_entity_count_per_chunk)
 #ifndef NDEBUG
                   ,
                   _m_debug_free_count(_arch_type->_m_entity_count_per_chunk)
@@ -965,12 +970,20 @@ namespace jeecs_impl
         void (*m_free_function)(void *);
 
         ecs_job(ecs_universe *universe, job_for_worlds_t _job, void *custom_data, void (*free_function)(void *))
-            : m_for_worlds_job(_job), m_job_type(job_type::FOR_WORLDS), m_universe(universe), m_custom_data(custom_data), m_free_function(free_function)
+            : m_job_type(job_type::FOR_WORLDS)
+            , m_for_worlds_job(_job)
+            , m_universe(universe)
+            , m_custom_data(custom_data)
+            , m_free_function(free_function)
         {
             assert(_job != nullptr);
         }
         ecs_job(ecs_universe *universe, job_call_once_t _job, void *custom_data, void (*free_function)(void *))
-            : m_call_once_job(_job), m_job_type(job_type::CALL_ONCE), m_universe(universe), m_custom_data(custom_data), m_free_function(free_function)
+            : m_job_type(job_type::CALL_ONCE)
+            , m_call_once_job(_job)
+            , m_universe(universe)
+            , m_custom_data(custom_data)
+            , m_free_function(free_function)
         {
             assert(_job != nullptr);
         }
@@ -2067,7 +2080,7 @@ namespace jeecs_impl
                 {
                     if (shared_job->m_job_type == ecs_job::job_type::FOR_WORLDS)
                         ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
-                                        [this, shared_job](ecs_world *world)
+                                        [shared_job](ecs_world *world)
                                         {
                                             world->execute_world_job(shared_job);
                                         });
@@ -2082,7 +2095,7 @@ namespace jeecs_impl
                 {
                     if (shared_job->m_job_type == ecs_job::job_type::FOR_WORLDS)
                         ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
-                                        [this, shared_job](ecs_world *world)
+                                        [shared_job](ecs_world *world)
                                         {
                                             world->execute_world_job(shared_job);
                                         });
@@ -2113,7 +2126,7 @@ namespace jeecs_impl
                 {
                     if (shared_job->m_job_type == ecs_job::job_type::FOR_WORLDS)
                         ParallelForeach(_m_world_list.begin(), _m_world_list.end(),
-                                        [this, shared_job](ecs_world *world)
+                                        [shared_job](ecs_world *world)
                                         {
                                             world->execute_world_job(shared_job);
                                         });
@@ -2385,49 +2398,49 @@ namespace jeecs_impl
 
         ParallelForeach(
             active_systems.begin(), active_systems.end(),
-            [cur_world](ecs_world::system_container_t::value_type &val)
+            [](ecs_world::system_container_t::value_type &val)
             {
                 val.first->m_system_updaters->m_pre_update(val.second);
             });
         ParallelForeach(
             active_systems.begin(), active_systems.end(),
-            [cur_world](ecs_world::system_container_t::value_type &val)
+            [](ecs_world::system_container_t::value_type &val)
             {
                 val.first->m_system_updaters->m_state_update(val.second);
             });
         ParallelForeach(
             active_systems.begin(), active_systems.end(),
-            [cur_world](ecs_world::system_container_t::value_type &val)
+            [](ecs_world::system_container_t::value_type &val)
             {
                 val.first->m_system_updaters->m_update(val.second);
             });
         ParallelForeach(
             active_systems.begin(), active_systems.end(),
-            [cur_world](ecs_world::system_container_t::value_type &val)
+            [](ecs_world::system_container_t::value_type &val)
             {
                 val.first->m_system_updaters->m_transform_update(val.second);
             });
         ParallelForeach(
             active_systems.begin(), active_systems.end(),
-            [cur_world](ecs_world::system_container_t::value_type &val)
+            [](ecs_world::system_container_t::value_type &val)
             {
                 val.first->m_system_updaters->m_physics_update(val.second);
             });
         ParallelForeach(
             active_systems.begin(), active_systems.end(),
-            [cur_world](ecs_world::system_container_t::value_type &val)
+            [](ecs_world::system_container_t::value_type &val)
             {
                 val.first->m_system_updaters->m_late_update(val.second);
             });
         ParallelForeach(
             active_systems.begin(), active_systems.end(),
-            [cur_world](ecs_world::system_container_t::value_type &val)
+            [](ecs_world::system_container_t::value_type &val)
             {
                 val.first->m_system_updaters->m_commit_update(val.second);
             });
         ParallelForeach(
             active_systems.begin(), active_systems.end(),
-            [cur_world](ecs_world::system_container_t::value_type &val)
+            [](ecs_world::system_container_t::value_type &val)
             {
                 val.first->m_system_updaters->m_graphic_update(val.second);
             });
