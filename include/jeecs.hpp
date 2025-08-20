@@ -11725,12 +11725,12 @@ namespace jeecs
                 if constexpr (sizeof(size_t) == sizeof(uint32_t))
                 {
                     typing::register_script_parser<size_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
-                        "uint32", "");
+                        "uint32", "public alias uint32 = int;");
                 }
                 else if constexpr (sizeof(size_t) == sizeof(uint64_t))
                 {
                     typing::register_script_parser<size_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
-                        "uint64", "");
+                        "uint64", "public alias uint64 = int;");
                 }
                 else
                 {
@@ -11738,9 +11738,7 @@ namespace jeecs
                     static_assert(sizeof(size_t) == sizeof(uint64_t) || sizeof(size_t) == sizeof(uint32_t));
                 }
             }
-
-            typing::register_script_parser<size_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
-                "size_t", "public alias size_t = int;");
+            // Or size_t is same as uint32_t or uint64_t, skip.
 
             typing::register_script_parser<float>(
                 guard,
