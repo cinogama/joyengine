@@ -25,7 +25,7 @@ set(JE4_IGNORED_WOOLANG_PKG_LIST        "process;socket" CACHE STRING "Ignore pr
 set(JE4_SPECIFY_OPENAL_LIB_NAME         "openal" CACHE STRING "Specify openal lib name" FORCE)
 
 add_compile_options(-pthread)
-add_definitions(-DJE4_CURRENT_PLATFORM=JE4_PLATFORM_WEBGL)
+# add_definitions(-DJE4_CURRENT_PLATFORM=JE4_PLATFORM_WEBGL)
 
 # WASM64 is not supported well, so we use WASM32 as default.
 if (OFF)

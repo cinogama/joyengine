@@ -12,6 +12,8 @@
 #include <vulkan/vulkan_android.h>
 #elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_LINUX
 #include <vulkan/vulkan_xlib.h>
+#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_MACOS
+#include <vulkan/vulkan_macos.h>
 #else
 #error Unsupport platform.
 #endif
@@ -318,6 +320,8 @@ namespace jeecs::graphic::api::vk130
             {
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
                 _instance = wo_load_lib("je/graphiclib/vulkan-1", "vulkan-1.dll", nullptr, false);
+#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_MACOS
+                _instance = wo_load_lib("je/graphiclib/vulkan", "libvulkan.dylib", nullptr, false);
 #else
                 _instance = wo_load_lib("je/graphiclib/vulkan", "libvulkan.so.1", nullptr, false);
                 if (_instance == nullptr)
