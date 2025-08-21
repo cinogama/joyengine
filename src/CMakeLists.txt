@@ -149,7 +149,7 @@ if (JE4_ENABLE_VULKAN130_GAPI)
         # Use MoltenVK for macOS/iOS.
         # Find static lib in ../3rd/moltenvk/MoltenVK/static
         target_link_libraries(joyengine_core_configs INTERFACE 
-            FRAMEWORKS "../3rd/moltenvk/MoltenVK/static/MoltenVK.xcframework")
+            "-framework ../3rd/moltenvk/MoltenVK/static/MoltenVK.xcframework")
         target_compile_definitions(joyengine_core_configs INTERFACE
             -DJE_ENABLE_VK130_GAPI)
     else()
