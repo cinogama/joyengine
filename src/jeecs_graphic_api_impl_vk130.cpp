@@ -1757,6 +1757,7 @@ namespace jeecs::graphic::api::vk130
             }
 #endif
 #else
+            glfwInitVulkanLoader(vkGetInstanceProcAddr);
             if (VK_SUCCESS != glfwCreateWindowSurface(
                 _vk_instance, (GLFWwindow*)_vk_jegl_interface->interface_handle(), nullptr, &_vk_surface))
             {
