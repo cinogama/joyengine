@@ -1594,6 +1594,8 @@ namespace jeecs::graphic::api::vk130
             const jegl_interface_config* config,
             bool reboot)
         {
+            glfwInitVulkanLoader(vkGetInstanceProcAddr);
+
             _vk_jegl_interface = new glfw(reboot ? glfw::HOLD : glfw::VULKAN130);
             _vk_jegl_interface->create_interface(ctx, config);
 
@@ -1757,7 +1759,6 @@ namespace jeecs::graphic::api::vk130
             }
 #endif
 #else
-            glfwInitVulkanLoader(vkGetInstanceProcAddr);
             if (VK_SUCCESS != glfwCreateWindowSurface(
                 _vk_instance, (GLFWwindow*)_vk_jegl_interface->interface_handle(), nullptr, &_vk_surface))
             {
