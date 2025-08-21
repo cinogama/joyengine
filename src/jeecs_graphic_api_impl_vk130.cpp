@@ -550,10 +550,6 @@ namespace jeecs::graphic::api::vk130
                 }
 
                 VkDescriptorSet result;
-                // Fix: Limit allocation attempts to prevent infinite loop
-                constexpr size_t MAX_POOL_CREATION_ATTEMPTS = 10;
-                size_t pool_creation_attempts = 0;
-
                 for (;;)
                 {
                     if (!m_pools.empty())
@@ -573,22 +569,7 @@ namespace jeecs::graphic::api::vk130
                             swapchain_image->use_descriptor_set<DESC_SET_TYPE>(result);
                             return result;
                         }
-                        else if (alloc_result == VK_ERROR_OUT_OF_POOL_MEMORY)
-                        {
-                            // Pool is full, try to create a new one
-                        }
-                        else
-                        {
-                            jeecs::debug::logfatal("Failed to allocate descriptor set with error: %d", alloc_result);
-                        }
                     }
-
-                    // Fix: Check for maximum attempts to prevent infinite loop
-                    if (pool_creation_attempts >= MAX_POOL_CREATION_ATTEMPTS)
-                    {
-                        jeecs::debug::logfatal("Failed to create descriptor pool after %zu attempts", MAX_POOL_CREATION_ATTEMPTS);
-                    }
-                    pool_creation_attempts++;
 
                     VkDescriptorPool new_created_pool;
 
