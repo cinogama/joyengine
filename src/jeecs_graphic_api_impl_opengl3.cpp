@@ -331,9 +331,7 @@ namespace jeecs::graphic::api::gl3
 
     jegl_update_action gl_pre_update(jegl_context::userdata_t ctx)
     {
-        jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
-        context->m_interface->swap_for_opengl();
-
+        jegl_gl3_context* context = reinterpret_cast<jegl_gl3_context*>(ctx);
         switch (context->m_interface->update())
         {
         case basic_interface::update_result::CLOSE:
@@ -361,12 +359,14 @@ namespace jeecs::graphic::api::gl3
     }
 
     jegl_update_action gl_commit_update(
-        jegl_context::userdata_t, jegl_update_action)
+        jegl_context::userdata_t ctx, jegl_update_action)
     {
+        jegl_gl3_context* context = reinterpret_cast<jegl_gl3_context*>(ctx);
         jegui_update_gl330();
 
         // 将绘制命令异步地提交给GPU
         glFlush();
+        context->m_interface->swap_for_opengl();
 
         return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
@@ -884,7 +884,6 @@ namespace jeecs::graphic::api::gl3
             }
 
             const static GLenum DRAW_METHODS[] = {
-                GL_LINES,
                 GL_LINE_STRIP,
                 GL_TRIANGLES,
                 GL_TRIANGLE_STRIP,

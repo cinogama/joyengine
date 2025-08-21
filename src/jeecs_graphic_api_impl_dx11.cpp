@@ -1209,7 +1209,6 @@ namespace jeecs::graphic::api::dx11
             jedx11_vertex* vertex = new jedx11_vertex;
 
             const static D3D_PRIMITIVE_TOPOLOGY DRAW_METHODS[] = {
-                D3D11_PRIMITIVE_TOPOLOGY_LINELIST,
                 D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP,
                 D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
                 D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,

@@ -2673,9 +2673,6 @@ namespace jeecs::graphic::api::vk130
 
             switch (resource->m_raw_vertex_data->m_type)
             {
-            case jegl_vertex::type::LINES:
-                vertex->m_topology = VkPrimitiveTopology::VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
-                break;
             case jegl_vertex::type::LINESTRIP:
                 vertex->m_topology = VkPrimitiveTopology::VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
                 break;

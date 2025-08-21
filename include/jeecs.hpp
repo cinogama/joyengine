@@ -1925,8 +1925,7 @@ struct jegl_vertex
 {
     enum type
     {
-        LINES = 0,
-        LINESTRIP,
+        LINESTRIP = 0,
         TRIANGLES,
         TRIANGLESTRIP,
     };
