@@ -164,7 +164,10 @@ if (JE4_ENABLE_VULKAN130_GAPI)
             NO_DEFAULT_PATH)
         
         if(MOLTENVK_FRAMEWORK)
-            target_link_libraries(joyengine_core_configs INTERFACE ${MOLTENVK_FRAMEWORK})
+            target_link_libraries(joyengine_core_configs INTERFACE 
+                ${MOLTENVK_FRAMEWORK}
+                "-framework IOSurface"
+                "-framework Metal")
         else()
             message(FATAL_ERROR "MoltenVK framework not found")
         endif()
