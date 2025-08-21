@@ -140,7 +140,8 @@ namespace jeecs::graphic
             case GLFW_KEY_KP_7:
             case GLFW_KEY_KP_8:
             case GLFW_KEY_KP_9:
-                keycode = (jeecs::input::keycode)((uint16_t)jeecs::input::keycode::NP_0 + (key - GLFW_KEY_KP_0));
+                keycode = (jeecs::input::keycode)(
+                    (uint16_t)jeecs::input::keycode::NP_0 + (key - GLFW_KEY_KP_0));
                 break;
             case GLFW_KEY_KP_ADD:
                 keycode = jeecs::input::keycode::NP_ADD;
@@ -188,7 +189,8 @@ namespace jeecs::graphic
             case GLFW_KEY_F14:
             case GLFW_KEY_F15:
             case GLFW_KEY_F16:
-                keycode = (jeecs::input::keycode)((uint16_t)jeecs::input::keycode::F1 + (key - GLFW_KEY_F1));
+                keycode = (jeecs::input::keycode)(
+                    (uint16_t)jeecs::input::keycode::F1 + (key - GLFW_KEY_F1));
                 break;
             default:
                 if (key >= 0 && key <= 127)
@@ -376,7 +378,6 @@ namespace jeecs::graphic
                 glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_MACOS
                 glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
-                glfwWindowHint(GLFW_COCOA_RETINA_FRAMEBUFFER, GLFW_TRUE);
 #endif
                 glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
                 glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_NATIVE_CONTEXT_API);
@@ -606,7 +607,6 @@ namespace jeecs::graphic
 #if JE4_CURRENT_PLATFORM != JE4_PLATFORM_WEBGL
                 _gamepad_manager.detach(this);
 #endif
-
                 do
                 {
                     std::lock_guard g1(_m_glfw_instance_mx);
