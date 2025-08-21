@@ -108,16 +108,14 @@ void jegui_init_vk130(
     ImGui_ImplVulkan_InitInfo *vkinfo,
     VkRenderPass pass,
     VkCommandBuffer cmdbuf,
-    PFN_vkVoidFunction (*loader_func)(const char *function_name, void *user_data),
+    jegui_vkapi_loader_func_t loader_func_maynull,
     void *user_data)
 {
     jegui_init_basic(ctx, true, get_img_res, apply_shader_sampler);
 
-    // Use MoltenVK in Apple platforms (macOS/iOS), 
-    // donot need load Vulkan functions dynamically.
-#if JE4_VK_USE_DYNAMIC_VK_LIB
-    ImGui_ImplVulkan_LoadFunctions(loader_func, user_data);
-#endif
+    if (loader_func_maynull != nullptr)
+        ImGui_ImplVulkan_LoadFunctions(loader_func_maynull, user_data);
+
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
     jegui_android_init((struct android_app *)window_handle);

@@ -5,6 +5,25 @@
 
 #include "jeecs_imgui_backend_api.hpp"
 
+#include <vulkan/vulkan.h>
+
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
+#   include <vulkan/vulkan_win32.h>
+#   define JE4_VK_USE_DYNAMIC_VK_LIB 1
+#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
+#   include <vulkan/vulkan_android.h>
+#   define JE4_VK_USE_DYNAMIC_VK_LIB 0
+#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_LINUX
+#   include <vulkan/vulkan_xlib.h>
+#   define JE4_VK_USE_DYNAMIC_VK_LIB 1
+#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_MACOS
+#   include <vulkan/vulkan_macos.h>
+#   define JE4_VK_USE_DYNAMIC_VK_LIB 0
+#else
+#   error Unsupport platform.
+#   define JE4_VK_USE_DYNAMIC_VK_LIB 1
+#endif
+
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
 #include "jeecs_graphic_api_interface_egl.hpp"
 #else

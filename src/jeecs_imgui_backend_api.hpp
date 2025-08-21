@@ -41,6 +41,7 @@ void jegui_shutdown_gl330(bool reboot);
 #if defined(JE_ENABLE_VK130_GAPI)
 #include <imgui_impl_vulkan.h>
 
+typedef PFN_vkVoidFunction(*jegui_vkapi_loader_func_t)(const char*, void*);
 void jegui_init_vk130(
     jegl_context *ctx,
     jegui_user_image_loader_t get_img_res,
@@ -49,7 +50,7 @@ void jegui_init_vk130(
     ImGui_ImplVulkan_InitInfo *vkinfo,
     VkRenderPass pass,
     VkCommandBuffer cmdbuf,
-    PFN_vkVoidFunction (*loader_func)(const char *function_name, void *user_data),
+    jegui_vkapi_loader_func_t loader_func_maynull,
     void *user_data);
 void jegui_update_vk130(VkCommandBuffer cmdbuf);
 void jegui_shutdown_vk130(bool reboot);
@@ -62,22 +63,3 @@ void jegui_init_none(
     jegui_user_sampler_loader_t apply_shader_sampler);
 void jegui_update_none();
 void jegui_shutdown_none(bool reboot);
-
-#include <vulkan/vulkan.h>
-
-#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
-#   include <vulkan/vulkan_win32.h>
-#   define JE4_VK_USE_DYNAMIC_VK_LIB 1
-#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
-#   include <vulkan/vulkan_android.h>
-#   define JE4_VK_USE_DYNAMIC_VK_LIB 0
-#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_LINUX
-#   include <vulkan/vulkan_xlib.h>
-#   define JE4_VK_USE_DYNAMIC_VK_LIB 1
-#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_MACOS
-#   include <vulkan/vulkan_macos.h>
-#   define JE4_VK_USE_DYNAMIC_VK_LIB 0
-#else
-#   error Unsupport platform.
-#   define JE4_VK_USE_DYNAMIC_VK_LIB 1
-#endif
