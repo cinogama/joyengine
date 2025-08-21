@@ -151,9 +151,13 @@ if (JE4_ENABLE_VULKAN130_GAPI)
     if (APPLE)
         # Use MoltenVK for macOS/iOS.
         # Find static lib in ../3rd/moltenvk/MoltenVK/static    
+
+        # TODO: Check platform and specify MoltenVK path.
+        set(JE4_MOLTENVK_PATH "macos-arm64_x86_64")
+
         find_library(MOLTENVK_FRAMEWORK
             NAMES MoltenVK
-            PATHS "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/moltenvk/MoltenVK/static"
+            PATHS "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/moltenvk/MoltenVK/static/${JE4_MOLTENVK_PATH}"
             NO_DEFAULT_PATH)
         
         if(MOLTENVK_FRAMEWORK)
