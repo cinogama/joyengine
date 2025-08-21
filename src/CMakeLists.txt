@@ -8,7 +8,12 @@ include_directories("../3rd/imgui/backends")
 include_directories("../3rd/imgui/misc/cpp")
 include_directories("../3rd/box2d/include")
 include_directories("../3rd/assimp/include")
-include_directories("../3rd/vulkan/include")
+if (APPLE)
+    # Use MoltenVK for macOS/iOS.
+    include_directories("../3rd/moltenvk/MoltenVK/include")
+else()
+    include_directories("../3rd/vulkan/include")
+endif()    
 include_directories("../3rd/glslang/glslang/Include")
 include_directories("../3rd/glslang/glslang/Public")
 include_directories("../3rd/spirv-cross")
@@ -134,15 +139,24 @@ if (JE4_ENABLE_DX11_GAPI AND WIN32)
         "../3rd/imgui/backends/imgui_impl_dx11.h")
 endif()
 
-# Vulkan 1.1
+# Vulkan 1.3
 if (JE4_ENABLE_VULKAN130_GAPI)
-    target_compile_definitions(joyengine_core_configs INTERFACE
-        -DJE_ENABLE_VK130_GAPI 
-        -DIMGUI_IMPL_VULKAN_NO_PROTOTYPES)
-
     list(APPEND imgui_srcs
         "../3rd/imgui/backends/imgui_impl_vulkan.cpp"
         "../3rd/imgui/backends/imgui_impl_vulkan.h")
+
+    if (APPLE)
+        # Use MoltenVK for macOS/iOS.
+        # Find static lib in ../3rd/moltenvk/MoltenVK/static
+        target_link_libraries(joyengine_core_configs INTERFACE 
+            FRAMEWORKS "../3rd/moltenvk/MoltenVK/static/MoltenVK.xcframework")
+        target_compile_definitions(joyengine_core_configs INTERFACE
+            -DJE_ENABLE_VK130_GAPI)
+    else()
+        target_compile_definitions(joyengine_core_configs INTERFACE
+            -DJE_ENABLE_VK130_GAPI 
+            -DIMGUI_IMPL_VULKAN_NO_PROTOTYPES)
+    endif()
 endif()
 
 # Metal

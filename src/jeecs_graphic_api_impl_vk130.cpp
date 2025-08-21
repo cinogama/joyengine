@@ -3,20 +3,8 @@
 
 #ifdef JE_ENABLE_VK130_GAPI
 
-#include "jeecs_imgui_backend_api.hpp"
 #include <vulkan/vulkan.h>
-
-#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
-#include <vulkan/vulkan_win32.h>
-#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
-#include <vulkan/vulkan_android.h>
-#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_LINUX
-#include <vulkan/vulkan_xlib.h>
-#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_MACOS
-#include <vulkan/vulkan_macos.h>
-#else
-#error Unsupport platform.
-#endif
+#include "jeecs_imgui_backend_api.hpp"
 
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
 #include "jeecs_graphic_api_interface_egl.hpp"
@@ -309,21 +297,22 @@ namespace jeecs::graphic::api::vk130
 
     struct jegl_vk130_context
     {
+#if JE4_VK_USE_DYNAMIC_VK_LIB
         struct vklibrary_instance_proxy
         {
             void* _instance;
 
             vklibrary_instance_proxy()
             {
-#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
+#   if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
                 _instance = wo_load_lib("je/graphiclib/vulkan-1", "vulkan-1.dll", nullptr, false);
-#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_MACOS
-                _instance = wo_load_lib("je/graphiclib/vulkan", "libvulkan.dylib", nullptr, false);
-#else
+#   elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_LINUX
                 _instance = wo_load_lib("je/graphiclib/vulkan", "libvulkan.so.1", nullptr, false);
                 if (_instance == nullptr)
                     _instance = wo_load_lib("je/graphiclib/vulkan", "libvulkan.so", nullptr, false);
-#endif
+#   else
+#       error Unsupport platform for dynamic vulkan library loading.
+#   endif
                 if (_instance == nullptr)
                 {
                     jeecs::debug::logfatal("Failed to get vulkan library instance.");
@@ -348,11 +337,10 @@ namespace jeecs::graphic::api::vk130
                 return result_ft;
             }
         };
-
-        jegl_context* _vk_jegl_context;
+        
         vklibrary_instance_proxy vk_proxy;
 
-#define VK_API_DECL(name) PFN_##name name = vk_proxy.api<PFN_##name>(#name);
+#   define VK_API_DECL(name) PFN_##name name = vk_proxy.api<PFN_##name>(#name);
 
         VK_API_DECL(vkCreateInstance);
         VK_API_DECL(vkDestroyInstance);
@@ -363,7 +351,9 @@ namespace jeecs::graphic::api::vk130
         VK_API_DECL(vkEnumerateInstanceLayerProperties);
         VK_API_DECL(vkEnumerateInstanceExtensionProperties);
 
-#undef VK_API_DECL
+#   undef VK_API_DECL
+#endif
+        jegl_context* _vk_jegl_context;
 
         // 一些配置项
         size_t _vk_msaa_config;
@@ -1674,9 +1664,14 @@ namespace jeecs::graphic::api::vk130
             }
 
             // 在此初始化vkAPI
-#define VK_API_DECL(name) name = reinterpret_cast<PFN_##name>(vkGetInstanceProcAddr(_vk_instance, #name));
+#if JE4_VK_USE_DYNAMIC_VK_LIB
+#   define VK_API_DECL(name) name = reinterpret_cast<PFN_##name>(vkGetInstanceProcAddr(_vk_instance, #name));
+#else
+#   define VK_API_DECL(name) name = ::name;
+#endif
             VK_API_LIST;
 #undef VK_API_DECL
+
 
             for (const char* required_layer : required_layers)
             {
@@ -3603,12 +3598,16 @@ namespace jeecs::graphic::api::vk130
                 &init_info,
                 _vk_swapchain_images.front()->m_framebuffer->m_rendpass,
                 cmdbuf,
+#if JE4_VK_USE_DYNAMIC_VK_LIB
                 [](const char* funcname, void* userdata)
                 {
                     jegl_vk130_context* ctx =
                         std::launder(reinterpret_cast<jegl_vk130_context*>(userdata));
                     return ctx->vkGetInstanceProcAddr(ctx->_vk_instance, funcname);
                 },
+#else
+                nullptr,
+#endif
                 this);
 
             end_temp_command_buffer_record(cmdbuf);

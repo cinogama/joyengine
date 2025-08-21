@@ -109,6 +109,7 @@ if(MSVC)
     target_compile_options(joyengine_configs INTERFACE "/source-charset:utf-8")
 else()
     target_compile_options(joyengine_configs INTERFACE -fno-exceptions)
+    target_link_libraries(joyengine_configs INTERFACE pthread)
 endif()
 
 ##############################################################################

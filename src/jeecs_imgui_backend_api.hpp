@@ -39,6 +39,7 @@ void jegui_shutdown_gl330(bool reboot);
 #endif
 
 #if defined(JE_ENABLE_VK130_GAPI)
+#undef IMGUI_IMPL_VULKAN_NO_PROTOTYPES
 #include <imgui_impl_vulkan.h>
 
 void jegui_init_vk130(
@@ -62,3 +63,20 @@ void jegui_init_none(
     jegui_user_sampler_loader_t apply_shader_sampler);
 void jegui_update_none();
 void jegui_shutdown_none(bool reboot);
+
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
+#   include <vulkan/vulkan_win32.h>
+#   define JE4_VK_USE_DYNAMIC_VK_LIB 1
+#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
+#   include <vulkan/vulkan_android.h>
+#   define JE4_VK_USE_DYNAMIC_VK_LIB 0
+#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_LINUX
+#   include <vulkan/vulkan_xlib.h>
+#   define JE4_VK_USE_DYNAMIC_VK_LIB 1
+#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_MACOS
+#   include <vulkan/vulkan_macos.h>
+#   define JE4_VK_USE_DYNAMIC_VK_LIB 0
+#else
+#   error Unsupport platform.
+#   define JE4_VK_USE_DYNAMIC_VK_LIB 1
+#endif

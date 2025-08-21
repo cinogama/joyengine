@@ -44,16 +44,17 @@ void jegl_set_host_graphic_api(jegl_graphic_api_entry api)
 
 jegl_graphic_api_entry jegl_get_host_graphic_api(void)
 {
+    return jegl_using_vk130_apis;
     if (_je_global_context._jegl_host_graphic_api == nullptr)
     {
 #if defined(JE_ENABLE_DX11_GAPI)
         return jegl_using_dx11_apis;
-#elif defined(JE_ENABLE_GL330_GAPI) || defined(JE_ENABLE_GLES300_GAPI) || defined(JE_ENABLE_WEBGL20_GAPI)
-        return jegl_using_opengl3_apis;
 #elif defined(JE_ENABLE_VK130_GAPI)
         return jegl_using_vk130_apis;
 #elif defined(JE_ENABLE_METAL_GAPI)
         return jegl_using_metal_apis;
+#elif defined(JE_ENABLE_GL330_GAPI) || defined(JE_ENABLE_GLES300_GAPI) || defined(JE_ENABLE_WEBGL20_GAPI)
+        return jegl_using_opengl3_apis;
 #else
         jeecs::debug::logwarn("No default graphic-api supported.");
         return jegl_using_none_apis;
