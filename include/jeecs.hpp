@@ -24,11 +24,14 @@
 #include <typeinfo>
 
 #include <atomic>
-#include <vector>
+#include <thread>
 #include <mutex>
 #include <shared_mutex>
+#include <condition_variable>
+
 #include <set>
 #include <map>
+#include <vector>
 #include <unordered_set>
 #include <unordered_map>
 #include <algorithm>
@@ -37,8 +40,6 @@
 #include <cstddef>
 #include <cmath>
 #include <random>
-#include <thread>
-#include <type_traits>
 #include <sstream>
 #include <climits>
 #include <initializer_list>
@@ -8236,7 +8237,6 @@ namespace jeecs
                 jegl_close_resource(_m_resource);
             }
         };
-
         class texture : public resource_basic
         {
             explicit texture(jegl_resource* res)
@@ -8430,7 +8430,6 @@ namespace jeecs
                     (int)resource()->m_raw_texture_data->m_height);
             }
         };
-
         class shader : public resource_basic
         {
         private:
@@ -8676,7 +8675,6 @@ namespace jeecs
                 return nullptr;
             }
         };
-
         class vertex : public resource_basic
         {
             explicit vertex(jegl_resource* res)
@@ -8712,7 +8710,6 @@ namespace jeecs
                 return std::nullopt;
             }
         };
-
         class framebuffer : public resource_basic
         {
             explicit framebuffer(jegl_resource* res)
@@ -8756,7 +8753,6 @@ namespace jeecs
                     (int)resource()->m_raw_framebuf_data->m_height);
             }
         };
-
         class uniformbuffer : public resource_basic
         {
             explicit uniformbuffer(jegl_resource* res)
@@ -8948,7 +8944,6 @@ namespace jeecs
             // * 包含边框的影响
             int m_baseline_offset_y = 0;
         };
-
         class font
         {
             JECS_DISABLE_MOVE_AND_COPY(font);
@@ -9289,7 +9284,7 @@ namespace jeecs
 #ifdef __cpp_lib_execution
                                     std::execution::par_unseq,
 #endif
-                                    parallel_pixel_index_iter{ 0 }, 
+                                    parallel_pixel_index_iter{ 0 },
                                     parallel_pixel_index_iter{ size_t(character_info->m_texture->height()) },
                                     [&](size_t fy)
                                     {
@@ -9410,6 +9405,118 @@ namespace jeecs
             }
         };
 
+        class graphic_syncer_host
+        {
+            JECS_DISABLE_MOVE_AND_COPY(graphic_syncer_host);
+
+            std::mutex mx;
+            std::condition_variable cv;
+            std::thread entry_script_thread;
+
+            bool entry_script_ended = false;
+            std::optional<jegl_context*> graphic_context = std::nullopt;
+
+            jegl_context* in_frame_current_context = nullptr;
+
+            static void callback(jegl_context* context, void* p)
+            {
+                graphic_syncer_host* self =
+                    reinterpret_cast<graphic_syncer_host*>(p);
+
+                std::lock_guard g(self->mx);
+                self->graphic_context = context;
+                self->cv.notify_one();
+            }
+            bool check_context_ready_no_lock()
+            {
+                if (graphic_context.has_value())
+                {
+                    in_frame_current_context = graphic_context.value();
+                    graphic_context.reset();
+
+                    jegl_sync_init(in_frame_current_context, false);
+                    return true;
+                }
+                return false;
+            }
+        public:
+            bool check_context_ready_block()
+            {
+                for (;;)
+                {
+                    std::unique_lock ug(mx);
+                    cv.wait(ug, [this]() {return entry_script_ended || graphic_context.has_value(); });
+
+                    if (entry_script_ended)
+                        return false;
+
+                    if (!check_context_ready_no_lock())
+                    {
+                        jeecs::debug::logerr(
+                            "Failed to get graphic context, it should not happend.");
+                        continue;
+                    }
+                    break;
+                }
+                return true;
+            }
+            bool check_context_ready_noblock()
+            {
+                std::lock_guard g(mx);
+                return check_context_ready_no_lock();
+            }
+            bool frame()
+            {
+                assert(in_frame_current_context != nullptr);
+                switch (jegl_sync_update(in_frame_current_context))
+                {
+                case jegl_sync_state::JEGL_SYNC_COMPLETE:
+                    // Normal frame end, do nothing.
+                    break;
+                case jegl_sync_state::JEGL_SYNC_REBOOT:
+                    // Require to reboot graphic thread.
+                    jegl_sync_shutdown(in_frame_current_context, true);
+                    jegl_sync_init(in_frame_current_context, true);
+                    break;
+                case jegl_sync_state::JEGL_SYNC_SHUTDOWN:
+                    // Graphic thread want to shutdown, exit the loop.
+                    jegl_sync_shutdown(in_frame_current_context, false);
+                    in_frame_current_context = nullptr;
+                    return false;
+                }
+                return true;
+            }
+            void loop()
+            {
+                for (;;)
+                {
+                    if (!check_context_ready_block())
+                        break; // If the entry script ended, exit the loop.
+
+                    while (frame())
+                        ; // Update frames until the graphic context request to shutdown.
+                }
+            }
+            graphic_syncer_host()
+            {
+                jegl_register_sync_thread_callback(
+                    graphic_syncer_host::callback, this);
+
+                entry_script_thread = std::thread(
+                    [this]()
+                    {
+                        je_main_script_entry();
+
+                        std::lock_guard g(mx);
+                        entry_script_ended = true;
+                        cv.notify_one();
+                    });
+            }
+            ~graphic_syncer_host()
+            {
+                entry_script_thread.join();
+            }
+        };
     }
 
     namespace audio
@@ -12004,6 +12111,85 @@ namespace jeecs
 #define first_down _firstDown<jeecs::basic::hash_compile_time(__FILE__), __LINE__>
 #define double_click _doubleClick<jeecs::basic::hash_compile_time(__FILE__), __LINE__>
     }
+
+    class game_engine_context
+    {
+        JECS_DISABLE_MOVE_AND_COPY(game_engine_context);
+
+        typing::type_unregister_guard types;
+
+        enum class graphic_state
+        {
+            GRAPHIC_CONTEXT_NOT_READY,
+            GRAPHIC_CONTEXT_READY,
+        };
+        graphic_state graphic_context_state_for_update_manually;
+        graphic::graphic_syncer_host* graphic_syncer;
+
+    public:
+        game_engine_context(int argc, char** argv)
+            : graphic_context_state_for_update_manually(
+                graphic_state::GRAPHIC_CONTEXT_NOT_READY)
+        {
+            je_init(argc, argv);
+            entry::module_entry(&types);
+
+            graphic_syncer = new graphic::graphic_syncer_host();
+        }
+        ~game_engine_context()
+        {
+            if (graphic_syncer != nullptr)
+                delete graphic_syncer;
+
+            entry::module_leave(&types);
+            je_finish();
+        }
+
+        void loop()
+        {
+            prepare_graphic();
+            graphic_syncer->loop();
+        }
+
+    protected:
+        enum class frame_update_result
+        {
+            FRAME_UPDATE_NOT_READY,
+            FRAME_UPDATE_READY,
+            FRAME_UPDATE_CLOSE_REQUESTED,
+        };
+
+        void prepare_graphic()
+        {
+            graphic_syncer = new graphic::graphic_syncer_host();
+
+        }
+        frame_update_result frame()
+        {
+            assert(graphic_syncer != nullptr);
+
+            switch(graphic_context_state_for_update_manually)
+            {
+            case graphic_state::GRAPHIC_CONTEXT_NOT_READY:
+                if (!graphic_syncer->check_context_ready_noblock())
+                    break;
+
+                graphic_context_state_for_update_manually = graphic_state::GRAPHIC_CONTEXT_READY;
+                /* FALL THROUGH */
+                [[fallthrough]];
+            case graphic_state::GRAPHIC_CONTEXT_READY:
+                if (graphic_syncer->frame())
+                    return frame_update_result::FRAME_UPDATE_READY;
+                else
+                    return frame_update_result::FRAME_UPDATE_CLOSE_REQUESTED;
+            default:
+                debug::logfatal(
+                    "Unknown graphic context state: %d",
+                    (int)graphic_context_state_for_update_manually);
+            }
+            return frame_update_result::FRAME_UPDATE_NOT_READY;
+        }
+    };
 }
 #endif
 #endif

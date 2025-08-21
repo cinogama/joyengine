@@ -8,106 +8,68 @@
  */
 #include "jeecs.hpp"
 
-#include <cmath>
-#include <optional>
-#include <cassert>
-
 using namespace jeecs;
 
-class je_webgl_surface_context
+class je_webgl_context: public game_engine_context
 {
-    int canvas_width = 0;
-    int canvas_height = 0;
+    int recorded_canvas_width = 0;
+    int recorded_canvas_height = 0;
 
-    typing::type_unregister_guard *_je_type_guard = nullptr;
-    jegl_context *_jegl_graphic_thread = nullptr;
-    bool _jegl_inited = false;
-
-    static void _jegl_webgl_sync_thread_created(
-        jegl_context *gl_context, void *context)
-    {
-        je_webgl_surface_context *surface_context =
-            std::launder(reinterpret_cast<je_webgl_surface_context *>(context));
-
-        surface_context->_jegl_graphic_thread = gl_context;
-    }
-
+    JECS_DISABLE_MOVE_AND_COPY(je_webgl_context);
 public:
-    je_webgl_surface_context()
+    je_webgl_context(int argc, char** argv)
+        : game_engine_context(argc, argv)
     {
-        je_init(0, nullptr);
-        jeecs::debug::loginfo("WebGL application started!");
-
-        // Update engine paths settings.
         jeecs_file_set_host_path("/.je4");
         jeecs_file_set_runtime_path("/.je4");
         jeecs_file_update_default_fimg("");
 
-        _je_type_guard = new typing::type_unregister_guard();
-        entry::module_entry(_je_type_guard);
-
-        jegl_register_sync_thread_callback(
-            _jegl_webgl_sync_thread_created, this);
-
-        // Execute script entry in another thread.
-        std::thread(je_main_script_entry).detach();
+        prepare_graphic();
     }
+    ~je_webgl_context() = default;
 
-    ~je_webgl_surface_context()
+    void frame()
     {
-        jegl_sync_shutdown(_jegl_graphic_thread, false);
-
-        entry::module_leave(_je_type_guard);
-
-        jeecs::debug::loginfo("WebGL application shutdown!");
-        je_finish();
-    }
-
-    bool update_frame()
-    {
-        if (!_jegl_inited)
+        switch (game_engine_context::frame())
         {
-            if (_jegl_graphic_thread != nullptr)
-            {
-                _jegl_inited = true;
-                jegl_sync_init(_jegl_graphic_thread, false);
-            }
-        }
-        else
+        case frame_update_result::FRAME_UPDATE_NOT_READY:
+            break;
+        case frame_update_result::FRAME_UPDATE_READY:
         {
-            if (jegl_sync_state::JEGL_SYNC_COMPLETE != jegl_sync_update(_jegl_graphic_thread))
-                return false;
-
+            // Frame has been updated, check canvas size.
             double width, height;
             if (EMSCRIPTEN_RESULT_SUCCESS == emscripten_get_element_css_size("#canvas", &width, &height))
             {
                 int rwidth = static_cast<int>(std::round(width));
                 int rheight = static_cast<int>(std::round(height));
 
-                if (canvas_width != rwidth || canvas_height != rheight)
+                if (recorded_canvas_width != rwidth || recorded_canvas_height != rheight)
                 {
-                    canvas_width = rwidth;
-                    canvas_height = rheight;
+                    recorded_canvas_width = rwidth;
+                    recorded_canvas_height = rheight;
 
                     if (width > 0 && height > 0)
                         je_io_set_window_size(rwidth, rheight);
                 }
             }
+            break;
         }
-        return true;
+        case frame_update_result::FRAME_UPDATE_CLOSE_REQUESTED:
+            // Game engine has been requested to close.
+            emscripten_cancel_main_loop();
+            break;
+        }
     }
 };
 
-je_webgl_surface_context *g_surface_context = nullptr;
+int g_argc = 0;
+char** g_argv = nullptr;
+je_webgl_context* g_webgl_context = nullptr;
 
 void webgl_rend_job_callback()
 {
-    if (g_surface_context != nullptr)
-    {
-        if (!g_surface_context->update_frame())
-            // Surface has been requested to close, stop the main loop.
-            emscripten_cancel_main_loop();
-    }
+    if (g_webgl_context != nullptr)
+        g_webgl_context->frame();
 }
 
 extern "C"
@@ -115,8 +77,8 @@ extern "C"
     void EMSCRIPTEN_KEEPALIVE 
         _je4_js_callback_prepare_surface_context()
     {
-        assert(g_surface_context == nullptr);
-        g_surface_context = new je_webgl_surface_context();
+        assert(g_webgl_context == nullptr);
+        g_webgl_context = new je_webgl_context(g_argc, g_argv);
     }
     void EMSCRIPTEN_KEEPALIVE 
         _je4_je_io_update_mousepos(int group, int x, int y)
@@ -134,6 +96,9 @@ extern "C"
 
 int main(int argc, char **argv)
 {
+    g_argc = argc;
+    g_argv = argv;
+
     // Mount idbfs to /builtin
     EM_ASM(
         const MOUSE_LEFT = 0;
@@ -276,8 +241,9 @@ int main(int argc, char **argv)
             } }););
 
     emscripten_set_main_loop(webgl_rend_job_callback, 0, 1);
-    if (g_surface_context != nullptr)
-        delete g_surface_context;
+
+    if (g_webgl_context != nullptr)
+        delete g_webgl_context;
 
     return 0;
 }
