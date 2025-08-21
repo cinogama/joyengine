@@ -12133,8 +12133,6 @@ namespace jeecs
         {
             je_init(argc, argv);
             entry::module_entry(&types);
-
-            graphic_syncer = new graphic::graphic_syncer_host();
         }
         ~game_engine_context()
         {
@@ -12162,7 +12160,6 @@ namespace jeecs
         void prepare_graphic()
         {
             graphic_syncer = new graphic::graphic_syncer_host();
-
         }
         frame_update_result frame()
         {

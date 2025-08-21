@@ -1778,9 +1778,7 @@ namespace jeecs::graphic::api::vk130
 
             std::vector<const char*> required_device_extensions = {
                 VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-                "VK_EXT_extended_dynamic_state3", // Emmm... Vulkan 真是令人讨厌……
-                "VK_EXT_robustness2",
-                VK_EXT_PRIMITIVE_TOPOLOGY_LIST_RESTART_EXTENSION_NAME,
+                "VK_EXT_extended_dynamic_state3",
             };
 
             size_t SKIP_DEVICE = 0;
@@ -1861,22 +1859,9 @@ namespace jeecs::graphic::api::vk130
 
             VkPhysicalDeviceFeatures device_features = {};
 
-            VkPhysicalDeviceRobustness2FeaturesEXT robustness2_features = {};
-            robustness2_features.sType = VkStructureType::VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT;
-            robustness2_features.pNext = nullptr;
-            robustness2_features.robustBufferAccess2 = VK_FALSE;
-            robustness2_features.robustImageAccess2 = VK_FALSE;
-            robustness2_features.nullDescriptor = VK_TRUE;
-
-            VkPhysicalDevicePrimitiveTopologyListRestartFeaturesEXT topologyListRestartFeatures = {};
-            topologyListRestartFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRIMITIVE_TOPOLOGY_LIST_RESTART_FEATURES_EXT;
-            topologyListRestartFeatures.primitiveTopologyListRestart = VK_TRUE;
-
-            robustness2_features.pNext = &topologyListRestartFeatures;
-
             VkDeviceCreateInfo device_create_info = {};
             device_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-            device_create_info.pNext = &robustness2_features;
+            device_create_info.pNext = nullptr;;
             device_create_info.flags = 0;
             device_create_info.queueCreateInfoCount = (uint32_t)queue_create_infos.size();
             device_create_info.pQueueCreateInfos = queue_create_infos.data();
