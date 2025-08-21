@@ -332,6 +332,7 @@ namespace jeecs::graphic::api::gl3
     jegl_update_action gl_pre_update(jegl_context::userdata_t ctx)
     {
         jegl_gl3_context* context = reinterpret_cast<jegl_gl3_context*>(ctx);
+
         switch (context->m_interface->update())
         {
         case basic_interface::update_result::CLOSE:
@@ -352,6 +353,7 @@ namespace jeecs::graphic::api::gl3
         [[fallthrough]];
         case basic_interface::update_result::NORMAL:
         _label_jegl_gl3_normal_job:
+            context->m_interface->swap_for_opengl();
             return jegl_update_action::JEGL_UPDATE_CONTINUE;
         default:
             abort();
@@ -359,15 +361,12 @@ namespace jeecs::graphic::api::gl3
     }
 
     jegl_update_action gl_commit_update(
-        jegl_context::userdata_t ctx, jegl_update_action)
+        jegl_context::userdata_t, jegl_update_action)
     {
-        jegl_gl3_context* context = reinterpret_cast<jegl_gl3_context*>(ctx);
         jegui_update_gl330();
 
         // 将绘制命令异步地提交给GPU
         glFlush();
-        context->m_interface->swap_for_opengl();
-
         return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
     void gl_pre_shutdown(jegl_context*, jegl_context::userdata_t, bool)
