@@ -3,7 +3,6 @@
 
 #ifdef JE_ENABLE_VK130_GAPI
 
-#include <vulkan/vulkan.h>
 #include "jeecs_imgui_backend_api.hpp"
 
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW

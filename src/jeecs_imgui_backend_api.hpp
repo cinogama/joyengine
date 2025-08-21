@@ -63,6 +63,8 @@ void jegui_init_none(
 void jegui_update_none();
 void jegui_shutdown_none(bool reboot);
 
+#include <vulkan/vulkan.h>
+
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
 #   include <vulkan/vulkan_win32.h>
 #   define JE4_VK_USE_DYNAMIC_VK_LIB 1
