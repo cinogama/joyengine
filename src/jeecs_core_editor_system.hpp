@@ -1235,98 +1235,100 @@ public let frag =
                     {
                         if (eid->eid == jedbg_get_editing_entity_uid())
                             _inputs.selected_entity = std::optional(e);
-                    } });
+                    }
+                });
 
-                    // Move walker(root)
-                    selector.contains<Editor::EditorWalker>();
-                    selector.except<Camera::Projection>();
-                    selector.exec(&DefaultEditorSystem::MoveWalker);
+            // Move walker(root)
+            selector.contains<Editor::EditorWalker>();
+            selector.except<Camera::Projection>();
+            selector.exec(&DefaultEditorSystem::MoveWalker);
 
-                    struct EditorGizmoContext
-                    {
-                        basic::resource<graphic::framebuffer> m_framebuffer;
-                        Transform::Translation* m_translation;
-                        Camera::Projection* m_projection;
+            struct EditorGizmoContext
+            {
+                basic::resource<graphic::framebuffer> m_framebuffer;
+                Transform::Translation* m_translation;
+                Camera::Projection* m_projection;
+            };
+            std::optional<EditorGizmoContext> enable_draw_gizmo_at_framebuf = std::nullopt;
+
+            // Move walker(camera)
+            selector.contains<Editor::EditorWalker>();
+            selector.exec([this, &enable_draw_gizmo_at_framebuf](
+                Transform::LocalRotation& rotation,
+                Camera::Projection& proj,
+                Transform::Translation& trans,
+                Camera::RendToFramebuffer& r2b,
+                Camera::OrthoProjection* o2d)
+                {
+                    if (!r2b.framebuffer.has_value())
+                        return;
+
+                    enable_draw_gizmo_at_framebuf = EditorGizmoContext{
+                           r2b.framebuffer.value(),
+                           &trans,
+                           &proj,
                     };
-                    std::optional<EditorGizmoContext> enable_draw_gizmo_at_framebuf = std::nullopt;
 
-                    // Move walker(camera)
-                    selector.contains<Editor::EditorWalker>();
-                    selector.exec([this, &enable_draw_gizmo_at_framebuf](
-                        Transform::LocalRotation& rotation,
-                        Camera::Projection& proj,
-                        Transform::Translation& trans,
-                        Camera::RendToFramebuffer& r2b,
-                        Camera::OrthoProjection* o2d)
+                    if (!_editor_enabled)
+                        return;
+
+                    using namespace input;
+                    using namespace math;
+
+                    auto view_space_width = r2b.framebuffer.value()->width();
+                    auto view_space_height = r2b.framebuffer.value()->height();
+
+                    auto uniform_mouse_x = 2.0f * ((float)_inputs.current_mouse_pos.x / (float)view_space_width - 0.5f);
+                    auto uniform_mouse_y = -2.0f * ((float)_inputs.current_mouse_pos.y / (float)view_space_height - 0.5f);
+
+                    if ((_camera_is_in_o2d_mode = o2d != nullptr))
+                    {
+                        o2d->scale = o2d->scale * pow(2.0f, (float)_inputs.wheel_delta_count);
+                        rotation.rot = quat();
+                    }
+
+                    _camera_ray = math::ray(
+                        trans,
+                        proj,
+                        math::vec2(uniform_mouse_x, uniform_mouse_y),
+                        _camera_is_in_o2d_mode);
+
+                    _camera_porjection = &proj;
+                    _camera_ortho_porjection = o2d;
+
+                    if (_inputs._drag_viewing && _inputs.r_button)
+                    {
+                        if (!_camera_is_in_o2d_mode)
                         {
-                            if (!r2b.framebuffer.has_value())
-                                return;
+                            auto delta_drag = _inputs.current_mouse_pos - _inputs._last_drag_mouse_pos;
+                            rotation.rot = rotation.rot * quat(MOUSE_ROTATION_SCALE * delta_drag.y, 0, 0);
+                        }
 
-                            enable_draw_gizmo_at_framebuf = EditorGizmoContext{
-                                   r2b.framebuffer.value(),
-                                   &trans,
-                                   &proj,
-                            };
+                        _camera_rot = trans.world_rotation;
+                        _camera_pos = trans.world_position;
+                    }
+                });
 
-                            if (!_editor_enabled)
-                                return;
+            /////////////////////////////////////////////////////////////////////////
+            // Prepare for gizmo drawing.
+            jegl_rendchain* gizmo_rchain = nullptr;
+            if (enable_draw_gizmo_at_framebuf.has_value())
+            {
+                auto& gizmo_context = enable_draw_gizmo_at_framebuf.value();
 
-                            using namespace input;
-                            using namespace math;
+                jegl_branch_new_frame(_gizmo_draw_branch, graphic::EDITOR_GIZMO_BRANCH_QUEUE);
+                gizmo_rchain = jegl_branch_new_chain(
+                    _gizmo_draw_branch,
+                    gizmo_context.m_framebuffer->resource(),
+                    0,
+                    0,
+                    0,
+                    0);
 
-                            auto view_space_width = r2b.framebuffer.value()->width();
-                            auto view_space_height = r2b.framebuffer.value()->height();
-
-                            auto uniform_mouse_x = 2.0f * ((float)_inputs.current_mouse_pos.x / (float)view_space_width - 0.5f);
-                            auto uniform_mouse_y = -2.0f * ((float)_inputs.current_mouse_pos.y / (float)view_space_height - 0.5f);
-
-                            if ((_camera_is_in_o2d_mode = o2d != nullptr))
-                            {
-                                o2d->scale = o2d->scale * pow(2.0f, (float)_inputs.wheel_delta_count);
-                                rotation.rot = quat();
-                            }
-
-                            _camera_ray = math::ray(
-                                trans,
-                                proj,
-                                math::vec2(uniform_mouse_x, uniform_mouse_y),
-                                _camera_is_in_o2d_mode);
-
-                            _camera_porjection = &proj;
-                            _camera_ortho_porjection = o2d;
-
-                            if (_inputs._drag_viewing && _inputs.r_button)
-                            {
-                                if (!_camera_is_in_o2d_mode)
-                                {
-                                    auto delta_drag = _inputs.current_mouse_pos - _inputs._last_drag_mouse_pos;
-                                    rotation.rot = rotation.rot * quat(MOUSE_ROTATION_SCALE * delta_drag.y, 0, 0);
-                                }
-
-                                _camera_rot = trans.world_rotation;
-                                _camera_pos = trans.world_position;
-                            } });
-
-                            /////////////////////////////////////////////////////////////////////////
-                            // Prepare for gizmo drawing.
-                            jegl_rendchain* gizmo_rchain = nullptr;
-                            if (enable_draw_gizmo_at_framebuf.has_value())
-                            {
-                                auto& gizmo_context = enable_draw_gizmo_at_framebuf.value();
-
-                                jegl_branch_new_frame(_gizmo_draw_branch, graphic::EDITOR_GIZMO_BRANCH_QUEUE);
-                                gizmo_rchain = jegl_branch_new_chain(
-                                    _gizmo_draw_branch,
-                                    gizmo_context.m_framebuffer->resource(),
-                                    0,
-                                    0,
-                                    0,
-                                    0);
-
-                                jegl_rchain_bind_uniform_buffer(
-                                    gizmo_rchain,
-                                    gizmo_context.m_projection->default_uniform_buffer->resource());
-                            }
+                jegl_rchain_bind_uniform_buffer(
+                    gizmo_rchain,
+                    gizmo_context.m_projection->default_uniform_buffer->resource());
+            }
 
 #define JE_CHECK_NEED_AND_SET_UNIFORM(ACTION, UNIFORM, ITEM, TYPE, ...)                                      \
     do                                                                                                       \
@@ -1335,418 +1337,425 @@ public let frag =
             jegl_rchain_set_builtin_uniform_##TYPE(ACTION, &UNIFORM->m_builtin_uniform_##ITEM, __VA_ARGS__); \
     } while (0)
 
-                            auto easy_draw_impl = [&](
-                                const math::vec3& postion,
-                                const math::quat& rotation,
-                                const math::vec3& scale,
-                                jegl_resource* shader,
-                                jegl_resource* vertex,
-                                jegl_rchain_texture_group_idx_t group) -> jegl_rendchain_rend_action*
-                                {
-                                    if (enable_draw_gizmo_at_framebuf.has_value())
-                                    {
-                                        float MAT4_GIZMO_M[4][4] = {};
-                                        float MAT4_GIZMO_MV[4][4] = {};
-                                        float MAT4_GIZMO_MVP[4][4] = {};
+            auto easy_draw_impl = [&](
+                const math::vec3& postion,
+                const math::quat& rotation,
+                const math::vec3& scale,
+                jegl_resource* shader,
+                jegl_resource* vertex,
+                jegl_rchain_texture_group_idx_t group) -> jegl_rendchain_rend_action*
+                {
+                    if (enable_draw_gizmo_at_framebuf.has_value())
+                    {
+                        float MAT4_GIZMO_M[4][4] = {};
+                        float MAT4_GIZMO_MV[4][4] = {};
+                        float MAT4_GIZMO_MVP[4][4] = {};
 
-                                        auto& gizmo_context = enable_draw_gizmo_at_framebuf.value();
+                        auto& gizmo_context = enable_draw_gizmo_at_framebuf.value();
 
-                                        auto draw_action = jegl_rchain_draw(
-                                            gizmo_rchain,
-                                            shader,
-                                            vertex,
-                                            group);
+                        auto draw_action = jegl_rchain_draw(
+                            gizmo_rchain,
+                            shader,
+                            vertex,
+                            group);
 
-                                        auto* builtin_uniform = &shader->m_raw_shader_data->m_builtin_uniforms;
+                        auto* builtin_uniform = &shader->m_raw_shader_data->m_builtin_uniforms;
 
-                                        math::transform(MAT4_GIZMO_M, postion, rotation, scale);
+                        math::transform(MAT4_GIZMO_M, postion, rotation, scale);
 
-                                        math::mat4xmat4(MAT4_GIZMO_MVP, gizmo_context.m_projection->view_projection, MAT4_GIZMO_M);
-                                        math::mat4xmat4(MAT4_GIZMO_MV, gizmo_context.m_projection->view, MAT4_GIZMO_M);
+                        math::mat4xmat4(MAT4_GIZMO_MVP, gizmo_context.m_projection->view_projection, MAT4_GIZMO_M);
+                        math::mat4xmat4(MAT4_GIZMO_MV, gizmo_context.m_projection->view, MAT4_GIZMO_M);
 
-                                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, m, float4x4, MAT4_GIZMO_M);
-                                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, mvp, float4x4, MAT4_GIZMO_MVP);
-                                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, mv, float4x4, MAT4_GIZMO_MV);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, m, float4x4, MAT4_GIZMO_M);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, mvp, float4x4, MAT4_GIZMO_MVP);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, mv, float4x4, MAT4_GIZMO_MV);
 
-                                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, local_scale, float3,
-                                            scale.x,
-                                            scale.y,
-                                            scale.z);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, local_scale, float3,
+                            scale.x,
+                            scale.y,
+                            scale.z);
 
-                                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, tiling, float2, 1.0f, 1.0f);
-                                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, offset, float2, 0.0f, 0.0f);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, tiling, float2, 1.0f, 1.0f);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, offset, float2, 0.0f, 0.0f);
 
-                                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, color, float4,
-                                            1.0f, 1.0f, 1.0f, 1.0f);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, builtin_uniform, color, float4,
+                            1.0f, 1.0f, 1.0f, 1.0f);
 
-                                        return draw_action;
-                                    }
-                                    return nullptr;
-                                };
-                            auto draw_easy_gizmo_impl = [&](Transform::Translation& trans, jegl_rchain_texture_group_idx_t group, bool rotation)
-                                {
-                                    if (enable_draw_gizmo_at_framebuf.has_value())
-                                    {
-                                        auto& gizmo_context = enable_draw_gizmo_at_framebuf.value();
+                        return draw_action;
+                    }
+                    return nullptr;
+                };
+            auto draw_easy_gizmo_impl = [&](Transform::Translation& trans, jegl_rchain_texture_group_idx_t group, bool rotation)
+                {
+                    if (enable_draw_gizmo_at_framebuf.has_value())
+                    {
+                        auto& gizmo_context = enable_draw_gizmo_at_framebuf.value();
 
-                                        auto final_rotation = gizmo_context.m_translation->world_rotation;
+                        auto final_rotation = gizmo_context.m_translation->world_rotation;
 
-                                        if (rotation)
-                                            final_rotation = final_rotation * math::quat::euler(0.f, 0.f, trans.world_rotation.euler_angle().z);
+                        if (rotation)
+                            final_rotation = final_rotation * math::quat::euler(0.f, 0.f, trans.world_rotation.euler_angle().z);
 
-                                        easy_draw_impl(
-                                            trans.world_position,
-                                            final_rotation,
-                                            math::vec3(1.f, 1.f, 1.f),
-                                            _gizmo_resources.m_gizmo_shader->resource(),
-                                            _gizmo_resources.m_gizmo_vertex->resource(),
-                                            group);
-                                    }
-                                };
+                        easy_draw_impl(
+                            trans.world_position,
+                            final_rotation,
+                            math::vec3(1.f, 1.f, 1.f),
+                            _gizmo_resources.m_gizmo_shader->resource(),
+                            _gizmo_resources.m_gizmo_vertex->resource(),
+                            group);
+                    }
+                };
 
-                            auto camera_gizmo_texture_group =
+            auto camera_gizmo_texture_group =
+                enable_draw_gizmo_at_framebuf.has_value() ? jegl_rchain_allocate_texture_group(gizmo_rchain) : 0;
+            auto point_light_gizmo_texture_group =
+                enable_draw_gizmo_at_framebuf.has_value() ? jegl_rchain_allocate_texture_group(gizmo_rchain) : 0;
+            auto parallel_light_gizmo_texture_group =
+                enable_draw_gizmo_at_framebuf.has_value() ? jegl_rchain_allocate_texture_group(gizmo_rchain) : 0;
+
+            if (enable_draw_gizmo_at_framebuf.has_value())
+            {
+                jegl_rchain_bind_texture(
+                    gizmo_rchain,
+                    camera_gizmo_texture_group,
+                    0,
+                    _gizmo_resources.m_camera_icon->resource());
+                jegl_rchain_bind_texture(
+                    gizmo_rchain,
+                    point_light_gizmo_texture_group,
+                    0,
+                    _gizmo_resources.m_point_or_shape_light2d_icon->resource());
+                jegl_rchain_bind_texture(
+                    gizmo_rchain,
+                    parallel_light_gizmo_texture_group,
+                    0,
+                    _gizmo_resources.m_parallel_light2d_icon->resource());
+            }
+
+            selector.except<Editor::Invisable>();
+            selector.anyof<Camera::OrthoProjection, Camera::PerspectiveProjection>();
+            selector.exec([&](game_entity e, Transform::Translation& trans, Camera::Projection& proj)
+                {
+                    if (_gizmo_mask & gizmo_mode::CAMERA)
+                    {
+                        SelectEntity(e, trans, nullptr);
+                        draw_easy_gizmo_impl(trans, camera_gizmo_texture_group, false);
+                    }
+
+                    if (_gizmo_mask & gizmo_mode::CAMERA_VISUAL_CONE
+                        && this->_inputs.selected_entity.has_value()
+                        && e == this->_inputs.selected_entity.value())
+                    {
+                        auto* draw_action = easy_draw_impl(
+                            trans.world_position,
+                            trans.world_rotation,
+                            math::vec3(1.0f, 1.0f, 1.0f),
+                            _gizmo_resources.m_gizmo_camera_visual_cone_shader->resource(),
+                            _gizmo_resources.m_gizmo_camera_visual_cone_vertex->resource(),
+                            SIZE_MAX);
+
+                        if (draw_action != nullptr)
+                        {
+                            auto* location_addr =
+                                _gizmo_resources.m_gizmo_camera_visual_cone_shader->
+                                get_uniform_location_as_builtin("InverseCameraProjection");
+
+                            jegl_rchain_set_builtin_uniform_float4x4(
+                                draw_action,
+                                location_addr,
+                                proj.inv_projection);
+                        }
+                    }
+                });
+
+            selector.except<Editor::Invisable>();
+            selector.anyof<Light2D::Point, Light2D::Range>();
+            selector.exec([&](game_entity e, Transform::Translation& trans)
+                {
+                    if (_gizmo_mask & gizmo_mode::LIGHT2D)
+                    {
+                        SelectEntity(e, trans, nullptr);
+                        draw_easy_gizmo_impl(trans, point_light_gizmo_texture_group, false);
+                    }
+                });
+
+            selector.except<Editor::Invisable>();
+            selector.contains<Light2D::Parallel>();
+            selector.exec([&](game_entity e, Transform::Translation& trans)
+                {
+                    if (_gizmo_mask & gizmo_mode::LIGHT2D)
+                    {
+                        SelectEntity(e, trans, nullptr);
+                        draw_easy_gizmo_impl(trans, parallel_light_gizmo_texture_group, true);
+                    }
+                });
+
+            selector.except<Editor::Invisable>();
+            selector.anyof<
+                Physics2D::Collider::Box,
+                Physics2D::Collider::Circle,
+                Physics2D::Collider::Capsule>();
+            selector.exec([&](
+                Transform::Translation& trans,
+                Physics2D::Transform::Position* ppos,
+                Physics2D::Transform::Rotation* prot,
+                Physics2D::Transform::Scale* pscale,
+                Physics2D::Collider::Box* box,
+                Physics2D::Collider::Capsule* capsule,
+                Physics2D::Collider::Circle* circle)
+                {
+                    if (_gizmo_mask & gizmo_mode::PHYSICS2D_COLLIDER)
+                    {
+                        auto final_world_position = trans.world_position;
+                        if (ppos != nullptr)
+                            final_world_position += math::vec3(ppos->offset);
+
+                        auto final_world_rotation = trans.world_rotation;
+                        if (prot != nullptr)
+                            final_world_rotation = final_world_rotation * math::quat::euler(0.f, 0.f, prot->angle);
+
+                        auto final_local_scale = trans.local_scale;
+                        if (pscale != nullptr)
+                            // We don't care about z of sacle.
+                            final_local_scale = final_local_scale * math::vec3(pscale->scale);
+
+                        if (box != nullptr)
+                            easy_draw_impl(
+                                final_world_position,
+                                final_world_rotation,
+                                final_local_scale,
+                                _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
+                                _gizmo_resources.m_gizmo_physics2d_collider_box_vertex->resource(),
+                                SIZE_MAX);
+                        else if (circle != nullptr)
+                        {
+                            // m_gizmo_physics2d_collider_circle_vertex's R is 1.0f, so we need to scale it.
+                            final_local_scale.x = std::max(final_local_scale.x, final_local_scale.y) / 2.0f;
+                            final_local_scale.y = final_local_scale.x;
+
+                            easy_draw_impl(
+                                final_world_position,
+                                final_world_rotation,
+                                final_local_scale,
+                                _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
+                                _gizmo_resources.m_gizmo_physics2d_collider_circle_vertex->resource(),
+                                SIZE_MAX);
+                        }
+                        else if (capsule != nullptr)
+                        {
+                            // We need to draw 2 circles and 1 box.
+                            auto circle_r = abs(final_local_scale.x / 2.0f);
+                            auto circle_offset = std::max(abs(final_local_scale.y) / 2.0f - abs(circle_r), 0.f);
+
+                            auto circle_position1 = final_world_position + final_world_rotation * math::vec3(0.f, circle_offset, 0.f);
+                            auto circle_position2 = final_world_position + final_world_rotation * math::vec3(0.f, -circle_offset, 0.f);
+                            auto circle_scale = math::vec3(circle_r, circle_r, circle_r);
+
+                            auto box_scale = math::vec3(
+                                final_local_scale.x,
+                                circle_offset * 2.0f,
+                                final_local_scale.z);
+
+                            easy_draw_impl(
+                                circle_position1,
+                                final_world_rotation,
+                                circle_scale,
+                                _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
+                                _gizmo_resources.m_gizmo_physics2d_collider_circle_vertex->resource(),
+                                SIZE_MAX);
+
+                            easy_draw_impl(
+                                circle_position2,
+                                final_world_rotation,
+                                circle_scale,
+                                _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
+                                _gizmo_resources.m_gizmo_physics2d_collider_circle_vertex->resource(),
+                                SIZE_MAX);
+
+                            easy_draw_impl(
+                                final_world_position,
+                                final_world_rotation,
+                                box_scale,
+                                _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
+                                _gizmo_resources.m_gizmo_physics2d_collider_box_vertex->resource(),
+                                SIZE_MAX);
+                        }
+                    }
+                });
+
+            // Assure gizmo_rchain exists.
+            if (enable_draw_gizmo_at_framebuf.has_value())
+            {
+                if (_inputs.selected_entity.has_value())
+                {
+                    if (_gizmo_mask & gizmo_mode::SELECTING_HIGHLIGHT)
+                    {
+                        auto& selected_entity = _inputs.selected_entity.value();
+                        auto* translation = selected_entity.get_component<Transform::Translation>();
+                        auto* shape = selected_entity.get_component<Renderer::Shape>();
+                        auto* textures = selected_entity.get_component<Renderer::Textures>();
+
+                        if (translation != nullptr && shape != nullptr && selected_entity.get_component<Renderer::Shaders>() != nullptr && selected_entity.get_component<Light2D::Point>() == nullptr && selected_entity.get_component<Light2D::Range>() == nullptr && selected_entity.get_component<Light2D::Parallel>() == nullptr)
+                        {
+                            jegl_rchain_texture_group_idx_t group =
                                 jegl_rchain_allocate_texture_group(gizmo_rchain);
-                            auto point_light_gizmo_texture_group =
-                                jegl_rchain_allocate_texture_group(gizmo_rchain);
-                            auto parallel_light_gizmo_texture_group =
-                                jegl_rchain_allocate_texture_group(gizmo_rchain);
 
-                            jegl_rchain_bind_texture(
-                                gizmo_rchain,
-                                camera_gizmo_texture_group,
-                                0,
-                                _gizmo_resources.m_camera_icon->resource());
-                            jegl_rchain_bind_texture(
-                                gizmo_rchain,
-                                point_light_gizmo_texture_group,
-                                0,
-                                _gizmo_resources.m_point_or_shape_light2d_icon->resource());
-                            jegl_rchain_bind_texture(
-                                gizmo_rchain,
-                                parallel_light_gizmo_texture_group,
-                                0,
-                                _gizmo_resources.m_parallel_light2d_icon->resource());
-
-                            selector.except<Editor::Invisable>();
-                            selector.anyof<Camera::OrthoProjection, Camera::PerspectiveProjection>();
-                            selector.exec([&](game_entity e, Transform::Translation& trans, Camera::Projection& proj)
+                            bool binded = false;
+                            if (textures != nullptr)
+                            {
+                                auto binded_in_zero = textures->get_texture(0);
+                                if (binded_in_zero.has_value())
                                 {
-                                    if (_gizmo_mask & gizmo_mode::CAMERA)
-                                    {
-                                        SelectEntity(e, trans, nullptr);
-                                        draw_easy_gizmo_impl(trans, camera_gizmo_texture_group, false);
-                                    }
+                                    binded = true;
+                                    jegl_rchain_bind_texture(
+                                        gizmo_rchain,
+                                        group,
+                                        0,
+                                        binded_in_zero.value()->resource());
+                                }
+                            }
 
-                                    if (_gizmo_mask & gizmo_mode::CAMERA_VISUAL_CONE
-                                        && this->_inputs.selected_entity.has_value()
-                                        && e == this->_inputs.selected_entity.value())
-                                    {
-                                        auto* draw_action = easy_draw_impl(
-                                            trans.world_position,
-                                            trans.world_rotation,
-                                            math::vec3(1.0f, 1.0f, 1.0f),
-                                            _gizmo_resources.m_gizmo_camera_visual_cone_shader->resource(),
-                                            _gizmo_resources.m_gizmo_camera_visual_cone_vertex->resource(),
-                                            SIZE_MAX);
+                            if (!binded)
+                                jegl_rchain_bind_texture(
+                                    gizmo_rchain,
+                                    group,
+                                    0,
+                                    _gizmo_resources.m_selecting_default_texture->resource());
 
-                                        if (draw_action != nullptr)
-                                        {
-                                            auto* location_addr =
-                                                _gizmo_resources.m_gizmo_camera_visual_cone_shader->
-                                                get_uniform_location_as_builtin("InverseCameraProjection");
+                            auto* draw_action = easy_draw_impl(
+                                translation->world_position,
+                                translation->world_rotation,
+                                translation->local_scale,
+                                _gizmo_resources.m_gizmo_selecting_item_highlight_shader->resource(),
+                                shape->vertex.has_value()
+                                ? shape->vertex.value()->resource()
+                                : _gizmo_resources.m_gizmo_vertex->resource(),
+                                group);
 
-                                            jegl_rchain_set_builtin_uniform_float4x4(
-                                                draw_action,
-                                                location_addr,
-                                                proj.inv_projection);
-                                        }
-                                    } });
+                            if (draw_action != nullptr && textures != nullptr)
+                            {
+                                auto* builtin_uniform = _gizmo_resources.m_gizmo_selecting_item_highlight_shader->m_builtin;
 
-                                    selector.except<Editor::Invisable>();
-                                    selector.anyof<Light2D::Point, Light2D::Range>();
-                                    selector.exec([&](game_entity e, Transform::Translation& trans)
-                                        {
-                                            if (_gizmo_mask & gizmo_mode::LIGHT2D)
-                                            {
-                                                SelectEntity(e, trans, nullptr);
-                                                draw_easy_gizmo_impl(trans, point_light_gizmo_texture_group, false);
-                                            } });
-
-                                            selector.except<Editor::Invisable>();
-                                            selector.contains<Light2D::Parallel>();
-                                            selector.exec([&](game_entity e, Transform::Translation& trans)
-                                                {
-                                                    if (_gizmo_mask & gizmo_mode::LIGHT2D)
-                                                    {
-                                                        SelectEntity(e, trans, nullptr);
-                                                        draw_easy_gizmo_impl(trans, parallel_light_gizmo_texture_group, true);
-                                                    } });
-
-                                                    selector.except<Editor::Invisable>();
-                                                    selector.anyof<
-                                                        Physics2D::Collider::Box,
-                                                        Physics2D::Collider::Circle,
-                                                        Physics2D::Collider::Capsule>();
-                                                    selector.exec([&](
-                                                        Transform::Translation& trans,
-                                                        Physics2D::Transform::Position* ppos,
-                                                        Physics2D::Transform::Rotation* prot,
-                                                        Physics2D::Transform::Scale* pscale,
-                                                        Physics2D::Collider::Box* box,
-                                                        Physics2D::Collider::Capsule* capsule,
-                                                        Physics2D::Collider::Circle* circle)
-                                                        {
-                                                            if (_gizmo_mask & gizmo_mode::PHYSICS2D_COLLIDER)
-                                                            {
-                                                                auto final_world_position = trans.world_position;
-                                                                if (ppos != nullptr)
-                                                                    final_world_position += math::vec3(ppos->offset);
-
-                                                                auto final_world_rotation = trans.world_rotation;
-                                                                if (prot != nullptr)
-                                                                    final_world_rotation = final_world_rotation * math::quat::euler(0.f, 0.f, prot->angle);
-
-                                                                auto final_local_scale = trans.local_scale;
-                                                                if (pscale != nullptr)
-                                                                    // We don't care about z of sacle.
-                                                                    final_local_scale = final_local_scale * math::vec3(pscale->scale);
-
-                                                                if (box != nullptr)
-                                                                    easy_draw_impl(
-                                                                        final_world_position,
-                                                                        final_world_rotation,
-                                                                        final_local_scale,
-                                                                        _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
-                                                                        _gizmo_resources.m_gizmo_physics2d_collider_box_vertex->resource(),
-                                                                        SIZE_MAX);
-                                                                else if (circle != nullptr)
-                                                                {
-                                                                    // m_gizmo_physics2d_collider_circle_vertex's R is 1.0f, so we need to scale it.
-                                                                    final_local_scale.x = std::max(final_local_scale.x, final_local_scale.y) / 2.0f;
-                                                                    final_local_scale.y = final_local_scale.x;
-
-                                                                    easy_draw_impl(
-                                                                        final_world_position,
-                                                                        final_world_rotation,
-                                                                        final_local_scale,
-                                                                        _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
-                                                                        _gizmo_resources.m_gizmo_physics2d_collider_circle_vertex->resource(),
-                                                                        SIZE_MAX);
-                                                                }
-                                                                else if (capsule != nullptr)
-                                                                {
-                                                                    // We need to draw 2 circles and 1 box.
-                                                                    auto circle_r = abs(final_local_scale.x / 2.0f);
-                                                                    auto circle_offset = std::max(abs(final_local_scale.y) / 2.0f - abs(circle_r), 0.f);
-
-                                                                    auto circle_position1 = final_world_position + final_world_rotation * math::vec3(0.f, circle_offset, 0.f);
-                                                                    auto circle_position2 = final_world_position + final_world_rotation * math::vec3(0.f, -circle_offset, 0.f);
-                                                                    auto circle_scale = math::vec3(circle_r, circle_r, circle_r);
-
-                                                                    auto box_scale = math::vec3(
-                                                                        final_local_scale.x,
-                                                                        circle_offset * 2.0f,
-                                                                        final_local_scale.z);
-
-                                                                    easy_draw_impl(
-                                                                        circle_position1,
-                                                                        final_world_rotation,
-                                                                        circle_scale,
-                                                                        _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
-                                                                        _gizmo_resources.m_gizmo_physics2d_collider_circle_vertex->resource(),
-                                                                        SIZE_MAX);
-
-                                                                    easy_draw_impl(
-                                                                        circle_position2,
-                                                                        final_world_rotation,
-                                                                        circle_scale,
-                                                                        _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
-                                                                        _gizmo_resources.m_gizmo_physics2d_collider_circle_vertex->resource(),
-                                                                        SIZE_MAX);
-
-                                                                    easy_draw_impl(
-                                                                        final_world_position,
-                                                                        final_world_rotation,
-                                                                        box_scale,
-                                                                        _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
-                                                                        _gizmo_resources.m_gizmo_physics2d_collider_box_vertex->resource(),
-                                                                        SIZE_MAX);
-                                                                }
-                                                            } });
-
-                                                            // Assure gizmo_rchain exists.
-                                                            if (enable_draw_gizmo_at_framebuf.has_value())
-                                                            {
-                                                                if (_inputs.selected_entity.has_value())
-                                                                {
-                                                                    if (_gizmo_mask & gizmo_mode::SELECTING_HIGHLIGHT)
-                                                                    {
-                                                                        auto& selected_entity = _inputs.selected_entity.value();
-                                                                        auto* translation = selected_entity.get_component<Transform::Translation>();
-                                                                        auto* shape = selected_entity.get_component<Renderer::Shape>();
-                                                                        auto* textures = selected_entity.get_component<Renderer::Textures>();
-
-                                                                        if (translation != nullptr && shape != nullptr && selected_entity.get_component<Renderer::Shaders>() != nullptr && selected_entity.get_component<Light2D::Point>() == nullptr && selected_entity.get_component<Light2D::Range>() == nullptr && selected_entity.get_component<Light2D::Parallel>() == nullptr)
-                                                                        {
-                                                                            jegl_rchain_texture_group_idx_t group =
-                                                                                jegl_rchain_allocate_texture_group(gizmo_rchain);
-
-                                                                            bool binded = false;
-                                                                            if (textures != nullptr)
-                                                                            {
-                                                                                auto binded_in_zero = textures->get_texture(0);
-                                                                                if (binded_in_zero.has_value())
-                                                                                {
-                                                                                    binded = true;
-                                                                                    jegl_rchain_bind_texture(
-                                                                                        gizmo_rchain,
-                                                                                        group,
-                                                                                        0,
-                                                                                        binded_in_zero.value()->resource());
-                                                                                }
-                                                                            }
-
-                                                                            if (!binded)
-                                                                                jegl_rchain_bind_texture(
-                                                                                    gizmo_rchain,
-                                                                                    group,
-                                                                                    0,
-                                                                                    _gizmo_resources.m_selecting_default_texture->resource());
-
-                                                                            auto* draw_action = easy_draw_impl(
-                                                                                translation->world_position,
-                                                                                translation->world_rotation,
-                                                                                translation->local_scale,
-                                                                                _gizmo_resources.m_gizmo_selecting_item_highlight_shader->resource(),
-                                                                                shape->vertex.has_value()
-                                                                                ? shape->vertex.value()->resource()
-                                                                                : _gizmo_resources.m_gizmo_vertex->resource(),
-                                                                                group);
-
-                                                                            if (draw_action != nullptr && textures != nullptr)
-                                                                            {
-                                                                                auto* builtin_uniform = _gizmo_resources.m_gizmo_selecting_item_highlight_shader->m_builtin;
-
-                                                                                JE_CHECK_NEED_AND_SET_UNIFORM(
-                                                                                    draw_action, builtin_uniform, tiling, float2, textures->tiling.x, textures->tiling.y);
-                                                                                JE_CHECK_NEED_AND_SET_UNIFORM(
-                                                                                    draw_action, builtin_uniform, offset, float2, textures->offset.x, textures->offset.y);
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
+                                JE_CHECK_NEED_AND_SET_UNIFORM(
+                                    draw_action, builtin_uniform, tiling, float2, textures->tiling.x, textures->tiling.y);
+                                JE_CHECK_NEED_AND_SET_UNIFORM(
+                                    draw_action, builtin_uniform, offset, float2, textures->offset.x, textures->offset.y);
+                            }
+                        }
+                    }
+                }
+            }
 
 #undef JE_CHECK_NEED_AND_SET_UNIFORM
-                                                            // Draw gizmo end.
-                                                            /////////////////////////////////////////////////////////////////////////
+            // Draw gizmo end.
+            /////////////////////////////////////////////////////////////////////////
 
-                                                            // Select entity
-                                                            selector.except<Editor::Invisable, Light2D::Point, Light2D::Parallel, Light2D::Range>();
-                                                            selector.contains<Renderer::Shaders, Renderer::Shape>();
-                                                            selector.exec(&DefaultEditorSystem::SelectEntity);
+            // Select entity
+            selector.except<Editor::Invisable, Light2D::Point, Light2D::Parallel, Light2D::Range>();
+            selector.contains<Renderer::Shaders, Renderer::Shape>();
+            selector.exec(&DefaultEditorSystem::SelectEntity);
 
-                                                            // Create & create mover!
-                                                            selector.exec(&DefaultEditorSystem::UpdateAndCreateMover);
+            // Create & create mover!
+            selector.exec(&DefaultEditorSystem::UpdateAndCreateMover);
 
-                                                            selector.contains<Editor::EntitySelectBox>();
-                                                            selector.exec([this](
-                                                                Transform::Translation& trans,
-                                                                Transform::LocalScale& localScale,
-                                                                Transform::LocalRotation& localRotation)
-                                                                {
-                                                                    if (const game_entity* current =
-                                                                        _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr)
-                                                                    {
-                                                                        localRotation.rot = math::quat();
-                                                                        auto* etrans = current->get_component<Transform::Translation>();
-                                                                        if (etrans != nullptr)
-                                                                        {
-                                                                            localScale.scale = etrans->local_scale;
-                                                                            if (_coord != coord_mode::LOCAL && _mode != Editor::EntityMover::mover_mode::SCALE)
-                                                                                localRotation.rot = etrans->world_rotation;
-                                                                        }
+            selector.contains<Editor::EntitySelectBox>();
+            selector.exec([this](
+                Transform::Translation& trans,
+                Transform::LocalScale& localScale,
+                Transform::LocalRotation& localRotation)
+                {
+                    if (const game_entity* current =
+                        _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr)
+                    {
+                        localRotation.rot = math::quat();
+                        auto* etrans = current->get_component<Transform::Translation>();
+                        if (etrans != nullptr)
+                        {
+                            localScale.scale = etrans->local_scale;
+                            if (_coord != coord_mode::LOCAL && _mode != Editor::EntityMover::mover_mode::SCALE)
+                                localRotation.rot = etrans->world_rotation;
+                        }
 
-                                                                        if (auto* eshape = current->get_component<Renderer::Shape>())
-                                                                        {
-                                                                            if (current->get_component<Light2D::Point>() == nullptr
-                                                                                && current->get_component<Light2D::Parallel>() == nullptr
-                                                                                && current->get_component<Light2D::Range>() == nullptr)
-                                                                            {
-                                                                                localScale.scale = localScale.scale * (
-                                                                                    eshape->vertex.has_value()
-                                                                                    ? jeecs::math::vec3(
-                                                                                        eshape->vertex.value()->resource()->m_raw_vertex_data->m_x_max
-                                                                                        - eshape->vertex.value()->resource()->m_raw_vertex_data->m_x_min,
-                                                                                        eshape->vertex.value()->resource()->m_raw_vertex_data->m_y_max
-                                                                                        - eshape->vertex.value()->resource()->m_raw_vertex_data->m_y_min,
-                                                                                        eshape->vertex.value()->resource()->m_raw_vertex_data->m_z_max
-                                                                                        - eshape->vertex.value()->resource()->m_raw_vertex_data->m_z_min
-                                                                                    )
-                                                                                    : jeecs::math::vec3(1.0f, 1.0f, 0.0f));
-                                                                            }
-                                                                            else
-                                                                            {
-                                                                                localScale.scale = jeecs::math::vec3(1.0f, 1.0f, 1.0f);
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                    else
-                                                                    {
-                                                                        // Hide the mover
-                                                                        localScale.scale = math::vec3(0, 0, 0);
-                                                                    } });
+                        if (auto* eshape = current->get_component<Renderer::Shape>())
+                        {
+                            if (current->get_component<Light2D::Point>() == nullptr
+                                && current->get_component<Light2D::Parallel>() == nullptr
+                                && current->get_component<Light2D::Range>() == nullptr)
+                            {
+                                localScale.scale = localScale.scale * (
+                                    eshape->vertex.has_value()
+                                    ? jeecs::math::vec3(
+                                        eshape->vertex.value()->resource()->m_raw_vertex_data->m_x_max
+                                        - eshape->vertex.value()->resource()->m_raw_vertex_data->m_x_min,
+                                        eshape->vertex.value()->resource()->m_raw_vertex_data->m_y_max
+                                        - eshape->vertex.value()->resource()->m_raw_vertex_data->m_y_min,
+                                        eshape->vertex.value()->resource()->m_raw_vertex_data->m_z_max
+                                        - eshape->vertex.value()->resource()->m_raw_vertex_data->m_z_min
+                                    )
+                                    : jeecs::math::vec3(1.0f, 1.0f, 0.0f));
+                            }
+                            else
+                            {
+                                localScale.scale = jeecs::math::vec3(1.0f, 1.0f, 1.0f);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Hide the mover
+                        localScale.scale = math::vec3(0, 0, 0);
+                    } });
 
-                                                                    // Mover mgr
-                                                                    selector.exec(&DefaultEditorSystem::MoveEntity);
+                    // Mover mgr
+                    selector.exec(&DefaultEditorSystem::MoveEntity);
 
-                                                                    if (_editor_enabled)
-                                                                    {
-                                                                        if (nullptr == _inputs._grab_axis_translation)
-                                                                        {
-                                                                            auto _set_editing_entity = [](const jeecs::game_entity& e)
-                                                                                {
-                                                                                    auto* eid = e.get_component<Editor::EntityId>();
-                                                                                    if (eid != nullptr)
-                                                                                        jedbg_set_editing_entity_uid(eid->eid);
-                                                                                };
+                    if (_editor_enabled)
+                    {
+                        if (nullptr == _inputs._grab_axis_translation)
+                        {
+                            auto _set_editing_entity = [](const jeecs::game_entity& e)
+                                {
+                                    auto* eid = e.get_component<Editor::EntityId>();
+                                    if (eid != nullptr)
+                                        jedbg_set_editing_entity_uid(eid->eid);
+                                };
 
-                                                                            if (!selected_list.empty())
-                                                                            {
-                                                                                const game_entity* e = _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr;
-                                                                                if (auto fnd = std::find_if(selected_list.begin(), selected_list.end(),
-                                                                                    [e](const SelectedResult& s) -> bool
-                                                                                    { return e ? s.entity == *e : false; });
-                                                                                    fnd != selected_list.end())
-                                                                                {
-                                                                                    if (_inputs.l_shift)
-                                                                                    {
-                                                                                        if (fnd == selected_list.begin())
-                                                                                            fnd = selected_list.end();
+                            if (!selected_list.empty())
+                            {
+                                const game_entity* e = _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr;
+                                if (auto fnd = std::find_if(selected_list.begin(), selected_list.end(),
+                                    [e](const SelectedResult& s) -> bool
+                                    { return e ? s.entity == *e : false; });
+                                    fnd != selected_list.end())
+                                {
+                                    if (_inputs.l_shift)
+                                    {
+                                        if (fnd == selected_list.begin())
+                                            fnd = selected_list.end();
 
-                                                                                        _set_editing_entity((--fnd)->entity);
-                                                                                    }
-                                                                                    else
-                                                                                    {
-                                                                                        if (++fnd == selected_list.end())
-                                                                                            _set_editing_entity(selected_list.begin()->entity);
-                                                                                        else
-                                                                                            _set_editing_entity(fnd->entity);
-                                                                                    }
-                                                                                }
-                                                                                else
-                                                                                    _set_editing_entity(selected_list.begin()->entity);
-                                                                            }
-                                                                            else if (_inputs.l_button_pushed)
-                                                                                jedbg_set_editing_entity_uid(0);
-                                                                        }
-                                                                        selected_list.clear();
-                                                                    }
-                                                                    je_io_set_lock_mouse(
-                                                                        _inputs.advise_lock_mouse_walking_camera);
+                                        _set_editing_entity((--fnd)->entity);
+                                    }
+                                    else
+                                    {
+                                        if (++fnd == selected_list.end())
+                                            _set_editing_entity(selected_list.begin()->entity);
+                                        else
+                                            _set_editing_entity(fnd->entity);
+                                    }
+                                }
+                                else
+                                    _set_editing_entity(selected_list.begin()->entity);
+                            }
+                            else if (_inputs.l_button_pushed)
+                                jedbg_set_editing_entity_uid(0);
+                        }
+                        selected_list.clear();
+                    }
+                    je_io_set_lock_mouse(
+                        _inputs.advise_lock_mouse_walking_camera);
 
-                                                                    _inputs._last_drag_mouse_pos = _inputs.current_mouse_pos;
-                                                                    _inputs.current_mouse_pos = _inputs._next_drag_mouse_pos;
+                    _inputs._last_drag_mouse_pos = _inputs.current_mouse_pos;
+                    _inputs.current_mouse_pos = _inputs._next_drag_mouse_pos;
         }
     };
 }
