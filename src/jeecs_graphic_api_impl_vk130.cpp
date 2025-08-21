@@ -1760,7 +1760,7 @@ namespace jeecs::graphic::api::vk130
             if (VK_SUCCESS != glfwCreateWindowSurface(
                 _vk_instance, (GLFWwindow*)_vk_jegl_interface->interface_handle(), nullptr, &_vk_surface))
             {
-                char* error_message = nullptr;
+                const char* error_message = nullptr;
                 auto eno = glfwGetError(&error_message);
 
                 jeecs::debug::logfatal("Failed to create vk130 glfw surface: %s(%d).",
