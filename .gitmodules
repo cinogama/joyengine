@@ -5,7 +5,8 @@
 [submodule "3rd/glfw"]
     path = 3rd/glfw
     url = https://git.cinogama.net/cinogamaproject/joyengineecs/glfw.git
-    branch = 3.3-stable
+    branch = master
+    tag = v3.4
 [submodule "3rd/stb"]
     path = 3rd/stb
     url = https://git.cinogama.net/cinogamaproject/joyengineecs/stb.git
