@@ -39,7 +39,6 @@ void jegui_shutdown_gl330(bool reboot);
 #endif
 
 #if defined(JE_ENABLE_VK130_GAPI)
-#undef IMGUI_IMPL_VULKAN_NO_PROTOTYPES
 #include <imgui_impl_vulkan.h>
 
 void jegui_init_vk130(

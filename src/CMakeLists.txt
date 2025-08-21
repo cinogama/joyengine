@@ -141,20 +141,28 @@ endif()
 
 # Vulkan 1.3
 if (JE4_ENABLE_VULKAN130_GAPI)
+    target_compile_definitions(joyengine_core_configs INTERFACE
+        -DJE_ENABLE_VK130_GAPI)
+
     list(APPEND imgui_srcs
         "../3rd/imgui/backends/imgui_impl_vulkan.cpp"
         "../3rd/imgui/backends/imgui_impl_vulkan.h")
 
     if (APPLE)
         # Use MoltenVK for macOS/iOS.
-        # Find static lib in ../3rd/moltenvk/MoltenVK/static
-        target_link_libraries(joyengine_core_configs INTERFACE 
-            "-framework ../3rd/moltenvk/MoltenVK/static/MoltenVK.xcframework")
-        target_compile_definitions(joyengine_core_configs INTERFACE
-            -DJE_ENABLE_VK130_GAPI)
+        # Find static lib in ../3rd/moltenvk/MoltenVK/static    
+        find_library(MOLTENVK_FRAMEWORK
+            NAMES MoltenVK
+            PATHS "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/moltenvk/MoltenVK/static"
+            NO_DEFAULT_PATH)
+        
+        if(MOLTENVK_FRAMEWORK)
+            target_link_libraries(joyengine_core_configs INTERFACE ${MOLTENVK_FRAMEWORK})
+        else()
+            message(FATAL_ERROR "MoltenVK framework not found")
+        endif()
     else()
         target_compile_definitions(joyengine_core_configs INTERFACE
-            -DJE_ENABLE_VK130_GAPI 
             -DIMGUI_IMPL_VULKAN_NO_PROTOTYPES)
     endif()
 endif()
