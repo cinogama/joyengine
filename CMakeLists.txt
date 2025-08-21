@@ -163,6 +163,7 @@ if (JE4_ENABLE_DX11_GAPI
 
     if (NOT ANDROID)
         set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glfw" FORCE)
+        set(GLFW_BUILD_WAYLAND OFF CACHE BOOL "Disable Wayland support in glfw" FORCE)
         add_subdirectory("3rd/glfw")
     endif()
 endif()
