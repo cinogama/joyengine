@@ -265,6 +265,7 @@ if (JE4_ENABLE_SHADER_WRAP_GENERATOR)
     # Build glslang and spirv-cross-c for shader wrap generator.
     target_compile_definitions(joyecs PRIVATE -DJE4_ENABLE_SHADER_WRAP_GENERATOR)
 
+    target_compile_features(spirv-cross-c INTERFACE cxx_std_17)
     if (NOT MSVC)
         target_compile_options (spirv-cross-c PRIVATE -fPIC)
     endif()
@@ -274,8 +275,6 @@ if (JE4_ENABLE_SHADER_WRAP_GENERATOR)
         SPIRV
         spirv-cross-c
         glslang-default-resource-limits)
-
-    message(FATAL_ERROR "Build glslang and spirv-cross-c for shader wrap generator.")
 endif()
 
 target_link_libraries(joyecs PRIVATE 

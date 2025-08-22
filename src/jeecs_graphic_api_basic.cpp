@@ -336,8 +336,11 @@ struct _je_graphic_shared_context
 };
 _je_graphic_shared_context _je_graphic_shared_context_instance;
 
-void jegl_shader_generate_glsl(void* shader_generator, jegl_shader* write_to_shader);
-void jegl_shader_free_generated_glsl(jegl_shader* write_to_shader);
+#if JE4_ENABLE_SHADER_WRAP_GENERATOR
+struct shader_wrapper;
+void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_shader* write_to_shader);
+#endif
+void jegl_shader_free_generated_shader_source(jegl_shader* write_to_shader);
 
 //////////////////////////////////// API /////////////////////////////////////////
 
@@ -923,7 +926,7 @@ void jegl_close_resource(jegl_resource* resource)
             break;
         case jegl_resource::SHADER:
             // close resource's raw data, then send this resource to closing-queue
-            jegl_shader_free_generated_glsl(resource->m_raw_shader_data);
+            jegl_shader_free_generated_shader_source(resource->m_raw_shader_data);
             delete resource->m_raw_shader_data;
             break;
         case jegl_resource::VERTEX:
@@ -1024,7 +1027,7 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src, bool i
         if (jeecs_file* shader_cache = jeecs_load_cache_file(path, SHADER_CACHE_VERSION, wo_crc64_str(src)))
             return _jegl_load_shader_cache(shader_cache, path);
     }
-
+#if JE4_ENABLE_SHADER_WRAP_GENERATOR
     wo_vm vmm = wo_create_vm();
     if (!wo_load_source(vmm, path, src))
     {
@@ -1047,11 +1050,11 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src, bool i
 
     if (wo_value retval = wo_invoke_value(vmm, &generate_shader_func, 0, nullptr, nullptr))
     {
-        void* shader_graph = wo_pointer(retval);
+        shader_wrapper* shader_graph = reinterpret_cast<shader_wrapper*>(wo_pointer(retval));
 
         jegl_shader* _shader = new jegl_shader();
 
-        jegl_shader_generate_glsl(shader_graph, _shader);
+        jegl_shader_generate_shader_source(shader_graph, _shader);
 
         jegl_resource* shader = _create_resource();
         shader->m_type = jegl_resource::SHADER;
@@ -1069,18 +1072,20 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src, bool i
         wo_close_vm(vmm);
         return nullptr;
     }
+#else
+    jeecs::debug::logerr("Shader generator has been disabled.");
+    return nullptr;
+#endif
 }
 
 jegl_resource* jegl_try_update_shared_resource(jegl_context* context, jegl_resource* resource)
 {
     return _je_graphic_shared_context_instance.try_update_shared_resource(context, resource);
 }
-
 jegl_resource* jegl_try_load_shared_resource(jegl_context* context, const char* path)
 {
     return _je_graphic_shared_context_instance.try_load_shared_resource(context, path);
 }
-
 void jegl_shrink_shared_resource_cache(jegl_context* context, size_t shrink_target_count)
 {
     _je_graphic_shared_context_instance.shrink_shared_resource_cache(shrink_target_count);
@@ -1363,7 +1368,7 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
     for (auto& vdata : vertex_datas)
     {
         // Normalize tangent vector
-        vdata.m_tangent = vdata.m_tangent.unit(); 
+        vdata.m_tangent = vdata.m_tangent.unit();
 
         for (size_t i = 0; i < 4; ++i)
         {
