@@ -273,10 +273,10 @@ target_link_libraries(joyecs PRIVATE
 
 if (JE4_ENABLE_VULKAN130_GAPI OR (NOT JE4_BUILD_FOR_RUNTIME_TARGET_ONLY))
     target_link_libraries(joyecs PRIVATE 
-    glslang
-    SPIRV 
-    # spirv-cross-c
-    glslang-default-resource-limits)
+        glslang
+        SPIRV 
+        spirv-cross-c
+        glslang-default-resource-limits)
 endif()
 
 if (JE4_SPECIFY_OPENAL_LIB_NAME STREQUAL "")

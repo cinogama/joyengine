@@ -3,7 +3,7 @@
 #include <cstddef>
 
 // Main cache version
-constexpr uint32_t CACHE_MANAGER_MAIN_VERSION = 0x00000003;
+constexpr uint32_t CACHE_MANAGER_MAIN_VERSION = 0;// x00000003;
 
 // Sub cache versions
-constexpr uint32_t SHADER_CACHE_VERSION = 0x00000265;
+constexpr uint32_t SHADER_CACHE_VERSION = 0;// 0x00000265;

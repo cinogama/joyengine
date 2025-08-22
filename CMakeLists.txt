@@ -146,11 +146,11 @@ if (JE4_ENABLE_VULKAN130_GAPI OR (NOT JE4_BUILD_FOR_RUNTIME_TARGET_ONLY))
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glslangc" FORCE)
     add_subdirectory("3rd/glslang")
 endif()
-# NOTE: Donot need spirv-cross. we will not generate hlsl/glsl/msl from spir-v.
-# set(SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS ON CACHE BOOL "Build static spirv-cross" FORCE)
-# set(SPIRV_CROSS_SHARED OFF CACHE BOOL "Build static spirv-cross" FORCE)
-# set(SPIRV_CROSS_STATIC ON CACHE BOOL "Build static spirv-cross" FORCE)
-# add_subdirectory("3rd/spirv-cross")
+
+set(SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS ON CACHE BOOL "Build static spirv-cross" FORCE)
+set(SPIRV_CROSS_SHARED OFF CACHE BOOL "Build static spirv-cross" FORCE)
+set(SPIRV_CROSS_STATIC ON CACHE BOOL "Build static spirv-cross" FORCE)
+add_subdirectory("3rd/spirv-cross")
 
 if (JE4_ENABLE_OPENGL330_GAPI)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glew" FORCE)
