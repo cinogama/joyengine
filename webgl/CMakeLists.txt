@@ -8,7 +8,7 @@ set(JE4_COPYING_BUILTIN_FILES           OFF CACHE BOOL "Disable copy builtin fil
 set(JE4_STATIC_LINK_MODULE_AND_PKGS     ON  CACHE BOOL "Enable static link packages on WebGL" FORCE)
 set(JE4_BUILD_SHARED_CORE               OFF CACHE BOOL "Disable static engine core on WebGL" FORCE)
 
-set(JE4_BUILD_FOR_RUNTIME_TARGET_ONLY   ON  CACHE BOOL "Disable method and library on WebGL" FORCE)
+set(JE4_ENABLE_SHADER_WRAP_GENERATOR    OFF  CACHE BOOL "Disable shader generator on WebGL" FORCE)
 
 set(JE4_ENABLE_DX11_GAPI                OFF CACHE BOOL "Disable DX11 on WebGL" FORCE)
 set(JE4_ENABLE_OPENGL330_GAPI           OFF CACHE BOOL "Disable OpenGL 3.3 on WebGL" FORCE)

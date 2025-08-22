@@ -117,6 +117,9 @@ jegl_shader::spir_v_code_t* _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, b
     /*_debug_jegl_regenerate_hlsl_from_spir_v(spir_v_codes, spir_v_code_len);
     _debug_jegl_regenerate_glsl_from_spir_v(spir_v_codes, spir_v_code_len);*/
 
+    void _debug_jegl_regenerate_glsl_from_spir_v(uint32_t * spir_v_code, size_t spir_v_ir_count);
+    _debug_jegl_regenerate_glsl_from_spir_v(spir_v_codes, spir_v_code_len);
+
     void _debug_jegl_regenerate_msl_from_spir_v(uint32_t * spir_v_code, size_t spir_v_ir_count);
     _debug_jegl_regenerate_msl_from_spir_v(spir_v_codes, spir_v_code_len);
 
@@ -859,6 +862,8 @@ void _debug_jegl_regenerate_hlsl_from_spir_v(uint32_t* spir_v_code, size_t spir_
 
     spvc_context_destroy(spir_v_cross_context);
 }
+
+#endif
 void _debug_jegl_regenerate_glsl_from_spir_v(uint32_t* spir_v_code, size_t spir_v_ir_count)
 {
     spvc_context spir_v_cross_context = nullptr;
@@ -877,6 +882,7 @@ void _debug_jegl_regenerate_glsl_from_spir_v(uint32_t* spir_v_code, size_t spir_
     spvc_compiler_options_set_bool(options, SPVC_COMPILER_OPTION_GLSL_ENABLE_420PACK_EXTENSION, SPVC_FALSE);
 
     spvc_compiler_install_compiler_options(compiler, options);
+    spvc_compiler_build_combined_image_samplers(compiler);
 
     // 转换成glsl
     const char* src = nullptr;
@@ -884,8 +890,6 @@ void _debug_jegl_regenerate_glsl_from_spir_v(uint32_t* spir_v_code, size_t spir_
 
     spvc_context_destroy(spir_v_cross_context);
 }
-#endif
-
 void _debug_jegl_regenerate_msl_from_spir_v(uint32_t* spir_v_code, size_t spir_v_ir_count)
 {
     spvc_context spir_v_cross_context = nullptr;

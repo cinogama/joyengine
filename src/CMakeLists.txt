@@ -261,6 +261,23 @@ if (NOT MSVC)
     target_compile_options (box2d PRIVATE -fPIC)
 endif()
 
+if (JE4_ENABLE_SHADER_WRAP_GENERATOR)
+    # Build glslang and spirv-cross-c for shader wrap generator.
+    target_compile_definitions(joyecs PRIVATE -DJE4_ENABLE_SHADER_WRAP_GENERATOR)
+
+    if (NOT MSVC)
+        target_compile_options (spirv-cross-c PRIVATE -fPIC)
+    endif()
+
+    list(APPEND jeecs_graphic_libs 
+        glslang
+        SPIRV
+        spirv-cross-c
+        glslang-default-resource-limits)
+
+    message(FATAL_ERROR "Build glslang and spirv-cross-c for shader wrap generator.")
+endif()
+
 target_link_libraries(joyecs PRIVATE 
     joyengine_configs
     joyengine_core_configs
@@ -270,14 +287,6 @@ target_link_libraries(joyecs PRIVATE
     woolang
     box2d 
     assimp)
-
-if (JE4_ENABLE_VULKAN130_GAPI OR (NOT JE4_BUILD_FOR_RUNTIME_TARGET_ONLY))
-    target_link_libraries(joyecs PRIVATE 
-        glslang
-        SPIRV 
-        spirv-cross-c
-        glslang-default-resource-limits)
-endif()
 
 if (JE4_SPECIFY_OPENAL_LIB_NAME STREQUAL "")
     target_link_libraries(joyecs PRIVATE OpenAL)
