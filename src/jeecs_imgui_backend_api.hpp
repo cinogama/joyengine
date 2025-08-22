@@ -38,7 +38,7 @@ void jegui_update_gl330();
 void jegui_shutdown_gl330(bool reboot);
 #endif
 
-#if defined(JE_ENABLE_VK130_GAPI)
+#ifdef JE_ENABLE_VK130_GAPI
 #include <imgui_impl_vulkan.h>
 
 typedef PFN_vkVoidFunction(*jegui_vkapi_loader_func_t)(const char*, void*);
@@ -55,6 +55,14 @@ void jegui_init_vk130(
 void jegui_update_vk130(VkCommandBuffer cmdbuf);
 void jegui_shutdown_vk130(bool reboot);
 
+#endif
+
+#ifdef JE_ENABLE_METAL_GAPI
+void jegui_init_metal(
+    jegl_context *ctx,
+    jegui_user_image_loader_t get_img_res,
+    jegui_user_sampler_loader_t apply_shader_sampler);
+void jegui_update_metal();
 #endif
 
 void jegui_init_none(
