@@ -27,7 +27,8 @@ namespace jeecs::graphic
 
         GLFWwindow* _m_windows;
         bool _m_window_resized;
-        bool _m_window_paused;
+        bool _m_window_state_changing;
+        bool _m_window_state_paused;
         mouse_lock_state_t _m_mouse_locked;
 
         inline static std::mutex _m_glfw_instance_mx;
@@ -50,16 +51,21 @@ namespace jeecs::graphic
 
             je_io_update_window_size(x, y);
 
-            context->_m_window_resized = true;
-
             if (x == 0 || y == 0)
-                context->_m_window_paused = true;
+                context->_m_window_state_paused = true;
             else
-                context->_m_window_paused = false;
+                context->_m_window_state_paused = false;
+            
+            context->_m_window_state_changing = true;
+            context->_m_window_resized = true;
         }
         static void glfw_callback_windows_pos_changed(GLFWwindow* fw, int x, int y)
         {
+            glfw* context = reinterpret_cast<glfw*>(glfwGetWindowUserPointer(fw));
+
             je_io_update_window_pos(x, y);
+
+            context->_m_window_state_changing = true;
         }
         static void glfw_callback_mouse_pos_changed(GLFWwindow* fw, double x, double y)
         {
@@ -346,7 +352,8 @@ namespace jeecs::graphic
         glfw(interface_type type)
             : _m_windows(nullptr)
             , _m_window_resized(true)
-            , _m_window_paused(false)
+            , _m_window_state_changing(false)
+            , _m_window_state_paused(false)
             , _m_mouse_locked(mouse_lock_state_t::NO_SPECIFY)
         {
             if (type == interface_type::HOLD)
@@ -363,7 +370,7 @@ namespace jeecs::graphic
 
 #ifndef NDEBUG
                     glfwSetErrorCallback([](int ecode, const char* desc) {
-                        fprintf(stderr, "Glfw error %d: %s\n", ecode, desc);
+                        jeecs::debug::logwarn("Glfw error %d: %s", ecode, desc);
                     });
 #endif
                 }
@@ -517,7 +524,9 @@ namespace jeecs::graphic
                 je_mem_free(icon_data.pixels);
             }
 
-            glfwMakeContextCurrent(_m_windows);
+            if (glfwGetWindowAttrib(_m_windows, GLFW_CLIENT_API) != GLFW_NO_API)
+                glfwMakeContextCurrent(_m_windows);
+
             glfwSetWindowSizeCallback(_m_windows, glfw_callback_windows_size_changed);
             glfwSetWindowPosCallback(_m_windows, glfw_callback_windows_pos_changed);
             glfwSetKeyCallback(_m_windows, glfw_callback_keyboard_stage_changed);
@@ -576,6 +585,8 @@ namespace jeecs::graphic
             if (je_io_fetch_update_window_title(&title))
                 glfwSetWindowTitle(_m_windows, title);
 
+            _m_window_state_changing = false;
+
             glfwPollEvents();
 
 #if JE4_CURRENT_PLATFORM != JE4_PLATFORM_WEBGL
@@ -588,7 +599,7 @@ namespace jeecs::graphic
                 return update_result::CLOSE;
             }
 
-            if (_m_window_paused)
+            if (_m_window_state_changing || _m_window_state_paused)
                 return update_result::PAUSE;
 
             if (_m_window_resized)
