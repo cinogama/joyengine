@@ -58,6 +58,9 @@ namespace jeecs::graphic::api::dx11
         MSWRLComPtr<ID3D11Texture2D> m_dx_main_renderer_target_depth_buffer;      // 深度模板缓冲区
         MSWRLComPtr<ID3D11RenderTargetView> m_dx_main_renderer_target_view;       // 渲染目标视图
 
+        jegl_dx11_context::MSWRLComPtr<ID3D11RasterizerState> m_rasterizers[3];
+        jegl_dx11_context::MSWRLComPtr<ID3D11RasterizerState> m_rasterizers_r2b[3];
+
         bool m_dx_context_finished;
         bool m_lock_resolution_for_fullscreen;
 
@@ -81,12 +84,19 @@ namespace jeecs::graphic::api::dx11
         jegl_dx11_context::MSWRLComPtr<ID3D11VertexShader> m_vertex;
         jegl_dx11_context::MSWRLComPtr<ID3D11PixelShader> m_fragment;
 
+        bool m_draw_for_r2b;
         bool m_uniform_updated;
+
         jegl_dx11_context::MSWRLComPtr<ID3D11Buffer> m_uniforms;
+
         void* m_uniform_cpu_buffers;
         size_t m_uniform_buffer_size;
 
+        uint32_t m_ndc_scale_uniform_id;
+
+
         jegl_dx11_context::MSWRLComPtr<ID3D11RasterizerState> m_rasterizer;
+        jegl_dx11_context::MSWRLComPtr<ID3D11RasterizerState> m_rasterizer_r2b;
         jegl_dx11_context::MSWRLComPtr<ID3D11DepthStencilState> m_depth;
         jegl_dx11_context::MSWRLComPtr<ID3D11BlendState> m_blend;
         struct sampler_structs
@@ -191,20 +201,81 @@ namespace jeecs::graphic::api::dx11
 
         // 创建深度缓冲区以及深度模板视图
         JERCHECK(context->m_dx_device->CreateTexture2D(
-            &depthStencilDesc, nullptr,
+            &depthStencilDesc,
+            nullptr,
             context->m_dx_main_renderer_target_depth_buffer.GetAddressOf()));
+
         JERCHECK(context->m_dx_device->CreateDepthStencilView(
-            context->m_dx_main_renderer_target_depth_buffer.Get(), nullptr,
+            context->m_dx_main_renderer_target_depth_buffer.Get(),
+            nullptr,
             context->m_dx_main_renderer_target_depth_view.GetAddressOf()));
 
-        JEDX11_TRACE_DEBUG_NAME(context->m_dx_main_renderer_target_depth_buffer, "JoyEngineDx11TargetDepthBuffer");
-        JEDX11_TRACE_DEBUG_NAME(context->m_dx_main_renderer_target_depth_buffer, "JoyEngineDx11TargetDepthBuffer");
-        JEDX11_TRACE_DEBUG_NAME(context->m_dx_main_renderer_target_depth_view, "JoyEngineDx11TargetDepthView");
+        JEDX11_TRACE_DEBUG_NAME(
+            context->m_dx_main_renderer_target_depth_buffer,
+            "JoyEngineDx11TargetDepthBuffer");
+        JEDX11_TRACE_DEBUG_NAME(
+            context->m_dx_main_renderer_target_depth_buffer,
+            "JoyEngineDx11TargetDepthBuffer");
+        JEDX11_TRACE_DEBUG_NAME(
+            context->m_dx_main_renderer_target_depth_view,
+            "JoyEngineDx11TargetDepthView");
 
         // 将渲染目标视图和深度/模板缓冲区结合到管线
         context->m_dx_context->OMSetRenderTargets(1,
             context->m_dx_main_renderer_target_view.GetAddressOf(),
             context->m_dx_main_renderer_target_depth_view.Get());
+
+        D3D11_RASTERIZER_DESC rasterizer_describe;
+        rasterizer_describe.FillMode = D3D11_FILL_SOLID;
+        rasterizer_describe.DepthBias = 0;
+        rasterizer_describe.DepthBiasClamp = 0.0f;
+        rasterizer_describe.SlopeScaledDepthBias = 0.0f;
+        rasterizer_describe.DepthClipEnable = TRUE;
+        rasterizer_describe.ScissorEnable = FALSE;
+        rasterizer_describe.MultisampleEnable = FALSE;
+        rasterizer_describe.AntialiasedLineEnable = FALSE;
+
+        rasterizer_describe.FrontCounterClockwise = TRUE;
+
+        rasterizer_describe.CullMode = D3D11_CULL_NONE;
+        JERCHECK(context->m_dx_device->CreateRasterizerState(
+            &rasterizer_describe,
+            context->m_rasterizers[
+                static_cast<size_t>(
+                    jegl_shader::cull_mode::NONE)].GetAddressOf()));
+        rasterizer_describe.CullMode = D3D11_CULL_FRONT;
+        JERCHECK(context->m_dx_device->CreateRasterizerState(
+            &rasterizer_describe,
+            context->m_rasterizers[
+                static_cast<size_t>(
+                    jegl_shader::cull_mode::FRONT)].GetAddressOf()));
+        rasterizer_describe.CullMode = D3D11_CULL_BACK;
+        JERCHECK(context->m_dx_device->CreateRasterizerState(
+            &rasterizer_describe,
+            context->m_rasterizers[
+                static_cast<size_t>(
+                    jegl_shader::cull_mode::BACK)].GetAddressOf()));
+
+        rasterizer_describe.FrontCounterClockwise = FALSE;
+
+        rasterizer_describe.CullMode = D3D11_CULL_NONE;
+        JERCHECK(context->m_dx_device->CreateRasterizerState(
+            &rasterizer_describe,
+            context->m_rasterizers_r2b[
+                static_cast<size_t>(
+                    jegl_shader::cull_mode::NONE)].GetAddressOf()));
+        rasterizer_describe.CullMode = D3D11_CULL_FRONT;
+        JERCHECK(context->m_dx_device->CreateRasterizerState(
+            &rasterizer_describe,
+            context->m_rasterizers_r2b[
+                static_cast<size_t>(
+                    jegl_shader::cull_mode::FRONT)].GetAddressOf()));
+        rasterizer_describe.CullMode = D3D11_CULL_BACK;
+        JERCHECK(context->m_dx_device->CreateRasterizerState(
+            &rasterizer_describe,
+            context->m_rasterizers_r2b[
+                static_cast<size_t>(
+                    jegl_shader::cull_mode::BACK)].GetAddressOf()));
 
         // 设置视口变换
         D3D11_VIEWPORT viewport;
@@ -461,6 +532,7 @@ namespace jeecs::graphic::api::dx11
         jegl_dx11_context::MSWRLComPtr<ID3DBlob> m_fragment_blob;
 
         jegl_dx11_context::MSWRLComPtr<ID3D11RasterizerState> m_rasterizer;
+        jegl_dx11_context::MSWRLComPtr<ID3D11RasterizerState> m_rasterizer_r2b;
         jegl_dx11_context::MSWRLComPtr<ID3D11DepthStencilState> m_depth;
         jegl_dx11_context::MSWRLComPtr<ID3D11BlendState> m_blend;
 
@@ -737,33 +809,10 @@ namespace jeecs::graphic::api::dx11
 
                 blob->m_uniform_size = last_elem_end_place;
 
-                D3D11_RASTERIZER_DESC rasterizer_describe;
-                switch (resource->m_raw_shader_data->m_cull_mode)
-                {
-                case jegl_shader::cull_mode::NONE:
-                    rasterizer_describe.CullMode = D3D11_CULL_NONE;
-                    break;
-                case jegl_shader::cull_mode::FRONT:
-                    rasterizer_describe.CullMode = D3D11_CULL_FRONT;
-                    break;
-                case jegl_shader::cull_mode::BACK:
-                    rasterizer_describe.CullMode = D3D11_CULL_BACK;
-                    break;
-                }
-                rasterizer_describe.FillMode = D3D11_FILL_SOLID;
-                rasterizer_describe.FrontCounterClockwise = TRUE;
-                rasterizer_describe.DepthBias = 0;
-                rasterizer_describe.DepthBiasClamp = 0.0f;
-                rasterizer_describe.SlopeScaledDepthBias = 0.0f;
-                rasterizer_describe.DepthClipEnable = TRUE;
-                rasterizer_describe.ScissorEnable = FALSE;
-                rasterizer_describe.MultisampleEnable = FALSE;
-                rasterizer_describe.AntialiasedLineEnable = FALSE;
-                JERCHECK(context->m_dx_device->CreateRasterizerState(
-                    &rasterizer_describe, blob->m_rasterizer.GetAddressOf()));
-
-                JEDX11_TRACE_DEBUG_NAME(blob->m_rasterizer,
-                    string_path + "_RasterizerState");
+                blob->m_rasterizer = context->m_rasterizers[
+                    static_cast<size_t>(resource->m_raw_shader_data->m_cull_mode)];
+                blob->m_rasterizer_r2b = context->m_rasterizers_r2b[
+                    static_cast<size_t>(resource->m_raw_shader_data->m_cull_mode)];
 
                 D3D11_DEPTH_STENCIL_DESC depth_describe;
                 depth_describe.DepthEnable = TRUE;
@@ -1116,6 +1165,7 @@ namespace jeecs::graphic::api::dx11
                 auto* shader_blob = std::launder(reinterpret_cast<dx11_resource_blob*>(blob));
 
                 jedx11_shader* jedx11_shader_res = new jedx11_shader;
+                jedx11_shader_res->m_draw_for_r2b = false;
                 jedx11_shader_res->m_uniform_updated = false;
 
                 std::string string_path = resource->m_path == nullptr
@@ -1134,23 +1184,29 @@ namespace jeecs::graphic::api::dx11
                     nullptr,
                     jedx11_shader_res->m_fragment.GetAddressOf()));
 
-                resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_m = shader_blob->get_built_in_location("JOYENGINE_TRANS_M");
-                resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_mv = shader_blob->get_built_in_location("JOYENGINE_TRANS_MV");
-                resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_mvp = shader_blob->get_built_in_location("JOYENGINE_TRANS_MVP");
+                auto* raw_shader_data = resource->m_raw_shader_data;
+                auto& builtin_uniforms = raw_shader_data->m_builtin_uniforms;
 
-                resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_tiling = shader_blob->get_built_in_location("JOYENGINE_TEXTURE_TILING");
-                resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_offset = shader_blob->get_built_in_location("JOYENGINE_TEXTURE_OFFSET");
+                builtin_uniforms.m_builtin_uniform_ndc_scale = shader_blob->get_built_in_location("JOYENGINE_NDC_SCALE");
+                jedx11_shader_res->m_ndc_scale_uniform_id = builtin_uniforms.m_builtin_uniform_ndc_scale;
 
-                resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_light2d_resolution =
+                builtin_uniforms.m_builtin_uniform_m = shader_blob->get_built_in_location("JOYENGINE_TRANS_M");
+                builtin_uniforms.m_builtin_uniform_mv = shader_blob->get_built_in_location("JOYENGINE_TRANS_MV");
+                builtin_uniforms.m_builtin_uniform_mvp = shader_blob->get_built_in_location("JOYENGINE_TRANS_MVP");
+
+                builtin_uniforms.m_builtin_uniform_tiling = shader_blob->get_built_in_location("JOYENGINE_TEXTURE_TILING");
+                builtin_uniforms.m_builtin_uniform_offset = shader_blob->get_built_in_location("JOYENGINE_TEXTURE_OFFSET");
+
+                builtin_uniforms.m_builtin_uniform_light2d_resolution =
                     shader_blob->get_built_in_location("JOYENGINE_LIGHT2D_RESOLUTION");
-                resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_light2d_decay =
+                builtin_uniforms.m_builtin_uniform_light2d_decay =
                     shader_blob->get_built_in_location("JOYENGINE_LIGHT2D_DECAY");
 
                 // ATTENTION: 注意，以下参数特殊shader可能挪作他用
-                resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_local_scale = shader_blob->get_built_in_location("JOYENGINE_LOCAL_SCALE");
-                resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_color = shader_blob->get_built_in_location("JOYENGINE_MAIN_COLOR");
+                builtin_uniforms.m_builtin_uniform_local_scale = shader_blob->get_built_in_location("JOYENGINE_LOCAL_SCALE");
+                builtin_uniforms.m_builtin_uniform_color = shader_blob->get_built_in_location("JOYENGINE_MAIN_COLOR");
 
-                auto* uniforms = resource->m_raw_shader_data->m_custom_uniforms;
+                auto* uniforms = raw_shader_data->m_custom_uniforms;
                 while (uniforms != nullptr)
                 {
                     uniforms->m_index = shader_blob->get_built_in_location(uniforms->m_name);
@@ -1185,6 +1241,7 @@ namespace jeecs::graphic::api::dx11
                 jedx11_shader_res->m_vao = shader_blob->m_vao;
 
                 jedx11_shader_res->m_rasterizer = shader_blob->m_rasterizer;
+                jedx11_shader_res->m_rasterizer_r2b = shader_blob->m_rasterizer_r2b;
                 jedx11_shader_res->m_depth = shader_blob->m_depth;
                 jedx11_shader_res->m_blend = shader_blob->m_blend;
 
@@ -1498,22 +1555,57 @@ namespace jeecs::graphic::api::dx11
             break;
         }
     }
-
+    void dx11_set_uniform(jegl_context::userdata_t ctx, uint32_t location, jegl_shader::uniform_type type, const void* val);
     void dx11_draw_vertex_with_shader(jegl_context::userdata_t ctx, jegl_resource* vert)
     {
         jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
 
         assert(vert->m_type == jegl_resource::type::VERTEX);
 
-        if (context->m_current_target_shader != nullptr && context->m_current_target_shader->m_uniform_buffer_size != 0)
+        auto* current_shader_instance = context->m_current_target_shader;
+
+        if (current_shader_instance != nullptr
+            && current_shader_instance->m_uniform_buffer_size != 0)
         {
+            if (context->m_current_target_framebuffer == nullptr)
+            {
+                if (current_shader_instance->m_draw_for_r2b)
+                {
+                    const float ndc_scale[4] = { 1.f, 1.f, 1.f, 1.f };
+
+                    current_shader_instance->m_draw_for_r2b = false;
+                    dx11_set_uniform(
+                        ctx,
+                        current_shader_instance->m_ndc_scale_uniform_id,
+                        jegl_shader::uniform_type::FLOAT4,
+                        ndc_scale);
+                }
+            }
+            else
+            {
+                if (!current_shader_instance->m_draw_for_r2b)
+                {
+                    const float ndc_scale_r2b[4] = { 1.f, -1.f, 1.f, 1.f };
+
+                    current_shader_instance->m_draw_for_r2b = true;
+                    dx11_set_uniform(
+                        ctx,
+                        current_shader_instance->m_ndc_scale_uniform_id,
+                        jegl_shader::uniform_type::FLOAT4,
+                        ndc_scale_r2b);
+                }
+            }
+
             if (context->m_current_target_shader->m_uniform_updated)
             {
                 context->m_current_target_shader->m_uniform_updated = false;
                 D3D11_MAPPED_SUBRESOURCE mappedData;
                 JERCHECK(context->m_dx_context->Map(
-                    context->m_current_target_shader->m_uniforms.Get(), 0,
-                    D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
+                    context->m_current_target_shader->m_uniforms.Get(),
+                    0,
+                    D3D11_MAP_WRITE_DISCARD,
+                    0,
+                    &mappedData));
 
                 memcpy(mappedData.pData,
                     context->m_current_target_shader->m_uniform_cpu_buffers,
@@ -1538,7 +1630,6 @@ namespace jeecs::graphic::api::dx11
         context->m_dx_context->IASetPrimitiveTopology(vertex->m_method);
         context->m_dx_context->DrawIndexed(vertex->m_count, 0, 0);
     }
-
     bool dx11_bind_shader(jegl_context::userdata_t ctx, jegl_resource* shader)
     {
         jegl_dx11_context* context = reinterpret_cast<jegl_dx11_context*>(ctx);
@@ -1553,7 +1644,11 @@ namespace jeecs::graphic::api::dx11
         context->m_dx_context->PSSetShader(shader_instance->m_fragment.Get(), nullptr, 0);
         context->m_dx_context->IASetInputLayout(shader_instance->m_vao.Get());
 
-        context->m_dx_context->RSSetState(shader_instance->m_rasterizer.Get());
+        if (context->m_current_target_framebuffer == nullptr)
+            context->m_dx_context->RSSetState(shader_instance->m_rasterizer.Get());
+        else
+            context->m_dx_context->RSSetState(shader_instance->m_rasterizer_r2b.Get());
+
         float _useless[4] = {};
         context->m_dx_context->OMSetBlendState(shader_instance->m_blend.Get(), _useless, UINT_MAX);
         context->m_dx_context->OMSetDepthStencilState(shader_instance->m_depth.Get(), 0);
@@ -1607,16 +1702,18 @@ namespace jeecs::graphic::api::dx11
         }
         else
         {
-            auto* framebuf = std::launder(reinterpret_cast<jedx11_framebuffer*>(framebuffer->m_handle.m_ptr));
+            auto* framebuf = reinterpret_cast<jedx11_framebuffer*>(
+                framebuffer->m_handle.m_ptr);
+
             context->m_dx_context->OMSetRenderTargets(
                 framebuf->m_color_target_count,
                 framebuf->m_target_views.data(),
                 framebuf->m_depth_view.Get());
-
             context->m_current_target_framebuffer = framebuf;
         }
 
-        auto* framw_buffer_raw = framebuffer != nullptr ? framebuffer->m_raw_framebuf_data : nullptr;
+        auto* framw_buffer_raw =
+            framebuffer != nullptr ? framebuffer->m_raw_framebuf_data : nullptr;
 
         size_t buf_w = context->RESOLUTION_WIDTH;
         size_t buf_h = context->RESOLUTION_HEIGHT;

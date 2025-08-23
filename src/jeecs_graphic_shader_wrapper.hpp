@@ -444,6 +444,7 @@ struct shader_wrapper
 
     shader_value_outs *vertex_out;
     shader_value_outs *fragment_out;
+    jegl_shader_value* ndc_scale;
     shader_configs shader_config;
 
     std::vector<shader_struct_define *> shader_struct_define_may_uniform_block;
@@ -467,9 +468,18 @@ struct shader_wrapper
 
     shader_wrapper(
         shader_value_outs *vout,
-        shader_value_outs *fout)
-        : vertex_out(vout), fragment_out(fout)
+        shader_value_outs *fout,
+        jegl_shader_value *ndc_scale)
+        : vertex_out(vout), fragment_out(fout), ndc_scale(ndc_scale)
     {
+        ndc_scale->add_useref_count();
+
+        auto result = uniform_variables.insert(
+            std::make_pair(
+                "JOYENGINE_NDC_SCALE",
+                _shader_wrapper_contex::get_uniform_info(ndc_scale)));
+
+        result.first->second.m_used_in_vertex = true;
     }
     ~shader_wrapper()
     {
@@ -481,6 +491,7 @@ struct shader_wrapper
 
         delete vertex_out;
         delete fragment_out;
+        delete_shader_value(ndc_scale);
     }
 };
 

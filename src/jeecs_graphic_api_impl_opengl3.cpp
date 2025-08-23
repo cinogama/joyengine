@@ -752,6 +752,7 @@ namespace jeecs::graphic::api::gl3
 
                     auto& builtin_uniforms = resource->m_raw_shader_data->m_builtin_uniforms;
 
+                    builtin_uniforms.m_builtin_uniform_ndc_scale = shared_blob_data->get_built_in_location("JOYENGINE_NDC_SCALE");
                     builtin_uniforms.m_builtin_uniform_m = shared_blob_data->get_built_in_location("JOYENGINE_TRANS_M");
                     builtin_uniforms.m_builtin_uniform_mv = shared_blob_data->get_built_in_location("JOYENGINE_TRANS_MV");
                     builtin_uniforms.m_builtin_uniform_mvp = shared_blob_data->get_built_in_location("JOYENGINE_TRANS_MVP");

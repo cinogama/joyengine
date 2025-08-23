@@ -111,7 +111,7 @@ void jegui_init_vk130(
     jegui_vkapi_loader_func_t loader_func_maynull,
     void *user_data)
 {
-    jegui_init_basic(ctx, true, get_img_res, apply_shader_sampler);
+    jegui_init_basic(ctx, get_img_res, apply_shader_sampler);
 
     if (loader_func_maynull != nullptr)
         ImGui_ImplVulkan_LoadFunctions(loader_func_maynull, user_data);

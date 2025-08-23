@@ -812,6 +812,7 @@ namespace shader
         vertin: VertexInType,
         vertout: vertex_out, 
         fragout: fragment_out, 
+        ndc_scale: float4,
         shader_config: ShaderConfig,
         struct_or_uniform_block_decl_list: array<struct_define>,
         sampler_defines: array<sampler2d>,
@@ -837,6 +838,7 @@ namespace shader
             v_in,
             vertext_out_result,
             fragment_out_result,
+            je_ndc_scale,
             configs,
             struct_uniform_blocks_decls->to_array,
             sampler2d::created_sampler2ds->to_array,
@@ -1647,3 +1649,4 @@ public let je_local_scale = uniform("JOYENGINE_LOCAL_SCALE", float3::one);
 public let je_tiling = uniform("JOYENGINE_TEXTURE_TILING", float2::one);
 public let je_offset = uniform("JOYENGINE_TEXTURE_OFFSET", float2::zero);
 public let je_color = uniform("JOYENGINE_MAIN_COLOR", float4::one);
+public let je_ndc_scale = uniform("JOYENGINE_NDC_SCALE", float4::one);

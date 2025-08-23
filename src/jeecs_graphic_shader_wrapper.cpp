@@ -11,7 +11,6 @@
 #include "jeecs_cache_version.hpp"
 #include "jeecs_graphic_shader_wrapper.hpp"
 #include "jeecs_graphic_shader_wrapper_methods.hpp"
-// #include "jeecs_graphic_shader_wrapper_glsl.hpp"
 #include "jeecs_graphic_shader_wrapper_hlsl.hpp"
 
 #include <glslang_c_interface.h>
@@ -240,6 +239,7 @@ void _scan_used_uniforms_in_vals(
 void scan_used_uniforms_in_wrap(shader_wrapper* wrap)
 {
     std::unordered_set<jegl_shader_value*> _scanned_val;
+
     for (auto* vout : wrap->vertex_out->out_values)
         _scan_used_uniforms_in_vals(wrap, vout, true, &_scanned_val);
     for (auto* vout : wrap->fragment_out->out_values)
@@ -265,7 +265,7 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
         fragment_spirv_src_len;
 
     // 1. Read generated source
-#ifdef JE_ENABLE_GLSL_CACHE_LOADING
+    // 1.1. GLSL
     jeecs_file_read(&vertex_glsl_src_len, sizeof(uint64_t), 1, cache_file);
 
     _shader->m_vertex_glsl_src = (const char*)je_mem_alloc((size_t)vertex_glsl_src_len + 1);
@@ -277,18 +277,8 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
     _shader->m_fragment_glsl_src = (const char*)je_mem_alloc((size_t)fragment_glsl_src_len + 1);
     jeecs_file_read(const_cast<char*>(_shader->m_fragment_glsl_src), sizeof(char), (size_t)fragment_glsl_src_len, cache_file);
     const_cast<char*>(_shader->m_fragment_glsl_src)[(size_t)fragment_glsl_src_len] = 0;
-#else
-    _shader->m_vertex_glsl_src = nullptr;
-    _shader->m_fragment_glsl_src = nullptr;
 
-    jeecs_file_read(&vertex_glsl_src_len, sizeof(uint64_t), 1, cache_file);
-    jeecs_file_seek(cache_file, vertex_glsl_src_len, JE_READ_FILE_CURRENT);
-
-    jeecs_file_read(&fragment_glsl_src_len, sizeof(uint64_t), 1, cache_file);
-    jeecs_file_seek(cache_file, fragment_glsl_src_len, JE_READ_FILE_CURRENT);
-#endif
-
-#ifdef JE_ENABLE_HLSL_CACHE_LOADING
+    // 1.2. HLSL
     jeecs_file_read(&vertex_hlsl_src_len, sizeof(uint64_t), 1, cache_file);
 
     _shader->m_vertex_hlsl_src = (const char*)je_mem_alloc((size_t)vertex_hlsl_src_len + 1);
@@ -300,18 +290,8 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
     _shader->m_fragment_hlsl_src = (const char*)je_mem_alloc((size_t)fragment_hlsl_src_len + 1);
     jeecs_file_read(const_cast<char*>(_shader->m_fragment_hlsl_src), sizeof(char), (size_t)fragment_hlsl_src_len, cache_file);
     const_cast<char*>(_shader->m_fragment_hlsl_src)[(size_t)fragment_hlsl_src_len] = 0;
-#else
-    _shader->m_vertex_hlsl_src = nullptr;
-    _shader->m_fragment_hlsl_src = nullptr;
 
-    jeecs_file_read(&vertex_hlsl_src_len, sizeof(uint64_t), 1, cache_file);
-    jeecs_file_seek(cache_file, vertex_hlsl_src_len, JE_READ_FILE_CURRENT);
-
-    jeecs_file_read(&fragment_hlsl_src_len, sizeof(uint64_t), 1, cache_file);
-    jeecs_file_seek(cache_file, fragment_hlsl_src_len, JE_READ_FILE_CURRENT);
-#endif
-
-#ifdef JE_ENABLE_SPIRV_CACHE_LOADING
+    // 1.3. SPIR-V
     jeecs_file_read(&vertex_spirv_src_len, sizeof(uint64_t), 1, cache_file);
     assert((size_t)vertex_spirv_src_len % sizeof(jegl_shader::spir_v_code_t) == 0);
 
@@ -325,18 +305,6 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
     _shader->m_fragment_spirv_count = (size_t)fragment_spirv_src_len / sizeof(jegl_shader::spir_v_code_t);
     _shader->m_fragment_spirv_codes = (const jegl_shader::spir_v_code_t*)je_mem_alloc((size_t)fragment_spirv_src_len);
     jeecs_file_read(const_cast<jegl_shader::spir_v_code_t*>(_shader->m_fragment_spirv_codes), sizeof(char), (size_t)fragment_spirv_src_len, cache_file);
-#else
-    _shader->m_vertex_spirv_codes = nullptr;
-    _shader->m_fragment_spirv_codes = nullptr;
-    _shader->m_vertex_spirv_count = 0;
-    _shader->m_fragment_spirv_count = 0;
-
-    jeecs_file_read(&vertex_spirv_src_len, sizeof(uint64_t), 1, cache_file);
-    jeecs_file_seek(cache_file, vertex_spirv_src_len, JE_READ_FILE_CURRENT);
-
-    jeecs_file_read(&fragment_spirv_src_len, sizeof(uint64_t), 1, cache_file);
-    jeecs_file_seek(cache_file, fragment_spirv_src_len, JE_READ_FILE_CURRENT);
-#endif
 
     // 2. read shader config
     jeecs_file_read(&_shader->m_depth_test, sizeof(jegl_shader::depth_test_method), 1, cache_file);
@@ -938,9 +906,10 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_s
             variable->m_index = jeecs::typing::INVALID_UINT32;
 
             auto utype = uniform_info.m_value->get_type();
-            auto* init_val = (utype == jegl_shader_value::type::TEXTURE2D ||
-                utype == jegl_shader_value::type::TEXTURE2D_MS ||
-                utype == jegl_shader_value::type::TEXTURE_CUBE)
+            auto* init_val = (
+                utype == jegl_shader_value::type::TEXTURE2D
+                || utype == jegl_shader_value::type::TEXTURE2D_MS
+                || utype == jegl_shader_value::type::TEXTURE_CUBE)
                 ? uniform_info.m_value
                 : uniform_info.m_value->m_uniform_init_val_may_nil;
 
@@ -1481,7 +1450,8 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args)
 
     shader_wrapper* wrapper = new shader_wrapper(
         (shader_value_outs*)wo_pointer(args + 1),
-        (shader_value_outs*)wo_pointer(args + 2));
+        (shader_value_outs*)wo_pointer(args + 2),
+        (jegl_shader_value*)wo_pointer(args + 3));
 
     wo_integer_t vin_size = wo_struct_len(args + 0);
 
@@ -1496,41 +1466,41 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args)
         wrapper->vertex_in.push_back(shader_val->get_type());
     }
 
-    wo_struct_get(elem, args + 3, 0);
+    wo_struct_get(elem, args + 4, 0);
     wrapper->shader_config.m_enable_shared = wo_bool(elem);
-    wo_struct_get(elem, args + 3, 1);
+    wo_struct_get(elem, args + 4, 1);
     wrapper->shader_config.m_depth_test = (jegl_shader::depth_test_method)wo_int(elem);
-    wo_struct_get(elem, args + 3, 2);
+    wo_struct_get(elem, args + 4, 2);
     wrapper->shader_config.m_depth_mask = (jegl_shader::depth_mask_method)wo_int(elem);
-    wo_struct_get(elem, args + 3, 3);
+    wo_struct_get(elem, args + 4, 3);
     wrapper->shader_config.m_blend_equation = (jegl_shader::blend_equation)wo_int(elem);
-    wo_struct_get(elem, args + 3, 4);
+    wo_struct_get(elem, args + 4, 4);
     wrapper->shader_config.m_blend_src = (jegl_shader::blend_method)wo_int(elem);
-    wo_struct_get(elem, args + 3, 5);
+    wo_struct_get(elem, args + 4, 5);
     wrapper->shader_config.m_blend_dst = (jegl_shader::blend_method)wo_int(elem);
-    wo_struct_get(elem, args + 3, 6);
+    wo_struct_get(elem, args + 4, 6);
     wrapper->shader_config.m_cull_mode = (jegl_shader::cull_mode)wo_int(elem);
 
-    size_t ubo_count = (size_t)wo_arr_len(args + 4);
+    size_t ubo_count = (size_t)wo_arr_len(args + 5);
     for (size_t i = 0; i < ubo_count; ++i)
     {
-        wo_arr_get(elem, args + 4, i);
+        wo_arr_get(elem, args + 5, i);
         wrapper->shader_struct_define_may_uniform_block.push_back(
             (shader_struct_define*)wo_pointer(elem));
     }
 
-    size_t sampler_count = (size_t)wo_arr_len(args + 5);
+    size_t sampler_count = (size_t)wo_arr_len(args + 6);
     for (size_t i = 0; i < sampler_count; ++i)
     {
-        wo_arr_get(elem, args + 5, i);
+        wo_arr_get(elem, args + 6, i);
         wrapper->decleared_samplers.push_back(
             (shader_sampler*)wo_pointer(elem));
     }
 
-    size_t custom_method_count = (size_t)wo_arr_len(args + 6);
+    size_t custom_method_count = (size_t)wo_arr_len(args + 7);
     for (size_t i = 0; i < custom_method_count; ++i)
     {
-        wo_arr_get(elem, args + 6, i);
+        wo_arr_get(elem, args + 7, i);
         wo_struct_get(val, elem, 0);
 
         auto& custom_shader_srcs = wrapper->custom_methods[wo_string(val)];
@@ -1543,10 +1513,10 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args)
         custom_shader_srcs.m_hlsl_impl = wo_string(elem);
     }
 
-    size_t user_function_count = (size_t)wo_arr_len(args + 7);
+    size_t user_function_count = (size_t)wo_arr_len(args + 8);
     for (size_t i = 0; i < user_function_count; ++i)
     {
-        wo_arr_get(elem, args + 7, i);
+        wo_arr_get(elem, args + 8, i);
         wo_struct_get(val, elem, 0);
 
         auto& user_function = wrapper->user_define_functions[wo_string(val)];

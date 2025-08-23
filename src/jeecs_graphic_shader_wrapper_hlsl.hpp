@@ -85,7 +85,13 @@ namespace jeecs
             }
             virtual std::string generate_uniform_block(shader_wrapper* wrapper, shader_struct_define* st) override
             {
-                std::string decl = attrib_binding(st->binding_place, 1) + "cbuffer " + st->name + ": register(b" + std::to_string(st->binding_place + 1) + ")\n{\n";
+                std::string decl = 
+                    attrib_binding(st->binding_place, 1) 
+                    + "cbuffer " 
+                    + st->name 
+                    + ": register(b" 
+                    + std::to_string(st->binding_place + 1)
+                    + ")\n{\n";
                 decl += generate_struct_body(wrapper, st);
                 return decl + "};\n";
             }
@@ -513,7 +519,7 @@ namespace jeecs
                     if (outid == 0)
                     {
                         body_result += "    float4 _je_position = " + outvarname.second + ";\n";
-                        body_result += "    vout.vout_position = _je_position;\n";
+                        body_result += "    vout.vout_position = _je_position * JOYENGINE_NDC_SCALE;\n";
                         body_result += "    vout._v2f_" + std::to_string(outid) + " = _je_position;\n";
                     }
                     else

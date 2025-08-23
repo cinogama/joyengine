@@ -205,7 +205,11 @@ namespace jeecs::graphic::api::vk130
             VkViewport m_viewport;
             VkRect2D m_scissor;
             VkPipelineViewportStateCreateInfo m_viewport_state_create_info;
+
+            // NOTE: 因为目标缓冲区的情况不一致，光栅化配置中对于正面的认定方式可能对不同管线的
+            //  设置不同，这项设置仍然可能会在 blob 创建完成之后被改变
             VkPipelineRasterizationStateCreateInfo m_rasterization_state_create_info;
+
             VkPipelineDepthStencilStateCreateInfo m_depth_stencil_state_create_info;
             VkPipelineMultisampleStateCreateInfo m_multi_sample_state_create_info;
             VkPipelineColorBlendAttachmentState m_color_blend_attachment_state;
@@ -314,6 +318,7 @@ namespace jeecs::graphic::api::vk130
         size_t m_height;
 
         size_t m_rend_rounds;
+        bool m_is_screen_framebuffer;
     };
     struct jevk13_vertex
     {
@@ -1086,7 +1091,7 @@ namespace jeecs::graphic::api::vk130
             jevk13_framebuffer* result = new jevk13_framebuffer{};
 
             result->m_rend_rounds = 0;
-
+            result->m_is_screen_framebuffer = true;
             result->m_width = w;
             result->m_height = h;
 
@@ -2391,7 +2396,11 @@ namespace jeecs::graphic::api::vk130
                     resource->m_path == nullptr ? "<builtin>" : resource->m_path);
                 break;
             }
-            shader_blob->m_rasterization_state_create_info.frontFace = VkFrontFace::VK_FRONT_FACE_COUNTER_CLOCKWISE;
+
+            // NOTE: 针对不同输出的缓冲区，这个设置实际上需要根据渲染目标的情况决定
+            shader_blob->m_rasterization_state_create_info.frontFace = 
+                VkFrontFace::VK_FRONT_FACE_COUNTER_CLOCKWISE;
+
             shader_blob->m_rasterization_state_create_info.lineWidth = 1;
 
             // TODO: 配置多重采样，不过JoyEngine的多重采样应该是配置在渲染目标上的，这里暂时不知道怎么处理比较合适
@@ -2652,7 +2661,7 @@ namespace jeecs::graphic::api::vk130
 
             for (auto* ubo : shader->m_uniform_variables)
                 destroy_uniform_buffer(ubo);
- 
+
             delete shader;
         }
 
@@ -3327,14 +3336,14 @@ namespace jeecs::graphic::api::vk130
             assert(_vk_current_target_framebuffer == nullptr);
             assert(_vk_current_command_buffer == nullptr);
 
-            cmd_begin_frame_buffer(_vk_current_swapchain_image_content->m_framebuffer, 0, 0, 0, 0);
+            cmd_begin_frame_buffer(nullptr, 0, 0, 0, 0);
         }
         void late_update()
         {
             assert(_vk_current_swapchain_image_content ==
                 _vk_swapchain_images[_vk_presenting_swapchain_image_index]);
 
-            cmd_begin_frame_buffer(_vk_current_swapchain_image_content->m_framebuffer, 0, 0, 0, 0);
+            cmd_begin_frame_buffer(nullptr, 0, 0, 0, 0);
 
             jegui_update_vk130(_vk_current_command_buffer);
 
@@ -3349,7 +3358,11 @@ namespace jeecs::graphic::api::vk130
             assert(_vk_current_target_framebuffer == nullptr);
             assert(_vk_current_command_buffer == nullptr);
 
-            _vk_current_target_framebuffer = framebuf;
+            if (framebuf == nullptr)
+                _vk_current_target_framebuffer = _vk_current_swapchain_image_content->m_framebuffer;
+            else
+                _vk_current_target_framebuffer = framebuf;
+
             _vk_current_command_buffer = _vk_command_buffer_allocator->allocate_command_buffer(
                 _vk_current_swapchain_image_content);
 
@@ -3361,8 +3374,8 @@ namespace jeecs::graphic::api::vk130
             render_pass_begin_info.renderPass = _vk_current_target_framebuffer->m_rendpass;
             render_pass_begin_info.framebuffer = _vk_current_target_framebuffer->m_framebuffer;
             render_pass_begin_info.renderArea.offset = { 0, 0 };
-            render_pass_begin_info.renderArea.extent.width = (uint32_t)framebuf->m_width;
-            render_pass_begin_info.renderArea.extent.height = (uint32_t)framebuf->m_height;
+            render_pass_begin_info.renderArea.extent.width = (uint32_t)_vk_current_target_framebuffer->m_width;
+            render_pass_begin_info.renderArea.extent.height = (uint32_t)_vk_current_target_framebuffer->m_height;
 
             render_pass_begin_info.clearValueCount = 0;
             render_pass_begin_info.pClearValues = nullptr;
@@ -3374,22 +3387,34 @@ namespace jeecs::graphic::api::vk130
 
             // NOTE: Pipeline的viewport的纵向坐标应当翻转以兼容opengl3和dx11实现
             if (w == 0)
-                w = framebuf->m_width;
+                w = _vk_current_target_framebuffer->m_width;
             if (h == 0)
-                h = framebuf->m_height;
+                h = _vk_current_target_framebuffer->m_height;
 
             VkViewport viewport = {};
             viewport.x = (float)x;
-            viewport.y = (float)framebuf->m_height - (float)y;
             viewport.width = (float)w;
-            viewport.height = -(float)h;
+
+            if (framebuf == nullptr)
+            {
+                viewport.y = (float)_vk_current_target_framebuffer->m_height - (float)y;
+                viewport.height = -(float)h;
+            }
+            else
+            {
+                viewport.y = (float)y;
+                viewport.height = (float)h;
+            }
+
             viewport.minDepth = 0.0f;
             viewport.maxDepth = 1.0f;
             vkCmdSetViewport(_vk_current_command_buffer, 0, 1, &viewport);
 
             VkRect2D scissor = {};
             scissor.offset = VkOffset2D{ (int32_t)0, (int32_t)0 };
-            scissor.extent = VkExtent2D{ (uint32_t)framebuf->m_width, (uint32_t)framebuf->m_height };
+            scissor.extent = VkExtent2D{ 
+                (uint32_t)_vk_current_target_framebuffer->m_width, 
+                (uint32_t)_vk_current_target_framebuffer->m_height };
             vkCmdSetScissor(_vk_current_command_buffer, 0, 1, &scissor);
 
             vkCmdSetPrimitiveRestartEnable(_vk_current_command_buffer, VK_TRUE);
@@ -3615,12 +3640,16 @@ namespace jeecs::graphic::api::vk130
     {
         assert(context->_vk_current_target_framebuffer != nullptr);
 
-        VkRenderPass target_pass = context->_vk_current_target_framebuffer->m_rendpass;
+        auto* target_framebuffer_instance = context->_vk_current_target_framebuffer;
+        VkRenderPass target_pass = target_framebuffer_instance->m_rendpass;
         assert(target_pass != VK_NULL_HANDLE);
 
         auto fnd = m_target_pass_pipelines.find(target_pass);
         if (fnd != m_target_pass_pipelines.end())
             return fnd->second;
+
+        if (!target_framebuffer_instance->m_is_screen_framebuffer)
+            m_blob_data->m_rasterization_state_create_info.frontFace = VkFrontFace::VK_FRONT_FACE_CLOCKWISE;
 
         VkGraphicsPipelineCreateInfo pipeline_create_info = {};
         pipeline_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -3821,21 +3850,23 @@ namespace jeecs::graphic::api::vk130
             auto* shader_blob = std::launder(reinterpret_cast<jevk13_shader_blob*>(blob));
             resource->m_handle.m_ptr = context->create_shader_with_blob(shader_blob);
 
-            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_m = shader_blob->get_built_in_location("JOYENGINE_TRANS_M");
-            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_mv = shader_blob->get_built_in_location("JOYENGINE_TRANS_MV");
-            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_mvp = shader_blob->get_built_in_location("JOYENGINE_TRANS_MVP");
+            auto* raw_shader_data = resource->m_raw_shader_data;
+            auto& builtin_uniforms = raw_shader_data->m_builtin_uniforms;
 
-            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_tiling = shader_blob->get_built_in_location("JOYENGINE_TEXTURE_TILING");
-            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_offset = shader_blob->get_built_in_location("JOYENGINE_TEXTURE_OFFSET");
-
-            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_light2d_resolution =
+            builtin_uniforms.m_builtin_uniform_ndc_scale = shader_blob->get_built_in_location("JOYENGINE_NDC_SCALE");
+            builtin_uniforms.m_builtin_uniform_m = shader_blob->get_built_in_location("JOYENGINE_TRANS_M");
+            builtin_uniforms.m_builtin_uniform_mv = shader_blob->get_built_in_location("JOYENGINE_TRANS_MV");
+            builtin_uniforms.m_builtin_uniform_mvp = shader_blob->get_built_in_location("JOYENGINE_TRANS_MVP");
+            builtin_uniforms.m_builtin_uniform_tiling = shader_blob->get_built_in_location("JOYENGINE_TEXTURE_TILING");
+            builtin_uniforms.m_builtin_uniform_offset = shader_blob->get_built_in_location("JOYENGINE_TEXTURE_OFFSET");
+            builtin_uniforms.m_builtin_uniform_light2d_resolution =
                 shader_blob->get_built_in_location("JOYENGINE_LIGHT2D_RESOLUTION");
-            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_light2d_decay =
+            builtin_uniforms.m_builtin_uniform_light2d_decay =
                 shader_blob->get_built_in_location("JOYENGINE_LIGHT2D_DECAY");
 
             // ATTENTION: 注意，以下参数特殊shader可能挪作他用
-            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_local_scale = shader_blob->get_built_in_location("JOYENGINE_LOCAL_SCALE");
-            resource->m_raw_shader_data->m_builtin_uniforms.m_builtin_uniform_color = shader_blob->get_built_in_location("JOYENGINE_MAIN_COLOR");
+            builtin_uniforms.m_builtin_uniform_local_scale = shader_blob->get_built_in_location("JOYENGINE_LOCAL_SCALE");
+            builtin_uniforms.m_builtin_uniform_color = shader_blob->get_built_in_location("JOYENGINE_MAIN_COLOR");
 
             auto* uniforms = resource->m_raw_shader_data->m_custom_uniforms;
             while (uniforms != nullptr)
@@ -3873,13 +3904,16 @@ namespace jeecs::graphic::api::vk130
                     color_attachments.push_back(attach_texture_instance);
             }
 
-            resource->m_handle.m_ptr = context->create_frame_buffer(
+            auto* frame_buffer_instance = context->create_frame_buffer(
                 resource->m_raw_framebuf_data->m_width,
                 resource->m_raw_framebuf_data->m_height,
                 color_attachments,
                 depth_attachment,
                 VkImageLayout::VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
+            frame_buffer_instance->m_is_screen_framebuffer = false;
+
+            resource->m_handle.m_ptr = frame_buffer_instance;
             break;
         }
         case jegl_resource::type::UNIFORMBUF:
@@ -3996,11 +4030,10 @@ namespace jeecs::graphic::api::vk130
     {
         jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
 
-        jevk13_framebuffer* target_framebuf;
-        if (framebuf == nullptr)
-            target_framebuf = context->_vk_current_swapchain_image_content->m_framebuffer;
-        else
-            target_framebuf = std::launder(reinterpret_cast<jevk13_framebuffer*>(framebuf->m_handle.m_ptr));
+        jevk13_framebuffer* target_framebuf = nullptr;
+        if (framebuf != nullptr)
+            target_framebuf = reinterpret_cast<jevk13_framebuffer*>(
+                framebuf->m_handle.m_ptr);
 
         context->cmd_begin_frame_buffer(target_framebuf, x, y, w, h);
     }

@@ -2007,6 +2007,11 @@ struct jegl_shader
     };
     struct builtin_uniform_location
     {
+        // NOTE: 不要写入这个位置，ndc_scale 是为了纠正渲染到纹理的 UV 映射关系用的
+        //  仅由底层的图形库实现负责写入；改变和翻转 ndc 需要底层图形库配合正面旋向
+        //  相关设置才能保证渲染结果正确
+        uint32_t m_builtin_uniform_ndc_scale = jeecs::typing::PENDING_UNIFORM_LOCATION;
+
         uint32_t m_builtin_uniform_m = jeecs::typing::PENDING_UNIFORM_LOCATION;
         uint32_t m_builtin_uniform_mv = jeecs::typing::PENDING_UNIFORM_LOCATION;
         uint32_t m_builtin_uniform_mvp = jeecs::typing::PENDING_UNIFORM_LOCATION;
@@ -3467,15 +3472,12 @@ typedef void (*jegui_user_sampler_loader_t)(jegl_context*, jegl_resource*);
 jegui_init_basic [基本接口]
 初始化ImGUI
     * 参数1 是一个指向引擎图形上下文的指针
-    * 参数2 用于指示是否需要反转帧纹理，部分图形库的内置字节序与预计的是相反的，这种情况
-        需要手动反转
-    * 参数3 是一个回调函数指针，用于获取一个纹理对应的底层图形库句柄以供ImGUI使用
-    * 参数4 是一个回调函数指针，用于应用一个指定着色器指定的采样设置
+    * 参数2 是一个回调函数指针，用于获取一个纹理对应的底层图形库句柄以供ImGUI使用
+    * 参数3 是一个回调函数指针，用于应用一个指定着色器指定的采样设置
     * 此接口仅适合用于对接自定义渲染API时使用
 */
 JE_API void jegui_init_basic(
     jegl_context* gl_context,
-    bool need_flip_frame_buf,
     jegui_user_image_loader_t get_img_res,
     jegui_user_sampler_loader_t apply_shader_sampler);
 
