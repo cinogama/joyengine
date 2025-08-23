@@ -332,7 +332,6 @@ namespace jeecs::graphic::api::gl3
 #endif
 #endif
         glEnable(GL_DEPTH_TEST);
-        glDepthRange(0., 1.);
 
 #ifdef JE_ENABLE_WEBGL20_GAPI
         // Get current context by emscripten_webgl_get_current_context
@@ -497,11 +496,16 @@ namespace jeecs::graphic::api::gl3
         case jegl_resource::type::SHADER:
         {
             GLuint vs = glCreateShader(GL_VERTEX_SHADER);
-            glShaderSource(vs, 1, &resource->m_raw_shader_data->m_vertex_glsl_src, NULL);
-            glCompileShader(vs);
-
             GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
+
+#ifdef JE_ENABLE_GL330_GAPI
+            glShaderSource(vs, 1, &resource->m_raw_shader_data->m_vertex_glsl_src, NULL);
             glShaderSource(fs, 1, &resource->m_raw_shader_data->m_fragment_glsl_src, NULL);
+#else
+            glShaderSource(vs, 1, &resource->m_raw_shader_data->m_vertex_glsles_src, NULL);
+            glShaderSource(fs, 1, &resource->m_raw_shader_data->m_fragment_glsles_src, NULL);
+#endif
+            glCompileShader(vs);
             glCompileShader(fs);
 
             // Check this program is acceptable?
@@ -1511,6 +1515,11 @@ namespace jeecs::graphic::api::gl3
             : context->RESOLUTION_HEIGHT;
 
         glViewport((GLint)x, (GLint)y, (GLsizei)w, (GLsizei)h);
+#ifdef JE_ENABLE_GL330_GAPI
+        glDepthRange(0., 1.);
+#else
+        glDepthRangef(0., 1.);
+#endif
     }
     void gl_clear_framebuffer_color(jegl_context::userdata_t, float color[4])
     {
