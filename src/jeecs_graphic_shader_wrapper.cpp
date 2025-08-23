@@ -820,8 +820,7 @@ void _jegl_regenerate_and_alloc_glsl_gl330_from_spir_v_combined(
     for (size_t i = 0; i < vertex_output_count; i++) {
         const spvc_reflected_resource& output = vertex_outputs[i];
         uint32_t location = spvc_compiler_get_decoration(vertex_compiler, output.id, SpvDecorationLocation);
-        const char* name = spvc_compiler_get_name(vertex_compiler, output.id);
-        
+
         // 标准化名称：使用 v_out_{location} 作为统一命名格式
         std::string standardized_name = "v_out_" + std::to_string(location);
         location_to_name[location] = standardized_name;
@@ -1017,7 +1016,6 @@ void _jegl_regenerate_and_alloc_glsl_gles300_from_spir_v_combined(
     for (size_t i = 0; i < vertex_output_count; i++) {
         const spvc_reflected_resource& output = vertex_outputs[i];
         uint32_t location = spvc_compiler_get_decoration(vertex_compiler, output.id, SpvDecorationLocation);
-        const char* name = spvc_compiler_get_name(vertex_compiler, output.id);
 
         // 标准化名称：使用 v_out_{location} 作为统一命名格式
         std::string standardized_name = "v_out_" + std::to_string(location);
