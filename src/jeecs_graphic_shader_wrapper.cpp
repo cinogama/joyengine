@@ -6,16 +6,9 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#ifdef JE4_ENABLE_SHADER_WRAP_GENERATOR
-
 #include "jeecs_cache_version.hpp"
 #include "jeecs_graphic_shader_wrapper.hpp"
 #include "jeecs_graphic_shader_wrapper_methods.hpp"
-#include "jeecs_graphic_shader_wrapper_hlsl.hpp"
-
-#include <glslang_c_interface.h>
-#include <resource_limits_c.h>
-#include <spirv_cross_c.h>
 
 // From jeecs_graphic_api_basic.cpp
 jegl_resource* _create_resource();
@@ -175,6 +168,14 @@ struct vertex_in_data_storage
         return shval;
     }
 };
+
+
+#ifdef JE4_ENABLE_SHADER_WRAP_GENERATOR
+
+#include "jeecs_graphic_shader_wrapper_hlsl.hpp"
+#include <glslang_c_interface.h>
+#include <resource_limits_c.h>
+#include <spirv_cross_c.h>
 
 void _scan_used_uniforms_in_vals(
     shader_wrapper* wrap,
@@ -1316,6 +1317,25 @@ void jegl_shader_free_generated_shader_source(jegl_shader* write_to_shader)
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+void jegl_shader_generator_init()
+{
+    glslang_initialize_process();
+}
+void jegl_shader_generator_shutdown()
+{
+    glslang_finalize_process();
+}
+
+#else
+void jegl_shader_generator_init()
+{
+}
+void jegl_shader_generator_shutdown()
+{
+}
+#endif
+
+
 WO_API wo_api jeecs_shader_float_create(wo_vm vm, wo_value args)
 {
     return wo_ret_gchandle(vm,
@@ -1799,21 +1819,3 @@ WO_API wo_api jeecs_shader_real_raw_op_div(wo_vm vm, wo_value args)
 {
     return wo_ret_real(vm, wo_real(args + 0) / wo_real(args + 1));
 }
-
-void jegl_shader_generator_init()
-{
-    glslang_initialize_process();
-}
-void jegl_shader_generator_shutdown()
-{
-    glslang_finalize_process();
-}
-
-#else
-void jegl_shader_generator_init()
-{
-}
-void jegl_shader_generator_shutdown()
-{
-}
-#endif
