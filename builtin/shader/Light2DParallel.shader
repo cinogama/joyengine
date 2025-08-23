@@ -75,7 +75,7 @@ let normal_z_offset = uniform("normal_z_offset", float::one);
 
 public func frag(vf: v2f)
 {
-    let uv = uvframebuf((vf.pos->xy / vf.pos->w + float2::const(1., 1.)) /2.);
+    let uv = (vf.pos->xy / vf.pos->w + float2::const(1., 1.)) /2.;
     let shadow_factor = 1. - multi_sampling_for_bias_shadow(Shadow, uv);
 
     let vnormalize = normalize(

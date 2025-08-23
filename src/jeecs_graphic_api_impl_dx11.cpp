@@ -1632,15 +1632,16 @@ namespace jeecs::graphic::api::dx11
         if (h == 0)
             h = buf_h;
 
-        y = buf_h - y - h;
-
         D3D11_VIEWPORT viewport;
-        viewport.Width = (float)w;
-        viewport.Height = (float)h;
-        viewport.TopLeftX = (float)x;
-        viewport.TopLeftY = (float)y;
+
         viewport.MinDepth = 0.0f;
         viewport.MaxDepth = 1.0f;
+
+        viewport.Width = (float)w;
+        viewport.TopLeftX = (float)x;
+
+        viewport.Height = (float)h;
+        viewport.TopLeftY = (float)buf_h - y - h;
 
         context->m_dx_context->RSSetViewports(1, &viewport);
     }

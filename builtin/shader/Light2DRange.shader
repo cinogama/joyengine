@@ -78,7 +78,7 @@ let Shadow      = je_light2d_defer_shadow;
 
 public func frag(vf: v2f)
 {  
-    let uv = uvframebuf((vf.pos->xy / vf.pos->w + float2::const(1., 1.)) /2.);
+    let uv = (vf.pos->xy / vf.pos->w + float2::const(1., 1.)) /2.;
 
     let pixvpos = vf.vpos->xyz / vf.vpos->w;
 

@@ -332,6 +332,7 @@ namespace jeecs::graphic::api::gl3
 #endif
 #endif
         glEnable(GL_DEPTH_TEST);
+        glDepthRange(0., 1.);
 
 #ifdef JE_ENABLE_WEBGL20_GAPI
         // Get current context by emscripten_webgl_get_current_context
@@ -767,13 +768,26 @@ namespace jeecs::graphic::api::gl3
                     builtin_uniforms.m_builtin_uniform_local_scale = shared_blob_data->get_built_in_location("JOYENGINE_LOCAL_SCALE");
                     builtin_uniforms.m_builtin_uniform_color = shared_blob_data->get_built_in_location("JOYENGINE_MAIN_COLOR");
 
+                    // "je4_gl_sampler_%zu", see _jegl_regenerate_and_alloc_glsl_from_spir_v_combined
+                    char gl_sampler_name[64];
+
                     auto* uniform_var = resource->m_raw_shader_data->m_custom_uniforms;
                     while (uniform_var)
                     {
                         if (uniform_var->m_uniform_type == jegl_shader::uniform_type::TEXTURE)
                         {
                             uniform_var->m_index = jeecs::typing::INVALID_UINT32;
-                            const auto location = glGetUniformLocation(shader_program, uniform_var->m_name);
+
+                            auto count = snprintf(
+                                gl_sampler_name, 
+                                sizeof(gl_sampler_name), 
+                                "je4_gl_sampler_%zu", 
+                                (size_t)uniform_var->ix);
+
+                            (void)count;
+                            assert(count > 0 && count < (int)sizeof(gl_sampler_name));
+
+                            const auto location = glGetUniformLocation(shader_program, gl_sampler_name);
                             if (location != -1)
                                 glUniform1i(location, (GLint)uniform_var->ix);
                         }

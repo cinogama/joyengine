@@ -1027,6 +1027,7 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src, bool i
         if (jeecs_file* shader_cache = jeecs_load_cache_file(path, SHADER_CACHE_VERSION, wo_crc64_str(src)))
             return _jegl_load_shader_cache(shader_cache, path);
     }
+
 #if JE4_ENABLE_SHADER_WRAP_GENERATOR
     wo_vm vmm = wo_create_vm();
     if (!wo_load_source(vmm, path, src))

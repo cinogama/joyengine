@@ -8805,12 +8805,12 @@ namespace jeecs
 
             m[2][0] = 0;
             m[2][1] = 0;
-            m[2][2] = 2.0f / (zfar - znear);
+            m[2][2] = 1.0f / (zfar - znear);
             m[2][3] = 0;
 
             m[3][0] = -((R + L) / (R - L));
             m[3][1] = -((T + B) / (T - B));
-            m[3][2] = -((zfar + znear) / (zfar - znear));
+            m[3][2] = 0;
             m[3][3] = 1;
         }
 
@@ -8842,12 +8842,12 @@ namespace jeecs
 
             m[2][0] = 0;
             m[2][1] = 0;
-            m[2][2] = (zfar - znear) / 2.0f;
+            m[2][2] = zfar - znear;
             m[2][3] = 0;
 
             m[3][0] = (R + L) / 2.0f;
             m[3][1] = (T + B) / 2.0f;
-            m[3][2] = (zfar + znear) / 2.0f;
+            m[3][2] = 0;
             m[3][3] = 1;
         }
 
@@ -8876,12 +8876,12 @@ namespace jeecs
 
             m[2][0] = 0;
             m[2][1] = 0;
-            m[2][2] = (-znear - zfar) / ZRANGE;
+            m[2][2] = -zfar / ZRANGE;
             m[2][3] = 1.0f;
 
             m[3][0] = 0;
             m[3][1] = 0;
-            m[3][2] = 2.0f * zfar * znear / ZRANGE;
+            m[3][2] = zfar * znear / ZRANGE;
             m[3][3] = 0;
         }
 
@@ -8911,12 +8911,12 @@ namespace jeecs
             m[2][0] = 0;
             m[2][1] = 0;
             m[2][2] = 0;
-            m[2][3] = ZRANGE / (2 * zfar * znear);
+            m[2][3] = ZRANGE / (zfar * znear);
 
             m[3][0] = 0;
             m[3][1] = 0;
             m[3][2] = 1;
-            m[3][3] = (zfar + znear) / (2 * zfar * znear);
+            m[3][3] = 1.f / znear;
         }
 
         struct character
@@ -12164,7 +12164,7 @@ namespace jeecs
         {
             assert(graphic_syncer != nullptr);
 
-            switch(graphic_context_state_for_update_manually)
+            switch (graphic_context_state_for_update_manually)
             {
             case graphic_state::GRAPHIC_CONTEXT_NOT_READY:
                 if (!graphic_syncer->check_context_ready_noblock())

@@ -28,7 +28,7 @@ public func vert(v: vin)
 {
     return v2f{
         pos = vec4(v.vertex, 1.),
-        uv = uvframebuf(v.uv),
+        uv = v.uv,
     };
 }
 

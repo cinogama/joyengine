@@ -709,11 +709,98 @@ void _jegl_regenerate_and_alloc_glsl_from_spir_v_combined(
     spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_GLSL_VULKAN_SEMANTICS, SPVC_TRUE);
     spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_GLSL_SEPARATE_SHADER_OBJECTS, SPVC_FALSE);
     
+    // 禁用重命名所有变量的行为，保留原始命名
+    spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_FORCE_TEMPORARY, SPVC_FALSE);
+    spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_FORCE_TEMPORARY, SPVC_FALSE);
+    
     spvc_compiler_install_compiler_options(vertex_compiler, vertex_options);
     spvc_compiler_install_compiler_options(fragment_compiler, fragment_options);
 
+    // 在构建组合图像采样器之前，先保存原始sampler名称和绑定点
+    spvc_resources vertex_resources_pre = nullptr;
+    spvc_compiler_create_shader_resources(vertex_compiler, &vertex_resources_pre);
+    
+    const spvc_reflected_resource* vertex_samplers = nullptr;
+    size_t vertex_sampler_count = 0;
+    spvc_resources_get_resource_list_for_type(
+        vertex_resources_pre, SPVC_RESOURCE_TYPE_SEPARATE_IMAGE, &vertex_samplers, &vertex_sampler_count);
+    
+    // 存储sampler的ID到binding的映射
+    std::unordered_map<uint32_t, uint32_t> vertex_sampler_bindings;
+    for (size_t i = 0; i < vertex_sampler_count; i++) {
+        const spvc_reflected_resource& sampler = vertex_samplers[i];
+        uint32_t binding = spvc_compiler_get_decoration(vertex_compiler, sampler.id, SpvDecorationBinding);
+        vertex_sampler_bindings[sampler.id] = binding;
+    }
+    
+    spvc_resources fragment_resources_pre = nullptr;
+    spvc_compiler_create_shader_resources(fragment_compiler, &fragment_resources_pre);
+    
+    const spvc_reflected_resource* fragment_samplers = nullptr;
+    size_t fragment_sampler_count = 0;
+    spvc_resources_get_resource_list_for_type(
+        fragment_resources_pre, SPVC_RESOURCE_TYPE_SEPARATE_IMAGE, &fragment_samplers, &fragment_sampler_count);
+    
+    // 存储sampler的ID到binding的映射
+    std::unordered_map<uint32_t, uint32_t> fragment_sampler_bindings;
+    for (size_t i = 0; i < fragment_sampler_count; i++) {
+        const spvc_reflected_resource& sampler = fragment_samplers[i];
+        uint32_t binding = spvc_compiler_get_decoration(fragment_compiler, sampler.id, SpvDecorationBinding);
+        fragment_sampler_bindings[sampler.id] = binding;
+    }
+
+    // 构建组合图像采样器
     spvc_compiler_build_combined_image_samplers(vertex_compiler);
     spvc_compiler_build_combined_image_samplers(fragment_compiler);
+    
+    // 处理顶点着色器中的组合图像采样器，使用通道号作为命名的一部分
+    const spvc_combined_image_sampler* vertex_combined_samplers = nullptr;
+    size_t vertex_combined_count = 0;
+    spvc_compiler_get_combined_image_samplers(vertex_compiler, &vertex_combined_samplers, &vertex_combined_count);
+    
+    char gl_sampler_name[64];
+    for (size_t i = 0; i < vertex_combined_count; i++) {
+        const auto& combined = vertex_combined_samplers[i];
+        uint32_t binding = 0;
+        
+        // 尝试获取原始sampler的binding
+        auto it = vertex_sampler_bindings.find(combined.image_id);
+        if (it != vertex_sampler_bindings.end()) {
+            binding = it->second;
+        }
+        
+        // 使用binding作为命名的一部分
+        auto count = snprintf(
+            gl_sampler_name, sizeof(gl_sampler_name), "je4_gl_sampler_%u", binding);
+        (void)count;
+        assert(count > 0 && (size_t)count < sizeof(gl_sampler_name));
+
+        spvc_compiler_set_name(vertex_compiler, combined.combined_id, gl_sampler_name);
+    }
+    
+    // 处理片元着色器中的组合图像采样器，使用通道号作为命名的一部分
+    const spvc_combined_image_sampler* fragment_combined_samplers = nullptr;
+    size_t fragment_combined_count = 0;
+    spvc_compiler_get_combined_image_samplers(fragment_compiler, &fragment_combined_samplers, &fragment_combined_count);
+    
+    for (size_t i = 0; i < fragment_combined_count; i++) {
+        const auto& combined = fragment_combined_samplers[i];
+        uint32_t binding = 0;
+        
+        // 尝试获取原始sampler的binding
+        auto it = fragment_sampler_bindings.find(combined.image_id);
+        if (it != fragment_sampler_bindings.end()) {
+            binding = it->second;
+        }
+        
+        // 使用binding作为命名的一部分
+        auto count = snprintf(
+            gl_sampler_name, sizeof(gl_sampler_name), "je4_gl_sampler_%u", binding);
+        (void)count;
+        assert(count > 0 && (size_t)count < sizeof(gl_sampler_name));
+
+        spvc_compiler_set_name(fragment_compiler, combined.combined_id, gl_sampler_name);
+    }
     
     // 获取顶点着色器输出变量
     spvc_resources vertex_resources = nullptr;

@@ -898,27 +898,28 @@ public let frag =
                 0.0f,
             };
             DeferLight2DResource()
-                : _no_shadow{ jeecs::graphic::texture::create(1, 1, jegl_texture::format::RGBA) }, _screen_vertex{ jeecs::graphic::vertex::create(
-                                                                                                                    jegl_vertex::type::TRIANGLESTRIP,
-                                                                                                                    _screen_vertex_data,
-                                                                                                                    sizeof(_screen_vertex_data),
-                                                                                                                    {0, 1, 2, 3},
-                                                                                                                    {
-                                                                                                                        {jegl_vertex::data_type::FLOAT32, 3},
-                                                                                                                        {jegl_vertex::data_type::FLOAT32, 2},
-                                                                                                                    })
-                                                                                                                    .value() },
+                : _no_shadow{ jeecs::graphic::texture::create(1, 1, jegl_texture::format::RGBA) }
+                , _screen_vertex{ jeecs::graphic::vertex::create(
+                    jegl_vertex::type::TRIANGLESTRIP,
+                    _screen_vertex_data,
+                    sizeof(_screen_vertex_data),
+                    {0, 1, 2, 3},
+                    {
+                        {jegl_vertex::data_type::FLOAT32, 3},
+                        {jegl_vertex::data_type::FLOAT32, 2},
+                    })
+                    .value() },
                 _sprite_shadow_vertex{ jeecs::graphic::vertex::create(
-                                          jegl_vertex::TRIANGLESTRIP,
-                                          _sprite_shadow_vertex_data,
-                                          sizeof(_sprite_shadow_vertex_data),
-                                          {0, 1, 2, 3},
-                                          {
-                                              {jegl_vertex::data_type::FLOAT32, 3},
-                                              {jegl_vertex::data_type::FLOAT32, 2},
-                                              {jegl_vertex::data_type::FLOAT32, 1},
-                                          })
-                                          .value() },
+                    jegl_vertex::TRIANGLESTRIP,
+                    _sprite_shadow_vertex_data,
+                    sizeof(_sprite_shadow_vertex_data),
+                    {0, 1, 2, 3},
+                    {
+                        {jegl_vertex::data_type::FLOAT32, 3},
+                        {jegl_vertex::data_type::FLOAT32, 2},
+                        {jegl_vertex::data_type::FLOAT32, 1},
+                    })
+                    .value() },
                 _defer_light2d_shadow_point_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_point.shader", R"(
 import je::shader;
 ZTEST   (ALWAYS);
