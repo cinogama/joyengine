@@ -264,9 +264,8 @@ namespace jeecs::graphic::api::vk130
         jeecs::basic::resource<jevk13_shader_blob::blob_data> m_blob_data;
 
         size_t m_uniform_cpu_buffer_size;
-        size_t m_uniform_cpu_buffer_update_offset;
-        size_t m_uniform_cpu_buffer_update_size;
-        void* m_uniform_cpu_buffer;
+        bool m_uniform_cpu_buffer_updated;
+        uint8_t* m_uniform_cpu_buffer;
 
         size_t m_next_allocate_ubos_for_uniform_variable;
         size_t m_command_commit_round;
@@ -290,13 +289,13 @@ namespace jeecs::graphic::api::vk130
         jevk13_shader(jevk13_shader_blob* blob)
             : m_blob_data(blob->m_blob_data)
             , m_uniform_cpu_buffer_size(blob->m_blob_data->m_uniform_size)
-            , m_uniform_cpu_buffer_update_offset(0)
-            , m_uniform_cpu_buffer_update_size(0)
+            , m_uniform_cpu_buffer_updated(false)
             , m_next_allocate_ubos_for_uniform_variable(0)
             , m_command_commit_round(0)
         {
             if (m_uniform_cpu_buffer_size != 0)
-                m_uniform_cpu_buffer = malloc(m_uniform_cpu_buffer_size);
+                m_uniform_cpu_buffer = std::launder(
+                    reinterpret_cast<uint8_t*>(malloc(m_uniform_cpu_buffer_size)));
             else
                 m_uniform_cpu_buffer = nullptr;
         }
@@ -2398,7 +2397,7 @@ namespace jeecs::graphic::api::vk130
             }
 
             // NOTE: 针对不同输出的缓冲区，这个设置实际上需要根据渲染目标的情况决定
-            shader_blob->m_rasterization_state_create_info.frontFace = 
+            shader_blob->m_rasterization_state_create_info.frontFace =
                 VkFrontFace::VK_FRONT_FACE_COUNTER_CLOCKWISE;
 
             shader_blob->m_rasterization_state_create_info.lineWidth = 1;
@@ -3412,8 +3411,8 @@ namespace jeecs::graphic::api::vk130
 
             VkRect2D scissor = {};
             scissor.offset = VkOffset2D{ (int32_t)0, (int32_t)0 };
-            scissor.extent = VkExtent2D{ 
-                (uint32_t)_vk_current_target_framebuffer->m_width, 
+            scissor.extent = VkExtent2D{
+                (uint32_t)_vk_current_target_framebuffer->m_width,
                 (uint32_t)_vk_current_target_framebuffer->m_height };
             vkCmdSetScissor(_vk_current_command_buffer, 0, 1, &scissor);
 
@@ -3500,23 +3499,24 @@ namespace jeecs::graphic::api::vk130
             assert(_vk_current_binded_shader != nullptr);
             VkDeviceSize offsets = 0;
 
-            if (_vk_current_binded_shader->m_uniform_cpu_buffer_update_size != 0)
+            if (_vk_current_binded_shader->m_uniform_cpu_buffer_size != 0)
             {
-                assert(_vk_current_binded_shader->m_uniform_cpu_buffer_size != 0);
+                if (_vk_current_binded_shader->m_uniform_cpu_buffer_updated)
+                {
+                    _vk_current_binded_shader->m_uniform_cpu_buffer_updated = true;
 
-                auto* new_ubo = _vk_current_binded_shader->allocate_ubo_for_vars(this);
+                    auto* new_ubo = _vk_current_binded_shader->allocate_ubo_for_vars(this);
 
-                update_uniform_buffer_with_range(
-                    new_ubo,
-                    _vk_current_binded_shader->m_uniform_cpu_buffer,
-                    _vk_current_binded_shader->m_uniform_cpu_buffer_update_offset,
-                    _vk_current_binded_shader->m_uniform_cpu_buffer_update_size);
+                    update_uniform_buffer_with_range(
+                        new_ubo,
+                        _vk_current_binded_shader->m_uniform_cpu_buffer,
+                        0,
+                        _vk_current_binded_shader->m_uniform_cpu_buffer_size);
+                }
 
-                _vk_current_binded_shader->m_uniform_cpu_buffer_update_size = 0;
+                _vk_descriptor_set_allocator->bind_uniform_vars(
+                    _vk_current_binded_shader->get_last_usable_variable(this)->m_uniform_buffer);
             }
-
-            _vk_descriptor_set_allocator->bind_uniform_vars(
-                _vk_current_binded_shader->get_last_usable_variable(this)->m_uniform_buffer);
 
             _vk_descriptor_set_allocator->apply_binding_work(
                 _vk_current_swapchain_image_content);
@@ -3648,8 +3648,10 @@ namespace jeecs::graphic::api::vk130
         if (fnd != m_target_pass_pipelines.end())
             return fnd->second;
 
-        if (!target_framebuffer_instance->m_is_screen_framebuffer)
-            m_blob_data->m_rasterization_state_create_info.frontFace = VkFrontFace::VK_FRONT_FACE_CLOCKWISE;
+        m_blob_data->m_rasterization_state_create_info.frontFace =
+            target_framebuffer_instance->m_is_screen_framebuffer
+            ? VkFrontFace::VK_FRONT_FACE_COUNTER_CLOCKWISE
+            : VkFrontFace::VK_FRONT_FACE_CLOCKWISE;
 
         VkGraphicsPipelineCreateInfo pipeline_create_info = {};
         pipeline_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -4088,29 +4090,11 @@ namespace jeecs::graphic::api::vk130
             break;
         }
 
+        current_shader->m_uniform_cpu_buffer_updated = true;
         memcpy(
-            reinterpret_cast<void*>((intptr_t)current_shader->m_uniform_cpu_buffer + location),
+            current_shader->m_uniform_cpu_buffer + location,
             val,
             data_size_byte_length);
-
-        if (current_shader->m_uniform_cpu_buffer_update_size == 0)
-        {
-            current_shader->m_uniform_cpu_buffer_update_offset = location;
-            current_shader->m_uniform_cpu_buffer_update_size = data_size_byte_length;
-        }
-        else
-        {
-            const size_t new_begin = std::min(
-                current_shader->m_uniform_cpu_buffer_update_offset,
-                static_cast<size_t>(location));
-
-            const size_t new_end = std::max(
-                current_shader->m_uniform_cpu_buffer_update_offset + current_shader->m_uniform_cpu_buffer_update_size,
-                location + data_size_byte_length);
-
-            current_shader->m_uniform_cpu_buffer_update_offset = new_begin;
-            current_shader->m_uniform_cpu_buffer_update_size = new_end - new_begin;
-        }
     }
 }
 

@@ -268,6 +268,11 @@ if (JE4_ENABLE_SHADER_WRAP_GENERATOR)
     target_compile_features(spirv-cross-c INTERFACE cxx_std_17)
     if (NOT MSVC)
         target_compile_options (spirv-cross-c PRIVATE -fPIC)
+        target_compile_options (spirv-cross-hlsl PRIVATE -fPIC)
+        target_compile_options (spirv-cross-glsl PRIVATE -fPIC)
+        target_compile_options (spirv-cross-msl PRIVATE -fPIC)
+        target_compile_options (spirv-cross-core PRIVATE -fPIC)
+        target_compile_options (spirv-cross-reflect PRIVATE -fPIC)
     endif()
 
     list(APPEND jeecs_graphic_libs 

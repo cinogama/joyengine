@@ -1792,25 +1792,25 @@ namespace jeecs::graphic::api::dx11
         {
         case jegl_shader::INT:
         case jegl_shader::FLOAT:
-            memcpy(write_buffer_addr, val, 4);
+            data_size_byte_length = 4;
             break;
         case jegl_shader::FLOAT2:
-            memcpy(write_buffer_addr, val, 8);
+            data_size_byte_length = 8;
             break;
         case jegl_shader::FLOAT3:
-            memcpy(write_buffer_addr, val, 12);
+            data_size_byte_length = 12;
             break;
         case jegl_shader::FLOAT4:
-            memcpy(write_buffer_addr, val, 16);
+            data_size_byte_length = 16;
             break;
         case jegl_shader::FLOAT4X4:
-            memcpy(write_buffer_addr, val, 64);
+            data_size_byte_length = 64;
             break;
         default:
             jeecs::debug::logerr("Unknown uniform variable type to set.");
             break;
-            break;
         }
+        memcpy(write_buffer_addr, val, data_size_byte_length);
     }
 }
 
