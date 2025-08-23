@@ -203,15 +203,15 @@ namespace jeecs
 #define JE_VERSION_WRAP(A, B, C) #A "." #B "." #C
 
                 if (host_graphic_api == jegl_using_dx11_apis)
-                    config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " DirectX11)";
+                    config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " DirectX 11)";
 #if defined(JE_ENABLE_GL330_GAPI) || defined(JE_ENABLE_GLES300_GAPI) || defined(JE_ENABLE_WEBGL20_GAPI)
                 else if (host_graphic_api == jegl_using_opengl3_apis)
 #   ifdef JE_ENABLE_GL330_GAPI
-                    config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " OpenGl3.3)";
+                    config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " OpenGL 3.3)";
 #   elif defined(JE_ENABLE_GLES300_GAPI)
-                    config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " OpenGlES3.0)";
+                    config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " OpenGLES 3.0)";
 #   else
-                    config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " WebGL2.0)";
+                    config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " WebGL 2.0)";
 #   endif
 #endif
                 else if (host_graphic_api == jegl_using_vk130_apis)

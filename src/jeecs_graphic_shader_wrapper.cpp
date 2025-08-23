@@ -694,13 +694,13 @@ void _jegl_regenerate_and_alloc_glsl_gl330_from_spir_v_combined(
     spvc_compiler_options_set_uint(vertex_options, SPVC_COMPILER_OPTION_GLSL_VERSION, 330);
     spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_GLSL_ES, SPVC_FALSE);
     spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_GLSL_ENABLE_420PACK_EXTENSION, SPVC_FALSE);
-    spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_GLSL_VULKAN_SEMANTICS, SPVC_TRUE);
+    spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_GLSL_VULKAN_SEMANTICS, SPVC_FALSE);
     spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_GLSL_SEPARATE_SHADER_OBJECTS, SPVC_FALSE);
 
     spvc_compiler_options_set_uint(fragment_options, SPVC_COMPILER_OPTION_GLSL_VERSION, 330);
     spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_GLSL_ES, SPVC_FALSE);
     spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_GLSL_ENABLE_420PACK_EXTENSION, SPVC_FALSE);
-    spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_GLSL_VULKAN_SEMANTICS, SPVC_TRUE);
+    spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_GLSL_VULKAN_SEMANTICS, SPVC_FALSE);
     spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_GLSL_SEPARATE_SHADER_OBJECTS, SPVC_FALSE);
     
     // 禁用重命名所有变量的行为，保留原始命名
@@ -891,13 +891,13 @@ void _jegl_regenerate_and_alloc_glsl_gles300_from_spir_v_combined(
     spvc_compiler_options_set_uint(vertex_options, SPVC_COMPILER_OPTION_GLSL_VERSION, 300);
     spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_GLSL_ES, SPVC_TRUE);
     spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_GLSL_ENABLE_420PACK_EXTENSION, SPVC_FALSE);
-    spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_GLSL_VULKAN_SEMANTICS, SPVC_TRUE);
+    spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_GLSL_VULKAN_SEMANTICS, SPVC_FALSE); // 改为 FALSE 以去除 Vulkan 特有的 set=0 布局
     spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_GLSL_SEPARATE_SHADER_OBJECTS, SPVC_FALSE);
 
     spvc_compiler_options_set_uint(fragment_options, SPVC_COMPILER_OPTION_GLSL_VERSION, 300);
     spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_GLSL_ES, SPVC_TRUE);
     spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_GLSL_ENABLE_420PACK_EXTENSION, SPVC_FALSE);
-    spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_GLSL_VULKAN_SEMANTICS, SPVC_TRUE);
+    spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_GLSL_VULKAN_SEMANTICS, SPVC_FALSE); // 改为 FALSE 以去除 Vulkan 特有的 set=0 布局
     spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_GLSL_SEPARATE_SHADER_OBJECTS, SPVC_FALSE);
 
     // 禁用重命名所有变量的行为，保留原始命名
