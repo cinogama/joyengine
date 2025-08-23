@@ -247,198 +247,6 @@ void scan_used_uniforms_in_wrap(shader_wrapper* wrap)
         _scan_used_uniforms_in_vals(wrap, vout, false, &_scanned_val);
 }
 
-jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
-{
-    assert(cache_file != nullptr);
-
-    jegl_shader* _shader = new jegl_shader();
-
-    jegl_resource* shader = _create_resource();
-    shader->m_type = jegl_resource::SHADER;
-    shader->m_raw_shader_data = _shader;
-
-    uint64_t
-        vertex_glsl_src_len,
-        fragment_glsl_src_len,
-        vertex_glsles_src_len,
-        fragment_glsles_src_len,
-        vertex_hlsl_src_len,
-        fragment_hlsl_src_len,
-        vertex_spirv_src_len,
-        fragment_spirv_src_len;
-
-    // 1. Read generated source
-    // 1.1. GLSL
-    jeecs_file_read(&vertex_glsl_src_len, sizeof(uint64_t), 1, cache_file);
-
-    _shader->m_vertex_glsl_src = (const char*)je_mem_alloc((size_t)vertex_glsl_src_len + 1);
-    jeecs_file_read(const_cast<char*>(_shader->m_vertex_glsl_src), sizeof(char), (size_t)vertex_glsl_src_len, cache_file);
-    const_cast<char*>(_shader->m_vertex_glsl_src)[(size_t)vertex_glsl_src_len] = 0;
-
-    jeecs_file_read(&fragment_glsl_src_len, sizeof(uint64_t), 1, cache_file);
-
-    _shader->m_fragment_glsl_src = (const char*)je_mem_alloc((size_t)fragment_glsl_src_len + 1);
-    jeecs_file_read(const_cast<char*>(_shader->m_fragment_glsl_src), sizeof(char), (size_t)fragment_glsl_src_len, cache_file);
-    const_cast<char*>(_shader->m_fragment_glsl_src)[(size_t)fragment_glsl_src_len] = 0;
-
-    // 1.2. GLSL ES
-
-    jeecs_file_read(&vertex_glsles_src_len, sizeof(uint64_t), 1, cache_file);
-
-    _shader->m_vertex_glsles_src = (const char*)je_mem_alloc((size_t)vertex_glsles_src_len + 1);
-    jeecs_file_read(const_cast<char*>(_shader->m_vertex_glsles_src), sizeof(char), (size_t)vertex_glsles_src_len, cache_file);
-    const_cast<char*>(_shader->m_vertex_glsles_src)[(size_t)vertex_glsles_src_len] = 0;
-
-    jeecs_file_read(&fragment_glsles_src_len, sizeof(uint64_t), 1, cache_file);
-
-    _shader->m_fragment_glsles_src = (const char*)je_mem_alloc((size_t)fragment_glsles_src_len + 1);
-    jeecs_file_read(const_cast<char*>(_shader->m_fragment_glsles_src), sizeof(char), (size_t)fragment_glsles_src_len, cache_file);
-    const_cast<char*>(_shader->m_fragment_glsles_src)[(size_t)fragment_glsles_src_len] = 0;
-
-    // 1.3. HLSL
-    jeecs_file_read(&vertex_hlsl_src_len, sizeof(uint64_t), 1, cache_file);
-
-    _shader->m_vertex_hlsl_src = (const char*)je_mem_alloc((size_t)vertex_hlsl_src_len + 1);
-    jeecs_file_read(const_cast<char*>(_shader->m_vertex_hlsl_src), sizeof(char), (size_t)vertex_hlsl_src_len, cache_file);
-    const_cast<char*>(_shader->m_vertex_hlsl_src)[(size_t)vertex_hlsl_src_len] = 0;
-
-    jeecs_file_read(&fragment_hlsl_src_len, sizeof(uint64_t), 1, cache_file);
-
-    _shader->m_fragment_hlsl_src = (const char*)je_mem_alloc((size_t)fragment_hlsl_src_len + 1);
-    jeecs_file_read(const_cast<char*>(_shader->m_fragment_hlsl_src), sizeof(char), (size_t)fragment_hlsl_src_len, cache_file);
-    const_cast<char*>(_shader->m_fragment_hlsl_src)[(size_t)fragment_hlsl_src_len] = 0;
-
-    // 1.4. SPIR-V
-    jeecs_file_read(&vertex_spirv_src_len, sizeof(uint64_t), 1, cache_file);
-    assert((size_t)vertex_spirv_src_len % sizeof(jegl_shader::spir_v_code_t) == 0);
-
-    _shader->m_vertex_spirv_count = (size_t)vertex_spirv_src_len / sizeof(jegl_shader::spir_v_code_t);
-    _shader->m_vertex_spirv_codes = (const jegl_shader::spir_v_code_t*)je_mem_alloc((size_t)vertex_spirv_src_len);
-    jeecs_file_read(const_cast<jegl_shader::spir_v_code_t*>(_shader->m_vertex_spirv_codes), sizeof(char), (size_t)vertex_spirv_src_len, cache_file);
-
-    jeecs_file_read(&fragment_spirv_src_len, sizeof(uint64_t), 1, cache_file);
-    assert((size_t)fragment_spirv_src_len % sizeof(jegl_shader::spir_v_code_t) == 0);
-
-    _shader->m_fragment_spirv_count = (size_t)fragment_spirv_src_len / sizeof(jegl_shader::spir_v_code_t);
-    _shader->m_fragment_spirv_codes = (const jegl_shader::spir_v_code_t*)je_mem_alloc((size_t)fragment_spirv_src_len);
-    jeecs_file_read(const_cast<jegl_shader::spir_v_code_t*>(_shader->m_fragment_spirv_codes), sizeof(char), (size_t)fragment_spirv_src_len, cache_file);
-
-    // 2. read shader config
-    jeecs_file_read(&_shader->m_depth_test, sizeof(jegl_shader::depth_test_method), 1, cache_file);
-    jeecs_file_read(&_shader->m_depth_mask, sizeof(jegl_shader::depth_mask_method), 1, cache_file);
-    jeecs_file_read(&_shader->m_blend_equation, sizeof(jegl_shader::blend_equation), 1, cache_file);
-    jeecs_file_read(&_shader->m_blend_src_mode, sizeof(jegl_shader::blend_method), 1, cache_file);
-    jeecs_file_read(&_shader->m_blend_dst_mode, sizeof(jegl_shader::blend_method), 1, cache_file);
-    jeecs_file_read(&_shader->m_cull_mode, sizeof(jegl_shader::cull_mode), 1, cache_file);
-
-    // 3. read if shader is enable to shared?
-    jeecs_file_read(&_shader->m_enable_to_shared, sizeof(bool), 1, cache_file);
-
-    // 4. read and generate custom variable & uniform block informs
-
-    // 4.1 read and generate custom variable
-    uint64_t custom_uniform_count;
-    jeecs_file_read(&custom_uniform_count, sizeof(uint64_t), 1, cache_file);
-
-    _shader->m_custom_uniforms = nullptr;
-
-    jegl_shader::unifrom_variables* last_create_variable = nullptr;
-    for (uint64_t i = 0; i < custom_uniform_count; ++i)
-    {
-        jegl_shader::unifrom_variables* current_variable = new jegl_shader::unifrom_variables();
-        if (_shader->m_custom_uniforms == nullptr)
-            _shader->m_custom_uniforms = current_variable;
-
-        if (last_create_variable != nullptr)
-            last_create_variable->m_next = current_variable;
-
-        // 4.1.1 read name
-        uint64_t uniform_name_len;
-        jeecs_file_read(&uniform_name_len, sizeof(uint64_t), 1, cache_file);
-        current_variable->m_name = (const char*)je_mem_alloc((size_t)uniform_name_len + 1);
-        jeecs_file_read(const_cast<char*>(current_variable->m_name), sizeof(char), (size_t)uniform_name_len, cache_file);
-        const_cast<char*>(current_variable->m_name)[(size_t)uniform_name_len] = 0;
-
-        // 4.1.2 read type
-        jeecs_file_read(&current_variable->m_uniform_type, sizeof(jegl_shader::uniform_type), 1, cache_file);
-
-        // 4.1.3 read data
-        static_assert(sizeof(current_variable->mat4x4) == sizeof(float[4][4]));
-        jeecs_file_read(&current_variable->mat4x4, sizeof(float[4][4]), 1, cache_file);
-
-        current_variable->m_index = jeecs::typing::INVALID_UINT32;
-        current_variable->m_updated = false;
-
-        last_create_variable = current_variable;
-        current_variable->m_next = nullptr;
-    }
-
-    // 4.2 read uniform block informs
-    uint64_t custom_uniform_block_count;
-    jeecs_file_read(&custom_uniform_block_count, sizeof(uint64_t), 1, cache_file);
-
-    _shader->m_custom_uniform_blocks = nullptr;
-
-    jegl_shader::uniform_blocks* last_create_block = nullptr;
-    for (uint64_t i = 0; i < custom_uniform_block_count; ++i)
-    {
-        jegl_shader::uniform_blocks* current_block = new jegl_shader::uniform_blocks();
-        if (_shader->m_custom_uniform_blocks == nullptr)
-            _shader->m_custom_uniform_blocks = current_block;
-
-        if (last_create_block != nullptr)
-            last_create_block->m_next = current_block;
-
-        // 4.2.1 read name
-        uint64_t uniform_name_len;
-        jeecs_file_read(&uniform_name_len, sizeof(uint64_t), 1, cache_file);
-        current_block->m_name = (const char*)je_mem_alloc((size_t)uniform_name_len + 1);
-        jeecs_file_read(const_cast<char*>(current_block->m_name), sizeof(char), (size_t)uniform_name_len, cache_file);
-        const_cast<char*>(current_block->m_name)[(size_t)uniform_name_len] = 0;
-
-        // 4.2.2 read binding place
-        static_assert(sizeof(current_block->m_specify_binding_place) == sizeof(uint32_t));
-        jeecs_file_read(&current_block->m_specify_binding_place, sizeof(uint32_t), 1, cache_file);
-
-        last_create_block = current_block;
-        current_block->m_next = nullptr;
-    }
-
-    // 4.3 read shader vertex layout
-    uint64_t vertex_in_count;
-    jeecs_file_read(&vertex_in_count, sizeof(uint64_t), 1, cache_file);
-
-    _shader->m_vertex_in_count = (size_t)vertex_in_count;
-    _shader->m_vertex_in = new jegl_shader::vertex_in_variables[_shader->m_vertex_in_count];
-
-    jeecs_file_read(_shader->m_vertex_in, sizeof(jegl_shader::vertex_in_variables),
-        _shader->m_vertex_in_count, cache_file);
-
-    // 4.4 read sampler informations;
-    uint64_t sampler_count;
-    jeecs_file_read(&sampler_count, sizeof(uint64_t), 1, cache_file);
-    _shader->m_sampler_count = (size_t)sampler_count;
-    _shader->m_sampler_methods = new jegl_shader::sampler_method[(size_t)sampler_count];
-    for (uint64_t i = 0; i < sampler_count; ++i)
-    {
-        auto& sampler = _shader->m_sampler_methods[i];
-        jeecs_file_read(&sampler.m_min, sizeof(jegl_shader::fliter_mode), 1, cache_file);
-        jeecs_file_read(&sampler.m_mag, sizeof(jegl_shader::fliter_mode), 1, cache_file);
-        jeecs_file_read(&sampler.m_mip, sizeof(jegl_shader::fliter_mode), 1, cache_file);
-        jeecs_file_read(&sampler.m_uwrap, sizeof(jegl_shader::wrap_mode), 1, cache_file);
-        jeecs_file_read(&sampler.m_vwrap, sizeof(jegl_shader::wrap_mode), 1, cache_file);
-        jeecs_file_read(&sampler.m_sampler_id, sizeof(uint32_t), 1, cache_file);
-        jeecs_file_read(&sampler.m_pass_id_count, sizeof(uint64_t), 1, cache_file);
-
-        sampler.m_pass_ids = new uint32_t[(size_t)sampler.m_pass_id_count];
-        jeecs_file_read(sampler.m_pass_ids, sizeof(uint32_t), (size_t)sampler.m_pass_id_count, cache_file);
-    }
-
-    jeecs_file_close(cache_file);
-
-    shader->m_path = jeecs::basic::make_new_string(path);
-    return shader;
-}
 void _jegl_create_shader_cache(jegl_resource* shader_resource, wo_integer_t virtual_file_crc64)
 {
     assert(shader_resource->m_path != nullptr && shader_resource->m_raw_shader_data && shader_resource->m_type == jegl_resource::type::SHADER);
@@ -1259,6 +1067,219 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_s
     }
     write_to_shader->m_sampler_methods = sampler_methods;
 }
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void jegl_shader_generator_init()
+{
+    glslang_initialize_process();
+}
+void jegl_shader_generator_shutdown()
+{
+    glslang_finalize_process();
+}
+
+#else
+void jegl_shader_generator_init()
+{
+}
+void jegl_shader_generator_shutdown()
+{
+}
+#endif
+
+jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
+{
+    assert(cache_file != nullptr);
+
+    jegl_shader* _shader = new jegl_shader();
+
+    jegl_resource* shader = _create_resource();
+    shader->m_type = jegl_resource::SHADER;
+    shader->m_raw_shader_data = _shader;
+
+    uint64_t
+        vertex_glsl_src_len,
+        fragment_glsl_src_len,
+        vertex_glsles_src_len,
+        fragment_glsles_src_len,
+        vertex_hlsl_src_len,
+        fragment_hlsl_src_len,
+        vertex_spirv_src_len,
+        fragment_spirv_src_len;
+
+    // 1. Read generated source
+    // 1.1. GLSL
+    jeecs_file_read(&vertex_glsl_src_len, sizeof(uint64_t), 1, cache_file);
+
+    _shader->m_vertex_glsl_src = (const char*)je_mem_alloc((size_t)vertex_glsl_src_len + 1);
+    jeecs_file_read(const_cast<char*>(_shader->m_vertex_glsl_src), sizeof(char), (size_t)vertex_glsl_src_len, cache_file);
+    const_cast<char*>(_shader->m_vertex_glsl_src)[(size_t)vertex_glsl_src_len] = 0;
+
+    jeecs_file_read(&fragment_glsl_src_len, sizeof(uint64_t), 1, cache_file);
+
+    _shader->m_fragment_glsl_src = (const char*)je_mem_alloc((size_t)fragment_glsl_src_len + 1);
+    jeecs_file_read(const_cast<char*>(_shader->m_fragment_glsl_src), sizeof(char), (size_t)fragment_glsl_src_len, cache_file);
+    const_cast<char*>(_shader->m_fragment_glsl_src)[(size_t)fragment_glsl_src_len] = 0;
+
+    // 1.2. GLSL ES
+
+    jeecs_file_read(&vertex_glsles_src_len, sizeof(uint64_t), 1, cache_file);
+
+    _shader->m_vertex_glsles_src = (const char*)je_mem_alloc((size_t)vertex_glsles_src_len + 1);
+    jeecs_file_read(const_cast<char*>(_shader->m_vertex_glsles_src), sizeof(char), (size_t)vertex_glsles_src_len, cache_file);
+    const_cast<char*>(_shader->m_vertex_glsles_src)[(size_t)vertex_glsles_src_len] = 0;
+
+    jeecs_file_read(&fragment_glsles_src_len, sizeof(uint64_t), 1, cache_file);
+
+    _shader->m_fragment_glsles_src = (const char*)je_mem_alloc((size_t)fragment_glsles_src_len + 1);
+    jeecs_file_read(const_cast<char*>(_shader->m_fragment_glsles_src), sizeof(char), (size_t)fragment_glsles_src_len, cache_file);
+    const_cast<char*>(_shader->m_fragment_glsles_src)[(size_t)fragment_glsles_src_len] = 0;
+
+    // 1.3. HLSL
+    jeecs_file_read(&vertex_hlsl_src_len, sizeof(uint64_t), 1, cache_file);
+
+    _shader->m_vertex_hlsl_src = (const char*)je_mem_alloc((size_t)vertex_hlsl_src_len + 1);
+    jeecs_file_read(const_cast<char*>(_shader->m_vertex_hlsl_src), sizeof(char), (size_t)vertex_hlsl_src_len, cache_file);
+    const_cast<char*>(_shader->m_vertex_hlsl_src)[(size_t)vertex_hlsl_src_len] = 0;
+
+    jeecs_file_read(&fragment_hlsl_src_len, sizeof(uint64_t), 1, cache_file);
+
+    _shader->m_fragment_hlsl_src = (const char*)je_mem_alloc((size_t)fragment_hlsl_src_len + 1);
+    jeecs_file_read(const_cast<char*>(_shader->m_fragment_hlsl_src), sizeof(char), (size_t)fragment_hlsl_src_len, cache_file);
+    const_cast<char*>(_shader->m_fragment_hlsl_src)[(size_t)fragment_hlsl_src_len] = 0;
+
+    // 1.4. SPIR-V
+    jeecs_file_read(&vertex_spirv_src_len, sizeof(uint64_t), 1, cache_file);
+    assert((size_t)vertex_spirv_src_len % sizeof(jegl_shader::spir_v_code_t) == 0);
+
+    _shader->m_vertex_spirv_count = (size_t)vertex_spirv_src_len / sizeof(jegl_shader::spir_v_code_t);
+    _shader->m_vertex_spirv_codes = (const jegl_shader::spir_v_code_t*)je_mem_alloc((size_t)vertex_spirv_src_len);
+    jeecs_file_read(const_cast<jegl_shader::spir_v_code_t*>(_shader->m_vertex_spirv_codes), sizeof(char), (size_t)vertex_spirv_src_len, cache_file);
+
+    jeecs_file_read(&fragment_spirv_src_len, sizeof(uint64_t), 1, cache_file);
+    assert((size_t)fragment_spirv_src_len % sizeof(jegl_shader::spir_v_code_t) == 0);
+
+    _shader->m_fragment_spirv_count = (size_t)fragment_spirv_src_len / sizeof(jegl_shader::spir_v_code_t);
+    _shader->m_fragment_spirv_codes = (const jegl_shader::spir_v_code_t*)je_mem_alloc((size_t)fragment_spirv_src_len);
+    jeecs_file_read(const_cast<jegl_shader::spir_v_code_t*>(_shader->m_fragment_spirv_codes), sizeof(char), (size_t)fragment_spirv_src_len, cache_file);
+
+    // 2. read shader config
+    jeecs_file_read(&_shader->m_depth_test, sizeof(jegl_shader::depth_test_method), 1, cache_file);
+    jeecs_file_read(&_shader->m_depth_mask, sizeof(jegl_shader::depth_mask_method), 1, cache_file);
+    jeecs_file_read(&_shader->m_blend_equation, sizeof(jegl_shader::blend_equation), 1, cache_file);
+    jeecs_file_read(&_shader->m_blend_src_mode, sizeof(jegl_shader::blend_method), 1, cache_file);
+    jeecs_file_read(&_shader->m_blend_dst_mode, sizeof(jegl_shader::blend_method), 1, cache_file);
+    jeecs_file_read(&_shader->m_cull_mode, sizeof(jegl_shader::cull_mode), 1, cache_file);
+
+    // 3. read if shader is enable to shared?
+    jeecs_file_read(&_shader->m_enable_to_shared, sizeof(bool), 1, cache_file);
+
+    // 4. read and generate custom variable & uniform block informs
+
+    // 4.1 read and generate custom variable
+    uint64_t custom_uniform_count;
+    jeecs_file_read(&custom_uniform_count, sizeof(uint64_t), 1, cache_file);
+
+    _shader->m_custom_uniforms = nullptr;
+
+    jegl_shader::unifrom_variables* last_create_variable = nullptr;
+    for (uint64_t i = 0; i < custom_uniform_count; ++i)
+    {
+        jegl_shader::unifrom_variables* current_variable = new jegl_shader::unifrom_variables();
+        if (_shader->m_custom_uniforms == nullptr)
+            _shader->m_custom_uniforms = current_variable;
+
+        if (last_create_variable != nullptr)
+            last_create_variable->m_next = current_variable;
+
+        // 4.1.1 read name
+        uint64_t uniform_name_len;
+        jeecs_file_read(&uniform_name_len, sizeof(uint64_t), 1, cache_file);
+        current_variable->m_name = (const char*)je_mem_alloc((size_t)uniform_name_len + 1);
+        jeecs_file_read(const_cast<char*>(current_variable->m_name), sizeof(char), (size_t)uniform_name_len, cache_file);
+        const_cast<char*>(current_variable->m_name)[(size_t)uniform_name_len] = 0;
+
+        // 4.1.2 read type
+        jeecs_file_read(&current_variable->m_uniform_type, sizeof(jegl_shader::uniform_type), 1, cache_file);
+
+        // 4.1.3 read data
+        static_assert(sizeof(current_variable->mat4x4) == sizeof(float[4][4]));
+        jeecs_file_read(&current_variable->mat4x4, sizeof(float[4][4]), 1, cache_file);
+
+        current_variable->m_index = jeecs::typing::INVALID_UINT32;
+        current_variable->m_updated = false;
+
+        last_create_variable = current_variable;
+        current_variable->m_next = nullptr;
+    }
+
+    // 4.2 read uniform block informs
+    uint64_t custom_uniform_block_count;
+    jeecs_file_read(&custom_uniform_block_count, sizeof(uint64_t), 1, cache_file);
+
+    _shader->m_custom_uniform_blocks = nullptr;
+
+    jegl_shader::uniform_blocks* last_create_block = nullptr;
+    for (uint64_t i = 0; i < custom_uniform_block_count; ++i)
+    {
+        jegl_shader::uniform_blocks* current_block = new jegl_shader::uniform_blocks();
+        if (_shader->m_custom_uniform_blocks == nullptr)
+            _shader->m_custom_uniform_blocks = current_block;
+
+        if (last_create_block != nullptr)
+            last_create_block->m_next = current_block;
+
+        // 4.2.1 read name
+        uint64_t uniform_name_len;
+        jeecs_file_read(&uniform_name_len, sizeof(uint64_t), 1, cache_file);
+        current_block->m_name = (const char*)je_mem_alloc((size_t)uniform_name_len + 1);
+        jeecs_file_read(const_cast<char*>(current_block->m_name), sizeof(char), (size_t)uniform_name_len, cache_file);
+        const_cast<char*>(current_block->m_name)[(size_t)uniform_name_len] = 0;
+
+        // 4.2.2 read binding place
+        static_assert(sizeof(current_block->m_specify_binding_place) == sizeof(uint32_t));
+        jeecs_file_read(&current_block->m_specify_binding_place, sizeof(uint32_t), 1, cache_file);
+
+        last_create_block = current_block;
+        current_block->m_next = nullptr;
+    }
+
+    // 4.3 read shader vertex layout
+    uint64_t vertex_in_count;
+    jeecs_file_read(&vertex_in_count, sizeof(uint64_t), 1, cache_file);
+
+    _shader->m_vertex_in_count = (size_t)vertex_in_count;
+    _shader->m_vertex_in = new jegl_shader::vertex_in_variables[_shader->m_vertex_in_count];
+
+    jeecs_file_read(_shader->m_vertex_in, sizeof(jegl_shader::vertex_in_variables),
+        _shader->m_vertex_in_count, cache_file);
+
+    // 4.4 read sampler informations;
+    uint64_t sampler_count;
+    jeecs_file_read(&sampler_count, sizeof(uint64_t), 1, cache_file);
+    _shader->m_sampler_count = (size_t)sampler_count;
+    _shader->m_sampler_methods = new jegl_shader::sampler_method[(size_t)sampler_count];
+    for (uint64_t i = 0; i < sampler_count; ++i)
+    {
+        auto& sampler = _shader->m_sampler_methods[i];
+        jeecs_file_read(&sampler.m_min, sizeof(jegl_shader::fliter_mode), 1, cache_file);
+        jeecs_file_read(&sampler.m_mag, sizeof(jegl_shader::fliter_mode), 1, cache_file);
+        jeecs_file_read(&sampler.m_mip, sizeof(jegl_shader::fliter_mode), 1, cache_file);
+        jeecs_file_read(&sampler.m_uwrap, sizeof(jegl_shader::wrap_mode), 1, cache_file);
+        jeecs_file_read(&sampler.m_vwrap, sizeof(jegl_shader::wrap_mode), 1, cache_file);
+        jeecs_file_read(&sampler.m_sampler_id, sizeof(uint32_t), 1, cache_file);
+        jeecs_file_read(&sampler.m_pass_id_count, sizeof(uint64_t), 1, cache_file);
+
+        sampler.m_pass_ids = new uint32_t[(size_t)sampler.m_pass_id_count];
+        jeecs_file_read(sampler.m_pass_ids, sizeof(uint32_t), (size_t)sampler.m_pass_id_count, cache_file);
+    }
+
+    jeecs_file_close(cache_file);
+
+    shader->m_path = jeecs::basic::make_new_string(path);
+    return shader;
+}
 void jegl_shader_free_generated_shader_source(jegl_shader* write_to_shader)
 {
     if (write_to_shader->m_vertex_glsl_src != nullptr)
@@ -1314,26 +1335,6 @@ void jegl_shader_free_generated_shader_source(jegl_shader* write_to_shader)
         delete[] write_to_shader->m_sampler_methods[i].m_pass_ids;
     delete[] write_to_shader->m_sampler_methods;
 }
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-void jegl_shader_generator_init()
-{
-    glslang_initialize_process();
-}
-void jegl_shader_generator_shutdown()
-{
-    glslang_finalize_process();
-}
-
-#else
-void jegl_shader_generator_init()
-{
-}
-void jegl_shader_generator_shutdown()
-{
-}
-#endif
 
 
 WO_API wo_api jeecs_shader_float_create(wo_vm vm, wo_value args)
