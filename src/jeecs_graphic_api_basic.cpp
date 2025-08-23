@@ -1647,7 +1647,6 @@ bool jegl_bind_shader(jegl_resource* shader)
                         uniform_vars->m_index, uniform_vars->mat4x4);
                     break;
                 case jegl_shader::uniform_type::INT:
-                case jegl_shader::uniform_type::TEXTURE:
                     jegl_uniform_int(
                         uniform_vars->m_index, uniform_vars->ix);
                     break;
@@ -1662,6 +1661,8 @@ bool jegl_bind_shader(jegl_resource* shader)
                 case jegl_shader::uniform_type::INT4:
                     jegl_uniform_int4(
                         uniform_vars->m_index, uniform_vars->ix, uniform_vars->iy, uniform_vars->iz, uniform_vars->iw);
+                    break;
+                case jegl_shader::uniform_type::TEXTURE:
                     break;
                 default:
                     jeecs::debug::logerr("Unsupport uniform variable type.");

@@ -24,10 +24,115 @@
 #include "jeecs_graphic_api_interface_glfw.hpp"
 #endif // JE_GL_USE_EGL_INSTEAD_GLFW
 
+#ifdef max
+#   undef max // Fuck windows.
+#endif
+#ifdef min
+#   undef min // Fuck windows.
+#endif
 // Here is low-level-graphic-api impl.
 // OpenGL version.
 namespace jeecs::graphic::api::gl3
 {
+    struct jegl3_vertex_data
+    {
+        GLuint m_vao;
+        GLuint m_vbo;
+        GLuint m_ebo;
+        GLenum m_method;
+        GLsizei m_pointcount;
+    };
+
+    struct jegl3_sampler
+    {
+        GLuint m_sampler;
+        std::vector<uint32_t> m_passes;
+
+        jegl3_sampler()
+        {
+            glGenSamplers(1, &m_sampler);
+        }
+        ~jegl3_sampler()
+        {
+            glDeleteSamplers(1, &m_sampler);
+        }
+    };
+
+    struct jegl3_shader_blob
+    {
+        struct jegl3_shader_blob_shared
+        {
+            std::vector<jegl3_sampler> m_samplers;
+
+            std::unordered_map<std::string, uint32_t> m_ulocations;
+            size_t m_uniform_size;
+
+            JECS_DISABLE_MOVE_AND_COPY(jegl3_shader_blob_shared);
+            jegl3_shader_blob_shared(uint32_t sampler_count)
+                : m_samplers(sampler_count)
+            {
+            }
+
+            uint32_t get_built_in_location(const std::string& name) const
+            {
+                auto fnd = m_ulocations.find(name);
+                if (fnd != m_ulocations.end())
+                    return fnd->second;
+
+                return jeecs::typing::INVALID_UINT32;
+            }
+        };
+
+        GLuint m_vertex_shader;
+        GLuint m_fragment_shader;
+        jeecs::basic::resource<jegl3_shader_blob_shared> m_shared_blob_data;
+
+        JECS_DISABLE_MOVE_AND_COPY(jegl3_shader_blob);
+
+        jegl3_shader_blob(GLuint vs, GLuint fs, jegl3_shader_blob_shared* s)
+            : m_vertex_shader(vs)
+            , m_fragment_shader(fs)
+            , m_shared_blob_data(jeecs::basic::resource<jegl3_shader_blob_shared>(s))
+        {
+        }
+    };
+
+    struct jegl_gl3_shader
+    {
+        GLuint uniforms;
+        GLuint instance;
+        jeecs::basic::resource<jegl3_shader_blob::jegl3_shader_blob_shared>
+            m_shared_blob_data;
+
+        size_t uniform_buffer_size;
+        size_t uniform_buffer_update_offset;
+        size_t uniform_buffer_update_size;
+        void* uniform_cpu_buffers;
+
+        jegl_gl3_shader(GLuint _instance, GLuint _uniforms, jegl3_shader_blob* blob)
+            : uniforms(_uniforms)
+            , instance(_instance)
+            , m_shared_blob_data(blob->m_shared_blob_data)
+            , uniform_buffer_size(blob->m_shared_blob_data->m_uniform_size)
+            , uniform_buffer_update_offset(0)
+            , uniform_buffer_update_size(0)
+        {
+            const auto uniform_size = blob->m_shared_blob_data->m_uniform_size;
+            if (uniform_size > 0)
+                uniform_cpu_buffers = malloc(uniform_size);
+            else
+                uniform_cpu_buffers = nullptr;
+        }
+        ~jegl_gl3_shader()
+        {
+            if (uniform_cpu_buffers != nullptr)
+                free(uniform_cpu_buffers);
+
+            glDeleteBuffers(1, &uniforms);
+            glDeleteProgram(instance);
+        }
+    };
+
     struct jegl_gl3_context
     {
         basic_interface* m_interface;
@@ -39,6 +144,7 @@ namespace jeecs::graphic::api::gl3
         GLuint m_binded_texture_passes[128] = {};
         GLenum m_binded_texture_passes_type[128] = {};
 
+        jegl_gl3_shader* current_active_shader_may_null = nullptr;
         jegl_shader::depth_test_method ACTIVE_DEPTH_MODE = jegl_shader::depth_test_method::INVALID;
         jegl_shader::depth_mask_method ACTIVE_MASK_MODE = jegl_shader::depth_mask_method::INVALID;
         jegl_shader::blend_equation ACTIVE_BLEND_EQUATION = jegl_shader::blend_equation::INVALID;
@@ -97,75 +203,8 @@ namespace jeecs::graphic::api::gl3
         }
     };
 
-    /////////////////////////////////////////////////////////////////////////////////////
 
-    struct jegl3_vertex_data
-    {
-        GLuint m_vao;
-        GLuint m_vbo;
-        GLuint m_ebo;
-        GLenum m_method;
-        GLsizei m_pointcount;
-    };
-
-    struct jegl3_sampler
-    {
-        GLuint m_sampler;
-        std::vector<uint32_t> m_passes;
-
-        jegl3_sampler()
-        {
-            glGenSamplers(1, &m_sampler);
-        }
-        ~jegl3_sampler()
-        {
-            glDeleteSamplers(1, &m_sampler);
-        }
-    };
-
-    struct jegl3_shader_blob
-    {
-        struct jegl3_shader_blob_shared
-        {
-            std::vector<jegl3_sampler> m_samplers;
-
-            JECS_DISABLE_MOVE_AND_COPY(jegl3_shader_blob_shared);
-            jegl3_shader_blob_shared(uint32_t sampler_count)
-                : m_samplers(sampler_count)
-            {
-            }
-        };
-
-        GLuint m_vertex_shader;
-        GLuint m_fragment_shader;
-        jeecs::basic::resource<jegl3_shader_blob_shared> m_shared_blob_data;
-
-        JECS_DISABLE_MOVE_AND_COPY(jegl3_shader_blob);
-
-        jegl3_shader_blob(GLuint vs, GLuint fs, jegl3_shader_blob_shared* s)
-            : m_vertex_shader(vs)
-            , m_fragment_shader(fs)
-            , m_shared_blob_data(jeecs::basic::resource<jegl3_shader_blob_shared>(s))
-        {
-        }
-    };
-
-    struct jegl_gl3_shader
-    {
-        GLuint instance;
-        jeecs::basic::resource<jegl3_shader_blob::jegl3_shader_blob_shared> m_shared_blob_data;
-
-        jegl_gl3_shader(GLuint instance, jegl3_shader_blob* blob)
-            : instance(instance), m_shared_blob_data(blob->m_shared_blob_data)
-        {
-        }
-        ~jegl_gl3_shader()
-        {
-            glDeleteProgram(instance);
-        }
-    };
-
-    void _gl_bind_shader_samplers(jegl_gl3_shader* shader_instance)
+    void _gl_bind_shader_samplers (jegl_gl3_shader* shader_instance)
     {
         for (auto& sampler : shader_instance->m_shared_blob_data->m_samplers)
         {
@@ -390,113 +429,78 @@ namespace jeecs::graphic::api::gl3
         jegl_shader::uniform_type type,
         const void* val)
     {
-        if (location == jeecs::typing::INVALID_UINT32)
+        jegl_gl3_context* context = reinterpret_cast<jegl_gl3_context*>(ctx);
+
+        if (location == jeecs::typing::INVALID_UINT32
+            || context->current_active_shader_may_null == nullptr)
             return;
 
+        auto* current_shader = context->current_active_shader_may_null;
+
+        size_t data_size_byte_length = 0;
         switch (type)
         {
         case jegl_shader::INT:
-        {
-            glUniform1i((GLint)location, *reinterpret_cast<const int*>(val));
-            break;
-        }
-        case jegl_shader::INT2:
-        {
-            const int* vptr = reinterpret_cast<const int*>(val);
-            glUniform2i((GLint)location, vptr[0], vptr[1]);
-            break;
-        }
-        case jegl_shader::INT3:
-        {
-            const int* vptr = reinterpret_cast<const int*>(val);
-            glUniform3i((GLint)location, vptr[0], vptr[1], vptr[2]);
-            break;
-        }
-        case jegl_shader::INT4:
-        {
-            const int* vptr = reinterpret_cast<const int*>(val);
-            glUniform4i((GLint)location, vptr[0], vptr[1], vptr[2], vptr[3]);
-            break;
-        }
         case jegl_shader::FLOAT:
-        {
-            glUniform1f((GLint)location, *reinterpret_cast<const float*>(val));
+            data_size_byte_length = 4;
             break;
-        }
+        case jegl_shader::INT2:
         case jegl_shader::FLOAT2:
-        {
-            const float* vptr = reinterpret_cast<const float*>(val);
-            glUniform2f((GLint)location, vptr[0], vptr[1]);
+            data_size_byte_length = 8;
             break;
-        }
+        case jegl_shader::INT3:
         case jegl_shader::FLOAT3:
-        {
-            const float* vptr = reinterpret_cast<const float*>(val);
-            glUniform3f((GLint)location, vptr[0], vptr[1], vptr[2]);
+            data_size_byte_length = 12;
             break;
-        }
+        case jegl_shader::INT4:
         case jegl_shader::FLOAT4:
-        {
-            const float* vptr = reinterpret_cast<const float*>(val);
-            glUniform4f((GLint)location, vptr[0], vptr[1], vptr[2], vptr[3]);
+            data_size_byte_length = 16;
             break;
-        }
         case jegl_shader::FLOAT4X4:
-        {
-            glUniformMatrix4fv((GLint)location, 1, false, reinterpret_cast<const float*>(val));
+            data_size_byte_length = 64;
             break;
-        }
         default:
             jeecs::debug::logerr("Unknown uniform variable type to set.");
             break;
         }
+
+        memcpy(
+            reinterpret_cast<void*>((intptr_t)current_shader->uniform_cpu_buffers + location),
+            val,
+            data_size_byte_length);
+
+        if (current_shader->uniform_buffer_update_size == 0)
+        {
+            current_shader->uniform_buffer_update_offset = location;
+            current_shader->uniform_buffer_update_size = data_size_byte_length;
+        }
+        else
+        {
+            const size_t new_begin = std::min(
+                current_shader->uniform_buffer_update_offset,
+                static_cast<size_t>(location));
+
+            const size_t new_end = std::max(
+                current_shader->uniform_buffer_update_offset + current_shader->uniform_buffer_update_size,
+                location + data_size_byte_length);
+
+            current_shader->uniform_buffer_update_offset = new_begin;
+            current_shader->uniform_buffer_update_size = new_end - new_begin;
+        }
     }
 
-    uint32_t gl_get_uniform_location(jegl_context::userdata_t, jegl_resource* shader, const char* name)
-    {
-        jegl_gl3_shader* shader_instance =
-            reinterpret_cast<jegl_gl3_shader*>(shader->m_handle.m_ptr);
-
-        assert(shader_instance != nullptr);
-
-        auto loc = glGetUniformLocation(shader_instance->instance, name);
-        if (loc == -1)
-            return jeecs::typing::INVALID_UINT32;
-        return (uint32_t)loc;
-    }
     jegl_resource_blob gl_create_resource_blob(jegl_context::userdata_t ctx, jegl_resource* resource)
     {
         switch (resource->m_type)
         {
         case jegl_resource::type::SHADER:
         {
-            std::string vertex_src
-#ifdef JE_ENABLE_GL330_GAPI
-                = "#version 330 core\n\n"
-#else
-                = "#version 300 es\n\n"
-#endif
-                ;
-            std::string fragment_src = vertex_src
-#ifdef JE_ENABLE_GL330_GAPI
-                //;
-#else
-                + "precision highp float;\n\n"
-#endif
-                ;
-
-            vertex_src += resource->m_raw_shader_data->m_vertex_glsl_src;
-            const char* vertex_src_cstrptr = vertex_src.c_str();
-
             GLuint vs = glCreateShader(GL_VERTEX_SHADER);
-            glShaderSource(vs, 1, &vertex_src_cstrptr, NULL);
+            glShaderSource(vs, 1, &resource->m_raw_shader_data->m_vertex_glsl_src, NULL);
             glCompileShader(vs);
 
-            fragment_src += resource->m_raw_shader_data->m_fragment_glsl_src;
-            const char* fragment_src_cstrptr = fragment_src.c_str();
-
             GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
-            glShaderSource(fs, 1, &fragment_src_cstrptr, NULL);
+            glShaderSource(fs, 1, &resource->m_raw_shader_data->m_fragment_glsl_src, NULL);
             glCompileShader(fs);
 
             // Check this program is acceptable?
@@ -544,13 +548,14 @@ namespace jeecs::graphic::api::gl3
             }
             else
             {
-                jegl3_shader_blob* blob = new jegl3_shader_blob(
-                    vs, fs, new jegl3_shader_blob::jegl3_shader_blob_shared((uint32_t)resource->m_raw_shader_data->m_sampler_count));
+                auto* shared_blob =
+                    new jegl3_shader_blob::jegl3_shader_blob_shared(
+                        (uint32_t)resource->m_raw_shader_data->m_sampler_count);
 
                 for (size_t i = 0; i < resource->m_raw_shader_data->m_sampler_count; ++i)
                 {
                     auto& sampler_config = resource->m_raw_shader_data->m_sampler_methods[i];
-                    auto& samplers = blob->m_shared_blob_data->m_samplers.at(i);
+                    auto& samplers = shared_blob->m_samplers.at(i);
 
                     switch (sampler_config.m_mag)
                     {
@@ -603,7 +608,58 @@ namespace jeecs::graphic::api::gl3
                         samplers.m_passes.at(i) = sampler_config.m_pass_ids[i];
                     }
                 }
-                return blob;
+
+                uint32_t last_elem_end_place = 0;
+                size_t max_allign = 4;
+                auto* uniforms = resource->m_raw_shader_data->m_custom_uniforms;
+                while (uniforms != nullptr)
+                {
+                    size_t unit_size = 0;
+                    size_t allign_base = 0;
+                    switch (uniforms->m_uniform_type)
+                    {
+                    case jegl_shader::uniform_type::INT:
+                    case jegl_shader::uniform_type::FLOAT:
+                        unit_size = 4;
+                        allign_base = 4;
+                        break;
+                    case jegl_shader::uniform_type::INT2:
+                    case jegl_shader::uniform_type::FLOAT2:
+                        unit_size = 8;
+                        allign_base = 8;
+                        break;
+                    case jegl_shader::uniform_type::INT3:
+                    case jegl_shader::uniform_type::FLOAT3:
+                        unit_size = 12;
+                        allign_base = 16;
+                        break;
+                    case jegl_shader::uniform_type::INT4:
+                    case jegl_shader::uniform_type::FLOAT4:
+                        unit_size = 16;
+                        allign_base = 16;
+                        break;
+                    case jegl_shader::uniform_type::FLOAT4X4:
+                        unit_size = 64;
+                        allign_base = 16;
+                        break;
+                    case jegl_shader::uniform_type::TEXTURE:
+                        break;
+                    }
+
+                    if (unit_size != 0)
+                    {
+                        max_allign = std::max(max_allign, allign_base);
+
+                        last_elem_end_place = jeecs::basic::allign_size(last_elem_end_place, allign_base);
+                        shared_blob->m_ulocations[uniforms->m_name] = last_elem_end_place;
+                        last_elem_end_place += unit_size;
+                    }
+                    uniforms = uniforms->m_next;
+                }
+                shared_blob->m_uniform_size =
+                    jeecs::basic::allign_size(last_elem_end_place, max_allign);
+
+                return new jegl3_shader_blob(vs, fs, shared_blob);
             }
             break;
         }
@@ -671,38 +727,72 @@ namespace jeecs::graphic::api::gl3
                 {
                     glUseProgram(shader_program);
 
-                    resource->m_handle.m_ptr = new jegl_gl3_shader(shader_program, shader_blob);
+                    // NOTE: JoyEngine 约定 ubo 0 为着色器自定义的 uniform 变量
+                    //  之前 OpenGL 版本的实现中，直接储存在着色器本身的 uniform 变量里，但是现在因为旧的着色器代码的
+                    //  生成被弃用，不再这么做，而是模拟 DX 和 Vulkan 的储存方式
+                    // 
+                    // NOTE: Uniform block 不需要额外的初始化，之后自然会被更新
+
+                    GLuint uniform_buffer;
+                    glGenBuffers(1, &uniform_buffer);
+                    glBindBuffer(GL_UNIFORM_BUFFER, uniform_buffer);
+                    glBufferData(
+                        GL_UNIFORM_BUFFER,
+                        (GLsizeiptr)shader_blob->m_shared_blob_data->m_uniform_size,
+                        NULL,
+                        GL_DYNAMIC_DRAW);
+
+                    jegl_gl3_shader* shader_instance =
+                        new jegl_gl3_shader(shader_program, uniform_buffer, shader_blob);
+
+                    resource->m_handle.m_ptr = shader_instance;
+
+                    auto shared_blob_data = shader_instance->m_shared_blob_data.get();
 
                     auto& builtin_uniforms = resource->m_raw_shader_data->m_builtin_uniforms;
 
-                    builtin_uniforms.m_builtin_uniform_m = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_M");
-                    builtin_uniforms.m_builtin_uniform_mv = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_MV");
-                    builtin_uniforms.m_builtin_uniform_mvp = gl_get_uniform_location(ctx, resource, "JOYENGINE_TRANS_MVP");
+                    builtin_uniforms.m_builtin_uniform_m = shared_blob_data->get_built_in_location("JOYENGINE_TRANS_M");
+                    builtin_uniforms.m_builtin_uniform_mv = shared_blob_data->get_built_in_location("JOYENGINE_TRANS_MV");
+                    builtin_uniforms.m_builtin_uniform_mvp = shared_blob_data->get_built_in_location("JOYENGINE_TRANS_MVP");
 
-                    builtin_uniforms.m_builtin_uniform_tiling = gl_get_uniform_location(ctx, resource, "JOYENGINE_TEXTURE_TILING");
-                    builtin_uniforms.m_builtin_uniform_offset = gl_get_uniform_location(ctx, resource, "JOYENGINE_TEXTURE_OFFSET");
+                    builtin_uniforms.m_builtin_uniform_tiling = shared_blob_data->get_built_in_location("JOYENGINE_TEXTURE_TILING");
+                    builtin_uniforms.m_builtin_uniform_offset = shared_blob_data->get_built_in_location("JOYENGINE_TEXTURE_OFFSET");
 
                     builtin_uniforms.m_builtin_uniform_light2d_resolution =
-                        gl_get_uniform_location(ctx, resource, "JOYENGINE_LIGHT2D_RESOLUTION");
+                        shared_blob_data->get_built_in_location("JOYENGINE_LIGHT2D_RESOLUTION");
                     builtin_uniforms.m_builtin_uniform_light2d_decay =
-                        gl_get_uniform_location(ctx, resource, "JOYENGINE_LIGHT2D_DECAY");
+                        shared_blob_data->get_built_in_location("JOYENGINE_LIGHT2D_DECAY");
 
                     // ATTENTION: 注意，以下参数特殊shader可能挪作他用
-                    builtin_uniforms.m_builtin_uniform_local_scale = gl_get_uniform_location(ctx, resource, "JOYENGINE_LOCAL_SCALE");
-                    builtin_uniforms.m_builtin_uniform_color = gl_get_uniform_location(ctx, resource, "JOYENGINE_MAIN_COLOR");
+                    builtin_uniforms.m_builtin_uniform_local_scale = shared_blob_data->get_built_in_location("JOYENGINE_LOCAL_SCALE");
+                    builtin_uniforms.m_builtin_uniform_color = shared_blob_data->get_built_in_location("JOYENGINE_MAIN_COLOR");
 
                     auto* uniform_var = resource->m_raw_shader_data->m_custom_uniforms;
                     while (uniform_var)
                     {
-                        uniform_var->m_index = gl_get_uniform_location(ctx, resource, uniform_var->m_name);
+                        if (uniform_var->m_uniform_type == jegl_shader::uniform_type::TEXTURE)
+                        {
+                            uniform_var->m_index = jeecs::typing::INVALID_UINT32;
+                            const auto location = glGetUniformLocation(shader_program, uniform_var->m_name);
+                            if (location != -1)
+                                glUniform1i(location, (GLint)uniform_var->ix);
+                        }
+                        else
+                        {
+                            uniform_var->m_index =
+                                shared_blob_data->get_built_in_location(uniform_var->m_name);
+                        }
+
                         uniform_var = uniform_var->m_next;
                     }
 
                     auto* uniform_block = resource->m_raw_shader_data->m_custom_uniform_blocks;
                     while (uniform_block)
                     {
-                        GLuint uniform_block_loc = glGetUniformBlockIndex(shader_program, uniform_block->m_name);
-                        glUniformBlockBinding(shader_program, uniform_block_loc, (GLuint)uniform_block->m_specify_binding_place);
+                        const GLuint uniform_block_loc = glGetUniformBlockIndex(shader_program, uniform_block->m_name);
+                        if (GL_INVALID_INDEX != uniform_block_loc)
+                            glUniformBlockBinding(shader_program, uniform_block_loc, 1 + (GLuint)uniform_block->m_specify_binding_place);
+
                         uniform_block = uniform_block->m_next;
                     }
                 }
@@ -1188,8 +1278,15 @@ namespace jeecs::graphic::api::gl3
             reinterpret_cast<jegl_gl3_shader*>(resource->m_handle.m_ptr);
 
         if (shader_instance == nullptr)
+        {
+            context->current_active_shader_may_null = nullptr;
             return false;
+        }
 
+        if (context->current_active_shader_may_null == shader_instance)
+            return true;
+
+        context->current_active_shader_may_null = shader_instance;
         if (resource->m_raw_shader_data != nullptr)
         {
             _gl_update_depth_test_method(context, resource->m_raw_shader_data->m_depth_test);
@@ -1257,8 +1354,6 @@ namespace jeecs::graphic::api::gl3
             break;
         case jegl_resource::type::UNIFORMBUF:
         {
-            glBindBuffer(GL_UNIFORM_BUFFER, (GLuint)resource->m_handle.m_uint1);
-
             if (resource->m_raw_uniformbuf_data != nullptr)
             {
                 glBindBufferRange(GL_UNIFORM_BUFFER, (GLuint)resource->m_raw_uniformbuf_data->m_buffer_binding_place,
@@ -1266,13 +1361,16 @@ namespace jeecs::graphic::api::gl3
 
                 if (resource->m_modified)
                 {
+                    glBindBuffer(GL_UNIFORM_BUFFER, (GLuint)resource->m_handle.m_uint1);
+
                     resource->m_modified = false;
 
                     assert(resource->m_raw_uniformbuf_data->m_update_length != 0);
                     glBufferSubData(GL_UNIFORM_BUFFER,
                         resource->m_raw_uniformbuf_data->m_update_begin_offset,
                         resource->m_raw_uniformbuf_data->m_update_length,
-                        resource->m_raw_uniformbuf_data->m_buffer + resource->m_raw_uniformbuf_data->m_update_begin_offset);
+                        resource->m_raw_uniformbuf_data->m_buffer
+                        + resource->m_raw_uniformbuf_data->m_update_begin_offset);
                 }
             }
             break;
@@ -1324,8 +1422,12 @@ namespace jeecs::graphic::api::gl3
 
     void gl_bind_uniform_buffer(jegl_context::userdata_t, jegl_resource* uniformbuf)
     {
-        glBindBufferRange(GL_UNIFORM_BUFFER, (GLuint)uniformbuf->m_raw_uniformbuf_data->m_buffer_binding_place,
-            (GLuint)uniformbuf->m_handle.m_uint1, 0, uniformbuf->m_raw_uniformbuf_data->m_buffer_size);
+        glBindBufferRange(
+            GL_UNIFORM_BUFFER,
+            1 + (GLuint)uniformbuf->m_raw_uniformbuf_data->m_buffer_binding_place,
+            (GLuint)uniformbuf->m_handle.m_uint1,
+            0,
+            uniformbuf->m_raw_uniformbuf_data->m_buffer_size);
     }
 
     void gl_bind_texture(jegl_context::userdata_t ctx, jegl_resource* texture, size_t pass)
@@ -1340,14 +1442,37 @@ namespace jeecs::graphic::api::gl3
                 (GLint)pass, GL_TEXTURE_2D, (GLuint)texture->m_handle.m_uint1);
     }
 
-    void gl_draw_vertex_with_shader(jegl_context::userdata_t, jegl_resource* vert)
+    void gl_draw_vertex_with_shader(jegl_context::userdata_t ctx, jegl_resource* vert)
     {
+        jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
         jegl3_vertex_data* vdata = std::launder(reinterpret_cast<jegl3_vertex_data*>(vert->m_handle.m_ptr));
 
-        glBindVertexArray(vdata->m_vao);
+        auto* current_shader = context->current_active_shader_may_null;
+        if (current_shader == nullptr || vdata == nullptr)
+            return;
 
-        if (vdata != nullptr)
-            glDrawElements(vdata->m_method, vdata->m_pointcount, GL_UNSIGNED_INT, 0);
+        if (current_shader->uniform_cpu_buffers != nullptr)
+        {
+            glBindBufferRange(GL_UNIFORM_BUFFER, 0,
+                current_shader->uniforms, 0, current_shader->uniform_buffer_size);
+
+            if (current_shader->uniform_buffer_update_size != 0)
+            {
+                glBindBuffer(GL_UNIFORM_BUFFER, current_shader->uniforms);
+
+                glBufferSubData(GL_UNIFORM_BUFFER,
+                    current_shader->uniform_buffer_update_offset,
+                    current_shader->uniform_buffer_update_size,
+                    reinterpret_cast<void*>(
+                        reinterpret_cast<intptr_t>(current_shader->uniform_cpu_buffers)
+                        + current_shader->uniform_buffer_update_offset));
+
+                current_shader->uniform_buffer_update_size = 0;
+            }
+        }
+
+        glBindVertexArray(vdata->m_vao);
+        glDrawElements(vdata->m_method, vdata->m_pointcount, GL_UNSIGNED_INT, 0);
     }
 
     void gl_set_rend_to_framebuffer(

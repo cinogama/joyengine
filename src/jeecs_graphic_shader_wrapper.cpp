@@ -668,38 +668,7 @@ jegl_shader::spir_v_code_t* _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, b
 
     return codes;
 }
-char* _jegl_regenerate_and_alloc_glsl_from_spir_v(const uint32_t* spir_v_code, size_t spir_v_ir_count)
-{
-    spvc_context spir_v_cross_context = nullptr;
-    spvc_context_create(&spir_v_cross_context);
 
-    spvc_parsed_ir ir = nullptr;
-    spvc_context_parse_spirv(spir_v_cross_context, spir_v_code, spir_v_ir_count, &ir);
-
-    spvc_compiler compiler = nullptr;
-    spvc_context_create_compiler(spir_v_cross_context, SPVC_BACKEND_GLSL, ir, SPVC_CAPTURE_MODE_COPY, &compiler);
-
-    spvc_compiler_options options = nullptr;
-    spvc_compiler_create_compiler_options(compiler, &options);
-
-    spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_GLSL_VERSION, 330);
-    spvc_compiler_options_set_bool(options, SPVC_COMPILER_OPTION_GLSL_ENABLE_420PACK_EXTENSION, SPVC_FALSE);
-    spvc_compiler_options_set_bool(options, SPVC_COMPILER_OPTION_GLSL_VULKAN_SEMANTICS, SPVC_TRUE);
-    spvc_compiler_options_set_bool(options, SPVC_COMPILER_OPTION_GLSL_SEPARATE_SHADER_OBJECTS, SPVC_FALSE);
-
-    spvc_compiler_build_combined_image_samplers(compiler);
-
-    spvc_compiler_install_compiler_options(compiler, options);
-
-    const char* src = nullptr;
-    spvc_compiler_compile(compiler, &src);
-
-    char* result = jeecs::basic::make_new_string(src);
-    spvc_context_destroy(spir_v_cross_context);
-    return result;
-}
-
-// 新增：同时处理顶点和片元着色器的SPIR-V代码，确保接口一致性
 void _jegl_regenerate_and_alloc_glsl_from_spir_v_combined(
     const uint32_t* vertex_spir_v_code, size_t vertex_spir_v_ir_count,
     const uint32_t* fragment_spir_v_code, size_t fragment_spir_v_ir_count,
@@ -733,8 +702,6 @@ void _jegl_regenerate_and_alloc_glsl_from_spir_v_combined(
     spvc_compiler_options_set_uint(vertex_options, SPVC_COMPILER_OPTION_GLSL_VERSION, 330);
     spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_GLSL_ENABLE_420PACK_EXTENSION, SPVC_FALSE);
     spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_GLSL_VULKAN_SEMANTICS, SPVC_TRUE);
-    
-    // 关键设置：禁用独立着色器对象以便顶点和片元着色器之间共享接口
     spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_GLSL_SEPARATE_SHADER_OBJECTS, SPVC_FALSE);
 
     spvc_compiler_options_set_uint(fragment_options, SPVC_COMPILER_OPTION_GLSL_VERSION, 330);
@@ -826,22 +793,24 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_s
 
     // 1. Generate original hlsl source.
     jeecs::shader_generator::hlsl_generator _hlsl_generator;
-    auto original_hlsl_vertex = _hlsl_generator.generate_vertex(shader_wrapper_ptr);
-    auto original_hlsl_fragment = _hlsl_generator.generate_fragment(shader_wrapper_ptr);
+    write_to_shader->m_vertex_hlsl_src = 
+        jeecs::basic::make_new_string(_hlsl_generator.generate_vertex(shader_wrapper_ptr));
+    write_to_shader->m_fragment_hlsl_src = 
+        jeecs::basic::make_new_string(_hlsl_generator.generate_fragment(shader_wrapper_ptr));
 
     // 2. Generate spir-v by original hlsl source.
     write_to_shader->m_vertex_spirv_codes =
         _jegl_parse_spir_v_from_hlsl(
-            original_hlsl_vertex.c_str(),
+            write_to_shader->m_vertex_hlsl_src,
             false,
             &write_to_shader->m_vertex_spirv_count);
     write_to_shader->m_fragment_spirv_codes =
         _jegl_parse_spir_v_from_hlsl(
-            original_hlsl_fragment.c_str(), 
+            write_to_shader->m_fragment_hlsl_src,
             true,
             &write_to_shader->m_fragment_spirv_count);
 
-    // 3. Generate glsl by spir-v - 使用新的组合方法
+    // 3. Generate glsl by spir-v
     _jegl_regenerate_and_alloc_glsl_from_spir_v_combined(
         write_to_shader->m_vertex_spirv_codes,
         write_to_shader->m_vertex_spirv_count,
@@ -850,17 +819,7 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_s
         &write_to_shader->m_vertex_glsl_src,
         &write_to_shader->m_fragment_glsl_src);
 
-    // 4. Generate hlsl by spir-v
-    //write_to_shader->m_vertex_hlsl_src =
-    //    _jegl_regenerate_and_alloc_hlsl_from_spir_v(
-    //        write_to_shader->m_vertex_spirv_codes,
-    //        write_to_shader->m_vertex_spirv_count, false);
-    //write_to_shader->m_fragment_hlsl_src =
-    //    _jegl_regenerate_and_alloc_hlsl_from_spir_v(
-    //        write_to_shader->m_fragment_spirv_codes,
-    //        write_to_shader->m_fragment_spirv_count, true);
-
-    // 5. Generate other info.
+    // 4. Generate other info.
     write_to_shader->m_vertex_in_count = shader_wrapper_ptr->vertex_in.size();
     write_to_shader->m_vertex_in = new jegl_shader::vertex_in_variables[write_to_shader->m_vertex_in_count];
     for (size_t i = 0; i < write_to_shader->m_vertex_in_count; ++i)

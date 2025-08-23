@@ -472,9 +472,10 @@ namespace jeecs::graphic::api::dx11
         uint32_t get_built_in_location(const std::string& name) const
         {
             auto fnd = m_ulocations.find(name);
-            if (fnd == m_ulocations.end())
-                return jeecs::typing::INVALID_UINT32;
-            return fnd->second;
+            if (fnd != m_ulocations.end())
+                return fnd->second;
+
+            return jeecs::typing::INVALID_UINT32;
         }
     };
 

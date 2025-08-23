@@ -44,6 +44,7 @@ void jegl_set_host_graphic_api(jegl_graphic_api_entry api)
 
 jegl_graphic_api_entry jegl_get_host_graphic_api(void)
 {
+    return jegl_using_opengl3_apis;
     if (_je_global_context._jegl_host_graphic_api == nullptr)
     {
 #if defined(JE_ENABLE_DX11_GAPI)

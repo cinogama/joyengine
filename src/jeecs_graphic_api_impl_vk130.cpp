@@ -234,9 +234,10 @@ namespace jeecs::graphic::api::vk130
         uint32_t get_built_in_location(const std::string& name) const
         {
             auto fnd = m_blob_data->m_ulocations.find(name);
-            if (fnd == m_blob_data->m_ulocations.end())
-                return jeecs::typing::INVALID_UINT32;
-            return fnd->second;
+            if (fnd != m_blob_data->m_ulocations.end())
+                return fnd->second;
+
+            return jeecs::typing::INVALID_UINT32;
         }
     };
     struct jevk13_texture
@@ -258,6 +259,16 @@ namespace jeecs::graphic::api::vk130
     {
         jeecs::basic::resource<jevk13_shader_blob::blob_data> m_blob_data;
 
+        size_t m_uniform_cpu_buffer_size;
+        size_t m_uniform_cpu_buffer_update_offset;
+        size_t m_uniform_cpu_buffer_update_size;
+        void* m_uniform_cpu_buffer;
+
+        size_t m_next_allocate_ubos_for_uniform_variable;
+        size_t m_command_commit_round;
+
+        std::vector<jevk13_uniformbuf*> m_uniform_variables;
+
         // Vulkan的这个设计真的让人很想吐槽，因为Pipeline和Shader与Pass/Rendbuffer
         // 捆绑在一起了，想尽办法最后就得靠目标渲染缓冲区的格式作为索引，根据shader
         // 的不同渲染目标(格式)创建不同的渲染管线
@@ -265,14 +276,6 @@ namespace jeecs::graphic::api::vk130
         //      也应该被释放。但是得考虑释放的时机
         std::unordered_map<VkRenderPass, VkPipeline>
             m_target_pass_pipelines;
-
-        std::vector<jevk13_uniformbuf*> m_uniform_variables;
-        size_t m_next_allocate_ubos_for_uniform_variable;
-        size_t m_command_commit_round;
-
-        void* m_uniform_cpu_buffer;
-        size_t m_uniform_cpu_buffer_size;
-        bool m_uniform_cpu_buffer_updated;
 
         VkPipeline prepare_pipeline(jegl_vk130_context* context);
         jevk13_uniformbuf* allocate_ubo_for_vars(jegl_vk130_context* context);
@@ -282,7 +285,21 @@ namespace jeecs::graphic::api::vk130
 
         jevk13_shader(jevk13_shader_blob* blob)
             : m_blob_data(blob->m_blob_data)
+            , m_uniform_cpu_buffer_size(blob->m_blob_data->m_uniform_size)
+            , m_uniform_cpu_buffer_update_offset(0)
+            , m_uniform_cpu_buffer_update_size(0)
+            , m_next_allocate_ubos_for_uniform_variable(0)
+            , m_command_commit_round(0)
         {
+            if (m_uniform_cpu_buffer_size != 0)
+                m_uniform_cpu_buffer = malloc(m_uniform_cpu_buffer_size);
+            else
+                m_uniform_cpu_buffer = nullptr;
+        }
+        ~jevk13_shader()
+        {
+            if (m_uniform_cpu_buffer != nullptr)
+                free(m_uniform_cpu_buffer);
         }
     };
     struct jevk13_framebuffer
@@ -355,7 +372,7 @@ namespace jeecs::graphic::api::vk130
                 return result_ft;
             }
         };
-        
+
         vklibrary_instance_proxy vk_proxy;
 
 #   define VK_API_DECL(name) PFN_##name name = vk_proxy.api<PFN_##name>(#name);
@@ -2626,31 +2643,16 @@ namespace jeecs::graphic::api::vk130
 
             jevk13_shader* shader = new jevk13_shader(blob);
 
-            shader->m_uniform_cpu_buffer_size = shader->m_blob_data->m_uniform_size;
-            shader->m_uniform_cpu_buffer_updated = true;
-            shader->m_next_allocate_ubos_for_uniform_variable = 0;
-            shader->m_command_commit_round = 0;
-
-            if (shader->m_blob_data->m_uniform_size == 0)
-                shader->m_uniform_cpu_buffer = nullptr;
-            else
-                shader->m_uniform_cpu_buffer = malloc(shader->m_uniform_cpu_buffer_size);
-
             return shader;
         }
         void destroy_shader(jevk13_shader* shader)
         {
             for (auto& [_, pipeline] : shader->m_target_pass_pipelines)
-            {
                 vkDestroyPipeline(_vk_logic_device, pipeline, nullptr);
-            }
-            for (auto* ubo : shader->m_uniform_variables)
-            {
-                destroy_uniform_buffer(ubo);
-            }
-            if (shader->m_uniform_cpu_buffer != nullptr)
-                free(shader->m_uniform_cpu_buffer);
 
+            for (auto* ubo : shader->m_uniform_variables)
+                destroy_uniform_buffer(ubo);
+ 
             delete shader;
         }
 
@@ -3473,24 +3475,23 @@ namespace jeecs::graphic::api::vk130
             assert(_vk_current_binded_shader != nullptr);
             VkDeviceSize offsets = 0;
 
-            if (_vk_current_binded_shader->m_uniform_cpu_buffer_size != 0)
+            if (_vk_current_binded_shader->m_uniform_cpu_buffer_update_size != 0)
             {
-                if (_vk_current_binded_shader->m_uniform_cpu_buffer_updated)
-                {
-                    _vk_current_binded_shader->m_uniform_cpu_buffer_updated = false;
+                assert(_vk_current_binded_shader->m_uniform_cpu_buffer_size != 0);
 
-                    auto* new_ubo = _vk_current_binded_shader->allocate_ubo_for_vars(this);
+                auto* new_ubo = _vk_current_binded_shader->allocate_ubo_for_vars(this);
 
-                    update_uniform_buffer_with_range(
-                        new_ubo,
-                        _vk_current_binded_shader->m_uniform_cpu_buffer,
-                        0,
-                        _vk_current_binded_shader->m_uniform_cpu_buffer_size);
-                }
+                update_uniform_buffer_with_range(
+                    new_ubo,
+                    _vk_current_binded_shader->m_uniform_cpu_buffer,
+                    _vk_current_binded_shader->m_uniform_cpu_buffer_update_offset,
+                    _vk_current_binded_shader->m_uniform_cpu_buffer_update_size);
 
-                _vk_descriptor_set_allocator->bind_uniform_vars(
-                    _vk_current_binded_shader->get_last_usable_variable(this)->m_uniform_buffer);
+                _vk_current_binded_shader->m_uniform_cpu_buffer_update_size = 0;
             }
+
+            _vk_descriptor_set_allocator->bind_uniform_vars(
+                _vk_current_binded_shader->get_last_usable_variable(this)->m_uniform_buffer);
 
             _vk_descriptor_set_allocator->apply_binding_work(
                 _vk_current_swapchain_image_content);
@@ -4018,14 +4019,14 @@ namespace jeecs::graphic::api::vk130
     {
         jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
 
-        assert(context->_vk_current_binded_shader != nullptr);
+        auto* current_shader = context->_vk_current_binded_shader;
+        assert(current_shader != nullptr);
 
         if (location == jeecs::typing::INVALID_UINT32)
             return;
 
-        context->_vk_current_binded_shader->m_uniform_cpu_buffer_updated = true;
-        assert(context->_vk_current_binded_shader->m_uniform_cpu_buffer_size != 0);
-        assert(context->_vk_current_binded_shader->m_uniform_cpu_buffer != nullptr);
+        assert(current_shader->m_uniform_cpu_buffer_size != 0);
+        assert(current_shader->m_uniform_cpu_buffer != nullptr);
 
         size_t data_size_byte_length = 0;
         switch (type)
@@ -4055,9 +4056,28 @@ namespace jeecs::graphic::api::vk130
         }
 
         memcpy(
-            reinterpret_cast<void*>((intptr_t)context->_vk_current_binded_shader->m_uniform_cpu_buffer + location),
+            reinterpret_cast<void*>((intptr_t)current_shader->m_uniform_cpu_buffer + location),
             val,
             data_size_byte_length);
+
+        if (current_shader->m_uniform_cpu_buffer_update_size == 0)
+        {
+            current_shader->m_uniform_cpu_buffer_update_offset = location;
+            current_shader->m_uniform_cpu_buffer_update_size = data_size_byte_length;
+        }
+        else
+        {
+            const size_t new_begin = std::min(
+                current_shader->m_uniform_cpu_buffer_update_offset,
+                static_cast<size_t>(location));
+
+            const size_t new_end = std::max(
+                current_shader->m_uniform_cpu_buffer_update_offset + current_shader->m_uniform_cpu_buffer_update_size,
+                location + data_size_byte_length);
+
+            current_shader->m_uniform_cpu_buffer_update_offset = new_begin;
+            current_shader->m_uniform_cpu_buffer_update_size = new_end - new_begin;
+        }
     }
 }
 
