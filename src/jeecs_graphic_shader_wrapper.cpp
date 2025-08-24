@@ -654,46 +654,207 @@ void _jegl_regenerate_and_alloc_msl_from_spir_v(
     const uint32_t* fragment_spir_v_code, size_t fragment_spir_v_ir_count,
     const char** out_msl)
 {
-    spvc_context context = NULL;
+    spvc_context spir_v_cross_context = NULL;
     spvc_parsed_ir vertex_ir = NULL;
     spvc_parsed_ir fragment_ir = NULL;
     spvc_compiler vertex_compiler = NULL;
     spvc_compiler fragment_compiler = NULL;
-    spvc_compiler_options options = NULL;
+    spvc_compiler_options vertex_options = NULL;
+    spvc_compiler_options fragment_options = NULL;
 
-    // 创建上下文
-    spvc_context_create(&context);
+    // 为顶点和片元着色器分别创建上下文
+    spvc_context_create(&spir_v_cross_context);
 
-    // 解析顶点着色器 SPIR-V
-    spvc_context_parse_spirv(context, vertex_spir_v_code, vertex_spir_v_ir_count, &vertex_ir);
+    // 分别解析顶点和片元着色器的SPIR-V
+    spvc_context_parse_spirv(spir_v_cross_context, vertex_spir_v_code, vertex_spir_v_ir_count, &vertex_ir);
+    spvc_context_parse_spirv(spir_v_cross_context, fragment_spir_v_code, fragment_spir_v_ir_count, &fragment_ir);
 
-    // 解析片段着色器 SPIR-V
-    spvc_context_parse_spirv(context, fragment_spir_v_code, fragment_spir_v_ir_count, &fragment_ir);
+    // 分别创建MSL编译器
+    spvc_context_create_compiler(spir_v_cross_context, SPVC_BACKEND_MSL, vertex_ir, SPVC_CAPTURE_MODE_TAKE_OWNERSHIP, &vertex_compiler);
+    spvc_context_create_compiler(spir_v_cross_context, SPVC_BACKEND_MSL, fragment_ir, SPVC_CAPTURE_MODE_TAKE_OWNERSHIP, &fragment_compiler);
 
-    // 创建 MSL 编译器
-    spvc_context_create_compiler(context, SPVC_BACKEND_MSL, vertex_ir, SPVC_CAPTURE_MODE_TAKE_OWNERSHIP, &vertex_compiler);
-    spvc_context_create_compiler(context, SPVC_BACKEND_MSL, fragment_ir, SPVC_CAPTURE_MODE_TAKE_OWNERSHIP, &fragment_compiler);
+    // 分别创建并设置MSL选项
+    spvc_compiler_create_compiler_options(vertex_compiler, &vertex_options);
+    spvc_compiler_create_compiler_options(fragment_compiler, &fragment_options);
 
-    // 创建并设置 MSL 选项
-    spvc_compiler_create_compiler_options(vertex_compiler, &options);
+    // 设置MSL版本和平台
+    spvc_compiler_options_set_uint(vertex_options, SPVC_COMPILER_OPTION_MSL_VERSION, SPVC_MAKE_MSL_VERSION(2, 0, 0));
+    spvc_compiler_options_set_uint(vertex_options, SPVC_COMPILER_OPTION_MSL_PLATFORM, JE4_PLATFORM_MACOS);
+    spvc_compiler_options_set_uint(fragment_options, SPVC_COMPILER_OPTION_MSL_VERSION, SPVC_MAKE_MSL_VERSION(2, 0, 0));
+    spvc_compiler_options_set_uint(fragment_options, SPVC_COMPILER_OPTION_MSL_PLATFORM, JE4_PLATFORM_MACOS);
 
-    spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_MSL_VERSION, SPVC_MAKE_MSL_VERSION(2, 0, 0));
-    spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_MSL_PLATFORM, JE4_PLATFORM_MACOS);
+    // 设置固定采样位置（如果需要）
+    spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_MSL_FIXED_SUBGROUP_SIZE, false);
+    spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_MSL_FIXED_SUBGROUP_SIZE, false);
 
-    spvc_compiler_install_compiler_options(vertex_compiler, options);
-    spvc_compiler_install_compiler_options(fragment_compiler, options);
+    spvc_compiler_install_compiler_options(vertex_compiler, vertex_options);
+    spvc_compiler_install_compiler_options(fragment_compiler, fragment_options);
 
-    // 编译生成 MSL
+    // 重命名主函数以避免冲突
+    spvc_compiler_set_entry_point(vertex_compiler, "vertex_main", SpvExecutionModelVertex);
+    spvc_compiler_set_entry_point(fragment_compiler, "fragment_main", SpvExecutionModelFragment);
+
+    // 获取顶点着色器的输出变量
+    spvc_resources vertex_resources = NULL;
+    spvc_compiler_create_shader_resources(vertex_compiler, &vertex_resources);
+
+    const spvc_reflected_resource* vertex_outputs = NULL;
+    size_t vertex_output_count = 0;
+    spvc_resources_get_resource_list_for_type(vertex_resources, SPVC_RESOURCE_TYPE_STAGE_OUTPUT, &vertex_outputs, &vertex_output_count);
+
+    // 获取片元着色器的输入变量
+    spvc_resources fragment_resources = NULL;
+    spvc_compiler_create_shader_resources(fragment_compiler, &fragment_resources);
+
+    const spvc_reflected_resource* fragment_inputs = NULL;
+    size_t fragment_input_count = 0;
+    spvc_resources_get_resource_list_for_type(fragment_resources, SPVC_RESOURCE_TYPE_STAGE_INPUT, &fragment_inputs, &fragment_input_count);
+
+    // 创建接口变量映射，确保顶点输出和片元输入匹配
+    std::unordered_map<uint32_t, std::string> location_to_name;
+
+    // 处理顶点着色器输出变量
+    for (size_t i = 0; i < vertex_output_count; i++) {
+        const spvc_reflected_resource& output = vertex_outputs[i];
+        uint32_t location = spvc_compiler_get_decoration(vertex_compiler, output.id, SpvDecorationLocation);
+
+        // 使用统一的命名格式
+        std::string interface_name = "v_stage_" + std::to_string(location);
+        location_to_name[location] = interface_name;
+
+        // 重命名顶点着色器输出变量
+        spvc_compiler_set_name(vertex_compiler, output.id, interface_name.c_str());
+    }
+
+    // 处理片元着色器输入变量，使其与顶点着色器输出匹配
+    for (size_t i = 0; i < fragment_input_count; i++) {
+        const spvc_reflected_resource& input = fragment_inputs[i];
+        uint32_t location = spvc_compiler_get_decoration(fragment_compiler, input.id, SpvDecorationLocation);
+
+        // 查找对应的接口变量名称
+        auto it = location_to_name.find(location);
+        if (it != location_to_name.end()) {
+            // 重命名片元着色器输入变量，使其与顶点着色器输出匹配
+            spvc_compiler_set_name(fragment_compiler, input.id, it->second.c_str());
+        }
+    }
+
+    // 处理uniform缓冲区和纹理，确保binding点一致
+    const spvc_reflected_resource* vertex_uniform_buffers = NULL;
+    size_t vertex_ub_count = 0;
+    spvc_resources_get_resource_list_for_type(vertex_resources, SPVC_RESOURCE_TYPE_UNIFORM_BUFFER, &vertex_uniform_buffers, &vertex_ub_count);
+
+    const spvc_reflected_resource* fragment_uniform_buffers = NULL;
+    size_t fragment_ub_count = 0;
+    spvc_resources_get_resource_list_for_type(fragment_resources, SPVC_RESOURCE_TYPE_UNIFORM_BUFFER, &fragment_uniform_buffers, &fragment_ub_count);
+
+    // 确保uniform缓冲区名称在两个着色器中一致
+    std::unordered_map<uint32_t, std::string> binding_to_ub_name;
+
+    for (size_t i = 0; i < vertex_ub_count; i++) {
+        const auto& ub = vertex_uniform_buffers[i];
+        uint32_t binding = spvc_compiler_get_decoration(vertex_compiler, ub.id, SpvDecorationBinding);
+        std::string ub_name = "uniform_buffer_" + std::to_string(binding);
+        binding_to_ub_name[binding] = ub_name;
+        spvc_compiler_set_name(vertex_compiler, ub.id, ub_name.c_str());
+    }
+
+    for (size_t i = 0; i < fragment_ub_count; i++) {
+        const auto& ub = fragment_uniform_buffers[i];
+        uint32_t binding = spvc_compiler_get_decoration(fragment_compiler, ub.id, SpvDecorationBinding);
+        auto it = binding_to_ub_name.find(binding);
+        if (it != binding_to_ub_name.end()) {
+            spvc_compiler_set_name(fragment_compiler, ub.id, it->second.c_str());
+        }
+    }
+
+    // 处理纹理采样器
+    const spvc_reflected_resource* vertex_samplers = NULL;
+    size_t vertex_sampler_count = 0;
+    spvc_resources_get_resource_list_for_type(vertex_resources, SPVC_RESOURCE_TYPE_SAMPLED_IMAGE, &vertex_samplers, &vertex_sampler_count);
+
+    const spvc_reflected_resource* fragment_samplers = NULL;
+    size_t fragment_sampler_count = 0;
+    spvc_resources_get_resource_list_for_type(fragment_resources, SPVC_RESOURCE_TYPE_SAMPLED_IMAGE, &fragment_samplers, &fragment_sampler_count);
+
+    std::unordered_map<uint32_t, std::string> binding_to_sampler_name;
+
+    for (size_t i = 0; i < vertex_sampler_count; i++) {
+        const auto& sampler = vertex_samplers[i];
+        uint32_t binding = spvc_compiler_get_decoration(vertex_compiler, sampler.id, SpvDecorationBinding);
+        std::string sampler_name = "je4_texture_" + std::to_string(binding);
+        binding_to_sampler_name[binding] = sampler_name;
+        spvc_compiler_set_name(vertex_compiler, sampler.id, sampler_name.c_str());
+    }
+
+    for (size_t i = 0; i < fragment_sampler_count; i++) {
+        const auto& sampler = fragment_samplers[i];
+        uint32_t binding = spvc_compiler_get_decoration(fragment_compiler, sampler.id, SpvDecorationBinding);
+        auto it = binding_to_sampler_name.find(binding);
+        if (it != binding_to_sampler_name.end()) {
+            spvc_compiler_set_name(fragment_compiler, sampler.id, it->second.c_str());
+        }
+    }
+
+    // 编译生成MSL
     const char* vertex_msl = NULL;
     const char* fragment_msl = NULL;
 
     spvc_compiler_compile(vertex_compiler, &vertex_msl);
     spvc_compiler_compile(fragment_compiler, &fragment_msl);
 
-    *out_msl = jeecs::basic::make_new_string(
-        vertex_msl + std::string("\n") + fragment_msl);
+    // 合并MSL代码
+    std::string combined_msl;
 
-    spvc_context_destroy(context);
+    // 添加通用头部
+    combined_msl += "#include <metal_stdlib>\n";
+    combined_msl += "#include <simd/simd.h>\n";
+    combined_msl += "using namespace metal;\n\n";
+
+    // 提取并合并结构体定义和常量定义
+    std::string vertex_msl_str(vertex_msl);
+    std::string fragment_msl_str(fragment_msl);
+
+    // 移除重复的头部声明
+    size_t vertex_main_pos = vertex_msl_str.find("vertex ");
+    size_t fragment_main_pos = fragment_msl_str.find("fragment ");
+
+    if (vertex_main_pos != std::string::npos) {
+        // 提取顶点着色器的结构体和常量定义部分
+        std::string vertex_declarations = vertex_msl_str.substr(0, vertex_main_pos);
+
+        // 移除重复的包含语句
+        size_t include_pos = vertex_declarations.find("#include");
+        if (include_pos != std::string::npos) {
+            size_t end_includes = vertex_declarations.find("using namespace metal;");
+            if (end_includes != std::string::npos) {
+                end_includes = vertex_declarations.find('\n', end_includes) + 1;
+                vertex_declarations = vertex_declarations.substr(end_includes);
+            }
+        }
+
+        combined_msl += vertex_declarations;
+        combined_msl += vertex_msl_str.substr(vertex_main_pos);
+    }
+    else {
+        combined_msl += vertex_msl_str;
+    }
+
+    combined_msl += "\n\n";
+
+    if (fragment_main_pos != std::string::npos) {
+        // 只添加片元着色器的主函数部分
+        combined_msl += fragment_msl_str.substr(fragment_main_pos);
+    }
+    else {
+        combined_msl += fragment_msl_str;
+    }
+
+    // 分配结果字符串
+    *out_msl = jeecs::basic::make_new_string(combined_msl);
+
+    // 清理资源
+    spvc_context_destroy(spir_v_cross_context);
 }
 
 void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_shader* write_to_shader)
