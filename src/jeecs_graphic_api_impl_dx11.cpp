@@ -468,7 +468,10 @@ namespace jeecs::graphic::api::dx11
         jegui_shutdown_dx11(reboot);
 
         if (context->m_dx_context)
+        {
             context->m_dx_context->ClearState();
+            context->m_dx_context->Flush(); // 确保所有命令完成
+        }
 
         context->m_interface->shutdown(reboot);
         delete context->m_interface;
@@ -1554,6 +1557,9 @@ namespace jeecs::graphic::api::dx11
         default:
             break;
         }
+        
+        // 添加：清理资源句柄
+        resource->m_handle.m_ptr = nullptr;
     }
     void dx11_set_uniform(jegl_context::userdata_t ctx, uint32_t location, jegl_shader::uniform_type type, const void* val);
     void dx11_draw_vertex_with_shader(jegl_context::userdata_t ctx, jegl_resource* vert)
