@@ -61,3 +61,7 @@
 	path = 3rd/moltenvk
 	url = https://git.cinogama.net/cinogamaproject/joyengineecs/moltenvk.git
 	branch = master
+[submodule "3rd/metal-cpp"]
+	path = 3rd/metal-cpp
+	url = https://git.cinogama.net/cinogamaproject/joyengineecs/metal-cpp.git
+	branch = master

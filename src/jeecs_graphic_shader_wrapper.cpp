@@ -470,11 +470,12 @@ jegl_shader::spir_v_code_t* _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, b
     return codes;
 }
 
-void _jegl_regenerate_and_alloc_glsl_gl330_from_spir_v_combined(
+void _jegl_regenerate_and_alloc_glsl_from_spir_v_combined(
     const uint32_t* vertex_spir_v_code, size_t vertex_spir_v_ir_count,
     const uint32_t* fragment_spir_v_code, size_t fragment_spir_v_ir_count,
     const char** out_vertex_glsl,
-    const char** out_fragment_glsl)
+    const char** out_fragment_glsl,
+    bool generate_for_es)
 {
     spvc_context spir_v_cross_context = nullptr;
     spvc_context_create(&spir_v_cross_context);
@@ -500,14 +501,25 @@ void _jegl_regenerate_and_alloc_glsl_gl330_from_spir_v_combined(
     spvc_compiler_create_compiler_options(vertex_compiler, &vertex_options);
     spvc_compiler_create_compiler_options(fragment_compiler, &fragment_options);
 
-    spvc_compiler_options_set_uint(vertex_options, SPVC_COMPILER_OPTION_GLSL_VERSION, 330);
-    spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_GLSL_ES, SPVC_FALSE);
+    if (generate_for_es)
+    {
+        spvc_compiler_options_set_uint(vertex_options, SPVC_COMPILER_OPTION_GLSL_VERSION, 300);
+        spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_GLSL_ES, SPVC_TRUE);
+        spvc_compiler_options_set_uint(fragment_options, SPVC_COMPILER_OPTION_GLSL_VERSION, 300);
+        spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_GLSL_ES, SPVC_TRUE);
+    }
+    else
+    {
+        spvc_compiler_options_set_uint(vertex_options, SPVC_COMPILER_OPTION_GLSL_VERSION, 330);
+        spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_GLSL_ES, SPVC_FALSE);
+        spvc_compiler_options_set_uint(fragment_options, SPVC_COMPILER_OPTION_GLSL_VERSION, 330);
+        spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_GLSL_ES, SPVC_FALSE);
+    }
+
     spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_GLSL_ENABLE_420PACK_EXTENSION, SPVC_FALSE);
     spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_GLSL_VULKAN_SEMANTICS, SPVC_FALSE);
     spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_GLSL_SEPARATE_SHADER_OBJECTS, SPVC_FALSE);
 
-    spvc_compiler_options_set_uint(fragment_options, SPVC_COMPILER_OPTION_GLSL_VERSION, 330);
-    spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_GLSL_ES, SPVC_FALSE);
     spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_GLSL_ENABLE_420PACK_EXTENSION, SPVC_FALSE);
     spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_GLSL_VULKAN_SEMANTICS, SPVC_FALSE);
     spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_GLSL_SEPARATE_SHADER_OBJECTS, SPVC_FALSE);
@@ -666,202 +678,6 @@ void _jegl_regenerate_and_alloc_glsl_gl330_from_spir_v_combined(
     spvc_context_destroy(spir_v_cross_context);
 }
 
-void _jegl_regenerate_and_alloc_glsl_gles300_from_spir_v_combined(
-    const uint32_t* vertex_spir_v_code, size_t vertex_spir_v_ir_count,
-    const uint32_t* fragment_spir_v_code, size_t fragment_spir_v_ir_count,
-    const char** out_vertex_glsl,
-    const char** out_fragment_glsl)
-{
-    spvc_context spir_v_cross_context = nullptr;
-    spvc_context_create(&spir_v_cross_context);
-
-    // 解析顶点着色器SPIR-V
-    spvc_parsed_ir vertex_ir = nullptr;
-    spvc_context_parse_spirv(spir_v_cross_context, vertex_spir_v_code, vertex_spir_v_ir_count, &vertex_ir);
-
-    // 解析片元着色器SPIR-V
-    spvc_parsed_ir fragment_ir = nullptr;
-    spvc_context_parse_spirv(spir_v_cross_context, fragment_spir_v_code, fragment_spir_v_ir_count, &fragment_ir);
-
-    // 创建顶点着色器编译器
-    spvc_compiler vertex_compiler = nullptr;
-    spvc_context_create_compiler(spir_v_cross_context, SPVC_BACKEND_GLSL, vertex_ir, SPVC_CAPTURE_MODE_COPY, &vertex_compiler);
-
-    // 创建片元着色器编译器
-    spvc_compiler fragment_compiler = nullptr;
-    spvc_context_create_compiler(spir_v_cross_context, SPVC_BACKEND_GLSL, fragment_ir, SPVC_CAPTURE_MODE_COPY, &fragment_compiler);
-
-    // 设置通用编译选项
-    spvc_compiler_options vertex_options = nullptr, fragment_options = nullptr;
-    spvc_compiler_create_compiler_options(vertex_compiler, &vertex_options);
-    spvc_compiler_create_compiler_options(fragment_compiler, &fragment_options);
-
-    spvc_compiler_options_set_uint(vertex_options, SPVC_COMPILER_OPTION_GLSL_VERSION, 300);
-    spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_GLSL_ES, SPVC_TRUE);
-    spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_GLSL_ENABLE_420PACK_EXTENSION, SPVC_FALSE);
-    spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_GLSL_VULKAN_SEMANTICS, SPVC_FALSE); // 改为 FALSE 以去除 Vulkan 特有的 set=0 布局
-    spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_GLSL_SEPARATE_SHADER_OBJECTS, SPVC_FALSE);
-
-    spvc_compiler_options_set_uint(fragment_options, SPVC_COMPILER_OPTION_GLSL_VERSION, 300);
-    spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_GLSL_ES, SPVC_TRUE);
-    spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_GLSL_ENABLE_420PACK_EXTENSION, SPVC_FALSE);
-    spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_GLSL_VULKAN_SEMANTICS, SPVC_FALSE); // 改为 FALSE 以去除 Vulkan 特有的 set=0 布局
-    spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_GLSL_SEPARATE_SHADER_OBJECTS, SPVC_FALSE);
-
-    // 禁用重命名所有变量的行为，保留原始命名
-    spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_FORCE_TEMPORARY, SPVC_FALSE);
-    spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_FORCE_TEMPORARY, SPVC_FALSE);
-
-    spvc_compiler_install_compiler_options(vertex_compiler, vertex_options);
-    spvc_compiler_install_compiler_options(fragment_compiler, fragment_options);
-
-    // 在构建组合图像采样器之前，先保存原始sampler名称和绑定点
-    spvc_resources vertex_resources_pre = nullptr;
-    spvc_compiler_create_shader_resources(vertex_compiler, &vertex_resources_pre);
-
-    const spvc_reflected_resource* vertex_samplers = nullptr;
-    size_t vertex_sampler_count = 0;
-    spvc_resources_get_resource_list_for_type(
-        vertex_resources_pre, SPVC_RESOURCE_TYPE_SEPARATE_IMAGE, &vertex_samplers, &vertex_sampler_count);
-
-    // 存储sampler的ID到binding的映射
-    std::unordered_map<uint32_t, uint32_t> vertex_sampler_bindings;
-    for (size_t i = 0; i < vertex_sampler_count; i++) {
-        const spvc_reflected_resource& sampler = vertex_samplers[i];
-        uint32_t binding = spvc_compiler_get_decoration(vertex_compiler, sampler.id, SpvDecorationBinding);
-        vertex_sampler_bindings[sampler.id] = binding;
-    }
-
-    spvc_resources fragment_resources_pre = nullptr;
-    spvc_compiler_create_shader_resources(fragment_compiler, &fragment_resources_pre);
-
-    const spvc_reflected_resource* fragment_samplers = nullptr;
-    size_t fragment_sampler_count = 0;
-    spvc_resources_get_resource_list_for_type(
-        fragment_resources_pre, SPVC_RESOURCE_TYPE_SEPARATE_IMAGE, &fragment_samplers, &fragment_sampler_count);
-
-    // 存储sampler的ID到binding的映射
-    std::unordered_map<uint32_t, uint32_t> fragment_sampler_bindings;
-    for (size_t i = 0; i < fragment_sampler_count; i++) {
-        const spvc_reflected_resource& sampler = fragment_samplers[i];
-        uint32_t binding = spvc_compiler_get_decoration(fragment_compiler, sampler.id, SpvDecorationBinding);
-        fragment_sampler_bindings[sampler.id] = binding;
-    }
-
-    // 构建组合图像采样器
-    spvc_compiler_build_combined_image_samplers(vertex_compiler);
-    spvc_compiler_build_combined_image_samplers(fragment_compiler);
-
-    // 处理顶点着色器中的组合图像采样器，使用通道号作为命名的一部分
-    const spvc_combined_image_sampler* vertex_combined_samplers = nullptr;
-    size_t vertex_combined_count = 0;
-    spvc_compiler_get_combined_image_samplers(vertex_compiler, &vertex_combined_samplers, &vertex_combined_count);
-
-    char gl_sampler_name[64];
-    for (size_t i = 0; i < vertex_combined_count; i++) {
-        const auto& combined = vertex_combined_samplers[i];
-        uint32_t binding = 0;
-
-        // 尝试获取原始sampler的binding
-        auto it = vertex_sampler_bindings.find(combined.image_id);
-        if (it != vertex_sampler_bindings.end()) {
-            binding = it->second;
-        }
-
-        // 使用binding作为命名的一部分
-        auto count = snprintf(
-            gl_sampler_name, sizeof(gl_sampler_name), "je4_gl_sampler_%u", binding);
-        (void)count;
-        assert(count > 0 && (size_t)count < sizeof(gl_sampler_name));
-
-        spvc_compiler_set_name(vertex_compiler, combined.combined_id, gl_sampler_name);
-    }
-
-    // 处理片元着色器中的组合图像采样器，使用通道号作为命名的一部分
-    const spvc_combined_image_sampler* fragment_combined_samplers = nullptr;
-    size_t fragment_combined_count = 0;
-    spvc_compiler_get_combined_image_samplers(fragment_compiler, &fragment_combined_samplers, &fragment_combined_count);
-
-    for (size_t i = 0; i < fragment_combined_count; i++) {
-        const auto& combined = fragment_combined_samplers[i];
-        uint32_t binding = 0;
-
-        // 尝试获取原始sampler的binding
-        auto it = fragment_sampler_bindings.find(combined.image_id);
-        if (it != fragment_sampler_bindings.end()) {
-            binding = it->second;
-        }
-
-        // 使用binding作为命名的一部分
-        auto count = snprintf(
-            gl_sampler_name, sizeof(gl_sampler_name), "je4_gl_sampler_%u", binding);
-        (void)count;
-        assert(count > 0 && (size_t)count < sizeof(gl_sampler_name));
-
-        spvc_compiler_set_name(fragment_compiler, combined.combined_id, gl_sampler_name);
-    }
-
-    // 获取顶点着色器输出变量
-    spvc_resources vertex_resources = nullptr;
-    spvc_compiler_create_shader_resources(vertex_compiler, &vertex_resources);
-
-    const spvc_reflected_resource* vertex_outputs = nullptr;
-    size_t vertex_output_count = 0;
-    spvc_resources_get_resource_list_for_type(vertex_resources, SPVC_RESOURCE_TYPE_STAGE_OUTPUT, &vertex_outputs, &vertex_output_count);
-
-    // 获取片元着色器输入变量
-    spvc_resources fragment_resources = nullptr;
-    spvc_compiler_create_shader_resources(fragment_compiler, &fragment_resources);
-
-    const spvc_reflected_resource* fragment_inputs = nullptr;
-    size_t fragment_input_count = 0;
-    spvc_resources_get_resource_list_for_type(fragment_resources, SPVC_RESOURCE_TYPE_STAGE_INPUT, &fragment_inputs, &fragment_input_count);
-
-    // 确保接口变量名称一致
-    // 创建映射表跟踪需要重命名的变量
-    std::unordered_map<uint32_t, std::string> location_to_name;
-
-    // 首先收集顶点着色器的输出位置和名称
-    for (size_t i = 0; i < vertex_output_count; i++) {
-        const spvc_reflected_resource& output = vertex_outputs[i];
-        uint32_t location = spvc_compiler_get_decoration(vertex_compiler, output.id, SpvDecorationLocation);
-
-        // 标准化名称：使用 v_out_{location} 作为统一命名格式
-        std::string standardized_name = "v_out_" + std::to_string(location);
-        location_to_name[location] = standardized_name;
-
-        // 重命名顶点着色器输出变量
-        spvc_compiler_set_name(vertex_compiler, output.id, standardized_name.c_str());
-    }
-
-    // 然后处理片元着色器的输入变量，使其与顶点着色器输出匹配
-    for (size_t i = 0; i < fragment_input_count; i++) {
-        const spvc_reflected_resource& input = fragment_inputs[i];
-        uint32_t location = spvc_compiler_get_decoration(fragment_compiler, input.id, SpvDecorationLocation);
-
-        // 查找对应位置的标准化名称
-        auto it = location_to_name.find(location);
-        if (it != location_to_name.end()) {
-            // 重命名片元着色器输入变量，使其与顶点着色器输出匹配
-            spvc_compiler_set_name(fragment_compiler, input.id, it->second.c_str());
-        }
-    }
-
-    // 编译生成GLSL源码
-    const char* vertex_src = nullptr;
-    spvc_compiler_compile(vertex_compiler, &vertex_src);
-
-    const char* fragment_src = nullptr;
-    spvc_compiler_compile(fragment_compiler, &fragment_src);
-
-    // 复制结果
-    *out_vertex_glsl = jeecs::basic::make_new_string(vertex_src);
-    *out_fragment_glsl = jeecs::basic::make_new_string(fragment_src);
-
-    // 清理资源
-    spvc_context_destroy(spir_v_cross_context);
-}
-
 void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_shader* write_to_shader)
 {
     shader_wrapper* shader_wrapper_ptr = (shader_wrapper*)shader_generator;
@@ -896,21 +712,23 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_s
             &write_to_shader->m_fragment_spirv_count);
 
     // 3. Generate glsl by spir-v
-    _jegl_regenerate_and_alloc_glsl_gl330_from_spir_v_combined(
+    _jegl_regenerate_and_alloc_glsl_from_spir_v_combined(
         write_to_shader->m_vertex_spirv_codes,
         write_to_shader->m_vertex_spirv_count,
         write_to_shader->m_fragment_spirv_codes,
         write_to_shader->m_fragment_spirv_count,
         &write_to_shader->m_vertex_glsl_src,
-        &write_to_shader->m_fragment_glsl_src);
+        &write_to_shader->m_fragment_glsl_src,
+        false);
 
-    _jegl_regenerate_and_alloc_glsl_gles300_from_spir_v_combined(
+    _jegl_regenerate_and_alloc_glsl_from_spir_v_combined(
         write_to_shader->m_vertex_spirv_codes,
         write_to_shader->m_vertex_spirv_count,
         write_to_shader->m_fragment_spirv_codes,
         write_to_shader->m_fragment_spirv_count,
         &write_to_shader->m_vertex_glsles_src,
-        &write_to_shader->m_fragment_glsles_src);
+        &write_to_shader->m_fragment_glsles_src,
+        true);
 
     // 4. Generate other info.
     write_to_shader->m_vertex_in_count = shader_wrapper_ptr->vertex_in.size();
