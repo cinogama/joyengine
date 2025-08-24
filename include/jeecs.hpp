@@ -2126,12 +2126,13 @@ struct jegl_shader
 
     using spir_v_code_t = uint32_t;
 
+    const char* m_vertex_hlsl_src;
+    const char* m_fragment_hlsl_src;
     const char* m_vertex_glsl_src;
     const char* m_fragment_glsl_src;
     const char* m_vertex_glsles_src;
     const char* m_fragment_glsles_src;
-    const char* m_vertex_hlsl_src;
-    const char* m_fragment_hlsl_src;
+    const char* m_msl_mac_src;
 
     size_t m_vertex_spirv_count;
     const spir_v_code_t* m_vertex_spirv_codes;

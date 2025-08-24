@@ -181,6 +181,44 @@ struct jegl_shader_value
         set_used_val(id + 1, args...);
     }
 
+    void release_myself()
+    {
+        do
+        {
+            if (m_ref_count)
+            {
+                --m_ref_count;
+                return;
+            }
+        } while (0);
+        delete this;
+    }
+    ~jegl_shader_value()
+    {
+        if (is_calc_value())
+        {
+            if (is_shader_in_value())
+            {
+                ;
+            }
+            else if (is_uniform_variable())
+            {
+                je_mem_free((void*)m_unifrom_varname);
+                if (m_uniform_init_val_may_nil)
+                    m_uniform_init_val_may_nil->release_myself();
+            }
+            else
+            {
+                for (size_t i = 0; i < m_opnums_count; ++i)
+                    m_opnums[i]->release_myself();
+
+                delete[] m_opnums;
+
+                je_mem_free((void*)m_opname);
+            }
+        }
+    }
+
     template <typename T, typename... TS>
     jegl_shader_value(type resulttype, const char *operat, T val, TS... args)
         : m_type((type)(resulttype | type::CALC_VALUE))
@@ -381,15 +419,13 @@ public:
     }
 };
 
-void delete_shader_value(jegl_shader_value *shader_val);
-
 struct shader_value_outs
 {
     std::vector<jegl_shader_value *> out_values;
     ~shader_value_outs()
     {
-        for (auto *val : out_values)
-            delete_shader_value(val);
+        for (auto* val : out_values)
+            val->release_myself();
     }
 };
 
@@ -491,7 +527,7 @@ struct shader_wrapper
 
         delete vertex_out;
         delete fragment_out;
-        delete_shader_value(ndc_scale);
+        ndc_scale->release_myself();
     }
 };
 

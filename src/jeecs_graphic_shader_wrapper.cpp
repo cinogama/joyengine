@@ -13,46 +13,6 @@
 // From jeecs_graphic_api_basic.cpp
 jegl_resource* _create_resource();
 
-void delete_shader_value(jegl_shader_value* shader_val)
-{
-    do
-    {
-        if (shader_val->m_ref_count)
-        {
-            --shader_val->m_ref_count;
-            return;
-        }
-    } while (0);
-    if (shader_val->is_calc_value())
-    {
-        if (shader_val->is_shader_in_value())
-        {
-            ;
-        }
-        else if (shader_val->is_uniform_variable())
-        {
-            je_mem_free((void*)shader_val->m_unifrom_varname);
-            if (shader_val->m_uniform_init_val_may_nil)
-                delete_shader_value(shader_val->m_uniform_init_val_may_nil);
-        }
-        else
-        {
-            for (size_t i = 0; i < shader_val->m_opnums_count; ++i)
-                delete_shader_value(shader_val->m_opnums[i]);
-            delete[] shader_val->m_opnums;
-
-            je_mem_free((void*)shader_val->m_opname);
-        }
-    }
-
-    delete shader_val;
-}
-void _free_shader_value(void* shader_value)
-{
-    jegl_shader_value* shader_val = (jegl_shader_value*)shader_value;
-    delete_shader_value(shader_val);
-}
-
 struct action_node
 {
     std::vector<action_node*> m_next_step;
@@ -151,7 +111,7 @@ struct vertex_in_data_storage
     ~vertex_in_data_storage()
     {
         for (auto& [id, val] : m_in_from_vao_guard)
-            delete_shader_value(val);
+            val->release_myself();
     }
     jegl_shader_value* get_val_at(size_t pos, jegl_shader_value::type type)
     {
@@ -259,6 +219,16 @@ void _jegl_create_shader_cache(jegl_resource* shader_resource, wo_integer_t virt
         auto* raw_shader_data = shader_resource->m_raw_shader_data;
 
         // 1. write shader generated source to cache
+        // 1.1. HLSL
+        const uint64_t vertex_hlsl_src_len = (uint64_t)strlen(raw_shader_data->m_vertex_hlsl_src);
+        const uint64_t fragment_hlsl_src_len = (uint64_t)strlen(raw_shader_data->m_fragment_hlsl_src);
+
+        jeecs_write_cache_file(&vertex_hlsl_src_len, sizeof(uint64_t), 1, cachefile);
+        jeecs_write_cache_file(raw_shader_data->m_vertex_hlsl_src, sizeof(char), (size_t)vertex_hlsl_src_len, cachefile);
+        jeecs_write_cache_file(&fragment_hlsl_src_len, sizeof(uint64_t), 1, cachefile);
+        jeecs_write_cache_file(raw_shader_data->m_fragment_hlsl_src, sizeof(char), (size_t)fragment_hlsl_src_len, cachefile);
+
+        // 1.2. GLSL
         const uint64_t vertex_glsl_src_len = (uint64_t)strlen(raw_shader_data->m_vertex_glsl_src);
         const uint64_t fragment_glsl_src_len = (uint64_t)strlen(raw_shader_data->m_fragment_glsl_src);
 
@@ -267,6 +237,7 @@ void _jegl_create_shader_cache(jegl_resource* shader_resource, wo_integer_t virt
         jeecs_write_cache_file(&fragment_glsl_src_len, sizeof(uint64_t), 1, cachefile);
         jeecs_write_cache_file(raw_shader_data->m_fragment_glsl_src, sizeof(char), (size_t)fragment_glsl_src_len, cachefile);
 
+        // 1.3. GLSLES
         const uint64_t vertex_glsles_src_len = (uint64_t)strlen(raw_shader_data->m_vertex_glsles_src);
         const uint64_t fragment_glsles_src_len = (uint64_t)strlen(raw_shader_data->m_fragment_glsles_src);
 
@@ -275,13 +246,13 @@ void _jegl_create_shader_cache(jegl_resource* shader_resource, wo_integer_t virt
         jeecs_write_cache_file(&fragment_glsles_src_len, sizeof(uint64_t), 1, cachefile);
         jeecs_write_cache_file(raw_shader_data->m_fragment_glsles_src, sizeof(char), (size_t)fragment_glsles_src_len, cachefile);
 
-        const uint64_t vertex_hlsl_src_len = (uint64_t)strlen(raw_shader_data->m_vertex_hlsl_src);
-        const uint64_t fragment_hlsl_src_len = (uint64_t)strlen(raw_shader_data->m_fragment_hlsl_src);
+        // 1.4. MSL MACOS
+        const uint64_t msl_mac_src_len = (uint64_t)strlen(raw_shader_data->m_msl_mac_src);
 
-        jeecs_write_cache_file(&vertex_hlsl_src_len, sizeof(uint64_t), 1, cachefile);
-        jeecs_write_cache_file(raw_shader_data->m_vertex_hlsl_src, sizeof(char), (size_t)vertex_hlsl_src_len, cachefile);
-        jeecs_write_cache_file(&fragment_hlsl_src_len, sizeof(uint64_t), 1, cachefile);
-        jeecs_write_cache_file(raw_shader_data->m_fragment_hlsl_src, sizeof(char), (size_t)fragment_hlsl_src_len, cachefile);
+        jeecs_write_cache_file(&msl_mac_src_len, sizeof(uint64_t), 1, cachefile);
+        jeecs_write_cache_file(raw_shader_data->m_msl_mac_src, sizeof(char), (size_t)msl_mac_src_len, cachefile);
+
+        // 1.5. SPIR-V
 
         const uint64_t vertex_spirv_src_len = (uint64_t)raw_shader_data->m_vertex_spirv_count * sizeof(jegl_shader::spir_v_code_t);
         const uint64_t fragment_spirv_src_len = (uint64_t)raw_shader_data->m_fragment_spirv_count * sizeof(jegl_shader::spir_v_code_t);
@@ -523,23 +494,23 @@ void _jegl_regenerate_and_alloc_glsl_from_spir_v_combined(
     spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_GLSL_ENABLE_420PACK_EXTENSION, SPVC_FALSE);
     spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_GLSL_VULKAN_SEMANTICS, SPVC_FALSE);
     spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_GLSL_SEPARATE_SHADER_OBJECTS, SPVC_FALSE);
-    
+
     // 禁用重命名所有变量的行为，保留原始命名
     spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_FORCE_TEMPORARY, SPVC_FALSE);
     spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_FORCE_TEMPORARY, SPVC_FALSE);
-    
+
     spvc_compiler_install_compiler_options(vertex_compiler, vertex_options);
     spvc_compiler_install_compiler_options(fragment_compiler, fragment_options);
 
     // 在构建组合图像采样器之前，先保存原始sampler名称和绑定点
     spvc_resources vertex_resources_pre = nullptr;
     spvc_compiler_create_shader_resources(vertex_compiler, &vertex_resources_pre);
-    
+
     const spvc_reflected_resource* vertex_samplers = nullptr;
     size_t vertex_sampler_count = 0;
     spvc_resources_get_resource_list_for_type(
         vertex_resources_pre, SPVC_RESOURCE_TYPE_SEPARATE_IMAGE, &vertex_samplers, &vertex_sampler_count);
-    
+
     // 存储sampler的ID到binding的映射
     std::unordered_map<uint32_t, uint32_t> vertex_sampler_bindings;
     for (size_t i = 0; i < vertex_sampler_count; i++) {
@@ -547,15 +518,15 @@ void _jegl_regenerate_and_alloc_glsl_from_spir_v_combined(
         uint32_t binding = spvc_compiler_get_decoration(vertex_compiler, sampler.id, SpvDecorationBinding);
         vertex_sampler_bindings[sampler.id] = binding;
     }
-    
+
     spvc_resources fragment_resources_pre = nullptr;
     spvc_compiler_create_shader_resources(fragment_compiler, &fragment_resources_pre);
-    
+
     const spvc_reflected_resource* fragment_samplers = nullptr;
     size_t fragment_sampler_count = 0;
     spvc_resources_get_resource_list_for_type(
         fragment_resources_pre, SPVC_RESOURCE_TYPE_SEPARATE_IMAGE, &fragment_samplers, &fragment_sampler_count);
-    
+
     // 存储sampler的ID到binding的映射
     std::unordered_map<uint32_t, uint32_t> fragment_sampler_bindings;
     for (size_t i = 0; i < fragment_sampler_count; i++) {
@@ -567,23 +538,23 @@ void _jegl_regenerate_and_alloc_glsl_from_spir_v_combined(
     // 构建组合图像采样器
     spvc_compiler_build_combined_image_samplers(vertex_compiler);
     spvc_compiler_build_combined_image_samplers(fragment_compiler);
-    
+
     // 处理顶点着色器中的组合图像采样器，使用通道号作为命名的一部分
     const spvc_combined_image_sampler* vertex_combined_samplers = nullptr;
     size_t vertex_combined_count = 0;
     spvc_compiler_get_combined_image_samplers(vertex_compiler, &vertex_combined_samplers, &vertex_combined_count);
-    
+
     char gl_sampler_name[64];
     for (size_t i = 0; i < vertex_combined_count; i++) {
         const auto& combined = vertex_combined_samplers[i];
         uint32_t binding = 0;
-        
+
         // 尝试获取原始sampler的binding
         auto it = vertex_sampler_bindings.find(combined.image_id);
         if (it != vertex_sampler_bindings.end()) {
             binding = it->second;
         }
-        
+
         // 使用binding作为命名的一部分
         auto count = snprintf(
             gl_sampler_name, sizeof(gl_sampler_name), "je4_gl_sampler_%u", binding);
@@ -592,22 +563,22 @@ void _jegl_regenerate_and_alloc_glsl_from_spir_v_combined(
 
         spvc_compiler_set_name(vertex_compiler, combined.combined_id, gl_sampler_name);
     }
-    
+
     // 处理片元着色器中的组合图像采样器，使用通道号作为命名的一部分
     const spvc_combined_image_sampler* fragment_combined_samplers = nullptr;
     size_t fragment_combined_count = 0;
     spvc_compiler_get_combined_image_samplers(fragment_compiler, &fragment_combined_samplers, &fragment_combined_count);
-    
+
     for (size_t i = 0; i < fragment_combined_count; i++) {
         const auto& combined = fragment_combined_samplers[i];
         uint32_t binding = 0;
-        
+
         // 尝试获取原始sampler的binding
         auto it = fragment_sampler_bindings.find(combined.image_id);
         if (it != fragment_sampler_bindings.end()) {
             binding = it->second;
         }
-        
+
         // 使用binding作为命名的一部分
         auto count = snprintf(
             gl_sampler_name, sizeof(gl_sampler_name), "je4_gl_sampler_%u", binding);
@@ -616,27 +587,27 @@ void _jegl_regenerate_and_alloc_glsl_from_spir_v_combined(
 
         spvc_compiler_set_name(fragment_compiler, combined.combined_id, gl_sampler_name);
     }
-    
+
     // 获取顶点着色器输出变量
     spvc_resources vertex_resources = nullptr;
     spvc_compiler_create_shader_resources(vertex_compiler, &vertex_resources);
-    
+
     const spvc_reflected_resource* vertex_outputs = nullptr;
     size_t vertex_output_count = 0;
     spvc_resources_get_resource_list_for_type(vertex_resources, SPVC_RESOURCE_TYPE_STAGE_OUTPUT, &vertex_outputs, &vertex_output_count);
-    
+
     // 获取片元着色器输入变量
     spvc_resources fragment_resources = nullptr;
     spvc_compiler_create_shader_resources(fragment_compiler, &fragment_resources);
-    
+
     const spvc_reflected_resource* fragment_inputs = nullptr;
     size_t fragment_input_count = 0;
     spvc_resources_get_resource_list_for_type(fragment_resources, SPVC_RESOURCE_TYPE_STAGE_INPUT, &fragment_inputs, &fragment_input_count);
-    
+
     // 确保接口变量名称一致
     // 创建映射表跟踪需要重命名的变量
     std::unordered_map<uint32_t, std::string> location_to_name;
-    
+
     // 首先收集顶点着色器的输出位置和名称
     for (size_t i = 0; i < vertex_output_count; i++) {
         const spvc_reflected_resource& output = vertex_outputs[i];
@@ -645,16 +616,16 @@ void _jegl_regenerate_and_alloc_glsl_from_spir_v_combined(
         // 标准化名称：使用 v_out_{location} 作为统一命名格式
         std::string standardized_name = "v_out_" + std::to_string(location);
         location_to_name[location] = standardized_name;
-        
+
         // 重命名顶点着色器输出变量
         spvc_compiler_set_name(vertex_compiler, output.id, standardized_name.c_str());
     }
-    
+
     // 然后处理片元着色器的输入变量，使其与顶点着色器输出匹配
     for (size_t i = 0; i < fragment_input_count; i++) {
         const spvc_reflected_resource& input = fragment_inputs[i];
         uint32_t location = spvc_compiler_get_decoration(fragment_compiler, input.id, SpvDecorationLocation);
-        
+
         // 查找对应位置的标准化名称
         auto it = location_to_name.find(location);
         if (it != location_to_name.end()) {
@@ -662,20 +633,67 @@ void _jegl_regenerate_and_alloc_glsl_from_spir_v_combined(
             spvc_compiler_set_name(fragment_compiler, input.id, it->second.c_str());
         }
     }
-    
+
     // 编译生成GLSL源码
     const char* vertex_src = nullptr;
     spvc_compiler_compile(vertex_compiler, &vertex_src);
-    
+
     const char* fragment_src = nullptr;
     spvc_compiler_compile(fragment_compiler, &fragment_src);
-    
+
     // 复制结果
     *out_vertex_glsl = jeecs::basic::make_new_string(vertex_src);
     *out_fragment_glsl = jeecs::basic::make_new_string(fragment_src);
-    
+
     // 清理资源
     spvc_context_destroy(spir_v_cross_context);
+}
+
+void _jegl_regenerate_and_alloc_msl_from_spir_v(
+    const uint32_t* vertex_spir_v_code, size_t vertex_spir_v_ir_count,
+    const uint32_t* fragment_spir_v_code, size_t fragment_spir_v_ir_count,
+    const char** out_msl)
+{
+    spvc_context context = NULL;
+    spvc_parsed_ir vertex_ir = NULL;
+    spvc_parsed_ir fragment_ir = NULL;
+    spvc_compiler vertex_compiler = NULL;
+    spvc_compiler fragment_compiler = NULL;
+    spvc_compiler_options options = NULL;
+
+    // 创建上下文
+    spvc_context_create(&context);
+
+    // 解析顶点着色器 SPIR-V
+    spvc_context_parse_spirv(context, vertex_spir_v_code, vertex_spir_v_ir_count, &vertex_ir);
+
+    // 解析片段着色器 SPIR-V
+    spvc_context_parse_spirv(context, fragment_spir_v_code, fragment_spir_v_ir_count, &fragment_ir);
+
+    // 创建 MSL 编译器
+    spvc_context_create_compiler(context, SPVC_BACKEND_MSL, vertex_ir, SPVC_CAPTURE_MODE_TAKE_OWNERSHIP, &vertex_compiler);
+    spvc_context_create_compiler(context, SPVC_BACKEND_MSL, fragment_ir, SPVC_CAPTURE_MODE_TAKE_OWNERSHIP, &fragment_compiler);
+
+    // 创建并设置 MSL 选项
+    spvc_compiler_create_compiler_options(vertex_compiler, &options);
+
+    spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_MSL_VERSION, SPVC_MAKE_MSL_VERSION(2, 0, 0));
+    spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_MSL_PLATFORM, JE4_PLATFORM_MACOS);
+
+    spvc_compiler_install_compiler_options(vertex_compiler, options);
+    spvc_compiler_install_compiler_options(fragment_compiler, options);
+
+    // 编译生成 MSL
+    const char* vertex_msl = NULL;
+    const char* fragment_msl = NULL;
+
+    spvc_compiler_compile(vertex_compiler, &vertex_msl);
+    spvc_compiler_compile(fragment_compiler, &fragment_msl);
+
+    *out_msl = jeecs::basic::make_new_string(
+        vertex_msl + std::string("\n") + fragment_msl);
+
+    spvc_context_destroy(context);
 }
 
 void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_shader* write_to_shader)
@@ -694,9 +712,9 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_s
 
     // 1. Generate original hlsl source.
     jeecs::shader_generator::hlsl_generator _hlsl_generator;
-    write_to_shader->m_vertex_hlsl_src = 
+    write_to_shader->m_vertex_hlsl_src =
         jeecs::basic::make_new_string(_hlsl_generator.generate_vertex(shader_wrapper_ptr));
-    write_to_shader->m_fragment_hlsl_src = 
+    write_to_shader->m_fragment_hlsl_src =
         jeecs::basic::make_new_string(_hlsl_generator.generate_fragment(shader_wrapper_ptr));
 
     // 2. Generate spir-v by original hlsl source.
@@ -729,6 +747,13 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_s
         &write_to_shader->m_vertex_glsles_src,
         &write_to_shader->m_fragment_glsles_src,
         true);
+
+    _jegl_regenerate_and_alloc_msl_from_spir_v(
+        write_to_shader->m_vertex_spirv_codes,
+        write_to_shader->m_vertex_spirv_count,
+        write_to_shader->m_fragment_spirv_codes,
+        write_to_shader->m_fragment_spirv_count,
+        &write_to_shader->m_msl_mac_src);
 
     // 4. Generate other info.
     write_to_shader->m_vertex_in_count = shader_wrapper_ptr->vertex_in.size();
@@ -917,17 +942,32 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
     shader->m_raw_shader_data = _shader;
 
     uint64_t
+        vertex_hlsl_src_len,
+        fragment_hlsl_src_len,
         vertex_glsl_src_len,
         fragment_glsl_src_len,
         vertex_glsles_src_len,
         fragment_glsles_src_len,
-        vertex_hlsl_src_len,
-        fragment_hlsl_src_len,
+        msl_mac_src_len,
         vertex_spirv_src_len,
         fragment_spirv_src_len;
 
     // 1. Read generated source
-    // 1.1. GLSL
+
+    // 1.1. HLSL
+    jeecs_file_read(&vertex_hlsl_src_len, sizeof(uint64_t), 1, cache_file);
+
+    _shader->m_vertex_hlsl_src = (const char*)je_mem_alloc((size_t)vertex_hlsl_src_len + 1);
+    jeecs_file_read(const_cast<char*>(_shader->m_vertex_hlsl_src), sizeof(char), (size_t)vertex_hlsl_src_len, cache_file);
+    const_cast<char*>(_shader->m_vertex_hlsl_src)[(size_t)vertex_hlsl_src_len] = 0;
+
+    jeecs_file_read(&fragment_hlsl_src_len, sizeof(uint64_t), 1, cache_file);
+
+    _shader->m_fragment_hlsl_src = (const char*)je_mem_alloc((size_t)fragment_hlsl_src_len + 1);
+    jeecs_file_read(const_cast<char*>(_shader->m_fragment_hlsl_src), sizeof(char), (size_t)fragment_hlsl_src_len, cache_file);
+    const_cast<char*>(_shader->m_fragment_hlsl_src)[(size_t)fragment_hlsl_src_len] = 0;
+
+    // 1.2. GLSL
     jeecs_file_read(&vertex_glsl_src_len, sizeof(uint64_t), 1, cache_file);
 
     _shader->m_vertex_glsl_src = (const char*)je_mem_alloc((size_t)vertex_glsl_src_len + 1);
@@ -940,7 +980,7 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
     jeecs_file_read(const_cast<char*>(_shader->m_fragment_glsl_src), sizeof(char), (size_t)fragment_glsl_src_len, cache_file);
     const_cast<char*>(_shader->m_fragment_glsl_src)[(size_t)fragment_glsl_src_len] = 0;
 
-    // 1.2. GLSL ES
+    // 1.3. GLSL ES
 
     jeecs_file_read(&vertex_glsles_src_len, sizeof(uint64_t), 1, cache_file);
 
@@ -954,20 +994,14 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
     jeecs_file_read(const_cast<char*>(_shader->m_fragment_glsles_src), sizeof(char), (size_t)fragment_glsles_src_len, cache_file);
     const_cast<char*>(_shader->m_fragment_glsles_src)[(size_t)fragment_glsles_src_len] = 0;
 
-    // 1.3. HLSL
-    jeecs_file_read(&vertex_hlsl_src_len, sizeof(uint64_t), 1, cache_file);
+    // 1.4. MSL (mac)
+    jeecs_file_read(&msl_mac_src_len, sizeof(uint64_t), 1, cache_file);
 
-    _shader->m_vertex_hlsl_src = (const char*)je_mem_alloc((size_t)vertex_hlsl_src_len + 1);
-    jeecs_file_read(const_cast<char*>(_shader->m_vertex_hlsl_src), sizeof(char), (size_t)vertex_hlsl_src_len, cache_file);
-    const_cast<char*>(_shader->m_vertex_hlsl_src)[(size_t)vertex_hlsl_src_len] = 0;
+    _shader->m_msl_mac_src = (const char*)je_mem_alloc((size_t)msl_mac_src_len + 1);
+    jeecs_file_read(const_cast<char*>(_shader->m_msl_mac_src), sizeof(char), (size_t)msl_mac_src_len, cache_file);
+    const_cast<char*>(_shader->m_msl_mac_src)[(size_t)msl_mac_src_len] = 0;
 
-    jeecs_file_read(&fragment_hlsl_src_len, sizeof(uint64_t), 1, cache_file);
-
-    _shader->m_fragment_hlsl_src = (const char*)je_mem_alloc((size_t)fragment_hlsl_src_len + 1);
-    jeecs_file_read(const_cast<char*>(_shader->m_fragment_hlsl_src), sizeof(char), (size_t)fragment_hlsl_src_len, cache_file);
-    const_cast<char*>(_shader->m_fragment_hlsl_src)[(size_t)fragment_hlsl_src_len] = 0;
-
-    // 1.4. SPIR-V
+    // 1.5. SPIR-V
     jeecs_file_read(&vertex_spirv_src_len, sizeof(uint64_t), 1, cache_file);
     assert((size_t)vertex_spirv_src_len % sizeof(jegl_shader::spir_v_code_t) == 0);
 
@@ -1100,31 +1134,19 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
 }
 void jegl_shader_free_generated_shader_source(jegl_shader* write_to_shader)
 {
-    if (write_to_shader->m_vertex_glsl_src != nullptr)
-    {
-        assert(write_to_shader->m_fragment_glsl_src != nullptr);
-        je_mem_free((void*)write_to_shader->m_vertex_glsl_src);
-        je_mem_free((void*)write_to_shader->m_fragment_glsl_src);
-    }
-    if (write_to_shader->m_vertex_glsles_src != nullptr)
-    {
-        assert(write_to_shader->m_fragment_glsles_src != nullptr);
-        je_mem_free((void*)write_to_shader->m_vertex_glsles_src);
-        je_mem_free((void*)write_to_shader->m_fragment_glsles_src);
-    }
-    if (write_to_shader->m_vertex_hlsl_src != nullptr)
-    {
-        assert(write_to_shader->m_fragment_hlsl_src != nullptr);
-        je_mem_free((void*)write_to_shader->m_vertex_hlsl_src);
-        je_mem_free((void*)write_to_shader->m_fragment_hlsl_src);
-    }
+    je_mem_free((void*)write_to_shader->m_vertex_hlsl_src);
+    je_mem_free((void*)write_to_shader->m_fragment_hlsl_src);
 
-    if (write_to_shader->m_vertex_spirv_codes != nullptr)
-    {
-        assert(write_to_shader->m_fragment_spirv_codes != nullptr);
-        je_mem_free((void*)write_to_shader->m_vertex_spirv_codes);
-        je_mem_free((void*)write_to_shader->m_fragment_spirv_codes);
-    }
+    je_mem_free((void*)write_to_shader->m_vertex_glsl_src);
+    je_mem_free((void*)write_to_shader->m_fragment_glsl_src);
+
+    je_mem_free((void*)write_to_shader->m_vertex_glsles_src);
+    je_mem_free((void*)write_to_shader->m_fragment_glsles_src);
+
+    je_mem_free((void*)write_to_shader->m_vertex_spirv_codes);
+    je_mem_free((void*)write_to_shader->m_fragment_spirv_codes);
+
+    je_mem_free((void*)write_to_shader->m_msl_mac_src);
 
     delete[] write_to_shader->m_vertex_in;
 
@@ -1153,7 +1175,11 @@ void jegl_shader_free_generated_shader_source(jegl_shader* write_to_shader)
         delete[] write_to_shader->m_sampler_methods[i].m_pass_ids;
     delete[] write_to_shader->m_sampler_methods;
 }
-
+void _free_shader_value(void* shader_value)
+{
+    jegl_shader_value* shader_val = (jegl_shader_value*)shader_value;
+    shader_val->release_myself();
+}
 
 WO_API wo_api jeecs_shader_float_create(wo_vm vm, wo_value args)
 {
@@ -1312,7 +1338,8 @@ WO_API wo_api jeecs_shader_apply_operation(wo_vm vm, wo_value args)
     AutoRelease auto_release([&]()
         {
             for (auto& tmp : tmp_svalue)
-                delete_shader_value(tmp); });
+                tmp->release_myself();
+        });
 
     std::vector<jegl_shader_value::type> _types(argc - 2);
     std::vector<jegl_shader_value*> _args(argc - 2);
