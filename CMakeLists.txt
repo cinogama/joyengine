@@ -165,8 +165,8 @@ endif()
 
 ##############################################################################
 
-include_directories("include")
-include_directories("3rd/woolang/include")
+target_include_directories(joyengine_configs INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_include_directories(joyengine_configs INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/3rd/woolang/include")
 
 # Scan /3rd/pkg/* to build the pkg and then static link them into joyecs.
 if (JE4_STATIC_LINK_MODULE_AND_PKGS)
@@ -213,6 +213,7 @@ if (JE4_STATIC_LINK_MODULE_AND_PKGS)
                 target_link_libraries(${pkg_name} PRIVATE joyengine_core_macro)
                 target_compile_definitions(${pkg_name} PRIVATE -Dwolib_entry=je_static_wo_pkg_${pkg_name}_entry)
                 target_compile_definitions(${pkg_name} PRIVATE -Dwolib_exit=je_static_wo_pkg_${pkg_name}_exit)
+                target_include_directories(${pkg_name} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/3rd/woolang/include")
 
                 if (NOT MSVC)
                     target_compile_options(${pkg_name} PRIVATE -fPIC)
