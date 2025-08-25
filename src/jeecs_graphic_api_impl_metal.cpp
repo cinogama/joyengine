@@ -4,6 +4,15 @@
 #ifdef JE_ENABLE_METAL_GAPI
 #include "jeecs_imgui_backend_api.hpp"
 
+#define NS_PRIVATE_IMPLEMENTATION
+#define MTL_PRIVATE_IMPLEMENTATION
+#define MTK_PRIVATE_IMPLEMENTATION
+#define CA_PRIVATE_IMPLEMENTATION
+
+#include <Metal/Metal.hpp>
+#include <AppKit/AppKit.hpp>
+#include <MetalKit/MetalKit.hpp>
+
 namespace jeecs::graphic::api::metal
 {
     jegl_context::userdata_t
