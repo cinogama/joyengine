@@ -18,8 +18,6 @@ void jegui_init_dx11(
     bool reboot);
 void jegui_update_dx11();
 void jegui_shutdown_dx11(bool reboot);
-bool jegui_win32_proc_handler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
-void jegui_win32_append_unicode16_char(wchar_t wch);
 #endif
 
 #if defined(JE_ENABLE_GL330_GAPI) || defined(JE_ENABLE_GLES300_GAPI) || defined(JE_ENABLE_WEBGL20_GAPI)

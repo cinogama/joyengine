@@ -28,10 +28,10 @@ namespace jeecs::graphic
             jegl_context *thread,
             const jegl_interface_config *config) = 0;
 
-        virtual void swap_for_opengl() = 0;
         virtual update_result update() = 0;
         virtual void shutdown(bool reboot) = 0;
 
+        virtual void swap_for_opengl() = 0;
         virtual void *interface_handle() const = 0;
     };
 }

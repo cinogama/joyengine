@@ -490,20 +490,17 @@ namespace jeecs::graphic::api::vk130
             {
                 m_using_semaphores.push_back(semaphore);
             }
-
             template <descriptor_set_type DESC_SET_TYPE>
             void use_descriptor_set(VkDescriptorSet set)
             {
                 m_using_descriptor_sets[DESC_SET_TYPE].push_back(set);
             }
-
             void release_using_resources()
             {
                 m_main_context->_vk_command_buffer_allocator->flush_command_buffer_allocator(this);
                 m_main_context->_vk_descriptor_set_allocator->flush_descriptor_set_allocator(this);
                 m_main_context->_vk_dear_imgui_descriptor_set_allocator->flush_descriptor_set_allocator(this);
             }
-
             swapchain_image_content(
                 jegl_vk130_context* main_contant,
                 jevk13_framebuffer* framebuffer,
@@ -3329,7 +3326,6 @@ namespace jeecs::graphic::api::vk130
                 _vk_swapchain_images[_vk_presenting_swapchain_image_index];
 
             _vk_current_swapchain_image_content->release_using_resources();
-
             _vk_current_swapchain_image_content->use_semaphore(_vk_last_command_buffer_semaphore);
 
             assert(_vk_current_target_framebuffer == nullptr);

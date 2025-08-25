@@ -169,6 +169,7 @@ target_include_directories(joyengine_configs INTERFACE "${CMAKE_CURRENT_SOURCE_D
 target_include_directories(joyengine_configs INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/3rd/woolang/include")
 
 # Scan /3rd/pkg/* to build the pkg and then static link them into joyecs.
+set(JE4_STATIC_LINKED_PKG_AND_MODULE_LIST "")
 if (JE4_STATIC_LINK_MODULE_AND_PKGS)
     target_compile_definitions(joyengine_configs INTERFACE -DJE4_STATIC_LINK_MODULE_AND_PKGS=1)
 
@@ -191,7 +192,6 @@ if (JE4_STATIC_LINK_MODULE_AND_PKGS)
 
     JE4_GET_SUB_DIR_LIST(JE4_STATIC_LINKING_PKG_DIR_LIST ${CMAKE_CURRENT_SOURCE_DIR}/3rd/pkg)
     JE4_GET_SUB_DIR_LIST(JE4_STATIC_LINKING_MODULE_DIR_LIST ${CMAKE_CURRENT_SOURCE_DIR}/module)
-    set(JE4_STATIC_LINKED_PKG_AND_MODULE_LIST "")
 
     # Get all valid woolang packages.
     foreach(pkg_name ${JE4_STATIC_LINKING_PKG_DIR_LIST})
@@ -215,7 +215,7 @@ if (JE4_STATIC_LINK_MODULE_AND_PKGS)
                 target_compile_definitions(${pkg_name} PRIVATE -Dwolib_exit=je_static_wo_pkg_${pkg_name}_exit)
                 target_include_directories(${pkg_name} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/3rd/woolang/include")
 
-                if (NOT MSVC)
+                if (JE4_BUILD_SHARED_CORE AND NOT MSVC)
                     target_compile_options(${pkg_name} PRIVATE -fPIC)
                 endif()
 

@@ -88,7 +88,7 @@ if (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES300_GAPI OR JE4_ENABLE_WEBGL
 
         if (MSVC)
             list(APPEND jeecs_graphic_libs OpenGL32)
-        else()
+        elseif (JE4_BUILD_SHARED_CORE)
             target_compile_options(glew_s PRIVATE -fPIC)
         endif()
         
@@ -222,7 +222,7 @@ if (JE4_ENABLE_OPENGL330_GAPI OR
 
         if (NOT JE4_ENABLE_WEBGL20_GAPI)
             # Use built-in glfw3 for webgl target, so we don't need to build glfw3.
-            if (NOT MSVC)
+            if (JE4_BUILD_SHARED_CORE AND NOT MSVC)
                 target_compile_options(glfw PRIVATE -fPIC)
             endif()
 
@@ -273,7 +273,7 @@ else()
     message(FATAL_ERROR "Unknown platform")
 endif()
 
-if (NOT MSVC)
+if (JE4_BUILD_SHARED_CORE AND NOT MSVC)
     target_compile_options (box2d PRIVATE -fPIC)
 endif()
 
@@ -284,7 +284,7 @@ if (JE4_ENABLE_SHADER_WRAP_GENERATOR)
     target_compile_features(spirv-cross-c PRIVATE cxx_std_17)
     target_compile_features(spirv-cross-core PRIVATE cxx_std_17)
     target_compile_features(spirv-cross-msl PRIVATE cxx_std_17)
-    if (NOT MSVC)
+    if (JE4_BUILD_SHARED_CORE AND NOT MSVC)
         target_compile_options (spirv-cross-c PRIVATE -fPIC)
         target_compile_options (spirv-cross-cpp PRIVATE -fPIC)
         target_compile_options (spirv-cross-hlsl PRIVATE -fPIC)
