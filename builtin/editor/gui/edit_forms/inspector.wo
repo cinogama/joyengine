@@ -111,7 +111,7 @@ namespace editor::gui::edit_forms
         {
             for(let (name, uniform_val) : shader->get_uniforms()->unmapping->std::sort(\l, r = l.0 < r.0;))
             {
-                if (name->begin_with("JOYENGINE_"))
+                if (name->begin_with("JE_"))
                     continue; // 引擎的内置shader-uniform变量，跳过显示
                     
                 match (uniform_val)

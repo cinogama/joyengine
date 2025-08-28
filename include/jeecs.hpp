@@ -2003,6 +2003,8 @@ struct jegl_shader
         FLOAT3,
         FLOAT4,
         TEXTURE,
+        FLOAT2X2,
+        FLOAT3X3,
         FLOAT4X4,
     };
     struct builtin_uniform_location
@@ -2036,7 +2038,7 @@ struct jegl_shader
         uint32_t m_index;
         uniform_type m_uniform_type;
         bool m_updated;
-        union
+        union value
         {
             struct
             {
@@ -2046,10 +2048,13 @@ struct jegl_shader
             {
                 int ix, iy, iz, iw;
             };
+            float mat2x2[2][2];
+            float mat3x3[3][3];
             float mat4x4[4][4];
         };
 
         unifrom_variables* m_next;
+        value m_value;
     };
     struct uniform_blocks
     {
@@ -2997,6 +3002,28 @@ jegl_uniform_float4 [基本接口]
     jegl_bind_shader
 */
 JE_API void jegl_uniform_float4(uint32_t location, float x, float y, float z, float w);
+
+/*
+jegl_uniform_float2x2 [基本接口]
+向当前着色器指定位置的一致变量设置一个2x2单精度浮点矩阵数值
+    * jegl_uniform_float2x2 不会初始化着色器，请在操作之前调用 jegl_bind_shader
+        以确保着色器完成初始化
+    * 此函数只允许在图形线程内调用
+请参见：
+    jegl_bind_shader
+*/
+JE_API void jegl_uniform_float2x2(uint32_t location, const float (*mat)[2]);
+
+/*
+jegl_uniform_float3x3 [基本接口]
+向当前着色器指定位置的一致变量设置一个3x3单精度浮点矩阵数值
+    * jegl_uniform_float3x3 不会初始化着色器，请在操作之前调用 jegl_bind_shader
+        以确保着色器完成初始化
+    * 此函数只允许在图形线程内调用
+请参见：
+    jegl_bind_shader
+*/
+JE_API void jegl_uniform_float3x3(uint32_t location, const float (*mat)[3]);
 
 /*
 jegl_uniform_float4x4 [基本接口]
@@ -8476,7 +8503,7 @@ namespace jeecs
                                 name.c_str(), val, this);
                         else
                         {
-                            jegl_shad_uniforms->ix = val;
+                            jegl_shad_uniforms->m_value.ix = val;
                             jegl_shad_uniforms->m_updated = true;
                         }
                         return;
@@ -8498,8 +8525,8 @@ namespace jeecs
                                 name.c_str(), x, y, this);
                         else
                         {
-                            jegl_shad_uniforms->ix = x;
-                            jegl_shad_uniforms->iy = y;
+                            jegl_shad_uniforms->m_value.ix = x;
+                            jegl_shad_uniforms->m_value.iy = y;
                             jegl_shad_uniforms->m_updated = true;
                         }
                         return;
@@ -8521,9 +8548,9 @@ namespace jeecs
                                 name.c_str(), x, y, z, this);
                         else
                         {
-                            jegl_shad_uniforms->ix = x;
-                            jegl_shad_uniforms->iy = y;
-                            jegl_shad_uniforms->iz = z;
+                            jegl_shad_uniforms->m_value.ix = x;
+                            jegl_shad_uniforms->m_value.iy = y;
+                            jegl_shad_uniforms->m_value.iz = z;
                             jegl_shad_uniforms->m_updated = true;
                         }
                         return;
@@ -8545,10 +8572,10 @@ namespace jeecs
                                 name.c_str(), x, y, z, w, this);
                         else
                         {
-                            jegl_shad_uniforms->ix = x;
-                            jegl_shad_uniforms->iy = y;
-                            jegl_shad_uniforms->iz = z;
-                            jegl_shad_uniforms->iw = w;
+                            jegl_shad_uniforms->m_value.ix = x;
+                            jegl_shad_uniforms->m_value.iy = y;
+                            jegl_shad_uniforms->m_value.iz = z;
+                            jegl_shad_uniforms->m_value.iw = w;
                             jegl_shad_uniforms->m_updated = true;
                         }
                         return;
@@ -8570,7 +8597,7 @@ namespace jeecs
                                 name.c_str(), val, this);
                         else
                         {
-                            jegl_shad_uniforms->x = val;
+                            jegl_shad_uniforms->m_value.x = val;
                             jegl_shad_uniforms->m_updated = true;
                         }
                         return;
@@ -8592,8 +8619,8 @@ namespace jeecs
                                 name.c_str(), val.x, val.y, this);
                         else
                         {
-                            jegl_shad_uniforms->x = val.x;
-                            jegl_shad_uniforms->y = val.y;
+                            jegl_shad_uniforms->m_value.x = val.x;
+                            jegl_shad_uniforms->m_value.y = val.y;
                             jegl_shad_uniforms->m_updated = true;
                         }
                         return;
@@ -8615,9 +8642,9 @@ namespace jeecs
                                 name.c_str(), val.x, val.y, val.z, this);
                         else
                         {
-                            jegl_shad_uniforms->x = val.x;
-                            jegl_shad_uniforms->y = val.y;
-                            jegl_shad_uniforms->z = val.z;
+                            jegl_shad_uniforms->m_value.x = val.x;
+                            jegl_shad_uniforms->m_value.y = val.y;
+                            jegl_shad_uniforms->m_value.z = val.z;
                             jegl_shad_uniforms->m_updated = true;
                         }
                         return;
@@ -8639,10 +8666,10 @@ namespace jeecs
                                 name.c_str(), val.x, val.y, val.z, val.w, this);
                         else
                         {
-                            jegl_shad_uniforms->x = val.x;
-                            jegl_shad_uniforms->y = val.y;
-                            jegl_shad_uniforms->z = val.z;
-                            jegl_shad_uniforms->w = val.w;
+                            jegl_shad_uniforms->m_value.x = val.x;
+                            jegl_shad_uniforms->m_value.y = val.y;
+                            jegl_shad_uniforms->m_value.z = val.z;
+                            jegl_shad_uniforms->m_value.w = val.w;
                             jegl_shad_uniforms->m_updated = true;
                         }
                         return;

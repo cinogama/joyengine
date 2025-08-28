@@ -1,6 +1,11 @@
 // Mono.shader
+import woo::std;
 
 import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
 
 SHARED  (true);
 ZTEST   (LESS);
@@ -8,28 +13,31 @@ ZWRITE  (ENABLE);
 BLEND   (ONE, ZERO);
 CULL    (NONE);
 
-VAO_STRUCT! vin {
-    vertex  : float3,
-};
-
-using v2f = struct {
-    pos     : float4,
-};
-
-using fout = struct {
-    color   : float4
-};
-
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex  : float3,
+    };
+    
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct {
+        pos     : float4,
+    };
+    
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct {
+        color   : float4,
+    };
+    
 public func vert(v: vin)
 {
     return v2f{
-        pos = je_mvp * vec4(v.vertex, 1.)
+        pos = JE_MVP * vec4!(v.vertex, 1.),
     };
 }
 
 public func frag(_: v2f)
 {
     return fout{
-        color = je_color,
+        color = JE_COLOR,
     };
 }

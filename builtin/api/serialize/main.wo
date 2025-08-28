@@ -321,7 +321,7 @@ namespace jeapi::serialize
                         let result = {}mut: map<string, array<dynamic>>;
                         for(let (name, uniform_val) : shad->get_uniforms())
                         {
-                            if (name->begin_with("JOYENGINE_"))
+                            if (name->begin_with("JE_"))
                                 continue; // 引擎的内置shader-uniform变量，跳过
                             match (uniform_val)
                             {
@@ -396,7 +396,7 @@ namespace jeapi::serialize
                                     =>> \nv = nv...
                                         ->  func(name, uniformval)
                                         {
-                                            if (!name->begin_with("JOYENGINE_"))
+                                            if (!name->begin_with("JE_"))
                                             {
                                                 match (uniformval)
                                                 {

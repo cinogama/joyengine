@@ -337,9 +337,19 @@ namespace jeecs
         JECS_DISABLE_MOVE_AND_COPY(GizmoResources);
 
         GizmoResources(jegl_context* glcontext)
-            : m_camera_icon{ _create_missing_default_icon() }, m_point_or_shape_light2d_icon{ _create_missing_default_icon() }, m_parallel_light2d_icon{ _create_missing_default_icon() }, m_selecting_default_texture{ graphic::texture::create(1, 1, jegl_texture::format::RGBA) }, m_gizmo_shader{ graphic::shader::create("!/builtin/gizmo.shader",
-                                                                                                                                                                                                                                                                                                                     {R"(
+            : m_camera_icon{ _create_missing_default_icon() }
+            , m_point_or_shape_light2d_icon{ _create_missing_default_icon() }
+            , m_parallel_light2d_icon{ _create_missing_default_icon() }
+            , m_selecting_default_texture{ 
+                graphic::texture::create(1, 1, jegl_texture::format::RGBA) }
+            , m_gizmo_shader{ graphic::shader::create("!/builtin/gizmo.shader",                                                                                                                                                                                                                                                                                                               {R"(
+import woo::std;
+
 import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
 
 SHARED  (true);
 ZTEST   (ALWAYS);
@@ -347,40 +357,56 @@ ZWRITE  (DISABLE);
 BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
 CULL    (NONE);
 
-VAO_STRUCT! vin {
-    vertex : float3,
-    uv : float2,
-};
-using v2f = struct {
-    pos : float4,
-    uv : float2,
-};
-using fout = struct {
-    color : float4,
-    self_lum: float4,
-};
-public let vert = 
-    \v: vin = v2f { 
-        pos = je_mvp * vec4(v.vertex, 1.0),
-        uv = v.uv 
-    }
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex : float3,
+        uv : float2,
+    };
+    
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct {
+        pos : float4,
+        uv : float2,
+    };
+    
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct {
+        color : float4,
+        self_lum: float4,
+    };
+    
+public let vert =
+    \v: vin = v2f {
+            pos = JE_MVP * vec4!(v.vertex, 1.0),
+            uv = v.uv,
+        }
+        ;
     ;
-;
-let NearestSampler  = sampler2d::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
-let Main            = uniform_texture:<texture2d>("Main", NearestSampler, 0);
-public let frag = 
-    \vf: v2f = fout{ 
-        color = texture_color * vec4(1., 1., 1., 0.8),
-        self_lum = vec4(texture_color->xyz, 1.0),
-    }
-    where texture_color = alphatest(je_color * texture(Main, vf.uv))
+    
+let NearestSampler  = Sampler2D::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
+WOSHADER_UNIFORM!
+    let Main        = texture2d::uniform(0, NearestSampler);
+    
+public let frag =
+    \vf: v2f = fout{
+            color = texture_color * vec4!(1., 1., 1., 0.8),
+            self_lum = vec4!(texture_color->xyz, 1.0),
+        }
+        where texture_color = alphatest(JE_COLOR * tex2d(Main, vf.uv))
+        ;
     ;
-;
 )"})
                                                                                                                                                                                                                                                                                                  .value() },
-            m_gizmo_camera_visual_cone_shader{ graphic::shader::create("!/builtin/gizmo_camera_visual_cone.shader",
-                                                                      {R"(
+            m_gizmo_camera_visual_cone_shader{ 
+                graphic::shader::create("!/builtin/gizmo_camera_visual_cone.shader",
+                {R"(
+import woo::std;
+
 import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
 
 SHARED  (true);
 ZTEST   (ALWAYS);
@@ -388,35 +414,50 @@ ZWRITE  (DISABLE);
 BLEND   (SRC_ALPHA, ONE);
 CULL    (NONE);
 
-VAO_STRUCT! vin {
-    vertex : float3,
-};
-using v2f = struct {
-    pos : float4,
-};
-using fout = struct {
-    color : float4,
-    self_lum: float4,
-};
-let InverseCameraProjection = uniform("InverseCameraProjection", float4x4::unit);
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex : float3,
+    };
+    
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct {
+        pos : float4,
+    };
+    
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct {
+        color : float4,
+        self_lum: float4,
+    };
+    
+WOSHADER_UNIFORM!
+    let InverseCameraProjection = float4x4::unit;
+
 public func vert(v: vin)
 {
-    return v2f { 
-        pos = je_mvp * InverseCameraProjection * vec4(v.vertex, 1.)
-    };
+    return v2f {
+        pos = JE_MVP * InverseCameraProjection * vec4!(v.vertex, 1.),
+        };
 }
 public func frag(_: v2f)
 {
-    return fout{ 
-        color = vec4(1., 1., 1., 0.8),
-        self_lum = vec4(1., 1., 1., 1.0),
+    return fout{
+        color = vec4!(1., 1., 1., 0.8),
+        self_lum = vec4!(1., 1., 1., 1.0),
     };
 }
 )"})
-                                                    .value() },
-            m_gizmo_physics2d_collider_shader{ graphic::shader::create("!/builtin/gizmo_physics2d_collider.shader",
-                                                                      {R"(
+                .value() },
+            m_gizmo_physics2d_collider_shader{ 
+                graphic::shader::create("!/builtin/gizmo_physics2d_collider.shader",
+                {R"(
+import woo::std;
+
 import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
 
 SHARED  (true);
 ZTEST   (ALWAYS);
@@ -424,34 +465,47 @@ ZWRITE  (DISABLE);
 BLEND   (SRC_ALPHA, ONE);
 CULL    (NONE);
 
-VAO_STRUCT! vin {
-    vertex : float3,
-};
-using v2f = struct {
-    pos : float4,
-};
-using fout = struct {
-    color : float4,
-    self_lum: float4,
-};
-public let vert = 
-    \v: vin = v2f { 
-        pos = je_mvp * vec4(v.vertex, 1.0)
-    }
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex : float3,
+    };
+    
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct {
+        pos : float4,
+    };
+    
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct {
+        color : float4,
+        self_lum: float4,
+    };
+    
+public let vert =
+    \v: vin = v2f {
+            pos = JE_MVP * vec4!(v.vertex, 1.0),
+        }
+        ;
     ;
-;
-public let frag = 
-    \_: v2f = fout{ 
-        color = vec4(0., 1., 1., 0.5),
-        self_lum = vec4(0., 1., 1., 1.0),
-    }
+public let frag =
+    \_: v2f = fout{
+            color = vec4!(0., 1., 1., 0.5),
+            self_lum = vec4!(0., 1., 1., 1.0),
+        }
+        ;
     ;
-;
 )"})
-                                                    .value() },
-            m_gizmo_selecting_item_highlight_shader{ graphic::shader::create("!/builtin/gizmo_selecting_item_highlight.shader",
-                                                                            {R"(
+            .value() }
+        , m_gizmo_selecting_item_highlight_shader{
+            graphic::shader::create("!/builtin/gizmo_selecting_item_highlight.shader",
+            {R"(
+import woo::std;
+
 import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
 
 SHARED  (true);
 ZTEST   (ALWAYS);
@@ -459,45 +513,53 @@ ZWRITE  (DISABLE);
 BLEND   (SRC_ALPHA, ONE);
 CULL    (NONE);
 
-VAO_STRUCT! vin {
-    vertex  : float3,
-    uv      : float2,
-};
-
-using v2f = struct {
-    pos     : float4,
-    uv      : float2,
-};
-
-using fout = struct {
-    color       : float4,
-    self_lum    : float4,
-};
-
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex  : float3,
+        uv      : float2,
+    };
+    
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct {
+        pos     : float4,
+        uv      : float2,
+    };
+    
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct {
+        color       : float4,
+        self_lum    : float4,
+    };
+    
 public func vert(v: vin)
 {
     return v2f{
-        pos = je_mvp * vec4(v.vertex, 1.),
-        uv = uvtrans(v.uv, je_tiling, je_offset),
+        pos = JE_MVP * vec4!(v.vertex, 1.),
+        uv = uvtrans(v.uv, JE_UV_TILING, JE_UV_OFFSET),
     };
 }
 
-let NearestSampler  = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
-let Main            = uniform_texture:<texture2d>("Main", NearestSampler, 0);
-
+let NearestSampler  = Sampler2D::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
+WOSHADER_UNIFORM!
+    let Main        = texture2d::uniform(0, NearestSampler);
+    
 public func frag(vf: v2f)
 {
-    let final_color = 
-        vec4(0.62, 0.22, 0.16, abs(sin(je_time->x * 2.)) * 0.5 * alphatest(texture(Main, vf.uv))->w);
-
+    let final_color =
+        vec4!(
+            0.62,
+            0.22,
+            0.16,
+            abs(sin(JE_TIME->x * 2.)) * 0.5 * alphatest(tex2d(Main, vf.uv))->w);
+            
     return fout{
         color = final_color,
-        self_lum = float4::zero,
+        self_lum = vec4!(0., 0., 0., 0.),
     };
 }
 )"})
-                                                          .value() },
-            m_gizmo_vertex{ graphic::vertex::create(
+        .value() }
+        , m_gizmo_vertex{ graphic::vertex::create(
                                jegl_vertex::type::TRIANGLESTRIP,
                                gizmo_vertex_data,
                                sizeof(gizmo_vertex_data),
@@ -856,80 +918,102 @@ public func frag(vf: v2f)
                 basic::resource<graphic::shader>
                     axis_shader = graphic::shader::create("!/builtin/mover_axis.shader",
                         { R"(
+import woo::std;
+
 import je::shader;
-        
+import pkg::woshader;
+
+using woshader;
+using je::shader;
+
 SHARED  (true);
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
 BLEND   (ONE, ZERO);
 CULL    (NONE);
-        
-VAO_STRUCT! vin {
-    vertex : float3,
-    color  : float3
-};
-using v2f = struct {
-    pos : float4,
-    color : float3
-};
-using fout = struct {
-    color : float4,
-    self_lum: float4,
-};
-        
-public let vert = 
-    \v: vin = v2f { 
-        pos = je_mvp * vec4(v.vertex, 1.), 
-        color = v.color 
-    } 
+
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex : float3,
+        color  : float3,
+    };
+    
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct {
+        pos : float4,
+        color : float3,
+    };
+    
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct {
+        color : float4,
+        self_lum: float4,
+    };
+    
+public let vert =
+    \v: vin = v2f {
+            pos = JE_MVP * vec4!(v.vertex, 1.),
+            color = v.color
+            }
+        ;
     ;
-;
-public let frag = 
-    \f: v2f = fout{ 
-        color = vec4(show_color, 1.),
-        self_lum = vec4(show_color * 100., 1.),
-    }
-    where show_color = lerp(f.color, float3::const(1., 1., 1.), ratio)
-        , ratio = step(float::const(0.5), je_color->x)
+public let frag =
+    \f: v2f = fout{
+            color = vec4!(show_color, 1.),
+            self_lum = vec4!(show_color * 100., 1.),
+        }
+        where show_color = lerp(f.color, vec3!(1., 1., 1.), vec3!(ratio, ratio, ratio))
+            , ratio = step(0.5, JE_COLOR->x)
+        ;
     ;
-;
         )" })
                     .value();
                 basic::resource<graphic::shader>
                     select_box_shader = graphic::shader::create("!/builtin/select_box.shader",
                         { R"(
+import woo::std;
+
 import je::shader;
-        
+import pkg::woshader;
+
+using woshader;
+using je::shader;
+
 SHARED  (true);
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
 BLEND   (ONE, ZERO);
 CULL    (NONE);
-        
-VAO_STRUCT! vin {
-    vertex : float3,
-};
-using v2f = struct {
-    pos : float4,
-};
-using fout = struct {
-    color : float4,
-    self_lum: float4,
-};
-        
-public let vert = 
-    \v: vin = v2f{ 
-        pos = je_mvp * vec4(v.vertex, 1.) 
-    }
+
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex : float3,
+    };
+    
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct {
+        pos : float4,
+    };
+    
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct {
+        color : float4,
+        self_lum: float4,
+    };
+    
+public let vert =
+    \v: vin = v2f{
+            pos = JE_MVP * vec4!(v.vertex, 1.)
+            }
+        ;
     ;
-;
-public let frag = 
-    \_: v2f = fout{ 
-        color = float4::const(0.5, 1., 0.5, 1.),
-        self_lum = float4::const(1., 100., 1., 1.),
-    }
+public let frag =
+    \_: v2f = fout{
+            color = vec4!(0.5, 1., 0.5, 1.),
+            self_lum = vec4!(1., 100., 1., 1.),
+        }
+        ;
     ;
-;
         )" })
                     .value();
 
@@ -1776,7 +1860,7 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_int(wo_vm vm, wo_value args)
     auto& bad_uniform_var = bad_shader->m_vars[wo_string(args + 1)];
 
     bad_uniform_var.m_uniform_type = jegl_shader::uniform_type::INT;
-    bad_uniform_var.ix = (int)wo_int(args + 2);
+    bad_uniform_var.m_value.ix = (int)wo_int(args + 2);
 
     return wo_ret_void(vm);
 }
@@ -1786,8 +1870,8 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_int2(wo_vm vm, wo_value args)
     auto& bad_uniform_var = bad_shader->m_vars[wo_string(args + 1)];
 
     bad_uniform_var.m_uniform_type = jegl_shader::uniform_type::INT2;
-    bad_uniform_var.ix = (int)wo_int(args + 2);
-    bad_uniform_var.iy = (int)wo_int(args + 3);
+    bad_uniform_var.m_value.ix = (int)wo_int(args + 2);
+    bad_uniform_var.m_value.iy = (int)wo_int(args + 3);
 
     return wo_ret_void(vm);
 }
@@ -1797,9 +1881,9 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_int3(wo_vm vm, wo_value args)
     auto& bad_uniform_var = bad_shader->m_vars[wo_string(args + 1)];
 
     bad_uniform_var.m_uniform_type = jegl_shader::uniform_type::INT3;
-    bad_uniform_var.ix = (int)wo_int(args + 2);
-    bad_uniform_var.iy = (int)wo_int(args + 3);
-    bad_uniform_var.iz = (int)wo_int(args + 4);
+    bad_uniform_var.m_value.ix = (int)wo_int(args + 2);
+    bad_uniform_var.m_value.iy = (int)wo_int(args + 3);
+    bad_uniform_var.m_value.iz = (int)wo_int(args + 4);
 
     return wo_ret_void(vm);
 }
@@ -1809,10 +1893,10 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_int4(wo_vm vm, wo_value args)
     auto& bad_uniform_var = bad_shader->m_vars[wo_string(args + 1)];
 
     bad_uniform_var.m_uniform_type = jegl_shader::uniform_type::INT4;
-    bad_uniform_var.ix = (int)wo_int(args + 2);
-    bad_uniform_var.iy = (int)wo_int(args + 3);
-    bad_uniform_var.iz = (int)wo_int(args + 4);
-    bad_uniform_var.iw = (int)wo_int(args + 5);
+    bad_uniform_var.m_value.ix = (int)wo_int(args + 2);
+    bad_uniform_var.m_value.iy = (int)wo_int(args + 3);
+    bad_uniform_var.m_value.iz = (int)wo_int(args + 4);
+    bad_uniform_var.m_value.iw = (int)wo_int(args + 5);
 
     return wo_ret_void(vm);
 }
@@ -1822,7 +1906,7 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_float(wo_vm vm, wo_value args)
     auto& bad_uniform_var = bad_shader->m_vars[wo_string(args + 1)];
 
     bad_uniform_var.m_uniform_type = jegl_shader::uniform_type::FLOAT;
-    bad_uniform_var.x = wo_float(args + 2);
+    bad_uniform_var.m_value.x = wo_float(args + 2);
 
     return wo_ret_void(vm);
 }
@@ -1832,8 +1916,8 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_float2(wo_vm vm, wo_value args)
     auto& bad_uniform_var = bad_shader->m_vars[wo_string(args + 1)];
 
     bad_uniform_var.m_uniform_type = jegl_shader::uniform_type::FLOAT2;
-    bad_uniform_var.x = wo_float(args + 2);
-    bad_uniform_var.y = wo_float(args + 3);
+    bad_uniform_var.m_value.x = wo_float(args + 2);
+    bad_uniform_var.m_value.y = wo_float(args + 3);
 
     return wo_ret_void(vm);
 }
@@ -1843,9 +1927,9 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_float3(wo_vm vm, wo_value args)
     auto& bad_uniform_var = bad_shader->m_vars[wo_string(args + 1)];
 
     bad_uniform_var.m_uniform_type = jegl_shader::uniform_type::FLOAT3;
-    bad_uniform_var.x = wo_float(args + 2);
-    bad_uniform_var.y = wo_float(args + 3);
-    bad_uniform_var.z = wo_float(args + 4);
+    bad_uniform_var.m_value.x = wo_float(args + 2);
+    bad_uniform_var.m_value.y = wo_float(args + 3);
+    bad_uniform_var.m_value.z = wo_float(args + 4);
 
     return wo_ret_void(vm);
 }
@@ -1855,10 +1939,10 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_float4(wo_vm vm, wo_value args)
     auto& bad_uniform_var = bad_shader->m_vars[wo_string(args + 1)];
 
     bad_uniform_var.m_uniform_type = jegl_shader::uniform_type::FLOAT4;
-    bad_uniform_var.x = wo_float(args + 2);
-    bad_uniform_var.y = wo_float(args + 3);
-    bad_uniform_var.z = wo_float(args + 4);
-    bad_uniform_var.w = wo_float(args + 5);
+    bad_uniform_var.m_value.x = wo_float(args + 2);
+    bad_uniform_var.m_value.y = wo_float(args + 3);
+    bad_uniform_var.m_value.z = wo_float(args + 4);
+    bad_uniform_var.m_value.w = wo_float(args + 5);
 
     return wo_ret_void(vm);
 }
@@ -1871,31 +1955,31 @@ inline void update_shader(
     switch (uni_var->m_uniform_type)
     {
     case jegl_shader::uniform_type::INT:
-        new_shad->set_uniform(uname, uni_var->ix);
+        new_shad->set_uniform(uname, uni_var->m_value.ix);
         break;
     case jegl_shader::uniform_type::INT2:
-        new_shad->set_uniform(uname, uni_var->ix, uni_var->iy);
+        new_shad->set_uniform(uname, uni_var->m_value.ix, uni_var->m_value.iy);
         break;
     case jegl_shader::uniform_type::INT3:
-        new_shad->set_uniform(uname, uni_var->ix, uni_var->iy, uni_var->iz);
+        new_shad->set_uniform(uname, uni_var->m_value.ix, uni_var->m_value.iy, uni_var->m_value.iz);
         break;
     case jegl_shader::uniform_type::INT4:
-        new_shad->set_uniform(uname, uni_var->ix, uni_var->iy, uni_var->iz, uni_var->iw);
+        new_shad->set_uniform(uname, uni_var->m_value.ix, uni_var->m_value.iy, uni_var->m_value.iz, uni_var->m_value.iw);
         break;
     case jegl_shader::uniform_type::FLOAT:
-        new_shad->set_uniform(uname, uni_var->x);
+        new_shad->set_uniform(uname, uni_var->m_value.x);
         break;
     case jegl_shader::uniform_type::FLOAT2:
         new_shad->set_uniform(uname,
-            jeecs::math::vec2(uni_var->x, uni_var->y));
+            jeecs::math::vec2(uni_var->m_value.x, uni_var->m_value.y));
         break;
     case jegl_shader::uniform_type::FLOAT3:
         new_shad->set_uniform(uname,
-            jeecs::math::vec3(uni_var->x, uni_var->y, uni_var->z));
+            jeecs::math::vec3(uni_var->m_value.x, uni_var->m_value.y, uni_var->m_value.z));
         break;
     case jegl_shader::uniform_type::FLOAT4:
         new_shad->set_uniform(uname,
-            jeecs::math::vec4(uni_var->x, uni_var->y, uni_var->z, uni_var->w));
+            jeecs::math::vec4(uni_var->m_value.x, uni_var->m_value.y, uni_var->m_value.z, uni_var->m_value.w));
         break;
     default:
         break; // donothing
@@ -2005,7 +2089,7 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
             // Load and create new shader instance, must be successful.
             *newshader = jeecs::graphic::shader::load(gcontext, new_shader_instance->resource()->m_path).value();
 
-            const char builtin_uniform_varname[] = "JOYENGINE_";
+            const char builtin_uniform_varname[] = "JE_";
 
             if constexpr (std::is_same<decltype(oldshader), jeecs::basic::resource<jeecs::graphic::shader>>::value)
             {
@@ -2017,28 +2101,59 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
                         switch (uniform_var->m_uniform_type)
                         {
                         case jegl_shader::uniform_type::INT:
-                            new_shader_instance->set_uniform(uniform_var->m_name, uniform_var->ix);
+                            new_shader_instance->set_uniform(
+                                uniform_var->m_name, 
+                                uniform_var->m_value.ix);
                             break;
                         case jegl_shader::uniform_type::INT2:
-                            new_shader_instance->set_uniform(uniform_var->m_name, uniform_var->ix, uniform_var->iy);
+                            new_shader_instance->set_uniform(
+                                uniform_var->m_name, 
+                                uniform_var->m_value.ix, 
+                                uniform_var->m_value.iy);
                             break;
                         case jegl_shader::uniform_type::INT3:
-                            new_shader_instance->set_uniform(uniform_var->m_name, uniform_var->ix, uniform_var->iy, uniform_var->iz);
+                            new_shader_instance->set_uniform(
+                                uniform_var->m_name, 
+                                uniform_var->m_value.ix, 
+                                uniform_var->m_value.iy, 
+                                uniform_var->m_value.iz);
                             break;
                         case jegl_shader::uniform_type::INT4:
-                            new_shader_instance->set_uniform(uniform_var->m_name, uniform_var->ix, uniform_var->iy, uniform_var->iz, uniform_var->iw);
+                            new_shader_instance->set_uniform(
+                                uniform_var->m_name, 
+                                uniform_var->m_value.ix,
+                                uniform_var->m_value.iy,
+                                uniform_var->m_value.iz, 
+                                uniform_var->m_value.iw);
                             break;
                         case jegl_shader::uniform_type::FLOAT:
-                            new_shader_instance->set_uniform(uniform_var->m_name, uniform_var->x);
+                            new_shader_instance->set_uniform(
+                                uniform_var->m_name, 
+                                uniform_var->m_value.x);
                             break;
                         case jegl_shader::uniform_type::FLOAT2:
-                            new_shader_instance->set_uniform(uniform_var->m_name, jeecs::math::vec2(uniform_var->x, uniform_var->y));
+                            new_shader_instance->set_uniform(
+                                uniform_var->m_name,
+                                jeecs::math::vec2(
+                                    uniform_var->m_value.x,
+                                    uniform_var->m_value.y));
                             break;
                         case jegl_shader::uniform_type::FLOAT3:
-                            new_shader_instance->set_uniform(uniform_var->m_name, jeecs::math::vec3(uniform_var->x, uniform_var->y, uniform_var->z));
+                            new_shader_instance->set_uniform(
+                                uniform_var->m_name,
+                                jeecs::math::vec3(
+                                    uniform_var->m_value.x, 
+                                    uniform_var->m_value.y, 
+                                    uniform_var->m_value.z));
                             break;
                         case jegl_shader::uniform_type::FLOAT4:
-                            new_shader_instance->set_uniform(uniform_var->m_name, jeecs::math::vec4(uniform_var->x, uniform_var->y, uniform_var->z, uniform_var->w));
+                            new_shader_instance->set_uniform(
+                                uniform_var->m_name,
+                                jeecs::math::vec4(
+                                    uniform_var->m_value.x, 
+                                    uniform_var->m_value.y, 
+                                    uniform_var->m_value.z, 
+                                    uniform_var->m_value.w));
                             break;
                         default:
                             // Just skip it.
@@ -2057,28 +2172,28 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
                         switch (var.m_uniform_type)
                         {
                         case jegl_shader::uniform_type::INT:
-                            new_shader_instance->set_uniform(name, var.ix);
+                            new_shader_instance->set_uniform(name, var.m_value.ix);
                             break;
                         case jegl_shader::uniform_type::INT2:
-                            new_shader_instance->set_uniform(name, var.ix, var.iy);
+                            new_shader_instance->set_uniform(name, var.m_value.ix, var.m_value.iy);
                             break;
                         case jegl_shader::uniform_type::INT3:
-                            new_shader_instance->set_uniform(name, var.ix, var.iy, var.iz);
+                            new_shader_instance->set_uniform(name, var.m_value.ix, var.m_value.iy, var.m_value.iz);
                             break;
                         case jegl_shader::uniform_type::INT4:
-                            new_shader_instance->set_uniform(name, var.ix, var.iy, var.iz, var.iw);
+                            new_shader_instance->set_uniform(name, var.m_value.ix, var.m_value.iy, var.m_value.iz, var.m_value.iw);
                             break;
                         case jegl_shader::uniform_type::FLOAT:
-                            new_shader_instance->set_uniform(name, var.x);
+                            new_shader_instance->set_uniform(name, var.m_value.x);
                             break;
                         case jegl_shader::uniform_type::FLOAT2:
-                            new_shader_instance->set_uniform(name, jeecs::math::vec2(var.x, var.y));
+                            new_shader_instance->set_uniform(name, jeecs::math::vec2(var.m_value.x, var.m_value.y));
                             break;
                         case jegl_shader::uniform_type::FLOAT3:
-                            new_shader_instance->set_uniform(name, jeecs::math::vec3(var.x, var.y, var.z));
+                            new_shader_instance->set_uniform(name, jeecs::math::vec3(var.m_value.x, var.m_value.y, var.m_value.z));
                             break;
                         case jegl_shader::uniform_type::FLOAT4:
-                            new_shader_instance->set_uniform(name, jeecs::math::vec4(var.x, var.y, var.z, var.w));
+                            new_shader_instance->set_uniform(name, jeecs::math::vec4(var.m_value.x, var.m_value.y, var.m_value.z, var.m_value.w));
                             break;
                         default:
                             // Just skip it.

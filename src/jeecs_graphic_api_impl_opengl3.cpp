@@ -359,7 +359,6 @@ namespace jeecs::graphic::api::gl3
                     reinterpret_cast<jegl_gl3_shader*>(res->m_handle.m_ptr);
 
                 assert(shader_instance != nullptr);
-
                 _gl_bind_shader_samplers(shader_instance);
             },
             context->m_interface->interface_handle(),
@@ -393,6 +392,9 @@ namespace jeecs::graphic::api::gl3
         case basic_interface::update_result::NORMAL:
         _label_jegl_gl3_normal_job:
             context->m_interface->swap_for_opengl();
+
+            // Reset context->current_active_shader_may_null to make sure bind correctly.
+            context->current_active_shader_may_null = nullptr;
             return jegl_update_action::JEGL_UPDATE_CONTINUE;
         default:
             abort();
@@ -609,9 +611,7 @@ namespace jeecs::graphic::api::gl3
 
                     samplers.m_passes.resize((size_t)sampler_config.m_pass_id_count);
                     for (uint64_t i = 0; i < sampler_config.m_pass_id_count; i += 1)
-                    {
                         samplers.m_passes.at(i) = sampler_config.m_pass_ids[i];
-                    }
                 }
 
                 uint32_t last_elem_end_place = 0;
@@ -756,22 +756,22 @@ namespace jeecs::graphic::api::gl3
 
                     auto& builtin_uniforms = resource->m_raw_shader_data->m_builtin_uniforms;
 
-                    builtin_uniforms.m_builtin_uniform_ndc_scale = shared_blob_data->get_built_in_location("JOYENGINE_NDC_SCALE");
-                    builtin_uniforms.m_builtin_uniform_m = shared_blob_data->get_built_in_location("JOYENGINE_TRANS_M");
-                    builtin_uniforms.m_builtin_uniform_mv = shared_blob_data->get_built_in_location("JOYENGINE_TRANS_MV");
-                    builtin_uniforms.m_builtin_uniform_mvp = shared_blob_data->get_built_in_location("JOYENGINE_TRANS_MVP");
+                    builtin_uniforms.m_builtin_uniform_ndc_scale = shared_blob_data->get_built_in_location("JE_NDC_SCALE");
+                    builtin_uniforms.m_builtin_uniform_m = shared_blob_data->get_built_in_location("JE_M");
+                    builtin_uniforms.m_builtin_uniform_mv = shared_blob_data->get_built_in_location("JE_MV");
+                    builtin_uniforms.m_builtin_uniform_mvp = shared_blob_data->get_built_in_location("JE_MVP");
 
-                    builtin_uniforms.m_builtin_uniform_tiling = shared_blob_data->get_built_in_location("JOYENGINE_TEXTURE_TILING");
-                    builtin_uniforms.m_builtin_uniform_offset = shared_blob_data->get_built_in_location("JOYENGINE_TEXTURE_OFFSET");
+                    builtin_uniforms.m_builtin_uniform_tiling = shared_blob_data->get_built_in_location("JE_UV_TILING");
+                    builtin_uniforms.m_builtin_uniform_offset = shared_blob_data->get_built_in_location("JE_UV_OFFSET");
 
                     builtin_uniforms.m_builtin_uniform_light2d_resolution =
-                        shared_blob_data->get_built_in_location("JOYENGINE_LIGHT2D_RESOLUTION");
+                        shared_blob_data->get_built_in_location("JE_LIGHT2D_RESOLUTION");
                     builtin_uniforms.m_builtin_uniform_light2d_decay =
-                        shared_blob_data->get_built_in_location("JOYENGINE_LIGHT2D_DECAY");
+                        shared_blob_data->get_built_in_location("JE_LIGHT2D_DECAY");
 
                     // ATTENTION: 注意，以下参数特殊shader可能挪作他用
-                    builtin_uniforms.m_builtin_uniform_local_scale = shared_blob_data->get_built_in_location("JOYENGINE_LOCAL_SCALE");
-                    builtin_uniforms.m_builtin_uniform_color = shared_blob_data->get_built_in_location("JOYENGINE_MAIN_COLOR");
+                    builtin_uniforms.m_builtin_uniform_local_scale = shared_blob_data->get_built_in_location("JE_LOCAL_SCALE");
+                    builtin_uniforms.m_builtin_uniform_color = shared_blob_data->get_built_in_location("JE_COLOR");
 
                     // "je4_gl_sampler_%zu", see _jegl_regenerate_and_alloc_glsl_from_spir_v_combined
                     char gl_sampler_name[64];
@@ -787,14 +787,14 @@ namespace jeecs::graphic::api::gl3
                                 gl_sampler_name, 
                                 sizeof(gl_sampler_name), 
                                 "je4_gl_sampler_%zu", 
-                                (size_t)uniform_var->ix);
+                                (size_t)uniform_var->m_value.ix);
 
                             (void)count;
                             assert(count > 0 && count < (int)sizeof(gl_sampler_name));
 
                             const auto location = glGetUniformLocation(shader_program, gl_sampler_name);
                             if (location != -1)
-                                glUniform1i(location, (GLint)uniform_var->ix);
+                                glUniform1i(location, (GLint)uniform_var->m_value.ix);
                         }
                         else
                         {

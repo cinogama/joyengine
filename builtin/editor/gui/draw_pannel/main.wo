@@ -757,7 +757,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                 =>> \nv = nv...
                     ->  func(name, uniformval)
                     {
-                        if (!name->begin_with("JOYENGINE_"))
+                        if (!name->begin_with("JE_"))
                         {
                             match (uniformval)
                             {

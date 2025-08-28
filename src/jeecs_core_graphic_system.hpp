@@ -55,26 +55,40 @@ namespace jeecs
                       .value() },
             default_shader{ graphic::shader::create("!/builtin/builtin_default.shader", R"(
 // Default shader
+import woo::std;
+
 import je::shader;
+import pkg::woshader;
 
-VAO_STRUCT! vin {
-    vertex : float3,
-};
-using v2f = struct {
-    pos : float4,
-};
-using fout = struct {
-    color : float4
-};
+using woshader;
+using je::shader;
 
-public let vert = 
-\v: vin = v2f{ pos = je_mvp * vertex_pos }
-    where vertex_pos = vec4(v.vertex, 1.);;
-
-public let frag = 
-\_: v2f = fout{ color = vec4(t, 0., t, 1.) }
-    where t = je_time->y();;
-
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex : float3,
+    };
+    
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct {
+        pos : float4,
+    };
+    
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct {
+        color : float4,
+    };
+    
+public let vert =
+    \v: vin = v2f{ pos = JE_MVP * vertex_pos }
+        where vertex_pos = vec4!(v.vertex, 1.)
+        ;
+    ;
+    
+public let frag =
+    \_: v2f = fout{ color = vec4!(t, 0., t, 1.) }
+        where t = JE_TIME->y
+        ;
+    ;
 )")
                                  .value() },
             default_texture{ graphic::texture::create(2, 2, jegl_texture::format::RGBA) }, default_shaders_list{ default_shader }
@@ -921,51 +935,66 @@ public let frag =
                     })
                     .value() },
                 _defer_light2d_shadow_point_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_point.shader", R"(
+import woo::std;
+
 import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
+
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
 BLEND_EQUATION(MAX);
 BLEND   (ONE, ONE);
 CULL    (BACK);
 
-VAO_STRUCT! vin
-{
-    vertex: float3,
-    factor: float,
-};
-
-using v2f = struct{
-    pos: float4,
-};
-
-using fout = struct{
-    shadow_factor: float4,
-};
-
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex: float3,
+        factor: float,
+    };
+    
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct {
+        pos: float4,
+    };
+    
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct {
+        shadow_factor: float4,
+    };
+    
 public func vert(v: vin)
 {
-    // ATTENTION: We will using je_color: float4 to pass lwpos.
-    let light_vpos = je_v * je_color;
-    let vpos = je_mv * vec4(v.vertex, 1.);
-
-    let shadow_vdir = vec3(normalize(vpos->xy - light_vpos->xy), 0.) * 2000. * v.factor;
+    // ATTENTION: We will using JE_COLOR: float4 to pass lwpos.
+    let light_vpos = JE_V * JE_COLOR;
+    let vpos = JE_MV * vec4!(v.vertex, 1.);
     
-    return v2f{pos = je_p * vec4(vpos->xyz + shadow_vdir, 1.)};   
+    let shadow_vdir = vec3!(normalize(vpos->xy - light_vpos->xy), 0.) * 2000. * v.factor;
+    
+    return v2f{pos = JE_P * vec4!(vpos->xyz + shadow_vdir, 1.)};
 }
 
 public func frag(_: v2f)
 {
-    // NOTE: je_local_scale->x is shadow factor here.
-    let shadow_factor = je_local_scale->x;
+    // NOTE: JE_LOCAL_SCALE->x is shadow factor here.
+    let shadow_factor = JE_LOCAL_SCALE->x;
     return fout{
-        shadow_factor = vec4(
+        shadow_factor = vec4!(
             shadow_factor, shadow_factor, shadow_factor, shadow_factor),
     };
 }
 )")
                                                        .value() },
                 _defer_light2d_shadow_parallel_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_parallel.shader", R"(
+import woo::std;
+
 import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
 
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
@@ -973,132 +1002,159 @@ BLEND_EQUATION(MAX);
 BLEND   (ONE, ONE);
 CULL    (BACK);
 
-VAO_STRUCT! vin
-{
-    vertex: float3,
-    factor: float,
-};
-
-using v2f = struct{
-    pos: float4,
-};
-
-using fout = struct{
-    shadow_factor: float4,
-};
-
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex: float3,
+        factor: float,
+    };
+    
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct {
+        pos: float4,
+    };
+    
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct {
+        shadow_factor: float4,
+    };
+    
 public func vert(v: vin)
 {
-    // ATTENTION: We will using je_color: float4 to pass lwpos.
-    let light_vdir = (je_v * je_color)->xyz - movement(je_v);
-    let vpos = je_mv * vec4(v.vertex, 1.);
-
-    let shadow_vdir = vec3(normalize(light_vdir->xy), 0.) * 2000. * v.factor;
+    // ATTENTION: We will using JE_COLOR: float4 to pass lwpos.
+    let light_vdir = (JE_V * JE_COLOR)->xyz - movement(JE_V);
+    let vpos = JE_MV * vec4!(v.vertex, 1.);
     
-    return v2f{pos = je_p * vec4(vpos->xyz + shadow_vdir, 1.)};   
+    let shadow_vdir = vec3!(normalize(light_vdir->xy), 0.) * 2000. * v.factor;
+    
+    return v2f{pos = JE_P * vec4!(vpos->xyz + shadow_vdir, 1.)};
 }
 
 public func frag(_: v2f)
 {
-    // NOTE: je_local_scale->x is shadow factor here.
-    let shadow_factor = je_local_scale->x;
+    // NOTE: JE_LOCAL_SCALE->x is shadow factor here.
+    let shadow_factor = JE_LOCAL_SCALE->x;
     return fout{
-        shadow_factor = vec4(
+        shadow_factor = vec4!(
             shadow_factor, shadow_factor, shadow_factor, shadow_factor),
     };
 }
 )")
                                                           .value() },
                 _defer_light2d_shadow_point_reverse_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_reverse_point.shader", R"(
+import woo::std;
+
 import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
+
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
 BLEND_EQUATION(MAX);
 BLEND   (ONE, ONE);
 CULL    (FRONT);
 
-VAO_STRUCT! vin
-{
-    vertex: float3,
-    factor: float,
-};
-
-using v2f = struct{
-    pos: float4,
-};
-
-using fout = struct{
-    shadow_factor: float4,
-};
-
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex: float3,
+        factor: float,
+    };
+    
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct {
+        pos: float4,
+    };
+    
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct {
+        shadow_factor: float4,
+    };
+    
 public func vert(v: vin)
 {
-    // ATTENTION: We will using je_color: float4 to pass lwpos.
-    let light_vpos = je_v * je_color;
-    let vpos = je_mv * vec4(v.vertex, 1.);
-
-    let shadow_vdir = vec3(normalize(vpos->xy - light_vpos->xy), 0.) * 2000. * v.factor;
+    // ATTENTION: We will using JE_COLOR: float4 to pass lwpos.
+    let light_vpos = JE_V * JE_COLOR;
+    let vpos = JE_MV * vec4!(v.vertex, 1.);
     
-    return v2f{pos = je_p * vec4(vpos->xyz + shadow_vdir, 1.)};   
+    let shadow_vdir = vec3!(normalize(vpos->xy - light_vpos->xy), 0.) * 2000. * v.factor;
+    
+    return v2f{pos = JE_P * vec4!(vpos->xyz + shadow_vdir, 1.)};
 }
 
 public func frag(_: v2f)
 {
-    // NOTE: je_local_scale->x is shadow factor here.
-    let shadow_factor = je_local_scale->x;
+    // NOTE: JE_LOCAL_SCALE->x is shadow factor here.
+    let shadow_factor = JE_LOCAL_SCALE->x;
     return fout{
-        shadow_factor = vec4(
+        shadow_factor = vec4!(
             shadow_factor, shadow_factor, shadow_factor, shadow_factor),
     };
 }
 )")
                                                                .value() },
                 _defer_light2d_shadow_parallel_reverse_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_reverse_parallel.shader", R"(
+import woo::std;
+
 import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
+
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
 BLEND_EQUATION(MAX);
 BLEND   (ONE, ONE);
 CULL    (FRONT);
 
-VAO_STRUCT! vin
-{
-    vertex: float3,
-    factor: float,
-};
-
-using v2f = struct{
-    pos: float4,
-};
-
-using fout = struct{
-    shadow_factor: float4,
-};
-
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex: float3,
+        factor: float,
+    };
+    
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct{
+        pos: float4,
+    };
+    
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct{
+        shadow_factor: float4,
+    };
+    
 public func vert(v: vin)
 {
-    // ATTENTION: We will using je_color: float4 to pass lwpos.
-    let light_vdir = (je_v * je_color)->xyz - movement(je_v);
-    let vpos = je_mv * vec4(v.vertex, 1.);
-
-    let shadow_vdir = vec3(normalize(light_vdir->xy), 0.) * 2000. * v.factor;
+    // ATTENTION: We will using JE_COLOR: float4 to pass lwpos.
+    let light_vdir = (JE_V * JE_COLOR)->xyz - movement(JE_V);
+    let vpos = JE_MV * vec4!(v.vertex, 1.);
     
-    return v2f{pos = je_p * vec4(vpos->xyz + shadow_vdir, 1.)};   
+    let shadow_vdir = vec3!(normalize(light_vdir->xy), 0.) * 2000. * v.factor;
+    
+    return v2f{pos = JE_P * vec4!(vpos->xyz + shadow_vdir, 1.)};
 }
 
 public func frag(_: v2f)
 {
-    // NOTE: je_local_scale->x is shadow factor here.
-    let shadow_factor = je_local_scale->x;
+    // NOTE: JE_LOCAL_SCALE->x is shadow factor here.
+    let shadow_factor = JE_LOCAL_SCALE->x;
     return fout{
-        shadow_factor = vec4(
+        shadow_factor = vec4!(
             shadow_factor, shadow_factor, shadow_factor, shadow_factor),
     };
 }
 )")
                                                                   .value() },
                 _defer_light2d_shadow_shape_point_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_point_shape.shader", R"(
+import woo::std;
+
 import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
+
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
 BLEND_EQUATION(MAX);
@@ -1106,61 +1162,73 @@ BLEND   (ONE, ONE);
 // MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
 CULL    (NONE);
 
-VAO_STRUCT! vin 
-{
-    vertex: float3,
-    uv: float2,
-};
-
-using v2f = struct{
-    pos: float4,
-    uv: float2,
-};
-
-using fout = struct{
-    shadow_factor: float4,
-};
-
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex: float3,
+        uv: float2,
+    };
+    
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct {
+        pos: float4,
+        uv: float2,
+    };
+    
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct {
+        shadow_factor: float4,
+    };
+    
 public func vert(v: vin)
 {
-    let light2d_vpos = je_v * vec4(je_color->xyz, 1.);
-    let shadow_scale_factor = je_color->w;
-
-    let vpos = je_mv * vec4(v.vertex, 1.);
+    let light2d_vpos = JE_V * vec4!(JE_COLOR->xyz, 1.);
+    let shadow_scale_factor = JE_COLOR->w;
+    
+    let vpos = JE_MV * vec4!(v.vertex, 1.);
     let vpos_light_diff = vpos->xyz / vpos->w - light2d_vpos->xyz / light2d_vpos->w;
     let vpos_light_diff_z_abs =  abs(vpos_light_diff->z);
-    let shadow_offset_xy_z_abs = vec3(
-        vpos_light_diff->xy / (1. + vpos_light_diff_z_abs) * shadow_scale_factor, 
+    let shadow_offset_xy_z_abs = vec3!(
+        vpos_light_diff->xy / (1. + vpos_light_diff_z_abs) * shadow_scale_factor,
         vpos_light_diff_z_abs);
-
-    let shadow_tiling_scale = je_local_scale->yz;
-    let shadow_tiling_scale_apply_offset = 
-        (float2::const(0.5, 0.5) - v.uv) * 2. * (float2::one - shadow_tiling_scale);
-
+        
+    let shadow_tiling_scale = JE_LOCAL_SCALE->yz;
+    let shadow_tiling_scale_apply_offset =
+        (vec2!(0.5, 0.5) - v.uv) * 2. * (vec2!(1., 1.) - shadow_tiling_scale);
+        
     return v2f{
-        pos = je_p * vec4((vpos->xyz / vpos->w) + shadow_offset_xy_z_abs, 1.),
-        uv = uvtrans(v.uv, je_tiling, je_offset) + shadow_tiling_scale_apply_offset,
+        pos = JE_P * vec4!((vpos->xyz / vpos->w) + shadow_offset_xy_z_abs, 1.),
+        uv = uvtrans(v.uv, JE_UV_TILING, JE_UV_OFFSET) + shadow_tiling_scale_apply_offset,
     };
 }
+
+let linear_clamp = Sampler2D::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
+WOSHADER_UNIFORM!
+    let Main = texture2d::uniform(0, linear_clamp);
+    
 public func frag(vf: v2f)
 {
-    let linear_clamp = sampler2d::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
-    let Main = uniform_texture:<texture2d>("Main", linear_clamp, 0);
     let final_shadow = alphatest(
-        vec4(
-            je_local_scale,     // NOTE: je_local_scale->x is shadow factor here.
-            texture(Main, vf.uv)->w));
-
+        vec4!(
+            JE_LOCAL_SCALE,     // NOTE: JE_LOCAL_SCALE->x is shadow factor here.
+            tex2d(Main, vf.uv)->w));
+            
     let shadow_factor = final_shadow->x;
     return fout{
-        shadow_factor = vec4(
+        shadow_factor = vec4!(
             shadow_factor, shadow_factor, shadow_factor, shadow_factor),
     };
 }
 )")
                                                              .value() },
                 _defer_light2d_shadow_shape_parallel_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_parallel_shape.shader", R"(
+import woo::std;
+
 import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
+
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
 BLEND_EQUATION(MAX);
@@ -1168,57 +1236,69 @@ BLEND   (ONE, ONE);
 // MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
 CULL    (NONE);
 
-VAO_STRUCT! vin 
-{
-    vertex: float3,
-    uv: float2,
-};
-
-using v2f = struct{
-    pos: float4,
-    uv: float2,
-};
-
-using fout = struct{
-    shadow_factor: float4,
-};
-
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex: float3,
+        uv: float2,
+    };
+    
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct{
+        pos: float4,
+        uv: float2,
+    };
+    
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct{
+        shadow_factor: float4,
+    };
+    
 public func vert(v: vin)
 {
-    let light2d_vdir = (je_v * vec4(je_color->xyz, 1.))->xyz - movement(je_v);
-    let shadow_scale_factor = je_color->w;
-
-    let vpos = je_mv * vec4(v.vertex, 1.);
+    let light2d_vdir = (JE_V * vec4!(JE_COLOR->xyz, 1.))->xyz - movement(JE_V);
+    let shadow_scale_factor = JE_COLOR->w;
+    
+    let vpos = JE_MV * vec4!(v.vertex, 1.);
     let shadow_vpos = normalize(light2d_vdir) * shadow_scale_factor;
-
-    let shadow_tiling_scale = je_local_scale->yz;
-    let shadow_tiling_scale_apply_offset = 
-        (float2::const(0.5, 0.5) - v.uv) * 2. * (float2::one - shadow_tiling_scale);    
-
+    
+    let shadow_tiling_scale = JE_LOCAL_SCALE->yz;
+    let shadow_tiling_scale_apply_offset =
+        (vec2!(0.5, 0.5) - v.uv) * 2. * (vec2!(1., 1.) - shadow_tiling_scale);
+        
     return v2f{
-        pos = je_p * vec4((vpos->xyz / vpos->w) + shadow_vpos, 1.),
-        uv = uvtrans(v.uv, je_tiling, je_offset) + shadow_tiling_scale_apply_offset,
+        pos = JE_P * vec4!((vpos->xyz / vpos->w) + shadow_vpos, 1.),
+        uv = uvtrans(v.uv, JE_UV_TILING, JE_UV_OFFSET) + shadow_tiling_scale_apply_offset,
     };
 }
+
+let linear_clamp = Sampler2D::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
+WOSHADER_UNIFORM!
+    let Main = texture2d::uniform(0, linear_clamp);
+    
 public func frag(vf: v2f)
 {
-    let linear_clamp = sampler2d::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
-    let Main = uniform_texture:<texture2d>("Main", linear_clamp, 0);
     let final_shadow = alphatest(
-        vec4(
-            je_local_scale,     // NOTE: je_local_scale->x is shadow factor here.
-            texture(Main, vf.uv)->w));
-
+        vec4!(
+            JE_LOCAL_SCALE,     // NOTE: JE_LOCAL_SCALE->x is shadow factor here.
+            tex2d(Main, vf.uv)->w));
+            
     let shadow_factor = final_shadow->x;
     return fout{
-        shadow_factor = vec4(
+        shadow_factor = vec4!(
             shadow_factor, shadow_factor, shadow_factor, shadow_factor),
     };
 }
 )")
                                                                 .value() },
                 _defer_light2d_shadow_sprite_point_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_point_sprite.shader", R"(
+import woo::std;
+
 import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
+
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
 BLEND_EQUATION(MAX);
@@ -1226,57 +1306,70 @@ BLEND   (ONE, ONE);
 // MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
 CULL    (NONE);
 
-VAO_STRUCT! vin 
-{
-    vertex: float3,
-    uv: float2,
-    factor: float,
-};
-
-using v2f = struct{
-    pos: float4,
-    uv: float2,
-};
-
-using fout = struct{
-    shadow_factor: float4,
-};
-
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex: float3,
+        uv: float2,
+        factor: float,
+    };
+    
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct{
+        pos: float4,
+        uv: float2,
+    };
+    
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct{
+        shadow_factor: float4,
+    };
+    
 public func vert(v: vin)
 {
-    let light2d_vpos = je_v * vec4(je_color->xyz, 1.);
-    let shadow_scale_factor = je_color->w;
-
-    let vpos = je_mv * vec4(v.vertex, 1.);
-    let centerpos = je_mv * vec4(0., 0., 0., 1.);
+    let light2d_vpos = JE_V * vec4!(JE_COLOR->xyz, 1.);
+    let shadow_scale_factor = JE_COLOR->w;
+    
+    let vpos = JE_MV * vec4!(v.vertex, 1.);
+    let centerpos = JE_MV * vec4!(0., 0., 0., 1.);
     let shadow_vpos = normalize(
         (centerpos->xyz / centerpos->w) - (light2d_vpos->xyz / light2d_vpos->w)
-    ) * shadow_scale_factor;
-    
+        ) * shadow_scale_factor;
+        
     return v2f{
-        pos = je_p * vec4((vpos->xyz / vpos->w) + shadow_vpos * v.factor, 1.),
-        uv = uvtrans(v.uv, je_tiling, je_offset),
+        pos = JE_P * vec4!((vpos->xyz / vpos->w) + shadow_vpos * v.factor, 1.),
+        uv = uvtrans(v.uv, JE_UV_TILING, JE_UV_OFFSET),
     };
 }
+
+let linear_clamp = Sampler2D::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
+WOSHADER_UNIFORM!
+    let Main = texture2d::uniform(0, linear_clamp);
+    
 public func frag(vf: v2f)
 {
-    let linear_clamp = sampler2d::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
-    let Main = uniform_texture:<texture2d>("Main", linear_clamp, 0);
-    let final_shadow = alphatest(
-        vec4(
-            je_local_scale,     // NOTE: je_local_scale->x is shadow factor here.
-            texture(Main, vf.uv)->w));
 
+    let final_shadow = alphatest(
+        vec4!(
+            JE_LOCAL_SCALE,     // NOTE: JE_LOCAL_SCALE->x is shadow factor here.
+            tex2d(Main, vf.uv)->w));
+            
     let shadow_factor = final_shadow->x;
     return fout{
-        shadow_factor = vec4(
+        shadow_factor = vec4!(
             shadow_factor, shadow_factor, shadow_factor, shadow_factor),
     };
 }
 )")
                                                               .value() },
                 _defer_light2d_shadow_sprite_parallel_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_parallel_sprite.shader", R"(
+import woo::std;
+
 import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
+
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
 BLEND_EQUATION(MAX);
@@ -1284,92 +1377,109 @@ BLEND   (ONE, ONE);
 // MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
 CULL    (NONE);
 
-VAO_STRUCT! vin 
-{
-    vertex: float3,
-    uv: float2,
-    factor: float,
-};
-
-using v2f = struct{
-    pos: float4,
-    uv: float2,
-};
-
-using fout = struct{
-    shadow_factor: float4,
-};
-
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex: float3,
+        uv: float2,
+        factor: float,
+    };
+    
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct {
+        pos: float4,
+        uv: float2,
+    };
+    
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct {
+        shadow_factor: float4,
+    };
+    
 public func vert(v: vin)
 {
-    let light2d_vdir = (je_v * vec4(je_color->xyz, 1.))->xyz - movement(je_v);
-    let shadow_scale_factor = je_color->w;
-
-    let vpos = je_mv * vec4(v.vertex, 1.);
+    let light2d_vdir = (JE_V * vec4!(JE_COLOR->xyz, 1.))->xyz - movement(JE_V);
+    let shadow_scale_factor = JE_COLOR->w;
+    
+    let vpos = JE_MV * vec4!(v.vertex, 1.);
     let shadow_vpos = normalize(light2d_vdir) * shadow_scale_factor;
     
     return v2f{
-        pos = je_p * vec4((vpos->xyz / vpos->w) + shadow_vpos * v.factor, 1.),
-        uv = uvtrans(v.uv, je_tiling, je_offset),
+        pos = JE_P * vec4!((vpos->xyz / vpos->w) + shadow_vpos * v.factor, 1.),
+        uv = uvtrans(v.uv, JE_UV_TILING, JE_UV_OFFSET),
     };
 }
+
+let linear_clamp = Sampler2D::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
+WOSHADER_UNIFORM!
+    let Main = texture2d::uniform(0, linear_clamp);
+    
 public func frag(vf: v2f)
 {
-    let linear_clamp = sampler2d::create(LINEAR, LINEAR, LINEAR, CLAMP, CLAMP);
-    let Main = uniform_texture:<texture2d>("Main", linear_clamp, 0);
     let final_shadow = alphatest(
-        vec4(
-            je_local_scale,     // NOTE: je_local_scale->x is shadow factor here.
-            texture(Main, vf.uv)->w));
-
+        vec4!(
+            JE_LOCAL_SCALE,     // NOTE: JE_LOCAL_SCALE->x is shadow factor here.
+            tex2d(Main, vf.uv)->w));
+            
     let shadow_factor = final_shadow->x;
     return fout{
-        shadow_factor = vec4(
+        shadow_factor = vec4!(
             shadow_factor, shadow_factor, shadow_factor, shadow_factor),
     };
 }
 )")
                                                                  .value() },
                 _defer_light2d_shadow_sub_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_sub.shader", R"(
+import woo::std;
+
 import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
+
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
 BLEND   (ONE, ZERO);
 // MUST CULL NONE TO MAKE SURE IF SCALE.X IS NEG.
 CULL    (NONE);
 
-VAO_STRUCT! vin 
-{
-    vertex: float3,
-    uv: float2,
-};
-
-using v2f = struct{
-    pos: float4,
-    uv: float2,
-};
-
-using fout = struct{
-    shadow_factor: float4,
-};
-
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex: float3,
+        uv: float2,
+    };
+    
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct {
+        pos: float4,
+        uv: float2,
+    };
+    
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct {
+        shadow_factor: float4,
+    };
+    
 public func vert(v: vin)
 {
     return v2f{
-        pos = je_mvp * vec4(v.vertex, 1.),
-        uv = uvtrans(v.uv, je_tiling, je_offset),
+        pos = JE_MVP * vec4!(v.vertex, 1.),
+        uv = uvtrans(v.uv, JE_UV_TILING, JE_UV_OFFSET),
     };
 }
+
+let nearest_clamp = Sampler2D::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
+WOSHADER_UNIFORM!
+    let Main = texture2d::uniform(0, nearest_clamp);
+    
 public func frag(vf: v2f)
 {
-    let nearest_clamp = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
-    let Main = uniform_texture:<texture2d>("Main", nearest_clamp, 0);
-    let final_shadow = alphatest(vec4(je_color->xyz, texture(Main, vf.uv)->w));
-
+    let final_shadow = alphatest(vec4!(JE_COLOR->xyz, tex2d(Main, vf.uv)->w));
+    
     let shadow_factor = final_shadow->x;
     return fout{
-        shadow_factor = vec4(
-            shadow_factor, shadow_factor, shadow_factor, float::one)
+        shadow_factor = vec4!(
+            shadow_factor, shadow_factor, shadow_factor, 1.),
     };
 }
 )")
