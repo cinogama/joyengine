@@ -609,7 +609,8 @@ namespace jeecs::graphic::api::dx11
             {
                 UINT layout_begin_offset = 0;
 
-                std::vector<D3D11_INPUT_ELEMENT_DESC> vertex_in_layout(resource->m_raw_shader_data->m_vertex_in_count);
+                std::vector<D3D11_INPUT_ELEMENT_DESC> vertex_in_layout(
+                    resource->m_raw_shader_data->m_vertex_in_count);
 
                 // VIN
                 size_t INT_COUNT = 0;
@@ -674,9 +675,14 @@ namespace jeecs::graphic::api::dx11
                             vlayout.SemanticIndex = 0;
                             vlayout.SemanticName = "NORMAL";
                         }
+                        else if (vlayout.SemanticIndex == 2)
+                        {
+                            vlayout.SemanticIndex = 0;
+                            vlayout.SemanticName = "TANGENT";
+                        }
                         else
                         {
-                            vlayout.SemanticIndex -= 2;
+                            vlayout.SemanticIndex -= 3;
                             vlayout.SemanticName = "COLOR";
                         }
                         vlayout.Format = DXGI_FORMAT_R32G32B32_FLOAT;
@@ -693,9 +699,14 @@ namespace jeecs::graphic::api::dx11
                             vlayout.SemanticIndex = 0;
                             vlayout.SemanticName = "NORMAL";
                         }
+                        else if (vlayout.SemanticIndex == 2)
+                        {
+                            vlayout.SemanticIndex = 0;
+                            vlayout.SemanticName = "TANGENT";
+                        }
                         else
                         {
-                            vlayout.SemanticIndex -= 2;
+                            vlayout.SemanticIndex -= 3;
                             vlayout.SemanticName = "COLOR";
                         }
                         vlayout.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;

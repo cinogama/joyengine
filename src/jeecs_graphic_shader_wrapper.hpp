@@ -38,6 +38,7 @@ struct shader_uniform_variable
 {
     std::string m_name;
     jegl_shader::uniform_type m_type;
+    jegl_shader::unifrom_variables::value m_init_value;
 };
 
 struct shader_texture
@@ -48,8 +49,8 @@ struct shader_texture
 
 struct shader_uniform_block_info
 {
-    std::string name;
-    uint32_t binding_place;
+    std::string m_name;
+    uint32_t m_binding_place;
 };
 
 struct shader_wrapper
@@ -64,4 +65,6 @@ struct shader_wrapper
 
     std::vector<shader_sampler> m_samplers;
     std::vector<shader_texture> m_textures;
+    std::vector<shader_uniform_variable> m_uniform_vars;
+
 };

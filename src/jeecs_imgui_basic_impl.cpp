@@ -2281,39 +2281,62 @@ void jegui_init_basic(
         "!/builtin/imgui_image_displayer.shader",
         R"(
 import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
+
 ZTEST   (OFF);
 ZWRITE  (DISABLE);
 BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
 CULL    (NONE);
 
-VAO_STRUCT! vin 
-{
-    vertex: float3,
-    uv: float2,
-};
+WOSHADER_VERTEX_IN!
+    using vin = struct{
+        vertex: float3,
+        uv: float2,
+    };
 
-using v2f = struct{
-    pos: float4,
-    uv: float2,
-};
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct{
+        pos: float4,
+        uv: float2,
+    };
 
-using fout = struct{
-    color: float4,
-};
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct{
+        color: float4,
+    };
+    
+// VAO_STRUCT! vin
+// {
+//     vertex: float3,
+//     uv: float2,
+// };
+
+// using v2f = struct{
+//     pos: float4,
+//     uv: float2,
+// };
+
+// using fout = struct{
+//     color: float4,
+// };
 
 public func vert(v: vin)
 {
     return v2f{
-        pos = vec4(v.vertex, 1.),
+        pos = vec4!(v.vertex, 1.),
         uv = v.uv,
     };
 }
 public func frag(vf: v2f)
 {
-    let nearest_clamp = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
-    let Main = uniform_texture:<texture2d>("Main", nearest_clamp, 0);
+    do vf;
+    // let nearest_clamp = sampler2d::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
+    // let Main = uniform_texture:<texture2d>("Main", nearest_clamp, 0);
     return fout{
-        color = texture(Main, vf.uv)
+        color = vec4!(1.,1.,1.,1.),//texture(Main, vf.uv)
     };
 }
 )").value();

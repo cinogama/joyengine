@@ -124,8 +124,8 @@ void _jegl_create_shader_cache(jegl_resource* shader_resource, wo_integer_t virt
             jeecs_write_cache_file(&custom_uniform->m_uniform_type, sizeof(jegl_shader::uniform_type), 1, cachefile);
 
             // 4.1.3 write data
-            static_assert(sizeof(custom_uniform->mat4x4) == sizeof(float[4][4]));
-            jeecs_write_cache_file(&custom_uniform->mat4x4, sizeof(float[4][4]), 1, cachefile);
+            static_assert(sizeof(custom_uniform->m_value.mat4x4) == sizeof(float[4][4]));
+            jeecs_write_cache_file(&custom_uniform->m_value.mat4x4, sizeof(float[4][4]), 1, cachefile);
 
             custom_uniform = custom_uniform->m_next;
         }
@@ -570,7 +570,7 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_s
     for (auto& uniform_block : shader_wrapper_ptr->m_uniform_blocks)
     {
         auto result = _uniform_blocks.insert(
-            std::make_pair(uniform_block.name, &uniform_block));
+            std::make_pair(uniform_block.m_name, &uniform_block));
 
         (void)result;
         assert(result.second);
@@ -579,91 +579,30 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_s
     do
     {
         jegl_shader::unifrom_variables** last = &write_to_shader->m_custom_uniforms;
-        for (auto& [name, uniform_info] : shader_wrapper_ptr->uniform_variables)
+        for (auto& uniform_info : shader_wrapper_ptr->m_uniform_vars)
         {
             jegl_shader::unifrom_variables* variable = new jegl_shader::unifrom_variables();
             variable->m_next = nullptr;
 
-            variable->m_name = jeecs::basic::make_new_string(name.c_str());
+            variable->m_name = jeecs::basic::make_new_string(uniform_info.m_name);
             variable->m_uniform_type = uniform_info.m_type;
-
             variable->m_index = jeecs::typing::INVALID_UINT32;
+            variable->m_value = uniform_info.m_init_value;
+            variable->m_updated = true;
 
-            auto utype = uniform_info.m_value->get_type();
-            auto* init_val = (
-                utype == jegl_shader_value::type::TEXTURE2D
-                || utype == jegl_shader_value::type::TEXTURE2D_MS
-                || utype == jegl_shader_value::type::TEXTURE_CUBE)
-                ? uniform_info.m_value
-                : uniform_info.m_value->m_uniform_init_val_may_nil;
+            *last = variable;
+            last = &variable->m_next;
+        }
 
-            if (init_val != nullptr)
-            {
-                switch (utype)
-                {
-                case jegl_shader_value::type::FLOAT:
-                    variable->x = init_val->m_float;
-                    break;
-                case jegl_shader_value::type::FLOAT2:
-                    variable->x = init_val->m_float2[0];
-                    variable->y = init_val->m_float2[1];
-                    break;
-                case jegl_shader_value::type::FLOAT3:
-                    variable->x = init_val->m_float3[0];
-                    variable->y = init_val->m_float3[1];
-                    variable->z = init_val->m_float3[2];
-                    break;
-                case jegl_shader_value::type::FLOAT4:
-                    variable->x = init_val->m_float4[0];
-                    variable->y = init_val->m_float4[1];
-                    variable->z = init_val->m_float4[2];
-                    variable->w = init_val->m_float4[3];
-                    break;
-                case jegl_shader_value::type::FLOAT4x4:
-                    memcpy(variable->mat4x4, init_val->m_float4x4, 4 * 4 * sizeof(float));
-                    break;
-                case jegl_shader_value::type::INTEGER:
-                    variable->ix = init_val->m_integer;
-                    break;
-                case jegl_shader_value::type::INTEGER2:
-                {
-                    variable->ix = init_val->m_integer2[0];
-                    variable->iy = init_val->m_integer2[1];
-                    break;
-                }
-                case jegl_shader_value::type::INTEGER3:
-                {
-                    variable->ix = init_val->m_integer3[0];
-                    variable->iy = init_val->m_integer3[1];
-                    variable->iz = init_val->m_integer3[2];
-                    break;
-                }
-                case jegl_shader_value::type::INTEGER4:
-                {
-                    variable->ix = init_val->m_integer4[0];
-                    variable->iy = init_val->m_integer4[1];
-                    variable->iz = init_val->m_integer4[2];
-                    variable->iw = init_val->m_integer4[3];
-                    break;
-                }
-                case jegl_shader_value::type::TEXTURE2D:
-                case jegl_shader_value::type::TEXTURE2D_MS:
-                case jegl_shader_value::type::TEXTURE_CUBE:
-                    variable->ix = uniform_info.m_value->m_uniform_texture_channel;
-                    break;
-                default:
-                    jeecs::debug::logerr("Unsupport uniform variable type.");
-                    break;
-                }
-                variable->m_updated = true;
-            }
-            else
-            {
-                static_assert(sizeof(variable->mat4x4) == 16 * sizeof(float));
-                memset(variable->mat4x4, 0, sizeof(variable->mat4x4));
-                variable->m_updated = false;
-            }
-
+        for (auto& texture : shader_wrapper_ptr->m_textures)
+        {
+            jegl_shader::unifrom_variables* variable = new jegl_shader::unifrom_variables();
+            variable->m_next = nullptr;
+            variable->m_name = jeecs::basic::make_new_string("_t" + std::to_string(texture.m_pass));
+            variable->m_uniform_type = jegl_shader::uniform_type::TEXTURE;
+            variable->m_index = jeecs::typing::INVALID_UINT32;
+            variable->m_value.ix = texture.m_sampler_id;
+            variable->m_updated = true;
             *last = variable;
             last = &variable->m_next;
         }
@@ -677,36 +616,36 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_s
             jegl_shader::uniform_blocks* block = new jegl_shader::uniform_blocks();
             block->m_next = nullptr;
 
-            assert(uniform_block_info->binding_place != jeecs::typing::INVALID_UINT32);
+            assert(uniform_block_info->m_binding_place != jeecs::typing::INVALID_UINT32);
 
-            block->m_name = jeecs::basic::make_new_string(uniform_block_info->name);
-            block->m_specify_binding_place = uniform_block_info->binding_place;
+            block->m_name = jeecs::basic::make_new_string(uniform_block_info->m_name);
+            block->m_specify_binding_place = uniform_block_info->m_binding_place;
 
             *last = block;
             last = &block->m_next;
         }
     } while (false);
 
-    write_to_shader->m_sampler_count = shader_wrapper_ptr->decleared_samplers.size();
+    write_to_shader->m_sampler_count = shader_wrapper_ptr->m_samplers.size();
     auto* sampler_methods = new jegl_shader::sampler_method[write_to_shader->m_sampler_count];
     for (size_t i = 0; i < write_to_shader->m_sampler_count; ++i)
     {
-        auto* sampler = shader_wrapper_ptr->decleared_samplers[i];
-        sampler_methods[i].m_min = sampler->m_min;
-        sampler_methods[i].m_mag = sampler->m_mag;
-        sampler_methods[i].m_mip = sampler->m_mip;
-        sampler_methods[i].m_uwrap = sampler->m_uwrap;
-        sampler_methods[i].m_vwrap = sampler->m_vwrap;
+        const auto& sampler = shader_wrapper_ptr->m_samplers.at(i);
+        sampler_methods[i].m_min = sampler.m_min;
+        sampler_methods[i].m_mag = sampler.m_mag;
+        sampler_methods[i].m_mip = sampler.m_mip;
+        sampler_methods[i].m_uwrap = sampler.m_uwrap;
+        sampler_methods[i].m_vwrap = sampler.m_vwrap;
 
-        sampler_methods[i].m_sampler_id = sampler->m_sampler_id;
-        sampler_methods[i].m_pass_id_count = (uint64_t)sampler->m_binded_texture_passid.size();
-        auto* passids = new uint32_t[sampler->m_binded_texture_passid.size()];
+        sampler_methods[i].m_sampler_id = sampler.m_sampler_id;
+        sampler_methods[i].m_pass_id_count = (uint64_t)sampler.m_binded_texture_passid.size();
+        auto* passids = new uint32_t[sampler.m_binded_texture_passid.size()];
 
         static_assert(std::is_same<decltype(sampler_methods[i].m_pass_ids), uint32_t*>::value);
 
         memcpy(
             passids,
-            sampler->m_binded_texture_passid.data(),
+            sampler.m_binded_texture_passid.data(),
             (size_t)sampler_methods[i].m_pass_id_count * sizeof(uint32_t));
 
         sampler_methods[i].m_pass_ids = passids;
@@ -866,8 +805,8 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
         jeecs_file_read(&current_variable->m_uniform_type, sizeof(jegl_shader::uniform_type), 1, cache_file);
 
         // 4.1.3 read data
-        static_assert(sizeof(current_variable->mat4x4) == sizeof(float[4][4]));
-        jeecs_file_read(&current_variable->mat4x4, sizeof(float[4][4]), 1, cache_file);
+        static_assert(sizeof(current_variable->m_value.mat4x4) == sizeof(float[4][4]));
+        jeecs_file_read(&current_variable->m_value.mat4x4, sizeof(float[4][4]), 1, cache_file);
 
         current_variable->m_index = jeecs::typing::INVALID_UINT32;
         current_variable->m_updated = false;
@@ -985,4 +924,288 @@ void jegl_shader_free_generated_shader_source(jegl_shader* write_to_shader)
     for (size_t i = 0; i < write_to_shader->m_sampler_count; ++i)
         delete[] write_to_shader->m_sampler_methods[i].m_pass_ids;
     delete[] write_to_shader->m_sampler_methods;
+}
+
+WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args)
+{
+    /*
+    func _wraped_shader(
+                vertex_source: string,
+                fragment_source: string,
+                vertex_in_layout: array<woshader::Type>,
+                samplers: array<woshader::Sampler2D>,
+                texture_passes: array<(int, int)>,
+                uniform_variables: array<(string, woshader::Type, woshader::ShaderValueImm)>,
+                uniform_blocks: array<(string, int)>)=> gchandle;
+    */
+    enum WoshaderType
+    {
+        Float,
+        Float2,
+        Float3,
+        Float4,
+        Float2x2,
+        Float3x3,
+        Float4x4,
+        Integer,
+        Integer2,
+        Integer3,
+        Integer4,
+        Texture2D,
+        Structure, // User defined structure.
+    };
+    enum WoshaderFilter
+    {
+        NEAREST,
+        LINEAR,
+    };
+    enum WoshaderWrap
+    {
+        CLAMP,
+        REPEAT,
+    };
+    auto parse_woshader_type_to_je_uniform_type =
+        [](WoshaderType t)
+        {
+            switch (t)
+            {
+            case Float: return jegl_shader::uniform_type::FLOAT;
+            case Float2: return jegl_shader::uniform_type::FLOAT2;
+            case Float3: return jegl_shader::uniform_type::FLOAT3;
+            case Float4: return jegl_shader::uniform_type::FLOAT4;
+            case Float2x2: return jegl_shader::uniform_type::FLOAT2X2;
+            case Float3x3: return jegl_shader::uniform_type::FLOAT3X3;
+            case Float4x4: return jegl_shader::uniform_type::FLOAT4X4;
+            case Integer: return jegl_shader::uniform_type::INT;
+            case Integer2: return jegl_shader::uniform_type::INT2;
+            case Integer3: return jegl_shader::uniform_type::INT3;
+            case Integer4: return jegl_shader::uniform_type::INT4;
+            default:
+                jeecs::debug::logfatal("Unsupport woshader type: %d.", (int)t);
+                return jegl_shader::uniform_type::FLOAT;
+            }
+
+        };
+    auto parse_woshader_filter_to_je_filter =
+        [](WoshaderFilter f)
+        {
+            switch (f)
+            {
+            case WoshaderFilter::LINEAR:
+                return jegl_shader::fliter_mode::LINEAR;
+            case WoshaderFilter::NEAREST:
+                return jegl_shader::fliter_mode::NEAREST;
+            default:
+                jeecs::debug::logfatal("Unsupport woshader filter type: %d.", (int)f);
+                return jegl_shader::fliter_mode::LINEAR;
+            }
+        };
+    auto parse_woshader_wrap_to_je_wrap =
+        [](WoshaderWrap w)
+        {
+            switch (w)
+            {
+            case WoshaderWrap::CLAMP:
+                return jegl_shader::wrap_mode::CLAMP;
+            case WoshaderWrap::REPEAT:
+                return jegl_shader::wrap_mode::REPEAT;
+            default:
+                jeecs::debug::logfatal("Unsupport woshader wrap type: %d.", (int)w);
+                return jegl_shader::wrap_mode::CLAMP;
+            }
+        };
+
+    wo_value s = wo_reserve_stack(vm, 3, &args);
+    wo_value tmp = s + 0;
+    wo_value tmp2 = s + 1;
+    wo_value tmp3 = s + 2;
+
+    shader_wrapper* wrapper = new shader_wrapper();
+
+    wrapper->m_vertex_hlsl_source = wo_string(args + 0);
+    wrapper->m_fragment_hlsl_source = wo_string(args + 1);
+
+    wo_value vertex_in_layout = args + 2;
+    wo_value samplers = args + 3;
+    wo_value texture_passes = args + 4;
+    wo_value uniform_variables = args + 5;
+    wo_value uniform_blocks = args + 6;
+
+    const auto vin_layout_len = wo_arr_len(vertex_in_layout);
+    wrapper->m_vin_layout.resize(vin_layout_len);
+    for (size_t i = 0; i < vin_layout_len; ++i)
+    {
+        wo_arr_get(tmp, vertex_in_layout, i);
+
+        wrapper->m_vin_layout.at(i) =
+            parse_woshader_type_to_je_uniform_type((WoshaderType)wo_int(tmp));
+    }
+
+    const auto sampler_count = wo_arr_len(samplers);
+    wrapper->m_samplers.resize(sampler_count);
+    for (size_t i = 0; i < sampler_count; ++i)
+    {
+        auto& sampler = wrapper->m_samplers.at(i);
+        wo_arr_get(tmp, samplers, i);
+
+        wo_struct_get(tmp2, tmp, 0);
+        sampler.m_min = parse_woshader_filter_to_je_filter((WoshaderFilter)wo_int(tmp2));
+        wo_struct_get(tmp2, tmp, 1);
+        sampler.m_mag = parse_woshader_filter_to_je_filter((WoshaderFilter)wo_int(tmp2));
+        wo_struct_get(tmp2, tmp, 2);
+        sampler.m_mip = parse_woshader_filter_to_je_filter((WoshaderFilter)wo_int(tmp2));
+
+        wo_struct_get(tmp2, tmp, 3);
+        sampler.m_uwrap = parse_woshader_wrap_to_je_wrap((WoshaderWrap)wo_int(tmp2));
+        wo_struct_get(tmp2, tmp, 4);
+        sampler.m_vwrap = parse_woshader_wrap_to_je_wrap((WoshaderWrap)wo_int(tmp2));
+    }
+
+    const auto texture_passes_len = wo_arr_len(texture_passes);
+    wrapper->m_textures.resize(texture_passes_len);
+    for (size_t i = 0; i < texture_passes_len; ++i)
+    {
+        auto& texture_pass = wrapper->m_textures.at(i);
+        wo_arr_get(tmp, texture_passes, i);
+
+        wo_struct_get(tmp2, tmp, 0);
+        texture_pass.m_pass = (uint32_t)wo_int(tmp2);
+        wo_struct_get(tmp2, tmp, 1);
+        texture_pass.m_sampler_id = (uint32_t)wo_int(tmp2);
+    }
+
+    const auto uniform_variables_count = wo_arr_len(uniform_variables);
+    wrapper->m_uniform_vars.resize(uniform_variables_count);
+    for (size_t i = 0; i < uniform_variables_count; ++i)
+    {
+        auto& uniform_variable = wrapper->m_uniform_vars.at(i);
+        wo_arr_get(tmp, uniform_variables, i);
+
+        wo_struct_get(tmp2, tmp, 0);
+        uniform_variable.m_name = wo_string(tmp2);
+
+        wo_struct_get(tmp2, tmp, 1);
+        uniform_variable.m_type =
+            parse_woshader_type_to_je_uniform_type((WoshaderType)wo_int(tmp2));
+
+        wo_struct_get(tmp2, tmp, 2);
+
+        // Get imm value from ShaderValueImm.
+        wo_struct_get(tmp, tmp2, 1);
+        switch (uniform_variable.m_type)
+        {
+        case jegl_shader::uniform_type::INT:
+            uniform_variable.m_init_value.ix = (int)wo_int(tmp);
+            break;
+        case jegl_shader::uniform_type::INT2:
+            wo_struct_get(tmp2, tmp, 0);
+            uniform_variable.m_init_value.ix = (int)wo_int(tmp2);
+            wo_struct_get(tmp2, tmp, 1);
+            uniform_variable.m_init_value.iy = (int)wo_int(tmp2);
+            break;
+        case jegl_shader::uniform_type::INT3:
+            wo_struct_get(tmp2, tmp, 0);
+            uniform_variable.m_init_value.ix = (int)wo_int(tmp2);
+            wo_struct_get(tmp2, tmp, 1);
+            uniform_variable.m_init_value.iy = (int)wo_int(tmp2);
+            wo_struct_get(tmp2, tmp, 2);
+            uniform_variable.m_init_value.iz = (int)wo_int(tmp2);
+            break;
+        case jegl_shader::uniform_type::INT4:
+            wo_struct_get(tmp2, tmp, 0);
+            uniform_variable.m_init_value.ix = (int)wo_int(tmp2);
+            wo_struct_get(tmp2, tmp, 1);
+            uniform_variable.m_init_value.iy = (int)wo_int(tmp2);
+            wo_struct_get(tmp2, tmp, 2);
+            uniform_variable.m_init_value.iz = (int)wo_int(tmp2);
+            wo_struct_get(tmp2, tmp, 3);
+            uniform_variable.m_init_value.iw = (int)wo_int(tmp2);
+            break;
+        case jegl_shader::uniform_type::FLOAT:
+            uniform_variable.m_init_value.x = wo_float(tmp);
+            break;
+        case jegl_shader::uniform_type::FLOAT2:
+            wo_struct_get(tmp2, tmp, 0);
+            uniform_variable.m_init_value.x = wo_float(tmp2);
+            wo_struct_get(tmp2, tmp, 1);
+            uniform_variable.m_init_value.y = wo_float(tmp2);
+            break;
+        case jegl_shader::uniform_type::FLOAT3:
+            wo_struct_get(tmp2, tmp, 0);
+            uniform_variable.m_init_value.x = wo_float(tmp2);
+            wo_struct_get(tmp2, tmp, 1);
+            uniform_variable.m_init_value.y = wo_float(tmp2);
+            wo_struct_get(tmp2, tmp, 2);
+            uniform_variable.m_init_value.z = wo_float(tmp2);
+            break;
+        case jegl_shader::uniform_type::FLOAT4:
+            wo_struct_get(tmp2, tmp, 0);
+            uniform_variable.m_init_value.x = wo_float(tmp2);
+            wo_struct_get(tmp2, tmp, 1);
+            uniform_variable.m_init_value.y = wo_float(tmp2);
+            wo_struct_get(tmp2, tmp, 2);
+            uniform_variable.m_init_value.z = wo_float(tmp2);
+            wo_struct_get(tmp2, tmp, 3);
+            uniform_variable.m_init_value.w = wo_float(tmp2);
+            break;
+        case jegl_shader::uniform_type::FLOAT2X2:
+            for (size_t x = 0; x < 2; ++x)
+            {
+                wo_struct_get(tmp2, tmp, x);
+                for (size_t y = 0; y < 2; ++y)
+                {
+                    wo_struct_get(tmp3, tmp2, y);
+                    uniform_variable.m_init_value.mat2x2[x][y] = wo_float(tmp3);
+                }
+            }
+            break;
+        case jegl_shader::uniform_type::FLOAT3X3:
+            for (size_t x = 0; x < 3; ++x)
+            {
+                wo_struct_get(tmp2, tmp, x);
+                for (size_t y = 0; y < 3; ++y)
+                {
+                    wo_struct_get(tmp3, tmp2, y);
+                    uniform_variable.m_init_value.mat3x3[x][y] = wo_float(tmp3);
+                }
+            }
+            break;
+        case jegl_shader::uniform_type::FLOAT4X4:
+            for (size_t x = 0; x < 4; ++x)
+            {
+                wo_struct_get(tmp2, tmp, x);
+                for (size_t y = 0; y < 4; ++y)
+                {
+                    wo_struct_get(tmp3, tmp2, y);
+                    uniform_variable.m_init_value.mat4x4[x][y] = wo_float(tmp3);
+                }
+            }
+            break;
+        default:
+            jeecs::debug::logfatal("Unsupported uniform variable type: %d", (int)uniform_variable.m_type);
+        }
+    }
+
+    const auto uniform_block_count = wo_arr_len(uniform_blocks);
+    wrapper->m_uniform_blocks.resize(uniform_block_count);
+    for (size_t i = 0; i < uniform_block_count; ++i)
+    {
+        auto& uniform_block = wrapper->m_uniform_blocks.at(i);
+        wo_arr_get(tmp, uniform_blocks, i);
+
+        wo_struct_get(tmp2, tmp, 0);
+        uniform_block.m_name = wo_string(tmp2);
+
+        wo_struct_get(tmp2, tmp, 1);
+        uniform_block.m_binding_place = (uint32_t)wo_int(tmp2);
+    }
+
+    return wo_ret_gchandle(
+        vm,
+        wrapper,
+        nullptr,
+        [](wo_ptr_t p)
+        {
+            delete reinterpret_cast<shader_wrapper*>(p);
+        });
 }
