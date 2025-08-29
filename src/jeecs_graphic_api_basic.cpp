@@ -1042,7 +1042,7 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src, bool i
 
     wo_unref_value generate_shader_func;
 
-    if (!wo_extern_symb(&generate_shader_func, vmm, "shader::generate"))
+    if (!wo_extern_symb(&generate_shader_func, vmm, "je::shader::generate_shader"))
     {
         jeecs::debug::logerr("Fail to load shader: %s. you should import je::shader.", path);
         wo_close_vm(vmm);
