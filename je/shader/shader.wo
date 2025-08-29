@@ -8,9 +8,149 @@ import pkg::buffer;
 
 namespace je::shader
 {
+    public let NEAREST = woshader::Sampler2D::filter::NEAREST;
+    public let LINEAR = woshader::Sampler2D::filter::LINEAR;
+    public let CLAMP = woshader::Sampler2D::wrap::CLAMP;
+    public let REPEAT = woshader::Sampler2D::wrap::REPEAT;
+    
+    public let OFF = ZConfig::OFF;
+    public let NEVER = ZConfig::NEVER;
+    public let LESS = ZConfig::LESS;
+    public let EQUAL = ZConfig::EQUAL;
+    public let GREATER = ZConfig::GREATER;
+    public let LESS_EQUAL = ZConfig::LESS_EQUAL;
+    public let NOT_EQUAL = ZConfig::NOT_EQUAL;
+    public let GREATER_EQUAL = ZConfig::GREATER_EQUAL;
+    public let ALWAYS = ZConfig::ALWAYS;
+    
+    public let DISABLE = GConfig::DISABLE;
+    public let ENABLE = GConfig::ENABLE;
+    
+    public let ADD = BlendEquation::ADD;
+    public let SUBTRACT = BlendEquation::SUBTRACT;
+    public let REVERSE_SUBTRACT = BlendEquation::REVERSE_SUBTRACT;
+    public let MIN = BlendEquation::MIN;
+    public let MAX = BlendEquation::MAX;
+    
+    public let ZERO = BlendConfig::ZERO;
+    public let ONE = BlendConfig::ONE;
+    public let SRC_COLOR = BlendConfig::SRC_COLOR;
+    public let SRC_ALPHA = BlendConfig::SRC_ALPHA;
+    public let ONE_MINUS_SRC_ALPHA = BlendConfig::ONE_MINUS_SRC_ALPHA;
+    public let ONE_MINUS_SRC_COLOR = BlendConfig::ONE_MINUS_SRC_COLOR;
+    public let DST_COLOR = BlendConfig::DST_COLOR;
+    public let DST_ALPHA = BlendConfig::DST_ALPHA;
+    public let ONE_MINUS_DST_ALPHA = BlendConfig::ONE_MINUS_DST_ALPHA;
+    public let ONE_MINUS_DST_COLOR = BlendConfig::ONE_MINUS_DST_COLOR;
+    
+    public let NONE = CullConfig::NONE;
+    public let FRONT = CullConfig::FRONT;
+    public let BACK = CullConfig::BACK;
+    
+    enum ZConfig
+    {
+        OFF = 0,
+        NEVER,
+        LESS,       /* DEFAULT */
+        EQUAL,
+        LESS_EQUAL,
+        GREATER,
+        NOT_EQUAL,
+        GREATER_EQUAL,
+        ALWAYS,
+    }
+    enum GConfig
+    {
+        DISABLE = 0,
+        ENABLE,
+    }
+    enum BlendEquation
+    {
+        ADD = 0,      /* DEFAULT */
+        SUBTRACT,
+        REVERSE_SUBTRACT,
+        MIN,
+        MAX,
+    }
+    enum BlendConfig
+    {
+        ZERO = 0,       /* DEFAULT SRC = ONE, DST = ZERO (DISABLE BLEND.) */
+        ONE,
+        
+        SRC_COLOR,
+        SRC_ALPHA,
+        
+        ONE_MINUS_SRC_ALPHA,
+        ONE_MINUS_SRC_COLOR,
+        
+        DST_COLOR,
+        DST_ALPHA,
+        
+        ONE_MINUS_DST_ALPHA,
+        ONE_MINUS_DST_COLOR,
+    }
+    enum CullConfig
+    {
+        NONE = 0,       /* DEFAULT */
+        FRONT,
+        BACK,
+    }
+    
+    using ShaderConfig = struct{
+        shared: mut bool,
+        ztest     : mut ZConfig,
+        zwrite    : mut GConfig,
+        blend_equation: mut BlendEquation,
+        blend_src : mut BlendConfig,
+        blend_dst : mut BlendConfig,
+        cull      : mut CullConfig,
+    };
+    let configs = ShaderConfig
+    {
+        shared = mut false,
+        ztest = mut LESS,
+        zwrite = mut ENABLE,
+        blend_equation = mut ADD,
+        blend_src = mut ONE,
+        blend_dst = mut ZERO,
+        cull = mut NONE,
+    };
+    
+    public func SHARED(enable: bool)
+    {
+        shader::configs.shared = enable;
+    }
+    public func ZTEST(zconfig: ZConfig)
+    {
+        shader::configs.ztest = zconfig;
+    }
+    public func ZWRITE(zwrite: GConfig)
+    {
+        shader::configs.zwrite = zwrite;
+    }
+    public func BLEND_EQUATION(equation: BlendEquation)
+    {
+        shader::configs.blend_equation = equation;
+    }
+    public func BLEND(src: BlendConfig, dst: BlendConfig)
+    {
+        shader::configs.blend_src = src;
+        shader::configs.blend_dst = dst;
+    }
+    public func CULL(cull: CullConfig)
+    {
+        shader::configs.cull = cull;
+    }
+    
     using HLSLForGlslang = struct{
         generated_vertex_src: mut option<string>,
         generated_fragment_src: mut option<string>,
+        
+        vertex_in_layout: vec<woshader::Type>,
+        samplers: vec<woshader::Sampler2D>,
+        texture_passes: vec<(int, int)>,
+        uniform_variables: vec<(string, woshader::Type, woshader::ShaderValueImm)>,
+        uniform_blocks: vec<(string, int)>,
     }
     {
         using woshader;
@@ -21,6 +161,12 @@ namespace je::shader
             return HLSLForGlslang{
                 generated_vertex_src = mut option::none,
                 generated_fragment_src = mut option::none,
+                
+                vertex_in_layout = []mut,
+                samplers = []mut,
+                texture_passes = []mut,
+                uniform_variables = []mut,
+                uniform_blocks = []mut,
             };
         }
         public func pre_generate(
@@ -81,15 +227,21 @@ namespace je::shader
             c->append_line("};");
         }
         public func generate_uniform_declare(
-            _: HLSLForGlslang, c: ShaderGeneratorContext, uniforms: UniformVariableRecord)=> void
+            self: HLSLForGlslang, c: ShaderGeneratorContext, uniforms: UniformVariableRecord)=> void
         {
             // Declare samplers
-            for (let (_, id) : uniforms.samplers->unmapping |> std::sort(\(_, a), (_, b) = a < b;))
+            let sorted_samplers = uniforms.samplers->unmapping
+                |> std::sort(\(_, a), (_, b) = a < b;);
+                
+            for (let (sampler, id) : sorted_samplers)
             {
+                assert(id == self.samplers->len);
+                self.samplers->add(sampler);
+                
                 append_spirv_attrib(c, F"vk::binding({id}, 3)");
                 c->append_line(F"SamplerState sampler_{id}: register(t{id});");
             }
-                
+            
             // Declare uniform variables
             //if (uniforms.defined_uniforms->iter |> iterator::count_if(\(_, uniform_var) = uniform_var.used;) > 0)
             
@@ -111,6 +263,8 @@ namespace je::shader
                 }
                 else
                 {
+                    self.uniform_variables->add((name, uniform_var.type, uniform_var.default_value));
+                    
                     let mut hlsl_type_name = get_type_name_with_type(uniform_var.type);
                     assert_message(
                         hlsl_type_name != "struct",
@@ -122,8 +276,11 @@ namespace je::shader
             c->append_line("};");
             
             std::sort_in_place(uniform_textures, \a, b = a.0 < b.0;);
-            for (let (pass, _): uniform_textures)
+            for (let (pass, sampler): uniform_textures)
             {
+                let sampler_id = sorted_samplers->find_if(\(s, _) = std::is_same(s, sampler);)->unwrap;
+                self.texture_passes->add((pass, sampler_id));
+                
                 append_spirv_attrib(c, F"vk::binding({pass}, 2)");
                 c->append_line(F"Texture2D _t{pass}: register(t{pass});");
             }
@@ -365,7 +522,7 @@ namespace je::shader
                 });
         }
         public func generate_vertex_in_struct(
-            _: HLSLForGlslang, c: ShaderGeneratorContext, vin: ShaderIOBlock)=> void
+            self: HLSLForGlslang, c: ShaderGeneratorContext, vin: ShaderIOBlock)=> void
         {
             c->append_line("struct WOSHADER_VERTEX_IN {");
             
@@ -377,6 +534,8 @@ namespace je::shader
             for (let (idx, field): vin.shader_ins->iter |> iterator::enumerate)
             {
                 let t = field->get_type;
+                self.vertex_in_layout->add(t);
+                
                 let hlsl_type_name = get_type_name_with_type(t);
                 
                 let mut mark = "";
@@ -614,15 +773,33 @@ namespace je::shader
     
     extern func generate_shader()
     {
+        extern("libjoyecs", "jeecs_shader_wrap_result_pack")
+            func _wraped_shader(
+                vertex_source: string,
+                fragment_source: string,
+                vertex_in_layout: array<woshader::Type>,
+                samplers: array<woshader::Sampler2D>,
+                texture_passes: array<(int /* pass */, int /* sampler id */)>,
+                uniform_variables: array<(string, woshader::Type, woshader::ShaderValueImm)>,
+                uniform_blocks: array<(string, int)>)=> gchandle;
+                
         let generator = je::shader::HLSLForGlslang::create();
         
         woshader::ShaderParseGlobalContext::generate(generator);
         
-        std::println(generator.generated_vertex_src->unwrap);
-        std::println(generator.generated_fragment_src->unwrap);
+        return _wraped_shader(
+            generator.generated_vertex_src->unwrap,
+            generator.generated_fragment_src->unwrap,
+            generator.vertex_in_layout->unsafe::asarray,
+            generator.samplers->unsafe::asarray,
+            generator.texture_passes->unsafe::asarray,
+            generator.uniform_variables->unsafe::asarray,
+            generator.uniform_blocks->unsafe::asarray,
+        );
     }
 }
 
+/*
 WOSHADER_VERTEX_IN!
     using vin = struct
     {
@@ -696,5 +873,5 @@ public func frag(v2f: v2f)=> frag_out
         color = woshader::vec4!(1.0, 0.0, 0.0, 1.0),
     };
 }
-
-je::shader::generate_shader();
+*/
+// do je::shader::generate_shader();
