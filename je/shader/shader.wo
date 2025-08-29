@@ -4,24 +4,36 @@ import pkg::interface;
 import pkg::iterator;
 import pkg::woshader;
 import pkg::worst;
+import pkg::buffer;
 
 namespace je::shader
 {
-    using HLSLForGlslang = struct{}
+    using HLSLForGlslang = struct{
+        generated_vertex_src: mut option<string>,
+        generated_fragment_src: mut option<string>,
+    }
     {
         using woshader;
         
         public func create()=> HLSLForGlslang
             where require!(HLSLForGlslang: IShaderGenerator);
         {
-            return HLSLForGlslang{};
+            return HLSLForGlslang{
+                generated_vertex_src = mut option::none,
+                generated_fragment_src = mut option::none,
+            };
         }
         public func pre_generate(
             _: HLSLForGlslang, _: ShaderGeneratorContext)=> void
         {
         
         }
-        
+        func append_spirv_attrib(c: ShaderGeneratorContext, attrib: string)
+        {
+            c->append_line("#ifdef GLSLANG_HLSL_TO_SPIRV");
+            c->append_line(F"    [[{attrib}]]");
+            c->append_line("#endif");
+        }
         func get_type_name_with_type(type: Type)
         {
             if (type == Type::Float)
@@ -73,22 +85,53 @@ namespace je::shader
         {
             // Declare samplers
             for (let (_, id) : uniforms.samplers->unmapping |> std::sort(\(_, a), (_, b) = a < b;))
+            {
+                append_spirv_attrib(c, F"vk::binding({id}, 3)");
                 c->append_line(F"SamplerState sampler_{id}: register(t{id});");
+            }
                 
             // Declare uniform variables
             //if (uniforms.defined_uniforms->iter |> iterator::count_if(\(_, uniform_var) = uniform_var.used;) > 0)
+            
+            let uniform_textures = []mut: vec<mut texture2d::base>;
+            
+            append_spirv_attrib(c, "vk::binding(0, 0)");
             c->append_line("cbuffer SHADER_UNIFORM: register(b0) {");
             for (let (name, uniform_var) : uniforms.defined_uniforms)
             {
-                let mut hlsl_type_name = get_type_name_with_type(uniform_var.type);
-                assert_message(
-                    hlsl_type_name != "struct" && hlsl_type_name != "Texture2D",
-                    F"Uniform variable `{name}` has unsupported type.");
+                if (uniform_var.type == Type::Texture2D)
+                {
+                    match (uniform_var.default_value)
+                    {
+                        Texture2D(b)?
+                            uniform_textures->add(mut b);
+                        _?
+                            std::panic("Texture2D uniform must have default value.");
+                    }
+                }
+                else
+                {
+                    let mut hlsl_type_name = get_type_name_with_type(uniform_var.type);
+                    assert_message(
+                        hlsl_type_name != "struct",
+                        F"Uniform variable `{name}` has unsupported type.");
+                        
+                    c->append_line(F"    {hlsl_type_name} {name};");
+                }
+            }
+            c->append_line("};");
+            
+            std::sort_in_place(uniform_textures, \a, b = a.0 < b.0;);
+            for (let (pass, _): uniform_textures)
+            {
+                append_spirv_attrib(c, F"vk::binding({pass}, 2)");
+                c->append_line(F"Texture2D _t{pass}: register(t{pass});");
             }
         }
         public func generate_uniform_block_declare(
             _: HLSLForGlslang, c: ShaderGeneratorContext, uniform_block: UniformBlock)=> void
         {
+            append_spirv_attrib(c, F"vk::binding({uniform_block.binding}, 1)");
             c->append_line(F"cbuffer UNIFORM_BLOCK_{uniform_block.binding}: register(b{uniform_block.binding + 1}) \{");
             for (let (_, field) : uniform_block->get_sorted_fields)
             {
@@ -253,6 +296,8 @@ namespace je::shader
                         |> iterator::reduce(\l, r = l + ", " + r;)
                         -> or("");
                         
+                    c->use_function(fname);
+                    
                     return ShaderGeneratorContext::EvalResult::Decl(
                         F"{typename} {vname} = {fname}({arglist});");
                 }
@@ -363,13 +408,14 @@ namespace je::shader
                         mark = "NORMAL0";
                     else if (f34_count == 2)
                         mark = "TANGENT0";
-                        
-                    mark = F"COLOR{f34_count - 3}";
+                    else
+                        mark = F"COLOR{f34_count - 3}";
                     f34_count += 1;
                 }
                 else
                     std::panic(F"Unsupported vertex input type {t}");
                     
+                append_spirv_attrib(c, F"vk::location({idx})");
                 c->append_line(F"    {hlsl_type_name} _v{idx}: {mark};");
             }
             c->append_line("};");
@@ -415,8 +461,8 @@ namespace je::shader
                 {
                     if (f34_count == 0)
                         mark = "POSITION0";
-                        
-                    mark = F"COLOR{f34_count - 1}";
+                    else
+                        mark = F"COLOR{f34_count - 1}";
                     f34_count += 1;
                 }
                 else
@@ -451,10 +497,10 @@ namespace je::shader
                     func((idx, sv)){
                         let t = sv->get_type;
                         let mut pdecl = get_type_name_with_type(t) + F" _a{idx}";
-
+                        
                         if (t == Type::Texture2D)
                             pdecl += F", SamplerState _a{idx}_sampler";
-
+                            
                         return pdecl;
                     })
                 |> iterator::reduce(\l, r = l + ", " + r;)
@@ -462,7 +508,7 @@ namespace je::shader
                 ;
                 
             c->append_line(F"{hlsl_ret_type_name} {f.name}({paramlist})\{");
-
+            
             let result = eval(c, f.return_value, function_type::NORMAL);
             c->append_line(F"    return {result};");
             c->append_line("}");
@@ -471,17 +517,17 @@ namespace je::shader
             _: HLSLForGlslang, c: ShaderGeneratorContext, vouts: array<ShaderValue>)=> void
         {
             c->append_line("WOSHADER_V2F vertex_main(WOSHADER_VERTEX_IN _vin){");
-
+            
             let vout_vals = vouts->>\sv = eval(c, sv, function_type::VERTEX);;
             
             c->append_line("    WOSHADER_V2F _v2f;");
-
+            
             if (!vout_vals->empty)
-                c->append_line("    _v2f.OUT_POSITION = {vout_vals[0]};");
-
+                c->append_line(F"    _v2f.OUT_POSITION = {vout_vals[0]};");
+                
             for (let (idx, vout_val) : vout_vals->iter |> iterator::enumerate)
                 c->append_line(F"    _v2f._v{idx} = {vout_val};");
-
+                
             c->append_line("    return _v2f;");
             c->append_line("}");
         }
@@ -489,16 +535,166 @@ namespace je::shader
             _: HLSLForGlslang, c: ShaderGeneratorContext, fouts: array<ShaderValue>)=> void
         {
             c->append_line("WOSHADER_FRAGMENT_OUT fragment_main(WOSHADER_V2F _v2f){");
-
+            
             let fout_vals = fouts->>\sv = eval(c, sv, function_type::FRAGMENT);;
             
             c->append_line("    WOSHADER_FRAGMENT_OUT _fout;");
-
+            
             for (let (idx, fout_val) : fout_vals->iter |> iterator::enumerate)
                 c->append_line(F"    _fout._v{idx} = {fout_val};");
-
+                
             c->append_line("    return _fout;");
             c->append_line("}");
         }
+        
+        public func combine(
+            self: HLSLForGlslang,
+            global: ShaderGeneratorContext,
+            functions: map<string, ShaderGeneratorContext>,
+            vertex: ShaderGeneratorContext,
+            fragment: ShaderGeneratorContext)=> void
+        {
+            let vertex_src = buffer::builder::create();
+            let fragment_src = buffer::builder::create();
+            
+            vertex_src->appendbuilder(
+                global.generated_codes,
+                0,
+                global.generated_codes->len);
+            fragment_src->appendbuilder(
+                global.generated_codes,
+                0,
+                global.generated_codes->len);
+                
+            func fetch_used_functions(
+                f: ShaderGeneratorContext,
+                functions: map<string, ShaderGeneratorContext>,
+                used: map<string, ShaderGeneratorContext>)=> map<string, ShaderGeneratorContext>
+            {
+                for (let (name, _) : f.used_function_names)
+                {
+                    if (used->contains(name))
+                        continue;
+                        
+                    let ff = functions[name];
+                    used->set(name, ff);
+                    
+                    do fetch_used_functions(ff, functions, used);
+                }
+                return used;
+            }
+            
+            let vertex_used_functions =
+                fetch_used_functions(vertex, functions, {}mut);
+            let fragment_used_functions =
+                fetch_used_functions(fragment, functions, {}mut);
+                
+            for (let (_, ff) : vertex_used_functions->iter)
+                vertex_src->appendbuilder(ff.generated_codes, 0, ff.generated_codes->len);
+                
+            for (let (_, ff) : fragment_used_functions->iter)
+                fragment_src->appendbuilder(ff.generated_codes, 0, ff.generated_codes->len);
+                
+            vertex_src->appendbuilder(
+                vertex.generated_codes,
+                0,
+                vertex.generated_codes->len);
+                
+            fragment_src->appendbuilder(
+                fragment.generated_codes,
+                0,
+                fragment.generated_codes->len);
+                
+            self.generated_vertex_src = option::value(
+                vertex_src->readbuffer(vertex_src->len): string);
+            self.generated_fragment_src = option::value(
+                fragment_src->readbuffer(fragment_src->len): string);
+        }
+    }
+    
+    extern func generate_shader()
+    {
+        let generator = je::shader::HLSLForGlslang::create();
+        
+        woshader::ShaderParseGlobalContext::generate(generator);
+        
+        std::println(generator.generated_vertex_src->unwrap);
+        std::println(generator.generated_fragment_src->unwrap);
     }
 }
+
+WOSHADER_VERTEX_IN!
+    using vin = struct
+    {
+        position: woshader::float3,
+        uv: woshader::float2,
+        normal: woshader::float3,
+        tangent: woshader::float4,
+    };
+    
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct
+    {
+        position: woshader::float4,
+    };
+    
+    
+WOSHADER_FRAGMENT_OUT!
+    using frag_out = struct
+    {
+        color: woshader::float4,
+    };
+    
+WOSHADER_STRUCT!
+    using example_t = struct{
+        a: woshader::float4,
+        b: woshader::float4,
+    };
+    
+WOSHADER_UNIFORM_BLOCK!(0)
+{
+    JE_P: woshader::float4x4,
+    JE_TIME: woshader::float4,
+    EXAMPLE: example_t,
+};
+
+WOSHADER_UNIFORM!
+    let Texture = woshader::texture(0, woshader::Sampler2D::create(
+            woshader::Sampler2D::filter::LINEAR,
+            woshader::Sampler2D::filter::LINEAR,
+            woshader::Sampler2D::filter::LINEAR,
+            woshader::Sampler2D::wrap::CLAMP,
+            woshader::Sampler2D::wrap::CLAMP));
+            
+WOSHADER_UNIFORM!
+    let JE_MVP = woshader::vec4x4!(
+        woshader::vec4!(1., 0., 0., 0.),
+        woshader::vec4!(0., 1., 0., 0.),
+        woshader::vec4!(0., 0., 1., 0.),
+        woshader::vec4!(0., 0., 0., 1.),
+    );
+    
+WOSHADER_FUNCTION!
+    func add(a: woshader::float4, b: woshader::float4)
+    {
+        return a + b;
+    }
+    
+public func vert(vin: vin)=> v2f
+{
+    return v2f
+    {
+        position = JE_MVP * woshader::vec4!(vin.position, 1.),
+    };
+}
+public func frag(v2f: v2f)=> frag_out
+{
+    do v2f;
+    
+    return frag_out
+    {
+        color = woshader::vec4!(1.0, 0.0, 0.0, 1.0),
+    };
+}
+
+je::shader::generate_shader();
