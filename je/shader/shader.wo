@@ -442,17 +442,63 @@ namespace je::shader
         public func generate_function(
             _: HLSLForGlslang, c: ShaderGeneratorContext, f: ShaderFunction)=> void
         {
-        
+            let func_ret_type = f.return_value->get_type;
+            let hlsl_ret_type_name = get_type_name_with_type(func_ret_type);
+            
+            let paramlist = f.arguments.shader_ins->iter
+                |> iterator::enumerate
+                |> iterator::map(
+                    func((idx, sv)){
+                        let t = sv->get_type;
+                        let mut pdecl = get_type_name_with_type(t) + F" _a{idx}";
+
+                        if (t == Type::Texture2D)
+                            pdecl += F", SamplerState _a{idx}_sampler";
+
+                        return pdecl;
+                    })
+                |> iterator::reduce(\l, r = l + ", " + r;)
+                -> or("")
+                ;
+                
+            c->append_line(F"{hlsl_ret_type_name} {f.name}({paramlist})\{");
+
+            let result = eval(c, f.return_value, function_type::NORMAL);
+            c->append_line(F"    return {result};");
+            c->append_line("}");
         }
         public func generate_vertex_main(
             _: HLSLForGlslang, c: ShaderGeneratorContext, vouts: array<ShaderValue>)=> void
         {
-        
+            c->append_line("WOSHADER_V2F vertex_main(WOSHADER_VERTEX_IN _vin){");
+
+            let vout_vals = vouts->>\sv = eval(c, sv, function_type::VERTEX);;
+            
+            c->append_line("    WOSHADER_V2F _v2f;");
+
+            if (!vout_vals->empty)
+                c->append_line("    _v2f.OUT_POSITION = {vout_vals[0]};");
+
+            for (let (idx, vout_val) : vout_vals->iter |> iterator::enumerate)
+                c->append_line(F"    _v2f._v{idx} = {vout_val};");
+
+            c->append_line("    return _v2f;");
+            c->append_line("}");
         }
         public func generate_fragment_main(
             _: HLSLForGlslang, c: ShaderGeneratorContext, fouts: array<ShaderValue>)=> void
         {
-        
+            c->append_line("WOSHADER_FRAGMENT_OUT fragment_main(WOSHADER_V2F _v2f){");
+
+            let fout_vals = fouts->>\sv = eval(c, sv, function_type::FRAGMENT);;
+            
+            c->append_line("    WOSHADER_FRAGMENT_OUT _fout;");
+
+            for (let (idx, fout_val) : fout_vals->iter |> iterator::enumerate)
+                c->append_line(F"    _fout._v{idx} = {fout_val};");
+
+            c->append_line("    return _fout;");
+            c->append_line("}");
         }
     }
 }
