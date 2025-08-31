@@ -301,6 +301,7 @@ void _jegl_regenerate_and_alloc_glsl_from_spir_v_combined(
         spvc_compiler_options_set_bool(fragment_options, SPVC_COMPILER_OPTION_GLSL_ES, SPVC_FALSE);
     }
 
+    spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_FIXUP_DEPTH_CONVENTION, SPVC_TRUE);
     spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_GLSL_ENABLE_420PACK_EXTENSION, SPVC_FALSE);
     spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_GLSL_VULKAN_SEMANTICS, SPVC_FALSE);
     spvc_compiler_options_set_bool(vertex_options, SPVC_COMPILER_OPTION_GLSL_SEPARATE_SHADER_OBJECTS, SPVC_FALSE);
