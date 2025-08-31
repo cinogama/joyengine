@@ -11,7 +11,7 @@ namespace jeecs
     {
         JECS_DISABLE_MOVE_AND_COPY(rendchain_branch);
 
-        static constexpr uint8_t BRANCH_CHAIN_POOL_SIZE = 1;
+        static constexpr uint8_t BRANCH_CHAIN_POOL_SIZE = 2;
 
         struct allocated_chain_t
         {

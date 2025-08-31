@@ -149,10 +149,11 @@ namespace je::shader
         vertex_in_layout: vec<woshader::Type>,
         samplers: vec<woshader::Sampler2D>,
         texture_passes: vec<(string, int /* pass */, int /* sampler id */)>,
-        uniform_variables: vec<(string, woshader::Type, woshader::ShaderValueImm)>,
+        uniform_variables: vec<(string, woshader::Type, woshader::ShaderValueImm, string /* declare */)>,
         uniform_blocks: vec<(string, int)>,
         
         alphatest: mut bool,
+        marked_used_uniform: map<string, void>,
     }
     {
         using woshader;
@@ -171,6 +172,9 @@ namespace je::shader
                 uniform_blocks = []mut,
                 
                 alphatest = mut false,
+                marked_used_uniform = {
+                    ["JE_NDC_SCALE"] = do nil,
+                }mut,
             };
         }
         public func get_texture_info_by_pass(self: HLSLForGlslang, pass: int)
@@ -262,8 +266,8 @@ namespace je::shader
             //if (uniforms.defined_uniforms->iter |> iterator::count_if(\(_, uniform_var) = uniform_var.used;) > 0)
             
             let uniform_textures = []mut: vec<mut (texture2d::base, string)>;
-            append_spirv_attrib(c, "vk::binding(0, 0)");
-            c->append_line("cbuffer SHADER_UNIFORM: register(b0) {");
+            // append_spirv_attrib(c, "vk::binding(0, 0)");
+            // c->append_line("cbuffer SHADER_UNIFORM: register(b0) {");
             for (let (name, uniform_var) : uniforms.defined_uniforms
                 -> unmapping |> std::sort(
                     func((_, a), (_, b))
@@ -285,17 +289,17 @@ namespace je::shader
                 }
                 else
                 {
-                    self.uniform_variables->add((name, uniform_var.type, uniform_var.default_value));
-                    
                     let mut hlsl_type_name = get_type_name_with_type(uniform_var.type);
                     assert_message(
                         hlsl_type_name != "struct",
                         F"Uniform variable `{name}` has unsupported type.");
                         
-                    c->append_line(F"    {hlsl_type_name} {name};");
+                    // c->append_line(F"    {hlsl_type_name} {name};");
+                    self.uniform_variables->add(
+                        (name, uniform_var.type, uniform_var.default_value, F"{hlsl_type_name} {name};"));
                 }
             }
-            c->append_line("};");
+            // c->append_line("};");
             
             std::sort_in_place(uniform_textures, \a, b = a[0].0 < b[0].0;);
             for (let ((pass, sampler), name): uniform_textures)
@@ -600,7 +604,11 @@ namespace je::shader
             {
                 Imm(imm)? return self->apply_eval_shader_imm(c, typename, vname, imm, ftype);
                 Operate(op)? return self->apply_eval_shader_operate(c, typename, vname, op, ftype);
-                Uniform(uname)? return ShaderGeneratorContext::EvalResult::Direct(uname);
+                Uniform(uname)?
+                {
+                    self.marked_used_uniform->set(uname, do nil);
+                    return ShaderGeneratorContext::EvalResult::Direct(uname);
+                }
                 ShaderIn(idx)?
                 {
                     if (ftype == function_type::VERTEX)
@@ -843,6 +851,15 @@ namespace je::shader
             let vertex_src = buffer::builder::create();
             let fragment_src = buffer::builder::create();
             
+            append_spirv_attrib(global, "vk::binding(0, 0)");
+            global->append_line("cbuffer SHADER_UNIFORM: register(b0) {");
+            for (let (name, _, _, decl) : self.uniform_variables)
+            {
+                if (self.marked_used_uniform->contains(name))
+                    global->append_line(F"    {decl}");
+            }
+            global->append_line("};");
+            
             vertex_src->appendbuilder(
                 global.generated_codes,
                 0,
@@ -930,7 +947,14 @@ namespace je::shader
             generator.vertex_in_layout->unsafe::asarray,
             generator.samplers->unsafe::asarray,
             generator.texture_passes->unsafe::asarray,
-            generator.uniform_variables->unsafe::asarray,
+            generator.uniform_variables->iter
+                |> iterator::filter_map(
+                    \(name, type, imm, _) =
+                        generator.marked_used_uniform->contains(name)
+                            ? option::value((name, type, imm))
+                            | option::none
+                        ;)
+                |> iterator::collect,
             generator.uniform_blocks->unsafe::asarray,
             configs,
         );
