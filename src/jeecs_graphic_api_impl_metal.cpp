@@ -12,13 +12,13 @@ namespace jeecs::graphic::api::metal
         if (!reboot)
             jeecs::debug::log("Graphic thread (Metal) start!");
 
-        jegui_init_metal(
+        /*jegui_init_metal(
             glthread,
             [](jegl_context*, jegl_resource*)
             {
                 return (uint64_t)nullptr;
             },
-            [](jegl_context*, jegl_resource*) {});
+            [](jegl_context*, jegl_resource*) {});*/
 
         return nullptr;
     }
@@ -30,7 +30,7 @@ namespace jeecs::graphic::api::metal
         if (!reboot)
             jeecs::debug::log("Graphic thread (Metal) shutdown!");
 
-        jegui_shutdown_metal(reboot);
+        //jegui_shutdown_metal(reboot);
     }
 
     jegl_update_action pre_update(jegl_context::graphic_impl_context_t)
@@ -40,7 +40,7 @@ namespace jeecs::graphic::api::metal
     jegl_update_action commit_update(
         jegl_context::graphic_impl_context_t, jegl_update_action)
     {
-        jegui_update_metal();
+        // jegui_update_metal();
         return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
 
