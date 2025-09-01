@@ -4,7 +4,6 @@ project("joyengineecs4w")
 
 # Setting for JoyEngineECS 4 Webgl.
 set(JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD OFF CACHE BOOL "Disable install baozi on WebGL" FORCE)
-set(JE4_COPYING_BUILTIN_FILES           OFF CACHE BOOL "Disable copy builtin files on WebGL" FORCE)
 set(JE4_STATIC_LINK_MODULE_AND_PKGS     ON  CACHE BOOL "Enable static link packages on WebGL" FORCE)
 set(JE4_BUILD_SHARED_CORE               OFF CACHE BOOL "Disable static engine core on WebGL" FORCE)
 
