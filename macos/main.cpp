@@ -195,7 +195,7 @@ public:
     je_macos_context(int argc, char** argv)
         : jeecs::game_engine_context(argc, argv)
     {
-        m_graphic_host = prepare_graphic();
+        m_graphic_host = prepare_graphic(false /* debug now */);
     }
     ~je_macos_context()
     {
