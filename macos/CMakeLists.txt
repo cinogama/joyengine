@@ -22,11 +22,13 @@ set(WO_SUPPORT_ASMJIT               OFF CACHE BOOL "Disable JIT on MacOS" FORCE)
 set(JE4MACOS_PATH "./../")
 add_subdirectory(${JE4MACOS_PATH} joyengineecs.out)
 
-include_directories("${JE4MACOS_PATH}/include")
-include_directories("${JE4MACOS_PATH}/3rd/woolang/include")
-
 add_executable(joyengineecs4m main.cpp)
 target_link_libraries(joyengineecs4m
         # JoyEngine core
         PUBLIC joyecs
         PRIVATE woolang)
+
+target_include_directories(joyengineecs4m 
+    PRIVATE "${JE4MACOS_PATH}/include"
+    PRIVATE "${JE4MACOS_PATH}/3rd/woolang/include"
+    PRIVATE "${JE4MACOS_PATH}/3rd/metal-cpp")
