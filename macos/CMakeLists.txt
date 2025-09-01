@@ -22,11 +22,32 @@ set(WO_SUPPORT_ASMJIT               OFF CACHE BOOL "Disable JIT on MacOS" FORCE)
 set(JE4MACOS_PATH "./../")
 add_subdirectory(${JE4MACOS_PATH} joyengineecs.out)
 
+find_library(METAL_FRAMEWORK Metal
+    PATHS "${JE4MACOS_PATH}/3rd/metal-cpp"
+    REQUIRED)
+find_library(METALKIT_FRAMEWORK MetalKit
+    PATHS "${JE4MACOS_PATH}/3rd/metal-cpp"
+    REQUIRED)
+find_library(APPKIT_FRAMEWORK AppKit
+    PATHS "${JE4MACOS_PATH}/3rd/metal-cpp"
+    REQUIRED)
+find_library(FOUNDATION_FRAMEWORK Foundation
+    PATHS "${JE4MACOS_PATH}/3rd/metal-cpp"
+    REQUIRED)
+find_library(QUARTZCORE_FRAMEWORK QuartzCore
+    PATHS "${JE4MACOS_PATH}/3rd/metal-cpp"
+    REQUIRED)
+
 add_executable(joyengineecs4m main.cpp)
 target_link_libraries(joyengineecs4m
         # JoyEngine core
         PUBLIC joyecs
-        PRIVATE woolang)
+        PRIVATE woolang
+        ${METAL_FRAMEWORK}
+        ${METALKIT_FRAMEWORK}
+        ${APPKIT_FRAMEWORK}
+        ${FOUNDATION_FRAMEWORK}
+        ${QUARTZCORE_FRAMEWORK})
 
 target_include_directories(joyengineecs4m 
     PRIVATE "${JE4MACOS_PATH}/include"
