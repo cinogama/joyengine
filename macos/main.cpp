@@ -21,11 +21,43 @@ class je_macos_context : public jeecs::game_engine_context
 
     jeecs::graphic::graphic_syncer_host* m_graphic_host;
 
+    class macos_demo_renderer
+    {
+    public:
+        macos_demo_renderer(MTL::Device* pDevice)
+            : _pDevice(pDevice->retain())
+        {
+            _pCommandQueue = _pDevice->newCommandQueue();
+        }
+        ~macos_demo_renderer()
+        {
+            _pCommandQueue->release();
+            _pDevice->release();
+        }
+        void draw(MTK::View* pView)
+        {
+            NS::AutoreleasePool* pPool = NS::AutoreleasePool::alloc()->init();
+
+            MTL::CommandBuffer* pCmd = _pCommandQueue->commandBuffer();
+            MTL::RenderPassDescriptor* pRpd = pView->currentRenderPassDescriptor();
+            MTL::RenderCommandEncoder* pEnc = pCmd->renderCommandEncoder(pRpd);
+            pEnc->endEncoding();
+            pCmd->presentDrawable(pView->currentDrawable());
+            pCmd->commit();
+
+            pPool->release();
+        }
+
+    private:
+        MTL::Device* _pDevice;
+        MTL::CommandQueue* _pCommandQueue;
+    };
+
     class macos_je_mtk_view_delegate : public MTK::ViewDelegate
     {
         bool m_graphic_request_to_close;
-        jeecs::graphic::graphic_syncer_host*
-            m_je_graphic_host;
+        jeecs::graphic::graphic_syncer_host* m_je_graphic_host;
+        macos_demo_renderer* m_renderer;
 
     public:
         macos_je_mtk_view_delegate(
@@ -34,6 +66,7 @@ class je_macos_context : public jeecs::game_engine_context
             : MTK::ViewDelegate()
             , m_graphic_request_to_close(false)
             , m_je_graphic_host(graphic_host)
+            , m_renderer(new macos_demo_renderer(pDevice))
         {
         }
         virtual ~macos_je_mtk_view_delegate() override
@@ -48,19 +81,21 @@ class je_macos_context : public jeecs::game_engine_context
                     m_je_graphic_host->get_graphic_context_after_context_ready(), 
                     false);
             }
+            delete m_renderer;
         }
 
         virtual void drawInMTKView(MTK::View* pView) override
         {
-            if (m_graphic_request_to_close)
-                // Graphic has been requested to close.
-                return;
+            //if (m_graphic_request_to_close)
+            //    // Graphic has been requested to close.
+            //    return;
 
-            if (!m_je_graphic_host->frame())
-            {
-                // TODO: Graphic requested to close, close windows and exit app.
-                m_graphic_request_to_close = true;
-            }
+            //if (!m_je_graphic_host->frame())
+            //{
+            //    // TODO: Graphic requested to close, close windows and exit app.
+            //    m_graphic_request_to_close = true;
+            //}
+            _pRenderer->draw(pView);
         }
     };
     class macos_je_application_delegate : public NS::ApplicationDelegate
