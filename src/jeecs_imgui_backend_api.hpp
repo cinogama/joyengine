@@ -61,6 +61,7 @@ void jegui_init_metal(
     jegui_user_image_loader_t get_img_res,
     jegui_user_sampler_loader_t apply_shader_sampler);
 void jegui_update_metal();
+void jegui_shutdown_metal(bool reboot);
 #endif
 
 void jegui_init_none(
