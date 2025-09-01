@@ -95,7 +95,7 @@ class je_macos_context : public jeecs::game_engine_context
             //    // TODO: Graphic requested to close, close windows and exit app.
             //    m_graphic_request_to_close = true;
             //}
-            _pRenderer->draw(pView);
+            m_renderer->draw(pView);
         }
     };
     class macos_je_application_delegate : public NS::ApplicationDelegate
