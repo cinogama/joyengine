@@ -307,7 +307,7 @@ namespace jeecs::graphic::api::gl3
         je_log(jelog_level, "(%d)%s-%s: %s", id, source_type, msg_type, message);
     }
 #endif
-    jegl_context::userdata_t gl_startup(jegl_context* gthread, const jegl_interface_config* config, bool reboot)
+    jegl_context::graphic_impl_context_t gl_startup(jegl_context* gthread, const jegl_interface_config* config, bool reboot)
     {
         jegl_gl3_context* context = new jegl_gl3_context(gthread, config, reboot);
 
@@ -367,7 +367,7 @@ namespace jeecs::graphic::api::gl3
         return context;
     }
 
-    jegl_update_action gl_pre_update(jegl_context::userdata_t ctx)
+    jegl_update_action gl_pre_update(jegl_context::graphic_impl_context_t ctx)
     {
         jegl_gl3_context* context = reinterpret_cast<jegl_gl3_context*>(ctx);
 
@@ -402,7 +402,7 @@ namespace jeecs::graphic::api::gl3
     }
 
     jegl_update_action gl_commit_update(
-        jegl_context::userdata_t, jegl_update_action)
+        jegl_context::graphic_impl_context_t, jegl_update_action)
     {
         jegui_update_gl330();
 
@@ -410,10 +410,10 @@ namespace jeecs::graphic::api::gl3
         glFlush();
         return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
-    void gl_pre_shutdown(jegl_context*, jegl_context::userdata_t, bool)
+    void gl_pre_shutdown(jegl_context*, jegl_context::graphic_impl_context_t, bool)
     {
     }
-    void gl_shutdown(jegl_context*, jegl_context::userdata_t userdata, bool reboot)
+    void gl_shutdown(jegl_context*, jegl_context::graphic_impl_context_t userdata, bool reboot)
     {
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(userdata));
 
@@ -426,7 +426,7 @@ namespace jeecs::graphic::api::gl3
         delete context;
     }
     void gl_set_uniform(
-        jegl_context::userdata_t ctx,
+        jegl_context::graphic_impl_context_t ctx,
         uint32_t location,
         jegl_shader::uniform_type type,
         const void* val)
@@ -491,7 +491,7 @@ namespace jeecs::graphic::api::gl3
         }
     }
 
-    jegl_resource_blob gl_create_resource_blob(jegl_context::userdata_t ctx, jegl_resource* resource)
+    jegl_resource_blob gl_create_resource_blob(jegl_context::graphic_impl_context_t ctx, jegl_resource* resource)
     {
         switch (resource->m_type)
         {
@@ -682,7 +682,7 @@ namespace jeecs::graphic::api::gl3
         return nullptr;
     }
 
-    void gl_close_resource_blob(jegl_context::userdata_t ctx, jegl_resource_blob blob)
+    void gl_close_resource_blob(jegl_context::graphic_impl_context_t ctx, jegl_resource_blob blob)
     {
         if (blob != nullptr)
         {
@@ -693,7 +693,7 @@ namespace jeecs::graphic::api::gl3
         }
     }
 
-    void gl_init_resource(jegl_context::userdata_t ctx, jegl_resource_blob blob, jegl_resource* resource)
+    void gl_init_resource(jegl_context::graphic_impl_context_t ctx, jegl_resource_blob blob, jegl_resource* resource)
     {
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
         assert(resource->m_custom_resource != nullptr);
@@ -1323,7 +1323,7 @@ namespace jeecs::graphic::api::gl3
         return true;
     }
 
-    void gl_using_resource(jegl_context::userdata_t ctx, jegl_resource* resource)
+    void gl_using_resource(jegl_context::graphic_impl_context_t ctx, jegl_resource* resource)
     {
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
         switch (resource->m_type)
@@ -1400,7 +1400,7 @@ namespace jeecs::graphic::api::gl3
         }
     }
 
-    void gl_close_resource(jegl_context::userdata_t, jegl_resource* resource)
+    void gl_close_resource(jegl_context::graphic_impl_context_t, jegl_resource* resource)
     {
         switch (resource->m_type)
         {
@@ -1433,13 +1433,13 @@ namespace jeecs::graphic::api::gl3
         }
     }
 
-    bool gl_bind_shader(jegl_context::userdata_t context, jegl_resource* shader)
+    bool gl_bind_shader(jegl_context::graphic_impl_context_t context, jegl_resource* shader)
     {
         jegl_gl3_context* ctx = std::launder(reinterpret_cast<jegl_gl3_context*>(context));
         return _gl_using_shader_program(ctx, shader);
     }
 
-    void gl_bind_uniform_buffer(jegl_context::userdata_t, jegl_resource* uniformbuf)
+    void gl_bind_uniform_buffer(jegl_context::graphic_impl_context_t, jegl_resource* uniformbuf)
     {
         glBindBufferRange(
             GL_UNIFORM_BUFFER,
@@ -1449,7 +1449,7 @@ namespace jeecs::graphic::api::gl3
             uniformbuf->m_raw_uniformbuf_data->m_buffer_size);
     }
 
-    void gl_bind_texture(jegl_context::userdata_t ctx, jegl_resource* texture, size_t pass)
+    void gl_bind_texture(jegl_context::graphic_impl_context_t ctx, jegl_resource* texture, size_t pass)
     {
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
 
@@ -1461,7 +1461,7 @@ namespace jeecs::graphic::api::gl3
                 (GLint)pass, GL_TEXTURE_2D, (GLuint)texture->m_handle.m_uint1);
     }
 
-    void gl_draw_vertex_with_shader(jegl_context::userdata_t ctx, jegl_resource* vert)
+    void gl_draw_vertex_with_shader(jegl_context::graphic_impl_context_t ctx, jegl_resource* vert)
     {
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
         jegl3_vertex_data* vdata = std::launder(reinterpret_cast<jegl3_vertex_data*>(vert->m_handle.m_ptr));
@@ -1495,7 +1495,7 @@ namespace jeecs::graphic::api::gl3
     }
 
     void gl_set_rend_to_framebuffer(
-        jegl_context::userdata_t ctx, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
+        jegl_context::graphic_impl_context_t ctx, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
     {
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
 
@@ -1521,13 +1521,13 @@ namespace jeecs::graphic::api::gl3
         glDepthRangef(0., 1.);
 #endif
     }
-    void gl_clear_framebuffer_color(jegl_context::userdata_t, float color[4])
+    void gl_clear_framebuffer_color(jegl_context::graphic_impl_context_t, float color[4])
     {
         glClearColor(color[0], color[1], color[2], color[3]);
         glClear(GL_COLOR_BUFFER_BIT);
     }
 
-    void gl_clear_framebuffer_depth(jegl_context::userdata_t ctx)
+    void gl_clear_framebuffer_depth(jegl_context::graphic_impl_context_t ctx)
     {
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
         _gl_update_depth_mask_method(context, jegl_shader::depth_mask_method::ENABLE);

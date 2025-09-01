@@ -24,7 +24,7 @@ public:
         jeecs_file_set_runtime_path("/.je4");
         jeecs_file_update_default_fimg("");
 
-        prepare_graphic();
+        (void)prepare_graphic();
     }
     ~je_webgl_context() = default;
 

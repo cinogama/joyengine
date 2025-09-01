@@ -17,79 +17,79 @@
 
 class je_macos_context : public jeecs::game_engine_context
 {
-    class renderer
+    JECS_DISABLE_MOVE_AND_COPY(je_macos_context);
+
+    jeecs::graphic::graphic_syncer_host* m_graphic_host;
+
+    class macos_je_mtk_view_delegate : public MTK::ViewDelegate
     {
+        bool m_graphic_request_to_close;
+        jeecs::graphic::graphic_syncer_host*
+            m_je_graphic_host;
+
     public:
-        renderer(MTL::Device* pDevice)
-            : _pDevice(pDevice->retain())
-        {
-            _pCommandQueue = _pDevice->newCommandQueue();
-        }
-        ~renderer()
-        {
-            _pCommandQueue->release();
-            _pDevice->release();
-        }
-        void draw(MTK::View* pView)
-        {
-            NS::AutoreleasePool* pPool = NS::AutoreleasePool::alloc()->init();
-
-            MTL::CommandBuffer* pCmd = _pCommandQueue->commandBuffer();
-            MTL::RenderPassDescriptor* pRpd = pView->currentRenderPassDescriptor();
-            MTL::RenderCommandEncoder* pEnc = pCmd->renderCommandEncoder(pRpd);
-            pEnc->endEncoding();
-            pCmd->presentDrawable(pView->currentDrawable());
-            pCmd->commit();
-
-            pPool->release();
-        }
-
-    private:
-        MTL::Device* _pDevice;
-        MTL::CommandQueue* _pCommandQueue;
-    };
-    class mtk_view_delegate : public MTK::ViewDelegate
-    {
-        renderer* _pRenderer;
-    public:
-        MyMTKViewDelegate(MTL::Device* pDevice)
+        macos_je_mtk_view_delegate(
+            MTL::Device* pDevice,
+            jeecs::graphic::graphic_syncer_host* graphic_host)
             : MTK::ViewDelegate()
-            , _pRenderer(new renderer(pDevice))
+            , m_graphic_request_to_close(false)
+            , m_je_graphic_host(graphic_host)
         {
+        }
+        virtual ~macos_je_mtk_view_delegate() override
+        {
+            if (!m_graphic_request_to_close)
+            {
+                // NOTE: view delegate has been destructed, but graphic host
+                //  has not been requested to close.
+                // This may happen when the window is closed by user in macos.
 
+                jegl_sync_shutdown(
+                    m_je_graphic_host->get_graphic_context_after_context_ready(), 
+                    false);
+            }
         }
-        virtual ~MyMTKViewDelegate() override
-        {
-            delete _pRenderer;
-        }
+
         virtual void drawInMTKView(MTK::View* pView) override
         {
-            _pRenderer->draw(pView);
-        }
-    }
-    class app_delegate : public NS::ApplicationDelegate
-    {
-        NS::Window* _pWindow;
-        MTK::View* _pMtkView;
-        MTL::Device* _pDevice;
-        mtk_view_delegate* _pViewDelegate;
-    public:
-        app_delegate()
-            : _pWindow(nullptr)
-            , _pMtkView(nullptr)
-            , _pDevice(nullptr)
-            , _pViewDelegate(nullptr)
-        {
-        }
-        ~app_delegate()
-        {
-            _pMtkView->release();
-            _pWindow->release();
-            _pDevice->release();
-            delete _pViewDelegate;
-        }
+            if (m_graphic_request_to_close)
+                // Graphic has been requested to close.
+                return;
 
-        ////////////////////////////////////////////////////////////////////////////////////////
+            if (!m_je_graphic_host->frame())
+            {
+                // TODO: Graphic requested to close, close windows and exit app.
+                m_graphic_request_to_close = true;
+            }
+        }
+    };
+    class macos_je_application_delegate : public NS::ApplicationDelegate
+    {
+        jeecs::graphic::graphic_syncer_host* 
+            m_je_graphic_host;
+
+        NS::Window* m_window;
+        MTK::View* m_mtk_view;
+        MTL::Device* m_device;
+        macos_je_mtk_view_delegate* m_view_delegate;
+    public:
+        macos_je_application_delegate(
+            jeecs::graphic::graphic_syncer_host* graphic_host)
+            : NS::ApplicationDelegate()
+            , m_je_graphic_host(graphic_host)
+            , m_window(nullptr)
+            , m_mtk_view(nullptr)
+            , m_device(nullptr)
+            , m_view_delegate(nullptr)
+        {
+        }
+        ~macos_je_application_delegate()
+        {
+            m_mtk_view->release();
+            m_window->release();
+            m_device->release();
+            delete m_view_delegate;
+        }
 
         NS::Menu* createMenuBar()
         {
@@ -132,73 +132,98 @@ class je_macos_context : public jeecs::game_engine_context
 
             return pMainMenu->autorelease();
         }
-        virtual void applicationWillFinishLaunching(NS::Notification* pNotification) override
+
+        virtual void applicationWillFinishLaunching(
+            NS::Notification* pNotification) override
         {
             NS::Menu* pMenu = createMenuBar();
             NS::Application* pApp = reinterpret_cast<NS::Application*>(pNotification->object());
             pApp->setMainMenu(pMenu);
             pApp->setActivationPolicy(NS::ActivationPolicy::ActivationPolicyRegular);
         }
-        virtual void applicationDidFinishLaunching(NS::Notification* pNotification) override
+        virtual void applicationDidFinishLaunching(
+            NS::Notification* pNotification) override
         {
-            CGRect frame = (CGRect){ {100.0, 100.0}, {512.0, 512.0} };
+            const auto& engine_graphic_config = 
+                m_je_graphic_host->get_graphic_context_after_context_ready()->m_config;
 
-            _pWindow = NS::Window::alloc()->init(
+            CGRect frame = (CGRect){ 
+                {
+                    100.0,
+                    100.0,
+                }, 
+                {
+                    (double)engine_graphic_config.m_width,
+                    (double)engine_graphic_config.m_height,
+                } 
+            };
+
+            m_window = NS::Window::alloc()->init(
                 frame,
                 NS::WindowStyleMaskClosable | NS::WindowStyleMaskTitled,
                 NS::BackingStoreBuffered,
                 false);
 
-            _pDevice = MTL::CreateSystemDefaultDevice();
+            m_device = MTL::CreateSystemDefaultDevice();
 
-            _pMtkView = MTK::View::alloc()->init(frame, _pDevice);
-            _pMtkView->setColorPixelFormat(MTL::PixelFormat::PixelFormatBGRA8Unorm_sRGB);
-            _pMtkView->setClearColor(MTL::ClearColor::Make(1.0, 0.0, 0.0, 1.0));
+            m_mtk_view = MTK::View::alloc()->init(frame, m_device);
+            m_mtk_view->setColorPixelFormat(MTL::PixelFormat::PixelFormatBGRA8Unorm_sRGB);
+            m_mtk_view->setClearColor(MTL::ClearColor::Make(1.0, 0.0, 0.0, 1.0));
 
-            _pViewDelegate = new mtk_view_delegate(_pDevice);
-            _pMtkView->setDelegate(_pViewDelegate);
+            m_view_delegate = new macos_je_mtk_view_delegate(m_device, m_je_graphic_host);
+            m_mtk_view->setDelegate(m_view_delegate);
 
-            _pWindow->setContentView(_pMtkView);
-            _pWindow->setTitle(NS::String::string("00 - Window", NS::StringEncoding::UTF8StringEncoding));
+            m_window->setContentView(m_mtk_view);
+            m_window->setTitle(
+                NS::String::string(
+                    engine_graphic_config.m_title,
+                    NS::StringEncoding::UTF8StringEncoding));
 
-            _pWindow->makeKeyAndOrderFront(nullptr);
+            m_window->makeKeyAndOrderFront(nullptr);
 
             NS::Application* pApp = reinterpret_cast<NS::Application*>(pNotification->object());
             pApp->activateIgnoringOtherApps(true);
         }
-        virtual bool applicationShouldTerminateAfterLastWindowClosed(NS::Application* pSender) override
+        virtual bool applicationShouldTerminateAfterLastWindowClosed(
+            NS::Application* pSender) override
         {
             return true;
         }
-    }
-    app_delegate delegate_instance;
-    NS::AutoreleasePool* m_auto_release_pool;
-
-    JECS_DISABLE_MOVE_AND_COPY(je_macos_context);
-private:
+    };
 
 public:
     je_macos_context(int argc, char** argv)
         : jeecs::game_engine_context(argc, argv)
     {
-        m_auto_release_pool = NS::AutoreleasePool::alloc()->init();
+        m_graphic_host = prepare_graphic();
     }
     ~je_macos_context()
     {
-        m_auto_release_pool->release();
     }
-
-    void loop()
+    void macos_loop()
     {
-        NS::Application* shared_app = NS::Application::sharedApplication();
+        for (;;)
+        {
+            if (!check_context_ready_block())
+                break; // If the entry script ended, exit the loop.
 
-        shared_app->setDelegate(&delegate_instance);
-        shared_app->run();
+            // Graphic context ready, prepare for macos window.
+            NS::AutoreleasePool* auto_release_pool = 
+                NS::AutoreleasePool::alloc()->init();
+
+            macos_je_application_delegate del(m_graphic_host);
+
+            NS::Application* shared_application = NS::Application::sharedApplication();
+            shared_application->setDelegate(&del);
+            shared_application->run();
+
+            auto_release_pool->release();
+        }
     }
 };
 
 int main(int argc, char** argv)
 {
     je_macos_context context(argc, argv);
-    context.loop();
+    context.macos_loop();
 }

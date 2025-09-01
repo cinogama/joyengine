@@ -426,7 +426,7 @@ void jegl_sync_init(jegl_context* thread, bool isreboot)
             thread->m_universe_instance,
             1.0 / (double)thread->m_config.m_fps);
 
-    thread->m_userdata = thread->m_apis->interface_startup(
+    thread->m_graphic_impl_context = thread->m_apis->interface_startup(
         thread, &thread->m_config, isreboot);
 
     ++thread->m_version;
@@ -458,7 +458,7 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
             goto is_reboot_or_shutdown;
 
         const auto frame_update_state =
-            thread->m_apis->update_frame_ready(thread->m_userdata);
+            thread->m_apis->update_frame_ready(thread->m_graphic_impl_context);
 
         switch (frame_update_state)
         {
@@ -483,7 +483,7 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
             frame_update_state);
 
         if (jegl_update_action::JEGL_UPDATE_STOP ==
-            thread->m_apis->update_draw_commit(thread->m_userdata, frame_update_state))
+            thread->m_apis->update_draw_commit(thread->m_graphic_impl_context, frame_update_state))
         {
             thread->_m_thread_notifier->m_graphic_terminated.store(true);
         }
@@ -514,7 +514,7 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
         {
             if (need_close)
             {
-                thread->m_apis->close_resource(thread->m_userdata, deleting_resource->m_destroy_resource);
+                thread->m_apis->close_resource(thread->m_graphic_impl_context, deleting_resource->m_destroy_resource);
                 thread->_m_thread_notifier->_m_created_resources.erase(deleting_resource->m_destroy_resource);
             }
 
@@ -540,18 +540,18 @@ bool jegl_sync_shutdown(jegl_context* thread, bool isreboot)
 {
     thread->m_apis->interface_shutdown_before_resource_release(
         thread,
-        thread->m_userdata,
+        thread->m_graphic_impl_context,
         isreboot);
 
     for (auto& [_, resource_blob] : thread->_m_thread_notifier->_m_cached_resource_blobs)
     {
-        thread->m_apis->close_resource_blob_cache(thread->m_userdata, resource_blob.m_blob);
+        thread->m_apis->close_resource_blob_cache(thread->m_graphic_impl_context, resource_blob.m_blob);
     }
     thread->_m_thread_notifier->_m_cached_resource_blobs.clear();
 
     for (auto* resource : thread->_m_thread_notifier->_m_created_resources)
     {
-        thread->m_apis->close_resource(thread->m_userdata, resource);
+        thread->m_apis->close_resource(thread->m_graphic_impl_context, resource);
         resource->m_graphic_thread = nullptr;
         resource->m_graphic_thread_version = 0;
     }
@@ -559,10 +559,10 @@ bool jegl_sync_shutdown(jegl_context* thread, bool isreboot)
 
     thread->m_apis->interface_shutdown(
         thread,
-        thread->m_userdata,
+        thread->m_graphic_impl_context,
         isreboot);
 
-    thread->m_userdata = nullptr;
+    thread->m_graphic_impl_context = nullptr;
 
     if (!isreboot)
     {
@@ -833,14 +833,16 @@ bool jegl_using_resource(jegl_resource* resource)
                 {
                     // Clear outdated blob.
                     _current_graphic_thread->m_apis
-                        ->close_resource_blob_cache(_current_graphic_thread->m_userdata, fnd->second.m_blob);
+                        ->close_resource_blob_cache(
+                            _current_graphic_thread->m_graphic_impl_context, 
+                            fnd->second.m_blob);
                 }
             }
         }
 
         if (resource_blob == nullptr)
             resource_blob = _current_graphic_thread->m_apis->create_resource_blob_cache(
-                _current_graphic_thread->m_userdata, resource);
+                _current_graphic_thread->m_graphic_impl_context, resource);
 
         if (resource->m_path != nullptr)
         {
@@ -853,17 +855,17 @@ bool jegl_using_resource(jegl_resource* resource)
 
         // Create resource by blob.
         _current_graphic_thread->m_apis->create_resource(
-            _current_graphic_thread->m_userdata, resource_blob, resource);
+            _current_graphic_thread->m_graphic_impl_context, resource_blob, resource);
 
         if (resource->m_path == nullptr)
             _current_graphic_thread->m_apis->close_resource_blob_cache(
-                _current_graphic_thread->m_userdata, resource_blob);
+                _current_graphic_thread->m_graphic_impl_context, resource_blob);
 
         _current_graphic_thread->_m_thread_notifier->_m_created_resources.insert(resource);
     }
 
     _current_graphic_thread->m_apis->using_resource(
-        _current_graphic_thread->m_userdata, resource);
+        _current_graphic_thread->m_graphic_impl_context, resource);
 
     return need_init_resource;
 }
@@ -1611,7 +1613,7 @@ bool jegl_bind_shader(jegl_resource* shader)
     assert(shader->m_type == jegl_resource::SHADER);
     bool need_init_uvar = jegl_using_resource(shader);
 
-    if (!_current_graphic_thread->m_apis->bind_shader(_current_graphic_thread->m_userdata, shader))
+    if (!_current_graphic_thread->m_apis->bind_shader(_current_graphic_thread->m_graphic_impl_context, shader))
         return false;
 
     auto uniform_vars = shader->m_raw_shader_data != nullptr
@@ -1713,25 +1715,25 @@ void jegl_bind_uniform_buffer(jegl_resource* uniformbuf)
 {
     jegl_using_resource(uniformbuf);
     _current_graphic_thread->m_apis->bind_uniform_buffer(
-        _current_graphic_thread->m_userdata, uniformbuf);
+        _current_graphic_thread->m_graphic_impl_context, uniformbuf);
 }
 
 void jegl_draw_vertex(jegl_resource* vert)
 {
     jegl_using_resource(vert);
     _current_graphic_thread->m_apis->draw_vertex(
-        _current_graphic_thread->m_userdata, vert);
+        _current_graphic_thread->m_graphic_impl_context, vert);
 }
 
 void jegl_clear_framebuffer_color(float color[4])
 {
     _current_graphic_thread->m_apis->clear_frame_color(
-        _current_graphic_thread->m_userdata, color);
+        _current_graphic_thread->m_graphic_impl_context, color);
 }
 void jegl_clear_framebuffer_depth()
 {
     _current_graphic_thread->m_apis->clear_frame_depth(
-        _current_graphic_thread->m_userdata);
+        _current_graphic_thread->m_graphic_impl_context);
 }
 
 void jegl_rend_to_framebuffer(jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
@@ -1740,21 +1742,21 @@ void jegl_rend_to_framebuffer(jegl_resource* framebuffer, size_t x, size_t y, si
         jegl_using_resource(framebuffer);
 
     _current_graphic_thread->m_apis->bind_framebuf(
-        _current_graphic_thread->m_userdata, framebuffer, x, y, w, h);
+        _current_graphic_thread->m_graphic_impl_context, framebuffer, x, y, w, h);
 }
 
 void jegl_bind_texture(jegl_resource* texture, size_t pass)
 {
     jegl_using_resource(texture);
     _current_graphic_thread->m_apis->bind_texture(
-        _current_graphic_thread->m_userdata, texture, pass);
+        _current_graphic_thread->m_graphic_impl_context, texture, pass);
 }
 
 void jegl_uniform_int(uint32_t location, int value)
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
     _current_graphic_thread->m_apis->set_uniform(
-        _current_graphic_thread->m_userdata, location, jegl_shader::INT, &value);
+        _current_graphic_thread->m_graphic_impl_context, location, jegl_shader::INT, &value);
 }
 
 void jegl_uniform_int2(uint32_t location, int x, int y)
@@ -1762,7 +1764,7 @@ void jegl_uniform_int2(uint32_t location, int x, int y)
     // NOTE: This method designed for using after 'jegl_using_resource'
     int value[2] = { x, y };
     _current_graphic_thread->m_apis->set_uniform(
-        _current_graphic_thread->m_userdata, location, jegl_shader::INT2, &value);
+        _current_graphic_thread->m_graphic_impl_context, location, jegl_shader::INT2, &value);
 }
 
 void jegl_uniform_int3(uint32_t location, int x, int y, int z)
@@ -1770,7 +1772,7 @@ void jegl_uniform_int3(uint32_t location, int x, int y, int z)
     // NOTE: This method designed for using after 'jegl_using_resource'
     int value[3] = { x, y, z };
     _current_graphic_thread->m_apis->set_uniform(
-        _current_graphic_thread->m_userdata, location, jegl_shader::INT3, &value);
+        _current_graphic_thread->m_graphic_impl_context, location, jegl_shader::INT3, &value);
 }
 
 void jegl_uniform_int4(uint32_t location, int x, int y, int z, int w)
@@ -1778,14 +1780,14 @@ void jegl_uniform_int4(uint32_t location, int x, int y, int z, int w)
     // NOTE: This method designed for using after 'jegl_using_resource'
     int value[4] = { x, y, z, w };
     _current_graphic_thread->m_apis->set_uniform(
-        _current_graphic_thread->m_userdata, location, jegl_shader::INT4, &value);
+        _current_graphic_thread->m_graphic_impl_context, location, jegl_shader::INT4, &value);
 }
 
 void jegl_uniform_float(uint32_t location, float value)
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
     _current_graphic_thread->m_apis->set_uniform(
-        _current_graphic_thread->m_userdata, location, jegl_shader::FLOAT, &value);
+        _current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT, &value);
 }
 
 void jegl_uniform_float2(uint32_t location, float x, float y)
@@ -1793,7 +1795,7 @@ void jegl_uniform_float2(uint32_t location, float x, float y)
     // NOTE: This method designed for using after 'jegl_using_resource'
     float value[] = { x, y };
     _current_graphic_thread->m_apis->set_uniform(
-        _current_graphic_thread->m_userdata, location, jegl_shader::FLOAT2, &value);
+        _current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT2, &value);
 }
 
 void jegl_uniform_float3(uint32_t location, float x, float y, float z)
@@ -1801,7 +1803,7 @@ void jegl_uniform_float3(uint32_t location, float x, float y, float z)
     // NOTE: This method designed for using after 'jegl_using_resource'
     float value[] = { x, y, z };
     _current_graphic_thread->m_apis->set_uniform(
-        _current_graphic_thread->m_userdata, location, jegl_shader::FLOAT3, &value);
+        _current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT3, &value);
 }
 
 void jegl_uniform_float4(uint32_t location, float x, float y, float z, float w)
@@ -1809,26 +1811,26 @@ void jegl_uniform_float4(uint32_t location, float x, float y, float z, float w)
     // NOTE: This method designed for using after 'jegl_using_resource'
     float value[] = { x, y, z, w };
     _current_graphic_thread->m_apis->set_uniform(
-        _current_graphic_thread->m_userdata, location, jegl_shader::FLOAT4, &value);
+        _current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT4, &value);
 }
 
 void jegl_uniform_float2x2(uint32_t location, const float (*mat)[2])
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
     _current_graphic_thread->m_apis->set_uniform(
-        _current_graphic_thread->m_userdata, location, jegl_shader::FLOAT2X2, mat);
+        _current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT2X2, mat);
 }
 
 void jegl_uniform_float3x3(uint32_t location, const float (*mat)[3])
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
     _current_graphic_thread->m_apis->set_uniform(
-        _current_graphic_thread->m_userdata, location, jegl_shader::FLOAT3X3, mat);
+        _current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT3X3, mat);
 }
 
 void jegl_uniform_float4x4(uint32_t location, const float (*mat)[4])
 {
     // NOTE: This method designed for using after 'jegl_using_resource'
     _current_graphic_thread->m_apis->set_uniform(
-        _current_graphic_thread->m_userdata, location, jegl_shader::FLOAT4X4, mat);
+        _current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT4X4, mat);
 }

@@ -289,7 +289,7 @@ namespace jeecs::graphic::api::dx11
         context->m_dx_context->RSSetViewports(1, &viewport);
     }
 
-    jegl_context::userdata_t dx11_startup(jegl_context* gthread, const jegl_interface_config* config, bool reboot)
+    jegl_context::graphic_impl_context_t dx11_startup(jegl_context* gthread, const jegl_interface_config* config, bool reboot)
     {
         jegl_dx11_context* context = new jegl_dx11_context;
 
@@ -433,13 +433,13 @@ namespace jeecs::graphic::api::dx11
             gthread,
             [](jegl_context*, jegl_resource* res)
             {
-                auto* resource = std::launder(reinterpret_cast<jedx11_texture*>(res->m_handle.m_ptr));
+                auto* resource = reinterpret_cast<jedx11_texture*>(res->m_handle.m_ptr);
                 return (uint64_t)resource->m_texture_view.Get();
             },
             [](jegl_context* ctx, jegl_resource* res)
             {
-                auto* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx->m_userdata));
-                auto* shader = std::launder(reinterpret_cast<jedx11_shader*>(res->m_handle.m_ptr));
+                auto* context = reinterpret_cast<jegl_dx11_context*>(ctx->m_graphic_impl_context);
+                auto* shader = reinterpret_cast<jedx11_shader*>(res->m_handle.m_ptr);
                 for (auto& sampler : shader->m_samplers)
                 {
                     context->m_dx_context->VSSetSamplers(
@@ -455,10 +455,10 @@ namespace jeecs::graphic::api::dx11
 
         return context;
     }
-    void dx11_pre_shutdown(jegl_context*, jegl_context::userdata_t, bool)
+    void dx11_pre_shutdown(jegl_context*, jegl_context::graphic_impl_context_t, bool)
     {
     }
-    void dx11_shutdown(jegl_context*, jegl_context::userdata_t userdata, bool reboot)
+    void dx11_shutdown(jegl_context*, jegl_context::graphic_impl_context_t userdata, bool reboot)
     {
         jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(userdata));
 
@@ -495,7 +495,7 @@ namespace jeecs::graphic::api::dx11
 #endif
     }
 
-    jegl_update_action dx11_pre_update(jegl_context::userdata_t ctx)
+    jegl_update_action dx11_pre_update(jegl_context::graphic_impl_context_t ctx)
     {
         jegl_dx11_context* context =
             std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
@@ -522,7 +522,7 @@ namespace jeecs::graphic::api::dx11
     }
 
     jegl_update_action dx11_commit_update(
-        jegl_context::userdata_t, jegl_update_action)
+        jegl_context::graphic_impl_context_t, jegl_update_action)
     {
         jegui_update_dx11();
         return jegl_update_action::JEGL_UPDATE_CONTINUE;
@@ -554,7 +554,7 @@ namespace jeecs::graphic::api::dx11
         }
     };
 
-    jegl_resource_blob dx11_create_resource_blob(jegl_context::userdata_t ctx, jegl_resource* resource)
+    jegl_resource_blob dx11_create_resource_blob(jegl_context::graphic_impl_context_t ctx, jegl_resource* resource)
     {
         jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
         switch (resource->m_type)
@@ -1054,7 +1054,7 @@ namespace jeecs::graphic::api::dx11
         return nullptr;
     }
 
-    void dx11_close_resource_blob(jegl_context::userdata_t ctx, jegl_resource_blob blob)
+    void dx11_close_resource_blob(jegl_context::graphic_impl_context_t ctx, jegl_resource_blob blob)
     {
         if (blob != nullptr)
             delete (dx11_resource_blob*)blob;
@@ -1167,7 +1167,7 @@ namespace jeecs::graphic::api::dx11
 
         return jedx11_texture_res;
     }
-    void dx11_init_resource(jegl_context::userdata_t ctx, jegl_resource_blob blob, jegl_resource* resource)
+    void dx11_init_resource(jegl_context::graphic_impl_context_t ctx, jegl_resource_blob blob, jegl_resource* resource)
     {
         jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
         switch (resource->m_type)
@@ -1442,8 +1442,8 @@ namespace jeecs::graphic::api::dx11
             break;
         }
     }
-    void dx11_close_resource(jegl_context::userdata_t ctx, jegl_resource* resource);
-    void dx11_using_resource(jegl_context::userdata_t ctx, jegl_resource* resource)
+    void dx11_close_resource(jegl_context::graphic_impl_context_t ctx, jegl_resource* resource);
+    void dx11_using_resource(jegl_context::graphic_impl_context_t ctx, jegl_resource* resource)
     {
         jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
         switch (resource->m_type)
@@ -1521,7 +1521,7 @@ namespace jeecs::graphic::api::dx11
             break;
         }
     }
-    void dx11_close_resource(jegl_context::userdata_t ctx, jegl_resource* resource)
+    void dx11_close_resource(jegl_context::graphic_impl_context_t ctx, jegl_resource* resource)
     {
         jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
         switch (resource->m_type)
@@ -1572,8 +1572,8 @@ namespace jeecs::graphic::api::dx11
         // 添加：清理资源句柄
         resource->m_handle.m_ptr = nullptr;
     }
-    void dx11_set_uniform(jegl_context::userdata_t ctx, uint32_t location, jegl_shader::uniform_type type, const void* val);
-    void dx11_draw_vertex_with_shader(jegl_context::userdata_t ctx, jegl_resource* vert)
+    void dx11_set_uniform(jegl_context::graphic_impl_context_t ctx, uint32_t location, jegl_shader::uniform_type type, const void* val);
+    void dx11_draw_vertex_with_shader(jegl_context::graphic_impl_context_t ctx, jegl_resource* vert)
     {
         jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
 
@@ -1647,7 +1647,7 @@ namespace jeecs::graphic::api::dx11
         context->m_dx_context->IASetPrimitiveTopology(vertex->m_method);
         context->m_dx_context->DrawIndexed(vertex->m_count, 0, 0);
     }
-    bool dx11_bind_shader(jegl_context::userdata_t ctx, jegl_resource* shader)
+    bool dx11_bind_shader(jegl_context::graphic_impl_context_t ctx, jegl_resource* shader)
     {
         jegl_dx11_context* context = reinterpret_cast<jegl_dx11_context*>(ctx);
 
@@ -1681,7 +1681,7 @@ namespace jeecs::graphic::api::dx11
         return true;
     }
 
-    void dx11_bind_uniform_buffer(jegl_context::userdata_t ctx, jegl_resource* uniformbuf)
+    void dx11_bind_uniform_buffer(jegl_context::graphic_impl_context_t ctx, jegl_resource* uniformbuf)
     {
         jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
 
@@ -1692,7 +1692,7 @@ namespace jeecs::graphic::api::dx11
             uniformbuf_instance->m_binding_place, 1, uniformbuf_instance->m_uniformbuf.GetAddressOf());
     }
 
-    void dx11_bind_texture(jegl_context::userdata_t ctx, jegl_resource* texture, size_t pass)
+    void dx11_bind_texture(jegl_context::graphic_impl_context_t ctx, jegl_resource* texture, size_t pass)
     {
         jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
 
@@ -1706,7 +1706,7 @@ namespace jeecs::graphic::api::dx11
         }
     }
 
-    void dx11_set_rend_to_framebuffer(jegl_context::userdata_t ctx, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
+    void dx11_set_rend_to_framebuffer(jegl_context::graphic_impl_context_t ctx, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
     {
         jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
 
@@ -1759,7 +1759,7 @@ namespace jeecs::graphic::api::dx11
 
         context->m_dx_context->RSSetViewports(1, &viewport);
     }
-    void dx11_clear_framebuffer_color(jegl_context::userdata_t ctx, float clear_color[4])
+    void dx11_clear_framebuffer_color(jegl_context::graphic_impl_context_t ctx, float clear_color[4])
     {
         jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
 
@@ -1773,7 +1773,7 @@ namespace jeecs::graphic::api::dx11
                     target.Get(), clear_color);
         }
     }
-    void dx11_clear_framebuffer_depth(jegl_context::userdata_t ctx)
+    void dx11_clear_framebuffer_depth(jegl_context::graphic_impl_context_t ctx)
     {
         jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
 
@@ -1789,7 +1789,7 @@ namespace jeecs::graphic::api::dx11
                     D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
         }
     }
-    void dx11_set_uniform(jegl_context::userdata_t ctx, uint32_t location, jegl_shader::uniform_type type, const void* val)
+    void dx11_set_uniform(jegl_context::graphic_impl_context_t ctx, uint32_t location, jegl_shader::uniform_type type, const void* val)
     {
         jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
         assert(context->m_current_target_shader != nullptr);

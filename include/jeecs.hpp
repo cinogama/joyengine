@@ -1827,6 +1827,8 @@ struct jegl_interface_config
     // * 在一些平台上无效
     display_mode m_display_mode;
 
+    // 是否允许用户调整窗口大小
+    // * 在一些平台上无效
     bool m_enable_resize;
 
     // 若MSAA值为0，则说明关闭超采样抗锯齿
@@ -1844,7 +1846,11 @@ struct jegl_interface_config
     // 不限制帧率请设置为 SIZE_MAX
     size_t m_fps;
 
+    // 窗口标题
     const char* m_title;
+
+    // 用户数据，针对一些特殊的平台（例如 Metal），需要通过此参数传递一些特定的参数
+    // * 不同图形库可能以不同的方式使用此参数，请根据额外约定使用。
     void* m_userdata;
 };
 
@@ -1865,7 +1871,7 @@ jegl_context [类型]
 */
 struct jegl_context
 {
-    using userdata_t = void*;
+    using graphic_impl_context_t = void*;
     using frame_job_func_t =
         void (*)(jegl_context*, void*, jegl_update_action);
 
@@ -1880,7 +1886,7 @@ struct jegl_context
     jeecs::typing::version_t m_version;
     jegl_interface_config m_config;
     jegl_graphic_api* m_apis;
-    userdata_t m_userdata;
+    graphic_impl_context_t m_graphic_impl_context;
 };
 
 /*
@@ -2251,28 +2257,28 @@ jegl_graphic_api [类型]
 */
 struct jegl_graphic_api
 {
-    using startup_func_t = jegl_context::userdata_t(*)(jegl_context*, const jegl_interface_config*, bool);
-    using shutdown_func_t = void (*)(jegl_context*, jegl_context::userdata_t, bool);
+    using startup_func_t = jegl_context::graphic_impl_context_t(*)(jegl_context*, const jegl_interface_config*, bool);
+    using shutdown_func_t = void (*)(jegl_context*, jegl_context::graphic_impl_context_t, bool);
 
-    using update_func_t = jegl_update_action(*)(jegl_context::userdata_t);
-    using commit_func_t = jegl_update_action(*)(jegl_context::userdata_t, jegl_update_action);
+    using update_func_t = jegl_update_action(*)(jegl_context::graphic_impl_context_t);
+    using commit_func_t = jegl_update_action(*)(jegl_context::graphic_impl_context_t, jegl_update_action);
 
-    using create_blob_func_t = jegl_resource_blob(*)(jegl_context::userdata_t, jegl_resource*);
-    using close_blob_func_t = void (*)(jegl_context::userdata_t, jegl_resource_blob);
+    using create_blob_func_t = jegl_resource_blob(*)(jegl_context::graphic_impl_context_t, jegl_resource*);
+    using close_blob_func_t = void (*)(jegl_context::graphic_impl_context_t, jegl_resource_blob);
 
-    using create_resource_func_t = void (*)(jegl_context::userdata_t, jegl_resource_blob, jegl_resource*);
-    using using_resource_func_t = void (*)(jegl_context::userdata_t, jegl_resource*);
-    using close_resource_func_t = void (*)(jegl_context::userdata_t, jegl_resource*);
+    using create_resource_func_t = void (*)(jegl_context::graphic_impl_context_t, jegl_resource_blob, jegl_resource*);
+    using using_resource_func_t = void (*)(jegl_context::graphic_impl_context_t, jegl_resource*);
+    using close_resource_func_t = void (*)(jegl_context::graphic_impl_context_t, jegl_resource*);
 
-    using bind_ubuffer_func_t = void (*)(jegl_context::userdata_t, jegl_resource*);
-    using bind_shader_func_t = bool (*)(jegl_context::userdata_t, jegl_resource*);
-    using bind_texture_func_t = void (*)(jegl_context::userdata_t, jegl_resource*, size_t);
-    using draw_vertex_func_t = void (*)(jegl_context::userdata_t, jegl_resource*);
+    using bind_ubuffer_func_t = void (*)(jegl_context::graphic_impl_context_t, jegl_resource*);
+    using bind_shader_func_t = bool (*)(jegl_context::graphic_impl_context_t, jegl_resource*);
+    using bind_texture_func_t = void (*)(jegl_context::graphic_impl_context_t, jegl_resource*, size_t);
+    using draw_vertex_func_t = void (*)(jegl_context::graphic_impl_context_t, jegl_resource*);
 
-    using bind_framebuf_func_t = void (*)(jegl_context::userdata_t, jegl_resource*, size_t, size_t, size_t, size_t);
-    using clear_color_func_t = void (*)(jegl_context::userdata_t, float[4]);
-    using clear_depth_func_t = void (*)(jegl_context::userdata_t);
-    using set_uniform_func_t = void (*)(jegl_context::userdata_t, uint32_t, jegl_shader::uniform_type, const void*);
+    using bind_framebuf_func_t = void (*)(jegl_context::graphic_impl_context_t, jegl_resource*, size_t, size_t, size_t, size_t);
+    using clear_color_func_t = void (*)(jegl_context::graphic_impl_context_t, float[4]);
+    using clear_depth_func_t = void (*)(jegl_context::graphic_impl_context_t);
+    using set_uniform_func_t = void (*)(jegl_context::graphic_impl_context_t, uint32_t, jegl_shader::uniform_type, const void*);
 
     /*
     jegl_graphic_api::interface_startup [成员]
@@ -9474,6 +9480,15 @@ namespace jeecs
                 return false;
             }
         public:
+            // 被设计用于自定义的图形同步上下文，用于获取引擎提供的图形配置信息
+            // 
+            // NOTE: 必须在 check_context_ready_block 或 check_context_ready_noblock 确认上下文已
+            //      就绪后才能调用
+            jegl_context* get_graphic_context_after_context_ready() const
+            {
+                assert(in_frame_current_context != nullptr);
+                return in_frame_current_context;
+            }
             bool check_context_ready_block()
             {
                 for (;;)
@@ -12176,13 +12191,11 @@ namespace jeecs
             entry::module_leave(&types);
             je_finish();
         }
-
         void loop()
         {
-            prepare_graphic();
+            (void)prepare_graphic();
             graphic_syncer->loop();
         }
-
     protected:
         enum class frame_update_result
         {
@@ -12190,10 +12203,10 @@ namespace jeecs
             FRAME_UPDATE_READY,
             FRAME_UPDATE_CLOSE_REQUESTED,
         };
-
-        void prepare_graphic()
+        graphic::graphic_syncer_host* prepare_graphic()
         {
             graphic_syncer = new graphic::graphic_syncer_host();
+            return graphic_syncer;
         }
         frame_update_result frame()
         {
