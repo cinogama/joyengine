@@ -204,7 +204,7 @@ public:
     {
         for (;;)
         {
-            if (!check_context_ready_block())
+            if (!m_graphic_host->check_context_ready_block())
                 break; // If the entry script ended, exit the loop.
 
             // Graphic context ready, prepare for macos window.
