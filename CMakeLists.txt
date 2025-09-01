@@ -165,8 +165,8 @@ endif()
 
 ##############################################################################
 
-target_include_directories(joyengine_configs INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
-target_include_directories(joyengine_configs INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/3rd/woolang/include")
+target_include_directories(joyengine_configs INTERFACE PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_include_directories(joyengine_configs INTERFACE PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/3rd/woolang/include")
 
 # Scan /3rd/pkg/* to build the pkg and then static link them into joyecs.
 set(JE4_STATIC_LINKED_PKG_AND_MODULE_LIST "")
