@@ -53,18 +53,18 @@ endif()
 add_library(joyengine_core_configs INTERFACE)
 
 target_include_directories(joyengine_core_configs INTERFACE 
-    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/stb"
-    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/imgui"
-    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/imgui/backends"
-    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/imgui/misc/cpp"
-    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/box2d/include"
-    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/assimp/include"
-    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/glslang/glslang/Include"
-    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/glslang/glslang/Public"
-    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/spirv-cross"
-    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/imgui-node-editor"
-    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/ImGuiColorTextEdit"
-    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/openal-soft/include")
+    "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/stb"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/imgui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/imgui/backends"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/imgui/misc/cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/box2d/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/assimp/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/glslang/glslang/Include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/glslang/glslang/Public"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/spirv-cross"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/imgui-node-editor"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/ImGuiColorTextEdit"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/openal-soft/include")
 
 set(imgui_srcs    
     "../3rd/imgui/imconfig.h"
@@ -84,7 +84,7 @@ if (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES300_GAPI OR JE4_ENABLE_WEBGL
         target_compile_definitions(joyengine_core_configs INTERFACE -DJE_ENABLE_GL330_GAPI)
 
         target_include_directories(joyengine_core_configs INTERFACE 
-            PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/glew/include")
+            "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/glew/include")
 
         if (MSVC)
             list(APPEND jeecs_graphic_libs OpenGL32)
@@ -99,7 +99,7 @@ if (JE4_ENABLE_OPENGL330_GAPI OR JE4_ENABLE_OPENGLES300_GAPI OR JE4_ENABLE_WEBGL
 
         if (WIN32)
             target_include_directories(joyengine_core_configs INTERFACE 
-                PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/opengles_env_w64/include")
+                "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/opengles_env_w64/include")
             list(APPEND jeecs_graphic_libs "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/opengles_env_w64/libEGL.lib")
             list(APPEND jeecs_graphic_libs "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/opengles_env_w64/libGLESv2.lib")
         else()
@@ -146,7 +146,7 @@ if (JE4_ENABLE_METAL_GAPI AND APPLE)
     find_library(QUARTZCORE_FRAMEWORK QuartzCore REQUIRED)
 
     target_include_directories(joyengine_core_configs INTERFACE 
-            PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/metal-cpp")
+            "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/metal-cpp")
 endif()
 
 # Vulkan 1.3
@@ -161,7 +161,7 @@ if (JE4_ENABLE_VULKAN130_GAPI)
     if (APPLE)
         # Use MoltenVK for macOS/iOS.
         target_include_directories(joyengine_core_configs INTERFACE 
-            PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/moltenvk/MoltenVK/include")
+            "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/moltenvk/MoltenVK/include")
 
         # Find static lib in ../3rd/moltenvk/MoltenVK/static    
 
@@ -194,7 +194,7 @@ if (JE4_ENABLE_VULKAN130_GAPI)
         endif()
     else()
          target_include_directories(joyengine_core_configs INTERFACE 
-            PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/vulkan/include")
+            "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/vulkan/include")
         target_compile_definitions(joyengine_core_configs INTERFACE
             -DIMGUI_IMPL_VULKAN_NO_PROTOTYPES)
     endif()
@@ -218,7 +218,7 @@ if (JE4_ENABLE_OPENGL330_GAPI OR
             "../3rd/imgui/backends/imgui_impl_android.h")
     else()
         target_include_directories(joyengine_core_configs INTERFACE 
-            PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/glfw/include")
+            "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/glfw/include")
 
         if (NOT JE4_ENABLE_WEBGL20_GAPI)
             # Use built-in glfw3 for webgl target, so we don't need to build glfw3.
