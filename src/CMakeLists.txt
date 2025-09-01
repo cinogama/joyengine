@@ -302,8 +302,8 @@ if (JE4_ENABLE_SHADER_WRAP_GENERATOR)
 endif()
 
 target_link_libraries(joyecs PRIVATE 
-    joyengine_configs
-    joyengine_core_configs
+    PUBLIC joyengine_configs
+    PUBLIC joyengine_core_configs
     ${jeecs_system_libs}
     ${jeecs_graphic_libs}
     ${JE4_STATIC_LINKED_PKG_AND_MODULE_LIST}
