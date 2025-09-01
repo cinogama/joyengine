@@ -90,6 +90,8 @@
 #   include <TargetConditionals.h>
 #   if TARGET_OS_MAC
 #       define JE4_CURRENT_PLATFORM JE4_PLATFORM_MACOS
+#   else
+#       error Unsupported Apple platform.
 #   endif
 #elif defined(__EMSCRIPTEN__)
 #define JE4_CURRENT_PLATFORM JE4_PLATFORM_WEBGL
