@@ -260,9 +260,7 @@ public:
 int main(int argc, char** argv)
 {
     ///////////////////////////////// DEV /////////////////////////////////
-    game_universe u = game_universe::create_universe();
-
-  
+    jeecs::game_universe u = jeecs::game_universe::create_universe();
 
     std::thread([&]() {
         
@@ -286,5 +284,5 @@ int main(int argc, char** argv)
     je_macos_context context(argc, argv);
     context.macos_loop();
 
-    game_universe::destroy_universe(u);
+    jeecs::game_universe::destroy_universe(u);
 }
