@@ -259,6 +259,32 @@ public:
 
 int main(int argc, char** argv)
 {
+    ///////////////////////////////// DEV /////////////////////////////////
+    game_universe u = game_universe::create_universe();
+
+  
+
+    std::thread([&]() {
+        
+        je_clock_sleep_for(3.0);
+        jeecs::debug::loginfo("Creating graphic host...");
+
+        jegl_interface_config config;
+        config.m_display_mode = jegl_interface_config::display_mode::WINDOWED;
+        config.m_enable_resize = true;
+        config.m_msaa = 0;
+        config.m_width = 512;
+        config.m_height = 512;
+        config.m_fps = 0;
+        config.m_title = "Demo";
+        config.m_userdata = nullptr;
+
+        jegl_uhost_get_or_create_for_universe(u.handle(), &config);
+
+        }).detach();
+
     je_macos_context context(argc, argv);
     context.macos_loop();
+
+    game_universe::destroy_universe(u);
 }
