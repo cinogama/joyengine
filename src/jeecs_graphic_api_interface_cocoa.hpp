@@ -8,15 +8,17 @@
 
 namespace jeecs::graphic::metal
 {
-    struct window_and_device
+    struct window_view_layout
     {
         NS::Window* m_window;
-
-        MTL::Device* m_metal_device;
         MTK::View* m_metal_view;
 
-        window_and_device(const char* title, double width, double height)
+        JECS_DISABLE_MOVE_AND_COPY(window_and_device);
+
+        window_view_layout(
+            const char* title, double width, double height, MTL::Device* device)
         {
+            assert(device != nullptr);
             CGRect frame = (CGRect){ {100.0, 100.0}, {width, height} };
 
             m_window = NS::Window::alloc()->init(
@@ -25,15 +27,12 @@ namespace jeecs::graphic::metal
                 NS::BackingStoreBuffered,
                 false);
 
-            m_metal_device = MTL::CreateSystemDefaultDevice();
-            assert(m_metal_device != nullptr);
-
             m_metal_view =
                 MTK::View::alloc()->init(frame, m_metal_device);
             m_metal_view->setColorPixelFormat(
                 MTL::PixelFormat::PixelFormatBGRA8Unorm_sRGB);
             m_metal_view->setClearColor(
-                MTL::ClearColor::Make(1.0, 0.0, 0.0, 1.0));
+                MTL::ClearColor::Make(0.0, 0.0, 0.0, 1.0));
 
             m_window->setContentView(m_metal_view);
 
@@ -41,6 +40,11 @@ namespace jeecs::graphic::metal
                 NS::String::string(
                     title, NS::StringEncoding::UTF8StringEncoding));
             m_window->makeKeyAndOrderFront(nullptr);
+        }
+        ~window_view_layout()
+        {
+            m_metal_view->release();
+            m_window->release();
         }
     };
 
@@ -90,14 +94,7 @@ namespace jeecs::graphic::metal
             return pMainMenu->autorelease();
         }
         graphic_syncer_host* m_engine_graphic_host;
-    public:
-        struct user_interface_context_t
-        {
-            NS::Window* m_window;
 
-            MTL::Device* m_metal_device;
-            MTK::View* m_metal_view;
-        };
     private:
         bool m_graphic_request_to_close;
     public:

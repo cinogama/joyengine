@@ -18,11 +18,21 @@ namespace jeecs::graphic::api::metal
     {
         JECS_DISABLE_MOVE_AND_COPY(jegl_metal_context);
 
-        jegl_metal_context() = default;
-        ~jegl_metal_context() = default;
+        MTL::Device*    m_metal_device;
+        std::unique_ptr<jeecs::graphic::metal::window_view_layout> 
+                        m_window_and_device;
 
-        std::unique_ptr<jeecs::graphic::metal::window_and_device>
-            m_window_and_device;
+        jegl_metal_context()
+        {
+            context->m_metal_device = 
+                MTL::CreateSystemDefaultDevice();
+        }
+        ~jegl_metal_context()
+        {
+            // Must release window before device.
+            m_window_and_device.reset();
+            m_metal_device->release();
+        }
     };
 
     jegl_context::graphic_impl_context_t
@@ -42,11 +52,13 @@ namespace jeecs::graphic::api::metal
         jegl_metal_context* context = new jegl_metal_context();
 
         context->m_window_and_device =
-            std::make_unique<jeecs::graphic::metal::window_and_device>(
+            std::make_unique<jeecs::graphic::metal::window_view_layout>(
                 cfg->m_title,
                 (double)cfg->m_width,
-                (double)cfg->m_height);
+                (double)cfg->m_height,
+                context->m_metal_device);
 
+        // Pass the window and view to `applicationDidFinishLaunching`
         const_cast<jegl_interface_config*>(cfg)->m_userdata =
             context->m_window_and_device.get();
 
