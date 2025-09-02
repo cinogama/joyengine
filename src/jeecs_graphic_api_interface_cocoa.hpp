@@ -13,7 +13,7 @@ namespace jeecs::graphic::metal
         NS::Window* m_window;
         MTK::View* m_metal_view;
 
-        JECS_DISABLE_MOVE_AND_COPY(window_and_device);
+        JECS_DISABLE_MOVE_AND_COPY(window_view_layout);
 
         window_view_layout(
             const char* title, double width, double height, MTL::Device* device)
@@ -143,10 +143,10 @@ namespace jeecs::graphic::metal
                 m_engine_graphic_host->get_graphic_context_after_context_ready();
             auto& config = engine_raw_graphic_context->m_config;
 
-            window_and_device* window_and_device_instance =
-                reinterpret_cast<window_and_device*>(config.m_userdata);
+            window_view_layout* window_view_layout_instance =
+                reinterpret_cast<window_view_layout*>(config.m_userdata);
 
-            window_and_device_instance->m_metal_view->setDelegate(this);
+            window_view_layout_instance->m_metal_view->setDelegate(this);
 
             application->activateIgnoringOtherApps(true);
         }
