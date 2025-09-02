@@ -137,12 +137,14 @@ namespace jeecs::graphic::api::metal
             jegl_context* engine_raw_graphic_context =
                 m_engine_graphic_host->get_graphic_context_after_context_ready();
 
-            jegl_metal_context* engine_graphic_context
-                reinterpret_cast<jegl_metal_context*>(engine_raw_graphic_context->m_graphic_impl_context);
+            jegl_metal_context* engine_graphic_context =
+                reinterpret_cast<jegl_metal_context*>(
+                    engine_raw_graphic_context->m_graphic_impl_context);
 
             const jegl_interface_config& engine_raw_graphic_config =
                 engine_raw_graphic_context->m_config;
 
+            // Init m_user_interface_context.
             engine_graphic_context->m_user_interface_context = &metal_ui_context;
 
             CGRect frame = (CGRect){
