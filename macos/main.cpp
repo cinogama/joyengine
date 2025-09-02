@@ -19,71 +19,15 @@ class je_macos_context : public jeecs::game_engine_context
 
     jeecs::graphic::graphic_syncer_host* m_graphic_host;
 
-    class macos_je_mtk_view_delegate : public MTK::ViewDelegate
-    {
-        bool m_graphic_request_to_close;
-        jeecs::graphic::graphic_syncer_host* m_je_graphic_host;
-        jeecs::graphic::metal::metal_interface_context* m_metal_interface_context;
-
-    public:
-        macos_je_mtk_view_delegate(
-            NS::Window* graphic_window,
-            jeecs::graphic::graphic_syncer_host* graphic_host)
-            : MTK::ViewDelegate()
-            , m_graphic_request_to_close(false)
-            , m_je_graphic_host(graphic_host)
-            , m_metal_interface_context(nullptr)
-        {
-            auto* engine_raw_graphic_context =
-                m_je_graphic_host->get_graphic_context_after_context_ready();
-
-            engine_raw_graphic_context->m_config.m_userdata =
-                m_metal_interface_context;
-
-            m_metal_interface_context =
-                new jeecs::graphic::metal::metal_interface_context(
-                    graphic_window, this);
-        }
-        virtual ~macos_je_mtk_view_delegate() override
-        {
-            if (!m_graphic_request_to_close)
-            {
-                // NOTE: view delegate has been destructed, but graphic host
-                //  has not been requested to close.
-                // This may happen when the window is closed by user in macos.
-
-                jegl_sync_shutdown(
-                    m_je_graphic_host->get_graphic_context_after_context_ready(),
-                    false);
-            }
-            delete m_metal_interface_context;
-        }
-
-        virtual void drawInMTKView(MTK::View* pView) override
-        {
-            if (m_graphic_request_to_close)
-                // Graphic has been requested to close.
-                return;
-
-            // TODO: Update gui context here.
-            // m_metal_interface_context->m_gui_context.xxx = ...;
-
-            if (!m_je_graphic_host->frame())
-            {
-                // TODO: Graphic requested to close, close windows and exit app.
-                m_graphic_request_to_close = true;
-            }
-        }
-    };
-    class macos_je_application_delegate : public NS::ApplicationDelegate
+    class macos_application_delegate : public NS::ApplicationDelegate
     {
         jeecs::graphic::graphic_syncer_host*
             m_je_graphic_host;
 
         NS::Window* m_window;
-        macos_je_mtk_view_delegate* m_view_delegate;
+        jeecs::graphic::metal::metal_view_delegate* m_view_delegate;
     public:
-        macos_je_application_delegate(
+        macos_application_delegate(
             jeecs::graphic::graphic_syncer_host* graphic_host)
             : NS::ApplicationDelegate()
             , m_je_graphic_host(graphic_host)
@@ -93,7 +37,7 @@ class je_macos_context : public jeecs::game_engine_context
             , m_view_delegate(nullptr)
         {
         }
-        ~macos_je_application_delegate()
+        ~macos_application_delegate()
         {
             delete m_view_delegate;
             m_window->release();
@@ -172,8 +116,9 @@ class je_macos_context : public jeecs::game_engine_context
                 NS::BackingStoreBuffered,
                 false);
 
-            m_view_delegate = new macos_je_mtk_view_delegate(
-                m_window, m_je_graphic_host);
+            jeecs::graphic::metal::m_view_delegate =
+                new metal_view_delegate(
+                    m_window, m_je_graphic_host);
 
             m_window->setTitle(
                 NS::String::string(
@@ -212,7 +157,7 @@ public:
             NS::AutoreleasePool* auto_release_pool =
                 NS::AutoreleasePool::alloc()->init();
 
-            macos_je_application_delegate del(m_graphic_host);
+            macos_application_delegate del(m_graphic_host);
 
             NS::Application* shared_application = NS::Application::sharedApplication();
             shared_application->setDelegate(&del);
