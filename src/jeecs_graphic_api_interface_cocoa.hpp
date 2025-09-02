@@ -68,7 +68,7 @@ namespace jeecs::graphic::metal
     public:
         application_delegate(graphic_syncer_host* ready_graphic_host)
             : NS::ApplicationDelegate()
-            , NS::ViewDelegate()
+            , MTK::ViewDelegate()
             , m_engine_graphic_host(ready_graphic_host)
             , m_graphic_request_to_close(false)
             , m_ui_context(std::nullopt)
