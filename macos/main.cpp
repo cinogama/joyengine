@@ -11,9 +11,7 @@
 #define MTK_PRIVATE_IMPLEMENTATION
 #define CA_PRIVATE_IMPLEMENTATION
 
-#include <Metal/Metal.hpp>
-#include <AppKit/AppKit.hpp>
-#include <MetalKit/MetalKit.hpp>
+#include "../src/jeecs_graphic_api_interface_cocoa.hpp"
 
 class je_macos_context : public jeecs::game_engine_context
 {
@@ -21,43 +19,11 @@ class je_macos_context : public jeecs::game_engine_context
 
     jeecs::graphic::graphic_syncer_host* m_graphic_host;
 
-    class macos_demo_renderer
-    {
-    public:
-        macos_demo_renderer(MTL::Device* pDevice)
-            : _pDevice(pDevice->retain())
-        {
-            _pCommandQueue = _pDevice->newCommandQueue();
-        }
-        ~macos_demo_renderer()
-        {
-            _pCommandQueue->release();
-            _pDevice->release();
-        }
-        void draw(MTK::View* pView)
-        {
-            NS::AutoreleasePool* pPool = NS::AutoreleasePool::alloc()->init();
-
-            MTL::CommandBuffer* pCmd = _pCommandQueue->commandBuffer();
-            MTL::RenderPassDescriptor* pRpd = pView->currentRenderPassDescriptor();
-            MTL::RenderCommandEncoder* pEnc = pCmd->renderCommandEncoder(pRpd);
-            pEnc->endEncoding();
-            pCmd->presentDrawable(pView->currentDrawable());
-            pCmd->commit();
-
-            pPool->release();
-        }
-
-    private:
-        MTL::Device* _pDevice;
-        MTL::CommandQueue* _pCommandQueue;
-    };
-
     class macos_je_mtk_view_delegate : public MTK::ViewDelegate
     {
         bool m_graphic_request_to_close;
         jeecs::graphic::graphic_syncer_host* m_je_graphic_host;
-        macos_demo_renderer* m_renderer;
+        jeecs::graphic::metal::metal_interface_context* m_metal_interface_context;
 
     public:
         macos_je_mtk_view_delegate(
@@ -66,8 +32,14 @@ class je_macos_context : public jeecs::game_engine_context
             : MTK::ViewDelegate()
             , m_graphic_request_to_close(false)
             , m_je_graphic_host(graphic_host)
-            , m_renderer(new macos_demo_renderer(pDevice))
+            , m_metal_interface_context(
+                new jeecs::graphic::metal::metal_interface_context(pDevice))
         {
+            auto* engine_raw_graphic_context = 
+                m_je_graphic_host->get_graphic_context_after_context_ready();
+
+            engine_raw_graphic_context->m_config.m_userdata = 
+                m_metal_interface_context;
         }
         virtual ~macos_je_mtk_view_delegate() override
         {
@@ -81,21 +53,23 @@ class je_macos_context : public jeecs::game_engine_context
                     m_je_graphic_host->get_graphic_context_after_context_ready(), 
                     false);
             }
-            delete m_renderer;
+            delete m_metal_interface_context;
         }
 
         virtual void drawInMTKView(MTK::View* pView) override
         {
-            //if (m_graphic_request_to_close)
-            //    // Graphic has been requested to close.
-            //    return;
+            if (m_graphic_request_to_close)
+                // Graphic has been requested to close.
+                return;
 
-            //if (!m_je_graphic_host->frame())
-            //{
-            //    // TODO: Graphic requested to close, close windows and exit app.
-            //    m_graphic_request_to_close = true;
-            //}
-            m_renderer->draw(pView);
+            // Update gui context here.
+            m_metal_interface_context->m_gui_context.m_draw_target_view = pView;
+
+            if (!m_je_graphic_host->frame())
+            {
+                // TODO: Graphic requested to close, close windows and exit app.
+                m_graphic_request_to_close = true;
+            }
         }
     };
     class macos_je_application_delegate : public NS::ApplicationDelegate
@@ -259,30 +233,6 @@ public:
 
 int main(int argc, char** argv)
 {
-    ///////////////////////////////// DEV /////////////////////////////////
-    jeecs::game_universe u = jeecs::game_universe::create_universe();
-
-    std::thread([&]() {
-        
-        je_clock_sleep_for(3.0);
-        jeecs::debug::loginfo("Creating graphic host...");
-
-        jegl_interface_config config;
-        config.m_display_mode = jegl_interface_config::display_mode::WINDOWED;
-        config.m_enable_resize = true;
-        config.m_msaa = 0;
-        config.m_width = 512;
-        config.m_height = 512;
-        config.m_fps = 0;
-        config.m_title = "Demo";
-        config.m_userdata = nullptr;
-
-        jegl_uhost_get_or_create_for_universe(u.handle(), &config);
-
-        }).detach();
-
     je_macos_context context(argc, argv);
     context.macos_loop();
-
-    jeecs::game_universe::destroy_universe(u);
 }

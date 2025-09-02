@@ -20,6 +20,12 @@ set(WO_SUPPORT_ASMJIT               OFF CACHE BOOL "Disable JIT on MacOS" FORCE)
 
 # Searches for a package provided by the game activity dependency
 set(JE4MACOS_PATH "./../")
+
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${JE4MACOS_PATH}/build")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${JE4MACOS_PATH}/build")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${JE4MACOS_PATH}/build")
+set(LIBRARY_OUTPUT_PATH "${JE4MACOS_PATH}/build")
+
 add_subdirectory(${JE4MACOS_PATH} joyengineecs.out)
 
 find_library(METAL_FRAMEWORK Metal
