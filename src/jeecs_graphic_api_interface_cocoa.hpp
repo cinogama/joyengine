@@ -1,101 +1,115 @@
 #pragma once
 
+#include "jeecs.hpp"
+
 #include <Metal/Metal.hpp>
 #include <AppKit/AppKit.hpp>
 #include <MetalKit/MetalKit.hpp>
 
+#include <optional>
+
 namespace jeecs::graphic::metal
 {
-    struct metal_interface_context
+    class application_delegate 
+        : public NS::ApplicationDelegate
+        , public NS::ViewDelegate
     {
-        JECS_DISABLE_MOVE_AND_COPY(metal_interface_context);
-
-        MTL::Device* m_device;
-        MTK::View* m_draw_target_view;
-
-        // NOTE: 从外部 GUI 同步得到的上下文，每帧开始前同步一次，保证在绘制回调期间始终有效
-        struct gui_context_t
+        static NS::Menu* createMenuBar()
         {
-        };
-        gui_context_t m_gui_context;
+            using NS::StringEncoding::UTF8StringEncoding;
 
-        metal_interface_context(
-            NS::Window* graphic_window,
-            MTK::ViewDelegate* view_delegate)
-            : m_gui_context{}
-        {
-            m_device = MTL::CreateSystemDefaultDevice();
-            m_draw_target_view = MTK::View::alloc()->init(frame, m_device);
+            NS::Menu* pMainMenu = NS::Menu::alloc()->init();
+            NS::MenuItem* pAppMenuItem = NS::MenuItem::alloc()->init();
+            NS::Menu* pAppMenu = NS::Menu::alloc()->init(NS::String::string("Appname", UTF8StringEncoding));
 
-            m_mtk_view->setColorPixelFormat(MTL::PixelFormat::PixelFormatBGRA8Unorm_sRGB);
-            m_mtk_view->setClearColor(MTL::ClearColor::Make(1.0, 0.0, 0.0, 1.0));
+            NS::String* appName = NS::RunningApplication::currentApplication()->localizedName();
+            NS::String* quitItemName = NS::String::string("Quit ", UTF8StringEncoding)->stringByAppendingString(appName);
+            SEL quitCb = NS::MenuItem::registerActionCallback("appQuit", [](void*, SEL, const NS::Object* pSender) {
+                auto pApp = NS::Application::sharedApplication();
+                pApp->terminate(pSender);
+                });
 
-            m_mtk_view->setDelegate(view_delegate);
-            graphic_window->setContentView(m_mtk_view);
+            NS::MenuItem* pAppQuitItem = pAppMenu->addItem(quitItemName, quitCb, NS::String::string("q", UTF8StringEncoding));
+            pAppQuitItem->setKeyEquivalentModifierMask(NS::EventModifierFlagCommand);
+            pAppMenuItem->setSubmenu(pAppMenu);
+
+            NS::MenuItem* pWindowMenuItem = NS::MenuItem::alloc()->init();
+            NS::Menu* pWindowMenu = NS::Menu::alloc()->init(NS::String::string("Window", UTF8StringEncoding));
+
+            SEL closeWindowCb = NS::MenuItem::registerActionCallback("windowClose", [](void*, SEL, const NS::Object*) {
+                auto pApp = NS::Application::sharedApplication();
+                pApp->windows()->object< NS::Window >(0)->close();
+                });
+            NS::MenuItem* pCloseWindowItem = pWindowMenu->addItem(NS::String::string("Close Window", UTF8StringEncoding), closeWindowCb, NS::String::string("w", UTF8StringEncoding));
+            pCloseWindowItem->setKeyEquivalentModifierMask(NS::EventModifierFlagCommand);
+
+            pWindowMenuItem->setSubmenu(pWindowMenu);
+
+            pMainMenu->addItem(pAppMenuItem);
+            pMainMenu->addItem(pWindowMenuItem);
+
+            pAppMenuItem->release();
+            pWindowMenuItem->release();
+            pAppMenu->release();
+            pWindowMenu->release();
+
+            return pMainMenu->autorelease();
         }
-        ~metal_interface_context()
-        {
-            m_draw_target_view->release();
-            m_device->release();
-        }
-    };
-
-    class metal_view_delegate : public MTK::ViewDelegate
-    {
-        bool m_graphic_request_to_close;
-        graphic_syncer_host* m_je_graphic_host;
-
-        metal_interface_context* m_metal_interface_context;
-
+        graphic_syncer_host* m_engine_graphic_host;
     public:
-        metal_view_delegate(
-            NS::Window* graphic_window,
-            graphic_syncer_host* graphic_host)
-            : MTK::ViewDelegate()
-            , m_graphic_request_to_close(false)
-            , m_je_graphic_host(graphic_host)
-            , m_metal_interface_context(nullptr)
+        struct user_interface_context_t
         {
-            auto* engine_raw_graphic_context =
-                m_je_graphic_host->get_graphic_context_after_context_ready();
-
-            m_metal_interface_context =
-                new metal_interface_context(
-                    graphic_window,
-                    this);
-
-            engine_raw_graphic_context->m_config.m_userdata =
-                m_metal_interface_context;
+            NS::Window* m_window;
+            MTL::Device* m_metal_device;
+        };
+    private:
+        std::optional<user_interface_context_t> m_ui_context;
+    public:
+        application_delegate(graphic_syncer_host* ready_graphic_host)
+            : NS::ApplicationDelegate()
+            , NS::ViewDelegate()
+            , m_engine_graphic_host(ready_graphic_host)
+        {
         }
-        virtual ~metal_view_delegate() override
+        ~application_delegate()
         {
-            if (!m_graphic_request_to_close)
+            if (m_ui_context.has_value())
             {
-                // NOTE: view delegate has been destructed, but graphic host
-                //  has not been requested to close.
-                // This may happen when the window is closed by user in macos.
-
-                jegl_sync_shutdown(
-                    m_je_graphic_host->get_graphic_context_after_context_ready(),
-                    false);
+                auto& context = m_ui_context.value();
             }
-            delete m_metal_interface_context;
         }
-
-        virtual void drawInMTKView(MTK::View* pView) override
+    public:
+        virtual void applicationWillFinishLaunching(
+            NS::Notification* pNotification) override
         {
-            if (m_graphic_request_to_close)
-                // Graphic has been requested to close.
-                return;
+            NS::Application* application =
+                reinterpret_cast<NS::Application*>(pNotification->object());
 
-            // TODO: Update gui context here.
-            // m_metal_interface_context->m_gui_context.xxx = ...;
+            application->setMainMenu(createMenuBar());
+            application->setActivationPolicy(NS::ActivationPolicy::ActivationPolicyRegular);
+        }
+        virtual void applicationDidFinishLaunching(
+            NS::Notification* pNotification) override
+        {
+            NS::Application* application = 
+                reinterpret_cast<NS::Application*>(pNotification->object());
 
-            if (!m_je_graphic_host->frame())
-            {
-                // TODO: Graphic requested to close, close windows and exit app.
-                m_graphic_request_to_close = true;
-            }
+            assert(m_engine_graphic_host != nullptr);
+            auto& context = m_ui_context.emplace();
+
+            jegl_context* engine_raw_graphic_context =
+                m_engine_graphic_host->get_graphic_context_after_context_ready();
+
+            jegl_interface_config& engine_raw_graphic_config =
+                engine_raw_graphic_context->m_config;
+
+
+            context.
+        }
+        virtual bool applicationShouldTerminateAfterLastWindowClosed(
+            NS::Application* pSender) override
+        {
+            return true;
         }
     };
 }
