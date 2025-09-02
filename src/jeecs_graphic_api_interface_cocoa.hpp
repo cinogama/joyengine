@@ -10,7 +10,7 @@ namespace jeecs::graphic::metal
 {
     class application_delegate
         : public NS::ApplicationDelegate
-        , public NS::ViewDelegate
+        , public MTK::ViewDelegate
     {
         static NS::Menu* createMenuBar()
         {
