@@ -138,15 +138,34 @@ if (JE4_ENABLE_DX11_GAPI AND WIN32)
 endif()
 
 # Metal
-if (JE4_ENABLE_METAL_GAPI AND APPLE)
-    find_library(METAL_FRAMEWORK Metal REQUIRED)
-    find_library(METALKIT_FRAMEWORK MetalKit REQUIRED)
-    find_library(APPKIT_FRAMEWORK AppKit REQUIRED)
-    find_library(FOUNDATION_FRAMEWORK Foundation REQUIRED)
-    find_library(QUARTZCORE_FRAMEWORK QuartzCore REQUIRED)
+if ((JE4_ENABLE_METAL_GAPI OR JE4_ENABLE_VULKAN130_GAPI) AND APPLE)
+    find_library(METAL_FRAMEWORK Metal
+        PATHS "../3rd/metal-cpp"
+        REQUIRED)
+    find_library(METALKIT_FRAMEWORK MetalKit
+        PATHS "../3rd/metal-cpp"
+        REQUIRED)
+    find_library(APPKIT_FRAMEWORK AppKit
+        PATHS "../3rd/metal-cpp"
+        REQUIRED)
+    find_library(FOUNDATION_FRAMEWORK Foundation
+        PATHS "../3rd/metal-cpp"
+        REQUIRED)
+    find_library(QUARTZCORE_FRAMEWORK QuartzCore
+        PATHS "../3rd/metal-cpp"
+        REQUIRED)
 
-    target_include_directories(joyengine_core_configs INTERFACE 
-            "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/metal-cpp")
+    target_link_libraries(joyengine_core_configs INTERFACE
+        ${METAL_FRAMEWORK}
+        ${METALKIT_FRAMEWORK}
+        ${APPKIT_FRAMEWORK}
+        ${FOUNDATION_FRAMEWORK}
+        ${QUARTZCORE_FRAMEWORK})
+
+    if (JE4_ENABLE_METAL_GAPI)
+        target_include_directories(joyengine_core_configs INTERFACE 
+            "../3rd/metal-cpp")
+    endif()
 endif()
 
 # Vulkan 1.3
@@ -164,18 +183,9 @@ if (JE4_ENABLE_VULKAN130_GAPI)
             "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/moltenvk/MoltenVK/include")
 
         # Find static lib in ../3rd/moltenvk/MoltenVK/static    
-
-        # TODO: Check platform and specify MoltenVK path.
         set(JE4_MOLTENVK_STATIC_LIBS 
             "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/moltenvk/MoltenVK/static")
 
-        # set(JE4_MOLTENVK_PATH "macos-arm64_x86_64")
-
-        # find_library(MOLTENVK_FRAMEWORK
-        #     NAMES MoltenVK
-        #     PATHS 
-        #     "${JE4_MOLTENVK_STATIC_LIBS}/MoltenVK.xcframework/${JE4_MOLTENVK_PATH}"
-        #     NO_DEFAULT_PATH)
         find_library(MOLTENVK_FRAMEWORK
             NAMES MoltenVK
             PATHS "${JE4_MOLTENVK_STATIC_LIBS}"
@@ -183,12 +193,7 @@ if (JE4_ENABLE_VULKAN130_GAPI)
         
         if(MOLTENVK_FRAMEWORK)
             target_link_libraries(joyengine_core_configs INTERFACE 
-                ${MOLTENVK_FRAMEWORK}
-                "-framework Metal"
-                "-framework QuartzCore"
-                "-framework IOSurface"
-                "-framework IOKit"
-                "-framework Foundation")
+                ${MOLTENVK_FRAMEWORK})
         else()
             message(FATAL_ERROR "MoltenVK framework not found")
         endif()
