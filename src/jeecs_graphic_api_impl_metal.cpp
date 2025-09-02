@@ -23,7 +23,8 @@ namespace jeecs::graphic::api::metal
         jeecs::graphic::metal::window_view_layout*
                             m_window_and_view_layout;
 
-        NS::AutoreleasePool* m_frame_auto_release_pool_init_pre_update_and_release_after_commit;
+        NS::AutoreleasePool* 
+                            m_frame_auto_release_pool_init_pre_update_and_release_after_commit;
 
         jegl_metal_context(const jegl_interface_config* cfg)
         {
@@ -41,7 +42,7 @@ namespace jeecs::graphic::api::metal
         ~jegl_metal_context()
         {
             // Must release window before device.
-            delete m_window_and_view_layout
+            delete m_window_and_view_layout;
             m_command_queue->release();
             m_metal_device->release();
         }
@@ -61,7 +62,7 @@ namespace jeecs::graphic::api::metal
             },
             [](jegl_context*, jegl_resource*) {});*/
 
-        jegl_metal_context* context = new jegl_metal_context();
+        jegl_metal_context* context = new jegl_metal_context(cfg);
 
         // Pass the window and view to `applicationDidFinishLaunching`
         const_cast<jegl_interface_config*>(cfg)->m_userdata =
@@ -108,8 +109,10 @@ namespace jeecs::graphic::api::metal
         MTL::RenderPassDescriptor* pRpd = 
             metal_context->m_window_and_view_layout->m_metal_view->currentRenderPassDescriptor();
         MTL::RenderCommandEncoder* pEnc = pCmd->renderCommandEncoder(pRpd);
+
         pEnc->endEncoding();
-        pCmd->presentDrawable(pView->currentDrawable());
+        pCmd->presentDrawable(
+            metal_context->m_window_and_view_layout->m_metal_view->currentDrawable());
         pCmd->commit();
 
         metal_context->m_frame_auto_release_pool_init_pre_update_and_release_after_commit->release();
