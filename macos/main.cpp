@@ -39,7 +39,7 @@ public:
             NS::AutoreleasePool* auto_release_pool =
                 NS::AutoreleasePool::alloc()->init();
 
-            macos_application_delegate del(m_graphic_host);
+            jeecs::graphic::metal::application_delegate del(m_graphic_host);
 
             NS::Application* shared_application = NS::Application::sharedApplication();
             shared_application->setDelegate(&del);
@@ -52,6 +52,11 @@ public:
 
 int main(int argc, char** argv)
 {
+    ///////////////////////////////// DEV /////////////////////////////////
+    jeecs::game_universe u = jeecs::game_universe::create_universe();
+
     je_macos_context context(argc, argv);
     context.macos_loop();
+
+    jeecs::game_universe::destroy_universe(u);
 }
