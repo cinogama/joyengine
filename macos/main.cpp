@@ -27,19 +27,22 @@ class je_macos_context : public jeecs::game_engine_context
 
     public:
         macos_je_mtk_view_delegate(
-            MTL::Device* pDevice,
+            NS::Window* graphic_window,
             jeecs::graphic::graphic_syncer_host* graphic_host)
             : MTK::ViewDelegate()
             , m_graphic_request_to_close(false)
             , m_je_graphic_host(graphic_host)
-            , m_metal_interface_context(
-                new jeecs::graphic::metal::metal_interface_context(pDevice))
+            , m_metal_interface_context(nullptr)
         {
-            auto* engine_raw_graphic_context = 
+            auto* engine_raw_graphic_context =
                 m_je_graphic_host->get_graphic_context_after_context_ready();
 
-            engine_raw_graphic_context->m_config.m_userdata = 
+            engine_raw_graphic_context->m_config.m_userdata =
                 m_metal_interface_context;
+
+            m_metal_interface_context =
+                new jeecs::graphic::metal::metal_interface_context(
+                    graphic_window, this);
         }
         virtual ~macos_je_mtk_view_delegate() override
         {
@@ -50,7 +53,7 @@ class je_macos_context : public jeecs::game_engine_context
                 // This may happen when the window is closed by user in macos.
 
                 jegl_sync_shutdown(
-                    m_je_graphic_host->get_graphic_context_after_context_ready(), 
+                    m_je_graphic_host->get_graphic_context_after_context_ready(),
                     false);
             }
             delete m_metal_interface_context;
@@ -62,8 +65,8 @@ class je_macos_context : public jeecs::game_engine_context
                 // Graphic has been requested to close.
                 return;
 
-            // Update gui context here.
-            m_metal_interface_context->m_gui_context.m_draw_target_view = pView;
+            // TODO: Update gui context here.
+            // m_metal_interface_context->m_gui_context.xxx = ...;
 
             if (!m_je_graphic_host->frame())
             {
@@ -74,12 +77,10 @@ class je_macos_context : public jeecs::game_engine_context
     };
     class macos_je_application_delegate : public NS::ApplicationDelegate
     {
-        jeecs::graphic::graphic_syncer_host* 
+        jeecs::graphic::graphic_syncer_host*
             m_je_graphic_host;
 
         NS::Window* m_window;
-        MTK::View* m_mtk_view;
-        MTL::Device* m_device;
         macos_je_mtk_view_delegate* m_view_delegate;
     public:
         macos_je_application_delegate(
@@ -94,10 +95,8 @@ class je_macos_context : public jeecs::game_engine_context
         }
         ~macos_je_application_delegate()
         {
-            m_mtk_view->release();
-            m_window->release();
-            m_device->release();
             delete m_view_delegate;
+            m_window->release();
         }
 
         NS::Menu* createMenuBar()
@@ -153,18 +152,18 @@ class je_macos_context : public jeecs::game_engine_context
         virtual void applicationDidFinishLaunching(
             NS::Notification* pNotification) override
         {
-            const auto& engine_graphic_config = 
+            const auto& engine_graphic_config =
                 m_je_graphic_host->get_graphic_context_after_context_ready()->m_config;
 
-            CGRect frame = (CGRect){ 
+            CGRect frame = (CGRect){
                 {
                     100.0,
                     100.0,
-                }, 
+                },
                 {
                     (double)engine_graphic_config.m_width,
                     (double)engine_graphic_config.m_height,
-                } 
+                }
             };
 
             m_window = NS::Window::alloc()->init(
@@ -173,16 +172,9 @@ class je_macos_context : public jeecs::game_engine_context
                 NS::BackingStoreBuffered,
                 false);
 
-            m_device = MTL::CreateSystemDefaultDevice();
+            m_view_delegate = new macos_je_mtk_view_delegate(
+                m_window, m_je_graphic_host);
 
-            m_mtk_view = MTK::View::alloc()->init(frame, m_device);
-            m_mtk_view->setColorPixelFormat(MTL::PixelFormat::PixelFormatBGRA8Unorm_sRGB);
-            m_mtk_view->setClearColor(MTL::ClearColor::Make(1.0, 0.0, 0.0, 1.0));
-
-            m_view_delegate = new macos_je_mtk_view_delegate(m_device, m_je_graphic_host);
-            m_mtk_view->setDelegate(m_view_delegate);
-
-            m_window->setContentView(m_mtk_view);
             m_window->setTitle(
                 NS::String::string(
                     engine_graphic_config.m_title,
@@ -217,7 +209,7 @@ public:
                 break; // If the entry script ended, exit the loop.
 
             // Graphic context ready, prepare for macos window.
-            NS::AutoreleasePool* auto_release_pool = 
+            NS::AutoreleasePool* auto_release_pool =
                 NS::AutoreleasePool::alloc()->init();
 
             macos_je_application_delegate del(m_graphic_host);
