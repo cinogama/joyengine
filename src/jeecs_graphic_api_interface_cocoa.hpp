@@ -28,7 +28,7 @@ namespace jeecs::graphic::metal
                 false);
 
             m_metal_view =
-                MTK::View::alloc()->init(frame, m_metal_device);
+                MTK::View::alloc()->init(frame, device);
             m_metal_view->setColorPixelFormat(
                 MTL::PixelFormat::PixelFormatBGRA8Unorm_sRGB);
             m_metal_view->setClearColor(
