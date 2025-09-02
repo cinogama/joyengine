@@ -32,7 +32,7 @@ int main(int argc, char** argv)
 
         }).detach();
 
-    jegl_cocoa_metal_application_run();
+    jegl_cocoa_metal_application_run(argc, argv);
 
     jeecs::game_universe::destroy_universe(u);
 }

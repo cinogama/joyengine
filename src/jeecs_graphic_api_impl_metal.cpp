@@ -3,12 +3,14 @@
 
 #ifdef JE_ENABLE_METAL_GAPI
 
+#include "jeecs_imgui_backend_api.hpp"
+
 #define NS_PRIVATE_IMPLEMENTATION
 #define MTL_PRIVATE_IMPLEMENTATION
 #define MTK_PRIVATE_IMPLEMENTATION
 #define CA_PRIVATE_IMPLEMENTATION
 
-#include "jeecs_imgui_backend_api.hpp"
+#include "jeecs_graphic_api_interface_cocoa.hpp"
 
 namespace jeecs::graphic::api::metal
 {
@@ -165,7 +167,7 @@ public:
     }
 };
 
-void jegl_cocoa_metal_application_run(void)
+void jegl_cocoa_metal_application_run(int argc, char** argv)
 {
     je_macos_context context(argc, argv);
     context.macos_loop();
