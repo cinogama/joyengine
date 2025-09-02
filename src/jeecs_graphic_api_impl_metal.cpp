@@ -18,19 +18,31 @@ namespace jeecs::graphic::api::metal
     {
         JECS_DISABLE_MOVE_AND_COPY(jegl_metal_context);
 
-        MTL::Device*    m_metal_device;
-        std::unique_ptr<jeecs::graphic::metal::window_view_layout> 
-                        m_window_and_device;
+        MTL::Device*        m_metal_device;
+        MTL::CommandQueue*  m_command_queue;
+        jeecs::graphic::metal::window_view_layout*
+                            m_window_and_view_layout;
 
-        jegl_metal_context()
+        NS::AutoreleasePool* m_frame_auto_release_pool_init_pre_update_and_release_after_commit;
+
+        jegl_metal_context(const jegl_interface_config* cfg)
         {
-            context->m_metal_device = 
+            m_metal_device = 
                 MTL::CreateSystemDefaultDevice();
+            m_command_queue = m_metal_device->newCommandQueue();
+
+            m_window_and_view_layout =
+                new jeecs::graphic::metal::window_view_layout(
+                    cfg->m_title,
+                    (double)cfg->m_width,
+                    (double)cfg->m_height,
+                    m_metal_device);
         }
         ~jegl_metal_context()
         {
             // Must release window before device.
-            m_window_and_device.reset();
+            delete m_window_and_view_layout
+            m_command_queue->release();
             m_metal_device->release();
         }
     };
@@ -51,16 +63,9 @@ namespace jeecs::graphic::api::metal
 
         jegl_metal_context* context = new jegl_metal_context();
 
-        context->m_window_and_device =
-            std::make_unique<jeecs::graphic::metal::window_view_layout>(
-                cfg->m_title,
-                (double)cfg->m_width,
-                (double)cfg->m_height,
-                context->m_metal_device);
-
         // Pass the window and view to `applicationDidFinishLaunching`
         const_cast<jegl_interface_config*>(cfg)->m_userdata =
-            context->m_window_and_device.get();
+            context->m_window_and_view_layout;
 
         return context;
     }
@@ -79,14 +84,35 @@ namespace jeecs::graphic::api::metal
         delete metal_context;
     }
 
-    jegl_update_action pre_update(jegl_context::graphic_impl_context_t)
+    jegl_update_action pre_update(jegl_context::graphic_impl_context_t ctx)
     {
+        jegl_metal_context* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
+
+        metal_context->m_frame_auto_release_pool_init_pre_update_and_release_after_commit =
+            NS::AutoreleasePool::alloc()->init();
+
         return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
     jegl_update_action commit_update(
-        jegl_context::graphic_impl_context_t, jegl_update_action)
+        jegl_context::graphic_impl_context_t ctx, jegl_update_action)
     {
+        jegl_metal_context* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
+
         // jegui_update_metal();
+
+        /*
+        初期开发，暂时在这里随便写写画画
+        */
+        MTL::CommandBuffer* pCmd = 
+            metal_context->m_command_queue->commandBuffer();
+        MTL::RenderPassDescriptor* pRpd = 
+            metal_context->m_window_and_view_layout->m_metal_view->currentRenderPassDescriptor();
+        MTL::RenderCommandEncoder* pEnc = pCmd->renderCommandEncoder(pRpd);
+        pEnc->endEncoding();
+        pCmd->presentDrawable(pView->currentDrawable());
+        pCmd->commit();
+
+        metal_context->m_frame_auto_release_pool_init_pre_update_and_release_after_commit->release();
         return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
 
