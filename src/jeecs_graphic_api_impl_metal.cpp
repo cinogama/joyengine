@@ -88,8 +88,36 @@ namespace jeecs::graphic::api::metal
     };
     struct metal_vertex
     {
-        MTL::PrimitiveType m_primitive_type;
+        JECS_DISABLE_MOVE_AND_COPY(metal_vertex);
 
+        MTL::PrimitiveType m_primitive_type;
+        MTL::Buffer* m_vertex_buffer;
+        MTL::Buffer* m_index_buffer;
+        MTL::VertexDescriptor* m_vertex_descriptor;
+        uint32_t m_index_count;
+
+        metal_vertex(
+            MTL::PrimitiveType primitive_type,
+            MTL::Buffer* vertex_buffer,
+            MTL::Buffer* index_buffer,
+            MTL::VertexDescriptor* vertex_descriptor,
+            uint32_t index_count)
+            : m_primitive_type(primitive_type)
+            , m_vertex_buffer(vertex_buffer)
+            , m_index_buffer(index_buffer)
+            , m_vertex_descriptor(vertex_descriptor)
+            , m_index_count(index_count)
+        {
+        }
+        ~metal_vertex()
+        {
+            if (m_vertex_buffer)
+                m_vertex_buffer->release();
+            if (m_index_buffer)
+                m_index_buffer->release();
+            if (m_vertex_descriptor)
+                m_vertex_descriptor->release();
+        }
     };
     jegl_context::graphic_impl_context_t
         startup(jegl_context* glthread, const jegl_interface_config* cfg, bool reboot)
@@ -343,7 +371,99 @@ public func frag(_: v2f)
         }
         case jegl_resource::type::VERTEX:
         {
+            auto* raw_vertex_data = res->m_raw_vertex_data;
+            assert(raw_vertex_data != nullptr);
 
+            // Create vertex buffer
+            MTL::Buffer* vertex_buffer = metal_context->m_metal_device->newBuffer(
+                raw_vertex_data->m_vertexs,
+                raw_vertex_data->m_vertex_length,
+                MTL::ResourceStorageModeShared);
+
+            // Create index buffer
+            MTL::Buffer* index_buffer = metal_context->m_metal_device->newBuffer(
+                raw_vertex_data->m_indexs,
+                raw_vertex_data->m_index_count * sizeof(uint32_t),
+                MTL::ResourceStorageModeShared);
+
+            // Create vertex descriptor
+            MTL::VertexDescriptor* vertex_descriptor = MTL::VertexDescriptor::alloc()->init();
+            
+            size_t offset = 0;
+            for (unsigned int i = 0; i < (unsigned int)raw_vertex_data->m_format_count; i++)
+            {
+                auto* attribute = vertex_descriptor->attributes()->object(i);
+                attribute->setBufferIndex(0);
+                attribute->setOffset(offset);
+
+                size_t format_size;
+                switch (raw_vertex_data->m_formats[i].m_type)
+                {
+                case jegl_vertex::data_type::FLOAT32:
+                    format_size = sizeof(float);
+                    switch (raw_vertex_data->m_formats[i].m_count)
+                    {
+                    case 1: attribute->setFormat(MTL::VertexFormatFloat); break;
+                    case 2: attribute->setFormat(MTL::VertexFormatFloat2); break;
+                    case 3: attribute->setFormat(MTL::VertexFormatFloat3); break;
+                    case 4: attribute->setFormat(MTL::VertexFormatFloat4); break;
+                    default:
+                        jeecs::debug::logfatal("Unsupported float vertex attribute count: %zu", 
+                            raw_vertex_data->m_formats[i].m_count);
+                        break;
+                    }
+                    break;
+                case jegl_vertex::data_type::INT32:
+                    format_size = sizeof(int);
+                    switch (raw_vertex_data->m_formats[i].m_count)
+                    {
+                    case 1: attribute->setFormat(MTL::VertexFormatInt); break;
+                    case 2: attribute->setFormat(MTL::VertexFormatInt2); break;
+                    case 3: attribute->setFormat(MTL::VertexFormatInt3); break;
+                    case 4: attribute->setFormat(MTL::VertexFormatInt4); break;
+                    default:
+                        jeecs::debug::logfatal("Unsupported int vertex attribute count: %zu", 
+                            raw_vertex_data->m_formats[i].m_count);
+                        break;
+                    }
+                    break;
+                default:
+                    jeecs::debug::logfatal("Bad vertex data type.");
+                    break;
+                }
+
+                offset += format_size * raw_vertex_data->m_formats[i].m_count;
+            }
+
+            // Set vertex buffer layout
+            auto* layout = vertex_descriptor->layouts()->object(0);
+            layout->setStride(raw_vertex_data->m_data_size_per_point);
+            layout->setStepFunction(MTL::VertexStepFunctionPerVertex);
+
+            // Map primitive types
+            MTL::PrimitiveType primitive_type;
+            switch (raw_vertex_data->m_type)
+            {
+            case jegl_vertex::vertex_type::LINES:
+                primitive_type = MTL::PrimitiveTypeLineStrip;
+                break;
+            case jegl_vertex::vertex_type::TRIANGLES:
+                primitive_type = MTL::PrimitiveTypeTriangle;
+                break;
+            case jegl_vertex::vertex_type::TRIANGLE_STRIP:
+                primitive_type = MTL::PrimitiveTypeTriangleStrip;
+                break;
+            default:
+                jeecs::debug::logfatal("Unsupported vertex primitive type.");
+                break;
+            }
+
+            res->m_handle.m_ptr = new metal_vertex(
+                primitive_type,
+                vertex_buffer,
+                index_buffer,
+                vertex_descriptor,
+                raw_vertex_data->m_index_count);
             break;
         }
         default:
@@ -361,6 +481,11 @@ public func frag(_: v2f)
         case jegl_resource::type::SHADER:
         {
             delete reinterpret_cast<metal_shader*>(res->m_handle.m_ptr);
+            break;
+        }
+        case jegl_resource::type::VERTEX:
+        {
+            delete reinterpret_cast<metal_vertex*>(res->m_handle.m_ptr);
             break;
         }
         default:
