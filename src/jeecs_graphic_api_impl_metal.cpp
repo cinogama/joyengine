@@ -187,7 +187,7 @@ public func frag(_: v2f)
         color = vec4!(1., 1., 1., 1.),
     };
 }
-)").unwrap();
+)").value();
 
         /*
         初期开发，暂时在这里随便写写画画
@@ -220,13 +220,14 @@ public func frag(_: v2f)
             assert(raw_shader != nullptr);
 
             NS::Error* error_info = nullptr;
-            MTL::Library* vertex_library = nullptr, fragment_library = nullptr;
+            MTL::Library* vertex_library = nullptr;
+            MTL::Library* fragment_library = nullptr;
 
             bool shader_load_failed = false;
             std::string error_informations;
 
             vertex_library = metal_context->m_metal_device->newLibrary(
-                NS::String::string(raw_shader->m_vertex_msl_mac_src, UTF8StringEncoding),
+                NS::String::string(raw_shader->m_vertex_msl_mac_src, NS::StringEncoding::UTF8StringEncoding),
                 nullptr,
                 &error_info);
 
@@ -240,7 +241,7 @@ public func frag(_: v2f)
             }
 
             fragment_library = metal_context->m_metal_device->newLibrary(
-                NS::String::string(raw_shader->m_fragment_msl_mac_src, UTF8StringEncoding),
+                NS::String::string(raw_shader->m_fragment_msl_mac_src, NS::StringEncoding::UTF8StringEncoding),
                 nullptr,
                 &error_info);
 
@@ -266,10 +267,10 @@ public func frag(_: v2f)
             {
                 MTL::Function* vertex_main_function =
                     vertex_library->newFunction(
-                        NS::String::string("vertex_main", UTF8StringEncoding));
+                        NS::String::string("vertex_main", NS::StringEncoding::UTF8StringEncoding));
                 MTL::Function* fragment_main_function =
                     fragment_library->newFunction(
-                        NS::String::string("fragment_main", UTF8StringEncoding));
+                        NS::String::string("fragment_main", NS::StringEncoding::UTF8StringEncoding));
 
                 assert(
                     vertex_main_function != nullptr
