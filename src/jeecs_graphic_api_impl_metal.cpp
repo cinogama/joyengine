@@ -101,6 +101,53 @@ namespace jeecs::graphic::api::metal
 
         // jegui_update_metal();
 
+        static basic::resource<graphic::shader> sd =
+            graphic::shader::create("!/test.shader", R"(
+// Mono.shader
+import woo::std;
+
+import je::shader;
+import pkg::woshader;
+
+using woshader;
+using je::shader;
+
+SHARED  (true);
+ZTEST   (LESS);
+ZWRITE  (ENABLE);
+BLEND   (ONE, ZERO);
+CULL    (NONE);
+
+WOSHADER_VERTEX_IN!
+    using vin = struct {
+        vertex  : float3,
+    };
+    
+WOSHADER_VERTEX_TO_FRAGMENT!
+    using v2f = struct {
+        pos     : float4,
+    };
+    
+WOSHADER_FRAGMENT_OUT!
+    using fout = struct {
+        color   : float4,
+    };
+    
+public func vert(v: vin)
+{
+    return v2f{
+        pos = vec4!(v.vertex, 1.),
+    };
+}
+
+public func frag(_: v2f)
+{
+    return fout{
+        color = vec4!(1., 1., 1., 1.),
+    };
+}
+)");
+
         /*
         初期开发，暂时在这里随便写写画画
         */
@@ -119,8 +166,9 @@ namespace jeecs::graphic::api::metal
         return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
 
-    jegl_resource_blob create_resource_blob(jegl_context::graphic_impl_context_t, jegl_resource*)
+    jegl_resource_blob create_resource_blob(jegl_context::graphic_impl_context_t, jegl_resource* res)
     {
+
         return nullptr;
     }
     void close_resource_blob(jegl_context::graphic_impl_context_t, jegl_resource_blob)
