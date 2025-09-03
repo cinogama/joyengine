@@ -3873,7 +3873,6 @@ namespace jeecs::graphic::api::vk130
                 uniforms->m_index = shader_blob->get_built_in_location(uniforms->m_name);
                 uniforms = uniforms->m_next;
             }
-
             break;
         }
         case jegl_resource::type::TEXTURE:
