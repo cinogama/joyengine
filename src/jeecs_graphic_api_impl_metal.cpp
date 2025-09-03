@@ -54,27 +54,37 @@ namespace jeecs::graphic::api::metal
 
         MTL::Function* m_vertex_function;
         MTL::Function* m_fragment_function;
-        MTL::RenderPipelineDescriptor* m_pipeline_descriptor;
 
         metal_resource_shader_blob(
-                MTL::Function* vert,
-                MTL::Function* frag,
-                MTL::RenderPipelineDescriptor* desc)
+            MTL::Function* vert,
+            MTL::Function* frag)
             : m_vertex_function(vert)
             , m_fragment_function(frag)
-            , m_pipeline_descriptor(desc)
         {
         }
         ~metal_resource_shader_blob()
         {
             m_vertex_function->release();
             m_fragment_function->release();
-            m_pipeline_descriptor->release();
         }
     };
     struct metal_shader
     {
+        JECS_DISABLE_MOVE_AND_COPY(metal_shader);
+
+        // TODO: Metal 的 pipeline state 和 vulkan 的 pipeline 类似，需要根据目标
+        //  缓冲区的格式等信息创建不同的 pipeline state。
+        //      现在仍然是在早期开发阶段，先以实现基本功能为主。
         MTL::RenderPipelineState* m_pipeline_state;
+
+        metal_shader(MTL::RenderPipelineState* pso)
+            : m_pipeline_state(pso)
+        {
+        }
+        ~metal_shader()
+        {
+            m_pipeline_state->release();
+        }
     };
 
     jegl_context::graphic_impl_context_t
@@ -224,8 +234,8 @@ public func frag(_: v2f)
             {
                 shader_load_failed = true;
                 error_informations += "In vertex shader: \n";
-               
-                error_informations += 
+
+                error_informations +=
                     error_info->localizedDescription()->utf8String();
             }
 
@@ -238,7 +248,7 @@ public func frag(_: v2f)
             {
                 shader_load_failed = true;
                 error_informations += "In fragment shader: \n";
-                error_informations += 
+                error_informations +=
                     error_info->localizedDescription()->utf8String();
             }
 
@@ -254,37 +264,20 @@ public func frag(_: v2f)
             }
             else
             {
-                MTL::Function* vertex_main_function = 
+                MTL::Function* vertex_main_function =
                     vertex_library->newFunction(
                         NS::String::string("vertex_main", UTF8StringEncoding));
                 MTL::Function* fragment_main_function =
                     fragment_library->newFunction(
                         NS::String::string("fragment_main", UTF8StringEncoding));
 
-                assert(vertex_main_function != nullptr && fragment_main_function != nullptr);
-
-                MTL::RenderPipelineDescriptor* desc = 
-                    MTL::RenderPipelineDescriptor::alloc()->init();
-
-                desc->setVertexFunction(vertex_main_function);
-                desc->setFragmentFunction(fragment_main_function);
-
-                for (size_t i = 0; i < raw_shader->m_fragment_out_count; ++i)
-                {
-                    MTL::PixelFormat format_type;
-                    switch (raw_shader->m_fragment_out[i])
-                    {
-                    case jegl_shader::uniform_type::FLOAT4:
-                        format_type 
-                    }
-                    desc->colorAttachments()->object(i)->setPixelFormat(
-                        format_type);
-                }
+                assert(
+                    vertex_main_function != nullptr
+                    && fragment_main_function != nullptr);
 
                 return new metal_resource_shader_blob(
                     vertex_main_function,
-                    fragment_main_function,
-                    desc);
+                    fragment_main_function);
             }
             break;
         }
@@ -302,8 +295,8 @@ public func frag(_: v2f)
     }
 
     void create_resource(
-        jegl_context::graphic_impl_context_t ctx, 
-        jegl_resource_blob blob, 
+        jegl_context::graphic_impl_context_t ctx,
+        jegl_resource_blob blob,
         jegl_resource* res)
     {
         jegl_metal_context* metal_context =
@@ -316,6 +309,27 @@ public func frag(_: v2f)
             if (blob != nullptr)
             {
                 auto* shader_blob = reinterpret_cast<metal_resource_shader_blob*>(blob);
+                MTL::RenderPipelineDescriptor* pDesc =
+                    MTL::RenderPipelineDescriptor::alloc()->init();
+
+                pDesc->setVertexFunction(shader_blob->m_vertex_function);
+                pDesc->setFragmentFunction(shader_blob->m_fragment_function);
+
+                pDesc->colorAttachments()->object(0)->setPixelFormat(
+                    MTL::PixelFormat::PixelFormatBGRA8Unorm_sRGB);
+
+                NS::Error* pError = nullptr;
+                auto* pso = _pDevice->newRenderPipelineState(pDesc, &pError);
+                if (pso == nullptr)
+                {
+                    jeecs::debug::logfatal(
+                        "Fail to create pipeline state object for shader '%s':\n%s",
+                        res->m_path,
+                        pError->localizedDescription()->utf8String());
+                    abort();
+                }
+
+                res->m_handle.m_ptr = new metal_shader(pso);
             }
             else
                 resource->m_handle.m_ptr = nullptr;
@@ -324,6 +338,7 @@ public func frag(_: v2f)
         }
         default:
             jeecs::debug::logfatal("Unsupported resource type to create in Metal backend.");
+            break;
         }
     }
     void using_resource(jegl_context::graphic_impl_context_t, jegl_resource*)
@@ -331,8 +346,18 @@ public func frag(_: v2f)
     }
     void close_resource(jegl_context::graphic_impl_context_t, jegl_resource*)
     {
+        switch (resource->m_type)
+        {
+        case jegl_resource::type::SHADER:
+        {
+            delete reinterpret_cast<metal_shader*>(resource->m_handle.m_ptr);
+            break;
+        }
+        default:
+            jeecs::debug::logfatal("Unsupported resource type to close in Metal backend.");
+            break;
+        }
     }
-
     void bind_uniform_buffer(jegl_context::graphic_impl_context_t, jegl_resource*)
     {
     }
