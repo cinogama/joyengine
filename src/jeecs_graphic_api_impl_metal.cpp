@@ -173,6 +173,20 @@ namespace jeecs::graphic::api::metal
             reinterpret_cast<jegl_metal_context*>(ctx);
 
         // jegui_update_metal();
+        const float pdata[] = {
+            -0.5f, -0.5f, 0.0f,
+             0.5f, -0.5f, 0.0f,
+            -0.5f,  0.5f, 0.0f,
+        };
+        static basic::resource<graphic::vertex> vt =
+            graphic::vertex::create(
+                jegl_vertex::type::TRIANGLESTRIP,
+                pdata,
+                sizeof(pdata),
+                { 0, 1, 2 },
+                {
+                    {jegl_vertex::data_type::FLOAT32, 3},
+                }).value();
 
         static basic::resource<graphic::shader> sd =
             graphic::shader::create("!/test.shader", R"(
@@ -216,7 +230,7 @@ public func vert(v: vin)
 public func frag(_: v2f)
 {
     return fout{
-        color = vec4!(1., 1., 1., 1.),
+        color = vec4!(1., 0., 1., 1.),
     };
 }
 )").value();
