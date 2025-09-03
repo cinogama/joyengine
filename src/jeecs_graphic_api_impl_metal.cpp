@@ -86,7 +86,11 @@ namespace jeecs::graphic::api::metal
             m_pipeline_state->release();
         }
     };
+    struct metal_vertex
+    {
+        MTL::PrimitiveType m_primitive_type;
 
+    };
     jegl_context::graphic_impl_context_t
         startup(jegl_context* glthread, const jegl_interface_config* cfg, bool reboot)
     {
@@ -334,6 +338,11 @@ public func frag(_: v2f)
             }
             else
                 res->m_handle.m_ptr = nullptr;
+
+            break;
+        }
+        case jegl_resource::type::VERTEX:
+        {
 
             break;
         }
