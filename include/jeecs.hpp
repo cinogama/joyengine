@@ -2036,10 +2036,7 @@ struct jegl_shader
         uint32_t m_builtin_uniform_light2d_resolution = jeecs::typing::PENDING_UNIFORM_LOCATION;
         uint32_t m_builtin_uniform_light2d_decay = jeecs::typing::PENDING_UNIFORM_LOCATION;
     };
-    struct vertex_in_variables
-    {
-        uniform_type m_type;
-    };
+
     struct unifrom_variables
     {
         const char* m_name;
@@ -2155,7 +2152,10 @@ struct jegl_shader
     const spir_v_code_t* m_fragment_spirv_codes;
 
     size_t m_vertex_in_count;
-    vertex_in_variables* m_vertex_in;
+    uniform_type* m_vertex_in;
+
+    size_t m_fragment_out_count;
+    uniform_type* m_fragment_out;
 
     unifrom_variables* m_custom_uniforms;
     uniform_blocks* m_custom_uniform_blocks;

@@ -2267,7 +2267,7 @@ namespace jeecs::graphic::api::vk130
                 shader_blob->m_vertex_input_attribute_descriptions[i].binding = 0;
                 shader_blob->m_vertex_input_attribute_descriptions[i].location = (uint32_t)i;
                 shader_blob->m_vertex_input_attribute_descriptions[i].offset = (uint32_t)vertex_point_data_size;
-                switch (resource->m_raw_shader_data->m_vertex_in[i].m_type)
+                switch (resource->m_raw_shader_data->m_vertex_in[i])
                 {
                 case jegl_shader::uniform_type::INT:
                     shader_blob->m_vertex_input_attribute_descriptions[i].format = VkFormat::VK_FORMAT_R32_SINT;
@@ -2308,7 +2308,7 @@ namespace jeecs::graphic::api::vk130
                 default:
                     jeecs::debug::logfatal(
                         "Unsupported vertex input type '%d' in shader '%s'.",
-                        (int)resource->m_raw_shader_data->m_vertex_in[i].m_type,
+                        (int)resource->m_raw_shader_data->m_vertex_in[i],
                         resource->m_path == nullptr ? "<builtin>" : resource->m_path);
                 }
             }
@@ -3873,7 +3873,6 @@ namespace jeecs::graphic::api::vk130
                 uniforms->m_index = shader_blob->get_built_in_location(uniforms->m_name);
                 uniforms = uniforms->m_next;
             }
-
             break;
         }
         case jegl_resource::type::TEXTURE:

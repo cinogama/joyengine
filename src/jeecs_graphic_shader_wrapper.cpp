@@ -150,8 +150,13 @@ void _jegl_create_shader_cache(jegl_resource* shader_resource, wo_integer_t virt
         // 4.3 write shader vertex layout
         uint64_t vertex_in_count = (uint64_t)raw_shader_data->m_vertex_in_count;
         jeecs_write_cache_file(&vertex_in_count, sizeof(uint64_t), 1, cachefile);
-        jeecs_write_cache_file(raw_shader_data->m_vertex_in, sizeof(jegl_shader::vertex_in_variables),
+        jeecs_write_cache_file(raw_shader_data->m_vertex_in, sizeof(jegl_shader::uniform_type),
             raw_shader_data->m_vertex_in_count, cachefile);
+
+        uint64_t fragment_out_count = (uint64_t)raw_shader_data->m_fragment_out_count;
+        jeecs_write_cache_file(&fragment_out_count, sizeof(uint64_t), 1, cachefile);
+        jeecs_write_cache_file(raw_shader_data->m_fragment_out, sizeof(jegl_shader::uniform_type),
+            raw_shader_data->m_fragment_out_count, cachefile);
 
         // 4.4 write sampler informations;
         uint64_t sampler_count = (uint64_t)raw_shader_data->m_sampler_count;
@@ -563,9 +568,14 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_s
 
     // 4. Generate other info.
     write_to_shader->m_vertex_in_count = shader_wrapper_ptr->m_vin_layout.size();
-    write_to_shader->m_vertex_in = new jegl_shader::vertex_in_variables[write_to_shader->m_vertex_in_count];
+    write_to_shader->m_vertex_in = new jegl_shader::uniform_type[write_to_shader->m_vertex_in_count];
     for (size_t i = 0; i < write_to_shader->m_vertex_in_count; ++i)
-        write_to_shader->m_vertex_in[i].m_type = shader_wrapper_ptr->m_vin_layout.at(i);
+        write_to_shader->m_vertex_in[i] = shader_wrapper_ptr->m_vin_layout.at(i);
+
+    write_to_shader->m_fragment_out_count = shader_wrapper_ptr->m_fout_layout.size();
+    write_to_shader->m_fragment_out = new jegl_shader::uniform_type[write_to_shader->m_fragment_out_count];
+    for (size_t i = 0; i < write_to_shader->m_fragment_out_count; ++i)
+        write_to_shader->m_fragment_out[i] = shader_wrapper_ptr->m_fout_layout.at(i);
 
     std::unordered_map<std::string, const shader_uniform_block_info*> _uniform_blocks;
     for (auto& uniform_block : shader_wrapper_ptr->m_uniform_blocks)
@@ -852,12 +862,17 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
     // 4.3 read shader vertex layout
     uint64_t vertex_in_count;
     jeecs_file_read(&vertex_in_count, sizeof(uint64_t), 1, cache_file);
-
     _shader->m_vertex_in_count = (size_t)vertex_in_count;
-    _shader->m_vertex_in = new jegl_shader::vertex_in_variables[_shader->m_vertex_in_count];
-
-    jeecs_file_read(_shader->m_vertex_in, sizeof(jegl_shader::vertex_in_variables),
+    _shader->m_vertex_in = new jegl_shader::uniform_type[_shader->m_vertex_in_count];
+    jeecs_file_read(_shader->m_vertex_in, sizeof(jegl_shader::uniform_type),
         _shader->m_vertex_in_count, cache_file);
+
+    uint64_t fragment_out_count;
+    jeecs_file_read(&fragment_out_count, sizeof(uint64_t), 1, cache_file);
+    _shader->m_fragment_out_count = (size_t)fragment_out_count;
+    _shader->m_fragment_out = new jegl_shader::uniform_type[_shader->m_fragment_out_count];
+    jeecs_file_read(_shader->m_fragment_out, sizeof(jegl_shader::uniform_type),
+        _shader->m_fragment_out_count, cache_file);
 
     // 4.4 read sampler informations;
     uint64_t sampler_count;
@@ -936,6 +951,7 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args)
                 vertex_source: string,
                 fragment_source: string,
                 vertex_in_layout: array<woshader::Type>,
+                fragment_out_layout: array<woshader::Type>,
                 samplers: array<woshader::Sampler2D>,
                 texture_passes: array<(string, int, int)>,
                 uniform_variables: array<(string, woshader::Type, woshader::ShaderValueImm)>,
@@ -1039,19 +1055,28 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args)
     wrapper->m_fragment_hlsl_source = wo_string(args + 1);
 
     wo_value vertex_in_layout = args + 2;
-    wo_value samplers = args + 3;
-    wo_value texture_passes = args + 4;
-    wo_value uniform_variables = args + 5;
-    wo_value uniform_blocks = args + 6;
-    wo_value configs = args + 7;
+    wo_value fragment_out_layout = args + 3;
+    wo_value samplers = args + 4;
+    wo_value texture_passes = args + 5;
+    wo_value uniform_variables = args + 6;
+    wo_value uniform_blocks = args + 7;
+    wo_value configs = args + 8;
 
     const auto vin_layout_len = wo_arr_len(vertex_in_layout);
     wrapper->m_vin_layout.resize(vin_layout_len);
     for (size_t i = 0; i < vin_layout_len; ++i)
     {
         wo_arr_get(tmp, vertex_in_layout, i);
-
         wrapper->m_vin_layout.at(i) =
+            parse_woshader_type_to_je_uniform_type((WoshaderType)wo_int(tmp));
+    }
+
+    const auto fout_layout_len = wo_arr_len(fragment_out_layout);
+    wrapper->m_fout_layout.resize(fout_layout_len);
+    for (size_t i = 0; i < fout_layout_len; ++i)
+    {
+        wo_arr_get(tmp, fragment_out_layout, i);
+        wrapper->m_fout_layout.at(i) =
             parse_woshader_type_to_je_uniform_type((WoshaderType)wo_int(tmp));
     }
 

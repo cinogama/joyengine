@@ -94,7 +94,6 @@ namespace jeecs::graphic::api::dx11
 
         uint32_t m_ndc_scale_uniform_id;
 
-
         jegl_dx11_context::MSWRLComPtr<ID3D11RasterizerState> m_rasterizer;
         jegl_dx11_context::MSWRLComPtr<ID3D11RasterizerState> m_rasterizer_r2b;
         jegl_dx11_context::MSWRLComPtr<ID3D11DepthStencilState> m_depth;
@@ -531,8 +530,8 @@ namespace jeecs::graphic::api::dx11
     struct dx11_resource_shader_blob
     {
         jegl_dx11_context::MSWRLComPtr<ID3D11InputLayout> m_vao;
-        jegl_dx11_context::MSWRLComPtr<ID3DBlob> m_vertex_blob;
-        jegl_dx11_context::MSWRLComPtr<ID3DBlob> m_fragment_blob;
+        jegl_dx11_context::MSWRLComPtr<ID3D11VertexShader> m_vertex;
+        jegl_dx11_context::MSWRLComPtr<ID3D11PixelShader> m_fragment;
 
         jegl_dx11_context::MSWRLComPtr<ID3D11RasterizerState> m_rasterizer;
         jegl_dx11_context::MSWRLComPtr<ID3D11RasterizerState> m_rasterizer_r2b;
@@ -567,6 +566,9 @@ namespace jeecs::graphic::api::dx11
             std::string error_informations;
             ID3DBlob* error_blob = nullptr;
 
+            jegl_dx11_context::MSWRLComPtr<ID3DBlob> vertex_blob;
+            jegl_dx11_context::MSWRLComPtr<ID3DBlob> fragment_blob;
+
             std::string string_path = resource->m_path == nullptr
                 ? "__joyengine_builtin_vshader" + std::to_string((intptr_t)resource) + "__"
                 : resource->m_path;
@@ -589,7 +591,7 @@ namespace jeecs::graphic::api::dx11
 #endif
                 ,
                 0,
-                blob->m_vertex_blob.GetAddressOf(),
+                vertex_blob.GetAddressOf(),
                 &error_blob);
 
             if (FAILED(compile_result))
@@ -627,7 +629,7 @@ namespace jeecs::graphic::api::dx11
                     vlayout.InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
                     vlayout.InstanceDataStepRate = 0;
 
-                    switch (resource->m_raw_shader_data->m_vertex_in[i].m_type)
+                    switch (resource->m_raw_shader_data->m_vertex_in[i])
                     {
                     case jegl_shader::uniform_type::INT:
                         vlayout.SemanticIndex = INT_COUNT++;
@@ -720,8 +722,8 @@ namespace jeecs::graphic::api::dx11
                 JERCHECK(context->m_dx_device->CreateInputLayout(
                     vertex_in_layout.data(),
                     vertex_in_layout.size(),
-                    blob->m_vertex_blob->GetBufferPointer(),
-                    blob->m_vertex_blob->GetBufferSize(),
+                    vertex_blob->GetBufferPointer(),
+                    vertex_blob->GetBufferSize(),
                     blob->m_vao.GetAddressOf()));
                 JEDX11_TRACE_DEBUG_NAME(blob->m_vao, string_path + "_Vao");
             }
@@ -744,7 +746,7 @@ namespace jeecs::graphic::api::dx11
 #endif
                 ,
                 0,
-                blob->m_fragment_blob.ReleaseAndGetAddressOf(),
+                fragment_blob.ReleaseAndGetAddressOf(),
                 &error_blob);
 
             if (FAILED(compile_result))
@@ -771,6 +773,18 @@ namespace jeecs::graphic::api::dx11
             }
             else
             {
+                JERCHECK(context->m_dx_device->CreateVertexShader(
+                    vertex_blob->GetBufferPointer(),
+                    vertex_blob->GetBufferSize(),
+                    nullptr,
+                    blob->m_vertex.GetAddressOf()));
+
+                JERCHECK(context->m_dx_device->CreatePixelShader(
+                    fragment_blob->GetBufferPointer(),
+                    fragment_blob->GetBufferSize(),
+                    nullptr,
+                    blob->m_fragment.GetAddressOf()));
+
                 uint32_t last_elem_end_place = 0;
                 constexpr size_t DX11_ALLIGN_BASE = 16; // 128bit allign in dx11
 
@@ -1187,30 +1201,25 @@ namespace jeecs::graphic::api::dx11
                     ? "__joyengine_builtin_vshader" + std::to_string((intptr_t)resource) + "__"
                     : resource->m_path;
 
-                JERCHECK(context->m_dx_device->CreateVertexShader(
-                    shader_blob->m_vertex_blob->GetBufferPointer(),
-                    shader_blob->m_vertex_blob->GetBufferSize(),
-                    nullptr,
-                    jedx11_shader_res->m_vertex.GetAddressOf()));
-
-                JERCHECK(context->m_dx_device->CreatePixelShader(
-                    shader_blob->m_fragment_blob->GetBufferPointer(),
-                    shader_blob->m_fragment_blob->GetBufferSize(),
-                    nullptr,
-                    jedx11_shader_res->m_fragment.GetAddressOf()));
-
                 auto* raw_shader_data = resource->m_raw_shader_data;
                 auto& builtin_uniforms = raw_shader_data->m_builtin_uniforms;
 
-                builtin_uniforms.m_builtin_uniform_ndc_scale = shader_blob->get_built_in_location("JE_NDC_SCALE");
-                jedx11_shader_res->m_ndc_scale_uniform_id = builtin_uniforms.m_builtin_uniform_ndc_scale;
+                builtin_uniforms.m_builtin_uniform_ndc_scale = 
+                    shader_blob->get_built_in_location("JE_NDC_SCALE");
+                jedx11_shader_res->m_ndc_scale_uniform_id = 
+                    builtin_uniforms.m_builtin_uniform_ndc_scale;
 
-                builtin_uniforms.m_builtin_uniform_m = shader_blob->get_built_in_location("JE_M");
-                builtin_uniforms.m_builtin_uniform_mv = shader_blob->get_built_in_location("JE_MV");
-                builtin_uniforms.m_builtin_uniform_mvp = shader_blob->get_built_in_location("JE_MVP");
+                builtin_uniforms.m_builtin_uniform_m = 
+                    shader_blob->get_built_in_location("JE_M");
+                builtin_uniforms.m_builtin_uniform_mv = 
+                    shader_blob->get_built_in_location("JE_MV");
+                builtin_uniforms.m_builtin_uniform_mvp = 
+                    shader_blob->get_built_in_location("JE_MVP");
 
-                builtin_uniforms.m_builtin_uniform_tiling = shader_blob->get_built_in_location("JE_UV_TILING");
-                builtin_uniforms.m_builtin_uniform_offset = shader_blob->get_built_in_location("JE_UV_OFFSET");
+                builtin_uniforms.m_builtin_uniform_tiling = 
+                    shader_blob->get_built_in_location("JE_UV_TILING");
+                builtin_uniforms.m_builtin_uniform_offset = 
+                    shader_blob->get_built_in_location("JE_UV_OFFSET");
 
                 builtin_uniforms.m_builtin_uniform_light2d_resolution =
                     shader_blob->get_built_in_location("JE_LIGHT2D_RESOLUTION");
@@ -1218,8 +1227,10 @@ namespace jeecs::graphic::api::dx11
                     shader_blob->get_built_in_location("JE_LIGHT2D_DECAY");
 
                 // ATTENTION: 注意，以下参数特殊shader可能挪作他用
-                builtin_uniforms.m_builtin_uniform_local_scale = shader_blob->get_built_in_location("JE_LOCAL_SCALE");
-                builtin_uniforms.m_builtin_uniform_color = shader_blob->get_built_in_location("JE_COLOR");
+                builtin_uniforms.m_builtin_uniform_local_scale = 
+                    shader_blob->get_built_in_location("JE_LOCAL_SCALE");
+                builtin_uniforms.m_builtin_uniform_color = 
+                    shader_blob->get_built_in_location("JE_COLOR");
 
                 auto* uniforms = raw_shader_data->m_custom_uniforms;
                 while (uniforms != nullptr)
@@ -1249,11 +1260,11 @@ namespace jeecs::graphic::api::dx11
                         malloc(shader_blob->m_uniform_size);
                 }
                 else
-                {
                     jedx11_shader_res->m_uniform_cpu_buffers = nullptr;
-                }
 
                 jedx11_shader_res->m_vao = shader_blob->m_vao;
+                jedx11_shader_res->m_vertex = shader_blob->m_vertex;
+                jedx11_shader_res->m_fragment = shader_blob->m_fragment;
 
                 jedx11_shader_res->m_rasterizer = shader_blob->m_rasterizer;
                 jedx11_shader_res->m_rasterizer_r2b = shader_blob->m_rasterizer_r2b;
@@ -1355,7 +1366,9 @@ namespace jeecs::graphic::api::dx11
             for (size_t i = 0; i < resource->m_raw_framebuf_data->m_attachment_count; ++i)
             {
                 auto& attachment = attachments[i];
-                if (0 == (attachment->resource()->m_raw_texture_data->m_format & jegl_texture::format::DEPTH))
+                if (0 == (
+                    attachment->resource()->m_raw_texture_data->m_format
+                        & jegl_texture::format::DEPTH))
                     ++color_attachment_count;
             }
 
@@ -1366,7 +1379,9 @@ namespace jeecs::graphic::api::dx11
             {
                 auto& attachment = attachments[i];
                 jegl_using_resource(attachment->resource());
-                if (0 != (attachment->resource()->m_raw_texture_data->m_format & jegl_texture::format::DEPTH))
+                if (0 != (
+                    attachment->resource()->m_raw_texture_data->m_format 
+                    & jegl_texture::format::DEPTH))
                 {
                     if (jedx11_framebuffer_res->m_depth_view.Get() == nullptr)
                     {
@@ -1377,7 +1392,9 @@ namespace jeecs::graphic::api::dx11
                         depth_view_describe.Flags = 0;
 
                         JERCHECK(context->m_dx_device->CreateDepthStencilView(
-                            std::launder(reinterpret_cast<jedx11_texture*>(attachment->resource()->m_handle.m_ptr))->m_texture.Get(),
+                            std::launder(
+                                reinterpret_cast<jedx11_texture*>(
+                                    attachment->resource()->m_handle.m_ptr))->m_texture.Get(),
                             &depth_view_describe,
                             jedx11_framebuffer_res->m_depth_view.GetAddressOf()));
 
@@ -1389,10 +1406,15 @@ namespace jeecs::graphic::api::dx11
                 else
                 {
                     JERCHECK(context->m_dx_device->CreateRenderTargetView(
-                        std::launder(reinterpret_cast<jedx11_texture*>(attachment->resource()->m_handle.m_ptr))->m_texture.Get(),
-                        nullptr, jedx11_framebuffer_res->m_rend_views[color_attachment_count].GetAddressOf()));
+                        std::launder(
+                            reinterpret_cast<jedx11_texture*>(
+                                attachment->resource()->m_handle.m_ptr))->m_texture.Get(),
+                        nullptr,
+                        jedx11_framebuffer_res->m_rend_views[color_attachment_count].GetAddressOf()));
 
-                    JEDX11_TRACE_DEBUG_NAME(jedx11_framebuffer_res->m_rend_views[color_attachment_count], "Framebuffer_Color");
+                    JEDX11_TRACE_DEBUG_NAME(
+                        jedx11_framebuffer_res->m_rend_views[color_attachment_count],
+                        "Framebuffer_Color");
 
                     ++color_attachment_count;
                 }
@@ -1401,8 +1423,12 @@ namespace jeecs::graphic::api::dx11
                 jedx11_framebuffer_res->m_target_views.push_back(v.Get());
 
             jedx11_framebuffer_res->m_color_target_count = (UINT)color_attachment_count;
-            assert(jedx11_framebuffer_res->m_target_views.size() == jedx11_framebuffer_res->m_rend_views.size());
-            assert(jedx11_framebuffer_res->m_target_views.size() == color_attachment_count);
+            assert(
+                jedx11_framebuffer_res->m_target_views.size() 
+                == jedx11_framebuffer_res->m_rend_views.size());
+            assert(
+                jedx11_framebuffer_res->m_target_views.size() 
+                == color_attachment_count);
 
             resource->m_handle.m_ptr = jedx11_framebuffer_res;
             break;
