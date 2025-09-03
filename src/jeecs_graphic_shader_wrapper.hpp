@@ -60,6 +60,7 @@ struct shader_wrapper
     std::string m_fragment_hlsl_source;
 
     std::vector<jegl_shader::uniform_type> m_vin_layout;
+    std::vector<jegl_shader::uniform_type> m_fout_layout;
     std::vector<shader_uniform_block_info> m_uniform_blocks;
 
     std::vector<shader_sampler> m_samplers;

@@ -627,7 +627,7 @@ namespace jeecs::graphic::api::dx11
                     vlayout.InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
                     vlayout.InstanceDataStepRate = 0;
 
-                    switch (resource->m_raw_shader_data->m_vertex_in[i].m_type)
+                    switch (resource->m_raw_shader_data->m_vertex_in[i])
                     {
                     case jegl_shader::uniform_type::INT:
                         vlayout.SemanticIndex = INT_COUNT++;

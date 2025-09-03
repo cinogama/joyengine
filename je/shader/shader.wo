@@ -147,6 +147,7 @@ namespace je::shader
         generated_fragment_src: mut option<string>,
         
         vertex_in_layout: vec<woshader::Type>,
+        fragment_out_layout: vec<woshader::Type>,
         samplers: vec<woshader::Sampler2D>,
         texture_passes: vec<(string, int /* pass */, int /* sampler id */)>,
         uniform_variables: vec<(string, woshader::Type, woshader::ShaderValueImm, string /* declare */)>,
@@ -166,6 +167,7 @@ namespace je::shader
                 generated_fragment_src = mut option::none,
                 
                 vertex_in_layout = []mut,
+                fragment_out_layout = []mut,
                 samplers = []mut,
                 texture_passes = []mut,
                 uniform_variables = []mut,
@@ -767,12 +769,14 @@ namespace je::shader
             c->append_line("};");
         }
         public func generate_fragment_out_struct(
-            _: HLSLForGlslang, c: ShaderGeneratorContext, fout: ShaderIOBlock)=> void
+            self: HLSLForGlslang, c: ShaderGeneratorContext, fout: ShaderIOBlock)=> void
         {
             c->append_line("struct WOSHADER_FRAGMENT_OUT {");
             for (let (idx, field): fout.shader_ins->iter |> iterator::enumerate)
             {
                 let t = field->get_type;
+                self.fragment_out_layout->add(t);
+
                 let hlsl_type_name = get_type_name_with_type(t);
                 
                 c->append_line(F"    {hlsl_type_name} _v{idx}: SV_TARGET{idx};");
@@ -931,6 +935,7 @@ namespace je::shader
                 vertex_source: string,
                 fragment_source: string,
                 vertex_in_layout: array<woshader::Type>,
+                fragment_out_layout: array<woshader::Type>,
                 samplers: array<woshader::Sampler2D>,
                 texture_passes: array<(string, int /* pass */, int /* sampler id */)>,
                 uniform_variables: array<(string, woshader::Type, woshader::ShaderValueImm)>,
@@ -945,6 +950,7 @@ namespace je::shader
             generator.generated_vertex_src->unwrap,
             generator.generated_fragment_src->unwrap,
             generator.vertex_in_layout->unsafe::asarray,
+            generator.fragment_out_layout->unsafe::asarray,
             generator.samplers->unsafe::asarray,
             generator.texture_passes->unsafe::asarray,
             generator.uniform_variables->iter
