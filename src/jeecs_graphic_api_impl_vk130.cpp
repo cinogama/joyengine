@@ -259,6 +259,7 @@ namespace jeecs::graphic::api::vk130
 
         uint32_t m_real_binding_place;
     };
+    struct jevk13_framebuffer;
     struct jevk13_shader
     {
         jeecs::basic::resource<jevk13_shader_blob::blob_data> m_blob_data;
@@ -275,9 +276,7 @@ namespace jeecs::graphic::api::vk130
         // Vulkan的这个设计真的让人很想吐槽，因为Pipeline和Shader与Pass/Rendbuffer
         // 捆绑在一起了，想尽办法最后就得靠目标渲染缓冲区的格式作为索引，根据shader
         // 的不同渲染目标(格式)创建不同的渲染管线
-        // TODO: 考虑什么情况下要释放Pipeline，如果Rendbuffer被释放了，那么Pipeline
-        //      也应该被释放。但是得考虑释放的时机
-        std::unordered_map<VkRenderPass, VkPipeline>
+        std::unordered_map<jevk13_framebuffer*, VkPipeline>
             m_target_pass_pipelines;
 
         VkPipeline prepare_pipeline(jegl_vk130_context* context);
@@ -308,8 +307,12 @@ namespace jeecs::graphic::api::vk130
     struct jevk13_framebuffer
     {
         VkRenderPass m_rendpass;
-        std::vector<jevk13_texture*>
-            m_color_attachments;
+
+        std::unordered_set<jevk13_shader*>
+            m_shaders_generate_pipeline_for_this_frame;
+
+        std::vector<jevk13_texture*> m_color_attachments;
+
         jevk13_texture* m_depth_attachment;
         VkFramebuffer m_framebuffer;
 
@@ -1207,6 +1210,15 @@ namespace jeecs::graphic::api::vk130
         }
         void destroy_frame_buffer(jevk13_framebuffer* fb)
         {
+            for (auto& shader : fb->m_shaders_generate_pipeline_for_this_frame)
+            {
+                auto fnd = shader->m_target_pass_pipelines.find(fb);
+                assert(fnd != shader->m_target_pass_pipelines.end());
+
+                vkDestroyPipeline(_vk_logic_device, fnd->second, nullptr);
+                shader->m_target_pass_pipelines.erase(fnd);
+            }
+
             vkDestroyRenderPass(_vk_logic_device, fb->m_rendpass, nullptr);
             vkDestroyFramebuffer(_vk_logic_device, fb->m_framebuffer, nullptr);
             delete fb; // Fix: Add missing delete to prevent memory leak
@@ -2652,8 +2664,11 @@ namespace jeecs::graphic::api::vk130
         }
         void destroy_shader(jevk13_shader* shader)
         {
-            for (auto& [_, pipeline] : shader->m_target_pass_pipelines)
+            for (auto& [framebuf, pipeline] : shader->m_target_pass_pipelines)
+            {
+                framebuf->m_shaders_generate_pipeline_for_this_frame.erase(shader);
                 vkDestroyPipeline(_vk_logic_device, pipeline, nullptr);
+            }
 
             for (auto* ubo : shader->m_uniform_variables)
                 destroy_uniform_buffer(ubo);
@@ -3566,7 +3581,7 @@ namespace jeecs::graphic::api::vk130
                 _vk_jegl_context,
                 [](jegl_context* ctx, jegl_resource* res)
                 {
-                    auto* this_context = 
+                    auto* this_context =
                         reinterpret_cast<jegl_vk130_context*>(ctx->m_graphic_impl_context);
 
                     auto vk13_texture = reinterpret_cast<jevk13_texture*>(res->m_handle.m_ptr);
@@ -3641,9 +3656,18 @@ namespace jeecs::graphic::api::vk130
         VkRenderPass target_pass = target_framebuffer_instance->m_rendpass;
         assert(target_pass != VK_NULL_HANDLE);
 
-        auto fnd = m_target_pass_pipelines.find(target_pass);
+        auto fnd = m_target_pass_pipelines.find(target_framebuffer_instance);
         if (fnd != m_target_pass_pipelines.end())
             return fnd->second;
+
+        do
+        {
+            // Generate relation ship between shader and framebuffer
+            auto result = target_framebuffer_instance->
+                m_shaders_generate_pipeline_for_this_frame.insert(this);
+            (void)result;
+            assert(result.second);
+        } while (0);
 
         m_blob_data->m_rasterization_state_create_info.frontFace =
             target_framebuffer_instance->m_is_screen_framebuffer
@@ -3700,9 +3724,14 @@ namespace jeecs::graphic::api::vk130
             &pipeline))
         {
             jeecs::debug::logfatal("Failed to create vk130 graphics pipeline.");
+            abort();
         }
 
-        m_target_pass_pipelines[target_pass] = pipeline;
+        auto result = m_target_pass_pipelines.insert(
+            std::make_pair(target_framebuffer_instance, pipeline));
+        (void)result;
+        assert(result.second);
+
         return pipeline;
     }
     jevk13_uniformbuf* jevk13_shader::allocate_ubo_for_vars(jegl_vk130_context* context)
@@ -3987,9 +4016,11 @@ namespace jeecs::graphic::api::vk130
 
     void draw_vertex_with_shader(jegl_context::graphic_impl_context_t ctx, jegl_resource* vertex)
     {
-        jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
+        jegl_vk130_context* context = 
+            std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
 
-        context->cmd_draw_vertex(std::launder(reinterpret_cast<jevk13_vertex*>(vertex->m_handle.m_ptr)));
+        context->cmd_draw_vertex(
+            std::launder(reinterpret_cast<jevk13_vertex*>(vertex->m_handle.m_ptr)));
     }
 
     bool bind_shader(jegl_context::graphic_impl_context_t ctx, jegl_resource* shader)
