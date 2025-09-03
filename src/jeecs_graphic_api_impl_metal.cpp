@@ -444,13 +444,13 @@ public func frag(_: v2f)
             MTL::PrimitiveType primitive_type;
             switch (raw_vertex_data->m_type)
             {
-            case jegl_vertex::vertex_type::LINES:
+            case jegl_vertex::type::LINES:
                 primitive_type = MTL::PrimitiveTypeLineStrip;
                 break;
-            case jegl_vertex::vertex_type::TRIANGLES:
+            case jegl_vertex::type::TRIANGLES:
                 primitive_type = MTL::PrimitiveTypeTriangle;
                 break;
-            case jegl_vertex::vertex_type::TRIANGLE_STRIP:
+            case jegl_vertex::type::TRIANGLE_STRIP:
                 primitive_type = MTL::PrimitiveTypeTriangleStrip;
                 break;
             default:
