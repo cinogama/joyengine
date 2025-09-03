@@ -187,7 +187,7 @@ public func frag(_: v2f)
         color = vec4!(1., 1., 1., 1.),
     };
 }
-)");
+)").unwrap();
 
         /*
         初期开发，暂时在这里随便写写画画
@@ -207,16 +207,16 @@ public func frag(_: v2f)
         return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
 
-    jegl_resource_blob create_resource_blob(jegl_context::graphic_impl_context_t, jegl_resource* res)
+    jegl_resource_blob create_resource_blob(jegl_context::graphic_impl_context_t ctx, jegl_resource* res)
     {
         jegl_metal_context* metal_context =
             reinterpret_cast<jegl_metal_context*>(ctx);
 
-        switch (resource->m_type)
+        switch (res->m_type)
         {
         case jegl_resource::type::SHADER:
         {
-            auto* raw_shader = resource->m_raw_shader_data;
+            auto* raw_shader = res->m_raw_shader_data;
             assert(raw_shader != nullptr);
 
             NS::Error* error_info = nullptr;
@@ -255,7 +255,7 @@ public func frag(_: v2f)
             if (shader_load_failed)
             {
                 jeecs::debug::logerr(
-                    "Fail to load shader '%s':\n%s", resource->m_path, error_informations.c_str());
+                    "Fail to load shader '%s':\n%s", res->m_path, error_informations.c_str());
                 if (vertex_library != nullptr)
                     vertex_library->release();
                 if (fragment_library != nullptr)
@@ -332,7 +332,7 @@ public func frag(_: v2f)
                 res->m_handle.m_ptr = new metal_shader(pso);
             }
             else
-                resource->m_handle.m_ptr = nullptr;
+                res->m_handle.m_ptr = nullptr;
 
             break;
         }
@@ -344,13 +344,13 @@ public func frag(_: v2f)
     void using_resource(jegl_context::graphic_impl_context_t, jegl_resource*)
     {
     }
-    void close_resource(jegl_context::graphic_impl_context_t, jegl_resource*)
+    void close_resource(jegl_context::graphic_impl_context_t, jegl_resource* res)
     {
-        switch (resource->m_type)
+        switch (res->m_type)
         {
         case jegl_resource::type::SHADER:
         {
-            delete reinterpret_cast<metal_shader*>(resource->m_handle.m_ptr);
+            delete reinterpret_cast<metal_shader*>(res->m_handle.m_ptr);
             break;
         }
         default:
