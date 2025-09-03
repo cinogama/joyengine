@@ -180,7 +180,7 @@ public func frag(_: v2f)
 )");
 
         /*
-        ³õÆÚ¿ª·¢£¬ÔÝÊ±ÔÚÕâÀïËæ±ãÐ´Ð´»­»­
+        åˆæœŸå¼€å‘ï¼Œæš‚æ—¶åœ¨è¿™é‡Œéšä¾¿å†™å†™ç”»ç”»
         */
         MTL::CommandBuffer* pCmd =
             metal_context->m_command_queue->commandBuffer();
@@ -255,19 +255,31 @@ public func frag(_: v2f)
             else
             {
                 MTL::Function* vertex_main_function = 
-                    vertex_library->newFunction(NS::String::string("vertex_main", UTF8StringEncoding));
+                    vertex_library->newFunction(
+                        NS::String::string("vertex_main", UTF8StringEncoding));
                 MTL::Function* fragment_main_function =
-                    fragment_library->newFunction(NS::String::string("fragment_main", UTF8StringEncoding));
+                    fragment_library->newFunction(
+                        NS::String::string("fragment_main", UTF8StringEncoding));
 
                 assert(vertex_main_function != nullptr && fragment_main_function != nullptr);
 
-                MTL::RenderPipelineDescriptor* desc = MTL::RenderPipelineDescriptor::alloc()->init();
+                MTL::RenderPipelineDescriptor* desc = 
+                    MTL::RenderPipelineDescriptor::alloc()->init();
+
                 desc->setVertexFunction(vertex_main_function);
                 desc->setFragmentFunction(fragment_main_function);
 
-                // TODO: ´Ë´¦½öÎªµ÷ÊÔ£¬ÒªÕýÊ½µØ»ñÈ¡ shader Æ¬ÔªµÄÊä³öÍ¨µÀ
-                desc->colorAttachments()->object(0)->setPixelFormat(
-                    MTL::PixelFormat::PixelFormatBGRA8Unorm_sRGB);
+                for (size_t i = 0; i < raw_shader->m_fragment_out_count; ++i)
+                {
+                    MTL::PixelFormat format_type;
+                    switch (raw_shader->m_fragment_out[i])
+                    {
+                    case jegl_shader::uniform_type::FLOAT4:
+                        format_type 
+                    }
+                    desc->colorAttachments()->object(i)->setPixelFormat(
+                        format_type);
+                }
 
                 return new metal_resource_shader_blob(
                     vertex_main_function,
