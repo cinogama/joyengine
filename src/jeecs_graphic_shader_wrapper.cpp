@@ -942,7 +942,7 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args)
                 uniform_blocks: array<(string, int)>,
                 config: ShaderConfig)=> gchandle;
     using ShaderConfig = struct{
-        shared: mut bool,
+        shared    : mut bool,
         ztest     : mut ZConfig,
         zwrite    : mut GConfig,
         blend_equation: mut BlendEquation,

@@ -528,7 +528,7 @@ namespace jeecs::graphic::api::dx11
         return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
 
-    struct dx11_resource_blob
+    struct dx11_resource_shader_blob
     {
         jegl_dx11_context::MSWRLComPtr<ID3D11InputLayout> m_vao;
         jegl_dx11_context::MSWRLComPtr<ID3DBlob> m_vertex_blob;
@@ -563,7 +563,7 @@ namespace jeecs::graphic::api::dx11
         {
             bool shader_load_failed = false;
 
-            dx11_resource_blob* blob = new dx11_resource_blob;
+            dx11_resource_shader_blob* blob = new dx11_resource_shader_blob;
             std::string error_informations;
             ID3DBlob* error_blob = nullptr;
 
@@ -1057,7 +1057,7 @@ namespace jeecs::graphic::api::dx11
     void dx11_close_resource_blob(jegl_context::graphic_impl_context_t ctx, jegl_resource_blob blob)
     {
         if (blob != nullptr)
-            delete (dx11_resource_blob*)blob;
+            delete reinterpret_cast<dx11_resource_shader_blob*>(blob);
     }
 
     jedx11_texture* dx11_create_texture_instance(jegl_dx11_context* context, jegl_resource* resource, bool is_dynamic)
@@ -1176,7 +1176,8 @@ namespace jeecs::graphic::api::dx11
         {
             if (blob != nullptr)
             {
-                auto* shader_blob = std::launder(reinterpret_cast<dx11_resource_blob*>(blob));
+                auto* shader_blob = 
+                    reinterpret_cast<dx11_resource_shader_blob*>(blob);
 
                 jedx11_shader* jedx11_shader_res = new jedx11_shader;
                 jedx11_shader_res->m_draw_for_r2b = false;

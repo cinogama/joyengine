@@ -18,17 +18,17 @@ namespace jeecs::graphic::api::metal
     {
         JECS_DISABLE_MOVE_AND_COPY(jegl_metal_context);
 
-        MTL::Device*        m_metal_device;
-        MTL::CommandQueue*  m_command_queue;
+        MTL::Device* m_metal_device;
+        MTL::CommandQueue* m_command_queue;
         jeecs::graphic::metal::window_view_layout*
-                            m_window_and_view_layout;
+            m_window_and_view_layout;
 
-        NS::AutoreleasePool* 
-                            m_frame_auto_release_pool_init_pre_update_and_release_after_commit;
+        NS::AutoreleasePool*
+            m_frame_auto_release_pool_init_pre_update_and_release_after_commit;
 
         jegl_metal_context(const jegl_interface_config* cfg)
         {
-            m_metal_device = 
+            m_metal_device =
                 MTL::CreateSystemDefaultDevice();
             m_command_queue = m_metal_device->newCommandQueue();
 
@@ -46,6 +46,35 @@ namespace jeecs::graphic::api::metal
             m_command_queue->release();
             m_metal_device->release();
         }
+    };
+
+    struct metal_resource_shader_blob
+    {
+        JECS_DISABLE_MOVE_AND_COPY(metal_resource_shader_blob);
+
+        MTL::Function* m_vertex_function;
+        MTL::Function* m_fragment_function;
+        MTL::RenderPipelineDescriptor* m_pipeline_descriptor;
+
+        metal_resource_shader_blob(
+                MTL::Function* vert,
+                MTL::Function* frag,
+                MTL::RenderPipelineDescriptor* desc)
+            : m_vertex_function(vert)
+            , m_fragment_function(frag)
+            , m_pipeline_descriptor(desc)
+        {
+        }
+        ~metal_resource_shader_blob()
+        {
+            m_vertex_function->release();
+            m_fragment_function->release();
+            m_pipeline_descriptor->release();
+        }
+    };
+    struct metal_shader
+    {
+        MTL::RenderPipelineState* m_pipeline_state;
     };
 
     jegl_context::graphic_impl_context_t
@@ -87,7 +116,8 @@ namespace jeecs::graphic::api::metal
 
     jegl_update_action pre_update(jegl_context::graphic_impl_context_t ctx)
     {
-        jegl_metal_context* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
+        jegl_metal_context* metal_context =
+            reinterpret_cast<jegl_metal_context*>(ctx);
 
         metal_context->m_frame_auto_release_pool_init_pre_update_and_release_after_commit =
             NS::AutoreleasePool::alloc()->init();
@@ -97,7 +127,8 @@ namespace jeecs::graphic::api::metal
     jegl_update_action commit_update(
         jegl_context::graphic_impl_context_t ctx, jegl_update_action)
     {
-        jegl_metal_context* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
+        jegl_metal_context* metal_context =
+            reinterpret_cast<jegl_metal_context*>(ctx);
 
         // jegui_update_metal();
 
@@ -151,9 +182,9 @@ public func frag(_: v2f)
         /*
         初期开发，暂时在这里随便写写画画
         */
-        MTL::CommandBuffer* pCmd = 
+        MTL::CommandBuffer* pCmd =
             metal_context->m_command_queue->commandBuffer();
-        MTL::RenderPassDescriptor* pRpd = 
+        MTL::RenderPassDescriptor* pRpd =
             metal_context->m_window_and_view_layout->m_metal_view->currentRenderPassDescriptor();
         MTL::RenderCommandEncoder* pEnc = pCmd->renderCommandEncoder(pRpd);
 
@@ -168,15 +199,120 @@ public func frag(_: v2f)
 
     jegl_resource_blob create_resource_blob(jegl_context::graphic_impl_context_t, jegl_resource* res)
     {
+        jegl_metal_context* metal_context =
+            reinterpret_cast<jegl_metal_context*>(ctx);
 
+        switch (resource->m_type)
+        {
+        case jegl_resource::type::SHADER:
+        {
+            auto* raw_shader = resource->m_raw_shader_data;
+            assert(raw_shader != nullptr);
+
+            NS::Error* error_info = nullptr;
+            MTL::Library* vertex_library = nullptr, fragment_library = nullptr;
+
+            bool shader_load_failed = false;
+            std::string error_informations;
+
+            vertex_library = metal_context->m_metal_device->newLibrary(
+                NS::String::string(raw_shader->m_vertex_msl_mac_src, UTF8StringEncoding),
+                nullptr,
+                &error_info);
+
+            if (vertex_library == nullptr)
+            {
+                shader_load_failed = true;
+                error_informations += "In vertex shader: \n";
+               
+                error_informations += 
+                    error_info->localizedDescription()->utf8String();
+            }
+
+            fragment_library = metal_context->m_metal_device->newLibrary(
+                NS::String::string(raw_shader->m_fragment_msl_mac_src, UTF8StringEncoding),
+                nullptr,
+                &error_info);
+
+            if (fragment_library == nullptr)
+            {
+                shader_load_failed = true;
+                error_informations += "In fragment shader: \n";
+                error_informations += 
+                    error_info->localizedDescription()->utf8String();
+            }
+
+            if (shader_load_failed)
+            {
+                jeecs::debug::logerr(
+                    "Fail to load shader '%s':\n%s", resource->m_path, error_informations.c_str());
+                if (vertex_library != nullptr)
+                    vertex_library->release();
+                if (fragment_library != nullptr)
+                    fragment_library->release();
+                return nullptr;
+            }
+            else
+            {
+                MTL::Function* vertex_main_function = 
+                    vertex_library->newFunction(NS::String::string("vertex_main", UTF8StringEncoding));
+                MTL::Function* fragment_main_function =
+                    fragment_library->newFunction(NS::String::string("fragment_main", UTF8StringEncoding));
+
+                assert(vertex_main_function != nullptr && fragment_main_function != nullptr);
+
+                MTL::RenderPipelineDescriptor* desc = MTL::RenderPipelineDescriptor::alloc()->init();
+                desc->setVertexFunction(vertex_main_function);
+                desc->setFragmentFunction(fragment_main_function);
+
+                // TODO: 此处仅为调试，要正式地获取 shader 片元的输出通道
+                desc->colorAttachments()->object(0)->setPixelFormat(
+                    MTL::PixelFormat::PixelFormatBGRA8Unorm_sRGB);
+
+                return new metal_resource_shader_blob(
+                    vertex_main_function,
+                    fragment_main_function,
+                    desc);
+            }
+            break;
+        }
+        default:
+            break;
+        }
         return nullptr;
     }
-    void close_resource_blob(jegl_context::graphic_impl_context_t, jegl_resource_blob)
+    void close_resource_blob(jegl_context::graphic_impl_context_t, jegl_resource_blob blob)
     {
+        if (blob != nullptr)
+        {
+            delete reinterpret_cast<metal_resource_shader_blob*>(blob);
+        }
     }
 
-    void create_resource(jegl_context::graphic_impl_context_t, jegl_resource_blob, jegl_resource*)
+    void create_resource(
+        jegl_context::graphic_impl_context_t ctx, 
+        jegl_resource_blob blob, 
+        jegl_resource* res)
     {
+        jegl_metal_context* metal_context =
+            reinterpret_cast<jegl_metal_context*>(ctx);
+
+        switch (res->m_type)
+        {
+        case jegl_resource::type::SHADER:
+        {
+            if (blob != nullptr)
+            {
+                auto* shader_blob = reinterpret_cast<metal_resource_shader_blob*>(blob);
+            }
+            else
+                resource->m_handle.m_ptr = nullptr;
+
+            break;
+        }
+        default:
+            jeecs::debug::logfatal("Unsupported resource type to create in Metal backend.");
+        }
     }
     void using_resource(jegl_context::graphic_impl_context_t, jegl_resource*)
     {
