@@ -320,7 +320,7 @@ public func frag(_: v2f)
                     MTL::PixelFormat::PixelFormatBGRA8Unorm_sRGB);
 
                 NS::Error* pError = nullptr;
-                auto* pso = _pDevice->newRenderPipelineState(pDesc, &pError);
+                auto* pso = metal_context->m_metal_device->newRenderPipelineState(pDesc, &pError);
                 if (pso == nullptr)
                 {
                     jeecs::debug::logfatal(
