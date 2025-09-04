@@ -366,7 +366,7 @@ public func frag(_: v2f)
 
                 for (size_t i = 0; i < raw_shader->m_vertex_in_count; ++i)
                 {
-                    unsigned int layout_begin_offset = 0
+                    unsigned int layout_begin_offset = 0;
 
                     auto* attribute = vertex_descriptor->attributes()->object(i);
                     attribute->setBufferIndex(0);
