@@ -111,7 +111,6 @@ namespace jeecs::graphic::api::metal
             MTL::PrimitiveType primitive_type,
             MTL::Buffer* vertex_buffer,
             MTL::Buffer* index_buffer,
-            MTL::VertexDescriptor* vertex_descriptor,
             uint32_t index_count)
             : m_primitive_type(primitive_type)
             , m_vertex_buffer(vertex_buffer)
