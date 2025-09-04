@@ -66,18 +66,22 @@ namespace jeecs::graphic::api::metal
 
         MTL::Function* m_vertex_function;
         MTL::Function* m_fragment_function;
+        MTL::VertexDescriptor* m_vertex_descriptor;
 
         metal_resource_shader_blob(
             MTL::Function* vert,
-            MTL::Function* frag)
+            MTL::Function* frag,
+            MTL::VertexDescriptor* vdesc)
             : m_vertex_function(vert)
             , m_fragment_function(frag)
+            , m_vertex_descriptor(vdesc)
         {
         }
         ~metal_resource_shader_blob()
         {
             m_vertex_function->release();
             m_fragment_function->release();
+            m_vertex_descriptor->release();
         }
     };
     struct metal_shader
@@ -357,9 +361,71 @@ public func frag(_: v2f)
                 vertex_library->release();
                 fragment_library->release();
 
+                MTL::VertexDescriptor* vertex_descriptor = 
+                    MTL::VertexDescriptor::alloc()->init();
+
+                for (size_t i = 0; i < raw_shader->m_vertex_in_count; ++i)
+                {
+                    unsigned int layout_begin_offset = 0
+
+                    auto* attribute = vertex_descriptor->attributes()->object(i);
+                    attribute->setBufferIndex(0);
+                    attribute->setOffset(layout_begin_offset);
+                  
+                    auto* layout = vertex_descriptor->layouts()->object(i);
+                    layout->setStepFunction(MTL::VertexStepFunctionPerVertex);
+
+                    switch (raw_shader->m_vertex_in[i])
+                    {
+                    case jegl_shader::uniform_type::INT:
+                        attribute->setFormat(MTL::VertexFormatInt);
+                        layout->setStride(sizeof(int));
+                        layout_begin_offset += 4;
+                        break;
+                    case jegl_shader::uniform_type::INT2:
+                        attribute->setFormat(MTL::VertexFormatInt2);
+                        layout->setStride(2 * sizeof(int));
+                        layout_begin_offset += 8;
+                        break;
+                    case jegl_shader::uniform_type::INT3:
+                        attribute->setFormat(MTL::VertexFormatInt3);
+                        layout->setStride(3 * sizeof(int));
+                        layout_begin_offset += 12;
+                        break;
+                    case jegl_shader::uniform_type::INT4:
+                        attribute->setFormat(MTL::VertexFormatInt4);
+                        layout->setStride(4 * sizeof(int));
+                        layout_begin_offset += 16;
+                        break;
+                    case jegl_shader::uniform_type::FLOAT:
+                        attribute->setFormat(MTL::VertexFormatFloat);
+                        layout->setStride(sizeof(float));
+                        layout_begin_offset += 4;
+                        break;
+                    case jegl_shader::uniform_type::FLOAT2:
+                        attribute->setFormat(MTL::VertexFormatFloat2);
+                        layout->setStride(2 * sizeof(float));
+                        layout_begin_offset += 8;
+                        break;
+                    case jegl_shader::uniform_type::FLOAT3:
+                        attribute->setFormat(MTL::VertexFormatFloat3);
+                        layout->setStride(3 * sizeof(float));
+                        layout_begin_offset += 12;
+                        break;
+                    case jegl_shader::uniform_type::FLOAT4:
+                        attribute->setFormat(MTL::VertexFormatFloat4);
+                        layout->setStride(4 * sizeof(float));
+                        layout_begin_offset += 16;
+                        break;
+                    default:
+                        abort();
+                    }
+                }
+
                 return new metal_resource_shader_blob(
                     vertex_main_function,
-                    fragment_main_function);
+                    fragment_main_function,
+                    vertex_descriptor);
             }
             break;
         }
@@ -396,8 +462,10 @@ public func frag(_: v2f)
 
                 pDesc->setVertexFunction(shader_blob->m_vertex_function);
                 pDesc->setFragmentFunction(shader_blob->m_fragment_function);
+                pDesc->setVertexDescriptor(shader_blob->m_vertex_descriptor);
 
                 // Create a default vertex descriptor for the shader
+                /*
                 MTL::VertexDescriptor* vertex_descriptor = MTL::VertexDescriptor::alloc()->init();
                 auto* attribute = vertex_descriptor->attributes()->object(0);
                 attribute->setBufferIndex(0);
@@ -409,6 +477,7 @@ public func frag(_: v2f)
                 layout->setStepFunction(MTL::VertexStepFunctionPerVertex);
                 
                 pDesc->setVertexDescriptor(vertex_descriptor);
+                */
 
                 pDesc->colorAttachments()->object(0)->setPixelFormat(
                     MTL::PixelFormat::PixelFormatBGRA8Unorm_sRGB);
