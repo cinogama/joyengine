@@ -105,7 +105,6 @@ namespace jeecs::graphic::api::metal
         MTL::PrimitiveType m_primitive_type;
         MTL::Buffer* m_vertex_buffer;
         MTL::Buffer* m_index_buffer;
-        MTL::VertexDescriptor* m_vertex_descriptor;
         uint32_t m_index_count;
 
         metal_vertex(
@@ -117,7 +116,6 @@ namespace jeecs::graphic::api::metal
             : m_primitive_type(primitive_type)
             , m_vertex_buffer(vertex_buffer)
             , m_index_buffer(index_buffer)
-            , m_vertex_descriptor(vertex_descriptor)
             , m_index_count(index_count)
         {
         }
@@ -127,8 +125,6 @@ namespace jeecs::graphic::api::metal
                 m_vertex_buffer->release();
             if (m_index_buffer)
                 m_index_buffer->release();
-            if (m_vertex_descriptor)
-                m_vertex_descriptor->release();
         }
     };
     jegl_context::graphic_impl_context_t
@@ -456,9 +452,9 @@ public func frag(_: v2f)
                 MTL::ResourceStorageModeShared);
 
             // Create vertex descriptor
-            MTL::VertexDescriptor* vertex_descriptor = MTL::VertexDescriptor::alloc()->init();
+            // MTL::VertexDescriptor* vertex_descriptor = MTL::VertexDescriptor::alloc()->init();
             
-            size_t offset = 0;
+            /*size_t offset = 0;
             for (unsigned int i = 0; i < (unsigned int)raw_vertex_data->m_format_count; i++)
             {
                 auto* attribute = vertex_descriptor->attributes()->object(i);
@@ -502,12 +498,12 @@ public func frag(_: v2f)
                 }
 
                 offset += format_size * raw_vertex_data->m_formats[i].m_count;
-            }
+            }*/
 
             // Set vertex buffer layout
-            auto* layout = vertex_descriptor->layouts()->object(0);
+           /* auto* layout = vertex_descriptor->layouts()->object(0);
             layout->setStride(raw_vertex_data->m_data_size_per_point);
-            layout->setStepFunction(MTL::VertexStepFunctionPerVertex);
+            layout->setStepFunction(MTL::VertexStepFunctionPerVertex);*/
 
             // Map primitive types
             MTL::PrimitiveType primitive_type;
@@ -531,7 +527,6 @@ public func frag(_: v2f)
                 primitive_type,
                 vertex_buffer,
                 index_buffer,
-                vertex_descriptor,
                 raw_vertex_data->m_index_count);
             break;
         }
