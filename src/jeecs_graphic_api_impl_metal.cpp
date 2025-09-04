@@ -173,15 +173,12 @@ namespace jeecs::graphic::api::metal
         jegl_metal_context* metal_context =
             reinterpret_cast<jegl_metal_context*>(ctx);
 
-        // 每帧开始之前，释放上一帧的自动释放池，并创建新的自动释放池
-        do
+        // 每帧开始之前，创建新的自动释放池（如果还没有的话）
+        if (metal_context->m_frame_auto_release == nullptr)
         {
-            if (metal_context->m_frame_auto_release != nullptr)
-                metal_context->m_frame_auto_release->release();
-
             metal_context->m_frame_auto_release =
                 NS::AutoreleasePool::alloc()->init();
-        } while (0);
+        }
 
         return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
@@ -282,6 +279,13 @@ public func frag(_: v2f)
         pCmd->presentDrawable(
             metal_context->m_window_and_view_layout->m_metal_view->currentDrawable());
         pCmd->commit();
+
+        // 帧结束后释放自动释放池
+        if (metal_context->m_frame_auto_release != nullptr)
+        {
+            metal_context->m_frame_auto_release->release();
+            metal_context->m_frame_auto_release = nullptr;
+        }
 
         return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
@@ -658,8 +662,7 @@ public:
 
             NS::Application* shared_application = NS::Application::sharedApplication();
             shared_application->setDelegate(&del);
-            shared_application->run();
-
+            shared_application->run(); 
             auto_release_pool->release();
         }
     }
