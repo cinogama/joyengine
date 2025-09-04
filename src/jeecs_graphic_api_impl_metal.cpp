@@ -271,7 +271,6 @@ public func frag(_: v2f)
 
         pEnc->setRenderPipelineState(shader_instance->m_pipeline_state);
         pEnc->setVertexBuffer(vertex_instance->m_vertex_buffer, 0, 0);
-        pEnc->setVertexDescriptor(vertex_instance->m_vertex_descriptor);
         pEnc->drawIndexedPrimitives(
             vertex_instance->m_primitive_type,
             vertex_instance->m_index_count,
@@ -399,6 +398,19 @@ public func frag(_: v2f)
                 pDesc->setVertexFunction(shader_blob->m_vertex_function);
                 pDesc->setFragmentFunction(shader_blob->m_fragment_function);
 
+                // Create a default vertex descriptor for the shader
+                MTL::VertexDescriptor* vertex_descriptor = MTL::VertexDescriptor::alloc()->init();
+                auto* attribute = vertex_descriptor->attributes()->object(0);
+                attribute->setBufferIndex(0);
+                attribute->setOffset(0);
+                attribute->setFormat(MTL::VertexFormatFloat3);
+                
+                auto* layout = vertex_descriptor->layouts()->object(0);
+                layout->setStride(3 * sizeof(float));
+                layout->setStepFunction(MTL::VertexStepFunctionPerVertex);
+                
+                pDesc->setVertexDescriptor(vertex_descriptor);
+
                 pDesc->colorAttachments()->object(0)->setPixelFormat(
                     MTL::PixelFormat::PixelFormatBGRA8Unorm_sRGB);
 
@@ -413,6 +425,7 @@ public func frag(_: v2f)
                     abort();
                 }
 
+                vertex_descriptor->release();
                 pDesc->release();
                 res->m_handle.m_ptr = new metal_shader(pso);
             }
