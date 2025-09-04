@@ -14,6 +14,7 @@
 
 namespace jeecs::graphic::api::metal
 {
+    struct metal_shader;
     struct jegl_metal_context
     {
         JECS_DISABLE_MOVE_AND_COPY(jegl_metal_context);
@@ -23,8 +24,14 @@ namespace jeecs::graphic::api::metal
         jeecs::graphic::metal::window_view_layout*
             m_window_and_view_layout;
 
-        NS::AutoreleasePool*
-            m_frame_auto_release_pool_init_pre_update_and_release_after_commit;
+        NS::AutoreleasePool* m_frame_auto_release;
+
+        /* Render context */
+        struct render_runtime_states
+        {
+            metal_shader* m_current_target_shader;
+        };
+        render_runtime_states m_render_states;
 
         jegl_metal_context(const jegl_interface_config* cfg)
         {
@@ -38,6 +45,8 @@ namespace jeecs::graphic::api::metal
                     (double)cfg->m_width,
                     (double)cfg->m_height,
                     m_metal_device);
+
+            m_frame_auto_release = nullptr;
         }
         ~jegl_metal_context()
         {
@@ -45,6 +54,9 @@ namespace jeecs::graphic::api::metal
             delete m_window_and_view_layout;
             m_command_queue->release();
             m_metal_device->release();
+
+            if (m_frame_auto_release != nullptr)
+                m_frame_auto_release->release();
         }
     };
 
@@ -161,8 +173,15 @@ namespace jeecs::graphic::api::metal
         jegl_metal_context* metal_context =
             reinterpret_cast<jegl_metal_context*>(ctx);
 
-        metal_context->m_frame_auto_release_pool_init_pre_update_and_release_after_commit =
-            NS::AutoreleasePool::alloc()->init();
+        // 每帧开始之前，释放上一帧的自动释放池，并创建新的自动释放池
+        do
+        {
+            if (metal_context->m_frame_auto_release != nullptr)
+                metal_context->m_frame_auto_release->release();
+
+            metal_context->m_frame_auto_release =
+                NS::AutoreleasePool::alloc()->init();
+        } while (0);
 
         return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
@@ -244,12 +263,27 @@ public func frag(_: v2f)
             metal_context->m_window_and_view_layout->m_metal_view->currentRenderPassDescriptor();
         MTL::RenderCommandEncoder* pEnc = pCmd->renderCommandEncoder(pRpd);
 
+        jegl_using_resource(sd->resource());
+        jegl_using_resource(vt->resource());
+
+        auto* shader_instance = std::launder(reinterpret_cast<metal_shader*>(sd->resource()->m_handle.m_ptr));
+        auto* vertex_instance = std::launder(reinterpret_cast<metal_vertex*>(vt->resource()->m_handle.m_ptr));
+
+        pEnc->setRenderPipelineState(shader_instance->m_pipeline_state);
+        pEnc->setVertexBuffer(vertex_instance->m_vertex_buffer, 0, 0);
+        pEnc->setVertexDescriptor(vertex_instance->m_vertex_descriptor);
+        pEnc->drawIndexedPrimitives(
+            vertex_instance->m_primitive_type,
+            vertex_instance->m_index_count,
+            MTL::IndexType::IndexTypeUInt32,
+            vertex_instance->m_index_buffer,
+            0);
+
         pEnc->endEncoding();
         pCmd->presentDrawable(
             metal_context->m_window_and_view_layout->m_metal_view->currentDrawable());
         pCmd->commit();
 
-        metal_context->m_frame_auto_release_pool_init_pre_update_and_release_after_commit->release();
         return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
 
@@ -514,8 +548,19 @@ public func frag(_: v2f)
     void bind_uniform_buffer(jegl_context::graphic_impl_context_t, jegl_resource*)
     {
     }
-    bool bind_shader(jegl_context::graphic_impl_context_t, jegl_resource*)
+    bool bind_shader(jegl_context::graphic_impl_context_t ctx, jegl_resource* res)
     {
+        //assert(res->m_type == jegl_resource::type::SHADER);
+        //
+        //auto* shader_instance = reinterpret_cast<metal_shader*>(res->m_handle.m_ptr);
+        //if (shader_instance == nullptr)
+        //    return false;
+
+        //auto* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
+        //metal_context->m_render_states.m_current_target_shader = shader_instance;
+
+
+
         return true;
     }
     void bind_texture(jegl_context::graphic_impl_context_t, jegl_resource*, size_t)
