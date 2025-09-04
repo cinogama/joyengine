@@ -322,6 +322,9 @@ public func frag(_: v2f)
                     vertex_main_function != nullptr
                     && fragment_main_function != nullptr);
 
+                vertex_library->release();
+                fragment_library->release();
+
                 return new metal_resource_shader_blob(
                     vertex_main_function,
                     fragment_main_function);
@@ -376,6 +379,7 @@ public func frag(_: v2f)
                     abort();
                 }
 
+                pDesc->release();
                 res->m_handle.m_ptr = new metal_shader(pso);
             }
             else
