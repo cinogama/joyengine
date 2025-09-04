@@ -224,11 +224,13 @@ CULL    (NONE);
 WOSHADER_VERTEX_IN!
     using vin = struct {
         vertex  : float3,
+        color   : float3,
     };
     
 WOSHADER_VERTEX_TO_FRAGMENT!
     using v2f = struct {
         pos     : float4,
+        color   : float3,
     };
     
 WOSHADER_FRAGMENT_OUT!
@@ -240,13 +242,14 @@ public func vert(v: vin)
 {
     return v2f{
         pos = vec4!(v.vertex, 1.),
+        color = v.color,
     };
 }
 
-public func frag(_: v2f)
+public func frag(v: v2f)
 {
     return fout{
-        color = vec4!(1., 0., 1., 1.),
+        color = vec4!(v.color, 1.),
     };
 }
 )").value();
