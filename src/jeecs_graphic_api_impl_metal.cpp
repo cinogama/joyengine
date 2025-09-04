@@ -493,7 +493,6 @@ public func frag(_: v2f)
                     abort();
                 }
 
-                vertex_descriptor->release();
                 pDesc->release();
                 res->m_handle.m_ptr = new metal_shader(pso);
             }
