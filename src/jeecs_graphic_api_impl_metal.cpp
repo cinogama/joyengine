@@ -189,9 +189,9 @@ namespace jeecs::graphic::api::metal
 
         // jegui_update_metal();
         const float pdata[] = {
-            -0.5f, -0.5f, 0.0f,
-             0.5f, -0.5f, 0.0f,
-            -0.5f,  0.5f, 0.0f,
+            -0.5f, -0.5f, 0.0f,  1.0f, 0.0f, 0.0f,
+             0.5f, -0.5f, 0.0f,  0.0f, 1.0f, 0.0f,
+            -0.5f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f,
         };
         static basic::resource<graphic::vertex> vt =
             graphic::vertex::create(
@@ -200,6 +200,7 @@ namespace jeecs::graphic::api::metal
                 sizeof(pdata),
                 { 0, 1, 2 },
                 {
+                    {jegl_vertex::data_type::FLOAT32, 3},
                     {jegl_vertex::data_type::FLOAT32, 3},
                 }).value();
 
