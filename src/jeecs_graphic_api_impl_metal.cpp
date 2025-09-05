@@ -110,16 +110,19 @@ namespace jeecs::graphic::api::metal
         MTL::Buffer* m_vertex_buffer;
         MTL::Buffer* m_index_buffer;
         uint32_t m_index_count;
+        uint32_t m_vertex_stride; // 添加实际顶点步长信息
 
         metal_vertex(
             MTL::PrimitiveType primitive_type,
             MTL::Buffer* vertex_buffer,
             MTL::Buffer* index_buffer,
-            uint32_t index_count)
+            uint32_t index_count,
+            uint32_t vertex_stride)
             : m_primitive_type(primitive_type)
             , m_vertex_buffer(vertex_buffer)
             , m_index_buffer(index_buffer)
             , m_index_count(index_count)
+            , m_vertex_stride(vertex_stride)
         {
         }
         ~metal_vertex()
@@ -368,62 +371,64 @@ public func frag(v: v2f)
                 MTL::VertexDescriptor* vertex_descriptor = 
                     MTL::VertexDescriptor::alloc()->init();
 
+                // 计算实际的顶点数据布局
+                unsigned int current_offset = 0;
+                
                 for (size_t i = 0; i < raw_shader->m_vertex_in_count; ++i)
                 {
-                    unsigned int layout_begin_offset = 0;
-
                     auto* attribute = vertex_descriptor->attributes()->object(i);
                     attribute->setBufferIndex(0);
-                    attribute->setOffset(layout_begin_offset);
-                  
-                    auto* layout = vertex_descriptor->layouts()->object(i);
-                    layout->setStepFunction(MTL::VertexStepFunctionPerVertex);
+                    attribute->setOffset(current_offset);
 
+                    unsigned int attribute_size = 0;
+                    
                     switch (raw_shader->m_vertex_in[i])
                     {
                     case jegl_shader::uniform_type::INT:
                         attribute->setFormat(MTL::VertexFormatInt);
-                        layout->setStride(sizeof(int));
-                        layout_begin_offset += 4;
+                        attribute_size = sizeof(int);
                         break;
                     case jegl_shader::uniform_type::INT2:
                         attribute->setFormat(MTL::VertexFormatInt2);
-                        layout->setStride(2 * sizeof(int));
-                        layout_begin_offset += 8;
+                        attribute_size = 2 * sizeof(int);
                         break;
                     case jegl_shader::uniform_type::INT3:
                         attribute->setFormat(MTL::VertexFormatInt3);
-                        layout->setStride(3 * sizeof(int));
-                        layout_begin_offset += 12;
+                        attribute_size = 3 * sizeof(int);
                         break;
                     case jegl_shader::uniform_type::INT4:
                         attribute->setFormat(MTL::VertexFormatInt4);
-                        layout->setStride(4 * sizeof(int));
-                        layout_begin_offset += 16;
+                        attribute_size = 4 * sizeof(int);
                         break;
                     case jegl_shader::uniform_type::FLOAT:
                         attribute->setFormat(MTL::VertexFormatFloat);
-                        layout->setStride(sizeof(float));
-                        layout_begin_offset += 4;
+                        attribute_size = sizeof(float);
                         break;
                     case jegl_shader::uniform_type::FLOAT2:
                         attribute->setFormat(MTL::VertexFormatFloat2);
-                        layout->setStride(2 * sizeof(float));
-                        layout_begin_offset += 8;
+                        attribute_size = 2 * sizeof(float);
                         break;
                     case jegl_shader::uniform_type::FLOAT3:
                         attribute->setFormat(MTL::VertexFormatFloat3);
-                        layout->setStride(3 * sizeof(float));
-                        layout_begin_offset += 12;
+                        attribute_size = 3 * sizeof(float);
                         break;
                     case jegl_shader::uniform_type::FLOAT4:
                         attribute->setFormat(MTL::VertexFormatFloat4);
-                        layout->setStride(4 * sizeof(float));
-                        layout_begin_offset += 16;
+                        attribute_size = 4 * sizeof(float);
                         break;
                     default:
                         abort();
                     }
+                    
+                    current_offset += attribute_size;
+                }
+
+                // 设置buffer layout，使用单一buffer布局
+                if (raw_shader->m_vertex_in_count > 0)
+                {
+                    auto* layout = vertex_descriptor->layouts()->object(0);
+                    layout->setStride(current_offset); // 使用计算出的总步长
+                    layout->setStepFunction(MTL::VertexStepFunctionPerVertex);
                 }
 
                 return new metal_resource_shader_blob(
@@ -522,60 +527,6 @@ public func frag(v: v2f)
                 raw_vertex_data->m_index_count * sizeof(uint32_t),
                 MTL::ResourceStorageModeShared);
 
-            // Create vertex descriptor
-            // MTL::VertexDescriptor* vertex_descriptor = MTL::VertexDescriptor::alloc()->init();
-            
-            /*size_t offset = 0;
-            for (unsigned int i = 0; i < (unsigned int)raw_vertex_data->m_format_count; i++)
-            {
-                auto* attribute = vertex_descriptor->attributes()->object(i);
-                attribute->setBufferIndex(0);
-                attribute->setOffset(offset);
-
-                size_t format_size;
-                switch (raw_vertex_data->m_formats[i].m_type)
-                {
-                case jegl_vertex::data_type::FLOAT32:
-                    format_size = sizeof(float);
-                    switch (raw_vertex_data->m_formats[i].m_count)
-                    {
-                    case 1: attribute->setFormat(MTL::VertexFormatFloat); break;
-                    case 2: attribute->setFormat(MTL::VertexFormatFloat2); break;
-                    case 3: attribute->setFormat(MTL::VertexFormatFloat3); break;
-                    case 4: attribute->setFormat(MTL::VertexFormatFloat4); break;
-                    default:
-                        jeecs::debug::logfatal("Unsupported float vertex attribute count: %zu", 
-                            raw_vertex_data->m_formats[i].m_count);
-                        break;
-                    }
-                    break;
-                case jegl_vertex::data_type::INT32:
-                    format_size = sizeof(int);
-                    switch (raw_vertex_data->m_formats[i].m_count)
-                    {
-                    case 1: attribute->setFormat(MTL::VertexFormatInt); break;
-                    case 2: attribute->setFormat(MTL::VertexFormatInt2); break;
-                    case 3: attribute->setFormat(MTL::VertexFormatInt3); break;
-                    case 4: attribute->setFormat(MTL::VertexFormatInt4); break;
-                    default:
-                        jeecs::debug::logfatal("Unsupported int vertex attribute count: %zu", 
-                            raw_vertex_data->m_formats[i].m_count);
-                        break;
-                    }
-                    break;
-                default:
-                    jeecs::debug::logfatal("Bad vertex data type.");
-                    break;
-                }
-
-                offset += format_size * raw_vertex_data->m_formats[i].m_count;
-            }*/
-
-            // Set vertex buffer layout
-           /* auto* layout = vertex_descriptor->layouts()->object(0);
-            layout->setStride(raw_vertex_data->m_data_size_per_point);
-            layout->setStepFunction(MTL::VertexStepFunctionPerVertex);*/
-
             // Map primitive types
             MTL::PrimitiveType primitive_type;
             switch (raw_vertex_data->m_type)
@@ -598,7 +549,8 @@ public func frag(v: v2f)
                 primitive_type,
                 vertex_buffer,
                 index_buffer,
-                raw_vertex_data->m_index_count);
+                raw_vertex_data->m_index_count,
+                raw_vertex_data->m_data_size_per_point); // 传入实际顶点大小
             break;
         }
         default:
