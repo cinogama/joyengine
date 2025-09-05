@@ -273,7 +273,7 @@ public func frag(v: v2f)
         auto* vertex_instance = std::launder(reinterpret_cast<metal_vertex*>(vt->resource()->m_handle.m_ptr));
 
         pEnc->setRenderPipelineState(shader_instance->m_pipeline_state);
-        pEnc->setVertexBuffer(vertex_instance->m_vertex_buffer, 0, 0);
+        pEnc->setVertexBuffer(vertex_instance->m_vertex_buffer, 0, vertex_instance->m_vertex_stride, 0);
         pEnc->drawIndexedPrimitives(
             vertex_instance->m_primitive_type,
             vertex_instance->m_index_count,
@@ -423,11 +423,11 @@ public func frag(v: v2f)
                     current_offset += attribute_size;
                 }
 
-                // 设置buffer layout，使用单一buffer布局
+                // 设置buffer layout，使用动态stride
                 if (raw_shader->m_vertex_in_count > 0)
                 {
                     auto* layout = vertex_descriptor->layouts()->object(0);
-                    layout->setStride(current_offset); // 使用计算出的总步长
+                    layout->setStride(MTL::BufferLayoutStrideDynamic); // 使用动态stride
                     layout->setStepFunction(MTL::VertexStepFunctionPerVertex);
                 }
 
