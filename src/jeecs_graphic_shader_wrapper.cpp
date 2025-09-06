@@ -1085,6 +1085,9 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args)
     for (size_t i = 0; i < sampler_count; ++i)
     {
         auto& sampler = wrapper->m_samplers.at(i);
+        
+        sampler.m_sampler_id = static_cast<uint32_t>(i);
+
         wo_arr_get(tmp, samplers, i);
 
         wo_struct_get(tmp2, tmp, 0);
