@@ -117,7 +117,7 @@ namespace jeecs::graphic::api::metal
     {
         JECS_DISABLE_MOVE_AND_COPY(metal_shader);
 
-        basic::resource<shared_state> m_shared_state;
+        basic::resource<metal_resource_shader_blob::shared_state> m_shared_state;
 
         size_t m_uniform_cpu_buffer_size;
         bool m_uniform_updated;
