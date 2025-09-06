@@ -774,6 +774,8 @@ public func frag(v: v2f)
         metal_uniform_buffer* ubuf =
             reinterpret_cast<metal_uniform_buffer*>(res->m_handle.m_ptr);
 
+        auto* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
+
         metal_context->m_render_states.m_render_command_encoder->setVertexBuffer(
             ubuf->m_uniform_buffer, 0, ubuf->m_binding_place);
         metal_context->m_render_states.m_render_command_encoder->setFragmentBuffer(
