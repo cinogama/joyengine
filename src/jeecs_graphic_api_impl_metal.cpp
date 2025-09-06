@@ -728,11 +728,37 @@ public func frag(v: v2f)
         auto* vertex_instance =
             reinterpret_cast<metal_vertex*>(res->m_handle.m_ptr);
 
+        auto* current_shader = metal_context->m_render_states.m_current_target_shader;
+        if (current_shader->m_uniform_buffer_update_size != 0)
+        {
+            // 将CPU端的uniform数据更新到GPU缓冲区
+            void* buffer_contents = current_shader->m_uniforms->contents();
+            memcpy(
+                reinterpret_cast<void*>(
+                    reinterpret_cast<intptr_t>(buffer_contents) + current_shader->m_uniform_buffer_update_offset),
+                reinterpret_cast<void*>(
+                    reinterpret_cast<intptr_t>(current_shader->m_uniform_cpu_buffer) + current_shader->m_uniform_buffer_update_offset),
+                current_shader->m_uniform_buffer_update_size);
+
+            // 重置更新标记
+            current_shader->m_uniform_buffer_update_size = 0;
+        }
+
         metal_context->m_render_states.m_render_command_encoder->setVertexBuffer(
             vertex_instance->m_vertex_buffer,
             0,
             vertex_instance->m_vertex_stride,
             0);
+
+        metal_context->m_render_states.m_render_command_encoder->setVertexBuffer(
+            current_shader->m_uniforms,
+            0,
+            1);
+        metal_context->m_render_states.m_render_command_encoder->setFragmentBuffer(
+            current_shader->m_uniforms,
+            0,
+            1);
+
         metal_context->m_render_states.m_render_command_encoder->drawIndexedPrimitives(
             vertex_instance->m_primitive_type,
             vertex_instance->m_index_count,

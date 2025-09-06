@@ -488,16 +488,46 @@ void _jegl_regenerate_and_alloc_msl_from_spir_v(
     spvc_context_create_compiler(context, SPVC_BACKEND_MSL, vertex_ir, SPVC_CAPTURE_MODE_TAKE_OWNERSHIP, &vertex_compiler);
     spvc_context_parse_spirv(context, fragment_spir_v_code, fragment_spir_v_ir_count, &fragment_ir);
     spvc_context_create_compiler(context, SPVC_BACKEND_MSL, fragment_ir, SPVC_CAPTURE_MODE_TAKE_OWNERSHIP, &fragment_compiler);
+    
+    // 设置编译选项
     spvc_compiler_options options;
     spvc_compiler_create_compiler_options(vertex_compiler, &options);
     spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_MSL_VERSION, SPVC_MAKE_MSL_VERSION(2, 0, 0));
     spvc_compiler_options_set_bool(options, SPVC_COMPILER_OPTION_MSL_ARGUMENT_BUFFERS, SPVC_FALSE);
+    spvc_compiler_options_set_bool(options, SPVC_COMPILER_OPTION_MSL_ENABLE_DECORATION_BINDING, SPVC_TRUE);
     spvc_compiler_install_compiler_options(vertex_compiler, options);
 
     spvc_compiler_create_compiler_options(fragment_compiler, &options);
     spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_MSL_VERSION, SPVC_MAKE_MSL_VERSION(2, 0, 0));
     spvc_compiler_options_set_bool(options, SPVC_COMPILER_OPTION_MSL_ARGUMENT_BUFFERS, SPVC_FALSE);
+    spvc_compiler_options_set_bool(options, SPVC_COMPILER_OPTION_MSL_ENABLE_DECORATION_BINDING, SPVC_TRUE);
     spvc_compiler_install_compiler_options(fragment_compiler, options);
+
+    // 修改顶点着色器的buffer绑定位置
+    spvc_resources vertex_resources = NULL;
+    spvc_compiler_create_shader_resources(vertex_compiler, &vertex_resources);
+    
+    const spvc_reflected_resource* vertex_uniform_buffers = NULL;
+    size_t vertex_uniform_buffer_count = 0;
+    spvc_resources_get_resource_list_for_type(vertex_resources, SPVC_RESOURCE_TYPE_UNIFORM_BUFFER, &vertex_uniform_buffers, &vertex_uniform_buffer_count);
+    
+    for (size_t i = 0; i < vertex_uniform_buffer_count; i++) {
+        uint32_t current_binding = spvc_compiler_get_decoration(vertex_compiler, vertex_uniform_buffers[i].id, SpvDecorationBinding);
+        spvc_compiler_set_decoration(vertex_compiler, vertex_uniform_buffers[i].id, SpvDecorationBinding, current_binding + 1);
+    }
+
+    // 修改片元着色器的buffer绑定位置
+    spvc_resources fragment_resources = NULL;
+    spvc_compiler_create_shader_resources(fragment_compiler, &fragment_resources);
+    
+    const spvc_reflected_resource* fragment_uniform_buffers = NULL;
+    size_t fragment_uniform_buffer_count = 0;
+    spvc_resources_get_resource_list_for_type(fragment_resources, SPVC_RESOURCE_TYPE_UNIFORM_BUFFER, &fragment_uniform_buffers, &fragment_uniform_buffer_count);
+    
+    for (size_t i = 0; i < fragment_uniform_buffer_count; i++) {
+        uint32_t current_binding = spvc_compiler_get_decoration(fragment_compiler, fragment_uniform_buffers[i].id, SpvDecorationBinding);
+        spvc_compiler_set_decoration(fragment_compiler, fragment_uniform_buffers[i].id, SpvDecorationBinding, current_binding + 1);
+    }
 
     spvc_compiler_compile(vertex_compiler, &vertex_msl);
     spvc_compiler_compile(fragment_compiler, &fragment_msl);
