@@ -108,34 +108,46 @@ namespace jeecs::graphic::api::gl3
 
     struct jegl_gl3_shader
     {
-        GLuint uniforms;
         jeecs::basic::resource<jegl3_shader_blob::jegl3_shader_blob_shared>
             m_shared_blob_data;
-
         size_t uniform_buffer_size;
         size_t uniform_buffer_update_offset;
         size_t uniform_buffer_update_size;
-        void* uniform_cpu_buffers;
 
-        jegl_gl3_shader(GLuint _uniforms, jegl3_shader_blob* blob)
-            : uniforms(_uniforms)
-            , m_shared_blob_data(blob->m_shared_blob_data)
+        void* uniform_cpu_buffers;
+        GLuint uniforms;
+
+        jegl_gl3_shader(jegl3_shader_blob* blob)
+            : m_shared_blob_data(blob->m_shared_blob_data)
             , uniform_buffer_size(blob->m_shared_blob_data->m_uniform_size)
             , uniform_buffer_update_offset(0)
             , uniform_buffer_update_size(0)
         {
-            const auto uniform_size = blob->m_shared_blob_data->m_uniform_size;
-            if (uniform_size > 0)
-                uniform_cpu_buffers = malloc(uniform_size);
+            if (uniform_buffer_size > 0)
+            {
+                glGenBuffers(1, &uniforms);
+                glBindBuffer(GL_UNIFORM_BUFFER, uniforms);
+                glBufferData(
+                    GL_UNIFORM_BUFFER,
+                    (GLsizeiptr)uniform_buffer_size,
+                    NULL,
+                    GL_DYNAMIC_DRAW);
+
+                uniform_cpu_buffers = malloc(uniform_buffer_size);
+                assert(uniform_cpu_buffers != nullptr);
+
+                memset(uniform_cpu_buffers, 0, uniform_buffer_size);
+            }
             else
                 uniform_cpu_buffers = nullptr;
         }
         ~jegl_gl3_shader()
         {
             if (uniform_cpu_buffers != nullptr)
+            {
+                glDeleteBuffers(1, &uniforms);
                 free(uniform_cpu_buffers);
-
-            glDeleteBuffers(1, &uniforms);
+            }
         }
     };
 
@@ -761,17 +773,8 @@ namespace jeecs::graphic::api::gl3
                 // 
                 // NOTE: Uniform block 不需要额外的初始化，之后自然会被更新
 
-                GLuint uniform_buffer;
-                glGenBuffers(1, &uniform_buffer);
-                glBindBuffer(GL_UNIFORM_BUFFER, uniform_buffer);
-                glBufferData(
-                    GL_UNIFORM_BUFFER,
-                    (GLsizeiptr)shader_blob->m_shared_blob_data->m_uniform_size,
-                    NULL,
-                    GL_DYNAMIC_DRAW);
-
                 jegl_gl3_shader* shader_instance =
-                    new jegl_gl3_shader(uniform_buffer, shader_blob);
+                    new jegl_gl3_shader(shader_blob);
 
                 resource->m_handle.m_ptr = shader_instance;
 

@@ -64,13 +64,39 @@ namespace jeecs::graphic::api::metal
     {
         JECS_DISABLE_MOVE_AND_COPY(metal_resource_shader_blob);
 
+        struct shared_state
+        {
+            JECS_DISABLE_MOVE_AND_COPY(shared_state);
+
+            jegl_metal_context* m_context;
+
+            // TODO: Metal 的 pipeline state 和 vulkan 的 pipeline 类似，需要根据目标
+            //  缓冲区的格式等信息创建不同的 pipeline state。
+            //      现在仍然是在早期开发阶段，先以实现基本功能为主。
+            MTL::RenderPipelineState* m_pipeline_state;
+
+            shared_state(jegl_metal_context* ctx)
+                : m_context(ctx)
+            {
+            }
+            ~shared_state()
+            {
+                m_pipeline_state->release();
+            }
+        };
+
         MTL::Function* m_vertex_function;
         MTL::Function* m_fragment_function;
         MTL::VertexDescriptor* m_vertex_descriptor;
 
-        std::unordered_map<std::string, uint32_t> m_uniform_locations;
+        basic::resource<shared_state> m_shared_state;
+
+        std::unordered_map<std::string, uint32_t>
+            m_uniform_locations;
+        size_t m_uniform_size;
 
         metal_resource_shader_blob(
+            jegl_metal_context* ctx,
             MTL::Function* vert,
             MTL::Function* frag,
             MTL::VertexDescriptor* vdesc)
@@ -78,6 +104,7 @@ namespace jeecs::graphic::api::metal
             , m_fragment_function(frag)
             , m_vertex_descriptor(vdesc)
         {
+            m_shared_state = new shared_state(m_context);
         }
         ~metal_resource_shader_blob()
         {
@@ -90,19 +117,43 @@ namespace jeecs::graphic::api::metal
     {
         JECS_DISABLE_MOVE_AND_COPY(metal_shader);
 
-        // TODO: Metal 的 pipeline state 和 vulkan 的 pipeline 类似，需要根据目标
-        //  缓冲区的格式等信息创建不同的 pipeline state。
-        //      现在仍然是在早期开发阶段，先以实现基本功能为主。
-        MTL::RenderPipelineState* m_pipeline_state;
+        basic::resource<shared_state> m_shared_state;
+
+        size_t m_uniform_cpu_buffer_size;
+        bool m_uniform_updated;
+        void* m_uniform_cpu_buffer;
+
         MTL::Buffer* m_uniforms;
 
-        metal_shader(MTL::RenderPipelineState* pso)
-            : m_pipeline_state(pso)
+        metal_shader(
+            metal_resource_shader_blob* blob,
+            MTL::RenderPipelineState* pso /* tmp */)
+            : m_shared_state(blob->m_shared_state)
+            , m_uniform_cpu_buffer_size(blob->m_uniform_size)
+            , m_uniform_updated(false)
         {
+            m_shared_state->m_pipeline_state = pso;
+            if (m_uniform_cpu_buffer_size != 0)
+            {
+                m_uniform_cpu_buffer = malloc(m_uniform_cpu_buffer_size);
+                assert(m_uniform_cpu_buffer != nullptr);
+
+                memset(m_uniform_cpu_buffer, 0, m_uniform_cpu_buffer_size);
+
+                m_uniforms = m_shared_state->m_context->m_metal_device->newBuffer(
+                    metal_shader_instance->m_uniform_cpu_buffer_size,
+                    MTL::ResourceStorageModeShared);
+            }
+            else
+                m_uniform_cpu_buffer = nullptr
         }
         ~metal_shader()
         {
-            m_pipeline_state->release();
+            if (m_uniform_cpu_buffer == nullptr)
+            {
+                free(m_uniform_cpu_buffer);
+                m_uniforms->release();
+            }
         }
     };
     struct metal_vertex
@@ -275,8 +326,13 @@ public func frag(v: v2f)
                 auto* shader_instance = std::launder(reinterpret_cast<metal_shader*>(sd->resource()->m_handle.m_ptr));
                 auto* vertex_instance = std::launder(reinterpret_cast<metal_vertex*>(vt->resource()->m_handle.m_ptr));
 
-                pEnc->setRenderPipelineState(shader_instance->m_pipeline_state);
-                pEnc->setVertexBuffer(vertex_instance->m_vertex_buffer, 0, vertex_instance->m_vertex_stride, 0);
+                pEnc->setRenderPipelineState(
+                    shader_instance->m_shared_state->m_pipeline_state);
+                pEnc->setVertexBuffer(
+                    vertex_instance->m_vertex_buffer,
+                    0, 
+                    vertex_instance->m_vertex_stride,
+                    0);
                 pEnc->drawIndexedPrimitives(
                     vertex_instance->m_primitive_type,
                     vertex_instance->m_index_count,
@@ -436,53 +492,61 @@ public func frag(v: v2f)
 
                 metal_resource_shader_blob* shader_blob =
                     new metal_resource_shader_blob(
+                        metal_context,
                         vertex_main_function,
                         fragment_main_function,
                         vertex_descriptor);
 
-                auto* uniforms = raw_shader->m_custom_uniforms;
+                uint32_t last_elem_end_place = 0;
+                size_t max_allign = 4;
+                auto* uniforms = resource->m_raw_shader_data->m_custom_uniforms;
                 while (uniforms != nullptr)
                 {
                     size_t unit_size = 0;
+                    size_t allign_base = 0;
                     switch (uniforms->m_uniform_type)
                     {
                     case jegl_shader::uniform_type::INT:
                     case jegl_shader::uniform_type::FLOAT:
                         unit_size = 4;
+                        allign_base = 4;
                         break;
                     case jegl_shader::uniform_type::INT2:
                     case jegl_shader::uniform_type::FLOAT2:
                         unit_size = 8;
+                        allign_base = 8;
                         break;
                     case jegl_shader::uniform_type::INT3:
                     case jegl_shader::uniform_type::FLOAT3:
                         unit_size = 12;
+                        allign_base = 16;
                         break;
                     case jegl_shader::uniform_type::INT4:
                     case jegl_shader::uniform_type::FLOAT4:
                         unit_size = 16;
+                        allign_base = 16;
                         break;
                     case jegl_shader::uniform_type::FLOAT4X4:
                         unit_size = 64;
+                        allign_base = 16;
                         break;
-                    default:
-                        unit_size = 0;
+                    case jegl_shader::uniform_type::TEXTURE:
                         break;
                     }
 
                     if (unit_size != 0)
                     {
-                        /*auto next_edge = last_elem_end_place / DX11_ALLIGN_BASE * DX11_ALLIGN_BASE + DX11_ALLIGN_BASE;
+                        max_allign = std::max(max_allign, allign_base);
 
-                        if (last_elem_end_place + std::min((size_t)16, unit_size) > next_edge)
-                            last_elem_end_place = next_edge;
-
-                        blob->m_uniform_locations[uniforms->m_name] = last_elem_end_place;
-
-                        last_elem_end_place += unit_size;*/
+                        last_elem_end_place =
+                            jeecs::basic::allign_size(last_elem_end_place, allign_base);
+                        shared_blob->m_uniform_locations[uniforms->m_name] = last_elem_end_place;
+                        last_elem_end_place += unit_size;
                     }
                     uniforms = uniforms->m_next;
                 }
+                shared_blob->m_uniform_size =
+                    jeecs::basic::allign_size(last_elem_end_place, max_allign);
 
                 return shader_blob;
             }
@@ -553,7 +617,28 @@ public func frag(v: v2f)
                 }
 
                 pDesc->release();
-                res->m_handle.m_ptr = new metal_shader(pso);
+
+                metal_shader* metal_shader_instance = new metal_shader(pso);
+                metal_shader_instance->m_uniform_cpu_buffer_size =
+                    shader_blob->m_uniform_size;
+                if (metal_shader_instance->m_uniform_cpu_buffer_size != 0)
+                {
+                    metal_shader_instance->m_uniforms =
+                        metal_context->m_metal_device->newBuffer(
+                            metal_shader_instance->m_uniform_cpu_buffer_size,
+                            MTL::ResourceStorageModeShared);
+                    metal_shader_instance->m_uniform_updated = false;
+                    metal_shader_instance->m_uniform_cpu_buffer =
+                        malloc(metal_shader_instance->m_uniform_cpu_buffer_size);
+                }
+                else
+                {
+                    metal_shader_instance->m_uniforms = nullptr;
+                    metal_shader_instance->m_uniform_updated = false;
+                    metal_shader_instance->m_uniform_cpu_buffer = nullptr;
+                }
+
+                res->m_handle.m_ptr = metal_shader_instance;
             }
             else
                 res->m_handle.m_ptr = nullptr;

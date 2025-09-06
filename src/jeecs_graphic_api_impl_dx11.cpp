@@ -34,6 +34,10 @@ namespace jeecs::graphic::api::dx11
 
     struct jegl_dx11_context
     {
+        JECS_DISABLE_MOVE_AND_COPY(jegl_dx11_context);
+        jegl_dx11_context() = default;
+        ~jegl_dx11_context() = default;
+
         graphic::glfw* m_interface;
 
         template <class T>
@@ -70,25 +74,36 @@ namespace jeecs::graphic::api::dx11
 
     struct jedx11_texture
     {
+        JECS_DISABLE_MOVE_AND_COPY(jedx11_texture);
+        jedx11_texture() = default;
+        ~jedx11_texture() = default;
+
         bool m_modifiable_texture_buffer;
         jegl_dx11_context::MSWRLComPtr<ID3D11Texture2D> m_texture;
         jegl_dx11_context::MSWRLComPtr<ID3D11ShaderResourceView> m_texture_view;
     };
     struct jedx11_modifiable_texture : public jedx11_texture
     {
+        JECS_DISABLE_MOVE_AND_COPY(jedx11_modifiable_texture);
+        jedx11_modifiable_texture() = default;
+        ~jedx11_modifiable_texture() = default;
+
         jedx11_texture* m_obsoluted_texture;
     };
     struct jedx11_shader
     {
+        JECS_DISABLE_MOVE_AND_COPY(jedx11_shader);
+        jedx11_shader() = default;
+        ~jedx11_shader() = default;
+
         jegl_dx11_context::MSWRLComPtr<ID3D11InputLayout> m_vao; // WTF?
         jegl_dx11_context::MSWRLComPtr<ID3D11VertexShader> m_vertex;
         jegl_dx11_context::MSWRLComPtr<ID3D11PixelShader> m_fragment;
 
         bool m_draw_for_r2b;
-        bool m_uniform_updated;
 
         jegl_dx11_context::MSWRLComPtr<ID3D11Buffer> m_uniforms;
-
+        bool m_uniform_updated;
         void* m_uniform_cpu_buffers;
         size_t m_uniform_buffer_size;
 
@@ -107,6 +122,10 @@ namespace jeecs::graphic::api::dx11
     };
     struct jedx11_vertex
     {
+        JECS_DISABLE_MOVE_AND_COPY(jedx11_vertex);
+        jedx11_vertex() = default;
+        ~jedx11_vertex() = default;
+
         jegl_dx11_context::MSWRLComPtr<ID3D11Buffer> m_vbo;
         jegl_dx11_context::MSWRLComPtr<ID3D11Buffer> m_ebo;
         UINT m_count;
@@ -115,11 +134,19 @@ namespace jeecs::graphic::api::dx11
     };
     struct jedx11_uniformbuf
     {
+        JECS_DISABLE_MOVE_AND_COPY(jedx11_uniformbuf);
+        jedx11_uniformbuf() = default;
+        ~jedx11_uniformbuf() = default;
+
         jegl_dx11_context::MSWRLComPtr<ID3D11Buffer> m_uniformbuf;
         UINT m_binding_place;
     };
     struct jedx11_framebuffer
     {
+        JECS_DISABLE_MOVE_AND_COPY(jedx11_framebuffer);
+        jedx11_framebuffer() = default;
+        ~jedx11_framebuffer() = default;
+
         std::vector<jegl_dx11_context::MSWRLComPtr<ID3D11RenderTargetView>> m_rend_views;
         jegl_dx11_context::MSWRLComPtr<ID3D11DepthStencilView> m_depth_view;
         std::vector<ID3D11RenderTargetView*> m_target_views;
@@ -1190,7 +1217,7 @@ namespace jeecs::graphic::api::dx11
         {
             if (blob != nullptr)
             {
-                auto* shader_blob = 
+                auto* shader_blob =
                     reinterpret_cast<dx11_resource_shader_blob*>(blob);
 
                 jedx11_shader* jedx11_shader_res = new jedx11_shader;
@@ -1204,21 +1231,21 @@ namespace jeecs::graphic::api::dx11
                 auto* raw_shader_data = resource->m_raw_shader_data;
                 auto& builtin_uniforms = raw_shader_data->m_builtin_uniforms;
 
-                builtin_uniforms.m_builtin_uniform_ndc_scale = 
+                builtin_uniforms.m_builtin_uniform_ndc_scale =
                     shader_blob->get_built_in_location("JE_NDC_SCALE");
-                jedx11_shader_res->m_ndc_scale_uniform_id = 
+                jedx11_shader_res->m_ndc_scale_uniform_id =
                     builtin_uniforms.m_builtin_uniform_ndc_scale;
 
-                builtin_uniforms.m_builtin_uniform_m = 
+                builtin_uniforms.m_builtin_uniform_m =
                     shader_blob->get_built_in_location("JE_M");
-                builtin_uniforms.m_builtin_uniform_mv = 
+                builtin_uniforms.m_builtin_uniform_mv =
                     shader_blob->get_built_in_location("JE_MV");
-                builtin_uniforms.m_builtin_uniform_mvp = 
+                builtin_uniforms.m_builtin_uniform_mvp =
                     shader_blob->get_built_in_location("JE_MVP");
 
-                builtin_uniforms.m_builtin_uniform_tiling = 
+                builtin_uniforms.m_builtin_uniform_tiling =
                     shader_blob->get_built_in_location("JE_UV_TILING");
-                builtin_uniforms.m_builtin_uniform_offset = 
+                builtin_uniforms.m_builtin_uniform_offset =
                     shader_blob->get_built_in_location("JE_UV_OFFSET");
 
                 builtin_uniforms.m_builtin_uniform_light2d_resolution =
@@ -1227,9 +1254,9 @@ namespace jeecs::graphic::api::dx11
                     shader_blob->get_built_in_location("JE_LIGHT2D_DECAY");
 
                 // ATTENTION: 注意，以下参数特殊shader可能挪作他用
-                builtin_uniforms.m_builtin_uniform_local_scale = 
+                builtin_uniforms.m_builtin_uniform_local_scale =
                     shader_blob->get_built_in_location("JE_LOCAL_SCALE");
-                builtin_uniforms.m_builtin_uniform_color = 
+                builtin_uniforms.m_builtin_uniform_color =
                     shader_blob->get_built_in_location("JE_COLOR");
 
                 auto* uniforms = raw_shader_data->m_custom_uniforms;
@@ -1258,6 +1285,11 @@ namespace jeecs::graphic::api::dx11
 
                     jedx11_shader_res->m_uniform_cpu_buffers =
                         malloc(shader_blob->m_uniform_size);
+
+                    memset(
+                        jedx11_shader_res->m_uniform_cpu_buffers,
+                        0,
+                        shader_blob->m_uniform_size);
                 }
                 else
                     jedx11_shader_res->m_uniform_cpu_buffers = nullptr;
@@ -1368,7 +1400,7 @@ namespace jeecs::graphic::api::dx11
                 auto& attachment = attachments[i];
                 if (0 == (
                     attachment->resource()->m_raw_texture_data->m_format
-                        & jegl_texture::format::DEPTH))
+                    & jegl_texture::format::DEPTH))
                     ++color_attachment_count;
             }
 
@@ -1380,7 +1412,7 @@ namespace jeecs::graphic::api::dx11
                 auto& attachment = attachments[i];
                 jegl_using_resource(attachment->resource());
                 if (0 != (
-                    attachment->resource()->m_raw_texture_data->m_format 
+                    attachment->resource()->m_raw_texture_data->m_format
                     & jegl_texture::format::DEPTH))
                 {
                     if (jedx11_framebuffer_res->m_depth_view.Get() == nullptr)
@@ -1424,10 +1456,10 @@ namespace jeecs::graphic::api::dx11
 
             jedx11_framebuffer_res->m_color_target_count = (UINT)color_attachment_count;
             assert(
-                jedx11_framebuffer_res->m_target_views.size() 
+                jedx11_framebuffer_res->m_target_views.size()
                 == jedx11_framebuffer_res->m_rend_views.size());
             assert(
-                jedx11_framebuffer_res->m_target_views.size() 
+                jedx11_framebuffer_res->m_target_views.size()
                 == color_attachment_count);
 
             resource->m_handle.m_ptr = jedx11_framebuffer_res;
@@ -1595,7 +1627,7 @@ namespace jeecs::graphic::api::dx11
         default:
             break;
         }
-        
+
         // 添加：清理资源句柄
         resource->m_handle.m_ptr = nullptr;
     }
@@ -1817,9 +1849,9 @@ namespace jeecs::graphic::api::dx11
         }
     }
     void dx11_set_uniform(
-        jegl_context::graphic_impl_context_t ctx, 
-        uint32_t location, 
-        jegl_shader::uniform_type type, 
+        jegl_context::graphic_impl_context_t ctx,
+        uint32_t location,
+        jegl_shader::uniform_type type,
         const void* val)
     {
         jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));

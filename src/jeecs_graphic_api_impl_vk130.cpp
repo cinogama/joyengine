@@ -276,10 +276,10 @@ namespace jeecs::graphic::api::vk130
         bool m_uniform_cpu_buffer_updated;
         uint8_t* m_uniform_cpu_buffer;
 
+        std::vector<jevk13_uniformbuf*> m_uniform_variables;       
+
         size_t m_next_allocate_ubos_for_uniform_variable;
         size_t m_command_commit_round;
-
-        std::vector<jevk13_uniformbuf*> m_uniform_variables;
 
         VkPipeline prepare_pipeline(jegl_vk130_context* context);
         jevk13_uniformbuf* allocate_ubo_for_vars(jegl_vk130_context* context);
@@ -295,16 +295,16 @@ namespace jeecs::graphic::api::vk130
             , m_command_commit_round(0)
         {
             if (m_uniform_cpu_buffer_size != 0)
+            {
                 m_uniform_cpu_buffer = std::launder(
                     reinterpret_cast<uint8_t*>(malloc(m_uniform_cpu_buffer_size)));
+                assert(m_uniform_cpu_buffer != nullptr);
+                memset(m_uniform_cpu_buffer, 0, m_uniform_cpu_buffer_size);
+            }
             else
                 m_uniform_cpu_buffer = nullptr;
         }
-        ~jevk13_shader()
-        {
-            if (m_uniform_cpu_buffer != nullptr)
-                free(m_uniform_cpu_buffer);
-        }
+        ~jevk13_shader();
     };
     struct jevk13_framebuffer
     {
@@ -2666,9 +2666,6 @@ namespace jeecs::graphic::api::vk130
         }
         void destroy_shader(jevk13_shader* shader)
         {
-            for (auto* ubo : shader->m_uniform_variables)
-                destroy_uniform_buffer(ubo);
-
             delete shader;
         }
 
@@ -3651,6 +3648,19 @@ namespace jeecs::graphic::api::vk130
         for (auto& sampler : m_samplers)
             m_context->vkDestroySampler(m_context->_vk_logic_device, sampler.m_vk_sampler, nullptr);
     }
+    jevk13_shader::~jevk13_shader()
+    {
+        if (m_uniform_cpu_buffer != nullptr)
+        {
+            auto* je_vk_context = m_blob_data->m_context;
+
+            for (auto* ubo : m_uniform_variables)
+                je_vk_context->destroy_uniform_buffer(ubo);
+
+            free(m_uniform_cpu_buffer);
+        }
+    }
+
     VkPipeline jevk13_shader::prepare_pipeline(jegl_vk130_context* context)
     {
         assert(context->_vk_current_target_framebuffer != nullptr);
