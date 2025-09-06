@@ -103,7 +103,7 @@ namespace jeecs::graphic::api::metal
             : m_vertex_function(vert)
             , m_fragment_function(frag)
             , m_vertex_descriptor(vdesc)
-            , m_shared_state(new shared_state(m_context))
+            , m_shared_state(new shared_state(ctx))
         {
         }
         ~metal_resource_shader_blob()
