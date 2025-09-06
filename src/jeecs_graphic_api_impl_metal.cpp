@@ -141,15 +141,15 @@ namespace jeecs::graphic::api::metal
                 memset(m_uniform_cpu_buffer, 0, m_uniform_cpu_buffer_size);
 
                 m_uniforms = m_shared_state->m_context->m_metal_device->newBuffer(
-                    metal_shader_instance->m_uniform_cpu_buffer_size,
+                    m_uniform_cpu_buffer_size,
                     MTL::ResourceStorageModeShared);
             }
             else
-                m_uniform_cpu_buffer = nullptr
+                m_uniform_cpu_buffer = nullptr;
         }
         ~metal_shader()
         {
-            if (m_uniform_cpu_buffer == nullptr)
+            if (m_uniform_cpu_buffer != nullptr)
             {
                 free(m_uniform_cpu_buffer);
                 m_uniforms->release();
