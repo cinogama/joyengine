@@ -133,7 +133,8 @@ namespace jeecs::graphic::api::metal
         basic::resource<metal_resource_shader_blob::shared_state> m_shared_state;
 
         size_t m_uniform_cpu_buffer_size;
-        bool m_uniform_updated;
+        size_t m_uniform_buffer_update_offset;
+        size_t m_uniform_buffer_update_size;
         void* m_uniform_cpu_buffer;
 
         MTL::Buffer* m_uniforms;
@@ -143,7 +144,8 @@ namespace jeecs::graphic::api::metal
             MTL::RenderPipelineState* pso /* tmp */)
             : m_shared_state(blob->m_shared_state)
             , m_uniform_cpu_buffer_size(blob->m_uniform_size)
-            , m_uniform_updated(false)
+            , m_uniform_buffer_update_offset(0)
+            , m_uniform_buffer_update_size(0)
         {
             m_shared_state->m_pipeline_state = pso;
             if (m_uniform_cpu_buffer_size != 0)
@@ -752,9 +754,67 @@ public func frag(v: v2f)
         jegl_context::graphic_impl_context_t    ctx,
         uint32_t                                location,
         jegl_shader::uniform_type               type,
-        const void* data)
+        const void*                             val)
     {
+        auto* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
 
+        auto* current_shader = metal_context->m_render_states.m_current_target_shader;
+
+        if (location == jeecs::typing::INVALID_UINT32
+            || current_shader == nullptr)
+            return;
+
+        size_t data_size_byte_length = 0;
+        switch (type)
+        {
+        case jegl_shader::INT:
+        case jegl_shader::FLOAT:
+            data_size_byte_length = 4;
+            break;
+        case jegl_shader::INT2:
+        case jegl_shader::FLOAT2:
+            data_size_byte_length = 8;
+            break;
+        case jegl_shader::INT3:
+        case jegl_shader::FLOAT3:
+            data_size_byte_length = 12;
+            break;
+        case jegl_shader::INT4:
+        case jegl_shader::FLOAT4:
+            data_size_byte_length = 16;
+            break;
+        case jegl_shader::FLOAT4X4:
+            data_size_byte_length = 64;
+            break;
+        default:
+            jeecs::debug::logerr("Unknown uniform variable type to set.");
+            break;
+        }
+
+        memcpy(
+            reinterpret_cast<void*>(
+                reinterpret_cast<intptr_t>(current_shader->m_uniform_cpu_buffer) + location),
+            val,
+            data_size_byte_length);
+
+        if (current_shader->m_uniform_buffer_update_size == 0)
+        {
+            current_shader->m_uniform_buffer_update_offset = location;
+            current_shader->m_uniform_buffer_update_size = data_size_byte_length;
+        }
+        else
+        {
+            const size_t new_begin = std::min(
+                current_shader->m_uniform_buffer_update_offset,
+                static_cast<size_t>(location));
+
+            const size_t new_end = std::max(
+                current_shader->m_uniform_buffer_update_offset + current_shader->m_uniform_buffer_update_size,
+                location + data_size_byte_length);
+
+            current_shader->m_uniform_buffer_update_offset = new_begin;
+            current_shader->m_uniform_buffer_update_size = new_end - new_begin;
+        }
     }
 }
 

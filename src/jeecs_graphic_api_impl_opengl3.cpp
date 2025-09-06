@@ -487,7 +487,8 @@ namespace jeecs::graphic::api::gl3
         }
 
         memcpy(
-            reinterpret_cast<void*>((intptr_t)current_shader->uniform_cpu_buffers + location),
+            reinterpret_cast<void*>(
+                reinterpret_cast<intptr_t>(current_shader->uniform_cpu_buffers) + location),
             val,
             data_size_byte_length);
 
