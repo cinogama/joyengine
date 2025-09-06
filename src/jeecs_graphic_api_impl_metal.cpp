@@ -713,7 +713,7 @@ public func frag(v: v2f)
     }
     void using_resource(jegl_context::graphic_impl_context_t, jegl_resource* res)
     {
-        switch (res->type)
+        switch (res->m_type)
         {
         case jegl_resource::type::SHADER:
             break;
@@ -739,10 +739,10 @@ public func frag(v: v2f)
                     memcpy(
                         reinterpret_cast<void*>(
                             reinterpret_cast<intptr_t>(buffer_contents)
-                            + res->m_raw_uniformbuf_data->m_update_offset),
+                            + res->m_raw_uniformbuf_data->m_update_begin_offset),
                         reinterpret_cast<void*>(
                             reinterpret_cast<intptr_t>(res->m_raw_uniformbuf_data->m_buffer)
-                            + res->m_raw_uniformbuf_data->m_update_offset),
+                            + res->m_raw_uniformbuf_data->m_update_begin_offset),
                         res->m_raw_uniformbuf_data->m_update_length);
                 }
             }
