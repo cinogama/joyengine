@@ -112,6 +112,15 @@ namespace jeecs::graphic::api::metal
             m_fragment_function->release();
             m_vertex_descriptor->release();
         }
+
+        uint32_t get_built_in_location(const std::string& name) const
+        {
+            auto fnd = m_uniform_locations.find(name);
+            if (fnd != m_uniform_locations.end())
+                return fnd->second;
+
+            return jeecs::typing::INVALID_UINT32;
+        }
     };
     struct metal_shader
     {
@@ -589,21 +598,6 @@ public func frag(v: v2f)
                 pDesc->setFragmentFunction(shader_blob->m_fragment_function);
                 pDesc->setVertexDescriptor(shader_blob->m_vertex_descriptor);
 
-                // Create a default vertex descriptor for the shader
-                /*
-                MTL::VertexDescriptor* vertex_descriptor = MTL::VertexDescriptor::alloc()->init();
-                auto* attribute = vertex_descriptor->attributes()->object(0);
-                attribute->setBufferIndex(0);
-                attribute->setOffset(0);
-                attribute->setFormat(MTL::VertexFormatFloat3);
-
-                auto* layout = vertex_descriptor->layouts()->object(0);
-                layout->setStride(3 * sizeof(float));
-                layout->setStepFunction(MTL::VertexStepFunctionPerVertex);
-
-                pDesc->setVertexDescriptor(vertex_descriptor);
-                */
-
                 pDesc->colorAttachments()->object(0)->setPixelFormat(
                     MTL::PixelFormat::PixelFormatBGRA8Unorm_sRGB);
 
@@ -621,26 +615,33 @@ public func frag(v: v2f)
                 pDesc->release();
 
                 metal_shader* metal_shader_instance = new metal_shader(shader_blob, pso);
-                metal_shader_instance->m_uniform_cpu_buffer_size =
-                    shader_blob->m_uniform_size;
-                if (metal_shader_instance->m_uniform_cpu_buffer_size != 0)
-                {
-                    metal_shader_instance->m_uniforms =
-                        metal_context->m_metal_device->newBuffer(
-                            metal_shader_instance->m_uniform_cpu_buffer_size,
-                            MTL::ResourceStorageModeShared);
-                    metal_shader_instance->m_uniform_updated = false;
-                    metal_shader_instance->m_uniform_cpu_buffer =
-                        malloc(metal_shader_instance->m_uniform_cpu_buffer_size);
-                }
-                else
-                {
-                    metal_shader_instance->m_uniforms = nullptr;
-                    metal_shader_instance->m_uniform_updated = false;
-                    metal_shader_instance->m_uniform_cpu_buffer = nullptr;
-                }
-
                 res->m_handle.m_ptr = metal_shader_instance;
+
+                // Read and fetch uniform locations.
+                auto* raw_shader_data = resource->m_raw_shader_data;
+                auto& builtin_uniforms = raw_shader_data->m_builtin_uniforms;
+
+                builtin_uniforms.m_builtin_uniform_ndc_scale = shader_blob->get_built_in_location("JE_NDC_SCALE");
+                builtin_uniforms.m_builtin_uniform_m = shader_blob->get_built_in_location("JE_M");
+                builtin_uniforms.m_builtin_uniform_mv = shader_blob->get_built_in_location("JE_MV");
+                builtin_uniforms.m_builtin_uniform_mvp = shader_blob->get_built_in_location("JE_MVP");
+                builtin_uniforms.m_builtin_uniform_tiling = shader_blob->get_built_in_location("JE_UV_TILING");
+                builtin_uniforms.m_builtin_uniform_offset = shader_blob->get_built_in_location("JE_UV_OFFSET");
+                builtin_uniforms.m_builtin_uniform_light2d_resolution =
+                    shader_blob->get_built_in_location("JE_LIGHT2D_RESOLUTION");
+                builtin_uniforms.m_builtin_uniform_light2d_decay =
+                    shader_blob->get_built_in_location("JE_LIGHT2D_DECAY");
+
+                // ATTENTION: 注意，以下参数特殊shader可能挪作他用
+                builtin_uniforms.m_builtin_uniform_local_scale = shader_blob->get_built_in_location("JE_LOCAL_SCALE");
+                builtin_uniforms.m_builtin_uniform_color = shader_blob->get_built_in_location("JE_COLOR");
+
+                auto* uniforms = raw_shader_data->m_custom_uniforms;
+                while (uniforms != nullptr)
+                {
+                    uniforms->m_index = shader_blob->get_built_in_location(uniforms->m_name);
+                    uniforms = uniforms->m_next;
+                }
             }
             else
                 res->m_handle.m_ptr = nullptr;

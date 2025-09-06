@@ -3910,7 +3910,7 @@ namespace jeecs::graphic::api::vk130
             builtin_uniforms.m_builtin_uniform_local_scale = shader_blob->get_built_in_location("JE_LOCAL_SCALE");
             builtin_uniforms.m_builtin_uniform_color = shader_blob->get_built_in_location("JE_COLOR");
 
-            auto* uniforms = resource->m_raw_shader_data->m_custom_uniforms;
+            auto* uniforms = raw_shader_data->m_custom_uniforms;
             while (uniforms != nullptr)
             {
                 uniforms->m_index = shader_blob->get_built_in_location(uniforms->m_name);
