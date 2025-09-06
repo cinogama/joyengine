@@ -769,7 +769,7 @@ public func frag(v: v2f)
             break;
         }
     }
-    void bind_uniform_buffer(jegl_context::graphic_impl_context_t, jegl_resource* res)
+    void bind_uniform_buffer(jegl_context::graphic_impl_context_t ctx, jegl_resource* res)
     {
         metal_uniform_buffer* ubuf =
             reinterpret_cast<metal_uniform_buffer*>(res->m_handle.m_ptr);
