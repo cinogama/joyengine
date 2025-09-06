@@ -1512,10 +1512,9 @@ namespace jeecs::graphic::api::dx11
         case jegl_resource::type::TEXTURE:
             if (resource->m_modified)
             {
+                resource->m_modified = false;
                 if (resource->m_raw_texture_data != nullptr)
                 {
-                    resource->m_modified = false;
-
                     jedx11_texture* texture_instance =
                         std::launder(reinterpret_cast<jedx11_texture*>(resource->m_handle.m_ptr));
 
@@ -1562,17 +1561,20 @@ namespace jeecs::graphic::api::dx11
                 resource->m_modified = false;
 
                 auto* uniformbuf_instance = std::launder(reinterpret_cast<jedx11_uniformbuf*>(resource->m_handle.m_ptr));
-                assert(resource->m_raw_uniformbuf_data != nullptr && resource->m_raw_uniformbuf_data->m_update_length != 0);
-                D3D11_MAPPED_SUBRESOURCE mappedData;
-                JERCHECK(context->m_dx_context->Map(
-                    uniformbuf_instance->m_uniformbuf.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
+                if (resource->m_raw_uniformbuf_data != nullptr)
+                {
+                    assert(resource->m_raw_uniformbuf_data->m_update_length != 0);
+                    D3D11_MAPPED_SUBRESOURCE mappedData;
+                    JERCHECK(context->m_dx_context->Map(
+                        uniformbuf_instance->m_uniformbuf.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
 
-                // DX11 Donot support partial update, update all.
-                memcpy((void*)((intptr_t)mappedData.pData),
-                    resource->m_raw_uniformbuf_data->m_buffer,
-                    resource->m_raw_uniformbuf_data->m_buffer_size);
+                    // DX11 Donot support partial update, update all.
+                    memcpy((void*)((intptr_t)mappedData.pData),
+                        resource->m_raw_uniformbuf_data->m_buffer,
+                        resource->m_raw_uniformbuf_data->m_buffer_size);
 
-                context->m_dx_context->Unmap(uniformbuf_instance->m_uniformbuf.Get(), 0);
+                    context->m_dx_context->Unmap(uniformbuf_instance->m_uniformbuf.Get(), 0);
+                }
             }
             break;
         }

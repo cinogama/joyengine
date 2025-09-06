@@ -42,7 +42,6 @@ namespace jeecs::graphic::api::gl3
         GLenum m_method;
         GLsizei m_pointcount;
     };
-
     struct jegl3_sampler
     {
         GLuint m_sampler;
@@ -57,7 +56,6 @@ namespace jeecs::graphic::api::gl3
             glDeleteSamplers(1, &m_sampler);
         }
     };
-
     struct jegl3_shader_blob
     {
         struct jegl3_shader_blob_shared
@@ -105,7 +103,6 @@ namespace jeecs::graphic::api::gl3
         {
         }
     };
-
     struct jegl_gl3_shader
     {
         jeecs::basic::resource<jegl3_shader_blob::jegl3_shader_blob_shared>
@@ -150,7 +147,6 @@ namespace jeecs::graphic::api::gl3
             }
         }
     };
-
     struct jegl_gl3_context
     {
         basic_interface* m_interface;
@@ -220,7 +216,38 @@ namespace jeecs::graphic::api::gl3
             bind_texture_pass_impl(m_last_active_pass_id, type, texture);
         }
     };
+    struct jegl_gl3_uniformbuf
+    {
+        JECS_DISABLE_MOVE_AND_COPY(jegl_gl3_uniformbuf);
 
+        GLuint m_uniform_buffer_object;
+        GLuint m_binding_place;
+        GLsizeiptr m_uniform_buffer_size;
+
+        jegl_gl3_uniformbuf(jegl_resource* resource)
+        {
+            glGenBuffers(1, &m_uniform_buffer_object);
+            glBindBuffer(GL_UNIFORM_BUFFER, m_uniform_buffer_object);
+            glBufferData(GL_UNIFORM_BUFFER,
+                resource->m_raw_uniformbuf_data->m_buffer_size,
+                NULL, GL_DYNAMIC_COPY); // 预分配空间
+
+            m_binding_place = 
+                (GLuint)(resource->m_raw_uniformbuf_data->m_buffer_binding_place + 1);
+            m_uniform_buffer_size = (GLsizeiptr)resource->m_raw_uniformbuf_data->m_buffer_size;
+
+            glBindBufferRange(
+                GL_UNIFORM_BUFFER,
+                m_binding_place,
+                m_uniform_buffer_object,
+                0,
+                m_uniform_buffer_size);
+        }
+        ~jegl_gl3_uniformbuf()
+        {
+            glDeleteBuffers(1, &m_uniform_buffer_object);
+        }
+    };
 
     void _gl_bind_shader_samplers(jegl_gl3_shader* shader_instance)
     {
@@ -1090,21 +1117,7 @@ namespace jeecs::graphic::api::gl3
         }
         case jegl_resource::type::UNIFORMBUF:
         {
-            GLuint uniform_buffer_object;
-            glGenBuffers(1, &uniform_buffer_object);
-            glBindBuffer(GL_UNIFORM_BUFFER, uniform_buffer_object);
-            glBufferData(GL_UNIFORM_BUFFER,
-                resource->m_raw_uniformbuf_data->m_buffer_size,
-                NULL, GL_DYNAMIC_COPY); // 预分配空间
-
-            glBindBufferRange(
-                GL_UNIFORM_BUFFER, 
-                1 + (GLuint)resource->m_raw_uniformbuf_data->m_buffer_binding_place,
-                uniform_buffer_object,
-                0, 
-                resource->m_raw_uniformbuf_data->m_buffer_size);
-
-            resource->m_handle.m_uint1 = uniform_buffer_object;
+            resource->m_handle.m_ptr = new jegl_gl3_uniformbuf(resource);
             break;
         }
         default:
@@ -1404,20 +1417,17 @@ namespace jeecs::graphic::api::gl3
             break;
         case jegl_resource::type::UNIFORMBUF:
         {
-            if (resource->m_raw_uniformbuf_data != nullptr)
+            if (resource->m_modified)
             {
-                glBindBufferRange(
-                    GL_UNIFORM_BUFFER, 
-                    1 + (GLuint)resource->m_raw_uniformbuf_data->m_buffer_binding_place,
-                    (GLuint)resource->m_handle.m_uint1,
-                    0,
-                    resource->m_raw_uniformbuf_data->m_buffer_size);
-
-                if (resource->m_modified)
+                resource->m_modified = false;
+                if (resource->m_raw_uniformbuf_data != nullptr)
                 {
-                    glBindBuffer(GL_UNIFORM_BUFFER, (GLuint)resource->m_handle.m_uint1);
+                    jegl_gl3_uniformbuf* ubuf =
+                        std::launder(reinterpret_cast<jegl_gl3_uniformbuf*>(resource->m_handle.m_ptr));
 
-                    resource->m_modified = false;
+                    assert(resource->m_raw_uniformbuf_data->m_update_length != 0);
+
+                    glBindBuffer(GL_UNIFORM_BUFFER, ubuf->m_uniform_buffer_object);
 
                     assert(resource->m_raw_uniformbuf_data->m_update_length != 0);
                     glBufferSubData(GL_UNIFORM_BUFFER,
@@ -1427,6 +1437,7 @@ namespace jeecs::graphic::api::gl3
                         + resource->m_raw_uniformbuf_data->m_update_begin_offset);
                 }
             }
+
             break;
         }
         default:
@@ -1476,12 +1487,15 @@ namespace jeecs::graphic::api::gl3
 
     void gl_bind_uniform_buffer(jegl_context::graphic_impl_context_t, jegl_resource* uniformbuf)
     {
+        jegl_gl3_uniformbuf* ubuf = 
+            std::launder(reinterpret_cast<jegl_gl3_uniformbuf*>(uniformbuf->m_handle.m_ptr));
+
         glBindBufferRange(
             GL_UNIFORM_BUFFER,
-            1 + (GLuint)uniformbuf->m_raw_uniformbuf_data->m_buffer_binding_place,
-            (GLuint)uniformbuf->m_handle.m_uint1,
+            ubuf->m_binding_place,
+            ubuf->m_uniform_buffer_object,
             0,
-            uniformbuf->m_raw_uniformbuf_data->m_buffer_size);
+            ubuf->m_uniform_buffer_size);
     }
 
     void gl_bind_texture(jegl_context::graphic_impl_context_t ctx, jegl_resource* texture, size_t pass)

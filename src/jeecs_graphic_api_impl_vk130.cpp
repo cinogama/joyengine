@@ -3228,13 +3228,15 @@ namespace jeecs::graphic::api::vk130
                 reinterpret_cast<jevk13_uniformbuf*>(resource->m_handle.m_ptr));
 
             auto* raw_uniformbuf_data = resource->m_raw_uniformbuf_data;
-            assert(raw_uniformbuf_data != nullptr && raw_uniformbuf_data->m_update_length > 0);
-
-            update_uniform_buffer_with_range(
-                uniformbuf,
-                raw_uniformbuf_data->m_buffer + raw_uniformbuf_data->m_update_begin_offset,
-                raw_uniformbuf_data->m_update_begin_offset,
-                raw_uniformbuf_data->m_buffer_size);
+            if (raw_uniformbuf_data != nullptr)
+            {
+                assert(raw_uniformbuf_data->m_update_length != 0);
+                update_uniform_buffer_with_range(
+                    uniformbuf,
+                    raw_uniformbuf_data->m_buffer + raw_uniformbuf_data->m_update_begin_offset,
+                    raw_uniformbuf_data->m_update_begin_offset,
+                    raw_uniformbuf_data->m_buffer_size);
+            }
         }
 
         /////////////////////////////////////////////////////

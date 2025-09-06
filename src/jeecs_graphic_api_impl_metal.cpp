@@ -171,6 +171,23 @@ namespace jeecs::graphic::api::metal
             }
         }
     };
+    struct metal_uniform_buffer
+    {
+        JECS_DISABLE_MOVE_AND_COPY(metal_uniform_buffer);
+
+        MTL::Buffer* m_uniform_buffer;
+        uint32_t m_binding_place;
+
+        metal_uniform_buffer(MTL::Buffer* buf, uint32_t place)
+            : m_uniform_buffer(buf)
+            , m_binding_place(place)
+        {
+        }
+        ~metal_uniform_buffer()
+        {
+            m_uniform_buffer->release();
+        }
+    };
     struct metal_vertex
     {
         JECS_DISABLE_MOVE_AND_COPY(metal_vertex);
@@ -251,7 +268,7 @@ namespace jeecs::graphic::api::metal
             metal_context->m_command_queue->commandBuffer();
         metal_context->m_render_states.m_render_pass_descriptor =
             metal_context->m_window_and_view_layout->m_metal_view->currentRenderPassDescriptor();
-        metal_context->m_render_states.m_render_command_encoder = 
+        metal_context->m_render_states.m_render_command_encoder =
             metal_context->m_render_states.m_currnet_command_buffer->renderCommandEncoder(
                 metal_context->m_render_states.m_render_pass_descriptor);
 
@@ -670,7 +687,23 @@ public func frag(v: v2f)
                 vertex_buffer,
                 index_buffer,
                 raw_vertex_data->m_index_count,
-                raw_vertex_data->m_data_size_per_point); // 传入实际顶点大小
+                raw_vertex_data->m_data_size_per_point);
+            break;
+        }
+        case jegl_resource::type::UNIFORMBUF:
+        {
+            MTL::Buffer* metal_buffer =
+                metal_context->m_metal_device->newBuffer(
+                    res->m_raw_uniformbuf_data->m_buffer,
+                    res->m_raw_uniformbuf_data->m_buffer_size,
+                    MTL::ResourceStorageModeShared);
+
+            metal_uniform_buffer* uniform_buffer_instance =
+                new metal_uniform_buffer(
+                    metal_buffer,
+                    res->m_raw_uniformbuf_data->m_buffer_binding_place);
+
+            res->m_handle.m_ptr = uniform_buffer_instance;
             break;
         }
         default:
@@ -678,8 +711,45 @@ public func frag(v: v2f)
             break;
         }
     }
-    void using_resource(jegl_context::graphic_impl_context_t, jegl_resource*)
+    void using_resource(jegl_context::graphic_impl_context_t, jegl_resource* res)
     {
+        switch (res->type)
+        {
+        case jegl_resource::type::SHADER:
+            break;
+        case jegl_resource::type::TEXTURE:
+            // TODO;
+            break;
+        case jegl_resource::type::VERTEX:
+            break;
+        case jegl_resource::type::FRAMEBUF:
+            break;
+        case jegl_resource::type::UNIFORMBUF:
+            if (res->m_modified)
+            {
+                res->m_modified = false;
+                if (res->m_raw_uniformbuf_data != nullptr)
+                {
+                    metal_uniform_buffer* ubuf =
+                        reinterpret_cast<metal_uniform_buffer*>(res->m_handle.m_ptr);
+
+                    assert(res->m_raw_uniformbuf_data->m_update_length != 0);
+                    void* buffer_contents = ubuf->m_uniform_buffer->contents();
+                    
+                    memcpy(
+                        reinterpret_cast<void*>(
+                            reinterpret_cast<intptr_t>(buffer_contents)
+                            + res->m_raw_uniformbuf_data->m_update_offset),
+                        reinterpret_cast<void*>(
+                            reinterpret_cast<intptr_t>(res->m_raw_uniformbuf_data->m_buffer)
+                            + res->m_raw_uniformbuf_data->m_update_offset),
+                        res->m_raw_uniformbuf_data->m_update_length);
+                }
+            }
+            break;
+        default:
+            ;
+        }
     }
     void close_resource(jegl_context::graphic_impl_context_t, jegl_resource* res)
     {
@@ -693,6 +763,11 @@ public func frag(v: v2f)
         case jegl_resource::type::VERTEX:
         {
             delete reinterpret_cast<metal_vertex*>(res->m_handle.m_ptr);
+            break;
+        }
+        case jegl_resource::type::UNIFORMBUF:
+        {
+            delete reinterpret_cast<metal_uniform_buffer*>(res->m_handle.m_ptr);
             break;
         }
         default:
@@ -735,9 +810,11 @@ public func frag(v: v2f)
             void* buffer_contents = current_shader->m_uniforms->contents();
             memcpy(
                 reinterpret_cast<void*>(
-                    reinterpret_cast<intptr_t>(buffer_contents) + current_shader->m_uniform_buffer_update_offset),
+                    reinterpret_cast<intptr_t>(
+                        buffer_contents) + current_shader->m_uniform_buffer_update_offset),
                 reinterpret_cast<void*>(
-                    reinterpret_cast<intptr_t>(current_shader->m_uniform_cpu_buffer) + current_shader->m_uniform_buffer_update_offset),
+                    reinterpret_cast<intptr_t>(
+                        current_shader->m_uniform_cpu_buffer) + current_shader->m_uniform_buffer_update_offset),
                 current_shader->m_uniform_buffer_update_size);
 
             // 重置更新标记
@@ -745,19 +822,13 @@ public func frag(v: v2f)
         }
 
         metal_context->m_render_states.m_render_command_encoder->setVertexBuffer(
-            vertex_instance->m_vertex_buffer,
-            0,
-            vertex_instance->m_vertex_stride,
-            0);
+            vertex_instance->m_vertex_buffer, 0, vertex_instance->m_vertex_stride, 0);
 
+        // Binding shader uniform.
         metal_context->m_render_states.m_render_command_encoder->setVertexBuffer(
-            current_shader->m_uniforms,
-            0,
-            1);
+            current_shader->m_uniforms, 0, 0 + 1);
         metal_context->m_render_states.m_render_command_encoder->setFragmentBuffer(
-            current_shader->m_uniforms,
-            0,
-            1);
+            current_shader->m_uniforms, 0, 0 + 1);
 
         metal_context->m_render_states.m_render_command_encoder->drawIndexedPrimitives(
             vertex_instance->m_primitive_type,
@@ -778,10 +849,7 @@ public func frag(v: v2f)
     }
 
     void set_uniform(
-        jegl_context::graphic_impl_context_t    ctx,
-        uint32_t                                location,
-        jegl_shader::uniform_type               type,
-        const void*                             val)
+        jegl_context::graphic_impl_context_t ctx, uint32_t location, jegl_shader::uniform_type type, const void* val)
     {
         auto* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
 
