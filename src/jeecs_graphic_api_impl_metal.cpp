@@ -499,7 +499,7 @@ public func frag(v: v2f)
 
                 uint32_t last_elem_end_place = 0;
                 size_t max_allign = 4;
-                auto* uniforms = resource->m_raw_shader_data->m_custom_uniforms;
+                auto* uniforms = raw_shader->m_custom_uniforms;
                 while (uniforms != nullptr)
                 {
                     size_t unit_size = 0;
@@ -540,12 +540,12 @@ public func frag(v: v2f)
 
                         last_elem_end_place =
                             jeecs::basic::allign_size(last_elem_end_place, allign_base);
-                        shared_blob->m_uniform_locations[uniforms->m_name] = last_elem_end_place;
+                        shader_blob->m_uniform_locations[uniforms->m_name] = last_elem_end_place;
                         last_elem_end_place += unit_size;
                     }
                     uniforms = uniforms->m_next;
                 }
-                shared_blob->m_uniform_size =
+                shader_blob->m_uniform_size =
                     jeecs::basic::allign_size(last_elem_end_place, max_allign);
 
                 return shader_blob;
