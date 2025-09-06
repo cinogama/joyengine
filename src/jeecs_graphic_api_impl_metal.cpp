@@ -30,6 +30,10 @@ namespace jeecs::graphic::api::metal
         struct render_runtime_states
         {
             metal_shader* m_current_target_shader;
+
+            MTL::CommandBuffer* m_currnet_command_buffer;
+            MTL::RenderPassDescriptor* m_render_pass_descriptor;
+            MTL::RenderCommandEncoder* m_render_command_encoder;
         };
         render_runtime_states m_render_states;
 
@@ -238,12 +242,16 @@ namespace jeecs::graphic::api::metal
         jegl_metal_context* metal_context =
             reinterpret_cast<jegl_metal_context*>(ctx);
 
-        // 每帧开始之前，创建新的自动释放池（如果还没有的话）
-        if (metal_context->m_frame_auto_release == nullptr)
-        {
-            metal_context->m_frame_auto_release =
-                NS::AutoreleasePool::alloc()->init();
-        }
+        // 每帧开始之前，创建新的自动释放池
+        metal_context->m_frame_auto_release = NS::AutoreleasePool::alloc()->init();
+
+        metal_context->m_render_states.m_currnet_command_buffer =
+            metal_context->m_command_queue->commandBuffer();
+        metal_context->m_render_states.m_render_pass_descriptor =
+            metal_context->m_window_and_view_layout->m_metal_view->currentRenderPassDescriptor();
+        metal_context->m_render_states.m_render_command_encoder = 
+            metal_context->m_render_states.m_currnet_command_buffer->renderCommandEncoder(
+                metal_context->m_render_states.m_render_pass_descriptor);
 
         return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
@@ -323,45 +331,17 @@ public func frag(v: v2f)
                 /*
                 初期开发，暂时在这里随便写写画画
                 */
-                MTL::CommandBuffer* pCmd =
-                    metal_context->m_command_queue->commandBuffer();
-                MTL::RenderPassDescriptor* pRpd =
-                    metal_context->m_window_and_view_layout->m_metal_view->currentRenderPassDescriptor();
-                MTL::RenderCommandEncoder* pEnc = pCmd->renderCommandEncoder(pRpd);
+                jegl_bind_shader(sd->resource());
+                jegl_draw_vertex(vt->resource());
 
-                jegl_using_resource(sd->resource());
-                jegl_using_resource(vt->resource());
-
-                auto* shader_instance = 
-                    reinterpret_cast<metal_shader*>(sd->resource()->m_handle.m_ptr);
-                auto* vertex_instance = 
-                    reinterpret_cast<metal_vertex*>(vt->resource()->m_handle.m_ptr);
-
-                pEnc->setRenderPipelineState(
-                    shader_instance->m_shared_state->m_pipeline_state);
-                pEnc->setVertexBuffer(
-                    vertex_instance->m_vertex_buffer,
-                    0, 
-                    vertex_instance->m_vertex_stride,
-                    0);
-                pEnc->drawIndexedPrimitives(
-                    vertex_instance->m_primitive_type,
-                    vertex_instance->m_index_count,
-                    MTL::IndexType::IndexTypeUInt32,
-                    vertex_instance->m_index_buffer,
-                    0);
-
-                pEnc->endEncoding();
-                pCmd->presentDrawable(
+                // Frame end.
+                metal_context->m_render_states.m_render_command_encoder->endEncoding();
+                metal_context->m_render_states.m_currnet_command_buffer->presentDrawable(
                     metal_context->m_window_and_view_layout->m_metal_view->currentDrawable());
-                pCmd->commit();
+                metal_context->m_render_states.m_currnet_command_buffer->commit();
 
                 // 帧结束后释放自动释放池
-                if (metal_context->m_frame_auto_release != nullptr)
-                {
-                    metal_context->m_frame_auto_release->release();
-                    metal_context->m_frame_auto_release = nullptr;
-                }
+                metal_context->m_frame_auto_release->release();
 
                 return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
@@ -723,16 +703,17 @@ public func frag(v: v2f)
     }
     bool bind_shader(jegl_context::graphic_impl_context_t ctx, jegl_resource* res)
     {
-        //assert(res->m_type == jegl_resource::type::SHADER);
-        //
-        //auto* shader_instance = reinterpret_cast<metal_shader*>(res->m_handle.m_ptr);
-        //if (shader_instance == nullptr)
-        //    return false;
+        assert(res->m_type == jegl_resource::type::SHADER);
 
-        //auto* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
-        //metal_context->m_render_states.m_current_target_shader = shader_instance;
+        auto* shader_instance = reinterpret_cast<metal_shader*>(res->m_handle.m_ptr);
+        if (shader_instance == nullptr)
+            return false;
 
+        auto* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
+        metal_context->m_render_states.m_current_target_shader = shader_instance;
 
+        metal_context->m_render_states.m_render_command_encoder->setRenderPipelineState(
+            shader_instance->m_shared_state->m_pipeline_state);
 
         return true;
     }
@@ -741,6 +722,20 @@ public func frag(v: v2f)
     }
     void draw_vertex_with_shader(jegl_context::graphic_impl_context_t, jegl_resource*)
     {
+        auto* vertex_instance =
+            reinterpret_cast<metal_vertex*>(vt->resource()->m_handle.m_ptr);
+
+        metal_context->m_render_states.m_render_command_encoder->setVertexBuffer(
+            vertex_instance->m_vertex_buffer,
+            0,
+            vertex_instance->m_vertex_stride,
+            0);
+        metal_context->m_render_states.m_render_command_encoder->drawIndexedPrimitives(
+            vertex_instance->m_primitive_type,
+            vertex_instance->m_index_count,
+            MTL::IndexType::IndexTypeUInt32,
+            vertex_instance->m_index_buffer,
+            0);
     }
 
     void bind_framebuffer(jegl_context::graphic_impl_context_t, jegl_resource*, size_t, size_t, size_t, size_t)
@@ -753,8 +748,13 @@ public func frag(v: v2f)
     {
     }
 
-    void set_uniform(jegl_context::graphic_impl_context_t, uint32_t, jegl_shader::uniform_type, const void*)
+    void set_uniform(
+        jegl_context::graphic_impl_context_t    ctx,
+        uint32_t                                location,
+        jegl_shader::uniform_type               type,
+        const void* data)
     {
+
     }
 }
 
