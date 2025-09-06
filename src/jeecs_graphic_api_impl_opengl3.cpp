@@ -67,7 +67,7 @@ namespace jeecs::graphic::api::gl3
             jegl3_sampler* m_samplers;
             uint32_t m_sampler_count;
 
-            std::unordered_map<std::string, uint32_t> m_ulocations;
+            std::unordered_map<std::string, uint32_t> m_uniform_locations;
             size_t m_uniform_size;
 
             JECS_DISABLE_MOVE_AND_COPY(jegl3_shader_blob_shared);
@@ -76,7 +76,7 @@ namespace jeecs::graphic::api::gl3
                 : m_shader_program_instance(shader_instance)
                 , m_samplers(new jegl3_sampler[sampler_count])
                 , m_sampler_count(sampler_count)
-                , m_ulocations{}
+                , m_uniform_locations{}
                 , m_uniform_size(0)
             {
             }
@@ -88,8 +88,8 @@ namespace jeecs::graphic::api::gl3
 
             uint32_t get_built_in_location(const std::string& name) const
             {
-                auto fnd = m_ulocations.find(name);
-                if (fnd != m_ulocations.end())
+                auto fnd = m_uniform_locations.find(name);
+                if (fnd != m_uniform_locations.end())
                     return fnd->second;
 
                 return jeecs::typing::INVALID_UINT32;
@@ -701,7 +701,7 @@ namespace jeecs::graphic::api::gl3
                         max_allign = std::max(max_allign, allign_base);
 
                         last_elem_end_place = jeecs::basic::allign_size(last_elem_end_place, allign_base);
-                        shared_blob->m_ulocations[uniforms->m_name] = last_elem_end_place;
+                        shared_blob->m_uniform_locations[uniforms->m_name] = last_elem_end_place;
                         last_elem_end_place += unit_size;
                     }
                     uniforms = uniforms->m_next;

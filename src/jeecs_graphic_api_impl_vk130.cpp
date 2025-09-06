@@ -223,7 +223,7 @@ namespace jeecs::graphic::api::vk130
                 uint32_t m_sampler_id;
             };
             std::vector<sampler_data> m_samplers;
-            std::unordered_map<std::string, uint32_t> m_ulocations;
+            std::unordered_map<std::string, uint32_t> m_uniform_locations;
             size_t m_uniform_size;
 
             // Vulkan的这个设计真的让人很想吐槽，因为Pipeline和Shader与Pass/Rendbuffer
@@ -246,8 +246,8 @@ namespace jeecs::graphic::api::vk130
 
         uint32_t get_built_in_location(const std::string& name) const
         {
-            auto fnd = m_blob_data->m_ulocations.find(name);
-            if (fnd != m_blob_data->m_ulocations.end())
+            auto fnd = m_blob_data->m_uniform_locations.find(name);
+            if (fnd != m_blob_data->m_uniform_locations.end())
                 return fnd->second;
 
             return jeecs::typing::INVALID_UINT32;
@@ -2612,7 +2612,7 @@ namespace jeecs::graphic::api::vk130
                     max_allign = std::max(max_allign, allign_base);
 
                     last_elem_end_place = jeecs::basic::allign_size(last_elem_end_place, allign_base);
-                    shader_blob->m_ulocations[uniforms->m_name] = last_elem_end_place;
+                    shader_blob->m_uniform_locations[uniforms->m_name] = last_elem_end_place;
                     last_elem_end_place += unit_size;
                 }
                 uniforms = uniforms->m_next;

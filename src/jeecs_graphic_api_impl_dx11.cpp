@@ -539,14 +539,14 @@ namespace jeecs::graphic::api::dx11
         jegl_dx11_context::MSWRLComPtr<ID3D11BlendState> m_blend;
 
         std::vector<jedx11_shader::sampler_structs> m_samplers;
-        std::unordered_map<std::string, uint32_t> m_ulocations;
+        std::unordered_map<std::string, uint32_t> m_uniform_locations;
 
         size_t m_uniform_size;
 
         uint32_t get_built_in_location(const std::string& name) const
         {
-            auto fnd = m_ulocations.find(name);
-            if (fnd != m_ulocations.end())
+            auto fnd = m_uniform_locations.find(name);
+            if (fnd != m_uniform_locations.end())
                 return fnd->second;
 
             return jeecs::typing::INVALID_UINT32;
@@ -825,7 +825,7 @@ namespace jeecs::graphic::api::dx11
                         if (last_elem_end_place + std::min((size_t)16, unit_size) > next_edge)
                             last_elem_end_place = next_edge;
 
-                        blob->m_ulocations[uniforms->m_name] = last_elem_end_place;
+                        blob->m_uniform_locations[uniforms->m_name] = last_elem_end_place;
 
                         last_elem_end_place += unit_size;
                     }
@@ -1816,7 +1816,11 @@ namespace jeecs::graphic::api::dx11
                     D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
         }
     }
-    void dx11_set_uniform(jegl_context::graphic_impl_context_t ctx, uint32_t location, jegl_shader::uniform_type type, const void* val)
+    void dx11_set_uniform(
+        jegl_context::graphic_impl_context_t ctx, 
+        uint32_t location, 
+        jegl_shader::uniform_type type, 
+        const void* val)
     {
         jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
         assert(context->m_current_target_shader != nullptr);

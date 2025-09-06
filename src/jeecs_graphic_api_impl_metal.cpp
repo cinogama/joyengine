@@ -68,6 +68,8 @@ namespace jeecs::graphic::api::metal
         MTL::Function* m_fragment_function;
         MTL::VertexDescriptor* m_vertex_descriptor;
 
+        std::unordered_map<std::string, uint32_t> m_uniform_locations;
+
         metal_resource_shader_blob(
             MTL::Function* vert,
             MTL::Function* frag,
@@ -92,6 +94,7 @@ namespace jeecs::graphic::api::metal
         //  缓冲区的格式等信息创建不同的 pipeline state。
         //      现在仍然是在早期开发阶段，先以实现基本功能为主。
         MTL::RenderPipelineState* m_pipeline_state;
+        MTL::Buffer* m_uniforms;
 
         metal_shader(MTL::RenderPipelineState* pso)
             : m_pipeline_state(pso)
@@ -207,8 +210,8 @@ namespace jeecs::graphic::api::metal
                     {jegl_vertex::data_type::FLOAT32, 3},
                 }).value();
 
-        static basic::resource<graphic::shader> sd =
-            graphic::shader::create("!/test.shader", R"(
+                static basic::resource<graphic::shader> sd =
+                    graphic::shader::create("!/test.shader", R"(
 // Mono.shader
 import woo::std;
 
@@ -257,43 +260,43 @@ public func frag(v: v2f)
 }
 )").value();
 
-        /*
-        初期开发，暂时在这里随便写写画画
-        */
-        MTL::CommandBuffer* pCmd =
-            metal_context->m_command_queue->commandBuffer();
-        MTL::RenderPassDescriptor* pRpd =
-            metal_context->m_window_and_view_layout->m_metal_view->currentRenderPassDescriptor();
-        MTL::RenderCommandEncoder* pEnc = pCmd->renderCommandEncoder(pRpd);
+                /*
+                初期开发，暂时在这里随便写写画画
+                */
+                MTL::CommandBuffer* pCmd =
+                    metal_context->m_command_queue->commandBuffer();
+                MTL::RenderPassDescriptor* pRpd =
+                    metal_context->m_window_and_view_layout->m_metal_view->currentRenderPassDescriptor();
+                MTL::RenderCommandEncoder* pEnc = pCmd->renderCommandEncoder(pRpd);
 
-        jegl_using_resource(sd->resource());
-        jegl_using_resource(vt->resource());
+                jegl_using_resource(sd->resource());
+                jegl_using_resource(vt->resource());
 
-        auto* shader_instance = std::launder(reinterpret_cast<metal_shader*>(sd->resource()->m_handle.m_ptr));
-        auto* vertex_instance = std::launder(reinterpret_cast<metal_vertex*>(vt->resource()->m_handle.m_ptr));
+                auto* shader_instance = std::launder(reinterpret_cast<metal_shader*>(sd->resource()->m_handle.m_ptr));
+                auto* vertex_instance = std::launder(reinterpret_cast<metal_vertex*>(vt->resource()->m_handle.m_ptr));
 
-        pEnc->setRenderPipelineState(shader_instance->m_pipeline_state);
-        pEnc->setVertexBuffer(vertex_instance->m_vertex_buffer, 0, vertex_instance->m_vertex_stride, 0);
-        pEnc->drawIndexedPrimitives(
-            vertex_instance->m_primitive_type,
-            vertex_instance->m_index_count,
-            MTL::IndexType::IndexTypeUInt32,
-            vertex_instance->m_index_buffer,
-            0);
+                pEnc->setRenderPipelineState(shader_instance->m_pipeline_state);
+                pEnc->setVertexBuffer(vertex_instance->m_vertex_buffer, 0, vertex_instance->m_vertex_stride, 0);
+                pEnc->drawIndexedPrimitives(
+                    vertex_instance->m_primitive_type,
+                    vertex_instance->m_index_count,
+                    MTL::IndexType::IndexTypeUInt32,
+                    vertex_instance->m_index_buffer,
+                    0);
 
-        pEnc->endEncoding();
-        pCmd->presentDrawable(
-            metal_context->m_window_and_view_layout->m_metal_view->currentDrawable());
-        pCmd->commit();
+                pEnc->endEncoding();
+                pCmd->presentDrawable(
+                    metal_context->m_window_and_view_layout->m_metal_view->currentDrawable());
+                pCmd->commit();
 
-        // 帧结束后释放自动释放池
-        if (metal_context->m_frame_auto_release != nullptr)
-        {
-            metal_context->m_frame_auto_release->release();
-            metal_context->m_frame_auto_release = nullptr;
-        }
+                // 帧结束后释放自动释放池
+                if (metal_context->m_frame_auto_release != nullptr)
+                {
+                    metal_context->m_frame_auto_release->release();
+                    metal_context->m_frame_auto_release = nullptr;
+                }
 
-        return jegl_update_action::JEGL_UPDATE_CONTINUE;
+                return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
 
     jegl_resource_blob create_resource_blob(jegl_context::graphic_impl_context_t ctx, jegl_resource* res)
@@ -368,12 +371,12 @@ public func frag(v: v2f)
                 vertex_library->release();
                 fragment_library->release();
 
-                MTL::VertexDescriptor* vertex_descriptor = 
+                MTL::VertexDescriptor* vertex_descriptor =
                     MTL::VertexDescriptor::alloc()->init();
 
                 // 计算实际的顶点数据布局
                 unsigned int current_offset = 0;
-                
+
                 for (size_t i = 0; i < raw_shader->m_vertex_in_count; ++i)
                 {
                     auto* attribute = vertex_descriptor->attributes()->object(i);
@@ -381,7 +384,7 @@ public func frag(v: v2f)
                     attribute->setOffset(current_offset);
 
                     unsigned int attribute_size = 0;
-                    
+
                     switch (raw_shader->m_vertex_in[i])
                     {
                     case jegl_shader::uniform_type::INT:
@@ -419,7 +422,7 @@ public func frag(v: v2f)
                     default:
                         abort();
                     }
-                    
+
                     current_offset += attribute_size;
                 }
 
@@ -431,10 +434,57 @@ public func frag(v: v2f)
                     layout->setStepFunction(MTL::VertexStepFunctionPerVertex);
                 }
 
-                return new metal_resource_shader_blob(
-                    vertex_main_function,
-                    fragment_main_function,
-                    vertex_descriptor);
+                metal_resource_shader_blob* shader_blob =
+                    new metal_resource_shader_blob(
+                        vertex_main_function,
+                        fragment_main_function,
+                        vertex_descriptor);
+
+                auto* uniforms = raw_shader->m_custom_uniforms;
+                while (uniforms != nullptr)
+                {
+                    size_t unit_size = 0;
+                    switch (uniforms->m_uniform_type)
+                    {
+                    case jegl_shader::uniform_type::INT:
+                    case jegl_shader::uniform_type::FLOAT:
+                        unit_size = 4;
+                        break;
+                    case jegl_shader::uniform_type::INT2:
+                    case jegl_shader::uniform_type::FLOAT2:
+                        unit_size = 8;
+                        break;
+                    case jegl_shader::uniform_type::INT3:
+                    case jegl_shader::uniform_type::FLOAT3:
+                        unit_size = 12;
+                        break;
+                    case jegl_shader::uniform_type::INT4:
+                    case jegl_shader::uniform_type::FLOAT4:
+                        unit_size = 16;
+                        break;
+                    case jegl_shader::uniform_type::FLOAT4X4:
+                        unit_size = 64;
+                        break;
+                    default:
+                        unit_size = 0;
+                        break;
+                    }
+
+                    if (unit_size != 0)
+                    {
+                        /*auto next_edge = last_elem_end_place / DX11_ALLIGN_BASE * DX11_ALLIGN_BASE + DX11_ALLIGN_BASE;
+
+                        if (last_elem_end_place + std::min((size_t)16, unit_size) > next_edge)
+                            last_elem_end_place = next_edge;
+
+                        blob->m_uniform_locations[uniforms->m_name] = last_elem_end_place;
+
+                        last_elem_end_place += unit_size;*/
+                    }
+                    uniforms = uniforms->m_next;
+                }
+
+                return shader_blob;
             }
             break;
         }
@@ -480,11 +530,11 @@ public func frag(v: v2f)
                 attribute->setBufferIndex(0);
                 attribute->setOffset(0);
                 attribute->setFormat(MTL::VertexFormatFloat3);
-                
+
                 auto* layout = vertex_descriptor->layouts()->object(0);
                 layout->setStride(3 * sizeof(float));
                 layout->setStepFunction(MTL::VertexStepFunctionPerVertex);
-                
+
                 pDesc->setVertexDescriptor(vertex_descriptor);
                 */
 
@@ -680,7 +730,7 @@ public:
 
             NS::Application* shared_application = NS::Application::sharedApplication();
             shared_application->setDelegate(&del);
-            shared_application->run(); 
+            shared_application->run();
             auto_release_pool->release();
         }
     }
