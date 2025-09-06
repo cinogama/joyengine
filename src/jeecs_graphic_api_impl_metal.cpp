@@ -722,10 +722,10 @@ public func frag(v: v2f)
     void bind_texture(jegl_context::graphic_impl_context_t, jegl_resource*, size_t)
     {
     }
-    void draw_vertex_with_shader(jegl_context::graphic_impl_context_t, jegl_resource*)
+    void draw_vertex_with_shader(jegl_context::graphic_impl_context_t, jegl_resource* res)
     {
         auto* vertex_instance =
-            reinterpret_cast<metal_vertex*>(vt->resource()->m_handle.m_ptr);
+            reinterpret_cast<metal_vertex*>(res->m_handle.m_ptr);
 
         metal_context->m_render_states.m_render_command_encoder->setVertexBuffer(
             vertex_instance->m_vertex_buffer,
