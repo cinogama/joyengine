@@ -178,10 +178,15 @@ namespace jeecs::graphic::api::metal
         MTL::Buffer* m_uniform_buffer;
         uint32_t m_binding_place;
 
-        metal_uniform_buffer(MTL::Buffer* buf, uint32_t place)
-            : m_uniform_buffer(buf)
-            , m_binding_place(place)
+        metal_uniform_buffer(jegl_metal_context* ctx, jegl_resource* res)
         {
+            m_uniform_buffer =
+                ctx->m_metal_device->newBuffer(
+                    res->m_raw_uniformbuf_data->m_buffer,
+                    res->m_raw_uniformbuf_data->m_buffer_size,
+                    MTL::ResourceStorageModeShared);
+            m_binding_place = 
+                (uint32_t)(res->m_raw_uniformbuf_data->m_buffer_binding_place + 2);
         }
         ~metal_uniform_buffer()
         {
@@ -692,18 +697,7 @@ public func frag(v: v2f)
         }
         case jegl_resource::type::UNIFORMBUF:
         {
-            MTL::Buffer* metal_buffer =
-                metal_context->m_metal_device->newBuffer(
-                    res->m_raw_uniformbuf_data->m_buffer,
-                    res->m_raw_uniformbuf_data->m_buffer_size,
-                    MTL::ResourceStorageModeShared);
-
-            metal_uniform_buffer* uniform_buffer_instance =
-                new metal_uniform_buffer(
-                    metal_buffer,
-                    res->m_raw_uniformbuf_data->m_buffer_binding_place);
-
-            res->m_handle.m_ptr = uniform_buffer_instance;
+            res->m_handle.m_ptr = new metal_uniform_buffer(metal_context, res);
             break;
         }
         default:
@@ -775,8 +769,15 @@ public func frag(v: v2f)
             break;
         }
     }
-    void bind_uniform_buffer(jegl_context::graphic_impl_context_t, jegl_resource*)
+    void bind_uniform_buffer(jegl_context::graphic_impl_context_t, jegl_resource* res)
     {
+        metal_uniform_buffer* ubuf =
+            reinterpret_cast<metal_uniform_buffer*>(res->m_handle.m_ptr);
+
+        metal_context->m_render_states.m_render_command_encoder->setVertexBuffer(
+            ubuf->m_uniform_buffer, 0, ubuf->m_binding_place);
+        metal_context->m_render_states.m_render_command_encoder->setFragmentBuffer(
+            ubuf->m_uniform_buffer, 0, ubuf->m_binding_place);
     }
     bool bind_shader(jegl_context::graphic_impl_context_t ctx, jegl_resource* res)
     {
