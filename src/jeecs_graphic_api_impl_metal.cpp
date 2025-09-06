@@ -323,8 +323,10 @@ public func frag(v: v2f)
                 jegl_using_resource(sd->resource());
                 jegl_using_resource(vt->resource());
 
-                auto* shader_instance = std::launder(reinterpret_cast<metal_shader*>(sd->resource()->m_handle.m_ptr));
-                auto* vertex_instance = std::launder(reinterpret_cast<metal_vertex*>(vt->resource()->m_handle.m_ptr));
+                auto* shader_instance = 
+                    reinterpret_cast<metal_shader*>(sd->resource()->m_handle.m_ptr);
+                auto* vertex_instance = 
+                    reinterpret_cast<metal_vertex*>(vt->resource()->m_handle.m_ptr);
 
                 pEnc->setRenderPipelineState(
                     shader_instance->m_shared_state->m_pipeline_state);
@@ -618,7 +620,7 @@ public func frag(v: v2f)
 
                 pDesc->release();
 
-                metal_shader* metal_shader_instance = new metal_shader(pso);
+                metal_shader* metal_shader_instance = new metal_shader(shader_blob, pso);
                 metal_shader_instance->m_uniform_cpu_buffer_size =
                     shader_blob->m_uniform_size;
                 if (metal_shader_instance->m_uniform_cpu_buffer_size != 0)
