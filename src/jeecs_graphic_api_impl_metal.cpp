@@ -618,7 +618,7 @@ public func frag(v: v2f)
                 res->m_handle.m_ptr = metal_shader_instance;
 
                 // Read and fetch uniform locations.
-                auto* raw_shader_data = resource->m_raw_shader_data;
+                auto* raw_shader_data = res->m_raw_shader_data;
                 auto& builtin_uniforms = raw_shader_data->m_builtin_uniforms;
 
                 builtin_uniforms.m_builtin_uniform_ndc_scale = shader_blob->get_built_in_location("JE_NDC_SCALE");
