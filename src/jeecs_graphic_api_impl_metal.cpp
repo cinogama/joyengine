@@ -835,6 +835,8 @@ public func frag(vf: v2f)
             }
             res->m_handle.m_ptr = new metal_texture(texture_instance);
             texture_desc->release();
+
+            break;
         }
         case jegl_resource::type::UNIFORMBUF:
         {
