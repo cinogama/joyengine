@@ -644,10 +644,10 @@ public func frag(v: v2f)
                     MTL::SamplerDescriptor* sampler_desc =
                         MTL::SamplerDescriptor::alloc()->init();
 
-                    sampler_desc->setMinFilter(filter_mode_cvt(sampler_method.m_min_filter));
-                    sampler_desc->setMagFilter(filter_mode_cvt(sampler_method.m_mag_filter));
-                    sampler_desc->setSAddressMode(wrap_mode_cvt(sampler_method.m_wrap_s));
-                    sampler_desc->setTAddressMode(wrap_mode_cvt(sampler_method.m_wrap_t));
+                    sampler_desc->setMinFilter(filter_mode_cvt(sampler_method.m_min));
+                    sampler_desc->setMagFilter(filter_mode_cvt(sampler_method.m_mag));
+                    sampler_desc->setSAddressMode(wrap_mode_cvt(sampler_method.m_uwrap));
+                    sampler_desc->setTAddressMode(wrap_mode_cvt(sampler_method.m_vwrap));
 
                     MTL::SamplerState* sampler_state =
                         metal_context->m_metal_device->newSamplerState(sampler_desc);
