@@ -318,7 +318,7 @@ namespace jeecs::graphic::api::metal
                 jegl_vertex::type::TRIANGLESTRIP,
                 pdata,
                 sizeof(pdata),
-                { 0, 1, 2 },
+                { 0, 1, 2, 3 },
                 {
                     {jegl_vertex::data_type::FLOAT32, 3},
                     {jegl_vertex::data_type::FLOAT32, 2},
