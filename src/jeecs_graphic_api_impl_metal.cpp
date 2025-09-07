@@ -308,9 +308,10 @@ namespace jeecs::graphic::api::metal
 
         // jegui_update_metal();
         const float pdata[] = {
-            -0.5f, -0.5f, 0.0f,  1.0f, 0.0f, 0.0f,
-             0.5f, -0.5f, 0.0f,  0.0f, 1.0f, 0.0f,
-            -0.5f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f,
+            -0.5f, -0.5f, 0.0f,  0.0f, 0.0f,
+             0.5f, -0.5f, 0.0f,  1.0f, 0.0f,
+            -0.5f,  0.5f, 0.0f,  0.0f, 1.0f,
+            0.5f,  0.5f, 0.0f,  1.0f, 1.0f,
         };
         static basic::resource<graphic::vertex> vt =
             graphic::vertex::create(
@@ -320,11 +321,13 @@ namespace jeecs::graphic::api::metal
                 { 0, 1, 2 },
                 {
                     {jegl_vertex::data_type::FLOAT32, 3},
-                    {jegl_vertex::data_type::FLOAT32, 3},
+                    {jegl_vertex::data_type::FLOAT32, 2},
                 }).value();
 
-                static basic::resource<graphic::shader> sd =
-                    graphic::shader::create("!/test.shader", R"(
+        static basic::resource<graphic::texture> tx =
+            graphic::texture::load(nullptr, "!/icon.png").value();
+        static basic::resource<graphic::shader> sd =
+            graphic::shader::create("!/test.shader", R"(
 // Mono.shader
 import woo::std;
 
@@ -343,13 +346,13 @@ CULL    (NONE);
 WOSHADER_VERTEX_IN!
     using vin = struct {
         vertex  : float3,
-        color   : float3,
+        uv      : float2,
     };
     
 WOSHADER_VERTEX_TO_FRAGMENT!
     using v2f = struct {
         pos     : float4,
-        color   : float3,
+        uv      : float2,
     };
     
 WOSHADER_FRAGMENT_OUT!
@@ -361,14 +364,18 @@ public func vert(v: vin)
 {
     return v2f{
         pos = vec4!(v.vertex, 1.),
-        color = v.color,
+        uv = v.uv,
     };
 }
 
-public func frag(v: v2f)
+let NearestSampler  = Sampler2D::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
+WOSHADER_UNIFORM!
+    let Main        = texture2d::uniform(0, NearestSampler);
+
+public func frag(vf: v2f)
 {
     return fout{
-        color = vec4!(v.color, 1.),
+        color = alphatest(JE_COLOR * tex2d(Main, vf.uv)),
     };
 }
 )").value();
@@ -377,6 +384,7 @@ public func frag(v: v2f)
                 初期开发，暂时在这里随便写写画画
                 */
                 jegl_bind_shader(sd->resource());
+                jegl_bind_texture(tx->resource(), 0);
                 jegl_draw_vertex(vt->resource());
 
                 // Frame end.
