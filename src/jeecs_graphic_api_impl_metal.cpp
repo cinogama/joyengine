@@ -185,7 +185,7 @@ namespace jeecs::graphic::api::metal
                     res->m_raw_uniformbuf_data->m_buffer,
                     res->m_raw_uniformbuf_data->m_buffer_size,
                     MTL::ResourceStorageModeShared);
-            m_binding_place = 
+            m_binding_place =
                 (uint32_t)(res->m_raw_uniformbuf_data->m_buffer_binding_place + 2);
         }
         ~metal_uniform_buffer()
@@ -222,6 +222,21 @@ namespace jeecs::graphic::api::metal
                 m_vertex_buffer->release();
             if (m_index_buffer)
                 m_index_buffer->release();
+        }
+    };
+    struct metal_texture
+    {
+        JECS_DEFAULT_CONSTRUCTOR(metal_texture);
+
+        MTL::Texture* m_texture;
+
+        metal_texture(MTL::Texture* tex)
+            : m_texture(tex)
+        {
+        }
+        ~metal_texture()
+        {
+            m_texture->release();
         }
     };
     jegl_context::graphic_impl_context_t
@@ -695,6 +710,65 @@ public func frag(v: v2f)
                 raw_vertex_data->m_data_size_per_point);
             break;
         }
+        case jegl_resource::type::TEXTURE:
+        {
+            auto* raw_texture_data = res->m_raw_texture_data;
+
+            MTL::TextureDescriptor* texture_desc = MTL::TextureDescriptor::alloc()->init();
+
+            texture_desc->setWidth((uint32_t)raw_texture_data->m_width);
+            texture_desc->setHeight((uint32_t)raw_texture_data->m_height);
+
+            bool float16 = 0 != (raw_texture_data->m_format & jegl_texture::format::FLOAT16);
+            bool is_cube = 0 != (raw_texture_data->m_format & jegl_texture::format::CUBE);
+
+            switch (raw_texture_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
+            {
+            case jegl_texture::format::MONO:
+                texture_desc->setPixelFormat(
+                    float16 ? MTL::PixelFormatR16Float : MTL::PixelFormatR8Unorm);
+                break;
+            case jegl_texture::format::RGBA:
+                texture_desc->setPixelFormat(
+                    float16 ? MTL::PixelFormatRGBA16Float : MTL::PixelFormatRGBA8Unorm);
+                break;
+            default:
+                jeecs::debug::logfatal("Unsupported texture color format.");
+                abort();
+                break;
+            }
+
+            texture_desc->setTextureType(MTL::TextureType2D);
+            texture_desc->setStorageMode(MTL::StorageModeManaged);
+            texture_desc->setUsage(MTL::ResourceUsageSample | MTL::ResourceUsageRead);
+
+            MTL::Texture* texture_instance =
+                metal_context->m_metal_device->newTexture(texture_desc);
+
+            if (raw_texture_data->m_format & jegl_texture::format::FRAMEBUF)
+            {
+                // TODO;
+                abort();
+            }
+            else
+            {
+                texture_instance->replaceRegion(
+                    MTL::Region(
+                        0, 
+                        0, 
+                        0, 
+                        (uint32_t)raw_texture_data->m_width, 
+                        (uint32_t)raw_texture_data->m_height, 
+                        1),
+                    0,
+                    raw_texture_data->m_data,
+                    (uint32_t)raw_texture_data->m_width 
+                    * (float16 ? 1 : 2)
+                    * (raw_texture_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK));
+            }
+            res->m_handle.m_ptr = new metal_texture(texture_instance);
+            texture_desc->release();
+        }
         case jegl_resource::type::UNIFORMBUF:
         {
             res->m_handle.m_ptr = new metal_uniform_buffer(metal_context, res);
@@ -729,7 +803,7 @@ public func frag(v: v2f)
 
                     assert(res->m_raw_uniformbuf_data->m_update_length != 0);
                     void* buffer_contents = ubuf->m_uniform_buffer->contents();
-                    
+
                     memcpy(
                         reinterpret_cast<void*>(
                             reinterpret_cast<intptr_t>(buffer_contents)
@@ -757,6 +831,11 @@ public func frag(v: v2f)
         case jegl_resource::type::VERTEX:
         {
             delete reinterpret_cast<metal_vertex*>(res->m_handle.m_ptr);
+            break;
+        }
+        case jegl_resource::type::TEXTURE:
+        {
+            delete reinterpret_cast<metal_texture*>(res->m_handle.m_ptr);
             break;
         }
         case jegl_resource::type::UNIFORMBUF:
