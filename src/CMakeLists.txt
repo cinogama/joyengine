@@ -138,7 +138,7 @@ if (JE4_ENABLE_DX11_GAPI AND WIN32)
 endif()
 
 # Metal
-if ((JE4_ENABLE_METAL_GAPI AND APPLE)
+if (JE4_ENABLE_METAL_GAPI AND APPLE)
     find_library(METAL_FRAMEWORK Metal
         PATHS "../3rd/metal-cpp"
         REQUIRED)
