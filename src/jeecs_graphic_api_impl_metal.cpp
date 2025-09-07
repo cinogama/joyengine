@@ -77,6 +77,12 @@ namespace jeecs::graphic::api::metal
             // TODO: Metal 的 pipeline state 和 vulkan 的 pipeline 类似，需要根据目标
             //  缓冲区的格式等信息创建不同的 pipeline state。
             //      现在仍然是在早期开发阶段，先以实现基本功能为主。
+            struct sampler_structs
+            {
+                MTL::SamplerState* m_sampler;
+                uint32_t m_sampler_id;
+            };
+            std::vector<sampler_structs> m_samplers;
             MTL::RenderPipelineState* m_pipeline_state;
 
             shared_state(jegl_metal_context* ctx)
@@ -86,6 +92,8 @@ namespace jeecs::graphic::api::metal
             ~shared_state()
             {
                 m_pipeline_state->release();
+                for (auto& sampler : m_samplers)
+                    sampler.m_sampler->release();
             }
         };
 
@@ -140,14 +148,12 @@ namespace jeecs::graphic::api::metal
         MTL::Buffer* m_uniforms;
 
         metal_shader(
-            metal_resource_shader_blob* blob,
-            MTL::RenderPipelineState* pso /* tmp */)
+            metal_resource_shader_blob* blob)
             : m_shared_state(blob->m_shared_state)
             , m_uniform_cpu_buffer_size(blob->m_uniform_size)
             , m_uniform_buffer_update_offset(0)
             , m_uniform_buffer_update_size(0)
         {
-            m_shared_state->m_pipeline_state = pso;
             if (m_uniform_cpu_buffer_size != 0)
             {
                 m_uniform_cpu_buffer = malloc(m_uniform_cpu_buffer_size);
@@ -527,6 +533,7 @@ public func frag(v: v2f)
                         fragment_main_function,
                         vertex_descriptor);
 
+                // Update uniforms layout.
                 uint32_t last_elem_end_place = 0;
                 size_t max_allign = 4;
                 auto* uniforms = raw_shader->m_custom_uniforms;
@@ -578,6 +585,80 @@ public func frag(v: v2f)
                 shader_blob->m_uniform_size =
                     jeecs::basic::allign_size(last_elem_end_place, max_allign);
 
+                // TMP: Create pso
+                MTL::RenderPipelineDescriptor* pDesc =
+                    MTL::RenderPipelineDescriptor::alloc()->init();
+
+                pDesc->setVertexFunction(shader_blob->m_vertex_function);
+                pDesc->setFragmentFunction(shader_blob->m_fragment_function);
+                pDesc->setVertexDescriptor(shader_blob->m_vertex_descriptor);
+
+                pDesc->colorAttachments()->object(0)->setPixelFormat(
+                    MTL::PixelFormat::PixelFormatBGRA8Unorm_sRGB);
+
+                NS::Error* pError = nullptr;
+                auto* pso = metal_context->m_metal_device->newRenderPipelineState(pDesc, &pError);
+                if (pso == nullptr)
+                {
+                    jeecs::debug::logfatal(
+                        "Fail to create pipeline state object for shader '%s':\n%s",
+                        res->m_path,
+                        pError->localizedDescription()->utf8String());
+                    abort();
+                }
+                shader_blob->m_shared_state->m_pipeline_state = pso;
+                pDesc->release();
+
+                // Create samplers
+                for (size_t i = 0; i < raw_shader->m_sampler_count; ++i)
+                {
+                    const auto& sampler_method = raw_shader->m_sampler_methods[i];
+
+                    auto filter_mode_cvt = [](jegl_shader::fliter_mode fmode)
+                        {
+                            switch (fmode)
+                            {
+                            case jegl_shader::fliter_mode::NEAREST:
+                                return MTL::SamplerMinMagFilterNearest;
+                            case jegl_shader::fliter_mode::LINEAR:
+                                return MTL::SamplerMinMagFilterLinear;
+                            default:
+                                jeecs::debug::logfatal("Unsupported filter mode.");
+                                return MTL::SamplerMinMagFilterNearest;
+                            }
+                        };
+                    auto wrap_mode_cvt = [](jegl_shader::wrap_mode wmode)
+                        {
+                            switch (wmode)
+                            {
+                            case jegl_shader::wrap_mode::REPEAT:
+                                return MTL::SamplerAddressModeRepeat;
+                            case jegl_shader::wrap_mode::CLAMP:
+                                return MTL::SamplerAddressModeClampToEdge;
+                            default:
+                                jeecs::debug::logfatal("Unsupported wrap mode.");
+                                return MTL::SamplerAddressModeClampToEdge;
+                            }
+                        };
+
+                    MTL::SamplerDescriptor* sampler_desc =
+                        MTL::SamplerDescriptor::alloc()->init();
+
+                    sampler_desc->setMinFilter(filter_mode_cvt(sampler_method.m_min_filter));
+                    sampler_desc->setMagFilter(filter_mode_cvt(sampler_method.m_mag_filter));
+                    sampler_desc->setSAddressMode(wrap_mode_cvt(sampler_method.m_wrap_s));
+                    sampler_desc->setTAddressMode(wrap_mode_cvt(sampler_method.m_wrap_t));
+
+                    MTL::SamplerState* sampler_state =
+                        metal_context->m_metal_device->newSamplerState(sampler_desc);
+
+                    metal_resource_shader_blob::shared_state::sampler_structs sampler_struct;
+                    sampler_struct.m_sampler = sampler_state;
+                    sampler_struct.m_sampler_id = sampler_method.m_sampler_id;
+
+                    shader_blob->m_shared_state->m_samplers.push_back(sampler_struct);
+                }
+
                 return shader_blob;
             }
             break;
@@ -610,30 +691,8 @@ public func frag(v: v2f)
             if (blob != nullptr)
             {
                 auto* shader_blob = reinterpret_cast<metal_resource_shader_blob*>(blob);
-                MTL::RenderPipelineDescriptor* pDesc =
-                    MTL::RenderPipelineDescriptor::alloc()->init();
 
-                pDesc->setVertexFunction(shader_blob->m_vertex_function);
-                pDesc->setFragmentFunction(shader_blob->m_fragment_function);
-                pDesc->setVertexDescriptor(shader_blob->m_vertex_descriptor);
-
-                pDesc->colorAttachments()->object(0)->setPixelFormat(
-                    MTL::PixelFormat::PixelFormatBGRA8Unorm_sRGB);
-
-                NS::Error* pError = nullptr;
-                auto* pso = metal_context->m_metal_device->newRenderPipelineState(pDesc, &pError);
-                if (pso == nullptr)
-                {
-                    jeecs::debug::logfatal(
-                        "Fail to create pipeline state object for shader '%s':\n%s",
-                        res->m_path,
-                        pError->localizedDescription()->utf8String());
-                    abort();
-                }
-
-                pDesc->release();
-
-                metal_shader* metal_shader_instance = new metal_shader(shader_blob, pso);
+                metal_shader* metal_shader_instance = new metal_shader(shader_blob);
                 res->m_handle.m_ptr = metal_shader_instance;
 
                 // Read and fetch uniform locations.
@@ -754,15 +813,15 @@ public func frag(v: v2f)
             {
                 texture_instance->replaceRegion(
                     MTL::Region(
-                        0, 
-                        0, 
-                        0, 
-                        (uint32_t)raw_texture_data->m_width, 
-                        (uint32_t)raw_texture_data->m_height, 
+                        0,
+                        0,
+                        0,
+                        (uint32_t)raw_texture_data->m_width,
+                        (uint32_t)raw_texture_data->m_height,
                         1),
                     0,
-                    raw_texture_data->m_data,
-                    (uint32_t)raw_texture_data->m_width 
+                    raw_texture_data->m_pixels,
+                    (uint32_t)raw_texture_data->m_width
                     * (float16 ? 1 : 2)
                     * (raw_texture_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK));
             }
@@ -874,10 +933,23 @@ public func frag(v: v2f)
         metal_context->m_render_states.m_render_command_encoder->setRenderPipelineState(
             shader_instance->m_shared_state->m_pipeline_state);
 
+        for (const auto& sampler_struct : shader_instance->m_shared_state->m_samplers)
+        {
+            metal_context->m_render_states.m_render_command_encoder->setFragmentSamplerState(
+                sampler_struct.m_sampler,
+                sampler_struct.m_sampler_id);
+        }
+
         return true;
     }
-    void bind_texture(jegl_context::graphic_impl_context_t, jegl_resource*, size_t)
+    void bind_texture(jegl_context::graphic_impl_context_t ctx, jegl_resource* res, size_t pass)
     {
+        auto* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
+        auto* texture_instance = reinterpret_cast<metal_texture*>(res->m_handle.m_ptr);
+
+        // 由于其他图形库不支持在顶点着色器中使用纹理采样，所以这里不绑定顶点着色器纹理
+        metal_context->m_render_states.m_render_command_encoder->setFragmentTexture(
+            texture_instance->m_texture, (uint32_t)pass);
     }
     void draw_vertex_with_shader(jegl_context::graphic_impl_context_t ctx, jegl_resource* res)
     {
