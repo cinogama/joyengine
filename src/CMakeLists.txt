@@ -138,7 +138,7 @@ if (JE4_ENABLE_DX11_GAPI AND WIN32)
 endif()
 
 # Metal
-if ((JE4_ENABLE_METAL_GAPI OR JE4_ENABLE_VULKAN130_GAPI) AND APPLE)
+if ((JE4_ENABLE_METAL_GAPI AND APPLE)
     find_library(METAL_FRAMEWORK Metal
         PATHS "../3rd/metal-cpp"
         REQUIRED)
@@ -162,10 +162,8 @@ if ((JE4_ENABLE_METAL_GAPI OR JE4_ENABLE_VULKAN130_GAPI) AND APPLE)
         ${FOUNDATION_FRAMEWORK}
         ${QUARTZCORE_FRAMEWORK})
 
-    if (JE4_ENABLE_METAL_GAPI)
-        target_include_directories(joyengine_core_configs INTERFACE 
-            "../3rd/metal-cpp")
-    endif()
+    target_include_directories(joyengine_core_configs INTERFACE 
+        "../3rd/metal-cpp")
 endif()
 
 # Vulkan 1.3
@@ -193,7 +191,12 @@ if (JE4_ENABLE_VULKAN130_GAPI)
         
         if(MOLTENVK_FRAMEWORK)
             target_link_libraries(joyengine_core_configs INTERFACE 
-                ${MOLTENVK_FRAMEWORK})
+                ${MOLTENVK_FRAMEWORK}
+                "-framework Metal"
+                "-framework QuartzCore"
+                "-framework IOSurface"
+                "-framework IOKit"
+                "-framework Foundation")
         else()
             message(FATAL_ERROR "MoltenVK framework not found")
         endif()
