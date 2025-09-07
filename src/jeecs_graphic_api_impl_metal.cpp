@@ -785,6 +785,9 @@ public func frag(vf: v2f)
 
             texture_desc->setWidth((uint32_t)raw_texture_data->m_width);
             texture_desc->setHeight((uint32_t)raw_texture_data->m_height);
+            texture_desc->setTextureType(MTL::TextureType2D);
+            texture_desc->setStorageMode(MTL::StorageModeManaged);
+            texture_desc->setUsage(MTL::ResourceUsageSample | MTL::ResourceUsageRead);
 
             bool float16 = 0 != (raw_texture_data->m_format & jegl_texture::format::FLOAT16);
             bool is_cube = 0 != (raw_texture_data->m_format & jegl_texture::format::CUBE);
@@ -804,10 +807,6 @@ public func frag(vf: v2f)
                 abort();
                 break;
             }
-
-            texture_desc->setTextureType(MTL::TextureType2D);
-            texture_desc->setStorageMode(MTL::StorageModeManaged);
-            texture_desc->setUsage(MTL::ResourceUsageSample | MTL::ResourceUsageRead);
 
             MTL::Texture* texture_instance =
                 metal_context->m_metal_device->newTexture(texture_desc);
@@ -830,7 +829,7 @@ public func frag(vf: v2f)
                     0,
                     raw_texture_data->m_pixels,
                     (uint32_t)raw_texture_data->m_width
-                    * (float16 ? 1 : 2)
+                    * (float16 ? 2 : 1)
                     * (raw_texture_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK));
             }
             res->m_handle.m_ptr = new metal_texture(texture_instance);
