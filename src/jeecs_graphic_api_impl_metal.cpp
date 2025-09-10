@@ -15,6 +15,8 @@
 namespace jeecs::graphic::api::metal
 {
     struct metal_shader;
+    struct metal_framebuffer;
+
     struct jegl_metal_context
     {
         JECS_DISABLE_MOVE_AND_COPY(jegl_metal_context);
@@ -32,7 +34,9 @@ namespace jeecs::graphic::api::metal
             metal_shader* m_current_target_shader;
 
             MTL::CommandBuffer* m_currnet_command_buffer;
-            MTL::RenderPassDescriptor* m_render_pass_descriptor;
+            MTL::RenderPassDescriptor* m_main_render_pass_descriptor;
+
+            metal_framebuffer* m_current_target_framebuffer_may_null;
             MTL::RenderCommandEncoder* m_render_command_encoder;
         };
         render_runtime_states m_render_states;
@@ -245,6 +249,21 @@ namespace jeecs::graphic::api::metal
             m_texture->release();
         }
     };
+    struct metal_framebuffer
+    {
+        JECS_DEFAULT_CONSTRUCTOR(metal_framebuffer);
+
+        MTL::RenderPassDescriptor* m_render_pass_descriptor;
+        metal_framebuffer()
+        {
+            m_render_pass_descriptor = MTL::RenderPassDescriptor::alloc()->init();
+        }
+        ~metal_framebuffer()
+        {
+            m_render_pass_descriptor->release();
+        }
+    };
+
     jegl_context::graphic_impl_context_t
         startup(jegl_context* glthread, const jegl_interface_config* cfg, bool reboot)
     {
@@ -292,11 +311,11 @@ namespace jeecs::graphic::api::metal
 
         metal_context->m_render_states.m_currnet_command_buffer =
             metal_context->m_command_queue->commandBuffer();
-        metal_context->m_render_states.m_render_pass_descriptor =
+        metal_context->m_render_states.m_main_render_pass_descriptor =
             metal_context->m_window_and_view_layout->m_metal_view->currentRenderPassDescriptor();
         metal_context->m_render_states.m_render_command_encoder =
             metal_context->m_render_states.m_currnet_command_buffer->renderCommandEncoder(
-                metal_context->m_render_states.m_render_pass_descriptor);
+                metal_context->m_render_states.m_main_render_pass_descriptor);
 
         return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
@@ -324,10 +343,10 @@ namespace jeecs::graphic::api::metal
                     {jegl_vertex::data_type::FLOAT32, 2},
                 }).value();
 
-        static basic::resource<graphic::texture> tx =
-            graphic::texture::load(nullptr, "!/icon.png").value();
-        static basic::resource<graphic::shader> sd =
-            graphic::shader::create("!/test.shader", R"(
+                static basic::resource<graphic::texture> tx =
+                    graphic::texture::load(nullptr, "!/icon.png").value();
+                static basic::resource<graphic::shader> sd =
+                    graphic::shader::create("!/test.shader", R"(
 // Mono.shader
 import woo::std;
 
@@ -602,7 +621,7 @@ public func frag(vf: v2f)
                 pDesc->setVertexDescriptor(shader_blob->m_vertex_descriptor);
 
                 pDesc->colorAttachments()->object(0)->setPixelFormat(
-                    MTL::PixelFormat::PixelFormatBGRA8Unorm_sRGB);
+                    MTL::PixelFormat::PixelFormatBGRA8Unorm);
 
                 NS::Error* pError = nullptr;
                 auto* pso = metal_context->m_metal_device->newRenderPipelineState(pDesc, &pError);
@@ -783,29 +802,51 @@ public func frag(vf: v2f)
 
             MTL::TextureDescriptor* texture_desc = MTL::TextureDescriptor::alloc()->init();
 
+            bool float16 = 0 != (raw_texture_data->m_format & jegl_texture::format::FLOAT16);
+            bool is_cube = 0 != (raw_texture_data->m_format & jegl_texture::format::CUBE);
+            bool is_framebuf = 0 != (raw_texture_data->m_format & jegl_texture::format::FRAMEBUF);
+            bool is_depth = 0 != (raw_texture_data->m_format & jegl_texture::format::DEPTH);
+
+            assert(!is_cube); // TODO;
+
             texture_desc->setWidth((uint32_t)raw_texture_data->m_width);
             texture_desc->setHeight((uint32_t)raw_texture_data->m_height);
             texture_desc->setTextureType(MTL::TextureType2D);
-            texture_desc->setStorageMode(MTL::StorageModeManaged);
-            texture_desc->setUsage(MTL::ResourceUsageSample | MTL::ResourceUsageRead);
 
-            bool float16 = 0 != (raw_texture_data->m_format & jegl_texture::format::FLOAT16);
-            bool is_cube = 0 != (raw_texture_data->m_format & jegl_texture::format::CUBE);
-
-            switch (raw_texture_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
+            if (is_framebuf)
             {
-            case jegl_texture::format::MONO:
-                texture_desc->setPixelFormat(
-                    float16 ? MTL::PixelFormatR16Float : MTL::PixelFormatR8Unorm);
-                break;
-            case jegl_texture::format::RGBA:
-                texture_desc->setPixelFormat(
-                    float16 ? MTL::PixelFormatRGBA16Float : MTL::PixelFormatRGBA8Unorm);
-                break;
-            default:
-                jeecs::debug::logfatal("Unsupported texture color format.");
-                abort();
-                break;
+                texture_desc->setUsage(
+                    MTL::ResourceUsageRenderTarget | MTL::ResourceUsageSample | MTL::ResourceUsageRead);
+                texture_desc->setStorageMode(MTL::StorageModePrivate);
+            }
+            else
+            {
+                texture_desc->setUsage(MTL::ResourceUsageSample | MTL::ResourceUsageRead);
+                texture_desc->setStorageMode(MTL::StorageModeManaged);
+            }
+
+            if (is_depth)
+            {
+                assert(is_framebuf);
+                texture_desc->setPixelFormat(MTL::PixelFormatDepth24Unorm_Stencil8);
+            }
+            else
+            {
+                switch (raw_texture_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
+                {
+                case jegl_texture::format::MONO:
+                    texture_desc->setPixelFormat(
+                        float16 ? MTL::PixelFormatR16Float : MTL::PixelFormatR8Unorm);
+                    break;
+                case jegl_texture::format::RGBA:
+                    texture_desc->setPixelFormat(
+                        float16 ? MTL::PixelFormatRGBA16Float : MTL::PixelFormatRGBA8Unorm);
+                    break;
+                default:
+                    jeecs::debug::logfatal("Unsupported texture color format.");
+                    abort();
+                    break;
+                }
             }
 
             MTL::Texture* texture_instance =
@@ -813,8 +854,7 @@ public func frag(vf: v2f)
 
             if (raw_texture_data->m_format & jegl_texture::format::FRAMEBUF)
             {
-                // TODO;
-                abort();
+                // No need to upload data.
             }
             else
             {
@@ -834,6 +874,59 @@ public func frag(vf: v2f)
             }
             res->m_handle.m_ptr = new metal_texture(texture_instance);
             texture_desc->release();
+
+            break;
+        }
+        case jegl_resource::type::FRAMEBUF:
+        {
+            metal_framebuffer* framebuf = new metal_framebuffer();
+
+            jeecs::basic::resource<jeecs::graphic::texture>* attachments =
+                std::launder(reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture> *>(
+                    res->m_raw_framebuf_data->m_output_attachments));
+
+            size_t color_attachment_count = 0;
+
+            for (size_t i = 0; i < res->m_raw_framebuf_data->m_attachment_count; ++i)
+            {
+                auto* attachment_resource = attachments[i]->resource();
+                jegl_using_resource(ctx, attachment_resource);
+
+                if (attachment_resource->m_raw_texture_data->m_format & jegl_texture::format::DEPTH)
+                {
+                    // Is depth attachment.
+                    MTL::RenderPassDepthAttachmentDescriptor* depth_attachment_desc = framebuf
+                        ->m_render_pass_descriptor
+                        ->depthAttachment();
+
+                    auto* texture_instance = reinterpret_cast<metal_texture*>(
+                        attachment_resource->m_handle.m_ptr);
+                    depth_attachment_desc->setTexture(texture_instance->m_texture);
+                    depth_attachment_desc->setLoadAction(MTL::LoadActionDontCare);
+                    depth_attachment_desc->setStoreAction(MTL::StoreActionStore);
+                    depth_attachment_desc->setClearDepth(1.0);
+                }
+                else
+                {
+                    // Is color attachment.
+                    MTL::RenderPassColorAttachmentDescriptor* color_attachment_desc = framebuf
+                        ->m_render_pass_descriptor
+                        ->colorAttachments()
+                        ->object(color_attachment_count);
+
+                    auto* texture_instance = reinterpret_cast<metal_texture*>(
+                        attachment_resource->m_handle.m_ptr);
+                    color_attachment_desc->setTexture(texture_instance->m_texture);
+                    color_attachment_desc->setLoadAction(MTL::LoadActionDontCare);
+                    color_attachment_desc->setStoreAction(MTL::StoreActionStore);
+                    color_attachment_desc->setClearColor(
+                        MTL::ClearColor{
+                            0.0, 0.0, 0.0, 1.0 });
+
+                    ++color_attachment_count;
+                }
+            }
+            res->m_handle.m_ptr = framebuf;
 
             break;
         }
