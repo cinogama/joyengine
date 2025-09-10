@@ -34,7 +34,7 @@ namespace je::towoo::system
                 [job_type::LATE_UPDATE] = "LATE_UPDATE",
             };
             je::logerr(F"The order of work is incorrect: {names[t]} must happend after {names[_current_job_type]}");
-            std::halt("The order of work is incorrect.");
+            std::panic("The order of work is incorrect.");
         }
     }
     
