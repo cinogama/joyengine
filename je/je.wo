@@ -60,24 +60,7 @@ namespace je
         
     extern("libjoyecs", "wojeapi_smooth_deltatime")
         public func smooth_deltatime()=> real;
-        
-    using thread = gchandle
-    {
-        namespace unsafe
-        {
-            extern("libjoyecs", "wojeapi_startup_thread")
-                public func create(f: ()=> void)=> thread;
-                
-            extern("libjoyecs", "wojeapi_abort_all_thread", slow)
-                public func abort_all()=> void;
-        }
-        extern("libjoyecs", "wojeapi_wait_thread", slow)
-            public func wait(self: thread)=> void;
             
-        extern("libjoyecs", "wojeapi_check_thread", slow)
-            public func finished(self: thread)=> bool;
-    }
-    
     extern("libjoyecs", "wojeapi_generate_uid")
         public func uid()=> string;
         

@@ -61,7 +61,7 @@ jegl_graphic_api_entry jegl_get_host_graphic_api(void)
     return _je_global_context._jegl_host_graphic_api;
 }
 
-void _jedbg_hook_woolang_panic(
+wo_bool_t _jedbg_hook_woolang_panic(
     wo_vm vm,
     wo_string_t src_file,
     uint32_t lineno,
@@ -86,24 +86,20 @@ void _jedbg_hook_woolang_panic(
 
     wo_pin_value_get(_je_global_panic_hooker_s + 6, _je_global_context._je_global_panic_hook_function);
 
-    if (nullptr != wo_invoke_value(
+    bool panic_processed = false;
+    if (nullptr == wo_invoke_value(
         _je_global_context._je_global_panic_hooker,
         _je_global_panic_hooker_s + 6,
         6,
         nullptr,
         &_je_global_panic_hooker_s))
     {
-        // Abort specify vm;
-        wo_abort_vm(vm);
-    }
-    else
-    {
         jeecs::debug::logwarn("Engine's woolang panic hook failed, try default.");
         assert(_je_global_context._je_global_old_panic_handler != nullptr);
         _je_global_context._je_global_old_panic_handler(vm, src_file, lineno, functionname, rterrcode, reason);
     }
-
     wo_pop_stack(_je_global_context._je_global_panic_hooker, 7);
+    return WO_FALSE;
 }
 
 WO_API wo_api wojeapi_editor_register_panic_hook(wo_vm vm, wo_value args)

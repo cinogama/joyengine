@@ -2317,7 +2317,8 @@ public func vert(v: vin)
     };
 }
 
-let nearest_clamp = Sampler2D::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
+let nearest_clamp = 
+    Sampler2D::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
 
 WOSHADER_UNIFORM!
     let Main = texture2d::uniform(0, nearest_clamp);
@@ -2328,7 +2329,6 @@ public func frag(vf: v2f)
         color = tex2d(Main, vf.uv),
     };
 }
-
 )").value();
 
     _je_gui_tls_ctx._jegui_imgui_config_path =

@@ -158,9 +158,7 @@ namespace editor
                 return result::err("未在调试中");
                 
             assert (self.m_worlds->empty);
-            
-            je::thread::unsafe::abort_all();
-            
+
             // 关闭所有世界~~
             do self->get_env->get_universe->get_all_worlds
                 ->> \w = w->close();
