@@ -892,7 +892,7 @@ public func frag(vf: v2f)
             for (size_t i = 0; i < res->m_raw_framebuf_data->m_attachment_count; ++i)
             {
                 auto* attachment_resource = attachments[i]->resource();
-                jegl_using_resource(ctx, attachment_resource);
+                jegl_using_resource(attachment_resource);
 
                 if (attachment_resource->m_raw_texture_data->m_format & jegl_texture::format::DEPTH)
                 {
@@ -1108,9 +1108,9 @@ public func frag(vf: v2f)
 
             // Create a new command buffer and encoder for the new framebuffer
             metal_context->m_render_states.m_currnet_command_buffer =
-                metal_context->m_metal_command_queue->commandBuffer();
+                metal_context->m_command_queue->commandBuffer();
             metal_context->m_render_states.m_render_command_encoder =
-                metal_context->m_currnet_command_buffer->renderCommandEncoder(
+                metal_context->m_render_states.m_currnet_command_buffer->renderCommandEncoder(
                     framebuf_instance->m_render_pass_descriptor);
             metal_context->m_render_states.m_current_target_framebuffer_may_null = framebuf_instance;
         }
