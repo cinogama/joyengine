@@ -816,12 +816,12 @@ public func frag(vf: v2f)
             if (is_framebuf)
             {
                 texture_desc->setUsage(
-                    MTL::ResourceUsageRenderTarget | MTL::ResourceUsageSample | MTL::ResourceUsageRead);
+                    MTL::TextureUsageRenderTarget | MTL::TextureUsageShaderRead);
                 texture_desc->setStorageMode(MTL::StorageModePrivate);
             }
             else
             {
-                texture_desc->setUsage(MTL::ResourceUsageSample | MTL::ResourceUsageRead);
+                texture_desc->setUsage(MTL::TextureUsageShaderRead);
                 texture_desc->setStorageMode(MTL::StorageModeManaged);
             }
 
