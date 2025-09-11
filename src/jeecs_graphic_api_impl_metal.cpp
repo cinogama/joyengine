@@ -236,7 +236,7 @@ namespace jeecs::graphic::api::metal
     };
     struct metal_texture
     {
-        JECS_DEFAULT_CONSTRUCTOR(metal_texture);
+        JECS_DISABLE_MOVE_AND_COPY(metal_texture);
 
         MTL::Texture* m_texture;
 
@@ -251,7 +251,7 @@ namespace jeecs::graphic::api::metal
     };
     struct metal_framebuffer
     {
-        JECS_DEFAULT_CONSTRUCTOR(metal_framebuffer);
+        JECS_DISABLE_MOVE_AND_COPY(metal_framebuffer);
 
         MTL::RenderPassDescriptor* m_render_pass_descriptor;
         metal_framebuffer()
