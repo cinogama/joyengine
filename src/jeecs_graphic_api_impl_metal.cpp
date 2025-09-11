@@ -255,6 +255,9 @@ namespace jeecs::graphic::api::metal
         JECS_DISABLE_MOVE_AND_COPY(metal_framebuffer);
 
         MTL::RenderPassDescriptor* m_render_pass_descriptor;
+        size_t m_color_attachment_count;
+        bool m_has_depth_attachment;
+
         metal_framebuffer()
         {
             m_render_pass_descriptor = MTL::RenderPassDescriptor::alloc()->init();
@@ -897,6 +900,8 @@ public func frag(vf: v2f)
                 if (attachment_resource->m_raw_texture_data->m_format & jegl_texture::format::DEPTH)
                 {
                     // Is depth attachment.
+                    framebuf->m_has_depth_attachment = true;
+
                     MTL::RenderPassDepthAttachmentDescriptor* depth_attachment_desc = framebuf
                         ->m_render_pass_descriptor
                         ->depthAttachment();
@@ -928,6 +933,7 @@ public func frag(vf: v2f)
                     ++color_attachment_count;
                 }
             }
+            framebuf->m_color_attachment_count = color_attachment_count;
             res->m_handle.m_ptr = framebuf;
 
             break;
@@ -1097,11 +1103,11 @@ public func frag(vf: v2f)
     }
 
     void bind_framebuffer(
-        jegl_context::graphic_impl_context_t, 
-        jegl_resource* fb, 
-        const size_t(*)[4],
-        const float(*)[4],
-        const float*)
+        jegl_context::graphic_impl_context_t,
+        jegl_resource* fb,
+        const size_t(*viewport_xywh)[4],
+        const float(*clear_color_rgba)[4],
+        const float* clear_depth)
     {
         auto* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
 
@@ -1109,34 +1115,97 @@ public func frag(vf: v2f)
             ? nullptr
             : reinterpret_cast<metal_framebuffer*>(fb->m_handle.m_ptr);
 
-        if (metal_context->m_render_states.m_current_target_framebuffer_may_null != target_framebuf_may_null)
+        if (target_framebuf_may_null != nullptr)
         {
-            metal_context->m_render_states.m_render_command_encoder->endEncoding();
+            for (size_t i = 0; i < target_framebuf_may_null->m_color_attachment_count; ++i)
+            {
+                auto* color_attachment_desc = target_framebuf_may_null
+                    ->m_render_pass_descriptor
+                    ->colorAttachments()
+                    ->object(i);
 
-            // Create a new command buffer and encoder for the new framebuffer
-            metal_context->m_render_states.m_currnet_command_buffer =
-                metal_context->m_command_queue->commandBuffer();
+                if (clear_color_rgba != nullptr)
+                {
+                    auto& clear_color = *clear_color_rgba;
 
-            metal_context->m_render_states.m_render_command_encoder =
-                metal_context->m_render_states.m_currnet_command_buffer->renderCommandEncoder(
-                    target_framebuf_may_null != nullptr 
-                    ? target_framebuf_may_null->m_render_pass_descriptor
-                    : metal_context->m_render_states.m_main_render_pass_descriptor);
+                    color_attachment_desc->setLoadAction(MTL::LoadActionClear);
+                    color_attachment_desc->setClearColor(
+                        MTL::ClearColor{
+                            clear_color[0],
+                            clear_color[1],
+                            clear_color[2],
+                            clear_color[3] });
+                }
+                else
+                    color_attachment_desc->setLoadAction(MTL::LoadActionLoad);
+            }
 
-            metal_context->m_render_states.m_current_target_framebuffer_may_null = 
-                target_framebuf_may_null;
+            if (target_framebuf_may_null->m_has_depth_attachment)
+            {
+                auto* depth_attachment_desc = target_framebuf_may_null
+                    ->m_render_pass_descriptor
+                    ->depthAttachment();
+                if (clear_depth != nullptr)
+                {
+                    depth_attachment_desc->setLoadAction(MTL::LoadActionClear);
+                    depth_attachment_desc->setClearDepth(*clear_depth);
+                }
+                else
+                    depth_attachment_desc->setLoadAction(MTL::LoadActionLoad);
+            }
         }
-    }
-    void clear_framebuffer_color(jegl_context::graphic_impl_context_t ctx, float color[4])
-    {
-        auto* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
+        else
+        {
+            auto* color_attachment_desc = metal_context
+                ->m_render_states
+                .m_main_render_pass_descriptor
+                ->colorAttachments()
+                ->object(0);
 
-        /* metal_context->m_render_states.m_render_command_encoder->clear(
-             0, MTL::ClearColor{ color[0], color[1], color[2], color[3] });*/
+            if (clear_color_rgba != nullptr)
+            {
+                auto& clear_color = *clear_color_rgba;
 
-    }
-    void clear_framebuffer_depth(jegl_context::graphic_impl_context_t)
-    {
+                color_attachment_desc->setLoadAction(MTL::LoadActionClear);
+                color_attachment_desc->setClearColor(
+                    MTL::ClearColor{
+                        clear_color[0],
+                        clear_color[1],
+                        clear_color[2],
+                        clear_color[3] });
+            }
+            else
+                color_attachment_desc->setLoadAction(MTL::LoadActionLoad);
+
+            // Main framebuffer has depth attachment.
+            auto* depth_attachment_desc = metal_context
+                ->m_render_states
+                .m_main_render_pass_descriptor
+                ->depthAttachment();
+
+            if (clear_depth != nullptr)
+            {
+                depth_attachment_desc->setLoadAction(MTL::LoadActionClear);
+                depth_attachment_desc->setClearDepth(*clear_depth);
+            }
+            else
+                depth_attachment_desc->setLoadAction(MTL::LoadActionLoad);
+        }
+
+        metal_context->m_render_states.m_render_command_encoder->endEncoding();
+
+        // Create a new command buffer and encoder for the new framebuffer
+        metal_context->m_render_states.m_currnet_command_buffer =
+            metal_context->m_command_queue->commandBuffer();
+
+        metal_context->m_render_states.m_render_command_encoder =
+            metal_context->m_render_states.m_currnet_command_buffer->renderCommandEncoder(
+                target_framebuf_may_null != nullptr
+                ? target_framebuf_may_null->m_render_pass_descriptor
+                : metal_context->m_render_states.m_main_render_pass_descriptor);
+
+        metal_context->m_render_states.m_current_target_framebuffer_may_null =
+            target_framebuf_may_null;
     }
 
     void set_uniform(
