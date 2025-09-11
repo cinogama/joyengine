@@ -1099,7 +1099,7 @@ public func frag(vf: v2f)
     void bind_framebuffer(jegl_context::graphic_impl_context_t ctx, jegl_resource* fb, size_t, size_t, size_t, size_t)
     {
         auto* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
-        auto* framebuf_instance =
+        /*auto* framebuf_instance =
             reinterpret_cast<metal_framebuffer*>(fb->m_handle.m_ptr);
 
         if (metal_context->m_render_states.m_current_target_framebuffer_may_null != framebuf_instance)
@@ -1114,7 +1114,7 @@ public func frag(vf: v2f)
                     framebuf_instance->m_render_pass_descriptor);
             metal_context->m_render_states.m_current_target_framebuffer_may_null = framebuf_instance;
         }
-        
+        */
     }
     void clear_framebuffer_color(jegl_context::graphic_impl_context_t ctx, float color[4])
     {
