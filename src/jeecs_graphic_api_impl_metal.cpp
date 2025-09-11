@@ -1102,6 +1102,97 @@ public func frag(vf: v2f)
             0);
     }
 
+    void set_framebuffer_clear_depth(
+        jegl_metal_context* metal_context,
+        metal_framebuffer* fb_maynull,
+        const float* clear_depth)
+    {
+        if (fb_maynull == nullptr)
+        {
+            // Clear main framebuffer
+            auto* depth_attachment_desc = metal_context
+                ->m_render_states
+                .m_main_render_pass_descriptor
+                ->depthAttachment();
+            if (clear_depth != nullptr)
+            {
+                depth_attachment_desc->setLoadAction(MTL::LoadActionClear);
+                depth_attachment_desc->setClearDepth(*clear_depth);
+            }
+            else
+                depth_attachment_desc->setLoadAction(MTL::LoadActionLoad);
+        }
+        else
+        {
+            if (fb_maynull->m_has_depth_attachment)
+            {
+                auto* depth_attachment_desc = fb_maynull
+                    ->m_render_pass_descriptor
+                    ->depthAttachment();
+                if (clear_depth != nullptr)
+                {
+                    depth_attachment_desc->setLoadAction(MTL::LoadActionClear);
+                    depth_attachment_desc->setClearDepth(*clear_depth);
+                }
+                else
+                    depth_attachment_desc->setLoadAction(MTL::LoadActionLoad);
+            }
+        }
+    }
+
+    void set_framebuffer_clear_color(
+        jegl_metal_context* metal_context,
+        metal_framebuffer* fb_maynull,
+        const float(*clear_color_rgba)[4])
+    {
+        if (fb_maynull == nullptr)
+        {
+            // Clear main framebuffer
+            auto* color_attachment_desc = metal_context
+                ->m_render_states
+                .m_main_render_pass_descriptor
+                ->colorAttachments()
+                ->object(0);
+
+            if (clear_color_rgba != nullptr)
+            {
+                auto& clear_color = *clear_color_rgba;
+                color_attachment_desc->setLoadAction(MTL::LoadActionClear);
+                color_attachment_desc->setClearColor(
+                    MTL::ClearColor{
+                        clear_color[0],
+                        clear_color[1],
+                        clear_color[2],
+                        clear_color[3] });
+            }
+            else
+                color_attachment_desc->setLoadAction(MTL::LoadActionLoad);
+        }
+        else
+        {
+            for (size_t i = 0; i < fb_maynull->m_color_attachment_count; ++i)
+            {
+                auto* color_attachment_desc = fb_maynull
+                    ->m_render_pass_descriptor
+                    ->colorAttachments()
+                    ->object(i);
+                if (clear_color_rgba != nullptr)
+                {
+                    auto& clear_color = *clear_color_rgba;
+                    color_attachment_desc->setLoadAction(MTL::LoadActionClear);
+                    color_attachment_desc->setClearColor(
+                        MTL::ClearColor{
+                            clear_color[0],
+                            clear_color[1],
+                            clear_color[2],
+                            clear_color[3] });
+                }
+                else
+                    color_attachment_desc->setLoadAction(MTL::LoadActionLoad);
+            }
+        }
+    }
+
     void bind_framebuffer(
         jegl_context::graphic_impl_context_t,
         jegl_resource* fb,
@@ -1115,82 +1206,15 @@ public func frag(vf: v2f)
             ? nullptr
             : reinterpret_cast<metal_framebuffer*>(fb->m_handle.m_ptr);
 
-        if (target_framebuf_may_null != nullptr)
-        {
-            for (size_t i = 0; i < target_framebuf_may_null->m_color_attachment_count; ++i)
-            {
-                auto* color_attachment_desc = target_framebuf_may_null
-                    ->m_render_pass_descriptor
-                    ->colorAttachments()
-                    ->object(i);
+        set_framebuffer_clear_color(
+            metal_context,
+            target_framebuf_may_null,
+            clear_color_rgba);
 
-                if (clear_color_rgba != nullptr)
-                {
-                    auto& clear_color = *clear_color_rgba;
-
-                    color_attachment_desc->setLoadAction(MTL::LoadActionClear);
-                    color_attachment_desc->setClearColor(
-                        MTL::ClearColor{
-                            clear_color[0],
-                            clear_color[1],
-                            clear_color[2],
-                            clear_color[3] });
-                }
-                else
-                    color_attachment_desc->setLoadAction(MTL::LoadActionLoad);
-            }
-
-            if (target_framebuf_may_null->m_has_depth_attachment)
-            {
-                auto* depth_attachment_desc = target_framebuf_may_null
-                    ->m_render_pass_descriptor
-                    ->depthAttachment();
-                if (clear_depth != nullptr)
-                {
-                    depth_attachment_desc->setLoadAction(MTL::LoadActionClear);
-                    depth_attachment_desc->setClearDepth(*clear_depth);
-                }
-                else
-                    depth_attachment_desc->setLoadAction(MTL::LoadActionLoad);
-            }
-        }
-        else
-        {
-            auto* color_attachment_desc = metal_context
-                ->m_render_states
-                .m_main_render_pass_descriptor
-                ->colorAttachments()
-                ->object(0);
-
-            if (clear_color_rgba != nullptr)
-            {
-                auto& clear_color = *clear_color_rgba;
-
-                color_attachment_desc->setLoadAction(MTL::LoadActionClear);
-                color_attachment_desc->setClearColor(
-                    MTL::ClearColor{
-                        clear_color[0],
-                        clear_color[1],
-                        clear_color[2],
-                        clear_color[3] });
-            }
-            else
-                color_attachment_desc->setLoadAction(MTL::LoadActionLoad);
-
-            // Main framebuffer has depth attachment.
-            auto* depth_attachment_desc = metal_context
-                ->m_render_states
-                .m_main_render_pass_descriptor
-                ->depthAttachment();
-
-            if (clear_depth != nullptr)
-            {
-                depth_attachment_desc->setLoadAction(MTL::LoadActionClear);
-                depth_attachment_desc->setClearDepth(*clear_depth);
-            }
-            else
-                depth_attachment_desc->setLoadAction(MTL::LoadActionLoad);
-        }
+        set_framebuffer_clear_depth(
+            metal_context,
+            target_framebuf_may_null,
+            clear_depth);
 
         metal_context->m_render_states.m_render_command_encoder->endEncoding();
 
