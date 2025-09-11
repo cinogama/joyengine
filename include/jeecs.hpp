@@ -2257,35 +2257,50 @@ jegl_graphic_api [类型]
 */
 struct jegl_graphic_api
 {
-    using startup_func_t = jegl_context::graphic_impl_context_t(*)(jegl_context*, const jegl_interface_config*, bool);
-    using shutdown_func_t = void (*)(jegl_context*, jegl_context::graphic_impl_context_t, bool);
+    using startup_func_t =
+        jegl_context::graphic_impl_context_t(*)(jegl_context*, const jegl_interface_config*, bool);
+    using shutdown_func_t =
+        void (*)(jegl_context*, jegl_context::graphic_impl_context_t, bool);
 
-    using update_func_t = jegl_update_action(*)(jegl_context::graphic_impl_context_t);
-    using commit_func_t = jegl_update_action(*)(jegl_context::graphic_impl_context_t, jegl_update_action);
+    using update_func_t =
+        jegl_update_action(*)(jegl_context::graphic_impl_context_t);
+    using commit_func_t =
+        jegl_update_action(*)(jegl_context::graphic_impl_context_t, jegl_update_action);
 
-    using create_blob_func_t = jegl_resource_blob(*)(jegl_context::graphic_impl_context_t, jegl_resource*);
-    using close_blob_func_t = void (*)(jegl_context::graphic_impl_context_t, jegl_resource_blob);
+    using create_blob_func_t =
+        jegl_resource_blob(*)(jegl_context::graphic_impl_context_t, jegl_resource*);
+    using close_blob_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, jegl_resource_blob);
 
-    using create_resource_func_t = void (*)(jegl_context::graphic_impl_context_t, jegl_resource_blob, jegl_resource*);
-    using using_resource_func_t = void (*)(jegl_context::graphic_impl_context_t, jegl_resource*);
-    using close_resource_func_t = void (*)(jegl_context::graphic_impl_context_t, jegl_resource*);
+    using create_resource_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, jegl_resource_blob, jegl_resource*);
+    using using_resource_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, jegl_resource*);
+    using close_resource_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, jegl_resource*);
 
-    using bind_ubuffer_func_t = void (*)(jegl_context::graphic_impl_context_t, jegl_resource*);
-    using bind_shader_func_t = bool (*)(jegl_context::graphic_impl_context_t, jegl_resource*);
-    using bind_texture_func_t = void (*)(jegl_context::graphic_impl_context_t, jegl_resource*, size_t);
-    using draw_vertex_func_t = void (*)(jegl_context::graphic_impl_context_t, jegl_resource*);
+    using bind_ubuffer_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, jegl_resource*);
+    using bind_shader_func_t =
+        bool (*)(jegl_context::graphic_impl_context_t, jegl_resource*);
+    using bind_texture_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, jegl_resource*, size_t);
+    using draw_vertex_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, jegl_resource*);
 
-    using bind_framebuf_func_t = void (*)(
-        jegl_context::graphic_impl_context_t,
-        jegl_resource* framebuffer,
-        const size_t(*viewport_xywh)[4],
-        const float(*clear_color_rgba)[4],
-        const float* clear_depth);
-    using set_uniform_func_t = void (*)(
-        jegl_context::graphic_impl_context_t,
-        uint32_t,
-        jegl_shader::uniform_type,
-        const void*);
+    using bind_framebuf_func_t =
+        void (*)(
+            jegl_context::graphic_impl_context_t,
+            jegl_resource* framebuffer,
+            const size_t(*viewport_xywh)[4],
+            const float(*clear_color_rgba)[4],
+            const float* clear_depth);
+    using set_uniform_func_t =
+        void (*)(
+            jegl_context::graphic_impl_context_t,
+            uint32_t,
+            jegl_shader::uniform_type,
+            const void*);
 
     /*
     jegl_graphic_api::interface_startup [成员]
@@ -2340,7 +2355,6 @@ struct jegl_graphic_api
     jegl_graphic_api::update_draw_commit [成员]
     图形接口在完成指示的渲染操作之后会调用的接口，图形实现应当在此接口中，将既存的提交任务提交到图形设备中（以最大化利用
     设备空闲），如果可以，渲染GUI的任务也应当在此处实现，并一并提交。
-        * 图形实现需要保证在此接口调用之后，目标缓冲区回到默认的（屏幕）渲染缓冲区。
         * 接口若返回 jegl_update_action::STOP，则表示图形实现请求关闭渲染，在帧同步工作完成后进入图形线程的退出流程。
         * 接口若返回 jegl_update_action::SKIP，由于并没有后续的渲染任务可被跳过，因此事实上如同返回 jegl_update_action::CONTINUE。
     */
@@ -2408,6 +2422,8 @@ struct jegl_graphic_api
     /*
     jegl_graphic_api::bind_shader [成员]
     绑定一个着色器作为当前渲染使用的着色器。
+        * 如果着色器因内部原因（一个典型的例子是因为引擎生成的shader代码不可用）而无法使用，图形实现应当
+            清空其内部绑定的着色器，如同完全没有绑定过任何着色器一般，并返回 false。
     */
     bind_shader_func_t bind_shader;
 
@@ -2424,12 +2440,15 @@ struct jegl_graphic_api
     /*
     jegl_graphic_api::draw_vertex [成员]
     使用之前绑定的着色器和纹理，绘制给定的顶点模型。
+        * 如果之前没有绑定着色器，或者绑定的着色器因内部原因不可用，则不进行任何绘制操作。
+        * 任意绘制操作都应当位于一帧内的目标缓冲区绑定作用域内，图形库不考虑违背此约定导致的任何问题。
     */
     draw_vertex_func_t draw_vertex;
 
     /*
     jegl_graphic_api::set_uniform [成员]
     向当前正在绑定的着色器设置一致变量。
+        * 如果之前没有绑定着色器，或者绑定的着色器因内部原因不可用，则不进行任何绘制操作。
     */
     set_uniform_func_t set_uniform;
 };
@@ -2894,7 +2913,7 @@ JE_API void jegl_bind_uniform_buffer(jegl_resource* uniformbuf);
 
 /*
 jegl_draw_vertex [基本接口]
-使用当前着色器（通过jegl_bind_shader绑定）和纹理（通过jegl_bind_texture绑定）,
+使用当前绑定着色器的（通过jegl_bind_shader绑定）和纹理（通过jegl_bind_texture绑定）,
 以指定方式绘制一个模型
     * 此函数只允许在图形线程内调用
     * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
@@ -2916,15 +2935,14 @@ clear_depth 用于指定深度清除值，若为 nullptr 则不进行深度清�
 */
 JE_API void jegl_rend_to_framebuffer(
     jegl_resource* framebuffer,
-    const size_t (*viewport_xywh)[4],
+    const size_t(*viewport_xywh)[4],
     const float (*clear_color_rgba)[4],
     const float* clear_depth);
 
 /*
 jegl_uniform_int [基本接口]
-向当前着色器指定位置的一致变量设置一个整型数值
-jegl_uniform_int 不会初始化着色器，请在操作之前调用 jegl_bind_shader
-以确保着色器完成初始化
+向当前绑定着色器的指定位置的一致变量设置一个整型数值
+    * 必须使用 jegl_bind_shader 在当前帧内事先绑定一个着色器
     * 此函数只允许在图形线程内调用
 请参见：
     jegl_bind_shader
@@ -2933,36 +2951,32 @@ JE_API void jegl_uniform_int(uint32_t location, int value);
 
 /*
 jegl_uniform_int2 [基本接口]
-向当前着色器指定位置的一致变量设置一个二维整型矢量数值
-jegl_uniform_int2 不会初始化着色器，请在操作之前调用 jegl_bind_shader
-以确保着色器完成初始化
+向当前绑定着色器的指定位置的一致变量设置一个二维整型矢量数值
+    * 必须使用 jegl_bind_shader 在当前帧内事先绑定一个着色器
     * 此函数只允许在图形线程内调用
 */
 JE_API void jegl_uniform_int2(uint32_t location, int x, int y);
 
 /*
 jegl_uniform_int3 [基本接口]
-向当前着色器指定位置的一致变量设置一个三维整型矢量数值
-jegl_uniform_int3 不会初始化着色器，请在操作之前调用 jegl_bind_shader
-以确保着色器完成初始化
+向当前绑定着色器的指定位置的一致变量设置一个三维整型矢量数值
+    * 必须使用 jegl_bind_shader 在当前帧内事先绑定一个着色器
     * 此函数只允许在图形线程内调用
 */
 JE_API void jegl_uniform_int3(uint32_t location, int x, int y, int z);
 
 /*
 jegl_uniform_int4 [基本接口]
-向当前着色器指定位置的一致变量设置一个四维整型矢量数值
-jegl_uniform_int4 不会初始化着色器，请在操作之前调用 jegl_bind_shader
-以确保着色器完成初始化
+向当前绑定着色器的指定位置的一致变量设置一个四维整型矢量数值
+    * 必须使用 jegl_bind_shader 在当前帧内事先绑定一个着色器
     * 此函数只允许在图形线程内调用
 */
 JE_API void jegl_uniform_int4(uint32_t location, int x, int y, int z, int w);
 
 /*
 jegl_uniform_float [基本接口]
-向当前着色器指定位置的一致变量设置一个单精度浮点数值
-    * jegl_uniform_float 不会初始化着色器，请在操作之前调用 jegl_bind_shader
-        以确保着色器完成初始化
+向当前绑定着色器的指定位置的一致变量设置一个单精度浮点数值
+    * 必须使用 jegl_bind_shader 在当前帧内事先绑定一个着色器
     * 此函数只允许在图形线程内调用
 请参见：
     jegl_bind_shader
@@ -2971,9 +2985,8 @@ JE_API void jegl_uniform_float(uint32_t location, float value);
 
 /*
 jegl_uniform_float2 [基本接口]
-向当前着色器指定位置的一致变量设置一个二维单精度浮点矢量数值
-    * jegl_uniform_float2 不会初始化着色器，请在操作之前调用 jegl_bind_shader
-        以确保着色器完成初始化
+向当前绑定着色器的指定位置的一致变量设置一个二维单精度浮点矢量数值
+    * 必须使用 jegl_bind_shader 在当前帧内事先绑定一个着色器
     * 此函数只允许在图形线程内调用
 请参见：
     jegl_bind_shader
@@ -2982,9 +2995,8 @@ JE_API void jegl_uniform_float2(uint32_t location, float x, float y);
 
 /*
 jegl_uniform_float3 [基本接口]
-向当前着色器指定位置的一致变量设置一个三维单精度浮点矢量数值
-    * jegl_uniform_float3 不会初始化着色器，请在操作之前调用 jegl_bind_shader
-        以确保着色器完成初始化
+向当前绑定着色器的指定位置的一致变量设置一个三维单精度浮点矢量数值
+    * 必须使用 jegl_bind_shader 在当前帧内事先绑定一个着色器
     * 此函数只允许在图形线程内调用
 请参见：
     jegl_bind_shader
@@ -2993,9 +3005,8 @@ JE_API void jegl_uniform_float3(uint32_t location, float x, float y, float z);
 
 /*
 jegl_uniform_float4 [基本接口]
-向当前着色器指定位置的一致变量设置一个四维单精度浮点矢量数值
-    * jegl_uniform_float4 不会初始化着色器，请在操作之前调用 jegl_bind_shader
-        以确保着色器完成初始化
+向当前绑定着色器的指定位置的一致变量设置一个四维单精度浮点矢量数值
+    * 必须使用 jegl_bind_shader 在当前帧内事先绑定一个着色器
     * 此函数只允许在图形线程内调用
 请参见：
     jegl_bind_shader
@@ -3004,9 +3015,8 @@ JE_API void jegl_uniform_float4(uint32_t location, float x, float y, float z, fl
 
 /*
 jegl_uniform_float2x2 [基本接口]
-向当前着色器指定位置的一致变量设置一个2x2单精度浮点矩阵数值
-    * jegl_uniform_float2x2 不会初始化着色器，请在操作之前调用 jegl_bind_shader
-        以确保着色器完成初始化
+向当前绑定着色器的指定位置的一致变量设置一个2x2单精度浮点矩阵数值
+    * 必须使用 jegl_bind_shader 在当前帧内事先绑定一个着色器
     * 此函数只允许在图形线程内调用
 请参见：
     jegl_bind_shader
@@ -3015,9 +3025,8 @@ JE_API void jegl_uniform_float2x2(uint32_t location, const float (*mat)[2]);
 
 /*
 jegl_uniform_float3x3 [基本接口]
-向当前着色器指定位置的一致变量设置一个3x3单精度浮点矩阵数值
-    * jegl_uniform_float3x3 不会初始化着色器，请在操作之前调用 jegl_bind_shader
-        以确保着色器完成初始化
+向当前绑定着色器的指定位置的一致变量设置一个3x3单精度浮点矩阵数值
+    * 必须使用 jegl_bind_shader 在当前帧内事先绑定一个着色器
     * 此函数只允许在图形线程内调用
 请参见：
     jegl_bind_shader
@@ -3026,9 +3035,8 @@ JE_API void jegl_uniform_float3x3(uint32_t location, const float (*mat)[3]);
 
 /*
 jegl_uniform_float4x4 [基本接口]
-向当前着色器指定位置的一致变量设置一个4x4单精度浮点矩阵数值
-    * jegl_uniform_float4x4 不会初始化着色器，请在操作之前调用 jegl_bind_shader
-        以确保着色器完成初始化
+向当前绑定着色器的指定位置的一致变量设置一个4x4单精度浮点矩阵数值
+    * 必须使用 jegl_bind_shader 在当前帧内事先绑定一个着色器
     * 此函数只允许在图形线程内调用
 请参见：
     jegl_bind_shader

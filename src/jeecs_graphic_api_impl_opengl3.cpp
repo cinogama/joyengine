@@ -379,6 +379,8 @@ namespace jeecs::graphic::api::gl3
     {
         jegl_gl3_context* context = reinterpret_cast<jegl_gl3_context*>(ctx);
 
+        context->current_active_shader_may_null = nullptr;
+
         switch (context->m_interface->update())
         {
         case basic_interface::update_result::CLOSE:
@@ -1499,7 +1501,7 @@ namespace jeecs::graphic::api::gl3
         jegl3_vertex_data* vdata = std::launder(reinterpret_cast<jegl3_vertex_data*>(vert->m_handle.m_ptr));
 
         auto* current_shader = context->current_active_shader_may_null;
-        if (current_shader == nullptr || vdata == nullptr)
+        if (current_shader == nullptr)
             return;
 
         if (current_shader->uniform_cpu_buffers != nullptr)

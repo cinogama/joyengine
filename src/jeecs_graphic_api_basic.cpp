@@ -776,21 +776,19 @@ bool jegl_using_resource(jegl_resource* resource)
         return false;
     }
 
-    if (nullptr == resource->m_graphic_thread)
-    {
-        need_init_resource = true;
-    }
-    else if (_current_graphic_thread != resource->m_graphic_thread)
+    if (resource->m_graphic_thread != nullptr 
+        && _current_graphic_thread != resource->m_graphic_thread)
     {
         jeecs::debug::logerr("This resource has been used in graphic thread: %p.",
             resource->m_graphic_thread);
         return false;
     }
-    if (resource->m_graphic_thread_version != _current_graphic_thread->m_version)
+    else if (nullptr == resource->m_graphic_thread
+        || resource->m_graphic_thread_version != _current_graphic_thread->m_version)
     {
         need_init_resource = true;
     }
-
+    
     // If resource is died, ignore it.
     if (resource->m_custom_resource == nullptr && need_init_resource)
     {
