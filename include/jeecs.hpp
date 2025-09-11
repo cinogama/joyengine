@@ -2275,10 +2275,17 @@ struct jegl_graphic_api
     using bind_texture_func_t = void (*)(jegl_context::graphic_impl_context_t, jegl_resource*, size_t);
     using draw_vertex_func_t = void (*)(jegl_context::graphic_impl_context_t, jegl_resource*);
 
-    using bind_framebuf_func_t = void (*)(jegl_context::graphic_impl_context_t, jegl_resource*, size_t, size_t, size_t, size_t);
-    using clear_color_func_t = void (*)(jegl_context::graphic_impl_context_t, float[4]);
-    using clear_depth_func_t = void (*)(jegl_context::graphic_impl_context_t);
-    using set_uniform_func_t = void (*)(jegl_context::graphic_impl_context_t, uint32_t, jegl_shader::uniform_type, const void*);
+    using bind_framebuf_func_t = void (*)(
+        jegl_context::graphic_impl_context_t,
+        jegl_resource* framebuffer,
+        const size_t(*viewport_xywh)[4],
+        const float(*clear_color_rgba)[4],
+        const float* clear_depth);
+    using set_uniform_func_t = void (*)(
+        jegl_context::graphic_impl_context_t,
+        uint32_t,
+        jegl_shader::uniform_type,
+        const void*);
 
     /*
     jegl_graphic_api::interface_startup [成员]
@@ -2333,6 +2340,7 @@ struct jegl_graphic_api
     jegl_graphic_api::update_draw_commit [成员]
     图形接口在完成指示的渲染操作之后会调用的接口，图形实现应当在此接口中，将既存的提交任务提交到图形设备中（以最大化利用
     设备空闲），如果可以，渲染GUI的任务也应当在此处实现，并一并提交。
+        * 图形实现需要保证在此接口调用之后，目标缓冲区回到默认的（屏幕）渲染缓冲区。
         * 接口若返回 jegl_update_action::STOP，则表示图形实现请求关闭渲染，在帧同步工作完成后进入图形线程的退出流程。
         * 接口若返回 jegl_update_action::SKIP，由于并没有后续的渲染任务可被跳过，因此事实上如同返回 jegl_update_action::CONTINUE。
     */
@@ -2406,6 +2414,10 @@ struct jegl_graphic_api
     /*
     jegl_graphic_api::bind_framebuf [成员]
     设置渲染目标，若传入nullptr，则目标为屏幕空间。
+        * 视口若不指定（viewport_xywh = nullptr），则如同使用 (0, 0, 0, 0)
+        * 视口的宽度和高度若为0，则使用帧缓冲区的宽度和高度
+        * 如果指定了颜色清除值，则在绑定后立即使用该颜色清除所有颜色附件
+        * 如果指定了深度清除值，则在绑定后立即使用该值清除深度附件
     */
     bind_framebuf_func_t bind_framebuf;
 
@@ -2414,18 +2426,6 @@ struct jegl_graphic_api
     使用之前绑定的着色器和纹理，绘制给定的顶点模型。
     */
     draw_vertex_func_t draw_vertex;
-
-    /*
-    jegl_graphic_api::clear_frame_color [成员]
-    以指定颜色清除渲染目标的所有颜色附件。
-    */
-    clear_color_func_t clear_frame_color;
-
-    /*
-    jegl_graphic_api::clear_frame_depth [成员]
-    以`无穷远`清空渲染目标的深度附件。
-    */
-    clear_depth_func_t clear_frame_depth;
 
     /*
     jegl_graphic_api::set_uniform [成员]
@@ -2905,29 +2905,20 @@ jegl_draw_vertex [基本接口]
 JE_API void jegl_draw_vertex(jegl_resource* vert);
 
 /*
-jegl_clear_framebuffer_color [基本接口]
-以color指定的颜色清除当前帧缓冲的颜色信息
-    * 此函数只允许在图形线程内调用
-    * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
-*/
-JE_API void jegl_clear_framebuffer_color(float color[4]);
-
-/*
-jegl_clear_framebuffer [基本接口]
-清除指定帧缓冲的深度信息
-    * 此函数只允许在图形线程内调用
-    * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
-*/
-JE_API void jegl_clear_framebuffer_depth();
-
-/*
 jegl_rend_to_framebuffer [基本接口]
-指定接下来的绘制操作作用于指定缓冲区，xywh用于指定绘制剪裁区域的左下角位置和区域大小
-若 framebuffer == nullptr 则绘制目标缓冲区设置为屏幕缓冲区
+指定接下来的绘制操作作用于指定缓冲区，
+framebuffer 用于指定渲染目标，若为 nullptr 则渲染目标为屏幕空间
+viewport_xywh 用于指定视口位置和大小，若为 nullptr 则视口设置为 (0, 0, 0, 0)
+clear_color_rgba 用于指定颜色清除值，若为 nullptr 则不进行颜色清除
+clear_depth 用于指定深度清除值，若为 nullptr 则不进行深度清除
     * 此函数只允许在图形线程内调用
     * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
 */
-JE_API void jegl_rend_to_framebuffer(jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h);
+JE_API void jegl_rend_to_framebuffer(
+    jegl_resource* framebuffer,
+    const size_t (*viewport_xywh)[4],
+    const float (*clear_color_rgba)[4],
+    const float* clear_depth);
 
 /*
 jegl_uniform_int [基本接口]
@@ -3113,14 +3104,17 @@ JE_API void jegl_rchain_bind_uniform_buffer(jegl_rendchain* chain, jegl_resource
 /*
 jegl_rchain_clear_color_buffer [基本接口]
 指示此链绘制开始时需要清除目标缓冲区的颜色缓存
+    * clear_color_rgba 如果为空，则使用 (0, 0, 0, 0)
 */
-JE_API void jegl_rchain_clear_color_buffer(jegl_rendchain* chain, const float* color);
+JE_API void jegl_rchain_clear_color_buffer(
+    jegl_rendchain* chain, const float (*clear_color_rgba)[4]);
 
 /*
 jegl_rchain_clear_depth_buffer [基本接口]
 指示此链绘制开始时需要清除目标缓冲区的深度缓存
 */
-JE_API void jegl_rchain_clear_depth_buffer(jegl_rendchain* chain);
+JE_API void jegl_rchain_clear_depth_buffer(
+    jegl_rendchain* chain, float clear_depth);
 
 typedef size_t jegl_rchain_texture_group_idx_t;
 

@@ -3350,6 +3350,7 @@ namespace jeecs::graphic::api::vk130
             assert(_vk_current_swapchain_image_content ==
                 _vk_swapchain_images[_vk_presenting_swapchain_image_index]);
 
+            // 结束录制！回到默认帧缓冲
             cmd_begin_frame_buffer(nullptr, 0, 0, 0, 0);
 
             jegui_update_vk130(_vk_current_command_buffer);
@@ -3426,7 +3427,7 @@ namespace jeecs::graphic::api::vk130
 
             vkCmdSetPrimitiveRestartEnable(_vk_current_command_buffer, VK_TRUE);
         }
-        void cmd_clear_frame_buffer_color(float color[4])
+        void cmd_clear_frame_buffer_color(const float color[4])
         {
             assert(_vk_current_target_framebuffer != nullptr);
 
@@ -3456,14 +3457,14 @@ namespace jeecs::graphic::api::vk130
                     &clear_rect);
             }
         }
-        void cmd_clear_frame_buffer_depth()
+        void cmd_clear_frame_buffer_depth(float clear_depth)
         {
             assert(_vk_current_target_framebuffer != nullptr);
 
             VkClearAttachment clear_attachment = {};
             clear_attachment.aspectMask = VkImageAspectFlagBits::VK_IMAGE_ASPECT_DEPTH_BIT;
             clear_attachment.colorAttachment = 0;
-            clear_attachment.clearValue.depthStencil.depth = 1.0f;
+            clear_attachment.clearValue.depthStencil.depth = clear_depth;
             clear_attachment.clearValue.depthStencil.stencil = 0;
 
             VkClearRect clear_rect = {};
@@ -4059,7 +4060,12 @@ namespace jeecs::graphic::api::vk130
             texture_instance->m_vk_texture_image_view);
     }
 
-    void set_rend_to_framebuffer(jegl_context::graphic_impl_context_t ctx, jegl_resource* framebuf, size_t x, size_t y, size_t w, size_t h)
+    void set_rend_to_framebuffer(
+        jegl_context::graphic_impl_context_t ctx, 
+        jegl_resource* framebuf,
+        const size_t(*viewport_xywh)[4],
+        const float (*clear_color_rgba)[4],
+        const float* clear_depth)
     {
         jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
 
@@ -4068,17 +4074,23 @@ namespace jeecs::graphic::api::vk130
             target_framebuf = reinterpret_cast<jevk13_framebuffer*>(
                 framebuf->m_handle.m_ptr);
 
+        size_t x = 0, y = 0, w = 0, h = 0;
+        if (viewport_xywh != nullptr)
+        {
+            auto& vp = *viewport_xywh;
+            x = vp[0];
+            y = vp[1];
+            w = vp[2];
+            h = vp[3];
+        }
         context->cmd_begin_frame_buffer(target_framebuf, x, y, w, h);
-    }
-    void clear_framebuffer_color(jegl_context::graphic_impl_context_t ctx, float color[4])
-    {
-        jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
-        context->cmd_clear_frame_buffer_color(color);
-    }
-    void clear_framebuffer_depth(jegl_context::graphic_impl_context_t ctx)
-    {
-        jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
-        context->cmd_clear_frame_buffer_depth();
+
+        if (clear_color_rgba != nullptr)
+            context->cmd_clear_frame_buffer_color(*clear_color_rgba);
+
+        if (clear_depth != nullptr)
+            context->cmd_clear_frame_buffer_depth(*clear_depth);
+
     }
 
     void set_uniform(jegl_context::graphic_impl_context_t ctx, uint32_t location, jegl_shader::uniform_type type, const void* val)
@@ -4154,8 +4166,6 @@ void jegl_using_vk130_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->draw_vertex = draw_vertex_with_shader;
 
     write_to_apis->bind_framebuf = set_rend_to_framebuffer;
-    write_to_apis->clear_frame_color = clear_framebuffer_color;
-    write_to_apis->clear_frame_depth = clear_framebuffer_depth;
 
     write_to_apis->set_uniform = set_uniform;
 }

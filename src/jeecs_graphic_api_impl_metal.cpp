@@ -76,7 +76,12 @@ namespace jeecs::graphic::api::metal
     {
     }
 
-    void bind_framebuffer(jegl_context::graphic_impl_context_t, jegl_resource*, size_t, size_t, size_t, size_t)
+    void bind_framebuffer(
+        jegl_context::graphic_impl_context_t, 
+        jegl_resource*, 
+        const size_t(*)[4],
+        const float(*)[4],
+        const float*)
     {
     }
     void clear_framebuffer_color(jegl_context::graphic_impl_context_t, float[4])
@@ -115,8 +120,6 @@ void jegl_using_metal_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->draw_vertex = draw_vertex_with_shader;
 
     write_to_apis->bind_framebuf = bind_framebuffer;
-    write_to_apis->clear_frame_color = clear_framebuffer_color;
-    write_to_apis->clear_frame_depth = clear_framebuffer_depth;
 
     write_to_apis->set_uniform = set_uniform;
 }

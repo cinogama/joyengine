@@ -1725,24 +1725,21 @@ void jegl_draw_vertex(jegl_resource* vert)
         _current_graphic_thread->m_graphic_impl_context, vert);
 }
 
-void jegl_clear_framebuffer_color(float color[4])
-{
-    _current_graphic_thread->m_apis->clear_frame_color(
-        _current_graphic_thread->m_graphic_impl_context, color);
-}
-void jegl_clear_framebuffer_depth()
-{
-    _current_graphic_thread->m_apis->clear_frame_depth(
-        _current_graphic_thread->m_graphic_impl_context);
-}
-
-void jegl_rend_to_framebuffer(jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
+void jegl_rend_to_framebuffer(
+    jegl_resource* framebuffer,
+    const size_t(*viewport_xywh)[4],
+    const float (*clear_color_rgba)[4],
+    const float* clear_depth)
 {
     if (framebuffer != nullptr)
         jegl_using_resource(framebuffer);
 
     _current_graphic_thread->m_apis->bind_framebuf(
-        _current_graphic_thread->m_graphic_impl_context, framebuffer, x, y, w, h);
+        _current_graphic_thread->m_graphic_impl_context,
+        framebuffer, 
+        viewport_xywh,
+        clear_color_rgba,
+        clear_depth);
 }
 
 void jegl_bind_texture(jegl_resource* texture, size_t pass)

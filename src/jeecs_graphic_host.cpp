@@ -162,9 +162,9 @@ namespace jeecs
             if (action == jegl_update_action::JEGL_UPDATE_CONTINUE)
             {
                 // Clear main frame buffer
-                float clearcolor[] = {0.f, 0.f, 0.f, 0.f};
-                jegl_clear_framebuffer_color(clearcolor);
-                jegl_clear_framebuffer_depth();
+                const float clearcolor[] = {0.f, 0.f, 0.f, 0.f};
+                const float cleardepth = 1.f;
+                jegl_rend_to_framebuffer(nullptr, nullptr, &clearcolor, &cleardepth);
             }
             else if (m_skip_all_draw)
                 return;
@@ -185,7 +185,6 @@ namespace jeecs
 
             } while (0);
 
-            jegl_rend_to_framebuffer(nullptr, 0, 0, 0, 0);
         }
 
         graphic_uhost(jeecs::game_universe _universe, const jegl_interface_config *_config)

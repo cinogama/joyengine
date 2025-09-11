@@ -521,8 +521,16 @@ namespace jeecs::graphic::api::dx11
     }
 
     jegl_update_action dx11_commit_update(
-        jegl_context::graphic_impl_context_t, jegl_update_action)
+        jegl_context::graphic_impl_context_t ctx, jegl_update_action)
     {
+        jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
+
+        // 回到默认帧缓冲区
+        context->m_dx_context->OMSetRenderTargets(1,
+            context->m_dx_main_renderer_target_view.GetAddressOf(),
+            context->m_dx_main_renderer_target_depth_view.Get());
+        context->m_current_target_framebuffer = nullptr;
+
         jegui_update_dx11();
         return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
@@ -1732,7 +1740,12 @@ namespace jeecs::graphic::api::dx11
         }
     }
 
-    void dx11_set_rend_to_framebuffer(jegl_context::graphic_impl_context_t ctx, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
+    void dx11_set_rend_to_framebuffer(
+        jegl_context::graphic_impl_context_t ctx, 
+        jegl_resource* framebuffer, 
+        const size_t(*viewport_xywh)[4],
+        const float (*clear_color_rgba)[4],
+        const float* clear_depth)
     {
         jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
 
@@ -1757,6 +1770,16 @@ namespace jeecs::graphic::api::dx11
 
         auto* framw_buffer_raw =
             framebuffer != nullptr ? framebuffer->m_raw_framebuf_data : nullptr;
+
+        size_t x = 0, y = 0, w = 0, h = 0;
+        if (viewport_xywh != nullptr)
+        {
+            auto& v = *viewport_xywh;
+            x = v[0];
+            y = v[1];
+            w = v[2];
+            h = v[3];
+        }
 
         size_t buf_w = context->RESOLUTION_WIDTH;
         size_t buf_h = context->RESOLUTION_HEIGHT;
@@ -1784,37 +1807,35 @@ namespace jeecs::graphic::api::dx11
         viewport.TopLeftY = (float)buf_h - y - h;
 
         context->m_dx_context->RSSetViewports(1, &viewport);
-    }
-    void dx11_clear_framebuffer_color(jegl_context::graphic_impl_context_t ctx, float clear_color[4])
-    {
-        jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
 
-        if (context->m_current_target_framebuffer == nullptr)
-            context->m_dx_context->ClearRenderTargetView(
-                context->m_dx_main_renderer_target_view.Get(), clear_color);
-        else
+        if (clear_color_rgba != nullptr)
         {
-            for (auto& target : context->m_current_target_framebuffer->m_rend_views)
+            if (context->m_current_target_framebuffer == nullptr)
                 context->m_dx_context->ClearRenderTargetView(
-                    target.Get(), clear_color);
+                    context->m_dx_main_renderer_target_view.Get(), *clear_color_rgba);
+            else
+            {
+                for (auto& target : context->m_current_target_framebuffer->m_rend_views)
+                    context->m_dx_context->ClearRenderTargetView(
+                        target.Get(), *clear_color_rgba);
+            }
         }
-    }
-    void dx11_clear_framebuffer_depth(jegl_context::graphic_impl_context_t ctx)
-    {
-        jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
-
-        if (context->m_current_target_framebuffer == nullptr)
-            context->m_dx_context->ClearDepthStencilView(
-                context->m_dx_main_renderer_target_depth_view.Get(),
-                D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
-        else
+        if (clear_depth != nullptr)
         {
-            if (context->m_current_target_framebuffer->m_depth_view.Get() != nullptr)
+            if (context->m_current_target_framebuffer == nullptr)
                 context->m_dx_context->ClearDepthStencilView(
-                    context->m_current_target_framebuffer->m_depth_view.Get(),
-                    D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+                    context->m_dx_main_renderer_target_depth_view.Get(),
+                    D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, *clear_depth, 0);
+            else
+            {
+                if (context->m_current_target_framebuffer->m_depth_view.Get() != nullptr)
+                    context->m_dx_context->ClearDepthStencilView(
+                        context->m_current_target_framebuffer->m_depth_view.Get(),
+                        D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, *clear_depth, 0);
+            }
         }
     }
+
     void dx11_set_uniform(jegl_context::graphic_impl_context_t ctx, uint32_t location, jegl_shader::uniform_type type, const void* val)
     {
         jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
@@ -1881,8 +1902,6 @@ void jegl_using_dx11_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->draw_vertex = dx11_draw_vertex_with_shader;
 
     write_to_apis->bind_framebuf = dx11_set_rend_to_framebuffer;
-    write_to_apis->clear_frame_color = dx11_clear_framebuffer_color;
-    write_to_apis->clear_frame_depth = dx11_clear_framebuffer_depth;
 
     write_to_apis->set_uniform = dx11_set_uniform;
 }

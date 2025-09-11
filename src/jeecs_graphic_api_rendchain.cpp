@@ -46,9 +46,12 @@ struct jegl_rendchain
 
     jegl_rendchain() = default;
 
-    bool m_clear_target_frame_color_buffer;
+    float m_clear_depth;
     float m_clear_color[4];
+
+    bool m_clear_target_frame_color_buffer;
     bool m_clear_target_frame_depth_buffer;
+
     jegl_resource *m_target_frame_buffer;
     size_t m_target_frame_buffer_viewport[4];
 
@@ -117,33 +120,38 @@ void jegl_rchain_begin(jegl_rendchain *chain, jegl_resource *framebuffer, size_t
     if (framebuffer != nullptr)
         chain->using_resource(framebuffer);
 }
-void jegl_rchain_bind_uniform_buffer(jegl_rendchain *chain, jegl_resource *uniformbuffer)
+void jegl_rchain_bind_uniform_buffer(
+    jegl_rendchain *chain, jegl_resource *uniformbuffer)
 {
     assert(uniformbuffer->m_type == jegl_resource::type::UNIFORMBUF);
     chain->using_resource(uniformbuffer);
     chain->m_binding_uniform_buffer.push_back(uniformbuffer);
 }
-void jegl_rchain_clear_color_buffer(jegl_rendchain *chain, const float *color)
+void jegl_rchain_clear_color_buffer(
+    jegl_rendchain *chain, const float (*clear_color_rgba)[4])
 {
     chain->m_clear_target_frame_color_buffer = true;
-    if (color == nullptr)
+
+    if (clear_color_rgba != nullptr)
+    {
+        auto& v = *clear_color_rgba;
+        chain->m_clear_color[0] = v[0];
+        chain->m_clear_color[1] = v[1];
+        chain->m_clear_color[2] = v[2];
+        chain->m_clear_color[3] = v[3];
+    }
+    else
     {
         chain->m_clear_color[0] = 0.f;
         chain->m_clear_color[1] = 0.f;
         chain->m_clear_color[2] = 0.f;
         chain->m_clear_color[3] = 0.f;
     }
-    else
-    {
-        chain->m_clear_color[0] = color[0];
-        chain->m_clear_color[1] = color[1];
-        chain->m_clear_color[2] = color[2];
-        chain->m_clear_color[3] = color[3];
-    }
 }
-void jegl_rchain_clear_depth_buffer(jegl_rendchain *chain)
+void jegl_rchain_clear_depth_buffer(jegl_rendchain *chain, float clear_depth)
 {
     chain->m_clear_target_frame_depth_buffer = true;
+    chain->m_clear_depth = clear_depth;
 }
 jegl_rchain_texture_group_idx_t jegl_rchain_allocate_texture_group(jegl_rendchain *chain)
 {
@@ -397,16 +405,11 @@ jegl_resource *jegl_rchain_get_target_framebuf(jegl_rendchain *chain)
 void jegl_rchain_commit(jegl_rendchain *chain, jegl_context *glthread)
 {
     // 遍历所有绘制命令，开始提交！
-    jegl_rend_to_framebuffer(chain->m_target_frame_buffer,
-                             chain->m_target_frame_buffer_viewport[0],
-                             chain->m_target_frame_buffer_viewport[1],
-                             chain->m_target_frame_buffer_viewport[2],
-                             chain->m_target_frame_buffer_viewport[3]);
-
-    if (chain->m_clear_target_frame_color_buffer)
-        jegl_clear_framebuffer_color(chain->m_clear_color);
-    if (chain->m_clear_target_frame_depth_buffer)
-        jegl_clear_framebuffer_depth();
+    jegl_rend_to_framebuffer(
+        chain->m_target_frame_buffer,
+        &chain->m_target_frame_buffer_viewport,
+        chain->m_clear_target_frame_color_buffer ? &chain->m_clear_color : nullptr,
+        chain->m_clear_target_frame_depth_buffer ? &chain->m_clear_depth : nullptr);
 
     for (auto *uniform_buffer : chain->m_binding_uniform_buffer)
         jegl_bind_uniform_buffer(uniform_buffer);
