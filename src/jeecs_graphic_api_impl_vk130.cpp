@@ -295,9 +295,8 @@ namespace jeecs::graphic::api::vk130
             , m_command_commit_round(0)
         {
             if (m_uniform_cpu_buffer_size != 0)
-            {
-                m_uniform_cpu_buffer = std::launder(
-                    reinterpret_cast<uint8_t*>(malloc(m_uniform_cpu_buffer_size)));
+                m_uniform_cpu_buffer =
+                reinterpret_cast<uint8_t*>(malloc(m_uniform_cpu_buffer_size));
                 assert(m_uniform_cpu_buffer != nullptr);
                 memset(m_uniform_cpu_buffer, 0, m_uniform_cpu_buffer_size);
             }
@@ -2903,8 +2902,8 @@ namespace jeecs::graphic::api::vk130
                     w, h,
                     vk_attachment_format,
                     VkImageTiling::VK_IMAGE_TILING_OPTIMAL,
-                    VkImageUsageFlagBits::VK_IMAGE_USAGE_TRANSFER_DST_BIT 
-                    | VkImageUsageFlagBits::VK_IMAGE_USAGE_SAMPLED_BIT 
+                    VkImageUsageFlagBits::VK_IMAGE_USAGE_TRANSFER_DST_BIT
+                    | VkImageUsageFlagBits::VK_IMAGE_USAGE_SAMPLED_BIT
                     | VkImageUsageFlagBits::VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
                     VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                     VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT,
@@ -3224,8 +3223,8 @@ namespace jeecs::graphic::api::vk130
         }
         void update_uniform_buffer(jegl_resource* resource)
         {
-            jevk13_uniformbuf* uniformbuf = std::launder(
-                reinterpret_cast<jevk13_uniformbuf*>(resource->m_handle.m_ptr));
+            jevk13_uniformbuf* uniformbuf =
+                reinterpret_cast<jevk13_uniformbuf*>(resource->m_handle.m_ptr);
 
             auto* raw_uniformbuf_data = resource->m_raw_uniformbuf_data;
             if (raw_uniformbuf_data != nullptr)
@@ -3349,6 +3348,7 @@ namespace jeecs::graphic::api::vk130
             assert(_vk_current_swapchain_image_content ==
                 _vk_swapchain_images[_vk_presenting_swapchain_image_index]);
 
+            // 结束录制！回到默认帧缓冲
             cmd_begin_frame_buffer(nullptr, 0, 0, 0, 0);
 
             jegui_update_vk130(_vk_current_command_buffer);
@@ -3425,7 +3425,7 @@ namespace jeecs::graphic::api::vk130
 
             vkCmdSetPrimitiveRestartEnable(_vk_current_command_buffer, VK_TRUE);
         }
-        void cmd_clear_frame_buffer_color(float color[4])
+        void cmd_clear_frame_buffer_color(const float color[4])
         {
             assert(_vk_current_target_framebuffer != nullptr);
 
@@ -3455,14 +3455,14 @@ namespace jeecs::graphic::api::vk130
                     &clear_rect);
             }
         }
-        void cmd_clear_frame_buffer_depth()
+        void cmd_clear_frame_buffer_depth(float clear_depth)
         {
             assert(_vk_current_target_framebuffer != nullptr);
 
             VkClearAttachment clear_attachment = {};
             clear_attachment.aspectMask = VkImageAspectFlagBits::VK_IMAGE_ASPECT_DEPTH_BIT;
             clear_attachment.colorAttachment = 0;
-            clear_attachment.clearValue.depthStencil.depth = 1.0f;
+            clear_attachment.clearValue.depthStencil.depth = clear_depth;
             clear_attachment.clearValue.depthStencil.stencil = 0;
 
             VkClearRect clear_rect = {};
@@ -3503,7 +3503,10 @@ namespace jeecs::graphic::api::vk130
         void cmd_draw_vertex(jevk13_vertex* vertex)
         {
             assert(_vk_current_target_framebuffer != nullptr);
-            assert(_vk_current_binded_shader != nullptr);
+
+            if (_vk_current_binded_shader == nullptr)
+                return;
+
             VkDeviceSize offsets = 0;
 
             if (_vk_current_binded_shader->m_uniform_cpu_buffer_size != 0)
@@ -3622,8 +3625,7 @@ namespace jeecs::graphic::api::vk130
 #if JE4_VK_USE_DYNAMIC_VK_LIB
                 [](const char* funcname, void* userdata)
                 {
-                    jegl_vk130_context* ctx =
-                        std::launder(reinterpret_cast<jegl_vk130_context*>(userdata));
+                    jegl_vk130_context* ctx = reinterpret_cast<jegl_vk130_context*>(userdata);
                     return ctx->vkGetInstanceProcAddr(ctx->_vk_instance, funcname);
                 },
 #else
@@ -3792,7 +3794,7 @@ namespace jeecs::graphic::api::vk130
     }
     void pre_shutdown(jegl_context*, jegl_context::graphic_impl_context_t ctx, bool reboot)
     {
-        jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
+        jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
 
         context->pre_shutdown();
     }
@@ -3801,7 +3803,7 @@ namespace jeecs::graphic::api::vk130
         if (!reboot)
             jeecs::debug::log("Graphic thread (Vulkan130) shutdown!");
 
-        jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
+        jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
 
         context->shutdown(reboot);
         context->_vk_jegl_interface->shutdown(reboot);
@@ -3812,7 +3814,9 @@ namespace jeecs::graphic::api::vk130
 
     jegl_update_action pre_update(jegl_context::graphic_impl_context_t ctx)
     {
-        jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
+        jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
+
+        context->_vk_current_binded_shader = nullptr;
 
         switch (context->_vk_jegl_interface->update())
         {
@@ -3845,7 +3849,7 @@ namespace jeecs::graphic::api::vk130
     jegl_update_action commit_update(
         jegl_context::graphic_impl_context_t ctx, jegl_update_action)
     {
-        jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
+        jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
 
         context->late_update();
 
@@ -3854,7 +3858,7 @@ namespace jeecs::graphic::api::vk130
 
     jegl_resource_blob create_resource_blob(jegl_context::graphic_impl_context_t ctx, jegl_resource* resource)
     {
-        jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
+        jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
         switch (resource->m_type)
         {
         case jegl_resource::type::SHADER:
@@ -3876,22 +3880,22 @@ namespace jeecs::graphic::api::vk130
     {
         if (blob != nullptr)
         {
-            jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
+            jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
 
-            auto* shader_blob = std::launder(reinterpret_cast<jevk13_shader_blob*>(blob));
+            auto* shader_blob = reinterpret_cast<jevk13_shader_blob*>(blob);
             context->destroy_shader_blob(shader_blob);
         }
     }
 
     void create_resource(jegl_context::graphic_impl_context_t ctx, jegl_resource_blob blob, jegl_resource* resource)
     {
-        jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
+        jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
         switch (resource->m_type)
         {
         case jegl_resource::type::SHADER:
         {
             assert(blob != nullptr);
-            auto* shader_blob = std::launder(reinterpret_cast<jevk13_shader_blob*>(blob));
+            auto* shader_blob = reinterpret_cast<jevk13_shader_blob*>(blob);
             resource->m_handle.m_ptr = context->create_shader_with_blob(shader_blob);
 
             auto* raw_shader_data = resource->m_raw_shader_data;
@@ -3932,15 +3936,16 @@ namespace jeecs::graphic::api::vk130
             jevk13_texture* depth_attachment = nullptr;
 
             jeecs::basic::resource<jeecs::graphic::texture>* attachments =
-                std::launder(reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture> *>(
-                    resource->m_raw_framebuf_data->m_output_attachments));
+                reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture> *>(
+                    resource->m_raw_framebuf_data->m_output_attachments);
 
             for (size_t i = 0; i < resource->m_raw_framebuf_data->m_attachment_count; ++i)
             {
                 auto& attachment = attachments[i];
                 jegl_using_resource(attachment->resource());
 
-                auto* attach_texture_instance = std::launder(reinterpret_cast<jevk13_texture*>(attachment->resource()->m_handle.m_ptr));
+                auto* attach_texture_instance =
+                    reinterpret_cast<jevk13_texture*>(attachment->resource()->m_handle.m_ptr);
                 if (0 != (attachment->resource()->m_raw_texture_data->m_format & jegl_texture::format::DEPTH))
                     depth_attachment = attach_texture_instance;
                 else
@@ -3969,7 +3974,7 @@ namespace jeecs::graphic::api::vk130
     void close_resource(jegl_context::graphic_impl_context_t ctx, jegl_resource* resource);
     void using_resource(jegl_context::graphic_impl_context_t ctx, jegl_resource* resource)
     {
-        jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
+        jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
         switch (resource->m_type)
         {
         case jegl_resource::type::SHADER:
@@ -3982,7 +3987,7 @@ namespace jeecs::graphic::api::vk130
                     resource->m_modified = false;
                     // Modified, free current resource id, reload one.
 
-                    jevk13_texture* texture = std::launder(reinterpret_cast<jevk13_texture*>(resource->m_handle.m_ptr));
+                    jevk13_texture* texture = reinterpret_cast<jevk13_texture*>(resource->m_handle.m_ptr);
                     context->trans_and_update_texture_pixels(texture, resource->m_raw_texture_data);
                 }
             }
@@ -4004,26 +4009,26 @@ namespace jeecs::graphic::api::vk130
     }
     void close_resource(jegl_context::graphic_impl_context_t ctx, jegl_resource* resource)
     {
-        jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
+        jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
 
         context->vkDeviceWaitIdle(context->_vk_logic_device);
 
         switch (resource->m_type)
         {
         case jegl_resource::type::SHADER:
-            context->destroy_shader(std::launder(reinterpret_cast<jevk13_shader*>(resource->m_handle.m_ptr)));
+            context->destroy_shader(reinterpret_cast<jevk13_shader*>(resource->m_handle.m_ptr));
             break;
         case jegl_resource::type::TEXTURE:
-            context->destroy_texture_instance(std::launder(reinterpret_cast<jevk13_texture*>(resource->m_handle.m_ptr)));
+            context->destroy_texture_instance(reinterpret_cast<jevk13_texture*>(resource->m_handle.m_ptr));
             break;
         case jegl_resource::type::VERTEX:
-            context->destroy_vertex_instance(std::launder(reinterpret_cast<jevk13_vertex*>(resource->m_handle.m_ptr)));
+            context->destroy_vertex_instance(reinterpret_cast<jevk13_vertex*>(resource->m_handle.m_ptr));
             break;
         case jegl_resource::type::FRAMEBUF:
-            context->destroy_frame_buffer(std::launder(reinterpret_cast<jevk13_framebuffer*>(resource->m_handle.m_ptr)));
+            context->destroy_frame_buffer(reinterpret_cast<jevk13_framebuffer*>(resource->m_handle.m_ptr));
             break;
         case jegl_resource::type::UNIFORMBUF:
-            context->destroy_uniform_buffer(std::launder(reinterpret_cast<jevk13_uniformbuf*>(resource->m_handle.m_ptr)));
+            context->destroy_uniform_buffer(reinterpret_cast<jevk13_uniformbuf*>(resource->m_handle.m_ptr));
             break;
         default:
             break;
@@ -4032,16 +4037,16 @@ namespace jeecs::graphic::api::vk130
 
     void draw_vertex_with_shader(jegl_context::graphic_impl_context_t ctx, jegl_resource* vertex)
     {
-        jegl_vk130_context* context = 
-            std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
+        jegl_vk130_context* context =
+            reinterpret_cast<jegl_vk130_context*>(ctx);
 
         context->cmd_draw_vertex(
-            std::launder(reinterpret_cast<jevk13_vertex*>(vertex->m_handle.m_ptr)));
+            reinterpret_cast<jevk13_vertex*>(vertex->m_handle.m_ptr));
     }
 
     bool bind_shader(jegl_context::graphic_impl_context_t ctx, jegl_resource* shader)
     {
-        jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
+        jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
 
         auto* shader_instance = reinterpret_cast<jevk13_shader*>(shader->m_handle.m_ptr);
         if (shader_instance != nullptr)
@@ -4049,13 +4054,14 @@ namespace jeecs::graphic::api::vk130
             context->cmd_bind_shader_pipeline(shader_instance);
             return true;
         }
+        context->_vk_current_binded_shader = nullptr;
         return false;
     }
     void bind_uniform_buffer(jegl_context::graphic_impl_context_t ctx, jegl_resource* uniformbuf)
     {
-        jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
-        jevk13_uniformbuf* uniformbuf_instance = std::launder(
-            reinterpret_cast<jevk13_uniformbuf*>(uniformbuf->m_handle.m_ptr));
+        jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
+        jevk13_uniformbuf* uniformbuf_instance =
+            reinterpret_cast<jevk13_uniformbuf*>(uniformbuf->m_handle.m_ptr);
 
         context->_vk_descriptor_set_allocator->bind_uniform_buffer(
             uniformbuf_instance->m_real_binding_place, uniformbuf_instance->m_uniform_buffer);
@@ -4063,44 +4069,55 @@ namespace jeecs::graphic::api::vk130
 
     void bind_texture(jegl_context::graphic_impl_context_t ctx, jegl_resource* texture, size_t pass)
     {
-        jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
+        jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
 
-        auto* texture_instance = std::launder(reinterpret_cast<jevk13_texture*>(texture->m_handle.m_ptr));
+        auto* texture_instance = reinterpret_cast<jevk13_texture*>(texture->m_handle.m_ptr);
         context->_vk_descriptor_set_allocator->bind_texture(
             (uint32_t)pass,
             texture_instance->m_vk_texture_image_view);
     }
 
-    void set_rend_to_framebuffer(jegl_context::graphic_impl_context_t ctx, jegl_resource* framebuf, size_t x, size_t y, size_t w, size_t h)
+    void set_rend_to_framebuffer(
+        jegl_context::graphic_impl_context_t ctx,
+        jegl_resource* framebuf,
+        const size_t(*viewport_xywh)[4],
+        const float (*clear_color_rgba)[4],
+        const float* clear_depth)
     {
-        jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
+        jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
 
         jevk13_framebuffer* target_framebuf = nullptr;
         if (framebuf != nullptr)
             target_framebuf = reinterpret_cast<jevk13_framebuffer*>(
                 framebuf->m_handle.m_ptr);
 
+        size_t x = 0, y = 0, w = 0, h = 0;
+        if (viewport_xywh != nullptr)
+        {
+            auto& vp = *viewport_xywh;
+            x = vp[0];
+            y = vp[1];
+            w = vp[2];
+            h = vp[3];
+        }
         context->cmd_begin_frame_buffer(target_framebuf, x, y, w, h);
-    }
-    void clear_framebuffer_color(jegl_context::graphic_impl_context_t ctx, float color[4])
-    {
-        jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
-        context->cmd_clear_frame_buffer_color(color);
-    }
-    void clear_framebuffer_depth(jegl_context::graphic_impl_context_t ctx)
-    {
-        jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
-        context->cmd_clear_frame_buffer_depth();
+
+        if (clear_color_rgba != nullptr)
+            context->cmd_clear_frame_buffer_color(*clear_color_rgba);
+
+        if (clear_depth != nullptr)
+            context->cmd_clear_frame_buffer_depth(*clear_depth);
+
     }
 
     void set_uniform(jegl_context::graphic_impl_context_t ctx, uint32_t location, jegl_shader::uniform_type type, const void* val)
     {
-        jegl_vk130_context* context = std::launder(reinterpret_cast<jegl_vk130_context*>(ctx));
+        jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
 
         auto* current_shader = context->_vk_current_binded_shader;
-        assert(current_shader != nullptr);
 
-        if (location == jeecs::typing::INVALID_UINT32)
+        if (location == jeecs::typing::INVALID_UINT32
+            || current_shader == nullptr)
             return;
 
         assert(current_shader->m_uniform_cpu_buffer_size != 0);
@@ -4166,8 +4183,6 @@ void jegl_using_vk130_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->draw_vertex = draw_vertex_with_shader;
 
     write_to_apis->bind_framebuf = set_rend_to_framebuffer;
-    write_to_apis->clear_frame_color = clear_framebuffer_color;
-    write_to_apis->clear_frame_depth = clear_framebuffer_depth;
 
     write_to_apis->set_uniform = set_uniform;
 }

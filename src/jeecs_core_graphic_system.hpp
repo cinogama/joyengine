@@ -478,16 +478,16 @@ public let frag =
 
                 if (current_camera.clear != nullptr)
                 {
-                    float clear_buffer_color[] = {
+                    const float clear_buffer_color[] = {
                         current_camera.clear->color.x,
                         current_camera.clear->color.y,
                         current_camera.clear->color.z,
                         current_camera.clear->color.w };
-                    jegl_rchain_clear_color_buffer(rend_chain, clear_buffer_color);
+                    jegl_rchain_clear_color_buffer(rend_chain, &clear_buffer_color);
                 }
 
                 // Clear depth buffer to overwrite pixels.
-                jegl_rchain_clear_depth_buffer(rend_chain);
+                jegl_rchain_clear_depth_buffer(rend_chain, 1.0f);
 
                 jegl_rchain_bind_uniform_buffer(rend_chain,
                     current_camera.projection->default_uniform_buffer->resource());
@@ -742,16 +742,16 @@ public let frag =
 
                 if (current_camera.clear != nullptr)
                 {
-                    float clear_buffer_color[] = {
+                    const float clear_buffer_color[] = {
                         current_camera.clear->color.x,
                         current_camera.clear->color.y,
                         current_camera.clear->color.z,
                         current_camera.clear->color.w };
-                    jegl_rchain_clear_color_buffer(rend_chain, clear_buffer_color);
+                    jegl_rchain_clear_color_buffer(rend_chain, &clear_buffer_color);
                 }
 
                 // Clear depth buffer to overwrite pixels.
-                jegl_rchain_clear_depth_buffer(rend_chain);
+                jegl_rchain_clear_depth_buffer(rend_chain, 1.0);
 
                 jegl_rchain_bind_uniform_buffer(rend_chain,
                     current_camera.projection->default_uniform_buffer->resource());
@@ -2003,7 +2003,7 @@ public func frag(vf: v2f)
                                 light2d_shadow_aim_buffer->height());
 
                             jegl_rchain_clear_color_buffer(light2d_shadow_rend_chain, nullptr);
-                            jegl_rchain_clear_depth_buffer(light2d_shadow_rend_chain);
+                            jegl_rchain_clear_depth_buffer(light2d_shadow_rend_chain, 1.0);
 
                             jegl_rchain_bind_uniform_buffer(light2d_shadow_rend_chain,
                                 current_camera.projection->default_uniform_buffer->resource());
@@ -2316,14 +2316,14 @@ public func frag(vf: v2f)
 
                     if (current_camera.clear != nullptr)
                     {
-                        float clear_buffer_color[] = {
+                        const float clear_buffer_color[] = {
                             current_camera.clear->color.x,
                             current_camera.clear->color.y,
                             current_camera.clear->color.z,
                             current_camera.clear->color.w };
-                        jegl_rchain_clear_color_buffer(rend_chain, clear_buffer_color);
+                        jegl_rchain_clear_color_buffer(rend_chain, &clear_buffer_color);
                     }
-                    jegl_rchain_clear_depth_buffer(rend_chain);
+                    jegl_rchain_clear_depth_buffer(rend_chain, 1.0);
                 }
                 else
                 {
@@ -2342,16 +2342,16 @@ public func frag(vf: v2f)
                     // If camera rend to texture, clear the frame buffer (if need)
                     if (current_camera.clear != nullptr)
                     {
-                        float clear_buffer_color[] = {
+                        const float clear_buffer_color[] = {
                             current_camera.clear->color.x,
                             current_camera.clear->color.y,
                             current_camera.clear->color.z,
                             current_camera.clear->color.w };
-                        jegl_rchain_clear_color_buffer(rend_chain, clear_buffer_color);
+                        jegl_rchain_clear_color_buffer(rend_chain, &clear_buffer_color);
                     }
 
                     // Clear depth buffer to overwrite pixels.
-                    jegl_rchain_clear_depth_buffer(rend_chain);
+                    jegl_rchain_clear_depth_buffer(rend_chain, 1.0);
                 }
 
                 jegl_rchain_bind_uniform_buffer(rend_chain,
@@ -2607,16 +2607,16 @@ public func frag(vf: v2f)
 
                     if (current_camera.clear != nullptr)
                     {
-                        float clear_buffer_color[] = {
+                        const float clear_buffer_color[] = {
                             current_camera.clear->color.x,
                             current_camera.clear->color.y,
                             current_camera.clear->color.z,
                             current_camera.clear->color.w };
-                        jegl_rchain_clear_color_buffer(final_target_rend_chain, clear_buffer_color);
+                        jegl_rchain_clear_color_buffer(final_target_rend_chain, &clear_buffer_color);
                     }
 
                     // Clear depth buffer to overwrite pixels.
-                    jegl_rchain_clear_depth_buffer(final_target_rend_chain);
+                    jegl_rchain_clear_depth_buffer(final_target_rend_chain, 1.0);
 
                     jegl_rchain_bind_uniform_buffer(final_target_rend_chain,
                         current_camera.projection->default_uniform_buffer->resource());

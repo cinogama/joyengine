@@ -79,9 +79,9 @@ namespace jeecs::graphic::api::metal
 
             jegl_metal_context* m_context;
 
-            // TODO: Metal çš„ pipeline state å’Œ vulkan çš„ pipeline ç±»ä¼¼ï¼Œéœ€è¦æ ¹æ®ç›®æ ‡
-            //  ç¼“å†²åŒºçš„æ ¼å¼ç­‰ä¿¡æ¯åˆ›å»ºä¸åŒçš„ pipeline stateã€‚
-            //      ç°åœ¨ä»ç„¶æ˜¯åœ¨æ—©æœŸå¼€å‘é˜¶æ®µï¼Œå…ˆä»¥å®ç°åŸºæœ¬åŠŸèƒ½ä¸ºä¸»ã€‚
+            // TODO: Metal µÄ pipeline state ºÍ vulkan µÄ pipeline ÀàËÆ£¬ĞèÒª¸ù¾İÄ¿±ê
+            //  »º³åÇøµÄ¸ñÊ½µÈĞÅÏ¢´´½¨²»Í¬µÄ pipeline state¡£
+            //      ÏÖÔÚÈÔÈ»ÊÇÔÚÔçÆÚ¿ª·¢½×¶Î£¬ÏÈÒÔÊµÏÖ»ù±¾¹¦ÄÜÎªÖ÷¡£
             struct sampler_structs
             {
                 MTL::SamplerState* m_sampler;
@@ -212,7 +212,7 @@ namespace jeecs::graphic::api::metal
         MTL::Buffer* m_vertex_buffer;
         MTL::Buffer* m_index_buffer;
         uint32_t m_index_count;
-        uint32_t m_vertex_stride; // æ·»åŠ å®é™…é¡¶ç‚¹æ­¥é•¿ä¿¡æ¯
+        uint32_t m_vertex_stride; // Ìí¼ÓÊµ¼Ê¶¥µã²½³¤ĞÅÏ¢
 
         metal_vertex(
             MTL::PrimitiveType primitive_type,
@@ -307,7 +307,7 @@ namespace jeecs::graphic::api::metal
         jegl_metal_context* metal_context =
             reinterpret_cast<jegl_metal_context*>(ctx);
 
-        // æ¯å¸§å¼€å§‹ä¹‹å‰ï¼Œåˆ›å»ºæ–°çš„è‡ªåŠ¨é‡Šæ”¾æ± 
+        // Ã¿Ö¡¿ªÊ¼Ö®Ç°£¬´´½¨ĞÂµÄ×Ô¶¯ÊÍ·Å³Ø
         metal_context->m_frame_auto_release = NS::AutoreleasePool::alloc()->init();
 
         metal_context->m_render_states.m_currnet_command_buffer =
@@ -402,7 +402,7 @@ public func frag(vf: v2f)
 )").value();
 
                 /*
-                åˆæœŸå¼€å‘ï¼Œæš‚æ—¶åœ¨è¿™é‡Œéšä¾¿å†™å†™ç”»ç”»
+                ³õÆÚ¿ª·¢£¬ÔİÊ±ÔÚÕâÀïËæ±ãĞ´Ğ´»­»­
                 */
                 jegl_bind_shader(sd->resource());
                 jegl_bind_texture(tx->resource(), 0);
@@ -414,7 +414,7 @@ public func frag(vf: v2f)
                     metal_context->m_window_and_view_layout->m_metal_view->currentDrawable());
                 metal_context->m_render_states.m_currnet_command_buffer->commit();
 
-                // å¸§ç»“æŸåé‡Šæ”¾è‡ªåŠ¨é‡Šæ”¾æ± 
+                // Ö¡½áÊøºóÊÍ·Å×Ô¶¯ÊÍ·Å³Ø
                 metal_context->m_frame_auto_release->release();
 
                 return jegl_update_action::JEGL_UPDATE_CONTINUE;
@@ -495,7 +495,7 @@ public func frag(vf: v2f)
                 MTL::VertexDescriptor* vertex_descriptor =
                     MTL::VertexDescriptor::alloc()->init();
 
-                // è®¡ç®—å®é™…çš„é¡¶ç‚¹æ•°æ®å¸ƒå±€
+                // ¼ÆËãÊµ¼ÊµÄ¶¥µãÊı¾İ²¼¾Ö
                 unsigned int current_offset = 0;
 
                 for (size_t i = 0; i < raw_shader->m_vertex_in_count; ++i)
@@ -547,11 +547,11 @@ public func frag(vf: v2f)
                     current_offset += attribute_size;
                 }
 
-                // è®¾ç½®buffer layoutï¼Œä½¿ç”¨åŠ¨æ€stride
+                // ÉèÖÃbuffer layout£¬Ê¹ÓÃ¶¯Ì¬stride
                 if (raw_shader->m_vertex_in_count > 0)
                 {
                     auto* layout = vertex_descriptor->layouts()->object(0);
-                    layout->setStride(MTL::BufferLayoutStrideDynamic); // ä½¿ç”¨åŠ¨æ€stride
+                    layout->setStride(MTL::BufferLayoutStrideDynamic); // Ê¹ÓÃ¶¯Ì¬stride
                     layout->setStepFunction(MTL::VertexStepFunctionPerVertex);
                 }
 
@@ -739,7 +739,7 @@ public func frag(vf: v2f)
                 builtin_uniforms.m_builtin_uniform_light2d_decay =
                     shader_blob->get_built_in_location("JE_LIGHT2D_DECAY");
 
-                // ATTENTION: æ³¨æ„ï¼Œä»¥ä¸‹å‚æ•°ç‰¹æ®Šshaderå¯èƒ½æŒªä½œä»–ç”¨
+                // ATTENTION: ×¢Òâ£¬ÒÔÏÂ²ÎÊıÌØÊâshader¿ÉÄÜÅ²×÷ËûÓÃ
                 builtin_uniforms.m_builtin_uniform_local_scale = shader_blob->get_built_in_location("JE_LOCAL_SCALE");
                 builtin_uniforms.m_builtin_uniform_color = shader_blob->get_built_in_location("JE_COLOR");
 
@@ -1051,7 +1051,7 @@ public func frag(vf: v2f)
         auto* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
         auto* texture_instance = reinterpret_cast<metal_texture*>(res->m_handle.m_ptr);
 
-        // ç”±äºå…¶ä»–å›¾å½¢åº“ä¸æ”¯æŒåœ¨é¡¶ç‚¹ç€è‰²å™¨ä¸­ä½¿ç”¨çº¹ç†é‡‡æ ·ï¼Œæ‰€ä»¥è¿™é‡Œä¸ç»‘å®šé¡¶ç‚¹ç€è‰²å™¨çº¹ç†
+        // ÓÉÓÚÆäËûÍ¼ĞÎ¿â²»Ö§³ÖÔÚ¶¥µã×ÅÉ«Æ÷ÖĞÊ¹ÓÃÎÆÀí²ÉÑù£¬ËùÒÔÕâÀï²»°ó¶¨¶¥µã×ÅÉ«Æ÷ÎÆÀí
         metal_context->m_render_states.m_render_command_encoder->setFragmentTexture(
             texture_instance->m_texture, (uint32_t)pass);
     }
@@ -1064,7 +1064,7 @@ public func frag(vf: v2f)
         auto* current_shader = metal_context->m_render_states.m_current_target_shader;
         if (current_shader->m_uniform_buffer_update_size != 0)
         {
-            // å°†CPUç«¯çš„uniformæ•°æ®æ›´æ–°åˆ°GPUç¼“å†²åŒº
+            // ½«CPU¶ËµÄuniformÊı¾İ¸üĞÂµ½GPU»º³åÇø
             void* buffer_contents = current_shader->m_uniforms->contents();
             memcpy(
                 reinterpret_cast<void*>(
@@ -1075,7 +1075,7 @@ public func frag(vf: v2f)
                         current_shader->m_uniform_cpu_buffer) + current_shader->m_uniform_buffer_update_offset),
                 current_shader->m_uniform_buffer_update_size);
 
-            // é‡ç½®æ›´æ–°æ ‡è®°
+            // ÖØÖÃ¸üĞÂ±ê¼Ç
             current_shader->m_uniform_buffer_update_size = 0;
         }
 
@@ -1096,7 +1096,12 @@ public func frag(vf: v2f)
             0);
     }
 
-    void bind_framebuffer(jegl_context::graphic_impl_context_t ctx, jegl_resource* fb, size_t, size_t, size_t, size_t)
+    void bind_framebuffer(
+        jegl_context::graphic_impl_context_t, 
+        jegl_resource* fb, 
+        const size_t(*)[4],
+        const float(*)[4],
+        const float*)
     {
         auto* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
 
@@ -1223,8 +1228,6 @@ void jegl_using_metal_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->draw_vertex = draw_vertex_with_shader;
 
     write_to_apis->bind_framebuf = bind_framebuffer;
-    write_to_apis->clear_frame_color = clear_framebuffer_color;
-    write_to_apis->clear_frame_depth = clear_framebuffer_depth;
 
     write_to_apis->set_uniform = set_uniform;
 }

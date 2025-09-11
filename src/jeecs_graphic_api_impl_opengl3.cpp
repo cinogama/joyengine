@@ -418,6 +418,8 @@ namespace jeecs::graphic::api::gl3
     {
         jegl_gl3_context* context = reinterpret_cast<jegl_gl3_context*>(ctx);
 
+        context->current_active_shader_may_null = nullptr;
+
         switch (context->m_interface->update())
         {
         case basic_interface::update_result::CLOSE:
@@ -451,6 +453,9 @@ namespace jeecs::graphic::api::gl3
     jegl_update_action gl_commit_update(
         jegl_context::graphic_impl_context_t, jegl_update_action)
     {
+        // 回到默认帧缓冲区
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+
         jegui_update_gl330();
 
         // 将绘制命令异步地提交给GPU
@@ -777,7 +782,6 @@ namespace jeecs::graphic::api::gl3
             delete shader_blob;
         }
     }
-
     void gl_init_resource(jegl_context::graphic_impl_context_t ctx, jegl_resource_blob blob, jegl_resource* resource)
     {
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
@@ -1125,7 +1129,6 @@ namespace jeecs::graphic::api::gl3
             break;
         }
     }
-
     void _gl_update_depth_test_method(jegl_gl3_context* ctx, jegl_shader::depth_test_method mode)
     {
         assert(mode != jegl_shader::depth_test_method::INVALID);
@@ -1516,7 +1519,7 @@ namespace jeecs::graphic::api::gl3
         jegl3_vertex_data* vdata = std::launder(reinterpret_cast<jegl3_vertex_data*>(vert->m_handle.m_ptr));
 
         auto* current_shader = context->current_active_shader_may_null;
-        if (current_shader == nullptr || vdata == nullptr)
+        if (current_shader == nullptr)
             return;
 
         if (current_shader->uniform_cpu_buffers != nullptr)
@@ -1544,7 +1547,11 @@ namespace jeecs::graphic::api::gl3
     }
 
     void gl_set_rend_to_framebuffer(
-        jegl_context::graphic_impl_context_t ctx, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h)
+        jegl_context::graphic_impl_context_t ctx,
+        jegl_resource* framebuffer,
+        const size_t(*viewport_xywh)[4],
+        const float (*clear_color_rgba)[4],
+        const float* clear_depth)
     {
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
 
@@ -1553,7 +1560,19 @@ namespace jeecs::graphic::api::gl3
         else
             glBindFramebuffer(GL_FRAMEBUFFER, framebuffer->m_handle.m_uint1);
 
-        auto* framw_buffer_raw = framebuffer != nullptr ? framebuffer->m_raw_framebuf_data : nullptr;
+        size_t x = 0, y = 0, w = 0, h = 0;
+        if (viewport_xywh != nullptr)
+        {
+            auto& viewport = *viewport_xywh;
+            x = viewport[0];
+            y = viewport[1];
+            w = viewport[2];
+            h = viewport[3];
+        }
+
+        auto* framw_buffer_raw = framebuffer != nullptr
+            ? framebuffer->m_raw_framebuf_data
+            : nullptr;
         if (w == 0)
             w = framw_buffer_raw != nullptr
             ? framebuffer->m_raw_framebuf_data->m_width
@@ -1569,18 +1588,28 @@ namespace jeecs::graphic::api::gl3
 #else
         glDepthRangef(0., 1.);
 #endif
-    }
-    void gl_clear_framebuffer_color(jegl_context::graphic_impl_context_t, float color[4])
-    {
-        glClearColor(color[0], color[1], color[2], color[3]);
-        glClear(GL_COLOR_BUFFER_BIT);
-    }
 
-    void gl_clear_framebuffer_depth(jegl_context::graphic_impl_context_t ctx)
-    {
-        jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
-        _gl_update_depth_mask_method(context, jegl_shader::depth_mask_method::ENABLE);
-        glClear(GL_DEPTH_BUFFER_BIT);
+        GLenum clear_mask = 0;
+        if (clear_color_rgba != nullptr)
+        {
+            auto& color = *clear_color_rgba;
+            glClearColor(color[0], color[1], color[2], color[3]);
+
+            clear_mask |= GL_COLOR_BUFFER_BIT;
+        }
+        if (clear_depth != nullptr)
+        {
+            _gl_update_depth_mask_method(context, jegl_shader::depth_mask_method::ENABLE);
+#ifdef JE_ENABLE_GL330_GAPI
+            glClearDepthf(*clear_depth);
+#else
+            glClearDepthf(*clear_depth);
+#endif
+            clear_mask |= GL_DEPTH_BUFFER_BIT;
+        }
+
+        if (clear_mask != 0)
+            glClear(clear_mask);
     }
 }
 
@@ -1608,8 +1637,6 @@ void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->draw_vertex = gl_draw_vertex_with_shader;
 
     write_to_apis->bind_framebuf = gl_set_rend_to_framebuffer;
-    write_to_apis->clear_frame_color = gl_clear_framebuffer_color;
-    write_to_apis->clear_frame_depth = gl_clear_framebuffer_depth;
 
     write_to_apis->set_uniform = gl_set_uniform;
 }
