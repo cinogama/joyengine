@@ -33,10 +33,11 @@ namespace jeecs::graphic::api::metal
         {
             metal_shader* m_current_target_shader;
 
-            MTL::CommandBuffer* m_currnet_command_buffer;
             MTL::RenderPassDescriptor* m_main_render_pass_descriptor;
 
             metal_framebuffer* m_current_target_framebuffer_may_null;
+
+            MTL::CommandBuffer* m_currnet_command_buffer;
             MTL::RenderCommandEncoder* m_render_command_encoder;
         };
         render_runtime_states m_render_states;
@@ -316,6 +317,7 @@ namespace jeecs::graphic::api::metal
         metal_context->m_render_states.m_render_command_encoder =
             metal_context->m_render_states.m_currnet_command_buffer->renderCommandEncoder(
                 metal_context->m_render_states.m_main_render_pass_descriptor);
+        metal_context->m_render_states.m_current_target_framebuffer_may_null = nullptr;
 
         return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
@@ -1094,11 +1096,33 @@ public func frag(vf: v2f)
             0);
     }
 
-    void bind_framebuffer(jegl_context::graphic_impl_context_t, jegl_resource*, size_t, size_t, size_t, size_t)
+    void bind_framebuffer(jegl_context::graphic_impl_context_t ctx, jegl_resource* fb, size_t, size_t, size_t, size_t)
     {
+        auto* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
+        auto* framebuf_instance =
+            reinterpret_cast<metal_framebuffer*>(fb->m_handle.m_ptr);
+
+        if (metal_context->m_render_states.m_current_target_framebuffer_may_null != framebuf_instance)
+        {
+            metal_context->m_render_states.m_render_command_encoder->endEncoding();
+
+            // Create a new command buffer and encoder for the new framebuffer
+            metal_context->m_render_states.m_currnet_command_buffer =
+                metal_context->m_metal_command_queue->commandBuffer();
+            metal_context->m_render_states.m_render_command_encoder =
+                metal_context->m_currnet_command_buffer->renderCommandEncoder(
+                    framebuf_instance->m_render_pass_descriptor);
+            metal_context->m_render_states.m_current_target_framebuffer_may_null = framebuf_instance;
+        }
+        
     }
-    void clear_framebuffer_color(jegl_context::graphic_impl_context_t, float[4])
+    void clear_framebuffer_color(jegl_context::graphic_impl_context_t ctx, float color[4])
     {
+        auto* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
+        
+       /* metal_context->m_render_states.m_render_command_encoder->clear(
+            0, MTL::ClearColor{ color[0], color[1], color[2], color[3] });*/
+
     }
     void clear_framebuffer_depth(jegl_context::graphic_impl_context_t)
     {
