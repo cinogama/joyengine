@@ -1194,7 +1194,7 @@ public func frag(vf: v2f)
     }
 
     void bind_framebuffer(
-        jegl_context::graphic_impl_context_t,
+        jegl_context::graphic_impl_context_t ctx,
         jegl_resource* fb,
         const size_t(*viewport_xywh)[4],
         const float(*clear_color_rgba)[4],
