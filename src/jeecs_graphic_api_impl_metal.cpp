@@ -1222,14 +1222,16 @@ public func frag(vf: v2f)
         metal_context->m_render_states.m_currnet_command_buffer =
             metal_context->m_command_queue->commandBuffer();
 
+        auto* target_framebuffer_desc = target_framebuf_may_null != nullptr
+            ? target_framebuf_may_null->m_render_pass_descriptor
+            : metal_context->m_render_states.m_main_render_pass_descriptor;
+
         metal_context->m_render_states.m_render_command_encoder =
             metal_context->m_render_states.m_currnet_command_buffer->renderCommandEncoder(
-                target_framebuf_may_null != nullptr
-                ? target_framebuf_may_null->m_render_pass_descriptor
-                : metal_context->m_render_states.m_main_render_pass_descriptor);
+                target_framebuffer_desc);
 
         metal_context->m_render_states.m_current_target_framebuffer_may_null =
-            target_framebuf_may_null;
+            target_framebuffer_desc;
     }
 
     void set_uniform(
