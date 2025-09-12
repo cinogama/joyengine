@@ -79,9 +79,9 @@ namespace jeecs::graphic::api::metal
 
             jegl_metal_context* m_context;
 
-            // TODO: Metal µÄ pipeline state ºÍ vulkan µÄ pipeline ÀàËÆ£¬ĞèÒª¸ù¾İÄ¿±ê
-            //  »º³åÇøµÄ¸ñÊ½µÈĞÅÏ¢´´½¨²»Í¬µÄ pipeline state¡£
-            //      ÏÖÔÚÈÔÈ»ÊÇÔÚÔçÆÚ¿ª·¢½×¶Î£¬ÏÈÒÔÊµÏÖ»ù±¾¹¦ÄÜÎªÖ÷¡£
+            // TODO: Metal çš„ pipeline state å’Œ vulkan çš„ pipeline ç±»ä¼¼ï¼Œéœ€è¦æ ¹æ®ç›®æ ‡
+            //  ç¼“å†²åŒºçš„æ ¼å¼ç­‰ä¿¡æ¯åˆ›å»ºä¸åŒçš„ pipeline stateã€‚
+            //      ç°åœ¨ä»ç„¶æ˜¯åœ¨æ—©æœŸå¼€å‘é˜¶æ®µï¼Œå…ˆä»¥å®ç°åŸºæœ¬åŠŸèƒ½ä¸ºä¸»ã€‚
             struct sampler_structs
             {
                 MTL::SamplerState* m_sampler;
@@ -212,7 +212,7 @@ namespace jeecs::graphic::api::metal
         MTL::Buffer* m_vertex_buffer;
         MTL::Buffer* m_index_buffer;
         uint32_t m_index_count;
-        uint32_t m_vertex_stride; // Ìí¼ÓÊµ¼Ê¶¥µã²½³¤ĞÅÏ¢
+        uint32_t m_vertex_stride; // æ·»åŠ å®é™…é¡¶ç‚¹æ­¥é•¿ä¿¡æ¯
 
         metal_vertex(
             MTL::PrimitiveType primitive_type,
@@ -310,7 +310,7 @@ namespace jeecs::graphic::api::metal
         jegl_metal_context* metal_context =
             reinterpret_cast<jegl_metal_context*>(ctx);
 
-        // Ã¿Ö¡¿ªÊ¼Ö®Ç°£¬´´½¨ĞÂµÄ×Ô¶¯ÊÍ·Å³Ø
+        // æ¯å¸§å¼€å§‹ä¹‹å‰ï¼Œåˆ›å»ºæ–°çš„è‡ªåŠ¨é‡Šæ”¾æ± 
         metal_context->m_frame_auto_release = NS::AutoreleasePool::alloc()->init();
 
         metal_context->m_render_states.m_currnet_command_buffer =
@@ -405,7 +405,7 @@ public func frag(vf: v2f)
 )").value();
 
                 /*
-                ³õÆÚ¿ª·¢£¬ÔİÊ±ÔÚÕâÀïËæ±ãĞ´Ğ´»­»­
+                åˆæœŸå¼€å‘ï¼Œæš‚æ—¶åœ¨è¿™é‡Œéšä¾¿å†™å†™ç”»ç”»
                 */
                 jegl_bind_shader(sd->resource());
                 jegl_bind_texture(tx->resource(), 0);
@@ -417,7 +417,7 @@ public func frag(vf: v2f)
                     metal_context->m_window_and_view_layout->m_metal_view->currentDrawable());
                 metal_context->m_render_states.m_currnet_command_buffer->commit();
 
-                // Ö¡½áÊøºóÊÍ·Å×Ô¶¯ÊÍ·Å³Ø
+                // å¸§ç»“æŸåé‡Šæ”¾è‡ªåŠ¨é‡Šæ”¾æ± 
                 metal_context->m_frame_auto_release->release();
 
                 return jegl_update_action::JEGL_UPDATE_CONTINUE;
@@ -498,7 +498,7 @@ public func frag(vf: v2f)
                 MTL::VertexDescriptor* vertex_descriptor =
                     MTL::VertexDescriptor::alloc()->init();
 
-                // ¼ÆËãÊµ¼ÊµÄ¶¥µãÊı¾İ²¼¾Ö
+                // è®¡ç®—å®é™…çš„é¡¶ç‚¹æ•°æ®å¸ƒå±€
                 unsigned int current_offset = 0;
 
                 for (size_t i = 0; i < raw_shader->m_vertex_in_count; ++i)
@@ -550,11 +550,11 @@ public func frag(vf: v2f)
                     current_offset += attribute_size;
                 }
 
-                // ÉèÖÃbuffer layout£¬Ê¹ÓÃ¶¯Ì¬stride
+                // è®¾ç½®buffer layoutï¼Œä½¿ç”¨åŠ¨æ€stride
                 if (raw_shader->m_vertex_in_count > 0)
                 {
                     auto* layout = vertex_descriptor->layouts()->object(0);
-                    layout->setStride(MTL::BufferLayoutStrideDynamic); // Ê¹ÓÃ¶¯Ì¬stride
+                    layout->setStride(MTL::BufferLayoutStrideDynamic); // ä½¿ç”¨åŠ¨æ€stride
                     layout->setStepFunction(MTL::VertexStepFunctionPerVertex);
                 }
 
@@ -742,7 +742,7 @@ public func frag(vf: v2f)
                 builtin_uniforms.m_builtin_uniform_light2d_decay =
                     shader_blob->get_built_in_location("JE_LIGHT2D_DECAY");
 
-                // ATTENTION: ×¢Òâ£¬ÒÔÏÂ²ÎÊıÌØÊâshader¿ÉÄÜÅ²×÷ËûÓÃ
+                // ATTENTION: æ³¨æ„ï¼Œä»¥ä¸‹å‚æ•°ç‰¹æ®Šshaderå¯èƒ½æŒªä½œä»–ç”¨
                 builtin_uniforms.m_builtin_uniform_local_scale = shader_blob->get_built_in_location("JE_LOCAL_SCALE");
                 builtin_uniforms.m_builtin_uniform_color = shader_blob->get_built_in_location("JE_COLOR");
 
@@ -1033,12 +1033,15 @@ public func frag(vf: v2f)
     {
         assert(res->m_type == jegl_resource::type::SHADER);
 
+        auto* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
         auto* shader_instance = reinterpret_cast<metal_shader*>(res->m_handle.m_ptr);
+
+        if (metal_context->m_render_states.m_current_target_shader == shader_instance)
+            return shader_instance != nullptr;
+
+        metal_context->m_render_states.m_current_target_shader = shader_instance;
         if (shader_instance == nullptr)
             return false;
-
-        auto* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
-        metal_context->m_render_states.m_current_target_shader = shader_instance;
 
         metal_context->m_render_states.m_render_command_encoder->setRenderPipelineState(
             shader_instance->m_shared_state->m_pipeline_state);
@@ -1057,7 +1060,7 @@ public func frag(vf: v2f)
         auto* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
         auto* texture_instance = reinterpret_cast<metal_texture*>(res->m_handle.m_ptr);
 
-        // ÓÉÓÚÆäËûÍ¼ĞÎ¿â²»Ö§³ÖÔÚ¶¥µã×ÅÉ«Æ÷ÖĞÊ¹ÓÃÎÆÀí²ÉÑù£¬ËùÒÔÕâÀï²»°ó¶¨¶¥µã×ÅÉ«Æ÷ÎÆÀí
+        // ç”±äºå…¶ä»–å›¾å½¢åº“ä¸æ”¯æŒåœ¨é¡¶ç‚¹ç€è‰²å™¨ä¸­ä½¿ç”¨çº¹ç†é‡‡æ ·ï¼Œæ‰€ä»¥è¿™é‡Œä¸ç»‘å®šé¡¶ç‚¹ç€è‰²å™¨çº¹ç†
         metal_context->m_render_states.m_render_command_encoder->setFragmentTexture(
             texture_instance->m_texture, (uint32_t)pass);
     }
@@ -1068,9 +1071,11 @@ public func frag(vf: v2f)
             reinterpret_cast<metal_vertex*>(res->m_handle.m_ptr);
 
         auto* current_shader = metal_context->m_render_states.m_current_target_shader;
+        assert(current_shader != nullptr);
+
         if (current_shader->m_uniform_buffer_update_size != 0)
         {
-            // ½«CPU¶ËµÄuniformÊı¾İ¸üĞÂµ½GPU»º³åÇø
+            // å°†CPUç«¯çš„uniformæ•°æ®æ›´æ–°åˆ°GPUç¼“å†²åŒº
             void* buffer_contents = current_shader->m_uniforms->contents();
             memcpy(
                 reinterpret_cast<void*>(
@@ -1081,7 +1086,7 @@ public func frag(vf: v2f)
                         current_shader->m_uniform_cpu_buffer) + current_shader->m_uniform_buffer_update_offset),
                 current_shader->m_uniform_buffer_update_size);
 
-            // ÖØÖÃ¸üĞÂ±ê¼Ç
+            // é‡ç½®æ›´æ–°æ ‡è®°
             current_shader->m_uniform_buffer_update_size = 0;
         }
 
@@ -1201,6 +1206,9 @@ public func frag(vf: v2f)
         const float* clear_depth)
     {
         auto* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
+
+        // Reset current binded shader.
+        metal_context->m_render_states.m_current_target_shader = nullptr;
 
         metal_framebuffer* target_framebuf_may_null = fb == nullptr
             ? nullptr

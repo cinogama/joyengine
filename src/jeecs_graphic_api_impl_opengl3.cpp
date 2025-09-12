@@ -1343,16 +1343,13 @@ namespace jeecs::graphic::api::gl3
         jegl_gl3_shader* shader_instance =
             reinterpret_cast<jegl_gl3_shader*>(resource->m_handle.m_ptr);
 
-        if (shader_instance == nullptr)
-        {
-            context->current_active_shader_may_null = nullptr;
-            return false;
-        }
-
         if (context->current_active_shader_may_null == shader_instance)
-            return true;
+            return shader_instance != nullptr;
 
         context->current_active_shader_may_null = shader_instance;
+        if (shader_instance == nullptr)
+            return false;
+    
         if (resource->m_raw_shader_data != nullptr)
         {
             _gl_update_depth_test_method(context, resource->m_raw_shader_data->m_depth_test);
@@ -1519,8 +1516,7 @@ namespace jeecs::graphic::api::gl3
         jegl3_vertex_data* vdata = std::launder(reinterpret_cast<jegl3_vertex_data*>(vert->m_handle.m_ptr));
 
         auto* current_shader = context->current_active_shader_may_null;
-        if (current_shader == nullptr)
-            return;
+        assert(current_shader != nullptr);
 
         if (current_shader->uniform_cpu_buffers != nullptr)
         {
@@ -1554,6 +1550,9 @@ namespace jeecs::graphic::api::gl3
         const float* clear_depth)
     {
         jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
+
+        // Reset current binded shader.
+        context->current_active_shader_may_null = nullptr;
 
         if (nullptr == framebuffer)
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);

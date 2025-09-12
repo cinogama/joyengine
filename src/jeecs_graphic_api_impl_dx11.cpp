@@ -1651,8 +1651,7 @@ namespace jeecs::graphic::api::dx11
         assert(vert->m_type == jegl_resource::type::VERTEX);
 
         auto* current_shader_instance = context->m_current_target_shader;
-        if (current_shader_instance == nullptr)
-            return;
+        assert(current_shader_instance != nullptr);
 
         if (current_shader_instance->m_uniform_buffer_size != 0)
         {
@@ -1724,10 +1723,14 @@ namespace jeecs::graphic::api::dx11
         jegl_dx11_context* context = reinterpret_cast<jegl_dx11_context*>(ctx);
 
         auto* shader_instance = reinterpret_cast<jedx11_shader*>(shader->m_handle.m_ptr);
+
+        if (context->m_current_target_shader == shader_instance)
+            return shader_instance != nullptr;
+
         context->m_current_target_shader = shader_instance;
 
         if (shader_instance == nullptr)
-            return false;    
+            return false;
 
         context->m_dx_context->VSSetShader(shader_instance->m_vertex.Get(), nullptr, 0);
         context->m_dx_context->PSSetShader(shader_instance->m_fragment.Get(), nullptr, 0);
@@ -1749,7 +1752,6 @@ namespace jeecs::graphic::api::dx11
             context->m_dx_context->PSSetSamplers(
                 sampler.m_sampler_id, 1, sampler.m_sampler.GetAddressOf());
         }
-
         return true;
     }
 
@@ -1786,6 +1788,9 @@ namespace jeecs::graphic::api::dx11
         const float* clear_depth)
     {
         jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
+
+        // Reset current binded shader.
+        context->m_current_target_shader = nullptr;
 
         if (framebuffer == nullptr)
         {

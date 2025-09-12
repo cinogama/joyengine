@@ -276,7 +276,7 @@ namespace jeecs::graphic::api::vk130
         bool m_uniform_cpu_buffer_updated;
         uint8_t* m_uniform_cpu_buffer;
 
-        std::vector<jevk13_uniformbuf*> m_uniform_variables;       
+        std::vector<jevk13_uniformbuf*> m_uniform_variables;
 
         size_t m_next_allocate_ubos_for_uniform_variable;
         size_t m_command_commit_round;
@@ -295,8 +295,9 @@ namespace jeecs::graphic::api::vk130
             , m_command_commit_round(0)
         {
             if (m_uniform_cpu_buffer_size != 0)
+            {
                 m_uniform_cpu_buffer =
-                reinterpret_cast<uint8_t*>(malloc(m_uniform_cpu_buffer_size));
+                    reinterpret_cast<uint8_t*>(malloc(m_uniform_cpu_buffer_size));
                 assert(m_uniform_cpu_buffer != nullptr);
                 memset(m_uniform_cpu_buffer, 0, m_uniform_cpu_buffer_size);
             }
@@ -3480,13 +3481,18 @@ namespace jeecs::graphic::api::vk130
                 1,
                 &clear_rect);
         }
-        void cmd_bind_shader_pipeline(jevk13_shader* shader)
+        bool cmd_bind_shader_pipeline(jevk13_shader* shader_may_null)
         {
             assert(_vk_current_target_framebuffer != nullptr);
 
-            _vk_current_binded_shader = shader;
+            if (_vk_current_binded_shader == shader_may_null)
+                return shader_may_null != nullptr;
 
-            for (auto& sampler : shader->m_blob_data->m_samplers)
+            _vk_current_binded_shader = shader_may_null;
+            if (shader_may_null == nullptr)
+                return false;
+
+            for (auto& sampler : shader_may_null->m_blob_data->m_samplers)
             {
                 _vk_descriptor_set_allocator->bind_sampler(
                     (size_t)sampler.m_sampler_id, sampler.m_vk_sampler);
@@ -3495,17 +3501,17 @@ namespace jeecs::graphic::api::vk130
             vkCmdBindPipeline(
                 _vk_current_command_buffer,
                 VkPipelineBindPoint::VK_PIPELINE_BIND_POINT_GRAPHICS,
-                shader->prepare_pipeline(this));
+                shader_may_null->prepare_pipeline(this));
 
             _vk_descriptor_set_allocator->bind_pipeline_layout(
-                shader->m_blob_data->m_pipeline_layout);
+                shader_may_null->m_blob_data->m_pipeline_layout);
+
+            return true;
         }
         void cmd_draw_vertex(jevk13_vertex* vertex)
         {
             assert(_vk_current_target_framebuffer != nullptr);
-
-            if (_vk_current_binded_shader == nullptr)
-                return;
+            assert(_vk_current_binded_shader != nullptr);
 
             VkDeviceSize offsets = 0;
 
@@ -4049,13 +4055,7 @@ namespace jeecs::graphic::api::vk130
         jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
 
         auto* shader_instance = reinterpret_cast<jevk13_shader*>(shader->m_handle.m_ptr);
-        if (shader_instance != nullptr)
-        {
-            context->cmd_bind_shader_pipeline(shader_instance);
-            return true;
-        }
-        context->_vk_current_binded_shader = nullptr;
-        return false;
+        return context->cmd_bind_shader_pipeline(shader_instance);
     }
     void bind_uniform_buffer(jegl_context::graphic_impl_context_t ctx, jegl_resource* uniformbuf)
     {
@@ -4087,6 +4087,10 @@ namespace jeecs::graphic::api::vk130
         jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
 
         jevk13_framebuffer* target_framebuf = nullptr;
+
+        // Reset current binded shader.
+        context->_vk_current_binded_shader = nullptr;
+
         if (framebuf != nullptr)
             target_framebuf = reinterpret_cast<jevk13_framebuffer*>(
                 framebuf->m_handle.m_ptr);
