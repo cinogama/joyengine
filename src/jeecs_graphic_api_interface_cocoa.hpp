@@ -32,7 +32,7 @@ namespace jeecs::graphic::metal
             m_metal_view->setColorPixelFormat(
                 MTL::PixelFormat::PixelFormatBGRA8Unorm_sRGB);
             m_metal_view->setDepthStencilPixelFormat(
-                MTL::PixelFormatDepth24Unorm_Stencil8);
+                MTL::PixelFormatDepth16Unorm);
 
             m_metal_view->setClearDepth(1.0);
             m_metal_view->setClearColor(

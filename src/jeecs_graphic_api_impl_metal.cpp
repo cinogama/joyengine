@@ -641,32 +641,6 @@ public func frag(vf: v2f)
                 shader_blob->m_uniform_size =
                     jeecs::basic::allign_size(last_elem_end_place, max_allign);
 
-                // TMP: Create pso
-               /* MTL::RenderPipelineDescriptor* pDesc =
-                    MTL::RenderPipelineDescriptor::alloc()->init();
-
-                pDesc->setVertexFunction(shader_blob->m_vertex_function);
-                pDesc->setFragmentFunction(shader_blob->m_fragment_function);
-                pDesc->setVertexDescriptor(shader_blob->m_vertex_descriptor);
-
-                pDesc->colorAttachments()->object(0)->setPixelFormat(
-                    MTL::PixelFormat::PixelFormatBGRA8Unorm);
-                pDesc->setDepthAttachmentPixelFormat(
-                    MTL::PixelFormatDepth24Unorm_Stencil8);
-
-                NS::Error* pError = nullptr;
-                auto* pso = metal_context->m_metal_device->newRenderPipelineState(pDesc, &pError);
-                if (pso == nullptr)
-                {
-                    jeecs::debug::logfatal(
-                        "Fail to create pipeline state object for shader '%s':\n%s",
-                        res->m_path,
-                        pError->localizedDescription()->utf8String());
-                    abort();
-                }
-                shader_blob->m_shared_state->m_pipeline_state = pso;
-                pDesc->release();*/
-
                 // Create samplers
                 for (size_t i = 0; i < raw_shader->m_sampler_count; ++i)
                 {
@@ -861,7 +835,7 @@ public func frag(vf: v2f)
             if (is_depth)
             {
                 assert(is_framebuf);
-                texture_format = MTL::PixelFormatDepth24Unorm_Stencil8;
+                texture_format = MTL::PixelFormatDepth16Unorm;
             }
             else
             {
@@ -1105,7 +1079,7 @@ public func frag(vf: v2f)
                 }
                 if (current_target_framebuffer->m_has_depth_attachment)
                     pDesc->setDepthAttachmentPixelFormat(
-                        MTL::PixelFormatDepth24Unorm_Stencil8);
+                        MTL::PixelFormatDepth16Unorm);
             }
             else
             {
@@ -1113,7 +1087,7 @@ public func frag(vf: v2f)
                 pDesc->colorAttachments()->object(0)->setPixelFormat(
                     MTL::PixelFormat::PixelFormatBGRA8Unorm);
                 pDesc->setDepthAttachmentPixelFormat(
-                    MTL::PixelFormatDepth24Unorm_Stencil8);
+                    MTL::PixelFormatDepth16Unorm);
             }
 
             NS::Error* pError = nullptr;
