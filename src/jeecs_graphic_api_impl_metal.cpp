@@ -50,10 +50,7 @@ namespace jeecs::graphic::api::metal
 
             m_window_and_view_layout =
                 new jeecs::graphic::metal::window_view_layout(
-                    cfg->m_title,
-                    (double)cfg->m_width,
-                    (double)cfg->m_height,
-                    m_metal_device);
+                    cfg, m_metal_device);
 
             m_frame_auto_release = nullptr;
         }
@@ -82,9 +79,6 @@ namespace jeecs::graphic::api::metal
             MTL::Function* m_fragment_function;
             MTL::VertexDescriptor* m_vertex_descriptor;
 
-            // TODO: Metal 的 pipeline state 和 vulkan 的 pipeline 类似，需要根据目标
-            //  缓冲区的格式等信息创建不同的 pipeline state。
-            //      现在仍然是在早期开发阶段，先以实现基本功能为主。
             struct sampler_structs
             {
                 MTL::SamplerState* m_sampler;

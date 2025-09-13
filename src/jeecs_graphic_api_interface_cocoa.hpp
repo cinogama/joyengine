@@ -16,14 +16,24 @@ namespace jeecs::graphic::metal
         JECS_DISABLE_MOVE_AND_COPY(window_view_layout);
 
         window_view_layout(
-            const char* title, double width, double height, MTL::Device* device)
+            const jegl_interface_config* cfg, MTL::Device* device)
         {
+            const char* title = cfg->m_title;
+            double width = (double)cfg->m_width;
+            double height = (double)cfg->m_height;
+
             assert(device != nullptr);
             CGRect frame = (CGRect){ {100.0, 100.0}, {width, height} };
 
+            auto window_config_attrib = 
+                NS::WindowStyleMaskClosable | NS::WindowStyleMaskTitled;
+
+            if (cfg->m_enable_resize)
+                window_config_attrib |= NS::WindowStyleMaskResizable;
+
             m_window = NS::Window::alloc()->init(
                 frame,
-                NS::WindowStyleMaskClosable | NS::WindowStyleMaskTitled,
+                window_config_attrib,
                 NS::BackingStoreBuffered,
                 false);
 
