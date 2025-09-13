@@ -56,9 +56,6 @@ void jegui_shutdown_vk130(bool reboot);
 #endif
 
 #ifdef JE_ENABLE_METAL_GAPI
-#include <imgui_impl_metal.h>
-
-
 void jegui_init_metal(
     jegl_context *ctx,
     jegui_user_image_loader_t get_img_res,

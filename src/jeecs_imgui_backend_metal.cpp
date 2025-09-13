@@ -3,6 +3,7 @@
 
 #ifdef JE_ENABLE_METAL_GAPI
 #include "jeecs_imgui_backend_api.hpp"
+#include "jeecs_graphic_api_interface_cocoa.hpp"
 
 #include <imgui.h>
 
