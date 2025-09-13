@@ -35,7 +35,7 @@ namespace jeecs::graphic::api::metal
 
             MTL::RenderPassDescriptor* m_main_render_pass_descriptor;
 
-            MTL::RenderPassDescriptor* m_current_target_framebuffer_may_null;
+            metal_framebuffer* m_current_target_framebuffer_may_null;
 
             MTL::CommandBuffer* m_currnet_command_buffer;
             MTL::RenderCommandEncoder* m_render_command_encoder;
@@ -268,8 +268,10 @@ namespace jeecs::graphic::api::metal
             {
                 auto fnd = linked_state->m_pipeline_states.find(this);
                 if (fnd != linked_state->m_pipeline_states.end())
+                {
                     fnd->second->release();
-                linked_state->m_pipeline_states.erase(fnd);
+                    linked_state->m_pipeline_states.erase(fnd);
+                }
             }
         }
     };
@@ -279,7 +281,7 @@ namespace jeecs::graphic::api::metal
         for (auto& [fb, state] : m_pipeline_states)
         {
             fb->m_linked_shaders.erase(this);
-            m_pipeline_state->release();
+            state->release();
         }
 
         for (auto& sampler : m_samplers)
@@ -871,7 +873,7 @@ public func frag(vf: v2f)
                     break;
                 case jegl_texture::format::RGBA:
                     texture_format =
-                        float16 ? MTL::PixelFormatRGBA16Float : MTL::PixelFormatRGBA8Unorm);
+                        float16 ? MTL::PixelFormatRGBA16Float : MTL::PixelFormatRGBA8Unorm;
                     break;
                 default:
                     jeecs::debug::logfatal("Unsupported texture color format.");
@@ -1125,7 +1127,7 @@ public func frag(vf: v2f)
                 abort();
             }
             auto result = shader_shared_state.m_pipeline_states.insert(
-                { current_target_framebuffer, pso });
+                std::make_pair(current_target_framebuffer, pso));
             (void)result;
             assert(result.second);
 
@@ -1327,7 +1329,7 @@ public func frag(vf: v2f)
                 target_framebuffer_desc);
 
         metal_context->m_render_states.m_current_target_framebuffer_may_null =
-            target_framebuffer_desc;
+            target_framebuf_may_null;
     }
 
     void set_uniform(
