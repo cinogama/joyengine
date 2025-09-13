@@ -88,23 +88,24 @@ namespace jeecs::graphic::api::metal
                 uint32_t m_sampler_id;
             };
             std::vector<sampler_structs> m_samplers;
-            MTL::RenderPipelineState* m_pipeline_state;
 
-            shared_state(jegl_metal_context* ctx)
+            MTL::Function* m_vertex_function;
+            MTL::Function* m_fragment_function;
+            MTL::VertexDescriptor* m_vertex_descriptor;
+
+            std::unordered_map<metal_framebuffer*, MTL::RenderPipelineState*>
+                m_pipeline_states;
+
+            shared_state(
+                jegl_metal_context* ctx,
+                MTL::Function* vert,
+                MTL::Function* frag,
+                MTL::VertexDescriptor* vdesc)
                 : m_context(ctx)
             {
             }
-            ~shared_state()
-            {
-                m_pipeline_state->release();
-                for (auto& sampler : m_samplers)
-                    sampler.m_sampler->release();
-            }
+            ~shared_state();
         };
-
-        MTL::Function* m_vertex_function;
-        MTL::Function* m_fragment_function;
-        MTL::VertexDescriptor* m_vertex_descriptor;
 
         basic::resource<shared_state> m_shared_state;
 
@@ -117,18 +118,10 @@ namespace jeecs::graphic::api::metal
             MTL::Function* vert,
             MTL::Function* frag,
             MTL::VertexDescriptor* vdesc)
-            : m_vertex_function(vert)
-            , m_fragment_function(frag)
-            , m_vertex_descriptor(vdesc)
-            , m_shared_state(new shared_state(ctx))
+            :  m_shared_state(new shared_state(ctx, vert, frag, vdesc))
         {
         }
-        ~metal_resource_shader_blob()
-        {
-            m_vertex_function->release();
-            m_fragment_function->release();
-            m_vertex_descriptor->release();
-        }
+        ~metal_resource_shader_blob() = default;
 
         uint32_t get_built_in_location(const std::string& name) const
         {
@@ -240,9 +233,11 @@ namespace jeecs::graphic::api::metal
         JECS_DISABLE_MOVE_AND_COPY(metal_texture);
 
         MTL::Texture* m_texture;
+        MTL::PixelFormat m_pixel_format;
 
-        metal_texture(MTL::Texture* tex)
+        metal_texture(MTL::Texture* tex, MTL::PixelFormat fmt)
             : m_texture(tex)
+            , m_pixel_format(fmt)
         {
         }
         ~metal_texture()
@@ -255,8 +250,12 @@ namespace jeecs::graphic::api::metal
         JECS_DISABLE_MOVE_AND_COPY(metal_framebuffer);
 
         MTL::RenderPassDescriptor* m_render_pass_descriptor;
-        size_t m_color_attachment_count;
+
+        std::vector<MTL::PixelFormat> m_color_attachment_formats;
         bool m_has_depth_attachment;
+
+        std::unordered_set<metal_resource_shader_blob::shared_state*>
+            m_linked_shaders;
 
         metal_framebuffer()
         {
@@ -265,8 +264,31 @@ namespace jeecs::graphic::api::metal
         ~metal_framebuffer()
         {
             m_render_pass_descriptor->release();
+            for (auto* linked_state : m_linked_shaders)
+            {
+                auto fnd = linked_state->m_pipeline_states.find(this);
+                if (fnd != linked_state->m_pipeline_states.end())
+                    fnd->second->release();
+                linked_state->m_pipeline_states.erase(fnd);
+            }
         }
     };
+
+    metal_resource_shader_blob::shared_state::~shared_state()
+    {
+        for (auto& [fb, state] : m_pipeline_states)
+        {
+            fb->m_linked_shaders.erase(this);
+            m_pipeline_state->release();
+        }
+
+        for (auto& sampler : m_samplers)
+            sampler.m_sampler->release();
+
+        m_vertex_function->release();
+        m_fragment_function->release();
+        m_vertex_descriptor->release();
+    }
 
     jegl_context::graphic_impl_context_t
         startup(jegl_context* glthread, const jegl_interface_config* cfg, bool reboot)
@@ -618,7 +640,7 @@ public func frag(vf: v2f)
                     jeecs::basic::allign_size(last_elem_end_place, max_allign);
 
                 // TMP: Create pso
-                MTL::RenderPipelineDescriptor* pDesc =
+               /* MTL::RenderPipelineDescriptor* pDesc =
                     MTL::RenderPipelineDescriptor::alloc()->init();
 
                 pDesc->setVertexFunction(shader_blob->m_vertex_function);
@@ -627,6 +649,8 @@ public func frag(vf: v2f)
 
                 pDesc->colorAttachments()->object(0)->setPixelFormat(
                     MTL::PixelFormat::PixelFormatBGRA8Unorm);
+                pDesc->setDepthAttachmentPixelFormat(
+                    MTL::PixelFormatDepth24Unorm_Stencil8);
 
                 NS::Error* pError = nullptr;
                 auto* pso = metal_context->m_metal_device->newRenderPipelineState(pDesc, &pError);
@@ -639,7 +663,7 @@ public func frag(vf: v2f)
                     abort();
                 }
                 shader_blob->m_shared_state->m_pipeline_state = pso;
-                pDesc->release();
+                pDesc->release();*/
 
                 // Create samplers
                 for (size_t i = 0; i < raw_shader->m_sampler_count; ++i)
@@ -830,21 +854,23 @@ public func frag(vf: v2f)
                 texture_desc->setStorageMode(MTL::StorageModeManaged);
             }
 
+            MTL::PixelFormat texture_format;
+
             if (is_depth)
             {
                 assert(is_framebuf);
-                texture_desc->setPixelFormat(MTL::PixelFormatDepth24Unorm_Stencil8);
+                texture_format = MTL::PixelFormatDepth24Unorm_Stencil8;
             }
             else
             {
                 switch (raw_texture_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
                 {
                 case jegl_texture::format::MONO:
-                    texture_desc->setPixelFormat(
-                        float16 ? MTL::PixelFormatR16Float : MTL::PixelFormatR8Unorm);
+                    texture_format =
+                        float16 ? MTL::PixelFormatR16Float : MTL::PixelFormatR8Unorm;
                     break;
                 case jegl_texture::format::RGBA:
-                    texture_desc->setPixelFormat(
+                    texture_format =
                         float16 ? MTL::PixelFormatRGBA16Float : MTL::PixelFormatRGBA8Unorm);
                     break;
                 default:
@@ -853,6 +879,8 @@ public func frag(vf: v2f)
                     break;
                 }
             }
+
+            texture_desc->setPixelFormat(texture_format);
 
             MTL::Texture* texture_instance =
                 metal_context->m_metal_device->newTexture(texture_desc);
@@ -877,7 +905,7 @@ public func frag(vf: v2f)
                     * (float16 ? 2 : 1)
                     * (raw_texture_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK));
             }
-            res->m_handle.m_ptr = new metal_texture(texture_instance);
+            res->m_handle.m_ptr = new metal_texture(texture_instance, texture_format);
             texture_desc->release();
 
             break;
@@ -923,6 +951,10 @@ public func frag(vf: v2f)
 
                     auto* texture_instance = reinterpret_cast<metal_texture*>(
                         attachment_resource->m_handle.m_ptr);
+                    
+                    framebuf->m_color_attachment_formats.push_back(
+                        texture_instance->m_pixel_format);
+
                     color_attachment_desc->setTexture(texture_instance->m_texture);
                     color_attachment_desc->setLoadAction(MTL::LoadActionDontCare);
                     color_attachment_desc->setStoreAction(MTL::StoreActionStore);
@@ -933,7 +965,6 @@ public func frag(vf: v2f)
                     ++color_attachment_count;
                 }
             }
-            framebuf->m_color_attachment_count = color_attachment_count;
             res->m_handle.m_ptr = framebuf;
 
             break;
@@ -1043,10 +1074,66 @@ public func frag(vf: v2f)
         if (shader_instance == nullptr)
             return false;
 
-        metal_context->m_render_states.m_render_command_encoder->setRenderPipelineState(
-            shader_instance->m_shared_state->m_pipeline_state);
+        auto& shader_shared_state = *shader_instance->m_shared_state;
+        auto* current_target_framebuffer =
+            metal_context->m_render_states.m_current_target_framebuffer_may_null;
 
-        for (const auto& sampler_struct : shader_instance->m_shared_state->m_samplers)
+        MTL::RenderPipelineState* pso;
+
+        auto fnd = shader_shared_state.m_pipeline_states.find(
+            current_target_framebuffer);
+
+        if (fnd != shader_shared_state.m_pipeline_states.end())
+            pso = fnd->second;
+        else
+        {
+            MTL::RenderPipelineDescriptor* pDesc =
+                MTL::RenderPipelineDescriptor::alloc()->init();
+
+            pDesc->setVertexFunction(shader_shared_state.m_vertex_function);
+            pDesc->setFragmentFunction(shader_shared_state.m_fragment_function);
+            pDesc->setVertexDescriptor(shader_shared_state.m_vertex_descriptor);
+
+            if (current_target_framebuffer != nullptr)
+            {
+                for (size_t i = 0; i < current_target_framebuffer->m_color_attachment_formats.size(); ++i)
+                {
+                    pDesc->colorAttachments()->object(i)->setPixelFormat(
+                        current_target_framebuffer->m_color_attachment_formats[i]);
+                }
+                if (current_target_framebuffer->m_has_depth_attachment)
+                    pDesc->setDepthAttachmentPixelFormat(
+                        MTL::PixelFormatDepth24Unorm_Stencil8);
+            }
+            else
+            {
+                // Create pso for main framebuffer
+                pDesc->colorAttachments()->object(0)->setPixelFormat(
+                    MTL::PixelFormat::PixelFormatBGRA8Unorm);
+                pDesc->setDepthAttachmentPixelFormat(
+                    MTL::PixelFormatDepth24Unorm_Stencil8);
+            }
+
+            NS::Error* pError = nullptr;
+            pso = metal_context->m_metal_device->newRenderPipelineState(pDesc, &pError);
+            if (pso == nullptr)
+            {
+                jeecs::debug::logfatal(
+                    "Fail to create pipeline state object for shader '%s':\n%s",
+                    res->m_path,
+                    pError->localizedDescription()->utf8String());
+                abort();
+            }
+            auto result = shader_shared_state.m_pipeline_states.insert(
+                { current_target_framebuffer, pso });
+            (void)result;
+            assert(result.second);
+
+            pDesc->release();
+        }
+
+        metal_context->m_render_states.m_render_command_encoder->setRenderPipelineState(pso);
+        for (const auto& sampler_struct : shader_shared_state.m_samplers)
         {
             metal_context->m_render_states.m_render_command_encoder->setFragmentSamplerState(
                 sampler_struct.m_sampler,
@@ -1175,12 +1262,13 @@ public func frag(vf: v2f)
         }
         else
         {
-            for (size_t i = 0; i < fb_maynull->m_color_attachment_count; ++i)
+            for (size_t i = fb_maynull->m_color_attachment_formats.size(); i > 0; --i)
             {
                 auto* color_attachment_desc = fb_maynull
                     ->m_render_pass_descriptor
                     ->colorAttachments()
-                    ->object(i);
+                    ->object(i - 1);
+
                 if (clear_color_rgba != nullptr)
                 {
                     auto& clear_color = *clear_color_rgba;
