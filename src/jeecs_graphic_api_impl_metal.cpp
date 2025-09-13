@@ -78,6 +78,9 @@ namespace jeecs::graphic::api::metal
             JECS_DISABLE_MOVE_AND_COPY(shared_state);
 
             jegl_metal_context* m_context;
+            MTL::Function* m_vertex_function;
+            MTL::Function* m_fragment_function;
+            MTL::VertexDescriptor* m_vertex_descriptor;
 
             // TODO: Metal 的 pipeline state 和 vulkan 的 pipeline 类似，需要根据目标
             //  缓冲区的格式等信息创建不同的 pipeline state。
@@ -88,11 +91,6 @@ namespace jeecs::graphic::api::metal
                 uint32_t m_sampler_id;
             };
             std::vector<sampler_structs> m_samplers;
-
-            MTL::Function* m_vertex_function;
-            MTL::Function* m_fragment_function;
-            MTL::VertexDescriptor* m_vertex_descriptor;
-
             std::unordered_map<metal_framebuffer*, MTL::RenderPipelineState*>
                 m_pipeline_states;
 
@@ -102,6 +100,10 @@ namespace jeecs::graphic::api::metal
                 MTL::Function* frag,
                 MTL::VertexDescriptor* vdesc)
                 : m_context(ctx)
+                , m_vertex_function(vert)
+                , m_fragment_function(frag)
+                , m_vertex_descriptor(vdesc)
+
             {
             }
             ~shared_state();
