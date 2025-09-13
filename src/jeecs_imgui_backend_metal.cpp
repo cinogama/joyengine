@@ -12,6 +12,11 @@ void jegui_init_metal(
     jegui_user_sampler_loader_t apply_shader_sampler)
 {
     jegui_init_basic(ctx, get_img_res, apply_shader_sampler);
+
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_MACOS
+    
+#endif
+
     ImGuiIO& io = ImGui::GetIO();
 
     unsigned char* tex_pixels = nullptr;

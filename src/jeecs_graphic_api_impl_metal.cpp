@@ -1426,6 +1426,7 @@ public:
             NS::Application* shared_application = NS::Application::sharedApplication();
             shared_application->setDelegate(&del);
             shared_application->run();
+
             auto_release_pool->release();
         }
     }

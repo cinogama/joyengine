@@ -139,6 +139,17 @@ endif()
 
 # Metal
 if (JE4_ENABLE_METAL_GAPI AND APPLE)
+    target_compile_definitions(joyengine_core_configs INTERFACE 
+        -DJE_ENABLE_METAL_GAPI
+        -DIMGUI_IMPL_METAL_CPP
+        -DIMGUI_IMPL_METAL_CPP_EXTENSIONS)
+
+    list(APPEND imgui_srcs
+        "../3rd/imgui/backends/imgui_impl_metal.mm"
+        "../3rd/imgui/backends/imgui_impl_metal.h"
+        "../3rd/imgui/backends/imgui_impl_osx.mm"
+        "../3rd/imgui/backends/imgui_impl_osx.h")
+
     find_library(METAL_FRAMEWORK Metal
         PATHS "../3rd/metal-cpp"
         REQUIRED)
@@ -206,11 +217,6 @@ if (JE4_ENABLE_VULKAN130_GAPI)
         target_compile_definitions(joyengine_core_configs INTERFACE
             -DIMGUI_IMPL_VULKAN_NO_PROTOTYPES)
     endif()
-endif()
-
-# Metal
-if (JE4_ENABLE_METAL_GAPI AND APPLE)
-    target_compile_definitions(joyengine_core_configs INTERFACE -DJE_ENABLE_METAL_GAPI)
 endif()
 
 # OpenGL3.3 / OpenGLES3.0 / Vulkan needed:

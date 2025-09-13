@@ -29,7 +29,6 @@ namespace jeecs::graphic
 
         GLFWwindow* _m_windows;
         bool _m_window_resized;
-        bool _m_window_state_changing;
         bool _m_window_state_paused;
         mouse_lock_state_t _m_mouse_locked;
 
@@ -57,8 +56,6 @@ namespace jeecs::graphic
                 context->_m_window_state_paused = true;
             else
                 context->_m_window_state_paused = false;
-            
-            context->_m_window_state_changing = true;
             context->_m_window_resized = true;
         }
         static void glfw_callback_windows_pos_changed(GLFWwindow* fw, int x, int y)
@@ -66,8 +63,6 @@ namespace jeecs::graphic
             glfw* context = reinterpret_cast<glfw*>(glfwGetWindowUserPointer(fw));
 
             je_io_update_window_pos(x, y);
-
-            context->_m_window_state_changing = true;
         }
         static void glfw_callback_mouse_pos_changed(GLFWwindow* fw, double x, double y)
         {
@@ -354,7 +349,6 @@ namespace jeecs::graphic
         glfw(interface_type type)
             : _m_windows(nullptr)
             , _m_window_resized(true)
-            , _m_window_state_changing(false)
             , _m_window_state_paused(false)
             , _m_mouse_locked(mouse_lock_state_t::NO_SPECIFY)
         {
@@ -589,8 +583,6 @@ namespace jeecs::graphic
             if (je_io_fetch_update_window_title(&title))
                 glfwSetWindowTitle(_m_windows, title);
 
-            _m_window_state_changing = false;
-
             glfwPollEvents();
 
 #if JE4_CURRENT_PLATFORM != JE4_PLATFORM_WEBGL
@@ -603,7 +595,7 @@ namespace jeecs::graphic
                 return update_result::CLOSE;
             }
 
-            if (_m_window_state_changing || _m_window_state_paused)
+            if (_m_window_state_paused)
                 return update_result::PAUSE;
 
             if (_m_window_resized)
