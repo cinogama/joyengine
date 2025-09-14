@@ -12,6 +12,7 @@
 #include <Foundation/Foundation.hpp>
 #include <Metal/Metal.hpp>
 #include <QuartzCore/QuartzCore.hpp>
+#include <AppKit/AppKit.hpp>
 
 // #include "jeecs_graphic_api_interface_cocoa.hpp"
 #include "jeecs_graphic_api_interface_glfw.hpp"
@@ -308,7 +309,7 @@ namespace jeecs::graphic::api::metal
             },
             [](jegl_context*, jegl_resource*) {});*/
 
-        jegl_metal_context* context = new jegl_metal_context(cfg);
+        jegl_metal_context* context = new jegl_metal_context(cfg, reboot);
 
         context->m_interface->create_interface(cfg);
 
