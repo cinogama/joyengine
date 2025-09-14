@@ -304,14 +304,6 @@ namespace jeecs::graphic::api::metal
         if (!reboot)
             jeecs::debug::log("Graphic thread (Metal) start!");
 
-        /*jegui_init_metal(
-            glthread,
-            [](jegl_context*, jegl_resource*)
-            {
-                return (uint64_t)nullptr;
-            },
-            [](jegl_context*, jegl_resource*) {});*/
-
         jegl_metal_context* context = new jegl_metal_context(cfg, reboot);
 
         context->m_interface->create_interface(cfg);
@@ -327,6 +319,23 @@ namespace jeecs::graphic::api::metal
         metal_content_view->setWantsLayer(true);
         metal_content_view->setOpaque(true);
 
+        jegui_init_metal(
+            glthread,
+            [](jegl_context*, jegl_resource* res)
+            {
+                metal_texture* tex =
+                    reinterpret_cast<metal_texture*>(res->m_handle.m_ptr);
+
+                return (uint64_t)tex->m_texture;
+            },
+            [](jegl_context*, jegl_resource*)
+            {
+                // TODO;
+            },
+            glfw_window,
+            context->m_metal_device);
+
+
         return context;
     }
     void pre_shutdown(jegl_context*, jegl_context::graphic_impl_context_t, bool)
@@ -339,7 +348,7 @@ namespace jeecs::graphic::api::metal
         if (!reboot)
             jeecs::debug::log("Graphic thread (Metal) shutdown!");
 
-        //jegui_shutdown_metal(reboot);
+        jegui_shutdown_metal(reboot);
         metal_context->m_interface->shutdown(reboot);
         delete metal_context;
     }
@@ -396,7 +405,6 @@ namespace jeecs::graphic::api::metal
         jegl_metal_context* metal_context =
             reinterpret_cast<jegl_metal_context*>(ctx);
 
-        // jegui_update_metal();
         const float pdata[] = {
             -0.5f, -0.5f, 0.0f,  0.0f, 0.0f,
              0.5f, -0.5f, 0.0f,  1.0f, 0.0f,
@@ -477,7 +485,25 @@ public func frag(vf: v2f)
                 jegl_bind_texture(tx->resource(), 0);
                 jegl_draw_vertex(vt->resource());
 
-                // Frame end.
+                // 渲染工作结束，检查，结束当前编码器，提交命令缓冲区，然后切换到默认帧缓冲
+                if (metal_context->m_render_states.m_current_target_framebuffer_may_null != nullptr)
+                {
+                    void bind_framebuffer(
+                        jegl_context::graphic_impl_context_t ctx,
+                        jegl_resource * fb,
+                        const size_t(*viewport_xywh)[4],
+                        const float(*clear_color_rgba)[4],
+                        const float* clear_depth);
+
+                    bind_framebuffer(
+                        ctx, nullptr, nullptr, nullptr, nullptr);
+                }
+
+                jegui_update_metal(
+                    metal_context->m_render_states.m_main_render_pass_descriptor,
+                    metal_context->m_render_states.m_currnet_command_buffer,
+                    metal_context->m_render_states.m_current_command_encoder);
+
                 metal_context->m_render_states.m_current_command_encoder->endEncoding();
                 metal_context->m_render_states.m_currnet_command_buffer->presentDrawable(
                     metal_context->m_render_states.m_main_this_frame_drawable);
