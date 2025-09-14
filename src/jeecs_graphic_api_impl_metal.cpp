@@ -337,7 +337,7 @@ namespace jeecs::graphic::api::metal
             jeecs::debug::log("Graphic thread (Metal) shutdown!");
 
         //jegui_shutdown_metal(reboot);
-        context->m_interface->shutdown(reboot);
+        metal_context->m_interface->shutdown(reboot);
         delete metal_context;
     }
 
