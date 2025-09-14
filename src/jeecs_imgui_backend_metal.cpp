@@ -3,7 +3,6 @@
 
 #ifdef JE_ENABLE_METAL_GAPI
 #include "jeecs_imgui_backend_api.hpp"
-#include "jeecs_graphic_api_interface_cocoa.hpp"
 
 #include <imgui.h>
 
@@ -14,7 +13,7 @@ void jegui_init_metal(
     MTL::Device* device)
 {
     jegui_init_basic(ctx, get_img_res, apply_shader_sampler);
-    ImGui_ImplMetal_Init(device);
+    // ImGui_ImplMetal_Init(device);
 }
 
 void jegui_update_metal()
