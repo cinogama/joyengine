@@ -73,7 +73,7 @@ void jegui_init_metal(
 void jegui_update_metal(
     MTL::RenderPassDescriptor* rend_pass_desc,
     MTL::CommandBuffer* command_buffer,
-    MTL::RenderCommandEncoder* command_encoder)
+    MTL::RenderCommandEncoder* command_encoder);
 void jegui_shutdown_metal(bool reboot);
 
 #endif
