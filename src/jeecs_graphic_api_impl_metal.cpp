@@ -1087,6 +1087,11 @@ namespace jeecs::graphic::api::metal
             delete reinterpret_cast<metal_uniform_buffer*>(res->m_handle.m_ptr);
             break;
         }
+        case jegl_resource::type::FRAMEBUF:
+        {
+            delete reinterpret_cast<metal_framebuffer*>(res->m_handle.m_ptr);
+            break;
+        }
         default:
             jeecs::debug::logfatal("Unsupported resource type to close in Metal backend.");
             break;
