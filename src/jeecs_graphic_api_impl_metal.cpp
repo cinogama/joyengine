@@ -1185,7 +1185,7 @@ namespace jeecs::graphic::api::metal
             if (current_target_framebuffer != nullptr)
             {
                 auto result = current_target_framebuffer->m_linked_shaders.insert(
-                    shader_instance);
+                    &shader_shared_state);
                 (void)result;
                 assert(result.second);
             }
