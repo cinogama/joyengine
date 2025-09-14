@@ -5,6 +5,8 @@
 #include "jeecs_imgui_backend_api.hpp"
 
 #include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_metal.h>
 
 void jegui_init_metal(
     jegl_context* ctx,

@@ -146,9 +146,7 @@ if (JE4_ENABLE_METAL_GAPI AND APPLE)
 
     list(APPEND imgui_srcs
         "../3rd/imgui/backends/imgui_impl_metal.mm"
-        "../3rd/imgui/backends/imgui_impl_metal.h"
-        "../3rd/imgui/backends/imgui_impl_osx.mm"
-        "../3rd/imgui/backends/imgui_impl_osx.h")
+        "../3rd/imgui/backends/imgui_impl_metal.h")
 
     find_library(METAL_FRAMEWORK Metal
         PATHS "../3rd/metal-cpp"
@@ -224,7 +222,8 @@ if (JE4_ENABLE_OPENGL330_GAPI OR
     JE4_ENABLE_OPENGLES300_GAPI OR 
     JE4_ENABLE_VULKAN130_GAPI OR
     JE4_ENABLE_WEBGL20_GAPI OR
-    JE4_ENABLE_DX11_GAPI)
+    JE4_ENABLE_DX11_GAPI OR
+    (JE4_ENABLE_METAL_GAPI AND APPLE))
 
     if (ANDROID)
         list(APPEND imgui_srcs
