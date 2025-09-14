@@ -14,7 +14,7 @@
 #include <QuartzCore/QuartzCore.hpp>
 
 // #include "jeecs_graphic_api_interface_cocoa.hpp"
-#incldue "jeecs_graphic_api_interface_glfw.hpp"
+#include "jeecs_graphic_api_interface_glfw.hpp"
 
 namespace jeecs::graphic::api::metal
 {
