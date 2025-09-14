@@ -4376,7 +4376,7 @@ jegl_cocoa_metal_application_run [基本接口]
         无法使用 game_engine_context 驱动主循环，需要调用此接口作为替代
     * 仅在 MacOS/IOS metal 下有效
 */
-JE_API void jegl_cocoa_metal_application_run(int argc, char** argv);
+// JE_API void jegl_cocoa_metal_application_run(int argc, char** argv);
 
 #endif // defined(JE4_PLATFORM_MACOS)
 

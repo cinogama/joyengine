@@ -6,11 +6,15 @@
 #include "jeecs_imgui_backend_api.hpp"
 
 #define NS_PRIVATE_IMPLEMENTATION
-#define MTL_PRIVATE_IMPLEMENTATION
-#define MTK_PRIVATE_IMPLEMENTATION
 #define CA_PRIVATE_IMPLEMENTATION
+#define MTL_PRIVATE_IMPLEMENTATION
 
-#include "jeecs_graphic_api_interface_cocoa.hpp"
+#include <Foundation/Foundation.hpp>
+#include <Metal/Metal.hpp>
+#include <QuartzCore/QuartzCore.hpp>
+
+// #include "jeecs_graphic_api_interface_cocoa.hpp"
+#incldue "jeecs_graphic_api_interface_glfw.hpp"
 
 namespace jeecs::graphic::api::metal
 {
@@ -21,20 +25,20 @@ namespace jeecs::graphic::api::metal
     {
         JECS_DISABLE_MOVE_AND_COPY(jegl_metal_context);
 
+        graphic::glfw* m_interface;
+
         MTL::Device* m_metal_device;
+        CA::MetalLayer* m_metal_layer;
         MTL::CommandQueue* m_command_queue;
-        jeecs::graphic::metal::window_view_layout*
-            m_window_and_view_layout;
 
         NS::AutoreleasePool* m_frame_auto_release;
 
         /* Render context */
         struct render_runtime_states
         {
-            metal_shader* m_current_target_shader;
-
             MTL::RenderPassDescriptor* m_main_render_pass_descriptor;
 
+            metal_shader* m_current_target_shader;
             metal_framebuffer* m_current_target_framebuffer_may_null;
 
             MTL::CommandBuffer* m_currnet_command_buffer;
@@ -42,22 +46,24 @@ namespace jeecs::graphic::api::metal
         };
         render_runtime_states m_render_states;
 
-        jegl_metal_context(const jegl_interface_config* cfg)
+        jegl_metal_context(const jegl_interface_config* cfg, bool reboot)
         {
             m_metal_device =
                 MTL::CreateSystemDefaultDevice();
             m_command_queue = m_metal_device->newCommandQueue();
 
-            m_window_and_view_layout =
-                new jeecs::graphic::metal::window_view_layout(
-                    cfg, m_metal_device);
+            m_interface = new glfw(reboot ? glfw::HOLD : glfw::METAL);
+
+            m_metal_layer = CA::MetalLayer::layer();
+            m_metal_layer->setDevice(m_metal_device);
 
             m_frame_auto_release = nullptr;
         }
         ~jegl_metal_context()
         {
             // Must release window before device.
-            delete m_window_and_view_layout;
+            delete m_interface;
+
             m_command_queue->release();
             m_metal_device->release();
 
@@ -304,9 +310,17 @@ namespace jeecs::graphic::api::metal
 
         jegl_metal_context* context = new jegl_metal_context(cfg);
 
-        // Pass the window and view to `applicationDidFinishLaunching`
-        const_cast<jegl_interface_config*>(cfg)->m_userdata =
-            context->m_window_and_view_layout;
+        context->m_interface->create_interface(cfg);
+
+        NS::Window* metal_window =
+            reinterpret_cast<NS::Window*>(
+                glfwGetCocoaWindow(context->m_interface->interface_handle()));
+
+        NS::View* metal_content_view = metal_window->contentView();
+
+        metal_content_view->setLayer(context->m_metal_layer);
+        metal_content_view->setWantsLayer(true);
+        metal_content_view->setOpaque(true);
 
         return context;
     }
@@ -321,7 +335,7 @@ namespace jeecs::graphic::api::metal
             jeecs::debug::log("Graphic thread (Metal) shutdown!");
 
         //jegui_shutdown_metal(reboot);
-
+        context->m_interface->shutdown(reboot);
         delete metal_context;
     }
 
@@ -333,9 +347,36 @@ namespace jeecs::graphic::api::metal
         // 每帧开始之前，创建新的自动释放池
         metal_context->m_frame_auto_release = NS::AutoreleasePool::alloc()->init();
 
+        // Reset render target states.
         metal_context->m_render_states.m_current_target_framebuffer_may_null = nullptr;
+        metal_context->m_render_states.m_current_target_shader = nullptr;
+
+        switch (metal_context->m_interface->update())
+        {
+        case basic_interface::update_result::CLOSE:
+            if (jegui_shutdown_callback())
+                return jegl_update_action::JEGL_UPDATE_STOP;
+            goto _label_jegl_metal_normal_job;
+        case basic_interface::update_result::PAUSE:
+            return jegl_update_action::JEGL_UPDATE_SKIP;
+        case basic_interface::update_result::RESIZE:
+            // TODO;
+            [[fallthrough]];
+        case basic_interface::update_result::NORMAL:
+        _label_jegl_metal_normal_job:
+            break;
+        }
+
+        auto surface = metal_context->m_metal_layer->nextDrawable();
+
+        // Get main pass descriptor.
         metal_context->m_render_states.m_main_render_pass_descriptor =
-            metal_context->m_window_and_view_layout->m_metal_view->currentRenderPassDescriptor();
+            MTL::RenderPassDescriptor::renderPassDescriptor();
+        auto passColorAttachment0 = pass->colorAttachments()->object(0);
+        passColorAttachment0->setClearColor(color);
+        passColorAttachment0->setLoadAction(MTL::LoadActionClear);
+        passColorAttachment0->setStoreAction(MTL::StoreActionStore);
+        passColorAttachment0->setTexture(surface->texture());
 
         metal_context->m_render_states.m_currnet_command_buffer =
             metal_context->m_command_queue->commandBuffer();
@@ -1396,48 +1437,48 @@ void jegl_using_metal_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->set_uniform = set_uniform;
 }
 
-class je_macos_context : public jeecs::game_engine_context
-{
-    JECS_DISABLE_MOVE_AND_COPY(je_macos_context);
-
-    jeecs::graphic::graphic_syncer_host* m_graphic_host;
-
-public:
-    je_macos_context(int argc, char** argv)
-        : jeecs::game_engine_context(argc, argv)
-    {
-        m_graphic_host = prepare_graphic(false /* debug now */);
-    }
-    ~je_macos_context()
-    {
-    }
-    void macos_loop()
-    {
-        for (;;)
-        {
-            if (!m_graphic_host->check_context_ready_block())
-                break; // If the entry script ended, exit the loop.
-
-            // Graphic context ready, prepare for macos window.
-            NS::AutoreleasePool* auto_release_pool =
-                NS::AutoreleasePool::alloc()->init();
-
-            jeecs::graphic::metal::application_delegate del(m_graphic_host);
-
-            NS::Application* shared_application = NS::Application::sharedApplication();
-            shared_application->setDelegate(&del);
-            shared_application->run();
-
-            auto_release_pool->release();
-        }
-    }
-};
-
-void jegl_cocoa_metal_application_run(int argc, char** argv)
-{
-    je_macos_context context(argc, argv);
-    context.macos_loop();
-}
+//class je_macos_context : public jeecs::game_engine_context
+//{
+//    JECS_DISABLE_MOVE_AND_COPY(je_macos_context);
+//
+//    jeecs::graphic::graphic_syncer_host* m_graphic_host;
+//
+//public:
+//    je_macos_context(int argc, char** argv)
+//        : jeecs::game_engine_context(argc, argv)
+//    {
+//        m_graphic_host = prepare_graphic(false /* debug now */);
+//    }
+//    ~je_macos_context()
+//    {
+//    }
+//    void macos_loop()
+//    {
+//        for (;;)
+//        {
+//            if (!m_graphic_host->check_context_ready_block())
+//                break; // If the entry script ended, exit the loop.
+//
+//            // Graphic context ready, prepare for macos window.
+//            NS::AutoreleasePool* auto_release_pool =
+//                NS::AutoreleasePool::alloc()->init();
+//
+//            jeecs::graphic::metal::application_delegate del(m_graphic_host);
+//
+//            NS::Application* shared_application = NS::Application::sharedApplication();
+//            shared_application->setDelegate(&del);
+//            shared_application->run();
+//
+//            auto_release_pool->release();
+//        }
+//    }
+//};
+//
+//void jegl_cocoa_metal_application_run(int argc, char** argv)
+//{
+//    je_macos_context context(argc, argv);
+//    context.macos_loop();
+//}
 
 #else
 void jegl_using_metal_apis(jegl_graphic_api* write_to_apis)

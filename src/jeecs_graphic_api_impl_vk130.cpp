@@ -1623,7 +1623,7 @@ namespace jeecs::graphic::api::vk130
             glfwInitVulkanLoader(vkGetInstanceProcAddr);
 
             _vk_jegl_interface = new glfw(reboot ? glfw::HOLD : glfw::VULKAN130);
-            _vk_jegl_interface->create_interface(ctx, config);
+            _vk_jegl_interface->create_interface(config);
 
             _vk_jegl_context = ctx;
 
@@ -1732,59 +1732,6 @@ namespace jeecs::graphic::api::vk130
             }
 
             // 创建Surface，并且绑定窗口句柄
-#if 0
-#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
-            VkWin32SurfaceCreateInfoKHR surface_create_info = {};
-            surface_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-            surface_create_info.pNext = nullptr;
-            surface_create_info.flags = 0;
-            surface_create_info.hinstance = GetModuleHandle(nullptr);
-            surface_create_info.hwnd = (HWND)_vk_jegl_interface->interface_handle();
-
-            assert(vkCreateWin32SurfaceKHR != nullptr);
-            if (VK_SUCCESS != vkCreateWin32SurfaceKHR(_vk_instance, &surface_create_info, nullptr, &_vk_surface))
-            {
-                jeecs::debug::logfatal("Failed to create vk130 win32 surface.");
-            }
-#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
-            VkAndroidSurfaceCreateInfoKHR surface_create_info = {};
-            surface_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
-            surface_create_info.pNext = nullptr;
-            surface_create_info.flags = 0;
-            surface_create_info.window = (ANativeWindow*)_vk_jegl_interface->interface_handle();
-
-            assert(vkCreateAndroidSurfaceKHR != nullptr);
-            if (VK_SUCCESS != vkCreateAndroidSurfaceKHR(_vk_instance, &surface_create_info, nullptr, &_vk_surface))
-            {
-                jeecs::debug::logfatal("Failed to create vk130 android surface.");
-            }
-
-#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_LINUX
-            VkXlibSurfaceCreateInfoKHR surface_create_info = {};
-            surface_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
-            surface_create_info.pNext = nullptr;
-            surface_create_info.flags = 0;
-            surface_create_info.dpy = (Display*)_vk_jegl_interface->interface_handle();
-            surface_create_info.window = (Window)_vk_jegl_interface->interface_handle();
-
-            assert(vkCreateXlibSurfaceKHR != nullptr);
-            if (VK_SUCCESS != vkCreateXlibSurfaceKHR(_vk_instance, &surface_create_info, nullptr, &_vk_surface))
-            {
-                jeecs::debug::logfatal("Failed to create vk130 xlib surface.");
-            }
-#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_MACOS
-            VkMacOSSurfaceCreateInfoMVK surface_create_info = {};
-            surface_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_MACOS_SURFACE_CREATE_INFO_MVK;
-            surface_create_info.pNext = nullptr;
-            surface_create_info.flags = 0;
-            surface_create_info.pView = (void*)_vk_jegl_interface->interface_handle();
-            assert(vkCreateMacOSSurfaceMVK != nullptr);
-            if (VK_SUCCESS != vkCreateMacOSSurfaceMVK(_vk_instance, &surface_create_info, nullptr, &_vk_surface))
-            {
-                jeecs::debug::logfatal("Failed to create vk130 macos surface.");
-            }
-#endif
-#else
             if (VK_SUCCESS != glfwCreateWindowSurface(
                 _vk_instance, (GLFWwindow*)_vk_jegl_interface->interface_handle(), nullptr, &_vk_surface))
             {
@@ -1794,7 +1741,6 @@ namespace jeecs::graphic::api::vk130
                 jeecs::debug::logfatal("Failed to create vk130 glfw surface: %s(%d).",
                     error_message, eno);
             }
-#endif
             // 获取可接受的设备
 
             uint32_t enum_deveice_count = 0;

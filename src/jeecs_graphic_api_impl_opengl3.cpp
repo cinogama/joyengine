@@ -363,7 +363,7 @@ namespace jeecs::graphic::api::gl3
             jeecs::debug::log("Graphic thread (OpenGL3) start!");
         }
 
-        context->m_interface->create_interface(gthread, config);
+        context->m_interface->create_interface(config);
 
 #if !defined(JE_GL_USE_EGL_INSTEAD_GLFW) && defined(JE_ENABLE_GL330_GAPI)
         if (auto glew_init_result = glewInit(); glew_init_result != GLEW_OK)

@@ -9,8 +9,14 @@
 
 #include <GLFW/glfw3.h>
 
-#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS && defined(JE_ENABLE_DX11_GAPI)
-#define GLFW_EXPOSE_NATIVE_WIN32 1
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
+#   if defined(JE_ENABLE_DX11_GAPI)
+#       define GLFW_EXPOSE_NATIVE_WIN32 1
+#   endif
+#else JE4_CURRENT_PLATFORM == JE4_PLATFORM_MACOS
+#   if defined(JE_ENABLE_METAL_GAPI)
+#       define GLFW_EXPOSE_NATIVE_COCOA 1
+#   endif
 #endif
 #include <GLFW/glfw3native.h>
 
@@ -43,6 +49,7 @@ namespace jeecs::graphic
             OPENGLES300,
             VULKAN130,
             DIRECTX11,
+            METAL,
         };
 
     public:
@@ -401,6 +408,7 @@ namespace jeecs::graphic
                 break;
             case interface_type::VULKAN130:
             case interface_type::DIRECTX11:
+            case interface_type::METAL:
                 glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
                 break;
             default:
@@ -412,7 +420,7 @@ namespace jeecs::graphic
 #endif
         }
 
-        virtual void create_interface(jegl_context* thread, const jegl_interface_config* config) override
+        virtual void create_interface(const jegl_interface_config* config) override
         {
             _m_mouse_locked = mouse_lock_state_t::NO_SPECIFY;
 
@@ -624,17 +632,9 @@ namespace jeecs::graphic
                 } while (0);
             }
         }
-
         virtual void* interface_handle() const override
         {
             return _m_windows;
         }
-
-#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS && defined(JE_ENABLE_DX11_GAPI)
-        HWND win32_handle() const
-        {
-            return glfwGetWin32Window(_m_windows);
-        }
-#endif
     };
 }

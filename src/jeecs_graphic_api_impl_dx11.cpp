@@ -320,9 +320,12 @@ namespace jeecs::graphic::api::dx11
         jegl_dx11_context* context = new jegl_dx11_context;
 
         context->m_interface = new glfw(reboot ? glfw::HOLD : glfw::DIRECTX11);
-        context->m_interface->create_interface(gthread, config);
+        context->m_interface->create_interface(config);
 
-        context->WINDOWS_HANDLE = context->m_interface->win32_handle();
+        context->WINDOWS_HANDLE =
+            glfwGetWin32Window(
+                reinterpret_cast<GLFWwindow*>(
+                    context->m_interface->interface_handle()));
 
         context->m_current_target_shader = nullptr;
         context->m_current_target_framebuffer = nullptr;

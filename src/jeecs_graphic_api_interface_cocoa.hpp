@@ -16,9 +16,6 @@ namespace jeecs::graphic::metal
         int m_rend_rect_width;
         int m_rend_rect_height;
 
-        int m_window_pos_x;
-        int m_window_pos_y;
-
         JECS_DISABLE_MOVE_AND_COPY(window_view_layout);
 
         window_view_layout(
@@ -140,11 +137,6 @@ namespace jeecs::graphic::metal
             CGSize drawableSize = pView->drawableSize();
             int width = (int)drawableSize.width;
             int height = (int)drawableSize.height;
-
-            int pos_x, pos_y;
-            m_window_view_layout_instance->m_window->getFrameOrigin(
-                &m_window_view_layout_instance->m_window_pos_x,
-                &m_window_view_layout_instance->m_window_pos_y);
 
             if (m_window_view_layout_instance->m_rend_rect_width != width
                 || m_window_view_layout_instance->m_rend_rect_height != height)
