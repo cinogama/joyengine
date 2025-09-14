@@ -38,7 +38,7 @@ namespace jeecs::graphic::api::metal
             metal_framebuffer* m_current_target_framebuffer_may_null;
 
             MTL::CommandBuffer* m_currnet_command_buffer;
-            MTL::RenderCommandEncoder* m_render_command_encoder;
+            MTL::RenderCommandEncoder* m_current_command_encoder;
         };
         render_runtime_states m_render_states;
 
@@ -114,7 +114,7 @@ namespace jeecs::graphic::api::metal
             MTL::Function* vert,
             MTL::Function* frag,
             MTL::VertexDescriptor* vdesc)
-            :  m_shared_state(new shared_state(ctx, vert, frag, vdesc))
+            : m_shared_state(new shared_state(ctx, vert, frag, vdesc))
         {
         }
         ~metal_resource_shader_blob() = default;
@@ -333,14 +333,15 @@ namespace jeecs::graphic::api::metal
         // 每帧开始之前，创建新的自动释放池
         metal_context->m_frame_auto_release = NS::AutoreleasePool::alloc()->init();
 
-        metal_context->m_render_states.m_currnet_command_buffer =
-            metal_context->m_command_queue->commandBuffer();
+        metal_context->m_render_states.m_current_target_framebuffer_may_null = nullptr;
         metal_context->m_render_states.m_main_render_pass_descriptor =
             metal_context->m_window_and_view_layout->m_metal_view->currentRenderPassDescriptor();
-        metal_context->m_render_states.m_render_command_encoder =
+
+        metal_context->m_render_states.m_currnet_command_buffer =
+            metal_context->m_command_queue->commandBuffer();
+        metal_context->m_render_states.m_current_command_encoder =
             metal_context->m_render_states.m_currnet_command_buffer->renderCommandEncoder(
                 metal_context->m_render_states.m_main_render_pass_descriptor);
-        metal_context->m_render_states.m_current_target_framebuffer_may_null = nullptr;
 
         return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
@@ -432,7 +433,7 @@ public func frag(vf: v2f)
                 jegl_draw_vertex(vt->resource());
 
                 // Frame end.
-                metal_context->m_render_states.m_render_command_encoder->endEncoding();
+                metal_context->m_render_states.m_current_command_encoder->endEncoding();
                 metal_context->m_render_states.m_currnet_command_buffer->presentDrawable(
                     metal_context->m_window_and_view_layout->m_metal_view->currentDrawable());
                 metal_context->m_render_states.m_currnet_command_buffer->commit();
@@ -923,7 +924,7 @@ public func frag(vf: v2f)
 
                     auto* texture_instance = reinterpret_cast<metal_texture*>(
                         attachment_resource->m_handle.m_ptr);
-                    
+
                     framebuf->m_color_attachment_formats.push_back(
                         texture_instance->m_pixel_format);
 
@@ -1027,9 +1028,9 @@ public func frag(vf: v2f)
 
         auto* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
 
-        metal_context->m_render_states.m_render_command_encoder->setVertexBuffer(
+        metal_context->m_render_states.m_current_command_encoder->setVertexBuffer(
             ubuf->m_uniform_buffer, 0, ubuf->m_binding_place);
-        metal_context->m_render_states.m_render_command_encoder->setFragmentBuffer(
+        metal_context->m_render_states.m_current_command_encoder->setFragmentBuffer(
             ubuf->m_uniform_buffer, 0, ubuf->m_binding_place);
     }
     bool bind_shader(jegl_context::graphic_impl_context_t ctx, jegl_resource* res)
@@ -1104,10 +1105,10 @@ public func frag(vf: v2f)
             pDesc->release();
         }
 
-        metal_context->m_render_states.m_render_command_encoder->setRenderPipelineState(pso);
+        metal_context->m_render_states.m_current_command_encoder->setRenderPipelineState(pso);
         for (const auto& sampler_struct : shader_shared_state.m_samplers)
         {
-            metal_context->m_render_states.m_render_command_encoder->setFragmentSamplerState(
+            metal_context->m_render_states.m_current_command_encoder->setFragmentSamplerState(
                 sampler_struct.m_sampler,
                 sampler_struct.m_sampler_id);
         }
@@ -1120,7 +1121,7 @@ public func frag(vf: v2f)
         auto* texture_instance = reinterpret_cast<metal_texture*>(res->m_handle.m_ptr);
 
         // 由于其他图形库不支持在顶点着色器中使用纹理采样，所以这里不绑定顶点着色器纹理
-        metal_context->m_render_states.m_render_command_encoder->setFragmentTexture(
+        metal_context->m_render_states.m_current_command_encoder->setFragmentTexture(
             texture_instance->m_texture, (uint32_t)pass);
     }
     void draw_vertex_with_shader(jegl_context::graphic_impl_context_t ctx, jegl_resource* res)
@@ -1149,16 +1150,16 @@ public func frag(vf: v2f)
             current_shader->m_uniform_buffer_update_size = 0;
         }
 
-        metal_context->m_render_states.m_render_command_encoder->setVertexBuffer(
+        metal_context->m_render_states.m_current_command_encoder->setVertexBuffer(
             vertex_instance->m_vertex_buffer, 0, vertex_instance->m_vertex_stride, 0);
 
         // Binding shader uniform.
-        metal_context->m_render_states.m_render_command_encoder->setVertexBuffer(
+        metal_context->m_render_states.m_current_command_encoder->setVertexBuffer(
             current_shader->m_uniforms, 0, 0 + 1);
-        metal_context->m_render_states.m_render_command_encoder->setFragmentBuffer(
+        metal_context->m_render_states.m_current_command_encoder->setFragmentBuffer(
             current_shader->m_uniforms, 0, 0 + 1);
 
-        metal_context->m_render_states.m_render_command_encoder->drawIndexedPrimitives(
+        metal_context->m_render_states.m_current_command_encoder->drawIndexedPrimitives(
             vertex_instance->m_primitive_type,
             vertex_instance->m_index_count,
             MTL::IndexType::IndexTypeUInt32,
@@ -1284,17 +1285,17 @@ public func frag(vf: v2f)
             target_framebuf_may_null,
             clear_depth);
 
-        metal_context->m_render_states.m_render_command_encoder->endEncoding();
+        metal_context->m_render_states.m_current_command_encoder->endEncoding();
+        metal_context->m_render_states.m_currnet_command_buffer->commit();
 
         // Create a new command buffer and encoder for the new framebuffer
-        metal_context->m_render_states.m_currnet_command_buffer =
-            metal_context->m_command_queue->commandBuffer();
-
         auto* target_framebuffer_desc = target_framebuf_may_null != nullptr
             ? target_framebuf_may_null->m_render_pass_descriptor
             : metal_context->m_render_states.m_main_render_pass_descriptor;
 
-        metal_context->m_render_states.m_render_command_encoder =
+        metal_context->m_render_states.m_currnet_command_buffer =
+            metal_context->m_command_queue->commandBuffer();
+        metal_context->m_render_states.m_current_command_encoder =
             metal_context->m_render_states.m_currnet_command_buffer->renderCommandEncoder(
                 target_framebuffer_desc);
 

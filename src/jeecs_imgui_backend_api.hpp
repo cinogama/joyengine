@@ -56,10 +56,16 @@ void jegui_shutdown_vk130(bool reboot);
 #endif
 
 #ifdef JE_ENABLE_METAL_GAPI
+namespace MTL
+{
+    class Device;
+}
+
 void jegui_init_metal(
     jegl_context *ctx,
     jegui_user_image_loader_t get_img_res,
-    jegui_user_sampler_loader_t apply_shader_sampler);
+    jegui_user_sampler_loader_t apply_shader_sampler,
+    MTL::Device* device);
 void jegui_update_metal();
 void jegui_shutdown_metal(bool reboot);
 #endif

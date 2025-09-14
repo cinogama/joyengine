@@ -13,6 +13,12 @@ namespace jeecs::graphic::metal
         NS::Window* m_window;
         MTK::View* m_metal_view;
 
+        int m_rend_rect_width;
+        int m_rend_rect_height;
+
+        int m_window_pos_x;
+        int m_window_pos_y;
+
         JECS_DISABLE_MOVE_AND_COPY(window_view_layout);
 
         window_view_layout(
@@ -110,7 +116,9 @@ namespace jeecs::graphic::metal
         graphic_syncer_host* m_engine_graphic_host;
 
     private:
+        window_view_layout* m_window_view_layout_instance;
         bool m_graphic_request_to_close;
+
     public:
         application_delegate(graphic_syncer_host* ready_graphic_host)
             : NS::ApplicationDelegate()
@@ -128,6 +136,25 @@ namespace jeecs::graphic::metal
             if (m_graphic_request_to_close)
                 // Graphic has been requested to close.
                 return;
+
+            CGSize drawableSize = pView->drawableSize();
+            int width = (int)drawableSize.width;
+            int height = (int)drawableSize.height;
+
+            int pos_x, pos_y;
+            m_window_view_layout_instance->m_window->getFrameOrigin(
+                &m_window_view_layout_instance->m_window_pos_x,
+                &m_window_view_layout_instance->m_window_pos_y);
+
+            if (m_window_view_layout_instance->m_rend_rect_width != width
+                || m_window_view_layout_instance->m_rend_rect_height != height)
+            {
+                // Notify engine graphic host to resize.
+                m_window_view_layout_instance->m_rend_rect_width = width;
+                m_window_view_layout_instance->m_rend_rect_height = height;
+
+                je_io_update_window_size(width, height);
+            }
 
             if (!m_engine_graphic_host->frame())
             {
@@ -157,10 +184,11 @@ namespace jeecs::graphic::metal
                 m_engine_graphic_host->get_graphic_context_after_context_ready();
             auto& config = engine_raw_graphic_context->m_config;
 
-            window_view_layout* window_view_layout_instance =
+
+            m_window_view_layout_instance =
                 reinterpret_cast<window_view_layout*>(config.m_userdata);
 
-            window_view_layout_instance->m_metal_view->setDelegate(this);
+            m_window_view_layout_instance->m_metal_view->setDelegate(this);
 
             application->activateIgnoringOtherApps(true);
         }

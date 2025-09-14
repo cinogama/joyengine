@@ -176,6 +176,7 @@ namespace jeecs::graphic::api::vk130
     struct jevk13_framebuffer;
     struct jevk13_shader_blob
     {
+        JECS_DISABLE_MOVE_AND_COPY(jevk13_shader_blob);
         struct blob_data
         {
             JECS_DISABLE_MOVE_AND_COPY(blob_data);
@@ -237,8 +238,6 @@ namespace jeecs::graphic::api::vk130
 
         jeecs::basic::resource<blob_data> m_blob_data;
 
-        JECS_DISABLE_MOVE_AND_COPY(jevk13_shader_blob);
-
         jevk13_shader_blob(blob_data* d)
             : m_blob_data(jeecs::basic::resource<blob_data>(d))
         {
@@ -255,6 +254,8 @@ namespace jeecs::graphic::api::vk130
     };
     struct jevk13_texture
     {
+        JECS_DISABLE_MOVE_AND_COPY(jevk13_texture);
+
         VkImage m_vk_texture_image;
         VkDeviceMemory m_vk_texture_image_memory;
 
@@ -263,6 +264,8 @@ namespace jeecs::graphic::api::vk130
     };
     struct jevk13_uniformbuf
     {
+        JECS_DISABLE_MOVE_AND_COPY(jevk13_uniformbuf);
+
         VkBuffer m_uniform_buffer;
         VkDeviceMemory m_uniform_buffer_memory;
 
@@ -270,6 +273,8 @@ namespace jeecs::graphic::api::vk130
     };
     struct jevk13_shader
     {
+        JECS_DISABLE_MOVE_AND_COPY(jevk13_shader);
+
         jeecs::basic::resource<jevk13_shader_blob::blob_data> m_blob_data;
 
         size_t m_uniform_cpu_buffer_size;
@@ -284,8 +289,6 @@ namespace jeecs::graphic::api::vk130
         VkPipeline prepare_pipeline(jegl_vk130_context* context);
         jevk13_uniformbuf* allocate_ubo_for_vars(jegl_vk130_context* context);
         jevk13_uniformbuf* get_last_usable_variable(jegl_vk130_context* context);
-
-        JECS_DISABLE_MOVE_AND_COPY(jevk13_shader);
 
         jevk13_shader(jevk13_shader_blob* blob)
             : m_blob_data(blob->m_blob_data)
@@ -308,6 +311,8 @@ namespace jeecs::graphic::api::vk130
     };
     struct jevk13_framebuffer
     {
+        JECS_DISABLE_MOVE_AND_COPY(jevk13_framebuffer);
+
         VkRenderPass m_rendpass;
 
         std::unordered_set<jevk13_shader_blob::blob_data*>
@@ -326,6 +331,10 @@ namespace jeecs::graphic::api::vk130
     };
     struct jevk13_vertex
     {
+        JECS_DISABLE_MOVE_AND_COPY(jevk13_vertex);
+
+        jevk13_vertex() = default;
+
         VkBuffer m_vk_vertex_buffer;
         VkDeviceMemory m_vk_vertex_buffer_memory;
 
@@ -341,9 +350,15 @@ namespace jeecs::graphic::api::vk130
 
     struct jegl_vk130_context
     {
+        JECS_DISABLE_MOVE_AND_COPY(jegl_vk130_context);
+
+        jegl_vk130_context() = default;
+
 #if JE4_VK_USE_DYNAMIC_VK_LIB
         struct vklibrary_instance_proxy
         {
+            JECS_DISABLE_MOVE_AND_COPY(vklibrary_instance_proxy);
+
             void* _instance;
 
             vklibrary_instance_proxy()
@@ -367,8 +382,6 @@ namespace jeecs::graphic::api::vk130
                 assert(_instance != nullptr);
                 wo_unload_lib(_instance, WO_DYLIB_UNREF);
             }
-
-            JECS_DISABLE_MOVE_AND_COPY(vklibrary_instance_proxy);
 
             template <typename FT>
             FT api(const char* name)
@@ -529,6 +542,8 @@ namespace jeecs::graphic::api::vk130
         template <descriptor_set_type DESC_SET_TYPE>
         struct single_descriptor_set_allocator
         {
+            JECS_DISABLE_MOVE_AND_COPY(single_descriptor_set_allocator);
+
             inline const static VkDescriptorType _desc_set_types[descriptor_set_type::COUNT + 1] = {
                 VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -541,8 +556,6 @@ namespace jeecs::graphic::api::vk130
             VkDescriptorSetLayout m_layout;
             std::list<VkDescriptorPool> m_pools;
             std::list<VkDescriptorSet> m_free_sets;
-
-            JECS_DISABLE_MOVE_AND_COPY(single_descriptor_set_allocator);
 
             single_descriptor_set_allocator(jegl_vk130_context* ctx, VkDescriptorSetLayout layout)
                 : m_context(ctx), m_layout(layout)
@@ -620,6 +633,8 @@ namespace jeecs::graphic::api::vk130
 
         struct descriptor_set_allocator
         {
+            JECS_DISABLE_MOVE_AND_COPY(descriptor_set_allocator);
+
             constexpr static size_t MAX_LAYOUT_COUNT = 16;
             constexpr static size_t MAX_UBO_LAYOUT = MAX_LAYOUT_COUNT;
             constexpr static size_t MAX_TEXTURE_LAYOUT = MAX_LAYOUT_COUNT;
@@ -814,8 +829,6 @@ namespace jeecs::graphic::api::vk130
                     nullptr);
             }
 
-            JECS_DISABLE_MOVE_AND_COPY(descriptor_set_allocator);
-
             descriptor_set_allocator(jegl_vk130_context* context)
                 : m_context(context), m_vk_shader_uniform_variable_sets(
                     context, context->_vk_global_descriptor_set_layouts[descriptor_set_type::UNIFORM_VARIABLES]),
@@ -874,6 +887,8 @@ namespace jeecs::graphic::api::vk130
         };
         struct command_buffer_allocator
         {
+            JECS_DISABLE_MOVE_AND_COPY(command_buffer_allocator);
+
             jegl_vk130_context* m_context;
 
             VkCommandPool m_command_pool;
@@ -937,8 +952,6 @@ namespace jeecs::graphic::api::vk130
                 swapchain_image->m_using_command_buffers.clear();
                 swapchain_image->m_using_semaphores.clear();
             }
-
-            JECS_DISABLE_MOVE_AND_COPY(command_buffer_allocator);
 
             command_buffer_allocator(jegl_vk130_context* context)
             {
