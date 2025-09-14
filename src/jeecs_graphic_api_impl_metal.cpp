@@ -313,9 +313,10 @@ namespace jeecs::graphic::api::metal
 
         context->m_interface->create_interface(cfg);
 
+        GLFWwindow* glfw_window =
+            reinterpret_cast<GLFWwindow*>(context->m_interface->interface_handle());
         NS::Window* metal_window =
-            reinterpret_cast<NS::Window*>(
-                glfwGetCocoaWindow(context->m_interface->interface_handle()));
+            reinterpret_cast<NS::Window*>(glfwGetCocoaWindow(glfw_window));
 
         NS::View* metal_content_view = metal_window->contentView();
 
@@ -373,11 +374,11 @@ namespace jeecs::graphic::api::metal
         // Get main pass descriptor.
         metal_context->m_render_states.m_main_render_pass_descriptor =
             MTL::RenderPassDescriptor::renderPassDescriptor();
-        auto passColorAttachment0 = pass->colorAttachments()->object(0);
-        passColorAttachment0->setClearColor(color);
-        passColorAttachment0->setLoadAction(MTL::LoadActionClear);
-        passColorAttachment0->setStoreAction(MTL::StoreActionStore);
-        passColorAttachment0->setTexture(surface->texture());
+
+        pass->colorAttachments()
+            ->object(0)
+            ->passColorAttachment0
+            ->setTexture(surface->texture());
 
         metal_context->m_render_states.m_currnet_command_buffer =
             metal_context->m_command_queue->commandBuffer();
