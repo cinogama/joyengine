@@ -509,10 +509,12 @@ void _jegl_regenerate_and_alloc_msl_from_spir_v(
     
     const spvc_reflected_resource* vertex_uniform_buffers = NULL;
     size_t vertex_uniform_buffer_count = 0;
-    spvc_resources_get_resource_list_for_type(vertex_resources, SPVC_RESOURCE_TYPE_UNIFORM_BUFFER, &vertex_uniform_buffers, &vertex_uniform_buffer_count);
+    spvc_resources_get_resource_list_for_type(
+        vertex_resources, SPVC_RESOURCE_TYPE_UNIFORM_BUFFER, &vertex_uniform_buffers, &vertex_uniform_buffer_count);
     
     for (size_t i = 0; i < vertex_uniform_buffer_count; i++) {
-        uint32_t current_binding = spvc_compiler_get_decoration(vertex_compiler, vertex_uniform_buffers[i].id, SpvDecorationBinding);
+        // Get SpvDecorationDescriptorSet as SpvDecorationBinding
+        uint32_t current_binding = spvc_compiler_get_decoration(vertex_compiler, vertex_uniform_buffers[i].id, SpvDecorationDescriptorSet);
         spvc_compiler_set_decoration(vertex_compiler, vertex_uniform_buffers[i].id, SpvDecorationBinding, current_binding + 1);
     }
 
@@ -522,10 +524,12 @@ void _jegl_regenerate_and_alloc_msl_from_spir_v(
     
     const spvc_reflected_resource* fragment_uniform_buffers = NULL;
     size_t fragment_uniform_buffer_count = 0;
-    spvc_resources_get_resource_list_for_type(fragment_resources, SPVC_RESOURCE_TYPE_UNIFORM_BUFFER, &fragment_uniform_buffers, &fragment_uniform_buffer_count);
+    spvc_resources_get_resource_list_for_type(
+        fragment_resources, SPVC_RESOURCE_TYPE_UNIFORM_BUFFER, &fragment_uniform_buffers, &fragment_uniform_buffer_count);
     
     for (size_t i = 0; i < fragment_uniform_buffer_count; i++) {
-        uint32_t current_binding = spvc_compiler_get_decoration(fragment_compiler, fragment_uniform_buffers[i].id, SpvDecorationBinding);
+        // Get SpvDecorationDescriptorSet as SpvDecorationBinding
+        uint32_t current_binding = spvc_compiler_get_decoration(fragment_compiler, fragment_uniform_buffers[i].id, SpvDecorationDescriptorSet);
         spvc_compiler_set_decoration(fragment_compiler, fragment_uniform_buffers[i].id, SpvDecorationBinding, current_binding + 1);
     }
 

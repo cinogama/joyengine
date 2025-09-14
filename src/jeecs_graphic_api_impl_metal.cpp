@@ -405,114 +405,114 @@ namespace jeecs::graphic::api::metal
         jegl_metal_context* metal_context =
             reinterpret_cast<jegl_metal_context*>(ctx);
 
-        const float pdata[] = {
-            -0.5f, -0.5f, 0.0f,  0.0f, 0.0f,
-             0.5f, -0.5f, 0.0f,  1.0f, 0.0f,
-            -0.5f,  0.5f, 0.0f,  0.0f, 1.0f,
-            0.5f,  0.5f, 0.0f,  1.0f, 1.0f,
-        };
-        static basic::resource<graphic::vertex> vt =
-            graphic::vertex::create(
-                jegl_vertex::type::TRIANGLESTRIP,
-                pdata,
-                sizeof(pdata),
-                { 0, 1, 2, 3 },
-                {
-                    {jegl_vertex::data_type::FLOAT32, 3},
-                    {jegl_vertex::data_type::FLOAT32, 2},
-                }).value();
+        //        const float pdata[] = {
+        //            -0.5f, -0.5f, 0.0f,  0.0f, 0.0f,
+        //             0.5f, -0.5f, 0.0f,  1.0f, 0.0f,
+        //            -0.5f,  0.5f, 0.0f,  0.0f, 1.0f,
+        //            0.5f,  0.5f, 0.0f,  1.0f, 1.0f,
+        //        };
+        //        static basic::resource<graphic::vertex> vt =
+        //            graphic::vertex::create(
+        //                jegl_vertex::type::TRIANGLESTRIP,
+        //                pdata,
+        //                sizeof(pdata),
+        //                { 0, 1, 2, 3 },
+        //                {
+        //                    {jegl_vertex::data_type::FLOAT32, 3},
+        //                    {jegl_vertex::data_type::FLOAT32, 2},
+        //                }).value();
+        //
+        //                static basic::resource<graphic::texture> tx =
+        //                    graphic::texture::load(nullptr, "!/icon.png").value();
+        //                static basic::resource<graphic::shader> sd =
+        //                    graphic::shader::create("!/test.shader", R"(
+        //// Mono.shader
+        //import woo::std;
+        //
+        //import je::shader;
+        //import pkg::woshader;
+        //
+        //using woshader;
+        //using je::shader;
+        //
+        //SHARED  (true);
+        //ZTEST   (LESS);
+        //ZWRITE  (ENABLE);
+        //BLEND   (ONE, ZERO);
+        //CULL    (NONE);
+        //
+        //WOSHADER_VERTEX_IN!
+        //    using vin = struct {
+        //        vertex  : float3,
+        //        uv      : float2,
+        //    };
+        //    
+        //WOSHADER_VERTEX_TO_FRAGMENT!
+        //    using v2f = struct {
+        //        pos     : float4,
+        //        uv      : float2,
+        //    };
+        //    
+        //WOSHADER_FRAGMENT_OUT!
+        //    using fout = struct {
+        //        color   : float4,
+        //    };
+        //    
+        //public func vert(v: vin)
+        //{
+        //    return v2f{
+        //        pos = vec4!(v.vertex, 1.),
+        //        uv = v.uv,
+        //    };
+        //}
+        //
+        //let NearestSampler  = Sampler2D::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
+        //WOSHADER_UNIFORM!
+        //    let Main        = texture2d::uniform(0, NearestSampler);
+        //
+        //public func frag(vf: v2f)
+        //{
+        //    return fout{
+        //        color = alphatest(JE_COLOR * tex2d(Main, vf.uv)),
+        //    };
+        //}
+        //)").value();
+        //
+        //                /*
+        //                初期开发，暂时在这里随便写写画画
+        //                */
+        //                jegl_bind_shader(sd->resource());
+        //                jegl_bind_texture(tx->resource(), 0);
+        //                jegl_draw_vertex(vt->resource());
 
-                static basic::resource<graphic::texture> tx =
-                    graphic::texture::load(nullptr, "!/icon.png").value();
-                static basic::resource<graphic::shader> sd =
-                    graphic::shader::create("!/test.shader", R"(
-// Mono.shader
-import woo::std;
+                        // 渲染工作结束，检查，结束当前编码器，提交命令缓冲区，然后切换到默认帧缓冲
+        if (metal_context->m_render_states.m_current_target_framebuffer_may_null != nullptr)
+        {
+            void bind_framebuffer(
+                jegl_context::graphic_impl_context_t ctx,
+                jegl_resource * fb,
+                const size_t(*viewport_xywh)[4],
+                const float(*clear_color_rgba)[4],
+                const float* clear_depth);
 
-import je::shader;
-import pkg::woshader;
+            bind_framebuffer(
+                ctx, nullptr, nullptr, nullptr, nullptr);
+        }
 
-using woshader;
-using je::shader;
+        jegui_update_metal(
+            metal_context->m_render_states.m_main_render_pass_descriptor,
+            metal_context->m_render_states.m_currnet_command_buffer,
+            metal_context->m_render_states.m_current_command_encoder);
 
-SHARED  (true);
-ZTEST   (LESS);
-ZWRITE  (ENABLE);
-BLEND   (ONE, ZERO);
-CULL    (NONE);
+        metal_context->m_render_states.m_current_command_encoder->endEncoding();
+        metal_context->m_render_states.m_currnet_command_buffer->presentDrawable(
+            metal_context->m_render_states.m_main_this_frame_drawable);
+        metal_context->m_render_states.m_currnet_command_buffer->commit();
 
-WOSHADER_VERTEX_IN!
-    using vin = struct {
-        vertex  : float3,
-        uv      : float2,
-    };
-    
-WOSHADER_VERTEX_TO_FRAGMENT!
-    using v2f = struct {
-        pos     : float4,
-        uv      : float2,
-    };
-    
-WOSHADER_FRAGMENT_OUT!
-    using fout = struct {
-        color   : float4,
-    };
-    
-public func vert(v: vin)
-{
-    return v2f{
-        pos = vec4!(v.vertex, 1.),
-        uv = v.uv,
-    };
-}
+        // 帧结束后释放自动释放池
+        metal_context->m_frame_auto_release->release();
 
-let NearestSampler  = Sampler2D::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
-WOSHADER_UNIFORM!
-    let Main        = texture2d::uniform(0, NearestSampler);
-
-public func frag(vf: v2f)
-{
-    return fout{
-        color = alphatest(JE_COLOR * tex2d(Main, vf.uv)),
-    };
-}
-)").value();
-
-                /*
-                初期开发，暂时在这里随便写写画画
-                */
-                jegl_bind_shader(sd->resource());
-                jegl_bind_texture(tx->resource(), 0);
-                jegl_draw_vertex(vt->resource());
-
-                // 渲染工作结束，检查，结束当前编码器，提交命令缓冲区，然后切换到默认帧缓冲
-                if (metal_context->m_render_states.m_current_target_framebuffer_may_null != nullptr)
-                {
-                    void bind_framebuffer(
-                        jegl_context::graphic_impl_context_t ctx,
-                        jegl_resource * fb,
-                        const size_t(*viewport_xywh)[4],
-                        const float(*clear_color_rgba)[4],
-                        const float* clear_depth);
-
-                    bind_framebuffer(
-                        ctx, nullptr, nullptr, nullptr, nullptr);
-                }
-
-                jegui_update_metal(
-                    metal_context->m_render_states.m_main_render_pass_descriptor,
-                    metal_context->m_render_states.m_currnet_command_buffer,
-                    metal_context->m_render_states.m_current_command_encoder);
-
-                metal_context->m_render_states.m_current_command_encoder->endEncoding();
-                metal_context->m_render_states.m_currnet_command_buffer->presentDrawable(
-                    metal_context->m_render_states.m_main_this_frame_drawable);
-                metal_context->m_render_states.m_currnet_command_buffer->commit();
-
-                // 帧结束后释放自动释放池
-                metal_context->m_frame_auto_release->release();
-
-                return jegl_update_action::JEGL_UPDATE_CONTINUE;
+        return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
 
     jegl_resource_blob create_resource_blob(jegl_context::graphic_impl_context_t ctx, jegl_resource* res)
