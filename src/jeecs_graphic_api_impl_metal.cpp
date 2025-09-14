@@ -284,7 +284,9 @@ namespace jeecs::graphic::api::metal
     {
         for (auto& [fb, state] : m_pipeline_states)
         {
-            fb->m_linked_shaders.erase(this);
+            if (fb != nullptr)
+                fb->m_linked_shaders.erase(this);
+
             state->release();
         }
 
