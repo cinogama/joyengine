@@ -37,6 +37,7 @@ namespace jeecs::graphic::api::metal
         /* Render context */
         struct render_runtime_states
         {
+            CA::MetalDrawable* m_main_this_frame_drawable;
             MTL::RenderPassDescriptor* m_main_render_pass_descriptor;
 
             metal_shader* m_current_target_shader;
@@ -353,6 +354,24 @@ namespace jeecs::graphic::api::metal
         metal_context->m_render_states.m_current_target_framebuffer_may_null = nullptr;
         metal_context->m_render_states.m_current_target_shader = nullptr;
 
+        metal_context->m_render_states.m_main_this_frame_drawable =
+            metal_context->m_metal_layer->nextDrawable();
+
+        metal_context->m_render_states.m_main_render_pass_descriptor =
+            MTL::RenderPassDescriptor::renderPassDescriptor();
+
+        metal_context->m_render_states.m_main_render_pass_descriptor
+            ->colorAttachments()
+            ->object(0)
+            ->setTexture(
+                metal_context->m_render_states.m_main_this_frame_drawable->texture());
+
+        metal_context->m_render_states.m_currnet_command_buffer =
+            metal_context->m_command_queue->commandBuffer();
+        metal_context->m_render_states.m_current_command_encoder =
+            metal_context->m_render_states.m_currnet_command_buffer->renderCommandEncoder(
+                metal_context->m_render_states.m_main_render_pass_descriptor);
+
         switch (metal_context->m_interface->update())
         {
         case basic_interface::update_result::CLOSE:
@@ -366,27 +385,8 @@ namespace jeecs::graphic::api::metal
             [[fallthrough]];
         case basic_interface::update_result::NORMAL:
         _label_jegl_metal_normal_job:
-            break;
+            return jegl_update_action::JEGL_UPDATE_CONTINUE;
         }
-
-        auto surface = metal_context->m_metal_layer->nextDrawable();
-
-        // Get main pass descriptor.
-        metal_context->m_render_states.m_main_render_pass_descriptor =
-            MTL::RenderPassDescriptor::renderPassDescriptor();
-
-        pass->colorAttachments()
-            ->object(0)
-            ->passColorAttachment0
-            ->setTexture(surface->texture());
-
-        metal_context->m_render_states.m_currnet_command_buffer =
-            metal_context->m_command_queue->commandBuffer();
-        metal_context->m_render_states.m_current_command_encoder =
-            metal_context->m_render_states.m_currnet_command_buffer->renderCommandEncoder(
-                metal_context->m_render_states.m_main_render_pass_descriptor);
-
-        return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
     jegl_update_action commit_update(
         jegl_context::graphic_impl_context_t ctx, jegl_update_action)
@@ -478,7 +478,7 @@ public func frag(vf: v2f)
                 // Frame end.
                 metal_context->m_render_states.m_current_command_encoder->endEncoding();
                 metal_context->m_render_states.m_currnet_command_buffer->presentDrawable(
-                    metal_context->m_window_and_view_layout->m_metal_view->currentDrawable());
+                    metal_context->m_render_states.m_main_this_frame_drawable);
                 metal_context->m_render_states.m_currnet_command_buffer->commit();
 
                 // 帧结束后释放自动释放池
