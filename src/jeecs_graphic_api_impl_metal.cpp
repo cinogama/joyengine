@@ -392,7 +392,9 @@ namespace jeecs::graphic::api::metal
         case basic_interface::update_result::PAUSE:
             return jegl_update_action::JEGL_UPDATE_SKIP;
         case basic_interface::update_result::RESIZE:
-            // TODO;
+            int w, h;
+            je_io_get_window_size(&w, &h);
+            metal_context->m_metal_layer->setDrawableSize(CGSizeMake(w, h));
             [[fallthrough]];
         case basic_interface::update_result::NORMAL:
         _label_jegl_metal_normal_job:
