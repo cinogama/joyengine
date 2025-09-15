@@ -1258,7 +1258,7 @@ namespace jeecs::graphic::api::metal
             val,
             data_size_byte_length);
 
-        current_shader->m_uniform_buffer_modified = true;
+        current_shader->m_uniform_buffer_updated = true;
     }
 
     void draw_vertex_with_shader(jegl_context::graphic_impl_context_t ctx, jegl_resource* res)
@@ -1302,9 +1302,9 @@ namespace jeecs::graphic::api::metal
         }
 
         MTL::Buffer* current_shader_uniform_buffer;
-        if (current_shader->m_uniform_buffer_modified)
+        if (current_shader->m_uniform_buffer_updated)
         {
-            current_shader->m_uniform_buffer_modified = false;
+            current_shader->m_uniform_buffer_updated = false;
             current_shader_uniform_buffer = current_shader->allocate_buffer_to_update(metal_context);
 
             // 将CPU端的uniform数据更新到GPU缓冲区
