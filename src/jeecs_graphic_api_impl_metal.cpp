@@ -292,6 +292,7 @@ namespace jeecs::graphic::api::metal
             m_linked_shaders;
 
         metal_framebuffer()
+            : m_has_depth_attachment(false)
         {
             m_render_pass_descriptor = MTL::RenderPassDescriptor::alloc()->init();
         }
