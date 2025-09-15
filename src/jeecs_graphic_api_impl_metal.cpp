@@ -428,7 +428,7 @@ namespace jeecs::graphic::api::metal
         metal_context->m_frame_auto_release = NS::AutoreleasePool::alloc()->init();
 
         // Update frame counter.
-        ++metal_context.m_render_states.m_frame_counter;
+        ++metal_context->m_render_states.m_frame_counter;
 
         // Reset render target states.
         metal_context->m_render_states.m_current_target_framebuffer_may_null = nullptr;
