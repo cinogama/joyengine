@@ -39,6 +39,8 @@ namespace jeecs::graphic::api::metal
         /* Render context */
         struct render_runtime_states
         {
+            size_t m_frame_counter;
+
             CA::MetalDrawable* m_main_this_frame_drawable;
             MTL::RenderPassDescriptor* m_main_render_pass_descriptor;
 
@@ -82,6 +84,7 @@ namespace jeecs::graphic::api::metal
             create_main_depth_texture(cfg->m_width, cfg->m_height);
 
             m_frame_auto_release = nullptr;
+            m_render_states.m_frame_counter = 1;
         }
         ~jegl_metal_context()
         {
@@ -166,25 +169,57 @@ namespace jeecs::graphic::api::metal
         basic::resource<metal_resource_shader_blob::shared_state> m_shared_state;
 
         size_t m_uniform_cpu_buffer_size;
-        size_t m_uniform_buffer_update_offset;
-        size_t m_uniform_buffer_update_size;
+        bool m_uniform_buffer_updated;
         void* m_uniform_cpu_buffer;
 
         bool m_draw_for_r2b;
 
-        uint32_t m_ndc_scale_uniform_id;
-        MTL::Buffer* m_uniforms;
+        size_t m_command_commit_round;
+        size_t m_next_allocate_uniform_buffer_index;
+        std::vector<MTL::Buffer*> m_allocated_uniform_buffers;
 
+        uint32_t m_ndc_scale_uniform_id;
+
+        MTL::Buffer* allocate_buffer_to_update(jegl_metal_context* ctx)
+        {
+            if (m_next_allocate_uniform_buffer_index >= m_allocated_uniform_buffers.size())
+            {
+                auto* buf = ctx->m_metal_device->newBuffer(
+                    m_uniform_cpu_buffer_size,
+                    MTL::ResourceStorageModeShared);
+
+                m_allocated_uniform_buffers.push_back(buf);
+                ++m_next_allocate_uniform_buffer_index;
+
+                return buf;
+            }
+            auto* buf = m_allocated_uniform_buffers[m_next_allocate_uniform_buffer_index++];
+        }
+        MTL::Buffer* get_last_usable_buffer(jegl_metal_context* ctx)
+        {
+            if (m_next_allocate_uniform_buffer_index == 0)
+                return allocate_buffer_to_update(ctx);
+            else if (m_command_commit_round != ctx->m_render_states.m_frame_counter)
+            {
+               if (m_next_allocate_uniform_buffer_index != 0)
+                   // Make sure use the newest UBO first.
+                   std::swap(
+                       m_allocated_uniform_buffers[0],
+                       m_allocated_uniform_buffers[m_next_allocate_uniform_buffer_index - 1]);
+
+               m_command_commit_round = ctx->m_render_states.m_frame_counter;
+               m_next_allocate_uniform_buffer_index = 1;
+            }
+            return m_allocated_uniform_buffers[m_next_allocate_uniform_buffer_index - 1];
+        }
 
         metal_shader(
             metal_resource_shader_blob* blob)
             : m_shared_state(blob->m_shared_state)
             , m_uniform_cpu_buffer_size(blob->m_uniform_size)
-            , m_uniform_buffer_update_offset(0)
-            , m_uniform_buffer_update_size(0)
+            , m_uniform_buffer_updated(false)
             , m_draw_for_r2b(false)
-
-
+            , m_command_commit_round(0)
         {
             if (m_uniform_cpu_buffer_size != 0)
             {
@@ -192,10 +227,6 @@ namespace jeecs::graphic::api::metal
                 assert(m_uniform_cpu_buffer != nullptr);
 
                 memset(m_uniform_cpu_buffer, 0, m_uniform_cpu_buffer_size);
-
-                m_uniforms = m_shared_state->m_context->m_metal_device->newBuffer(
-                    m_uniform_cpu_buffer_size,
-                    MTL::ResourceStorageModeShared);
             }
             else
                 m_uniform_cpu_buffer = nullptr;
@@ -205,8 +236,12 @@ namespace jeecs::graphic::api::metal
             if (m_uniform_cpu_buffer != nullptr)
             {
                 free(m_uniform_cpu_buffer);
-                m_uniforms->release();
+
+                for (auto buf : m_allocated_uniform_buffers)
+                    buf->release();
+                m_allocated_uniform_buffers.clear();
             }
+            assert(m_allocated_uniform_buffers.size() == 0);
         }
     };
     struct metal_uniform_buffer
@@ -391,6 +426,9 @@ namespace jeecs::graphic::api::metal
 
         // 每帧开始之前，创建新的自动释放池
         metal_context->m_frame_auto_release = NS::AutoreleasePool::alloc()->init();
+
+        // Update frame counter.
+        ++metal_context.m_render_states.m_frame_counter;
 
         // Reset render target states.
         metal_context->m_render_states.m_current_target_framebuffer_may_null = nullptr;
@@ -1220,24 +1258,7 @@ namespace jeecs::graphic::api::metal
             val,
             data_size_byte_length);
 
-        if (current_shader->m_uniform_buffer_update_size == 0)
-        {
-            current_shader->m_uniform_buffer_update_offset = location;
-            current_shader->m_uniform_buffer_update_size = data_size_byte_length;
-        }
-        else
-        {
-            const size_t new_begin = std::min(
-                current_shader->m_uniform_buffer_update_offset,
-                static_cast<size_t>(location));
-
-            const size_t new_end = std::max(
-                current_shader->m_uniform_buffer_update_offset + current_shader->m_uniform_buffer_update_size,
-                location + data_size_byte_length);
-
-            current_shader->m_uniform_buffer_update_offset = new_begin;
-            current_shader->m_uniform_buffer_update_size = new_end - new_begin;
-        }
+        current_shader->m_uniform_buffer_modified = true;
     }
 
     void draw_vertex_with_shader(jegl_context::graphic_impl_context_t ctx, jegl_resource* res)
@@ -1280,10 +1301,14 @@ namespace jeecs::graphic::api::metal
             }
         }
 
-        if (current_shader->m_uniform_buffer_update_size != 0)
+        MTL::Buffer* current_shader_uniform_buffer;
+        if (current_shader->m_uniform_buffer_modified)
         {
+            current_shader->m_uniform_buffer_modified = false;
+            current_shader_uniform_buffer = current_shader->allocate_buffer_to_update(metal_context);
+
             // 将CPU端的uniform数据更新到GPU缓冲区
-            void* buffer_contents = current_shader->m_uniforms->contents();
+            void* buffer_contents = current_shader_uniform_buffer->contents();
             memcpy(
                 reinterpret_cast<void*>(
                     reinterpret_cast<intptr_t>(
@@ -1296,15 +1321,17 @@ namespace jeecs::graphic::api::metal
             // 重置更新标记
             current_shader->m_uniform_buffer_update_size = 0;
         }
+        else
+            current_shader_uniform_buffer = current_shader->get_last_usable_buffer(metal_context);
 
         metal_context->m_render_states.m_current_command_encoder->setVertexBuffer(
             vertex_instance->m_vertex_buffer, 0, vertex_instance->m_vertex_stride, 0);
 
         // Binding shader uniform.
         metal_context->m_render_states.m_current_command_encoder->setVertexBuffer(
-            current_shader->m_uniforms, 0, 0 + 1);
+            current_shader_uniform_buffer, 0, 0 + 1);
         metal_context->m_render_states.m_current_command_encoder->setFragmentBuffer(
-            current_shader->m_uniforms, 0, 0 + 1);
+            current_shader_uniform_buffer, 0, 0 + 1);
 
         metal_context->m_render_states.m_current_command_encoder->drawIndexedPrimitives(
             vertex_instance->m_primitive_type,

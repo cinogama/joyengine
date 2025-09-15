@@ -3740,7 +3740,10 @@ namespace jeecs::graphic::api::vk130
         else if (m_command_commit_round != context->_vk_command_commit_round)
         {
             if (m_next_allocate_ubos_for_uniform_variable != 0)
-                std::swap(m_uniform_variables[0], m_uniform_variables[m_next_allocate_ubos_for_uniform_variable - 1]);
+                // Make sure use the newest UBO first.
+                std::swap(
+                    m_uniform_variables[0], 
+                    m_uniform_variables[m_next_allocate_ubos_for_uniform_variable - 1]);
 
             m_command_commit_round = context->_vk_command_commit_round;
             m_next_allocate_ubos_for_uniform_variable = 1;
