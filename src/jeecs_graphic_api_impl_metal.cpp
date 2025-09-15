@@ -1310,16 +1310,9 @@ namespace jeecs::graphic::api::metal
             // 将CPU端的uniform数据更新到GPU缓冲区
             void* buffer_contents = current_shader_uniform_buffer->contents();
             memcpy(
-                reinterpret_cast<void*>(
-                    reinterpret_cast<intptr_t>(
-                        buffer_contents) + current_shader->m_uniform_buffer_update_offset),
-                reinterpret_cast<void*>(
-                    reinterpret_cast<intptr_t>(
-                        current_shader->m_uniform_cpu_buffer) + current_shader->m_uniform_buffer_update_offset),
-                current_shader->m_uniform_buffer_update_size);
-
-            // 重置更新标记
-            current_shader->m_uniform_buffer_update_size = 0;
+                buffer_contents,
+                current_shader->m_uniform_cpu_buffer,
+                current_shader->m_uniform_cpu_buffer_size);
         }
         else
             current_shader_uniform_buffer = current_shader->get_last_usable_buffer(metal_context);
