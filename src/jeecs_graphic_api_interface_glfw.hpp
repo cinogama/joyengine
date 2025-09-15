@@ -67,7 +67,7 @@ namespace jeecs::graphic
         }
         static void glfw_callback_windows_pos_changed(GLFWwindow* fw, int x, int y)
         {
-            glfw* context = reinterpret_cast<glfw*>(glfwGetWindowUserPointer(fw));
+            // glfw* context = reinterpret_cast<glfw*>(glfwGetWindowUserPointer(fw));
 
             je_io_update_window_pos(x, y);
         }

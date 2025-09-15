@@ -193,7 +193,7 @@ namespace jeecs::graphic::api::metal
 
                 return buf;
             }
-            auto* buf = m_allocated_uniform_buffers[m_next_allocate_uniform_buffer_index++];
+            return m_allocated_uniform_buffers[m_next_allocate_uniform_buffer_index++];
         }
         MTL::Buffer* get_last_usable_buffer(jegl_metal_context* ctx)
         {
