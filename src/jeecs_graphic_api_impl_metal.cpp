@@ -8,11 +8,13 @@
 #define NS_PRIVATE_IMPLEMENTATION
 #define CA_PRIVATE_IMPLEMENTATION
 #define MTL_PRIVATE_IMPLEMENTATION
+#define MTK_PRIVATE_IMPLEMENTATION
 
 #include <Foundation/Foundation.hpp>
 #include <Metal/Metal.hpp>
 #include <QuartzCore/QuartzCore.hpp>
 #include <AppKit/AppKit.hpp>
+#include <MetalKit/MetalKit.hpp>
 
 // #include "jeecs_graphic_api_interface_cocoa.hpp"
 #include "jeecs_graphic_api_interface_glfw.hpp"
@@ -31,7 +33,7 @@ namespace jeecs::graphic::api::metal
         MTL::Device* m_metal_device;
         CA::MetalLayer* m_metal_layer;
         MTL::CommandQueue* m_command_queue;
-
+        MTL::Texture* m_main_depth_texture_target;
         NS::AutoreleasePool* m_frame_auto_release;
 
         /* Render context */
@@ -48,6 +50,25 @@ namespace jeecs::graphic::api::metal
         };
         render_runtime_states m_render_states;
 
+        void create_main_depth_texture(int w, int h)
+        {
+            MTL::TextureDescriptor* depthTexDesc = MTL::TextureDescriptor::alloc()->init();
+            depthTexDesc->setWidth(w);
+            depthTexDesc->setHeight(h);
+            depthTexDesc->setDepth(1);
+            depthTexDesc->setPixelFormat(MTL::PixelFormatDepth16Unorm);
+            depthTexDesc->setTextureType(MTL::TextureType2D);
+            depthTexDesc->setStorageMode(MTL::StorageModePrivate);
+            depthTexDesc->setUsage(MTL::TextureUsageRenderTarget);
+            m_main_depth_texture_target = m_metal_device->newTexture(depthTexDesc);
+            depthTexDesc->release();
+        }
+        void recreate_main_depth_texture(int w, int h)
+        {
+            m_main_depth_texture_target->release();
+            create_main_depth_texture(w, h);
+        }
+
         jegl_metal_context(const jegl_interface_config* cfg, bool reboot)
         {
             m_metal_device =
@@ -58,6 +79,7 @@ namespace jeecs::graphic::api::metal
 
             m_metal_layer = CA::MetalLayer::layer();
             m_metal_layer->setDevice(m_metal_device);
+            create_main_depth_texture(cfg->m_width, cfg->m_height);
 
             m_frame_auto_release = nullptr;
         }
@@ -68,6 +90,7 @@ namespace jeecs::graphic::api::metal
 
             m_command_queue->release();
             m_metal_device->release();
+            m_main_depth_texture_target->release();
 
             if (m_frame_auto_release != nullptr)
                 m_frame_auto_release->release();
@@ -147,7 +170,11 @@ namespace jeecs::graphic::api::metal
         size_t m_uniform_buffer_update_size;
         void* m_uniform_cpu_buffer;
 
+        bool m_draw_for_r2b;
+
+        uint32_t m_ndc_scale_uniform_id;
         MTL::Buffer* m_uniforms;
+
 
         metal_shader(
             metal_resource_shader_blob* blob)
@@ -155,6 +182,9 @@ namespace jeecs::graphic::api::metal
             , m_uniform_cpu_buffer_size(blob->m_uniform_size)
             , m_uniform_buffer_update_offset(0)
             , m_uniform_buffer_update_size(0)
+            , m_draw_for_r2b(false)
+
+
         {
             if (m_uniform_cpu_buffer_size != 0)
             {
@@ -376,6 +406,9 @@ namespace jeecs::graphic::api::metal
             ->object(0)
             ->setTexture(
                 metal_context->m_render_states.m_main_this_frame_drawable->texture());
+        metal_context->m_render_states.m_main_render_pass_descriptor
+            ->depthAttachment()
+            ->setTexture(metal_context->m_main_depth_texture_target);
 
         metal_context->m_render_states.m_currnet_command_buffer =
             metal_context->m_command_queue->commandBuffer();
@@ -395,6 +428,7 @@ namespace jeecs::graphic::api::metal
             int w, h;
             je_io_get_window_size(&w, &h);
             metal_context->m_metal_layer->setDrawableSize(CGSizeMake(w, h));
+            metal_context->recreate_main_depth_texture(w, h);
             [[fallthrough]];
         case basic_interface::update_result::NORMAL:
         _label_jegl_metal_normal_job:
@@ -407,87 +441,7 @@ namespace jeecs::graphic::api::metal
         jegl_metal_context* metal_context =
             reinterpret_cast<jegl_metal_context*>(ctx);
 
-        //        const float pdata[] = {
-        //            -0.5f, -0.5f, 0.0f,  0.0f, 0.0f,
-        //             0.5f, -0.5f, 0.0f,  1.0f, 0.0f,
-        //            -0.5f,  0.5f, 0.0f,  0.0f, 1.0f,
-        //            0.5f,  0.5f, 0.0f,  1.0f, 1.0f,
-        //        };
-        //        static basic::resource<graphic::vertex> vt =
-        //            graphic::vertex::create(
-        //                jegl_vertex::type::TRIANGLESTRIP,
-        //                pdata,
-        //                sizeof(pdata),
-        //                { 0, 1, 2, 3 },
-        //                {
-        //                    {jegl_vertex::data_type::FLOAT32, 3},
-        //                    {jegl_vertex::data_type::FLOAT32, 2},
-        //                }).value();
-        //
-        //                static basic::resource<graphic::texture> tx =
-        //                    graphic::texture::load(nullptr, "!/icon.png").value();
-        //                static basic::resource<graphic::shader> sd =
-        //                    graphic::shader::create("!/test.shader", R"(
-        //// Mono.shader
-        //import woo::std;
-        //
-        //import je::shader;
-        //import pkg::woshader;
-        //
-        //using woshader;
-        //using je::shader;
-        //
-        //SHARED  (true);
-        //ZTEST   (LESS);
-        //ZWRITE  (ENABLE);
-        //BLEND   (ONE, ZERO);
-        //CULL    (NONE);
-        //
-        //WOSHADER_VERTEX_IN!
-        //    using vin = struct {
-        //        vertex  : float3,
-        //        uv      : float2,
-        //    };
-        //    
-        //WOSHADER_VERTEX_TO_FRAGMENT!
-        //    using v2f = struct {
-        //        pos     : float4,
-        //        uv      : float2,
-        //    };
-        //    
-        //WOSHADER_FRAGMENT_OUT!
-        //    using fout = struct {
-        //        color   : float4,
-        //    };
-        //    
-        //public func vert(v: vin)
-        //{
-        //    return v2f{
-        //        pos = vec4!(v.vertex, 1.),
-        //        uv = v.uv,
-        //    };
-        //}
-        //
-        //let NearestSampler  = Sampler2D::create(NEAREST, NEAREST, NEAREST, CLAMP, CLAMP);
-        //WOSHADER_UNIFORM!
-        //    let Main        = texture2d::uniform(0, NearestSampler);
-        //
-        //public func frag(vf: v2f)
-        //{
-        //    return fout{
-        //        color = alphatest(JE_COLOR * tex2d(Main, vf.uv)),
-        //    };
-        //}
-        //)").value();
-        //
-        //                /*
-        //                初期开发，暂时在这里随便写写画画
-        //                */
-        //                jegl_bind_shader(sd->resource());
-        //                jegl_bind_texture(tx->resource(), 0);
-        //                jegl_draw_vertex(vt->resource());
-
-                        // 渲染工作结束，检查，结束当前编码器，提交命令缓冲区，然后切换到默认帧缓冲
+        // 渲染工作结束，检查，结束当前编码器，提交命令缓冲区，然后切换到默认帧缓冲
         if (metal_context->m_render_states.m_current_target_framebuffer_may_null != nullptr)
         {
             void bind_framebuffer(
@@ -754,13 +708,14 @@ namespace jeecs::graphic::api::metal
                     MTL::SamplerState* sampler_state =
                         metal_context->m_metal_device->newSamplerState(sampler_desc);
 
+                    sampler_desc->release();
+
                     metal_resource_shader_blob::shared_state::sampler_structs sampler_struct;
                     sampler_struct.m_sampler = sampler_state;
                     sampler_struct.m_sampler_id = sampler_method.m_sampler_id;
 
                     shader_blob->m_shared_state->m_samplers.push_back(sampler_struct);
                 }
-
                 return shader_blob;
             }
             break;
@@ -811,6 +766,9 @@ namespace jeecs::graphic::api::metal
                     shader_blob->get_built_in_location("JE_LIGHT2D_RESOLUTION");
                 builtin_uniforms.m_builtin_uniform_light2d_decay =
                     shader_blob->get_built_in_location("JE_LIGHT2D_DECAY");
+
+                metal_shader_instance->m_ndc_scale_uniform_id = 
+                    builtin_uniforms.m_builtin_uniform_ndc_scale;
 
                 // ATTENTION: 注意，以下参数特殊shader可能挪作他用
                 builtin_uniforms.m_builtin_uniform_local_scale = shader_blob->get_built_in_location("JE_LOCAL_SCALE");
@@ -1214,6 +1172,73 @@ namespace jeecs::graphic::api::metal
         metal_context->m_render_states.m_current_command_encoder->setFragmentTexture(
             texture_instance->m_texture, (uint32_t)pass);
     }
+    void set_uniform(
+        jegl_context::graphic_impl_context_t ctx,
+        uint32_t location, 
+        jegl_shader::uniform_type type,
+        const void* val)
+    {
+        auto* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
+
+        auto* current_shader = metal_context->m_render_states.m_current_target_shader;
+
+        if (location == jeecs::typing::INVALID_UINT32
+            || current_shader == nullptr)
+            return;
+
+        size_t data_size_byte_length = 0;
+        switch (type)
+        {
+        case jegl_shader::INT:
+        case jegl_shader::FLOAT:
+            data_size_byte_length = 4;
+            break;
+        case jegl_shader::INT2:
+        case jegl_shader::FLOAT2:
+            data_size_byte_length = 8;
+            break;
+        case jegl_shader::INT3:
+        case jegl_shader::FLOAT3:
+            data_size_byte_length = 12;
+            break;
+        case jegl_shader::INT4:
+        case jegl_shader::FLOAT4:
+            data_size_byte_length = 16;
+            break;
+        case jegl_shader::FLOAT4X4:
+            data_size_byte_length = 64;
+            break;
+        default:
+            jeecs::debug::logerr("Unknown uniform variable type to set.");
+            break;
+        }
+
+        memcpy(
+            reinterpret_cast<void*>(
+                reinterpret_cast<intptr_t>(current_shader->m_uniform_cpu_buffer) + location),
+            val,
+            data_size_byte_length);
+
+        if (current_shader->m_uniform_buffer_update_size == 0)
+        {
+            current_shader->m_uniform_buffer_update_offset = location;
+            current_shader->m_uniform_buffer_update_size = data_size_byte_length;
+        }
+        else
+        {
+            const size_t new_begin = std::min(
+                current_shader->m_uniform_buffer_update_offset,
+                static_cast<size_t>(location));
+
+            const size_t new_end = std::max(
+                current_shader->m_uniform_buffer_update_offset + current_shader->m_uniform_buffer_update_size,
+                location + data_size_byte_length);
+
+            current_shader->m_uniform_buffer_update_offset = new_begin;
+            current_shader->m_uniform_buffer_update_size = new_end - new_begin;
+        }
+    }
+
     void draw_vertex_with_shader(jegl_context::graphic_impl_context_t ctx, jegl_resource* res)
     {
         auto* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
@@ -1222,6 +1247,39 @@ namespace jeecs::graphic::api::metal
 
         auto* current_shader = metal_context->m_render_states.m_current_target_shader;
         assert(current_shader != nullptr);
+
+        if (current_shader->m_uniform_cpu_buffer_size != 0)
+        {
+            if (metal_context->m_render_states.m_current_target_framebuffer_may_null != nullptr)
+            {
+                if (current_shader->m_draw_for_r2b)
+                {
+                    const float ndc_scale[4] = { 1.f, 1.f, 1.f, 1.f };
+
+                    current_shader->m_draw_for_r2b = false;
+                    set_uniform(
+                        ctx,
+                        current_shader,
+                        current_shader->m_ndc_scale_uniform_id,
+                        jegl_shader::uniform_type::FLOAT4,
+                        ndc_scale);
+                }
+            }
+            else
+            {
+                if (!current_shader->m_draw_for_r2b)
+                {
+                    const float ndc_scale_r2b[4] = { 1.f, -1.f, 1.f, 1.f };
+                    current_shader->m_draw_for_r2b = true;
+                    set_uniform(
+                        ctx,
+                        current_shader,
+                        current_shader->m_ndc_scale_uniform_id,
+                        jegl_shader::uniform_type::FLOAT4,
+                        ndc_scale_r2b);
+                }
+            }
+        }
 
         if (current_shader->m_uniform_buffer_update_size != 0)
         {
@@ -1391,70 +1449,6 @@ namespace jeecs::graphic::api::metal
 
         metal_context->m_render_states.m_current_target_framebuffer_may_null =
             target_framebuf_may_null;
-    }
-
-    void set_uniform(
-        jegl_context::graphic_impl_context_t ctx, uint32_t location, jegl_shader::uniform_type type, const void* val)
-    {
-        auto* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
-
-        auto* current_shader = metal_context->m_render_states.m_current_target_shader;
-
-        if (location == jeecs::typing::INVALID_UINT32
-            || current_shader == nullptr)
-            return;
-
-        size_t data_size_byte_length = 0;
-        switch (type)
-        {
-        case jegl_shader::INT:
-        case jegl_shader::FLOAT:
-            data_size_byte_length = 4;
-            break;
-        case jegl_shader::INT2:
-        case jegl_shader::FLOAT2:
-            data_size_byte_length = 8;
-            break;
-        case jegl_shader::INT3:
-        case jegl_shader::FLOAT3:
-            data_size_byte_length = 12;
-            break;
-        case jegl_shader::INT4:
-        case jegl_shader::FLOAT4:
-            data_size_byte_length = 16;
-            break;
-        case jegl_shader::FLOAT4X4:
-            data_size_byte_length = 64;
-            break;
-        default:
-            jeecs::debug::logerr("Unknown uniform variable type to set.");
-            break;
-        }
-
-        memcpy(
-            reinterpret_cast<void*>(
-                reinterpret_cast<intptr_t>(current_shader->m_uniform_cpu_buffer) + location),
-            val,
-            data_size_byte_length);
-
-        if (current_shader->m_uniform_buffer_update_size == 0)
-        {
-            current_shader->m_uniform_buffer_update_offset = location;
-            current_shader->m_uniform_buffer_update_size = data_size_byte_length;
-        }
-        else
-        {
-            const size_t new_begin = std::min(
-                current_shader->m_uniform_buffer_update_offset,
-                static_cast<size_t>(location));
-
-            const size_t new_end = std::max(
-                current_shader->m_uniform_buffer_update_offset + current_shader->m_uniform_buffer_update_size,
-                location + data_size_byte_length);
-
-            current_shader->m_uniform_buffer_update_offset = new_begin;
-            current_shader->m_uniform_buffer_update_size = new_end - new_begin;
-        }
     }
 }
 

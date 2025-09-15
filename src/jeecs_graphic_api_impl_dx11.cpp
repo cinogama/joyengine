@@ -100,13 +100,12 @@ namespace jeecs::graphic::api::dx11
         jegl_dx11_context::MSWRLComPtr<ID3D11VertexShader> m_vertex;
         jegl_dx11_context::MSWRLComPtr<ID3D11PixelShader> m_fragment;
 
-        bool m_draw_for_r2b;
-
         jegl_dx11_context::MSWRLComPtr<ID3D11Buffer> m_uniforms;
-        bool m_uniform_updated;
         void* m_uniform_cpu_buffers;
         size_t m_uniform_buffer_size;
+        bool m_uniform_updated;
 
+        bool m_draw_for_r2b;
         uint32_t m_ndc_scale_uniform_id;
 
         jegl_dx11_context::MSWRLComPtr<ID3D11RasterizerState> m_rasterizer;
