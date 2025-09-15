@@ -1259,7 +1259,6 @@ namespace jeecs::graphic::api::metal
                     current_shader->m_draw_for_r2b = false;
                     set_uniform(
                         ctx,
-                        current_shader,
                         current_shader->m_ndc_scale_uniform_id,
                         jegl_shader::uniform_type::FLOAT4,
                         ndc_scale);
@@ -1273,7 +1272,6 @@ namespace jeecs::graphic::api::metal
                     current_shader->m_draw_for_r2b = true;
                     set_uniform(
                         ctx,
-                        current_shader,
                         current_shader->m_ndc_scale_uniform_id,
                         jegl_shader::uniform_type::FLOAT4,
                         ndc_scale_r2b);
