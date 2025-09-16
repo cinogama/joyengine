@@ -113,7 +113,7 @@ namespace jeecs::graphic::api::metal
             MTL::Function* m_fragment_function;
 
             MTL::VertexDescriptor* m_vertex_descriptor;
-            MTL::DepthStencilDescriptor* m_depth_stencil_descriptor;
+            MTL::DepthStencilState* m_depth_stencil_state;
 
             bool m_blend_enabled;
             MTL::BlendFactor m_blend_src_factor;
@@ -136,7 +136,7 @@ namespace jeecs::graphic::api::metal
                 MTL::Function* vert,
                 MTL::Function* frag,
                 MTL::VertexDescriptor* vdesc,
-                MTL::DepthStencilDescriptor* ddesc,
+                MTL::DepthStencilState* dstate,
                 bool blend_enabled,
                 MTL::BlendFactor src_bdesc,
                 MTL::BlendFactor dst_bdesc,
@@ -146,7 +146,7 @@ namespace jeecs::graphic::api::metal
                 , m_vertex_function(vert)
                 , m_fragment_function(frag)
                 , m_vertex_descriptor(vdesc)
-                , m_depth_stencil_descriptor(ddesc)
+                , m_depth_stencil_state(dstate)
                 , m_blend_enabled(blend_enabled)
                 , m_blend_src_factor(src_bdesc)
                 , m_blend_dst_factor(dst_bdesc)
@@ -168,7 +168,7 @@ namespace jeecs::graphic::api::metal
             MTL::Function* vert,
             MTL::Function* frag,
             MTL::VertexDescriptor* vdesc,
-            MTL::DepthStencilDescriptor* ddesc,
+            MTL::DepthStencilState* dstate,
             bool blend_enabled,
             MTL::BlendFactor src_bdesc,
             MTL::BlendFactor dst_bdesc,
@@ -180,7 +180,7 @@ namespace jeecs::graphic::api::metal
                     vert,
                     frag,
                     vdesc,
-                    ddesc,
+                    dstate,
                     blend_enabled,
                     src_bdesc,
                     dst_bdesc,
@@ -400,7 +400,7 @@ namespace jeecs::graphic::api::metal
         m_vertex_function->release();
         m_fragment_function->release();
         m_vertex_descriptor->release();
-        m_depth_stencil_descriptor->release();
+        m_depth_stencil_state->release();
     }
 
     jegl_context::graphic_impl_context_t
@@ -733,6 +733,9 @@ namespace jeecs::graphic::api::metal
                     break;
                 }
 
+                MTL::DepthStencilState* depth_stencil_state =
+                    metal_context->m_metal_device->newDepthStencilState(depth_stencil_descriptor);
+                depth_stencil_descriptor->release();
               
                 auto blend_equation_cvt = [](jegl_shader::blend_equation eq)
                     {
@@ -815,7 +818,7 @@ namespace jeecs::graphic::api::metal
                         vertex_main_function,
                         fragment_main_function,
                         vertex_descriptor,
-                        depth_stencil_descriptor,
+                        depth_stencil_state,
                         blend_enabled,
                         blend_method_cvt(raw_shader->m_blend_src_mode),
                         blend_method_cvt(raw_shader->m_blend_dst_mode),
@@ -1388,7 +1391,7 @@ namespace jeecs::graphic::api::metal
         metal_context->m_render_states.m_current_command_encoder->setRenderPipelineState(pso);
 
         metal_context->m_render_states.m_current_command_encoder->setDepthStencilState(
-            shader_shared_state.m_depth_stencil_descriptor);
+            shader_shared_state.m_depth_stencil_state);
         metal_context->m_render_states.m_current_command_encoder->setCullMode(
             shader_shared_state.m_cull_mode);
 
