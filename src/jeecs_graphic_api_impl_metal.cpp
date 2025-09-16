@@ -659,7 +659,7 @@ namespace jeecs::graphic::api::metal
                     layout->setStepFunction(MTL::VertexStepFunctionPerVertex);
                 }·
 
-                MTL::DepthStencilDescriptor* depth_stencil_descriptor =
+                    MTL::DepthStencilDescriptor* depth_stencil_descriptor =
                     MTL::DepthStencilDescriptor::alloc()->init();
 
                 switch (raw_shader->m_depth_mask)
@@ -712,61 +712,68 @@ namespace jeecs::graphic::api::metal
                     MTL::BlendDescriptor::alloc()->init();
 
                 auto blend_equation_cvt = [](jegl_shader::blend_equation eq)
-                {
-                    switch (eq)
                     {
-                    case jegl_shader::blend_equation::ADD:
-                        return MTL::BlendOperationAdd;
-                    case jegl_shader::blend_equation::SUBTRACT:
-                        return MTL::BlendOperationSubtract;
-                    case jegl_shader::blend_equation::REVERSE_SUBTRACT:
-                        return MTL::BlendOperationReverseSubtract;
-                    case jegl_shader::blend_equation::MIN:
-                        return MTL::BlendOperationMin;
-                    case jegl_shader::blend_equation::MAX:
-                        return MTL::BlendOperationMax;
-                    default:
-                        jeecs::debug::logfatal("Unsupported blend equation.");
-                        abort();
-                    }
-                };
+                        switch (eq)
+                        {
+                        case jegl_shader::blend_equation::ADD:
+                            return MTL::BlendOperationAdd;
+                        case jegl_shader::blend_equation::SUBTRACT:
+                            return MTL::BlendOperationSubtract;
+                        case jegl_shader::blend_equation::REVERSE_SUBTRACT:
+                            return MTL::BlendOperationReverseSubtract;
+                        case jegl_shader::blend_equation::MIN:
+                            return MTL::BlendOperationMin;
+                        case jegl_shader::blend_equation::MAX:
+                            return MTL::BlendOperationMax;
+                        default:
+                            jeecs::debug::logfatal("Unsupported blend equation.");
+                            abort();
+                        }
+                    };
 
                 auto blend_method_cvt = [](jegl_shader::blend_method method)
-                {
-                    switch (method)
                     {
-                    case jegl_shader::blend_method::ZERO:
-                        return MTL::BlendFactorZero;
-                    case jegl_shader::blend_method::ONE:
-                        return MTL::BlendFactorOne;
-                    case jegl_shader::blend_method::SRC_COLOR:
-                        return MTL::BlendFactorSourceColor;
-                    case jegl_shader::blend_method::SRC_ALPHA:
-                        return MTL::BlendFactorSourceAlpha;
-                    case jegl_shader::blend_method::ONE_MINUS_SRC_ALPHA:
-                        return MTL::BlendFactorOneMinusSourceAlpha;
-                    case jegl_shader::blend_method::ONE_MINUS_SRC_COLOR:
-                        return MTL::BlendFactorOneMinusSourceColor;
-                    case jegl_shader::blend_method::DST_COLOR:
-                        return MTL::BlendFactorDestinationColor;
-                    case jegl_shader::blend_method::DST_ALPHA:
-                        return MTL::BlendFactorDestinationAlpha;
-                    case jegl_shader::blend_method::ONE_MINUS_DST_ALPHA:
-                        return MTL::BlendFactorOneMinusDestinationAlpha;
-                    case jegl_shader::blend_method::ONE_MINUS_DST_COLOR:
-                        return MTL::BlendFactorOneMinusDestinationColor;
-                    default:
-                        jeecs::debug::logfatal("Unsupported blend method.");
-                        abort();
-                    }
-                };
+                        switch (method)
+                        {
+                        case jegl_shader::blend_method::ZERO:
+                            return MTL::BlendFactorZero;
+                        case jegl_shader::blend_method::ONE:
+                            return MTL::BlendFactorOne;
+                        case jegl_shader::blend_method::SRC_COLOR:
+                            return MTL::BlendFactorSourceColor;
+                        case jegl_shader::blend_method::SRC_ALPHA:
+                            return MTL::BlendFactorSourceAlpha;
+                        case jegl_shader::blend_method::ONE_MINUS_SRC_ALPHA:
+                            return MTL::BlendFactorOneMinusSourceAlpha;
+                        case jegl_shader::blend_method::ONE_MINUS_SRC_COLOR:
+                            return MTL::BlendFactorOneMinusSourceColor;
+                        case jegl_shader::blend_method::DST_COLOR:
+                            return MTL::BlendFactorDestinationColor;
+                        case jegl_shader::blend_method::DST_ALPHA:
+                            return MTL::BlendFactorDestinationAlpha;
+                        case jegl_shader::blend_method::ONE_MINUS_DST_ALPHA:
+                            return MTL::BlendFactorOneMinusDestinationAlpha;
+                        case jegl_shader::blend_method::ONE_MINUS_DST_COLOR:
+                            return MTL::BlendFactorOneMinusDestinationColor;
+                        default:
+                            jeecs::debug::logfatal("Unsupported blend method.");
+                            abort();
+                        }
+                    };
 
-                blend_descriptor->setAlphaBlendOperation(blend_equation_cvt(raw_shader->m_blend_equation));
-                blend_descriptor->setRgbBlendOperation(blend_equation_cvt(raw_shader->m_blend_equation));
-                blend_descriptor->setSourceAlphaBlendFactor(blend_method_cvt(raw_shader->m_blend_src_mode));
-                blend_descriptor->setSourceRGBBlendFactor(blend_method_cvt(raw_shader->m_blend_src_mode));
-                blend_descriptor->setDestinationAlphaBlendFactor(blend_method_cvt(raw_shader->m_blend_dst_mode));
-                blend_descriptor->setDestinationRGBBlendFactor(blend_method_cvt(raw_shader->m_blend_dst_mode));
+                if (raw_shader->m_blend_src_mode == jegl_shader::blend_method::ONE &&
+                    raw_shader->m_blend_dst_mode == jegl_shader::blend_method::ZERO)
+                    blend_descriptor->setBlendingEnabled(false);
+                else
+                {
+                    blend_descriptor->setBlendingEnabled(true);
+                    blend_descriptor->setAlphaBlendOperation(blend_equation_cvt(raw_shader->m_blend_equation));
+                    blend_descriptor->setRgbBlendOperation(blend_equation_cvt(raw_shader->m_blend_equation));
+                    blend_descriptor->setSourceAlphaBlendFactor(blend_method_cvt(raw_shader->m_blend_src_mode));
+                    blend_descriptor->setSourceRGBBlendFactor(blend_method_cvt(raw_shader->m_blend_src_mode));
+                    blend_descriptor->setDestinationAlphaBlendFactor(blend_method_cvt(raw_shader->m_blend_dst_mode));
+                    blend_descriptor->setDestinationRGBBlendFactor(blend_method_cvt(raw_shader->m_blend_dst_mode));
+                }
 
                 metal_resource_shader_blob* shader_blob =
                     new metal_resource_shader_blob(
@@ -1317,7 +1324,14 @@ namespace jeecs::graphic::api::metal
             pDesc->release();
         }
 
+        // 开始绑定使用的 PSO, 深度缓冲描述符，混色描述符等
         metal_context->m_render_states.m_current_command_encoder->setRenderPipelineState(pso);
+        
+        metal_context->m_render_states.m_current_command_encoder->setDepthStencilState(
+            shader_shared_state.m_depth_stencil_state);
+        metal_context->m_render_states.m_current_command_encoder->setBlendState(
+            shader_shared_state.m_blend_state);
+
         for (const auto& sampler_struct : shader_shared_state.m_samplers)
         {
             metal_context->m_render_states.m_current_command_encoder->setFragmentSamplerState(
