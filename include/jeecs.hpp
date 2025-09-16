@@ -1849,7 +1849,7 @@ struct jegl_interface_config
     // 窗口标题
     const char* m_title;
 
-    // 用户数据，针对一些特殊的平台（例如 Metal），需要通过此参数传递一些特定的参数
+    // 用户数据，针对一些特殊的平台，可能需要通过此参数传递一些特定的参数
     // * 不同图形库可能以不同的方式使用此参数，请根据额外约定使用。
     void* m_userdata;
 };
@@ -2073,7 +2073,6 @@ struct jegl_shader
     {
         INVALID = -1,
 
-        OFF,
         NEVER,
         LESS, /* DEFAULT */
         EQUAL,
@@ -9453,7 +9452,7 @@ namespace jeecs
 
             std::mutex mx;
             std::condition_variable cv;
-            std::thread entry_script_thread;
+            std::optional<std::thread> entry_script_thread;
 
             bool entry_script_ended = false;
             std::optional<jegl_context*> graphic_context = std::nullopt;
@@ -9548,24 +9547,28 @@ namespace jeecs
                         ; // Update frames until the graphic context request to shutdown.
                 }
             }
-            graphic_syncer_host()
+            graphic_syncer_host(bool execute_entry_script)
             {
                 jegl_register_sync_thread_callback(
                     graphic_syncer_host::callback, this);
 
-                entry_script_thread = std::thread(
-                    [this]()
-                    {
-                        je_main_script_entry();
+                if (execute_entry_script)
+                    entry_script_thread = std::thread(
+                        [this]()
+                        {
+                            je_main_script_entry();
 
-                        std::lock_guard g(mx);
-                        entry_script_ended = true;
-                        cv.notify_one();
-                    });
+                            std::lock_guard g(mx);
+                            entry_script_ended = true;
+                            cv.notify_one();
+                        });
+                else
+                    entry_script_thread = std::nullopt;
             }
             ~graphic_syncer_host()
             {
-                entry_script_thread.join();
+                if (entry_script_thread.has_value())
+                    entry_script_thread.value().join();
             }
         };
     }
@@ -12195,7 +12198,7 @@ namespace jeecs
         }
         void loop()
         {
-            (void)prepare_graphic();
+            (void)prepare_graphic(true);
             graphic_syncer->loop();
         }
     protected:
@@ -12205,9 +12208,9 @@ namespace jeecs
             FRAME_UPDATE_READY,
             FRAME_UPDATE_CLOSE_REQUESTED,
         };
-        graphic::graphic_syncer_host* prepare_graphic()
+        graphic::graphic_syncer_host* prepare_graphic(bool execute_entry)
         {
-            graphic_syncer = new graphic::graphic_syncer_host();
+            graphic_syncer = new graphic::graphic_syncer_host(execute_entry);
             return graphic_syncer;
         }
         frame_update_result frame()

@@ -176,6 +176,7 @@ namespace jeecs::graphic::api::vk130
     struct jevk13_framebuffer;
     struct jevk13_shader_blob
     {
+        JECS_DISABLE_MOVE_AND_COPY(jevk13_shader_blob);
         struct blob_data
         {
             JECS_DISABLE_MOVE_AND_COPY(blob_data);
@@ -223,7 +224,7 @@ namespace jeecs::graphic::api::vk130
                 uint32_t m_sampler_id;
             };
             std::vector<sampler_data> m_samplers;
-            std::unordered_map<std::string, uint32_t> m_ulocations;
+            std::unordered_map<std::string, uint32_t> m_uniform_locations;
             size_t m_uniform_size;
 
             // Vulkan的这个设计真的让人很想吐槽，因为Pipeline和Shader与Pass/Rendbuffer
@@ -237,8 +238,6 @@ namespace jeecs::graphic::api::vk130
 
         jeecs::basic::resource<blob_data> m_blob_data;
 
-        JECS_DISABLE_MOVE_AND_COPY(jevk13_shader_blob);
-
         jevk13_shader_blob(blob_data* d)
             : m_blob_data(jeecs::basic::resource<blob_data>(d))
         {
@@ -246,8 +245,8 @@ namespace jeecs::graphic::api::vk130
 
         uint32_t get_built_in_location(const std::string& name) const
         {
-            auto fnd = m_blob_data->m_ulocations.find(name);
-            if (fnd != m_blob_data->m_ulocations.end())
+            auto fnd = m_blob_data->m_uniform_locations.find(name);
+            if (fnd != m_blob_data->m_uniform_locations.end())
                 return fnd->second;
 
             return jeecs::typing::INVALID_UINT32;
@@ -255,6 +254,8 @@ namespace jeecs::graphic::api::vk130
     };
     struct jevk13_texture
     {
+        JECS_DISABLE_MOVE_AND_COPY(jevk13_texture);
+
         VkImage m_vk_texture_image;
         VkDeviceMemory m_vk_texture_image_memory;
 
@@ -263,6 +264,8 @@ namespace jeecs::graphic::api::vk130
     };
     struct jevk13_uniformbuf
     {
+        JECS_DISABLE_MOVE_AND_COPY(jevk13_uniformbuf);
+
         VkBuffer m_uniform_buffer;
         VkDeviceMemory m_uniform_buffer_memory;
 
@@ -270,22 +273,22 @@ namespace jeecs::graphic::api::vk130
     };
     struct jevk13_shader
     {
+        JECS_DISABLE_MOVE_AND_COPY(jevk13_shader);
+
         jeecs::basic::resource<jevk13_shader_blob::blob_data> m_blob_data;
 
         size_t m_uniform_cpu_buffer_size;
         bool m_uniform_cpu_buffer_updated;
         uint8_t* m_uniform_cpu_buffer;
 
+        std::vector<jevk13_uniformbuf*> m_uniform_variables;
+
         size_t m_next_allocate_ubos_for_uniform_variable;
         size_t m_command_commit_round;
-
-        std::vector<jevk13_uniformbuf*> m_uniform_variables;
 
         VkPipeline prepare_pipeline(jegl_vk130_context* context);
         jevk13_uniformbuf* allocate_ubo_for_vars(jegl_vk130_context* context);
         jevk13_uniformbuf* get_last_usable_variable(jegl_vk130_context* context);
-
-        JECS_DISABLE_MOVE_AND_COPY(jevk13_shader);
 
         jevk13_shader(jevk13_shader_blob* blob)
             : m_blob_data(blob->m_blob_data)
@@ -295,19 +298,21 @@ namespace jeecs::graphic::api::vk130
             , m_command_commit_round(0)
         {
             if (m_uniform_cpu_buffer_size != 0)
+            {
                 m_uniform_cpu_buffer =
-                reinterpret_cast<uint8_t*>(malloc(m_uniform_cpu_buffer_size));
+                    reinterpret_cast<uint8_t*>(malloc(m_uniform_cpu_buffer_size));
+                assert(m_uniform_cpu_buffer != nullptr);
+                memset(m_uniform_cpu_buffer, 0, m_uniform_cpu_buffer_size);
+            }
             else
                 m_uniform_cpu_buffer = nullptr;
         }
-        ~jevk13_shader()
-        {
-            if (m_uniform_cpu_buffer != nullptr)
-                free(m_uniform_cpu_buffer);
-        }
+        ~jevk13_shader();
     };
     struct jevk13_framebuffer
     {
+        JECS_DISABLE_MOVE_AND_COPY(jevk13_framebuffer);
+
         VkRenderPass m_rendpass;
 
         std::unordered_set<jevk13_shader_blob::blob_data*>
@@ -326,6 +331,10 @@ namespace jeecs::graphic::api::vk130
     };
     struct jevk13_vertex
     {
+        JECS_DISABLE_MOVE_AND_COPY(jevk13_vertex);
+
+        jevk13_vertex() = default;
+
         VkBuffer m_vk_vertex_buffer;
         VkDeviceMemory m_vk_vertex_buffer_memory;
 
@@ -341,9 +350,15 @@ namespace jeecs::graphic::api::vk130
 
     struct jegl_vk130_context
     {
+        JECS_DISABLE_MOVE_AND_COPY(jegl_vk130_context);
+
+        jegl_vk130_context() = default;
+
 #if JE4_VK_USE_DYNAMIC_VK_LIB
         struct vklibrary_instance_proxy
         {
+            JECS_DISABLE_MOVE_AND_COPY(vklibrary_instance_proxy);
+
             void* _instance;
 
             vklibrary_instance_proxy()
@@ -367,8 +382,6 @@ namespace jeecs::graphic::api::vk130
                 assert(_instance != nullptr);
                 wo_unload_lib(_instance, WO_DYLIB_UNREF);
             }
-
-            JECS_DISABLE_MOVE_AND_COPY(vklibrary_instance_proxy);
 
             template <typename FT>
             FT api(const char* name)
@@ -529,6 +542,8 @@ namespace jeecs::graphic::api::vk130
         template <descriptor_set_type DESC_SET_TYPE>
         struct single_descriptor_set_allocator
         {
+            JECS_DISABLE_MOVE_AND_COPY(single_descriptor_set_allocator);
+
             inline const static VkDescriptorType _desc_set_types[descriptor_set_type::COUNT + 1] = {
                 VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -541,8 +556,6 @@ namespace jeecs::graphic::api::vk130
             VkDescriptorSetLayout m_layout;
             std::list<VkDescriptorPool> m_pools;
             std::list<VkDescriptorSet> m_free_sets;
-
-            JECS_DISABLE_MOVE_AND_COPY(single_descriptor_set_allocator);
 
             single_descriptor_set_allocator(jegl_vk130_context* ctx, VkDescriptorSetLayout layout)
                 : m_context(ctx), m_layout(layout)
@@ -620,6 +633,8 @@ namespace jeecs::graphic::api::vk130
 
         struct descriptor_set_allocator
         {
+            JECS_DISABLE_MOVE_AND_COPY(descriptor_set_allocator);
+
             constexpr static size_t MAX_LAYOUT_COUNT = 16;
             constexpr static size_t MAX_UBO_LAYOUT = MAX_LAYOUT_COUNT;
             constexpr static size_t MAX_TEXTURE_LAYOUT = MAX_LAYOUT_COUNT;
@@ -814,8 +829,6 @@ namespace jeecs::graphic::api::vk130
                     nullptr);
             }
 
-            JECS_DISABLE_MOVE_AND_COPY(descriptor_set_allocator);
-
             descriptor_set_allocator(jegl_vk130_context* context)
                 : m_context(context), m_vk_shader_uniform_variable_sets(
                     context, context->_vk_global_descriptor_set_layouts[descriptor_set_type::UNIFORM_VARIABLES]),
@@ -874,6 +887,8 @@ namespace jeecs::graphic::api::vk130
         };
         struct command_buffer_allocator
         {
+            JECS_DISABLE_MOVE_AND_COPY(command_buffer_allocator);
+
             jegl_vk130_context* m_context;
 
             VkCommandPool m_command_pool;
@@ -937,8 +952,6 @@ namespace jeecs::graphic::api::vk130
                 swapchain_image->m_using_command_buffers.clear();
                 swapchain_image->m_using_semaphores.clear();
             }
-
-            JECS_DISABLE_MOVE_AND_COPY(command_buffer_allocator);
 
             command_buffer_allocator(jegl_vk130_context* context)
             {
@@ -1610,7 +1623,7 @@ namespace jeecs::graphic::api::vk130
             glfwInitVulkanLoader(vkGetInstanceProcAddr);
 
             _vk_jegl_interface = new glfw(reboot ? glfw::HOLD : glfw::VULKAN130);
-            _vk_jegl_interface->create_interface(ctx, config);
+            _vk_jegl_interface->create_interface(config);
 
             _vk_jegl_context = ctx;
 
@@ -1719,59 +1732,6 @@ namespace jeecs::graphic::api::vk130
             }
 
             // 创建Surface，并且绑定窗口句柄
-#if 0
-#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
-            VkWin32SurfaceCreateInfoKHR surface_create_info = {};
-            surface_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-            surface_create_info.pNext = nullptr;
-            surface_create_info.flags = 0;
-            surface_create_info.hinstance = GetModuleHandle(nullptr);
-            surface_create_info.hwnd = (HWND)_vk_jegl_interface->interface_handle();
-
-            assert(vkCreateWin32SurfaceKHR != nullptr);
-            if (VK_SUCCESS != vkCreateWin32SurfaceKHR(_vk_instance, &surface_create_info, nullptr, &_vk_surface))
-            {
-                jeecs::debug::logfatal("Failed to create vk130 win32 surface.");
-            }
-#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
-            VkAndroidSurfaceCreateInfoKHR surface_create_info = {};
-            surface_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
-            surface_create_info.pNext = nullptr;
-            surface_create_info.flags = 0;
-            surface_create_info.window = (ANativeWindow*)_vk_jegl_interface->interface_handle();
-
-            assert(vkCreateAndroidSurfaceKHR != nullptr);
-            if (VK_SUCCESS != vkCreateAndroidSurfaceKHR(_vk_instance, &surface_create_info, nullptr, &_vk_surface))
-            {
-                jeecs::debug::logfatal("Failed to create vk130 android surface.");
-            }
-
-#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_LINUX
-            VkXlibSurfaceCreateInfoKHR surface_create_info = {};
-            surface_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
-            surface_create_info.pNext = nullptr;
-            surface_create_info.flags = 0;
-            surface_create_info.dpy = (Display*)_vk_jegl_interface->interface_handle();
-            surface_create_info.window = (Window)_vk_jegl_interface->interface_handle();
-
-            assert(vkCreateXlibSurfaceKHR != nullptr);
-            if (VK_SUCCESS != vkCreateXlibSurfaceKHR(_vk_instance, &surface_create_info, nullptr, &_vk_surface))
-            {
-                jeecs::debug::logfatal("Failed to create vk130 xlib surface.");
-            }
-#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_MACOS
-            VkMacOSSurfaceCreateInfoMVK surface_create_info = {};
-            surface_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_MACOS_SURFACE_CREATE_INFO_MVK;
-            surface_create_info.pNext = nullptr;
-            surface_create_info.flags = 0;
-            surface_create_info.pView = (void*)_vk_jegl_interface->interface_handle();
-            assert(vkCreateMacOSSurfaceMVK != nullptr);
-            if (VK_SUCCESS != vkCreateMacOSSurfaceMVK(_vk_instance, &surface_create_info, nullptr, &_vk_surface))
-            {
-                jeecs::debug::logfatal("Failed to create vk130 macos surface.");
-            }
-#endif
-#else
             if (VK_SUCCESS != glfwCreateWindowSurface(
                 _vk_instance, (GLFWwindow*)_vk_jegl_interface->interface_handle(), nullptr, &_vk_surface))
             {
@@ -1781,7 +1741,6 @@ namespace jeecs::graphic::api::vk130
                 jeecs::debug::logfatal("Failed to create vk130 glfw surface: %s(%d).",
                     error_message, eno);
             }
-#endif
             // 获取可接受的设备
 
             uint32_t enum_deveice_count = 0;
@@ -2453,9 +2412,6 @@ namespace jeecs::graphic::api::vk130
             shader_blob->m_depth_stencil_state_create_info.depthTestEnable = VK_TRUE;
             switch (resource->m_raw_shader_data->m_depth_test)
             {
-            case jegl_shader::depth_test_method::OFF:
-                shader_blob->m_depth_stencil_state_create_info.depthTestEnable = VK_FALSE;
-                break;
             case jegl_shader::depth_test_method::NEVER:
                 shader_blob->m_depth_stencil_state_create_info.depthCompareOp = VkCompareOp::VK_COMPARE_OP_NEVER;
                 break;
@@ -2612,7 +2568,7 @@ namespace jeecs::graphic::api::vk130
                     max_allign = std::max(max_allign, allign_base);
 
                     last_elem_end_place = jeecs::basic::allign_size(last_elem_end_place, allign_base);
-                    shader_blob->m_ulocations[uniforms->m_name] = last_elem_end_place;
+                    shader_blob->m_uniform_locations[uniforms->m_name] = last_elem_end_place;
                     last_elem_end_place += unit_size;
                 }
                 uniforms = uniforms->m_next;
@@ -2666,9 +2622,6 @@ namespace jeecs::graphic::api::vk130
         }
         void destroy_shader(jevk13_shader* shader)
         {
-            for (auto* ubo : shader->m_uniform_variables)
-                destroy_uniform_buffer(ubo);
-
             delete shader;
         }
 
@@ -3231,13 +3184,15 @@ namespace jeecs::graphic::api::vk130
                 reinterpret_cast<jevk13_uniformbuf*>(resource->m_handle.m_ptr);
 
             auto* raw_uniformbuf_data = resource->m_raw_uniformbuf_data;
-            assert(raw_uniformbuf_data != nullptr && raw_uniformbuf_data->m_update_length > 0);
-
-            update_uniform_buffer_with_range(
-                uniformbuf,
-                raw_uniformbuf_data->m_buffer + raw_uniformbuf_data->m_update_begin_offset,
-                raw_uniformbuf_data->m_update_begin_offset,
-                raw_uniformbuf_data->m_buffer_size);
+            if (raw_uniformbuf_data != nullptr)
+            {
+                assert(raw_uniformbuf_data->m_update_length != 0);
+                update_uniform_buffer_with_range(
+                    uniformbuf,
+                    raw_uniformbuf_data->m_buffer + raw_uniformbuf_data->m_update_begin_offset,
+                    raw_uniformbuf_data->m_update_begin_offset,
+                    raw_uniformbuf_data->m_buffer_size);
+            }
         }
 
         /////////////////////////////////////////////////////
@@ -3482,13 +3437,18 @@ namespace jeecs::graphic::api::vk130
                 1,
                 &clear_rect);
         }
-        void cmd_bind_shader_pipeline(jevk13_shader* shader)
+        bool cmd_bind_shader_pipeline(jevk13_shader* shader_may_null)
         {
             assert(_vk_current_target_framebuffer != nullptr);
 
-            _vk_current_binded_shader = shader;
+            if (_vk_current_binded_shader == shader_may_null)
+                return shader_may_null != nullptr;
 
-            for (auto& sampler : shader->m_blob_data->m_samplers)
+            _vk_current_binded_shader = shader_may_null;
+            if (shader_may_null == nullptr)
+                return false;
+
+            for (auto& sampler : shader_may_null->m_blob_data->m_samplers)
             {
                 _vk_descriptor_set_allocator->bind_sampler(
                     (size_t)sampler.m_sampler_id, sampler.m_vk_sampler);
@@ -3497,17 +3457,17 @@ namespace jeecs::graphic::api::vk130
             vkCmdBindPipeline(
                 _vk_current_command_buffer,
                 VkPipelineBindPoint::VK_PIPELINE_BIND_POINT_GRAPHICS,
-                shader->prepare_pipeline(this));
+                shader_may_null->prepare_pipeline(this));
 
             _vk_descriptor_set_allocator->bind_pipeline_layout(
-                shader->m_blob_data->m_pipeline_layout);
+                shader_may_null->m_blob_data->m_pipeline_layout);
+
+            return true;
         }
         void cmd_draw_vertex(jevk13_vertex* vertex)
         {
             assert(_vk_current_target_framebuffer != nullptr);
-
-            if (_vk_current_binded_shader == nullptr)
-                return;
+            assert(_vk_current_binded_shader != nullptr);
 
             VkDeviceSize offsets = 0;
 
@@ -3654,6 +3614,19 @@ namespace jeecs::graphic::api::vk130
         for (auto& sampler : m_samplers)
             m_context->vkDestroySampler(m_context->_vk_logic_device, sampler.m_vk_sampler, nullptr);
     }
+    jevk13_shader::~jevk13_shader()
+    {
+        if (m_uniform_cpu_buffer != nullptr)
+        {
+            auto* je_vk_context = m_blob_data->m_context;
+
+            for (auto* ubo : m_uniform_variables)
+                je_vk_context->destroy_uniform_buffer(ubo);
+
+            free(m_uniform_cpu_buffer);
+        }
+    }
+
     VkPipeline jevk13_shader::prepare_pipeline(jegl_vk130_context* context)
     {
         assert(context->_vk_current_target_framebuffer != nullptr);
@@ -3745,6 +3718,12 @@ namespace jeecs::graphic::api::vk130
     {
         if (m_next_allocate_ubos_for_uniform_variable >= m_uniform_variables.size())
         {
+            if (m_command_commit_round != context->_vk_command_commit_round)
+            {
+                m_command_commit_round = context->_vk_command_commit_round;
+                m_next_allocate_ubos_for_uniform_variable = 0;
+            }
+
             auto* ubo = context->create_uniform_buffer_with_size(
                 0, m_uniform_cpu_buffer_size);
 
@@ -3764,7 +3743,10 @@ namespace jeecs::graphic::api::vk130
         else if (m_command_commit_round != context->_vk_command_commit_round)
         {
             if (m_next_allocate_ubos_for_uniform_variable != 0)
-                std::swap(m_uniform_variables[0], m_uniform_variables[m_next_allocate_ubos_for_uniform_variable - 1]);
+                // Make sure use the newest UBO first.
+                std::swap(
+                    m_uniform_variables[0], 
+                    m_uniform_variables[m_next_allocate_ubos_for_uniform_variable - 1]);
 
             m_command_commit_round = context->_vk_command_commit_round;
             m_next_allocate_ubos_for_uniform_variable = 1;
@@ -3905,7 +3887,7 @@ namespace jeecs::graphic::api::vk130
             builtin_uniforms.m_builtin_uniform_local_scale = shader_blob->get_built_in_location("JE_LOCAL_SCALE");
             builtin_uniforms.m_builtin_uniform_color = shader_blob->get_built_in_location("JE_COLOR");
 
-            auto* uniforms = resource->m_raw_shader_data->m_custom_uniforms;
+            auto* uniforms = raw_shader_data->m_custom_uniforms;
             while (uniforms != nullptr)
             {
                 uniforms->m_index = shader_blob->get_built_in_location(uniforms->m_name);
@@ -4038,13 +4020,7 @@ namespace jeecs::graphic::api::vk130
         jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
 
         auto* shader_instance = reinterpret_cast<jevk13_shader*>(shader->m_handle.m_ptr);
-        if (shader_instance != nullptr)
-        {
-            context->cmd_bind_shader_pipeline(shader_instance);
-            return true;
-        }
-        context->_vk_current_binded_shader = nullptr;
-        return false;
+        return context->cmd_bind_shader_pipeline(shader_instance);
     }
     void bind_uniform_buffer(jegl_context::graphic_impl_context_t ctx, jegl_resource* uniformbuf)
     {
@@ -4076,6 +4052,10 @@ namespace jeecs::graphic::api::vk130
         jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
 
         jevk13_framebuffer* target_framebuf = nullptr;
+
+        // Reset current binded shader.
+        context->_vk_current_binded_shader = nullptr;
+
         if (framebuf != nullptr)
             target_framebuf = reinterpret_cast<jevk13_framebuffer*>(
                 framebuf->m_handle.m_ptr);

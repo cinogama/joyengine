@@ -56,11 +56,26 @@ void jegui_shutdown_vk130(bool reboot);
 #endif
 
 #ifdef JE_ENABLE_METAL_GAPI
+namespace MTL
+{
+    class Device;
+    class RenderPassDescriptor;
+    class CommandBuffer;
+    class RenderCommandEncoder;
+}
+
 void jegui_init_metal(
-    jegl_context *ctx,
+    jegl_context* ctx,
     jegui_user_image_loader_t get_img_res,
-    jegui_user_sampler_loader_t apply_shader_sampler);
-void jegui_update_metal();
+    jegui_user_sampler_loader_t apply_shader_sampler,
+    void* window_handle,
+    MTL::Device* device);
+void jegui_update_metal(
+    MTL::RenderPassDescriptor* rend_pass_desc,
+    MTL::CommandBuffer* command_buffer,
+    MTL::RenderCommandEncoder* command_encoder);
+void jegui_shutdown_metal(bool reboot);
+
 #endif
 
 void jegui_init_none(

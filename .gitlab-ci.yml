@@ -217,7 +217,7 @@ build_macos_opengl_vk:
       -DJE4_ENABLE_OPENGL330_GAPI=ON
       -DJE4_ENABLE_OPENGLES300_GAPI=OFF
       -DJE4_ENABLE_VULKAN130_GAPI=ON
-      -DJE4_ENABLE_METAL_GAPI=OFF
+      -DJE4_ENABLE_METAL_GAPI=ON
     - if [ ! -d pkg ]; then mkdir pkg; fi
     - if [ ! -d builtin ]; then mkdir builtin; fi
     - cmake --build . --config=RelWithDebInfo --target jedriver --parallel 4

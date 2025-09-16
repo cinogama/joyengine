@@ -2286,7 +2286,7 @@ import pkg::woshader;
 using woshader;
 using je::shader;
 
-ZTEST   (OFF);
+ZTEST   (NEVER);
 ZWRITE  (DISABLE);
 BLEND   (SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
 CULL    (NONE);

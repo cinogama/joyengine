@@ -46,9 +46,6 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/output")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/output")
 set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/output")
 
-include_directories("${JE4WEBGL_PATH}/include")
-include_directories("${JE4WEBGL_PATH}/3rd/woolang/include")
-
 add_executable(joyengineecs4w main.cpp)
 target_link_libraries(joyengineecs4w
         # JoyEngine core
@@ -66,6 +63,11 @@ foreach(file ${PRELOAD_FILES})
     set(JE4_PRELOAD_FLAGS 
     "${JE4_PRELOAD_FLAGS} --preload-file \"${CMAKE_CURRENT_SOURCE_DIR}/preloads/${file}\"@/${file}")
 endforeach()
+
+target_include_directories(
+    joyengineecs4w    
+    PRIVATE "${JE4WEBGL_PATH}/include"
+    PRIVATE "${JE4WEBGL_PATH}/3rd/woolang/include")
 
 set_target_properties(joyengineecs4w PROPERTIES
         SUFFIX ".html"
