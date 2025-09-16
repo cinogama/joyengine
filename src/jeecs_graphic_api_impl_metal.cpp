@@ -401,7 +401,6 @@ namespace jeecs::graphic::api::metal
         m_fragment_function->release();
         m_vertex_descriptor->release();
         m_depth_stencil_descriptor->release();
-        m_blend_descriptor->release();
     }
 
     jegl_context::graphic_impl_context_t
@@ -1307,17 +1306,17 @@ namespace jeecs::graphic::api::metal
         else
         {
             auto apply_blend_setting_to_attachment =
-                [&](RenderPipelineColorAttachmentDescriptor* desc)
+                [&](MTL::RenderPipelineColorAttachmentDescriptor* desc)
                 {
                     desc->setBlendingEnabled(shader_shared_state.m_blend_enabled);
                     if (shader_shared_state.m_blend_enabled)
                     {
-                        desc->setRgbBlendOperation(shader_shared_state.m_blend_equation);
-                        desc->setAlphaBlendOperation(shader_shared_state.m_blend_equation);
-                        desc->setSourceRgbBlendFactor(shader_shared_state.m_blend_src_mode);
-                        desc->setSourceAlphaBlendFactor(shader_shared_state.m_blend_src_mode);
-                        desc->setDestinationRgbBlendFactor(shader_shared_state.m_blend_dst_mode);
-                        desc->setDestinationAlphaBlendFactor(shader_shared_state.m_blend_dst_mode);
+                        desc->setRgbBlendOperation(shader_shared_state.m_blend_operation);
+                        desc->setAlphaBlendOperation(shader_shared_state.m_blend_operation);
+                        desc->setSourceRgbBlendFactor(shader_shared_state.m_blend_src_factor);
+                        desc->setSourceAlphaBlendFactor(shader_shared_state.m_blend_src_factor);
+                        desc->setDestinationRgbBlendFactor(shader_shared_state.m_blend_dst_factor);
+                        desc->setDestinationAlphaBlendFactor(shader_shared_state.m_blend_dst_factor);
                     }
                 };
 
