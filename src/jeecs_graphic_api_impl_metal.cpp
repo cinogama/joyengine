@@ -220,6 +220,7 @@ namespace jeecs::graphic::api::metal
             , m_uniform_buffer_updated(false)
             , m_draw_for_r2b(false)
             , m_command_commit_round(0)
+            , m_next_allocate_uniform_buffer_index(0)
         {
             if (m_uniform_cpu_buffer_size != 0)
             {
