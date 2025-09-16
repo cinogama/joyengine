@@ -442,7 +442,7 @@ namespace jeecs::graphic::api::metal
             [](jegl_context* ctx, jegl_resource* res)
             {
                 auto* metal_context =
-                    reinterpret_cast<jegl_vk130_context*>(ctx->m_graphic_impl_context);
+                    reinterpret_cast<jegl_metal_context*>(ctx->m_graphic_impl_context);
                 auto* shader_instance = reinterpret_cast<metal_shader*>(res->m_handle.m_ptr);
                 auto& shader_shared_state = *shader_instance->m_shared_state;
                 for (const auto& sampler_struct : shader_shared_state.m_samplers)
