@@ -885,9 +885,6 @@ namespace jeecs::graphic::api::dx11
                 depth_describe.DepthEnable = TRUE;
                 switch (resource->m_raw_shader_data->m_depth_test)
                 {
-                case jegl_shader::depth_test_method::OFF:
-                    depth_describe.DepthEnable = FALSE;
-                    break;
                 case jegl_shader::depth_test_method::NEVER:
                     depth_describe.DepthFunc = D3D11_COMPARISON_NEVER;
                     break;

@@ -232,7 +232,7 @@ namespace jeecs::graphic::api::gl3
                 resource->m_raw_uniformbuf_data->m_buffer_size,
                 NULL, GL_DYNAMIC_COPY); // 预分配空间
 
-            m_binding_place = 
+            m_binding_place =
                 (GLuint)(resource->m_raw_uniformbuf_data->m_buffer_binding_place + 1);
             m_uniform_buffer_size = (GLsizeiptr)resource->m_raw_uniformbuf_data->m_buffer_size;
 
@@ -1136,42 +1136,37 @@ namespace jeecs::graphic::api::gl3
         {
             ctx->ACTIVE_DEPTH_MODE = mode;
 
-            if (mode == jegl_shader::depth_test_method::OFF)
-                glDisable(GL_DEPTH_TEST);
-            else
+            glEnable(GL_DEPTH_TEST);
+            switch (mode)
             {
-                glEnable(GL_DEPTH_TEST);
-                switch (mode)
-                {
-                case jegl_shader::depth_test_method::NEVER:
-                    glDepthFunc(GL_NEVER);
-                    break;
-                case jegl_shader::depth_test_method::LESS:
-                    glDepthFunc(GL_LESS);
-                    break;
-                case jegl_shader::depth_test_method::EQUAL:
-                    glDepthFunc(GL_EQUAL);
-                    break;
-                case jegl_shader::depth_test_method::LESS_EQUAL:
-                    glDepthFunc(GL_LEQUAL);
-                    break;
-                case jegl_shader::depth_test_method::GREATER:
-                    glDepthFunc(GL_GREATER);
-                    break;
-                case jegl_shader::depth_test_method::NOT_EQUAL:
-                    glDepthFunc(GL_NOTEQUAL);
-                    break;
-                case jegl_shader::depth_test_method::GREATER_EQUAL:
-                    glDepthFunc(GL_GEQUAL);
-                    break;
-                case jegl_shader::depth_test_method::ALWAYS:
-                    glDepthFunc(GL_ALWAYS);
-                    break;
-                default:
-                    jeecs::debug::logerr("Invalid depth test method.");
-                    break;
-                }
-            } // end else
+            case jegl_shader::depth_test_method::NEVER:
+                glDepthFunc(GL_NEVER);
+                break;
+            case jegl_shader::depth_test_method::LESS:
+                glDepthFunc(GL_LESS);
+                break;
+            case jegl_shader::depth_test_method::EQUAL:
+                glDepthFunc(GL_EQUAL);
+                break;
+            case jegl_shader::depth_test_method::LESS_EQUAL:
+                glDepthFunc(GL_LEQUAL);
+                break;
+            case jegl_shader::depth_test_method::GREATER:
+                glDepthFunc(GL_GREATER);
+                break;
+            case jegl_shader::depth_test_method::NOT_EQUAL:
+                glDepthFunc(GL_NOTEQUAL);
+                break;
+            case jegl_shader::depth_test_method::GREATER_EQUAL:
+                glDepthFunc(GL_GEQUAL);
+                break;
+            case jegl_shader::depth_test_method::ALWAYS:
+                glDepthFunc(GL_ALWAYS);
+                break;
+            default:
+                jeecs::debug::logerr("Invalid depth test method.");
+                break;
+            }
         }
     }
     void _gl_update_depth_mask_method(jegl_gl3_context* ctx, jegl_shader::depth_mask_method mode)
@@ -1349,7 +1344,7 @@ namespace jeecs::graphic::api::gl3
         context->current_active_shader_may_null = shader_instance;
         if (shader_instance == nullptr)
             return false;
-    
+
         if (resource->m_raw_shader_data != nullptr)
         {
             _gl_update_depth_test_method(context, resource->m_raw_shader_data->m_depth_test);
@@ -1487,7 +1482,7 @@ namespace jeecs::graphic::api::gl3
 
     void gl_bind_uniform_buffer(jegl_context::graphic_impl_context_t, jegl_resource* uniformbuf)
     {
-        jegl_gl3_uniformbuf* ubuf = 
+        jegl_gl3_uniformbuf* ubuf =
             std::launder(reinterpret_cast<jegl_gl3_uniformbuf*>(uniformbuf->m_handle.m_ptr));
 
         glBindBufferRange(

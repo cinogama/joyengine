@@ -2412,9 +2412,6 @@ namespace jeecs::graphic::api::vk130
             shader_blob->m_depth_stencil_state_create_info.depthTestEnable = VK_TRUE;
             switch (resource->m_raw_shader_data->m_depth_test)
             {
-            case jegl_shader::depth_test_method::OFF:
-                shader_blob->m_depth_stencil_state_create_info.depthTestEnable = VK_FALSE;
-                break;
             case jegl_shader::depth_test_method::NEVER:
                 shader_blob->m_depth_stencil_state_create_info.depthCompareOp = VkCompareOp::VK_COMPARE_OP_NEVER;
                 break;

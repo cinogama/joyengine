@@ -2073,7 +2073,6 @@ struct jegl_shader
     {
         INVALID = -1,
 
-        OFF,
         NEVER,
         LESS, /* DEFAULT */
         EQUAL,

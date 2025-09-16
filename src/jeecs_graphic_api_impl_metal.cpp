@@ -111,7 +111,10 @@ namespace jeecs::graphic::api::metal
             jegl_metal_context* m_context;
             MTL::Function* m_vertex_function;
             MTL::Function* m_fragment_function;
+
             MTL::VertexDescriptor* m_vertex_descriptor;
+            MTL::DepthStencilDescriptor* m_depth_stencil_descriptor;
+            MTL::BlendDescriptor* m_blend_descriptor;
 
             struct sampler_structs
             {
@@ -126,12 +129,15 @@ namespace jeecs::graphic::api::metal
                 jegl_metal_context* ctx,
                 MTL::Function* vert,
                 MTL::Function* frag,
-                MTL::VertexDescriptor* vdesc)
+                MTL::VertexDescriptor* vdesc,
+                MTL::DepthStencilDescriptor* ddesc,
+                MTL::BlendDescriptor* bdesc)
                 : m_context(ctx)
                 , m_vertex_function(vert)
                 , m_fragment_function(frag)
                 , m_vertex_descriptor(vdesc)
-
+                , m_depth_stencil_descriptor(ddesc)
+                , m_blend_descriptor(bdesc)
             {
             }
             ~shared_state();
@@ -147,8 +153,13 @@ namespace jeecs::graphic::api::metal
             jegl_metal_context* ctx,
             MTL::Function* vert,
             MTL::Function* frag,
-            MTL::VertexDescriptor* vdesc)
-            : m_shared_state(new shared_state(ctx, vert, frag, vdesc))
+            MTL::VertexDescriptor* vdesc,
+            MTL::DepthStencilDescriptor* ddesc,
+            MTL::BlendDescriptor* bdesc
+        )
+            : m_shared_state(
+                new shared_state(
+                    ctx, vert, frag, vdesc, ddesc, bdesc))
         {
         }
         ~metal_resource_shader_blob() = default;
@@ -201,14 +212,14 @@ namespace jeecs::graphic::api::metal
                 return allocate_buffer_to_update(ctx);
             else if (m_command_commit_round != ctx->m_render_states.m_frame_counter)
             {
-               if (m_next_allocate_uniform_buffer_index != 0)
-                   // Make sure use the newest UBO first.
-                   std::swap(
-                       m_allocated_uniform_buffers[0],
-                       m_allocated_uniform_buffers[m_next_allocate_uniform_buffer_index - 1]);
+                if (m_next_allocate_uniform_buffer_index != 0)
+                    // Make sure use the newest UBO first.
+                    std::swap(
+                        m_allocated_uniform_buffers[0],
+                        m_allocated_uniform_buffers[m_next_allocate_uniform_buffer_index - 1]);
 
-               m_command_commit_round = ctx->m_render_states.m_frame_counter;
-               m_next_allocate_uniform_buffer_index = 1;
+                m_command_commit_round = ctx->m_render_states.m_frame_counter;
+                m_next_allocate_uniform_buffer_index = 1;
             }
             return m_allocated_uniform_buffers[m_next_allocate_uniform_buffer_index - 1];
         }
@@ -363,6 +374,8 @@ namespace jeecs::graphic::api::metal
         m_vertex_function->release();
         m_fragment_function->release();
         m_vertex_descriptor->release();
+        m_depth_stencil_descriptor->release();
+        m_blend_descriptor->release();
     }
 
     jegl_context::graphic_impl_context_t
@@ -644,14 +657,125 @@ namespace jeecs::graphic::api::metal
                     auto* layout = vertex_descriptor->layouts()->object(0);
                     layout->setStride(MTL::BufferLayoutStrideDynamic); // 使用动态stride
                     layout->setStepFunction(MTL::VertexStepFunctionPerVertex);
+                }·
+
+                MTL::DepthStencilDescriptor* depth_stencil_descriptor =
+                    MTL::DepthStencilDescriptor::alloc()->init();
+
+                switch (raw_shader->m_depth_mask)
+                {
+                case jegl_shader::depth_mask::DISABLE:
+                    depth_stencil_descriptor->setDepthWriteEnabled(false);
+                    break;
+                case jegl_shader::depth_mask::ENABLE:
+                    depth_stencil_descriptor->setDepthWriteEnabled(true);
+                    break;
+                default:
+                    jeecs::debug::logfatal("Unsupported depth mask mode.");
+                    abort();
+                    break;
                 }
+
+                switch (raw_shader->m_depth_test)
+                {
+                case jegl_shader::depth_test::NEVER:
+                    depth_stencil_descriptor->setDepthCompareFunction(MTL::CompareFunctionNever);
+                    break;
+                case jegl_shader::depth_test::LESS:
+                    depth_stencil_descriptor->setDepthCompareFunction(MTL::CompareFunctionLess);
+                    break;
+                case jegl_shader::depth_test::EQUAL:
+                    depth_stencil_descriptor->setDepthCompareFunction(MTL::CompareFunctionEqual);
+                    break;
+                case jegl_shader::depth_test::LESS_EQUAL:
+                    depth_stencil_descriptor->setDepthCompareFunction(MTL::CompareFunctionLessEqual);
+                    break;
+                case jegl_shader::depth_test::GREATER:
+                    depth_stencil_descriptor->setDepthCompareFunction(MTL::CompareFunctionGreater);
+                    break;
+                case jegl_shader::depth_test::NOT_EQUAL:
+                    depth_stencil_descriptor->setDepthCompareFunction(MTL::CompareFunctionNotEqual);
+                    break;
+                case jegl_shader::depth_test::GREATER_EQUAL:
+                    depth_stencil_descriptor->setDepthCompareFunction(MTL::CompareFunctionGreaterEqual);
+                    break;
+                case jegl_shader::depth_test::ALWAYS:
+                    depth_stencil_descriptor->setDepthCompareFunction(MTL::CompareFunctionAlways);
+                    break;
+                default:
+                    jeecs::debug::logfatal("Unsupported depth test mode.");
+                    abort();
+                    break;
+                }
+
+                MTL::BlendDescriptor* blend_descriptor =
+                    MTL::BlendDescriptor::alloc()->init();
+
+                auto blend_equation_cvt = [](jegl_shader::blend_equation eq)
+                {
+                    switch (eq)
+                    {
+                    case jegl_shader::blend_equation::ADD:
+                        return MTL::BlendOperationAdd;
+                    case jegl_shader::blend_equation::SUBTRACT:
+                        return MTL::BlendOperationSubtract;
+                    case jegl_shader::blend_equation::REVERSE_SUBTRACT:
+                        return MTL::BlendOperationReverseSubtract;
+                    case jegl_shader::blend_equation::MIN:
+                        return MTL::BlendOperationMin;
+                    case jegl_shader::blend_equation::MAX:
+                        return MTL::BlendOperationMax;
+                    default:
+                        jeecs::debug::logfatal("Unsupported blend equation.");
+                        abort();
+                    }
+                };
+
+                auto blend_method_cvt = [](jegl_shader::blend_method method)
+                {
+                    switch (method)
+                    {
+                    case jegl_shader::blend_method::ZERO:
+                        return MTL::BlendFactorZero;
+                    case jegl_shader::blend_method::ONE:
+                        return MTL::BlendFactorOne;
+                    case jegl_shader::blend_method::SRC_COLOR:
+                        return MTL::BlendFactorSourceColor;
+                    case jegl_shader::blend_method::SRC_ALPHA:
+                        return MTL::BlendFactorSourceAlpha;
+                    case jegl_shader::blend_method::ONE_MINUS_SRC_ALPHA:
+                        return MTL::BlendFactorOneMinusSourceAlpha;
+                    case jegl_shader::blend_method::ONE_MINUS_SRC_COLOR:
+                        return MTL::BlendFactorOneMinusSourceColor;
+                    case jegl_shader::blend_method::DST_COLOR:
+                        return MTL::BlendFactorDestinationColor;
+                    case jegl_shader::blend_method::DST_ALPHA:
+                        return MTL::BlendFactorDestinationAlpha;
+                    case jegl_shader::blend_method::ONE_MINUS_DST_ALPHA:
+                        return MTL::BlendFactorOneMinusDestinationAlpha;
+                    case jegl_shader::blend_method::ONE_MINUS_DST_COLOR:
+                        return MTL::BlendFactorOneMinusDestinationColor;
+                    default:
+                        jeecs::debug::logfatal("Unsupported blend method.");
+                        abort();
+                    }
+                };
+
+                blend_descriptor->setAlphaBlendOperation(blend_equation_cvt(raw_shader->m_blend_equation));
+                blend_descriptor->setRgbBlendOperation(blend_equation_cvt(raw_shader->m_blend_equation));
+                blend_descriptor->setSourceAlphaBlendFactor(blend_method_cvt(raw_shader->m_blend_src_mode));
+                blend_descriptor->setSourceRGBBlendFactor(blend_method_cvt(raw_shader->m_blend_src_mode));
+                blend_descriptor->setDestinationAlphaBlendFactor(blend_method_cvt(raw_shader->m_blend_dst_mode));
+                blend_descriptor->setDestinationRGBBlendFactor(blend_method_cvt(raw_shader->m_blend_dst_mode));
 
                 metal_resource_shader_blob* shader_blob =
                     new metal_resource_shader_blob(
                         metal_context,
                         vertex_main_function,
                         fragment_main_function,
-                        vertex_descriptor);
+                        vertex_descriptor,
+                        depth_stencil_descriptor,
+                        blend_descriptor);
 
                 // Update uniforms layout.
                 uint32_t last_elem_end_place = 0;
@@ -807,7 +931,7 @@ namespace jeecs::graphic::api::metal
                 builtin_uniforms.m_builtin_uniform_light2d_decay =
                     shader_blob->get_built_in_location("JE_LIGHT2D_DECAY");
 
-                metal_shader_instance->m_ndc_scale_uniform_id = 
+                metal_shader_instance->m_ndc_scale_uniform_id =
                     builtin_uniforms.m_builtin_uniform_ndc_scale;
 
                 // ATTENTION: 注意，以下参数特殊shader可能挪作他用
@@ -1214,7 +1338,7 @@ namespace jeecs::graphic::api::metal
     }
     void set_uniform(
         jegl_context::graphic_impl_context_t ctx,
-        uint32_t location, 
+        uint32_t location,
         jegl_shader::uniform_type type,
         const void* val)
     {
