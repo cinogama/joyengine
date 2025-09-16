@@ -4367,19 +4367,6 @@ je_main_script_entry [基本接口]
 */
 JE_API bool je_main_script_entry();
 
-#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_MACOS
-/*
-jegl_cocoa_metal_application_run [基本接口]
-运行 MacOS/IOS 平台下的图形（窗口）主循环
-    * 作为 game_engine_context 及其 loop 的替代品，由于 Cocoa 框架的特殊性
-        无法使用 game_engine_context 驱动主循环，需要调用此接口作为替代
-    * 仅在 MacOS/IOS metal 下有效
-*/
-// JE_API void jegl_cocoa_metal_application_run(int argc, char** argv);
-
-#endif // defined(JE4_PLATFORM_MACOS)
-
-
 // DEBUG API, SHOULD NOT BE USED IN GAME PROJECT, ONLY USED FOR EDITOR
 #ifdef JE_ENABLE_DEBUG_API
 
