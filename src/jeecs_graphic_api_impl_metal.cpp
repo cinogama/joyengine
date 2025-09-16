@@ -1313,9 +1313,9 @@ namespace jeecs::graphic::api::metal
                     {
                         desc->setRgbBlendOperation(shader_shared_state.m_blend_operation);
                         desc->setAlphaBlendOperation(shader_shared_state.m_blend_operation);
-                        desc->setSourceRgbBlendFactor(shader_shared_state.m_blend_src_factor);
+                        desc->setSourceRGBBlendFactor(shader_shared_state.m_blend_src_factor);
                         desc->setSourceAlphaBlendFactor(shader_shared_state.m_blend_src_factor);
-                        desc->setDestinationRgbBlendFactor(shader_shared_state.m_blend_dst_factor);
+                        desc->setDestinationRGBBlendFactor(shader_shared_state.m_blend_dst_factor);
                         desc->setDestinationAlphaBlendFactor(shader_shared_state.m_blend_dst_factor);
                     }
                 };
