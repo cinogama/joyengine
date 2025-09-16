@@ -114,7 +114,12 @@ namespace jeecs::graphic::api::metal
 
             MTL::VertexDescriptor* m_vertex_descriptor;
             MTL::DepthStencilDescriptor* m_depth_stencil_descriptor;
-            MTL::BlendDescriptor* m_blend_descriptor;
+
+            bool m_blend_enabled;
+            MTL::BlendFactor m_blend_src_factor;
+            MTL::BlendFactor m_blend_dst_factor;
+            MTL::BlendOperation m_blend_operation;
+
             MTL::CullMode m_cull_mode;
 
             struct sampler_structs
@@ -132,14 +137,20 @@ namespace jeecs::graphic::api::metal
                 MTL::Function* frag,
                 MTL::VertexDescriptor* vdesc,
                 MTL::DepthStencilDescriptor* ddesc,
-                MTL::BlendDescriptor* bdesc,
+                bool blend_enabled,
+                MTL::BlendFactor src_bdesc,
+                MTL::BlendFactor dst_bdesc,
+                MTL::BlendOperation op_bdesc,
                 MTL::CullMode cmode)
                 : m_context(ctx)
                 , m_vertex_function(vert)
                 , m_fragment_function(frag)
                 , m_vertex_descriptor(vdesc)
                 , m_depth_stencil_descriptor(ddesc)
-                , m_blend_descriptor(bdesc)
+                , m_blend_enabled(blend_enabled)
+                , m_blend_src_factor(src_bdesc)
+                , m_blend_dst_factor(dst_bdesc)
+                , m_blend_operation(op_bdesc)
                 , m_cull_mode(cmode)
             {
             }
@@ -158,11 +169,23 @@ namespace jeecs::graphic::api::metal
             MTL::Function* frag,
             MTL::VertexDescriptor* vdesc,
             MTL::DepthStencilDescriptor* ddesc,
-            MTL::BlendDescriptor* bdesc,
+            bool blend_enabled,
+            MTL::BlendFactor src_bdesc,
+            MTL::BlendFactor dst_bdesc,
+            MTL::BlendOperation op_bdesc,
             MTL::CullMode cmode)
             : m_shared_state(
                 new shared_state(
-                    ctx, vert, frag, vdesc, ddesc, bdesc, cmode))
+                    ctx,
+                    vert,
+                    frag,
+                    vdesc,
+                    ddesc,
+                    blend_enabled,
+                    src_bdesc,
+                    dst_bdesc,
+                    op_bdesc,
+                    cmode))
         {
         }
         ~metal_resource_shader_blob() = default;
@@ -711,9 +734,7 @@ namespace jeecs::graphic::api::metal
                     break;
                 }
 
-                MTL::BlendDescriptor* blend_descriptor =
-                    MTL::BlendDescriptor::alloc()->init();
-
+              
                 auto blend_equation_cvt = [](jegl_shader::blend_equation eq)
                     {
                         switch (eq)
@@ -763,21 +784,7 @@ namespace jeecs::graphic::api::metal
                             abort();
                         }
                     };
-
-                if (raw_shader->m_blend_src_mode == jegl_shader::blend_method::ONE &&
-                    raw_shader->m_blend_dst_mode == jegl_shader::blend_method::ZERO)
-                    blend_descriptor->setBlendingEnabled(false);
-                else
-                {
-                    blend_descriptor->setBlendingEnabled(true);
-                    blend_descriptor->setAlphaBlendOperation(blend_equation_cvt(raw_shader->m_blend_equation));
-                    blend_descriptor->setRgbBlendOperation(blend_equation_cvt(raw_shader->m_blend_equation));
-                    blend_descriptor->setSourceAlphaBlendFactor(blend_method_cvt(raw_shader->m_blend_src_mode));
-                    blend_descriptor->setSourceRGBBlendFactor(blend_method_cvt(raw_shader->m_blend_src_mode));
-                    blend_descriptor->setDestinationAlphaBlendFactor(blend_method_cvt(raw_shader->m_blend_dst_mode));
-                    blend_descriptor->setDestinationRGBBlendFactor(blend_method_cvt(raw_shader->m_blend_dst_mode));
-                }
-
+                
                 MTL::CullMode cull_mode;
 
                 switch (raw_shader->m_cull_mode)
@@ -797,6 +804,12 @@ namespace jeecs::graphic::api::metal
                     break;
                 }
 
+                bool blend_enabled = true;
+
+                if (raw_shader->m_blend_src_mode == jegl_shader::blend_method::ONE &&
+                    raw_shader->m_blend_dst_mode == jegl_shader::blend_method::ZERO)
+                    blend_enabled = false;
+
                 metal_resource_shader_blob* shader_blob =
                     new metal_resource_shader_blob(
                         metal_context,
@@ -804,7 +817,10 @@ namespace jeecs::graphic::api::metal
                         fragment_main_function,
                         vertex_descriptor,
                         depth_stencil_descriptor,
-                        blend_descriptor,
+                        blend_enabled,
+                        blend_method_cvt(raw_shader->m_blend_src_mode),
+                        blend_method_cvt(raw_shader->m_blend_dst_mode),
+                        blend_equation_cvt(raw_shader->m_blend_equation),
                         cull_mode);
 
                 // Update uniforms layout.
@@ -1290,6 +1306,21 @@ namespace jeecs::graphic::api::metal
             pso = fnd->second;
         else
         {
+            auto apply_blend_setting_to_attachment =
+                [&](RenderPipelineColorAttachmentDescriptor* desc)
+                {
+                    desc->setBlendingEnabled(shader_shared_state.m_blend_enabled);
+                    if (shader_shared_state.m_blend_enabled)
+                    {
+                        desc->setRgbBlendOperation(shader_shared_state.m_blend_equation);
+                        desc->setAlphaBlendOperation(shader_shared_state.m_blend_equation);
+                        desc->setSourceRgbBlendFactor(shader_shared_state.m_blend_src_mode);
+                        desc->setSourceAlphaBlendFactor(shader_shared_state.m_blend_src_mode);
+                        desc->setDestinationRgbBlendFactor(shader_shared_state.m_blend_dst_mode);
+                        desc->setDestinationAlphaBlendFactor(shader_shared_state.m_blend_dst_mode);
+                    }
+                };
+
             MTL::RenderPipelineDescriptor* pDesc =
                 MTL::RenderPipelineDescriptor::alloc()->init();
 
@@ -1301,8 +1332,11 @@ namespace jeecs::graphic::api::metal
             {
                 for (size_t i = 0; i < current_target_framebuffer->m_color_attachment_formats.size(); ++i)
                 {
-                    pDesc->colorAttachments()->object(i)->setPixelFormat(
+                    auto* desc = pDesc->colorAttachments()->object(i);
+                    desc->setPixelFormat(
                         current_target_framebuffer->m_color_attachment_formats[i]);
+
+                    apply_blend_setting_to_attachment(desc);
                 }
                 if (current_target_framebuffer->m_has_depth_attachment)
                     pDesc->setDepthAttachmentPixelFormat(
@@ -1311,8 +1345,12 @@ namespace jeecs::graphic::api::metal
             else
             {
                 // Create pso for main framebuffer
-                pDesc->colorAttachments()->object(0)->setPixelFormat(
+                auto* desc = pDesc->colorAttachments()->object(0);
+                desc->setPixelFormat(
                     MTL::PixelFormat::PixelFormatBGRA8Unorm);
+
+                apply_blend_setting_to_attachment(desc);
+
                 pDesc->setDepthAttachmentPixelFormat(
                     MTL::PixelFormatDepth16Unorm);
             }
@@ -1347,13 +1385,11 @@ namespace jeecs::graphic::api::metal
             pDesc->release();
         }
 
-        // 开始绑定使用的 PSO, 深度缓冲描述符，混色描述符等
+        // 开始绑定使用的 PSO, 深度缓冲描述符，面剪裁描述符等
         metal_context->m_render_states.m_current_command_encoder->setRenderPipelineState(pso);
 
         metal_context->m_render_states.m_current_command_encoder->setDepthStencilState(
-            shader_shared_state.m_depth_stencil_state);
-        metal_context->m_render_states.m_current_command_encoder->setBlendState(
-            shader_shared_state.m_blend_state);
+            shader_shared_state.m_depth_stencil_descriptor);
         metal_context->m_render_states.m_current_command_encoder->setCullMode(
             shader_shared_state.m_cull_mode);
 
