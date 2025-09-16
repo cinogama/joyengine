@@ -439,9 +439,18 @@ namespace jeecs::graphic::api::metal
 
                 return (uint64_t)tex->m_texture;
             },
-            [](jegl_context*, jegl_resource*)
+            [](jegl_context* ctx, jegl_resource* res)
             {
-                // TODO;
+                auto* metal_context =
+                    reinterpret_cast<jegl_vk130_context*>(ctx->m_graphic_impl_context);
+                auto* shader_instance = reinterpret_cast<metal_shader*>(res->m_handle.m_ptr);
+                auto& shader_shared_state = *shader_instance->m_shared_state;
+                for (const auto& sampler_struct : shader_shared_state.m_samplers)
+                {
+                    metal_context->m_render_states.m_current_command_encoder->setFragmentSamplerState(
+                        sampler_struct.m_sampler,
+                        sampler_struct.m_sampler_id);
+                }
             },
             glfw_window,
             context->m_metal_device);
