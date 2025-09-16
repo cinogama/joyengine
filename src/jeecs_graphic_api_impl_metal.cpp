@@ -221,6 +221,12 @@ namespace jeecs::graphic::api::metal
         {
             if (m_next_allocate_uniform_buffer_index >= m_allocated_uniform_buffers.size())
             {
+                if (m_command_commit_round != ctx->m_render_states.m_frame_counter)
+                {
+                    m_command_commit_round = ctx->m_render_states.m_frame_counter;
+                    m_next_allocate_uniform_buffer_index = 0;
+                }
+
                 auto* buf = ctx->m_metal_device->newBuffer(
                     m_uniform_cpu_buffer_size,
                     MTL::ResourceStorageModeShared);

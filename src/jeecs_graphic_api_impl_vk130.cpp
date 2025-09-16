@@ -3718,6 +3718,12 @@ namespace jeecs::graphic::api::vk130
     {
         if (m_next_allocate_ubos_for_uniform_variable >= m_uniform_variables.size())
         {
+            if (m_command_commit_round != context->_vk_command_commit_round)
+            {
+                m_command_commit_round = context->_vk_command_commit_round;
+                m_next_allocate_ubos_for_uniform_variable = 0;
+            }
+
             auto* ubo = context->create_uniform_buffer_with_size(
                 0, m_uniform_cpu_buffer_size);
 
