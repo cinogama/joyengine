@@ -115,6 +115,7 @@ namespace jeecs::graphic::api::metal
             MTL::VertexDescriptor* m_vertex_descriptor;
             MTL::DepthStencilDescriptor* m_depth_stencil_descriptor;
             MTL::BlendDescriptor* m_blend_descriptor;
+            MTL::CullMode m_cull_mode;
 
             struct sampler_structs
             {
@@ -131,13 +132,15 @@ namespace jeecs::graphic::api::metal
                 MTL::Function* frag,
                 MTL::VertexDescriptor* vdesc,
                 MTL::DepthStencilDescriptor* ddesc,
-                MTL::BlendDescriptor* bdesc)
+                MTL::BlendDescriptor* bdesc,
+                MTL::CullMode cmode)
                 : m_context(ctx)
                 , m_vertex_function(vert)
                 , m_fragment_function(frag)
                 , m_vertex_descriptor(vdesc)
                 , m_depth_stencil_descriptor(ddesc)
                 , m_blend_descriptor(bdesc)
+                , m_cull_mode(cmode)
             {
             }
             ~shared_state();
@@ -1411,10 +1414,11 @@ namespace jeecs::graphic::api::metal
 
         if (current_shader->m_uniform_cpu_buffer_size != 0)
         {
-            if (metal_context->m_render_states.m_current_target_framebuffer_may_null != nullptr)
+            if (metal_context->m_render_states.m_current_target_framebuffer_may_null == nullptr)
             {
                 if (current_shader->m_draw_for_r2b)
                 {
+                    // 正准备渲染到屏幕，但是此前shader被用于渲染到缓冲区，重置 NDC 矫正
                     const float ndc_scale[4] = { 1.f, 1.f, 1.f, 1.f };
 
                     current_shader->m_draw_for_r2b = false;
@@ -1429,6 +1433,7 @@ namespace jeecs::graphic::api::metal
             {
                 if (!current_shader->m_draw_for_r2b)
                 {
+                    // 和上面的情况相反，准备渲染到缓冲区，准备 NDC 矫正
                     const float ndc_scale_r2b[4] = { 1.f, -1.f, 1.f, 1.f };
                     current_shader->m_draw_for_r2b = true;
                     set_uniform(
