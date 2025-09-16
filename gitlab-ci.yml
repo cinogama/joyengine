@@ -1,0 +1,231 @@
+# Linux x64/arm64 OpenGL
+build_linux_opengl:
+  stage: build
+  script:
+    - git submodule update --init --recursive --force
+    - if [ ! -d build ]; then mkdir build; fi
+    - cd build
+    - rm -f CMakeCache.txt
+    - cmake ..
+      -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=OFF
+      -DJE4_COPYING_BUILTIN_FILES=OFF
+      -DJE4_STATIC_LINK_MODULE_AND_PKGS=OFF
+      -DJE4_ENABLE_DX11_GAPI=OFF
+      -DJE4_ENABLE_OPENGL330_GAPI=ON
+      -DJE4_ENABLE_OPENGLES300_GAPI=OFF
+      -DJE4_ENABLE_VULKAN130_GAPI=OFF
+      -DJE4_ENABLE_METAL_GAPI=OFF
+    - if [ ! -d pkg ]; then mkdir pkg; fi
+    - if [ ! -d builtin ]; then mkdir builtin; fi
+    - cmake --build . --config=RelWithDebInfo --target jedriver --parallel 4
+    - cd ..
+  cache:
+    when: on_success
+    key: jeecs-build-release-$CI_COMMIT_REF_SLUG
+    paths:
+        - "build/*"
+  tags:
+    - ubuntu20
+
+build_linux_a64_opengl:
+  stage: build
+  script:
+    - git submodule update --init --recursive --force
+    - if [ ! -d build ]; then mkdir build; fi
+    - cd build
+    - rm -f CMakeCache.txt
+    - cmake ..
+      -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=OFF
+      -DJE4_COPYING_BUILTIN_FILES=OFF
+      -DJE4_STATIC_LINK_MODULE_AND_PKGS=OFF
+      -DJE4_BUILD_SHARED_CORE=ON
+      -DJE4_ENABLE_DX11_GAPI=OFF
+      -DJE4_ENABLE_OPENGL330_GAPI=ON
+      -DJE4_ENABLE_OPENGLES300_GAPI=OFF
+      -DJE4_ENABLE_VULKAN130_GAPI=OFF
+      -DJE4_ENABLE_METAL_GAPI=OFF
+    - if [ ! -d pkg ]; then mkdir pkg; fi
+    - if [ ! -d builtin ]; then mkdir builtin; fi
+    - cmake --build . --config=RelWithDebInfo --target jedriver --parallel 4
+    - cd ..
+  cache:
+    when: on_success
+    key: jeecs-build-release-$CI_COMMIT_REF_SLUG
+    paths:
+        - "build/*"
+  tags:
+    - ubuntu22_arm64
+
+build_linux_a64_opengl_static:
+  stage: build
+  script:
+    - git submodule update --init --recursive --force
+    - if [ ! -d build ]; then mkdir build; fi
+    - cd build
+    - rm -f CMakeCache.txt
+    - cmake ..
+      -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=OFF
+      -DJE4_COPYING_BUILTIN_FILES=OFF
+      -DJE4_STATIC_LINK_MODULE_AND_PKGS=ON
+      -DJE4_BUILD_SHARED_CORE=OFF
+      -DJE4_ENABLE_DX11_GAPI=OFF
+      -DJE4_ENABLE_OPENGL330_GAPI=ON
+      -DJE4_ENABLE_OPENGLES300_GAPI=OFF
+      -DJE4_ENABLE_VULKAN130_GAPI=OFF
+      -DJE4_ENABLE_METAL_GAPI=OFF
+    - if [ ! -d pkg ]; then mkdir pkg; fi
+    - if [ ! -d builtin ]; then mkdir builtin; fi
+    - cmake --build . --config=RelWithDebInfo --target jedriver --parallel 4
+    - cd ..
+  cache:
+    when: on_success
+    key: jeecs-build-release-$CI_COMMIT_REF_SLUG
+    paths:
+        - "build/*"
+  tags:
+    - ubuntu22_arm64
+
+# Linux arm64 OpenGLES
+build_linux_opengles:
+  stage: build
+  script:
+    - git submodule update --init --recursive --force
+    - if [ ! -d build ]; then mkdir build; fi
+    - cd build
+    - rm -f CMakeCache.txt
+    - cmake ..
+      -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=OFF
+      -DJE4_COPYING_BUILTIN_FILES=OFF
+      -DJE4_STATIC_LINK_MODULE_AND_PKGS=OFF
+      -DJE4_BUILD_SHARED_CORE=ON
+      -DJE4_ENABLE_DX11_GAPI=OFF
+      -DJE4_ENABLE_OPENGL330_GAPI=OFF
+      -DJE4_ENABLE_OPENGLES300_GAPI=ON
+      -DJE4_ENABLE_VULKAN130_GAPI=OFF
+      -DJE4_ENABLE_METAL_GAPI=OFF
+    - if [ ! -d pkg ]; then mkdir pkg; fi
+    - if [ ! -d builtin ]; then mkdir builtin; fi
+    - cmake --build . --config=RelWithDebInfo --target jedriver --parallel 4
+    - cd ..
+  cache:
+    when: on_success
+    key: jeecs-build-release-$CI_COMMIT_REF_SLUG
+    paths:
+        - "build/*"
+  tags:
+    - ubuntu22_arm64
+
+# Windows x64 OpenGL DX11 Vulkan
+
+build_win64_dx11_opengl_vk:
+  stage: build
+  script:
+    - git submodule update --init --recursive --force
+    - if not exist cmakebuild ( mkdir cmakebuild )
+    - cd cmakebuild
+    - del CMakeCache.txt
+    - cmake ..
+      -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=ON
+      -DJE4_COPYING_BUILTIN_FILES=ON
+      -DJE4_STATIC_LINK_MODULE_AND_PKGS=ON
+      -DJE4_BUILD_SHARED_CORE=ON
+      -DJE4_ENABLE_DX11_GAPI=ON
+      -DJE4_ENABLE_OPENGL330_GAPI=ON
+      -DJE4_ENABLE_OPENGLES300_GAPI=OFF
+      -DJE4_ENABLE_VULKAN130_GAPI=ON
+      -DJE4_ENABLE_METAL_GAPI=OFF
+      -DCMAKE_BUILD_TYPE=RelWithDebInfo
+    - cmake --build . --config=RelWithDebInfo --target jedriver --parallel 4
+    - cd ..
+    - cd build
+    - copy RelWithDebInfo\*
+    - cd ..
+  artifacts:
+    name: jeecs-win32-release-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHA
+    paths:
+      - build/jedriver.exe
+      - build/OpenAL32.dll
+      - build/libjoyecs.dll
+      - build/libwoo.dll
+      - build/libjoyecs.lib
+      - build/libwoo.lib
+      - build/libjoyecs.pdb
+      - build/libwoo.pdb
+      - build/pkg/*
+      - build/builtin/*
+      - build/licenses/*
+      - build/je/*
+  tags:
+    - winserver22
+
+build_win64_dx11_opengles_vk:
+  stage: build
+  script:
+    - git submodule update --init --recursive --force
+    - if not exist cmakebuild ( mkdir cmakebuild )
+    - cd cmakebuild
+    - del CMakeCache.txt
+    - cmake ..
+      -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=ON
+      -DJE4_COPYING_BUILTIN_FILES=ON
+      -DJE4_STATIC_LINK_MODULE_AND_PKGS=ON
+      -DJE4_BUILD_SHARED_CORE=ON
+      -DJE4_ENABLE_DX11_GAPI=ON
+      -DJE4_ENABLE_OPENGL330_GAPI=OFF
+      -DJE4_ENABLE_OPENGLES300_GAPI=ON
+      -DJE4_ENABLE_VULKAN130_GAPI=ON
+      -DJE4_ENABLE_METAL_GAPI=OFF
+      -DCMAKE_BUILD_TYPE=RelWithDebInfo
+    - cmake --build . --config=RelWithDebInfo --target jedriver --parallel 4
+  tags:
+    - winserver22
+
+build_win64_dx11_opengles_vk_static:
+  stage: build
+  script:
+    - git submodule update --init --recursive --force
+    - if not exist cmakebuild ( mkdir cmakebuild )
+    - cd cmakebuild
+    - del CMakeCache.txt
+    - cmake ..
+      -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=ON
+      -DJE4_COPYING_BUILTIN_FILES=ON
+      -DJE4_STATIC_LINK_MODULE_AND_PKGS=ON
+      -DJE4_BUILD_SHARED_CORE=OFF
+      -DJE4_ENABLE_DX11_GAPI=ON
+      -DJE4_ENABLE_OPENGL330_GAPI=OFF
+      -DJE4_ENABLE_OPENGLES300_GAPI=ON
+      -DJE4_ENABLE_VULKAN130_GAPI=ON
+      -DJE4_ENABLE_METAL_GAPI=OFF
+      -DCMAKE_BUILD_TYPE=RelWithDebInfo
+    - cmake --build . --config=RelWithDebInfo --target jedriver --parallel 4
+  tags:
+    - winserver22
+
+build_macos_opengl_vk:
+  stage: build
+  script:
+    - git submodule update --init --recursive --force
+    - if [ ! -d build ]; then mkdir build; fi
+    - cd build
+    - rm -f CMakeCache.txt
+    - cmake ..
+      -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=OFF
+      -DJE4_COPYING_BUILTIN_FILES=OFF
+      -DJE4_STATIC_LINK_MODULE_AND_PKGS=OFF
+      -DJE4_ENABLE_DX11_GAPI=OFF
+      -DJE4_ENABLE_OPENGL330_GAPI=ON
+      -DJE4_ENABLE_OPENGLES300_GAPI=OFF
+      -DJE4_ENABLE_VULKAN130_GAPI=ON
+      -DJE4_ENABLE_METAL_GAPI=ON
+    - if [ ! -d pkg ]; then mkdir pkg; fi
+    - if [ ! -d builtin ]; then mkdir builtin; fi
+    - cmake --build . --config=RelWithDebInfo --target jedriver --parallel 4
+    - cd ..
+  cache:
+    when: on_success
+    key: jeecs-build-release-$CI_COMMIT_REF_SLUG
+    paths:
+        - "build/*"
+  tags:
+    - mac-arm64
