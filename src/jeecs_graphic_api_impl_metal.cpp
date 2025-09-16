@@ -158,11 +158,11 @@ namespace jeecs::graphic::api::metal
             MTL::Function* frag,
             MTL::VertexDescriptor* vdesc,
             MTL::DepthStencilDescriptor* ddesc,
-            MTL::BlendDescriptor* bdesc
-        )
+            MTL::BlendDescriptor* bdesc,
+            MTL::CullMode cmode)
             : m_shared_state(
                 new shared_state(
-                    ctx, vert, frag, vdesc, ddesc, bdesc))
+                    ctx, vert, frag, vdesc, ddesc, bdesc, cmode))
         {
         }
         ~metal_resource_shader_blob() = default;
@@ -778,6 +778,25 @@ namespace jeecs::graphic::api::metal
                     blend_descriptor->setDestinationRGBBlendFactor(blend_method_cvt(raw_shader->m_blend_dst_mode));
                 }
 
+                MTL::CullMode cull_mode;
+
+                switch (raw_shader->m_cull_mode)
+                {
+                case jegl_shader::cull_mode::NONE:
+                    cull_mode = MTL::CullModeNone;
+                    break;
+                case jegl_shader::cull_mode::FRONT:
+                    cull_mode = MTL::CullModeFront;
+                    break;
+                case jegl_shader::cull_mode::BACK:
+                    cull_mode = MTL::CullModeBack;
+                    break;
+                default:
+                    jeecs::debug::logfatal("Unsupported cull mode.");
+                    abort();
+                    break;
+                }
+
                 metal_resource_shader_blob* shader_blob =
                     new metal_resource_shader_blob(
                         metal_context,
@@ -785,7 +804,8 @@ namespace jeecs::graphic::api::metal
                         fragment_main_function,
                         vertex_descriptor,
                         depth_stencil_descriptor,
-                        blend_descriptor);
+                        blend_descriptor,
+                        cull_mode);
 
                 // Update uniforms layout.
                 uint32_t last_elem_end_place = 0;
@@ -1334,6 +1354,15 @@ namespace jeecs::graphic::api::metal
             shader_shared_state.m_depth_stencil_state);
         metal_context->m_render_states.m_current_command_encoder->setBlendState(
             shader_shared_state.m_blend_state);
+        metal_context->m_render_states.m_current_command_encoder->setCullMode(
+            shader_shared_state.m_cull_mode);
+
+        if (current_target_framebuffer == nullptr)
+            metal_context->m_render_states.m_current_command_encoder->setFrontFacingWinding(
+                MTL::WindingCounterClockwise);
+        else
+            metal_context->m_render_states.m_current_command_encoder->setFrontFacingWinding(
+                MTL::WindingClockwise);
 
         for (const auto& sampler_struct : shader_shared_state.m_samplers)
         {
