@@ -657,17 +657,17 @@ namespace jeecs::graphic::api::metal
                     auto* layout = vertex_descriptor->layouts()->object(0);
                     layout->setStride(MTL::BufferLayoutStrideDynamic); // 使用动态stride
                     layout->setStepFunction(MTL::VertexStepFunctionPerVertex);
-                }·
+                }
 
-                    MTL::DepthStencilDescriptor* depth_stencil_descriptor =
+                MTL::DepthStencilDescriptor* depth_stencil_descriptor =
                     MTL::DepthStencilDescriptor::alloc()->init();
 
                 switch (raw_shader->m_depth_mask)
                 {
-                case jegl_shader::depth_mask::DISABLE:
+                case jegl_shader::depth_mask_method::DISABLE:
                     depth_stencil_descriptor->setDepthWriteEnabled(false);
                     break;
-                case jegl_shader::depth_mask::ENABLE:
+                case jegl_shader::depth_mask_method::ENABLE:
                     depth_stencil_descriptor->setDepthWriteEnabled(true);
                     break;
                 default:
@@ -678,28 +678,28 @@ namespace jeecs::graphic::api::metal
 
                 switch (raw_shader->m_depth_test)
                 {
-                case jegl_shader::depth_test::NEVER:
+                case jegl_shader::depth_test_method::NEVER:
                     depth_stencil_descriptor->setDepthCompareFunction(MTL::CompareFunctionNever);
                     break;
-                case jegl_shader::depth_test::LESS:
+                case jegl_shader::depth_test_method::LESS:
                     depth_stencil_descriptor->setDepthCompareFunction(MTL::CompareFunctionLess);
                     break;
-                case jegl_shader::depth_test::EQUAL:
+                case jegl_shader::depth_test_method::EQUAL:
                     depth_stencil_descriptor->setDepthCompareFunction(MTL::CompareFunctionEqual);
                     break;
-                case jegl_shader::depth_test::LESS_EQUAL:
+                case jegl_shader::depth_test_method::LESS_EQUAL:
                     depth_stencil_descriptor->setDepthCompareFunction(MTL::CompareFunctionLessEqual);
                     break;
-                case jegl_shader::depth_test::GREATER:
+                case jegl_shader::depth_test_method::GREATER:
                     depth_stencil_descriptor->setDepthCompareFunction(MTL::CompareFunctionGreater);
                     break;
-                case jegl_shader::depth_test::NOT_EQUAL:
+                case jegl_shader::depth_test_method::NOT_EQUAL:
                     depth_stencil_descriptor->setDepthCompareFunction(MTL::CompareFunctionNotEqual);
                     break;
-                case jegl_shader::depth_test::GREATER_EQUAL:
+                case jegl_shader::depth_test_method::GREATER_EQUAL:
                     depth_stencil_descriptor->setDepthCompareFunction(MTL::CompareFunctionGreaterEqual);
                     break;
-                case jegl_shader::depth_test::ALWAYS:
+                case jegl_shader::depth_test_method::ALWAYS:
                     depth_stencil_descriptor->setDepthCompareFunction(MTL::CompareFunctionAlways);
                     break;
                 default:
@@ -1326,7 +1326,7 @@ namespace jeecs::graphic::api::metal
 
         // 开始绑定使用的 PSO, 深度缓冲描述符，混色描述符等
         metal_context->m_render_states.m_current_command_encoder->setRenderPipelineState(pso);
-        
+
         metal_context->m_render_states.m_current_command_encoder->setDepthStencilState(
             shader_shared_state.m_depth_stencil_state);
         metal_context->m_render_states.m_current_command_encoder->setBlendState(
