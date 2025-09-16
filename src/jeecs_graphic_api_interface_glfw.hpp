@@ -9,8 +9,14 @@
 
 #include <GLFW/glfw3.h>
 
-#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS && defined(JE_ENABLE_DX11_GAPI)
-#define GLFW_EXPOSE_NATIVE_WIN32 1
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
+#   if defined(JE_ENABLE_DX11_GAPI)
+#       define GLFW_EXPOSE_NATIVE_WIN32 1
+#   endif
+#elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_MACOS
+#   if defined(JE_ENABLE_METAL_GAPI)
+#       define GLFW_EXPOSE_NATIVE_COCOA 1
+#   endif
 #endif
 #include <GLFW/glfw3native.h>
 
@@ -29,7 +35,6 @@ namespace jeecs::graphic
 
         GLFWwindow* _m_windows;
         bool _m_window_resized;
-        bool _m_window_state_changing;
         bool _m_window_state_paused;
         mouse_lock_state_t _m_mouse_locked;
 
@@ -44,6 +49,7 @@ namespace jeecs::graphic
             OPENGLES300,
             VULKAN130,
             DIRECTX11,
+            METAL,
         };
 
     public:
@@ -57,17 +63,13 @@ namespace jeecs::graphic
                 context->_m_window_state_paused = true;
             else
                 context->_m_window_state_paused = false;
-            
-            context->_m_window_state_changing = true;
             context->_m_window_resized = true;
         }
         static void glfw_callback_windows_pos_changed(GLFWwindow* fw, int x, int y)
         {
-            glfw* context = reinterpret_cast<glfw*>(glfwGetWindowUserPointer(fw));
+            // glfw* context = reinterpret_cast<glfw*>(glfwGetWindowUserPointer(fw));
 
             je_io_update_window_pos(x, y);
-
-            context->_m_window_state_changing = true;
         }
         static void glfw_callback_mouse_pos_changed(GLFWwindow* fw, double x, double y)
         {
@@ -354,7 +356,6 @@ namespace jeecs::graphic
         glfw(interface_type type)
             : _m_windows(nullptr)
             , _m_window_resized(true)
-            , _m_window_state_changing(false)
             , _m_window_state_paused(false)
             , _m_mouse_locked(mouse_lock_state_t::NO_SPECIFY)
         {
@@ -407,6 +408,7 @@ namespace jeecs::graphic
                 break;
             case interface_type::VULKAN130:
             case interface_type::DIRECTX11:
+            case interface_type::METAL:
                 glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
                 break;
             default:
@@ -418,7 +420,7 @@ namespace jeecs::graphic
 #endif
         }
 
-        virtual void create_interface(jegl_context* thread, const jegl_interface_config* config) override
+        virtual void create_interface(const jegl_interface_config* config) override
         {
             _m_mouse_locked = mouse_lock_state_t::NO_SPECIFY;
 
@@ -589,8 +591,6 @@ namespace jeecs::graphic
             if (je_io_fetch_update_window_title(&title))
                 glfwSetWindowTitle(_m_windows, title);
 
-            _m_window_state_changing = false;
-
             glfwPollEvents();
 
 #if JE4_CURRENT_PLATFORM != JE4_PLATFORM_WEBGL
@@ -603,7 +603,7 @@ namespace jeecs::graphic
                 return update_result::CLOSE;
             }
 
-            if (_m_window_state_changing || _m_window_state_paused)
+            if (_m_window_state_paused)
                 return update_result::PAUSE;
 
             if (_m_window_resized)
@@ -632,17 +632,9 @@ namespace jeecs::graphic
                 } while (0);
             }
         }
-
         virtual void* interface_handle() const override
         {
             return _m_windows;
         }
-
-#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS && defined(JE_ENABLE_DX11_GAPI)
-        HWND win32_handle() const
-        {
-            return glfwGetWin32Window(_m_windows);
-        }
-#endif
     };
 }

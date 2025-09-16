@@ -173,86 +173,14 @@ namespace jeecs
                 graphic::texture::create(8, 8, jegl_texture::format::RGBA);
 
             static const uint8_t _unexist_gizmo_icon[8][8] = {
-                {
-                    0,
-                    0,
-                    1,
-                    1,
-                    1,
-                    1,
-                    0,
-                    0,
-                },
-                {
-                    0,
-                    1,
-                    0,
-                    0,
-                    0,
-                    0,
-                    1,
-                    0,
-                },
-                {
-                    0,
-                    1,
-                    0,
-                    0,
-                    0,
-                    0,
-                    1,
-                    0,
-                },
-                {
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    1,
-                    1,
-                    0,
-                },
-                {
-                    0,
-                    0,
-                    0,
-                    0,
-                    1,
-                    0,
-                    0,
-                    0,
-                },
-                {
-                    0,
-                    0,
-                    0,
-                    1,
-                    1,
-                    0,
-                    0,
-                    0,
-                },
-                {
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                },
-                {
-                    0,
-                    0,
-                    0,
-                    1,
-                    1,
-                    0,
-                    0,
-                    0,
-                },
+                { 0, 0, 1, 1, 1, 1, 0, 0, },
+                { 0, 1, 0, 0, 0, 0, 1, 0, },
+                { 0, 1, 0, 0, 0, 0, 1, 0, },
+                { 0, 0, 0, 0, 0, 1, 1, 0, },
+                { 0, 0, 0, 0, 1, 0, 0, 0, },
+                { 0, 0, 0, 1, 1, 0, 0, 0, },
+                { 0, 0, 0, 0, 0, 0, 0, 0, },
+                { 0, 0, 0, 1, 1, 0, 0, 0, },
             };
 
             for (size_t ix = 0; ix < 8; ++ix)
@@ -286,52 +214,20 @@ namespace jeecs
         // basic::resource<graphic::vertex> m_gizmo_physics2d_collider_capsule_vertex;
 
         inline static const float gizmo_vertex_data[] = {
-            -0.5f,
-            0.5f,
-            0.0f,
-            0.0f,
-            1.0f,
-            -0.5f,
-            -0.5f,
-            0.0f,
-            0.0f,
-            0.0f,
-            0.5f,
-            0.5f,
-            0.0f,
-            1.0f,
-            1.0f,
-            0.5f,
-            -0.5f,
-            0.0f,
-            1.0f,
-            0.0f,
+            -0.5f, 0.5f, 0.0f,      0.0f, 1.0f,
+            -0.5f, -0.5f, 0.0f,     0.0f, 0.0f,
+            0.5f, 0.5f, 0.0f,       1.0f, 1.0f,
+            0.5f, -0.5f, 0.0f,      1.0f, 0.0f,
         };
         inline static const float gizmo_camera_visual_cone_vertex_data[] = {
-            -1.0f,
-            -1.0f,
-            -1.0f,
-            1.0f,
-            -1.0f,
-            -1.0f,
-            1.0f,
-            1.0f,
-            -1.0f,
-            -1.0f,
-            1.0f,
-            -1.0f,
-            -1.0f,
-            -1.0f,
-            1.0f,
-            1.0f,
-            -1.0f,
-            1.0f,
-            1.0f,
-            1.0f,
-            1.0f,
-            -1.0f,
-            1.0f,
-            1.0f,
+            -1.0f, -1.0f, -1.0f,
+            1.0f, -1.0f, -1.0f,
+            1.0f, 1.0f, -1.0f,
+            -1.0f, 1.0f, -1.0f,
+            -1.0f, -1.0f, 1.0f,
+            1.0f, -1.0f, 1.0f,
+            1.0f, 1.0f, 1.0f,
+            -1.0f, 1.0f, 1.0f,
         };
 
         JECS_DISABLE_MOVE_AND_COPY(GizmoResources);
@@ -340,9 +236,9 @@ namespace jeecs
             : m_camera_icon{ _create_missing_default_icon() }
             , m_point_or_shape_light2d_icon{ _create_missing_default_icon() }
             , m_parallel_light2d_icon{ _create_missing_default_icon() }
-            , m_selecting_default_texture{ 
+            , m_selecting_default_texture{
                 graphic::texture::create(1, 1, jegl_texture::format::RGBA) }
-            , m_gizmo_shader{ graphic::shader::create("!/builtin/gizmo.shader",                                                                                                                                                                                                                                                                                                               {R"(
+                , m_gizmo_shader{ graphic::shader::create("!/builtin/gizmo.shader",                                                                                                                                                                                                                                                                                                               {R"(
 import woo::std;
 
 import je::shader;
@@ -397,7 +293,7 @@ public let frag =
     ;
 )"})
                                                                                                                                                                                                                                                                                                  .value() },
-            m_gizmo_camera_visual_cone_shader{ 
+            m_gizmo_camera_visual_cone_shader{
                 graphic::shader::create("!/builtin/gizmo_camera_visual_cone.shader",
                 {R"(
 import woo::std;
@@ -448,7 +344,7 @@ public func frag(_: v2f)
 }
 )"})
                 .value() },
-            m_gizmo_physics2d_collider_shader{ 
+            m_gizmo_physics2d_collider_shader{
                 graphic::shader::create("!/builtin/gizmo_physics2d_collider.shader",
                 {R"(
 import woo::std;
@@ -496,9 +392,9 @@ public let frag =
     ;
 )"})
             .value() }
-        , m_gizmo_selecting_item_highlight_shader{
-            graphic::shader::create("!/builtin/gizmo_selecting_item_highlight.shader",
-            {R"(
+            , m_gizmo_selecting_item_highlight_shader{
+                graphic::shader::create("!/builtin/gizmo_selecting_item_highlight.shader",
+                {R"(
 import woo::std;
 
 import je::shader;
@@ -559,34 +455,37 @@ public func frag(vf: v2f)
 }
 )"})
         .value() }
-        , m_gizmo_vertex{ graphic::vertex::create(
-                               jegl_vertex::type::TRIANGLESTRIP,
-                               gizmo_vertex_data,
-                               sizeof(gizmo_vertex_data),
-                               {0, 1, 2, 3},
-                               {
-                                   {jegl_vertex::data_type::FLOAT32, 3},
-                                   {jegl_vertex::data_type::FLOAT32, 2},
-                               })
-                               .value() },
-            m_gizmo_camera_visual_cone_vertex{ graphic::vertex::create(jegl_vertex::type::LINESTRIP,
-                                                                      gizmo_camera_visual_cone_vertex_data,
-                                                                      sizeof(gizmo_camera_visual_cone_vertex_data),
-                                                                      {0, 1, 2, 3, 0, 4, 5, 6, 7, 4, 5, 1, 2, 6, 7, 3},
-                                                                      {
-                                                                          {jegl_vertex::data_type::FLOAT32, 3},
-                                                                      })
-                                                  .value() },
-            m_gizmo_physics2d_collider_box_vertex{ graphic::vertex::create(
-                                                      jegl_vertex::type::LINESTRIP,
-                                                      gizmo_vertex_data,
-                                                      sizeof(gizmo_vertex_data),
-                                                      {0, 1, 3, 2, 0},
-                                                      {
-                                                          {jegl_vertex::data_type::FLOAT32, 3},
-                                                          {jegl_vertex::data_type::FLOAT32, 2},
-                                                      })
-                                                      .value() },
+            , m_gizmo_vertex{
+                graphic::vertex::create(
+                    jegl_vertex::type::TRIANGLESTRIP,
+                    gizmo_vertex_data,
+                    sizeof(gizmo_vertex_data),
+                    {0, 1, 2, 3},
+                    {
+                        {jegl_vertex::data_type::FLOAT32, 3},
+                        {jegl_vertex::data_type::FLOAT32, 2},
+                    })
+                    .value() },
+            m_gizmo_camera_visual_cone_vertex{
+                graphic::vertex::create(jegl_vertex::type::LINESTRIP,
+                    gizmo_camera_visual_cone_vertex_data,
+                    sizeof(gizmo_camera_visual_cone_vertex_data),
+                    {0, 1, 2, 3, 0, 4, 5, 6, 7, 4, 5, 1, 2, 6, 7, 3},
+                    {
+                        {jegl_vertex::data_type::FLOAT32, 3},
+                    })
+                    .value() },
+            m_gizmo_physics2d_collider_box_vertex{
+                graphic::vertex::create(
+                    jegl_vertex::type::LINESTRIP,
+                    gizmo_vertex_data,
+                    sizeof(gizmo_vertex_data),
+                    {0, 1, 3, 2, 0},
+                    {
+                        {jegl_vertex::data_type::FLOAT32, 3},
+                        {jegl_vertex::data_type::FLOAT32, 2},
+                    })
+                    .value() },
             m_gizmo_physics2d_collider_circle_vertex{ _create_circle_vertex({0.f, 0.f, 1.f}) }
         {
             auto camera_icon = graphic::texture::load(glcontext, "!/builtin/icon/gizmo_camera.png");
@@ -701,58 +600,61 @@ public func frag(vf: v2f)
         inline static input_msg _inputs = {};
 
         inline static const float axis_x_data[] = {
-            -1.f, 0.f, 0.f, 0.25f, 0.f, 0.f,
-            1.f, 0.f, 0.f, 1.f, 0.f, 0.f };
+            -1.f, 0.f, 0.f,     0.25f, 0.f, 0.f,
+            1.f, 0.f, 0.f,      1.f, 0.f, 0.f,
+        };
         inline static const float axis_y_data[] = {
-            0.f,
-            -1.f,
-            0.f,
-            0.f,
-            0.25f,
-            0.f,
-            0.f,
-            1.f,
-            0.f,
-            0.f,
-            1.f,
-            0.f,
+            0.f, -1.f, 0.f,     0.f, 0.25f, 0.f,
+            0.f, 1.f, 0.f,      0.f, 1.f, 0.f,
         };
         inline static const float axis_z_data[] = {
-            0.f, 0.f, -1.f, 0.f, 0.f, 0.25f,
-            0.f, 0.f, 1.f, 0.f, 0.f, 1.f };
+            0.f, 0.f, -1.f,     0.f, 0.f, 0.25f,
+            0.f, 0.f, 1.f,      0.f, 0.f, 1.f,
+        };
 
         DefaultEditorSystem(game_world w)
             : game_system(w)
-            , _graphic_uhost(jegl_uhost_get_or_create_for_universe(w.get_universe().handle(), nullptr))
-            , _gizmo_resources(jegl_uhost_get_context(_graphic_uhost))
-            , axis_x{ graphic::vertex::create(jegl_vertex::type::LINESTRIP,
-                                            axis_x_data,
-                                            sizeof(axis_x_data),
-                                            {0, 1},
-                                            {
-                                                {jegl_vertex::data_type::FLOAT32, 3},
-                                                {jegl_vertex::data_type::FLOAT32, 3},
-                                            })
-                        .value() },
-            axis_y{ graphic::vertex::create(jegl_vertex::type::LINESTRIP,
-                                           axis_y_data,
-                                           sizeof(axis_y_data),
-                                           {0, 1},
-                                           {
-                                               {jegl_vertex::data_type::FLOAT32, 3},
-                                               {jegl_vertex::data_type::FLOAT32, 3},
-                                           })
-                       .value() },
-            axis_z{ graphic::vertex::create(jegl_vertex::type::LINESTRIP,
-                                           axis_z_data,
-                                           sizeof(axis_z_data),
-                                           {0, 1},
-                                           {
-                                               {jegl_vertex::data_type::FLOAT32, 3},
-                                               {jegl_vertex::data_type::FLOAT32, 3},
-                                           })
-                       .value() },
-            circ_x{ GizmoResources::_create_circle_vertex({1.f, 0.f, 0.f}) }
+            , _graphic_uhost(
+                jegl_uhost_get_or_create_for_universe(
+                    w.get_universe().handle(),
+                    nullptr))
+            , _gizmo_resources(
+                jegl_uhost_get_context(
+                    _graphic_uhost))
+            , axis_x{
+                graphic::vertex::create(
+                    jegl_vertex::type::LINESTRIP,
+                        axis_x_data,
+                        sizeof(axis_x_data),
+                        {0, 1},
+                        {
+                            {jegl_vertex::data_type::FLOAT32, 3},
+                            {jegl_vertex::data_type::FLOAT32, 3},
+                        })
+                        .value() }
+            , axis_y{
+                graphic::vertex::create(
+                    jegl_vertex::type::LINESTRIP,
+                        axis_y_data,
+                        sizeof(axis_y_data),
+                        {0, 1},
+                        {
+                            {jegl_vertex::data_type::FLOAT32, 3},
+                            {jegl_vertex::data_type::FLOAT32, 3},
+                        })
+                       .value() }
+            , axis_z{
+                graphic::vertex::create(
+                    jegl_vertex::type::LINESTRIP,
+                        axis_z_data,
+                        sizeof(axis_z_data),
+                        {0, 1},
+                        {
+                            {jegl_vertex::data_type::FLOAT32, 3},
+                            {jegl_vertex::data_type::FLOAT32, 3},
+                        })
+                       .value() }
+            , circ_x{ GizmoResources::_create_circle_vertex({1.f, 0.f, 0.f}) }
             , circ_y{ GizmoResources::_create_circle_vertex({0.f, 1.f, 0.f}) }
             , circ_z{ GizmoResources::_create_circle_vertex({0.f, 0.f, 1.f}) }
         {
@@ -775,9 +677,25 @@ public func frag(vf: v2f)
             circ_z->resource()->m_raw_vertex_data->m_y_min += -selector_size;
             circ_z->resource()->m_raw_vertex_data->m_y_max += selector_size;
 
-            circ_x->resource()->m_raw_vertex_data->m_x_min = circ_y->resource()->m_raw_vertex_data->m_y_min = circ_z->resource()->m_raw_vertex_data->m_z_min = axis_x->resource()->m_raw_vertex_data->m_y_min = axis_x->resource()->m_raw_vertex_data->m_z_min = axis_y->resource()->m_raw_vertex_data->m_x_min = axis_y->resource()->m_raw_vertex_data->m_z_min = axis_z->resource()->m_raw_vertex_data->m_x_min = axis_z->resource()->m_raw_vertex_data->m_y_min = -selector_size;
+            circ_x->resource()->m_raw_vertex_data->m_x_min =
+                circ_y->resource()->m_raw_vertex_data->m_y_min =
+                circ_z->resource()->m_raw_vertex_data->m_z_min =
+                axis_x->resource()->m_raw_vertex_data->m_y_min =
+                axis_x->resource()->m_raw_vertex_data->m_z_min =
+                axis_y->resource()->m_raw_vertex_data->m_x_min =
+                axis_y->resource()->m_raw_vertex_data->m_z_min =
+                axis_z->resource()->m_raw_vertex_data->m_x_min =
+                axis_z->resource()->m_raw_vertex_data->m_y_min = -selector_size;
 
-            circ_x->resource()->m_raw_vertex_data->m_x_max = circ_y->resource()->m_raw_vertex_data->m_y_max = circ_z->resource()->m_raw_vertex_data->m_z_max = axis_x->resource()->m_raw_vertex_data->m_y_max = axis_x->resource()->m_raw_vertex_data->m_z_max = axis_y->resource()->m_raw_vertex_data->m_x_max = axis_y->resource()->m_raw_vertex_data->m_z_max = axis_z->resource()->m_raw_vertex_data->m_x_max = axis_z->resource()->m_raw_vertex_data->m_y_max = selector_size;
+            circ_x->resource()->m_raw_vertex_data->m_x_max =
+                circ_y->resource()->m_raw_vertex_data->m_y_max =
+                circ_z->resource()->m_raw_vertex_data->m_z_max =
+                axis_x->resource()->m_raw_vertex_data->m_y_max =
+                axis_x->resource()->m_raw_vertex_data->m_z_max =
+                axis_y->resource()->m_raw_vertex_data->m_x_max =
+                axis_y->resource()->m_raw_vertex_data->m_z_max =
+                axis_z->resource()->m_raw_vertex_data->m_x_max =
+                axis_z->resource()->m_raw_vertex_data->m_y_max = selector_size;
         }
         ~DefaultEditorSystem()
         {
@@ -880,43 +798,28 @@ public func frag(vf: v2f)
                 mover.init = true;
 
                 const float select_box_vert_data[] = {
-                    -0.5f,
-                    -0.5f,
-                    -0.5f,
-                    0.5f,
-                    -0.5f,
-                    -0.5f,
-                    0.5f,
-                    0.5f,
-                    -0.5f,
-                    -0.5f,
-                    0.5f,
-                    -0.5f,
-                    -0.5f,
-                    -0.5f,
-                    0.5f,
-                    0.5f,
-                    -0.5f,
-                    0.5f,
-                    0.5f,
-                    0.5f,
-                    0.5f,
-                    -0.5f,
-                    0.5f,
-                    0.5f,
+                    -0.5f, -0.5f, -0.5f,
+                    0.5f, -0.5f, -0.5f,
+                    0.5f, 0.5f, -0.5f,
+                    -0.5f, 0.5f, -0.5f,
+                    -0.5f, -0.5f, 0.5f,
+                    0.5f, -0.5f, 0.5f,
+                    0.5f, 0.5f, 0.5f,
+                    -0.5f, 0.5f, 0.5f,
                 };
                 basic::resource<graphic::vertex> select_box_vert =
                     graphic::vertex::create(jegl_vertex::type::LINESTRIP,
                         select_box_vert_data,
                         sizeof(select_box_vert_data),
                         { 0, 1, 2, 3, 0, 4, 5, 6, 7, 4, 5, 1, 2, 6, 7, 3 },
-                                            {
-                                                {jegl_vertex::data_type::FLOAT32, 3},
-                                            })
-                                            .value();
+                        {
+                            {jegl_vertex::data_type::FLOAT32, 3},
+                        })
+                        .value();
 
                 basic::resource<graphic::shader>
-                    axis_shader = graphic::shader::create("!/builtin/mover_axis.shader",
+                    axis_shader = graphic::shader::create(
+                        "!/builtin/mover_axis.shader",
                         { R"(
 import woo::std;
 
@@ -969,7 +872,8 @@ public let frag =
         )" })
                     .value();
                 basic::resource<graphic::shader>
-                    select_box_shader = graphic::shader::create("!/builtin/select_box.shader",
+                    select_box_shader = graphic::shader::create(
+                        "!/builtin/select_box.shader",
                         { R"(
 import woo::std;
 
@@ -2102,33 +2006,33 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
                         {
                         case jegl_shader::uniform_type::INT:
                             new_shader_instance->set_uniform(
-                                uniform_var->m_name, 
+                                uniform_var->m_name,
                                 uniform_var->m_value.ix);
                             break;
                         case jegl_shader::uniform_type::INT2:
                             new_shader_instance->set_uniform(
-                                uniform_var->m_name, 
-                                uniform_var->m_value.ix, 
+                                uniform_var->m_name,
+                                uniform_var->m_value.ix,
                                 uniform_var->m_value.iy);
                             break;
                         case jegl_shader::uniform_type::INT3:
                             new_shader_instance->set_uniform(
-                                uniform_var->m_name, 
-                                uniform_var->m_value.ix, 
-                                uniform_var->m_value.iy, 
+                                uniform_var->m_name,
+                                uniform_var->m_value.ix,
+                                uniform_var->m_value.iy,
                                 uniform_var->m_value.iz);
                             break;
                         case jegl_shader::uniform_type::INT4:
                             new_shader_instance->set_uniform(
-                                uniform_var->m_name, 
+                                uniform_var->m_name,
                                 uniform_var->m_value.ix,
                                 uniform_var->m_value.iy,
-                                uniform_var->m_value.iz, 
+                                uniform_var->m_value.iz,
                                 uniform_var->m_value.iw);
                             break;
                         case jegl_shader::uniform_type::FLOAT:
                             new_shader_instance->set_uniform(
-                                uniform_var->m_name, 
+                                uniform_var->m_name,
                                 uniform_var->m_value.x);
                             break;
                         case jegl_shader::uniform_type::FLOAT2:
@@ -2142,17 +2046,17 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
                             new_shader_instance->set_uniform(
                                 uniform_var->m_name,
                                 jeecs::math::vec3(
-                                    uniform_var->m_value.x, 
-                                    uniform_var->m_value.y, 
+                                    uniform_var->m_value.x,
+                                    uniform_var->m_value.y,
                                     uniform_var->m_value.z));
                             break;
                         case jegl_shader::uniform_type::FLOAT4:
                             new_shader_instance->set_uniform(
                                 uniform_var->m_name,
                                 jeecs::math::vec4(
-                                    uniform_var->m_value.x, 
-                                    uniform_var->m_value.y, 
-                                    uniform_var->m_value.z, 
+                                    uniform_var->m_value.x,
+                                    uniform_var->m_value.y,
+                                    uniform_var->m_value.z,
                                     uniform_var->m_value.w));
                             break;
                         default:

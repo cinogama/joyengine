@@ -34,9 +34,11 @@ class jegl_android_surface_manager
     bool _jegl_android_update_paused;
     _jegl_window_android_app _jegl_window_android_app;
 
-    static void _jegl_android_sync_thread_created(jegl_context* gthread, void*)
+    static void _jegl_android_sync_thread_created(jegl_context* gthread, void* android_window_app)
     {
         jeecs::debug::loginfo("Graphic interface created!");
+
+        gthread->m_config.m_userdata = android_window_app;
         instance()._jegl_graphic_thread = gthread;
     }
     static void _je_log_to_android(int level, const char* msg, void*)

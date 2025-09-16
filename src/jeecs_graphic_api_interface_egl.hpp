@@ -46,7 +46,7 @@ namespace jeecs::graphic
         {
         }
 
-        virtual void create_interface(jegl_context *thread, const jegl_interface_config *config) override
+        virtual void create_interface(const jegl_interface_config *config) override
         {
             constexpr EGLint attribs[] = {
                 EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
@@ -84,11 +84,11 @@ namespace jeecs::graphic
                     }
                     return false;
                 });
-
-            assert(thread->_m_sync_callback_arg != nullptr);
-
+            
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
-            auto *data = (_jegl_window_android_app *)thread->_m_sync_callback_arg;
+            auto *data = (_jegl_window_android_app *)config->m_userdata;
+            assert(data != nullptr);
+
             m_context.m_window = (EGLNativeWindowType)data->m_android_window;
             m_app = (struct android_app *)data->m_android_app;
 #else

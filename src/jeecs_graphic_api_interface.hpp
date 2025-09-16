@@ -25,7 +25,6 @@ namespace jeecs::graphic
         };
 
         virtual void create_interface(
-            jegl_context *thread,
             const jegl_interface_config *config) = 0;
 
         virtual update_result update() = 0;

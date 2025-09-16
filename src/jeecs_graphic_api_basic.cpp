@@ -483,7 +483,8 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
             frame_update_state);
 
         if (jegl_update_action::JEGL_UPDATE_STOP ==
-            thread->m_apis->update_draw_commit(thread->m_graphic_impl_context, frame_update_state))
+            thread->m_apis->update_draw_commit(
+                thread->m_graphic_impl_context, frame_update_state))
         {
             thread->_m_thread_notifier->m_graphic_terminated.store(true);
         }

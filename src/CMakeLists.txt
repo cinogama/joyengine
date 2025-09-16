@@ -139,14 +139,40 @@ endif()
 
 # Metal
 if (JE4_ENABLE_METAL_GAPI AND APPLE)
-    find_library(METAL_FRAMEWORK Metal REQUIRED)
-    find_library(METALKIT_FRAMEWORK MetalKit REQUIRED)
-    find_library(APPKIT_FRAMEWORK AppKit REQUIRED)
-    find_library(FOUNDATION_FRAMEWORK Foundation REQUIRED)
-    find_library(QUARTZCORE_FRAMEWORK QuartzCore REQUIRED)
+    target_compile_definitions(joyengine_core_configs INTERFACE 
+        -DJE_ENABLE_METAL_GAPI
+        -DIMGUI_IMPL_METAL_CPP
+        -DIMGUI_IMPL_METAL_CPP_EXTENSIONS)
+
+    list(APPEND imgui_srcs
+        "../3rd/imgui/backends/imgui_impl_metal.mm"
+        "../3rd/imgui/backends/imgui_impl_metal.h")
+
+    find_library(METAL_FRAMEWORK Metal
+        PATHS "../3rd/metal-cpp"
+        REQUIRED)
+    find_library(METALKIT_FRAMEWORK MetalKit
+        PATHS "../3rd/metal-cpp"
+        REQUIRED)
+    find_library(APPKIT_FRAMEWORK AppKit
+        PATHS "../3rd/metal-cpp"
+        REQUIRED)
+    find_library(FOUNDATION_FRAMEWORK Foundation
+        PATHS "../3rd/metal-cpp"
+        REQUIRED)
+    find_library(QUARTZCORE_FRAMEWORK QuartzCore
+        PATHS "../3rd/metal-cpp"
+        REQUIRED)
+
+    target_link_libraries(joyengine_core_configs INTERFACE
+        ${METAL_FRAMEWORK}
+        ${METALKIT_FRAMEWORK}
+        ${APPKIT_FRAMEWORK}
+        ${FOUNDATION_FRAMEWORK}
+        ${QUARTZCORE_FRAMEWORK})
 
     target_include_directories(joyengine_core_configs INTERFACE 
-            "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/metal-cpp")
+        "../3rd/metal-cpp")
 endif()
 
 # Vulkan 1.3
@@ -164,18 +190,9 @@ if (JE4_ENABLE_VULKAN130_GAPI)
             "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/moltenvk/MoltenVK/include")
 
         # Find static lib in ../3rd/moltenvk/MoltenVK/static    
-
-        # TODO: Check platform and specify MoltenVK path.
         set(JE4_MOLTENVK_STATIC_LIBS 
             "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/moltenvk/MoltenVK/static")
 
-        # set(JE4_MOLTENVK_PATH "macos-arm64_x86_64")
-
-        # find_library(MOLTENVK_FRAMEWORK
-        #     NAMES MoltenVK
-        #     PATHS 
-        #     "${JE4_MOLTENVK_STATIC_LIBS}/MoltenVK.xcframework/${JE4_MOLTENVK_PATH}"
-        #     NO_DEFAULT_PATH)
         find_library(MOLTENVK_FRAMEWORK
             NAMES MoltenVK
             PATHS "${JE4_MOLTENVK_STATIC_LIBS}"
@@ -200,17 +217,13 @@ if (JE4_ENABLE_VULKAN130_GAPI)
     endif()
 endif()
 
-# Metal
-if (JE4_ENABLE_METAL_GAPI AND APPLE)
-    target_compile_definitions(joyengine_core_configs INTERFACE -DJE_ENABLE_METAL_GAPI)
-endif()
-
 # OpenGL3.3 / OpenGLES3.0 / Vulkan needed:
 if (JE4_ENABLE_OPENGL330_GAPI OR 
     JE4_ENABLE_OPENGLES300_GAPI OR 
     JE4_ENABLE_VULKAN130_GAPI OR
     JE4_ENABLE_WEBGL20_GAPI OR
-    JE4_ENABLE_DX11_GAPI)
+    JE4_ENABLE_DX11_GAPI OR
+    (JE4_ENABLE_METAL_GAPI AND APPLE))
 
     if (ANDROID)
         list(APPEND imgui_srcs
@@ -302,8 +315,8 @@ if (JE4_ENABLE_SHADER_WRAP_GENERATOR)
 endif()
 
 target_link_libraries(joyecs PRIVATE 
-    joyengine_configs
-    joyengine_core_configs
+    PUBLIC joyengine_configs
+    PUBLIC joyengine_core_configs
     ${jeecs_system_libs}
     ${jeecs_graphic_libs}
     ${JE4_STATIC_LINKED_PKG_AND_MODULE_LIST}

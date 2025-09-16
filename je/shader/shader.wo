@@ -12,8 +12,7 @@ namespace je::shader
     public let LINEAR = woshader::Sampler2D::filter::LINEAR;
     public let CLAMP = woshader::Sampler2D::wrap::CLAMP;
     public let REPEAT = woshader::Sampler2D::wrap::REPEAT;
-    
-    public let OFF = ZConfig::OFF;
+
     public let NEVER = ZConfig::NEVER;
     public let LESS = ZConfig::LESS;
     public let EQUAL = ZConfig::EQUAL;
@@ -49,8 +48,7 @@ namespace je::shader
     
     enum ZConfig
     {
-        OFF = 0,
-        NEVER,
+        NEVER = 0,
         LESS,       /* DEFAULT */
         EQUAL,
         LESS_EQUAL,
