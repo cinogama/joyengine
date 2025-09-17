@@ -332,13 +332,13 @@ namespace fileresource_void
         {
             match (jeapi::gui::widget::File(F"文件：##{tag}", val.path->or(""), \=do nil;))
             {
-            value(p)?
-                if (p == "")
-                    return option::value(fileresource_void{ path = option::none });
+                value(p)?
+                    if (p == "")
+                        return option::value(fileresource_void{ path = option::none });
                 else
                     return option::value(fileresource_void{ path = option::value(p) });
-            none?
-                return option::none;
+                none?
+                    return option::none;
             }
         }
     }
@@ -362,13 +362,13 @@ namespace fileresource_audio_buffer
         {
             match (jeapi::gui::widget::File(F"文件：##{tag}", val.path->or(""), \=do nil;))
             {
-            value(p)?
-                if (p == "")
-                    return option::value(fileresource_audio_buffer{ path = option::none });
+                value(p)?
+                    if (p == "")
+                        return option::value(fileresource_audio_buffer{ path = option::none });
                 else
                     return option::value(fileresource_audio_buffer{ path = option::value(p) });
-            none?
-                return option::none;
+                none?
+                    return option::none;
             }
         }
     }
@@ -436,84 +436,84 @@ namespace Light2D::Range::light_shape
         public extern func edit(val: Light2D::Range::light_shape, tag: string)=> option<Light2D::Range::light_shape>
         {
             let mut need_update = false;
-
+            
             let mut strength_data = val.m_strength;
             let mut point_data = val.m_positions;
-
+            
             match (InputInt(F"层数##{tag}", strength_data->len)->>\n = n < 0 ? 0 | n;)
             {
-            value(count)?
-            {
-                strength_data = strength_data->resize(count, 0.0: real);
-                point_data = point_data->resize(count * val.m_point_count, (0., 0.): vec2);
-
-                need_update = true;
+                value(count)?
+                {
+                    strength_data = strength_data->resize(count, 0.0: real);
+                    point_data = point_data->resize(count * val.m_point_count, (0., 0.): vec2);
+                    
+                    need_update = true;
+                }
+                none?;
             }
-            none?;
-            }
-
+            
             let layer_count = strength_data->len;
             let mut point_count = val.m_point_count;
-
+            
             match (InputInt(F"顶点##{tag}", point_count)->>\n = n < 0 ? 0 | n;)
             {
-            value(count)?
-            {
-                let v = vec::create(count * layer_count, mut (0., 0.): vec2);
-                for (let mut ilayer = 0; ilayer < layer_count; ilayer += 1)
+                value(count)?
                 {
-                    for (let mut ipoint = 0; ipoint < math::min(count, point_count); ipoint += 1)
+                    let v = vec::create(count * layer_count, mut (0., 0.): vec2);
+                    for (let mut ilayer = 0; ilayer < layer_count; ilayer += 1)
                     {
-                        v[ilayer * count + ipoint] = point_data[ilayer * point_count + ipoint];
+                        for (let mut ipoint = 0; ipoint < math::min(count, point_count); ipoint += 1)
+                        {
+                            v[ilayer * count + ipoint] = point_data[ilayer * point_count + ipoint];
+                        }
                     }
+                    point_count = count;
+                    point_data = v->unsafe::cast:<array<vec2>>;
+                    
+                    need_update = true;
                 }
-                point_count = count;
-                point_data = v->unsafe::cast:<array<vec2>>;
-
-                need_update = true;
+                none?;
             }
-            none?;
-            }
-
+            
             let layered_positions = []mut: vec<array<vec2>>;
             for (let mut offset = 0; offset < layer_count; offset += 1)
                 layered_positions->add(
                     point_data->sub_len(offset * point_count, point_count));
-
+                    
             Text("形状网格");
             TextDisabled("* 请保持最内层为凸多边形");
             match (jeapi::gui::widget::poseditor(
-                F"##shape##{tag}", 
-                math::min(GetContentRegionAvail().0, 400.),
-                layered_positions as vec<array<vec2>>->unsafe::cast:<array<array<(real, real)>>>,
-                0.01,
-                func(a, i)
-                {
-                    let r = []mut: vec<((real, real), (real, real))>;
-                    for (let (idx, p) : a[i]->iter |> iterator::enumerate)
+                    F"##shape##{tag}",
+                    math::min(GetContentRegionAvail().0, 400.),
+                    layered_positions as vec<array<vec2>>->unsafe::cast:<array<array<(real, real)>>>,
+                    0.01,
+                    func(a, i)
                     {
-                        r->add((a[i][(idx > 0 ? idx | a[i]->len) - 1], p));
-
-                        if (i > 0)
-                            r->add((a[i - 1][idx], p));
-                    }
-                    return r->to_array;
-                },
-            ))
+                        let r = []mut: vec<((real, real), (real, real))>;
+                        for (let (idx, p) : a[i]->iter |> iterator::enumerate)
+                        {
+                            r->add((a[i][(idx > 0 ? idx | a[i]->len) - 1], p));
+                            
+                            if (i > 0)
+                                r->add((a[i - 1][idx], p));
+                        }
+                        return r->to_array;
+                    },
+                ))
             {
-            value(posgroups)?
-            {
-                point_data = posgroups
-                    ->  reduce(\l, r = l->connect(r);)
-                    ->  or([])
-                    ->> \e = e: vec2;
+                value(posgroups)?
+                {
+                    point_data = posgroups
+                        ->  reduce(\l, r = l->connect(r);)
+                        ->  or([])
+                        ->> \e = e: vec2;
+                        ;
+                    need_update = true;
+                }
+                none?
                     ;
-                need_update = true;
             }
-            none?
-                ;
-            }
-
+            
             let new_strength_data = []mut: vec<real>;
             for (let (i, st) : strength_data->iter |> iterator::enumerate)
             {
@@ -521,16 +521,16 @@ namespace Light2D::Range::light_shape
                 SameLine();
                 match (DragFloat(F"##strength_{i}##{tag}", st, 0.01, 0., 1.))
                 {
-                value(newst)?
-                {
-                    new_strength_data->add(newst);
-                    need_update = true;
-                }
-                none?
-                    new_strength_data->add(st);
+                    value(newst)?
+                    {
+                        new_strength_data->add(newst);
+                        need_update = true;
+                    }
+                    none?
+                        new_strength_data->add(st);
                 }
             }
-
+            
             if (need_update)
                 return option::value(
                     Light2D::Range::light_shape
@@ -540,11 +540,11 @@ namespace Light2D::Range::light_shape
                         m_positions = point_data,
                     }
                 );
-
+                
             return option::none;
         }
     }
-
+    
 }
 namespace Light2D::BlockShadow::block_mesh
 {
@@ -568,36 +568,36 @@ namespace Light2D::BlockShadow::block_mesh
             let mut size_changed = false;
             match (InputInt(F"size##{tag}", val: array<vec2>->len)->>\n = n < 0 ? 0 | n;)
             {
-            value(newsize)?
+                value(newsize)?
                 {
                     val = val: array<vec2>->resize(newsize, (0., 0.): vec2): Light2D::BlockShadow::block_mesh;
                     size_changed = true;
                 }
-            none?;
+                none?;
             }
-
+            
             match (jeapi::gui::widget::poseditor(
-                F"##block_mesh##{tag}", 
-                math::min(GetContentRegionAvail().0, 400.),
-                [val: array<vec2>->>\p = p: (real, real);],
-                0.01,
-                func(a, i)
-                {
-                    let r = []mut: vec<((real, real), (real, real))>;
-                    for (let (idx, p) : a[i]->iter |> iterator::enumerate)
+                    F"##block_mesh##{tag}",
+                    math::min(GetContentRegionAvail().0, 400.),
+                    [val: array<vec2>->>\p = p: (real, real);],
+                    0.01,
+                    func(a, i)
                     {
-                        if (idx > 0)
-                            r->add((a[i][idx - 1], p));
-                    }
-                    return r->to_array;
-                },
-            ))
+                        let r = []mut: vec<((real, real), (real, real))>;
+                        for (let (idx, p) : a[i]->iter |> iterator::enumerate)
+                        {
+                            if (idx > 0)
+                                r->add((a[i][idx - 1], p));
+                        }
+                        return r->to_array;
+                    },
+                ))
             {
-            value(posgroups)?
-                return option::value(posgroups[0] as array<(real, real)>->>\p = p: vec2;: Light2D::BlockShadow::block_mesh);
-            none?
-                if (size_changed)
-                    return option::value(val);
+                value(posgroups)?
+                    return option::value(posgroups[0] as array<(real, real)>->>\p = p: vec2;: Light2D::BlockShadow::block_mesh);
+                none?
+                    if (size_changed)
+                        return option::value(val);
                 else
                     return option::none;
             }
@@ -629,7 +629,7 @@ namespace UserInterface::Origin::origin_center
                 SameLine();
                 if (CheckBox(F"##{tag}_ru", origin_center::right + origin_center::top == val)->is_value)
                     newval = origin_center::right + origin_center::top;
-
+                    
                 if (CheckBox(F"##{tag}_l", origin_center::left == val)->is_value)
                     newval = origin_center::left;
                 SameLine();
@@ -638,7 +638,7 @@ namespace UserInterface::Origin::origin_center
                 SameLine();
                 if (CheckBox(F"##{tag}_r", origin_center::right == val)->is_value)
                     newval = origin_center::right;
-
+                    
                 if (CheckBox(F"##{tag}_lb", origin_center::left + origin_center::bottom == val)->is_value)
                     newval = origin_center::left + origin_center::bottom;
                 SameLine();
@@ -649,7 +649,7 @@ namespace UserInterface::Origin::origin_center
                     newval = origin_center::right + origin_center::bottom;
             }
             EndGroup();
-
+            
             if (newval != val)
                 return option::value(newval);
             else
@@ -664,24 +664,28 @@ namespace Animation::FrameAnimation::animation_list
         public extern func saving(val: Animation::FrameAnimation::animation_list)=> string
         {
             return val: array<animation_state>
-                ->> \state = [state.m_path: dynamic, state.m_animation: dynamic, state.m_loop: dynamic];
-                ->  serialize
-                ->  unwrap;
+                ->> \state = [
+                        state.m_path: dynamic,
+                        state.m_action->is_value ? state.m_action->unwrap: dynamic | nil: dynamic,
+                        state.m_loop: dynamic];
+                    ->  serialize
+                    ->  unwrap;
         }
         public extern func restoring(dat: string)=> Animation::FrameAnimation::animation_list
         {
             return dat->array::deserialize->or([])
-                ->> \state = 
-                        animation_state
-                        {
-                            m_path = state_dat->get_or(0, "": dynamic)->or(""), 
-                            m_animation = state_dat->get_or(1, "": dynamic)->or(""), 
-                            m_loop = state_dat->get_or(2, false: dynamic)->or(false), 
-                        }
-                        where state_dat = state->or([]: array<dynamic>)
+                ->> \state =
+                    animation_state
+                    {
+                        m_path = state_dat->get_or(0, "": dynamic)->or(""),
+                        m_action = state_dat->get_or(1, nil: dynamic)->trycast:<string>,
+                        m_loop = state_dat->get_or(2, false: dynamic)->or(false),
+                    }
+                    where 
+                        state_dat = state->or([]: array<dynamic>)
                     ;
                 : animation_list;
-                ;
+            ;
         }
         public extern func edit(mut val: Animation::FrameAnimation::animation_list, tag: string)=> option<Animation::FrameAnimation::animation_list>
         {
@@ -689,78 +693,78 @@ namespace Animation::FrameAnimation::animation_list
             
             match (InputInt(F"size##{tag}", val: array<animation_state>->len)->>\n = n < 0 ? 0 | n;)
             {
-            value(newsize)?
+                value(newsize)?
                 {
                     val = val: array<animation_state>
-                        ->resize(newsize, 
+                        ->resize(newsize,
                             animation_state
                             {
                                 m_path = "",
-                                m_animation = "", 
+                                m_action = option::none,
                                 m_loop = false,
                             }): Animation::FrameAnimation::animation_list;
                     need_update = true;
                 }
-            none?;
+                none?;
             }
-
+            
             let mut newval = []mut: vec<animation_state>;
-
+            
             for (let (idx, state) : val: array<animation_state>->iter |> iterator::enumerate)
             {
                 let mut path = state.m_path;
-                let mut animation = state.m_animation;
+                let mut animation = state.m_action;
                 let mut loop = state.m_loop;
-
-                if (TreeNodeEx(F"动画 {idx}", 
-                                TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow 
-                                + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick 
-                                + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
-                                + TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen))
+                
+                if (TreeNodeEx(F"动画 {idx}",
+                        TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnArrow
+                            + TreeNodeAttribute::ImGuiTreeNodeFlags_OpenOnDoubleClick
+                            + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
+                            + TreeNodeAttribute::ImGuiTreeNodeFlags_DefaultOpen))
                 {
                     match (CheckBox(F"循环##{tag}", loop))
                     {
-                    value(newloop)?
+                        value(newloop)?
                         {
                             loop = newloop;
                             need_update = true;
                         }
-                    none?;
+                        none?;
                     }
                     SameLine();
-
+                    
                     match (jeapi::gui::widget::File(F"路径##{tag}", path, \=do nil;))
                     {
-                    value(newpath)?
+                        value(newpath)?
                         {
                             path = newpath;
                             need_update = true;
                         }
-                    none?;
+                        none?;
                     }
-
-                    match (InputText(F"动作##{tag}", animation))
+                    
+                    match (InputText(F"动作##{tag}", animation->or("")))
                     {
-                    value(newanimation)?
+                        value(newanimation)?
                         {
-                            animation = newanimation;
+                            animation = option::value(newanimation);
                             need_update = true;
                         }
-                    none?;
+                        none?;
                     }
-
+                    
                     newval->add(
                         animation_state
                         {
                             m_path = path,
-                            m_animation = animation,
+                            m_action = animation,
                             m_loop = loop,
                         }
                     );
                     TreePop();
                 }
             }
-
+            
             if (need_update)
                 return option::value(newval->to_array: Animation::FrameAnimation::animation_list);
             else

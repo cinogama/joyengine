@@ -36,14 +36,20 @@ namespace jeecs::graphic::api::gl3
 {
     struct jegl3_vertex_data
     {
+        JECS_DISABLE_MOVE_AND_COPY(jegl3_vertex_data);
+
         GLuint m_vao;
         GLuint m_vbo;
         GLuint m_ebo;
         GLenum m_method;
         GLsizei m_pointcount;
+
+        jegl3_vertex_data() = default;
     };
     struct jegl3_sampler
     {
+        JECS_DISABLE_MOVE_AND_COPY(jegl3_sampler);
+
         GLuint m_sampler;
         std::vector<uint32_t> m_passes;
 
@@ -58,8 +64,11 @@ namespace jeecs::graphic::api::gl3
     };
     struct jegl3_shader_blob
     {
+        JECS_DISABLE_MOVE_AND_COPY(jegl3_shader_blob);
         struct jegl3_shader_blob_shared
         {
+            JECS_DISABLE_MOVE_AND_COPY(jegl3_shader_blob_shared);
+
             GLuint m_shader_program_instance;
 
             jegl3_sampler* m_samplers;
@@ -67,8 +76,6 @@ namespace jeecs::graphic::api::gl3
 
             std::unordered_map<std::string, uint32_t> m_uniform_locations;
             size_t m_uniform_size;
-
-            JECS_DISABLE_MOVE_AND_COPY(jegl3_shader_blob_shared);
 
             jegl3_shader_blob_shared(GLuint shader_instance, uint32_t sampler_count)
                 : m_shader_program_instance(shader_instance)
@@ -96,8 +103,6 @@ namespace jeecs::graphic::api::gl3
 
         jeecs::basic::resource<jegl3_shader_blob_shared> m_shared_blob_data;
 
-        JECS_DISABLE_MOVE_AND_COPY(jegl3_shader_blob);
-
         jegl3_shader_blob(jeecs::basic::resource<jegl3_shader_blob_shared> s)
             : m_shared_blob_data(s)
         {
@@ -105,6 +110,8 @@ namespace jeecs::graphic::api::gl3
     };
     struct jegl_gl3_shader
     {
+        JECS_DISABLE_MOVE_AND_COPY(jegl_gl3_shader);
+
         jeecs::basic::resource<jegl3_shader_blob::jegl3_shader_blob_shared>
             m_shared_blob_data;
         size_t uniform_buffer_size;
@@ -145,6 +152,26 @@ namespace jeecs::graphic::api::gl3
                 glDeleteBuffers(1, &uniforms);
                 free(uniform_cpu_buffers);
             }
+        }
+    };
+    struct jegl_gl3_framebuf
+    {
+        JECS_DISABLE_MOVE_AND_COPY(jegl_gl3_framebuf);
+
+        size_t m_frame_width;
+        size_t m_frame_height;
+
+        GLuint m_fbo;
+
+        jegl_gl3_framebuf(size_t w, size_t h, GLuint fbo)
+            : m_frame_width(w)
+            , m_frame_height(h)
+            , m_fbo(fbo)
+        {
+        }
+        ~jegl_gl3_framebuf()
+        {
+            glDeleteFramebuffers(1, &m_fbo);
         }
     };
     struct jegl_gl3_context
@@ -1112,11 +1139,15 @@ namespace jeecs::graphic::api::gl3
 
             glDrawBuffers((GLsizei)glattachments.size(), glattachments.data());
 
-            resource->m_handle.m_uint1 = fbo;
-
             GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
             if (status != GL_FRAMEBUFFER_COMPLETE)
                 jeecs::debug::logerr("Framebuffer(%p) not complete, status: %d.", resource, (int)status);
+
+            resource->m_handle.m_ptr = new jegl_gl3_framebuf(
+                resource->m_raw_framebuf_data->m_width,
+                resource->m_raw_framebuf_data->m_height,
+                fbo);
+
             break;
         }
         case jegl_resource::type::UNIFORMBUF:
@@ -1463,8 +1494,13 @@ namespace jeecs::graphic::api::gl3
             break;
         }
         case jegl_resource::type::FRAMEBUF:
-            glDeleteFramebuffers(1, &resource->m_handle.m_uint1);
+        {
+            jegl_gl3_framebuf* fdata =
+                std::launder(reinterpret_cast<jegl_gl3_framebuf*>(resource->m_handle.m_ptr));
+
+            delete fdata;
             break;
+        }
         case jegl_resource::type::UNIFORMBUF:
             glDeleteBuffers(1, &resource->m_handle.m_uint1);
             break;
@@ -1544,15 +1580,20 @@ namespace jeecs::graphic::api::gl3
         const float (*clear_color_rgba)[4],
         const float* clear_depth)
     {
-        jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
+        jegl_gl3_context* context = reinterpret_cast<jegl_gl3_context*>(ctx);
 
         // Reset current binded shader.
         context->current_active_shader_may_null = nullptr;
 
-        if (nullptr == framebuffer)
+        jegl_gl3_framebuf* framebuffer_instance = nullptr;
+        if (framebuffer != nullptr)
+            framebuffer_instance = reinterpret_cast<jegl_gl3_framebuf*>(
+                framebuffer->m_handle.m_ptr);
+
+        if (nullptr == framebuffer_instance)
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
         else
-            glBindFramebuffer(GL_FRAMEBUFFER, framebuffer->m_handle.m_uint1);
+            glBindFramebuffer(GL_FRAMEBUFFER, framebuffer_instance->m_fbo);
 
         int32_t x = 0, y = 0, w = 0, h = 0;
         if (viewport_xywh != nullptr)
@@ -1564,18 +1605,15 @@ namespace jeecs::graphic::api::gl3
             h = viewport[3];
         }
 
-        auto* framw_buffer_raw = framebuffer != nullptr
-            ? framebuffer->m_raw_framebuf_data
-            : nullptr;
         if (w == 0)
             w = static_cast<int32_t>(
-                framw_buffer_raw != nullptr
-                ? framebuffer->m_raw_framebuf_data->m_width
+                framebuffer_instance != nullptr
+                ? framebuffer_instance->m_frame_width
                 : context->RESOLUTION_WIDTH);
         if (h == 0)
             h = static_cast<int32_t>(
-                framw_buffer_raw != nullptr
-                ? framebuffer->m_raw_framebuf_data->m_height
+                framebuffer_instance != nullptr
+                ? framebuffer_instance->m_frame_height
                 : context->RESOLUTION_HEIGHT);
 
         glViewport((GLint)x, (GLint)y, (GLsizei)w, (GLsizei)h);

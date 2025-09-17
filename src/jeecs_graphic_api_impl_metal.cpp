@@ -371,14 +371,19 @@ namespace jeecs::graphic::api::metal
 
         MTL::RenderPassDescriptor* m_render_pass_descriptor;
 
-        std::vector<MTL::PixelFormat> m_color_attachment_formats;
-        bool m_has_depth_attachment;
+        size_t m_frame_width;
+        size_t m_frame_height;
 
+        bool m_has_depth_attachment;
+        std::vector<MTL::PixelFormat> m_color_attachment_formats;
+        
         std::unordered_set<metal_resource_shader_blob::shared_state*>
             m_linked_shaders;
 
-        metal_framebuffer()
-            : m_has_depth_attachment(false)
+        metal_framebuffer(size_t w, size_t h)
+            : m_frame_width(w),
+            , m_frame_height(h)
+            , m_has_depth_attachment(false)
         {
             m_render_pass_descriptor = MTL::RenderPassDescriptor::alloc()->init();
         }
@@ -1150,7 +1155,9 @@ namespace jeecs::graphic::api::metal
         }
         case jegl_resource::type::FRAMEBUF:
         {
-            metal_framebuffer* framebuf = new metal_framebuffer();
+            metal_framebuffer* framebuf = new metal_framebuffer(
+                res->m_raw_framebuf_data->m_width,
+                res->m_raw_framebuf_data->m_height);
 
             jeecs::basic::resource<jeecs::graphic::texture>* attachments =
                 std::launder(reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture> *>(
@@ -1718,15 +1725,15 @@ namespace jeecs::graphic::api::metal
 
         const int32_t buf_h =
             static_cast<int32_t>(
-                framw_buffer_raw != nullptr
-                ? framw_buffer_raw->m_height
+                target_framebuf_may_null != nullptr
+                ? target_framebuf_may_null->m_frame_height
                 : metal_context->m_render_states.m_screen_height);
 
         if (w == 0)
         {
             w = static_cast<int32_t>(
-                framw_buffer_raw != nullptr
-                ? framw_buffer_raw->m_width
+                target_framebuf_may_null != nullptr
+                ? target_framebuf_may_null->m_frame_width
                 : metal_context->m_render_states.m_screen_width);
         }
         if (h == 0)

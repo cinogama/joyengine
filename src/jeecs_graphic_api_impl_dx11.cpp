@@ -142,8 +142,15 @@ namespace jeecs::graphic::api::dx11
     };
     struct jedx11_framebuffer
     {
+        size_t m_frame_width;
+        size_t m_frame_height;
+
         JECS_DISABLE_MOVE_AND_COPY(jedx11_framebuffer);
-        jedx11_framebuffer() = default;
+        jedx11_framebuffer(size_t w, size_t h)
+            : m_frame_width(w)
+            , m_frame_height(h)
+        {
+        }
         ~jedx11_framebuffer() = default;
 
         std::vector<jegl_dx11_context::MSWRLComPtr<ID3D11RenderTargetView>> m_rend_views;
@@ -1398,7 +1405,10 @@ namespace jeecs::graphic::api::dx11
         }
         case jegl_resource::type::FRAMEBUF:
         {
-            jedx11_framebuffer* jedx11_framebuffer_res = new jedx11_framebuffer;
+            jedx11_framebuffer* jedx11_framebuffer_res =
+                new jedx11_framebuffer(
+                    resource->m_raw_framebuf_data->m_width,
+                    resource->m_raw_framebuf_data->m_height);
 
             jeecs::basic::resource<jeecs::graphic::texture>* attachments =
                 std::launder(reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture> *>(
@@ -1794,25 +1804,23 @@ namespace jeecs::graphic::api::dx11
 
         if (framebuffer == nullptr)
         {
+            context->m_current_target_framebuffer = nullptr;
+
             context->m_dx_context->OMSetRenderTargets(1,
                 context->m_dx_main_renderer_target_view.GetAddressOf(),
                 context->m_dx_main_renderer_target_depth_view.Get());
-            context->m_current_target_framebuffer = nullptr;
         }
         else
         {
-            auto* framebuf = reinterpret_cast<jedx11_framebuffer*>(
-                framebuffer->m_handle.m_ptr);
+            context->m_current_target_framebuffer =
+                reinterpret_cast<jedx11_framebuffer*>(
+                    framebuffer->m_handle.m_ptr);
 
             context->m_dx_context->OMSetRenderTargets(
-                framebuf->m_color_target_count,
-                framebuf->m_target_views.data(),
-                framebuf->m_depth_view.Get());
-            context->m_current_target_framebuffer = framebuf;
+                context->m_current_target_framebuffer->m_color_target_count,
+                context->m_current_target_framebuffer->m_target_views.data(),
+                context->m_current_target_framebuffer->m_depth_view.Get());
         }
-
-        auto* framw_buffer_raw =
-            framebuffer != nullptr ? framebuffer->m_raw_framebuf_data : nullptr;
 
         int32_t x = 0, y = 0, w = 0, h = 0;
         if (viewport_xywh != nullptr)
@@ -1826,15 +1834,15 @@ namespace jeecs::graphic::api::dx11
 
         const int32_t buf_h =
             static_cast<int32_t>(
-                framw_buffer_raw != nullptr
-                ? framw_buffer_raw->m_height
+                context->m_current_target_framebuffer != nullptr
+                ? context->m_current_target_framebuffer->m_frame_height
                 : context->RESOLUTION_HEIGHT);
 
         if (w == 0)
         {
             w = static_cast<int32_t>(
-                framw_buffer_raw != nullptr
-                ? framw_buffer_raw->m_width
+                context->m_current_target_framebuffer != nullptr
+                ? context->m_current_target_framebuffer->m_frame_width
                 : context->RESOLUTION_WIDTH);
         }
         if (h == 0)

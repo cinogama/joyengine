@@ -11189,7 +11189,7 @@ namespace jeecs
                         "{\n"
                         "    public using animation_state = struct{\n"
                         "        public m_path: string,\n"
-                        "        public m_animation: option<string>,\n"
+                        "        public m_action: option<string>,\n"
                         "        public m_loop: bool,\n"
                         "    };\n"
                         "    public using animation_list = array<animation_state>;\n"
