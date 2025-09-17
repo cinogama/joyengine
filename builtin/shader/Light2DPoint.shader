@@ -53,19 +53,21 @@ WOSHADER_FUNCTION!
         let mut shadow_factor = vec1!(0.);
         
         let bias = [
-            (0., 1., 0.25),
-            (-1., 0., 0.25),
-            (0., 0., 0.75),
-            (1., 0., 0.25),
-            (0., -1., 0.25),
+            (-1., 0.),
+            (1., 0.),
+            (0., 0.),
+            (0., -1.),
+            (0., 1.),
         ];
         
         let bias_step = vec2!(1.5, 1.5) / JE_LIGHT2D_RESOLUTION;
-        for (let (xv, yv, f) : bias)
+        for (let (xv, yv) : bias)
         {
-            shadow_factor += f * tex2d(shadow, uv + bias_step * vec2!(xv, yv))->x;
+            shadow_factor = max(
+                shadow_factor, 
+                tex2d(shadow, uv + bias_step * vec2!(xv, yv))->x);
         }
-        return min(shadow_factor, 1.);
+        return shadow_factor;
     }
     
 WOSHADER_FUNCTION!

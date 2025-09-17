@@ -394,7 +394,12 @@ namespace editor::gui
                         do std::shell(F"code {_wrap_path(context->get_project->get_path->to_string())} {_wrap_path(p.path->to_string)}");
                         return option::none;
                     },
-                    
+                [".shader"] = 
+                    func (p: PathInfo, context: EditorContext)
+                    {
+                        do std::shell(F"code {_wrap_path(context->get_project->get_path->to_string())} {_wrap_path(p.path->to_string)}");
+                        return option::none;
+                    },                    
             };
             
             return registed_open_method
