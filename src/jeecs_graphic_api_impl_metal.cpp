@@ -101,9 +101,6 @@ namespace jeecs::graphic::api::metal
             m_command_queue->release();
             m_metal_device->release();
             m_main_depth_texture_target->release();
-
-            if (m_frame_auto_release != nullptr)
-                m_frame_auto_release->release();
         }
     };
 
@@ -381,7 +378,7 @@ namespace jeecs::graphic::api::metal
             m_linked_shaders;
 
         metal_framebuffer(size_t w, size_t h)
-            : m_frame_width(w),
+            : m_frame_width(w)
             , m_frame_height(h)
             , m_has_depth_attachment(false)
         {
