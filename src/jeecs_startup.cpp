@@ -86,7 +86,6 @@ wo_bool_t _jedbg_hook_woolang_panic(
 
     wo_pin_value_get(_je_global_panic_hooker_s + 6, _je_global_context._je_global_panic_hook_function);
 
-    bool panic_processed = false;
     if (nullptr == wo_invoke_value(
         _je_global_context._je_global_panic_hooker,
         _je_global_panic_hooker_s + 6,

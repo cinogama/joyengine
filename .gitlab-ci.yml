@@ -202,7 +202,7 @@ build_win64_dx11_opengles_vk_static:
   tags:
     - winserver22
 
-build_macos_opengl_vk:
+build_macos_metal_opengl_vk:
   stage: build
   script:
     - git submodule update --init --recursive --force

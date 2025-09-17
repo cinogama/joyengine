@@ -480,7 +480,7 @@ void _jegl_regenerate_and_alloc_msl_from_spir_v(
     spvc_parsed_ir fragment_ir = NULL;
     spvc_compiler vertex_compiler = NULL;
     spvc_compiler fragment_compiler = NULL;
-    spvc_resources resources = NULL;
+
     const char* vertex_msl = NULL;
     const char* fragment_msl = NULL;
     spvc_context_create(&context);
