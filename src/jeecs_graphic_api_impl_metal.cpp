@@ -41,6 +41,9 @@ namespace jeecs::graphic::api::metal
         {
             size_t m_frame_counter;
 
+            int m_screen_width;
+            int m_screen_height;
+
             CA::MetalDrawable* m_main_this_frame_drawable;
             MTL::RenderPassDescriptor* m_main_render_pass_descriptor;
 
@@ -81,6 +84,10 @@ namespace jeecs::graphic::api::metal
 
             m_metal_layer = CA::MetalLayer::layer();
             m_metal_layer->setDevice(m_metal_device);
+
+            m_render_states.m_screen_width = (int)cfg->m_width;
+            m_render_states.m_screen_height = (int)cfg->m_height;
+
             create_main_depth_texture(cfg->m_width, cfg->m_height);
 
             m_frame_auto_release = nullptr;
@@ -503,11 +510,8 @@ namespace jeecs::graphic::api::metal
             ->depthAttachment()
             ->setTexture(metal_context->m_main_depth_texture_target);
 
-        metal_context->m_render_states.m_currnet_command_buffer =
-            metal_context->m_command_queue->commandBuffer();
-        metal_context->m_render_states.m_current_command_encoder =
-            metal_context->m_render_states.m_currnet_command_buffer->renderCommandEncoder(
-                metal_context->m_render_states.m_main_render_pass_descriptor);
+        metal_context->m_render_states.m_currnet_command_buffer = nullptr;
+        metal_context->m_render_states.m_current_command_encoder = nullptr;
 
         switch (metal_context->m_interface->update())
         {
@@ -518,16 +522,30 @@ namespace jeecs::graphic::api::metal
         case basic_interface::update_result::PAUSE:
             return jegl_update_action::JEGL_UPDATE_SKIP;
         case basic_interface::update_result::RESIZE:
-            int w, h;
-            je_io_get_window_size(&w, &h);
-            metal_context->m_metal_layer->setDrawableSize(CGSizeMake(w, h));
-            metal_context->recreate_main_depth_texture(w, h);
+            je_io_get_window_size(
+                &metal_context->m_render_states.m_screen_width,
+                &metal_context->m_render_states.m_screen_height);
+            metal_context->m_metal_layer->setDrawableSize(
+                CGSizeMake(
+                    metal_context->m_render_states.m_screen_width,
+                    metal_context->m_render_states.m_screen_height));
+            metal_context->recreate_main_depth_texture(
+                metal_context->m_render_states.m_screen_width,
+                metal_context->m_render_states.m_screen_height);
             [[fallthrough]];
         case basic_interface::update_result::NORMAL:
         _label_jegl_metal_normal_job:
             return jegl_update_action::JEGL_UPDATE_CONTINUE;
         }
     }
+
+    void bind_framebuffer(
+        jegl_context::graphic_impl_context_t ctx,
+        jegl_resource* fb,
+        const int32_t(*viewport_xywh)[4],
+        const float(*clear_color_rgba)[4],
+        const float* clear_depth);
+
     jegl_update_action commit_update(
         jegl_context::graphic_impl_context_t ctx, jegl_update_action)
     {
@@ -535,18 +553,7 @@ namespace jeecs::graphic::api::metal
             reinterpret_cast<jegl_metal_context*>(ctx);
 
         // 渲染工作结束，检查，结束当前编码器，提交命令缓冲区，然后切换到默认帧缓冲
-        if (metal_context->m_render_states.m_current_target_framebuffer_may_null != nullptr)
-        {
-            void bind_framebuffer(
-                jegl_context::graphic_impl_context_t ctx,
-                jegl_resource * fb,
-                const size_t(*viewport_xywh)[4],
-                const float(*clear_color_rgba)[4],
-                const float* clear_depth);
-
-            bind_framebuffer(
-                ctx, nullptr, nullptr, nullptr, nullptr);
-        }
+        bind_framebuffer(ctx, nullptr, nullptr, nullptr, nullptr);
 
         jegui_update_metal(
             metal_context->m_render_states.m_main_render_pass_descriptor,
@@ -751,7 +758,7 @@ namespace jeecs::graphic::api::metal
                 MTL::DepthStencilState* depth_stencil_state =
                     metal_context->m_metal_device->newDepthStencilState(depth_stencil_descriptor);
                 depth_stencil_descriptor->release();
-              
+
                 auto blend_equation_cvt = [](jegl_shader::blend_equation eq)
                     {
                         switch (eq)
@@ -801,7 +808,7 @@ namespace jeecs::graphic::api::metal
                             abort();
                         }
                     };
-                
+
                 MTL::CullMode cull_mode;
 
                 switch (raw_shader->m_cull_mode)
@@ -1655,7 +1662,7 @@ namespace jeecs::graphic::api::metal
     void bind_framebuffer(
         jegl_context::graphic_impl_context_t ctx,
         jegl_resource* fb,
-        const size_t(*viewport_xywh)[4],
+        const int32_t(*viewport_xywh)[4],
         const float(*clear_color_rgba)[4],
         const float* clear_depth)
     {
@@ -1663,6 +1670,15 @@ namespace jeecs::graphic::api::metal
 
         // Reset current binded shader.
         metal_context->m_render_states.m_current_target_shader = nullptr;
+
+        // Finish last command encoder and buffer if any.
+        if (metal_context->m_render_states.m_current_command_encoder != nullptr)
+        {
+            assert(metal_context->m_render_states.m_currnet_command_buffer != nullptr);
+
+            metal_context->m_render_states.m_current_command_encoder->endEncoding();
+            metal_context->m_render_states.m_currnet_command_buffer->commit();
+        }
 
         metal_framebuffer* target_framebuf_may_null = fb == nullptr
             ? nullptr
@@ -1678,9 +1694,6 @@ namespace jeecs::graphic::api::metal
             target_framebuf_may_null,
             clear_depth);
 
-        metal_context->m_render_states.m_current_command_encoder->endEncoding();
-        metal_context->m_render_states.m_currnet_command_buffer->commit();
-
         // Create a new command buffer and encoder for the new framebuffer
         auto* target_framebuffer_desc = target_framebuf_may_null != nullptr
             ? target_framebuf_may_null->m_render_pass_descriptor
@@ -1691,6 +1704,44 @@ namespace jeecs::graphic::api::metal
         metal_context->m_render_states.m_current_command_encoder =
             metal_context->m_render_states.m_currnet_command_buffer->renderCommandEncoder(
                 target_framebuffer_desc);
+
+        // Set viewport
+        int32_t x = 0, y = 0, w = 0, h = 0;
+        if (viewport_xywh != nullptr)
+        {
+            auto& v = *viewport_xywh;
+            x = v[0];
+            y = v[1];
+            w = v[2];
+            h = v[3];
+        }
+
+        const int32_t buf_h =
+            static_cast<int32_t>(
+                framw_buffer_raw != nullptr
+                ? framw_buffer_raw->m_height
+                : metal_context->m_render_states.m_screen_height);
+
+        if (w == 0)
+        {
+            w = static_cast<int32_t>(
+                framw_buffer_raw != nullptr
+                ? framw_buffer_raw->m_width
+                : metal_context->m_render_states.m_screen_width);
+        }
+        if (h == 0)
+            h = buf_h;
+
+        MTL::Viewport viewport;
+        viewport.originX = (double)x;
+        viewport.originY = (double)(buf_h - y - h);
+        viewport.width = w;
+        viewport.height = h;
+        viewport.znear = 0.0;
+        viewport.zfar = 1.0;
+
+        metal_context->m_render_states.m_current_command_encoder->setViewport(
+            viewport);
 
         metal_context->m_render_states.m_current_target_framebuffer_may_null =
             target_framebuf_may_null;

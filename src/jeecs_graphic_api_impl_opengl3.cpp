@@ -1540,7 +1540,7 @@ namespace jeecs::graphic::api::gl3
     void gl_set_rend_to_framebuffer(
         jegl_context::graphic_impl_context_t ctx,
         jegl_resource* framebuffer,
-        const size_t(*viewport_xywh)[4],
+        const int32_t(*viewport_xywh)[4],
         const float (*clear_color_rgba)[4],
         const float* clear_depth)
     {
@@ -1554,7 +1554,7 @@ namespace jeecs::graphic::api::gl3
         else
             glBindFramebuffer(GL_FRAMEBUFFER, framebuffer->m_handle.m_uint1);
 
-        size_t x = 0, y = 0, w = 0, h = 0;
+        int32_t x = 0, y = 0, w = 0, h = 0;
         if (viewport_xywh != nullptr)
         {
             auto& viewport = *viewport_xywh;
@@ -1568,13 +1568,15 @@ namespace jeecs::graphic::api::gl3
             ? framebuffer->m_raw_framebuf_data
             : nullptr;
         if (w == 0)
-            w = framw_buffer_raw != nullptr
-            ? framebuffer->m_raw_framebuf_data->m_width
-            : context->RESOLUTION_WIDTH;
+            w = static_cast<int32_t>(
+                framw_buffer_raw != nullptr
+                ? framebuffer->m_raw_framebuf_data->m_width
+                : context->RESOLUTION_WIDTH);
         if (h == 0)
-            h = framw_buffer_raw != nullptr
-            ? framebuffer->m_raw_framebuf_data->m_height
-            : context->RESOLUTION_HEIGHT;
+            h = static_cast<int32_t>(
+                framw_buffer_raw != nullptr
+                ? framebuffer->m_raw_framebuf_data->m_height
+                : context->RESOLUTION_HEIGHT);
 
         glViewport((GLint)x, (GLint)y, (GLsizei)w, (GLsizei)h);
 #ifdef JE_ENABLE_GL330_GAPI

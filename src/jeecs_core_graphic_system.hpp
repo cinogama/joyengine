@@ -162,8 +162,8 @@ public let frag =
 
         DefaultResources m_default_resources;
 
-        std::vector<camera_arch> m_camera_list;
-        std::vector<renderer_arch> m_renderer_list;
+        std::multiset<camera_arch> m_camera_list;
+        std::multiset<renderer_arch> m_renderer_list;
 
         size_t WINDOWS_WIDTH = 0;
         size_t WINDOWS_HEIGHT = 0;
@@ -371,7 +371,7 @@ public let frag =
             selector.exec([this](Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf, Camera::Clear* clear)
                 {
                     auto* branch = this->allocate_branch(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
-                    m_camera_list.emplace_back(
+                    m_camera_list.insert(
                         camera_arch{
                             branch, rendqueue, &projection, cameraviewport, rendbuf, nullptr, clear
                         }
@@ -389,16 +389,12 @@ public let frag =
                     UserInterface::Rotation* rotation,
                     Renderer::Color* color)
                 {
-                    m_renderer_list.emplace_back(
+                    m_renderer_list.insert(
                         renderer_arch{
                             color, rendqueue, nullptr, &shape, &shads, texs, &origin, rotation });
                 });
-            ;
-            std::sort(m_camera_list.begin(), m_camera_list.end());
-            std::sort(m_renderer_list.begin(), m_renderer_list.end());
 
             this->branch_allocate_end();
-
             DrawFrame();
         }
 
@@ -467,14 +463,17 @@ public let frag =
                 if (current_camera.viewport)
                     rend_chain = jegl_branch_new_chain(current_camera.branchPipeline,
                         rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resource(),
-                        (size_t)(current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH),
-                        (size_t)(current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT),
-                        (size_t)(current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH),
-                        (size_t)(current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT));
+                        (int32_t)(current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH),
+                        (int32_t)(current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT),
+                        (uint32_t)(current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH),
+                        (uint32_t)(current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT));
                 else
                     rend_chain = jegl_branch_new_chain(current_camera.branchPipeline,
                         rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resource(),
-                        0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
+                        0,
+                        0,
+                        (uint32_t)RENDAIMBUFFER_WIDTH,
+                        (uint32_t)RENDAIMBUFFER_HEIGHT);
 
                 if (current_camera.clear != nullptr)
                 {
@@ -645,11 +644,12 @@ public let frag =
                 Camera::Clear* clear)
                 {
                     auto* branch = this->allocate_branch(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
-                    m_camera_list.emplace_back(
+                    m_camera_list.insert(
                         camera_arch{
                             branch, rendqueue, &projection, cameraviewport, rendbuf, frustumCulling, clear
                         }
-                    ); });
+                    );
+                });
 
             selector.except<Light2D::Point, Light2D::Parallel, UserInterface::Origin>();
             selector.exec([this](
@@ -661,17 +661,14 @@ public let frag =
                 Renderer::Color* color)
                 {
                     // RendOb will be input to a chain and used for swap
-                    m_renderer_list.emplace_back(
+                    m_renderer_list.insert(
                         renderer_arch{
                             color, rendqueue, &trans, &shape, &shads, texs
-                        }); });
+                        });
+                });
 
-                    std::sort(m_camera_list.begin(), m_camera_list.end());
-                    std::sort(m_renderer_list.begin(), m_renderer_list.end());
-
-                    this->branch_allocate_end();
-
-                    DrawFrame();
+            this->branch_allocate_end();
+            DrawFrame();
         }
 
         void DrawFrame()
@@ -731,14 +728,17 @@ public let frag =
                 if (current_camera.viewport)
                     rend_chain = jegl_branch_new_chain(current_camera.branchPipeline,
                         rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resource(),
-                        (size_t)(current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH),
-                        (size_t)(current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT),
-                        (size_t)(current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH),
-                        (size_t)(current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT));
+                        (int32_t)(current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH),
+                        (int32_t)(current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT),
+                        (uint32_t)(current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH),
+                        (uint32_t)(current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT));
                 else
                     rend_chain = jegl_branch_new_chain(current_camera.branchPipeline,
                         rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resource(),
-                        0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
+                        0,
+                        0,
+                        (uint32_t)RENDAIMBUFFER_WIDTH,
+                        (uint32_t)RENDAIMBUFFER_HEIGHT);
 
                 if (current_camera.clear != nullptr)
                 {
@@ -912,29 +912,38 @@ public let frag =
                 0.0f,
             };
             DeferLight2DResource()
-                : _no_shadow{ jeecs::graphic::texture::create(1, 1, jegl_texture::format::RGBA) }
-                , _screen_vertex{ jeecs::graphic::vertex::create(
-                    jegl_vertex::type::TRIANGLESTRIP,
-                    _screen_vertex_data,
-                    sizeof(_screen_vertex_data),
-                    {0, 1, 2, 3},
-                    {
-                        {jegl_vertex::data_type::FLOAT32, 3},
-                        {jegl_vertex::data_type::FLOAT32, 2},
-                    })
-                    .value() },
-                _sprite_shadow_vertex{ jeecs::graphic::vertex::create(
-                    jegl_vertex::TRIANGLESTRIP,
-                    _sprite_shadow_vertex_data,
-                    sizeof(_sprite_shadow_vertex_data),
-                    {0, 1, 2, 3},
-                    {
-                        {jegl_vertex::data_type::FLOAT32, 3},
-                        {jegl_vertex::data_type::FLOAT32, 2},
-                        {jegl_vertex::data_type::FLOAT32, 1},
-                    })
-                    .value() },
-                _defer_light2d_shadow_point_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_point.shader", R"(
+                : _no_shadow{
+                    jeecs::graphic::texture::create(1, 1, jegl_texture::format::RGBA)
+                }
+                , _screen_vertex{
+                    jeecs::graphic::vertex::create(
+                        jegl_vertex::type::TRIANGLESTRIP,
+                        _screen_vertex_data,
+                        sizeof(_screen_vertex_data),
+                        {0, 1, 2, 3},
+                        {
+                            {jegl_vertex::data_type::FLOAT32, 3},
+                            {jegl_vertex::data_type::FLOAT32, 2},
+                        })
+                        .value()
+                }
+                , _sprite_shadow_vertex{
+                    jeecs::graphic::vertex::create(
+                        jegl_vertex::TRIANGLESTRIP,
+                        _sprite_shadow_vertex_data,
+                        sizeof(_sprite_shadow_vertex_data),
+                        {0, 1, 2, 3},
+                        {
+                            {jegl_vertex::data_type::FLOAT32, 3},
+                            {jegl_vertex::data_type::FLOAT32, 2},
+                            {jegl_vertex::data_type::FLOAT32, 1},
+                        })
+                        .value()
+                }
+                , _defer_light2d_shadow_point_pass{
+                    jeecs::graphic::shader::create(
+                        "!/builtin/defer_light2d_shadow_point.shader",
+                        R"(
 import woo::std;
 
 import je::shader;
@@ -985,9 +994,12 @@ public func frag(_: v2f)
             shadow_factor, shadow_factor, shadow_factor, shadow_factor),
     };
 }
-)")
-                                                       .value() },
-                _defer_light2d_shadow_parallel_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_parallel.shader", R"(
+)").value()
+                }
+                , _defer_light2d_shadow_parallel_pass{
+                    jeecs::graphic::shader::create(
+                        "!/builtin/defer_light2d_shadow_parallel.shader",
+                        R"(
 import woo::std;
 
 import je::shader;
@@ -1038,9 +1050,12 @@ public func frag(_: v2f)
             shadow_factor, shadow_factor, shadow_factor, shadow_factor),
     };
 }
-)")
-                                                          .value() },
-                _defer_light2d_shadow_point_reverse_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_reverse_point.shader", R"(
+)").value()
+                }
+                , _defer_light2d_shadow_point_reverse_pass{
+                jeecs::graphic::shader::create(
+                    "!/builtin/defer_light2d_shadow_reverse_point.shader",
+                    R"(
 import woo::std;
 
 import je::shader;
@@ -1091,9 +1106,12 @@ public func frag(_: v2f)
             shadow_factor, shadow_factor, shadow_factor, shadow_factor),
     };
 }
-)")
-                                                               .value() },
-                _defer_light2d_shadow_parallel_reverse_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_reverse_parallel.shader", R"(
+)").value()
+                }
+                , _defer_light2d_shadow_parallel_reverse_pass{
+                    jeecs::graphic::shader::create(
+                        "!/builtin/defer_light2d_shadow_reverse_parallel.shader",
+                        R"(
 import woo::std;
 
 import je::shader;
@@ -1144,9 +1162,12 @@ public func frag(_: v2f)
             shadow_factor, shadow_factor, shadow_factor, shadow_factor),
     };
 }
-)")
-                                                                  .value() },
-                _defer_light2d_shadow_shape_point_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_point_shape.shader", R"(
+)").value()
+                }
+                , _defer_light2d_shadow_shape_point_pass{
+                    jeecs::graphic::shader::create(
+                        "!/builtin/defer_light2d_shadow_point_shape.shader",
+                        R"(
 import woo::std;
 
 import je::shader;
@@ -1218,9 +1239,12 @@ public func frag(vf: v2f)
             shadow_factor, shadow_factor, shadow_factor, shadow_factor),
     };
 }
-)")
-                                                             .value() },
-                _defer_light2d_shadow_shape_parallel_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_parallel_shape.shader", R"(
+)").value()
+                }
+                , _defer_light2d_shadow_shape_parallel_pass{
+                    jeecs::graphic::shader::create(
+                        "!/builtin/defer_light2d_shadow_parallel_shape.shader",
+                        R"(
 import woo::std;
 
 import je::shader;
@@ -1288,9 +1312,12 @@ public func frag(vf: v2f)
             shadow_factor, shadow_factor, shadow_factor, shadow_factor),
     };
 }
-)")
-                                                                .value() },
-                _defer_light2d_shadow_sprite_point_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_point_sprite.shader", R"(
+)").value()
+                }
+                , _defer_light2d_shadow_sprite_point_pass{
+                    jeecs::graphic::shader::create(
+                        "!/builtin/defer_light2d_shadow_point_sprite.shader",
+                        R"(
 import woo::std;
 
 import je::shader;
@@ -1359,9 +1386,12 @@ public func frag(vf: v2f)
             shadow_factor, shadow_factor, shadow_factor, shadow_factor),
     };
 }
-)")
-                                                              .value() },
-                _defer_light2d_shadow_sprite_parallel_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_parallel_sprite.shader", R"(
+)").value()
+                }
+                , _defer_light2d_shadow_sprite_parallel_pass{
+                jeecs::graphic::shader::create(
+                    "!/builtin/defer_light2d_shadow_parallel_sprite.shader"
+                    , R"(
 import woo::std;
 
 import je::shader;
@@ -1426,9 +1456,12 @@ public func frag(vf: v2f)
             shadow_factor, shadow_factor, shadow_factor, shadow_factor),
     };
 }
-)")
-                                                                 .value() },
-                _defer_light2d_shadow_sub_pass{ jeecs::graphic::shader::create("!/builtin/defer_light2d_shadow_sub.shader", R"(
+)").value()
+                }
+                , _defer_light2d_shadow_sub_pass{
+                    jeecs::graphic::shader::create(
+                        "!/builtin/defer_light2d_shadow_sub.shader",
+                        R"(
 import woo::std;
 
 import je::shader;
@@ -1482,9 +1515,10 @@ public func frag(vf: v2f)
             shadow_factor, shadow_factor, shadow_factor, 1.),
     };
 }
-)")
-                                                     .value() }
+)").value()
+                }
             {
+                // Donothing...
             }
         };
 
@@ -1557,7 +1591,7 @@ public func frag(vf: v2f)
             const Shape* shape;
         };
 
-        std::vector<l2dcamera_arch> m_2dcamera_list;
+        std::multiset<l2dcamera_arch> m_2dcamera_list;
         std::vector<light2d_arch> m_2dlight_list;
 
         std::vector<block2d_arch> m_2dblock_z_list;
@@ -1607,7 +1641,7 @@ public func frag(vf: v2f)
                 Renderer::Color* color)
                 {
                     auto* branch = this->allocate_branch(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
-                    m_2dcamera_list.emplace_back(
+                    m_2dcamera_list.insert(
                         l2dcamera_arch{
                             branch,
                             rendqueue,
@@ -1683,230 +1717,234 @@ public func frag(vf: v2f)
                                         (jegl_texture::format)(jegl_texture::format::RGBA | jegl_texture::format::FLOAT16),
                                     }).value();
                         }
-                    } });
+                    }
+                });
 
-                    selector.except<Light2D::Point, Light2D::Parallel, Light2D::Range, UserInterface::Origin>();
-                    selector.exec([this](Translation& trans, Shaders& shads, Textures* texs, Shape& shape, Rendqueue* rendqueue, Renderer::Color* color)
+            selector.except<Light2D::Point, Light2D::Parallel, Light2D::Range, UserInterface::Origin>();
+            selector.exec(
+                [this](
+                    Translation& trans,
+                    Shaders& shads,
+                    Textures* texs,
+                    Shape& shape,
+                    Rendqueue* rendqueue,
+                    Renderer::Color* color)
+                {
+                    // RendOb will be input to a chain and used for swap
+                    m_renderer_list.insert(
+                        renderer_arch{
+                            color, rendqueue, &trans, &shape, &shads, texs
+                        });
+                });
+
+            selector.anyof<Light2D::Point, Light2D::Parallel, Light2D::Range>();
+            selector.exec([this](Translation& trans,
+                Light2D::TopDown* topdown,
+                Light2D::Point* point,
+                Light2D::Parallel* parallel,
+                Light2D::Range* range,
+                Light2D::Gain* gain,
+                Light2D::ShadowBuffer* shadowbuffer,
+                Renderer::Color* color,
+                Shape& shape,
+                Shaders& shads,
+                Textures* texs)
+                {
+                    m_2dlight_list.emplace_back(
+                        light2d_arch{
+                            &trans, topdown, point, parallel, range, gain, shadowbuffer,
+                            color, &shape, &shads, texs,
+                        });
+                    if (shadowbuffer != nullptr)
+                    {
+                        size_t SHADOW_BUFFER_WIDTH =
+                            std::max((size_t)1, (size_t)llround(
+                                WINDOWS_WIDTH * std::max(0.f, std::min(shadowbuffer->resolution_ratio, 1.0f))));
+
+                        size_t SHADOW_BUFFER_HEIGHT =
+                            std::max((size_t)1, (size_t)llround(
+                                WINDOWS_HEIGHT * std::max(0.f, std::min(shadowbuffer->resolution_ratio, 1.0f))));
+
+                        bool generate_new_framebuffer = !shadowbuffer->buffer.has_value();
+                        if (!generate_new_framebuffer)
                         {
-                            // RendOb will be input to a chain and used for swap
-                            m_renderer_list.emplace_back(
-                                renderer_arch{
-                                    color, rendqueue, &trans, &shape, &shads, texs
-                                }); });
+                            auto& buffer = shadowbuffer->buffer.value();
+                            if (buffer->width() != SHADOW_BUFFER_WIDTH
+                                || buffer->height() != SHADOW_BUFFER_HEIGHT)
+                                generate_new_framebuffer = true;
+                        }
 
-                            selector.anyof<Light2D::Point, Light2D::Parallel, Light2D::Range>();
-                            selector.exec([this](Translation& trans,
-                                Light2D::TopDown* topdown,
-                                Light2D::Point* point,
-                                Light2D::Parallel* parallel,
-                                Light2D::Range* range,
-                                Light2D::Gain* gain,
-                                Light2D::ShadowBuffer* shadowbuffer,
-                                Renderer::Color* color,
-                                Shape& shape,
-                                Shaders& shads,
-                                Textures* texs)
+                        if (generate_new_framebuffer)
+                        {
+                            shadowbuffer->buffer = graphic::framebuffer::create(
+                                std::max((size_t)1, SHADOW_BUFFER_WIDTH),
+                                std::max((size_t)1, SHADOW_BUFFER_HEIGHT),
                                 {
-                                    m_2dlight_list.emplace_back(
-                                        light2d_arch{
-                                            &trans, topdown, point, parallel, range, gain, shadowbuffer,
-                                            color, &shape, &shads, texs,
-                                        }
-                                        );
-                                    if (shadowbuffer != nullptr)
+                                    jegl_texture::format::RGBA,
+                                    // Only store shadow value to R-pass
+                                }).value();
+                        }
+                    }
+                    if (range != nullptr)
+                    {
+                        if (!range->shape.m_light_mesh.has_value()
+                            && range->shape.m_point_count != 0
+                            && !range->shape.m_positions.empty())
+                        {
+                            std::vector<float> vertex_datas;
+                            std::vector<uint32_t> index_datas;
+                            auto append_point =
+                                [&vertex_datas, &index_datas, &range](const math::vec2& p, size_t layerid)
+                                {
+                                    vertex_datas.push_back(p.x);
+                                    vertex_datas.push_back(p.y);
+                                    vertex_datas.push_back(0.f);
+                                    vertex_datas.push_back(range->shape.m_strength[layerid]);
+
+                                    index_datas.push_back((uint32_t)index_datas.size());
+                                };
+
+                            size_t layer_count = range->shape.m_strength.size();
+                            size_t last_point_index = 0;
+                            for (size_t ilayer = 0; ilayer < layer_count; ++ilayer)
+                            {
+                                // 如果是第一层，那么特殊处理，
+                                if (ilayer == 0)
+                                {
+                                    for (size_t ipoint = 0; ipoint < range->shape.m_point_count; ++ipoint)
                                     {
-                                        size_t SHADOW_BUFFER_WIDTH =
-                                            std::max((size_t)1, (size_t)llround(
-                                                WINDOWS_WIDTH * std::max(0.f, std::min(shadowbuffer->resolution_ratio, 1.0f))));
+                                        if (ipoint == 0)
+                                            last_point_index = 0;
+                                        else if (ipoint % 2 == 1)
+                                            last_point_index = 1 + ipoint / 2;
+                                        else
+                                            last_point_index = range->shape.m_point_count - ipoint / 2;
 
-                                        size_t SHADOW_BUFFER_HEIGHT =
-                                            std::max((size_t)1, (size_t)llround(
-                                                WINDOWS_HEIGHT * std::max(0.f, std::min(shadowbuffer->resolution_ratio, 1.0f))));
-
-                                        bool generate_new_framebuffer = !shadowbuffer->buffer.has_value();
-                                        if (!generate_new_framebuffer)
-                                        {
-                                            auto& buffer = shadowbuffer->buffer.value();
-                                            if (buffer->width() != SHADOW_BUFFER_WIDTH
-                                                || buffer->height() != SHADOW_BUFFER_HEIGHT)
-                                                generate_new_framebuffer = true;
-                                        }
-
-                                        if (generate_new_framebuffer)
-                                        {
-                                            shadowbuffer->buffer = graphic::framebuffer::create(
-                                                std::max((size_t)1, SHADOW_BUFFER_WIDTH),
-                                                std::max((size_t)1, SHADOW_BUFFER_HEIGHT),
-                                                {
-                                                    jegl_texture::format::RGBA,
-                                                    // Only store shadow value to R-pass
-                                                }).value();
-                                        }
+                                        append_point(range->shape.m_positions.at(last_point_index), 0);
                                     }
-                                    if (range != nullptr)
+                                }
+                                else
+                                {
+                                    // 如果是点的数量是偶数，那么接下来的层的点需要反向旋转
+                                    for (size_t tipoint = 0; tipoint < range->shape.m_point_count; ++tipoint)
                                     {
-                                        if (!range->shape.m_light_mesh.has_value()
-                                            && range->shape.m_point_count != 0
-                                            && !range->shape.m_positions.empty())
+                                        size_t real_ipoint;
+                                        size_t real_next_last_layer_ipoint;
+                                        if (range->shape.m_point_count % 2 == 0)
                                         {
-                                            std::vector<float> vertex_datas;
-                                            std::vector<uint32_t> index_datas;
-                                            auto append_point =
-                                                [&vertex_datas, &index_datas, &range](const math::vec2& p, size_t layerid)
-                                                {
-                                                    vertex_datas.push_back(p.x);
-                                                    vertex_datas.push_back(p.y);
-                                                    vertex_datas.push_back(0.f);
-                                                    vertex_datas.push_back(range->shape.m_strength[layerid]);
-
-                                                    index_datas.push_back((uint32_t)index_datas.size());
-                                                };
-
-                                            size_t layer_count = range->shape.m_strength.size();
-                                            size_t last_point_index = 0;
-                                            for (size_t ilayer = 0; ilayer < layer_count; ++ilayer)
-                                            {
-                                                // 如果是第一层，那么特殊处理，
-                                                if (ilayer == 0)
-                                                {
-                                                    for (size_t ipoint = 0; ipoint < range->shape.m_point_count; ++ipoint)
-                                                    {
-                                                        if (ipoint == 0)
-                                                            last_point_index = 0;
-                                                        else if (ipoint % 2 == 1)
-                                                            last_point_index = 1 + ipoint / 2;
-                                                        else
-                                                            last_point_index = range->shape.m_point_count - ipoint / 2;
-
-                                                        append_point(range->shape.m_positions.at(last_point_index), 0);
-                                                    }
-                                                }
-                                                else
-                                                {
-                                                    // 如果是点的数量是偶数，那么接下来的层的点需要反向旋转
-                                                    for (size_t tipoint = 0; tipoint < range->shape.m_point_count; ++tipoint)
-                                                    {
-                                                        size_t real_ipoint;
-                                                        size_t real_next_last_layer_ipoint;
-                                                        if (range->shape.m_point_count % 2 == 0)
-                                                        {
-                                                            // 反向旋转
-                                                            real_ipoint = (last_point_index + range->shape.m_point_count - tipoint) % range->shape.m_point_count;
-                                                            real_next_last_layer_ipoint = (last_point_index + range->shape.m_point_count - tipoint - 1) % range->shape.m_point_count;
-                                                        }
-                                                        else
-                                                        {
-                                                            // 正向旋转
-                                                            real_ipoint = (last_point_index + tipoint) % range->shape.m_point_count;
-                                                            real_next_last_layer_ipoint = (last_point_index + tipoint + 1) % range->shape.m_point_count;
-                                                        }
-
-                                                        append_point(range->shape.m_positions[real_ipoint + ilayer * range->shape.m_point_count], ilayer);
-
-                                                        // 如果不是最后一个点，那么链接到下一个顺位点
-                                                        if (tipoint + 1 != range->shape.m_point_count)
-                                                            append_point(range->shape.m_positions[real_next_last_layer_ipoint + (ilayer - 1) * range->shape.m_point_count], ilayer - 1);
-                                                    }
-
-                                                    // 最后链接到本层的第一个顺位点
-                                                    append_point(range->shape.m_positions[last_point_index + ilayer * range->shape.m_point_count], ilayer);
-                                                }
-                                            }
-
-                                            range->shape.m_light_mesh = jeecs::graphic::vertex::create(
-                                                jegl_vertex::type::TRIANGLESTRIP,
-                                                vertex_datas.data(), vertex_datas.size() * sizeof(float),
-                                                index_datas,
-                                                {
-                                                    {jegl_vertex::data_type::FLOAT32, 3},
-                                                    {jegl_vertex::data_type::FLOAT32, 1},
-                                                });
+                                            // 反向旋转
+                                            real_ipoint = (last_point_index + range->shape.m_point_count - tipoint) % range->shape.m_point_count;
+                                            real_next_last_layer_ipoint = (last_point_index + range->shape.m_point_count - tipoint - 1) % range->shape.m_point_count;
                                         }
-                                    } });
-
-                                    selector.anyof<
-                                        Light2D::BlockShadow,
-                                        Light2D::ShapeShadow,
-                                        Light2D::SpriteShadow,
-                                        Light2D::SelfShadow>();
-
-                                    selector.exec([this](Translation& trans,
-                                        Light2D::BlockShadow* blockshadow,
-                                        Light2D::ShapeShadow* shapeshadow,
-                                        Light2D::SpriteShadow* spriteshadow,
-                                        Light2D::SelfShadow* selfshadow,
-                                        Textures* texture,
-                                        Shape& shape)
+                                        else
                                         {
-                                            if (blockshadow != nullptr)
-                                            {
-                                                if (!blockshadow->mesh.m_block_mesh.has_value())
-                                                {
-                                                    std::vector<float> _vertex_buffer;
-                                                    std::vector<uint32_t> _index_buffer;
-                                                    if (!blockshadow->mesh.m_block_points.empty())
-                                                    {
-                                                        for (auto& point : blockshadow->mesh.m_block_points)
-                                                        {
-                                                            _vertex_buffer.insert(_vertex_buffer.end(),
-                                                                {
-                                                                    point.x, point.y, 0.f, 0.f,
-                                                                    point.x, point.y, 0.f, 1.f,
-                                                                });
+                                            // 正向旋转
+                                            real_ipoint = (last_point_index + tipoint) % range->shape.m_point_count;
+                                            real_next_last_layer_ipoint = (last_point_index + tipoint + 1) % range->shape.m_point_count;
+                                        }
 
-                                                            uint32_t _index_offset = _index_buffer.size();
-                                                            _index_buffer.insert(_index_buffer.end(),
-                                                                {
-                                                                    _index_offset,
-                                                                    _index_offset + 1,
-                                                                });
-                                                        }
-                                                        blockshadow->mesh.m_block_mesh = jeecs::graphic::vertex::create(
-                                                            jegl_vertex::type::TRIANGLESTRIP,
-                                                            _vertex_buffer.data(), _vertex_buffer.size() * sizeof(float),
-                                                            _index_buffer,
-                                                            {
-                                                                {jegl_vertex::data_type::FLOAT32, 3},
-                                                                {jegl_vertex::data_type::FLOAT32, 1},
-                                                            });
-                                                    }
-                                                    else
-                                                        blockshadow->mesh.m_block_mesh.reset();
-                                                }
-                                            }
+                                        append_point(range->shape.m_positions[real_ipoint + ilayer * range->shape.m_point_count], ilayer);
 
-                                            m_2dblock_z_list.push_back(
-                                                block2d_arch{
-                                                        &trans,
-                                                        blockshadow,
-                                                        shapeshadow,
-                                                        spriteshadow,
-                                                        selfshadow,
-                                                        texture,
-                                                        &shape
-                                                }
-                                            ); });
+                                        // 如果不是最后一个点，那么链接到下一个顺位点
+                                        if (tipoint + 1 != range->shape.m_point_count)
+                                            append_point(range->shape.m_positions[real_next_last_layer_ipoint + (ilayer - 1) * range->shape.m_point_count], ilayer - 1);
+                                    }
 
-                                    std::sort(m_2dblock_z_list.begin(), m_2dblock_z_list.end(),
-                                        [](const block2d_arch& a, const block2d_arch& b)
+                                    // 最后链接到本层的第一个顺位点
+                                    append_point(range->shape.m_positions[last_point_index + ilayer * range->shape.m_point_count], ilayer);
+                                }
+                            }
+
+                            range->shape.m_light_mesh = jeecs::graphic::vertex::create(
+                                jegl_vertex::type::TRIANGLESTRIP,
+                                vertex_datas.data(), vertex_datas.size() * sizeof(float),
+                                index_datas,
+                                {
+                                    {jegl_vertex::data_type::FLOAT32, 3},
+                                    {jegl_vertex::data_type::FLOAT32, 1},
+                                });
+                        }
+                    }
+                });
+
+            selector.anyof<
+                Light2D::BlockShadow,
+                Light2D::ShapeShadow,
+                Light2D::SpriteShadow,
+                Light2D::SelfShadow>();
+
+            selector.exec([this](Translation& trans,
+                Light2D::BlockShadow* blockshadow,
+                Light2D::ShapeShadow* shapeshadow,
+                Light2D::SpriteShadow* spriteshadow,
+                Light2D::SelfShadow* selfshadow,
+                Textures* texture,
+                Shape& shape)
+                {
+                    if (blockshadow != nullptr)
+                    {
+                        if (!blockshadow->mesh.m_block_mesh.has_value())
+                        {
+                            std::vector<float> _vertex_buffer;
+                            std::vector<uint32_t> _index_buffer;
+                            if (!blockshadow->mesh.m_block_points.empty())
+                            {
+                                for (auto& point : blockshadow->mesh.m_block_points)
+                                {
+                                    _vertex_buffer.insert(_vertex_buffer.end(),
                                         {
-                                            return a.translation->world_position.z > b.translation->world_position.z;
+                                            point.x, point.y, 0.f, 0.f,
+                                            point.x, point.y, 0.f, 1.f,
                                         });
 
-                                    m_2dblock_y_list = m_2dblock_z_list;
-
-                                    std::sort(m_2dblock_y_list.begin(), m_2dblock_y_list.end(),
-                                        [](const block2d_arch& a, const block2d_arch& b)
+                                    uint32_t _index_offset = _index_buffer.size();
+                                    _index_buffer.insert(_index_buffer.end(),
                                         {
-                                            return a.translation->world_position.y > b.translation->world_position.y;
+                                            _index_offset,
+                                            _index_offset + 1,
                                         });
+                                }
+                                blockshadow->mesh.m_block_mesh = jeecs::graphic::vertex::create(
+                                    jegl_vertex::type::TRIANGLESTRIP,
+                                    _vertex_buffer.data(), _vertex_buffer.size() * sizeof(float),
+                                    _index_buffer,
+                                    {
+                                        {jegl_vertex::data_type::FLOAT32, 3},
+                                        {jegl_vertex::data_type::FLOAT32, 1},
+                                    });
+                            }
+                            else
+                                blockshadow->mesh.m_block_mesh.reset();
+                        }
+                    }
 
-                                    std::sort(m_2dcamera_list.begin(), m_2dcamera_list.end());
-                                    std::sort(m_renderer_list.begin(), m_renderer_list.end());
+                    m_2dblock_z_list.push_back(
+                        block2d_arch{
+                                &trans,
+                                blockshadow,
+                                shapeshadow,
+                                spriteshadow,
+                                selfshadow,
+                                texture,
+                                &shape
+                        }
+                    );
+                });
 
-                                    this->branch_allocate_end();
+            m_2dblock_y_list = m_2dblock_z_list;
+            std::sort(m_2dblock_z_list.begin(), m_2dblock_z_list.end(),
+                [](const block2d_arch& a, const block2d_arch& b)
+                {
+                    return a.translation->world_position.z > b.translation->world_position.z;
+                });
+            std::sort(m_2dblock_y_list.begin(), m_2dblock_y_list.end(),
+                [](const block2d_arch& a, const block2d_arch& b)
+                {
+                    return a.translation->world_position.y > b.translation->world_position.y;
+                });
 
-                                    DrawFrame();
+            this->branch_allocate_end();
+            DrawFrame();
         }
 
         void DrawFrame()
@@ -1998,9 +2036,11 @@ public func frag(vf: v2f)
                             auto& light2d_shadow_aim_buffer = lightarch.shadowbuffer->buffer.value();
                             jegl_rendchain* light2d_shadow_rend_chain = jegl_branch_new_chain(
                                 current_camera.branchPipeline,
-                                light2d_shadow_aim_buffer->resource(), 0, 0,
-                                light2d_shadow_aim_buffer->width(),
-                                light2d_shadow_aim_buffer->height());
+                                light2d_shadow_aim_buffer->resource(),
+                                0,
+                                0,
+                                (uint32_t)light2d_shadow_aim_buffer->width(),
+                                (uint32_t)light2d_shadow_aim_buffer->height());
 
                             jegl_rchain_clear_color_buffer(light2d_shadow_rend_chain, nullptr);
                             jegl_rchain_clear_depth_buffer(light2d_shadow_rend_chain, 1.0);
@@ -2312,7 +2352,10 @@ public func frag(vf: v2f)
                     rend_chain = jegl_branch_new_chain(
                         current_camera.branchPipeline,
                         light2d_rend_aim_buffer,
-                        0, 0, 0, 0);
+                        0,
+                        0,
+                        0,
+                        0);
 
                     if (current_camera.clear != nullptr)
                     {
@@ -2330,14 +2373,17 @@ public func frag(vf: v2f)
                     if (current_camera.viewport)
                         rend_chain = jegl_branch_new_chain(current_camera.branchPipeline,
                             rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resource(),
-                            (size_t)(current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH),
-                            (size_t)(current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT),
-                            (size_t)(current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH),
-                            (size_t)(current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT));
+                            (int32_t)(current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH),
+                            (int32_t)(current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT),
+                            (uint32_t)(current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH),
+                            (uint32_t)(current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT));
                     else
                         rend_chain = jegl_branch_new_chain(current_camera.branchPipeline,
                             rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resource(),
-                            0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
+                            0,
+                            0,
+                            (uint32_t)RENDAIMBUFFER_WIDTH,
+                            (uint32_t)RENDAIMBUFFER_HEIGHT);
 
                     // If camera rend to texture, clear the frame buffer (if need)
                     if (current_camera.clear != nullptr)
@@ -2450,7 +2496,10 @@ public func frag(vf: v2f)
                     jegl_rendchain* light2d_light_effect_rend_chain = jegl_branch_new_chain(
                         current_camera.branchPipeline,
                         current_camera.light2DPostPass->post_light_target.value()->resource(),
-                        0, 0, 0, 0);
+                        0,
+                        0,
+                        0,
+                        0);
 
                     jegl_rchain_clear_color_buffer(light2d_light_effect_rend_chain, nullptr);
 
@@ -2596,14 +2645,17 @@ public func frag(vf: v2f)
                     if (current_camera.viewport)
                         final_target_rend_chain = jegl_branch_new_chain(current_camera.branchPipeline,
                             rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resource(),
-                            (size_t)(current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH),
-                            (size_t)(current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT),
-                            (size_t)(current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH),
-                            (size_t)(current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT));
+                            (int32_t)(current_camera.viewport->viewport.x * (float)RENDAIMBUFFER_WIDTH),
+                            (int32_t)(current_camera.viewport->viewport.y * (float)RENDAIMBUFFER_HEIGHT),
+                            (uint32_t)(current_camera.viewport->viewport.z * (float)RENDAIMBUFFER_WIDTH),
+                            (uint32_t)(current_camera.viewport->viewport.w * (float)RENDAIMBUFFER_HEIGHT));
                     else
                         final_target_rend_chain = jegl_branch_new_chain(current_camera.branchPipeline,
                             rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resource(),
-                            0, 0, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
+                            0,
+                            0,
+                            (uint32_t)RENDAIMBUFFER_WIDTH,
+                            (uint32_t)RENDAIMBUFFER_HEIGHT);
 
                     if (current_camera.clear != nullptr)
                     {
@@ -2711,8 +2763,11 @@ public func frag(vf: v2f)
 
                     for (auto& animation : frame_animation.animations.m_animations)
                     {
+                        if (!animation.m_current_action.has_value())
+                            continue;
+
                         auto* active_animation_frames =
-                            animation.m_animations.find(animation.m_current_action);
+                            animation.m_animations.find(animation.m_current_action.value());
 
                         if (active_animation_frames != animation.m_animations.end())
                         {
@@ -2750,7 +2805,9 @@ public func frag(vf: v2f)
                                                 case Animation::FrameAnimation::animation_list::frame_data::data_value::type::INT:
                                                     if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<int>())
                                                     {
-                                                        jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'int', but member is '%s'.",
+                                                        jeecs::debug::logerr(
+                                                            "Cannot apply animation frame data for component '%s''s member '%s', "
+                                                            "type should be 'int', but member is '%s'.",
                                                             cdata.m_component_type->m_typename,
                                                             cdata.m_member_info->m_member_name,
                                                             cdata.m_member_info->m_member_type->m_typename);
@@ -2760,7 +2817,9 @@ public func frag(vf: v2f)
                                                 case Animation::FrameAnimation::animation_list::frame_data::data_value::type::FLOAT:
                                                     if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<float>())
                                                     {
-                                                        jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'float', but member is '%s'.",
+                                                        jeecs::debug::logerr(
+                                                            "Cannot apply animation frame data for component '%s''s member '%s', "
+                                                            "type should be 'float', but member is '%s'.",
                                                             cdata.m_component_type->m_typename,
                                                             cdata.m_member_info->m_member_name,
                                                             cdata.m_member_info->m_member_type->m_typename);
@@ -2770,7 +2829,9 @@ public func frag(vf: v2f)
                                                 case Animation::FrameAnimation::animation_list::frame_data::data_value::type::VEC2:
                                                     if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec2>())
                                                     {
-                                                        jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'vec2', but member is '%s'.",
+                                                        jeecs::debug::logerr(
+                                                            "Cannot apply animation frame data for component '%s''s member '%s', "
+                                                            "type should be 'vec2', but member is '%s'.",
                                                             cdata.m_component_type->m_typename,
                                                             cdata.m_member_info->m_member_name,
                                                             cdata.m_member_info->m_member_type->m_typename);
@@ -2780,7 +2841,9 @@ public func frag(vf: v2f)
                                                 case Animation::FrameAnimation::animation_list::frame_data::data_value::type::VEC3:
                                                     if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec3>())
                                                     {
-                                                        jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'vec3', but member is '%s'.",
+                                                        jeecs::debug::logerr(
+                                                            "Cannot apply animation frame data for component '%s''s member '%s', "
+                                                            "type should be 'vec3', but member is '%s'.",
                                                             cdata.m_component_type->m_typename,
                                                             cdata.m_member_info->m_member_name,
                                                             cdata.m_member_info->m_member_type->m_typename);
@@ -2790,7 +2853,9 @@ public func frag(vf: v2f)
                                                 case Animation::FrameAnimation::animation_list::frame_data::data_value::type::VEC4:
                                                     if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::vec4>())
                                                     {
-                                                        jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'vec4', but member is '%s'.",
+                                                        jeecs::debug::logerr(
+                                                            "Cannot apply animation frame data for component '%s''s member '%s', "
+                                                            "type should be 'vec4', but member is '%s'.",
                                                             cdata.m_component_type->m_typename,
                                                             cdata.m_member_info->m_member_name,
                                                             cdata.m_member_info->m_member_type->m_typename);
@@ -2800,7 +2865,9 @@ public func frag(vf: v2f)
                                                 case Animation::FrameAnimation::animation_list::frame_data::data_value::type::QUAT4:
                                                     if (cdata.m_member_info->m_member_type != jeecs::typing::type_info::of<math::quat>())
                                                     {
-                                                        jeecs::debug::logerr("Cannot apply animation frame data for component '%s''s member '%s', type should be 'quat', but member is '%s'.",
+                                                        jeecs::debug::logerr(
+                                                            "Cannot apply animation frame data for component '%s''s member '%s', "
+                                                            "type should be 'quat', but member is '%s'.",
                                                             cdata.m_component_type->m_typename,
                                                             cdata.m_member_info->m_member_name,
                                                             cdata.m_member_info->m_member_type->m_typename);
@@ -2808,7 +2875,9 @@ public func frag(vf: v2f)
                                                     }
                                                     break;
                                                 default:
-                                                    jeecs::debug::logerr("Bad animation data type(%d) when trying set data of component '%s''s member '%s', please check.",
+                                                    jeecs::debug::logerr(
+                                                        "Bad animation data type(%d) when trying set data of component '%s''s member '%s', "
+                                                        "please check.",
                                                         (int)cdata.m_member_value.m_type,
                                                         cdata.m_component_type->m_typename,
                                                         cdata.m_member_info->m_member_name);
@@ -2855,12 +2924,16 @@ public func frag(vf: v2f)
                                                     break;
                                                 case Animation::FrameAnimation::animation_list::frame_data::data_value::type::QUAT4:
                                                     if (cdata.m_offset_mode)
-                                                        *(math::quat*)cdata.m_member_addr_cache = *(math::quat*)cdata.m_member_addr_cache * cdata.m_member_value.m_value.q4;
+                                                        *(math::quat*)cdata.m_member_addr_cache =
+                                                        *(math::quat*)cdata.m_member_addr_cache
+                                                        * cdata.m_member_value.m_value.q4;
                                                     else
                                                         *(math::quat*)cdata.m_member_addr_cache = cdata.m_member_value.m_value.q4;
                                                     break;
                                                 default:
-                                                    jeecs::debug::logerr("Bad animation data type(%d) when trying set data of component '%s''s member '%s', please check.",
+                                                    jeecs::debug::logerr(
+                                                        "Bad animation data type(%d) when trying set data of component '%s''s member '%s', "
+                                                        "please check.",
                                                         (int)cdata.m_member_value.m_type,
                                                         cdata.m_component_type->m_typename,
                                                         cdata.m_member_info->m_member_name);
@@ -2875,7 +2948,10 @@ public func frag(vf: v2f)
                                     {
                                         animation.m_current_frame_index = 0;
                                         animation.m_next_update_time =
-                                            _fixed_time + active_animation_frames->v.frames[animation.m_current_frame_index].m_frame_time / frame_animation.speed + math::random(-frame_animation.jitter, frame_animation.jitter) / frame_animation.speed;
+                                            _fixed_time
+                                            + (active_animation_frames->v.frames[animation.m_current_frame_index].m_frame_time
+                                                + math::random(-frame_animation.jitter, frame_animation.jitter))
+                                            / frame_animation.speed;
                                     }
                                     else
                                     {
@@ -2883,7 +2959,8 @@ public func frag(vf: v2f)
                                         auto delta_time_between_frams = _fixed_time - animation.m_next_update_time;
                                         auto next_frame_index = (animation.m_current_frame_index + 1) % current_animation_frame_count;
 
-                                        while (delta_time_between_frams > active_animation_frames->v.frames[next_frame_index].m_frame_time / frame_animation.speed)
+                                        while (
+                                            delta_time_between_frams > active_animation_frames->v.frames[next_frame_index].m_frame_time / frame_animation.speed)
                                         {
                                             if (animation.m_loop == false && next_frame_index == current_animation_frame_count - 1)
                                                 break;
@@ -2891,13 +2968,18 @@ public func frag(vf: v2f)
                                             // 在此应用跳过帧的deltaframe数据
                                             update_and_apply_component_frame_data(e, active_animation_frames->v.frames[next_frame_index]);
 
-                                            delta_time_between_frams -= active_animation_frames->v.frames[next_frame_index].m_frame_time / frame_animation.speed;
+                                            delta_time_between_frams -=
+                                                active_animation_frames->v.frames[next_frame_index].m_frame_time / frame_animation.speed;
                                             next_frame_index = (next_frame_index + 1) % current_animation_frame_count;
                                         }
 
                                         animation.m_current_frame_index = next_frame_index;
                                         animation.m_next_update_time =
-                                            _fixed_time + active_animation_frames->v.frames[animation.m_current_frame_index].m_frame_time / frame_animation.speed - delta_time_between_frams + math::random(-frame_animation.jitter, frame_animation.jitter) / frame_animation.speed;
+                                            _fixed_time
+                                            - delta_time_between_frams
+                                            + (active_animation_frames->v.frames[animation.m_current_frame_index].m_frame_time
+                                                + math::random(-frame_animation.jitter, frame_animation.jitter))
+                                            / frame_animation.speed;
                                     }
 
                                     if (animation.m_loop == false)
@@ -2931,7 +3013,9 @@ public func frag(vf: v2f)
                                                 shaders->set_uniform(udata.m_uniform_name.c_str(), udata.m_uniform_value.m_value.v4);
                                                 break;
                                             default:
-                                                jeecs::debug::logerr("Bad animation data type(%d) when trying set data of uniform variable '%s', please check.",
+                                                jeecs::debug::logerr(
+                                                    "Bad animation data type(%d) when trying set data of uniform variable '%s', "
+                                                    "please check.",
                                                     (int)udata.m_uniform_value.m_type,
                                                     udata.m_uniform_name.c_str());
                                                 break;
@@ -2941,7 +3025,7 @@ public func frag(vf: v2f)
                                     if (finish_animation)
                                     {
                                         // 终止动画
-                                        animation.set_action("");
+                                        animation.stop();
                                     }
                                     animation.m_last_speed = frame_animation.speed;
                                 }
@@ -2950,7 +3034,7 @@ public func frag(vf: v2f)
                         else
                         {
                             // 如果没有找到对应的动画，那么终止动画
-                            animation.set_action("");
+                            animation.stop();
                         }
                         // 这个注释写在这里单纯是因为花括号写得太难看，稍微避免出现一个大于号
                     }

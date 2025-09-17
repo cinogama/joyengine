@@ -51,7 +51,8 @@ namespace jeecs
             chain_buffer.m_allocated_chains_count = 0;
             chain_buffer.m_priority = priority;
         }
-        jegl_rendchain *allocate_new_chain(jegl_resource *framebuffer, size_t x, size_t y, size_t w, size_t h)
+        jegl_rendchain *allocate_new_chain(
+            jegl_resource *framebuffer, int32_t x, int32_t y, uint32_t w, uint32_t h)
         {
             auto &chain_buffer = get_commiting_chain_buffer();
 
@@ -334,7 +335,8 @@ void jegl_uhost_free_branch(jeecs::graphic_uhost *host, jeecs::rendchain_branch 
 {
     return host->free_pipeline(free_branch);
 }
-jegl_rendchain *jegl_branch_new_chain(jeecs::rendchain_branch *branch, jegl_resource *framebuffer, size_t x, size_t y, size_t w, size_t h)
+jegl_rendchain *jegl_branch_new_chain(
+    jeecs::rendchain_branch *branch, jegl_resource *framebuffer, int32_t x, int32_t y, uint32_t w, uint32_t h)
 {
     return branch->allocate_new_chain(framebuffer, x, y, w, h);
 }

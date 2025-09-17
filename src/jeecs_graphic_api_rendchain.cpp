@@ -53,7 +53,7 @@ struct jegl_rendchain
     bool m_clear_target_frame_depth_buffer;
 
     jegl_resource *m_target_frame_buffer;
-    size_t m_target_frame_buffer_viewport[4];
+    int32_t m_target_frame_buffer_viewport[4];
 
     std::unordered_set<jegl_resource *> m_used_resource;
 
@@ -98,15 +98,18 @@ void jegl_rchain_close(jegl_rendchain *chain)
     }
     delete chain;
 }
-void jegl_rchain_begin(jegl_rendchain *chain, jegl_resource *framebuffer, size_t x, size_t y, size_t w, size_t h)
+void jegl_rchain_begin(
+    jegl_rendchain *chain, 
+    jegl_resource *framebuffer, 
+    int32_t x, int32_t y, uint32_t w, uint32_t h)
 {
     assert(framebuffer == nullptr || framebuffer->m_type == jegl_resource::type::FRAMEBUF);
 
     chain->m_target_frame_buffer = framebuffer;
     chain->m_target_frame_buffer_viewport[0] = x;
     chain->m_target_frame_buffer_viewport[1] = y;
-    chain->m_target_frame_buffer_viewport[2] = w;
-    chain->m_target_frame_buffer_viewport[3] = h;
+    chain->m_target_frame_buffer_viewport[2] = static_cast<int32_t>(w);
+    chain->m_target_frame_buffer_viewport[3] = static_cast<int32_t>(h);
 
     chain->m_clear_target_frame_color_buffer = false;
     chain->m_clear_target_frame_depth_buffer = false;

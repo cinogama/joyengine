@@ -78,7 +78,7 @@ namespace jeecs::graphic::api::none
     void bind_framebuffer(
         jegl_context::graphic_impl_context_t,
         jegl_resource*,
-        const size_t(*)[4],
+        const int32_t(*)[4],
         const float(*)[4],
         const float*)
     {

@@ -1390,6 +1390,15 @@ WO_API wo_api wojeapi_towoo_animation_frameanimation_active_animation(wo_vm vm, 
     return wo_ret_void(vm);
 }
 
+WO_API wo_api wojeapi_towoo_animation_frameanimation_stop_animation(wo_vm vm, wo_value args)
+{
+    auto& anim = wo_component<jeecs::Animation::FrameAnimation>(args + 0);
+    anim.animations.stop_action((size_t)wo_int(args + 1));
+
+    return wo_ret_void(vm);
+}
+
+
 WO_API wo_api wojeapi_towoo_animation_frameanimation_is_playing(wo_vm vm, wo_value args)
 {
     auto& anim = wo_component<jeecs::Animation::FrameAnimation>(args + 0);

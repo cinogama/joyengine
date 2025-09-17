@@ -2291,7 +2291,7 @@ struct jegl_graphic_api
         void (*)(
             jegl_context::graphic_impl_context_t,
             jegl_resource* framebuffer,
-            const size_t(*viewport_xywh)[4],
+            const int32_t(*viewport_xywh)[4],
             const float(*clear_color_rgba)[4],
             const float* clear_depth);
     using set_uniform_func_t =
@@ -2430,6 +2430,7 @@ struct jegl_graphic_api
     jegl_graphic_api::bind_framebuf [成员]
     设置渲染目标，若传入nullptr，则目标为屏幕空间。
         * 视口若不指定（viewport_xywh = nullptr），则如同使用 (0, 0, 0, 0)
+        * viewport_xywh 的 x, y 允许为负数，但是 w 和 h 不允许为负数
         * 视口的宽度和高度若为0，则使用帧缓冲区的宽度和高度
         * 如果指定了颜色清除值，则在绑定后立即使用该颜色清除所有颜色附件
         * 如果指定了深度清除值，则在绑定后立即使用该值清除深度附件
@@ -2934,7 +2935,7 @@ clear_depth 用于指定深度清除值，若为 nullptr 则不进行深度清�
 */
 JE_API void jegl_rend_to_framebuffer(
     jegl_resource* framebuffer,
-    const size_t(*viewport_xywh)[4],
+    const int32_t(*viewport_xywh)[4],
     const float (*clear_color_rgba)[4],
     const float* clear_depth);
 
@@ -3100,7 +3101,10 @@ jegl_rchain_begin [基本接口]
 请参见：
     jegl_rendchain
 */
-JE_API void jegl_rchain_begin(jegl_rendchain* chain, jegl_resource* framebuffer, size_t x, size_t y, size_t w, size_t h);
+JE_API void jegl_rchain_begin(
+    jegl_rendchain* chain, 
+    jegl_resource* framebuffer, 
+    int32_t x, int32_t y, uint32_t w, uint32_t h);
 
 /*
 jegl_rchain_bind_uniform_buffer [基本接口]
@@ -3484,10 +3488,10 @@ jegl_branch_new_chain [基本接口]
 JE_API jegl_rendchain* jegl_branch_new_chain(
     jeecs::rendchain_branch* branch,
     jegl_resource* framebuffer,
-    size_t x,
-    size_t y,
-    size_t w,
-    size_t h);
+    int32_t x,
+    int32_t y,
+    uint32_t w,
+    uint32_t h);
 
 /*
 jegui_set_font [基本接口]
@@ -5739,13 +5743,13 @@ namespace jeecs
                 }
             }
             template <typename... Args>
-            void emplace(Args &&...args) noexcept
+            T& emplace(Args &&...args) noexcept
             {
                 if (has_constructed)
                     storage.~T();
                 else
                     has_constructed = true;
-                new (&storage) T(std::forward<Args>(args)...);
+                return *new (&storage) T(std::forward<Args>(args)...);
             }
 
             T* operator->() noexcept
@@ -10947,7 +10951,7 @@ namespace jeecs
                     basic::map<basic::string, animation_data> m_animations;
                     basic::string m_path;
 
-                    basic::string m_current_action = "";
+                    basic::optional<basic::string> m_current_action;
                     size_t m_current_frame_index = SIZE_MAX;
                     double m_next_update_time = 0.0f;
                     float m_last_speed = 1.0f;
@@ -10958,15 +10962,24 @@ namespace jeecs
                     {
                         m_loop = loop;
                     }
-                    void set_action(const std::string& animation_name)
+                    void stop()
                     {
-                        m_current_action = animation_name;
+                        m_current_action.reset();
                         m_current_frame_index = SIZE_MAX;
                         m_next_update_time = 0.0f;
                     }
-                    std::string get_action() const
+                    void set_action(const std::string& animation_name)
                     {
-                        return m_current_action.c_str();
+                        m_current_action.emplace() = animation_name;
+                        m_current_frame_index = SIZE_MAX;
+                        m_next_update_time = 0.0f;
+                    }
+                    std::optional<std::string> get_action() const
+                    {
+                        if (m_current_action.has_value())
+                            return m_current_action.value().cpp_str();
+                        else
+                            return std::nullopt;
                     }
 
                     void load_animation(const std::string& str)
@@ -11153,10 +11166,15 @@ namespace jeecs
                         m_animations[id].set_loop(loop);
                     }
                 }
+                void stop_action(size_t id)
+                {
+                    if (id < m_animations.size())
+                        m_animations[id].stop();
+                }
                 bool is_playing(size_t id) const
                 {
                     if (id < m_animations.size())
-                        return m_animations[id].m_current_action != "";
+                        return m_animations[id].m_current_action.has_value();
                     return false;
                 }
 
@@ -11171,7 +11189,7 @@ namespace jeecs
                         "{\n"
                         "    public using animation_state = struct{\n"
                         "        public m_path: string,\n"
-                        "        public m_animation: string,\n"
+                        "        public m_animation: option<string>,\n"
                         "        public m_loop: bool,\n"
                         "    };\n"
                         "    public using animation_list = array<animation_state>;\n"
@@ -11196,7 +11214,10 @@ namespace jeecs
                         animation_inst.load_animation(wo_string(tmp));
 
                         wo_struct_get(tmp, animation, 1);
-                        animation_inst.set_action(wo_string(tmp));
+                        if (wo_option_get(tmp, tmp))
+                            animation_inst.set_action(wo_string(tmp));
+                        else
+                            animation_inst.stop();
 
                         wo_struct_get(tmp, animation, 2);
                         animation_inst.set_loop(wo_bool(tmp));
@@ -11217,7 +11238,12 @@ namespace jeecs
                         wo_set_string(tmp, vm, animation_inst.m_path.c_str());
                         wo_struct_set(animation, 0, tmp);
 
-                        wo_set_string(tmp, vm, animation_inst.get_action().c_str());
+                        auto action = animation_inst.get_action();
+                        if (action.has_value())
+                            wo_set_option_string(tmp, vm, action.value().c_str());
+                        else
+                            wo_set_option_none(tmp, vm);
+                        
                         wo_struct_set(animation, 1, tmp);
 
                         wo_set_bool(tmp, animation_inst.m_loop);

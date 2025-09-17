@@ -487,6 +487,9 @@ namespace Animation
         extern("libjoyecs", "wojeapi_towoo_animation_frameanimation_active_animation")
             public func active_action(self: FrameAnimation, animation_id: int, name: string, loop: bool)=> void;
             
+        extern("libjoyecs", "wojeapi_towoo_animation_frameanimation_stop_animation")
+            public func stop_action(self: FrameAnimation, animation_id: int)=> void;
+
         extern("libjoyecs", "wojeapi_towoo_animation_frameanimation_is_playing")
             public func is_playing(self: FrameAnimation, animation_id: int)=> bool;
     }

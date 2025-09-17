@@ -528,6 +528,7 @@ namespace jeecs::graphic::api::dx11
         jegl_dx11_context* context =
             std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
 
+        context->m_current_target_framebuffer = nullptr;
         context->m_current_target_shader = nullptr;
 
         switch (context->m_interface->update())
@@ -1782,7 +1783,7 @@ namespace jeecs::graphic::api::dx11
     void dx11_set_rend_to_framebuffer(
         jegl_context::graphic_impl_context_t ctx,
         jegl_resource* framebuffer,
-        const size_t(*viewport_xywh)[4],
+        const int32_t(*viewport_xywh)[4],
         const float (*clear_color_rgba)[4],
         const float* clear_depth)
     {
@@ -1813,7 +1814,7 @@ namespace jeecs::graphic::api::dx11
         auto* framw_buffer_raw =
             framebuffer != nullptr ? framebuffer->m_raw_framebuf_data : nullptr;
 
-        size_t x = 0, y = 0, w = 0, h = 0;
+        int32_t x = 0, y = 0, w = 0, h = 0;
         if (viewport_xywh != nullptr)
         {
             auto& v = *viewport_xywh;
@@ -1823,17 +1824,19 @@ namespace jeecs::graphic::api::dx11
             h = v[3];
         }
 
-        size_t buf_w = context->RESOLUTION_WIDTH;
-        size_t buf_h = context->RESOLUTION_HEIGHT;
-
-        if (framw_buffer_raw != nullptr)
-        {
-            buf_w = framw_buffer_raw->m_width;
-            buf_h = framw_buffer_raw->m_height;
-        }
+        const int32_t buf_h =
+            static_cast<int32_t>(
+                framw_buffer_raw != nullptr
+                ? framw_buffer_raw->m_height
+                : context->RESOLUTION_HEIGHT);
 
         if (w == 0)
-            w = buf_w;
+        {
+            w = static_cast<int32_t>(
+                framw_buffer_raw != nullptr
+                ? framw_buffer_raw->m_width
+                : context->RESOLUTION_WIDTH);
+        }
         if (h == 0)
             h = buf_h;
 
@@ -1846,7 +1849,7 @@ namespace jeecs::graphic::api::dx11
         viewport.TopLeftX = (float)x;
 
         viewport.Height = (float)h;
-        viewport.TopLeftY = (float)buf_h - y - h;
+        viewport.TopLeftY = (float)(buf_h - y - h);
 
         context->m_dx_context->RSSetViewports(1, &viewport);
 

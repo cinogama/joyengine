@@ -1726,7 +1726,7 @@ void jegl_draw_vertex(jegl_resource* vert)
 
 void jegl_rend_to_framebuffer(
     jegl_resource* framebuffer,
-    const size_t(*viewport_xywh)[4],
+    const int32_t(*viewport_xywh)[4],
     const float (*clear_color_rgba)[4],
     const float* clear_depth)
 {

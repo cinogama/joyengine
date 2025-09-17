@@ -3298,7 +3298,7 @@ namespace jeecs::graphic::api::vk130
             assert(_vk_current_target_framebuffer == nullptr);
             assert(_vk_current_command_buffer == nullptr);
 
-            cmd_begin_frame_buffer(nullptr, 0, 0, 0, 0);
+            // cmd_begin_frame_buffer(nullptr, 0, 0, 0, 0);
         }
         void late_update()
         {
@@ -3307,13 +3307,11 @@ namespace jeecs::graphic::api::vk130
 
             // 结束录制！回到默认帧缓冲
             cmd_begin_frame_buffer(nullptr, 0, 0, 0, 0);
-
             jegui_update_vk130(_vk_current_command_buffer);
-
             finish_frame_buffer();
         }
         /////////////////////////////////////////////////////
-        void cmd_begin_frame_buffer(jevk13_framebuffer* framebuf, size_t x, size_t y, size_t w, size_t h)
+        void cmd_begin_frame_buffer(jevk13_framebuffer* framebuf, int32_t x, int32_t y, int32_t w, int32_t h)
         {
             if (_vk_current_target_framebuffer != nullptr)
                 finish_frame_buffer();
@@ -3350,9 +3348,9 @@ namespace jeecs::graphic::api::vk130
 
             // NOTE: Pipeline的viewport的纵向坐标应当翻转以兼容opengl3和dx11实现
             if (w == 0)
-                w = _vk_current_target_framebuffer->m_width;
+                w = static_cast<int32_t>(_vk_current_target_framebuffer->m_width);
             if (h == 0)
-                h = _vk_current_target_framebuffer->m_height;
+                h = static_cast<int32_t>(_vk_current_target_framebuffer->m_height);
 
             VkViewport viewport = {};
             viewport.x = (float)x;
@@ -4045,7 +4043,7 @@ namespace jeecs::graphic::api::vk130
     void set_rend_to_framebuffer(
         jegl_context::graphic_impl_context_t ctx,
         jegl_resource* framebuf,
-        const size_t(*viewport_xywh)[4],
+        const int32_t(*viewport_xywh)[4],
         const float (*clear_color_rgba)[4],
         const float* clear_depth)
     {
@@ -4060,7 +4058,7 @@ namespace jeecs::graphic::api::vk130
             target_framebuf = reinterpret_cast<jevk13_framebuffer*>(
                 framebuf->m_handle.m_ptr);
 
-        size_t x = 0, y = 0, w = 0, h = 0;
+        int32_t x = 0, y = 0, w = 0, h = 0;
         if (viewport_xywh != nullptr)
         {
             auto& vp = *viewport_xywh;
@@ -4073,10 +4071,8 @@ namespace jeecs::graphic::api::vk130
 
         if (clear_color_rgba != nullptr)
             context->cmd_clear_frame_buffer_color(*clear_color_rgba);
-
         if (clear_depth != nullptr)
             context->cmd_clear_frame_buffer_depth(*clear_depth);
-
     }
 
     void set_uniform(jegl_context::graphic_impl_context_t ctx, uint32_t location, jegl_shader::uniform_type type, const void* val)
