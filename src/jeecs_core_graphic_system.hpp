@@ -2051,9 +2051,7 @@ public func frag(vf: v2f)
                                     0);
 
                             const float clear_color[4] = { 0.f, 0.f, 0.f, 0.f };
-
                             jegl_rchain_clear_color_buffer(light2d_shadow_rend_chain, 0, clear_color);
-                            jegl_rchain_clear_depth_buffer(light2d_shadow_rend_chain, 1.0);
 
                             jegl_rchain_bind_uniform_buffer(light2d_shadow_rend_chain,
                                 current_camera.projection->default_uniform_buffer->resource());
@@ -2411,8 +2409,6 @@ public func frag(vf: v2f)
                     jegl_rchain_clear_color_buffer(rend_chain, 2, clear_zero);
                     // 用 norm 清空法线通道
                     jegl_rchain_clear_color_buffer(rend_chain, 3, clear_norm);
-
-                    jegl_rchain_clear_depth_buffer(rend_chain, 1.0);
                 }
                 else
                 {
@@ -2441,10 +2437,9 @@ public func frag(vf: v2f)
                             current_camera.clear->color.w };
                         jegl_rchain_clear_color_buffer(rend_chain, 0, clear_buffer_color);
                     }
-
-                    // Clear depth buffer to overwrite pixels.
-                    jegl_rchain_clear_depth_buffer(rend_chain, 1.0);
                 }
+                // Clear depth buffer to overwrite pixels.
+                jegl_rchain_clear_depth_buffer(rend_chain, 1.0);
 
                 jegl_rchain_bind_uniform_buffer(rend_chain,
                     current_camera.projection->default_uniform_buffer->resource());
@@ -2714,7 +2709,6 @@ public func frag(vf: v2f)
                             current_camera.clear->color.z,
                             current_camera.clear->color.w 
                         };
-
                         jegl_rchain_clear_color_buffer(
                             final_target_rend_chain, 0, clear_buffer_color);
                     }

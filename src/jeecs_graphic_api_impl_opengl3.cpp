@@ -1628,11 +1628,17 @@ namespace jeecs::graphic::api::gl3
                     clear_operations->m_color.m_clear_color_rgba);
                 break;
             case jegl_frame_buffer_clear_operation::clear_type::DEPTH:
+            {
+                const float gl_depth =
+                    clear_operations->m_depth.m_clear_depth * 2.f - 1.f;
+
+                _gl_update_depth_mask_method(context, jegl_shader::depth_mask_method::ENABLE);
                 glClearBufferfv(
                     GL_DEPTH,
                     0,
-                    &clear_operations->m_depth.m_clear_depth);
+                    &gl_depth);
                 break;
+            }
             default:
                 jeecs::debug::logfatal("Unknown framebuffer clear operation.");
                 abort();

@@ -518,6 +518,11 @@ namespace jeecs::graphic::api::vk130
                 m_main_context->_vk_descriptor_set_allocator->flush_descriptor_set_allocator(this);
                 m_main_context->_vk_dear_imgui_descriptor_set_allocator->flush_descriptor_set_allocator(this);
             }
+            void release_using_resources_with_sync_queue_free()
+            {
+                m_main_context->vkQueueWaitIdle(m_main_context->_vk_logic_device_present_queue);
+                release_using_resources();
+            }
             swapchain_image_content(
                 jegl_vk130_context* main_contant,
                 jevk13_framebuffer* framebuffer,
@@ -3797,8 +3802,8 @@ namespace jeecs::graphic::api::vk130
             {
                 assert(
                     context->_vk_current_swapchain_image_content
-                    == context->_vk_swapchain_images[_vk_presenting_swapchain_image_index]);
-                context->_vk_current_swapchain_image_content->release_using_resources();
+                    == context->_vk_swapchain_images[context->_vk_presenting_swapchain_image_index]);
+                context->_vk_current_swapchain_image_content->release_using_resources_with_sync_queue_free();
             }
             return jegl_update_action::JEGL_UPDATE_SKIP;
         case basic_interface::update_result::RESIZE:
