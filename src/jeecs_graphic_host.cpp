@@ -163,9 +163,17 @@ namespace jeecs
             if (action == jegl_update_action::JEGL_UPDATE_CONTINUE)
             {
                 // Clear main frame buffer
-                const float clearcolor[] = {0.f, 0.f, 0.f, 0.f};
-                const float cleardepth = 1.f;
-                jegl_rend_to_framebuffer(nullptr, nullptr, &clearcolor, &cleardepth);
+                jegl_frame_buffer_clear_operation color, depth;
+
+                color.m_type = jegl_frame_buffer_clear_operation::clear_type::COLOR;
+                color.m_color = jegl_frame_buffer_clear_operation::clear_color_attachment{ 0, {} };
+                color.m_next = &depth;
+
+                depth.m_type = jegl_frame_buffer_clear_operation::clear_type::DEPTH;
+                depth.m_depth = jegl_frame_buffer_clear_operation::clear_depth_attachment{ 1.0f };
+                depth.m_next = nullptr;
+
+                jegl_rend_to_framebuffer(nullptr, nullptr, &color);
             }
             else if (m_skip_all_draw)
                 return;
@@ -174,12 +182,14 @@ namespace jeecs
             {
                 std::lock_guard g1(m_rendchain_branchs_mx);
 
-                std::stable_sort(m_rendchain_branchs.begin(), m_rendchain_branchs.end(),
-                                 [](rendchain_branch *a, rendchain_branch *b)
-                                 {
-                                     return a->get_rendering_chain_buffer().m_priority <
-                                            b->get_rendering_chain_buffer().m_priority;
-                                 });
+                std::stable_sort(
+                    m_rendchain_branchs.begin(), 
+                    m_rendchain_branchs.end(),
+                    [](rendchain_branch *a, rendchain_branch *b)
+                    {
+                        return a->get_rendering_chain_buffer().m_priority <
+                            b->get_rendering_chain_buffer().m_priority;
+                    });
 
                 for (auto *gpipe : m_rendchain_branchs)
                     gpipe->_commit_frame(glthread, action);

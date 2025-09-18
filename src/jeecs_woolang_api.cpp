@@ -234,8 +234,8 @@ WO_API wo_api wojeapi_apply_camera_framebuf_setting(wo_vm vm, wo_value args)
             (size_t)wo_int(args + 2), 
             {
                 jegl_texture::format::RGBA,
-                jegl_texture::format::DEPTH,
-            });
+            },
+            true);
     }
     else
         jeecs::debug::logfatal("No RendToFramebuffer in specify entity when 'wojeapi_apply_camera_framebuf_setting'.");

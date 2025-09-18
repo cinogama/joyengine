@@ -1522,11 +1522,13 @@ jegl_resource* jegl_create_vertex(
 }
 
 jegl_resource* jegl_create_framebuf(
-    size_t width, size_t height,
-    const jegl_texture::format* attachment_formats,
-    size_t attachment_count)
+    size_t width,
+    size_t height,
+    const jegl_texture::format* color_attachment_formats,
+    size_t color_attachment_count,
+    bool contain_depth_attachment)
 {
-    if (width == 0 || height == 0 || attachment_count == 0)
+    if (width == 0 || height == 0 || color_attachment_count == 0)
     {
         jeecs::debug::logerr("Failed to create invalid framebuffer: size is zero or no attachment.");
         return nullptr;
@@ -1537,21 +1539,34 @@ jegl_resource* jegl_create_framebuf(
     framebuf->m_raw_framebuf_data = new jegl_frame_buffer();
     framebuf->m_path = nullptr;
 
-    framebuf->m_raw_framebuf_data->m_attachment_count = attachment_count;
+    framebuf->m_raw_framebuf_data->m_attachment_count =
+        color_attachment_count + (contain_depth_attachment ? 1 : 0);
     framebuf->m_raw_framebuf_data->m_width = width;
     framebuf->m_raw_framebuf_data->m_height = height;
 
-    jeecs::basic::resource<jeecs::graphic::texture>* attachments = nullptr;
-    if (attachment_count > 0)
-    {
-        attachments = reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture> *>(
-            malloc(attachment_count * sizeof(jeecs::basic::resource<jeecs::graphic::texture>)));
+    jeecs::basic::resource<jeecs::graphic::texture>* attachments =
+        reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture> *>(
+            malloc(
+                framebuf->m_raw_framebuf_data->m_attachment_count 
+                * sizeof(jeecs::basic::resource<jeecs::graphic::texture>)));
 
-        for (size_t i = 0; i < attachment_count; ++i)
-            new (&attachments[i]) jeecs::basic::resource<jeecs::graphic::texture>(
-                jeecs::graphic::texture::create(width, height,
-                    jegl_texture::format(attachment_formats[i] | jegl_texture::format::FRAMEBUF)));
-    }
+    for (size_t i = 0; i < color_attachment_count; ++i)
+        new (&attachments[i]) jeecs::basic::resource<jeecs::graphic::texture>(
+            jeecs::graphic::texture::create(
+                width, 
+                height,
+                jegl_texture::format(
+                    color_attachment_formats[i] 
+                    | jegl_texture::format::FRAMEBUF)));
+
+    if (contain_depth_attachment)
+        new (&attachments[color_attachment_count]) jeecs::basic::resource<jeecs::graphic::texture>(
+            jeecs::graphic::texture::create(
+                width, 
+                height,
+                jegl_texture::format(
+                    jegl_texture::format::DEPTH
+                    | jegl_texture::format::FRAMEBUF)));
 
     framebuf->m_raw_framebuf_data->m_output_attachments =
         (jegl_frame_buffer::attachment_t*)attachments;
@@ -1727,8 +1742,7 @@ void jegl_draw_vertex(jegl_resource* vert)
 void jegl_rend_to_framebuffer(
     jegl_resource* framebuffer,
     const int32_t(*viewport_xywh)[4],
-    const float (*clear_color_rgba)[4],
-    const float* clear_depth)
+    const jegl_frame_buffer_clear_operation* clear_operations)
 {
     if (framebuffer != nullptr)
         jegl_using_resource(framebuffer);
@@ -1737,8 +1751,7 @@ void jegl_rend_to_framebuffer(
         _current_graphic_thread->m_graphic_impl_context,
         framebuffer,
         viewport_xywh,
-        clear_color_rgba,
-        clear_depth);
+        clear_operations);
 }
 
 void jegl_bind_texture(jegl_resource* texture, size_t pass)

@@ -1667,8 +1667,7 @@ namespace jeecs::graphic::api::metal
         jegl_context::graphic_impl_context_t ctx,
         jegl_resource* fb,
         const int32_t(*viewport_xywh)[4],
-        const float(*clear_color_rgba)[4],
-        const float* clear_depth)
+        const jegl_frame_buffer_clear_operation* clear_operations)
     {
         auto* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
 
@@ -1688,7 +1687,8 @@ namespace jeecs::graphic::api::metal
             ? nullptr
             : reinterpret_cast<metal_framebuffer*>(fb->m_handle.m_ptr);
 
-        set_framebuffer_clear_color(
+        // TODO;
+        /*set_framebuffer_clear_color(
             metal_context,
             target_framebuf_may_null,
             clear_color_rgba);
@@ -1696,7 +1696,7 @@ namespace jeecs::graphic::api::metal
         set_framebuffer_clear_depth(
             metal_context,
             target_framebuf_may_null,
-            clear_depth);
+            clear_depth);*/
 
         // Create a new command buffer and encoder for the new framebuffer
         auto* target_framebuffer_desc = target_framebuf_may_null != nullptr

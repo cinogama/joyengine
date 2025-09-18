@@ -1577,8 +1577,7 @@ namespace jeecs::graphic::api::gl3
         jegl_context::graphic_impl_context_t ctx,
         jegl_resource* framebuffer,
         const int32_t(*viewport_xywh)[4],
-        const float (*clear_color_rgba)[4],
-        const float* clear_depth)
+        const jegl_frame_buffer_clear_operation* clear_operations)
     {
         jegl_gl3_context* context = reinterpret_cast<jegl_gl3_context*>(ctx);
 
@@ -1617,33 +1616,30 @@ namespace jeecs::graphic::api::gl3
                 : context->RESOLUTION_HEIGHT);
 
         glViewport((GLint)x, (GLint)y, (GLsizei)w, (GLsizei)h);
-#ifdef JE_ENABLE_GL330_GAPI
-        glDepthRange(0., 1.);
-#else
-        glDepthRangef(0., 1.);
-#endif
 
-        GLenum clear_mask = 0;
-        if (clear_color_rgba != nullptr)
+        while (clear_operations != nullptr)
         {
-            auto& color = *clear_color_rgba;
-            glClearColor(color[0], color[1], color[2], color[3]);
-
-            clear_mask |= GL_COLOR_BUFFER_BIT;
+            switch (clear_operations->m_type)
+            {
+            case jegl_frame_buffer_clear_operation::clear_type::COLOR:
+                glClearBufferfv(
+                    GL_COLOR,
+                    (GLint)clear_operations->m_color.m_color_attachment_idx,
+                    clear_operations->m_color.m_clear_color_rgba);
+                break;
+            case jegl_frame_buffer_clear_operation::clear_type::DEPTH:
+                glClearBufferfv(
+                    GL_DEPTH,
+                    0,
+                    &clear_operations->m_depth.m_clear_depth);
+                break;
+            default:
+                jeecs::debug::logfatal("Unknown framebuffer clear operation.");
+                abort();
+                break;
+            }
+            clear_operations = clear_operations->m_next;
         }
-        if (clear_depth != nullptr)
-        {
-            _gl_update_depth_mask_method(context, jegl_shader::depth_mask_method::ENABLE);
-#ifdef JE_ENABLE_GL330_GAPI
-            glClearDepthf(*clear_depth);
-#else
-            glClearDepthf(*clear_depth);
-#endif
-            clear_mask |= GL_DEPTH_BUFFER_BIT;
-        }
-
-        if (clear_mask != 0)
-            glClear(clear_mask);
     }
 }
 

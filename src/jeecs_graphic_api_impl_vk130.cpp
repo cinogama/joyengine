@@ -113,7 +113,6 @@ namespace jeecs::graphic::api::vk130
                                                             \
     VK_API_DECL(vkCreateCommandPool);                       \
     VK_API_DECL(vkDestroyCommandPool);                      \
-    VK_API_DECL(vkResetCommandPool);                        \
     VK_API_DECL(vkAllocateCommandBuffers);                  \
     VK_API_DECL(vkFreeCommandBuffers);                      \
     VK_API_DECL(vkBeginCommandBuffer);                      \
@@ -524,7 +523,9 @@ namespace jeecs::graphic::api::vk130
                 jevk13_framebuffer* framebuffer,
                 jevk13_texture* color_attachment,
                 jevk13_texture* depth_attachment)
-                : m_main_context(main_contant), m_framebuffer(framebuffer), m_textures_only_for_free{ color_attachment, depth_attachment }
+                : m_main_context(main_contant)
+                , m_framebuffer(framebuffer)
+                , m_textures_only_for_free{ color_attachment, depth_attachment }
             {
             }
             ~swapchain_image_content()
@@ -919,6 +920,8 @@ namespace jeecs::graphic::api::vk130
                 {
                     result = m_free_cmd_buffers.back();
                     m_free_cmd_buffers.pop_back();
+
+                    m_context->vkResetCommandBuffer(result, 0);
                 }
                 else
                 {
@@ -3266,13 +3269,11 @@ namespace jeecs::graphic::api::vk130
                 present_info.pResults = nullptr;
 
                 vkQueuePresentKHR(_vk_logic_device_present_queue, &present_info);
-                ++_vk_command_commit_round;
             }
         }
 
         void update()
         {
-            // 开始录制！
             _vk_last_command_buffer_semaphore =
                 _vk_command_buffer_allocator->allocate_semaphore(nullptr);
             _vk_wait_for_last_command_buffer_stage =
@@ -3380,18 +3381,18 @@ namespace jeecs::graphic::api::vk130
 
             vkCmdSetPrimitiveRestartEnable(_vk_current_command_buffer, VK_TRUE);
         }
-        void cmd_clear_frame_buffer_color(const float color[4])
+        void cmd_clear_frame_buffer_color(size_t attachment_id, const float color[4])
         {
             assert(_vk_current_target_framebuffer != nullptr);
 
-            for (size_t i = 0; i < _vk_current_target_framebuffer->m_color_attachments.size(); ++i)
+            if (attachment_id < _vk_current_target_framebuffer->m_color_attachments.size())
             {
                 VkClearValue clear_color = {};
                 clear_color.color = VkClearColorValue{ { color[0], color[1], color[2], color[3] } };
 
                 VkClearAttachment clear_attachment = {};
                 clear_attachment.aspectMask = VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT;
-                clear_attachment.colorAttachment = (uint32_t)i;
+                clear_attachment.colorAttachment = (uint32_t)attachment_id;
                 clear_attachment.clearValue = clear_color;
 
                 VkClearRect clear_rect = {};
@@ -3786,10 +3787,19 @@ namespace jeecs::graphic::api::vk130
         jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
 
         context->_vk_current_binded_shader = nullptr;
+        ++context->_vk_command_commit_round;
 
         switch (context->_vk_jegl_interface->update())
         {
         case basic_interface::update_result::PAUSE:
+            // Very ugly!
+            if (context->_vk_presenting_swapchain_image_index != typing::INVALID_UINT32)
+            {
+                assert(
+                    context->_vk_current_swapchain_image_content
+                    == context->_vk_swapchain_images[_vk_presenting_swapchain_image_index]);
+                context->_vk_current_swapchain_image_content->release_using_resources();
+            }
             return jegl_update_action::JEGL_UPDATE_SKIP;
         case basic_interface::update_result::RESIZE:
             // Make present before swap chain recreation.
@@ -4044,8 +4054,7 @@ namespace jeecs::graphic::api::vk130
         jegl_context::graphic_impl_context_t ctx,
         jegl_resource* framebuf,
         const int32_t(*viewport_xywh)[4],
-        const float (*clear_color_rgba)[4],
-        const float* clear_depth)
+        const jegl_frame_buffer_clear_operation* clear_operations)
     {
         jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
 
@@ -4069,16 +4078,26 @@ namespace jeecs::graphic::api::vk130
         }
         context->cmd_begin_frame_buffer(target_framebuf, x, y, w, h);
 
-        if (clear_color_rgba != nullptr)
-            context->cmd_clear_frame_buffer_color(*clear_color_rgba);
-
-        if (clear_depth != nullptr)
+        while (clear_operations != nullptr)
         {
-            if (target_framebuf == nullptr
-                || target_framebuf->m_depth_attachment != nullptr)
+            switch (clear_operations->m_type)
             {
-                context->cmd_clear_frame_buffer_depth(*clear_depth);
+            case jegl_frame_buffer_clear_operation::clear_type::COLOR:
+                context->cmd_clear_frame_buffer_color(
+                    clear_operations->m_color.m_color_attachment_idx,
+                    clear_operations->m_color.m_clear_color_rgba);
+                break;
+            case jegl_frame_buffer_clear_operation::clear_type::DEPTH:
+                if (target_framebuf == nullptr || target_framebuf->m_depth_attachment != nullptr)
+                    context->cmd_clear_frame_buffer_depth(
+                        clear_operations->m_depth.m_clear_depth);
+                break;
+            default:
+                jeecs::debug::logfatal("Unknown framebuffer clear operation.");
+                abort();
+                break;
             }
+            clear_operations = clear_operations->m_next;
         }
     }
 

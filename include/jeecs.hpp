@@ -2251,6 +2251,36 @@ struct jegl_resource
 };
 
 /*
+jegl_frame_buffer_clear_operation [类型]
+帧缓冲区清除操作链表，用于指定清除哪些附件以及清除为何值
+*/
+struct jegl_frame_buffer_clear_operation
+{
+    enum class clear_type
+    {
+        COLOR,
+        DEPTH,
+    };
+    struct clear_color_attachment
+    {
+        size_t m_color_attachment_idx;
+        float m_clear_color_rgba[4];
+    };
+    struct clear_depth_attachment
+    {
+        float m_clear_depth;
+    };
+
+    clear_type m_type;
+    union
+    {
+        clear_color_attachment m_color;
+        clear_depth_attachment m_depth;
+    };
+    const jegl_frame_buffer_clear_operation* m_next;
+};
+
+/*
 jegl_graphic_api [类型]
 图形接口，包含底层使用的各项基本函数
 */
@@ -2292,14 +2322,13 @@ struct jegl_graphic_api
             jegl_context::graphic_impl_context_t,
             jegl_resource* framebuffer,
             const int32_t(*viewport_xywh)[4],
-            const float(*clear_color_rgba)[4],
-            const float* clear_depth);
+            const jegl_frame_buffer_clear_operation* clear_operations);
     using set_uniform_func_t =
         void (*)(
             jegl_context::graphic_impl_context_t,
-            uint32_t,
-            jegl_shader::uniform_type,
-            const void*);
+            uint32_t location,
+            jegl_shader::uniform_type type,
+            const void* data_ptr);
 
     /*
     jegl_graphic_api::interface_startup [成员]
@@ -2432,8 +2461,8 @@ struct jegl_graphic_api
         * 视口若不指定（viewport_xywh = nullptr），则如同使用 (0, 0, 0, 0)
         * viewport_xywh 的 x, y 允许为负数，但是 w 和 h 不允许为负数
         * 视口的宽度和高度若为0，则使用帧缓冲区的宽度和高度
-        * 如果指定了颜色清除值，则在绑定后立即使用该颜色清除所有颜色附件
-        * 如果指定了深度清除值，则在绑定后立即使用该值清除深度附件
+        * clear_operations 链表用于指示缓冲区的清除操作，允许为 nullptr，表示不进行任何清除操作
+            链表的最后一项的 m_next 应当为 nullptr
     */
     bind_framebuf_func_t bind_framebuf;
 
@@ -2669,8 +2698,9 @@ jegl_create_framebuf [基本接口]
 JE_API jegl_resource* jegl_create_framebuf(
     size_t width,
     size_t height,
-    const jegl_texture::format* attachment_formats,
-    size_t attachment_count);
+    const jegl_texture::format* color_attachment_formats,
+    size_t color_attachment_count,
+    bool contain_depth_attachment);
 
 struct je_stb_font_data;
 typedef void (*je_font_char_updater_t)(jegl_texture::pixel_data_t*, size_t, size_t);
@@ -2928,16 +2958,14 @@ jegl_rend_to_framebuffer [基本接口]
 指定接下来的绘制操作作用于指定缓冲区，
 framebuffer 用于指定渲染目标，若为 nullptr 则渲染目标为屏幕空间
 viewport_xywh 用于指定视口位置和大小，若为 nullptr 则视口设置为 (0, 0, 0, 0)
-clear_color_rgba 用于指定颜色清除值，若为 nullptr 则不进行颜色清除
-clear_depth 用于指定深度清除值，若为 nullptr 则不进行深度清除
+clear_operations 用于指定颜色附件或深度附件清除值，若为 nullptr 则不进行任何清除
     * 此函数只允许在图形线程内调用
     * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
 */
 JE_API void jegl_rend_to_framebuffer(
     jegl_resource* framebuffer,
     const int32_t(*viewport_xywh)[4],
-    const float (*clear_color_rgba)[4],
-    const float* clear_depth);
+    const jegl_frame_buffer_clear_operation* clear_operations);
 
 /*
 jegl_uniform_int [基本接口]
@@ -3115,10 +3143,11 @@ JE_API void jegl_rchain_bind_uniform_buffer(jegl_rendchain* chain, jegl_resource
 /*
 jegl_rchain_clear_color_buffer [基本接口]
 指示此链绘制开始时需要清除目标缓冲区的颜色缓存
-    * clear_color_rgba 如果为空，则使用 (0, 0, 0, 0)
 */
 JE_API void jegl_rchain_clear_color_buffer(
-    jegl_rendchain* chain, const float (*clear_color_rgba)[4]);
+    jegl_rendchain* chain,
+    size_t attachment_index, 
+    const float clear_color_rgba[4]);
 
 /*
 jegl_rchain_clear_depth_buffer [基本接口]
@@ -8746,9 +8775,12 @@ namespace jeecs
             {
                 auto* res = jegl_create_vertex(
                     type,
-                    pdatas, pdatalen,
-                    idatas.data(), idatas.size(),
-                    fdatas.data(), fdatas.size());
+                    pdatas, 
+                    pdatalen,
+                    idatas.data(), 
+                    idatas.size(),
+                    fdatas.data(), 
+                    fdatas.size());
 
                 if (res != nullptr)
                     return basic::resource<vertex>(new vertex(res));
@@ -8764,9 +8796,18 @@ namespace jeecs
 
         public:
             static std::optional<basic::resource<framebuffer>> create(
-                size_t reso_w, size_t reso_h, const std::vector<jegl_texture::format>& attachment)
+                size_t reso_w, 
+                size_t reso_h, 
+                const std::vector<jegl_texture::format>& color_attachment_formats,
+                bool contain_depth_attachment)
             {
-                auto* res = jegl_create_framebuf(reso_w, reso_h, attachment.data(), attachment.size());
+                auto* res = jegl_create_framebuf(
+                    reso_w, 
+                    reso_h, 
+                    color_attachment_formats.data(), 
+                    color_attachment_formats.size(),
+                    contain_depth_attachment);
+
                 if (res != nullptr)
                     return basic::resource<framebuffer>(new framebuffer(res));
                 return std::nullopt;

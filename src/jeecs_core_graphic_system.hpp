@@ -482,7 +482,8 @@ public let frag =
                         current_camera.clear->color.y,
                         current_camera.clear->color.z,
                         current_camera.clear->color.w };
-                    jegl_rchain_clear_color_buffer(rend_chain, &clear_buffer_color);
+
+                    jegl_rchain_clear_color_buffer(rend_chain, 0, clear_buffer_color);
                 }
 
                 // Clear depth buffer to overwrite pixels.
@@ -747,7 +748,7 @@ public let frag =
                         current_camera.clear->color.y,
                         current_camera.clear->color.z,
                         current_camera.clear->color.w };
-                    jegl_rchain_clear_color_buffer(rend_chain, &clear_buffer_color);
+                    jegl_rchain_clear_color_buffer(rend_chain, 0, clear_buffer_color);
                 }
 
                 // Clear depth buffer to overwrite pixels.
@@ -1697,7 +1698,9 @@ public func frag(vf: v2f)
                         if (need_update && RENDAIMBUFFER_WIDTH > 0 && RENDAIMBUFFER_HEIGHT > 0)
                         {
                             light2dpostpass->post_rend_target
-                                = jeecs::graphic::framebuffer::create(RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT,
+                                = jeecs::graphic::framebuffer::create(
+                                    RENDAIMBUFFER_WIDTH, 
+                                    RENDAIMBUFFER_HEIGHT,
                                     {
                                         // 漫反射颜色
                                         jegl_texture::format::RGBA,
@@ -1707,15 +1710,17 @@ public func frag(vf: v2f)
                                         jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::FLOAT16),
                                         // 法线空间颜色
                                         jegl_texture::format(jegl_texture::format::RGBA | jegl_texture::format::FLOAT16),
-                                        // 深度缓冲区
-                                        jegl_texture::format::DEPTH,
-                                    }).value();
+                                    },
+                                    true).value();
                             light2dpostpass->post_light_target
-                                = jeecs::graphic::framebuffer::create(LIGHT_BUFFER_WIDTH, LIGHT_BUFFER_HEIGHT,
+                                = jeecs::graphic::framebuffer::create(
+                                    LIGHT_BUFFER_WIDTH, 
+                                    LIGHT_BUFFER_HEIGHT,
                                     {
                                         // 光渲染结果
                                         (jegl_texture::format)(jegl_texture::format::RGBA | jegl_texture::format::FLOAT16),
-                                    }).value();
+                                    },
+                                    false).value();
                         }
                     }
                 });
@@ -1782,7 +1787,8 @@ public func frag(vf: v2f)
                                 {
                                     jegl_texture::format::RGBA,
                                     // Only store shadow value to R-pass
-                                }).value();
+                                },
+                                false).value();
                         }
                     }
                     if (range != nullptr)
@@ -2007,7 +2013,8 @@ public func frag(vf: v2f)
                 // If current camera contain light2d-pass, prepare light shadow here.
                 if (current_camera.light2DPostPass != nullptr)
                 {
-                    if (!current_camera.light2DPostPass->post_rend_target.has_value() || !current_camera.light2DPostPass->post_light_target.has_value())
+                    if (!current_camera.light2DPostPass->post_rend_target.has_value() 
+                        || !current_camera.light2DPostPass->post_light_target.has_value())
                         // Not ready, skip this frame.
                         continue;
 
@@ -2043,21 +2050,32 @@ public func frag(vf: v2f)
                                     0,
                                     0);
 
-                            jegl_rchain_clear_color_buffer(light2d_shadow_rend_chain, nullptr);
+                            const float clear_color[4] = { 0.f, 0.f, 0.f, 0.f };
+
+                            jegl_rchain_clear_color_buffer(light2d_shadow_rend_chain, 0, clear_color);
                             jegl_rchain_clear_depth_buffer(light2d_shadow_rend_chain, 1.0);
 
                             jegl_rchain_bind_uniform_buffer(light2d_shadow_rend_chain,
                                 current_camera.projection->default_uniform_buffer->resource());
 
                             const auto& normal_shadow_pass =
-                                lightarch.parallel != nullptr ? m_defer_light2d_host._defer_light2d_shadow_parallel_pass : m_defer_light2d_host._defer_light2d_shadow_point_pass;
+                                lightarch.parallel != nullptr 
+                                ? m_defer_light2d_host._defer_light2d_shadow_parallel_pass 
+                                : m_defer_light2d_host._defer_light2d_shadow_point_pass;
                             const auto& reverse_normal_shadow_pass =
-                                lightarch.parallel != nullptr ? m_defer_light2d_host._defer_light2d_shadow_parallel_reverse_pass : m_defer_light2d_host._defer_light2d_shadow_point_reverse_pass;
+                                lightarch.parallel != nullptr 
+                                ? m_defer_light2d_host._defer_light2d_shadow_parallel_reverse_pass 
+                                : m_defer_light2d_host._defer_light2d_shadow_point_reverse_pass;
                             const auto& shape_shadow_pass =
-                                lightarch.parallel != nullptr ? m_defer_light2d_host._defer_light2d_shadow_shape_parallel_pass : m_defer_light2d_host._defer_light2d_shadow_shape_point_pass;
+                                lightarch.parallel != nullptr 
+                                ? m_defer_light2d_host._defer_light2d_shadow_shape_parallel_pass 
+                                : m_defer_light2d_host._defer_light2d_shadow_shape_point_pass;
                             const auto& sprite_shadow_pass =
-                                lightarch.parallel != nullptr ? m_defer_light2d_host._defer_light2d_shadow_sprite_parallel_pass : m_defer_light2d_host._defer_light2d_shadow_sprite_point_pass;
-                            const auto& sub_shadow_pass = m_defer_light2d_host._defer_light2d_shadow_sub_pass;
+                                lightarch.parallel != nullptr 
+                                ? m_defer_light2d_host._defer_light2d_shadow_sprite_parallel_pass 
+                                : m_defer_light2d_host._defer_light2d_shadow_sprite_point_pass;
+                            const auto& sub_shadow_pass = 
+                                m_defer_light2d_host._defer_light2d_shadow_sub_pass;
 
                             std::list<block2d_arch*> block_in_current_layer;
 
@@ -2087,7 +2105,9 @@ public func frag(vf: v2f)
                                         ? blockarch.translation->world_position.z >= lightarch.translation->world_position.z
                                         : blockarch.translation->world_position.y >= lightarch.translation->world_position.y;
 
-                                    if (blockarch.blockshadow != nullptr && blockarch.blockshadow->factor > 0.f && (!light_is_above_block || !blockarch.blockshadow->auto_disable))
+                                    if (blockarch.blockshadow != nullptr 
+                                        && blockarch.blockshadow->factor > 0.f
+                                        && (!light_is_above_block || !blockarch.blockshadow->auto_disable))
                                     {
                                         if (blockarch.blockshadow->mesh.m_block_mesh.has_value())
                                         {
@@ -2134,7 +2154,9 @@ public func frag(vf: v2f)
                                                     1.f);
                                         }
                                     }
-                                    if (blockarch.shapeshadow != nullptr && blockarch.shapeshadow->factor > 0.f && (light_is_above_block || !blockarch.shapeshadow->auto_disable))
+                                    if (blockarch.shapeshadow != nullptr 
+                                        && blockarch.shapeshadow->factor > 0.f 
+                                        && (light_is_above_block || !blockarch.shapeshadow->auto_disable))
                                     {
                                         auto texture_group = jegl_rchain_allocate_texture_group(light2d_shadow_rend_chain);
                                         if (blockarch.textures != nullptr)
@@ -2336,8 +2358,20 @@ public func frag(vf: v2f)
 
                                             if (block_in_layer->textures != nullptr)
                                             {
-                                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, tiling, float2, block_in_layer->textures->tiling.x, block_in_layer->textures->tiling.y);
-                                                JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, offset, float2, block_in_layer->textures->offset.x, block_in_layer->textures->offset.y);
+                                                JE_CHECK_NEED_AND_SET_UNIFORM(
+                                                    rchain_draw_action, 
+                                                    builtin_uniform, 
+                                                    tiling, 
+                                                    float2, 
+                                                    block_in_layer->textures->tiling.x, 
+                                                    block_in_layer->textures->tiling.y);
+                                                JE_CHECK_NEED_AND_SET_UNIFORM(
+                                                    rchain_draw_action, 
+                                                    builtin_uniform, 
+                                                    offset, 
+                                                    float2, 
+                                                    block_in_layer->textures->offset.x,
+                                                    block_in_layer->textures->offset.y);
                                             }
                                         }
                                     }
@@ -2364,9 +2398,20 @@ public func frag(vf: v2f)
                             current_camera.clear->color.x,
                             current_camera.clear->color.y,
                             current_camera.clear->color.z,
-                            current_camera.clear->color.w };
-                        jegl_rchain_clear_color_buffer(rend_chain, &clear_buffer_color);
+                            current_camera.clear->color.w 
+                        };
+                        jegl_rchain_clear_color_buffer(rend_chain, 0, clear_buffer_color);
                     }
+
+                    const float clear_zero[4] = { 0.f, 0.f, 0.f, 0.f };
+                    const float clear_norm[4] = { 0.f, 0.f, 1.f, 1.f };
+
+                    // 用 zero 清空自发光通道和视空间坐标
+                    jegl_rchain_clear_color_buffer(rend_chain, 1, clear_zero);
+                    jegl_rchain_clear_color_buffer(rend_chain, 2, clear_zero);
+                    // 用 norm 清空法线通道
+                    jegl_rchain_clear_color_buffer(rend_chain, 3, clear_norm);
+
                     jegl_rchain_clear_depth_buffer(rend_chain, 1.0);
                 }
                 else
@@ -2394,7 +2439,7 @@ public func frag(vf: v2f)
                             current_camera.clear->color.y,
                             current_camera.clear->color.z,
                             current_camera.clear->color.w };
-                        jegl_rchain_clear_color_buffer(rend_chain, &clear_buffer_color);
+                        jegl_rchain_clear_color_buffer(rend_chain, 0, clear_buffer_color);
                     }
 
                     // Clear depth buffer to overwrite pixels.
@@ -2491,7 +2536,8 @@ public func frag(vf: v2f)
 
                 if (current_camera.light2DPostPass != nullptr && current_camera.shaders != nullptr)
                 {
-                    assert(current_camera.light2DPostPass->post_rend_target.has_value() && current_camera.light2DPostPass->post_light_target.has_value());
+                    assert(current_camera.light2DPostPass->post_rend_target.has_value() 
+                        && current_camera.light2DPostPass->post_light_target.has_value());
 
                     // Rend Light result to target buffer.
                     jegl_rendchain* light2d_light_effect_rend_chain = jegl_branch_new_chain(
@@ -2502,7 +2548,9 @@ public func frag(vf: v2f)
                         0,
                         0);
 
-                    jegl_rchain_clear_color_buffer(light2d_light_effect_rend_chain, nullptr);
+                    const float clear_color[] = { 0.f, 0.f, 0.f, 0.f };
+                    jegl_rchain_clear_color_buffer(
+                        light2d_light_effect_rend_chain, 0, clear_color);
 
                     jegl_rchain_bind_uniform_buffer(light2d_light_effect_rend_chain,
                         current_camera.projection->default_uniform_buffer->resource());
@@ -2664,8 +2712,11 @@ public func frag(vf: v2f)
                             current_camera.clear->color.x,
                             current_camera.clear->color.y,
                             current_camera.clear->color.z,
-                            current_camera.clear->color.w };
-                        jegl_rchain_clear_color_buffer(final_target_rend_chain, &clear_buffer_color);
+                            current_camera.clear->color.w 
+                        };
+
+                        jegl_rchain_clear_color_buffer(
+                            final_target_rend_chain, 0, clear_buffer_color);
                     }
 
                     // Clear depth buffer to overwrite pixels.

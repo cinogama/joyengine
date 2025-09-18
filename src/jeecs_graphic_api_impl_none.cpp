@@ -79,8 +79,7 @@ namespace jeecs::graphic::api::none
         jegl_context::graphic_impl_context_t,
         jegl_resource*,
         const int32_t(*)[4],
-        const float(*)[4],
-        const float*)
+        const jegl_frame_buffer_clear_operation*)
     {
     }
     void clear_framebuffer_color(jegl_context::graphic_impl_context_t, float[4])
