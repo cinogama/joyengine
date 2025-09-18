@@ -1677,7 +1677,7 @@ namespace jeecs::graphic::api::metal
             {
                 if (fb_maynull->m_has_depth_attachment)
                 {
-                    depth_attachment_desc = fb_maynull
+                    fb_maynull
                         ->m_render_pass_descriptor
                         ->depthAttachment()
                         ->setLoadAction(MTL::LoadActionLoad);
