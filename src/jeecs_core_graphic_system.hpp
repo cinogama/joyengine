@@ -472,8 +472,8 @@ public let frag =
                         rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resource(),
                         0,
                         0,
-                        (uint32_t)RENDAIMBUFFER_WIDTH,
-                        (uint32_t)RENDAIMBUFFER_HEIGHT);
+                        0,
+                        0);
 
                 if (current_camera.clear != nullptr)
                 {
@@ -737,8 +737,8 @@ public let frag =
                         rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resource(),
                         0,
                         0,
-                        (uint32_t)RENDAIMBUFFER_WIDTH,
-                        (uint32_t)RENDAIMBUFFER_HEIGHT);
+                        0,
+                        0);
 
                 if (current_camera.clear != nullptr)
                 {
@@ -2034,13 +2034,14 @@ public func frag(vf: v2f)
                             assert(lightarch.shadowbuffer->buffer.has_value());
 
                             auto& light2d_shadow_aim_buffer = lightarch.shadowbuffer->buffer.value();
-                            jegl_rendchain* light2d_shadow_rend_chain = jegl_branch_new_chain(
-                                current_camera.branchPipeline,
-                                light2d_shadow_aim_buffer->resource(),
-                                0,
-                                0,
-                                (uint32_t)light2d_shadow_aim_buffer->width(),
-                                (uint32_t)light2d_shadow_aim_buffer->height());
+                            jegl_rendchain* light2d_shadow_rend_chain =
+                                jegl_branch_new_chain(
+                                    current_camera.branchPipeline,
+                                    light2d_shadow_aim_buffer->resource(),
+                                    0,
+                                    0,
+                                    0,
+                                    0);
 
                             jegl_rchain_clear_color_buffer(light2d_shadow_rend_chain, nullptr);
                             jegl_rchain_clear_depth_buffer(light2d_shadow_rend_chain, 1.0);
@@ -2382,8 +2383,8 @@ public func frag(vf: v2f)
                             rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resource(),
                             0,
                             0,
-                            (uint32_t)RENDAIMBUFFER_WIDTH,
-                            (uint32_t)RENDAIMBUFFER_HEIGHT);
+                            0,
+                            0);
 
                     // If camera rend to texture, clear the frame buffer (if need)
                     if (current_camera.clear != nullptr)
@@ -2654,8 +2655,8 @@ public func frag(vf: v2f)
                             rend_aim_buffer == nullptr ? nullptr : rend_aim_buffer->resource(),
                             0,
                             0,
-                            (uint32_t)RENDAIMBUFFER_WIDTH,
-                            (uint32_t)RENDAIMBUFFER_HEIGHT);
+                            0,
+                            0);
 
                     if (current_camera.clear != nullptr)
                     {

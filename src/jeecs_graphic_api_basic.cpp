@@ -777,7 +777,7 @@ bool jegl_using_resource(jegl_resource* resource)
         return false;
     }
 
-    if (resource->m_graphic_thread != nullptr 
+    if (resource->m_graphic_thread != nullptr
         && _current_graphic_thread != resource->m_graphic_thread)
     {
         jeecs::debug::logerr("This resource has been used in graphic thread: %p.",
@@ -789,7 +789,7 @@ bool jegl_using_resource(jegl_resource* resource)
     {
         need_init_resource = true;
     }
-    
+
     // If resource is died, ignore it.
     if (resource->m_custom_resource == nullptr && need_init_resource)
     {
@@ -833,7 +833,7 @@ bool jegl_using_resource(jegl_resource* resource)
                     // Clear outdated blob.
                     _current_graphic_thread->m_apis
                         ->close_resource_blob_cache(
-                            _current_graphic_thread->m_graphic_impl_context, 
+                            _current_graphic_thread->m_graphic_impl_context,
                             fnd->second.m_blob);
                 }
             }
@@ -1735,7 +1735,7 @@ void jegl_rend_to_framebuffer(
 
     _current_graphic_thread->m_apis->bind_framebuf(
         _current_graphic_thread->m_graphic_impl_context,
-        framebuffer, 
+        framebuffer,
         viewport_xywh,
         clear_color_rgba,
         clear_depth);
