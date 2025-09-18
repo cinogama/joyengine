@@ -3743,7 +3743,7 @@ namespace jeecs::graphic::api::vk130
             if (m_next_allocate_ubos_for_uniform_variable != 0)
                 // Make sure use the newest UBO first.
                 std::swap(
-                    m_uniform_variables[0], 
+                    m_uniform_variables[0],
                     m_uniform_variables[m_next_allocate_ubos_for_uniform_variable - 1]);
 
             m_command_commit_round = context->_vk_command_commit_round;
@@ -4071,8 +4071,15 @@ namespace jeecs::graphic::api::vk130
 
         if (clear_color_rgba != nullptr)
             context->cmd_clear_frame_buffer_color(*clear_color_rgba);
+
         if (clear_depth != nullptr)
-            context->cmd_clear_frame_buffer_depth(*clear_depth);
+        {
+            if (target_framebuf == nullptr
+                || target_framebuf->m_depth_attachment != nullptr)
+            {
+                context->cmd_clear_frame_buffer_depth(*clear_depth);
+            }
+        }
     }
 
     void set_uniform(jegl_context::graphic_impl_context_t ctx, uint32_t location, jegl_shader::uniform_type type, const void* val)
