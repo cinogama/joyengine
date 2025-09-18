@@ -545,8 +545,7 @@ namespace jeecs::graphic::api::metal
         jegl_context::graphic_impl_context_t ctx,
         jegl_resource* fb,
         const int32_t(*viewport_xywh)[4],
-        const float(*clear_color_rgba)[4],
-        const float* clear_depth);
+        const jegl_frame_buffer_clear_operation* clear_operations);
 
     jegl_update_action commit_update(
         jegl_context::graphic_impl_context_t ctx, jegl_update_action)
@@ -555,7 +554,7 @@ namespace jeecs::graphic::api::metal
             reinterpret_cast<jegl_metal_context*>(ctx);
 
         // 渲染工作结束，检查，结束当前编码器，提交命令缓冲区，然后切换到默认帧缓冲
-        bind_framebuffer(ctx, nullptr, nullptr, nullptr, nullptr);
+        bind_framebuffer(ctx, nullptr, nullptr, nullptr);
 
         jegui_update_metal(
             metal_context->m_render_states.m_main_render_pass_descriptor,
