@@ -2402,11 +2402,13 @@ public func frag(vf: v2f)
                     }
 
                     const float clear_zero[4] = { 0.f, 0.f, 0.f, 0.f };
+                    const float clear_infi[4] = { 0.f, 0.f, 1e20f, 0.f };
                     const float clear_norm[4] = { 0.f, 0.f, 1.f, 1.f };
 
-                    // 用 zero 清空自发光通道和视空间坐标
+                    // 用 zero 清空自发光通道
                     jegl_rchain_clear_color_buffer(rend_chain, 1, clear_zero);
-                    jegl_rchain_clear_color_buffer(rend_chain, 2, clear_zero);
+                    // 用 infi 清空距离通道
+                    jegl_rchain_clear_color_buffer(rend_chain, 2, clear_infi);
                     // 用 norm 清空法线通道
                     jegl_rchain_clear_color_buffer(rend_chain, 3, clear_norm);
                 }

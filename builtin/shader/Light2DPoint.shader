@@ -53,11 +53,11 @@ WOSHADER_FUNCTION!
         let mut shadow_factor = vec1!(0.);
         
         let bias = [
-            (-1., 0.),
-            (1., 0.),
+            (-1., -1.),
+            (-1., 1.),
             (0., 0.),
-            (0., -1.),
-            (0., 1.),
+            (1., -1.),
+            (1., 1.),
         ];
         
         let bias_step = vec2!(1.5, 1.5) / JE_LIGHT2D_RESOLUTION;
