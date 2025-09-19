@@ -1504,7 +1504,7 @@ namespace jeecs::graphic::api::metal
             break;
         case jegl_shader::FLOAT3X3:
         {
-            float* target_storage = reinterpret_cast<float*>(write_buffer_addr);
+            float* target_storage = reinterpret_cast<float*>(target_buffer);
             const float* source_storage = reinterpret_cast<const float*>(val);
 
             memcpy(target_storage, source_storage, 12);

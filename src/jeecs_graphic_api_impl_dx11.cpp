@@ -1936,7 +1936,7 @@ namespace jeecs::graphic::api::dx11
         assert(context->m_current_target_shader->m_uniform_buffer_size != 0);
         assert(context->m_current_target_shader->m_uniform_cpu_buffers != nullptr);
 
-        auto* write_buffer_addr = reinterpret_cast<void*>(
+        auto* target_buffer = reinterpret_cast<void*>(
             (intptr_t)context->m_current_target_shader->m_uniform_cpu_buffers + location);
 
         size_t data_size_byte_length = 0;
@@ -1963,7 +1963,7 @@ namespace jeecs::graphic::api::dx11
             break;
         case jegl_shader::FLOAT3X3:
         {
-            float* target_storage = reinterpret_cast<float*>(write_buffer_addr);
+            float* target_storage = reinterpret_cast<float*>(target_buffer);
             const float* source_storage = reinterpret_cast<const float*>(val);
 
             memcpy(target_storage, source_storage, 12);
@@ -1979,7 +1979,7 @@ namespace jeecs::graphic::api::dx11
             jeecs::debug::logerr("Unknown uniform variable type to set.");
             break;
         }
-        memcpy(write_buffer_addr, val, data_size_byte_length);
+        memcpy(target_buffer, val, data_size_byte_length);
     }
 }
 
