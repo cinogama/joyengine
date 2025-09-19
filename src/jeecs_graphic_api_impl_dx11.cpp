@@ -1390,7 +1390,7 @@ namespace jeecs::graphic::api::dx11
             index_buffer_describe.StructureByteStride = 0;
 
             D3D11_SUBRESOURCE_DATA index_buffer_data;
-            index_buffer_data.pSysMem = resource->m_raw_vertex_data->m_indexs;
+            index_buffer_data.pSysMem = resource->m_raw_vertex_data->m_indices;
             index_buffer_data.SysMemPitch = 0;
             index_buffer_data.SysMemSlicePitch = 0;
             JERCHECK(context->m_dx_device->CreateBuffer(

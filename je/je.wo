@@ -716,7 +716,7 @@ namespace je
                 public func load(univ: option<universe>, path: string)=> option<vertex>;
                 
             extern("libjoyecs", "wojeapi_vertex_create", slow)
-                public func create(vtype: type, vertices: array<real>, indexs: array<int>, indices: array<int>)=> vertex;
+                public func create(vtype: type, vertices: array<real>, indices: array<int>, formats: array<int>)=> vertex;
                 
             extern("libjoyecs", "wojeapi_vertex_path")
                 public func path(self: vertex)=> option<string>;

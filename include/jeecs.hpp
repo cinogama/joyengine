@@ -282,12 +282,12 @@ namespace jeecs
         using uid_t = uuid;
 
         /*
-        jeecs::typing::ms_stamp_t [类型别名]
+        jeecs::typing::timestamp_ms_t [类型别名]
         用于储存以毫秒为单位的时间戳的类型别名
         请参见：
             je_clock_time_stamp
         */
-        using ms_stamp_t = uint64_t;
+        using timestamp_ms_t = uint64_t;
 
         using debug_eid_t = uint64_t;
 
@@ -436,9 +436,8 @@ namespace jeecs
     /*
     jeecs::game_entity [核心类型]
     引擎的实体索引类型
-    用于指示一个ArchChunk中的位置，实体索引会因为组件发生变化（移除或添加）而失效
-    因此除非能确保实体绝不发生变动，否则不应该长期持有任何实体索引；即建议每一帧
-    即取即用。
+    用于指示一个ArchChunk中的位置，实体索引会因为组件发生变化（移除或添加）而失效，
+    实体索引仅在当前帧保证有效，任何情况下不应该跨帧地储存实体索引。
     注意：
         * 若实体索引所在的世界仍然存在，那么失效的实体索引仍能进行各项操作，但均
             不生效，亦无法从中获取任何组件。
@@ -1534,7 +1533,7 @@ je_clock_time_stamp [基本接口]
 获取引擎的运行时间戳，单位是毫秒
 获取到的时间是引擎自启动到当前为止的时间
 */
-JE_API jeecs::typing::ms_stamp_t je_clock_time_stamp();
+JE_API jeecs::typing::timestamp_ms_t je_clock_time_stamp();
 
 /*
 je_clock_sleep_until [基本接口]
@@ -1583,9 +1582,9 @@ struct fimg_creating_context;
 
 enum je_read_file_seek_mode
 {
-    JE_READ_FILE_SET = SEEK_SET,
-    JE_READ_FILE_CURRENT = SEEK_CUR,
-    JE_READ_FILE_END = SEEK_END,
+    JE_READ_FILE_SEEK_SET = SEEK_SET,
+    JE_READ_FILE_SEEK_CURRENT = SEEK_CUR,
+    JE_READ_FILE_SEEK_END = SEEK_END,
 };
 
 typedef void* jeecs_raw_file;
@@ -1962,7 +1961,7 @@ struct jegl_vertex
 
     const void* m_vertexs;
     size_t m_vertex_length;
-    const uint32_t* m_indexs;
+    const uint32_t* m_indices;
     size_t m_index_count;
     const data_layout* m_formats;
     size_t m_format_count;
@@ -2683,7 +2682,7 @@ JE_API jegl_resource* jegl_create_vertex(
     jegl_vertex::type type,
     const void* datas,
     size_t data_length,
-    const uint32_t* indexs,
+    const uint32_t* indices,
     size_t index_count,
     const jegl_vertex::data_layout* format,
     size_t format_count);
@@ -3751,7 +3750,7 @@ je_io_gamepad_is_active [基本接口]
 */
 JE_API bool je_io_gamepad_is_active(
     je_io_gamepad_handle_t gamepad,
-    jeecs::typing::ms_stamp_t* out_last_pushed_time_may_null);
+    jeecs::typing::timestamp_ms_t* out_last_pushed_time_may_null);
 /*
 je_io_gamepad_get_button_down [基本接口]
 获取指定虚拟手柄的指定按键是否被按下
@@ -4762,7 +4761,7 @@ namespace jeecs
         {
             ElemT* _elems_ptr_begin = nullptr;
             ElemT* _elems_ptr_end = nullptr;
-            ElemT* _elems_buffer_end = nullptr;
+            ElemT* _elems_buf_end = nullptr;
 
             static constexpr size_t _single_elem_size = sizeof(ElemT);
 
@@ -4808,11 +4807,11 @@ namespace jeecs
             }
             inline void _reserve(size_t elem_reserving_count)
             {
-                const size_t _pre_reserved_count = (size_t)(_elems_buffer_end - _elems_ptr_begin);
+                const size_t _pre_reserved_count = (size_t)(_elems_buf_end - _elems_ptr_begin);
                 if (elem_reserving_count > _pre_reserved_count)
                 {
                     ElemT* new_reserved_begin = (ElemT*)je_mem_alloc(elem_reserving_count * _single_elem_size);
-                    _elems_buffer_end = new_reserved_begin + elem_reserving_count;
+                    _elems_buf_end = new_reserved_begin + elem_reserving_count;
 
                     _elems_ptr_end = new_reserved_begin + _move(new_reserved_begin, _elems_ptr_begin, _elems_ptr_end);
                     je_mem_free(_elems_ptr_begin);
@@ -4848,17 +4847,17 @@ namespace jeecs
             vector(ElemT* ptr, size_t length) noexcept
             {
                 _elems_ptr_begin = ptr;
-                _elems_ptr_end = _elems_buffer_end = _elems_ptr_begin + length;
+                _elems_ptr_end = _elems_buf_end = _elems_ptr_begin + length;
             }
             vector(vector&& another_list) noexcept
             {
                 _elems_ptr_begin = another_list._elems_ptr_begin;
                 _elems_ptr_end = another_list._elems_ptr_end;
-                _elems_buffer_end = another_list._elems_buffer_end;
+                _elems_buf_end = another_list._elems_buf_end;
 
                 another_list._elems_ptr_begin =
                     another_list._elems_ptr_end =
-                    another_list._elems_buffer_end = nullptr;
+                    another_list._elems_buf_end = nullptr;
             }
 
             inline vector& operator=(const vector& another_list) noexcept
@@ -4875,11 +4874,11 @@ namespace jeecs
 
                 _elems_ptr_begin = another_list._elems_ptr_begin;
                 _elems_ptr_end = another_list._elems_ptr_end;
-                _elems_buffer_end = another_list._elems_buffer_end;
+                _elems_buf_end = another_list._elems_buf_end;
 
                 another_list._elems_ptr_begin =
                     another_list._elems_ptr_end =
-                    another_list._elems_buffer_end = nullptr;
+                    another_list._elems_buf_end = nullptr;
 
                 return *this;
             }
@@ -4902,7 +4901,7 @@ namespace jeecs
             }
             inline size_t reserved_size() const noexcept
             {
-                return _elems_buffer_end - _elems_ptr_begin;
+                return _elems_buf_end - _elems_ptr_begin;
             }
             inline void clear() noexcept
             {
@@ -8770,7 +8769,7 @@ namespace jeecs
                 jegl_vertex::type type,
                 const void* pdatas,
                 size_t pdatalen,
-                const std::vector<uint32_t> idatas, // EBO Indexs
+                const std::vector<uint32_t> idatas, // EBO indices
                 const std::vector<jegl_vertex::data_layout> fdatas)
             {
                 auto* res = jegl_create_vertex(
@@ -12101,7 +12100,7 @@ namespace jeecs
         template <typing::typehash_t hash_v1, int v2>
         static bool _doubleClick(bool keystate, float i = 0.1f)
         {
-            static typing::ms_stamp_t lact_click_tm = je_clock_time_stamp();
+            static typing::timestamp_ms_t lact_click_tm = je_clock_time_stamp();
             static bool release_for_next_click = false;
 
             auto cur_time = je_clock_time_stamp();
@@ -12109,7 +12108,7 @@ namespace jeecs
             // 1. first click.
             if (keystate)
             {
-                if (release_for_next_click && cur_time - lact_click_tm < (typing::ms_stamp_t)(i * 1000.f))
+                if (release_for_next_click && cur_time - lact_click_tm < (typing::timestamp_ms_t)(i * 1000.f))
                 {
                     // Is Double click!
                     lact_click_tm = 0; // reset the time.
@@ -12117,7 +12116,7 @@ namespace jeecs
                     return true;
                 }
                 // Release for a long time, re calc the time
-                if (!release_for_next_click || cur_time - lact_click_tm > (typing::ms_stamp_t)(i * 1000.f))
+                if (!release_for_next_click || cur_time - lact_click_tm > (typing::timestamp_ms_t)(i * 1000.f))
                 {
                     lact_click_tm = cur_time;
                     release_for_next_click = false;
@@ -12125,7 +12124,7 @@ namespace jeecs
             }
             else
             {
-                if (!release_for_next_click && cur_time - lact_click_tm < (typing::ms_stamp_t)(i * 1000.f))
+                if (!release_for_next_click && cur_time - lact_click_tm < (typing::timestamp_ms_t)(i * 1000.f))
                     release_for_next_click = true;
             }
             return false;
@@ -12160,7 +12159,7 @@ namespace jeecs
                 je_io_gamepad_get_stick(m_gamepad_handle, stick, &x, &y);
                 return { x, y };
             }
-            bool actived(typing::ms_stamp_t* out_last_update_time_may_null) const
+            bool actived(typing::timestamp_ms_t* out_last_update_time_may_null) const
             {
                 return je_io_gamepad_is_active(
                     m_gamepad_handle, out_last_update_time_may_null);
@@ -12194,7 +12193,7 @@ namespace jeecs
             {
                 auto gamepad_handles = _get_all_handle();
 
-                typing::ms_stamp_t last_update_time = 0;
+                typing::timestamp_ms_t last_update_time = 0;
                 size_t last_index = SIZE_MAX;
 
                 const size_t size = gamepad_handles.size();
@@ -12202,7 +12201,7 @@ namespace jeecs
 
                 for (size_t i = 0; i < size; ++i)
                 {
-                    typing::ms_stamp_t cur_time;
+                    typing::timestamp_ms_t cur_time;
                     if (je_io_gamepad_is_active(data[i], &cur_time))
                     {
                         if (cur_time > last_update_time)

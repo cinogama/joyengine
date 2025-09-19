@@ -1583,7 +1583,12 @@ public let frag =
                         auto* shape = selected_entity.get_component<Renderer::Shape>();
                         auto* textures = selected_entity.get_component<Renderer::Textures>();
 
-                        if (translation != nullptr && shape != nullptr && selected_entity.get_component<Renderer::Shaders>() != nullptr && selected_entity.get_component<Light2D::Point>() == nullptr && selected_entity.get_component<Light2D::Range>() == nullptr && selected_entity.get_component<Light2D::Parallel>() == nullptr)
+                        if (translation != nullptr 
+                            && shape != nullptr 
+                            && selected_entity.get_component<Renderer::Shaders>() != nullptr 
+                            && selected_entity.get_component<Light2D::Point>() == nullptr
+                            && selected_entity.get_component<Light2D::Range>() == nullptr 
+                            && selected_entity.get_component<Light2D::Parallel>() == nullptr)
                         {
                             jegl_rchain_texture_group_idx_t group =
                                 jegl_rchain_allocate_texture_group(gizmo_rchain);

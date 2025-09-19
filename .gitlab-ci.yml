@@ -15,9 +15,10 @@ build_linux_opengl:
       -DJE4_ENABLE_OPENGLES300_GAPI=OFF
       -DJE4_ENABLE_VULKAN130_GAPI=OFF
       -DJE4_ENABLE_METAL_GAPI=OFF
+      -DCMAKE_BUILD_TYPE=RELWITHDEBINFO
     - if [ ! -d pkg ]; then mkdir pkg; fi
     - if [ ! -d builtin ]; then mkdir builtin; fi
-    - cmake --build . --config=RelWithDebInfo --target jedriver --parallel 4
+    - cmake --build . --config=RELWITHDEBINFO --target jedriver --parallel
     - cd ..
   cache:
     when: on_success
@@ -44,9 +45,10 @@ build_linux_a64_opengl:
       -DJE4_ENABLE_OPENGLES300_GAPI=OFF
       -DJE4_ENABLE_VULKAN130_GAPI=OFF
       -DJE4_ENABLE_METAL_GAPI=OFF
+      -DCMAKE_BUILD_TYPE=RELWITHDEBINFO
     - if [ ! -d pkg ]; then mkdir pkg; fi
     - if [ ! -d builtin ]; then mkdir builtin; fi
-    - cmake --build . --config=RelWithDebInfo --target jedriver --parallel 4
+    - cmake --build . --config=RELWITHDEBINFO --target jedriver --parallel
     - cd ..
   cache:
     when: on_success
@@ -73,9 +75,10 @@ build_linux_a64_opengl_static:
       -DJE4_ENABLE_OPENGLES300_GAPI=OFF
       -DJE4_ENABLE_VULKAN130_GAPI=OFF
       -DJE4_ENABLE_METAL_GAPI=OFF
+      -DCMAKE_BUILD_TYPE=RELWITHDEBINFO
     - if [ ! -d pkg ]; then mkdir pkg; fi
     - if [ ! -d builtin ]; then mkdir builtin; fi
-    - cmake --build . --config=RelWithDebInfo --target jedriver --parallel 4
+    - cmake --build . --config=RELWITHDEBINFO --target jedriver --parallel
     - cd ..
   cache:
     when: on_success
@@ -103,9 +106,10 @@ build_linux_opengles:
       -DJE4_ENABLE_OPENGLES300_GAPI=ON
       -DJE4_ENABLE_VULKAN130_GAPI=OFF
       -DJE4_ENABLE_METAL_GAPI=OFF
+      -DCMAKE_BUILD_TYPE=RELWITHDEBINFO
     - if [ ! -d pkg ]; then mkdir pkg; fi
     - if [ ! -d builtin ]; then mkdir builtin; fi
-    - cmake --build . --config=RelWithDebInfo --target jedriver --parallel 4
+    - cmake --build . --config=RELWITHDEBINFO --target jedriver --parallel
     - cd ..
   cache:
     when: on_success
@@ -134,11 +138,11 @@ build_win64_dx11_opengl_vk:
       -DJE4_ENABLE_OPENGLES300_GAPI=OFF
       -DJE4_ENABLE_VULKAN130_GAPI=ON
       -DJE4_ENABLE_METAL_GAPI=OFF
-      -DCMAKE_BUILD_TYPE=RelWithDebInfo
-    - cmake --build . --config=RelWithDebInfo --target jedriver --parallel 4
+      -DCMAKE_BUILD_TYPE=RELWITHDEBINFO
+    - cmake --build . --config=RELWITHDEBINFO --target jedriver --parallel
     - cd ..
     - cd build
-    - copy RelWithDebInfo\*
+    - copy RELWITHDEBINFO\*
     - cd ..
   artifacts:
     name: jeecs-win32-release-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHA
@@ -175,8 +179,8 @@ build_win64_dx11_opengles_vk:
       -DJE4_ENABLE_OPENGLES300_GAPI=ON
       -DJE4_ENABLE_VULKAN130_GAPI=ON
       -DJE4_ENABLE_METAL_GAPI=OFF
-      -DCMAKE_BUILD_TYPE=RelWithDebInfo
-    - cmake --build . --config=RelWithDebInfo --target jedriver --parallel 4
+      -DCMAKE_BUILD_TYPE=RELWITHDEBINFO
+    - cmake --build . --config=RELWITHDEBINFO --target jedriver --parallel
   tags:
     - winserver22
 
@@ -197,8 +201,8 @@ build_win64_dx11_opengles_vk_static:
       -DJE4_ENABLE_OPENGLES300_GAPI=ON
       -DJE4_ENABLE_VULKAN130_GAPI=ON
       -DJE4_ENABLE_METAL_GAPI=OFF
-      -DCMAKE_BUILD_TYPE=RelWithDebInfo
-    - cmake --build . --config=RelWithDebInfo --target jedriver --parallel 4
+      -DCMAKE_BUILD_TYPE=RELWITHDEBINFO
+    - cmake --build . --config=RELWITHDEBINFO --target jedriver --parallel
   tags:
     - winserver22
 
@@ -218,9 +222,10 @@ build_macos_metal_opengl_vk:
       -DJE4_ENABLE_OPENGLES300_GAPI=OFF
       -DJE4_ENABLE_VULKAN130_GAPI=ON
       -DJE4_ENABLE_METAL_GAPI=ON
+      -DCMAKE_BUILD_TYPE=RELWITHDEBINFO
     - if [ ! -d pkg ]; then mkdir pkg; fi
     - if [ ! -d builtin ]; then mkdir builtin; fi
-    - cmake --build . --config=RelWithDebInfo --target jedriver --parallel 4
+    - cmake --build . --config=RELWITHDEBINFO --target jedriver --parallel
     - cd ..
   cache:
     when: on_success

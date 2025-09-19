@@ -88,7 +88,11 @@ namespace jeecs_impl
 
     public:
         mcmp_lockfree_fixed_loop_queue(size_t queue_size)
-            : _m_queue_buffer(new T[queue_size + 1]), _m_queue_size(queue_size + 1), _m_head(0), _m_tail_for_write(0), _m_tail_for_reading(0)
+            : _m_queue_buffer(new T[queue_size + 1])
+            , _m_queue_size(queue_size + 1)
+            , _m_head(0)
+            , _m_tail_for_write(0)
+            , _m_tail_for_reading(0)
         {
             assert(queue_size != 0);
         }
@@ -473,7 +477,9 @@ namespace jeecs_impl
             {
                 mem_offset = jeecs::basic::allign_size(mem_offset, typeinfo->m_align);
 
-                const_cast<archtypes_map&>(_m_arch_typeinfo_mapping)[typeinfo->m_id] = arch_type_info{ typeinfo, mem_offset };
+                const_cast<archtypes_map&>(_m_arch_typeinfo_mapping)[typeinfo->m_id] = 
+                    arch_type_info{ typeinfo, mem_offset };
+
                 mem_offset += typeinfo->m_chunk_size * _m_entity_count_per_chunk;
             }
         }
@@ -661,7 +667,10 @@ namespace jeecs_impl
             }
         }
 
-        void alloc_entity(arch_chunk** out_chunk, jeecs::typing::entity_id_in_chunk_t* out_eid, jeecs::typing::version_t* out_eversion) noexcept
+        void alloc_entity(
+            arch_chunk** out_chunk, 
+            jeecs::typing::entity_id_in_chunk_t* out_eid, 
+            jeecs::typing::version_t* out_eversion) noexcept
         {
             std::shared_lock sg1(_m_chunk_list_defragmentation_mx);
             while (true)
@@ -787,7 +796,10 @@ namespace jeecs_impl
                 }
                 else
                 {
-                    assert(depend->m_requirements[reqid].m_require == jeecs::requirement::ANYOF || depend->m_requirements[reqid].m_require == jeecs::requirement::MAYNOT || depend->m_requirements[reqid].m_require == jeecs::requirement::EXCEPT);
+                    assert(
+                        depend->m_requirements[reqid].m_require == jeecs::requirement::ANYOF 
+                        || depend->m_requirements[reqid].m_require == jeecs::requirement::MAYNOT 
+                        || depend->m_requirements[reqid].m_require == jeecs::requirement::EXCEPT);
                     info->m_component_sizes[reqid] = info->m_component_offsets[reqid] = 0;
                 }
             }
@@ -909,7 +921,9 @@ namespace jeecs_impl
                 std::shared_lock sg1(_m_arch_types_mapping_mx);
                 for (auto& [typeset, arch] : _m_arch_types_mapping)
                 {
-                    if (contains(typeset, contain_set) && contain_all_any(typeset, anyof_sets) && except(typeset, except_set))
+                    if (contains(typeset, contain_set) 
+                        && contain_all_any(typeset, anyof_sets)
+                        && except(typeset, except_set))
                     {
                         // Current arch is matched!
                         dependence->m_archs.push_back(arch->create_chunk_info(dependence));
@@ -1679,7 +1693,8 @@ namespace jeecs_impl
                                     }
 
                                     // Active new one
-                                    assert(current_entity.chunk()->get_entity_meta()[current_entity._m_id].m_stat == jeecs::game_entity::entity_stat::READY);
+                                    assert(current_entity.chunk()->get_entity_meta()[current_entity._m_id].m_stat 
+                                        == jeecs::game_entity::entity_stat::READY);
                                     chunk->command_active_entity(entity_id, jeecs::game_entity::entity_stat::READY);
                                 }
                                 else

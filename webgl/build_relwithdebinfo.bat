@@ -25,7 +25,7 @@ if %errorlevel% neq 0 (
     exit /b %errorlevel%
 )
 
-call cmake --build ./ --target joyengineecs4w --verbose -- -j 32
+call cmake --build ./ --config=RELWITHDEBINFO --target joyengineecs4w --verbose -- -j 32
 @REM Check if build failed
 if %errorlevel% neq 0 (
     cd ..

@@ -1034,7 +1034,7 @@ namespace jeecs::graphic::api::metal
 
             // Create index buffer
             MTL::Buffer* index_buffer = metal_context->m_metal_device->newBuffer(
-                raw_vertex_data->m_indexs,
+                raw_vertex_data->m_indices,
                 raw_vertex_data->m_index_count * sizeof(uint32_t),
                 MTL::ResourceStorageModeShared);
 

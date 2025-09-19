@@ -17,10 +17,11 @@ namespace jeecs
         {
         }
 
-        void CommitUpdate(jeecs::selector &selector)
+        void CommitUpdate(jeecs::selector& selector)
         {
-            selector.exec([this](Audio::Listener &listener, Transform::Translation &trans)
-                          {
+            selector.exec(
+                [this](Audio::Listener& listener, Transform::Translation& trans)
+                {
                     auto velocity = (trans.world_position - listener.last_position) / std::max(deltatime(), 0.0001f);
                     listener.last_position = trans.world_position;
 
@@ -48,60 +49,60 @@ namespace jeecs
                             listener_data->m_velocity[2] = velocity.z;
                         }); });
 
-            selector.exec([this](Audio::Source &source, Transform::Translation &trans)
-                          {
-                    auto velocity = (trans.world_position - source.last_position) / std::max(deltatime(), 0.0001f);
-                    source.last_position = trans.world_position;
-
-                    source.source->update(
-                        [&](jeal_source* source_data) 
+                    selector.exec([this](Audio::Source& source, Transform::Translation& trans)
                         {
-                            source_data->m_gain = source.volume;
-                            source_data->m_pitch = source.pitch;
+                            auto velocity = (trans.world_position - source.last_position) / std::max(deltatime(), 0.0001f);
+                            source.last_position = trans.world_position;
 
-                            source_data->m_location[0] = trans.world_position.x;
-                            source_data->m_location[1] = trans.world_position.y;
-                            source_data->m_location[2] = trans.world_position.z;
+                            source.source->update(
+                                [&](jeal_source* source_data)
+                                {
+                                    source_data->m_gain = source.volume;
+                                    source_data->m_pitch = source.pitch;
 
-                            source_data->m_velocity[0] = velocity.x;
-                            source_data->m_velocity[1] = velocity.y;
-                            source_data->m_velocity[2] = velocity.z;
-                        }); });
+                                    source_data->m_location[0] = trans.world_position.x;
+                                    source_data->m_location[1] = trans.world_position.y;
+                                    source_data->m_location[2] = trans.world_position.z;
 
-            selector.exec([](Audio::Source &source, Audio::Playing &playing)
-                          {
-                    if (!playing.buffer.has_resource())
-                    {
-                        playing.is_playing = false;
-                        playing.play = false;
-                        if (source.source->get_state() != jeal_state::JE_AUDIO_STATE_STOPPED)
-                            source.source->stop();
-                    }
-                    else
-                    {
-                        source.source->set_playing_buffer(playing.buffer.get_resource().value());
-                        source.source->update(
-                            [&](jeal_source* source_data) 
-                            {
-                                source_data->m_loop = playing.loop;
-                            });
+                                    source_data->m_velocity[0] = velocity.x;
+                                    source_data->m_velocity[1] = velocity.y;
+                                    source_data->m_velocity[2] = velocity.z;
+                                }); });
 
-                        if (playing.is_playing && source.source->get_state() == jeal_state::JE_AUDIO_STATE_STOPPED)
-                        {
-                            playing.is_playing = false;
-                            playing.play = false;
-                        }
-                        else
-                        {
-                            if (source.source->get_state() != jeal_state::JE_AUDIO_STATE_STOPPED)
-                                playing.is_playing = true;
+                            selector.exec([](Audio::Source& source, Audio::Playing& playing)
+                                {
+                                    if (!playing.buffer.has_resource())
+                                    {
+                                        playing.is_playing = false;
+                                        playing.play = false;
+                                        if (source.source->get_state() != jeal_state::JE_AUDIO_STATE_STOPPED)
+                                            source.source->stop();
+                                    }
+                                    else
+                                    {
+                                        source.source->set_playing_buffer(playing.buffer.get_resource().value());
+                                        source.source->update(
+                                            [&](jeal_source* source_data)
+                                            {
+                                                source_data->m_loop = playing.loop;
+                                            });
 
-                            if (playing.play && source.source->get_state() != jeal_state::JE_AUDIO_STATE_PLAYING)
-                                source.source->play();
-                            else if (!playing.play && source.source->get_state() == jeal_state::JE_AUDIO_STATE_PLAYING)
-                                source.source->pause();
-                        }
-                    } });
+                                        if (playing.is_playing && source.source->get_state() == jeal_state::JE_AUDIO_STATE_STOPPED)
+                                        {
+                                            playing.is_playing = false;
+                                            playing.play = false;
+                                        }
+                                        else
+                                        {
+                                            if (source.source->get_state() != jeal_state::JE_AUDIO_STATE_STOPPED)
+                                                playing.is_playing = true;
+
+                                            if (playing.play && source.source->get_state() != jeal_state::JE_AUDIO_STATE_PLAYING)
+                                                source.source->play();
+                                            else if (!playing.play && source.source->get_state() == jeal_state::JE_AUDIO_STATE_PLAYING)
+                                                source.source->pause();
+                                        }
+                                    } });
         }
     };
 }

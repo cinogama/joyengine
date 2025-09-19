@@ -1042,7 +1042,7 @@ namespace jeecs::graphic::api::gl3
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
             glBufferData(GL_ELEMENT_ARRAY_BUFFER,
                 resource->m_raw_vertex_data->m_index_count * sizeof(uint32_t),
-                resource->m_raw_vertex_data->m_indexs,
+                resource->m_raw_vertex_data->m_indices,
                 GL_STATIC_DRAW);
 
             size_t offset = 0;

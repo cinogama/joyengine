@@ -999,7 +999,7 @@ WO_API wo_api wojeapi_input_gamepad_actived(wo_vm vm, wo_value args)
     jeecs::input::gamepad* gamepad =
         (jeecs::input::gamepad*)wo_pointer(args + 0);
 
-    jeecs::typing::ms_stamp_t actived;
+    jeecs::typing::timestamp_ms_t actived;
     if (gamepad->actived(&actived))
         return wo_ret_option_int(vm, actived);
 

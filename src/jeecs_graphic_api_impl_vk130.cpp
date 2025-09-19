@@ -1824,13 +1824,13 @@ namespace jeecs::graphic::api::vk130
 
             // 图形簇和提交簇可能是同一个簇，所以这里用set去重
             // NOTE: Vulkan 不允许为同一个簇创建不同的队列
-            std::set<uint32_t> unique_queue_family_indexs = {
+            std::set<uint32_t> unique_queue_family_indices = {
                 _vk_device_queue_graphic_family_index,
                 _vk_device_queue_present_family_index };
 
             float queue_priority = 1.0f;
 
-            for (uint32_t queue_family_index : unique_queue_family_indexs)
+            for (uint32_t queue_family_index : unique_queue_family_indices)
             {
                 VkDeviceQueueCreateInfo queue_create_info = {};
                 queue_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -2699,7 +2699,7 @@ namespace jeecs::graphic::api::vk130
                 &index_buffer_memory_ptr);
             memcpy(
                 index_buffer_memory_ptr,
-                resource->m_raw_vertex_data->m_indexs,
+                resource->m_raw_vertex_data->m_indices,
                 resource->m_raw_vertex_data->m_index_count * sizeof(uint32_t));
             vkUnmapMemory(
                 _vk_logic_device,

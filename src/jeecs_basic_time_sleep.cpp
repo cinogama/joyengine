@@ -30,10 +30,10 @@ double je_clock_time()
     using namespace std;
     return (std::chrono::steady_clock::now() - _start_time) / 1.0s;
 }
-jeecs::typing::ms_stamp_t je_clock_time_stamp()
+jeecs::typing::timestamp_ms_t je_clock_time_stamp()
 {
     using namespace std;
-    return (jeecs::typing::ms_stamp_t)(std::chrono::steady_clock::now().time_since_epoch() / 1ms);
+    return (jeecs::typing::timestamp_ms_t)(std::chrono::steady_clock::now().time_since_epoch() / 1ms);
 }
 
 void je_clock_sleep_until(double time)

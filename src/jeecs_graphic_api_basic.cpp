@@ -54,9 +54,9 @@ namespace Assimp
             size_t pOffset,
             aiOrigin pOrigin) override
         {
-            static_assert((int)aiOrigin::aiOrigin_CUR == (int)je_read_file_seek_mode::JE_READ_FILE_CURRENT);
-            static_assert((int)aiOrigin::aiOrigin_END == (int)je_read_file_seek_mode::JE_READ_FILE_END);
-            static_assert((int)aiOrigin::aiOrigin_SET == (int)je_read_file_seek_mode::JE_READ_FILE_SET);
+            static_assert((int)aiOrigin::aiOrigin_CUR == (int)je_read_file_seek_mode::JE_READ_FILE_SEEK_CURRENT);
+            static_assert((int)aiOrigin::aiOrigin_END == (int)je_read_file_seek_mode::JE_READ_FILE_SEEK_END);
+            static_assert((int)aiOrigin::aiOrigin_SET == (int)je_read_file_seek_mode::JE_READ_FILE_SEEK_SET);
 
             jeecs_file_seek(m_file, (int64_t)pOffset, (je_read_file_seek_mode)pOrigin);
             return aiReturn::aiReturn_SUCCESS;
@@ -933,7 +933,7 @@ void jegl_close_resource(jegl_resource* resource)
         case jegl_resource::VERTEX:
             // close resource's raw data, then send this resource to closing-queue
             je_mem_free((void*)resource->m_raw_vertex_data->m_vertexs);
-            je_mem_free((void*)resource->m_raw_vertex_data->m_indexs);
+            je_mem_free((void*)resource->m_raw_vertex_data->m_indices);
             je_mem_free((void*)resource->m_raw_vertex_data->m_formats);
             for (size_t bone_idx = 0; bone_idx < resource->m_raw_vertex_data->m_bone_count; ++bone_idx)
                 _jegl_free_vertex_bone_data(resource->m_raw_vertex_data->m_bones[bone_idx]);
@@ -1156,7 +1156,7 @@ jegl_resource* jegl_load_texture(jegl_context* context, const char* path)
         res_reader.eof = [](void* f)
             { return jeecs_file_tell((jeecs_file*)f) >= ((jeecs_file*)f)->m_file_length ? 1 : 0; };
         res_reader.skip = [](void* f, int n)
-            { jeecs_file_seek((jeecs_file*)f, (size_t)n, je_read_file_seek_mode::JE_READ_FILE_CURRENT); };
+            { jeecs_file_seek((jeecs_file*)f, (size_t)n, je_read_file_seek_mode::JE_READ_FILE_SEEK_CURRENT); };
 
         texture->m_raw_texture_data->m_pixels = stbi_load_from_callbacks(&res_reader, texfile, &w, &h, &cdepth, STBI_rgb_alpha);
 
@@ -1421,7 +1421,7 @@ jegl_resource* jegl_create_vertex(
     jegl_vertex::type type,
     const void* datas,
     size_t data_length,
-    const uint32_t* indexs,
+    const uint32_t* indices,
     size_t index_count,
     const jegl_vertex::data_layout* format,
     size_t format_count)
@@ -1463,8 +1463,8 @@ jegl_resource* jegl_create_vertex(
     vertex->m_raw_vertex_data->m_vertex_length = data_length;
 
     uint32_t* index_buffer = (uint32_t*)je_mem_alloc(index_count * sizeof(uint32_t));
-    memcpy(index_buffer, indexs, index_count * sizeof(uint32_t));
-    vertex->m_raw_vertex_data->m_indexs = index_buffer;
+    memcpy(index_buffer, indices, index_count * sizeof(uint32_t));
+    vertex->m_raw_vertex_data->m_indices = index_buffer;
     vertex->m_raw_vertex_data->m_index_count = index_count;
 
     jegl_vertex::data_layout* formats =

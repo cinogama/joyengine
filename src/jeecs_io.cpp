@@ -19,7 +19,7 @@ struct _je_gamepad_state
     bool _enabled;
     std::string _name;
     std::string _guid;
-    jeecs::typing::ms_stamp_t
+    jeecs::typing::timestamp_ms_t
         _last_update_time;
 
     bool _key_states[(uint8_t)jeecs::input::gamepadcode::_COUNT];
@@ -302,7 +302,7 @@ size_t je_io_gamepad_get(size_t count, je_io_gamepad_handle_t *out_gamepads)
 }
 bool je_io_gamepad_is_active(
     je_io_gamepad_handle_t gamepad,
-    jeecs::typing::ms_stamp_t *out_last_pushed_time_may_null)
+    jeecs::typing::timestamp_ms_t *out_last_pushed_time_may_null)
 {
     if (out_last_pushed_time_may_null != nullptr)
         *out_last_pushed_time_may_null = gamepad->_last_update_time;
