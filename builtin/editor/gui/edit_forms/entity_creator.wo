@@ -390,7 +390,6 @@ namespace editor::gui::edit_forms
                 {
                     if (MenuItem("透视投影"))
                     {
-                        context->add_components("Camera::Clip");
                         context->add_components("Camera::Projection");
                         context->add_components("Camera::PerspectiveProjection");
                         context->add_components("Camera::Viewport");
@@ -398,7 +397,6 @@ namespace editor::gui::edit_forms
                     }
                     if (MenuItem("平行投影"))
                     {
-                        context->add_components("Camera::Clip");
                         context->add_components("Camera::Projection");
                         context->add_components("Camera::OrthoProjection");
                         context->add_components("Camera::Viewport");

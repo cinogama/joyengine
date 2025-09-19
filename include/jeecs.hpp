@@ -10157,8 +10157,7 @@ namespace jeecs
 
         (Viewport)
         OrthoProjection/PerspectiveProjection
-        Projection
-        Clip  ----------\
+        Projection ----\
                          >------> Cameras
                         /          / | \
         Translation ---<          /  |  \ (for each..)
@@ -10275,20 +10274,6 @@ namespace jeecs
     }
     namespace Camera
     {
-        struct Clip
-        {
-            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Clip);
-            JECS_DEFAULT_CONSTRUCTOR(Clip);
-
-            float znear = 0.3f;
-            float zfar = 1000.0f;
-
-            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
-            {
-                typing::register_member(guard, &Clip::znear, "znear");
-                typing::register_member(guard, &Clip::zfar, "zfar");
-            }
-        };
         struct FrustumCulling
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(FrustumCulling);
@@ -10315,10 +10300,12 @@ namespace jeecs
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Projection);
 
+            float znear = 0.3f;
+            float zfar = 1000.0f;
+
             jeecs::basic::resource<jeecs::graphic::uniformbuffer>
                 default_uniform_buffer = jeecs::graphic::uniformbuffer::create(
-                    0, sizeof(graphic::BasePipelineInterface::default_uniform_buffer_data_t))
-                .value();
+                    0, sizeof(graphic::BasePipelineInterface::default_uniform_buffer_data_t)).value();
 
             float view[4][4] = {};
             float projection[4][4] = {};
@@ -10328,6 +10315,12 @@ namespace jeecs
             Projection() = default;
             Projection(const Projection&) { /* Do nothing */ }
             Projection(Projection&&) = default;
+
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &Projection::znear, "znear");
+                typing::register_member(guard, &Projection::zfar, "zfar");
+            }
         };
         struct OrthoProjection
         {
@@ -11810,7 +11803,6 @@ namespace jeecs
 
             type_info::register_type<Animation::FrameAnimation>(guard, "Animation::FrameAnimation");
 
-            type_info::register_type<Camera::Clip>(guard, "Camera::Clip");
             type_info::register_type<Camera::FrustumCulling>(guard, "Camera::FrustumCulling");
             type_info::register_type<Camera::Projection>(guard, "Camera::Projection");
             type_info::register_type<Camera::OrthoProjection>(guard, "Camera::OrthoProjection");

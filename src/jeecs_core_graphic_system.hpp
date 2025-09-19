@@ -110,7 +110,6 @@ public let frag =
         using Translation = Transform::Translation;
         using Rendqueue = Renderer::Rendqueue;
 
-        using Clip = Camera::Clip;
         using PerspectiveProjection = Camera::PerspectiveProjection;
         using OrthoProjection = Camera::OrthoProjection;
         using Projection = Camera::Projection;
@@ -173,7 +172,6 @@ public let frag =
             Camera::Projection& projection,
             Camera::OrthoProjection* ortho,
             Camera::PerspectiveProjection* perspec,
-            Camera::Clip* clip,
             Camera::Viewport* viewport,
             Camera::RendToFramebuffer* rendbuf,
             Camera::FrustumCulling* frustumCulling)
@@ -191,9 +189,6 @@ public let frag =
             math::mat4xmat4(projection.view, mat_inv_rotation, mat_inv_position);
 
             assert(ortho || perspec);
-            float znear = clip ? clip->znear : 0.3f;
-            float zfar = clip ? clip->zfar : 1000.0f;
-
             graphic::framebuffer* rend_aim_buffer =
                 rendbuf && rendbuf->framebuffer.has_value()
                 ? rendbuf->framebuffer.value().get()
@@ -213,19 +208,19 @@ public let frag =
             {
                 graphic::ortho_projection(projection.projection,
                     (float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT,
-                    ortho->scale, znear, zfar);
+                    ortho->scale, projection.znear, projection.zfar);
                 graphic::ortho_inv_projection(projection.inv_projection,
                     (float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT,
-                    ortho->scale, znear, zfar);
+                    ortho->scale, projection.znear, projection.zfar);
             }
             else
             {
                 graphic::perspective_projection(projection.projection,
                     (float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT,
-                    perspec->angle, znear, zfar);
+                    perspec->angle, projection.znear, projection.zfar);
                 graphic::perspective_inv_projection(projection.inv_projection,
                     (float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT,
-                    perspec->angle, znear, zfar);
+                    perspec->angle, projection.znear, projection.zfar);
             }
 
             assert(projection.default_uniform_buffer != nullptr);
@@ -250,7 +245,7 @@ public let frag =
                     ? (float)RENDAIMBUFFER_WIDTH / (float)RENDAIMBUFFER_HEIGHT * ortho_height_gain
                     : 1.0f;
 
-                float ortho_depth_gain = ortho != nullptr ? zfar * 0.5f : 1.0f;
+                float ortho_depth_gain = ortho != nullptr ? projection.zfar * 0.5f : 1.0f;
 
                 // Left clipping plane
                 frustumCulling->frustum_plane_normals[0] =
@@ -1529,7 +1524,6 @@ public func frag(vf: v2f)
 
         using Rendqueue = Renderer::Rendqueue;
 
-        using Clip = Camera::Clip;
         using PerspectiveProjection = Camera::PerspectiveProjection;
         using OrthoProjection = Camera::OrthoProjection;
         using Projection = Camera::Projection;
@@ -2402,7 +2396,7 @@ public func frag(vf: v2f)
                     }
 
                     const float clear_zero[4] = { 0.f, 0.f, 0.f, 0.f };
-                    const float clear_infi[4] = { 0.f, 0.f, 1e20f, 0.f };
+                    const float clear_infi[4] = { 0.f, 0.f, current_camera.projection->zfar, 0.f };
                     const float clear_norm[4] = { 0.f, 0.f, 1.f, 1.f };
 
                     // 用 zero 清空自发光通道
