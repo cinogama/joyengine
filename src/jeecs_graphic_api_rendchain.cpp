@@ -158,7 +158,6 @@ void jegl_rchain_clear_color_buffer(
     auto* op = _jegl_rchain_prepare_clear_operation(
         chain, jegl_frame_buffer_clear_operation::clear_type::COLOR);
 
-    auto& color = *clear_color_rgba;
     op->m_color = jegl_frame_buffer_clear_operation::clear_color_attachment
     {
         attachment_idx,

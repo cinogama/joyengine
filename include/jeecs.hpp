@@ -2092,7 +2092,8 @@ struct jegl_shader
     {
         INVALID = -1,
 
-        ADD, /* DEFAULT */
+        DISABLED, /* DEFAULT */
+        ADD,
         SUBTRACT,
         REVERSE_SUBTRACT,
         MIN,
@@ -2102,7 +2103,7 @@ struct jegl_shader
     {
         INVALID = -1,
 
-        ZERO, /* DEFAULT SRC = ONE, DST = ZERO (DISABLE BLEND.) */
+        ZERO, /* DEFAULT SRC = ONE, DST = ZERO */
         ONE,
 
         SRC_COLOR,

@@ -11,7 +11,6 @@ using je::shader;
 SHARED  (false);
 ZTEST   (ALWAYS);
 ZWRITE  (DISABLE);
-BLEND   (ONE, ZERO);
 CULL    (BACK);
 
 WOSHADER_VERTEX_IN!

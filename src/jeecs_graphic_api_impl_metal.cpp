@@ -426,6 +426,7 @@ namespace jeecs::graphic::api::metal
 
         jegl_metal_context* context = new jegl_metal_context(cfg, reboot);
 
+        // If glfw enabled.
         context->m_interface->create_interface(cfg);
 
         GLFWwindow* glfw_window =
@@ -461,6 +462,7 @@ namespace jeecs::graphic::api::metal
                 //        sampler_struct.m_sampler_id);
                 //}
             },
+            // If glfw enabled.
             glfw_window,
             context->m_metal_device);
 
@@ -478,7 +480,10 @@ namespace jeecs::graphic::api::metal
             jeecs::debug::log("Graphic thread (Metal) shutdown!");
 
         jegui_shutdown_metal(reboot);
+
+        // If glfw enabled.
         metal_context->m_interface->shutdown(reboot);
+
         delete metal_context;
     }
 
@@ -515,6 +520,7 @@ namespace jeecs::graphic::api::metal
         metal_context->m_render_states.m_currnet_command_buffer = nullptr;
         metal_context->m_render_states.m_current_command_encoder = nullptr;
 
+        // If glfw enabled.
         switch (metal_context->m_interface->update())
         {
         case basic_interface::update_result::CLOSE:
@@ -764,6 +770,8 @@ namespace jeecs::graphic::api::metal
                     {
                         switch (eq)
                         {
+                        case jegl_shader::blend_equation::DISABLED:
+                            return MTL::BlendOperationAdd; // Not used.
                         case jegl_shader::blend_equation::ADD:
                             return MTL::BlendOperationAdd;
                         case jegl_shader::blend_equation::SUBTRACT:
@@ -831,8 +839,7 @@ namespace jeecs::graphic::api::metal
 
                 bool blend_enabled = true;
 
-                if (raw_shader->m_blend_src_mode == jegl_shader::blend_method::ONE &&
-                    raw_shader->m_blend_dst_mode == jegl_shader::blend_method::ZERO)
+                if (raw_shader->m_blend_equation == jegl_shader::blend_equation::DISABLED)
                     blend_enabled = false;
 
                 metal_resource_shader_blob* shader_blob =
@@ -876,6 +883,13 @@ namespace jeecs::graphic::api::metal
                     case jegl_shader::uniform_type::INT4:
                     case jegl_shader::uniform_type::FLOAT4:
                         unit_size = 16;
+                        allign_base = 16;
+                        break;
+                    case jegl_shader::uniform_type::FLOAT2X2:
+                        unit_size = 16;
+                        allign_base = 8;
+                    case jegl_shader::uniform_type::FLOAT3X3:
+                        unit_size = 48;
                         allign_base = 16;
                         break;
                     case jegl_shader::uniform_type::FLOAT4X4:
@@ -1075,6 +1089,7 @@ namespace jeecs::graphic::api::metal
             bool is_framebuf = 0 != (raw_texture_data->m_format & jegl_texture::format::FRAMEBUF);
             bool is_depth = 0 != (raw_texture_data->m_format & jegl_texture::format::DEPTH);
 
+            (void)is_cube;
             assert(!is_cube); // TODO;
 
             texture_desc->setWidth((uint32_t)raw_texture_data->m_width);
@@ -1459,6 +1474,12 @@ namespace jeecs::graphic::api::metal
             || current_shader == nullptr)
             return;
 
+        current_shader->m_uniform_buffer_updated = true;
+
+        void* target_buffer = reinterpret_cast<void*>(
+            reinterpret_cast<intptr_t>(
+                current_shader->m_uniform_cpu_buffer) + location);
+
         size_t data_size_byte_length = 0;
         switch (type)
         {
@@ -1478,6 +1499,20 @@ namespace jeecs::graphic::api::metal
         case jegl_shader::FLOAT4:
             data_size_byte_length = 16;
             break;
+        case jegl_shader::FLOAT2X2:
+            data_size_byte_length = 16;
+            break;
+        case jegl_shader::FLOAT3X3:
+        {
+            float* target_storage = reinterpret_cast<float*>(write_buffer_addr);
+            const float* source_storage = reinterpret_cast<const float*>(val);
+
+            memcpy(target_storage, source_storage, 12);
+            memcpy(target_storage + 4, source_storage + 3, 12);
+            memcpy(target_storage + 8, source_storage + 6, 12);
+
+            return;
+        }
         case jegl_shader::FLOAT4X4:
             data_size_byte_length = 64;
             break;
@@ -1486,13 +1521,7 @@ namespace jeecs::graphic::api::metal
             break;
         }
 
-        memcpy(
-            reinterpret_cast<void*>(
-                reinterpret_cast<intptr_t>(current_shader->m_uniform_cpu_buffer) + location),
-            val,
-            data_size_byte_length);
-
-        current_shader->m_uniform_buffer_updated = true;
+        memcpy(target_buffer, val, data_size_byte_length);
     }
 
     void draw_vertex_with_shader(jegl_context::graphic_impl_context_t ctx, jegl_resource* res)

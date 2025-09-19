@@ -10,7 +10,6 @@ using je::shader;
 SHARED  (true);
 ZTEST   (LESS);
 ZWRITE  (ENABLE);
-BLEND   (ONE, ZERO);
 CULL    (NONE);
 
 WOSHADER_VERTEX_IN!

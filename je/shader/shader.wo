@@ -25,6 +25,7 @@ namespace je::shader
     public let DISABLE = GConfig::DISABLE;
     public let ENABLE = GConfig::ENABLE;
     
+    public let DISABLED = BlendEquation::DISABLED;
     public let ADD = BlendEquation::ADD;
     public let SUBTRACT = BlendEquation::SUBTRACT;
     public let REVERSE_SUBTRACT = BlendEquation::REVERSE_SUBTRACT;
@@ -64,7 +65,8 @@ namespace je::shader
     }
     enum BlendEquation
     {
-        ADD = 0,      /* DEFAULT */
+        DISABLED = 0, /* DEFAULT */
+        ADD,
         SUBTRACT,
         REVERSE_SUBTRACT,
         MIN,
@@ -72,7 +74,7 @@ namespace je::shader
     }
     enum BlendConfig
     {
-        ZERO = 0,       /* DEFAULT SRC = ONE, DST = ZERO (DISABLE BLEND.) */
+        ZERO = 0,       /* DEFAULT SRC = ONE, DST = ZERO */
         ONE,
         
         SRC_COLOR,
@@ -108,7 +110,7 @@ namespace je::shader
         shared = mut false,
         ztest = mut LESS,
         zwrite = mut ENABLE,
-        blend_equation = mut ADD,
+        blend_equation = mut DISABLED,
         blend_src = mut ONE,
         blend_dst = mut ZERO,
         cull = mut NONE,
@@ -126,12 +128,9 @@ namespace je::shader
     {
         shader::configs.zwrite = zwrite;
     }
-    public func BLEND_EQUATION(equation: BlendEquation)
+    public func BLEND(equation: BlendEquation, src: BlendConfig, dst: BlendConfig)
     {
         shader::configs.blend_equation = equation;
-    }
-    public func BLEND(src: BlendConfig, dst: BlendConfig)
-    {
         shader::configs.blend_src = src;
         shader::configs.blend_dst = dst;
     }

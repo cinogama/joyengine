@@ -27,8 +27,10 @@ option(JE4_ENABLE_WEBGL20_GAPI      "Enable WebGL 2.0 Graphic API"      OFF)
 option(JE4_ENABLE_VULKAN130_GAPI    "Enable Vulkan 1.3 Graphic API"     OFF)
 option(JE4_ENABLE_METAL_GAPI        "Enable Metal Graphic API"          OFF)
 
-set(JE4_SPECIFY_OPENAL_LIB_NAME "" CACHE STRING "Specified openal library name, if empty-string, use openal-soft")
-set(JE4_IGNORED_WOOLANG_PKG_LIST "" CACHE STRING "Woolang package in this list will be ignored")
+set(JE4_SPECIFY_OPENAL_LIB_NAME     "" CACHE STRING     "Specified openal library name, \
+                                                        if empty-string, use openal-soft")
+set(JE4_IGNORED_WOOLANG_PKG_LIST    "" CACHE STRING    "Woolang package in this list will\
+                                                        be ignored")
 
 ##############################################################################
 # Install packages by baozi before build script,
@@ -49,18 +51,20 @@ if (JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD)
         execute_process(
             COMMAND cmd /c ${JE4_FETCHING_BAOZI_CMDLINE} 
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-            RESULT_VARIABLE JE4_CMAKE_STATUS_PACAKGE_INSTALL)
+            RESULT_VARIABLE JE4_CMAKE_STATUS_PACAKGE_INSTALL_RESULT)
     else()
         execute_process(
             COMMAND sh -c "${JE4_FETCHING_BAOZI_CMDLINE}"
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-            RESULT_VARIABLE JE4_CMAKE_STATUS_PACAKGE_INSTALL)
+            RESULT_VARIABLE JE4_CMAKE_STATUS_PACAKGE_INSTALL_RESULT)
     endif()
 
-    if (JE4_CMAKE_STATUS_PACAKGE_INSTALL EQUAL 0)
+    if (JE4_CMAKE_STATUS_PACAKGE_INSTALL_RESULT EQUAL 0)
         message(STATUS "Woolang packages installed successfully.")
     else()
-        message(FATAL_ERROR "Failed to install woolang packages(${JE4_CMAKE_STATUS_PACAKGE_INSTALL}), please check the error message above.")
+        message(FATAL_ERROR 
+            "Failed to install woolang packages(${JE4_CMAKE_STATUS_PACAKGE_INSTALL_RESULT})\
+            , please check the error message above.")
     endif()
 else()
     message(STATUS "JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD is disabled.")
@@ -88,7 +92,9 @@ execute_process(
 if (JE4_CMAKE_STATUS_BUILD_SCRIPT EQUAL 0)
     message(STATUS "Build script executed successfully.")
 else()
-    message(FATAL_ERROR "Failed to execute build script(${JE4_CMAKE_STATUS_BUILD_SCRIPT}), please check the error message above.")
+    message(FATAL_ERROR 
+        "Failed to execute build script(${JE4_CMAKE_STATUS_BUILD_SCRIPT}), please check the \
+        error message above.")
 endif()
 
 ##############################################################################

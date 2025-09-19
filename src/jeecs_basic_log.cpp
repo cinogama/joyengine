@@ -21,9 +21,9 @@
 struct GBarLogmsg
 {
     int m_level;
-    const char *m_msg;
+    const char* m_msg;
 
-    GBarLogmsg *last;
+    GBarLogmsg* last;
 };
 
 struct je_log_context
@@ -35,20 +35,23 @@ struct je_log_context
     std::atomic_bool _gbar_log_shutdown_flag = false;
 };
 
-void _je_log_work(je_log_context *ctx)
+void _je_log_work(je_log_context* ctx)
 {
     do
     {
         do
         {
             std::unique_lock ug1(ctx->_gbar_log_thread_mx);
-            ctx->_gbar_log_thread_cv.wait(ug1,
-                                          [ctx]() -> bool
-                                          { return !ctx->_gbar_log_list.empty() || ctx->_gbar_log_shutdown_flag; });
+            ctx->_gbar_log_thread_cv.wait(
+                ug1,
+                [ctx]()
+                { 
+                    return !ctx->_gbar_log_list.empty() || ctx->_gbar_log_shutdown_flag; 
+                });
         } while (0);
 
-        GBarLogmsg *msg = ctx->_gbar_log_list.pick_all();
-        std::list<GBarLogmsg *> reverse_msgs;
+        GBarLogmsg* msg = ctx->_gbar_log_list.pick_all();
+        std::list<GBarLogmsg*> reverse_msgs;
 
         while (msg)
         {
@@ -56,7 +59,7 @@ void _je_log_work(je_log_context *ctx)
             msg = msg->last;
         }
 
-        for (auto *rmsg : reverse_msgs)
+        for (auto* rmsg : reverse_msgs)
         {
             switch (rmsg->m_level)
             {
@@ -81,7 +84,7 @@ void _je_log_work(je_log_context *ctx)
             }
             puts(rmsg->m_msg);
 
-            free((void *)(rmsg->m_msg));
+            free((void*)(rmsg->m_msg));
             delete rmsg;
         }
 
@@ -89,12 +92,12 @@ void _je_log_work(je_log_context *ctx)
 }
 
 std::shared_mutex log_context_instance_mx;
-je_log_context *log_context_instance = {};
+je_log_context* log_context_instance = {};
 
 void je_log_init()
 {
     std::lock_guard g1(log_context_instance_mx);
-    je_log_context *ctx = new je_log_context;
+    je_log_context* ctx = new je_log_context;
     log_context_instance = ctx;
     ctx->_gbar_log_thread = std::thread(_je_log_work, ctx);
 }
@@ -119,9 +122,9 @@ void je_log_finish()
 
 std::atomic_size_t registered_id = 0;
 std::shared_mutex registered_callbacks_mx;
-std::unordered_map<size_t, std::pair<void (*)(int, const char *, void *), void *>> registered_callbacks;
+std::unordered_map<size_t, std::pair<void (*)(int, const char*, void*), void*>> registered_callbacks;
 
-size_t je_log_register_callback(void (*func)(int level, const char *msg, void *custom), void *custom)
+size_t je_log_register_callback(void (*func)(int level, const char* msg, void* custom), void* custom)
 {
     size_t id = ++registered_id;
 
@@ -132,18 +135,18 @@ size_t je_log_register_callback(void (*func)(int level, const char *msg, void *c
     return id;
 }
 
-void *je_log_unregister_callback(size_t regid)
+void* je_log_unregister_callback(size_t regid)
 {
     std::lock_guard lg(registered_callbacks_mx);
     assert(registered_callbacks.find(regid) != registered_callbacks.end());
 
-    auto *cus = registered_callbacks[regid].second;
+    auto* cus = registered_callbacks[regid].second;
     registered_callbacks.erase(regid);
 
     return cus;
 }
 
-void je_log(int level, const char *format, ...)
+void je_log(int level, const char* format, ...)
 {
     va_list va, vb;
     va_start(va, format);
@@ -152,7 +155,7 @@ void je_log(int level, const char *format, ...)
     size_t total_buffer_sz = vsnprintf(nullptr, 0, format, va);
     va_end(va);
 
-    char *buf = (char *)malloc(total_buffer_sz + 2);
+    char* buf = (char*)malloc(total_buffer_sz + 2);
     vsnprintf(buf, total_buffer_sz + 1, format, vb);
     va_end(vb);
 
@@ -169,12 +172,12 @@ void je_log(int level, const char *format, ...)
     {
         // Invoke callbacks
         std::shared_lock sg(registered_callbacks_mx);
-        for (auto &[_, f] : registered_callbacks)
+        for (auto& [_, f] : registered_callbacks)
         {
             f.first(level, buf, f.second);
         }
     } while (0);
 
-    log_context_instance->_gbar_log_list.add_one(new GBarLogmsg{level, buf});
+    log_context_instance->_gbar_log_list.add_one(new GBarLogmsg{ level, buf });
     log_context_instance->_gbar_log_thread_cv.notify_one();
 }
