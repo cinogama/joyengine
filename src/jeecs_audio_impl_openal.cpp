@@ -1757,7 +1757,7 @@ namespace jeecs
                 break;
             }
         }
-        void set_source_buffer(jeal_source *source, const jeal_buffer *buffer)
+        bool set_source_buffer(jeal_source *source, const jeal_buffer *buffer)
         {
             assert(source != nullptr);
             assert(buffer != nullptr);
@@ -1765,6 +1765,7 @@ namespace jeecs
             std::lock_guard g2(m_buffers_mx); // g2
             std::lock_guard g1(m_sources_mx); // g1
 
+            bool buffer_changed = false;
             for (;;)
             {
                 if (source->m_source_instance != nullptr)
@@ -1775,23 +1776,28 @@ namespace jeecs
                         continue;
 
                     assert(buffer->m_buffer_instance != nullptr);
+                    if (!source->m_source_instance->m_playing_buffer.has_value()
+                        || source->m_source_instance->m_playing_buffer.value() != buffer)
+                    {
+                        source->m_source_instance->m_playing_buffer.set_res(buffer);
 
-                    source->m_source_instance->m_playing_buffer.set_res(buffer);
+                        ALenum play_state;
+                        alGetSourcei(
+                            source->m_source_instance->m_source_id,
+                            AL_SOURCE_STATE,
+                            &play_state);
 
-                    ALenum play_state;
-                    alGetSourcei(
-                        source->m_source_instance->m_source_id,
-                        AL_SOURCE_STATE,
-                        &play_state);
+                        if (play_state != AL_INITIAL && play_state != AL_STOPPED)
+                            // 对正在播放的 source 设置 buffer 时，应该停止当前的播放
+                            alSourceStop(source->m_source_instance->m_source_id);
 
-                    if (play_state != AL_INITIAL && play_state != AL_STOPPED)
-                        // 对正在播放的 source 设置 buffer 时，应该停止当前的播放
-                        alSourceStop(source->m_source_instance->m_source_id);
+                        alSourcei(
+                            source->m_source_instance->m_source_id,
+                            AL_BUFFER,
+                            buffer->m_buffer_instance->m_buffer_id);
 
-                    alSourcei(
-                        source->m_source_instance->m_source_id,
-                        AL_BUFFER,
-                        buffer->m_buffer_instance->m_buffer_id);
+                        buffer_changed = true;
+                    }
                 }
                 else
                 {
@@ -1802,15 +1808,21 @@ namespace jeecs
 
                     // 此时没有设备，但状态需要装填到转储中
                     auto *dump_instance = require_dump_for_no_device_context_source(source);
-                    auto &dump = dump_instance->m_dump.value();
 
-                    dump_instance->m_playing_buffer.set_res(buffer);
-                    dump.m_play_state = jeal_state::JE_AUDIO_STATE_STOPPED;
-                    dump.m_play_process = 0;
+                    if (dump_instance->m_playing_buffer.value() != buffer)
+                    {
+                        auto& dump = dump_instance->m_dump.value();
+
+                        dump_instance->m_playing_buffer.set_res(buffer);
+                        dump.m_play_state = jeal_state::JE_AUDIO_STATE_STOPPED;
+                        dump.m_play_process = 0;
+
+                        buffer_changed = true;
+                    }
                 }
-
                 break;
             }
+            return buffer_changed;
         }
         void play_source(jeal_source *source)
         {
@@ -2433,11 +2445,11 @@ void jeal_close_source(jeal_source *source)
 
     jeecs::g_engine_audio_context->close_source(source);
 }
-void jeal_set_source_buffer(jeal_source *source, const jeal_buffer *buffer)
+bool jeal_set_source_buffer(jeal_source *source, const jeal_buffer *buffer)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
-    jeecs::g_engine_audio_context->set_source_buffer(source, buffer);
+    return jeecs::g_engine_audio_context->set_source_buffer(source, buffer);
 }
 void jeal_set_source_effect_slot(
     jeal_source *source,

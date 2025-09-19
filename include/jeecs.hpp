@@ -3130,8 +3130,8 @@ jegl_rchain_begin [基本接口]
     jegl_rendchain
 */
 JE_API void jegl_rchain_begin(
-    jegl_rendchain* chain, 
-    jegl_resource* framebuffer, 
+    jegl_rendchain* chain,
+    jegl_resource* framebuffer,
     int32_t x, int32_t y, uint32_t w, uint32_t h);
 
 /*
@@ -3146,7 +3146,7 @@ jegl_rchain_clear_color_buffer [基本接口]
 */
 JE_API void jegl_rchain_clear_color_buffer(
     jegl_rendchain* chain,
-    size_t attachment_index, 
+    size_t attachment_index,
     const float clear_color_rgba[4]);
 
 /*
@@ -4247,8 +4247,9 @@ JE_API void jeal_close_source(jeal_source* source);
 jeal_set_source_buffer [基本接口]
 设置音频源的播放音频
     只有音源设置有音频时，其他的播放等动作才会生效
+    * 如果设置的音频与先前的音频不同，自动停止播放，返回 true
 */
-JE_API void jeal_set_source_buffer(jeal_source* source, const jeal_buffer* buffer);
+JE_API bool jeal_set_source_buffer(jeal_source* source, const jeal_buffer* buffer);
 
 /*
 jeal_set_source_effect_slot [基本接口]
@@ -8775,11 +8776,11 @@ namespace jeecs
             {
                 auto* res = jegl_create_vertex(
                     type,
-                    pdatas, 
+                    pdatas,
                     pdatalen,
-                    idatas.data(), 
+                    idatas.data(),
                     idatas.size(),
-                    fdatas.data(), 
+                    fdatas.data(),
                     fdatas.size());
 
                 if (res != nullptr)
@@ -8796,15 +8797,15 @@ namespace jeecs
 
         public:
             static std::optional<basic::resource<framebuffer>> create(
-                size_t reso_w, 
-                size_t reso_h, 
+                size_t reso_w,
+                size_t reso_h,
                 const std::vector<jegl_texture::format>& color_attachment_formats,
                 bool contain_depth_attachment)
             {
                 auto* res = jegl_create_framebuf(
-                    reso_w, 
-                    reso_h, 
-                    color_attachment_formats.data(), 
+                    reso_w,
+                    reso_h,
+                    color_attachment_formats.data(),
                     color_attachment_formats.size(),
                     contain_depth_attachment);
 
@@ -9788,9 +9789,9 @@ namespace jeecs
             {
                 return basic::resource<source>(new source(jeal_create_source()));
             }
-            inline void set_playing_buffer(const basic::resource<buffer>& buffer)
+            inline bool set_playing_buffer(const basic::resource<buffer>& buffer)
             {
-                jeal_set_source_buffer(_m_audio_source, buffer->handle());
+                return jeal_set_source_buffer(_m_audio_source, buffer->handle());
             }
             jeal_source* handle() const
             {
@@ -11277,7 +11278,7 @@ namespace jeecs
                             wo_set_option_string(tmp, vm, action.value().c_str());
                         else
                             wo_set_option_none(tmp, vm);
-                        
+
                         wo_struct_set(animation, 1, tmp);
 
                         wo_set_bool(tmp, animation_inst.m_loop);
@@ -11357,13 +11358,28 @@ namespace jeecs
         struct Playing
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Playing);
-            JECS_DEFAULT_CONSTRUCTOR(Playing);
 
+            enum class play_state
+            {
+                STOPPED,
+                PLAYING,
+                LOOPED_PLAYING,
+            };
+            play_state state = play_state::STOPPED;
             basic::fileresource<audio::buffer> buffer;
-            bool is_playing = false;
-
+            
             bool play = true;
             bool loop = true;
+
+            Playing() = default;
+            Playing(const Playing& another)
+                : state(play_state::STOPPED)
+                , buffer(another.buffer)
+                , play(another.play)
+                , loop(another.loop)
+            {
+            }
+            Playing(Playing&&) = default;
 
             void set_buffer(const basic::resource<audio::buffer>& buf)
             {
@@ -11390,11 +11406,12 @@ namespace jeecs
             input::keycode left_stick_up_left_down_right[4];
 
             VirtualGamepad()
-                : gamepad(je_io_create_gamepad(nullptr, nullptr)), left_stick_up_left_down_right{
-                                                                       input::keycode::W,
-                                                                       input::keycode::A,
-                                                                       input::keycode::S,
-                                                                       input::keycode::D }
+                : gamepad(je_io_create_gamepad(nullptr, nullptr))
+                , left_stick_up_left_down_right{
+                    input::keycode::W,
+                    input::keycode::A,
+                    input::keycode::S,
+                    input::keycode::D }
             {
                 keymap[input::keycode::UP] = input::gamepadcode::UP;
                 keymap[input::keycode::DOWN] = input::gamepadcode::DOWN;
@@ -11405,19 +11422,23 @@ namespace jeecs
                 keymap[input::keycode::ESC] = input::gamepadcode::SELECT;
             }
             VirtualGamepad(const VirtualGamepad& another)
-                : gamepad(je_io_create_gamepad(nullptr, nullptr)), keymap(another.keymap), left_stick_up_left_down_right{
-                                                                                               another.left_stick_up_left_down_right[0],
-                                                                                               another.left_stick_up_left_down_right[1],
-                                                                                               another.left_stick_up_left_down_right[2],
-                                                                                               another.left_stick_up_left_down_right[3] }
+                : gamepad(je_io_create_gamepad(nullptr, nullptr))
+                , keymap(another.keymap)
+                , left_stick_up_left_down_right{
+                    another.left_stick_up_left_down_right[0],
+                    another.left_stick_up_left_down_right[1],
+                    another.left_stick_up_left_down_right[2],
+                    another.left_stick_up_left_down_right[3] }
             {
             }
             VirtualGamepad(VirtualGamepad&& another)
-                : gamepad(another.gamepad), keymap(std::move(another.keymap)), left_stick_up_left_down_right{
-                                                                                   another.left_stick_up_left_down_right[0],
-                                                                                   another.left_stick_up_left_down_right[1],
-                                                                                   another.left_stick_up_left_down_right[2],
-                                                                                   another.left_stick_up_left_down_right[3] }
+                : gamepad(another.gamepad)
+                , keymap(std::move(another.keymap))
+                , left_stick_up_left_down_right{
+                    another.left_stick_up_left_down_right[0],
+                    another.left_stick_up_left_down_right[1],
+                    another.left_stick_up_left_down_right[2],
+                    another.left_stick_up_left_down_right[3] }
             {
                 another.gamepad = nullptr;
             }
