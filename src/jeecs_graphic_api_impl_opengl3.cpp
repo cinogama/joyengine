@@ -921,9 +921,8 @@ namespace jeecs::graphic::api::gl3
             delete shader_blob;
         }
     }
-    void gl_init_resource(jegl_context::graphic_impl_context_t ctx, jegl_resource_blob blob, jegl_resource* resource)
+    void gl_init_resource(jegl_context::graphic_impl_context_t, jegl_resource_blob blob, jegl_resource* resource)
     {
-        jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
         assert(resource->m_custom_resource != nullptr);
 
         switch (resource->m_type)
@@ -1351,9 +1350,8 @@ namespace jeecs::graphic::api::gl3
         return true;
     }
 
-    void gl_using_resource(jegl_context::graphic_impl_context_t ctx, jegl_resource* resource)
+    void gl_using_resource(jegl_context::graphic_impl_context_t, jegl_resource* resource)
     {
-        jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
         switch (resource->m_type)
         {
         case jegl_resource::type::SHADER:
@@ -1364,9 +1362,6 @@ namespace jeecs::graphic::api::gl3
                 if (resource->m_raw_texture_data != nullptr)
                 {
                     resource->m_modified = false;
-
-                    GLenum last_texture_type;
-                    GLuint last_texture;
 
                     // Update texture's pixels, only normal pixel data will be updated.
                     glBindTexture(GL_TEXTURE_2D, (GLuint)resource->m_handle.m_uint1);

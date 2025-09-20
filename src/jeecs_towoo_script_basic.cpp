@@ -792,7 +792,8 @@ WO_API wo_api wojeapi_towoo_register_system_job(wo_vm vm, wo_value args)
 
     if (!stepwork.m_is_single_work)
     {
-        for (wo_integer_t i = 0; i < wo_arr_len(requirements); ++i)
+        const size_t requirements_count = wo_arr_len(requirements);
+        for (size_t i = 0; i < requirements_count; ++i)
         {
             wo_arr_get(requirement_info, requirements, i);
 
