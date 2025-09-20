@@ -188,7 +188,6 @@ namespace jeecs::graphic::api::gl3
         size_t RESOLUTION_WIDTH = 0;
         size_t RESOLUTION_HEIGHT = 0;
 
-        GLint m_last_active_pass_id = 0;
         GLuint m_binded_texture_passes[128] = {};
         GLenum m_binded_texture_passes_type[128] = {};
 
@@ -233,21 +232,6 @@ namespace jeecs::graphic::api::gl3
                 m_binded_texture_passes[pass] = texture;
                 m_binded_texture_passes_type[pass] = type;
             }
-        }
-        bool get_last_binded_texture_and_type(GLuint* out_texture, GLenum* out_type)
-        {
-            if (m_binded_texture_passes_type[m_last_active_pass_id] != 0)
-            {
-                *out_texture = m_binded_texture_passes[m_last_active_pass_id];
-                *out_type = m_binded_texture_passes_type[m_last_active_pass_id];
-
-                return true;
-            }
-            return false;
-        }
-        void bind_texture_to_last_pass(GLenum type, GLuint texture)
-        {
-            bind_texture_pass_impl(m_last_active_pass_id, type, texture);
         }
     };
     struct jegl_gl3_uniformbuf
@@ -1044,12 +1028,6 @@ namespace jeecs::graphic::api::gl3
             bool is_cube = 0 != (resource->m_raw_texture_data->m_format & jegl_texture::format::CUBE);
 
             auto gl_texture_type = GL_TEXTURE_2D;
-
-            GLenum last_texture_type;
-            GLuint last_texture;
-            bool need_restore_texture_state =
-                context->get_last_binded_texture_and_type(&last_texture, &last_texture_type);
-
             glBindTexture(gl_texture_type, texture);
 
             assert(GL_TEXTURE_2D == gl_texture_type);
@@ -1143,13 +1121,6 @@ namespace jeecs::graphic::api::gl3
             resource->m_handle.m_uint1 = texture;
             resource->m_handle.m_uint2 = (uint32_t)resource->m_raw_texture_data->m_format;
             static_assert(std::is_same<decltype(resource->m_handle.m_uint2), uint32_t>::value);
-
-            if (need_restore_texture_state)
-            {
-                context->bind_texture_to_last_pass(
-                    last_texture_type,
-                    last_texture);
-            }
 
             break;
         }
@@ -1396,8 +1367,6 @@ namespace jeecs::graphic::api::gl3
 
                     GLenum last_texture_type;
                     GLuint last_texture;
-                    bool need_restore_texture_state =
-                        context->get_last_binded_texture_and_type(&last_texture, &last_texture_type);
 
                     // Update texture's pixels, only normal pixel data will be updated.
                     glBindTexture(GL_TEXTURE_2D, (GLuint)resource->m_handle.m_uint1);
@@ -1414,13 +1383,6 @@ namespace jeecs::graphic::api::gl3
                         GL_RGBA,
                         is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
                         resource->m_raw_texture_data->m_pixels);
-
-                    if (need_restore_texture_state)
-                    {
-                        context->bind_texture_to_last_pass(
-                            last_texture_type,
-                            last_texture);
-                    }
                 }
             }
             break;

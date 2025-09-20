@@ -28,13 +28,13 @@ add_compile_options(-pthread)
 
 # WASM64 is not supported well, so we use WASM32 as default.
 if (OFF)
-        add_compile_options(-m64)
-        set(WO_SPECIFY_PLATFORM_TYPE "WO_PLATFORM_64" CACHE STRING "Specify platform type." FORCE)
-        set(JE4WEBGL_MEMORY64 1)
+    add_compile_options(-m64)
+    set(WO_SPECIFY_PLATFORM_TYPE "WO_PLATFORM_64" CACHE STRING "Specify platform type." FORCE)
+    set(JE4WEBGL_MEMORY64 1)
 else()
-        add_compile_options(-m32)
-        set(WO_SPECIFY_PLATFORM_TYPE "WO_PLATFORM_32" CACHE STRING "Specify platform type." FORCE)
-        set(JE4WEBGL_MEMORY64 0)
+    add_compile_options(-m32)
+    set(WO_SPECIFY_PLATFORM_TYPE "WO_PLATFORM_32" CACHE STRING "Specify platform type." FORCE)
+    set(JE4WEBGL_MEMORY64 0)
 endif()
 
 # Searches for a package provided by the game activity dependency
@@ -48,26 +48,39 @@ set(LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/output")
 
 add_executable(joyengineecs4w main.cpp)
 target_link_libraries(joyengineecs4w
-        # JoyEngine core
-        PUBLIC joyecs
-        PRIVATE woolang idbfs.js)
+    # JoyEngine core
+    PUBLIC joyecs
+    PRIVATE woolang idbfs.js)
 
 # Use wasm64
 file(GLOB PRELOAD_FILES 
-        RELATIVE 
-        "${CMAKE_CURRENT_SOURCE_DIR}/preloads"
-        "${CMAKE_CURRENT_SOURCE_DIR}/preloads/*")
+    RELATIVE 
+    "${CMAKE_CURRENT_SOURCE_DIR}/preloads"
+    "${CMAKE_CURRENT_SOURCE_DIR}/preloads/*")
 set(JE4_PRELOAD_FLAGS "")
 
 foreach(file ${PRELOAD_FILES})
     set(JE4_PRELOAD_FLAGS 
-    "${JE4_PRELOAD_FLAGS} --preload-file \"${CMAKE_CURRENT_SOURCE_DIR}/preloads/${file}\"@/${file}")
+        "${JE4_PRELOAD_FLAGS} \
+        --preload-file \"${CMAKE_CURRENT_SOURCE_DIR}/preloads/${file}\"@/${file}")
 endforeach()
 
 target_include_directories(
     joyengineecs4w    
     PRIVATE "${JE4WEBGL_PATH}/include"
     PRIVATE "${JE4WEBGL_PATH}/3rd/woolang/include")
+
+string (TOUPPER "${CMAKE_BUILD_TYPE}" JE_WEBGL_CMAKE_BUILD_TYPE_UPPER_CASE)
+if (JE_WEBGL_CMAKE_BUILD_TYPE_UPPER_CASE STREQUAL "DEBUG"
+    OR JE_WEBGL_CMAKE_BUILD_TYPE_UPPER_CASE STREQUAL "RELWITHDEBINFO")
+    set(JE4_PRELOAD_FLAGS 
+        "${JE4_PRELOAD_FLAGS} \
+        -s ASSERTIONS=1 \
+        -s SAFE_HEAP=1 \
+        -s STACK_OVERFLOW_CHECK=1 \
+        -s GL_ASSERTIONS=1 \
+        -s GL_DEBUG=1")
+endif()
 
 set_target_properties(joyengineecs4w PROPERTIES
         SUFFIX ".html"
