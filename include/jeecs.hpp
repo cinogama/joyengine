@@ -4392,6 +4392,18 @@ JE_API void jeal_enumerate_devices_and_do(
     jeal_enumerate_device_callback_t callback, void* userdata);
 
 /*
+jeal_disconnect_all_devices [基本接口]
+关闭所有现有的设备，如同没有枚举到任何设备一般
+    * 正常情况下不需要调用这个接口，这个接口是为一些移动端设备等，在程序切至
+        后台时，需要暂停（终止）所有音频的播放；此时使用这个接口可以彻底终止
+        所有音频效果
+    * 恢复时，使用 jeal_enumerate_devices_and_do 重新枚举所有设备
+参见：
+    jeal_enumerate_devices_and_do
+*/
+JE_API void jeal_disconnect_all_devices();
+
+/*
 je_main_script_entry [基本接口]
 运行入口脚本
     * 阻塞直到入口脚本运行完毕

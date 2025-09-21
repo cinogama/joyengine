@@ -1872,7 +1872,8 @@ namespace jeecs
                     // 此时没有设备，但状态需要装填到转储中
                     auto* dump_instance = require_dump_for_no_device_context_source(source);
 
-                    if (dump_instance->m_playing_buffer.value() != buffer)
+                    if (!dump_instance->m_playing_buffer.has_value()
+                        || dump_instance->m_playing_buffer.value() != buffer)
                     {
                         auto& dump = dump_instance->m_dump.value();
 
@@ -2205,6 +2206,15 @@ namespace jeecs
                 active_using_device(
                     const_cast<jeal_play_device*>(using_device));
             }
+        }
+
+        void disconnect_all_devices()
+        {
+            std::lock_guard g0(m_context_mx); // g0
+
+            update_enumed_play_devices({});
+
+            jeecs::debug::loginfo("All audio devices disconnected.");
         }
 
         void audio_device_update_thread_job()
@@ -2766,5 +2776,11 @@ void jeal_enumerate_devices_and_do(
     jeecs::g_engine_audio_context->refetch_devices_and_do(
         callback,
         userdata);
+}
+
+void jeal_disconnect_all_devices()
+{
+    assert(jeecs::g_engine_audio_context != nullptr);
+    jeecs::g_engine_audio_context->disconnect_all_devices();
 }
 
