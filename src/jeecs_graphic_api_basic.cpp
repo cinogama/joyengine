@@ -417,15 +417,18 @@ void jegl_sync_init(jegl_context* thread, bool isreboot)
 
     assert(_current_graphic_thread == thread);
 
-    if (thread->m_config.m_fps == 0)
-        je_ecs_universe_set_frame_deltatime(
-            thread->m_universe_instance,
-            0.0);
-    else
-        je_ecs_universe_set_frame_deltatime(
-            thread->m_universe_instance,
-            1.0 / (double)thread->m_config.m_fps);
-
+    if (thread->m_universe_instance != nullptr)
+    {
+        if (thread->m_config.m_fps == 0)
+            je_ecs_universe_set_frame_deltatime(
+                thread->m_universe_instance,
+                0.0);
+        else
+            je_ecs_universe_set_frame_deltatime(
+                thread->m_universe_instance,
+                1.0 / (double)thread->m_config.m_fps);
+    }
+    
     thread->m_graphic_impl_context = thread->m_apis->interface_startup(
         thread, &thread->m_config, isreboot);
 
@@ -575,7 +578,8 @@ bool jegl_sync_shutdown(jegl_context* thread, bool isreboot)
     return false;
 }
 
-void jegl_register_sync_thread_callback(jeecs_sync_callback_func_t callback, void* arg)
+void jegl_register_sync_thread_callback(
+    jeecs_sync_callback_func_t callback, void* arg)
 {
     assert(callback != nullptr);
 
