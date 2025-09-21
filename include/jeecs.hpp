@@ -3839,8 +3839,9 @@ struct jeal_play_device
     jeal_native_play_device_instance*
         m_device_instance;
 
-    const char* m_name;        // 设备名称
+    const char* m_name;        // 设备名称，实现保证唯一性
     bool m_active;             // 是否是当前使用的播放设备
+    bool m_is_default;         // 是否是默认播放设备
     int m_max_auxiliary_sends; // 最大辅助发送数量，如果等于0，则不支持
 };
 
@@ -4373,24 +4374,22 @@ jeal_update_effect [基本接口]
 */
 JE_API void jeal_update_effect(void* effect);
 
-/*
-jeal_refetch_devices [基本接口]
-获取当前已链接的所有音频设备
-    此前获取的所有设备的指针/引用都将失效，因此需要明确设备指针的所有者
-*/
-JE_API const jeal_play_device* jeal_refetch_devices(size_t* out_device_count);
+typedef const jeal_play_device* (*
+    jeal_enumerate_device_callback_t)(
+        const jeal_play_device* enumerated_devices, 
+        size_t enumerated_device_count, 
+        void* userdata);
 
 /*
-jeal_using_device [基本接口]
-指示当前使用的设备
+jeal_enumerate_devices_and_do [基本接口]
+枚举获取当前所有已经链接的音频播放设备
+    * 不应当将获取到的设备实例传递到回调函数作用域之外，无法保证实例在回调
+        函数以外是否仍然有效；不要复制获取到的设备结构体。
+    * 回调函数可以返回一个设备的地址，如果这么做，将指示音频使用此设备播放；
+        返回 nullptr 表示不改变当前使用的设备
 */
-JE_API void jeal_using_device(const jeal_play_device* device);
-
-/*
-jeal_check_device_connected [基本接口]
-检查设备是否链接
-*/
-JE_API bool jeal_check_device_connected(const jeal_play_device* device);
+JE_API void jeal_enumerate_devices_and_do(
+    jeal_enumerate_device_callback_t callback, void* userdata);
 
 /*
 je_main_script_entry [基本接口]
@@ -11367,7 +11366,7 @@ namespace jeecs
             };
             play_state state = play_state::STOPPED;
             basic::fileresource<audio::buffer> buffer;
-            
+
             bool play = true;
             bool loop = true;
 
