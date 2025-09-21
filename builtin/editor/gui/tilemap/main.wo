@@ -611,7 +611,7 @@ namespace editor::gui::tilemap
         m_focus_on_drawing_layer: mut bool,
         m_offset: mut(real, real), // 未经过缩放的原始偏移
         m_scale: mut real,
-        m_layerd_tiles: map<int, map<int, map<int, Tile>>>,
+        m_layerd_tiles: mut map<int, map<int, map<int, Tile>>>,
         
         m_show_grid: mut bool,
     }
@@ -628,7 +628,7 @@ namespace editor::gui::tilemap
                 m_focus_on_drawing_layer = mut true,
                 m_offset = mut(0., 0.),
                 m_scale = mut 1.,
-                m_layerd_tiles = {}mut,
+                m_layerd_tiles = mut {}mut,
                 
                 m_show_grid = mut true,
             };
@@ -662,6 +662,23 @@ namespace editor::gui::tilemap
                         jeapi::gui::form::errmsg("错误", F"无法保存TileSet到{tileset_path->to_string}: {msg}");
                 }
             }
+        }
+        
+        // 在当前绘制图层的上方插入一层(当前层后移)
+        func insert_layer_at_here(self: TileEditContext)
+        {
+            self.m_layerd_tiles =
+                self.m_layerd_tiles ->> \k, v = (k >= self.m_drawing_layer ? k + 1 | k, v);
+                    ;
+        }
+        
+        // 移除当前绘制图层（后续层前移）
+        func remove_this_layer(self: TileEditContext)
+        {
+            self.m_layerd_tiles =
+                self.m_layerd_tiles->forall(\k, _ = k != self.m_drawing_layer;)
+                    ->> \k, v = (k > self.m_drawing_layer ? k - 1 | k, v);
+                    ;
         }
         
         // 遍历项目的"resource/tilemap"目录下的所有文件，加载并创建TileMapSet实例，获得一个TileMapSet实例数组
@@ -1157,16 +1174,34 @@ namespace editor::gui::tilemap
                 
                 if (self.m_scale >= 1. && self.m_show_grid)
                 {
-                    for (let mut ix = 0.; ix < draww; ix += scaled_tile_size)
+                    for (let mut ix = 0; ix <= (draww / scaled_tile_size): int; ix += 1)
+                    {
+                        let x = ix: real * scaled_tile_size;
+                        
+                        let current_x_id = ix - (oldoffsetx / scaled_tile_size): int;
+                        
                         drawlist->AddLine(
-                            (lux + ix + oldoffsetx % scaled_tile_size, luy),
-                            (lux + ix + oldoffsetx % scaled_tile_size, p1[1]),
-                            (127, 127, 127, 127), 2.);
-                    for (let mut iy = 0.; iy < drawh; iy += scaled_tile_size)
+                            (lux + x + oldoffsetx % scaled_tile_size, luy),
+                            (lux + x + oldoffsetx % scaled_tile_size, p1[1]),
+                            current_x_id == 0
+                                ? (0, 255, 0, 127)
+                                | current_x_id % 16 == 0 ? (255, 255, 255, 127) | (127, 127, 127, 127),
+                            2.);
+                    }
+                    for (let mut iy = 0; iy <= (drawh / scaled_tile_size): int; iy += 1)
+                    {
+                        let y = iy: real * scaled_tile_size;
+                        
+                        let current_y_id = iy - (oldoffsety / scaled_tile_size): int;
+                        
                         drawlist->AddLine(
-                            (lux, luy + iy + oldoffsety % scaled_tile_size),
-                            (p1[0], luy + iy + oldoffsety % scaled_tile_size),
-                            (127, 127, 127, 127), 2.);
+                            (lux, luy + y + oldoffsety % scaled_tile_size),
+                            (p1[0], luy + y + oldoffsety % scaled_tile_size),
+                            current_y_id == 0
+                                ? (255, 0, 0, 127)
+                                | current_y_id % 16 == 0 ? (255, 255, 255, 127) | (127, 127, 127, 127),
+                            2.);
+                    }
                 }
                 
                 // 高亮鼠标所在的块儿
@@ -1179,9 +1214,9 @@ namespace editor::gui::tilemap
                     
                     let (mpblockx, mpblocky) = (
                         math::floor((mposx - lux - oldoffsetx) / scaled_tile_size): real,
-                        math::floor((mposy - luy - oldoffsety) / scaled_tile_size): real
-                        );
-                        
+                        math::floor((mposy - luy - oldoffsety) / scaled_tile_size): real,
+                    );
+                    
                     let mut highlight_alpha = 100;
                     
                     if (ctrl_down)
@@ -1725,7 +1760,11 @@ namespace editor::gui::tilemap
                                     if (MenuItem("导出"))
                                         create_image_dialog(editctx,
                                             fsys::parent(tilemap_file), fsys::purename(tilemap_file));
-                                            
+                                    if (MenuItem("插入一层"))
+                                        editctx->insert_layer_at_here();
+                                    if (MenuItem("删除当前层"))
+                                        editctx->remove_this_layer();
+                                        
                                     EndMenu();
                                 }
                                 if (BeginMenu("视图"))

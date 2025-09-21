@@ -80,24 +80,24 @@
 #define JE4_PLATFORM_MACOS 5
 
 #ifndef JE4_CURRENT_PLATFORM
-#if defined(_WIN32)
-#define JE4_CURRENT_PLATFORM JE4_PLATFORM_WINDOWS
-#elif defined(__ANDROID__)
-#define JE4_CURRENT_PLATFORM JE4_PLATFORM_ANDROID
-#elif defined(__linux__)
-#define JE4_CURRENT_PLATFORM JE4_PLATFORM_LINUX
-#elif defined(__APPLE__)
-#   include <TargetConditionals.h>
-#   if TARGET_OS_MAC
-#       define JE4_CURRENT_PLATFORM JE4_PLATFORM_MACOS
+#   if defined(_WIN32)
+#       define JE4_CURRENT_PLATFORM JE4_PLATFORM_WINDOWS
+#   elif defined(__ANDROID__)
+#       define JE4_CURRENT_PLATFORM JE4_PLATFORM_ANDROID
+#   elif defined(__linux__)
+#       define JE4_CURRENT_PLATFORM JE4_PLATFORM_LINUX
+#   elif defined(__APPLE__)
+#       include <TargetConditionals.h>
+#       if TARGET_OS_MAC
+#           define JE4_CURRENT_PLATFORM JE4_PLATFORM_MACOS
+#       else
+#           error Unsupported Apple platform.
+#       endif
+#   elif defined(__EMSCRIPTEN__)
+#       define JE4_CURRENT_PLATFORM JE4_PLATFORM_WEBGL
 #   else
-#       error Unsupported Apple platform.
+#       error Unsupported platform.
 #   endif
-#elif defined(__EMSCRIPTEN__)
-#define JE4_CURRENT_PLATFORM JE4_PLATFORM_WEBGL
-#else
-#error Unsupported platform.
-#endif
 #elif JE4_CURRENT_PLATFORM != JE4_PLATFORM_WINDOWS \
     && JE4_CURRENT_PLATFORM != JE4_PLATFORM_LINUX \
     && JE4_CURRENT_PLATFORM != JE4_PLATFORM_ANDROID \
