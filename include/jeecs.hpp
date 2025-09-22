@@ -3084,13 +3084,11 @@ typedef struct jegl_rchain_texture_group jegl_rchain_texture_group;
 
 /*
 jegl_rchain_allocate_texture_group [基本接口]
-创建纹理组，返回可通过jegl_rchain_draw作用于绘制操作或jegl_rchain_bind_pre_texture_group
-作用于全局的纹理组句柄
-可通过jegl_rchain_bind_texture向纹理组中提交纹理
+创建纹理组，返回可用于绘制操作的纹理组句柄
+可通过 jegl_rchain_bind_texture 向纹理组中提交纹理
 请参见：
     jegl_rchain_draw
     jegl_rchain_bind_texture
-    jegl_rchain_bind_pre_texture_group
 */
 JE_API jegl_rchain_texture_group* jegl_rchain_allocate_texture_group(
     jegl_rendchain* chain);
