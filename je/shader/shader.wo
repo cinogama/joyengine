@@ -533,7 +533,7 @@ namespace je::shader
                             [BuiltinFunc::Operate_Clamp] = "clamp",
                             [BuiltinFunc::Operate_Floor] = "floor",
                             [BuiltinFunc::Operate_Ceil] = "ceil",
-                            [BuiltinFunc::Operate_Fract] = "fract",
+                            [BuiltinFunc::Operate_Fract] = "frac",
                             [BuiltinFunc::Operate_Sqrt] = "sqrt",
                             [BuiltinFunc::Operate_Normalize] = "normalize",
                             [BuiltinFunc::Operate_Dot] = "dot",
