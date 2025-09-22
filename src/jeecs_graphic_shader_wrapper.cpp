@@ -124,8 +124,8 @@ void _jegl_create_shader_cache(jegl_resource* shader_resource, wo_integer_t virt
             jeecs_write_cache_file(&custom_uniform->m_uniform_type, sizeof(jegl_shader::uniform_type), 1, cachefile);
 
             // 4.1.3 write data
-            static_assert(sizeof(custom_uniform->m_value.mat4x4) == sizeof(float[4][4]));
-            jeecs_write_cache_file(&custom_uniform->m_value.mat4x4, sizeof(float[4][4]), 1, cachefile);
+            static_assert(sizeof(custom_uniform->m_value.m_float4x4) == sizeof(float[4][4]));
+            jeecs_write_cache_file(&custom_uniform->m_value.m_float4x4, sizeof(float[4][4]), 1, cachefile);
 
             custom_uniform = custom_uniform->m_next;
         }
@@ -649,7 +649,7 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_s
             variable->m_name = jeecs::basic::make_new_string(texture.m_name);
             variable->m_uniform_type = jegl_shader::uniform_type::TEXTURE;
             variable->m_index = jeecs::graphic::INVALID_UNIFORM_LOCATION;
-            variable->m_value.ix = texture.m_pass;
+            variable->m_value.m_int = texture.m_pass;
             variable->m_updated = true;
             *last = variable;
             last = &variable->m_next;
@@ -852,8 +852,8 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
         jeecs_file_read(&current_variable->m_uniform_type, sizeof(jegl_shader::uniform_type), 1, cache_file);
 
         // 4.1.3 read data
-        static_assert(sizeof(current_variable->m_value.mat4x4) == sizeof(float[4][4]));
-        jeecs_file_read(&current_variable->m_value.mat4x4, sizeof(float[4][4]), 1, cache_file);
+        static_assert(sizeof(current_variable->m_value.m_float4x4) == sizeof(float[4][4]));
+        jeecs_file_read(&current_variable->m_value.m_float4x4, sizeof(float[4][4]), 1, cache_file);
 
         current_variable->m_index = jeecs::graphic::INVALID_UNIFORM_LOCATION;
         current_variable->m_updated = false;
@@ -1173,58 +1173,58 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args)
         switch (uniform_variable.m_type)
         {
         case jegl_shader::uniform_type::INT:
-            uniform_variable.m_init_value.ix = (int)wo_int(tmp);
+            uniform_variable.m_init_value.m_int = (int)wo_int(tmp);
             break;
         case jegl_shader::uniform_type::INT2:
             wo_struct_get(tmp2, tmp, 0);
-            uniform_variable.m_init_value.ix = (int)wo_int(tmp2);
+            uniform_variable.m_init_value.m_int2[0] = (int)wo_int(tmp2);
             wo_struct_get(tmp2, tmp, 1);
-            uniform_variable.m_init_value.iy = (int)wo_int(tmp2);
+            uniform_variable.m_init_value.m_int2[1] = (int)wo_int(tmp2);
             break;
         case jegl_shader::uniform_type::INT3:
             wo_struct_get(tmp2, tmp, 0);
-            uniform_variable.m_init_value.ix = (int)wo_int(tmp2);
+            uniform_variable.m_init_value.m_int3[0] = (int)wo_int(tmp2);
             wo_struct_get(tmp2, tmp, 1);
-            uniform_variable.m_init_value.iy = (int)wo_int(tmp2);
+            uniform_variable.m_init_value.m_int3[1] = (int)wo_int(tmp2);
             wo_struct_get(tmp2, tmp, 2);
-            uniform_variable.m_init_value.iz = (int)wo_int(tmp2);
+            uniform_variable.m_init_value.m_int3[2] = (int)wo_int(tmp2);
             break;
         case jegl_shader::uniform_type::INT4:
             wo_struct_get(tmp2, tmp, 0);
-            uniform_variable.m_init_value.ix = (int)wo_int(tmp2);
+            uniform_variable.m_init_value.m_int4[0] = (int)wo_int(tmp2);
             wo_struct_get(tmp2, tmp, 1);
-            uniform_variable.m_init_value.iy = (int)wo_int(tmp2);
+            uniform_variable.m_init_value.m_int4[1] = (int)wo_int(tmp2);
             wo_struct_get(tmp2, tmp, 2);
-            uniform_variable.m_init_value.iz = (int)wo_int(tmp2);
+            uniform_variable.m_init_value.m_int4[2] = (int)wo_int(tmp2);
             wo_struct_get(tmp2, tmp, 3);
-            uniform_variable.m_init_value.iw = (int)wo_int(tmp2);
+            uniform_variable.m_init_value.m_int4[3] = (int)wo_int(tmp2);
             break;
         case jegl_shader::uniform_type::FLOAT:
-            uniform_variable.m_init_value.x = wo_float(tmp);
+            uniform_variable.m_init_value.m_float = wo_float(tmp);
             break;
         case jegl_shader::uniform_type::FLOAT2:
             wo_struct_get(tmp2, tmp, 0);
-            uniform_variable.m_init_value.x = wo_float(tmp2);
+            uniform_variable.m_init_value.m_float2[0] = wo_float(tmp2);
             wo_struct_get(tmp2, tmp, 1);
-            uniform_variable.m_init_value.y = wo_float(tmp2);
+            uniform_variable.m_init_value.m_float2[1] = wo_float(tmp2);
             break;
         case jegl_shader::uniform_type::FLOAT3:
             wo_struct_get(tmp2, tmp, 0);
-            uniform_variable.m_init_value.x = wo_float(tmp2);
+            uniform_variable.m_init_value.m_float3[0] = wo_float(tmp2);
             wo_struct_get(tmp2, tmp, 1);
-            uniform_variable.m_init_value.y = wo_float(tmp2);
+            uniform_variable.m_init_value.m_float3[1] = wo_float(tmp2);
             wo_struct_get(tmp2, tmp, 2);
-            uniform_variable.m_init_value.z = wo_float(tmp2);
+            uniform_variable.m_init_value.m_float3[2] = wo_float(tmp2);
             break;
         case jegl_shader::uniform_type::FLOAT4:
             wo_struct_get(tmp2, tmp, 0);
-            uniform_variable.m_init_value.x = wo_float(tmp2);
+            uniform_variable.m_init_value.m_float4[0] = wo_float(tmp2);
             wo_struct_get(tmp2, tmp, 1);
-            uniform_variable.m_init_value.y = wo_float(tmp2);
+            uniform_variable.m_init_value.m_float4[1] = wo_float(tmp2);
             wo_struct_get(tmp2, tmp, 2);
-            uniform_variable.m_init_value.z = wo_float(tmp2);
+            uniform_variable.m_init_value.m_float4[2] = wo_float(tmp2);
             wo_struct_get(tmp2, tmp, 3);
-            uniform_variable.m_init_value.w = wo_float(tmp2);
+            uniform_variable.m_init_value.m_float4[3] = wo_float(tmp2);
             break;
         case jegl_shader::uniform_type::FLOAT2X2:
             for (size_t x = 0; x < 2; ++x)
@@ -1233,7 +1233,7 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args)
                 for (size_t y = 0; y < 2; ++y)
                 {
                     wo_struct_get(tmp3, tmp2, y);
-                    uniform_variable.m_init_value.mat2x2[x][y] = wo_float(tmp3);
+                    uniform_variable.m_init_value.m_float2x2[x][y] = wo_float(tmp3);
                 }
             }
             break;
@@ -1244,7 +1244,7 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args)
                 for (size_t y = 0; y < 3; ++y)
                 {
                     wo_struct_get(tmp3, tmp2, y);
-                    uniform_variable.m_init_value.mat3x3[x][y] = wo_float(tmp3);
+                    uniform_variable.m_init_value.m_float3x3[x][y] = wo_float(tmp3);
                 }
             }
             break;
@@ -1255,7 +1255,7 @@ WO_API wo_api jeecs_shader_wrap_result_pack(wo_vm vm, wo_value args)
                 for (size_t y = 0; y < 4; ++y)
                 {
                     wo_struct_get(tmp3, tmp2, y);
-                    uniform_variable.m_init_value.mat4x4[x][y] = wo_float(tmp3);
+                    uniform_variable.m_init_value.m_float4x4[x][y] = wo_float(tmp3);
                 }
             }
             break;

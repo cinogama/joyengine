@@ -1831,63 +1831,63 @@ WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args)
         {
         case jegl_shader::uniform_type::INT:
         case jegl_shader::uniform_type::TEXTURE:
-            wo_set_int(elem, uniforms->m_value.ix);
+            wo_set_int(elem, uniforms->m_value.m_int);
             break;
         case jegl_shader::uniform_type::INT2:
             wo_set_struct(elem, vm, 2);
-            wo_set_int(key, uniforms->m_value.ix);
+            wo_set_int(key, uniforms->m_value.m_int2[0]);
             wo_struct_set(elem, 0, key);
-            wo_set_int(key, uniforms->m_value.iy);
+            wo_set_int(key, uniforms->m_value.m_int2[1]);
             wo_struct_set(elem, 1, key);
             break;
         case jegl_shader::uniform_type::INT3:
             wo_set_struct(elem, vm, 3);
-            wo_set_int(key, uniforms->m_value.ix);
+            wo_set_int(key, uniforms->m_value.m_int3[0]);
             wo_struct_set(elem, 0, key);
-            wo_set_int(key, uniforms->m_value.iy);
+            wo_set_int(key, uniforms->m_value.m_int3[1]);
             wo_struct_set(elem, 1, key);
-            wo_set_int(key, uniforms->m_value.iz);
+            wo_set_int(key, uniforms->m_value.m_int3[2]);
             wo_struct_set(elem, 2, key);
             break;
         case jegl_shader::uniform_type::INT4:
             wo_set_struct(elem, vm, 4);
-            wo_set_int(key, uniforms->m_value.ix);
+            wo_set_int(key, uniforms->m_value.m_int4[0]);
             wo_struct_set(elem, 0, key);
-            wo_set_int(key, uniforms->m_value.iy);
+            wo_set_int(key, uniforms->m_value.m_int4[1]);
             wo_struct_set(elem, 1, key);
-            wo_set_int(key, uniforms->m_value.iz);
+            wo_set_int(key, uniforms->m_value.m_int4[2]);
             wo_struct_set(elem, 2, key);
-            wo_set_int(key, uniforms->m_value.iw);
+            wo_set_int(key, uniforms->m_value.m_int4[3]);
             wo_struct_set(elem, 3, key);
             break;
         case jegl_shader::uniform_type::FLOAT:
-            wo_set_float(elem, uniforms->m_value.x);
+            wo_set_float(elem, uniforms->m_value.m_float);
             break;
         case jegl_shader::uniform_type::FLOAT2:
             wo_set_struct(elem, vm, 2);
-            wo_set_float(key, uniforms->m_value.x);
+            wo_set_float(key, uniforms->m_value.m_float2[0]);
             wo_struct_set(elem, 0, key);
-            wo_set_float(key, uniforms->m_value.y);
+            wo_set_float(key, uniforms->m_value.m_float2[1]);
             wo_struct_set(elem, 1, key);
             break;
         case jegl_shader::uniform_type::FLOAT3:
             wo_set_struct(elem, vm, 3);
-            wo_set_float(key, uniforms->m_value.x);
+            wo_set_float(key, uniforms->m_value.m_float3[0]);
             wo_struct_set(elem, 0, key);
-            wo_set_float(key, uniforms->m_value.y);
+            wo_set_float(key, uniforms->m_value.m_float3[1]);
             wo_struct_set(elem, 1, key);
-            wo_set_float(key, uniforms->m_value.z);
+            wo_set_float(key, uniforms->m_value.m_float3[2]);
             wo_struct_set(elem, 2, key);
             break;
         case jegl_shader::uniform_type::FLOAT4:
             wo_set_struct(elem, vm, 4);
-            wo_set_float(key, uniforms->m_value.x);
+            wo_set_float(key, uniforms->m_value.m_float4[0]);
             wo_struct_set(elem, 0, key);
-            wo_set_float(key, uniforms->m_value.y);
+            wo_set_float(key, uniforms->m_value.m_float4[1]);
             wo_struct_set(elem, 1, key);
-            wo_set_float(key, uniforms->m_value.z);
+            wo_set_float(key, uniforms->m_value.m_float4[2]);
             wo_struct_set(elem, 2, key);
-            wo_set_float(key, uniforms->m_value.w);
+            wo_set_float(key, uniforms->m_value.m_float4[3]);
             wo_struct_set(elem, 3, key);
             break;
         default:

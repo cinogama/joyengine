@@ -1320,7 +1320,7 @@ public let frag =
     do                                                                                                       \
     {                                                                                                        \
         if (UNIFORM->m_builtin_uniform_##ITEM != graphic::INVALID_UNIFORM_LOCATION)                                     \
-            jegl_rchain_set_builtin_uniform_##TYPE(ACTION, &UNIFORM->m_builtin_uniform_##ITEM, __VA_ARGS__); \
+            jegl_rchain_set_uniform_##TYPE(ACTION, &UNIFORM->m_builtin_uniform_##ITEM, __VA_ARGS__); \
     } while (0)
 
             auto easy_draw_impl = [&](
@@ -1443,11 +1443,11 @@ public let frag =
 
                         if (draw_action != nullptr)
                         {
-                            auto* location_addr =
+                            const auto* location_addr =
                                 _gizmo_resources.m_gizmo_camera_visual_cone_shader->
-                                get_uniform_location_as_builtin("InverseCameraProjection");
+                                get_uniform_location("InverseCameraProjection");
 
-                            jegl_rchain_set_builtin_uniform_float4x4(
+                            jegl_rchain_set_uniform_float4x4(
                                 draw_action,
                                 location_addr,
                                 proj.inv_projection);
@@ -1768,7 +1768,7 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_int(wo_vm vm, wo_value args)
     auto& bad_uniform_var = bad_shader->m_vars[wo_string(args + 1)];
 
     bad_uniform_var.m_uniform_type = jegl_shader::uniform_type::INT;
-    bad_uniform_var.m_value.ix = (int)wo_int(args + 2);
+    bad_uniform_var.m_value.m_int = (int)wo_int(args + 2);
 
     return wo_ret_void(vm);
 }
@@ -1778,8 +1778,8 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_int2(wo_vm vm, wo_value args)
     auto& bad_uniform_var = bad_shader->m_vars[wo_string(args + 1)];
 
     bad_uniform_var.m_uniform_type = jegl_shader::uniform_type::INT2;
-    bad_uniform_var.m_value.ix = (int)wo_int(args + 2);
-    bad_uniform_var.m_value.iy = (int)wo_int(args + 3);
+    bad_uniform_var.m_value.m_int2[0] = (int)wo_int(args + 2);
+    bad_uniform_var.m_value.m_int2[1] = (int)wo_int(args + 3);
 
     return wo_ret_void(vm);
 }
@@ -1789,9 +1789,9 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_int3(wo_vm vm, wo_value args)
     auto& bad_uniform_var = bad_shader->m_vars[wo_string(args + 1)];
 
     bad_uniform_var.m_uniform_type = jegl_shader::uniform_type::INT3;
-    bad_uniform_var.m_value.ix = (int)wo_int(args + 2);
-    bad_uniform_var.m_value.iy = (int)wo_int(args + 3);
-    bad_uniform_var.m_value.iz = (int)wo_int(args + 4);
+    bad_uniform_var.m_value.m_int3[0] = (int)wo_int(args + 2);
+    bad_uniform_var.m_value.m_int3[1] = (int)wo_int(args + 3);
+    bad_uniform_var.m_value.m_int3[2] = (int)wo_int(args + 4);
 
     return wo_ret_void(vm);
 }
@@ -1801,10 +1801,10 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_int4(wo_vm vm, wo_value args)
     auto& bad_uniform_var = bad_shader->m_vars[wo_string(args + 1)];
 
     bad_uniform_var.m_uniform_type = jegl_shader::uniform_type::INT4;
-    bad_uniform_var.m_value.ix = (int)wo_int(args + 2);
-    bad_uniform_var.m_value.iy = (int)wo_int(args + 3);
-    bad_uniform_var.m_value.iz = (int)wo_int(args + 4);
-    bad_uniform_var.m_value.iw = (int)wo_int(args + 5);
+    bad_uniform_var.m_value.m_int4[0] = (int)wo_int(args + 2);
+    bad_uniform_var.m_value.m_int4[1] = (int)wo_int(args + 3);
+    bad_uniform_var.m_value.m_int4[2] = (int)wo_int(args + 4);
+    bad_uniform_var.m_value.m_int4[3] = (int)wo_int(args + 5);
 
     return wo_ret_void(vm);
 }
@@ -1814,7 +1814,7 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_float(wo_vm vm, wo_value args)
     auto& bad_uniform_var = bad_shader->m_vars[wo_string(args + 1)];
 
     bad_uniform_var.m_uniform_type = jegl_shader::uniform_type::FLOAT;
-    bad_uniform_var.m_value.x = wo_float(args + 2);
+    bad_uniform_var.m_value.m_float = wo_float(args + 2);
 
     return wo_ret_void(vm);
 }
@@ -1824,8 +1824,8 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_float2(wo_vm vm, wo_value args)
     auto& bad_uniform_var = bad_shader->m_vars[wo_string(args + 1)];
 
     bad_uniform_var.m_uniform_type = jegl_shader::uniform_type::FLOAT2;
-    bad_uniform_var.m_value.x = wo_float(args + 2);
-    bad_uniform_var.m_value.y = wo_float(args + 3);
+    bad_uniform_var.m_value.m_float2[0] = wo_float(args + 2);
+    bad_uniform_var.m_value.m_float2[1] = wo_float(args + 3);
 
     return wo_ret_void(vm);
 }
@@ -1835,9 +1835,9 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_float3(wo_vm vm, wo_value args)
     auto& bad_uniform_var = bad_shader->m_vars[wo_string(args + 1)];
 
     bad_uniform_var.m_uniform_type = jegl_shader::uniform_type::FLOAT3;
-    bad_uniform_var.m_value.x = wo_float(args + 2);
-    bad_uniform_var.m_value.y = wo_float(args + 3);
-    bad_uniform_var.m_value.z = wo_float(args + 4);
+    bad_uniform_var.m_value.m_float3[0] = wo_float(args + 2);
+    bad_uniform_var.m_value.m_float3[1] = wo_float(args + 3);
+    bad_uniform_var.m_value.m_float3[2] = wo_float(args + 4);
 
     return wo_ret_void(vm);
 }
@@ -1847,10 +1847,10 @@ WO_API wo_api wojeapi_store_bad_shader_uniforms_float4(wo_vm vm, wo_value args)
     auto& bad_uniform_var = bad_shader->m_vars[wo_string(args + 1)];
 
     bad_uniform_var.m_uniform_type = jegl_shader::uniform_type::FLOAT4;
-    bad_uniform_var.m_value.x = wo_float(args + 2);
-    bad_uniform_var.m_value.y = wo_float(args + 3);
-    bad_uniform_var.m_value.z = wo_float(args + 4);
-    bad_uniform_var.m_value.w = wo_float(args + 5);
+    bad_uniform_var.m_value.m_float4[0] = wo_float(args + 2);
+    bad_uniform_var.m_value.m_float4[1] = wo_float(args + 3);
+    bad_uniform_var.m_value.m_float4[2] = wo_float(args + 4);
+    bad_uniform_var.m_value.m_float4[3] = wo_float(args + 5);
 
     return wo_ret_void(vm);
 }
@@ -1863,31 +1863,59 @@ inline void update_shader(
     switch (uni_var->m_uniform_type)
     {
     case jegl_shader::uniform_type::INT:
-        new_shad->set_uniform(uname, uni_var->m_value.ix);
+        new_shad->set_uniform(
+            uname,
+            uni_var->m_value.m_int);
         break;
     case jegl_shader::uniform_type::INT2:
-        new_shad->set_uniform(uname, uni_var->m_value.ix, uni_var->m_value.iy);
+        new_shad->set_uniform(
+            uname,
+            uni_var->m_value.m_int2[0], 
+            uni_var->m_value.m_int2[1]);
         break;
     case jegl_shader::uniform_type::INT3:
-        new_shad->set_uniform(uname, uni_var->m_value.ix, uni_var->m_value.iy, uni_var->m_value.iz);
+        new_shad->set_uniform(
+            uname, 
+            uni_var->m_value.m_int3[0], 
+            uni_var->m_value.m_int3[1], 
+            uni_var->m_value.m_int3[2]);
         break;
     case jegl_shader::uniform_type::INT4:
-        new_shad->set_uniform(uname, uni_var->m_value.ix, uni_var->m_value.iy, uni_var->m_value.iz, uni_var->m_value.iw);
+        new_shad->set_uniform(
+            uname, 
+            uni_var->m_value.m_int4[0], 
+            uni_var->m_value.m_int4[1],
+            uni_var->m_value.m_int4[2], 
+            uni_var->m_value.m_int4[3]);
         break;
     case jegl_shader::uniform_type::FLOAT:
-        new_shad->set_uniform(uname, uni_var->m_value.x);
+        new_shad->set_uniform(
+            uname, 
+            uni_var->m_value.m_float);
         break;
     case jegl_shader::uniform_type::FLOAT2:
-        new_shad->set_uniform(uname,
-            jeecs::math::vec2(uni_var->m_value.x, uni_var->m_value.y));
+        new_shad->set_uniform(
+            uname, 
+            jeecs::math::vec2(
+                uni_var->m_value.m_float2[0],
+                uni_var->m_value.m_float2[1]));
         break;
     case jegl_shader::uniform_type::FLOAT3:
-        new_shad->set_uniform(uname,
-            jeecs::math::vec3(uni_var->m_value.x, uni_var->m_value.y, uni_var->m_value.z));
+        new_shad->set_uniform(
+            uname,
+            jeecs::math::vec3(
+                uni_var->m_value.m_float3[0],
+                uni_var->m_value.m_float3[1],
+                uni_var->m_value.m_float3[2]));
         break;
     case jegl_shader::uniform_type::FLOAT4:
-        new_shad->set_uniform(uname,
-            jeecs::math::vec4(uni_var->m_value.x, uni_var->m_value.y, uni_var->m_value.z, uni_var->m_value.w));
+        new_shad->set_uniform(
+            uname,
+            jeecs::math::vec4(
+                uni_var->m_value.m_float4[0], 
+                uni_var->m_value.m_float4[1], 
+                uni_var->m_value.m_float4[2], 
+                uni_var->m_value.m_float4[3]));
         break;
     default:
         break; // donothing
@@ -2011,57 +2039,57 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
                         case jegl_shader::uniform_type::INT:
                             new_shader_instance->set_uniform(
                                 uniform_var->m_name,
-                                uniform_var->m_value.ix);
+                                uniform_var->m_value.m_int);
                             break;
                         case jegl_shader::uniform_type::INT2:
                             new_shader_instance->set_uniform(
                                 uniform_var->m_name,
-                                uniform_var->m_value.ix,
-                                uniform_var->m_value.iy);
+                                uniform_var->m_value.m_int2[0],
+                                uniform_var->m_value.m_int2[1]);
                             break;
                         case jegl_shader::uniform_type::INT3:
                             new_shader_instance->set_uniform(
                                 uniform_var->m_name,
-                                uniform_var->m_value.ix,
-                                uniform_var->m_value.iy,
-                                uniform_var->m_value.iz);
+                                uniform_var->m_value.m_int3[0],
+                                uniform_var->m_value.m_int3[1],
+                                uniform_var->m_value.m_int3[2]);
                             break;
                         case jegl_shader::uniform_type::INT4:
                             new_shader_instance->set_uniform(
                                 uniform_var->m_name,
-                                uniform_var->m_value.ix,
-                                uniform_var->m_value.iy,
-                                uniform_var->m_value.iz,
-                                uniform_var->m_value.iw);
+                                uniform_var->m_value.m_int4[0],
+                                uniform_var->m_value.m_int4[1],
+                                uniform_var->m_value.m_int4[2],
+                                uniform_var->m_value.m_int4[3]);
                             break;
                         case jegl_shader::uniform_type::FLOAT:
                             new_shader_instance->set_uniform(
                                 uniform_var->m_name,
-                                uniform_var->m_value.x);
+                                uniform_var->m_value.m_float);
                             break;
                         case jegl_shader::uniform_type::FLOAT2:
                             new_shader_instance->set_uniform(
                                 uniform_var->m_name,
                                 jeecs::math::vec2(
-                                    uniform_var->m_value.x,
-                                    uniform_var->m_value.y));
+                                    uniform_var->m_value.m_float2[0],
+                                    uniform_var->m_value.m_float2[1]));
                             break;
                         case jegl_shader::uniform_type::FLOAT3:
                             new_shader_instance->set_uniform(
                                 uniform_var->m_name,
                                 jeecs::math::vec3(
-                                    uniform_var->m_value.x,
-                                    uniform_var->m_value.y,
-                                    uniform_var->m_value.z));
+                                    uniform_var->m_value.m_float3[0],
+                                    uniform_var->m_value.m_float3[1],
+                                    uniform_var->m_value.m_float3[2]));
                             break;
                         case jegl_shader::uniform_type::FLOAT4:
                             new_shader_instance->set_uniform(
                                 uniform_var->m_name,
                                 jeecs::math::vec4(
-                                    uniform_var->m_value.x,
-                                    uniform_var->m_value.y,
-                                    uniform_var->m_value.z,
-                                    uniform_var->m_value.w));
+                                    uniform_var->m_value.m_float4[0],
+                                    uniform_var->m_value.m_float4[1],
+                                    uniform_var->m_value.m_float4[2],
+                                    uniform_var->m_value.m_float4[3]));
                             break;
                         default:
                             // Just skip it.
@@ -2080,28 +2108,36 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
                         switch (var.m_uniform_type)
                         {
                         case jegl_shader::uniform_type::INT:
-                            new_shader_instance->set_uniform(name, var.m_value.ix);
+                            new_shader_instance->set_uniform(
+                                name, var.m_value.m_int);
                             break;
                         case jegl_shader::uniform_type::INT2:
-                            new_shader_instance->set_uniform(name, var.m_value.ix, var.m_value.iy);
+                            new_shader_instance->set_uniform(
+                                name, var.m_value.m_int2[0], var.m_value.m_int2[1]);
                             break;
                         case jegl_shader::uniform_type::INT3:
-                            new_shader_instance->set_uniform(name, var.m_value.ix, var.m_value.iy, var.m_value.iz);
+                            new_shader_instance->set_uniform(
+                                name, var.m_value.m_int3[0], var.m_value.m_int3[1], var.m_value.m_int3[2]);
                             break;
                         case jegl_shader::uniform_type::INT4:
-                            new_shader_instance->set_uniform(name, var.m_value.ix, var.m_value.iy, var.m_value.iz, var.m_value.iw);
+                            new_shader_instance->set_uniform(
+                                name, var.m_value.m_int4[0], var.m_value.m_int4[1], var.m_value.m_int4[2], var.m_value.m_int4[3]);
                             break;
                         case jegl_shader::uniform_type::FLOAT:
-                            new_shader_instance->set_uniform(name, var.m_value.x);
+                            new_shader_instance->set_uniform(
+                                name, var.m_value.m_float);
                             break;
                         case jegl_shader::uniform_type::FLOAT2:
-                            new_shader_instance->set_uniform(name, jeecs::math::vec2(var.m_value.x, var.m_value.y));
+                            new_shader_instance->set_uniform(
+                                name, jeecs::math::vec2(var.m_value.m_float2[0], var.m_value.m_float2[1]));
                             break;
                         case jegl_shader::uniform_type::FLOAT3:
-                            new_shader_instance->set_uniform(name, jeecs::math::vec3(var.m_value.x, var.m_value.y, var.m_value.z));
+                            new_shader_instance->set_uniform(
+                                name, jeecs::math::vec3(var.m_value.m_float3[0], var.m_value.m_float3[1], var.m_value.m_float3[2]));
                             break;
                         case jegl_shader::uniform_type::FLOAT4:
-                            new_shader_instance->set_uniform(name, jeecs::math::vec4(var.m_value.x, var.m_value.y, var.m_value.z, var.m_value.w));
+                            new_shader_instance->set_uniform(
+                                name, jeecs::math::vec4(var.m_value.m_float4[0], var.m_value.m_float4[1], var.m_value.m_float4[2], var.m_value.m_float4[3]));
                             break;
                         default:
                             // Just skip it.

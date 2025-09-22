@@ -2050,18 +2050,29 @@ struct jegl_shader
         bool m_updated;
         union value
         {
-            struct
-            {
-                float x, y, z, w;
-            };
-            struct
-            {
-                int ix, iy, iz, iw;
-            };
-            float mat2x2[2][2];
-            float mat3x3[3][3];
-            float mat4x4[4][4];
+            int m_int;
+            int m_int2[2];
+            int m_int3[3];
+            int m_int4[4];
+            float m_float;
+            float m_float2[2];
+            float m_float3[3];
+            float m_float4[4];
+            float m_float2x2[2][2];
+            float m_float3x3[3][3];
+            float m_float4x4[4][4];
         };
+        static_assert(0 == offsetof(value, m_int));
+        static_assert(0 == offsetof(value, m_int2));
+        static_assert(0 == offsetof(value, m_int3));
+        static_assert(0 == offsetof(value, m_int4));
+        static_assert(0 == offsetof(value, m_float));
+        static_assert(0 == offsetof(value, m_float2));
+        static_assert(0 == offsetof(value, m_float3));
+        static_assert(0 == offsetof(value, m_float4));
+        static_assert(0 == offsetof(value, m_float2x2));
+        static_assert(0 == offsetof(value, m_float3x3));
+        static_assert(0 == offsetof(value, m_float4x4));
 
         unifrom_variables* m_next;
         value m_value;
@@ -2974,118 +2985,14 @@ JE_API void jegl_rend_to_framebuffer(
     const jegl_frame_buffer_clear_operation* clear_operations);
 
 /*
-jegl_uniform_int [基本接口]
-向当前绑定着色器的指定位置的一致变量设置一个整型数值
-    * 必须使用 jegl_bind_shader 在当前帧内事先绑定一个着色器
-    * 此函数只允许在图形线程内调用
-请参见：
-    jegl_bind_shader
-*/
-JE_API void jegl_uniform_int(uint32_t location, int value);
-
-/*
-jegl_uniform_int2 [基本接口]
-向当前绑定着色器的指定位置的一致变量设置一个二维整型矢量数值
-    * 必须使用 jegl_bind_shader 在当前帧内事先绑定一个着色器
-    * 此函数只允许在图形线程内调用
-*/
-JE_API void jegl_uniform_int2(uint32_t location, int x, int y);
-
-/*
-jegl_uniform_int3 [基本接口]
-向当前绑定着色器的指定位置的一致变量设置一个三维整型矢量数值
-    * 必须使用 jegl_bind_shader 在当前帧内事先绑定一个着色器
-    * 此函数只允许在图形线程内调用
-*/
-JE_API void jegl_uniform_int3(uint32_t location, int x, int y, int z);
-
-/*
-jegl_uniform_int4 [基本接口]
-向当前绑定着色器的指定位置的一致变量设置一个四维整型矢量数值
-    * 必须使用 jegl_bind_shader 在当前帧内事先绑定一个着色器
-    * 此函数只允许在图形线程内调用
-*/
-JE_API void jegl_uniform_int4(uint32_t location, int x, int y, int z, int w);
-
-/*
-jegl_uniform_float [基本接口]
-向当前绑定着色器的指定位置的一致变量设置一个单精度浮点数值
-    * 必须使用 jegl_bind_shader 在当前帧内事先绑定一个着色器
-    * 此函数只允许在图形线程内调用
-请参见：
-    jegl_bind_shader
-*/
-JE_API void jegl_uniform_float(uint32_t location, float value);
-
-/*
-jegl_uniform_float2 [基本接口]
-向当前绑定着色器的指定位置的一致变量设置一个二维单精度浮点矢量数值
-    * 必须使用 jegl_bind_shader 在当前帧内事先绑定一个着色器
-    * 此函数只允许在图形线程内调用
-请参见：
-    jegl_bind_shader
-*/
-JE_API void jegl_uniform_float2(uint32_t location, float x, float y);
-
-/*
-jegl_uniform_float3 [基本接口]
-向当前绑定着色器的指定位置的一致变量设置一个三维单精度浮点矢量数值
-    * 必须使用 jegl_bind_shader 在当前帧内事先绑定一个着色器
-    * 此函数只允许在图形线程内调用
-请参见：
-    jegl_bind_shader
-*/
-JE_API void jegl_uniform_float3(uint32_t location, float x, float y, float z);
-
-/*
-jegl_uniform_float4 [基本接口]
-向当前绑定着色器的指定位置的一致变量设置一个四维单精度浮点矢量数值
-    * 必须使用 jegl_bind_shader 在当前帧内事先绑定一个着色器
-    * 此函数只允许在图形线程内调用
-请参见：
-    jegl_bind_shader
-*/
-JE_API void jegl_uniform_float4(uint32_t location, float x, float y, float z, float w);
-
-/*
-jegl_uniform_float2x2 [基本接口]
-向当前绑定着色器的指定位置的一致变量设置一个2x2单精度浮点矩阵数值
-    * 必须使用 jegl_bind_shader 在当前帧内事先绑定一个着色器
-    * 此函数只允许在图形线程内调用
-请参见：
-    jegl_bind_shader
-*/
-JE_API void jegl_uniform_float2x2(uint32_t location, const float (*mat)[2]);
-
-/*
-jegl_uniform_float3x3 [基本接口]
-向当前绑定着色器的指定位置的一致变量设置一个3x3单精度浮点矩阵数值
-    * 必须使用 jegl_bind_shader 在当前帧内事先绑定一个着色器
-    * 此函数只允许在图形线程内调用
-请参见：
-    jegl_bind_shader
-*/
-JE_API void jegl_uniform_float3x3(uint32_t location, const float (*mat)[3]);
-
-/*
-jegl_uniform_float4x4 [基本接口]
-向当前绑定着色器的指定位置的一致变量设置一个4x4单精度浮点矩阵数值
-    * 必须使用 jegl_bind_shader 在当前帧内事先绑定一个着色器
-    * 此函数只允许在图形线程内调用
-请参见：
-    jegl_bind_shader
-*/
-JE_API void jegl_uniform_float4x4(uint32_t location, const float (*mat)[4]);
-
-/*
-jegl_uniform_value [基本接口]
+jegl_set_uniform_value [基本接口]
 向当前绑定着色器的指定位置的一致变量设置一个指定类型的数值
     * 必须使用 jegl_bind_shader 在当前帧内事先绑定一个着色器
     * 此函数只允许在图形线程内调用
     * type 指定 data 指向的数据的类型，data 指向的数据必须至少包含 type 所指定的类型所需的字节数
     * 请确保 type 和 data 指向的数据类型一致，否则结果未定义
 */
-JE_API void jegl_uniform_value(
+JE_API void jegl_set_uniform_value(
     uint32_t location, jegl_shader::uniform_type type, const void* data);
 
 // jegl rendchain api
@@ -3218,46 +3125,46 @@ jegl_rchain_set_uniform_int [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_int(
     jegl_rendchain_rend_action* act,
-    uint32_t binding_place,
+    const uint32_t* binding_place_may_null,
     int val);
 
 /*
 jegl_rchain_set_uniform_int2 [基本接口]
-为 act 指定的绘制操作应用二维整型矢量一致变量
+为 act 指定的绘制操作应用二维整型一致变量
 请参见：
     jegl_rendchain_rend_action
 */
 JE_API void jegl_rchain_set_uniform_int2(
     jegl_rendchain_rend_action* act,
-    uint32_t binding_place,
-    int x,
+    const uint32_t* binding_place_may_null,
+    int x, 
     int y);
 
 /*
 jegl_rchain_set_uniform_int3 [基本接口]
-为 act 指定的绘制操作应用三维整型矢量一致变量
+为 act 指定的绘制操作应用三维整型一致变量
 请参见：
     jegl_rendchain_rend_action
 */
 JE_API void jegl_rchain_set_uniform_int3(
     jegl_rendchain_rend_action* act,
-    uint32_t binding_place,
-    int x,
+    const uint32_t* binding_place_may_null,
+    int x, 
     int y,
     int z);
 
 /*
 jegl_rchain_set_uniform_int4 [基本接口]
-为 act 指定的绘制操作应用四维整型矢量一致变量
+为 act 指定的绘制操作应用四维整型一致变量
 请参见：
     jegl_rendchain_rend_action
 */
 JE_API void jegl_rchain_set_uniform_int4(
     jegl_rendchain_rend_action* act,
-    uint32_t binding_place,
+    const uint32_t* binding_place_may_null,
     int x,
-    int y,
-    int z,
+    int y, 
+    int z, 
     int w);
 
 /*
@@ -3268,7 +3175,7 @@ jegl_rchain_set_uniform_float [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_float(
     jegl_rendchain_rend_action* act,
-    uint32_t binding_place,
+    const uint32_t* binding_place_may_null,
     float val);
 
 /*
@@ -3279,7 +3186,7 @@ jegl_rchain_set_uniform_float2 [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_float2(
     jegl_rendchain_rend_action* act,
-    uint32_t binding_place,
+    const uint32_t* binding_place_may_null,
     float x,
     float y);
 
@@ -3291,7 +3198,7 @@ jegl_rchain_set_uniform_float3 [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_float3(
     jegl_rendchain_rend_action* act,
-    uint32_t binding_place,
+    const uint32_t* binding_place_may_null,
     float x,
     float y,
     float z);
@@ -3304,7 +3211,7 @@ jegl_rchain_set_uniform_float4 [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_float4(
     jegl_rendchain_rend_action* act,
-    uint32_t binding_place,
+    const uint32_t* binding_place_may_null,
     float x,
     float y,
     float z,
@@ -3318,7 +3225,7 @@ jegl_rchain_set_uniform_float2x2 [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_float2x2(
     jegl_rendchain_rend_action* act,
-    uint32_t binding_place,
+    const uint32_t* binding_place_may_null,
     const float (*mat)[2]);
 
 /*
@@ -3329,7 +3236,7 @@ jegl_rchain_set_uniform_float3x3 [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_float3x3(
     jegl_rendchain_rend_action* act,
-    uint32_t binding_place,
+    const uint32_t* binding_place_may_null,
     const float (*mat)[3]);
 
 /*
@@ -3340,134 +3247,7 @@ jegl_rchain_set_uniform_float4x4 [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_float4x4(
     jegl_rendchain_rend_action* act,
-    uint32_t binding_place,
-    const float (*mat)[4]);
-
-/*
-jegl_rchain_set_builtin_uniform_int [基本接口]
-为 act 指定的绘制操作应用整型一致变量
-请参见：
-    jegl_rendchain_rend_action
-*/
-JE_API void jegl_rchain_set_builtin_uniform_int(
-    jegl_rendchain_rend_action* act,
-    uint32_t* binding_place,
-    int val);
-
-/*
-jegl_rchain_set_builtin_uniform_int2 [基本接口]
-为 act 指定的绘制操作应用二维整型一致变量
-请参见：
-    jegl_rendchain_rend_action
-*/
-JE_API void jegl_rchain_set_builtin_uniform_int2(
-    jegl_rendchain_rend_action* act,
-    uint32_t* binding_place,
-    int x, int y);
-
-/*
-jegl_rchain_set_builtin_uniform_int3 [基本接口]
-为 act 指定的绘制操作应用三维整型一致变量
-请参见：
-    jegl_rendchain_rend_action
-*/
-JE_API void jegl_rchain_set_builtin_uniform_int3(
-    jegl_rendchain_rend_action* act,
-    uint32_t* binding_place,
-    int x, int y, int z);
-
-/*
-jegl_rchain_set_builtin_uniform_int4 [基本接口]
-为 act 指定的绘制操作应用四维整型一致变量
-请参见：
-    jegl_rendchain_rend_action
-*/
-JE_API void jegl_rchain_set_builtin_uniform_int4(
-    jegl_rendchain_rend_action* act,
-    uint32_t* binding_place,
-    int x, int y, int z, int w);
-
-/*
-jegl_rchain_set_builtin_uniform_float [基本接口]
-为 act 指定的绘制操作应用单精度浮点数一致变量
-请参见：
-    jegl_rendchain_rend_action
-*/
-JE_API void jegl_rchain_set_builtin_uniform_float(
-    jegl_rendchain_rend_action* act,
-    uint32_t* binding_place,
-    float val);
-
-/*
-jegl_rchain_set_builtin_uniform_float2 [基本接口]
-为 act 指定的绘制操作应用二维单精度浮点数矢量一致变量
-请参见：
-    jegl_rendchain_rend_action
-*/
-JE_API void jegl_rchain_set_builtin_uniform_float2(
-    jegl_rendchain_rend_action* act,
-    uint32_t* binding_place,
-    float x,
-    float y);
-
-/*
-jegl_rchain_set_builtin_uniform_float3 [基本接口]
-为 act 指定的绘制操作应用三维单精度浮点数矢量一致变量
-请参见：
-    jegl_rendchain_rend_action
-*/
-JE_API void jegl_rchain_set_builtin_uniform_float3(
-    jegl_rendchain_rend_action* act,
-    uint32_t* binding_place,
-    float x,
-    float y,
-    float z);
-
-/*
-jegl_rchain_set_builtin_uniform_float4 [基本接口]
-为 act 指定的绘制操作应用四维单精度浮点数矢量一致变量
-请参见：
-    jegl_rendchain_rend_action
-*/
-JE_API void jegl_rchain_set_builtin_uniform_float4(
-    jegl_rendchain_rend_action* act,
-    uint32_t* binding_place,
-    float x,
-    float y,
-    float z,
-    float w);
-
-/*
-jegl_rchain_set_builtin_uniform_float2x2 [基本接口]
-为 act 指定的绘制操作应用2x2单精度浮点数矩阵一致变量
-请参见：
-    jegl_rendchain_rend_action
-*/
-JE_API void jegl_rchain_set_builtin_uniform_float2x2(
-    jegl_rendchain_rend_action* act,
-    uint32_t* binding_place,
-    const float (*mat)[2]);
-
-/*
-jegl_rchain_set_builtin_uniform_float3x3 [基本接口]
-为 act 指定的绘制操作应用3x3单精度浮点数矩阵一致变量
-请参见：
-    jegl_rendchain_rend_action
-*/
-JE_API void jegl_rchain_set_builtin_uniform_float3x3(
-    jegl_rendchain_rend_action* act,
-    uint32_t* binding_place,
-    const float (*mat)[3]);
-
-/*
-jegl_rchain_set_builtin_uniform_float4x4 [基本接口]
-为 act 指定的绘制操作应用4x4单精度浮点数矩阵一致变量
-请参见：
-    jegl_rendchain_rend_action
-*/
-JE_API void jegl_rchain_set_builtin_uniform_float4x4(
-    jegl_rendchain_rend_action* act,
-    uint32_t* binding_place,
+    const uint32_t* binding_place_may_null,
     const float (*mat)[4]);
 
 /*
@@ -8612,7 +8392,7 @@ namespace jeecs
                                 name.c_str(), val, this);
                         else
                         {
-                            jegl_shad_uniforms->m_value.ix = val;
+                            jegl_shad_uniforms->m_value.m_int = val;
                             jegl_shad_uniforms->m_updated = true;
                         }
                         return;
@@ -8634,8 +8414,8 @@ namespace jeecs
                                 name.c_str(), x, y, this);
                         else
                         {
-                            jegl_shad_uniforms->m_value.ix = x;
-                            jegl_shad_uniforms->m_value.iy = y;
+                            jegl_shad_uniforms->m_value.m_int2[0] = x;
+                            jegl_shad_uniforms->m_value.m_int2[1] = y;
                             jegl_shad_uniforms->m_updated = true;
                         }
                         return;
@@ -8657,9 +8437,9 @@ namespace jeecs
                                 name.c_str(), x, y, z, this);
                         else
                         {
-                            jegl_shad_uniforms->m_value.ix = x;
-                            jegl_shad_uniforms->m_value.iy = y;
-                            jegl_shad_uniforms->m_value.iz = z;
+                            jegl_shad_uniforms->m_value.m_int3[0] = x;
+                            jegl_shad_uniforms->m_value.m_int3[1] = y;
+                            jegl_shad_uniforms->m_value.m_int3[2] = z;
                             jegl_shad_uniforms->m_updated = true;
                         }
                         return;
@@ -8681,10 +8461,10 @@ namespace jeecs
                                 name.c_str(), x, y, z, w, this);
                         else
                         {
-                            jegl_shad_uniforms->m_value.ix = x;
-                            jegl_shad_uniforms->m_value.iy = y;
-                            jegl_shad_uniforms->m_value.iz = z;
-                            jegl_shad_uniforms->m_value.iw = w;
+                            jegl_shad_uniforms->m_value.m_int4[0] = x;
+                            jegl_shad_uniforms->m_value.m_int4[1] = y;
+                            jegl_shad_uniforms->m_value.m_int4[2] = z;
+                            jegl_shad_uniforms->m_value.m_int4[3] = w;
                             jegl_shad_uniforms->m_updated = true;
                         }
                         return;
@@ -8706,7 +8486,7 @@ namespace jeecs
                                 name.c_str(), val, this);
                         else
                         {
-                            jegl_shad_uniforms->m_value.x = val;
+                            jegl_shad_uniforms->m_value.m_float = val;
                             jegl_shad_uniforms->m_updated = true;
                         }
                         return;
@@ -8728,8 +8508,8 @@ namespace jeecs
                                 name.c_str(), val.x, val.y, this);
                         else
                         {
-                            jegl_shad_uniforms->m_value.x = val.x;
-                            jegl_shad_uniforms->m_value.y = val.y;
+                            jegl_shad_uniforms->m_value.m_float2[0] = val.x;
+                            jegl_shad_uniforms->m_value.m_float2[1] = val.y;
                             jegl_shad_uniforms->m_updated = true;
                         }
                         return;
@@ -8751,9 +8531,9 @@ namespace jeecs
                                 name.c_str(), val.x, val.y, val.z, this);
                         else
                         {
-                            jegl_shad_uniforms->m_value.x = val.x;
-                            jegl_shad_uniforms->m_value.y = val.y;
-                            jegl_shad_uniforms->m_value.z = val.z;
+                            jegl_shad_uniforms->m_value.m_float3[0] = val.x;
+                            jegl_shad_uniforms->m_value.m_float3[1] = val.y;
+                            jegl_shad_uniforms->m_value.m_float3[2] = val.z;
                             jegl_shad_uniforms->m_updated = true;
                         }
                         return;
@@ -8775,10 +8555,10 @@ namespace jeecs
                                 name.c_str(), val.x, val.y, val.z, val.w, this);
                         else
                         {
-                            jegl_shad_uniforms->m_value.x = val.x;
-                            jegl_shad_uniforms->m_value.y = val.y;
-                            jegl_shad_uniforms->m_value.z = val.z;
-                            jegl_shad_uniforms->m_value.w = val.w;
+                            jegl_shad_uniforms->m_value.m_float4[0] = val.x;
+                            jegl_shad_uniforms->m_value.m_float4[1] = val.y;
+                            jegl_shad_uniforms->m_value.m_float4[2] = val.z;
+                            jegl_shad_uniforms->m_value.m_float4[3] = val.w;
                             jegl_shad_uniforms->m_updated = true;
                         }
                         return;
@@ -8786,22 +8566,7 @@ namespace jeecs
                     jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
             }
-
-            uint32_t get_uniform_location(const std::string& name)
-            {
-                auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
-                while (jegl_shad_uniforms)
-                {
-                    if (jegl_shad_uniforms->m_name == name)
-                    {
-                        return jegl_shad_uniforms->m_index;
-                    }
-                    jegl_shad_uniforms = jegl_shad_uniforms->m_next;
-                }
-
-                return graphic::INVALID_UNIFORM_LOCATION;
-            }
-            uint32_t* get_uniform_location_as_builtin(const std::string& name)
+            const uint32_t* get_uniform_location(const std::string& name)
             {
                 auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
                 while (jegl_shad_uniforms)

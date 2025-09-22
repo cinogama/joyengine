@@ -428,7 +428,7 @@ void jegl_sync_init(jegl_context* thread, bool isreboot)
                 thread->m_universe_instance,
                 1.0 / (double)thread->m_config.m_fps);
     }
-    
+
     thread->m_graphic_impl_context = thread->m_apis->interface_startup(
         thread, &thread->m_config, isreboot);
 
@@ -1551,22 +1551,22 @@ jegl_resource* jegl_create_framebuf(
     jeecs::basic::resource<jeecs::graphic::texture>* attachments =
         reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture> *>(
             malloc(
-                framebuf->m_raw_framebuf_data->m_attachment_count 
+                framebuf->m_raw_framebuf_data->m_attachment_count
                 * sizeof(jeecs::basic::resource<jeecs::graphic::texture>)));
 
     for (size_t i = 0; i < color_attachment_count; ++i)
         new (&attachments[i]) jeecs::basic::resource<jeecs::graphic::texture>(
             jeecs::graphic::texture::create(
-                width, 
+                width,
                 height,
                 jegl_texture::format(
-                    color_attachment_formats[i] 
+                    color_attachment_formats[i]
                     | jegl_texture::format::FRAMEBUF)));
 
     if (contain_depth_attachment)
         new (&attachments[color_attachment_count]) jeecs::basic::resource<jeecs::graphic::texture>(
             jeecs::graphic::texture::create(
-                width, 
+                width,
                 height,
                 jegl_texture::format(
                     jegl_texture::format::DEPTH
@@ -1644,83 +1644,14 @@ bool jegl_bind_shader(jegl_resource* shader)
         {
             if (uniform_vars->m_updated || need_init_uvar)
             {
+                assert(uniform_vars->m_uniform_type != jegl_shader::uniform_type::TEXTURE);
+
                 uniform_vars->m_updated = false;
-                switch (uniform_vars->m_uniform_type)
-                {
-                case jegl_shader::uniform_type::FLOAT:
-                    jegl_uniform_float(
-                        uniform_vars->m_index,
-                        uniform_vars->m_value.x);
-                    break;
-                case jegl_shader::uniform_type::FLOAT2:
-                    jegl_uniform_float2(
-                        uniform_vars->m_index,
-                        uniform_vars->m_value.x,
-                        uniform_vars->m_value.y);
-                    break;
-                case jegl_shader::uniform_type::FLOAT3:
-                    jegl_uniform_float3(
-                        uniform_vars->m_index,
-                        uniform_vars->m_value.x,
-                        uniform_vars->m_value.y,
-                        uniform_vars->m_value.z);
-                    break;
-                case jegl_shader::uniform_type::FLOAT4:
-                    jegl_uniform_float4(
-                        uniform_vars->m_index,
-                        uniform_vars->m_value.x,
-                        uniform_vars->m_value.y,
-                        uniform_vars->m_value.z,
-                        uniform_vars->m_value.w);
-                    break;
-                case jegl_shader::uniform_type::FLOAT2X2:
-                    jegl_uniform_float2x2(
-                        uniform_vars->m_index,
-                        uniform_vars->m_value.mat2x2);
-                    break;
-                case jegl_shader::uniform_type::FLOAT3X3:
-                    jegl_uniform_float3x3(
-                        uniform_vars->m_index,
-                        uniform_vars->m_value.mat3x3);
-                    break;
-                case jegl_shader::uniform_type::FLOAT4X4:
-                    jegl_uniform_float4x4(
-                        uniform_vars->m_index,
-                        uniform_vars->m_value.mat4x4);
-                    break;
-                case jegl_shader::uniform_type::INT:
-                    jegl_uniform_int(
-                        uniform_vars->m_index,
-                        uniform_vars->m_value.ix);
-                    break;
-                case jegl_shader::uniform_type::INT2:
-                    jegl_uniform_int2(
-                        uniform_vars->m_index,
-                        uniform_vars->m_value.ix,
-                        uniform_vars->m_value.iy);
-                    break;
-                case jegl_shader::uniform_type::INT3:
-                    jegl_uniform_int3(
-                        uniform_vars->m_index,
-                        uniform_vars->m_value.ix,
-                        uniform_vars->m_value.iy,
-                        uniform_vars->m_value.iz);
-                    break;
-                case jegl_shader::uniform_type::INT4:
-                    jegl_uniform_int4(
-                        uniform_vars->m_index,
-                        uniform_vars->m_value.ix,
-                        uniform_vars->m_value.iy,
-                        uniform_vars->m_value.iz,
-                        uniform_vars->m_value.iw);
-                    break;
-                case jegl_shader::uniform_type::TEXTURE:
-                    break;
-                default:
-                    jeecs::debug::logerr("Unsupport uniform variable type.");
-                    break;
-                    break;
-                }
+
+                jegl_set_uniform_value(
+                    uniform_vars->m_index,
+                    uniform_vars->m_uniform_type,
+                    &uniform_vars->m_value);
             }
         }
         uniform_vars = uniform_vars->m_next;
@@ -1848,7 +1779,7 @@ void jegl_uniform_float4x4(uint32_t location, const float (*mat)[4])
         _current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT4X4, mat);
 }
 
-void jegl_uniform_value(
+void jegl_set_uniform_value(
     uint32_t location, jegl_shader::uniform_type type, const void* data)
 {
     _current_graphic_thread->m_apis->set_uniform(

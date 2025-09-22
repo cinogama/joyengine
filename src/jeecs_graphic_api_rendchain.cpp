@@ -11,24 +11,9 @@ struct jegl_rendchain;
 struct jegl_uniform_data_node
 {
     jegl_shader::uniform_type m_type;
-    uint32_t m_binding_place;
-    uint32_t* m_binding_place_addr;
+    const uint32_t* m_binding_place_addr;
 
-    union value
-    {
-        int m_int;
-        int m_int2[2];
-        int m_int3[3];
-        int m_int4[4];
-        float m_float;
-        float m_float2[2];
-        float m_float3[3];
-        float m_float4[4];
-        float m_float2x2[2][2];
-        float m_float3x3[3][3];
-        float m_float4x4[4][4];
-    };
-    value m_value;
+    jegl_shader::unifrom_variables::value m_value;
 };
 struct jegl_rchain_texture_group
 {
@@ -228,7 +213,8 @@ void jegl_rchain_set_uniform_buffer(
     act->m_uniform_buffers.push_back(uniform_buffer);
 }
 
-jegl_uniform_data_node* _jegl_rchain_get_uniform_node(jegl_rendchain_rend_action* act, uint32_t binding_place)
+jegl_uniform_data_node* _jegl_rchain_get_uniform_node(
+    jegl_rendchain_rend_action* act, const uint32_t* binding_place_addr)
 {
     const size_t uniform_index = act->m_chain->m_used_uniform_count++;
     if (uniform_index >= act->m_chain->m_created_uniforms.size())
@@ -238,26 +224,33 @@ jegl_uniform_data_node* _jegl_rchain_get_uniform_node(jegl_rendchain_rend_action
     }
     auto* uniform_addr = act->m_chain->m_created_uniforms[uniform_index];
     act->m_binding_uniforms.push_back(uniform_addr);
-    uniform_addr->m_binding_place = binding_place;
-    uniform_addr->m_binding_place_addr = &uniform_addr->m_binding_place;
+    uniform_addr->m_binding_place_addr = binding_place_addr;
     return uniform_addr;
 }
 
 void jegl_rchain_set_uniform_int(
     jegl_rendchain_rend_action* act,
-    uint32_t binding_place,
+    const uint32_t* binding_place,
     int val)
 {
+    if (binding_place == nullptr
+        || *binding_place == jeecs::graphic::INVALID_UNIFORM_LOCATION)
+        return;
+
     auto* uniform = _jegl_rchain_get_uniform_node(act, binding_place);
     uniform->m_type = jegl_shader::uniform_type::INT;
     uniform->m_value.m_int = val;
 }
 void jegl_rchain_set_uniform_int2(
     jegl_rendchain_rend_action* act,
-    uint32_t binding_place,
+    const uint32_t* binding_place,
     int x,
     int y)
 {
+    if (binding_place == nullptr
+        || *binding_place == jeecs::graphic::INVALID_UNIFORM_LOCATION)
+        return;
+
     auto* uniform = _jegl_rchain_get_uniform_node(act, binding_place);
     uniform->m_type = jegl_shader::uniform_type::INT2;
     uniform->m_value.m_int2[0] = x;
@@ -265,11 +258,15 @@ void jegl_rchain_set_uniform_int2(
 }
 void jegl_rchain_set_uniform_int3(
     jegl_rendchain_rend_action* act,
-    uint32_t binding_place,
+    const uint32_t* binding_place,
     int x,
     int y,
     int z)
 {
+    if (binding_place == nullptr
+        || *binding_place == jeecs::graphic::INVALID_UNIFORM_LOCATION)
+        return;
+
     auto* uniform = _jegl_rchain_get_uniform_node(act, binding_place);
     uniform->m_type = jegl_shader::uniform_type::INT3;
     uniform->m_value.m_int3[0] = x;
@@ -278,12 +275,16 @@ void jegl_rchain_set_uniform_int3(
 }
 void jegl_rchain_set_uniform_int4(
     jegl_rendchain_rend_action* act,
-    uint32_t binding_place,
+    const uint32_t* binding_place,
     int x,
     int y,
     int z,
     int w)
 {
+    if (binding_place == nullptr
+        || *binding_place == jeecs::graphic::INVALID_UNIFORM_LOCATION)
+        return;
+
     auto* uniform = _jegl_rchain_get_uniform_node(act, binding_place);
     uniform->m_type = jegl_shader::uniform_type::INT4;
     uniform->m_value.m_int4[0] = x;
@@ -293,19 +294,27 @@ void jegl_rchain_set_uniform_int4(
 }
 void jegl_rchain_set_uniform_float(
     jegl_rendchain_rend_action* act,
-    uint32_t binding_place,
+    const uint32_t* binding_place,
     float val)
 {
+    if (binding_place == nullptr
+        || *binding_place == jeecs::graphic::INVALID_UNIFORM_LOCATION)
+        return;
+
     auto* uniform = _jegl_rchain_get_uniform_node(act, binding_place);
     uniform->m_type = jegl_shader::uniform_type::FLOAT;
     uniform->m_value.m_float = val;
 }
 void jegl_rchain_set_uniform_float2(
     jegl_rendchain_rend_action* act,
-    uint32_t binding_place,
+    const uint32_t* binding_place,
     float x,
     float y)
 {
+    if (binding_place == nullptr
+        || *binding_place == jeecs::graphic::INVALID_UNIFORM_LOCATION)
+        return;
+
     auto* uniform = _jegl_rchain_get_uniform_node(act, binding_place);
     uniform->m_type = jegl_shader::uniform_type::FLOAT2;
     uniform->m_value.m_float2[0] = x;
@@ -313,11 +322,15 @@ void jegl_rchain_set_uniform_float2(
 }
 void jegl_rchain_set_uniform_float3(
     jegl_rendchain_rend_action* act,
-    uint32_t binding_place,
+    const uint32_t* binding_place,
     float x,
     float y,
     float z)
 {
+    if (binding_place == nullptr
+        || *binding_place == jeecs::graphic::INVALID_UNIFORM_LOCATION)
+        return;
+
     auto* uniform = _jegl_rchain_get_uniform_node(act, binding_place);
     uniform->m_type = jegl_shader::uniform_type::FLOAT3;
     uniform->m_value.m_float3[0] = x;
@@ -326,12 +339,16 @@ void jegl_rchain_set_uniform_float3(
 }
 void jegl_rchain_set_uniform_float4(
     jegl_rendchain_rend_action* act,
-    uint32_t binding_place,
+    const uint32_t* binding_place,
     float x,
     float y,
     float z,
     float w)
 {
+    if (binding_place == nullptr
+        || *binding_place == jeecs::graphic::INVALID_UNIFORM_LOCATION)
+        return;
+
     auto* uniform = _jegl_rchain_get_uniform_node(act, binding_place);
     uniform->m_type = jegl_shader::uniform_type::FLOAT4;
     uniform->m_value.m_float4[0] = x;
@@ -341,9 +358,13 @@ void jegl_rchain_set_uniform_float4(
 }
 void jegl_rchain_set_uniform_float2x2(
     jegl_rendchain_rend_action* act,
-    uint32_t binding_place,
+    const uint32_t* binding_place,
     const float (*mat)[2])
 {
+    if (binding_place == nullptr
+        || *binding_place == jeecs::graphic::INVALID_UNIFORM_LOCATION)
+        return;
+
     auto* uniform = _jegl_rchain_get_uniform_node(act, binding_place);
     uniform->m_type = jegl_shader::uniform_type::FLOAT2X2;
 
@@ -352,9 +373,13 @@ void jegl_rchain_set_uniform_float2x2(
 }
 void jegl_rchain_set_uniform_float3x3(
     jegl_rendchain_rend_action* act,
-    uint32_t binding_place,
+    const uint32_t* binding_place,
     const float (*mat)[3])
 {
+    if (binding_place == nullptr
+        || *binding_place == jeecs::graphic::INVALID_UNIFORM_LOCATION)
+        return;
+
     auto* uniform = _jegl_rchain_get_uniform_node(act, binding_place);
     uniform->m_type = jegl_shader::uniform_type::FLOAT3X3;
 
@@ -363,153 +388,14 @@ void jegl_rchain_set_uniform_float3x3(
 }
 void jegl_rchain_set_uniform_float4x4(
     jegl_rendchain_rend_action* act,
-    uint32_t binding_place,
+    const uint32_t* binding_place,
     const float (*mat)[4])
 {
+    if (binding_place == nullptr
+        || *binding_place == jeecs::graphic::INVALID_UNIFORM_LOCATION)
+        return;
+
     auto* uniform = _jegl_rchain_get_uniform_node(act, binding_place);
-    uniform->m_type = jegl_shader::uniform_type::FLOAT4X4;
-
-    static_assert(sizeof(uniform->m_value.m_float4x4) == sizeof(float) * 4 * 4);
-    memcpy(uniform->m_value.m_float4x4, mat, sizeof(uniform->m_value.m_float4x4));
-}
-
-//////////////////////////////////////////////////////////////////////////
-
-void jegl_rchain_set_builtin_uniform_int(
-    jegl_rendchain_rend_action* act,
-    uint32_t* binding_place,
-    int val)
-{
-    auto* uniform = _jegl_rchain_get_uniform_node(act, *binding_place);
-    uniform->m_binding_place_addr = binding_place;
-    uniform->m_type = jegl_shader::uniform_type::INT;
-    uniform->m_value.m_int = val;
-}
-void jegl_rchain_set_builtin_uniform_int2(
-    jegl_rendchain_rend_action* act,
-    uint32_t* binding_place,
-    int x,
-    int y)
-{
-    auto* uniform = _jegl_rchain_get_uniform_node(act, *binding_place);
-    uniform->m_binding_place_addr = binding_place;
-    uniform->m_type = jegl_shader::uniform_type::INT2;
-    uniform->m_value.m_int2[0] = x;
-    uniform->m_value.m_int2[1] = y;
-}
-void jegl_rchain_set_builtin_uniform_int3(
-    jegl_rendchain_rend_action* act,
-    uint32_t* binding_place,
-    int x,
-    int y,
-    int z)
-{
-    auto* uniform = _jegl_rchain_get_uniform_node(act, *binding_place);
-    uniform->m_binding_place_addr = binding_place;
-    uniform->m_type = jegl_shader::uniform_type::INT3;
-    uniform->m_value.m_int3[0] = x;
-    uniform->m_value.m_int3[1] = y;
-    uniform->m_value.m_int3[2] = z;
-}
-void jegl_rchain_set_builtin_uniform_int4(
-    jegl_rendchain_rend_action* act,
-    uint32_t* binding_place,
-    int x,
-    int y,
-    int z,
-    int w)
-{
-    auto* uniform = _jegl_rchain_get_uniform_node(act, *binding_place);
-    uniform->m_binding_place_addr = binding_place;
-    uniform->m_type = jegl_shader::uniform_type::INT4;
-    uniform->m_value.m_int4[0] = x;
-    uniform->m_value.m_int4[1] = y;
-    uniform->m_value.m_int4[2] = z;
-    uniform->m_value.m_int4[3] = w;
-}
-void jegl_rchain_set_builtin_uniform_float(
-    jegl_rendchain_rend_action* act,
-    uint32_t* binding_place,
-    float val)
-{
-    auto* uniform = _jegl_rchain_get_uniform_node(act, *binding_place);
-    uniform->m_binding_place_addr = binding_place;
-    uniform->m_type = jegl_shader::uniform_type::FLOAT;
-    uniform->m_value.m_float = val;
-}
-void jegl_rchain_set_builtin_uniform_float2(
-    jegl_rendchain_rend_action* act,
-    uint32_t* binding_place,
-    float x,
-    float y)
-{
-    auto* uniform = _jegl_rchain_get_uniform_node(act, *binding_place);
-    uniform->m_binding_place_addr = binding_place;
-    uniform->m_type = jegl_shader::uniform_type::FLOAT2;
-    uniform->m_value.m_float2[0] = x;
-    uniform->m_value.m_float2[1] = y;
-}
-void jegl_rchain_set_builtin_uniform_float3(
-    jegl_rendchain_rend_action* act,
-    uint32_t* binding_place,
-    float x,
-    float y,
-    float z)
-{
-    auto* uniform = _jegl_rchain_get_uniform_node(act, *binding_place);
-    uniform->m_binding_place_addr = binding_place;
-    uniform->m_type = jegl_shader::uniform_type::FLOAT3;
-    uniform->m_value.m_float3[0] = x;
-    uniform->m_value.m_float3[1] = y;
-    uniform->m_value.m_float3[2] = z;
-}
-void jegl_rchain_set_builtin_uniform_float4(
-    jegl_rendchain_rend_action* act,
-    uint32_t* binding_place,
-    float x,
-    float y,
-    float z,
-    float w)
-{
-    auto* uniform = _jegl_rchain_get_uniform_node(act, *binding_place);
-    uniform->m_binding_place_addr = binding_place;
-    uniform->m_type = jegl_shader::uniform_type::FLOAT4;
-    uniform->m_value.m_float4[0] = x;
-    uniform->m_value.m_float4[1] = y;
-    uniform->m_value.m_float4[2] = z;
-    uniform->m_value.m_float4[3] = w;
-}
-void jegl_rchain_set_builtin_uniform_float2x2(
-    jegl_rendchain_rend_action* act,
-    uint32_t* binding_place,
-    const float (*mat)[2])
-{
-    auto* uniform = _jegl_rchain_get_uniform_node(act, *binding_place);
-    uniform->m_binding_place_addr = binding_place;
-    uniform->m_type = jegl_shader::uniform_type::FLOAT2X2;
-
-    static_assert(sizeof(uniform->m_value.m_float2x2) == sizeof(float) * 2 * 2);
-    memcpy(uniform->m_value.m_float2x2, mat, sizeof(uniform->m_value.m_float2x2));
-}
-void jegl_rchain_set_builtin_uniform_float3x3(
-    jegl_rendchain_rend_action* act,
-    uint32_t* binding_place,
-    const float (*mat)[3])
-{
-    auto* uniform = _jegl_rchain_get_uniform_node(act, *binding_place);
-    uniform->m_binding_place_addr = binding_place;
-    uniform->m_type = jegl_shader::uniform_type::FLOAT3X3;
-
-    static_assert(sizeof(uniform->m_value.m_float3x3) == sizeof(float) * 3 * 3);
-    memcpy(uniform->m_value.m_float3x3, mat, sizeof(uniform->m_value.m_float3x3));
-}
-void jegl_rchain_set_builtin_uniform_float4x4(
-    jegl_rendchain_rend_action* act,
-    uint32_t* binding_place,
-    const float (*mat)[4])
-{
-    auto* uniform = _jegl_rchain_get_uniform_node(act, *binding_place);
-    uniform->m_binding_place_addr = binding_place;
     uniform->m_type = jegl_shader::uniform_type::FLOAT4X4;
 
     static_assert(sizeof(uniform->m_value.m_float4x4) == sizeof(float) * 4 * 4);
@@ -569,24 +455,12 @@ void jegl_rchain_commit(jegl_rendchain* chain, jegl_context* glthread)
             {
                 for (auto* uniform_data : action.m_binding_uniforms)
                 {
-                    if (*uniform_data->m_binding_place_addr == jeecs::graphic::PENDING_UNIFORM_LOCATION)
+                    if (jeecs::graphic::PENDING_UNIFORM_LOCATION == *uniform_data->m_binding_place_addr)
                         continue;
-
-                    static_assert(0 == offsetof(jegl_uniform_data_node::value, m_int));
-                    static_assert(0 == offsetof(jegl_uniform_data_node::value, m_int2));
-                    static_assert(0 == offsetof(jegl_uniform_data_node::value, m_int3));
-                    static_assert(0 == offsetof(jegl_uniform_data_node::value, m_int4));
-                    static_assert(0 == offsetof(jegl_uniform_data_node::value, m_float));
-                    static_assert(0 == offsetof(jegl_uniform_data_node::value, m_float2));
-                    static_assert(0 == offsetof(jegl_uniform_data_node::value, m_float3));
-                    static_assert(0 == offsetof(jegl_uniform_data_node::value, m_float4));
-                    static_assert(0 == offsetof(jegl_uniform_data_node::value, m_float2x2));
-                    static_assert(0 == offsetof(jegl_uniform_data_node::value, m_float3x3));
-                    static_assert(0 == offsetof(jegl_uniform_data_node::value, m_float4x4));
 
                     assert(uniform_data->m_type != jegl_shader::uniform_type::TEXTURE);
 
-                    jegl_uniform_value(
+                    jegl_set_uniform_value(
                         *uniform_data->m_binding_place_addr,
                         uniform_data->m_type,
                         &uniform_data->m_value);

@@ -985,14 +985,14 @@ namespace jeecs::graphic::api::gl3
                             gl_sampler_name,
                             sizeof(gl_sampler_name),
                             "je4_gl_sampler_%zu",
-                            (size_t)uniform_var->m_value.ix);
+                            (size_t)uniform_var->m_value.m_int);
 
                         (void)count;
                         assert(count > 0 && count < (int)sizeof(gl_sampler_name));
 
                         const auto location = glGetUniformLocation(shader_program, gl_sampler_name);
                         if (location != -1)
-                            glUniform1i(location, (GLint)uniform_var->m_value.ix);
+                            glUniform1i(location, (GLint)uniform_var->m_value.m_int);
                     }
                     else
                     {
