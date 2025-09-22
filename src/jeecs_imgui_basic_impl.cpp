@@ -750,7 +750,7 @@ WO_API wo_api je_gui_listbox_withsize(wo_vm vm, wo_value args)
         {
             wo_arr_get(elem, args + 1, i);
             wo_string_t item = wo_string(elem);
-            if (ImGui::Selectable(item, i == origin_selected_index))
+            if (ImGui::Selectable(item, (int)i == origin_selected_index))
             {
                 value_updated = true;
                 selected_index = (int)i;

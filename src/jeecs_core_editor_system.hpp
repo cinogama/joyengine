@@ -1319,7 +1319,7 @@ public let frag =
 #define JE_CHECK_NEED_AND_SET_UNIFORM(ACTION, UNIFORM, ITEM, TYPE, ...)                                      \
     do                                                                                                       \
     {                                                                                                        \
-        if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)                                     \
+        if (UNIFORM->m_builtin_uniform_##ITEM != graphic::INVALID_UNIFORM_LOCATION)                                     \
             jegl_rchain_set_builtin_uniform_##TYPE(ACTION, &UNIFORM->m_builtin_uniform_##ITEM, __VA_ARGS__); \
     } while (0)
 
@@ -1329,7 +1329,7 @@ public let frag =
                 const math::vec3& scale,
                 jegl_resource* shader,
                 jegl_resource* vertex,
-                jegl_rchain_texture_group_idx_t group) -> jegl_rendchain_rend_action*
+                jegl_rchain_texture_group* group) -> jegl_rendchain_rend_action*
                 {
                     if (enable_draw_gizmo_at_framebuf.has_value())
                     {
@@ -1371,7 +1371,8 @@ public let frag =
                     }
                     return nullptr;
                 };
-            auto draw_easy_gizmo_impl = [&](Transform::Translation& trans, jegl_rchain_texture_group_idx_t group, bool rotation)
+            auto draw_easy_gizmo_impl =
+                [&](Transform::Translation& trans, jegl_rchain_texture_group* group, bool rotation)
                 {
                     if (enable_draw_gizmo_at_framebuf.has_value())
                     {
@@ -1438,7 +1439,7 @@ public let frag =
                             math::vec3(1.0f, 1.0f, 1.0f),
                             _gizmo_resources.m_gizmo_camera_visual_cone_shader->resource(),
                             _gizmo_resources.m_gizmo_camera_visual_cone_vertex->resource(),
-                            SIZE_MAX);
+                            nullptr);
 
                         if (draw_action != nullptr)
                         {
@@ -1512,7 +1513,7 @@ public let frag =
                                 final_local_scale,
                                 _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
                                 _gizmo_resources.m_gizmo_physics2d_collider_box_vertex->resource(),
-                                SIZE_MAX);
+                                nullptr);
                         else if (circle != nullptr)
                         {
                             // m_gizmo_physics2d_collider_circle_vertex's R is 1.0f, so we need to scale it.
@@ -1525,7 +1526,7 @@ public let frag =
                                 final_local_scale,
                                 _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
                                 _gizmo_resources.m_gizmo_physics2d_collider_circle_vertex->resource(),
-                                SIZE_MAX);
+                                nullptr);
                         }
                         else if (capsule != nullptr)
                         {
@@ -1548,7 +1549,7 @@ public let frag =
                                 circle_scale,
                                 _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
                                 _gizmo_resources.m_gizmo_physics2d_collider_circle_vertex->resource(),
-                                SIZE_MAX);
+                                nullptr);
 
                             easy_draw_impl(
                                 circle_position2,
@@ -1556,7 +1557,7 @@ public let frag =
                                 circle_scale,
                                 _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
                                 _gizmo_resources.m_gizmo_physics2d_collider_circle_vertex->resource(),
-                                SIZE_MAX);
+                                nullptr);
 
                             easy_draw_impl(
                                 final_world_position,
@@ -1564,7 +1565,7 @@ public let frag =
                                 box_scale,
                                 _gizmo_resources.m_gizmo_physics2d_collider_shader->resource(),
                                 _gizmo_resources.m_gizmo_physics2d_collider_box_vertex->resource(),
-                                SIZE_MAX);
+                                nullptr);
                         }
                     }
                 });
@@ -1588,7 +1589,7 @@ public let frag =
                             && selected_entity.get_component<Light2D::Range>() == nullptr 
                             && selected_entity.get_component<Light2D::Parallel>() == nullptr)
                         {
-                            jegl_rchain_texture_group_idx_t group =
+                            jegl_rchain_texture_group* group =
                                 jegl_rchain_allocate_texture_group(gizmo_rchain);
 
                             bool binded = false;

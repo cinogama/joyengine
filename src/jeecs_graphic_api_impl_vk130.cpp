@@ -248,7 +248,7 @@ namespace jeecs::graphic::api::vk130
             if (fnd != m_blob_data->m_uniform_locations.end())
                 return fnd->second;
 
-            return jeecs::typing::INVALID_UINT32;
+            return jeecs::graphic::INVALID_UNIFORM_LOCATION;
         }
     };
     struct jevk13_texture
@@ -1381,7 +1381,7 @@ namespace jeecs::graphic::api::vk130
                 jeecs::debug::logfatal("Failed to create vk130 swapchain, unsupported present mode.");
             }
 
-            _vk_presenting_swapchain_image_index = typing::INVALID_UINT32;
+            _vk_presenting_swapchain_image_index = UINT32_MAX;
 
             // 尝试三重缓冲？
             uint32_t swapchain_image_count = _vk_surface_capabilities.minImageCount + 1;
@@ -1725,7 +1725,6 @@ namespace jeecs::graphic::api::vk130
 #endif
             VK_API_LIST;
 #undef VK_API_DECL
-
 
             for (const char* required_layer : required_layers)
             {
@@ -3275,7 +3274,7 @@ namespace jeecs::graphic::api::vk130
         void present()
         {
             // Present last drawed frame.
-            if (_vk_presenting_swapchain_image_index != typing::INVALID_UINT32)
+            if (_vk_presenting_swapchain_image_index != UINT32_MAX)
             {
                 assert(_vk_current_swapchain_image_content == _vk_swapchain_images[_vk_presenting_swapchain_image_index]);
 
@@ -3815,7 +3814,7 @@ namespace jeecs::graphic::api::vk130
         {
         case basic_interface::update_result::PAUSE:
             // Very ugly!
-            if (context->_vk_presenting_swapchain_image_index != typing::INVALID_UINT32)
+            if (context->_vk_presenting_swapchain_image_index != UINT32_MAX)
             {
                 assert(
                     context->_vk_current_swapchain_image_content
@@ -4129,7 +4128,7 @@ namespace jeecs::graphic::api::vk130
 
         auto* current_shader = context->_vk_current_binded_shader;
 
-        if (location == jeecs::typing::INVALID_UINT32
+        if (location == jeecs::graphic::INVALID_UNIFORM_LOCATION
             || current_shader == nullptr)
             return;
 

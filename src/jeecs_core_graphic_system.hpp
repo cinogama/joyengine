@@ -1,10 +1,10 @@
 #pragma once
 
 #ifndef JE_IMPL
-#error JE_IMPL must be defined, please check `jeecs_core_systems_and_components.cpp`
+#   error JE_IMPL must be defined, please check `jeecs_core_systems_and_components.cpp`
 #endif
 #ifndef JE_ENABLE_DEBUG_API
-#error JE_ENABLE_DEBUG_API must be defined, please check `jeecs_core_systems_and_components.cpp`
+#   error JE_ENABLE_DEBUG_API must be defined, please check `jeecs_core_systems_and_components.cpp`
 #endif
 #include "jeecs.hpp"
 
@@ -18,7 +18,7 @@ namespace jeecs
 #define JE_CHECK_NEED_AND_SET_UNIFORM(ACTION, UNIFORM, ITEM, TYPE, ...)                                      \
     do                                                                                                       \
     {                                                                                                        \
-        if (UNIFORM->m_builtin_uniform_##ITEM != typing::INVALID_UINT32)                                     \
+        if (UNIFORM->m_builtin_uniform_##ITEM != graphic::INVALID_UNIFORM_LOCATION)                                     \
             jegl_rchain_set_builtin_uniform_##TYPE(ACTION, &UNIFORM->m_builtin_uniform_##ITEM, __VA_ARGS__); \
     } while (0)
 
@@ -363,7 +363,12 @@ public let frag =
             selector.exec([&](Transform::Anchor& anchor, UserInterface::Origin& origin)
                 { parent_origin_list[anchor.uid] = &origin; });
 
-            selector.exec([this](Projection& projection, Rendqueue* rendqueue, Viewport* cameraviewport, RendToFramebuffer* rendbuf, Camera::Clear* clear)
+            selector.exec([this](
+                Projection& projection,
+                Rendqueue* rendqueue,
+                Viewport* cameraviewport,
+                RendToFramebuffer* rendbuf,
+                Camera::Clear* clear)
                 {
                     auto* branch = this->allocate_branch(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
                     m_camera_list.insert(
@@ -1684,7 +1689,7 @@ public func frag(vf: v2f)
                         {
                             light2dpostpass->post_rend_target
                                 = jeecs::graphic::framebuffer::create(
-                                    RENDAIMBUFFER_WIDTH, 
+                                    RENDAIMBUFFER_WIDTH,
                                     RENDAIMBUFFER_HEIGHT,
                                     {
                                         // 漫反射颜色
@@ -1699,7 +1704,7 @@ public func frag(vf: v2f)
                                     true).value();
                             light2dpostpass->post_light_target
                                 = jeecs::graphic::framebuffer::create(
-                                    LIGHT_BUFFER_WIDTH, 
+                                    LIGHT_BUFFER_WIDTH,
                                     LIGHT_BUFFER_HEIGHT,
                                     {
                                         // 光渲染结果
@@ -1998,7 +2003,7 @@ public func frag(vf: v2f)
                 // If current camera contain light2d-pass, prepare light shadow here.
                 if (current_camera.light2DPostPass != nullptr)
                 {
-                    if (!current_camera.light2DPostPass->post_rend_target.has_value() 
+                    if (!current_camera.light2DPostPass->post_rend_target.has_value()
                         || !current_camera.light2DPostPass->post_light_target.has_value())
                         // Not ready, skip this frame.
                         continue;
@@ -2042,22 +2047,22 @@ public func frag(vf: v2f)
                                 current_camera.projection->default_uniform_buffer->resource());
 
                             const auto& normal_shadow_pass =
-                                lightarch.parallel != nullptr 
-                                ? m_defer_light2d_host._defer_light2d_shadow_parallel_pass 
+                                lightarch.parallel != nullptr
+                                ? m_defer_light2d_host._defer_light2d_shadow_parallel_pass
                                 : m_defer_light2d_host._defer_light2d_shadow_point_pass;
                             const auto& reverse_normal_shadow_pass =
-                                lightarch.parallel != nullptr 
-                                ? m_defer_light2d_host._defer_light2d_shadow_parallel_reverse_pass 
+                                lightarch.parallel != nullptr
+                                ? m_defer_light2d_host._defer_light2d_shadow_parallel_reverse_pass
                                 : m_defer_light2d_host._defer_light2d_shadow_point_reverse_pass;
                             const auto& shape_shadow_pass =
-                                lightarch.parallel != nullptr 
-                                ? m_defer_light2d_host._defer_light2d_shadow_shape_parallel_pass 
+                                lightarch.parallel != nullptr
+                                ? m_defer_light2d_host._defer_light2d_shadow_shape_parallel_pass
                                 : m_defer_light2d_host._defer_light2d_shadow_shape_point_pass;
                             const auto& sprite_shadow_pass =
-                                lightarch.parallel != nullptr 
-                                ? m_defer_light2d_host._defer_light2d_shadow_sprite_parallel_pass 
+                                lightarch.parallel != nullptr
+                                ? m_defer_light2d_host._defer_light2d_shadow_sprite_parallel_pass
                                 : m_defer_light2d_host._defer_light2d_shadow_sprite_point_pass;
-                            const auto& sub_shadow_pass = 
+                            const auto& sub_shadow_pass =
                                 m_defer_light2d_host._defer_light2d_shadow_sub_pass;
 
                             std::list<block2d_arch*> block_in_current_layer;
@@ -2088,7 +2093,7 @@ public func frag(vf: v2f)
                                         ? blockarch.translation->world_position.z >= lightarch.translation->world_position.z
                                         : blockarch.translation->world_position.y >= lightarch.translation->world_position.y;
 
-                                    if (blockarch.blockshadow != nullptr 
+                                    if (blockarch.blockshadow != nullptr
                                         && blockarch.blockshadow->factor > 0.f
                                         && (!light_is_above_block || !blockarch.blockshadow->auto_disable))
                                     {
@@ -2102,7 +2107,8 @@ public func frag(vf: v2f)
                                                 light2d_shadow_rend_chain,
                                                 using_shadow_pass_shader->resource(),
                                                 blockarch.blockshadow->mesh.m_block_mesh.value()->resource(),
-                                                SIZE_MAX);
+                                                nullptr);
+
                                             auto* builtin_uniform = using_shadow_pass_shader->m_builtin;
 
                                             const float(&MAT4_MODEL)[4][4] = blockarch.translation->object2world;
@@ -2137,8 +2143,8 @@ public func frag(vf: v2f)
                                                     1.f);
                                         }
                                     }
-                                    if (blockarch.shapeshadow != nullptr 
-                                        && blockarch.shapeshadow->factor > 0.f 
+                                    if (blockarch.shapeshadow != nullptr
+                                        && blockarch.shapeshadow->factor > 0.f
                                         && (light_is_above_block || !blockarch.shapeshadow->auto_disable))
                                     {
                                         auto texture_group = jegl_rchain_allocate_texture_group(light2d_shadow_rend_chain);
@@ -2342,17 +2348,17 @@ public func frag(vf: v2f)
                                             if (block_in_layer->textures != nullptr)
                                             {
                                                 JE_CHECK_NEED_AND_SET_UNIFORM(
-                                                    rchain_draw_action, 
-                                                    builtin_uniform, 
-                                                    tiling, 
-                                                    float2, 
-                                                    block_in_layer->textures->tiling.x, 
+                                                    rchain_draw_action,
+                                                    builtin_uniform,
+                                                    tiling,
+                                                    float2,
+                                                    block_in_layer->textures->tiling.x,
                                                     block_in_layer->textures->tiling.y);
                                                 JE_CHECK_NEED_AND_SET_UNIFORM(
-                                                    rchain_draw_action, 
-                                                    builtin_uniform, 
-                                                    offset, 
-                                                    float2, 
+                                                    rchain_draw_action,
+                                                    builtin_uniform,
+                                                    offset,
+                                                    float2,
                                                     block_in_layer->textures->offset.x,
                                                     block_in_layer->textures->offset.y);
                                             }
@@ -2381,7 +2387,7 @@ public func frag(vf: v2f)
                             current_camera.clear->color.x,
                             current_camera.clear->color.y,
                             current_camera.clear->color.z,
-                            current_camera.clear->color.w 
+                            current_camera.clear->color.w
                         };
                         jegl_rchain_clear_color_buffer(rend_chain, 0, clear_buffer_color);
                     }
@@ -2430,10 +2436,6 @@ public func frag(vf: v2f)
 
                 jegl_rchain_bind_uniform_buffer(rend_chain,
                     current_camera.projection->default_uniform_buffer->resource());
-
-                auto shadow_pre_bind_texture_group = jegl_rchain_allocate_texture_group(rend_chain);
-
-                jegl_rchain_bind_pre_texture_group(rend_chain, shadow_pre_bind_texture_group);
 
                 constexpr jeecs::math::vec2 default_tiling(1.f, 1.f), default_offset(0.f, 0.f);
 
@@ -2518,7 +2520,7 @@ public func frag(vf: v2f)
 
                 if (current_camera.light2DPostPass != nullptr && current_camera.shaders != nullptr)
                 {
-                    assert(current_camera.light2DPostPass->post_rend_target.has_value() 
+                    assert(current_camera.light2DPostPass->post_rend_target.has_value()
                         && current_camera.light2DPostPass->post_light_target.has_value());
 
                     // Rend Light result to target buffer.
@@ -2537,24 +2539,11 @@ public func frag(vf: v2f)
                     jegl_rchain_bind_uniform_buffer(light2d_light_effect_rend_chain,
                         current_camera.projection->default_uniform_buffer->resource());
 
-                    auto lightpass_pre_bind_texture_group = jegl_rchain_allocate_texture_group(light2d_light_effect_rend_chain);
-
                     auto* post_rend_target_frame_buffer = current_camera.light2DPostPass->post_rend_target.value().get();
-                    // Bind attachment
-                    // 绑定漫反射颜色通道
-                    jegl_rchain_bind_texture(light2d_light_effect_rend_chain, lightpass_pre_bind_texture_group, JE_LIGHT2D_DEFER_0 + 0,
-                        post_rend_target_frame_buffer->get_attachment(0).value()->resource());
-                    // 绑定自发光通道
-                    jegl_rchain_bind_texture(light2d_light_effect_rend_chain, lightpass_pre_bind_texture_group, JE_LIGHT2D_DEFER_0 + 1,
-                        post_rend_target_frame_buffer->get_attachment(1).value()->resource());
-                    // 绑定视空间坐标通道
-                    jegl_rchain_bind_texture(light2d_light_effect_rend_chain, lightpass_pre_bind_texture_group, JE_LIGHT2D_DEFER_0 + 2,
-                        post_rend_target_frame_buffer->get_attachment(2).value()->resource());
-                    // 绑定视空间法线通道
-                    jegl_rchain_bind_texture(light2d_light_effect_rend_chain, lightpass_pre_bind_texture_group, JE_LIGHT2D_DEFER_0 + 3,
-                        post_rend_target_frame_buffer->get_attachment(3).value()->resource());
-
-                    jegl_rchain_bind_pre_texture_group(light2d_light_effect_rend_chain, lightpass_pre_bind_texture_group);
+                    auto* diffuse_attachment = post_rend_target_frame_buffer->get_attachment(0).value()->resource();
+                    auto* emissive_attachment = post_rend_target_frame_buffer->get_attachment(1).value()->resource();
+                    auto* viewpos_attachment = post_rend_target_frame_buffer->get_attachment(2).value()->resource();
+                    auto* viewnorm_attachment = post_rend_target_frame_buffer->get_attachment(3).value()->resource();
 
                     for (auto* light2d_p : _2dlight_after_culling)
                     {
@@ -2562,10 +2551,36 @@ public func frag(vf: v2f)
 
                         assert(light2d.translation != nullptr && light2d.color != nullptr && light2d.shaders != nullptr && light2d.shape != nullptr);
 
-                        // 绑定阴影
                         auto texture_group = jegl_rchain_allocate_texture_group(light2d_light_effect_rend_chain);
 
-                        jegl_rchain_bind_texture(light2d_light_effect_rend_chain, texture_group,
+                        // 绑定漫反射颜色通道
+                        jegl_rchain_bind_texture(
+                            light2d_light_effect_rend_chain, 
+                            texture_group, 
+                            JE_LIGHT2D_DEFER_0 + 0,
+                            diffuse_attachment);
+                        // 绑定自发光通道
+                        jegl_rchain_bind_texture(
+                            light2d_light_effect_rend_chain, 
+                            texture_group, 
+                            JE_LIGHT2D_DEFER_0 + 1,
+                            emissive_attachment);
+                        // 绑定视空间坐标通道
+                        jegl_rchain_bind_texture(
+                            light2d_light_effect_rend_chain, 
+                            texture_group,
+                            JE_LIGHT2D_DEFER_0 + 2,
+                            viewpos_attachment);
+                        // 绑定视空间法线通道
+                        jegl_rchain_bind_texture(
+                            light2d_light_effect_rend_chain,
+                            texture_group, 
+                            JE_LIGHT2D_DEFER_0 + 3,
+                            viewnorm_attachment);
+                        // 绑定阴影
+                        jegl_rchain_bind_texture(
+                            light2d_light_effect_rend_chain, 
+                            texture_group,
                             JE_LIGHT2D_DEFER_0 + 4,
                             light2d.shadowbuffer != nullptr // assert light2d.shadowbuffer->buffer.has_value()
                             ? light2d.shadowbuffer->buffer.value()->get_attachment(0).value()->resource()
@@ -2593,8 +2608,12 @@ public func frag(vf: v2f)
                         const jeecs::math::vec2
                             * _using_tiling = &default_tiling,
                             * _using_offset = &default_offset;
+
                         jegl_rchain_bind_texture(
-                            light2d_light_effect_rend_chain, texture_group, 0, m_default_resources.default_texture->resource());
+                            light2d_light_effect_rend_chain,
+                            texture_group,
+                            0,
+                            m_default_resources.default_texture->resource());
 
                         if (light2d.textures != nullptr)
                         {
@@ -2603,7 +2622,10 @@ public func frag(vf: v2f)
 
                             for (auto& texture : light2d.textures->textures)
                                 jegl_rchain_bind_texture(
-                                    light2d_light_effect_rend_chain, texture_group, texture.m_pass_id, texture.m_texture->resource());
+                                    light2d_light_effect_rend_chain,
+                                    texture_group,
+                                    texture.m_pass_id,
+                                    texture.m_texture->resource());
                         }
 
                         for (auto& shader_pass : drawing_shaders)
@@ -2613,7 +2635,10 @@ public func frag(vf: v2f)
                                 using_shader = &m_default_resources.default_shader;
 
                             auto* rchain_draw_action = jegl_rchain_draw(
-                                light2d_light_effect_rend_chain, (*using_shader)->resource(), drawing_shape->resource(), texture_group);
+                                light2d_light_effect_rend_chain,
+                                (*using_shader)->resource(),
+                                drawing_shape->resource(),
+                                texture_group);
                             auto* builtin_uniform = (*using_shader)->m_builtin;
 
                             JE_CHECK_NEED_AND_SET_UNIFORM(rchain_draw_action, builtin_uniform, m, float4x4, MAT4_MODEL);
@@ -2694,7 +2719,7 @@ public func frag(vf: v2f)
                             current_camera.clear->color.x,
                             current_camera.clear->color.y,
                             current_camera.clear->color.z,
-                            current_camera.clear->color.w 
+                            current_camera.clear->color.w
                         };
                         jegl_rchain_clear_color_buffer(
                             final_target_rend_chain, 0, clear_buffer_color);

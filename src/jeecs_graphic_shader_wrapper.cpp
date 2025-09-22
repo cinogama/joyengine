@@ -632,7 +632,7 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_s
 
             variable->m_name = jeecs::basic::make_new_string(uniform_info.m_name);
             variable->m_uniform_type = uniform_info.m_type;
-            variable->m_index = jeecs::typing::INVALID_UINT32;
+            variable->m_index = jeecs::graphic::INVALID_UNIFORM_LOCATION;
             variable->m_value = uniform_info.m_init_value;
             variable->m_updated = true;
 
@@ -648,7 +648,7 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_s
             variable->m_next = nullptr;
             variable->m_name = jeecs::basic::make_new_string(texture.m_name);
             variable->m_uniform_type = jegl_shader::uniform_type::TEXTURE;
-            variable->m_index = jeecs::typing::INVALID_UINT32;
+            variable->m_index = jeecs::graphic::INVALID_UNIFORM_LOCATION;
             variable->m_value.ix = texture.m_pass;
             variable->m_updated = true;
             *last = variable;
@@ -664,7 +664,7 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_s
             jegl_shader::uniform_blocks* block = new jegl_shader::uniform_blocks();
             block->m_next = nullptr;
 
-            assert(uniform_block_info->m_binding_place != jeecs::typing::INVALID_UINT32);
+            assert(uniform_block_info->m_binding_place != jeecs::graphic::INVALID_UNIFORM_LOCATION);
 
             block->m_name = jeecs::basic::make_new_string(uniform_block_info->m_name);
             block->m_specify_binding_place = uniform_block_info->m_binding_place;
@@ -855,7 +855,7 @@ jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
         static_assert(sizeof(current_variable->m_value.mat4x4) == sizeof(float[4][4]));
         jeecs_file_read(&current_variable->m_value.mat4x4, sizeof(float[4][4]), 1, cache_file);
 
-        current_variable->m_index = jeecs::typing::INVALID_UINT32;
+        current_variable->m_index = jeecs::graphic::INVALID_UNIFORM_LOCATION;
         current_variable->m_updated = false;
 
         last_create_variable = current_variable;

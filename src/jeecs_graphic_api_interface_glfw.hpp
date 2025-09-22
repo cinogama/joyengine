@@ -374,7 +374,7 @@ namespace jeecs::graphic
 #ifndef NDEBUG
                     glfwSetErrorCallback([](int ecode, const char* desc) {
                         jeecs::debug::logwarn("Glfw error %d: %s", ecode, desc);
-                    });
+                        });
 #endif
                 }
 
@@ -529,7 +529,16 @@ namespace jeecs::graphic
             }
 
             if (glfwGetWindowAttrib(_m_windows, GLFW_CLIENT_API) != GLFW_NO_API)
+            {
                 glfwMakeContextCurrent(_m_windows);
+                // Donot sync for webgl, and donot process mouse event.
+#if JE4_CURRENT_PLATFORM != JE4_PLATFORM_WEBGL
+                if (config->m_fps == 0)
+                    glfwSwapInterval(1);
+                else
+#endif
+                    glfwSwapInterval(0);
+            }
 
             glfwSetWindowSizeCallback(_m_windows, glfw_callback_windows_size_changed);
             glfwSetWindowPosCallback(_m_windows, glfw_callback_windows_pos_changed);
@@ -545,19 +554,11 @@ namespace jeecs::graphic
                 (int)interface_width,
                 (int)interface_height);
 
-#if defined(JE_ENABLE_GL330_GAPI) || defined(JE_ENABLE_GLES300_GAPI) || defined(JE_ENABLE_WEBGL20_GAPI)
-            // Donot sync for webgl, and donot process mouse event.
             // We will process mouse event in javascript(WebGL).
-#   if JE4_CURRENT_PLATFORM != JE4_PLATFORM_WEBGL
+#if JE4_CURRENT_PLATFORM != JE4_PLATFORM_WEBGL
             glfwSetCursorPosCallback(_m_windows, glfw_callback_mouse_pos_changed);
             glfwSetMouseButtonCallback(_m_windows, glfw_callback_mouse_key_clicked);
             glfwSetScrollCallback(_m_windows, glfw_callback_mouse_scroll_changed);
-
-            if (config->m_fps == 0)
-                glfwSwapInterval(1);
-            else
-#   endif
-                glfwSwapInterval(0);
 #endif
         }
         virtual void swap_for_opengl() override

@@ -598,7 +598,7 @@ namespace jeecs::graphic::api::dx11
             if (fnd != m_uniform_locations.end())
                 return fnd->second;
 
-            return jeecs::typing::INVALID_UINT32;
+            return jeecs::graphic::INVALID_UNIFORM_LOCATION;
         }
     };
 
@@ -1928,7 +1928,7 @@ namespace jeecs::graphic::api::dx11
     {
         jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
 
-        if (location == jeecs::typing::INVALID_UINT32
+        if (location == jeecs::graphic::INVALID_UNIFORM_LOCATION
             || context->m_current_target_shader == nullptr)
             return;
 

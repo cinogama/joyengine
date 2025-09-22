@@ -122,15 +122,16 @@ void je_log_finish()
 
 std::atomic_size_t registered_id = 0;
 std::shared_mutex registered_callbacks_mx;
-std::unordered_map<size_t, std::pair<void (*)(int, const char*, void*), void*>> registered_callbacks;
+std::unordered_map<je_log_regid_t, std::pair<je_log_callback_t, void*>> registered_callbacks;
 
-size_t je_log_register_callback(void (*func)(int level, const char* msg, void* custom), void* custom)
+je_log_regid_t je_log_register_callback(je_log_callback_t callback, void* userdata)
 {
     size_t id = ++registered_id;
 
     std::lock_guard lg(registered_callbacks_mx);
+
     assert(registered_callbacks.find(id) == registered_callbacks.end());
-    registered_callbacks[id] = std::make_pair(func, custom);
+    registered_callbacks[id] = std::make_pair(callback, userdata);
 
     return id;
 }

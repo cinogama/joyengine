@@ -1,7 +1,9 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
-#if defined(JE_ENABLE_GL330_GAPI) || defined(JE_ENABLE_GLES300_GAPI) || defined(JE_ENABLE_WEBGL20_GAPI)
+#if defined(JE_ENABLE_GL330_GAPI)       \
+    || defined(JE_ENABLE_GLES300_GAPI)  \
+    || defined(JE_ENABLE_WEBGL20_GAPI)
 
 #include "jeecs_imgui_backend_api.hpp"
 
@@ -104,7 +106,7 @@ namespace jeecs::graphic::api::gl3
                 if (fnd != m_uniform_locations.end())
                     return fnd->second;
 
-                return jeecs::typing::INVALID_UINT32;
+                return jeecs::graphic::INVALID_UNIFORM_LOCATION;
             }
         };
 
@@ -488,7 +490,7 @@ namespace jeecs::graphic::api::gl3
     {
         jegl_gl3_context* context = reinterpret_cast<jegl_gl3_context*>(ctx);
 
-        if (location == jeecs::typing::INVALID_UINT32
+        if (location == jeecs::graphic::INVALID_UNIFORM_LOCATION
             || context->current_active_shader_may_null == nullptr)
             return;
 
@@ -977,7 +979,7 @@ namespace jeecs::graphic::api::gl3
                 {
                     if (uniform_var->m_uniform_type == jegl_shader::uniform_type::TEXTURE)
                     {
-                        uniform_var->m_index = jeecs::typing::INVALID_UINT32;
+                        uniform_var->m_index = jeecs::graphic::INVALID_UNIFORM_LOCATION;
 
                         auto count = snprintf(
                             gl_sampler_name,

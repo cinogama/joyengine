@@ -1640,7 +1640,7 @@ bool jegl_bind_shader(jegl_resource* shader)
 
     while (uniform_vars)
     {
-        if (uniform_vars->m_index != jeecs::typing::INVALID_UINT32)
+        if (uniform_vars->m_index != jeecs::graphic::INVALID_UNIFORM_LOCATION)
         {
             if (uniform_vars->m_updated || need_init_uvar)
             {
@@ -1846,4 +1846,11 @@ void jegl_uniform_float4x4(uint32_t location, const float (*mat)[4])
     // NOTE: This method designed for using after 'jegl_using_resource'
     _current_graphic_thread->m_apis->set_uniform(
         _current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT4X4, mat);
+}
+
+void jegl_uniform_value(
+    uint32_t location, jegl_shader::uniform_type type, const void* data)
+{
+    _current_graphic_thread->m_apis->set_uniform(
+        _current_graphic_thread->m_graphic_impl_context, location, type, data);
 }

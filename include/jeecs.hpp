@@ -7,7 +7,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 
 #ifndef __cplusplus
-#error jeecs.h only support for c++
+#   error jeecs.h only support for c++
 #else
 
 #include "wo.h"
@@ -45,31 +45,31 @@
 #include <initializer_list>
 #include <optional>
 #ifdef __cpp_lib_execution
-#include <execution>
+#   include <execution>
 #endif
 
 #define JE_FORCE_CAPI WO_FORCE_CAPI
 #define JE_FORCE_CAPI_END WO_FORCE_CAPI_END
 
 #ifdef WO_SHARED_LIB
-#define JE4_SHARED_CORE
+#   define JE4_SHARED_CORE
 #else
-#define JE4_STATIC_CORE
+#   define JE4_STATIC_CORE
 #endif
 
 #define JE_IMPORT WO_IMPORT
 #define JE_EXPORT WO_EXPORT
 
 #ifdef JE_IMPL
-#define JE_IMPORT_OR_EXPORT JE_EXPORT
+#   define JE_IMPORT_OR_EXPORT JE_EXPORT
 #else
-#define JE_IMPORT_OR_EXPORT JE_IMPORT
+#   define JE_IMPORT_OR_EXPORT JE_IMPORT
 #endif
 
 #ifdef JE4_STATIC_CORE
-#define JE_API
+#   define JE_API
 #else
-#define JE_API JE_IMPORT_OR_EXPORT
+#   define JE_API JE_IMPORT_OR_EXPORT
 #endif
 
 // Supported platform list
@@ -149,7 +149,7 @@ namespace jeecs
 
     /*
     jeecs::typing [命名空间]
-    此处定义引擎使用的常用类型和常量值
+    此处定义引擎使用的常用类型和类型相关的常量值
     */
     namespace typing
     {
@@ -174,23 +174,6 @@ namespace jeecs
             jeecs::typing::typeid_t
         */
         constexpr typeid_t INVALID_TYPE_ID = SIZE_MAX;
-
-        /*
-        jeecs::typing::INVALID_UINT32 [常量]
-        uint32_t 类型的无效值，通常被用于在图形库的资源中指示此资源不包含有效资源
-        请参见：
-            jegl_resource
-        */
-        constexpr uint32_t INVALID_UINT32 = (uint32_t)-1;
-
-        /*
-        jeecs::typing::PENDING_UNIFORM_LOCATION [常量]
-        图形库的一致变量位置信息初始值，由于此信息需要在对应着色器编译完成后才能确定，
-        因此此值暗示当前一致变量位置尚未确定，可通过此值确认shader状态，但不推荐
-        请参见：
-            jegl_shader
-        */
-        constexpr uint32_t PENDING_UNIFORM_LOCATION = (uint32_t)-2;
 
         struct type_info;
 
@@ -303,7 +286,10 @@ namespace jeecs
             static auto _type_selector() // -> T*
             {
                 if constexpr (
-                    std::is_reference<T>::value || std::is_pointer<T>::value || std::is_const<T>::value || std::is_volatile<T>::value)
+                    std::is_reference<T>::value 
+                    || std::is_pointer<T>::value 
+                    || std::is_const<T>::value 
+                    || std::is_volatile<T>::value)
                     return _origin_type<_origin_t<T>>::_type_selector();
                 else
                     return (T*)nullptr;
@@ -738,6 +724,22 @@ namespace jeecs
         */
         inline constexpr int EDITOR_GIZMO_BRANCH_QUEUE = 50000;
 
+        /*
+        jeecs::graphic::INVALID_UNIFORM_LOCATION [常量]
+        图形库的一致变量位置信息无效值，通常用于指示着色器中不存在指定名称的一致变量
+        请参见：
+            jegl_resource
+        */
+        constexpr uint32_t INVALID_UNIFORM_LOCATION = (uint32_t)-1;
+
+        /*
+        jeecs::graphic::PENDING_UNIFORM_LOCATION [常量]
+        图形库的一致变量位置信息初始值，由于此信息需要在对应着色器编译完成后才能确定，
+        因此此值暗示当前一致变量位置尚未确定，可通过此值确认shader状态，但不推荐
+        请参见：
+            jegl_shader
+        */
+        constexpr uint32_t PENDING_UNIFORM_LOCATION = (uint32_t)-2;
     }
 }
 
@@ -758,7 +760,8 @@ namespace std
     template <>
     struct equal_to<jeecs::typing::uid_t>
     {
-        inline constexpr size_t operator()(const jeecs::typing::uid_t& a, const jeecs::typing::uid_t& b) const noexcept
+        inline constexpr size_t operator()(
+            const jeecs::typing::uid_t& a, const jeecs::typing::uid_t& b) const noexcept
         {
             return a.a == b.a && a.b == b.b;
         }
@@ -847,11 +850,14 @@ JE_LOG_FATAL [宏常量]
 */
 #define JE_LOG_FATAL 4
 
+typedef size_t je_log_regid_t;
+typedef void (*je_log_callback_t)(int level, const char* msg, void* userdata);
+
 /*
 je_log_register_callback [基本接口]
 用于注册一个日志发生时的回调函数，返回注册句柄。
 */
-JE_API size_t je_log_register_callback(void (*func)(int level, const char* msg, void* custom), void* custom);
+JE_API je_log_regid_t je_log_register_callback(je_log_callback_t callback, void* userdata);
 
 /*
 je_log_unregister_callback [基本接口]
@@ -2019,21 +2025,21 @@ struct jegl_shader
         // NOTE: 不要写入这个位置，ndc_scale 是为了纠正渲染到纹理的 UV 映射关系用的
         //  仅由底层的图形库实现负责写入；改变和翻转 ndc 需要底层图形库配合正面旋向
         //  相关设置才能保证渲染结果正确
-        uint32_t m_builtin_uniform_ndc_scale = jeecs::typing::PENDING_UNIFORM_LOCATION;
+        uint32_t m_builtin_uniform_ndc_scale = jeecs::graphic::PENDING_UNIFORM_LOCATION;
 
-        uint32_t m_builtin_uniform_m = jeecs::typing::PENDING_UNIFORM_LOCATION;
-        uint32_t m_builtin_uniform_mv = jeecs::typing::PENDING_UNIFORM_LOCATION;
-        uint32_t m_builtin_uniform_mvp = jeecs::typing::PENDING_UNIFORM_LOCATION;
+        uint32_t m_builtin_uniform_m = jeecs::graphic::PENDING_UNIFORM_LOCATION;
+        uint32_t m_builtin_uniform_mv = jeecs::graphic::PENDING_UNIFORM_LOCATION;
+        uint32_t m_builtin_uniform_mvp = jeecs::graphic::PENDING_UNIFORM_LOCATION;
 
-        uint32_t m_builtin_uniform_local_scale = jeecs::typing::PENDING_UNIFORM_LOCATION;
+        uint32_t m_builtin_uniform_local_scale = jeecs::graphic::PENDING_UNIFORM_LOCATION;
 
-        uint32_t m_builtin_uniform_tiling = jeecs::typing::PENDING_UNIFORM_LOCATION;
-        uint32_t m_builtin_uniform_offset = jeecs::typing::PENDING_UNIFORM_LOCATION;
+        uint32_t m_builtin_uniform_tiling = jeecs::graphic::PENDING_UNIFORM_LOCATION;
+        uint32_t m_builtin_uniform_offset = jeecs::graphic::PENDING_UNIFORM_LOCATION;
 
-        uint32_t m_builtin_uniform_color = jeecs::typing::PENDING_UNIFORM_LOCATION;
+        uint32_t m_builtin_uniform_color = jeecs::graphic::PENDING_UNIFORM_LOCATION;
 
-        uint32_t m_builtin_uniform_light2d_resolution = jeecs::typing::PENDING_UNIFORM_LOCATION;
-        uint32_t m_builtin_uniform_light2d_decay = jeecs::typing::PENDING_UNIFORM_LOCATION;
+        uint32_t m_builtin_uniform_light2d_resolution = jeecs::graphic::PENDING_UNIFORM_LOCATION;
+        uint32_t m_builtin_uniform_light2d_decay = jeecs::graphic::PENDING_UNIFORM_LOCATION;
     };
 
     struct unifrom_variables
@@ -3071,6 +3077,17 @@ jegl_uniform_float4x4 [基本接口]
 */
 JE_API void jegl_uniform_float4x4(uint32_t location, const float (*mat)[4]);
 
+/*
+jegl_uniform_value [基本接口]
+向当前绑定着色器的指定位置的一致变量设置一个指定类型的数值
+    * 必须使用 jegl_bind_shader 在当前帧内事先绑定一个着色器
+    * 此函数只允许在图形线程内调用
+    * type 指定 data 指向的数据的类型，data 指向的数据必须至少包含 type 所指定的类型所需的字节数
+    * 请确保 type 和 data 指向的数据类型一致，否则结果未定义
+*/
+JE_API void jegl_uniform_value(
+    uint32_t location, jegl_shader::uniform_type type, const void* data);
+
 // jegl rendchain api
 
 /*
@@ -3156,7 +3173,7 @@ jegl_rchain_clear_depth_buffer [基本接口]
 JE_API void jegl_rchain_clear_depth_buffer(
     jegl_rendchain* chain, float clear_depth);
 
-typedef size_t jegl_rchain_texture_group_idx_t;
+typedef struct jegl_rchain_texture_group jegl_rchain_texture_group;
 
 /*
 jegl_rchain_allocate_texture_group [基本接口]
@@ -3168,20 +3185,20 @@ jegl_rchain_allocate_texture_group [基本接口]
     jegl_rchain_bind_texture
     jegl_rchain_bind_pre_texture_group
 */
-JE_API jegl_rchain_texture_group_idx_t jegl_rchain_allocate_texture_group(
+JE_API jegl_rchain_texture_group* jegl_rchain_allocate_texture_group(
     jegl_rendchain* chain);
 
 /*
 jegl_rchain_draw [基本接口]
 将指定的顶点，使用指定的着色器和纹理将绘制操作作用到绘制链上
-    * 若绘制的物体不需要使用纹理，可以使用不绑定纹理的纹理组或传入 SIZE_MAX
+    * 若绘制的物体不需要使用纹理，可以使用不绑定纹理的纹理组或传入 nullptr
     * 返回的对象仅限在同一个渲染链的下一次绘制命令开始之前使用。
 */
 JE_API jegl_rendchain_rend_action* jegl_rchain_draw(
     jegl_rendchain* chain,
     jegl_resource* shader,
     jegl_resource* vertex,
-    jegl_rchain_texture_group_idx_t texture_group);
+    jegl_rchain_texture_group* texture_group_may_null);
 
 /*
 jegl_rchain_set_uniform_buffer [基本接口]
@@ -3294,6 +3311,28 @@ JE_API void jegl_rchain_set_uniform_float4(
     float w);
 
 /*
+jegl_rchain_set_uniform_float2x2 [基本接口]
+为 act 指定的绘制操作应用2x2单精度浮点数矩阵一致变量
+请参见：
+    jegl_rendchain_rend_action
+*/
+JE_API void jegl_rchain_set_uniform_float2x2(
+    jegl_rendchain_rend_action* act,
+    uint32_t binding_place,
+    const float (*mat)[2]);
+
+/*
+jegl_rchain_set_uniform_float3x3 [基本接口]
+为 act 指定的绘制操作应用3x3单精度浮点数矩阵一致变量
+请参见：
+    jegl_rendchain_rend_action
+*/
+JE_API void jegl_rchain_set_uniform_float3x3(
+    jegl_rendchain_rend_action* act,
+    uint32_t binding_place,
+    const float (*mat)[3]);
+
+/*
 jegl_rchain_set_uniform_float4x4 [基本接口]
 为 act 指定的绘制操作应用4x4单精度浮点数矩阵一致变量
 请参见：
@@ -3399,6 +3438,28 @@ JE_API void jegl_rchain_set_builtin_uniform_float4(
     float w);
 
 /*
+jegl_rchain_set_builtin_uniform_float2x2 [基本接口]
+为 act 指定的绘制操作应用2x2单精度浮点数矩阵一致变量
+请参见：
+    jegl_rendchain_rend_action
+*/
+JE_API void jegl_rchain_set_builtin_uniform_float2x2(
+    jegl_rendchain_rend_action* act,
+    uint32_t* binding_place,
+    const float (*mat)[2]);
+
+/*
+jegl_rchain_set_builtin_uniform_float3x3 [基本接口]
+为 act 指定的绘制操作应用3x3单精度浮点数矩阵一致变量
+请参见：
+    jegl_rendchain_rend_action
+*/
+JE_API void jegl_rchain_set_builtin_uniform_float3x3(
+    jegl_rendchain_rend_action* act,
+    uint32_t* binding_place,
+    const float (*mat)[3]);
+
+/*
 jegl_rchain_set_builtin_uniform_float4x4 [基本接口]
 为 act 指定的绘制操作应用4x4单精度浮点数矩阵一致变量
 请参见：
@@ -3417,21 +3478,9 @@ jegl_rchain_bind_texture [基本接口]
 */
 JE_API void jegl_rchain_bind_texture(
     jegl_rendchain* chain,
-    jegl_rchain_texture_group_idx_t texture_group,
+    jegl_rchain_texture_group* texture_group,
     size_t binding_pass,
     jegl_resource* texture);
-
-/*
-jegl_rchain_bind_pre_texture_group [基本接口]
-将指定的纹理组在全部绘制操作开始前绑定
-    * 预先绑定的纹理可能被覆盖，请保证与其他绘制操作占据的通道做出区分
-请参见：
-    jegl_rchain_allocate_texture_group
-    jegl_rchain_bind_texture
-*/
-JE_API void jegl_rchain_bind_pre_texture_group(
-    jegl_rendchain* chain,
-    size_t texture_group);
 
 /*
 jegl_rchain_commit [基本接口]
@@ -4393,11 +4442,11 @@ JE_API void jeal_enumerate_devices_and_do(
 
 /*
 jeal_disconnect_all_devices [基本接口]
-关闭所有现有的设备，如同没有枚举到任何设备一般
-    * 正常情况下不需要调用这个接口，这个接口是为一些移动端设备等，在程序切至
+关闭所有现有的播放设备，如同没有枚举到任何播放设备一般
+    * 正常情况下不需要调用这个接口，这个接口是为一些移动端平台，在程序切至
         后台时，需要暂停（终止）所有音频的播放；此时使用这个接口可以彻底终止
         所有音频效果
-    * 恢复时，使用 jeal_enumerate_devices_and_do 重新枚举所有设备
+    * 恢复时，使用 jeal_enumerate_devices_and_do 重新枚举所有设备以恢复播放
 参见：
     jeal_enumerate_devices_and_do
 */
@@ -5162,7 +5211,8 @@ namespace jeecs
         jeecs::basic::hash_compile_time [函数]
         可在编译时计算字符串的哈希值的哈希函数
         */
-        constexpr typing::typehash_t hash_compile_time(char const* str, typing::typehash_t last_value = basis)
+        constexpr typing::typehash_t hash_compile_time(
+            char const* str, typing::typehash_t last_value = basis)
         {
             return *str ? hash_compile_time(str + 1, (*str ^ last_value) * prime) : last_value;
         }
@@ -5282,7 +5332,8 @@ namespace jeecs
             struct has_pointer_typeinfo_constructor_function
             {
                 template <typename V>
-                static auto _tester(int) -> _true_type<decltype(new V(std::declval<void*>(), std::declval<const jeecs::typing::type_info*>()))>;
+                static auto _tester(int) -> _true_type<decltype(
+                    new V(std::declval<void*>(), std::declval<const jeecs::typing::type_info*>()))>;
 
                 template <typename V>
                 static std::false_type _tester(...);
@@ -5304,7 +5355,8 @@ namespace jeecs
             struct has_typeinfo_constructor_function
             {
                 template <typename V>
-                static auto _tester(int) -> _true_type<decltype(new V(std::declval<const jeecs::typing::type_info*>()))>;
+                static auto _tester(int) -> _true_type<decltype(
+                    new V(std::declval<const jeecs::typing::type_info*>()))>;
 
                 template <typename V>
                 static std::false_type _tester(...);
@@ -8349,7 +8401,10 @@ namespace jeecs
             static basic::resource<texture> clip(
                 const basic::resource<texture>& src, size_t x, size_t y, size_t w, size_t h)
             {
-                jegl_texture::format new_texture_format = (jegl_texture::format)(src->resource()->m_raw_texture_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK);
+                jegl_texture::format new_texture_format = 
+                    (jegl_texture::format)(
+                        src->resource()->m_raw_texture_data->m_format 
+                        & jegl_texture::format::COLOR_DEPTH_MASK);
                 jegl_resource* res = jegl_create_texture(w, h, new_texture_format);
 
                 // Create texture must be successfully.
@@ -8744,7 +8799,7 @@ namespace jeecs
                     jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
 
-                return typing::INVALID_UINT32;
+                return graphic::INVALID_UNIFORM_LOCATION;
             }
             uint32_t* get_uniform_location_as_builtin(const std::string& name)
             {
@@ -8757,7 +8812,6 @@ namespace jeecs
                     }
                     jegl_shad_uniforms = jegl_shad_uniforms->m_next;
                 }
-
                 return nullptr;
             }
         };
@@ -9461,7 +9515,9 @@ namespace jeecs
             size_t _m_this_frame_allocate_rchain_pipeline_count;
 
             BasePipelineInterface(game_world w, const jegl_interface_config* config)
-                : game_system(w), _m_graphic_host(jegl_uhost_get_or_create_for_universe(w.get_universe().handle(), config)), _m_this_frame_allocate_rchain_pipeline_count(0)
+                : game_system(w)
+                , _m_graphic_host(jegl_uhost_get_or_create_for_universe(w.get_universe().handle(), config))
+                , _m_this_frame_allocate_rchain_pipeline_count(0)
             {
             }
             ~BasePipelineInterface()
@@ -11121,15 +11177,23 @@ namespace jeecs
                                                 jeecs_file_read(&value.m_value.q4, sizeof(value.m_value.q4), 1, file_handle);
                                                 break;
                                             default:
-                                                jeecs::debug::logerr("Unknown value type(%d) for component frame data when reading animation '%s' frame %zu in '%s'.",
-                                                    (int)value.m_type, frame_name.c_str(), (size_t)j, str.c_str());
+                                                jeecs::debug::logerr(
+                                                    "Unknown value type(%d) for component frame data when reading animation '%s' frame %zu in '%s'.",
+                                                    (int)value.m_type,
+                                                    frame_name.c_str(),
+                                                    (size_t)j, 
+                                                    str.c_str());
                                                 break;
                                             }
 
                                             auto* component_type = jeecs::typing::type_info::of(component_name.c_str());
                                             if (component_type == nullptr)
-                                                jeecs::debug::logerr("Failed to found component type named '%s' when reading animation '%s' frame %zu in '%s'.",
-                                                    component_name.c_str(), frame_name.c_str(), (size_t)j, str.c_str());
+                                                jeecs::debug::logerr(
+                                                    "Failed to found component type named '%s' when reading animation '%s' frame %zu in '%s'.",
+                                                    component_name.c_str(), 
+                                                    frame_name.c_str(),
+                                                    (size_t)j, 
+                                                    str.c_str());
                                             else
                                             {
                                                 frame_data::component_data cdata;
@@ -11141,8 +11205,13 @@ namespace jeecs
                                                 cdata.m_entity_cache = {};
 
                                                 if (cdata.m_member_info == nullptr)
-                                                    jeecs::debug::logerr("Component '%s' donot have member named '%s' when reading animation '%s' frame %zu in '%s'.",
-                                                        component_name.c_str(), member_name.c_str(), frame_name.c_str(), (size_t)j, str.c_str());
+                                                    jeecs::debug::logerr(
+                                                        "Component '%s' donot have member named '%s' when reading animation '%s' frame %zu in '%s'.",
+                                                        component_name.c_str(), 
+                                                        member_name.c_str(),
+                                                        frame_name.c_str(), 
+                                                        (size_t)j,
+                                                        str.c_str());
                                                 else
                                                     frame_dat.m_component_data.push_back(cdata);
                                             }
@@ -11338,7 +11407,10 @@ namespace jeecs
                 last_position = another.last_position;
             }
             Source(Source&& another) noexcept
-                : source(std::move(another.source)), pitch(another.pitch), volume(another.volume), last_position(another.last_position)
+                : source(std::move(another.source))
+                , pitch(another.pitch)
+                , volume(another.volume)
+                , last_position(another.last_position)
             {
             }
 
@@ -11794,7 +11866,10 @@ namespace jeecs
                         translation.local_scale * entity_box_size,
                         translation.world_rotation);
 
-                if (minResult.intersected && consider_mesh && entity_shape_may_null != nullptr && entity_shape_may_null->vertex.has_value())
+                if (minResult.intersected 
+                    && consider_mesh 
+                    && entity_shape_may_null != nullptr 
+                    && entity_shape_may_null->vertex.has_value())
                 {
                     return intersect_mesh(
                         entity_shape_may_null->vertex.value(),

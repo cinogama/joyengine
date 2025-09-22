@@ -783,7 +783,7 @@ WO_API wo_api wojeapi_towoo_register_system_job(wo_vm vm, wo_value args)
 
     _jetowoo_job_type que = (_jetowoo_job_type)wo_int(args + 2);
     wo_value requirements = args + 3;
-    wo_integer_t component_arg_count = wo_int(args + 4);
+    size_t component_arg_count = (size_t)wo_int(args + 4);
     bool is_single_work = wo_bool(args + 5);
     wo_value requirement_info = s + 0;
     wo_value elem = s + 1;
@@ -1398,7 +1398,6 @@ WO_API wo_api wojeapi_towoo_animation_frameanimation_stop_animation(wo_vm vm, wo
 
     return wo_ret_void(vm);
 }
-
 
 WO_API wo_api wojeapi_towoo_animation_frameanimation_is_playing(wo_vm vm, wo_value args)
 {

@@ -200,7 +200,7 @@ namespace jeecs::graphic::api::metal
             if (fnd != m_uniform_locations.end())
                 return fnd->second;
 
-            return jeecs::typing::INVALID_UINT32;
+            return jeecs::graphic::INVALID_UNIFORM_LOCATION;
         }
     };
     struct metal_shader
@@ -465,7 +465,6 @@ namespace jeecs::graphic::api::metal
             // If glfw enabled.
             glfw_window,
             context->m_metal_device);
-
 
         return context;
     }
@@ -1470,7 +1469,7 @@ namespace jeecs::graphic::api::metal
 
         auto* current_shader = metal_context->m_render_states.m_current_target_shader;
 
-        if (location == jeecs::typing::INVALID_UINT32
+        if (location == jeecs::graphic::INVALID_UNIFORM_LOCATION
             || current_shader == nullptr)
             return;
 
