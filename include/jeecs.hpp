@@ -8599,8 +8599,8 @@ namespace jeecs
                 jegl_vertex::type type,
                 const void* pdatas,
                 size_t pdatalen,
-                const std::vector<uint32_t> idatas, // EBO indices
-                const std::vector<jegl_vertex::data_layout> fdatas)
+                const std::vector<uint32_t>& idatas, // EBO indices
+                const std::vector<jegl_vertex::data_layout>& fdatas)
             {
                 auto* res = jegl_create_vertex(
                     type,
