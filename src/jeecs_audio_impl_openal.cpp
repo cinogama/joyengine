@@ -1625,18 +1625,32 @@ namespace jeecs
                 jeecs_file_read(&useless, sizeof(int16_t), 1, wav_file);
             }
 
-            // Read in the the last byte of data before the sound file
-            jeecs_file_read(&wave_data, sizeof(WAVE_Data), 1, wav_file);
-            // check for data tag in memory
-            if (wave_data.subChunkID[0] != 'd' ||
-                wave_data.subChunkID[1] != 'a' ||
-                wave_data.subChunkID[2] != 't' ||
-                wave_data.subChunkID[3] != 'a')
+            do
             {
-                jeecs::debug::logerr("Invalid wav file: '%s', bad data head.", path);
-                jeecs_file_close(wav_file);
-                return nullptr;
-            }
+                // Read in the the last byte of data before the sound file
+                if (0 == jeecs_file_read(&wave_data, sizeof(WAVE_Data), 1, wav_file))
+                {
+                    jeecs::debug::logerr("Invalid wav file: '%s', bad data head.", path);
+                    jeecs_file_close(wav_file);
+                    return nullptr;
+                }
+
+                // check for data tag in memory
+                if (wave_data.subChunkID[0] == 'd' ||
+                    wave_data.subChunkID[1] == 'a' ||
+                    wave_data.subChunkID[2] == 't' ||
+                    wave_data.subChunkID[3] == 'a')
+                {
+                    // data chunk found.
+                    break;
+                }
+                else
+                {
+                    // Skip the chunk data we don't care about
+                    jeecs_file_seek(wav_file, wave_data.subChunk2Size, JE_READ_FILE_SEEK_CURRENT);
+                }
+
+            } while (true);
 
             // Allocate memory for data
             void* data = malloc(wave_data.subChunk2Size);
