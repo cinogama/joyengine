@@ -499,6 +499,14 @@ namespace je::shader
                         return ShaderGeneratorContext::EvalResult::Decl(
                             F"{typename} {vname} = {tex}.Sample({sampler}, {uv});");
                     }
+                    else if (builtin_func == BuiltinFunc::Operate_Step)
+                    {
+                        let value = self->eval(c, args[0], ftype);
+                        let edge = self->eval(c, args[1], ftype);
+                        
+                        return ShaderGeneratorContext::EvalResult::Decl(
+                            F"{typename} {vname} = step({edge}, {value});");
+                    }
                     else
                     {
                         static let BUILTIN_FUNC_NAMES = {
@@ -512,7 +520,6 @@ namespace je::shader
                             [BuiltinFunc::Operator_Make_Float2x2] = "float2x2",
                             [BuiltinFunc::Operator_Make_Float3x3] = "float3x3",
                             [BuiltinFunc::Operator_Make_Float4x4] = "float4x4",
-                            [BuiltinFunc::Operate_Step] = "step",
                             [BuiltinFunc::Operate_Lerp] = "lerp",
                             [BuiltinFunc::Operate_Sin] = "sin",
                             [BuiltinFunc::Operate_Cos] = "cos",
@@ -534,6 +541,7 @@ namespace je::shader
                             [BuiltinFunc::Operate_Floor] = "floor",
                             [BuiltinFunc::Operate_Ceil] = "ceil",
                             [BuiltinFunc::Operate_Fract] = "frac",
+                            [BuiltinFunc::Operate_Round] = "round",
                             [BuiltinFunc::Operate_Sqrt] = "sqrt",
                             [BuiltinFunc::Operate_Normalize] = "normalize",
                             [BuiltinFunc::Operate_Dot] = "dot",
