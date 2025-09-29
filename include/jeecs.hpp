@@ -10131,11 +10131,7 @@ namespace jeecs
             {
                 for (size_t index = 0; index < 6; ++index)
                 {
-                    auto distance_vec = frustum_plane_normals[index] * origin;
-                    auto distance = distance_vec.x + distance_vec.y + distance_vec.z +
-                        frustum_plane_distance[index];
-
-                    if (distance < -r)
+                    if (frustum_plane_normals[index].dot(origin) + frustum_plane_distance[index] < -r)
                         return false;
                 }
                 return true;

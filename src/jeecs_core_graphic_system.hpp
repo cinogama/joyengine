@@ -89,9 +89,9 @@ public let frag =
         where t = JE_TIME->y
         ;
     ;
-)")
-                                 .value() },
-            default_texture{ graphic::texture::create(2, 2, jegl_texture::format::RGBA) }, default_shaders_list{ default_shader }
+)").value() }
+            , default_texture{ graphic::texture::create(2, 2, jegl_texture::format::RGBA) }
+            , default_shaders_list{ default_shader }
         {
             default_texture->pix(0, 0).set({ 1.f, 0.25f, 1.f, 1.f });
             default_texture->pix(1, 1).set({ 1.f, 0.25f, 1.f, 1.f });
@@ -309,13 +309,6 @@ public let frag =
             }
 
             return size;
-        }
-        math::vec3 get_entity_size(const Transform::Translation& trans, const Renderer::Shape* shape_may_null)
-        {
-            if (shape_may_null != nullptr)
-                return get_entity_size(trans, shape_may_null->vertex);
-            else
-                return get_entity_size(trans, std::nullopt);
         }
     };
 
@@ -745,10 +738,12 @@ public let frag =
                 // Walk through all entities, rend them to target buffer(include L2DCamera/R2Buf/Screen).
                 for (auto& rendentity : m_renderer_list)
                 {
-                    assert(rendentity.translation != nullptr && rendentity.shaders != nullptr && rendentity.shape != nullptr);
+                    assert(rendentity.translation != nullptr
+                        && rendentity.shaders != nullptr
+                        && rendentity.shape != nullptr);
 
                     const float entity_range = 0.5f *
-                        get_entity_size(*rendentity.translation, rendentity.shape).length();
+                        get_entity_size(*rendentity.translation, rendentity.shape->vertex).length();
 
                     if (current_camera.frustumCulling != nullptr)
                     {
@@ -1998,7 +1993,7 @@ public func frag(vf: v2f)
                     {
                         const float light_range = 0.5f *
                             (lightarch.range == nullptr
-                                ? get_entity_size(*lightarch.translation, lightarch.shape).length()
+                                ? get_entity_size(*lightarch.translation, lightarch.shape->vertex).length()
                                 : get_entity_size(*lightarch.translation, lightarch.range->shape.m_light_mesh).length());
 
                         if (current_camera.frustumCulling != nullptr && lightarch.parallel == nullptr)
@@ -2064,7 +2059,7 @@ public func frag(vf: v2f)
                                     : (int64_t)(blockarch.translation->world_position.y * 100.f);
 
                                 const float block_range = 0.5f *
-                                    get_entity_size(*blockarch.translation, blockarch.shape).length();
+                                    get_entity_size(*blockarch.translation, blockarch.shape->vertex).length();
 
                                 const auto l2b_distance = (math::vec2(blockarch.translation->world_position) -
                                     math::vec2(lightarch.translation->world_position))
@@ -2427,10 +2422,12 @@ public func frag(vf: v2f)
                 // Walk through all entities, rend them to target buffer(include L2DCamera/R2Buf/Screen).
                 for (auto& rendentity : m_renderer_list)
                 {
-                    assert(rendentity.translation != nullptr && rendentity.shaders != nullptr && rendentity.shape != nullptr);
+                    assert(rendentity.translation != nullptr 
+                        && rendentity.shaders != nullptr 
+                        && rendentity.shape != nullptr);
 
                     const float entity_range = 0.5f *
-                        get_entity_size(*rendentity.translation, rendentity.shape).length();
+                        get_entity_size(*rendentity.translation, rendentity.shape->vertex).length();
 
                     if (current_camera.frustumCulling != nullptr)
                     {
