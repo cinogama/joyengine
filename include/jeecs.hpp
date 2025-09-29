@@ -10113,6 +10113,20 @@ namespace jeecs
             float frustum_plane_distance[6] = {};
             math::vec3 frustum_plane_normals[6] = {};
 
+            void set_plane_normal_and_distance(
+                size_t plane_idx, float nx, float ny, float nz, float d)
+            {
+                auto& normal = frustum_plane_normals[plane_idx];
+
+                normal.x = nx;
+                normal.y = ny;
+                normal.z = nz;
+
+                const float len = normal.length();
+                normal /= len;
+
+                frustum_plane_distance[plane_idx] = d / len;
+            }
             bool test_circle(const math::vec3& origin, float r) const
             {
                 for (size_t index = 0; index < 6; ++index)

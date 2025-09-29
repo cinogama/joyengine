@@ -194,7 +194,7 @@ public let frag =
                 ? rendbuf->framebuffer.value().get()
                 : nullptr;
 
-            size_t
+            const size_t
                 RENDAIMBUFFER_WIDTH =
                 (size_t)llround(
                     (viewport ? viewport->viewport.z : 1.0f) *
@@ -238,68 +238,53 @@ public let frag =
 
             if (frustumCulling != nullptr)
             {
-                float ortho_height_gain = ortho != nullptr
-                    ? graphic::ORTHO_PROJECTION_RATIO / ortho->scale
-                    : 1.0f;
-                float ortho_width_gain = ortho != nullptr
-                    ? (float)RENDAIMBUFFER_WIDTH / (float)RENDAIMBUFFER_HEIGHT * ortho_height_gain
-                    : 1.0f;
-
-                float ortho_depth_gain = ortho != nullptr ? projection.zfar * 0.5f : 1.0f;
-
                 // Left clipping plane
-                frustumCulling->frustum_plane_normals[0] =
-                    ortho_width_gain * math::vec3(
-                        projection.view_projection[0][3] + projection.view_projection[0][0],
-                        projection.view_projection[1][3] + projection.view_projection[1][0],
-                        projection.view_projection[2][3] + projection.view_projection[2][0]);
-                frustumCulling->frustum_plane_distance[0] =
-                    ortho_width_gain * (projection.view_projection[3][3] + projection.view_projection[3][0]);
+                frustumCulling->set_plane_normal_and_distance(
+                    0,
+                    projection.view_projection[0][3] + projection.view_projection[0][0],
+                    projection.view_projection[1][3] + projection.view_projection[1][0],
+                    projection.view_projection[2][3] + projection.view_projection[2][0],
+                    projection.view_projection[3][3] + projection.view_projection[3][0]);
 
                 // Right clipping plane
-                frustumCulling->frustum_plane_normals[1] =
-                    ortho_width_gain * math::vec3(
-                        projection.view_projection[0][3] - projection.view_projection[0][0],
-                        projection.view_projection[1][3] - projection.view_projection[1][0],
-                        projection.view_projection[2][3] - projection.view_projection[2][0]);
-                frustumCulling->frustum_plane_distance[1] =
-                    ortho_width_gain * (projection.view_projection[3][3] - projection.view_projection[3][0]);
+                frustumCulling->set_plane_normal_and_distance(
+                    1,
+                    projection.view_projection[0][3] - projection.view_projection[0][0],
+                    projection.view_projection[1][3] - projection.view_projection[1][0],
+                    projection.view_projection[2][3] - projection.view_projection[2][0],
+                    projection.view_projection[3][3] - projection.view_projection[3][0]);
 
                 // Top clipping plane
-                frustumCulling->frustum_plane_normals[2] =
-                    ortho_height_gain * math::vec3(
-                        projection.view_projection[0][3] - projection.view_projection[0][1],
-                        projection.view_projection[1][3] - projection.view_projection[1][1],
-                        projection.view_projection[2][3] - projection.view_projection[2][1]);
-                frustumCulling->frustum_plane_distance[2] =
-                    ortho_height_gain * (projection.view_projection[3][3] - projection.view_projection[3][1]);
+                frustumCulling->set_plane_normal_and_distance(
+                    2,
+                    projection.view_projection[0][3] - projection.view_projection[0][1],
+                    projection.view_projection[1][3] - projection.view_projection[1][1],
+                    projection.view_projection[2][3] - projection.view_projection[2][1],
+                    projection.view_projection[3][3] - projection.view_projection[3][1]);
 
                 // Bottom clipping plane
-                frustumCulling->frustum_plane_normals[3] =
-                    ortho_height_gain * math::vec3(
-                        projection.view_projection[0][3] + projection.view_projection[0][1],
-                        projection.view_projection[1][3] + projection.view_projection[1][1],
-                        projection.view_projection[2][3] + projection.view_projection[2][1]);
-                frustumCulling->frustum_plane_distance[3] =
-                    ortho_height_gain * (projection.view_projection[3][3] + projection.view_projection[3][1]);
+                frustumCulling->set_plane_normal_and_distance(
+                    3,
+                    projection.view_projection[0][3] + projection.view_projection[0][1],
+                    projection.view_projection[1][3] + projection.view_projection[1][1],
+                    projection.view_projection[2][3] + projection.view_projection[2][1],
+                    projection.view_projection[3][3] + projection.view_projection[3][1]);
 
                 // Near clipping plane
-                frustumCulling->frustum_plane_normals[4] =
-                    ortho_depth_gain * math::vec3(
-                        projection.view_projection[0][3] + projection.view_projection[0][2],
-                        projection.view_projection[1][3] + projection.view_projection[1][2],
-                        projection.view_projection[2][3] + projection.view_projection[2][2]);
-                frustumCulling->frustum_plane_distance[4] =
-                    ortho_depth_gain * (projection.view_projection[3][3] + projection.view_projection[3][2]);
+                frustumCulling->set_plane_normal_and_distance(
+                    4,
+                    projection.view_projection[0][3] + projection.view_projection[0][2],
+                    projection.view_projection[1][3] + projection.view_projection[1][2],
+                    projection.view_projection[2][3] + projection.view_projection[2][2],
+                    projection.view_projection[3][3] + projection.view_projection[3][2]);
 
                 // Far clipping plane
-                frustumCulling->frustum_plane_normals[5] =
-                    ortho_depth_gain * math::vec3(
-                        projection.view_projection[0][3] - projection.view_projection[0][2],
-                        projection.view_projection[1][3] - projection.view_projection[1][2],
-                        projection.view_projection[2][3] - projection.view_projection[2][2]);
-                frustumCulling->frustum_plane_distance[5] =
-                    ortho_depth_gain * (projection.view_projection[3][3] - projection.view_projection[3][2]);
+                frustumCulling->set_plane_normal_and_distance(
+                    5,
+                    projection.view_projection[0][3] - projection.view_projection[0][2],
+                    projection.view_projection[1][3] - projection.view_projection[1][2],
+                    projection.view_projection[2][3] - projection.view_projection[2][2],
+                    projection.view_projection[3][3] - projection.view_projection[3][2]);
             }
         }
 
@@ -432,7 +417,7 @@ public let frag =
                     else
                         continue;
                 }
-                size_t RENDAIMBUFFER_WIDTH = rend_aim_buffer ? rend_aim_buffer->width() : WINDOWS_WIDTH,
+                const size_t RENDAIMBUFFER_WIDTH = rend_aim_buffer ? rend_aim_buffer->width() : WINDOWS_WIDTH,
                     RENDAIMBUFFER_HEIGHT = rend_aim_buffer ? rend_aim_buffer->height() : WINDOWS_HEIGHT;
 
                 jegl_rendchain* rend_chain = nullptr;
@@ -697,7 +682,7 @@ public let frag =
                         continue;
                 }
 
-                size_t
+                const size_t
                     RENDAIMBUFFER_WIDTH = rend_aim_buffer ? rend_aim_buffer->width() : WINDOWS_WIDTH,
                     RENDAIMBUFFER_HEIGHT = rend_aim_buffer ? rend_aim_buffer->height() : WINDOWS_HEIGHT;
 
@@ -1655,20 +1640,20 @@ public func frag(vf: v2f)
                             ? rendbuf->framebuffer->get()
                             : nullptr;
 
-                        size_t RENDAIMBUFFER_WIDTH =
+                        const size_t RENDAIMBUFFER_WIDTH =
                             std::max((size_t)1, (size_t)llround(
                                 (cameraviewport ? cameraviewport->viewport.z : 1.0f) *
                                 (rend_aim_buffer ? rend_aim_buffer->width() : WINDOWS_WIDTH)));
-                        size_t RENDAIMBUFFER_HEIGHT =
+                        const size_t RENDAIMBUFFER_HEIGHT =
                             std::max((size_t)1, (size_t)llround(
                                 (cameraviewport ? cameraviewport->viewport.w : 1.0f) *
                                 (rend_aim_buffer ? rend_aim_buffer->height() : WINDOWS_HEIGHT)));
 
-                        size_t LIGHT_BUFFER_WIDTH =
+                        const size_t LIGHT_BUFFER_WIDTH =
                             std::max((size_t)1, (size_t)llround(
                                 RENDAIMBUFFER_WIDTH * std::max(0.f, std::min(light2dpostpass->light_rend_ratio, 1.0f))));
 
-                        size_t LIGHT_BUFFER_HEIGHT =
+                        const size_t LIGHT_BUFFER_HEIGHT =
                             std::max((size_t)1, (size_t)llround(
                                 RENDAIMBUFFER_HEIGHT * std::max(0.f, std::min(light2dpostpass->light_rend_ratio, 1.0f))));
 
@@ -1965,7 +1950,7 @@ public func frag(vf: v2f)
                         continue;
                 }
 
-                size_t
+                const size_t
                     RENDAIMBUFFER_WIDTH = rend_aim_buffer ? rend_aim_buffer->width() : WINDOWS_WIDTH,
                     RENDAIMBUFFER_HEIGHT = rend_aim_buffer ? rend_aim_buffer->height() : WINDOWS_HEIGHT;
 
@@ -2555,31 +2540,31 @@ public func frag(vf: v2f)
 
                         // 绑定漫反射颜色通道
                         jegl_rchain_bind_texture(
-                            light2d_light_effect_rend_chain, 
-                            texture_group, 
+                            light2d_light_effect_rend_chain,
+                            texture_group,
                             JE_LIGHT2D_DEFER_0 + 0,
                             diffuse_attachment);
                         // 绑定自发光通道
                         jegl_rchain_bind_texture(
-                            light2d_light_effect_rend_chain, 
-                            texture_group, 
+                            light2d_light_effect_rend_chain,
+                            texture_group,
                             JE_LIGHT2D_DEFER_0 + 1,
                             emissive_attachment);
                         // 绑定视空间坐标通道
                         jegl_rchain_bind_texture(
-                            light2d_light_effect_rend_chain, 
+                            light2d_light_effect_rend_chain,
                             texture_group,
                             JE_LIGHT2D_DEFER_0 + 2,
                             viewpos_attachment);
                         // 绑定视空间法线通道
                         jegl_rchain_bind_texture(
                             light2d_light_effect_rend_chain,
-                            texture_group, 
+                            texture_group,
                             JE_LIGHT2D_DEFER_0 + 3,
                             viewnorm_attachment);
                         // 绑定阴影
                         jegl_rchain_bind_texture(
-                            light2d_light_effect_rend_chain, 
+                            light2d_light_effect_rend_chain,
                             texture_group,
                             JE_LIGHT2D_DEFER_0 + 4,
                             light2d.shadowbuffer != nullptr // assert light2d.shadowbuffer->buffer.has_value()
