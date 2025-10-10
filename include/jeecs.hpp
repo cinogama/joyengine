@@ -3703,7 +3703,7 @@ struct jeal_buffer
     jeal_native_buffer_instance*
         m_buffer_instance;
 
-    size_t m_references; // 引用计数
+    mutable size_t m_references; // 引用计数
 
     const void* m_data;
     size_t m_size;
@@ -4050,6 +4050,50 @@ jeal_close_buffer [基本接口]
 */
 JE_API void jeal_close_buffer(const jeal_buffer* buffer);
 
+
+enum jeal_filter_type
+{
+    JE_AUDIO_FILTER_LOWPASS,
+    JE_AUDIO_FILTER_HIGHPASS,
+    JE_AUDIO_FILTER_BANDPASS,
+};
+
+struct jeal_native_filter_instance;
+struct jeal_filter
+{
+    jeal_native_filter_instance*
+        m_filter_instance;
+
+    size_t m_references; // 引用计数
+
+    // 滤波器类型, 默认值为 JE_AUDIO_FILTER_LOWPASS
+    jeal_filter_type    m_type;
+    // 增益，默认值为 1.0，范围 [0.0, 1.0]
+    float               m_gain;
+    // 低频增益（对高通滤波器无效），0 表示完全压制低频部分，默认值为 0.5，范围 [0.0, 1.0]
+    float               m_gain_lf;
+    // 高频增益（对低通滤波器无效），0 表示完全压制高频部分，默认值为 0.5，范围 [0.0, 1.0]
+    float               m_gain_hf;
+};
+
+/*
+jeal_create_filter_lowpass [基本接口]
+创建一个低通滤波器
+*/
+jeal_filter* jeal_create_filter();
+
+/*
+jeal_update_filter [基本接口]
+将对 jeal_filter 的参数修改应用到实际的滤波器上
+*/
+void jeal_update_filter(jeal_filter* filter);
+
+/*
+jeal_close_filter [基本接口]
+关闭一个滤波器
+*/
+void jeal_close_filter(jeal_filter* filter);
+
 /*
 jeal_create_source [基本接口]
 创建一个音频源
@@ -4080,11 +4124,21 @@ jeal_set_source_buffer [基本接口]
 JE_API bool jeal_set_source_buffer(jeal_source* source, const jeal_buffer* buffer);
 
 /*
-jeal_set_source_effect_slot [基本接口]
-设置音频源的效果槽
+jeal_set_source_effect_slot_and_filter [基本接口]
+设置音频源的效果槽和滤波器
     slot_idx 必须小于 jeecs::audio::MAX_AUXILIARY_SENDS
 */
-JE_API void jeal_set_source_effect_slot(jeal_source* source, jeal_effect_slot* slot_may_null, size_t slot_idx);
+JE_API void jeal_set_source_effect_slot_and_filter(
+    jeal_source* source, 
+    size_t slot_idx,
+    jeal_effect_slot* slot_may_null,
+    jeal_filter* filter_may_null);
+
+/*
+jeal_set_source_filter [基本接口]
+设置音频源的滤波器
+*/
+JE_API void jeal_set_source_filter(jeal_source* source, jeal_filter* filter_may_null);
 
 /*
 jeal_play_source [基本接口]
@@ -9554,6 +9608,38 @@ namespace jeecs
                 jeal_update_effect_slot(m_effect_slot);
             }
         };
+        class filter
+        {
+            JECS_DISABLE_MOVE_AND_COPY(filter);
+
+            jeal_filter* _m_audio_filter;
+
+            filter(jeal_filter* audio_filter)
+                : _m_audio_filter(audio_filter)
+            {
+                assert(_m_audio_filter != nullptr);
+            }
+        public:
+            ~filter()
+            {
+                jeal_close_filter(_m_audio_filter);
+            }
+
+            inline static basic::resource<filter> create()
+            {
+                return basic::resource<filter>(new filter(jeal_create_filter()));
+            }
+
+            jeal_filter* handle() const
+            {
+                return _m_audio_filter;
+            }
+            void update(const std::function<void(jeal_filter*)>& func)
+            {
+                func(_m_audio_filter);
+                jeal_update_filter(_m_audio_filter);
+            }
+        };
         class buffer
         {
             JECS_DISABLE_MOVE_AND_COPY(buffer);
@@ -9652,10 +9738,23 @@ namespace jeecs
                 func(_m_audio_source);
                 jeal_update_source(_m_audio_source);
             }
-            void bind_effect_slot(const basic::resource<effect_slot>& slot, size_t pass)
+            void set_filter(const std::optional<basic::resource<filter>>& filter)
+            {
+                jeal_set_source_filter(
+                    _m_audio_source,
+                    filter.has_value() ? filter.value()->handle() : nullptr);
+            }
+            void bind_effect_slot(
+                size_t pass,
+                const std::optional<basic::resource<effect_slot>>& slot,
+                const std::optional<basic::resource<filter>>& filter)
             {
                 if (pass < MAX_AUXILIARY_SENDS)
-                    jeal_set_source_effect_slot(_m_audio_source, slot->handle(), pass);
+                    jeal_set_source_effect_slot_and_filter(
+                        _m_audio_source, 
+                        pass,
+                        slot.has_value() ? slot.value()->handle() : nullptr,
+                        filter.has_value() ? filter.value()->handle() : nullptr);
             }
         };
         class listener

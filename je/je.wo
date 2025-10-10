@@ -60,7 +60,7 @@ namespace je
         
     extern("libjoyecs", "wojeapi_smooth_deltatime")
         public func smooth_deltatime()=> real;
-            
+        
     extern("libjoyecs", "wojeapi_generate_uid")
         public func uid()=> string;
         
@@ -239,7 +239,7 @@ namespace je
                 
             extern("libjoyecs", "wojeapi_input_gamepad_actived")
                 public func actived(self: gamepad)=> option<int>;
-
+                
             extern("libjoyecs", "wojeapi_input_gamepad_get_all")
                 public func get_all()=> array<gamepad>;
                 
@@ -611,6 +611,45 @@ namespace je
             extern("libjoyecs", "wojeapi_audio_buffer_info")
                 public func info(self: buffer)=> buffer_data_t;
         }
+        
+        using filter = gchandle
+        {
+            public enum type
+            {
+                LOWPASS,
+                HIGHPASS,
+                BANDPASS,
+            }
+            
+            using filter_data_t = struct{
+                public type: mut type,
+                public gain: mut real,
+                public gain_lf: mut real,
+                public gain_hf: mut real,
+            };
+            
+            public func close(self: filter)=> bool
+            {
+                return self: gchandle->close();
+            }
+
+            extern("libjoyecs", "wojeapi_audio_filter_create")
+                public func create()=> filter;
+                
+            extern("libjoyecs", "wojeapi_audio_filter_info")
+                public func info(self: filter)=> filter_data_t;
+
+            public func update(self: filter, f: (filter_data_t)=> void)=> void
+            {
+                extern("libjoyecs", "wojeapi_audio_filter_update")
+                    func _update(self: filter, info: filter_data_t)=> void;
+                    
+                let i = self->info();
+                f(i);
+                _update(self, i);
+            }
+        }
+        
         using source = gchandle
         {
             public enum state
@@ -659,6 +698,9 @@ namespace je
                 
             extern("libjoyecs", "wojeapi_audio_source_set_buffer")
                 public func set_buffer(self: source, buffer: buffer)=> void;
+
+            extern("libjoyecs", "wojeapi_audio_source_set_filter")
+                public func set_filter(self: source, filter: option<filter>)=> void;
                 
             extern("libjoyecs", "wojeapi_audio_source_get_state")
                 public func get_state(self: source)=> state;
@@ -669,8 +711,9 @@ namespace je
             extern("libjoyecs", "wojeapi_audio_source_set_offset")
                 public func set_offset(self: source, offset: int)=> void;
                 
-            extern("libjoyecs", "wojeapi_audio_source_bind_effect_slot")
-                public func bind_effect_slot(self: source, effect_slot: effect_slot, pass: int)=> void;
+            extern("libjoyecs", "wojeapi_audio_source_bind_effect_slot_and_filter")
+                public func bind_effect_slot_and_filter(
+                    self: source, effect_slot: option<effect_slot>, filter: option<filter>, pass: int)=> void;
         }
         namespace listener
         {

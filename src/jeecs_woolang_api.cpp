@@ -2490,6 +2490,82 @@ WO_API wo_api wojeapi_audio_buffer_info(wo_vm vm, wo_value args)
 
     return wo_ret_val(vm, result);
 }
+/*
+extern("libjoyecs", "wojeapi_audio_filter_create")
+    public func create()=> filter;
+
+extern("libjoyecs", "wojeapi_audio_filter_info")
+    public func info(self: filter)=> filter_data_t;
+
+extern("libjoyecs", "wojeapi_audio_filter_update")
+    func _update(self: filter, info: filter_data_t)=> void;
+*/
+WO_API wo_api wojeapi_audio_filter_create(wo_vm vm, wo_value args)
+{
+    return wo_ret_gchandle(
+        vm,
+        new jeecs::basic::resource<jeecs::audio::filter>(jeecs::audio::filter::create()),
+        nullptr,
+        [](void* p)
+        {
+            delete reinterpret_cast<jeecs::basic::resource<jeecs::audio::filter>*>(p);
+        });
+}
+
+WO_API wo_api wojeapi_audio_filter_info(wo_vm vm, wo_value args)
+{
+    wo_value stacks = wo_reserve_stack(vm, 2, &args);
+    wo_value result = stacks + 0;
+    wo_value elem = stacks + 1;
+
+    jeecs::basic::resource<jeecs::audio::filter>* filter =
+        reinterpret_cast<jeecs::basic::resource<jeecs::audio::filter> *>(wo_pointer(args + 0));
+
+    wo_set_struct(result, vm, 4);
+
+    auto* filter_instance = (*filter)->handle();
+
+    wo_set_int(elem, (wo_int_t)filter_instance->m_type);
+    wo_struct_set(result, 0, elem);
+
+    wo_set_float(elem, filter_instance->m_gain);
+    wo_struct_set(result, 1, elem);
+
+    wo_set_float(elem, filter_instance->m_gain_lf);
+    wo_struct_set(result, 2, elem);
+
+    wo_set_float(elem, filter_instance->m_gain_hf);
+    wo_struct_set(result, 3, elem);
+
+    return wo_ret_val(vm, result);
+}
+
+WO_API wo_api wojeapi_audio_filter_update(wo_vm vm, wo_value args)
+{
+    wo_value stacks = wo_reserve_stack(vm, 1, &args);
+    wo_value elem = stacks + 0;
+
+    jeecs::basic::resource<jeecs::audio::filter>* filter =
+        reinterpret_cast<jeecs::basic::resource<jeecs::audio::filter> *>(wo_pointer(args + 0));
+    wo_value updated_info = args + 1;
+
+    (*filter)->update([&](jeal_filter* flt)
+        {
+            wo_struct_get(elem, updated_info, 0);
+            flt->m_type = (jeal_filter_type)wo_int(elem);
+
+            wo_struct_get(elem, updated_info, 1);
+            flt->m_gain = wo_float(elem);
+
+            wo_struct_get(elem, updated_info, 2);
+            flt->m_gain_lf = wo_float(elem);
+
+            wo_struct_get(elem, updated_info, 3);
+            flt->m_gain_hf = wo_float(elem);
+        });
+
+    return wo_ret_void(vm);
+}
 
 WO_API wo_api wojeapi_audio_source_create(wo_vm vm, wo_value args)
 {
@@ -2620,14 +2696,51 @@ WO_API wo_api wojeapi_audio_source_set_buffer(wo_vm vm, wo_value args)
 
     return wo_ret_void(vm);
 }
-WO_API wo_api wojeapi_audio_source_bind_effect_slot(wo_vm vm, wo_value args)
+WO_API wo_api wojeapi_audio_source_set_filter(wo_vm vm, wo_value args)
 {
+    wo_value stacks = wo_reserve_stack(vm, 1, &args);
+    wo_value elem = stacks + 0;
+
     jeecs::basic::resource<jeecs::audio::source>* source =
         reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(wo_pointer(args + 0));
-    auto* effect_slot =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::effect_slot> *>(wo_pointer(args + 1));
 
-    (*source)->bind_effect_slot(*effect_slot, (size_t)wo_int(args + 2));
+    std::optional<jeecs::basic::resource<jeecs::audio::filter>> filter;
+    if (wo_option_get(elem, args + 1))
+    {
+        filter.emplace(
+            *reinterpret_cast<jeecs::basic::resource<jeecs::audio::filter> *>(
+                wo_pointer(elem)));
+    }
+        
+    (*source)->set_filter(filter);
+
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_audio_source_bind_effect_slot_and_filter(wo_vm vm, wo_value args)
+{
+    wo_value stacks = wo_reserve_stack(vm, 1, &args);
+    wo_value elem = stacks + 0;
+
+    jeecs::basic::resource<jeecs::audio::source>* source =
+        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(wo_pointer(args + 0));
+
+    std::optional<jeecs::basic::resource<jeecs::audio::effect_slot>> effect_slot;
+    std::optional<jeecs::basic::resource<jeecs::audio::filter>> filter;
+
+    if (wo_option_get(elem, args + 1))
+    {
+        effect_slot.emplace(
+            *reinterpret_cast<jeecs::basic::resource<jeecs::audio::effect_slot> *>(
+                wo_pointer(elem)));
+    }
+    if (wo_option_get(elem, args + 2))
+    {
+        filter.emplace(
+            *reinterpret_cast<jeecs::basic::resource<jeecs::audio::filter> *>(
+                wo_pointer(elem)));
+    }
+
+    (*source)->bind_effect_slot((size_t)wo_int(args + 3), effect_slot, filter);
 
     return wo_ret_void(vm);
 }
