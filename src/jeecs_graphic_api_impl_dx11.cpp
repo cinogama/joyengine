@@ -1666,7 +1666,13 @@ namespace jeecs::graphic::api::dx11
         // 添加：清理资源句柄
         resource->m_handle.m_ptr = nullptr;
     }
-    void dx11_set_uniform(jegl_context::graphic_impl_context_t ctx, uint32_t location, jegl_shader::uniform_type type, const void* val);
+
+    void dx11_set_uniform(
+        jegl_context::graphic_impl_context_t ctx, 
+        uint32_t location, 
+        jegl_shader::uniform_type type, 
+        const void* val);
+
     void dx11_draw_vertex_with_shader(jegl_context::graphic_impl_context_t ctx, jegl_resource* vert)
     {
         jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));

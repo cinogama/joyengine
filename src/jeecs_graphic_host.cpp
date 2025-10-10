@@ -37,7 +37,8 @@ namespace jeecs
         rendchain_branch()
             : m_writing_chain_buffer_index(0)
             , m_writing_chain_buffer_p(&m_chain_buffers[0])
-            , m_rendering_chain_buffer_p(&m_chain_buffers[(BRANCH_CHAIN_POOL_SIZE - 1) % BRANCH_CHAIN_POOL_SIZE])
+            , m_rendering_chain_buffer_p(
+                &m_chain_buffers[(BRANCH_CHAIN_POOL_SIZE - 1) % BRANCH_CHAIN_POOL_SIZE])
         {
             for (auto& chain_buffer : m_chain_buffers)
             {
@@ -100,7 +101,8 @@ namespace jeecs
             while (chain_iter != chain_iter_end)
             {
                 auto* rend_job_chain = *(chain_iter++);
-                if (action != jegl_update_action::JEGL_UPDATE_CONTINUE && jegl_rchain_get_target_framebuf(rend_job_chain) == nullptr)
+                if (action != jegl_update_action::JEGL_UPDATE_CONTINUE 
+                    && jegl_rchain_get_target_framebuf(rend_job_chain) == nullptr)
                     continue;
 
                 jegl_rchain_commit(rend_job_chain, thread);

@@ -938,7 +938,8 @@ namespace jeecs::graphic::api::vk130
                     command_buffer_alloc_info.commandBufferCount = 1;
 
                     result = nullptr;
-                    if (m_context->vkAllocateCommandBuffers(m_context->_vk_logic_device, &command_buffer_alloc_info, &result) != VK_SUCCESS)
+                    if (m_context->vkAllocateCommandBuffers(
+                        m_context->_vk_logic_device, &command_buffer_alloc_info, &result) != VK_SUCCESS)
                     {
                         jeecs::debug::logfatal("Failed to allocate command buffers!");
                     }
@@ -1177,10 +1178,14 @@ namespace jeecs::graphic::api::vk130
             VkSubpassDependency default_render_subpass_dependency = {};
             default_render_subpass_dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
             default_render_subpass_dependency.dstSubpass = 0;
-            default_render_subpass_dependency.srcStageMask = VkPipelineStageFlagBits::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            default_render_subpass_dependency.srcStageMask = 
+                VkPipelineStageFlagBits::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
             default_render_subpass_dependency.srcAccessMask = 0;
-            default_render_subpass_dependency.dstStageMask = VkPipelineStageFlagBits::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-            default_render_subpass_dependency.dstAccessMask = VkAccessFlagBits::VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VkAccessFlagBits::VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            default_render_subpass_dependency.dstStageMask = 
+                VkPipelineStageFlagBits::VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            default_render_subpass_dependency.dstAccessMask = 
+                VkAccessFlagBits::VK_ACCESS_COLOR_ATTACHMENT_READ_BIT 
+                | VkAccessFlagBits::VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
             VkRenderPassCreateInfo default_render_pass_create_info = {};
             default_render_pass_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -1225,7 +1230,8 @@ namespace jeecs::graphic::api::vk130
             framebuffer_create_info.height = (uint32_t)h;
             framebuffer_create_info.layers = 1;
 
-            if (VK_SUCCESS != vkCreateFramebuffer(_vk_logic_device, &framebuffer_create_info, nullptr, &result->m_framebuffer))
+            if (VK_SUCCESS != vkCreateFramebuffer(
+                _vk_logic_device, &framebuffer_create_info, nullptr, &result->m_framebuffer))
             {
                 jeecs::debug::logfatal("Failed to create vk130 swapchain framebuffer.");
             }
@@ -1804,13 +1810,21 @@ namespace jeecs::graphic::api::vk130
             if (vk_validation_layer_supported)
             {
                 VkDebugUtilsMessengerCreateInfoEXT debug_layer_config = {};
-                debug_layer_config.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-                debug_layer_config.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-                debug_layer_config.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+                debug_layer_config.sType = 
+                    VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+                debug_layer_config.messageSeverity = 
+                    VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT 
+                    | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
+                    | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+                debug_layer_config.messageType = 
+                    VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT 
+                    | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT 
+                    | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
                 debug_layer_config.pfnUserCallback = &debug_callback;
 
                 assert(vkCreateDebugUtilsMessengerEXT != nullptr);
-                if (VK_SUCCESS != vkCreateDebugUtilsMessengerEXT(_vk_instance, &debug_layer_config, nullptr, &_vk_debug_manager))
+                if (VK_SUCCESS != vkCreateDebugUtilsMessengerEXT(
+                    _vk_instance, &debug_layer_config, nullptr, &_vk_debug_manager))
                 {
                     jeecs::debug::logfatal("Failed to set up debug layer callback.");
                 }
@@ -1863,8 +1877,17 @@ namespace jeecs::graphic::api::vk130
                 jeecs::debug::logfatal("Failed to create vk130 logic device.");
             }
 
-            vkGetDeviceQueue(_vk_logic_device, _vk_device_queue_graphic_family_index, 0, &_vk_logic_device_graphic_queue);
-            vkGetDeviceQueue(_vk_logic_device, _vk_device_queue_present_family_index, 0, &_vk_logic_device_present_queue);
+            vkGetDeviceQueue(
+                _vk_logic_device, 
+                _vk_device_queue_graphic_family_index,
+                0, 
+                &_vk_logic_device_graphic_queue);
+            vkGetDeviceQueue(
+                _vk_logic_device,
+                _vk_device_queue_present_family_index,
+                0,
+                &_vk_logic_device_present_queue);
+
             assert(_vk_logic_device_graphic_queue != VK_NULL_HANDLE);
             assert(_vk_logic_device_present_queue != VK_NULL_HANDLE);
 
@@ -1980,7 +2003,8 @@ namespace jeecs::graphic::api::vk130
             command_buffer_begin_info.sType = VkStructureType::VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
             command_buffer_begin_info.pNext = nullptr;
             // TODO: 我们的命令缓冲区稍后会设置为执行完毕后重用
-            command_buffer_begin_info.flags = VkCommandBufferUsageFlagBits::VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+            command_buffer_begin_info.flags = 
+                VkCommandBufferUsageFlagBits::VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
             command_buffer_begin_info.pInheritanceInfo = nullptr;
 
             if (VK_SUCCESS != vkBeginCommandBuffer(cmdbuf, &command_buffer_begin_info))
@@ -2013,7 +2037,8 @@ namespace jeecs::graphic::api::vk130
             abort();
         };
 
-        VkDeviceMemory alloc_vk_device_memory(const VkMemoryRequirements& requirement, VkMemoryPropertyFlags properties)
+        VkDeviceMemory alloc_vk_device_memory(
+            const VkMemoryRequirements& requirement, VkMemoryPropertyFlags properties)
         {
             VkDeviceMemory result;
 
@@ -2270,27 +2295,33 @@ namespace jeecs::graphic::api::vk130
                     vertex_point_data_size += sizeof(float);
                     break;
                 case jegl_shader::uniform_type::FLOAT2:
-                    shader_blob->m_vertex_input_attribute_descriptions[i].format = VkFormat::VK_FORMAT_R32G32_SFLOAT;
+                    shader_blob->m_vertex_input_attribute_descriptions[i].format = 
+                        VkFormat::VK_FORMAT_R32G32_SFLOAT;
                     vertex_point_data_size += sizeof(float) * 2;
                     break;
                 case jegl_shader::uniform_type::FLOAT3:
-                    shader_blob->m_vertex_input_attribute_descriptions[i].format = VkFormat::VK_FORMAT_R32G32B32_SFLOAT;
+                    shader_blob->m_vertex_input_attribute_descriptions[i].format = 
+                        VkFormat::VK_FORMAT_R32G32B32_SFLOAT;
                     vertex_point_data_size += sizeof(float) * 3;
                     break;
                 case jegl_shader::uniform_type::FLOAT4:
-                    shader_blob->m_vertex_input_attribute_descriptions[i].format = VkFormat::VK_FORMAT_R32G32B32A32_SFLOAT;
+                    shader_blob->m_vertex_input_attribute_descriptions[i].format = 
+                        VkFormat::VK_FORMAT_R32G32B32A32_SFLOAT;
                     vertex_point_data_size += sizeof(float) * 4;
                     break;
                 case jegl_shader::uniform_type::FLOAT2X2:
-                    shader_blob->m_vertex_input_attribute_descriptions[i].format = VkFormat::VK_FORMAT_R32G32B32A32_SFLOAT;
+                    shader_blob->m_vertex_input_attribute_descriptions[i].format =
+                        VkFormat::VK_FORMAT_R32G32B32A32_SFLOAT;
                     vertex_point_data_size += sizeof(float) * 4;
                     break;
                 case jegl_shader::uniform_type::FLOAT3X3:
-                    shader_blob->m_vertex_input_attribute_descriptions[i].format = VkFormat::VK_FORMAT_R32G32B32A32_SFLOAT;
+                    shader_blob->m_vertex_input_attribute_descriptions[i].format =
+                        VkFormat::VK_FORMAT_R32G32B32A32_SFLOAT;
                     vertex_point_data_size += sizeof(float) * 4;
                     break;
                 case jegl_shader::uniform_type::FLOAT4X4:
-                    shader_blob->m_vertex_input_attribute_descriptions[i].format = VkFormat::VK_FORMAT_R32G32B32A32_SFLOAT;
+                    shader_blob->m_vertex_input_attribute_descriptions[i].format = 
+                        VkFormat::VK_FORMAT_R32G32B32A32_SFLOAT;
                     vertex_point_data_size += sizeof(float) * 4;
                     break;
                 default:
@@ -2304,7 +2335,8 @@ namespace jeecs::graphic::api::vk130
             shader_blob->m_vertex_input_binding_description = {};
             shader_blob->m_vertex_input_binding_description.binding = 0;
             shader_blob->m_vertex_input_binding_description.stride = (uint32_t)vertex_point_data_size;
-            shader_blob->m_vertex_input_binding_description.inputRate = VkVertexInputRate::VK_VERTEX_INPUT_RATE_VERTEX;
+            shader_blob->m_vertex_input_binding_description.inputRate = 
+                VkVertexInputRate::VK_VERTEX_INPUT_RATE_VERTEX;
 
             shader_blob->m_vertex_input_state_create_info = {};
             shader_blob->m_vertex_input_state_create_info.sType =
@@ -2602,7 +2634,8 @@ namespace jeecs::graphic::api::vk130
             // 动态配置~！
             // InputAssemblyState 和 Viewport 都应当允许动态配置
             shader_blob->m_dynamic_state_create_info = {};
-            shader_blob->m_dynamic_state_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+            shader_blob->m_dynamic_state_create_info.sType = 
+                VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
             shader_blob->m_dynamic_state_create_info.pNext = nullptr;
             shader_blob->m_dynamic_state_create_info.flags = 0;
             shader_blob->m_dynamic_state_create_info.dynamicStateCount =
@@ -2903,7 +2936,8 @@ namespace jeecs::graphic::api::vk130
             return texture;
         }
 
-        void transition_image_layout(VkImage image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout)
+        void transition_image_layout(
+            VkImage image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout)
         {
             VkCommandBuffer command_buffer = begin_temp_command_buffer_records();
             {
@@ -2955,7 +2989,8 @@ namespace jeecs::graphic::api::vk130
                     source_stage = VkPipelineStageFlagBits::VK_PIPELINE_STAGE_TRANSFER_BIT;
                     destination_stage = VkPipelineStageFlagBits::VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
                 }
-                else if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                else if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED 
+                    && new_layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
                 {
                     barrier.srcAccessMask = 0;
                     barrier.dstAccessMask =
@@ -2964,15 +2999,19 @@ namespace jeecs::graphic::api::vk130
                     source_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
                     destination_stage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
                 }
-                else if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+                else if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED 
+                    && new_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
                 {
                     barrier.srcAccessMask = 0;
-                    barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+                    barrier.dstAccessMask = 
+                        VK_ACCESS_COLOR_ATTACHMENT_READ_BIT 
+                        | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
                     source_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
                     destination_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
                 }
-                else if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+                else if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED 
+                    && new_layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
                 {
                     barrier.srcAccessMask = 0;
                     barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
@@ -2990,15 +3029,20 @@ namespace jeecs::graphic::api::vk130
                 }
                 else if (old_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL && new_layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
                 {
-                    barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+                    barrier.srcAccessMask = 
+                        VK_ACCESS_COLOR_ATTACHMENT_READ_BIT 
+                        | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
                     barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
 
                     source_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
                     destination_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
                 }
-                else if (old_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL && new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+                else if (old_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL 
+                    && new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
                 {
-                    barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+                    barrier.srcAccessMask = 
+                        VK_ACCESS_COLOR_ATTACHMENT_READ_BIT 
+                        | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
                     barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
                     source_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -3010,7 +3054,9 @@ namespace jeecs::graphic::api::vk130
                         && new_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
                     barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-                    barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+                    barrier.dstAccessMask = 
+                        VK_ACCESS_COLOR_ATTACHMENT_READ_BIT 
+                        | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
                     source_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
                     destination_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -3276,7 +3322,8 @@ namespace jeecs::graphic::api::vk130
             // Present last drawed frame.
             if (_vk_presenting_swapchain_image_index != UINT32_MAX)
             {
-                assert(_vk_current_swapchain_image_content == _vk_swapchain_images[_vk_presenting_swapchain_image_index]);
+                assert(_vk_current_swapchain_image_content 
+                    == _vk_swapchain_images[_vk_presenting_swapchain_image_index]);
 
                 VkSwapchainKHR swapchains[] = { _vk_swapchain };
                 VkPresentInfoKHR present_info = {};
@@ -4122,7 +4169,11 @@ namespace jeecs::graphic::api::vk130
         }
     }
 
-    void set_uniform(jegl_context::graphic_impl_context_t ctx, uint32_t location, jegl_shader::uniform_type type, const void* val)
+    void set_uniform(
+        jegl_context::graphic_impl_context_t ctx,
+        uint32_t location, 
+        jegl_shader::uniform_type type,
+        const void* val)
     {
         jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
 
