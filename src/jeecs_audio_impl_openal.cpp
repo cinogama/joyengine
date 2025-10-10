@@ -260,7 +260,6 @@ namespace jeecs
         jeecs::debug::logfatal("Failed to load al function: %s.", #name); \
         return;                                                           \
     }
-
                 JEAL_LOAD_FUNC(alGenEffects);
                 JEAL_LOAD_FUNC(alDeleteEffects);
                 JEAL_LOAD_FUNC(alEffecti);
@@ -1803,7 +1802,8 @@ namespace jeecs
                         // 锁上上下文锁后发现，此时实例已经被转储，重新执行检查
                         continue;
 
-                    assert(slot_may_null->m_effect_slot_instance != nullptr);
+                    assert(slot_may_null == nullptr 
+                        || slot_may_null->m_effect_slot_instance != nullptr);
 
                     source->m_source_instance->m_playing_effect_slot[slot_idx].set_res_may_null(slot_may_null);
 
