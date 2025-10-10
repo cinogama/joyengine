@@ -240,8 +240,8 @@ namespace je::shader
                 if (hlsl_type_name == "struct")
                     hlsl_type_name = field.struct_type->unwrap.name;
                     
-                c->append_line(F"    {hlsl_type_name}{
-                    field.array_elem_count->>\v = "[" + v: string + "]";->or("")} {field_name};");
+                c->append_line(F"    {hlsl_type_name} {field_name}{
+                    field.array_elem_count->>\v = "[" + v: string + "]";->or("")};");
             }
             c->append_line("};");
         }
@@ -324,8 +324,8 @@ namespace je::shader
                 if (hlsl_type_name == "struct")
                     hlsl_type_name = field.struct_type->unwrap.name;
                     
-                c->append_line(F"    {hlsl_type_name}{
-                    field.array_elem_count->>\v = "[" + v: string + "]";->or("")} {field.name};");
+                c->append_line(F"    {hlsl_type_name} {field.name}{
+                    field.array_elem_count->>\v = "[" + v: string + "]";->or("")};");
             }
             c->append_line("};");
             self.uniform_blocks->add((uniform_block_name, uniform_block.binding));
