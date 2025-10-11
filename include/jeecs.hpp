@@ -6335,12 +6335,6 @@ namespace jeecs
 
     struct dependence
     {
-        basic::vector<requirement> m_requirements;
-
-        // Store archtypes here?
-        game_world m_world = nullptr;
-        size_t m_current_arch_version = 0;
-
         // archs of dependences:
         struct arch_chunks_info
         {
@@ -6372,33 +6366,40 @@ namespace jeecs
             size_t* m_component_sizes;
             size_t* m_component_offsets;
         };
+
+        basic::vector<requirement> m_requirements;
         basic::vector<arch_chunks_info*> m_archs;
+        size_t m_current_arch_version = 0;
+
         dependence() = default;
         dependence(const dependence& d)
-            : m_requirements(d.m_requirements), m_world(d.m_world), m_current_arch_version(0), m_archs({})
+            : m_requirements(d.m_requirements)
+            , m_archs({})
+            , m_current_arch_version(0)
         {
         }
         dependence(dependence&& d)
-            : m_requirements(std::move(d.m_requirements)), m_world(std::move(d.m_world)), m_current_arch_version(d.m_current_arch_version), m_archs(std::move(d.m_archs))
+            : m_requirements(std::move(d.m_requirements))
+            , m_archs(std::move(d.m_archs))
+            , m_current_arch_version(d.m_current_arch_version)
         {
             d.m_current_arch_version = 0;
         }
         dependence& operator=(const dependence& d)
         {
             m_requirements = d.m_requirements;
-            m_world = d.m_world;
-            m_current_arch_version = 0;
             m_archs = {};
+            m_current_arch_version = 0;
 
             return *this;
         }
         dependence& operator=(dependence&& d)
         {
             m_requirements = std::move(d.m_requirements);
-            m_world = std::move(d.m_world);
-            m_current_arch_version = d.m_current_arch_version;
-            d.m_current_arch_version = 0;
             m_archs = std::move(d.m_archs);
+            m_current_arch_version = d.m_current_arch_version;
+
+            d.m_current_arch_version = 0;
 
             return *this;
         }
@@ -6409,14 +6410,15 @@ namespace jeecs
 
         void update(const game_world& aim_world) noexcept
         {
-            assert(aim_world.handle() != nullptr);
+            auto* world_handle = aim_world.handle();
 
-            size_t arch_updated_ver = je_ecs_world_archmgr_updated_version(aim_world.handle());
-            if (m_world != aim_world || m_current_arch_version != arch_updated_ver)
+            assert(world_handle != nullptr);
+
+            size_t arch_updated_ver = je_ecs_world_archmgr_updated_version(world_handle);
+            if (m_current_arch_version != arch_updated_ver)
             {
                 m_current_arch_version = arch_updated_ver;
-                m_world = aim_world;
-                je_ecs_world_update_dependences_archinfo(m_world.handle(), this);
+                je_ecs_world_update_dependences_archinfo(world_handle, this);
             }
         }
     };
