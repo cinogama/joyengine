@@ -768,43 +768,35 @@ namespace jeecs_impl
         {
             return _m_arch_typeinfo;
         }
-        static void free_chunk_info(jeecs::dependence::arch_chunks_info* archinfo) noexcept
+
+        inline void create_chunk_info(const jeecs::dependence* depend, jeecs::dependence::arch_chunks_info* out_arch_info) const noexcept
         {
-            delete[] archinfo->m_component_sizes;
-            delete[] archinfo->m_component_offsets;
+            out_arch_info->m_arch = const_cast<arch_type*>(this);
+            out_arch_info->m_entity_count = get_entity_count_per_chunk();
 
-            delete archinfo;
-        }
-        inline jeecs::dependence::arch_chunks_info* create_chunk_info(const jeecs::dependence* depend) const noexcept
-        {
-            jeecs::dependence::arch_chunks_info* info = new jeecs::dependence::arch_chunks_info;
-            info->m_arch = const_cast<arch_type*>(this);
-            info->m_entity_count = get_entity_count_per_chunk();
-
-            info->m_component_count = depend->m_requirements.size();
-            info->m_component_sizes = new size_t[info->m_component_count];
-            info->m_component_offsets = new size_t[info->m_component_count];
-
-            for (size_t reqid = 0; reqid < info->m_component_count; ++reqid)
+            for (const auto& requirement : depend->m_requirements)
             {
-                auto* arch_typeinfo = get_arch_type_info_by_type_id(depend->m_requirements[reqid].m_type);
-
-                if (arch_typeinfo)
+                auto* arch_typeinfo = get_arch_type_info_by_type_id(requirement.m_type);
+                if (arch_typeinfo != nullptr)
                 {
-                    info->m_component_sizes[reqid] = arch_typeinfo->m_typeinfo->m_chunk_size;
-                    info->m_component_offsets[reqid] = arch_typeinfo->m_begin_offset_in_chunk;
+                    out_arch_info->m_component_infos.emplace_back(
+                        jeecs::dependence::arch_chunks_info::component_info{ 
+                            arch_typeinfo->m_begin_offset_in_chunk,
+                            arch_typeinfo->m_typeinfo->m_chunk_size });
                 }
                 else
                 {
                     assert(
-                        depend->m_requirements[reqid].m_require == jeecs::requirement::ANYOF 
-                        || depend->m_requirements[reqid].m_require == jeecs::requirement::MAYNOT 
-                        || depend->m_requirements[reqid].m_require == jeecs::requirement::EXCEPT);
-                    info->m_component_sizes[reqid] = info->m_component_offsets[reqid] = 0;
+                        requirement.m_require == jeecs::requirement::ANYOF
+                        || requirement.m_require == jeecs::requirement::MAYNOT
+                        || requirement.m_require == jeecs::requirement::EXCEPT);
+
+                    out_arch_info->m_component_infos.emplace_back(
+                        jeecs::dependence::arch_chunks_info::component_info{
+                            0,
+                            0 });
                 }
             }
-
-            return info;
         }
     };
 
@@ -926,7 +918,9 @@ namespace jeecs_impl
                         && except(typeset, except_set))
                     {
                         // Current arch is matched!
-                        dependence->m_archs.push_back(arch->create_chunk_info(dependence));
+                        arch->create_chunk_info(
+                            dependence, 
+                            &dependence->m_archs.emplace_back());
                     }
                 }
             } while (0);
@@ -2611,13 +2605,6 @@ size_t je_ecs_world_archmgr_updated_version(void* world)
 void je_ecs_world_update_dependences_archinfo(void* world, jeecs::dependence* dependence)
 {
     reinterpret_cast<jeecs_impl::ecs_world*>(world)->update_dependence_archinfo(dependence);
-}
-
-void je_ecs_clear_dependence_archinfos(jeecs::dependence* dependence)
-{
-    for (auto* archinfo : dependence->m_archs)
-        jeecs_impl::arch_type::free_chunk_info(archinfo);
-    dependence->m_archs.clear();
 }
 
 void* je_ecs_world_entity_add_component(

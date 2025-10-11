@@ -2060,7 +2060,7 @@ namespace jeecs
                         continue;
 
                     assert(filter_may_null == nullptr
-                        || filter_may_null->m_effect_slot_instance != nullptr);
+                        || filter_may_null->m_filter_instance != nullptr);
 
                     source->m_source_instance->m_playing_filter.set_res_may_null(filter_may_null);
 

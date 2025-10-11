@@ -286,9 +286,9 @@ namespace jeecs
             static auto _type_selector() // -> T*
             {
                 if constexpr (
-                    std::is_reference<T>::value 
-                    || std::is_pointer<T>::value 
-                    || std::is_const<T>::value 
+                    std::is_reference<T>::value
+                    || std::is_pointer<T>::value
+                    || std::is_const<T>::value
                     || std::is_volatile<T>::value)
                     return _origin_type<_origin_t<T>>::_type_selector();
                 else
@@ -1319,13 +1319,6 @@ je_ecs_world_update_dependences_archinfo [基本接口]
 JE_API void je_ecs_world_update_dependences_archinfo(
     void* world,
     jeecs::dependence* dependence);
-
-/*
-je_ecs_clear_dependence_archinfos [基本接口]
-释放依赖中的 ArchType 缓存信息
-此函数一般用于selector销毁时，释放持有的 ArchType 缓存
-*/
-JE_API void je_ecs_clear_dependence_archinfos(jeecs::dependence* dependence);
 
 /*
 je_ecs_world_add_system_instance [基本接口]
@@ -3135,7 +3128,7 @@ jegl_rchain_set_uniform_int2 [基本接口]
 JE_API void jegl_rchain_set_uniform_int2(
     jegl_rendchain_rend_action* act,
     const uint32_t* binding_place_may_null,
-    int x, 
+    int x,
     int y);
 
 /*
@@ -3147,7 +3140,7 @@ jegl_rchain_set_uniform_int3 [基本接口]
 JE_API void jegl_rchain_set_uniform_int3(
     jegl_rendchain_rend_action* act,
     const uint32_t* binding_place_may_null,
-    int x, 
+    int x,
     int y,
     int z);
 
@@ -3161,8 +3154,8 @@ JE_API void jegl_rchain_set_uniform_int4(
     jegl_rendchain_rend_action* act,
     const uint32_t* binding_place_may_null,
     int x,
-    int y, 
-    int z, 
+    int y,
+    int z,
     int w);
 
 /*
@@ -4129,7 +4122,7 @@ jeal_set_source_effect_slot_and_filter [基本接口]
     slot_idx 必须小于 jeecs::audio::MAX_AUXILIARY_SENDS
 */
 JE_API void jeal_set_source_effect_slot_and_filter(
-    jeal_source* source, 
+    jeal_source* source,
     size_t slot_idx,
     jeal_effect_slot* slot_may_null,
     jeal_filter* filter_may_null);
@@ -4257,8 +4250,8 @@ JE_API void jeal_update_effect(void* effect);
 
 typedef const jeal_play_device* (*
     jeal_enumerate_device_callback_t)(
-        const jeal_play_device* enumerated_devices, 
-        size_t enumerated_device_count, 
+        const jeal_play_device* enumerated_devices,
+        size_t enumerated_device_count,
         void* userdata);
 
 /*
@@ -4812,6 +4805,18 @@ namespace jeecs
             {
                 _assure(size() + 1);
                 new (_elems_ptr_end++) ElemT(_e);
+            }
+            inline ElemT& emplace_back()
+            {
+                _assure(size() + 1);
+                new (_elems_ptr_end) ElemT();
+                return *(_elems_ptr_end++);
+            }
+            inline ElemT& emplace_back(ElemT&& _e)
+            {
+                _assure(size() + 1);
+                new (_elems_ptr_end) ElemT(std::move(_e));
+                return *(_elems_ptr_end++);
             }
             inline void pop_back() noexcept
             {
@@ -6328,7 +6333,9 @@ namespace jeecs
         typing::typeid_t m_type;
 
         requirement(type _require, size_t group_id, typing::typeid_t _type)
-            : m_require(_require), m_require_group_id(group_id), m_type(_type)
+            : m_require(_require)
+            , m_require_group_id(group_id)
+            , m_type(_type)
         {
         }
     };
@@ -6362,13 +6369,17 @@ namespace jeecs
             Each type of components will have a size, and begin-offset in buffer.
             We can use these informations to get all components to walk through.
             */
-            size_t m_component_count;
-            size_t* m_component_sizes;
-            size_t* m_component_offsets;
+
+            struct component_info
+            {
+                size_t m_component_offset_in_chunk;
+                size_t m_component_offset_of_unit;
+            };
+            basic::vector<component_info> m_component_infos;
         };
 
         basic::vector<requirement> m_requirements;
-        basic::vector<arch_chunks_info*> m_archs;
+        basic::vector<arch_chunks_info> m_archs;
         size_t m_current_arch_version = 0;
 
         dependence() = default;
@@ -6403,10 +6414,7 @@ namespace jeecs
 
             return *this;
         }
-        ~dependence()
-        {
-            je_ecs_clear_dependence_archinfos(this);
-        }
+        ~dependence() = default;
 
         void update(const game_world& aim_world) noexcept
         {
@@ -6576,13 +6584,15 @@ namespace jeecs
             return false;
         }
         inline static void* get_component_from_archchunk_ptr(
-            dependence::arch_chunks_info* archinfo, void* chunkbuf, size_t entity_id, size_t cid)
+            const dependence::arch_chunks_info* archinfo, void* chunkbuf, size_t entity_id, size_t cid)
         {
-            assert(cid < archinfo->m_component_count);
+            assert(cid < archinfo->m_component_infos.size());
 
-            if (archinfo->m_component_sizes[cid])
+            const auto& component_info = archinfo->m_component_infos.at(cid);
+
+            if (component_info.m_component_offset_of_unit != 0)
             {
-                size_t offset = archinfo->m_component_offsets[cid] + archinfo->m_component_sizes[cid] * entity_id;
+                size_t offset = component_info.m_component_offset_in_chunk + component_info.m_component_offset_of_unit * entity_id;
                 return reinterpret_cast<void*>(reinterpret_cast<intptr_t>(chunkbuf) + offset);
             }
             else
@@ -6590,7 +6600,7 @@ namespace jeecs
         }
         template <typename ComponentT, typename... ArgTs>
         inline static ComponentT get_component_from_archchunk(
-            dependence::arch_chunks_info* archinfo, void* chunkbuf, size_t entity_id)
+            const dependence::arch_chunks_info* archinfo, void* chunkbuf, size_t entity_id)
         {
             constexpr size_t cid = _const_type_index<ComponentT, ArgTs...>::index;
             auto* component_ptr = std::launder(reinterpret_cast<typename typing::origin_t<ComponentT> *>(
@@ -6623,21 +6633,21 @@ namespace jeecs
             template <typename FT>
             inline static void exec(dependence* depend, FT&& f, game_system* sys) noexcept
             {
-                for (auto* archinfo : depend->m_archs)
+                for (const auto& archinfo : depend->m_archs)
                 {
-                    auto cur_chunk = je_arch_get_chunk(archinfo->m_arch);
+                    auto cur_chunk = je_arch_get_chunk(archinfo.m_arch);
                     while (cur_chunk)
                     {
                         auto entity_meta_addr = je_arch_entity_meta_addr_in_chunk(cur_chunk);
-                        for (size_t eid = 0; eid < archinfo->m_entity_count; ++eid)
+                        for (size_t eid = 0; eid < archinfo.m_entity_count; ++eid)
                         {
                             if (get_entity_avaliable(entity_meta_addr, eid))
                             {
                                 if constexpr (std::is_void<typename typing::function_traits<FT>::this_t>::value)
-                                    f(get_component_from_archchunk<ArgTs, ArgTs...>(archinfo, cur_chunk, eid)...);
+                                    f(get_component_from_archchunk<ArgTs, ArgTs...>(&archinfo, cur_chunk, eid)...);
                                 else
                                     (static_cast<typename typing::function_traits<FT>::this_t*>(sys)->*f)(
-                                        get_component_from_archchunk<ArgTs, ArgTs...>(archinfo, cur_chunk, eid)...);
+                                        get_component_from_archchunk<ArgTs, ArgTs...>(&archinfo, cur_chunk, eid)...);
                             }
                         }
                         cur_chunk = je_arch_next_chunk(cur_chunk);
@@ -6652,24 +6662,24 @@ namespace jeecs
             template <typename FT>
             inline static void exec(dependence* depend, FT&& f, game_system* sys) noexcept
             {
-                for (auto* archinfo : depend->m_archs)
+                for (const auto& archinfo : depend->m_archs)
                 {
-                    auto cur_chunk = je_arch_get_chunk(archinfo->m_arch);
+                    auto cur_chunk = je_arch_get_chunk(archinfo.m_arch);
                     while (cur_chunk)
                     {
                         auto entity_meta_addr = je_arch_entity_meta_addr_in_chunk(cur_chunk);
                         typing::version_t version;
-                        for (size_t eid = 0; eid < archinfo->m_entity_count; ++eid)
+                        for (size_t eid = 0; eid < archinfo.m_entity_count; ++eid)
                         {
                             if (get_entity_avaliable_version(entity_meta_addr, eid, &version))
                             {
                                 if constexpr (std::is_void<typename typing::function_traits<FT>::this_t>::value)
                                     f(game_entity{ cur_chunk, eid, version },
-                                        get_component_from_archchunk<ArgTs, ArgTs...>(archinfo, cur_chunk, eid)...);
+                                        get_component_from_archchunk<ArgTs, ArgTs...>(&archinfo, cur_chunk, eid)...);
                                 else
                                     (static_cast<typename typing::function_traits<FT>::this_t*>(sys)->*f)(
                                         game_entity{ cur_chunk, eid, version },
-                                        get_component_from_archchunk<ArgTs, ArgTs...>(archinfo, cur_chunk, eid)...);
+                                        get_component_from_archchunk<ArgTs, ArgTs...>(&archinfo, cur_chunk, eid)...);
                             }
                         }
 
@@ -8235,9 +8245,9 @@ namespace jeecs
             static basic::resource<texture> clip(
                 const basic::resource<texture>& src, size_t x, size_t y, size_t w, size_t h)
             {
-                jegl_texture::format new_texture_format = 
+                jegl_texture::format new_texture_format =
                     (jegl_texture::format)(
-                        src->resource()->m_raw_texture_data->m_format 
+                        src->resource()->m_raw_texture_data->m_format
                         & jegl_texture::format::COLOR_DEPTH_MASK);
                 jegl_resource* res = jegl_create_texture(w, h, new_texture_format);
 
@@ -9753,7 +9763,7 @@ namespace jeecs
             {
                 if (pass < MAX_AUXILIARY_SENDS)
                     jeal_set_source_effect_slot_and_filter(
-                        _m_audio_source, 
+                        _m_audio_source,
                         pass,
                         slot.has_value() ? slot.value()->handle() : nullptr,
                         filter.has_value() ? filter.value()->handle() : nullptr);
@@ -11055,7 +11065,7 @@ namespace jeecs
                                                     "Unknown value type(%d) for component frame data when reading animation '%s' frame %zu in '%s'.",
                                                     (int)value.m_type,
                                                     frame_name.c_str(),
-                                                    (size_t)j, 
+                                                    (size_t)j,
                                                     str.c_str());
                                                 break;
                                             }
@@ -11064,9 +11074,9 @@ namespace jeecs
                                             if (component_type == nullptr)
                                                 jeecs::debug::logerr(
                                                     "Failed to found component type named '%s' when reading animation '%s' frame %zu in '%s'.",
-                                                    component_name.c_str(), 
+                                                    component_name.c_str(),
                                                     frame_name.c_str(),
-                                                    (size_t)j, 
+                                                    (size_t)j,
                                                     str.c_str());
                                             else
                                             {
@@ -11081,9 +11091,9 @@ namespace jeecs
                                                 if (cdata.m_member_info == nullptr)
                                                     jeecs::debug::logerr(
                                                         "Component '%s' donot have member named '%s' when reading animation '%s' frame %zu in '%s'.",
-                                                        component_name.c_str(), 
+                                                        component_name.c_str(),
                                                         member_name.c_str(),
-                                                        frame_name.c_str(), 
+                                                        frame_name.c_str(),
                                                         (size_t)j,
                                                         str.c_str());
                                                 else
@@ -11740,9 +11750,9 @@ namespace jeecs
                         translation.local_scale * entity_box_size,
                         translation.world_rotation);
 
-                if (minResult.intersected 
-                    && consider_mesh 
-                    && entity_shape_may_null != nullptr 
+                if (minResult.intersected
+                    && consider_mesh
+                    && entity_shape_may_null != nullptr
                     && entity_shape_may_null->vertex.has_value())
                 {
                     return intersect_mesh(

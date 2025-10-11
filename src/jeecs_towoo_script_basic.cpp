@@ -203,14 +203,14 @@ namespace jeecs
                     else
                     {
                         work.m_dependence.update(get_world());
-                        for (auto* archinfo : work.m_dependence.m_archs)
+                        for (const auto& archinfo : work.m_dependence.m_archs)
                         {
-                            auto cur_chunk = je_arch_get_chunk(archinfo->m_arch);
+                            auto cur_chunk = je_arch_get_chunk(archinfo.m_arch);
                             while (cur_chunk)
                             {
                                 auto entity_meta_addr = je_arch_entity_meta_addr_in_chunk(cur_chunk);
                                 typing::version_t version;
-                                for (size_t eid = 0; eid < archinfo->m_entity_count; ++eid)
+                                for (size_t eid = 0; eid < archinfo.m_entity_count; ++eid)
                                 {
                                     if (selector::get_entity_avaliable_version(entity_meta_addr, eid, &version))
                                     {
@@ -225,7 +225,9 @@ namespace jeecs
                                         {
                                             const size_t cmpid = cmpidx - work.m_used_components.begin();
 
-                                            void* component = selector::get_component_from_archchunk_ptr(archinfo, cur_chunk, eid, cmpid);
+                                            void* component = selector::get_component_from_archchunk_ptr(
+                                                &archinfo, cur_chunk, eid, cmpid);
+
                                             const auto* typeinfo = *cmpidx;
 
                                             wo_value component_st = s + 2 + cmpid;
