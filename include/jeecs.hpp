@@ -6844,7 +6844,7 @@ namespace jeecs
                 static constexpr size_t index = _index();
             };
             inline static void* get_component_from_archchunk_ptr(
-                const dependence::arch_chunks_info* archinfo, void* chunkbuf, size_t entity_id, size_t cid)
+                const dependence::arch_chunks_info* archinfo, void* chunkbuf, typing::entity_id_in_chunk_t entity_id, size_t cid)
             {
                 assert(cid < archinfo->m_component_infos.size());
 
@@ -6860,7 +6860,7 @@ namespace jeecs
             }
             template <typename ComponentT, typename... ArgTs>
             inline static ComponentT get_component_from_archchunk(
-                const dependence::arch_chunks_info* archinfo, void* chunkbuf, size_t entity_id)
+                const dependence::arch_chunks_info* archinfo, void* chunkbuf, typing::entity_id_in_chunk_t entity_id)
             {
                 constexpr size_t cid = _const_type_index<ComponentT, ArgTs...>::index;
                 auto* component_ptr = std::launder(reinterpret_cast<typename typing::origin_t<ComponentT> *>(
@@ -6887,15 +6887,30 @@ namespace jeecs
             }
         public:
             using components = std::tuple<Components...>;
+            using entity_with_components = std::tuple<game_entity, Components...>;
             static void apply_dependence(size_t group, dependence* out_dependence)
             {
                 _apply_dependence<Components...>(group, out_dependence);
             }
 
             static components fetch_component_slice_from_chunk(
-                const dependence::arch_chunks_info* archinfo, void* chunkbuf, size_t entity_id)
+                const dependence::arch_chunks_info* archinfo, void* chunkbuf, typing::entity_id_in_chunk_t entity_id)
             {
                 return std::forward_as_tuple(
+                    get_component_from_archchunk<Components, Components...>(archinfo, chunkbuf, entity_id)...);
+            }
+            static entity_with_components fetch_entity_and_component_slice_from_chunk(
+                const dependence::arch_chunks_info* archinfo,
+                void* chunkbuf,
+                typing::entity_id_in_chunk_t entity_id,
+                typing::version_t entity_version)
+            {
+                return std::forward_as_tuple(
+                    game_entity{
+                        chunkbuf,
+                        entity_id,
+                        entity_version,
+                    },
                     get_component_from_archchunk<Components, Components...>(archinfo, chunkbuf, entity_id)...);
             }
         };
@@ -6952,6 +6967,7 @@ namespace jeecs
     public:
         class ComponentSliceIter
         {
+        protected:
             const dependence::arch_chunks_info* m_archs_current;
             const dependence::arch_chunks_info* m_archs_end;
 
@@ -6960,7 +6976,7 @@ namespace jeecs
             size_t m_chunk_entity_currnet_index;
 
             // For `end()` only.
-            ComponentSliceIter(
+            explicit ComponentSliceIter(
                 const dependence::arch_chunks_info* _archs_end)
                 : m_archs_current(_archs_end)
                 , m_archs_end(_archs_end)
@@ -6970,6 +6986,7 @@ namespace jeecs
             {
             }
 
+        private:
             void _move_to_valid_entity()
             {
                 for (;;)
@@ -7021,7 +7038,7 @@ namespace jeecs
                 , m_chunk_entity_currnet_index(0)
             {
             }
-            ComponentSliceIter(const dependence* dependence)
+            explicit ComponentSliceIter(const dependence* dependence)
             {
                 m_archs_current = dependence->m_archs.begin();
                 m_archs_end = dependence->m_archs.end();
@@ -7088,127 +7105,34 @@ namespace jeecs
                     ft);
             }
         };
-        class EntityComponentSliceIter
+        class EntityComponentSliceIter : public ComponentSliceIter
         {
-            const dependence::arch_chunks_info* m_archs_current;
-            const dependence::arch_chunks_info* m_archs_end;
-
-            void* m_chunk_currnet;
-            const jeecs::game_entity::meta* m_chunk_current_entity_meta;
-            size_t m_chunk_entity_currnet_index;
-
-            // For `end()` only.
-            EntityComponentSliceIter(
+        private:
+            explicit EntityComponentSliceIter(
                 const dependence::arch_chunks_info* _archs_end)
-                : m_archs_current(_archs_end)
-                , m_archs_end(_archs_end)
-                , m_chunk_currnet(nullptr)
-                , m_chunk_current_entity_meta(nullptr)
-                , m_chunk_entity_currnet_index(0)
+                : ComponentSliceIter(_archs_end)
             {
             }
-
-            void _move_to_valid_entity()
-            {
-                for (;;)
-                {
-                    if (m_chunk_entity_currnet_index >= m_archs_current->m_entity_count)
-                    {
-                        // Move to next chunk.
-                        m_chunk_entity_currnet_index = 0;
-                        m_chunk_currnet = je_arch_next_chunk(m_chunk_currnet);
-                        if (m_chunk_currnet == nullptr)
-                        {
-                            // Move to next arch.
-                            if (++m_archs_current == m_archs_end)
-                                // End! m_archs_current == m_archs_end && m_chunk_currnet == nullptr
-                                break;
-
-                            m_chunk_currnet = je_arch_get_chunk(m_archs_current->m_arch);
-                            assert(m_chunk_currnet != nullptr);
-                        }
-
-                        // Update entity meta for new chunk.
-                        m_chunk_current_entity_meta = je_arch_entity_meta_addr_in_chunk(m_chunk_currnet);
-                    }
-
-                    if (jeecs::game_entity::entity_stat::READY
-                        == m_chunk_current_entity_meta[m_chunk_entity_currnet_index].m_stat)
-                        break;
-
-                    ++m_chunk_entity_currnet_index;
-                }
-            }
-
         public:
-            typedef ptrdiff_t difference_type;
-            typedef std::pair<game_entity, typename SliceView::components> value_type;
-            typedef void pointer;
-            typedef void reference;
-            typedef std::forward_iterator_tag iterator_category;
+            typedef typename SliceView::entity_with_components value_type;
 
             EntityComponentSliceIter(const EntityComponentSliceIter&) = default;
             EntityComponentSliceIter(EntityComponentSliceIter&&) = default;
             EntityComponentSliceIter& operator = (const EntityComponentSliceIter&) = default;
             EntityComponentSliceIter& operator = (EntityComponentSliceIter&&) = default;
-            EntityComponentSliceIter()
-                : m_archs_current(nullptr)
-                , m_archs_end(nullptr)
-                , m_chunk_currnet(nullptr)
-                , m_chunk_current_entity_meta(nullptr)
-                , m_chunk_entity_currnet_index(0)
+            EntityComponentSliceIter() = default;
+            explicit EntityComponentSliceIter(const dependence* dependence)
+                : ComponentSliceIter(dependence)
             {
             }
-            EntityComponentSliceIter(const dependence* dependence)
-            {
-                m_archs_current = dependence->m_archs.begin();
-                m_archs_end = dependence->m_archs.end();
 
-                m_chunk_currnet = je_arch_get_chunk(m_archs_current->m_arch);
-                m_chunk_current_entity_meta = je_arch_entity_meta_addr_in_chunk(m_chunk_currnet);
-                m_chunk_entity_currnet_index = 0;
-
-                _move_to_valid_entity();
-            }
-
-            EntityComponentSliceIter operator ++()
-            {
-                ++m_chunk_entity_currnet_index;
-                _move_to_valid_entity();
-
-                return *this;
-            }
-            EntityComponentSliceIter operator ++(int)
-            {
-                auto current = this;
-
-                ++m_chunk_entity_currnet_index;
-                _move_to_valid_entity();
-
-                return current;
-            }
-            bool operator ==(const EntityComponentSliceIter& pindex) const
-            {
-                return m_archs_current == pindex.m_archs_current
-                    && m_chunk_currnet == pindex.m_chunk_currnet
-                    && m_chunk_entity_currnet_index == pindex.m_chunk_entity_currnet_index;
-            }
-            bool operator !=(const EntityComponentSliceIter& pindex) const
-            {
-                return m_archs_current != pindex.m_archs_current
-                    || m_chunk_currnet != pindex.m_chunk_currnet
-                    || m_chunk_entity_currnet_index != pindex.m_chunk_entity_currnet_index;
-            }
             value_type operator*()
             {
-                return std::make_pair(
-                    game_entity{
-                        m_chunk_currnet,
-                        m_chunk_entity_currnet_index,
-                        m_chunk_current_entity_meta[m_chunk_entity_currnet_index].m_version
-                    },
-                    SliceView::fetch_component_slice_from_chunk(
-                        m_archs_current, m_chunk_currnet, m_chunk_entity_currnet_index));
+                return SliceView::fetch_entity_and_component_slice_from_chunk(
+                    m_archs_current, 
+                    m_chunk_currnet, 
+                    m_chunk_entity_currnet_index, 
+                    m_chunk_current_entity_meta[m_chunk_entity_currnet_index].m_version);
             }
 
             EntityComponentSliceIter begin()

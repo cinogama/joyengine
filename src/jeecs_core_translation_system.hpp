@@ -27,20 +27,20 @@ namespace jeecs
         {
         }
 
-        void TransfromStageUpdate(jeecs::selector &selector)
+        void TransfromStageUpdate(jeecs::selector& selector)
         {
-            std::unordered_map<typing::uuid, Translation *> binded_trans;
+            std::unordered_map<typing::uuid, Translation*> binded_trans;
 
             // 对于有L2W的组件，在此优先处理
             selector.except<LocalToParent>();
             selector.exec(
                 [&binded_trans](
-                    Anchor *anchor,
-                    Translation &trans,
-                    LocalToWorld &l2w,
-                    LocalPosition *position,
-                    LocalRotation *rotation,
-                    LocalScale *scale)
+                    Anchor* anchor,
+                    Translation& trans,
+                    LocalToWorld& l2w,
+                    LocalPosition* position,
+                    LocalRotation* rotation,
+                    LocalScale* scale)
                 {
                     l2w.pos = position ? position->pos : math::vec3();
                     l2w.rot = rotation ? rotation->rot : math::quat();
@@ -59,21 +59,21 @@ namespace jeecs
 
             struct AnchoredTrans
             {
-                Anchor *anchor_may_null;
-                Translation *trans;
-                LocalToParent *l2p;
+                Anchor* anchor_may_null;
+                Translation* trans;
+                LocalToParent* l2p;
             };
             std::list<AnchoredTrans> pending_anchor_information;
 
             // 对于有L2P先进行应用，稍后更新到Translation上
             selector.except<LocalToWorld>();
             selector.exec(
-                [&](Anchor *anchor,
-                    Translation &trans,
-                    LocalToParent &l2p,
-                    LocalPosition *position,
-                    LocalRotation *rotation,
-                    LocalScale *scale)
+                [&](Anchor* anchor,
+                    Translation& trans,
+                    LocalToParent& l2p,
+                    LocalPosition* position,
+                    LocalRotation* rotation,
+                    LocalScale* scale)
                 {
                     l2p.pos = position ? position->pos : math::vec3();
                     l2p.rot = rotation ? rotation->rot : math::quat();
@@ -83,7 +83,7 @@ namespace jeecs
                         AnchoredTrans{
                             anchor,
                             &trans,
-                            &l2p});
+                            &l2p });
                 });
 
             size_t count = 0;
@@ -91,7 +91,7 @@ namespace jeecs
             {
                 count = pending_anchor_information.size();
                 for (auto idx = pending_anchor_information.begin();
-                     idx != pending_anchor_information.end();)
+                    idx != pending_anchor_information.end();)
                 {
                     auto current_idx = idx++;
 
@@ -99,7 +99,7 @@ namespace jeecs
                     if (fnd != binded_trans.end())
                     {
                         // 父变换已决，应用之
-                        const Translation *parent_trans = fnd->second;
+                        const Translation* parent_trans = fnd->second;
                         current_idx->trans->world_rotation = parent_trans->world_rotation * current_idx->l2p->rot;
                         current_idx->trans->world_position = parent_trans->world_rotation * current_idx->l2p->pos + parent_trans->world_position;
                         current_idx->trans->local_scale = current_idx->l2p->scale;
@@ -119,25 +119,25 @@ namespace jeecs
             }
         }
 
-        void UserInterfaceStageUpdate(jeecs::selector &selector)
+        void UserInterfaceStageUpdate(jeecs::selector& selector)
         {
-            std::unordered_map<typing::uuid, UserInterface::Origin *> binded_origins;
+            std::unordered_map<typing::uuid, UserInterface::Origin*> binded_origins;
 
             struct AnchoredOrigin
             {
-                Anchor *anchor_may_null;
-                UserInterface::Origin *origin;
-                LocalToParent *l2p;
+                Anchor* anchor_may_null;
+                UserInterface::Origin* origin;
+                LocalToParent* l2p;
             };
             std::list<AnchoredOrigin> pending_anchor_information;
 
             selector.exec(
                 [&binded_origins, &pending_anchor_information](
-                    Anchor *anchor,
-                    Transform::LocalToParent *l2p,
-                    UserInterface::Origin &origin,
-                    UserInterface::Absolute *absolute,
-                    UserInterface::Relatively *relatively)
+                    Anchor* anchor,
+                    Transform::LocalToParent* l2p,
+                    UserInterface::Origin& origin,
+                    UserInterface::Absolute* absolute,
+                    UserInterface::Relatively* relatively)
                 {
                     if (absolute != nullptr)
                     {
@@ -166,7 +166,7 @@ namespace jeecs
                             AnchoredOrigin{
                                 anchor,
                                 &origin,
-                                l2p});
+                                l2p });
                     }
                     else
                     {
@@ -184,7 +184,7 @@ namespace jeecs
             {
                 count = pending_anchor_information.size();
                 for (auto idx = pending_anchor_information.begin();
-                     idx != pending_anchor_information.end();)
+                    idx != pending_anchor_information.end();)
                 {
                     auto current_idx = idx++;
 
@@ -192,7 +192,7 @@ namespace jeecs
                     if (fnd != binded_origins.end())
                     {
                         // 父变换已决，应用之
-                        const UserInterface::Origin *parent_origin = fnd->second;
+                        const UserInterface::Origin* parent_origin = fnd->second;
 
                         current_idx->origin->root_center = parent_origin->root_center;
                         current_idx->origin->global_location += parent_origin->global_location;
@@ -213,47 +213,24 @@ namespace jeecs
             }
         }
 
-        void TransformUpdate(jeecs::selector &selector)
+        void TransformUpdate(jeecs::selector& selector)
         {
             TransfromStageUpdate(selector);
             UserInterfaceStageUpdate(selector);
         }
-        void CommitUpdate(jeecs::selector &selector)
+        void CommitUpdate(jeecs::selector& selector)
         {
             // 到此为止，所有的变换均已应用到 Translation 上，现在更新变换矩阵
 
-            jeecs::slice<jeecs::slice_requirement::View<Translation&>> a;
-
-            a.fetch(get_world()).foreach_parallel(
-                [](auto&& slice) 
+            selector.exec(
+                [](Translation& trans)
                 {
-                    auto& [trans] = slice;
-
                     math::transform(
                         trans.object2world,
                         trans.world_position,
                         trans.world_rotation,
                         trans.local_scale);
                 });
-
-            /*for (auto& [trans] : a.fetch(get_world()))
-            {
-                math::transform(
-                    trans.object2world,
-                    trans.world_position,
-                    trans.world_rotation,
-                    trans.local_scale);
-            }*/
-
-            /*selector.exec(
-                [](Translation &trans)
-                {
-                    math::transform(
-                        trans.object2world,
-                        trans.world_position,
-                        trans.world_rotation,
-                        trans.local_scale);
-                });*/
         }
     };
 }
