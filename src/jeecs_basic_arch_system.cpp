@@ -1220,8 +1220,16 @@ namespace jeecs_impl
         JECS_DISABLE_MOVE_AND_COPY(ecs_world);
 
     public:
-        using system_container_t = std::unordered_map<const jeecs::typing::type_info*, jeecs::game_system*>;
+        using system_container_t = 
+            std::unordered_map<const jeecs::typing::type_info*, jeecs::game_system*>;
+        using slice_cache_container_t =
+            std::unordered_map<jeecs::typing::typehash_t, std::unique_ptr<jeecs::dependence>>;
 
+        // NOTE: 此处之所以要根据不同系统实例缓存不同的切片，是考虑到编译防火墙，不同编译器/库对
+        //      相同/不同的切片类型哈希可能不同/相同；为了规避因此导致的哈希冲突或者重复，针对不同
+        //      实例缓存，这样确保一个实例对应的始终是相同的模块（库），避免编译防火墙问题。
+        using system_slice_cache_container_t = 
+            std::unordered_map<jeecs::game_system*, slice_cache_container_t>;
     private:
         ecs_universe* _m_universe;
 
@@ -1235,7 +1243,7 @@ namespace jeecs_impl
 
         std::string _m_name;
         system_container_t m_systems;
-
+        system_slice_cache_container_t m_system_slice_caches;
     private:
         inline static std::shared_mutex _m_alive_worlds_mx;
         inline static std::unordered_set<ecs_world*> _m_alive_worlds;
@@ -1266,13 +1274,12 @@ namespace jeecs_impl
             std::shared_lock sg1(_m_alive_worlds_mx);
             return _m_alive_worlds.find(world) != _m_alive_worlds.end() && !world->is_destroying();
         }
-
         system_container_t& get_system_instances() noexcept
         {
             return m_systems;
         }
-
-        void _destroy_system_instance(const jeecs::typing::type_info* type, jeecs::game_system* sys) noexcept
+        void _destroy_system_instance(
+            const jeecs::typing::type_info* type, jeecs::game_system* sys) noexcept
         {
             if (_m_world_enabled)
                 type->m_system_updaters->m_on_disable(sys);
@@ -1294,13 +1301,24 @@ namespace jeecs_impl
                 if (_m_world_enabled)
                     type->m_system_updaters->m_on_enable(sys);
 
-                m_systems[type] = sys;
+                auto result = m_systems.insert(std::make_pair(type, sys)).second;
+                (void)result;
+                assert(result);
+
+                // Create system slice cache for this system
+                result = m_system_slice_caches.insert(
+                    std::make_pair(sys, slice_cache_container_t{})).second;
+                (void)result;
+                assert(result);
             }
             else
             {
 #ifndef NDEBUG
-                jeecs::debug::logwarn("Trying to append system: '%s', but current world(%p) has already contain same one(%p), replace it with %p",
-                    type->m_typename, this, fnd->second, sys);
+                jeecs::debug::logwarn(
+                    "Trying to append system: '%s', but current world(%p) has already contain same one(%p), replace it with %p",
+                    type->m_typename, 
+                    this, fnd->second, 
+                    sys);
 #endif
                 remove_system_instance(type);
                 append_system_instance(type, sys);
@@ -1308,16 +1326,21 @@ namespace jeecs_impl
         }
         void remove_system_instance(const jeecs::typing::type_info* type) noexcept
         {
-            if (m_systems.find(type) != m_systems.end())
+            auto fnd = m_systems.find(type);
+            if (fnd != m_systems.end())
             {
-                _destroy_system_instance(type, m_systems[type]);
-                m_systems.erase(m_systems.find(type));
+                _destroy_system_instance(fnd->first, fnd->second);
+
+                m_system_slice_caches.erase(fnd->second);
+                m_systems.erase(fnd);                
             }
 #ifndef NDEBUG
             else
             {
-                jeecs::debug::logwarn("Trying to remove system: '%s', but current world(%p) donot have this system.",
-                    type->m_typename, this);
+                jeecs::debug::logwarn(
+                    "Trying to remove system: '%s', but current world(%p) donot have this system.",
+                    type->m_typename,
+                    this);
             }
 #endif
         }
@@ -1368,8 +1391,11 @@ namespace jeecs_impl
                 std::vector<const jeecs::typing::type_info*> _removing_sys_types;
                 _removing_sys_types.reserve(m_systems.size());
 
-                for (auto& sys : m_systems)
-                    _removing_sys_types.push_back(sys.first);
+                for (auto& [sys_type, sys_instance] : m_systems)
+                {
+                    (void)sys_instance;
+                    _removing_sys_types.push_back(sys_type);
+                }
 
                 for (auto type : _removing_sys_types)
                     remove_system_instance(type);
