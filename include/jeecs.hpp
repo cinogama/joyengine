@@ -44,6 +44,7 @@
 #include <climits>
 #include <initializer_list>
 #include <optional>
+#include <tuple>
 #ifdef __cpp_lib_execution
 #   include <execution>
 #endif
@@ -6012,9 +6013,9 @@ namespace jeecs
             {
                 return of<T>()->m_id;
             }
-            inline static typeid_t id(typeid_t _tid)
+            inline static typeid_t id(const type_info* _tinfo)
             {
-                return of(_tid)->m_id;
+                return _tinfo->m_id;
             }
             inline static typeid_t id(const char* name)
             {
@@ -6380,27 +6381,33 @@ namespace jeecs
 
         basic::vector<requirement> m_requirements;
         basic::vector<arch_chunks_info> m_archs;
-        size_t m_current_arch_version = 0;
+
+        size_t m_current_arch_version;
+        void* m_cached_arch_belongs_to_world_handle;
 
         dependence() = default;
         dependence(const dependence& d)
             : m_requirements(d.m_requirements)
             , m_archs({})
             , m_current_arch_version(0)
+            , m_cached_arch_belongs_to_world_handle(nullptr)
         {
         }
         dependence(dependence&& d)
             : m_requirements(std::move(d.m_requirements))
             , m_archs(std::move(d.m_archs))
             , m_current_arch_version(d.m_current_arch_version)
+            , m_cached_arch_belongs_to_world_handle(d.m_cached_arch_belongs_to_world_handle)
         {
             d.m_current_arch_version = 0;
+            d.m_cached_arch_belongs_to_world_handle = nullptr;
         }
         dependence& operator=(const dependence& d)
         {
             m_requirements = d.m_requirements;
             m_archs = {};
             m_current_arch_version = 0;
+            m_cached_arch_belongs_to_world_handle = nullptr;
 
             return *this;
         }
@@ -6409,23 +6416,28 @@ namespace jeecs
             m_requirements = std::move(d.m_requirements);
             m_archs = std::move(d.m_archs);
             m_current_arch_version = d.m_current_arch_version;
+            m_cached_arch_belongs_to_world_handle = d.m_cached_arch_belongs_to_world_handle;
 
             d.m_current_arch_version = 0;
+            d.m_cached_arch_belongs_to_world_handle = nullptr;
 
             return *this;
         }
         ~dependence() = default;
 
-        void update(const game_world& aim_world) noexcept
+        void update(game_world aim_world) noexcept
         {
             auto* world_handle = aim_world.handle();
 
             assert(world_handle != nullptr);
 
             size_t arch_updated_ver = je_ecs_world_archmgr_updated_version(world_handle);
-            if (m_current_arch_version != arch_updated_ver)
+            if (m_cached_arch_belongs_to_world_handle != world_handle
+                || m_current_arch_version != arch_updated_ver)
             {
                 m_current_arch_version = arch_updated_ver;
+                m_cached_arch_belongs_to_world_handle = world_handle;
+
                 je_ecs_world_update_dependences_archinfo(world_handle, this);
             }
         }
@@ -6780,6 +6792,336 @@ namespace jeecs
                 _apply_anyof<Ts...>(depend, m_any_id);
                 ++m_any_id;
             }
+        }
+    };
+
+    namespace slice_requirement
+    {
+        namespace base
+        {
+            template<requirement::type RequireType>
+            struct RequirementBase
+            {
+                template<typename T, typename ... Ts>
+                static void _apply_dependence_impl(size_t group, dependence* out_dependence)
+                {
+                    out_dependence->m_requirements.push_back(
+                        requirement(RequireType, group, typing::type_info::id<T>()));
+
+                    if constexpr (sizeof...(Ts) > 0)
+                        _apply_dependence_impl<Ts...>(group, out_dependence);
+                }
+
+                template<typename ... Ts>
+                static void _apply_dependence(size_t group, dependence* out_dependence)
+                {
+                    if constexpr (sizeof...(Ts) > 0)
+                        _apply_dependence_impl<Ts...>(group, out_dependence);
+                }
+            };
+            struct ViewBase : RequirementBase<requirement::type::CONTAINS> {};
+            struct ContainsBase : RequirementBase<requirement::type::CONTAINS> {};
+            struct ExceptBase : RequirementBase<requirement::type::EXCEPT> {};
+            struct AnyOfBase : RequirementBase<requirement::type::ANYOF> {};
+        }
+
+        template<typename ... Components>
+        struct View : base::ViewBase
+        {
+        private:
+            template <typename ComponentT, typename... ArgTs>
+            struct _const_type_index
+            {
+                using f_t = typing::function_traits<void(ArgTs...)>;
+                template <size_t id = 0>
+                static constexpr size_t _index()
+                {
+                    if constexpr (std::is_same<typename f_t::template argument<id>::type, ComponentT>::value)
+                        return id;
+                    else
+                        return _index<id + 1>();
+                }
+                static constexpr size_t index = _index();
+            };
+            inline static void* get_component_from_archchunk_ptr(
+                const dependence::arch_chunks_info* archinfo, void* chunkbuf, size_t entity_id, size_t cid)
+            {
+                assert(cid < archinfo->m_component_infos.size());
+
+                const auto& component_info = archinfo->m_component_infos.at(cid);
+
+                if (component_info.m_component_offset_of_unit != 0)
+                {
+                    size_t offset = component_info.m_component_offset_in_chunk + component_info.m_component_offset_of_unit * entity_id;
+                    return reinterpret_cast<void*>(reinterpret_cast<intptr_t>(chunkbuf) + offset);
+                }
+                else
+                    return nullptr;
+            }
+            template <typename ComponentT, typename... ArgTs>
+            inline static ComponentT get_component_from_archchunk(
+                const dependence::arch_chunks_info* archinfo, void* chunkbuf, size_t entity_id)
+            {
+                constexpr size_t cid = _const_type_index<ComponentT, ArgTs...>::index;
+                auto* component_ptr = std::launder(reinterpret_cast<typename typing::origin_t<ComponentT> *>(
+                    get_component_from_archchunk_ptr(archinfo, chunkbuf, entity_id, cid)));
+
+                if (component_ptr != nullptr)
+                {
+                    if constexpr (std::is_reference<ComponentT>::value)
+                        return *component_ptr;
+                    else
+                    {
+                        static_assert(std::is_pointer<ComponentT>::value);
+                        return component_ptr;
+                    }
+                }
+
+                if constexpr (std::is_reference<ComponentT>::value)
+                {
+                    assert(("Only maynot/anyof canbe here. 'je_ecs_world_update_dependences_archinfo' may have some problem.", false));
+                    abort();
+                }
+                else
+                    return nullptr; // Only maynot/anyof can be here, no need to cast the type;
+            }
+        public:
+            using components = std::tuple<Components...>;
+            static void apply_dependence(size_t group, dependence* out_dependence)
+            {
+                _apply_dependence<Components...>(group, out_dependence);
+            }
+
+            static components fetch_component_slice_from_chunk(
+                const dependence::arch_chunks_info* archinfo, void* chunkbuf, size_t entity_id)
+            {
+                return std::forward_as_tuple(
+                    get_component_from_archchunk<Components, Components...>(archinfo, chunkbuf, entity_id)...);
+            }
+        };
+        template<typename ... Components>
+        struct Contains : base::ContainsBase
+        {
+            using components = std::tuple<Components...>;
+            static void apply_dependence(size_t group, dependence* out_dependence)
+            {
+                _apply_dependence<Components...>(group, out_dependence);
+            }
+        };
+        template<typename ... Components>
+        struct Except : base::ExceptBase
+        {
+            using components = std::tuple<Components...>;
+            static void apply_dependence(size_t group, dependence* out_dependence)
+            {
+                _apply_dependence<Components...>(group, out_dependence);
+            }
+        };
+        template<typename ... Components>
+        struct AnyOf : base::AnyOfBase
+        {
+            using components = std::tuple<Components...>;
+            static void apply_dependence(size_t group, dependence* out_dependence)
+            {
+                _apply_dependence<Components...>(group, out_dependence);
+            }
+        };
+    }
+
+    template<typename SliceView, typename ... SliceRequirements>
+    class slice
+    {
+        dependence m_dependence;
+
+        template<size_t Group, typename T, typename ... Ts>
+        void _apply_requirements()
+        {
+            static_assert(
+                Group == 0
+                ? std::is_base_of<slice_requirement::base::ViewBase, T>::value : (
+                    std::is_base_of<slice_requirement::base::ContainsBase, T>::value
+                    || std::is_base_of<slice_requirement::base::ExceptBase, T>::value
+                    || std::is_base_of<slice_requirement::base::AnyOfBase, T>::value));
+
+            T::apply_dependence(Group, &m_dependence);
+
+            if constexpr (sizeof...(Ts) > 0)
+                _apply_requirements<Group + 1, Ts...>();
+        }
+
+    public:
+        class ComponentSliceIter
+        {
+            const dependence::arch_chunks_info* m_archs_current;
+            const dependence::arch_chunks_info* m_archs_end;
+
+            void* m_chunk_currnet;
+            const jeecs::game_entity::meta* m_chunk_current_entity_meta;
+            size_t m_chunk_entity_currnet_index;
+
+            ptrdiff_t m_total_entity_index;
+
+            // For `end()` only.
+            ComponentSliceIter(
+                const dependence::arch_chunks_info* _archs_end)
+                : m_archs_current(_archs_end)
+                , m_archs_end(_archs_end)
+                , m_chunk_currnet(nullptr)
+                , m_chunk_current_entity_meta(nullptr)
+                , m_chunk_entity_currnet_index(0)
+            {
+            }
+
+            void _move_to_valid_entity()
+            {
+                for (;;)
+                {
+                    if (m_chunk_entity_currnet_index >= m_archs_current->m_entity_count)
+                    {
+                        // Move to next chunk.
+                        m_chunk_entity_currnet_index = 0;
+                        m_chunk_currnet = je_arch_next_chunk(m_chunk_currnet);
+                        if (m_chunk_currnet == nullptr)
+                        {
+                            // Move to next arch.
+                            if (++m_archs_current == m_archs_end)
+                                // End! m_archs_current == m_archs_end && m_chunk_currnet == nullptr
+                                break;
+
+                            m_chunk_currnet = je_arch_get_chunk(m_archs_current->m_arch);
+                            assert(m_chunk_currnet != nullptr);
+                        }
+
+                        // Update entity meta for new chunk.
+                        m_chunk_current_entity_meta = je_arch_entity_meta_addr_in_chunk(m_chunk_currnet);
+                    }
+
+                    if (jeecs::game_entity::entity_stat::READY
+                        == m_chunk_current_entity_meta[m_chunk_entity_currnet_index].m_stat)
+                        break;
+
+                    ++m_chunk_entity_currnet_index;
+                }
+            }
+
+        public:
+            typedef ptrdiff_t difference_type;
+            typedef typename SliceView::components value_type;
+            typedef void pointer;
+            typedef void reference;
+            typedef std::forward_iterator_tag iterator_category;
+
+            ComponentSliceIter(const ComponentSliceIter&) = default;
+            ComponentSliceIter(ComponentSliceIter&&) = default;
+            ComponentSliceIter& operator = (const ComponentSliceIter&) = default;
+            ComponentSliceIter& operator = (ComponentSliceIter&&) = default;
+            ComponentSliceIter()
+                : m_archs_current(nullptr)
+                , m_archs_end(nullptr)
+                , m_chunk_currnet(nullptr)
+                , m_chunk_current_entity_meta(nullptr)
+                , m_chunk_entity_currnet_index(0)
+            {
+            }
+            ComponentSliceIter(const dependence* dependence)
+            {
+                m_archs_current = dependence->m_archs.begin();
+                m_archs_end = dependence->m_archs.end();
+
+                m_chunk_currnet = je_arch_get_chunk(m_archs_current->m_arch);
+                m_chunk_current_entity_meta = je_arch_entity_meta_addr_in_chunk(m_chunk_currnet);
+                m_chunk_entity_currnet_index = 0;
+
+                _move_to_valid_entity();
+            }
+
+            ComponentSliceIter operator ++()
+            {
+                ++m_chunk_entity_currnet_index;
+                _move_to_valid_entity();
+
+                return *this;
+            }
+            ComponentSliceIter operator ++(int)
+            {
+                auto current = this;
+
+                ++m_chunk_entity_currnet_index;
+                _move_to_valid_entity();
+
+                return current;
+            }
+            bool operator ==(const ComponentSliceIter& pindex) const
+            {
+                return m_archs_current == pindex.m_archs_current
+                    && m_chunk_currnet == pindex.m_chunk_currnet
+                    && m_chunk_entity_currnet_index == pindex.m_chunk_entity_currnet_index;
+            }
+            bool operator !=(const ComponentSliceIter& pindex) const
+            {
+                return m_archs_current != pindex.m_archs_current
+                    || m_chunk_currnet != pindex.m_chunk_currnet
+                    || m_chunk_entity_currnet_index != pindex.m_chunk_entity_currnet_index;
+            }
+            value_type operator*()
+            {
+                return SliceView::fetch_component_slice_from_chunk(
+                    m_archs_current, m_chunk_currnet, m_chunk_entity_currnet_index);
+            }
+
+            ComponentSliceIter begin()
+            {
+                return *this;
+            }
+            ComponentSliceIter end()
+            {
+                return ComponentSliceIter(m_archs_end);
+            }
+
+            //ptrdiff_t operator-(const ComponentSliceIter& another) const
+            //{
+            //    return ptrdiff_t(id - another.id);
+            //}
+
+            template<typename FT>
+            void foreach_parallel(FT&& ft)
+            {
+                std::for_each(
+#ifdef __cpp_lib_execution
+                    std::execution::par_unseq,
+#endif
+                    *this,
+                    end(),
+                    ft);
+            }
+        };
+        class EntityComponentSliceIter
+        {
+            const dependence* m_dependence;
+        public:
+            EntityComponentSliceIter(const dependence* dependence)
+                : m_dependence(dependence)
+            {
+            }
+        };
+
+        slice()
+        {
+            static_assert(std::is_base_of<slice_requirement::base::ViewBase, SliceView>::value,
+                "First template argument of slice must be slice::View.");
+
+            _apply_requirements<0, SliceView, SliceRequirements...>();
+        }
+
+        ComponentSliceIter fetch(game_world w)
+        {
+            m_dependence.update(w);
+            return ComponentSliceIter(&m_dependence);
+        }
+        EntityComponentSliceIter fetch_entity(game_world w)
+        {
+            m_dependence.update(w);
+            return EntityComponentSliceIter(&m_dependence);
         }
     };
 

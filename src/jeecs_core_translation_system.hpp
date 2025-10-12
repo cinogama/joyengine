@@ -221,7 +221,31 @@ namespace jeecs
         void CommitUpdate(jeecs::selector &selector)
         {
             // 到此为止，所有的变换均已应用到 Translation 上，现在更新变换矩阵
-            selector.exec(
+
+            jeecs::slice<jeecs::slice_requirement::View<Translation&>> a;
+
+            a.fetch(get_world()).foreach_parallel(
+                [](auto& slice) 
+                {
+                    auto& [trans] = slice;
+
+                    math::transform(
+                        trans.object2world,
+                        trans.world_position,
+                        trans.world_rotation,
+                        trans.local_scale);
+                });
+
+            /*for (auto& [trans] : a.fetch(get_world()))
+            {
+                math::transform(
+                    trans.object2world,
+                    trans.world_position,
+                    trans.world_rotation,
+                    trans.local_scale);
+            }*/
+
+            /*selector.exec(
                 [](Translation &trans)
                 {
                     math::transform(
@@ -229,7 +253,7 @@ namespace jeecs
                         trans.world_position,
                         trans.world_rotation,
                         trans.local_scale);
-                });
+                });*/
         }
     };
 }
