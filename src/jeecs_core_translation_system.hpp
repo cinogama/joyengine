@@ -225,7 +225,7 @@ namespace jeecs
             jeecs::slice<jeecs::slice_requirement::View<Translation&>> a;
 
             a.fetch(get_world()).foreach_parallel(
-                [](auto& slice) 
+                [](auto&& slice) 
                 {
                     auto& [trans] = slice;
 
