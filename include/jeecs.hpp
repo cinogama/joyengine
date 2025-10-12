@@ -6959,8 +6959,6 @@ namespace jeecs
             const jeecs::game_entity::meta* m_chunk_current_entity_meta;
             size_t m_chunk_entity_currnet_index;
 
-            ptrdiff_t m_total_entity_index;
-
             // For `end()` only.
             ComponentSliceIter(
                 const dependence::arch_chunks_info* _archs_end)
@@ -7078,10 +7076,149 @@ namespace jeecs
                 return ComponentSliceIter(m_archs_end);
             }
 
-            //ptrdiff_t operator-(const ComponentSliceIter& another) const
-            //{
-            //    return ptrdiff_t(id - another.id);
-            //}
+            template<typename FT>
+            void foreach_parallel(FT&& ft)
+            {
+                std::for_each(
+#ifdef __cpp_lib_execution
+                    std::execution::par_unseq,
+#endif
+                    * this,
+                    end(),
+                    ft);
+            }
+        };
+        class EntityComponentSliceIter
+        {
+            const dependence::arch_chunks_info* m_archs_current;
+            const dependence::arch_chunks_info* m_archs_end;
+
+            void* m_chunk_currnet;
+            const jeecs::game_entity::meta* m_chunk_current_entity_meta;
+            size_t m_chunk_entity_currnet_index;
+
+            // For `end()` only.
+            EntityComponentSliceIter(
+                const dependence::arch_chunks_info* _archs_end)
+                : m_archs_current(_archs_end)
+                , m_archs_end(_archs_end)
+                , m_chunk_currnet(nullptr)
+                , m_chunk_current_entity_meta(nullptr)
+                , m_chunk_entity_currnet_index(0)
+            {
+            }
+
+            void _move_to_valid_entity()
+            {
+                for (;;)
+                {
+                    if (m_chunk_entity_currnet_index >= m_archs_current->m_entity_count)
+                    {
+                        // Move to next chunk.
+                        m_chunk_entity_currnet_index = 0;
+                        m_chunk_currnet = je_arch_next_chunk(m_chunk_currnet);
+                        if (m_chunk_currnet == nullptr)
+                        {
+                            // Move to next arch.
+                            if (++m_archs_current == m_archs_end)
+                                // End! m_archs_current == m_archs_end && m_chunk_currnet == nullptr
+                                break;
+
+                            m_chunk_currnet = je_arch_get_chunk(m_archs_current->m_arch);
+                            assert(m_chunk_currnet != nullptr);
+                        }
+
+                        // Update entity meta for new chunk.
+                        m_chunk_current_entity_meta = je_arch_entity_meta_addr_in_chunk(m_chunk_currnet);
+                    }
+
+                    if (jeecs::game_entity::entity_stat::READY
+                        == m_chunk_current_entity_meta[m_chunk_entity_currnet_index].m_stat)
+                        break;
+
+                    ++m_chunk_entity_currnet_index;
+                }
+            }
+
+        public:
+            typedef ptrdiff_t difference_type;
+            typedef std::pair<game_entity, typename SliceView::components> value_type;
+            typedef void pointer;
+            typedef void reference;
+            typedef std::forward_iterator_tag iterator_category;
+
+            EntityComponentSliceIter(const EntityComponentSliceIter&) = default;
+            EntityComponentSliceIter(EntityComponentSliceIter&&) = default;
+            EntityComponentSliceIter& operator = (const EntityComponentSliceIter&) = default;
+            EntityComponentSliceIter& operator = (EntityComponentSliceIter&&) = default;
+            EntityComponentSliceIter()
+                : m_archs_current(nullptr)
+                , m_archs_end(nullptr)
+                , m_chunk_currnet(nullptr)
+                , m_chunk_current_entity_meta(nullptr)
+                , m_chunk_entity_currnet_index(0)
+            {
+            }
+            EntityComponentSliceIter(const dependence* dependence)
+            {
+                m_archs_current = dependence->m_archs.begin();
+                m_archs_end = dependence->m_archs.end();
+
+                m_chunk_currnet = je_arch_get_chunk(m_archs_current->m_arch);
+                m_chunk_current_entity_meta = je_arch_entity_meta_addr_in_chunk(m_chunk_currnet);
+                m_chunk_entity_currnet_index = 0;
+
+                _move_to_valid_entity();
+            }
+
+            EntityComponentSliceIter operator ++()
+            {
+                ++m_chunk_entity_currnet_index;
+                _move_to_valid_entity();
+
+                return *this;
+            }
+            EntityComponentSliceIter operator ++(int)
+            {
+                auto current = this;
+
+                ++m_chunk_entity_currnet_index;
+                _move_to_valid_entity();
+
+                return current;
+            }
+            bool operator ==(const EntityComponentSliceIter& pindex) const
+            {
+                return m_archs_current == pindex.m_archs_current
+                    && m_chunk_currnet == pindex.m_chunk_currnet
+                    && m_chunk_entity_currnet_index == pindex.m_chunk_entity_currnet_index;
+            }
+            bool operator !=(const EntityComponentSliceIter& pindex) const
+            {
+                return m_archs_current != pindex.m_archs_current
+                    || m_chunk_currnet != pindex.m_chunk_currnet
+                    || m_chunk_entity_currnet_index != pindex.m_chunk_entity_currnet_index;
+            }
+            value_type operator*()
+            {
+                return std::make_pair(
+                    game_entity{
+                        m_chunk_currnet,
+                        m_chunk_entity_currnet_index,
+                        m_chunk_current_entity_meta[m_chunk_entity_currnet_index].m_version
+                    },
+                    SliceView::fetch_component_slice_from_chunk(
+                        m_archs_current, m_chunk_currnet, m_chunk_entity_currnet_index));
+            }
+
+            EntityComponentSliceIter begin()
+            {
+                return *this;
+            }
+            EntityComponentSliceIter end()
+            {
+                return EntityComponentSliceIter(m_archs_end);
+            }
 
             template<typename FT>
             void foreach_parallel(FT&& ft)
@@ -7090,18 +7227,9 @@ namespace jeecs
 #ifdef __cpp_lib_execution
                     std::execution::par_unseq,
 #endif
-                    *this,
+                    * this,
                     end(),
                     ft);
-            }
-        };
-        class EntityComponentSliceIter
-        {
-            const dependence* m_dependence;
-        public:
-            EntityComponentSliceIter(const dependence* dependence)
-                : m_dependence(dependence)
-            {
             }
         };
 
