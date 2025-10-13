@@ -32,30 +32,24 @@ namespace jeecs
             std::unordered_map<typing::uuid, Translation*> binded_trans;
 
             // 对于有L2W的组件，在此优先处理
-            selector.except<LocalToParent>();
-            selector.exec(
-                [&binded_trans](
-                    Anchor* anchor,
-                    Translation& trans,
-                    LocalToWorld& l2w,
-                    LocalPosition* position,
-                    LocalRotation* rotation,
-                    LocalScale* scale)
+            for (auto& [anchor, trans, l2w, position, rotation, scale] : query<
+                slice_requirement::view<Anchor*, Translation&, LocalToWorld&, LocalPosition*, LocalRotation*, LocalScale*>,
+                slice_requirement::except<LocalToParent>>())
+            {
+                l2w.pos = position ? position->pos : math::vec3();
+                l2w.rot = rotation ? rotation->rot : math::quat();
+                l2w.scale = scale ? scale->scale : math::vec3(1.f, 1.f, 1.f);
+
+                trans.world_rotation = l2w.rot;
+                trans.world_position = l2w.pos;
+                trans.local_scale = l2w.scale;
+
+                if (anchor != nullptr)
                 {
-                    l2w.pos = position ? position->pos : math::vec3();
-                    l2w.rot = rotation ? rotation->rot : math::quat();
-                    l2w.scale = scale ? scale->scale : math::vec3(1.f, 1.f, 1.f);
-
-                    trans.world_rotation = l2w.rot;
-                    trans.world_position = l2w.pos;
-                    trans.local_scale = l2w.scale;
-
-                    if (anchor != nullptr)
-                    {
-                        // 对于L2W的变换，其直接作为变换起点集合
-                        binded_trans.insert(std::make_pair(anchor->uid, &trans));
-                    }
-                });
+                    // 对于L2W的变换，其直接作为变换起点集合
+                    binded_trans.insert(std::make_pair(anchor->uid, &trans));
+                }
+            }
 
             struct AnchoredTrans
             {
@@ -222,15 +216,15 @@ namespace jeecs
         {
             // 到此为止，所有的变换均已应用到 Translation 上，现在更新变换矩阵
 
-            selector.exec(
-                [](Translation& trans)
-                {
-                    math::transform(
-                        trans.object2world,
-                        trans.world_position,
-                        trans.world_rotation,
-                        trans.local_scale);
-                });
+            for (auto& [trans] : 
+                query_view<Translation&>())
+            {
+                math::transform(
+                    trans.object2world,
+                    trans.world_position,
+                    trans.world_rotation,
+                    trans.local_scale);
+            }
         }
     };
 }

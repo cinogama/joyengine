@@ -1473,6 +1473,18 @@ je_ecs_world_set_able [基本接口]
 */
 JE_API void je_ecs_world_set_able(void* world, bool enable);
 
+/*
+je_ecs_world_query_dependence [基本接口]
+根据指定的系统实例和切片类型，获取切片查询缓存
+  * 需要检查返回值，如果返回 false，应当由调用方初始化切片查询缓存的 requirements 字段并执行更新
+  * 获取到的查询缓存仅在当前帧有效，不应当被持久化保存
+*/
+JE_API bool je_ecs_world_query_slice_dependence(
+    void* world,
+    jeecs::game_system* system_instance,
+    jeecs::typing::typehash_t slice_type_hash,
+    jeecs::dependence** out_dependence);
+
 // ATTENTION: These 2 functions have no thread-safe-promise.
 /*
 je_ecs_get_name_of_entity [基本接口]
@@ -6793,8 +6805,34 @@ namespace jeecs
     {
         namespace base
         {
+            struct view_base
+            {
+                template<typename T, typename ... Ts>
+                static void _apply_dependence_impl(dependence* out_dependence)
+                {
+                    static_assert(
+                        std::is_pointer_v<T> || std::is_reference_v<T>);
+
+                    out_dependence->m_requirements.push_back(
+                        requirement{
+                            std::is_pointer<T>::value ? requirement::type::MAYNOT : requirement::type::CONTAINS,
+                            0,
+                            typing::type_info::id<typing::origin_t<T>>() });
+
+                    if constexpr (sizeof...(Ts) > 0)
+                        _apply_dependence_impl<Ts...>(out_dependence);
+                }
+
+                template<typename ... Ts>
+                static void _apply_dependence(dependence* out_dependence)
+                {
+                    if constexpr (sizeof...(Ts) > 0)
+                        _apply_dependence_impl<Ts...>(out_dependence);
+                }
+            };
+
             template<requirement::type RequireType>
-            struct RequirementBase
+            struct requirement_base
             {
                 template<typename T, typename ... Ts>
                 static void _apply_dependence_impl(size_t group, dependence* out_dependence)
@@ -6813,14 +6851,13 @@ namespace jeecs
                         _apply_dependence_impl<Ts...>(group, out_dependence);
                 }
             };
-            struct ViewBase : RequirementBase<requirement::type::CONTAINS> {};
-            struct ContainsBase : RequirementBase<requirement::type::CONTAINS> {};
-            struct ExceptBase : RequirementBase<requirement::type::EXCEPT> {};
-            struct AnyOfBase : RequirementBase<requirement::type::ANYOF> {};
+            struct contains_base : requirement_base<requirement::type::CONTAINS> {};
+            struct except_base : requirement_base<requirement::type::EXCEPT> {};
+            struct anyof_base : requirement_base<requirement::type::ANYOF> {};
         }
 
         template<typename ... Components>
-        struct View : base::ViewBase
+        struct view : base::view_base
         {
         private:
             template <typename ComponentT, typename... ArgTs>
@@ -6882,9 +6919,9 @@ namespace jeecs
         public:
             using components = std::tuple<Components...>;
             using entity_with_components = std::tuple<game_entity, Components...>;
-            static void apply_dependence(size_t group, dependence* out_dependence)
+            static void apply_dependence(dependence* out_dependence)
             {
-                _apply_dependence<Components...>(group, out_dependence);
+                _apply_dependence<Components...>(out_dependence);
             }
 
             static components fetch_component_slice_from_chunk(
@@ -6909,7 +6946,7 @@ namespace jeecs
             }
         };
         template<typename ... Components>
-        struct Contains : base::ContainsBase
+        struct contains : base::contains_base
         {
             using components = std::tuple<Components...>;
             static void apply_dependence(size_t group, dependence* out_dependence)
@@ -6918,7 +6955,7 @@ namespace jeecs
             }
         };
         template<typename ... Components>
-        struct Except : base::ExceptBase
+        struct except : base::except_base
         {
             using components = std::tuple<Components...>;
             static void apply_dependence(size_t group, dependence* out_dependence)
@@ -6927,7 +6964,7 @@ namespace jeecs
             }
         };
         template<typename ... Components>
-        struct AnyOf : base::AnyOfBase
+        struct anyof : base::anyof_base
         {
             using components = std::tuple<Components...>;
             static void apply_dependence(size_t group, dependence* out_dependence)
@@ -6943,19 +6980,29 @@ namespace jeecs
         dependence m_dependence;
 
         template<size_t Group, typename T, typename ... Ts>
-        void _apply_requirements()
+        static void _apply_requirements_impl(dependence* dep)
         {
             static_assert(
-                Group == 0
-                ? std::is_base_of<slice_requirement::base::ViewBase, T>::value : (
-                    std::is_base_of<slice_requirement::base::ContainsBase, T>::value
-                    || std::is_base_of<slice_requirement::base::ExceptBase, T>::value
-                    || std::is_base_of<slice_requirement::base::AnyOfBase, T>::value));
+                std::is_base_of<slice_requirement::base::contains_base, T>::value
+                || std::is_base_of<slice_requirement::base::except_base, T>::value
+                || std::is_base_of<slice_requirement::base::anyof_base, T>::value);
 
-            T::apply_dependence(Group, &m_dependence);
+            T::apply_dependence(Group, dep);
 
             if constexpr (sizeof...(Ts) > 0)
-                _apply_requirements<Group + 1, Ts...>();
+                _apply_requirements_impl<Group + 1, Ts...>(dep);
+        }
+        template<size_t Group, typename ... Ts>
+        static void _apply_requirements(dependence* dep)
+        {
+            if constexpr (sizeof...(Ts) > 0)
+                _apply_requirements_impl<Group, Ts...>(dep);
+        }
+    public:
+        static void apply_requirements(dependence* dep)
+        {
+            SliceView::apply_dependence(dep);
+            _apply_requirements<1, SliceRequirements...>(dep);
         }
 
     public:
@@ -7120,10 +7167,21 @@ namespace jeecs
             {
             }
 
+            EntityComponentSliceIter operator ++()
+            {
+                this->operator++();
+                return *this;
+            }
+            EntityComponentSliceIter operator ++(int)
+            {
+                auto current = this;
+                this->operator++(0);
+                return current;
+            }
             value_type operator*()
             {
                 return SliceView::fetch_entity_and_component_slice_from_chunk(
-                    this->m_archs_current, 
+                    this->m_archs_current,
                     this->m_chunk_currnet,
                     this->m_chunk_entity_currnet_index,
                     this->m_chunk_current_entity_meta[this->m_chunk_entity_currnet_index].m_version);
@@ -7153,10 +7211,10 @@ namespace jeecs
 
         slice()
         {
-            static_assert(std::is_base_of<slice_requirement::base::ViewBase, SliceView>::value,
-                "First template argument of slice must be slice::View.");
+            static_assert(std::is_base_of<slice_requirement::base::view_base, SliceView>::value,
+                "First template argument of slice must be slice::view.");
 
-            _apply_requirements<0, SliceView, SliceRequirements...>();
+            apply_requirements(&m_dependence);
         }
 
         ComponentSliceIter fetch(game_world w)
@@ -7253,6 +7311,23 @@ namespace jeecs
         game_world _m_game_world;
         selector _m_default_selector;
 
+        template<typename SliceView, typename ... SliceRequirements>
+        jeecs::dependence* _fetch_query_slice_cache()
+        {
+            jeecs::dependence* dep;
+            if (!je_ecs_world_query_slice_dependence(
+                get_world().handle(),
+                this,
+                typeid(slice<SliceView, SliceRequirements...>).hash_code(),
+                &dep))
+            {
+                // This dependence is just created, need to apply requirements.
+                slice<SliceView, SliceRequirements...>::apply_requirements(dep);
+                dep->update(get_world());
+            }
+            return dep;
+        }
+
     public:
         game_system(game_world world)
             : _m_game_world(world), _m_default_selector(this)
@@ -7300,6 +7375,29 @@ namespace jeecs
         inline selector& _select_continue() noexcept
         {
             return _m_default_selector;
+        }
+
+        template<typename SliceView, typename ... SliceRequirements>
+        inline typename slice<SliceView, SliceRequirements...>::ComponentSliceIter query()
+        {
+            return slice<SliceView, SliceRequirements...>::ComponentSliceIter(
+                _fetch_query_slice_cache<SliceView, SliceRequirements...>());
+        }
+        template<typename SliceView, typename ... SliceRequirements>
+        inline typename slice<SliceView, SliceRequirements...>::EntityComponentSliceIter query_entity()
+        {
+            return slice<SliceView, SliceRequirements...>::EntityComponentSliceIter(
+                _fetch_query_slice_cache<SliceView, SliceRequirements...>());
+        }      
+        template<typename ... ViewTypes>
+        inline typename slice<slice_requirement::view<ViewTypes...>>::ComponentSliceIter query_view()
+        {
+            return query<slice_requirement::view<ViewTypes...>>();
+        }
+        template<typename ... ViewTypes>
+        inline typename slice<slice_requirement::view<ViewTypes...>>::EntityComponentSliceIter query_entity_view()
+        {
+            return query_entity<slice_requirement::view<ViewTypes...>>();
         }
     };
 
