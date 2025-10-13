@@ -1,6 +1,6 @@
 #pragma once
 
-#define JE_CORE_VERSION JE_VERSION_WRAP(4, 8, 6)
+#define JE_CORE_VERSION JE_VERSION_WRAP(4, 9, 0)
 
 #ifndef JE_MSVC_RC_INCLUDE
 
@@ -6573,6 +6573,43 @@ namespace jeecs
         };
     }
 
+    /*
+    从 jeecs::selector 接过筛选组件集合的大任，作为其的继任者，slice（切片）机制
+    闪亮登场！
+
+    然而实际上这个玩意儿并没有做什么特别的事情，只是把原本 selector 从传入的函数类型
+    中析取对组件的类型要求改成了传入 SliceView 和 SliceRequirements 来表达。
+
+    此外，从原本的传递一个回调函数改成了一个满足 C++ 旧式前向迭代器规范的迭代器类型，
+    可以更友好地适配 STL 提供的算法。
+
+    此外，筛选器的依赖缓存也被转移到了 World 内（指 System 的 query 系列方法），这样
+    做的目的是避免在系统类型内定义切片实例（写起来麻烦）；当然，喜欢创建独立的 slice
+    实例也是被允许的，或许真的有人喜欢这么做呢？
+
+    最后，因为系统的 query 将依赖状态放在了 World 内，所以其更新也不需要每次都执行检
+    查（由 World 代办了）。最棒的是，这样一来，再也不需要像 selector 机制一样，对 query
+    有严格的执行顺序要求，完全可以随意地按任何顺序执行，甚至能够并行执行！
+
+    当然，slice 并没有规避所有的问题：因此吧之前 selector 机制中的说明贴在下面：
+
+    ```
+        实际上只要和ArchSystem扯上关系，就永远不可能干净。很不幸，选择器正是一根搅屎棍，它负责从
+        ArchSystem管理的区域内按照我们的需求，分离出满足我们需求的ArchType，再从上面把合法的组件
+        一个个摘出来递到我们面前。
+
+        在这里——jeecs.h中，选择器的实现已经显得非常麻烦，但实际上这里只是选择器的一部分，在
+        ArchSystem中，有一个名为je_ecs_world_update_dependences_archinfo的函数。这个函数在黑暗处
+        负责在适当的实际更新选择器的筛选结果。
+   
+        为了优雅，背后就得承担代价；为了性能我们就得做出牺牲。伟大的圣窝窝头，这么做真的值得吗？
+    
+                                                                       ——虔诚的窝窝头信徒
+                                                                           mr_cino
+    ```    
+    至于 selector，感谢它三年来的付出和陪伴，从 JoyEngine 4.9 版本起，不再提供。
+    */
+
     template<typename SliceView, typename ... SliceRequirements>
     class slice
     {
@@ -6930,6 +6967,7 @@ namespace jeecs
                 &dep))
             {
                 // This dependence is just created, need to apply requirements.
+
                 slice<SliceView, SliceRequirements...>::apply_requirements(dep);
                 dep->update(get_world());
             }
@@ -7009,14 +7047,12 @@ namespace jeecs
         return (T*)je_ecs_world_entity_get_component(this,
             typing::type_info::id<T>());
     }
-
     template <typename T>
     inline T* game_entity::add_component() const noexcept
     {
         return (T*)je_ecs_world_entity_add_component(this,
             typing::type_info::id<T>());
     }
-
     template <typename T>
     inline void game_entity::remove_component() const noexcept
     {
