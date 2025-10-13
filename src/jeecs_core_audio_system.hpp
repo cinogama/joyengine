@@ -26,18 +26,24 @@ namespace jeecs
         {
             for (auto&& [listener, trans] : query_view<Listener&, Translation&>())
             {
-                auto velocity = (trans.world_position - listener.last_position) / std::max(deltatime(), 0.0001f);
+                auto velocity =
+                    (trans.world_position - listener.last_position) / std::max(deltatime(), 0.0001f);
+
                 listener.last_position = trans.world_position;
 
-                audio::listener::update(
-                    [&](jeal_listener* listener_data)
-                    {
-                        listener_data->m_location[0] = trans.world_position.x;
-                        listener_data->m_location[1] = trans.world_position.y;
-                        listener_data->m_location[2] = trans.world_position.z;
+                const auto& current_position = trans.world_position;
+                const auto& current_rotation = trans.world_rotation;
 
-                        auto face = trans.world_rotation * listener.face;
-                        auto up = trans.world_rotation * listener.up;
+                audio::listener::update(
+                    [&current_position, &current_rotation, &listener, &velocity](
+                        jeal_listener* listener_data)
+                    {
+                        listener_data->m_location[0] = current_position.x;
+                        listener_data->m_location[1] = current_position.y;
+                        listener_data->m_location[2] = current_position.z;
+
+                        auto face = current_rotation * listener.face;
+                        auto up = current_rotation * listener.up;
 
                         listener_data->m_forward[0] = face.x;
                         listener_data->m_forward[1] = face.y;

@@ -6977,13 +6977,13 @@ namespace jeecs
         template<typename SliceView, typename ... SliceRequirements>
         inline typename slice<SliceView, SliceRequirements...>::ComponentSliceIter query()
         {
-            return slice<SliceView, SliceRequirements...>::ComponentSliceIter(
+            return typename slice<SliceView, SliceRequirements...>::ComponentSliceIter(
                 _fetch_query_slice_cache<SliceView, SliceRequirements...>());
         }
         template<typename SliceView, typename ... SliceRequirements>
         inline typename slice<SliceView, SliceRequirements...>::EntityComponentSliceIter query_entity()
         {
-            return slice<SliceView, SliceRequirements...>::EntityComponentSliceIter(
+            return typename slice<SliceView, SliceRequirements...>::EntityComponentSliceIter(
                 _fetch_query_slice_cache<SliceView, SliceRequirements...>());
         }
         template<typename ... ViewTypes>

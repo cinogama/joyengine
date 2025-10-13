@@ -1770,12 +1770,12 @@ public func frag(vf: v2f)
                         std::vector<float> vertex_datas;
                         std::vector<uint32_t> index_datas;
                         auto append_point =
-                            [&vertex_datas, &index_datas, &range](const math::vec2& p, size_t layerid)
+                            [&vertex_datas, &index_datas](const math::vec2& p, float strength)
                             {
                                 vertex_datas.push_back(p.x);
                                 vertex_datas.push_back(p.y);
                                 vertex_datas.push_back(0.f);
-                                vertex_datas.push_back(range->shape.m_strength[layerid]);
+                                vertex_datas.push_back(strength);
 
                                 index_datas.push_back((uint32_t)index_datas.size());
                             };
@@ -1796,7 +1796,9 @@ public func frag(vf: v2f)
                                     else
                                         last_point_index = range->shape.m_point_count - ipoint / 2;
 
-                                    append_point(range->shape.m_positions.at(last_point_index), 0);
+                                    append_point(
+                                        range->shape.m_positions.at(last_point_index), 
+                                        range->shape.m_strength.at(0));
                                 }
                             }
                             else
@@ -1819,15 +1821,21 @@ public func frag(vf: v2f)
                                         real_next_last_layer_ipoint = (last_point_index + tipoint + 1) % range->shape.m_point_count;
                                     }
 
-                                    append_point(range->shape.m_positions[real_ipoint + ilayer * range->shape.m_point_count], ilayer);
+                                    append_point(
+                                        range->shape.m_positions[real_ipoint + ilayer * range->shape.m_point_count], 
+                                        range->shape.m_strength.at(ilayer));
 
                                     // 如果不是最后一个点，那么链接到下一个顺位点
                                     if (tipoint + 1 != range->shape.m_point_count)
-                                        append_point(range->shape.m_positions[real_next_last_layer_ipoint + (ilayer - 1) * range->shape.m_point_count], ilayer - 1);
+                                        append_point(
+                                            range->shape.m_positions[real_next_last_layer_ipoint + (ilayer - 1) * range->shape.m_point_count], 
+                                            range->shape.m_strength.at(ilayer - 1));
                                 }
 
                                 // 最后链接到本层的第一个顺位点
-                                append_point(range->shape.m_positions[last_point_index + ilayer * range->shape.m_point_count], ilayer);
+                                append_point(
+                                    range->shape.m_positions[last_point_index + ilayer * range->shape.m_point_count], 
+                                    range->shape.m_strength.at(ilayer));
                             }
                         }
 
