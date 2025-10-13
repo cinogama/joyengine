@@ -7141,7 +7141,7 @@ namespace jeecs
             }
             EntityComponentSliceIter end()
             {
-                return EntityComponentSliceIter(m_archs_end);
+                return EntityComponentSliceIter(this->m_archs_end);
             }
 
             template<typename FT>
