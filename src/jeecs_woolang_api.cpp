@@ -701,7 +701,7 @@ WO_API wo_api wojeapi_get_entity_chunk_info(wo_vm vm, wo_value args)
     char buf[64];
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
 
-    int result = snprintf(buf, sizeof(buf), "[%p:%zuv%zu]", entity->_m_in_chunk, entity->_m_id, entity->_m_version);
+    int result = snprintf(buf, sizeof(buf), "[%p:%uv%u]", entity->_m_in_chunk, entity->_m_id, entity->_m_version);
     assert(result > 0 && result < (int)sizeof(buf));
     (void)result;
 
@@ -711,7 +711,7 @@ WO_API wo_api wojeapi_get_entity_chunk_info(wo_vm vm, wo_value args)
 WO_API wo_api wojeapi_find_entity_with_chunk_info(wo_vm vm, wo_value args)
 {
     jeecs::game_entity* entity = new jeecs::game_entity();
-    ((void)sscanf(wo_string(args + 0), "[%p:%zuv%zu]", &entity->_m_in_chunk, &entity->_m_id, &entity->_m_version));
+    ((void)sscanf(wo_string(args + 0), "[%p:%uv%u]", &entity->_m_in_chunk, &entity->_m_id, &entity->_m_version));
 
     return wo_ret_gchandle(vm, entity,
         nullptr, [](void* ptr)
@@ -743,7 +743,9 @@ WO_API wo_api wojeapi_get_component_from_entity(wo_vm vm, wo_value args)
 {
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
 
-    return wo_ret_option_ptr_may_null(vm, je_ecs_world_entity_get_component(entity,
+    return wo_ret_option_ptr_may_null(
+        vm, 
+        je_ecs_world_entity_get_component(entity,
         ((const jeecs::typing::type_info*)wo_pointer(args + 1))->m_id));
 }
 

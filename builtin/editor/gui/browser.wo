@@ -1237,9 +1237,9 @@ namespace $$MODULE_NAME$$
         void OnEnable();
         void OnDisable();
 
-        void PreUpdate(jeecs::selector&);
-        void Update(jeecs::selector&);
-        void LateUpdate(jeecs::selector&);
+        void PreUpdate();
+        void Update();
+        void LateUpdate();
     };
 }
 "@;
@@ -1266,13 +1266,13 @@ namespace $$MODULE_NAME$$
     {
     }
 
-    void $$SYSTEM_NAME$$::PreUpdate(jeecs::selector& selector)
+    void $$SYSTEM_NAME$$::PreUpdate()
     {
     }
-    void $$SYSTEM_NAME$$::Update(jeecs::selector& selector)
+    void $$SYSTEM_NAME$$::Update()
     {
     }
-    void $$SYSTEM_NAME$$::LateUpdate(jeecs::selector& selector)
+    void $$SYSTEM_NAME$$::LateUpdate()
     {
     }
 }

@@ -17,35 +17,34 @@ namespace jeecs
         {
         }
 
-        void StateUpdate(jeecs::selector &selector)
+        void StateUpdate()
         {
-            selector.exec(
-                [](Input::VirtualGamepad &vgamepad)
+            for (auto&& [vgamepad] : query_view<Input::VirtualGamepad&>())
+            {
+                float left_stick_x = 0.f, left_stick_y = 0.f;
+                if (input::keydown(vgamepad.left_stick_up_left_down_right[0]))
+                    left_stick_y += 1.f;
+                if (input::keydown(vgamepad.left_stick_up_left_down_right[1]))
+                    left_stick_x -= 1.f;
+                if (input::keydown(vgamepad.left_stick_up_left_down_right[2]))
+                    left_stick_y -= 1.f;
+                if (input::keydown(vgamepad.left_stick_up_left_down_right[3]))
+                    left_stick_x += 1.f;
+
+                je_io_gamepad_update_stick(
+                    vgamepad.gamepad, input::joystickcode::L, left_stick_x, left_stick_y);
+
+                std::unordered_map<input::gamepadcode, bool> key_state;
+                for (auto& [kb, gp] : vgamepad.keymap)
                 {
-                    float left_stick_x = 0.f, left_stick_y = 0.f;
-                    if (input::keydown(vgamepad.left_stick_up_left_down_right[0]))
-                        left_stick_y += 1.f;
-                    if (input::keydown(vgamepad.left_stick_up_left_down_right[1]))
-                        left_stick_x -= 1.f;
-                    if (input::keydown(vgamepad.left_stick_up_left_down_right[2]))
-                        left_stick_y -= 1.f;
-                    if (input::keydown(vgamepad.left_stick_up_left_down_right[3]))
-                        left_stick_x += 1.f;
+                    key_state[gp] = key_state[gp] || input::keydown(kb);
+                }
 
-                    je_io_gamepad_update_stick(
-                        vgamepad.gamepad, input::joystickcode::L, left_stick_x, left_stick_y);
-
-                    std::unordered_map<input::gamepadcode, bool> key_state;
-                    for (auto &[kb, gp] : vgamepad.keymap)
-                    {
-                        key_state[gp] = key_state[gp] || input::keydown(kb);
-                    }
-
-                    for (auto &[gp, state] : key_state)
-                    {
-                        je_io_gamepad_update_button_state(vgamepad.gamepad, gp, state);
-                    }
-                });
+                for (auto& [gp, state] : key_state)
+                {
+                    je_io_gamepad_update_button_state(vgamepad.gamepad, gp, state);
+                }
+            }
         }
     };
 }
