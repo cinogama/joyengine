@@ -210,10 +210,12 @@ namespace jeecs
                             {
                                 auto entity_meta_addr = je_arch_entity_meta_addr_in_chunk(cur_chunk);
                                 typing::version_t version;
-                                for (size_t eid = 0; eid < archinfo.m_entity_count; ++eid)
+                                for (jeecs::typing::entity_id_in_chunk_t eid = 0; eid < archinfo.m_entity_count; ++eid)
                                 {
-                                    if (selector::get_entity_avaliable_version(entity_meta_addr, eid, &version))
+                                    if (jeecs::game_entity::entity_stat::READY == entity_meta_addr[eid].m_stat)
                                     {
+                                        version = entity_meta_addr[eid].m_version;
+
                                         // game_entity{ cur_chunk, eid, version }
                                         // Valid! prepare to invoke!
                                         const size_t used_component_count = work.m_used_components.size();
@@ -225,7 +227,7 @@ namespace jeecs
                                         {
                                             const size_t cmpid = cmpidx - work.m_used_components.begin();
 
-                                            void* component = selector::get_component_from_archchunk_ptr(
+                                            void* component = slice_requirement::base::view_base::get_component_from_archchunk_ptr(
                                                 &archinfo, cur_chunk, eid, cmpid);
 
                                             const auto* typeinfo = *cmpidx;
@@ -261,7 +263,15 @@ namespace jeecs
                                         }
 
                                         // Push entity
-                                        wo_set_gchandle(s + 1, m_job_vm, new jeecs::game_entity{ cur_chunk, eid, version }, nullptr,
+                                        wo_set_gchandle(
+                                            s + 1,
+                                            m_job_vm,
+                                            new jeecs::game_entity{
+                                                cur_chunk,
+                                                eid,
+                                                version
+                                            },
+                                            nullptr,
                                             [](void* eptr)
                                             { delete std::launder(reinterpret_cast<jeecs::game_entity*>(eptr)); });
 
@@ -312,15 +322,15 @@ namespace jeecs
                 }
             }
 
-            void PreUpdate(jeecs::selector&)
+            void PreUpdate()
             {
                 update_step_work(m_pre_dependences);
             }
-            void Update(jeecs::selector&)
+            void Update()
             {
                 update_step_work(m_dependences);
             }
-            void LateUpdate(jeecs::selector&)
+            void LateUpdate()
             {
                 update_step_work(m_late_dependences);
             }

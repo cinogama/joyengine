@@ -12,29 +12,32 @@
 
 namespace jeecs
 {
+    using namespace Transform;
+    using namespace UserInterface;
+
+    using namespace slice_requirement;
+
     struct TranslationUpdatingSystem : public game_system
     {
-        using Anchor = Transform::Anchor;
-        using LocalPosition = Transform::LocalPosition;
-        using LocalRotation = Transform::LocalRotation;
-        using LocalScale = Transform::LocalScale;
-
-        using LocalToParent = Transform::LocalToParent;
-        using LocalToWorld = Transform::LocalToWorld;
-        using Translation = Transform::Translation;
-
         TranslationUpdatingSystem(game_world world) : game_system(world)
         {
         }
 
-        void TransfromStageUpdate(jeecs::selector& selector)
+        void TransfromStageUpdate()
         {
+            struct AnchoredTrans
+            {
+                Anchor* anchor_may_null;
+                Translation* trans;
+                LocalToParent* l2p;
+            };
+            std::list<AnchoredTrans> pending_anchor_information;
             std::unordered_map<typing::uuid, Translation*> binded_trans;
 
             // 对于有L2W的组件，在此优先处理
             for (auto& [anchor, trans, l2w, position, rotation, scale] : query<
-                slice_requirement::view<Anchor*, Translation&, LocalToWorld&, LocalPosition*, LocalRotation*, LocalScale*>,
-                slice_requirement::except<LocalToParent>>())
+                view<Anchor*, Translation&, LocalToWorld&, LocalPosition*, LocalRotation*, LocalScale*>,
+                except<LocalToParent>>())
             {
                 l2w.pos = position ? position->pos : math::vec3();
                 l2w.rot = rotation ? rotation->rot : math::quat();
@@ -51,34 +54,21 @@ namespace jeecs
                 }
             }
 
-            struct AnchoredTrans
-            {
-                Anchor* anchor_may_null;
-                Translation* trans;
-                LocalToParent* l2p;
-            };
-            std::list<AnchoredTrans> pending_anchor_information;
-
             // 对于有L2P先进行应用，稍后更新到Translation上
-            selector.except<LocalToWorld>();
-            selector.exec(
-                [&](Anchor* anchor,
-                    Translation& trans,
-                    LocalToParent& l2p,
-                    LocalPosition* position,
-                    LocalRotation* rotation,
-                    LocalScale* scale)
-                {
-                    l2p.pos = position ? position->pos : math::vec3();
-                    l2p.rot = rotation ? rotation->rot : math::quat();
-                    l2p.scale = scale ? scale->scale : math::vec3(1.f, 1.f, 1.f);
+            for (auto& [anchor, trans, l2p, position, rotation, scale] : query<
+                view<Anchor*, Translation&, LocalToParent&, LocalPosition*, LocalRotation*, LocalScale*>,
+                except<LocalToWorld>>())
+            {
+                l2p.pos = position ? position->pos : math::vec3();
+                l2p.rot = rotation ? rotation->rot : math::quat();
+                l2p.scale = scale ? scale->scale : math::vec3(1.f, 1.f, 1.f);
 
-                    pending_anchor_information.push_back(
-                        AnchoredTrans{
-                            anchor,
-                            &trans,
-                            &l2p });
-                });
+                pending_anchor_information.push_back(
+                    AnchoredTrans{
+                        anchor,
+                        &trans,
+                        &l2p });
+            }
 
             size_t count = 0;
             for (;;)
@@ -112,8 +102,7 @@ namespace jeecs
                 }
             }
         }
-
-        void UserInterfaceStageUpdate(jeecs::selector& selector)
+        void UserInterfaceStageUpdate()
         {
             std::unordered_map<typing::uuid, UserInterface::Origin*> binded_origins;
 
@@ -125,53 +114,48 @@ namespace jeecs
             };
             std::list<AnchoredOrigin> pending_anchor_information;
 
-            selector.exec(
-                [&binded_origins, &pending_anchor_information](
-                    Anchor* anchor,
-                    Transform::LocalToParent* l2p,
-                    UserInterface::Origin& origin,
-                    UserInterface::Absolute* absolute,
-                    UserInterface::Relatively* relatively)
+            for (auto& [anchor, l2p, origin, absolute, relatively] : query_view<
+                Anchor*, LocalToParent*, Origin&, Absolute*, Relatively*>())
+            {
+                if (absolute != nullptr)
                 {
-                    if (absolute != nullptr)
-                    {
-                        origin.global_offset = absolute->offset;
-                        origin.size = absolute->size;
-                    }
-                    else
-                        origin.size = {};
+                    origin.global_offset = absolute->offset;
+                    origin.size = absolute->size;
+                }
+                else
+                    origin.size = {};
 
-                    if (relatively != nullptr)
-                    {
-                        origin.global_location = relatively->location;
-                        origin.scale = relatively->scale;
+                if (relatively != nullptr)
+                {
+                    origin.global_location = relatively->location;
+                    origin.scale = relatively->scale;
 
-                        origin.keep_vertical_ratio = relatively->use_vertical_ratio;
-                    }
-                    else
-                    {
-                        origin.scale = {};
-                        // NOTE: We dont care `keep_vertical_ratio` if rel is not exist.
-                    }
+                    origin.keep_vertical_ratio = relatively->use_vertical_ratio;
+                }
+                else
+                {
+                    origin.scale = {};
+                    // NOTE: We dont care `keep_vertical_ratio` if rel is not exist.
+                }
 
-                    if (l2p != nullptr)
+                if (l2p != nullptr)
+                {
+                    pending_anchor_information.push_back(
+                        AnchoredOrigin{
+                            anchor,
+                            &origin,
+                            l2p });
+                }
+                else
+                {
+                    // 是根UI元素
+                    origin.root_center = origin.elem_center;
+                    if (anchor != nullptr)
                     {
-                        pending_anchor_information.push_back(
-                            AnchoredOrigin{
-                                anchor,
-                                &origin,
-                                l2p });
+                        binded_origins.insert(std::make_pair(anchor->uid, &origin));
                     }
-                    else
-                    {
-                        // 是根UI元素
-                        origin.root_center = origin.elem_center;
-                        if (anchor != nullptr)
-                        {
-                            binded_origins.insert(std::make_pair(anchor->uid, &origin));
-                        }
-                    }
-                });
+                }
+            }
 
             size_t count = 0;
             for (;;)
@@ -207,16 +191,16 @@ namespace jeecs
             }
         }
 
-        void TransformUpdate(jeecs::selector& selector)
+        void TransformUpdate()
         {
-            TransfromStageUpdate(selector);
-            UserInterfaceStageUpdate(selector);
+            TransfromStageUpdate();
+            UserInterfaceStageUpdate();
         }
-        void CommitUpdate(jeecs::selector& selector)
+        void CommitUpdate()
         {
             // 到此为止，所有的变换均已应用到 Translation 上，现在更新变换矩阵
 
-            for (auto& [trans] : 
+            for (auto& [trans] :
                 query_view<Translation&>())
             {
                 math::transform(

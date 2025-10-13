@@ -162,7 +162,7 @@ namespace jeecs_impl
 
         const types_set _m_types_set;
         const size_t _m_entity_size;
-        const size_t _m_entity_count_per_chunk;
+        const jeecs::typing::entity_id_in_chunk_t _m_entity_count_per_chunk;
         arch_manager* _m_arch_manager;
 
     public:
@@ -180,14 +180,14 @@ namespace jeecs_impl
 
             const types_set* _m_types;
             const archtypes_map* _m_arch_typeinfo_mapping;
-            const size_t _m_entity_count;
+            const jeecs::typing::entity_id_in_chunk_t _m_entity_count;
             const size_t _m_entity_size;
 
             arch_type* _m_arch_type;
             mcmp_lockfree_fixed_loop_queue<jeecs::typing::entity_id_in_chunk_t>
                 _m_free_slots;
 #ifndef NDEBUG
-            std::atomic_size_t _m_debug_free_count;
+            std::atomic<jeecs::typing::entity_id_in_chunk_t> _m_debug_free_count;
 #endif
 
         public:
@@ -209,7 +209,7 @@ namespace jeecs_impl
 
                 _m_entities_meta = new jeecs::game_entity::meta[_m_entity_count]{};
 
-                for (size_t i = 0; i < _m_entity_count; ++i)
+                for (jeecs::typing::entity_id_in_chunk_t i = 0; i < _m_entity_count; ++i)
                     _m_free_slots.push((jeecs::typing::entity_id_in_chunk_t)i);
             }
             ~arch_chunk()
@@ -372,8 +372,8 @@ namespace jeecs_impl
         };
 
     private:
-        std::atomic_size_t _m_free_count;
-        std::atomic_size_t _m_total_count;
+        std::atomic<jeecs::typing::entity_id_in_chunk_t> _m_free_count;
+        std::atomic<jeecs::typing::entity_id_in_chunk_t> _m_total_count;
 
         jeecs::basic::atomic_list<arch_chunk> _m_chunks;
 
@@ -469,8 +469,8 @@ namespace jeecs_impl
             const size_t chunk_size_without_gap = CHUNK_SIZE - component_reserved_gap;
             assert(_m_entity_size != 0 && _m_entity_size <= chunk_size_without_gap);
 
-            const_cast<size_t&>(_m_entity_count_per_chunk) =
-                chunk_size_without_gap / _m_entity_size;
+            const_cast<jeecs::typing::entity_id_in_chunk_t&>(_m_entity_count_per_chunk) =
+                static_cast<jeecs::typing::entity_id_in_chunk_t>(chunk_size_without_gap / _m_entity_size);
 
             size_t mem_offset = 0;
             for (auto* typeinfo : _m_arch_typeinfo)
@@ -675,7 +675,7 @@ namespace jeecs_impl
             std::shared_lock sg1(_m_chunk_list_defragmentation_mx);
             while (true)
             {
-                size_t free_entity_count = _m_free_count.load();
+                jeecs::typing::entity_id_in_chunk_t free_entity_count = _m_free_count.load();
                 while (0 != free_entity_count)
                 {
                     if (!_m_free_count.compare_exchange_weak(

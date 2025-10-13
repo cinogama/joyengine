@@ -192,8 +192,8 @@ namespace jeecs
         using parse_c2w_func_t = void (*)(const void*, wo_vm, wo_value);
         using parse_w2c_func_t = void (*)(void*, wo_vm, wo_value);
 
-        using entity_id_in_chunk_t = size_t;
-        using version_t = size_t;
+        using entity_id_in_chunk_t = uint32_t;
+        using version_t = uint32_t;
 
         /*
         jeecs::typing::uuid [类型]
@@ -530,6 +530,7 @@ namespace jeecs
                 _m_version != e._m_version;
         }
     };
+    static_assert(std::is_trivial_v<game_entity>);
 
     struct dependence;
 
@@ -1024,14 +1025,14 @@ JE_API void je_towoo_unregister_system(const jeecs::typing::type_info* tinfo);
 je_arch_get_chunk [基本接口]
 通过给定的ArchType，获取其首个Chunk，由于ArchType总是至少有一个Chunk，
 所以总是返回非nullptr值。
-    * 此方法一般由selector调用，用于获取指定ArchType中的组件信息
+    * 此方法一般由 slice 调用，用于获取指定ArchType中的组件信息
 */
 JE_API void* je_arch_get_chunk(void* archtype);
 
 /*
 je_arch_next_chunk [基本接口]
 通过给定的Chunk，获取其下一个Chunk，如果给定Chunk没有后继则返回nullptr
-    * 此方法一般由selector调用，用于获取指定ArchType中的组件信息
+    * 此方法一般由 slice 调用，用于获取指定ArchType中的组件信息
 */
 JE_API void* je_arch_next_chunk(void* chunk);
 
@@ -1308,14 +1309,14 @@ JE_API bool je_ecs_world_is_valid(void* world);
 /*
 je_ecs_world_archmgr_updated_version [基本接口]
 获取当前世界的 ArchManager 的版本号
-此函数可获取世界的 ArchType 是否有增加，一般用于selector检测是否需要更新 ArchType 缓存
+此函数可获取世界的 ArchType 是否有增加，一般用于 slice 检测是否需要更新 ArchType 缓存
 */
 JE_API size_t je_ecs_world_archmgr_updated_version(void* world);
 
 /*
 je_ecs_world_update_dependences_archinfo [基本接口]
 从当前世界更新类型依赖信息（即 ArchType 缓存）
-此函数一般用于selector更新自身某步 dependence 的 ArchType 缓存
+此函数一般用于 slice 更新自身某步 dependence 的 ArchType 缓存
 */
 JE_API void je_ecs_world_update_dependences_archinfo(
     void* world,
@@ -4483,11 +4484,6 @@ namespace jeecs
         JE_DECL_SFINAE_CHECKER_HELPLER(has__select_begin, &T::_select_begin);
         JE_DECL_SFINAE_CHECKER_HELPLER(has__select_continue, &T::_select_continue);
 
-        template <typename T>
-        constexpr bool sfinae_is_game_system_v =
-            typing::sfinae_has__select_begin<T>::value &&
-            typing::sfinae_has__select_continue<T>::value;
-
 #undef JE_DECL_SFINAE_CHECKER_HELPLER
     }
 
@@ -5259,105 +5255,53 @@ namespace jeecs
             }
             static void on_enable(void* _ptr)
             {
-                if constexpr (typing::sfinae_is_game_system_v<T> && typing::sfinae_has_OnEnable<T>::value)
-                {
+                if constexpr (typing::sfinae_has_OnEnable<T>::value)
                     reinterpret_cast<T*>(_ptr)->OnEnable();
-                }
             }
             static void on_disable(void* _ptr)
             {
-                if constexpr (typing::sfinae_is_game_system_v<T> && typing::sfinae_has_OnDisable<T>::value)
-                {
+                if constexpr (typing::sfinae_has_OnDisable<T>::value)
                     reinterpret_cast<T*>(_ptr)->OnDisable();
-                }
             }
             static void pre_update(void* _ptr)
             {
-                if constexpr (typing::sfinae_is_game_system_v<T>)
-                {
-                    T* sys = reinterpret_cast<T*>(_ptr);
-                    sys->_select_begin();
-
-                    if constexpr (typing::sfinae_has_PreUpdate<T>::value)
-                        sys->PreUpdate(sys->_select_continue());
-                }
+                if constexpr (typing::sfinae_has_PreUpdate<T>::value)
+                    reinterpret_cast<T*>(_ptr)->PreUpdate();
             }
             static void state_update(void* _ptr)
             {
-                if constexpr (typing::sfinae_is_game_system_v<T>)
-                {
-                    if constexpr (typing::sfinae_has_StateUpdate<T>::value)
-                    {
-                        T* sys = reinterpret_cast<T*>(_ptr);
-                        sys->StateUpdate(sys->_select_continue());
-                    }
-                }
+                if constexpr (typing::sfinae_has_StateUpdate<T>::value)
+                    reinterpret_cast<T*>(_ptr)->StateUpdate();
             }
             static void update(void* _ptr)
             {
-                if constexpr (typing::sfinae_is_game_system_v<T>)
-                {
-                    if constexpr (typing::sfinae_has_Update<T>::value)
-                    {
-                        T* sys = reinterpret_cast<T*>(_ptr);
-                        sys->Update(sys->_select_continue());
-                    }
-                }
+                if constexpr (typing::sfinae_has_Update<T>::value)
+                    reinterpret_cast<T*>(_ptr)->Update();
             }
             static void physics_update(void* _ptr)
             {
-                if constexpr (typing::sfinae_is_game_system_v<T>)
-                {
-                    if constexpr (typing::sfinae_has_PhysicsUpdate<T>::value)
-                    {
-                        T* sys = reinterpret_cast<T*>(_ptr);
-                        sys->PhysicsUpdate(sys->_select_continue());
-                    }
-                }
+                if constexpr (typing::sfinae_has_PhysicsUpdate<T>::value)
+                    reinterpret_cast<T*>(_ptr)->PhysicsUpdate();
             }
             static void transform_update(void* _ptr)
             {
-                if constexpr (typing::sfinae_is_game_system_v<T>)
-                {
-                    if constexpr (typing::sfinae_has_TransformUpdate<T>::value)
-                    {
-                        T* sys = reinterpret_cast<T*>(_ptr);
-                        sys->TransformUpdate(sys->_select_continue());
-                    }
-                }
+                if constexpr (typing::sfinae_has_TransformUpdate<T>::value)
+                    reinterpret_cast<T*>(_ptr)->TransformUpdate();
             }
             static void late_update(void* _ptr)
             {
-                if constexpr (typing::sfinae_is_game_system_v<T>)
-                {
-                    if constexpr (typing::sfinae_has_LateUpdate<T>::value)
-                    {
-                        T* sys = reinterpret_cast<T*>(_ptr);
-                        sys->LateUpdate(sys->_select_continue());
-                    }
-                }
+                if constexpr (typing::sfinae_has_LateUpdate<T>::value)
+                    reinterpret_cast<T*>(_ptr)->LateUpdate();
             }
             static void commit_update(void* _ptr)
             {
-                if constexpr (typing::sfinae_is_game_system_v<T>)
-                {
-                    if constexpr (typing::sfinae_has_CommitUpdate<T>::value)
-                    {
-                        T* sys = reinterpret_cast<T*>(_ptr);
-                        sys->CommitUpdate(sys->_select_continue());
-                    }
-                }
+                if constexpr (typing::sfinae_has_CommitUpdate<T>::value)
+                    reinterpret_cast<T*>(_ptr)->CommitUpdate();
             }
             static void graphic_update(void* _ptr)
             {
-                if constexpr (typing::sfinae_is_game_system_v<T>)
-                {
-                    if constexpr (typing::sfinae_has_GraphicUpdate<T>::value)
-                    {
-                        T* sys = reinterpret_cast<T*>(_ptr);
-                        sys->GraphicUpdate(sys->_select_continue());
-                    }
-                }
+                if constexpr (typing::sfinae_has_GraphicUpdate<T>::value)
+                    reinterpret_cast<T*>(_ptr)->GraphicUpdate();
             }
 
             static void parse_from_script_type(void* _ptr, wo_vm vm, wo_value val)
@@ -6353,7 +6297,7 @@ namespace jeecs
         struct arch_chunks_info
         {
             void* m_arch;
-            size_t m_entity_count;
+            typing::entity_id_in_chunk_t m_entity_count;
 
             /* An arch will contain a chain of chunks
             --------------------------------------
@@ -6449,364 +6393,76 @@ namespace jeecs
         }
     };
 
-    /*
-     * 早上好，这一站我们来到了选择器，JoyEngine中第二混乱的东西
-     *
-     * 实际上只要和ArchSystem扯上关系，就永远不可能干净。很不幸，选择器正是一根搅屎棍，它负责从
-     * ArchSystem管理的区域内按照我们的需求，分离出满足我们需求的ArchType，再从上面把合法的组件
-     * 一个个摘出来递到我们面前。
-     *
-     * 在这里——jeecs.h中，选择器的实现已经显得非常麻烦，但实际上这里只是选择器的一部分，在
-     * ArchSystem中，有一个名为je_ecs_world_update_dependences_archinfo的函数。这个函数在黑暗处
-     * 负责在适当的实际更新选择器的筛选结果。
-     *
-     * 为了优雅，背后就得承担代价；为了性能我们就得做出牺牲。伟大的圣窝窝头，这么做真的值得吗？
-     *
-     *                                                                   ——虔诚的窝窝头信徒
-     *                                                                       mr_cino
-     */
-    struct selector
-    {
-        JECS_DISABLE_MOVE_AND_COPY(selector);
-        size_t m_curstep = 0;
-        size_t m_any_id = 0;
-        game_world m_current_world = nullptr;
-
-        bool m_first_time_to_work = true;
-        basic::vector<dependence> m_dependence_caches;
-
-        game_system* m_system_instance = nullptr;
-
-    private:
-        template <size_t ArgN, typename FT>
-        void _apply_dependence(dependence& dep)
-        {
-            using f = typing::function_traits<FT>;
-            if constexpr (ArgN < f::arity)
-            {
-                using CurRequireT = typename f::template argument<ArgN>::type;
-
-                // NOTE: Must be here for correct order.
-                _apply_dependence<ArgN + 1, FT>(dep);
-
-                if constexpr (ArgN == 0 && std::is_same<CurRequireT, game_entity>::value)
-                {
-                    // First argument is game_entity, skip this argument
-                }
-                else if constexpr (std::is_reference<CurRequireT>::value)
-                    // Reference, means CONTAINS
-                    dep.m_requirements.push_front(
-                        requirement{ requirement::type::CONTAINS, 0,
-                            typing::type_info::id<jeecs::typing::origin_t<CurRequireT>>() });
-                else if constexpr (std::is_pointer<CurRequireT>::value)
-                    // Pointer, means MAYNOT
-                    dep.m_requirements.push_front(
-                        requirement{ requirement::type::MAYNOT, 0,
-                            typing::type_info::id<jeecs::typing::origin_t<CurRequireT>>() });
-                else
-                {
-                    static_assert(std::is_void<CurRequireT>::value || !std::is_void<CurRequireT>::value,
-                        "'exec' of selector only accept ref or ptr type of Components.");
-                }
-            }
-        }
-
-        template <typename CurRequireT, typename... Ts>
-        void _apply_except(dependence& dep)
-        {
-            static_assert(std::is_same<typing::origin_t<CurRequireT>, CurRequireT>::value);
-
-            auto id = typing::type_info::id<CurRequireT>();
-
-#ifndef NDEBUG
-            for (const requirement& req : dep.m_requirements)
-                if (req.m_type == id)
-                    debug::logwarn("Repeat or conflict when excepting component '%s'.",
-                        typing::type_info::of<CurRequireT>()->m_typename);
-#endif
-            dep.m_requirements.push_back(requirement{ requirement::type::EXCEPT, 0, id });
-            if constexpr (sizeof...(Ts) > 0)
-                _apply_except<Ts...>(dep);
-        }
-
-        template <typename CurRequireT, typename... Ts>
-        void _apply_contain(dependence& dep)
-        {
-            static_assert(std::is_same<typing::origin_t<CurRequireT>, CurRequireT>::value);
-
-            auto id = typing::type_info::id<CurRequireT>();
-
-#ifndef NDEBUG
-            for (const requirement& req : dep.m_requirements)
-                if (req.m_type == id)
-                    debug::logwarn("Repeat or conflict when containing component '%s'.",
-                        typing::type_info::of<CurRequireT>()->m_typename);
-#endif
-            dep.m_requirements.push_back(requirement{ requirement::type::CONTAINS, 0, id });
-            if constexpr (sizeof...(Ts) > 0)
-                _apply_contain<Ts...>(dep);
-        }
-
-        template <typename CurRequireT, typename... Ts>
-        void _apply_anyof(dependence& dep, size_t any_group)
-        {
-            static_assert(std::is_same<typing::origin_t<CurRequireT>, CurRequireT>::value);
-
-            auto id = typing::type_info::id<CurRequireT>();
-#ifndef NDEBUG
-            for (const requirement& req : dep.m_requirements)
-                if (req.m_type == id && req.m_require != requirement::type::MAYNOT)
-                    debug::logwarn("Repeat or conflict when require any of component '%s'.",
-                        typing::type_info::of<CurRequireT>()->m_typename);
-#endif
-            dep.m_requirements.push_back(requirement{ requirement::type::ANYOF, any_group, id });
-            if constexpr (sizeof...(Ts) > 0)
-                _apply_anyof<Ts...>(dep, any_group);
-        }
-
-        template <typename FT>
-        struct _executor_extracting_agent : std::false_type
-        {
-        };
-
-        template <typename ComponentT, typename... ArgTs>
-        struct _const_type_index
-        {
-            using f_t = typing::function_traits<void(ArgTs...)>;
-            template <size_t id = 0>
-            static constexpr size_t _index()
-            {
-                if constexpr (std::is_same<typename f_t::template argument<id>::type, ComponentT>::value)
-                    return id;
-                else
-                    return _index<id + 1>();
-            }
-            static constexpr size_t index = _index();
-        };
-
-    public:
-        inline static bool get_entity_avaliable(
-            const game_entity::meta* entity_meta, size_t eid) noexcept
-        {
-            return jeecs::game_entity::entity_stat::READY == entity_meta[eid].m_stat;
-        }
-
-        inline static bool get_entity_avaliable_version(
-            const game_entity::meta* entity_meta, size_t eid, typing::version_t* out_version) noexcept
-        {
-            if (jeecs::game_entity::entity_stat::READY == entity_meta[eid].m_stat)
-            {
-                *out_version = entity_meta[eid].m_version;
-                return true;
-            }
-            return false;
-        }
-        inline static void* get_component_from_archchunk_ptr(
-            const dependence::arch_chunks_info* archinfo, void* chunkbuf, size_t entity_id, size_t cid)
-        {
-            assert(cid < archinfo->m_component_infos.size());
-
-            const auto& component_info = archinfo->m_component_infos.at(cid);
-
-            if (component_info.m_component_offset_of_unit != 0)
-            {
-                size_t offset = component_info.m_component_offset_in_chunk + component_info.m_component_offset_of_unit * entity_id;
-                return reinterpret_cast<void*>(reinterpret_cast<intptr_t>(chunkbuf) + offset);
-            }
-            else
-                return nullptr;
-        }
-        template <typename ComponentT, typename... ArgTs>
-        inline static ComponentT get_component_from_archchunk(
-            const dependence::arch_chunks_info* archinfo, void* chunkbuf, size_t entity_id)
-        {
-            constexpr size_t cid = _const_type_index<ComponentT, ArgTs...>::index;
-            auto* component_ptr = std::launder(reinterpret_cast<typename typing::origin_t<ComponentT> *>(
-                get_component_from_archchunk_ptr(archinfo, chunkbuf, entity_id, cid)));
-
-            if (component_ptr != nullptr)
-            {
-                if constexpr (std::is_reference<ComponentT>::value)
-                    return *component_ptr;
-                else
-                {
-                    static_assert(std::is_pointer<ComponentT>::value);
-                    return component_ptr;
-                }
-            }
-
-            if constexpr (std::is_reference<ComponentT>::value)
-            {
-                assert(("Only maynot/anyof canbe here. 'je_ecs_world_update_dependences_archinfo' may have some problem.", false));
-                abort();
-            }
-            else
-                return nullptr; // Only maynot/anyof can be here, no need to cast the type;
-        }
-
-    private:
-        template <typename RT, typename... ArgTs>
-        struct _executor_extracting_agent<RT(ArgTs...)> : std::true_type
-        {
-            template <typename FT>
-            inline static void exec(dependence* depend, FT&& f, game_system* sys) noexcept
-            {
-                for (const auto& archinfo : depend->m_archs)
-                {
-                    auto cur_chunk = je_arch_get_chunk(archinfo.m_arch);
-                    while (cur_chunk)
-                    {
-                        auto entity_meta_addr = je_arch_entity_meta_addr_in_chunk(cur_chunk);
-                        for (size_t eid = 0; eid < archinfo.m_entity_count; ++eid)
-                        {
-                            if (get_entity_avaliable(entity_meta_addr, eid))
-                            {
-                                if constexpr (std::is_void<typename typing::function_traits<FT>::this_t>::value)
-                                    f(get_component_from_archchunk<ArgTs, ArgTs...>(&archinfo, cur_chunk, eid)...);
-                                else
-                                    (static_cast<typename typing::function_traits<FT>::this_t*>(sys)->*f)(
-                                        get_component_from_archchunk<ArgTs, ArgTs...>(&archinfo, cur_chunk, eid)...);
-                            }
-                        }
-                        cur_chunk = je_arch_next_chunk(cur_chunk);
-                    }
-                }
-            }
-        };
-
-        template <typename RT, typename... ArgTs>
-        struct _executor_extracting_agent<RT(game_entity, ArgTs...)> : std::true_type
-        {
-            template <typename FT>
-            inline static void exec(dependence* depend, FT&& f, game_system* sys) noexcept
-            {
-                for (const auto& archinfo : depend->m_archs)
-                {
-                    auto cur_chunk = je_arch_get_chunk(archinfo.m_arch);
-                    while (cur_chunk)
-                    {
-                        auto entity_meta_addr = je_arch_entity_meta_addr_in_chunk(cur_chunk);
-                        typing::version_t version;
-                        for (size_t eid = 0; eid < archinfo.m_entity_count; ++eid)
-                        {
-                            if (get_entity_avaliable_version(entity_meta_addr, eid, &version))
-                            {
-                                if constexpr (std::is_void<typename typing::function_traits<FT>::this_t>::value)
-                                    f(game_entity{ cur_chunk, eid, version },
-                                        get_component_from_archchunk<ArgTs, ArgTs...>(&archinfo, cur_chunk, eid)...);
-                                else
-                                    (static_cast<typename typing::function_traits<FT>::this_t*>(sys)->*f)(
-                                        game_entity{ cur_chunk, eid, version },
-                                        get_component_from_archchunk<ArgTs, ArgTs...>(&archinfo, cur_chunk, eid)...);
-                            }
-                        }
-
-                        cur_chunk = je_arch_next_chunk(cur_chunk);
-                    }
-                }
-            }
-        };
-
-        template <typename FT>
-        void _update(FT&& exec)
-        {
-            assert((bool)m_current_world);
-
-            assert(m_curstep < m_dependence_caches.size());
-            if (m_first_time_to_work)
-            {
-                // First times to execute this job or arch/world changed, register requirements
-                assert(m_curstep + 1 == m_dependence_caches.size());
-
-                dependence& dep = m_dependence_caches.back();
-                _apply_dependence<0, FT>(dep);
-
-                m_dependence_caches.push_back(dependence());
-            }
-
-            dependence& cur_dependence = m_dependence_caches[m_curstep];
-            cur_dependence.update(m_current_world);
-
-            // OK! Execute step function!
-            static_assert(
-                _executor_extracting_agent<typename typing::function_traits<FT>::flat_func_t>::value,
-                "Fail to extract types of arguments from 'FT'.");
-            _executor_extracting_agent<typename typing::function_traits<FT>::flat_func_t>::exec(
-                &cur_dependence, exec, m_system_instance);
-
-            ++m_curstep;
-        }
-
-    public:
-        selector(game_system* game_sys)
-            : m_system_instance(game_sys)
-        {
-        }
-
-        ~selector()
-        {
-            m_dependence_caches.clear();
-        }
-
-        inline void select_begin(game_world w)
-        {
-            if (m_first_time_to_work)
-            {
-                if (m_dependence_caches.empty())
-                    m_dependence_caches.push_back(dependence());
-                else
-                {
-                    m_dependence_caches.erase(m_dependence_caches.end() - 1);
-                    m_first_time_to_work = false;
-                }
-            }
-
-            m_curstep = 0;
-            m_current_world = w;
-        }
-
-        template <typename FT>
-        inline void exec(FT&& _exec)
-        {
-            _update(_exec);
-        }
-
-        template <typename... Ts>
-        inline void except() noexcept
-        {
-            if (m_first_time_to_work)
-            {
-                auto& depend = m_dependence_caches[m_curstep];
-                _apply_except<Ts...>(depend);
-            }
-        }
-        template <typename... Ts>
-        inline void contains() noexcept
-        {
-            if (m_first_time_to_work)
-            {
-                auto& depend = m_dependence_caches[m_curstep];
-                _apply_contain<Ts...>(depend);
-            }
-        }
-        template <typename... Ts>
-        inline void anyof() noexcept
-        {
-            if (m_first_time_to_work)
-            {
-                auto& depend = m_dependence_caches[m_curstep];
-                _apply_anyof<Ts...>(depend, m_any_id);
-                ++m_any_id;
-            }
-        }
-    };
-
     namespace slice_requirement
     {
         namespace base
         {
             struct view_base
             {
+            private:
+                template <typename ComponentT, typename... ArgTs>
+                struct _const_type_index
+                {
+                    using f_t = typing::function_traits<void(ArgTs...)>;
+                    template <size_t id = 0>
+                    static constexpr size_t _index()
+                    {
+                        if constexpr (std::is_same<typename f_t::template argument<id>::type, ComponentT>::value)
+                            return id;
+                        else
+                            return _index<id + 1>();
+                    }
+                    static constexpr size_t index = _index();
+                };
+            public:
+                inline static void* get_component_from_archchunk_ptr(
+                    const dependence::arch_chunks_info* archinfo,
+                    void* chunkbuf,
+                    typing::entity_id_in_chunk_t entity_id,
+                    size_t cid)
+                {
+                    assert(cid < archinfo->m_component_infos.size());
+
+                    const auto& component_info = archinfo->m_component_infos.at(cid);
+
+                    if (component_info.m_component_offset_of_unit != 0)
+                    {
+                        size_t offset = component_info.m_component_offset_in_chunk + component_info.m_component_offset_of_unit * entity_id;
+                        return reinterpret_cast<void*>(reinterpret_cast<intptr_t>(chunkbuf) + offset);
+                    }
+                    else
+                        return nullptr;
+                }
+                template <typename ComponentT, typename... ArgTs>
+                inline static ComponentT get_component_from_archchunk(
+                    const dependence::arch_chunks_info* archinfo,
+                    void* chunkbuf,
+                    typing::entity_id_in_chunk_t entity_id)
+                {
+                    constexpr size_t cid = _const_type_index<ComponentT, ArgTs...>::index;
+                    auto* component_ptr = std::launder(reinterpret_cast<typename typing::origin_t<ComponentT> *>(
+                        get_component_from_archchunk_ptr(archinfo, chunkbuf, entity_id, cid)));
+
+                    if (component_ptr != nullptr)
+                    {
+                        if constexpr (std::is_reference<ComponentT>::value)
+                            return *component_ptr;
+                        else
+                        {
+                            static_assert(std::is_pointer<ComponentT>::value);
+                            return component_ptr;
+                        }
+                    }
+
+                    if constexpr (std::is_reference<ComponentT>::value)
+                    {
+                        assert(("Only maynot/anyof canbe here. 'je_ecs_world_update_dependences_archinfo' may have some problem.", false));
+                        abort();
+                    }
+                    else
+                        return nullptr; // Only maynot/anyof can be here, no need to cast the type;
+                }
+            protected:
                 template<typename T, typename ... Ts>
                 static void _apply_dependence_impl(dependence* out_dependence)
                 {
@@ -6859,66 +6515,8 @@ namespace jeecs
         template<typename ... Components>
         struct view : base::view_base
         {
-        private:
-            template <typename ComponentT, typename... ArgTs>
-            struct _const_type_index
-            {
-                using f_t = typing::function_traits<void(ArgTs...)>;
-                template <size_t id = 0>
-                static constexpr size_t _index()
-                {
-                    if constexpr (std::is_same<typename f_t::template argument<id>::type, ComponentT>::value)
-                        return id;
-                    else
-                        return _index<id + 1>();
-                }
-                static constexpr size_t index = _index();
-            };
-            inline static void* get_component_from_archchunk_ptr(
-                const dependence::arch_chunks_info* archinfo, void* chunkbuf, typing::entity_id_in_chunk_t entity_id, size_t cid)
-            {
-                assert(cid < archinfo->m_component_infos.size());
-
-                const auto& component_info = archinfo->m_component_infos.at(cid);
-
-                if (component_info.m_component_offset_of_unit != 0)
-                {
-                    size_t offset = component_info.m_component_offset_in_chunk + component_info.m_component_offset_of_unit * entity_id;
-                    return reinterpret_cast<void*>(reinterpret_cast<intptr_t>(chunkbuf) + offset);
-                }
-                else
-                    return nullptr;
-            }
-            template <typename ComponentT, typename... ArgTs>
-            inline static ComponentT get_component_from_archchunk(
-                const dependence::arch_chunks_info* archinfo, void* chunkbuf, typing::entity_id_in_chunk_t entity_id)
-            {
-                constexpr size_t cid = _const_type_index<ComponentT, ArgTs...>::index;
-                auto* component_ptr = std::launder(reinterpret_cast<typename typing::origin_t<ComponentT> *>(
-                    get_component_from_archchunk_ptr(archinfo, chunkbuf, entity_id, cid)));
-
-                if (component_ptr != nullptr)
-                {
-                    if constexpr (std::is_reference<ComponentT>::value)
-                        return *component_ptr;
-                    else
-                    {
-                        static_assert(std::is_pointer<ComponentT>::value);
-                        return component_ptr;
-                    }
-                }
-
-                if constexpr (std::is_reference<ComponentT>::value)
-                {
-                    assert(("Only maynot/anyof canbe here. 'je_ecs_world_update_dependences_archinfo' may have some problem.", false));
-                    abort();
-                }
-                else
-                    return nullptr; // Only maynot/anyof can be here, no need to cast the type;
-            }
-        public:
             using components = std::tuple<Components...>;
-            using entity_with_components = std::tuple<game_entity, Components...>;
+            using entity_with_components = std::tuple<const game_entity, Components...>;
             static void apply_dependence(dependence* out_dependence)
             {
                 _apply_dependence<Components...>(out_dependence);
@@ -6942,7 +6540,8 @@ namespace jeecs
                         entity_id,
                         entity_version,
                     },
-                    get_component_from_archchunk<Components, Components...>(archinfo, chunkbuf, entity_id)...);
+                    get_component_from_archchunk<Components, Components...>(
+                        archinfo, chunkbuf, entity_id)...);
             }
         };
         template<typename ... Components>
@@ -7014,7 +6613,7 @@ namespace jeecs
 
             void* m_chunk_currnet;
             const jeecs::game_entity::meta* m_chunk_current_entity_meta;
-            size_t m_chunk_entity_currnet_index;
+            typing::entity_id_in_chunk_t m_chunk_entity_currnet_index;
 
             // For `end()` only.
             explicit ComponentSliceIter(
@@ -7084,11 +6683,21 @@ namespace jeecs
                 m_archs_current = dependence->m_archs.begin();
                 m_archs_end = dependence->m_archs.end();
 
-                m_chunk_currnet = je_arch_get_chunk(m_archs_current->m_arch);
-                m_chunk_current_entity_meta = je_arch_entity_meta_addr_in_chunk(m_chunk_currnet);
-                m_chunk_entity_currnet_index = 0;
+                if (m_archs_current != m_archs_end)
+                {
+                    m_chunk_currnet = je_arch_get_chunk(m_archs_current->m_arch);
+                    m_chunk_current_entity_meta = je_arch_entity_meta_addr_in_chunk(m_chunk_currnet);
+                    m_chunk_entity_currnet_index = 0;
 
-                _move_to_valid_entity();
+                    _move_to_valid_entity();
+                }
+                else
+                {
+                    // NOTE: 没有枚举到任何 ArchType，直接置为 end 状态。
+                    m_chunk_currnet = nullptr;
+                    m_chunk_current_entity_meta = nullptr;
+                    m_chunk_entity_currnet_index = 0;
+                }
             }
 
             ComponentSliceIter operator ++()
@@ -7169,13 +6778,13 @@ namespace jeecs
 
             EntityComponentSliceIter operator ++()
             {
-                this->operator++();
+                this->ComponentSliceIter::operator++();
                 return *this;
             }
             EntityComponentSliceIter operator ++(int)
             {
                 auto current = this;
-                this->operator++(0);
+                this->ComponentSliceIter::operator++(0);
                 return current;
             }
             value_type operator*()
@@ -7309,7 +6918,6 @@ namespace jeecs
 
     private:
         game_world _m_game_world;
-        selector _m_default_selector;
 
         template<typename SliceView, typename ... SliceRequirements>
         jeecs::dependence* _fetch_query_slice_cache()
@@ -7330,7 +6938,7 @@ namespace jeecs
 
     public:
         game_system(game_world world)
-            : _m_game_world(world), _m_default_selector(this)
+            : _m_game_world(world)
         {
         }
 
@@ -7366,17 +6974,6 @@ namespace jeecs
             return _m_game_world;
         }
 
-        // Select from default selector
-        inline selector& _select_begin() noexcept
-        {
-            _m_default_selector.select_begin(get_world());
-            return _m_default_selector;
-        }
-        inline selector& _select_continue() noexcept
-        {
-            return _m_default_selector;
-        }
-
         template<typename SliceView, typename ... SliceRequirements>
         inline typename slice<SliceView, SliceRequirements...>::ComponentSliceIter query()
         {
@@ -7388,7 +6985,7 @@ namespace jeecs
         {
             return slice<SliceView, SliceRequirements...>::EntityComponentSliceIter(
                 _fetch_query_slice_cache<SliceView, SliceRequirements...>());
-        }      
+        }
         template<typename ... ViewTypes>
         inline typename slice<slice_requirement::view<ViewTypes...>>::ComponentSliceIter query_view()
         {
