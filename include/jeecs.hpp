@@ -7129,10 +7129,10 @@ namespace jeecs
             value_type operator*()
             {
                 return SliceView::fetch_entity_and_component_slice_from_chunk(
-                    m_archs_current, 
-                    m_chunk_currnet, 
-                    m_chunk_entity_currnet_index, 
-                    m_chunk_current_entity_meta[m_chunk_entity_currnet_index].m_version);
+                    this->m_archs_current, 
+                    this->m_chunk_currnet,
+                    this->m_chunk_entity_currnet_index,
+                    this->m_chunk_current_entity_meta[this->m_chunk_entity_currnet_index].m_version);
             }
 
             EntityComponentSliceIter begin()
