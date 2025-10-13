@@ -477,7 +477,7 @@ namespace jeecs_impl
             {
                 mem_offset = jeecs::basic::allign_size(mem_offset, typeinfo->m_align);
 
-                const_cast<archtypes_map&>(_m_arch_typeinfo_mapping)[typeinfo->m_id] = 
+                const_cast<archtypes_map&>(_m_arch_typeinfo_mapping)[typeinfo->m_id] =
                     arch_type_info{ typeinfo, mem_offset };
 
                 mem_offset += typeinfo->m_chunk_size * _m_entity_count_per_chunk;
@@ -668,8 +668,8 @@ namespace jeecs_impl
         }
 
         void alloc_entity(
-            arch_chunk** out_chunk, 
-            jeecs::typing::entity_id_in_chunk_t* out_eid, 
+            arch_chunk** out_chunk,
+            jeecs::typing::entity_id_in_chunk_t* out_eid,
             jeecs::typing::version_t* out_eversion) noexcept
         {
             std::shared_lock sg1(_m_chunk_list_defragmentation_mx);
@@ -780,7 +780,7 @@ namespace jeecs_impl
                 if (arch_typeinfo != nullptr)
                 {
                     out_arch_info->m_component_infos.emplace_back(
-                        jeecs::dependence::arch_chunks_info::component_info{ 
+                        jeecs::dependence::arch_chunks_info::component_info{
                             arch_typeinfo->m_begin_offset_in_chunk,
                             arch_typeinfo->m_typeinfo->m_chunk_size });
                 }
@@ -913,13 +913,13 @@ namespace jeecs_impl
                 std::shared_lock sg1(_m_arch_types_mapping_mx);
                 for (auto& [typeset, arch] : _m_arch_types_mapping)
                 {
-                    if (contains(typeset, contain_set) 
+                    if (contains(typeset, contain_set)
                         && contain_all_any(typeset, anyof_sets)
                         && except(typeset, except_set))
                     {
                         // Current arch is matched!
                         arch->create_chunk_info(
-                            dependence, 
+                            dependence,
                             &dependence->m_archs.emplace_back());
                     }
                 }
@@ -1038,10 +1038,10 @@ namespace jeecs_impl
 
             _entity_command_buffer() = default;
         };
-
         struct _world_command_buffer
         {
             JECS_DISABLE_MOVE_AND_COPY(_world_command_buffer);
+
             struct typed_system
             {
                 const jeecs::typing::type_info* m_typeinfo;
@@ -1055,9 +1055,20 @@ namespace jeecs_impl
                     // Do nothing else
                 }
             };
+            struct append_slice_query_cache
+            {
+                // NOTE: 当尝试添加一个切片查询缓存时，系统可能已经被移除了；这种情况下就不添加了
+                jeecs::game_system* m_system_instance_may_not_exist;
 
-            jeecs::basic::atomic_list<typed_system> m_adding_or_removing_systems;
+                jeecs::typing::typehash_t m_query_slice_typehash;
+                jeecs::dependence* m_created_dependence;
+
+                append_slice_query_cache* last;
+
+            };
+
             bool m_destroy_world;
+            jeecs::basic::atomic_list<typed_system> m_adding_or_removing_systems;
 
             // Update configs ?
             std::optional<bool> m_update_enabled;
@@ -1066,12 +1077,14 @@ namespace jeecs_impl
         };
 
         std::shared_mutex _m_command_buffer_mx;
-        // 此处必须使用std::map，因为unordered容器一旦重哈希，_entity_command_buffer可能发生移动
-        // 导致失效。
-        std::map<arch_type::entity, _entity_command_buffer*>
-            _m_entity_command_buffers;
+        std::shared_mutex _m_command_executer_guard_mx;
+
+        using entity_ommand_buffer_map_t =
+            std::map<arch_type::entity, _entity_command_buffer*>;
+
         ecs_world* _m_world;
         _world_command_buffer* _m_world_command_buffer;
+        entity_ommand_buffer_map_t _m_entity_command_buffers;
 
         _entity_command_buffer* _find_or_create_buffer_for_entity(const arch_type::entity& e)
         {
@@ -1092,7 +1105,12 @@ namespace jeecs_impl
             auto* ebuf = new _entity_command_buffer{};
             ebuf->m_entity_removed_flag = false;
             ebuf->m_entity_active_stat = jeecs::game_entity::entity_stat::UNAVAILABLE;
-            return _m_entity_command_buffers[e] = ebuf;
+
+            auto result = _m_entity_command_buffers.insert(std::make_pair(e, ebuf)).second;
+            (void)result;
+            assert(result);
+
+            return ebuf;
         }
         _world_command_buffer* _find_or_create_buffer_for_world()
         {
@@ -1115,8 +1133,6 @@ namespace jeecs_impl
 
             return _m_world_command_buffer = wbuf;
         }
-
-        std::shared_mutex _m_command_executer_guard_mx;
 
     public:
         command_buffer(ecs_world* world)
@@ -1220,7 +1236,7 @@ namespace jeecs_impl
         JECS_DISABLE_MOVE_AND_COPY(ecs_world);
 
     public:
-        using system_container_t = 
+        using system_container_t =
             std::unordered_map<const jeecs::typing::type_info*, jeecs::game_system*>;
         using slice_cache_container_t =
             std::unordered_map<jeecs::typing::typehash_t, std::unique_ptr<jeecs::dependence>>;
@@ -1228,9 +1244,11 @@ namespace jeecs_impl
         // NOTE: 此处之所以要根据不同系统实例缓存不同的切片，是考虑到编译防火墙，不同编译器/库对
         //      相同/不同的切片类型哈希可能不同/相同；为了规避因此导致的哈希冲突或者重复，针对不同
         //      实例缓存，这样确保一个实例对应的始终是相同的模块（库），避免编译防火墙问题。
-        using system_slice_cache_container_t = 
+        using system_slice_cache_container_t =
             std::unordered_map<jeecs::game_system*, slice_cache_container_t>;
     private:
+        std::string _m_name;
+
         ecs_universe* _m_universe;
 
         command_buffer _m_command_buffer;
@@ -1241,7 +1259,6 @@ namespace jeecs_impl
         std::atomic_bool _m_destroying_flag;
         std::atomic_size_t _m_archmgr_updated_version;
 
-        std::string _m_name;
         system_container_t m_systems;
         system_slice_cache_container_t m_system_slice_caches;
     private:
@@ -1250,13 +1267,13 @@ namespace jeecs_impl
 
     public:
         ecs_world(ecs_universe* universe)
-            : _m_universe(universe)
+            : _m_name("<anonymous>")
+            , _m_universe(universe)
             , _m_command_buffer(this)
             , _m_arch_manager(this)
             , _m_world_enabled(false)
             , _m_destroying_flag(false)
             , _m_archmgr_updated_version(100)
-            , _m_name("<anonymous>")
         {
             std::lock_guard g1(_m_alive_worlds_mx);
             _m_alive_worlds.insert(this);
@@ -1316,8 +1333,8 @@ namespace jeecs_impl
 #ifndef NDEBUG
                 jeecs::debug::logwarn(
                     "Trying to append system: '%s', but current world(%p) has already contain same one(%p), replace it with %p",
-                    type->m_typename, 
-                    this, fnd->second, 
+                    type->m_typename,
+                    this, fnd->second,
                     sys);
 #endif
                 remove_system_instance(type);
@@ -1332,7 +1349,7 @@ namespace jeecs_impl
                 _destroy_system_instance(fnd->first, fnd->second);
 
                 m_system_slice_caches.erase(fnd->second);
-                m_systems.erase(fnd);                
+                m_systems.erase(fnd);
             }
 #ifndef NDEBUG
             else
@@ -1713,7 +1730,7 @@ namespace jeecs_impl
                                     }
 
                                     // Active new one
-                                    assert(current_entity.chunk()->get_entity_meta()[current_entity._m_id].m_stat 
+                                    assert(current_entity.chunk()->get_entity_meta()[current_entity._m_id].m_stat
                                         == jeecs::game_entity::entity_stat::READY);
                                     chunk->command_active_entity(entity_id, jeecs::game_entity::entity_stat::READY);
                                 }
@@ -2503,7 +2520,7 @@ void je_ecs_universe_register_exit_callback(void* universe, void (*callback)(voi
 {
     reinterpret_cast<jeecs_impl::ecs_universe*>(universe)->register_exit_callback(
         [callback, arg]()
-        { 
+        {
             callback(arg);
         });
 }
@@ -2608,7 +2625,7 @@ void je_ecs_world_create_prefab_with_components(
     while (*component_ids != jeecs::typing::INVALID_TYPE_ID)
         types.insert(*(component_ids++));
 
-    auto entity =reinterpret_cast<jeecs_impl::ecs_world*>(world)
+    auto entity = reinterpret_cast<jeecs_impl::ecs_world*>(world)
         ->create_entity_with_component(types, jeecs::game_entity::entity_stat::PREFAB);
     out_entity->_set_arch_chunk_info(entity._m_in_chunk, entity._m_id, entity._m_version);
 }
@@ -2877,7 +2894,7 @@ double je_ecs_universe_get_frame_deltatime(void* universe)
 }
 void je_ecs_universe_set_frame_deltatime(void* universe, double delta)
 {
-   reinterpret_cast<jeecs_impl::ecs_universe*>(universe)->set_frame_deltatime(delta);
+    reinterpret_cast<jeecs_impl::ecs_universe*>(universe)->set_frame_deltatime(delta);
 }
 
 double je_ecs_universe_get_real_deltatime(void* universe)

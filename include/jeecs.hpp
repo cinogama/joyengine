@@ -6332,14 +6332,8 @@ namespace jeecs
         type m_require;
         size_t m_require_group_id;
         typing::typeid_t m_type;
-
-        requirement(type _require, size_t group_id, typing::typeid_t _type)
-            : m_require(_require)
-            , m_require_group_id(group_id)
-            , m_type(_type)
-        {
-        }
     };
+    static_assert(std::is_trivial_v<requirement>);
 
     struct dependence
     {
@@ -6490,13 +6484,13 @@ namespace jeecs
                 else if constexpr (std::is_reference<CurRequireT>::value)
                     // Reference, means CONTAINS
                     dep.m_requirements.push_front(
-                        requirement(requirement::type::CONTAINS, 0,
-                            typing::type_info::id<jeecs::typing::origin_t<CurRequireT>>()));
+                        requirement{ requirement::type::CONTAINS, 0,
+                            typing::type_info::id<jeecs::typing::origin_t<CurRequireT>>() });
                 else if constexpr (std::is_pointer<CurRequireT>::value)
                     // Pointer, means MAYNOT
                     dep.m_requirements.push_front(
-                        requirement(requirement::type::MAYNOT, 0,
-                            typing::type_info::id<jeecs::typing::origin_t<CurRequireT>>()));
+                        requirement{ requirement::type::MAYNOT, 0,
+                            typing::type_info::id<jeecs::typing::origin_t<CurRequireT>>() });
                 else
                 {
                     static_assert(std::is_void<CurRequireT>::value || !std::is_void<CurRequireT>::value,
@@ -6518,7 +6512,7 @@ namespace jeecs
                     debug::logwarn("Repeat or conflict when excepting component '%s'.",
                         typing::type_info::of<CurRequireT>()->m_typename);
 #endif
-            dep.m_requirements.push_back(requirement(requirement::type::EXCEPT, 0, id));
+            dep.m_requirements.push_back(requirement{ requirement::type::EXCEPT, 0, id });
             if constexpr (sizeof...(Ts) > 0)
                 _apply_except<Ts...>(dep);
         }
@@ -6536,7 +6530,7 @@ namespace jeecs
                     debug::logwarn("Repeat or conflict when containing component '%s'.",
                         typing::type_info::of<CurRequireT>()->m_typename);
 #endif
-            dep.m_requirements.push_back(requirement(requirement::type::CONTAINS, 0, id));
+            dep.m_requirements.push_back(requirement{ requirement::type::CONTAINS, 0, id });
             if constexpr (sizeof...(Ts) > 0)
                 _apply_contain<Ts...>(dep);
         }
@@ -6553,7 +6547,7 @@ namespace jeecs
                     debug::logwarn("Repeat or conflict when require any of component '%s'.",
                         typing::type_info::of<CurRequireT>()->m_typename);
 #endif
-            dep.m_requirements.push_back(requirement(requirement::type::ANYOF, any_group, id));
+            dep.m_requirements.push_back(requirement{ requirement::type::ANYOF, any_group, id });
             if constexpr (sizeof...(Ts) > 0)
                 _apply_anyof<Ts...>(dep, any_group);
         }
@@ -6806,7 +6800,7 @@ namespace jeecs
                 static void _apply_dependence_impl(size_t group, dependence* out_dependence)
                 {
                     out_dependence->m_requirements.push_back(
-                        requirement(RequireType, group, typing::type_info::id<T>()));
+                        requirement{ RequireType, group, typing::type_info::id<T>() });
 
                     if constexpr (sizeof...(Ts) > 0)
                         _apply_dependence_impl<Ts...>(group, out_dependence);
