@@ -163,7 +163,14 @@ public let frag =
 
         void PrepareCameras()
         {
-            for (auto& [translation, projection, ortho, perspec, viewport, rendbuf, frustumCulling] : query<
+            for (auto&& [
+                translation,
+                projection,
+                ortho,
+                perspec,
+                viewport,
+                rendbuf,
+                frustumCulling] : query<
                 view<
                 Translation&,
                 Projection&,
@@ -335,7 +342,7 @@ public let frag =
 
             UserInterfaceGraphicPipelineSystem::PrepareCameras();
 
-            for (auto& [projection, rendqueue, cameraviewport, rendbuf, clear] : query_view<
+            for (auto&& [projection, rendqueue, cameraviewport, rendbuf, clear] : query_view<
                 Projection&, Rendqueue*, Viewport*, RendToFramebuffer*, Clear*>())
             {
                 auto* branch = this->allocate_branch(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
@@ -346,7 +353,7 @@ public let frag =
                 );
             }
 
-            for (auto& [shads, texs, shape, rendqueue, origin, rotation, color] : query<
+            for (auto&& [shads, texs, shape, rendqueue, origin, rotation, color] : query<
                 view<Shaders&, Textures*, Shape&, Rendqueue*, Origin&, Rotation*, Color*>,
                 anyof<Absolute, Relatively>,
                 except<Point, Parallel, Range>>())
@@ -597,7 +604,7 @@ public let frag =
 
             UnlitGraphicPipelineSystem::PrepareCameras();
 
-            for (auto& [projection, rendqueue, cameraviewport, rendbuf, frustumCulling, clear] : query_view<
+            for (auto&& [projection, rendqueue, cameraviewport, rendbuf, frustumCulling, clear] : query_view<
                 Projection&, Rendqueue*, Viewport*, RendToFramebuffer*, FrustumCulling*, Clear*>())
             {
                 auto* branch = this->allocate_branch(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
@@ -608,7 +615,7 @@ public let frag =
                 );
             }
 
-            for (auto& [trans, shads, texs, shape, rendqueue, color] : query<
+            for (auto&& [trans, shads, texs, shape, rendqueue, color] : query<
                 view<Translation&, Shaders&, Textures*, Shape&, Rendqueue*, Color*>,
                 except<Point, Parallel, Origin>>())
             {
@@ -1570,7 +1577,7 @@ public func frag(vf: v2f)
 
             DeferLight2DGraphicPipelineSystem::PrepareCameras();
 
-            for (auto& [
+            for (auto&& [
                 tarns,
                 projection,
                 rendqueue,
@@ -1678,7 +1685,7 @@ public func frag(vf: v2f)
                 }
             }
 
-            for (auto& [trans, shads, texs, shape, rendqueue, color] : query<
+            for (auto&& [trans, shads, texs, shape, rendqueue, color] : query<
                 view<Translation&, Shaders&, Textures*, Shape&, Rendqueue*, Color*>,
                 except<Point, Parallel, Range, Origin>>())
             {
@@ -1689,9 +1696,34 @@ public func frag(vf: v2f)
                     });
             }
 
-            for (auto& [trans, topdown, point, parallel, range, gain, shadowbuffer, color, shape, shads, texs] : query<
-                view<Translation&, TopDown*, Point*, Parallel*, Range*, Gain*, ShadowBuffer*, Color*, Shape&, Shaders&, Textures*>,
-                anyof<Point, Parallel, Range>>())
+            for (auto&& [
+                trans,
+                topdown,
+                point,
+                parallel,
+                range,
+                gain,
+                shadowbuffer,
+                color,
+                shape,
+                shads,
+                texs] : query<
+                view<
+                Translation&,
+                TopDown*,
+                Point*,
+                Parallel*,
+                Range*,
+                Gain*,
+                ShadowBuffer*,
+                Color*,
+                Shape&,
+                Shaders&,
+                Textures*>,
+                anyof<
+                Point,
+                Parallel,
+                Range>>())
             {
                 m_2dlight_list.emplace_back(
                     light2d_arch{
@@ -1811,7 +1843,7 @@ public func frag(vf: v2f)
                 }
             }
 
-            for (auto& [trans, blockshadow, shapeshadow, spriteshadow, selfshadow, texture, shape] : query<
+            for (auto&& [trans, blockshadow, shapeshadow, spriteshadow, selfshadow, texture, shape] : query<
                 view<Translation&, BlockShadow*, ShapeShadow*, SpriteShadow*, SelfShadow*, Textures*, Shape&>,
                 anyof<BlockShadow, ShapeShadow, SpriteShadow, SelfShadow>>())
             {
@@ -2752,7 +2784,7 @@ public func frag(vf: v2f)
         void StateUpdate()
         {
             _fixed_time += deltatime();
-            for (auto& [e, frame_animation, shaders] : query_entity_view<
+            for (auto&& [e, frame_animation, shaders] : query_entity_view<
                 Animation::FrameAnimation&, Shaders*>())
             {
                 if (abs(frame_animation.speed) == 0.0f)

@@ -222,7 +222,7 @@ namespace jeecs
             std::map<size_t, std::unique_ptr<Physics2DWorldContext>>
                 _m_this_frame_alive_worlds;
 
-            for (auto& [e, world] : query_entity_view<Physics2D::World&>())
+            for (auto&& [e, world] : query_entity_view<Physics2D::World&>())
             {
                 auto fnd = _m_alive_physic_worlds.find(world.layerid);
                 if (fnd == _m_alive_physic_worlds.end())
@@ -243,7 +243,7 @@ namespace jeecs
                 }
             }
 
-            for (auto& [
+            for (auto&& [
                 e,
                 translation,
                 rigidbody,
@@ -571,7 +571,7 @@ namespace jeecs
             _m_alive_physic_worlds.swap(_m_this_frame_alive_worlds);
 
             // 在此处将动力学数据更新到组件上
-            for (auto& [
+            for (auto&& [
                 translation,
                 localposition,
                 localrotation,
