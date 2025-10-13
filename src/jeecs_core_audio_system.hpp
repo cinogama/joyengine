@@ -34,16 +34,17 @@ namespace jeecs
                 const auto& current_position = trans.world_position;
                 const auto& current_rotation = trans.world_rotation;
 
+                const auto face = current_rotation * listener.face;
+                const auto up = current_rotation * listener.up;
+
+                const auto volume = listener.volume;
+
                 audio::listener::update(
-                    [&current_position, &current_rotation, &listener, &velocity](
-                        jeal_listener* listener_data)
+                    [&](jeal_listener* listener_data)
                     {
                         listener_data->m_location[0] = current_position.x;
                         listener_data->m_location[1] = current_position.y;
                         listener_data->m_location[2] = current_position.z;
-
-                        auto face = current_rotation * listener.face;
-                        auto up = current_rotation * listener.up;
 
                         listener_data->m_forward[0] = face.x;
                         listener_data->m_forward[1] = face.y;
@@ -52,7 +53,7 @@ namespace jeecs
                         listener_data->m_upward[1] = up.y;
                         listener_data->m_upward[2] = up.z;
 
-                        listener_data->m_gain = listener.volume;
+                        listener_data->m_gain = volume;
 
                         listener_data->m_velocity[0] = velocity.x;
                         listener_data->m_velocity[1] = velocity.y;
@@ -64,15 +65,19 @@ namespace jeecs
                 auto velocity = (trans.world_position - source.last_position) / std::max(deltatime(), 0.0001f);
                 source.last_position = trans.world_position;
 
+                const auto source_volume = source.volume;
+                const auto source_pitch = source.pitch;
+                const auto& current_position = trans.world_position;
+
                 source.source->update(
                     [&](jeal_source* source_data)
                     {
-                        source_data->m_gain = source.volume;
-                        source_data->m_pitch = source.pitch;
+                        source_data->m_gain = source_volume;
+                        source_data->m_pitch = source_pitch;
 
-                        source_data->m_location[0] = trans.world_position.x;
-                        source_data->m_location[1] = trans.world_position.y;
-                        source_data->m_location[2] = trans.world_position.z;
+                        source_data->m_location[0] = current_position.x;
+                        source_data->m_location[1] = current_position.y;
+                        source_data->m_location[2] = current_position.z;
 
                         source_data->m_velocity[0] = velocity.x;
                         source_data->m_velocity[1] = velocity.y;
@@ -91,16 +96,19 @@ namespace jeecs
                 else
                 {
                     // Update source buffer.
-                    bool buffer_updated = source.source->set_playing_buffer(playing.buffer.get_resource().value());
+                    const bool buffer_updated = 
+                        source.source->set_playing_buffer(playing.buffer.get_resource().value());
+                    const bool looping = playing.loop;
+
                     if (playing.state == Audio::Playing::play_state::STOPPED)
                     {
                         if (playing.play)
                         {
                             // Request to play.
                             source.source->update(
-                                [&](jeal_source* source_data)
+                                [looping](jeal_source* source_data)
                                 {
-                                    source_data->m_loop = playing.loop;
+                                    source_data->m_loop = looping;
                                 });
 
                             if (playing.loop)
@@ -117,9 +125,9 @@ namespace jeecs
                         if ((playing.state == Audio::Playing::play_state::LOOPED_PLAYING) != playing.loop)
                         {
                             source.source->update(
-                                [&](jeal_source* source_data)
+                                [looping](jeal_source* source_data)
                                 {
-                                    source_data->m_loop = playing.loop;
+                                    source_data->m_loop = looping;
                                 });
 
                             if (playing.loop)
