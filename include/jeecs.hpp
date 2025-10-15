@@ -6496,7 +6496,7 @@ namespace jeecs
                 static void _apply_dependence_impl(size_t group, dependence* out_dependence)
                 {
                     out_dependence->m_requirements.push_back(
-                        requirement{ RequireType, group, typing::type_info::id<T>() });
+                        requirement{ RequireType, group, typing::type_info::id<typing::origin_t<T>>() });
 
                     if constexpr (sizeof...(Ts) > 0)
                         _apply_dependence_impl<Ts...>(group, out_dependence);
@@ -6603,12 +6603,12 @@ namespace jeecs
         在这里——jeecs.h中，选择器的实现已经显得非常麻烦，但实际上这里只是选择器的一部分，在
         ArchSystem中，有一个名为je_ecs_world_update_dependences_archinfo的函数。这个函数在黑暗处
         负责在适当的实际更新选择器的筛选结果。
-   
+
         为了优雅，背后就得承担代价；为了性能我们就得做出牺牲。伟大的圣窝窝头，这么做真的值得吗？
-    
+
                                                                        ——虔诚的窝窝头信徒
                                                                            mr_cino
-    ```    
+    ```
     至于 selector，感谢它三年来的付出和陪伴，从 JoyEngine 4.9 版本起，不再提供。
     */
 

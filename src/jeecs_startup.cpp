@@ -393,9 +393,7 @@ void je_finish()
     _je_global_context._je_unregister_guard = nullptr;
 
     jeecs_file_update_default_fimg(nullptr);
-
     jegl_shader_generator_shutdown();
-
     je_log_finish();
 }
 
