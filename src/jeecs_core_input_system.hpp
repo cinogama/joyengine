@@ -10,6 +10,8 @@
 
 namespace jeecs
 {
+    using namespace slice_requirement;
+
     struct VirtualGamepadInputSystem : public game_system
     {
         VirtualGamepadInputSystem(game_world world)
@@ -19,7 +21,10 @@ namespace jeecs
 
         void StateUpdate()
         {
-            for (auto&& [vgamepad] : query_view<Input::VirtualGamepad&>())
+            for (auto&& [vgamepad] :
+                query typesof(
+                    view typesof(Input::VirtualGamepad&)
+                )())
             {
                 float left_stick_x = 0.f, left_stick_y = 0.f;
                 if (input::keydown(vgamepad.left_stick_up_left_down_right[0]))

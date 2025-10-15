@@ -128,6 +128,8 @@
 #define CommitUpdate CommitUpdate       // 用于提交最终生效的数据 (Transform, Audio, ScriptRuntime)
 #define GraphicUpdate GraphicUpdate     // 用于将数据呈现到用户界面
 
+#define typesof(...) <__VA_ARGS__>      // 用于优化泛型参数列表对代码自动整理的影响，配合需要大量泛型参数的接口使用
+
 /*
 jeecs [命名空间]
 此处定义引擎自带的所有的C++接口类、函数、类型和常量
@@ -7023,16 +7025,6 @@ namespace jeecs
         {
             return typename collection<SliceView, SliceRequirements...>::entity_slice(
                 _fetch_query_slice_cache<SliceView, SliceRequirements...>());
-        }
-        template<typename ... ViewTypes>
-        inline typename collection<slice_requirement::view<ViewTypes...>>::slice query_view()
-        {
-            return query<slice_requirement::view<ViewTypes...>>();
-        }
-        template<typename ... ViewTypes>
-        inline typename collection<slice_requirement::view<ViewTypes...>>::entity_slice query_entity_view()
-        {
-            return query_entity<slice_requirement::view<ViewTypes...>>();
         }
     };
 

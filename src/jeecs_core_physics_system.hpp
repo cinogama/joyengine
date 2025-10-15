@@ -13,6 +13,8 @@
 
 namespace jeecs
 {
+    using namespace slice_requirement;
+
     // We will treat the b2BodyId as a unique id.
     static_assert(sizeof(Physics2D::Rigidbody::rigidbody_id_t) == sizeof(b2BodyId));
     static_assert(sizeof(Physics2D::Collider::shape_id_t) == sizeof(b2ShapeId));
@@ -222,7 +224,9 @@ namespace jeecs
             std::map<size_t, std::unique_ptr<Physics2DWorldContext>>
                 _m_this_frame_alive_worlds;
 
-            for (auto&& [e, world] : query_entity_view<Physics2D::World&>())
+            for (auto&& [e, world] : query_entity<
+                view typesof(Physics2D::World&)
+            >())
             {
                 auto fnd = _m_alive_physic_worlds.find(world.layerid);
                 if (fnd == _m_alive_physic_worlds.end())
@@ -258,26 +262,31 @@ namespace jeecs
                 scale,
                 posoffset,
                 rotoffset,
-                rendshape]: query_entity<
-                view<
-                Transform::Translation&,
-                Physics2D::Rigidbody&,
-                Physics2D::Mass*,
-                Physics2D::Kinematics*,
-                Physics2D::Restitution*,
-                Physics2D::Friction*,
-                Physics2D::Bullet*,
-                Physics2D::Collider::Box*,
-                Physics2D::Collider::Circle*,
-                Physics2D::Collider::Capsule*,
-                Physics2D::Transform::Scale*,
-                Physics2D::Transform::Position*,
-                Physics2D::Transform::Rotation*,
-                Renderer::Shape*>,
-                anyof<
-                Physics2D::Collider::Box,
-                Physics2D::Collider::Circle,
-                Physics2D::Collider::Capsule>>())
+                rendshape
+            ]:
+            query_entity <
+                view typesof(
+                    Transform::Translation&,
+                    Physics2D::Rigidbody&,
+                    Physics2D::Mass*,
+                    Physics2D::Kinematics*,
+                    Physics2D::Restitution*,
+                    Physics2D::Friction*,
+                    Physics2D::Bullet*,
+                    Physics2D::Collider::Box*,
+                    Physics2D::Collider::Circle*,
+                    Physics2D::Collider::Capsule*,
+                    Physics2D::Transform::Scale*,
+                    Physics2D::Transform::Position*,
+                    Physics2D::Transform::Rotation*,
+                    Renderer::Shape*
+                ),
+                anyof typesof(
+                    Physics2D::Collider::Box,
+                    Physics2D::Collider::Circle,
+                    Physics2D::Collider::Capsule
+                )
+            > ())
             {
                 auto fnd = _m_this_frame_alive_worlds.find(rigidbody.layerid);
                 if (fnd == _m_this_frame_alive_worlds.end())
@@ -579,20 +588,24 @@ namespace jeecs
                 kinematics,
                 collisions,
                 posoffset,
-                rotoffset] : query<
-                view<
-                Transform::Translation&,
-                Transform::LocalPosition&,
-                Transform::LocalRotation&,
-                Physics2D::Rigidbody&,
-                Physics2D::Kinematics*,
-                Physics2D::CollisionResult*,
-                Physics2D::Transform::Position*,
-                Physics2D::Transform::Rotation*>,
-                anyof<
-                Physics2D::Kinematics,
-                Physics2D::CollisionResult>>())
-
+                rotoffset
+            ] :
+            query<
+                view typesof(
+                    Transform::Translation&,
+                    Transform::LocalPosition&,
+                    Transform::LocalRotation&,
+                    Physics2D::Rigidbody&,
+                    Physics2D::Kinematics*,
+                    Physics2D::CollisionResult*,
+                    Physics2D::Transform::Position*,
+                    Physics2D::Transform::Rotation*
+                ),
+                anyof typesof(
+                    Physics2D::Kinematics,
+                    Physics2D::CollisionResult
+                )
+            >())
             {
                 if (rigidbody.native_rigidbody != Physics2D::Rigidbody::null_rigidbody)
                 {

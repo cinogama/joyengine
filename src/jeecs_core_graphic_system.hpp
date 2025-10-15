@@ -170,16 +170,23 @@ public let frag =
                 perspec,
                 viewport,
                 rendbuf,
-                frustumCulling] : query<
-                view<
-                Translation&,
-                Projection&,
-                OrthoProjection*,
-                PerspectiveProjection*,
-                Viewport*,
-                RendToFramebuffer*,
-                FrustumCulling*>,
-                anyof<OrthoProjection, PerspectiveProjection>>())
+                frustumCulling
+            ] :
+            query<
+                view typesof(
+                    Translation&,
+                    Projection&,
+                    OrthoProjection*,
+                    PerspectiveProjection*,
+                    Viewport*,
+                    RendToFramebuffer*,
+                    FrustumCulling*
+                ),
+                anyof typesof(
+                    OrthoProjection,
+                    PerspectiveProjection
+                )
+            >())
             {
                 float mat_inv_rotation[4][4];
                 translation.world_rotation.create_inv_matrix(mat_inv_rotation);
@@ -342,8 +349,22 @@ public let frag =
 
             UserInterfaceGraphicPipelineSystem::PrepareCameras();
 
-            for (auto&& [projection, rendqueue, cameraviewport, rendbuf, clear] : query_view<
-                Projection&, Rendqueue*, Viewport*, RendToFramebuffer*, Clear*>())
+            for (auto&& [
+                projection,
+                rendqueue,
+                cameraviewport,
+                rendbuf,
+                clear
+            ] :
+            query<
+                view typesof(
+                    Projection&,
+                    Rendqueue*,
+                    Viewport*,
+                    RendToFramebuffer*,
+                    Clear*
+                )
+            >())
             {
                 auto* branch = this->allocate_branch(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
                 m_camera_list.insert(
@@ -354,9 +375,10 @@ public let frag =
             }
 
             for (auto&& [shads, texs, shape, rendqueue, origin, rotation, color] : query<
-                view<Shaders&, Textures*, Shape&, Rendqueue*, Origin&, Rotation*, Color*>,
-                anyof<Absolute, Relatively>,
-                except<Point, Parallel, Range>>())
+                view typesof(Shaders&, Textures*, Shape&, Rendqueue*, Origin&, Rotation*, Color*),
+                anyof typesof(Absolute, Relatively),
+                except typesof(Point, Parallel, Range)
+            >())
             {
                 m_renderer_list.insert(
                     renderer_arch{
@@ -604,8 +626,24 @@ public let frag =
 
             UnlitGraphicPipelineSystem::PrepareCameras();
 
-            for (auto&& [projection, rendqueue, cameraviewport, rendbuf, frustumCulling, clear] : query_view<
-                Projection&, Rendqueue*, Viewport*, RendToFramebuffer*, FrustumCulling*, Clear*>())
+            for (auto&& [
+                projection,
+                rendqueue,
+                cameraviewport,
+                rendbuf,
+                frustumCulling,
+                clear
+            ] :
+            query<
+                view typesof(
+                    Projection&,
+                    Rendqueue*,
+                    Viewport*,
+                    RendToFramebuffer*,
+                    FrustumCulling*,
+                    Clear*
+                )
+            >())
             {
                 auto* branch = this->allocate_branch(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
                 m_camera_list.insert(
@@ -616,8 +654,20 @@ public let frag =
             }
 
             for (auto&& [trans, shads, texs, shape, rendqueue, color] : query<
-                view<Translation&, Shaders&, Textures*, Shape&, Rendqueue*, Color*>,
-                except<Point, Parallel, Origin>>())
+                view typesof(
+                    Translation&,
+                    Shaders&,
+                    Textures*,
+                    Shape&,
+                    Rendqueue*,
+                    Color*
+                ),
+                except typesof(
+                    Point,
+                    Parallel,
+                    Origin
+                )
+            >())
             {
                 // RendOb will be input to a chain and used for swap
                 m_renderer_list.insert(
@@ -1588,18 +1638,22 @@ public func frag(vf: v2f)
                 textures,
                 frustumCulling,
                 clear,
-                color]: query_view<
-                Translation&,
-                Projection&,
-                Rendqueue*,
-                Viewport*,
-                RendToFramebuffer*,
-                CameraPostPass*,
-                Shaders*,
-                Textures*,
-                FrustumCulling*,
-                Clear*,
-                Color*>())
+                color] :
+            query<
+                view typesof(
+                    Translation&,
+                    Projection&,
+                    Rendqueue*,
+                    Viewport*,
+                    RendToFramebuffer*,
+                    CameraPostPass*,
+                    Shaders*,
+                    Textures*,
+                    FrustumCulling*,
+                    Clear*,
+                    Color*
+                )
+            >())
             {
                 auto* branch = this->allocate_branch(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
                 m_2dcamera_list.insert(
@@ -1686,8 +1740,21 @@ public func frag(vf: v2f)
             }
 
             for (auto&& [trans, shads, texs, shape, rendqueue, color] : query<
-                view<Translation&, Shaders&, Textures*, Shape&, Rendqueue*, Color*>,
-                except<Point, Parallel, Range, Origin>>())
+                view typesof(
+                    Translation&,
+                    Shaders&,
+                    Textures*, 
+                    Shape&, 
+                    Rendqueue*, 
+                    Color*
+                ),
+                except typesof(
+                    Point, 
+                    Parallel,
+                    Range, 
+                    Origin
+                )
+            >())
             {
                 // RendOb will be input to a chain and used for swap
                 m_renderer_list.insert(
@@ -1707,23 +1774,28 @@ public func frag(vf: v2f)
                 color,
                 shape,
                 shads,
-                texs] : query<
-                view<
-                Translation&,
-                TopDown*,
-                Point*,
-                Parallel*,
-                Range*,
-                Gain*,
-                ShadowBuffer*,
-                Color*,
-                Shape&,
-                Shaders&,
-                Textures*>,
-                anyof<
-                Point,
-                Parallel,
-                Range>>())
+                texs
+            ] :
+            query<
+                view typesof(
+                    Translation&,
+                    TopDown*,
+                    Point*,
+                    Parallel*,
+                    Range*,
+                    Gain*,
+                    ShadowBuffer*,
+                    Color*,
+                    Shape&,
+                    Shaders&,
+                    Textures*
+                ),
+                anyof typesof(
+                    Point,
+                    Parallel,
+                    Range
+                )
+            >())
             {
                 m_2dlight_list.emplace_back(
                     light2d_arch{
@@ -1797,7 +1869,7 @@ public func frag(vf: v2f)
                                         last_point_index = range->shape.m_point_count - ipoint / 2;
 
                                     append_point(
-                                        range->shape.m_positions.at(last_point_index), 
+                                        range->shape.m_positions.at(last_point_index),
                                         range->shape.m_strength.at(0));
                                 }
                             }
@@ -1822,19 +1894,19 @@ public func frag(vf: v2f)
                                     }
 
                                     append_point(
-                                        range->shape.m_positions[real_ipoint + ilayer * range->shape.m_point_count], 
+                                        range->shape.m_positions[real_ipoint + ilayer * range->shape.m_point_count],
                                         range->shape.m_strength.at(ilayer));
 
                                     // 如果不是最后一个点，那么链接到下一个顺位点
                                     if (tipoint + 1 != range->shape.m_point_count)
                                         append_point(
-                                            range->shape.m_positions[real_next_last_layer_ipoint + (ilayer - 1) * range->shape.m_point_count], 
+                                            range->shape.m_positions[real_next_last_layer_ipoint + (ilayer - 1) * range->shape.m_point_count],
                                             range->shape.m_strength.at(ilayer - 1));
                                 }
 
                                 // 最后链接到本层的第一个顺位点
                                 append_point(
-                                    range->shape.m_positions[last_point_index + ilayer * range->shape.m_point_count], 
+                                    range->shape.m_positions[last_point_index + ilayer * range->shape.m_point_count],
                                     range->shape.m_strength.at(ilayer));
                             }
                         }
@@ -1852,8 +1924,22 @@ public func frag(vf: v2f)
             }
 
             for (auto&& [trans, blockshadow, shapeshadow, spriteshadow, selfshadow, texture, shape] : query<
-                view<Translation&, BlockShadow*, ShapeShadow*, SpriteShadow*, SelfShadow*, Textures*, Shape&>,
-                anyof<BlockShadow, ShapeShadow, SpriteShadow, SelfShadow>>())
+                view typesof(
+                    Translation&,
+                    BlockShadow*, 
+                    ShapeShadow*, 
+                    SpriteShadow*, 
+                    SelfShadow*, 
+                    Textures*, 
+                    Shape&
+                ),
+                anyof typesof(
+                    BlockShadow, 
+                    ShapeShadow, 
+                    SpriteShadow, 
+                    SelfShadow
+                )
+            >())
             {
                 if (blockshadow != nullptr)
                 {
@@ -2792,8 +2878,11 @@ public func frag(vf: v2f)
         void StateUpdate()
         {
             _fixed_time += deltatime();
-            for (auto&& [e, frame_animation, shaders] : query_entity_view<
-                Animation::FrameAnimation&, Shaders*>())
+            for (auto&& [e, frame_animation, shaders] : query_entity<
+                view typesof(
+                    Animation::FrameAnimation&, Shaders*
+                )
+            >())
             {
                 if (abs(frame_animation.speed) == 0.0f)
                     continue;

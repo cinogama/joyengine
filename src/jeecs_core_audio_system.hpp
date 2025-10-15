@@ -24,10 +24,13 @@ namespace jeecs
 
         void CommitUpdate()
         {
-            for (auto&& [listener, trans] : query_view<Listener&, Translation&>())
+            for (auto&& [listener, trans] : query<
+                view typesof(Listener&, Translation&)
+            >())
             {
                 auto velocity =
-                    (trans.world_position - listener.last_position) / std::max(deltatime(), 0.0001f);
+                    (trans.world_position
+                        - listener.last_position) / std::max(deltatime(), 0.0001f);
 
                 listener.last_position = trans.world_position;
 
@@ -60,7 +63,9 @@ namespace jeecs
                         listener_data->m_velocity[2] = velocity.z;
                     });
             }
-            for (auto&& [source, trans] : query_view<Source&, Translation&>())
+            for (auto&& [source, trans] : query<
+                view typesof(Source&, Translation&)
+            >())
             {
                 auto velocity = (trans.world_position - source.last_position) / std::max(deltatime(), 0.0001f);
                 source.last_position = trans.world_position;
@@ -84,7 +89,9 @@ namespace jeecs
                         source_data->m_velocity[2] = velocity.z;
                     });
             }
-            for (auto&& [source, playing] : query_view<Source&, Playing&>())
+            for (auto&& [source, playing] : query<
+                view typesof(Source&, Playing&)
+            >())
             {
                 if (!playing.buffer.has_resource())
                 {
@@ -96,7 +103,7 @@ namespace jeecs
                 else
                 {
                     // Update source buffer.
-                    const bool buffer_updated = 
+                    const bool buffer_updated =
                         source.source->set_playing_buffer(playing.buffer.get_resource().value());
                     const bool looping = playing.loop;
 

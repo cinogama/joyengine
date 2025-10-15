@@ -730,9 +730,10 @@ public func frag(vf: v2f)
                 return;
 
             for (auto&& [position, rotation, trans] : query<
-                view<LocalPosition&, LocalRotation&, Translation&>,
-                contains<Editor::EditorWalker>,
-                except<Projection>>())
+                view typesof(LocalPosition&, LocalRotation&, Translation&),
+                contains typesof(Editor::EditorWalker),
+                except typesof(Projection)
+            >())
             {
                 if (_inputs.r_button_pushed)
                 {
@@ -800,8 +801,24 @@ public func frag(vf: v2f)
 
         void UpdateAndCreateMover()
         {
-            for (auto&& [mover_entity, anchor, position, rotation, scale, trans, mover] : query_entity_view<
-                Anchor&, LocalPosition&, LocalRotation&, LocalScale&, Translation&, Editor::EntityMoverRoot&>())
+            for (auto&& [
+                mover_entity,
+                anchor,
+                position,
+                rotation,
+                scale,
+                trans,
+                mover] :
+            query_entity<
+                view typesof(
+                    Anchor&,
+                    LocalPosition&,
+                    LocalRotation&,
+                    LocalScale&,
+                    Translation&,
+                    Editor::EntityMoverRoot&
+                )
+            >())
             {
                 if (!mover.init)
                 {
@@ -1022,8 +1039,16 @@ public let frag =
 
         void MoveEntity()
         {
-            for (auto&& [mover, trans, posi, scale, shape, color] : query_view<
-                Editor::EntityMover&, Translation&, LocalPosition&, LocalScale&, Shape*, Color&>())
+            for (auto&& [mover, trans, posi, scale, shape, color] : query<
+                view typesof(
+                    Editor::EntityMover&,
+                    Translation&,
+                    LocalPosition&,
+                    LocalScale&,
+                    Shape*,
+                    Color&
+                )
+            >())
             {
                 if (mover.mode != _mode || _inputs.l_tab)
                 {
@@ -1220,7 +1245,9 @@ public let frag =
             _inputs._wheel_count_record = (int)input::wheel(0).y;
 
             // 获取被选中的实体
-            for (auto&& [e, eid] : query_entity_view<Editor::EntityId*>())
+            for (auto&& [e, eid] : query_entity<
+                view typesof(Editor::EntityId*)
+            >())
             {
                 if (eid == nullptr)
                 {
@@ -1427,9 +1454,10 @@ public let frag =
             if (_gizmo_mask & (gizmo_mode::CAMERA | gizmo_mode::CAMERA_VISUAL_CONE))
             {
                 for (auto&& [e, trans, proj] : query_entity<
-                    view<Translation&, Projection&>,
-                    anyof<OrthoProjection, PerspectiveProjection>,
-                    except<Editor::Invisable>>())
+                    view typesof(Translation&, Projection&),
+                    anyof typesof(OrthoProjection, PerspectiveProjection),
+                    except typesof(Editor::Invisable)
+                >())
                 {
                     if (_gizmo_mask & gizmo_mode::CAMERA)
                     {
@@ -1467,9 +1495,10 @@ public let frag =
             if (_gizmo_mask & gizmo_mode::LIGHT2D)
             {
                 for (auto&& [e, trans] : query_entity<
-                    view<Translation&>,
-                    anyof<Point, Range>,
-                    except<Editor::Invisable>>())
+                    view typesof(Translation&),
+                    anyof typesof(Point, Range),
+                    except typesof(Editor::Invisable)
+                >())
                 {
                     SelectEntity(e, trans, nullptr);
                     draw_easy_gizmo_impl(trans, point_light_gizmo_texture_group, false);
@@ -1479,9 +1508,10 @@ public let frag =
             if (_gizmo_mask & gizmo_mode::LIGHT2D)
             {
                 for (auto&& [e, trans] : query_entity<
-                    view<Translation&>,
-                    contains<Parallel>,
-                    except<Editor::Invisable>>())
+                    view typesof(Translation&),
+                    contains typesof(Parallel),
+                    except typesof(Editor::Invisable)
+                >())
                 {
                     SelectEntity(e, trans, nullptr);
                     draw_easy_gizmo_impl(trans, parallel_light_gizmo_texture_group, true);
@@ -1491,20 +1521,24 @@ public let frag =
             if (_gizmo_mask & gizmo_mode::PHYSICS2D_COLLIDER)
             {
                 for (auto&& [trans, ppos, prot, pscale, box, capsule, circle] : query<
-                    view<
-                    Translation&,
-                    Physics2D::Transform::Position*,
-                    Physics2D::Transform::Rotation*,
-                    Physics2D::Transform::Scale*,
-                    Physics2D::Collider::Box*,
-                    Physics2D::Collider::Capsule*,
-                    Physics2D::Collider::Circle*>,
-                    anyof<
-                    Physics2D::Collider::Box,
-                    Physics2D::Collider::Capsule,
-                    Physics2D::Collider::Circle>,
-                    except<
-                    Editor::Invisable>>())
+                    view typesof(
+                        Translation&,
+                        Physics2D::Transform::Position*,
+                        Physics2D::Transform::Rotation*,
+                        Physics2D::Transform::Scale*,
+                        Physics2D::Collider::Box*,
+                        Physics2D::Collider::Capsule*,
+                        Physics2D::Collider::Circle*
+                    ),
+                    anyof typesof(
+                        Physics2D::Collider::Box,
+                        Physics2D::Collider::Capsule,
+                        Physics2D::Collider::Circle
+                    ),
+                    except typesof(
+                        Editor::Invisable
+                    )
+                >())
                 {
                     auto final_world_position = trans.world_position;
                     if (ppos != nullptr)
@@ -1657,9 +1691,10 @@ public let frag =
 
             // Select entity
             for (auto&& [e, trans, shape] : query_entity<
-                view<Translation&, Shape&>,
-                contains<Shaders>,
-                except<Editor::Invisable, Point, Parallel, Range>>())
+                view typesof(Translation&, Shape&),
+                contains typesof(Shaders),
+                except typesof(Editor::Invisable, Point, Parallel, Range)
+            >())
             {
                 SelectEntity(e, trans, &shape);
             }
@@ -1668,8 +1703,9 @@ public let frag =
             UpdateAndCreateMover();
 
             for (auto&& [trans, localScale, localRotation] : query<
-                view<Translation&, LocalScale&, LocalRotation&>,
-                contains<Editor::EntitySelectBox>>())
+                view typesof(Translation&, LocalScale&, LocalRotation&),
+                contains typesof(Editor::EntitySelectBox)
+            >())
             {
                 if (const game_entity* current =
                     _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr)
@@ -1733,8 +1769,8 @@ public let frag =
                         const game_entity* e = _inputs.selected_entity ? &_inputs.selected_entity.value() : nullptr;
                         if (auto fnd = std::find_if(selected_list.begin(), selected_list.end(),
                             [e](const SelectedResult& s) -> bool
-                            { 
-                                return e ? s.entity == *e : false; 
+                            {
+                                return e ? s.entity == *e : false;
                             });
                             fnd != selected_list.end())
                         {

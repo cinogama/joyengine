@@ -36,8 +36,15 @@ namespace jeecs
 
             // 对于有L2W的组件，在此优先处理
             for (auto&& [anchor, trans, l2w, position, rotation, scale] : query<
-                view<Anchor*, Translation&, LocalToWorld&, LocalPosition*, LocalRotation*, LocalScale*>,
-                except<LocalToParent>>())
+                view typesof(
+                    Anchor*,
+                    Translation&,
+                    LocalToWorld&,
+                    LocalPosition*,
+                    LocalRotation*,
+                    LocalScale*),
+                except typesof(LocalToParent)
+            >())
             {
                 l2w.pos = position ? position->pos : math::vec3();
                 l2w.rot = rotation ? rotation->rot : math::quat();
@@ -56,8 +63,16 @@ namespace jeecs
 
             // 对于有L2P先进行应用，稍后更新到Translation上
             for (auto&& [anchor, trans, l2p, position, rotation, scale] : query<
-                view<Anchor*, Translation&, LocalToParent&, LocalPosition*, LocalRotation*, LocalScale*>,
-                except<LocalToWorld>>())
+                view typesof(
+                    Anchor*,
+                    Translation&,
+                    LocalToParent&,
+                    LocalPosition*,
+                    LocalRotation*,
+                    LocalScale*
+                ),
+                except typesof(LocalToWorld)
+            >())
             {
                 l2p.pos = position ? position->pos : math::vec3();
                 l2p.rot = rotation ? rotation->rot : math::quat();
@@ -114,8 +129,15 @@ namespace jeecs
             };
             std::list<AnchoredOrigin> pending_anchor_information;
 
-            for (auto&& [anchor, l2p, origin, absolute, relatively] : query_view<
-                Anchor*, LocalToParent*, Origin&, Absolute*, Relatively*>())
+            for (auto&& [anchor, l2p, origin, absolute, relatively] : query<
+                view typesof(
+                    Anchor*,
+                    LocalToParent*,
+                    Origin&,
+                    Absolute*,
+                    Relatively*
+                )
+            >())
             {
                 if (absolute != nullptr)
                 {
@@ -201,7 +223,9 @@ namespace jeecs
             // 到此为止，所有的变换均已应用到 Translation 上，现在更新变换矩阵
 
             for (auto&& [trans] :
-                query_view<Translation&>())
+                query typesof(
+                    view typesof(Translation&)
+                )())
             {
                 math::transform(
                     trans.object2world,
