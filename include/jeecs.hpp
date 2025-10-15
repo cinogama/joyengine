@@ -1025,14 +1025,14 @@ JE_API void je_towoo_unregister_system(const jeecs::typing::type_info* tinfo);
 je_arch_get_chunk [基本接口]
 通过给定的ArchType，获取其首个Chunk，由于ArchType总是至少有一个Chunk，
 所以总是返回非nullptr值。
-    * 此方法一般由 slice 调用，用于获取指定ArchType中的组件信息
+    * 此方法一般由 collection 调用，用于获取指定ArchType中的组件信息
 */
 JE_API void* je_arch_get_chunk(void* archtype);
 
 /*
 je_arch_next_chunk [基本接口]
 通过给定的Chunk，获取其下一个Chunk，如果给定Chunk没有后继则返回nullptr
-    * 此方法一般由 slice 调用，用于获取指定ArchType中的组件信息
+    * 此方法一般由 collection 调用，用于获取指定ArchType中的组件信息
 */
 JE_API void* je_arch_next_chunk(void* chunk);
 
@@ -1309,14 +1309,14 @@ JE_API bool je_ecs_world_is_valid(void* world);
 /*
 je_ecs_world_archmgr_updated_version [基本接口]
 获取当前世界的 ArchManager 的版本号
-此函数可获取世界的 ArchType 是否有增加，一般用于 slice 检测是否需要更新 ArchType 缓存
+此函数可获取世界的 ArchType 是否有增加，一般用于 collection 检测是否需要更新 ArchType 缓存
 */
 JE_API size_t je_ecs_world_archmgr_updated_version(void* world);
 
 /*
 je_ecs_world_update_dependences_archinfo [基本接口]
 从当前世界更新类型依赖信息（即 ArchType 缓存）
-此函数一般用于 slice 更新自身某步 dependence 的 ArchType 缓存
+此函数一般用于 collection 更新自身某步 dependence 的 ArchType 缓存
 */
 JE_API void je_ecs_world_update_dependences_archinfo(
     void* world,
@@ -6574,7 +6574,7 @@ namespace jeecs
     }
 
     /*
-    从 jeecs::selector 接过筛选组件集合的大任，作为其的继任者，slice（切片）机制
+    从 jeecs::selector 接过筛选组件集合的大任，作为其的继任者，collection 机制
     闪亮登场！
 
     然而实际上这个玩意儿并没有做什么特别的事情，只是把原本 selector 从传入的函数类型
@@ -6584,14 +6584,14 @@ namespace jeecs
     可以更友好地适配 STL 提供的算法。
 
     此外，筛选器的依赖缓存也被转移到了 World 内（指 System 的 query 系列方法），这样
-    做的目的是避免在系统类型内定义切片实例（写起来麻烦）；当然，喜欢创建独立的 slice
+    做的目的是避免在系统类型内定义切片实例（写起来麻烦）；当然，喜欢创建独立的 collection
     实例也是被允许的，或许真的有人喜欢这么做呢？
 
     最后，因为系统的 query 将依赖状态放在了 World 内，所以其更新也不需要每次都执行检
     查（由 World 代办了）。最棒的是，这样一来，再也不需要像 selector 机制一样，对 query
     有严格的执行顺序要求，完全可以随意地按任何顺序执行，甚至能够并行执行！
 
-    当然，slice 并没有规避所有的问题：因此吧之前 selector 机制中的说明贴在下面：
+    当然，collection 并没有规避所有的问题：因此吧之前 selector 机制中的说明贴在下面：
 
     ```
         实际上只要和ArchSystem扯上关系，就永远不可能干净。很不幸，选择器正是一根搅屎棍，它负责从
@@ -6611,7 +6611,7 @@ namespace jeecs
     */
 
     template<typename SliceView, typename ... SliceRequirements>
-    class slice
+    class collection
     {
         dependence m_dependence;
 
@@ -6642,7 +6642,7 @@ namespace jeecs
         }
 
     public:
-        class ComponentSliceIter
+        class slice
         {
         protected:
             const dependence::arch_chunks_info* m_archs_current;
@@ -6653,7 +6653,7 @@ namespace jeecs
             typing::entity_id_in_chunk_t m_chunk_entity_currnet_index;
 
             // For `end()` only.
-            explicit ComponentSliceIter(
+            explicit slice(
                 const dependence::arch_chunks_info* _archs_end)
                 : m_archs_current(_archs_end)
                 , m_archs_end(_archs_end)
@@ -6703,11 +6703,11 @@ namespace jeecs
             typedef void reference;
             typedef std::forward_iterator_tag iterator_category;
 
-            ComponentSliceIter(const ComponentSliceIter&) = default;
-            ComponentSliceIter(ComponentSliceIter&&) = default;
-            ComponentSliceIter& operator = (const ComponentSliceIter&) = default;
-            ComponentSliceIter& operator = (ComponentSliceIter&&) = default;
-            ComponentSliceIter()
+            slice(const slice&) = default;
+            slice(slice&&) = default;
+            slice& operator = (const slice&) = default;
+            slice& operator = (slice&&) = default;
+            slice()
                 : m_archs_current(nullptr)
                 , m_archs_end(nullptr)
                 , m_chunk_currnet(nullptr)
@@ -6715,7 +6715,7 @@ namespace jeecs
                 , m_chunk_entity_currnet_index(0)
             {
             }
-            explicit ComponentSliceIter(const dependence* dependence)
+            explicit slice(const dependence* dependence)
             {
                 m_archs_current = dependence->m_archs.begin();
                 m_archs_end = dependence->m_archs.end();
@@ -6737,14 +6737,14 @@ namespace jeecs
                 }
             }
 
-            ComponentSliceIter operator ++()
+            slice operator ++()
             {
                 ++m_chunk_entity_currnet_index;
                 _move_to_valid_entity();
 
                 return *this;
             }
-            ComponentSliceIter operator ++(int)
+            slice operator ++(int)
             {
                 auto current = this;
 
@@ -6753,13 +6753,13 @@ namespace jeecs
 
                 return current;
             }
-            bool operator ==(const ComponentSliceIter& pindex) const
+            bool operator ==(const slice& pindex) const
             {
                 return m_archs_current == pindex.m_archs_current
                     && m_chunk_currnet == pindex.m_chunk_currnet
                     && m_chunk_entity_currnet_index == pindex.m_chunk_entity_currnet_index;
             }
-            bool operator !=(const ComponentSliceIter& pindex) const
+            bool operator !=(const slice& pindex) const
             {
                 return m_archs_current != pindex.m_archs_current
                     || m_chunk_currnet != pindex.m_chunk_currnet
@@ -6771,13 +6771,13 @@ namespace jeecs
                     m_archs_current, m_chunk_currnet, m_chunk_entity_currnet_index);
             }
 
-            ComponentSliceIter begin()
+            slice begin()
             {
                 return *this;
             }
-            ComponentSliceIter end()
+            slice end()
             {
-                return ComponentSliceIter(m_archs_end);
+                return slice(m_archs_end);
             }
 
             template<typename FT>
@@ -6792,36 +6792,36 @@ namespace jeecs
                     ft);
             }
         };
-        class EntityComponentSliceIter : public ComponentSliceIter
+        class entity_slice : public slice
         {
         private:
-            explicit EntityComponentSliceIter(
+            explicit entity_slice(
                 const dependence::arch_chunks_info* _archs_end)
-                : ComponentSliceIter(_archs_end)
+                : slice(_archs_end)
             {
             }
         public:
             typedef typename SliceView::entity_with_components value_type;
 
-            EntityComponentSliceIter(const EntityComponentSliceIter&) = default;
-            EntityComponentSliceIter(EntityComponentSliceIter&&) = default;
-            EntityComponentSliceIter& operator = (const EntityComponentSliceIter&) = default;
-            EntityComponentSliceIter& operator = (EntityComponentSliceIter&&) = default;
-            EntityComponentSliceIter() = default;
-            explicit EntityComponentSliceIter(const dependence* dependence)
-                : ComponentSliceIter(dependence)
+            entity_slice(const entity_slice&) = default;
+            entity_slice(entity_slice&&) = default;
+            entity_slice& operator = (const entity_slice&) = default;
+            entity_slice& operator = (entity_slice&&) = default;
+            entity_slice() = default;
+            explicit entity_slice(const dependence* dependence)
+                : slice(dependence)
             {
             }
 
-            EntityComponentSliceIter operator ++()
+            entity_slice operator ++()
             {
-                this->ComponentSliceIter::operator++();
+                this->slice::operator++();
                 return *this;
             }
-            EntityComponentSliceIter operator ++(int)
+            entity_slice operator ++(int)
             {
                 auto current = this;
-                this->ComponentSliceIter::operator++(0);
+                this->slice::operator++(0);
                 return current;
             }
             value_type operator*()
@@ -6833,13 +6833,13 @@ namespace jeecs
                     this->m_chunk_current_entity_meta[this->m_chunk_entity_currnet_index].m_version);
             }
 
-            EntityComponentSliceIter begin()
+            entity_slice begin()
             {
                 return *this;
             }
-            EntityComponentSliceIter end()
+            entity_slice end()
             {
-                return EntityComponentSliceIter(this->m_archs_end);
+                return entity_slice(this->m_archs_end);
             }
 
             template<typename FT>
@@ -6855,23 +6855,23 @@ namespace jeecs
             }
         };
 
-        slice()
+        collection()
         {
             static_assert(std::is_base_of<slice_requirement::base::view_base, SliceView>::value,
-                "First template argument of slice must be slice::view.");
+                "First template argument of collection must be collection::view.");
 
             apply_requirements(&m_dependence);
         }
 
-        ComponentSliceIter fetch(game_world w)
+        slice fetch(game_world w)
         {
             m_dependence.update(w);
-            return ComponentSliceIter(&m_dependence);
+            return slice(&m_dependence);
         }
-        EntityComponentSliceIter fetch_entity(game_world w)
+        entity_slice fetch_with_entity(game_world w)
         {
             m_dependence.update(w);
-            return EntityComponentSliceIter(&m_dependence);
+            return entity_slice(&m_dependence);
         }
     };
 
@@ -6963,12 +6963,12 @@ namespace jeecs
             if (!je_ecs_world_query_slice_dependence(
                 get_world().handle(),
                 this,
-                typeid(slice<SliceView, SliceRequirements...>).hash_code(),
+                typeid(collection<SliceView, SliceRequirements...>).hash_code(),
                 &dep))
             {
                 // This dependence is just created, need to apply requirements.
 
-                slice<SliceView, SliceRequirements...>::apply_requirements(dep);
+                collection<SliceView, SliceRequirements...>::apply_requirements(dep);
                 dep->update(get_world());
             }
             return dep;
@@ -7013,24 +7013,24 @@ namespace jeecs
         }
 
         template<typename SliceView, typename ... SliceRequirements>
-        inline typename slice<SliceView, SliceRequirements...>::ComponentSliceIter query()
+        inline typename collection<SliceView, SliceRequirements...>::slice query()
         {
-            return typename slice<SliceView, SliceRequirements...>::ComponentSliceIter(
+            return typename collection<SliceView, SliceRequirements...>::slice(
                 _fetch_query_slice_cache<SliceView, SliceRequirements...>());
         }
         template<typename SliceView, typename ... SliceRequirements>
-        inline typename slice<SliceView, SliceRequirements...>::EntityComponentSliceIter query_entity()
+        inline typename collection<SliceView, SliceRequirements...>::entity_slice query_entity()
         {
-            return typename slice<SliceView, SliceRequirements...>::EntityComponentSliceIter(
+            return typename collection<SliceView, SliceRequirements...>::entity_slice(
                 _fetch_query_slice_cache<SliceView, SliceRequirements...>());
         }
         template<typename ... ViewTypes>
-        inline typename slice<slice_requirement::view<ViewTypes...>>::ComponentSliceIter query_view()
+        inline typename collection<slice_requirement::view<ViewTypes...>>::slice query_view()
         {
             return query<slice_requirement::view<ViewTypes...>>();
         }
         template<typename ... ViewTypes>
-        inline typename slice<slice_requirement::view<ViewTypes...>>::EntityComponentSliceIter query_entity_view()
+        inline typename collection<slice_requirement::view<ViewTypes...>>::entity_slice query_entity_view()
         {
             return query_entity<slice_requirement::view<ViewTypes...>>();
         }
