@@ -260,6 +260,8 @@ namespace jeecs::graphic::api::vk130
 
         VkImageView m_vk_texture_image_view;
         VkFormat m_vk_texture_format;
+
+        jevk13_texture() = default;
     };
     struct jevk13_uniformbuf
     {
@@ -269,6 +271,8 @@ namespace jeecs::graphic::api::vk130
         VkDeviceMemory m_uniform_buffer_memory;
 
         uint32_t m_real_binding_place;
+
+        jevk13_uniformbuf() = default;
     };
     struct jevk13_shader
     {
@@ -327,6 +331,8 @@ namespace jeecs::graphic::api::vk130
 
         size_t m_rend_rounds;
         bool m_is_screen_framebuffer;
+
+        jevk13_framebuffer() = default;
     };
     struct jevk13_vertex
     {

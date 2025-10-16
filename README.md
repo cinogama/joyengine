@@ -6,11 +6,13 @@ A game engine based on ECS architecture implemented in C++ and Woolang.
 
 ## 编译说明（How to compile）
 
+> 需要使用支持 C++20 的编译器进行构建
 
 在编译之前，需要安装baozi，用以获取引擎编辑器所需的一些包：
 
-<del>安装baozi可以通过[Chief_Reloaded](https://github.com/BiDuang/Chief_Reloaded)进行</del>
-在新版本 Chief 发布之前，请手动安装 Baozi。
+~~安装baozi可以通过[Chief_Reloaded](https://github.com/BiDuang/Chief_Reloaded)进行~~
+
+> 在新版本 Chief 发布之前，请手动安装 Baozi。
 
 编译流程中会自动调用baozi拉取最新的pkg，可以通过将cmake配置：`JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD` 设置为 OFF 关闭安装操作
 
@@ -23,20 +25,18 @@ A game engine based on ECS architecture implemented in C++ and Woolang.
 apt install libx11-dev libxext-dev libxtst-dev libxrender-dev libxmu-dev libxmuu-dev 
 apt install libxrandr-dev libxinerama-dev libxcursor-dev 
 apt install libgl1-mesa-dev libglu1-mesa-dev
-
 ```
 
 #### 特别注意
-引擎的编辑器目前仅在windows上可以使用完整功能，并且需要配置环境 `MSBUILD` 和 `CMAKE`
-此环境变量应该是MSBUILD.exe的所在目录，若未配置正确的环境变量，引擎编辑器初次启动时将会提示配置。
+引擎的编辑器目前仅在windows上可以使用完整功能，并且需要配置环境 `CMAKE`，此环境变量应该指示 `cmake.exe` 的路径。
 
 ---
 
 ## 鸣谢（Acknowledgments）
 
-感谢 [OpenAl Soft](https://openal-soft.org/) 为这个引擎提供了非常棒的声音支持，不过需要额外说明的是，引擎使用的OpenAL Soft是OpenAL的软实现，使用LGPL协议开源，可以在[这里](https://github.com/kcat/openal-soft.git)获取到OpenAL Soft的原始代码，JoyEngine使用的版本为原始的1.23.1版本。
+感谢 [OpenAl Soft](https://openal-soft.org/) 为这个引擎提供了非常棒的声音支持，不过需要额外说明的是，引擎使用的OpenAL Soft是OpenAL的软实现，使用LGPL协议开源，可以在[这里](https://github.com/kcat/openal-soft.git)获取到OpenAL Soft的原始代码。
 
-Thanks to [OpenAl Soft](https://openal-soft.org/) for the awesome sounds of this engine Support, but what needs to be explained is that the OpenAL Soft used is the soft implementation of OpenAL, which is open-sourced using the LGPL protocol, and can be obtained from [here](https://github.com/kcat/openal-soft.git) The original code, the version used by JoyEngine is the original 1.23.1 version.
+Thanks to [OpenAl Soft](https://openal-soft.org/) for the awesome sounds of this engine Support, but what needs to be explained is that the OpenAL Soft used is the soft implementation of OpenAL, which is open-sourced using the LGPL protocol, and can be obtained from [here](https://github.com/kcat/openal-soft.git) The original code.
 
 感谢 [glew](https://github.com/nigels-com/glew)、[glfw](https://www.glfw.org/)为引擎的渲染提供OpenGL拓展和界面接口。
 

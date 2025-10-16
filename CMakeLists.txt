@@ -108,7 +108,7 @@ endif()
 
 add_library(joyengine_configs INTERFACE)
 target_link_libraries(joyengine_configs INTERFACE joyengine_core_macro)
-target_compile_features(joyengine_configs INTERFACE cxx_std_17)
+target_compile_features(joyengine_configs INTERFACE cxx_std_20)
 if(MSVC) 
     target_compile_options(joyengine_configs INTERFACE "/source-charset:utf-8")
 else()
@@ -139,6 +139,7 @@ if(MSVC)
     add_compile_options("/source-charset:utf-8")
 endif()
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static assimp" FORCE)
+set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "Build zlib in assimp" FORCE)
 add_subdirectory("3rd/assimp")
 
 # Use glslang and spirv-cross to generate shader wraper for all supported platform.

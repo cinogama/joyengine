@@ -222,7 +222,7 @@ target_include_directories($$JEMODULE_PROJECT_NAME$$ PRIVATE ./sources)
 set_target_properties($$JEMODULE_PROJECT_NAME$$ PROPERTIES OUTPUT_NAME lib$$JEMODULE_PROJECT_NAME$$)
 set_target_properties($$JEMODULE_PROJECT_NAME$$ PROPERTIES PREFIX "")
 
-target_compile_features($$JEMODULE_PROJECT_NAME$$ PRIVATE cxx_std_17)
+target_compile_features($$JEMODULE_PROJECT_NAME$$ PRIVATE cxx_std_20)
 if(MSVC) 
     target_compile_options($$JEMODULE_PROJECT_NAME$$ PRIVATE "/source-charset:utf-8")
 else()
