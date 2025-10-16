@@ -108,7 +108,7 @@ endif()
 
 add_library(joyengine_configs INTERFACE)
 target_link_libraries(joyengine_configs INTERFACE joyengine_core_macro)
-target_compile_features(joyengine_configs INTERFACE cxx_std_17)
+target_compile_features(joyengine_configs INTERFACE cxx_std_20)
 if(MSVC) 
     target_compile_options(joyengine_configs INTERFACE "/source-charset:utf-8")
 else()
