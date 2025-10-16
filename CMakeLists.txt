@@ -139,6 +139,7 @@ if(MSVC)
     add_compile_options("/source-charset:utf-8")
 endif()
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static assimp" FORCE)
+set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "Build zlib in assimp" FORCE)
 add_subdirectory("3rd/assimp")
 
 # Use glslang and spirv-cross to generate shader wraper for all supported platform.
