@@ -131,6 +131,15 @@ are generated using Bison and comply with GPLv3 with special bison exception."@
                             TextDisabled("SPIRV-Headers is licensed under the MIT License");
                             TextDisabled("Copyright 2015-2018 The Khronos Group Inc.");
                             
+                            Text("MoltenVK https://github.com/KhronosGroup/MoltenVK");
+                            TextDisabled("MoltenVK is licensed under the Apache License v2.0 License");
+                            TextDisabled("Copyright (c) 2015-2025 The Brenwill Workshop Ltd.");
+
+                            Text("使用下面这些库为 Metal 提供支持：");
+                            Text("Metal-Cpp https://developer.apple.com/cn/metal/cpp/");
+                            TextDisabled("Metal-Cpp is licensed under the Apache License v2.0 License");
+                            TextDisabled("Copyright (c) 2014-2024 Apple Inc. All rights reserved.");
+
                             Text("编辑器环境使用一些按原样提供的第三方工具:");
                             Text("CMake https://cmake.org/");
                             Text("rcedit https://github.com/electron/rcedit");
