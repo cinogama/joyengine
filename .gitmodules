@@ -31,7 +31,7 @@
 [submodule "3rd/assimp"]
     path = 3rd/assimp
     url = https://git.cinogama.net/cinogamaproject/joyengineecs/assimp.git
-    branch = master_v5.3.1
+    branch = master_v6_0_2
 [submodule "3rd/vulkan"]
     path = 3rd/vulkan
     url = https://git.cinogama.net/cinogamaproject/joyengineecs/Vulkan-Headers.git
