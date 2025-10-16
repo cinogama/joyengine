@@ -289,10 +289,10 @@ namespace jeecs
             static auto _type_selector() // -> T*
             {
                 if constexpr (
-                    std::is_reference<T>::value
-                    || std::is_pointer<T>::value
-                    || std::is_const<T>::value
-                    || std::is_volatile<T>::value)
+                    std::is_reference_v<T>
+                    || std::is_pointer_v<T>
+                    || std::is_const_v<T>
+                    || std::is_volatile_v<T>)
                     return _origin_type<_origin_t<T>>::_type_selector();
                 else
                     return (T*)nullptr;
@@ -4447,46 +4447,199 @@ namespace jeecs
 
     namespace typing
     {
-#define JE_DECL_SFINAE_CHECKER_HELPLER(name, memberexpr)                        \
-    template <typename T, typename VoidT = void>                                \
-    struct sfinae_##name : std::false_type                                      \
-    {                                                                           \
-        static_assert(std::is_void<VoidT>::value);                              \
-    };                                                                          \
-    template <typename T>                                                       \
-    struct sfinae_##name<T, std::void_t<decltype(memberexpr)>> : std::true_type \
-    {                                                                           \
-    };
+        namespace traits
+        {
+            template<typename T>
+            concept has_JERefRegsiter = requires(type_unregister_guard * guard)
+            {
+                { T::JERefRegsiter(guard) } -> std::same_as<void>;
+            };
+            template<typename T>
+            concept has_JEScriptTypeInterface = requires(T t, const T ct, wo_vm vm, wo_value val)
+            {
+                { T::JEScriptTypeName() } -> std::same_as<const char*>;
+                { T::JEScriptTypeDeclare() } -> std::same_as<const char*>;
+                { t.JEParseFromScriptType(vm, val) } -> std::same_as<void>;
+                { ct.JEParseToScriptType(vm, val) } -> std::same_as<void>;
+            };
 
-        JE_DECL_SFINAE_CHECKER_HELPLER(has_JERefRegsiter, &T::JERefRegsiter);
-        JE_DECL_SFINAE_CHECKER_HELPLER(
-            match_JERefRegsiter, T::JERefRegsiter((jeecs::typing::type_unregister_guard*)nullptr));
+            template <typename U>
+            concept has_pointer_typeinfo_constructor_function = requires(void* ptr, const jeecs::typing::type_info * tinfo)
+            {
+                new U(ptr, tinfo);
+            };
+            template <typename U>
+            concept has_pointer_constructor_function = requires(void* ptr)
+            {
+                new U(ptr);
+            };
+            template <typename U>
+            concept has_typeinfo_constructor_function = requires(const jeecs::typing::type_info * tinfo)
+            {
+                new U(tinfo);
+            };
+            template <typename U>
+            concept has_default_constructor_function = requires()
+            {
+                new U();
+            };
 
-        // static const char* T::JEScriptTypeName()
-        JE_DECL_SFINAE_CHECKER_HELPLER(has_JEScriptTypeName, &T::JEScriptTypeName);
-        // static const char* T::JEScriptTypeDeclare()
-        JE_DECL_SFINAE_CHECKER_HELPLER(has_JEScriptTypeDeclare, &T::JEScriptTypeDeclare);
-        // void T::JEParseFromScriptType(wo_vm vm, wo_value val)
-        JE_DECL_SFINAE_CHECKER_HELPLER(has_JEParseFromScriptType, &T::JEParseFromScriptType);
-        // void T::JEParseToScriptType(wo_vm vm, wo_value val) const
-        JE_DECL_SFINAE_CHECKER_HELPLER(has_JEParseToScriptType, &T::JEParseToScriptType);
+            template <typename T>
+            concept is_reference_or_pointer = std::is_reference_v<T> || std::is_pointer_v<T>;
 
-        JE_DECL_SFINAE_CHECKER_HELPLER(has_OnEnable, &T::OnEnable);
-        JE_DECL_SFINAE_CHECKER_HELPLER(has_OnDisable, &T::OnDisable);
+            namespace system
+            {
+                template<typename T>
+                concept has_OnEnable = requires(T t)
+                {
+                    { t.OnEnable() } -> std::same_as<void>;
+                };
+                template<typename T>
+                concept has_OnDisable = requires(T t)
+                {
+                    { t.OnDisable() } -> std::same_as<void>;
+                };
 
-        JE_DECL_SFINAE_CHECKER_HELPLER(has_PreUpdate, &T::PreUpdate);
-        JE_DECL_SFINAE_CHECKER_HELPLER(has_StateUpdate, &T::StateUpdate);
-        JE_DECL_SFINAE_CHECKER_HELPLER(has_Update, &T::Update);
-        JE_DECL_SFINAE_CHECKER_HELPLER(has_PhysicsUpdate, &T::PhysicsUpdate);
-        JE_DECL_SFINAE_CHECKER_HELPLER(has_TransformUpdate, &T::TransformUpdate);
-        JE_DECL_SFINAE_CHECKER_HELPLER(has_LateUpdate, &T::LateUpdate);
-        JE_DECL_SFINAE_CHECKER_HELPLER(has_CommitUpdate, &T::CommitUpdate);
-        JE_DECL_SFINAE_CHECKER_HELPLER(has_GraphicUpdate, &T::GraphicUpdate);
+                template<typename T>
+                concept has_PreUpdate = requires(T t)
+                {
+                    { t.PreUpdate() } -> std::same_as<void>;
+                };
+                template<typename T>
+                concept has_StateUpdate = requires(T t)
+                {
+                    { t.StateUpdate() } -> std::same_as<void>;
+                };
+                template<typename T>
+                concept has_Update = requires(T t)
+                {
+                    { t.Update() } -> std::same_as<void>;
+                };
+                template<typename T>
+                concept has_PhysicsUpdate = requires(T t)
+                {
+                    { t.PhysicsUpdate() } -> std::same_as<void>;
+                };
+                template<typename T>
+                concept has_TransformUpdate = requires(T t)
+                {
+                    { t.TransformUpdate() } -> std::same_as<void>;
+                };
+                template<typename T>
+                concept has_LateUpdate = requires(T t)
+                {
+                    { t.LateUpdate() } -> std::same_as<void>;
+                };
+                template<typename T>
+                concept has_CommitUpdate = requires(T t)
+                {
+                    { t.CommitUpdate() } -> std::same_as<void>;
+                };
+                template<typename T>
+                concept has_GraphicUpdate = requires(T t)
+                {
+                    { t.GraphicUpdate() } -> std::same_as<void>;
+                };
+            }
+        }
 
-        JE_DECL_SFINAE_CHECKER_HELPLER(has__select_begin, &T::_select_begin);
-        JE_DECL_SFINAE_CHECKER_HELPLER(has__select_continue, &T::_select_continue);
+        template <typename T>
+        struct default_functions
+        {
+            static void constructor(void* _ptr, void* arg_ptr, const jeecs::typing::type_info* tinfo)
+            {
+                if constexpr (traits::has_pointer_typeinfo_constructor_function<T>)
+                    new (_ptr) T(arg_ptr, tinfo);
+                else if constexpr (traits::has_pointer_constructor_function<T>)
+                    new (_ptr) T(arg_ptr);
+                else if constexpr (traits::has_typeinfo_constructor_function<T>)
+                    new (_ptr) T(tinfo);
+                else
+                {
+                    static_assert(traits::has_default_constructor_function<T>);
+                    new (_ptr) T{};
+                }
+            }
+            static void destructor(void* _ptr)
+            {
+                ((T*)_ptr)->~T();
+            }
+            static void copier(void* _ptr, const void* _be_copy_ptr)
+            {
+                if constexpr (std::is_copy_constructible_v<T>)
+                    new (_ptr) T(*(const T*)_be_copy_ptr);
+                else
+                    debug::logerr("This type: '%s' is not copy-constructible but you try to do it.", typeid(T).name());
+            }
+            static void mover(void* _ptr, void* _be_moved_ptr)
+            {
+                if constexpr (std::is_move_constructible_v<T>)
+                    new (_ptr) T(std::move(*(T*)_be_moved_ptr));
+                else
+                    debug::logerr("This type: '%s' is not move-constructible but you try to do it.", typeid(T).name());
+            }
+            static void on_enable(void* _ptr)
+            {
+                if constexpr (traits::system::has_OnEnable<T>)
+                    reinterpret_cast<T*>(_ptr)->OnEnable();
+            }
+            static void on_disable(void* _ptr)
+            {
+                if constexpr (traits::system::has_OnDisable<T>)
+                    reinterpret_cast<T*>(_ptr)->OnDisable();
+            }
+            static void pre_update(void* _ptr)
+            {
+                if constexpr (traits::system::has_PreUpdate<T>)
+                    reinterpret_cast<T*>(_ptr)->PreUpdate();
+            }
+            static void state_update(void* _ptr)
+            {
+                if constexpr (traits::system::has_StateUpdate<T>)
+                    reinterpret_cast<T*>(_ptr)->StateUpdate();
+            }
+            static void update(void* _ptr)
+            {
+                if constexpr (traits::system::has_Update<T>)
+                    reinterpret_cast<T*>(_ptr)->Update();
+            }
+            static void physics_update(void* _ptr)
+            {
+                if constexpr (traits::system::has_PhysicsUpdate<T>)
+                    reinterpret_cast<T*>(_ptr)->PhysicsUpdate();
+            }
+            static void transform_update(void* _ptr)
+            {
+                if constexpr (traits::system::has_TransformUpdate<T>)
+                    reinterpret_cast<T*>(_ptr)->TransformUpdate();
+            }
+            static void late_update(void* _ptr)
+            {
+                if constexpr (traits::system::has_LateUpdate<T>)
+                    reinterpret_cast<T*>(_ptr)->LateUpdate();
+            }
+            static void commit_update(void* _ptr)
+            {
+                if constexpr (traits::system::has_CommitUpdate<T>)
+                    reinterpret_cast<T*>(_ptr)->CommitUpdate();
+            }
+            static void graphic_update(void* _ptr)
+            {
+                if constexpr (traits::system::has_GraphicUpdate<T>)
+                    reinterpret_cast<T*>(_ptr)->GraphicUpdate();
+            }
 
-#undef JE_DECL_SFINAE_CHECKER_HELPLER
+            static void parse_from_script_type(void* _ptr, wo_vm vm, wo_value val)
+            {
+                if constexpr (traits::has_JEScriptTypeInterface<T>)
+                    reinterpret_cast<T*>(_ptr)->JEParseFromScriptType(vm, val);
+            }
+            static void parse_to_script_type(const void* _ptr, wo_vm vm, wo_value val)
+            {
+                if constexpr (traits::has_JEScriptTypeInterface<T>)
+                    reinterpret_cast<const T*>(_ptr)->JEParseToScriptType(vm, val);
+            }
+        };
     }
 
     /*
@@ -4693,7 +4846,7 @@ namespace jeecs
             }
             inline static size_t _erase(ElemT* from_begin, ElemT* from_end) noexcept
             {
-                if constexpr (!std::is_trivial<ElemT>::value)
+                if constexpr (!std::is_trivial_v<ElemT>)
                 {
                     for (ElemT* origin_elem = from_begin; origin_elem < from_end;)
                     {
@@ -4831,7 +4984,7 @@ namespace jeecs
             }
             inline void pop_back() noexcept
             {
-                if constexpr (!std::is_trivial<ElemT>::value)
+                if constexpr (!std::is_trivial_v<ElemT>)
                     (_elems_ptr_end--)->~ElemT();
                 else
                     _elems_ptr_end--;
@@ -5080,14 +5233,14 @@ namespace jeecs
         template <typename T, typename... ArgTs>
         T* create_new(ArgTs &&...args)
         {
-            static_assert(!std::is_void<T>::value);
+            static_assert(!std::is_void_v<T>);
 
             return new (je_mem_alloc(sizeof(T))) T(args...);
         }
         template <typename T, typename... ArgTs>
         T* create_new_n(size_t n)
         {
-            static_assert(!std::is_void<T>::value);
+            static_assert(!std::is_void_v<T>);
 
             return new (je_mem_alloc(sizeof(T) * n)) T[n];
         }
@@ -5095,7 +5248,7 @@ namespace jeecs
         template <typename T>
         void destroy_free(T* address)
         {
-            static_assert(!std::is_void<T>::value);
+            static_assert(!std::is_void_v<T>);
 
             address->~T();
             je_mem_free(address);
@@ -5103,7 +5256,7 @@ namespace jeecs
         template <typename T>
         void destroy_free_n(T* address, size_t n)
         {
-            static_assert(!std::is_void<T>::value);
+            static_assert(!std::is_void_v<T>);
 
             for (size_t i = 0; i < n; i++)
                 address[i].~T();
@@ -5169,156 +5322,6 @@ namespace jeecs
         };
 
         template <typename T>
-        struct default_functions
-        {
-            template <typename W>
-            struct _true_type : public std::true_type
-            {
-            };
-
-            template <typename U>
-            struct has_pointer_typeinfo_constructor_function
-            {
-                template <typename V>
-                static auto _tester(int) -> _true_type<decltype(
-                    new V(std::declval<void*>(), std::declval<const jeecs::typing::type_info*>()))>;
-
-                template <typename V>
-                static std::false_type _tester(...);
-
-                constexpr static bool value = decltype(_tester<U>(0))::value;
-            };
-            template <typename U>
-            struct has_pointer_constructor_function
-            {
-                template <typename V>
-                static auto _tester(int) -> _true_type<decltype(new V(std::declval<void*>()))>;
-
-                template <typename V>
-                static std::false_type _tester(...);
-
-                constexpr static bool value = decltype(_tester<U>(0))::value;
-            };
-            template <typename U>
-            struct has_typeinfo_constructor_function
-            {
-                template <typename V>
-                static auto _tester(int) -> _true_type<decltype(
-                    new V(std::declval<const jeecs::typing::type_info*>()))>;
-
-                template <typename V>
-                static std::false_type _tester(...);
-
-                constexpr static bool value = decltype(_tester<U>(0))::value;
-            };
-            template <typename U>
-            struct has_default_constructor_function
-            {
-                template <typename V>
-                static auto _tester(int) -> _true_type<decltype(new V())>;
-
-                template <typename V>
-                static std::false_type _tester(...);
-
-                constexpr static bool value = decltype(_tester<U>(0))::value;
-            };
-
-            static void constructor(void* _ptr, void* arg_ptr, const jeecs::typing::type_info* tinfo)
-            {
-                if constexpr (has_pointer_typeinfo_constructor_function<T>::value)
-                    new (_ptr) T(arg_ptr, tinfo);
-                else if constexpr (has_pointer_constructor_function<T>::value)
-                    new (_ptr) T(arg_ptr);
-                else if constexpr (has_typeinfo_constructor_function<T>::value)
-                    new (_ptr) T(tinfo);
-                else
-                {
-                    static_assert(has_default_constructor_function<T>::value);
-                    new (_ptr) T{};
-                }
-            }
-            static void destructor(void* _ptr)
-            {
-                ((T*)_ptr)->~T();
-            }
-            static void copier(void* _ptr, const void* _be_copy_ptr)
-            {
-                if constexpr (std::is_copy_constructible<T>::value)
-                    new (_ptr) T(*(const T*)_be_copy_ptr);
-                else
-                    debug::logerr("This type: '%s' is not copy-constructible but you try to do it.", typeid(T).name());
-            }
-            static void mover(void* _ptr, void* _be_moved_ptr)
-            {
-                if constexpr (std::is_move_constructible<T>::value)
-                    new (_ptr) T(std::move(*(T*)_be_moved_ptr));
-                else
-                    debug::logerr("This type: '%s' is not move-constructible but you try to do it.", typeid(T).name());
-            }
-            static void on_enable(void* _ptr)
-            {
-                if constexpr (typing::sfinae_has_OnEnable<T>::value)
-                    reinterpret_cast<T*>(_ptr)->OnEnable();
-            }
-            static void on_disable(void* _ptr)
-            {
-                if constexpr (typing::sfinae_has_OnDisable<T>::value)
-                    reinterpret_cast<T*>(_ptr)->OnDisable();
-            }
-            static void pre_update(void* _ptr)
-            {
-                if constexpr (typing::sfinae_has_PreUpdate<T>::value)
-                    reinterpret_cast<T*>(_ptr)->PreUpdate();
-            }
-            static void state_update(void* _ptr)
-            {
-                if constexpr (typing::sfinae_has_StateUpdate<T>::value)
-                    reinterpret_cast<T*>(_ptr)->StateUpdate();
-            }
-            static void update(void* _ptr)
-            {
-                if constexpr (typing::sfinae_has_Update<T>::value)
-                    reinterpret_cast<T*>(_ptr)->Update();
-            }
-            static void physics_update(void* _ptr)
-            {
-                if constexpr (typing::sfinae_has_PhysicsUpdate<T>::value)
-                    reinterpret_cast<T*>(_ptr)->PhysicsUpdate();
-            }
-            static void transform_update(void* _ptr)
-            {
-                if constexpr (typing::sfinae_has_TransformUpdate<T>::value)
-                    reinterpret_cast<T*>(_ptr)->TransformUpdate();
-            }
-            static void late_update(void* _ptr)
-            {
-                if constexpr (typing::sfinae_has_LateUpdate<T>::value)
-                    reinterpret_cast<T*>(_ptr)->LateUpdate();
-            }
-            static void commit_update(void* _ptr)
-            {
-                if constexpr (typing::sfinae_has_CommitUpdate<T>::value)
-                    reinterpret_cast<T*>(_ptr)->CommitUpdate();
-            }
-            static void graphic_update(void* _ptr)
-            {
-                if constexpr (typing::sfinae_has_GraphicUpdate<T>::value)
-                    reinterpret_cast<T*>(_ptr)->GraphicUpdate();
-            }
-
-            static void parse_from_script_type(void* _ptr, wo_vm vm, wo_value val)
-            {
-                if constexpr (typing::sfinae_has_JEParseFromScriptType<T>::value)
-                    reinterpret_cast<T*>(_ptr)->JEParseFromScriptType(vm, val);
-            }
-            static void parse_to_script_type(const void* _ptr, wo_vm vm, wo_value val)
-            {
-                if constexpr (typing::sfinae_has_JEParseToScriptType<T>::value)
-                    reinterpret_cast<const T*>(_ptr)->JEParseToScriptType(vm, val);
-            }
-        };
-
-        template <typename T>
         constexpr auto type_hash()
         {
             return typeid(T).hash_code();
@@ -5330,7 +5333,7 @@ namespace jeecs
             template <size_t Index, typename AimT, typename CurrentT, typename... Ts>
             constexpr static size_t _index()
             {
-                if constexpr (std::is_same<AimT, CurrentT>::value)
+                if constexpr (std::is_same_v<AimT, CurrentT>)
                     return Index;
                 else
                     return _index<Index + 1, AimT, Ts...>();
@@ -5879,7 +5882,7 @@ namespace jeecs
                 je_typing_class current_type =
                     is_basic_type
                     ? je_typing_class::JE_BASIC_TYPE
-                    : (std::is_base_of<game_system, T>::value
+                    : (std::is_base_of_v<game_system, T>
                         ? je_typing_class::JE_SYSTEM
                         : je_typing_class::JE_COMPONENT);
 
@@ -5890,10 +5893,10 @@ namespace jeecs
                     sizeof(T),
                     alignof(T),
                     current_type,
-                    basic::default_functions<T>::constructor,
-                    basic::default_functions<T>::destructor,
-                    basic::default_functions<T>::copier,
-                    basic::default_functions<T>::mover);
+                    typing::default_functions<T>::constructor,
+                    typing::default_functions<T>::destructor,
+                    typing::default_functions<T>::copier,
+                    typing::default_functions<T>::mover);
 
                 do
                 {
@@ -5987,13 +5990,9 @@ namespace jeecs
                 const type_info* local_type = nullptr;
                 if (guard->_register_or_get_local_type_info<T>(_typename, &local_type))
                 {
-                    if constexpr (sfinae_has_JERefRegsiter<T>::value)
+                    if constexpr (traits::has_JERefRegsiter<T>)
                     {
-                        if constexpr (sfinae_match_JERefRegsiter<T>::value)
-                            T::JERefRegsiter(guard);
-                        else
-                            static_assert(sfinae_match_JERefRegsiter<T>::value,
-                                "T::JERefRegsiter must be `static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)`.");
+                        T::JERefRegsiter(guard);
                     }
                 }
 
@@ -6001,26 +6000,23 @@ namespace jeecs
                 {
                     je_register_system_updater(
                         local_type,
-                        basic::default_functions<T>::on_enable,
-                        basic::default_functions<T>::on_disable,
-                        basic::default_functions<T>::pre_update,
-                        basic::default_functions<T>::state_update,
-                        basic::default_functions<T>::update,
-                        basic::default_functions<T>::physics_update,
-                        basic::default_functions<T>::transform_update,
-                        basic::default_functions<T>::late_update,
-                        basic::default_functions<T>::commit_update,
-                        basic::default_functions<T>::graphic_update);
+                        typing::default_functions<T>::on_enable,
+                        typing::default_functions<T>::on_disable,
+                        typing::default_functions<T>::pre_update,
+                        typing::default_functions<T>::state_update,
+                        typing::default_functions<T>::update,
+                        typing::default_functions<T>::physics_update,
+                        typing::default_functions<T>::transform_update,
+                        typing::default_functions<T>::late_update,
+                        typing::default_functions<T>::commit_update,
+                        typing::default_functions<T>::graphic_update);
                 }
 
-                if constexpr (sfinae_has_JEScriptTypeName<T>::value &&
-                    sfinae_has_JEScriptTypeDeclare<T>::value &&
-                    sfinae_has_JEParseFromScriptType<T>::value &&
-                    sfinae_has_JEParseToScriptType<T>::value)
+                if constexpr (traits::has_JEScriptTypeInterface<T>)
                 {
                     je_register_script_parser(local_type,
-                        basic::default_functions<T>::parse_to_script_type,
-                        basic::default_functions<T>::parse_from_script_type,
+                        typing::default_functions<T>::parse_to_script_type,
+                        typing::default_functions<T>::parse_from_script_type,
                         T::JEScriptTypeName(),
                         T::JEScriptTypeDeclare());
                 }
@@ -6409,7 +6405,8 @@ namespace jeecs
                     template <size_t id = 0>
                     static constexpr size_t _index()
                     {
-                        if constexpr (std::is_same<typename f_t::template argument<id>::type, ComponentT>::value)
+                        if constexpr (std::is_same_v<
+                            typename f_t::template argument<id>::type, ComponentT>)
                             return id;
                         else
                             return _index<id + 1>();
@@ -6447,16 +6444,16 @@ namespace jeecs
 
                     if (component_ptr != nullptr)
                     {
-                        if constexpr (std::is_reference<ComponentT>::value)
+                        if constexpr (std::is_reference_v<ComponentT>)
                             return *component_ptr;
                         else
                         {
-                            static_assert(std::is_pointer<ComponentT>::value);
+                            static_assert(std::is_pointer_v<ComponentT>);
                             return component_ptr;
                         }
                     }
 
-                    if constexpr (std::is_reference<ComponentT>::value)
+                    if constexpr (std::is_reference_v<ComponentT>)
                     {
                         assert(("Only maynot/anyof canbe here. 'je_ecs_world_update_dependences_archinfo' may have some problem.", false));
                         abort();
@@ -6473,7 +6470,7 @@ namespace jeecs
 
                     out_dependence->m_requirements.push_back(
                         requirement{
-                            std::is_pointer<T>::value ? requirement::type::MAYNOT : requirement::type::CONTAINS,
+                            std::is_pointer_v<T> ? requirement::type::MAYNOT : requirement::type::CONTAINS,
                             0,
                             typing::type_info::id<typing::origin_t<T>>() });
 
@@ -6514,7 +6511,7 @@ namespace jeecs
             struct anyof_base : requirement_base<requirement::type::ANYOF> {};
         }
 
-        template<typename ... Components>
+        template<typing::traits::is_reference_or_pointer ... Components>
         struct view : base::view_base
         {
             using components = std::tuple<Components...>;
@@ -6573,6 +6570,18 @@ namespace jeecs
                 _apply_dependence<Components...>(group, out_dependence);
             }
         };
+
+        namespace traits
+        {
+            template<typename T>
+            concept is_view = std::is_base_of_v<base::view_base, T>;
+
+            template<typename T>
+            concept is_requirement =
+                std::is_base_of_v<base::contains_base, T>
+                || std::is_base_of_v<base::except_base, T>
+                || std::is_base_of_v<base::anyof_base, T>;
+        }
     }
 
     /*
@@ -6612,7 +6621,9 @@ namespace jeecs
     至于 selector，感谢它三年来的付出和陪伴，从 JoyEngine 4.9 版本起，不再提供。
     */
 
-    template<typename SliceView, typename ... SliceRequirements>
+    template<
+        slice_requirement::traits::is_view SliceView, 
+        slice_requirement::traits::is_requirement ... SliceRequirements>
     class collection
     {
         dependence m_dependence;
@@ -6621,9 +6632,9 @@ namespace jeecs
         static void _apply_requirements_impl(dependence* dep)
         {
             static_assert(
-                std::is_base_of<slice_requirement::base::contains_base, T>::value
-                || std::is_base_of<slice_requirement::base::except_base, T>::value
-                || std::is_base_of<slice_requirement::base::anyof_base, T>::value);
+                std::is_base_of_v<slice_requirement::base::contains_base, T>
+                || std::is_base_of_v<slice_requirement::base::except_base, T>
+                || std::is_base_of_v<slice_requirement::base::anyof_base, T>);
 
             T::apply_dependence(Group, dep);
 
@@ -6859,7 +6870,7 @@ namespace jeecs
 
         collection()
         {
-            static_assert(std::is_base_of<slice_requirement::base::view_base, SliceView>::value,
+            static_assert(std::is_base_of_v<slice_requirement::base::view_base, SliceView>,
                 "First template argument of collection must be collection::view.");
 
             apply_requirements(&m_dependence);
@@ -6958,7 +6969,9 @@ namespace jeecs
     private:
         game_world _m_game_world;
 
-        template<typename SliceView, typename ... SliceRequirements>
+        template<
+            slice_requirement::traits::is_view SliceView, 
+            slice_requirement::traits::is_requirement... SliceRequirements>
         jeecs::dependence* _fetch_query_slice_cache()
         {
             jeecs::dependence* dep;
@@ -7014,13 +7027,17 @@ namespace jeecs
             return _m_game_world;
         }
 
-        template<typename SliceView, typename ... SliceRequirements>
+        template<
+            slice_requirement::traits::is_view SliceView, 
+            slice_requirement::traits::is_requirement ... SliceRequirements>
         inline typename collection<SliceView, SliceRequirements...>::slice query()
         {
             return typename collection<SliceView, SliceRequirements...>::slice(
                 _fetch_query_slice_cache<SliceView, SliceRequirements...>());
         }
-        template<typename SliceView, typename ... SliceRequirements>
+        template<
+            slice_requirement::traits::is_view SliceView, 
+            slice_requirement::traits::is_requirement ... SliceRequirements>
         inline typename collection<SliceView, SliceRequirements...>::entity_slice query_entity()
         {
             return typename collection<SliceView, SliceRequirements...>::entity_slice(
@@ -7056,7 +7073,6 @@ namespace jeecs
     {
         return jeecs::game_world(je_ecs_world_of_entity(this));
     }
-
     inline void game_entity::close() const noexcept
     {
         if (_m_in_chunk == nullptr)
@@ -7089,7 +7105,7 @@ namespace jeecs
             static std::random_device rd;
             static std::mt19937 gen(rd());
 
-            if constexpr (std::is_floating_point<T>::value)
+            if constexpr (std::is_floating_point_v<T>)
             {
                 std::uniform_real_distribution<> dis(from, to);
                 return (T)dis(gen);
@@ -8374,8 +8390,8 @@ namespace jeecs
                     {
                         new_texture->pix(ix, iy).set(
                             src->pix(ix + x, iy + y).get());
-                    }
-                }
+            }
+        }
 #else
                 auto color_depth = (int)new_texture_format;
                 auto* dst_pixels = new_texture->resource()->m_raw_texture_data->m_pixels;
@@ -8393,7 +8409,7 @@ namespace jeecs
                 }
 #endif
                 return basic::resource<texture>(new_texture);
-            }
+    }
 
             class pixel
             {
@@ -8525,7 +8541,7 @@ namespace jeecs
                     (int)resource()->m_raw_texture_data->m_width,
                     (int)resource()->m_raw_texture_data->m_height);
             }
-        };
+};
         class shader : public resource_basic
         {
         private:

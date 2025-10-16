@@ -702,23 +702,23 @@ const jeecs::typing::type_info* je_towoo_register_system(
                         sizeof(jeecs::towoo::ToWooBaseSystem),
                         alignof(jeecs::towoo::ToWooBaseSystem),
                         je_typing_class::JE_SYSTEM,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::constructor,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::destructor,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::copier,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::mover);
+                        jeecs::typing::default_functions<jeecs::towoo::ToWooBaseSystem>::constructor,
+                        jeecs::typing::default_functions<jeecs::towoo::ToWooBaseSystem>::destructor,
+                        jeecs::typing::default_functions<jeecs::towoo::ToWooBaseSystem>::copier,
+                        jeecs::typing::default_functions<jeecs::towoo::ToWooBaseSystem>::mover);
 
                     je_register_system_updater(
                         towoo_system_tinfo,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::on_enable,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::on_disable,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::pre_update,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::state_update,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::update,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::physics_update,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::transform_update,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::late_update,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::commit_update,
-                        jeecs::basic::default_functions<jeecs::towoo::ToWooBaseSystem>::graphic_update);
+                        jeecs::typing::default_functions<jeecs::towoo::ToWooBaseSystem>::on_enable,
+                        jeecs::typing::default_functions<jeecs::towoo::ToWooBaseSystem>::on_disable,
+                        jeecs::typing::default_functions<jeecs::towoo::ToWooBaseSystem>::pre_update,
+                        jeecs::typing::default_functions<jeecs::towoo::ToWooBaseSystem>::state_update,
+                        jeecs::typing::default_functions<jeecs::towoo::ToWooBaseSystem>::update,
+                        jeecs::typing::default_functions<jeecs::towoo::ToWooBaseSystem>::physics_update,
+                        jeecs::typing::default_functions<jeecs::towoo::ToWooBaseSystem>::transform_update,
+                        jeecs::typing::default_functions<jeecs::towoo::ToWooBaseSystem>::late_update,
+                        jeecs::typing::default_functions<jeecs::towoo::ToWooBaseSystem>::commit_update,
+                        jeecs::typing::default_functions<jeecs::towoo::ToWooBaseSystem>::graphic_update);
 
                     assert(jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems.find(towoo_system_tinfo) ==
                         jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems.end());
@@ -918,20 +918,20 @@ WO_API wo_api wojeapi_towoo_update_component_data(wo_vm vm, wo_value args)
             component_size,
             component_allign,
             je_typing_class::JE_COMPONENT,
-            jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::constructor,
-            jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::destructor,
-            jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::copier,
-            jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::mover);
+            jeecs::typing::default_functions<jeecs::towoo::ToWooBaseComponent>::constructor,
+            jeecs::typing::default_functions<jeecs::towoo::ToWooBaseComponent>::destructor,
+            jeecs::typing::default_functions<jeecs::towoo::ToWooBaseComponent>::copier,
+            jeecs::typing::default_functions<jeecs::towoo::ToWooBaseComponent>::mover);
     else
         // 此处仅更新类型的大小和对齐，并释放成员信息以供重新注册
         je_typing_reset(
             towoo_component_tinfo,
             component_size,
             component_allign,
-            jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::constructor,
-            jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::destructor,
-            jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::copier,
-            jeecs::basic::default_functions<jeecs::towoo::ToWooBaseComponent>::mover);
+            jeecs::typing::default_functions<jeecs::towoo::ToWooBaseComponent>::constructor,
+            jeecs::typing::default_functions<jeecs::towoo::ToWooBaseComponent>::destructor,
+            jeecs::typing::default_functions<jeecs::towoo::ToWooBaseComponent>::copier,
+            jeecs::typing::default_functions<jeecs::towoo::ToWooBaseComponent>::mover);
 
     for (auto& memberinfo : member_defs)
     {
