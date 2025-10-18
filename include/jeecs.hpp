@@ -10011,7 +10011,7 @@ namespace jeecs
 
             Anchor() = default;
             Anchor(Anchor&&) = default;
-            Anchor(Anchor&) {}
+            Anchor(const Anchor&) {}
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
