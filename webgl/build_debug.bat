@@ -25,7 +25,7 @@ if %errorlevel% neq 0 (
     exit /b %errorlevel%
 )
 
-call cmake --build ./ --config=DEBUG --target joyengineecs4w --verbose -- -j 32
+call cmake --build ./ --config=DEBUG --target joyengineecs4w --parallel
 @REM Check if build failed
 if %errorlevel% neq 0 (
     cd ..
