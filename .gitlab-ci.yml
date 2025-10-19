@@ -128,7 +128,7 @@ build_win64_dx11_opengl_vk:
     - if not exist cmakebuild ( mkdir cmakebuild )
     - cd cmakebuild
     - del CMakeCache.txt
-    - cmd /c cmake ..
+    - cmake ..
       -A x64
       -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=ON
       -DJE4_COPYING_BUILTIN_FILES=ON
@@ -170,7 +170,7 @@ build_win64_dx11_opengles_vk:
     - if not exist cmakebuild ( mkdir cmakebuild )
     - cd cmakebuild
     - del CMakeCache.txt
-    - cmd /c cmake ..
+    - cmake ..
       -A x64
       -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=ON
       -DJE4_COPYING_BUILTIN_FILES=ON
@@ -193,7 +193,7 @@ build_win64_dx11_opengles_vk_static:
     - if not exist cmakebuild ( mkdir cmakebuild )
     - cd cmakebuild
     - del CMakeCache.txt
-    - cmd /c cmake ..
+    - cmake ..
       -A x64
       -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=ON
       -DJE4_COPYING_BUILTIN_FILES=ON
