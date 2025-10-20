@@ -123,7 +123,7 @@ namespace Editor
         source += "    };\n";
         source += F"    let doc_path = fsys::normalize(" + path->to_string->enstring + ");\n";
         source += "    let node_editor = jeapi::gui::node_editor::create(\"workflow_node_editor\", nodedict);\n";
-        source += "    do fsys::readall(doc_path)->>\\dat = node_editor->restore(dat);;\n";
+        source += "    do file::readall(doc_path)->>\\dat = node_editor->restore(dat);;\n";
         source += F"    let form = jeapi::gui::form::create(\"Workflow 编辑器: \" + doc_path->to_string, true,\n";
         source += @"    func(_){
             node_editor->update();
@@ -136,7 +136,7 @@ namespace Editor
             "是否保存到:" + doc_path->to_string + "?", func(save){
                 if (save)
                 {
-                    if (!fsys::writeall(doc_path, node_editor->dump()))
+                    if (!file::writeall(doc_path, node_editor->dump()))
                     {
                         jeapi::gui::form::msg("保存失败", "保存Workflow失败");
                         return;

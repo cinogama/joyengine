@@ -12,12 +12,14 @@ import pkg::iterator;
 import pkg::makenew;
 import pkg::worst;
 import pkg::math;
+import pkg::buffer;
 
 import builtin::editor::gui::main;
 import builtin::editor::project::main;
 import builtin::editor::gui::form::msg;
 import builtin::editor::gui::form::input;
 import builtin::editor::gui::form::ask;
+import builtin::editor::tools::file;
 import builtin::api::gui::file;
 
 using std;
@@ -656,7 +658,7 @@ namespace editor::gui::tilemap
                 match (tileset->serialize)
                 {
                     ok(data)?
-                        if (!fsys::writeall(tileset_path, data: string))
+                        if (!file::writeall(tileset_path, data: string: buffer))
                             jeapi::gui::form::errmsg("错误", F"无法保存TileSet到{tileset_path->to_string}: 无法写入文件");
                     err(msg)?
                         jeapi::gui::form::errmsg("错误", F"无法保存TileSet到{tileset_path->to_string}: {msg}");
@@ -691,11 +693,12 @@ namespace editor::gui::tilemap
             {
                 if (fsys::extension(file)->lower == ".je4tileset")
                 {
-                    match (fsys::readall(file))
+                    match (editor::file::readall(file))
                     {
                         value(data)?
                             match (TileMapSet::deserialize(
-                                    self.m_context, data->dict::deserialize->or({})->>\k, v = (k as string, v);))
+                                    self.m_context,
+                                    data as buffer: string->dict::deserialize->or({})->>\k, v = (k as string, v);))
                             {
                                 ok(tileset)?
                                     self.m_tile_sets->add(tileset);
@@ -1683,7 +1686,9 @@ namespace editor::gui::tilemap
                                                     ["texture"] = F"chunk_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}_{layer}.png": dynamic,
                                                     ["size"] = chunksz: dynamic,
                                                 };
-                                                if (!fsys::writeall(target_chunk_path / F"chunk_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}_{layer}.je4chunk", chunk_info: string))
+                                                if (!file::writeall(
+                                                        target_chunk_path / F"chunk_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}_{layer}.je4chunk",
+                                                        chunk_info: string: buffer))
                                                 {
                                                     jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_chunk_path->to_string}");
                                                 }
@@ -1700,18 +1705,20 @@ namespace editor::gui::tilemap
                                                 
                                             chunks_pos_info[chunk.m_position.0]->set(chunk.m_position.1, F"chunk_{chunk.m_position.0}_{chunk.m_position.1}.je4chunk");
                                             
-                                            if (!\dat = fsys::writeall(target_chunk_path / F"chunk_{chunk.m_position.0}_{chunk.m_position.1}.je4chunk", dat);
-                                                <| {
-                                                    ["layers"] = chunk.m_image_layers
-                                                    ->> \layerid = (layerid, F"chunk_{chunk.m_position.0}_{chunk.m_position.1}_{layerid}.je4chunk");
-                                                    ->  mapping
-                                                    }: string)
+                                            if (!\dat = file::writeall(
+                                                        target_chunk_path / F"chunk_{chunk.m_position.0}_{chunk.m_position.1}.je4chunk",
+                                                        dat: buffer);
+                                                    <| {
+                                                        ["layers"] = chunk.m_image_layers
+                                                        ->> \layerid = (layerid, F"chunk_{chunk.m_position.0}_{chunk.m_position.1}_{layerid}.je4chunk");
+                                                        ->  mapping
+                                                        }: string)
                                             {
                                                 jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_chunk_path->to_string}");
                                             }
                                         }
                                         
-                                        if (fsys::writeall(target_chunk_path / F"chunklist.je4chunklist", chunks_pos_info: string) == false)
+                                        if (file::writeall(target_chunk_path / F"chunklist.je4chunklist", chunks_pos_info: string: buffer) == false)
                                             jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_path->to_string}");
                                     }
                                     none?;
@@ -1814,7 +1821,7 @@ namespace editor::gui::tilemap
                             formopen->set(false);
                             if (opt)
                             {
-                                if (!fsys::writeall(tilemap_file, editctx->dump_tiles: string))
+                                if (!file::writeall(tilemap_file, editctx->dump_tiles: string: buffer))
                                 {
                                     jeapi::gui::form::errmsg("错误", F"无法保存TileMap到{tilemap_file->to_string}: 无法写入文件");
                                     formopen->set(true);

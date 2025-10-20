@@ -15,11 +15,13 @@ import pkg::thread;
 import pkg::try;
 import pkg::makenew;
 import pkg::iterator;
+import pkg::buffer;
 
 import builtin::editor::project::main;
 import builtin::editor::gui::form::input;
 import builtin::editor::gui::form::msg;
 import builtin::editor::tools::varify;
+import builtin::editor::tools::file;
 
 using je::gui;
 using jeapi::varify;
@@ -28,7 +30,7 @@ using fsys;
 namespace editor
 {
     // 启动个进程，等待进程结束，如果进程成功执行并以0作为退出码，则返回true
-    func start_process(process: string, args: array<string>)
+    func start_process(process: fsys::path_t, args: array<string>)
     {
         return new! process(process, args)
             =>> \pid = pid->wait->okay;
@@ -230,7 +232,7 @@ else()
 endif()
 "@;
                 let content = CMAKE_FILE_CONTENT->replace("$$JEMODULE_PROJECT_NAME$$", self.name);
-            if (!writeall(self.path / "CMakeLists.txt", content))
+            if (!file::writeall(self.path / "CMakeLists.txt", content: buffer))
             {
                 return result::err(F"无法写入'{self.path}/CMakeLists.txt'");
             }
@@ -495,8 +497,8 @@ endif()
                     let rttype = std::platform::runtime_type::DEBUG;
                     
                     // 校验最后一次编译时的引擎版本，如果不一致，那么删掉全部动态库
-                    let is_same_version = fsys::readall(path / "version.json")
-                        ->> \dat = created_module->check_verify_info(dat);
+                    let is_same_version = file::readall(path / "version.json")
+                        ->> \dat = created_module->check_verify_info(dat: string);
                         ->  or(false)
                         ;
                     if (is_same_version)
@@ -751,7 +753,7 @@ $$REGISTER_SYSTEM_TYPES$$
                     ->replace("$$REGISTER_COMPONENT_TYPES$$", register_component_types)
                     ->replace("$$REGISTER_SYSTEM_TYPES$$", register_system_types);
                     
-            if (!writeall(self.path/"loader.hpp", loader_src))
+            if (!file::writeall(self.path/"loader.hpp", loader_src: buffer))
             {
                 do context->>\context = context.display_msg = F"无法写入'{self.path}/loader.hpp'";;
                 return result::err(F"无法写入'{self.path}/loader.hpp'");
@@ -762,7 +764,8 @@ $$REGISTER_SYSTEM_TYPES$$
             
             let building_path = self.path->to_string + "/.build_" + config;
             
-            if (start_process(CMAKE_PATH->to_string,
+            if (start_process(
+                    CMAKE_PATH,
                     [
                         CMAKE_PATH->to_string,
                         self.path->to_string,
@@ -770,8 +773,8 @@ $$REGISTER_SYSTEM_TYPES$$
                         F"-DCMAKE_BUILD_TYPE={config}",
                         F"-DBUILD_SHARED_LIBS=ON",
                         F"-DJEMODULE_ENGINE_CORE_LIB_FILENAME={_lib_append_suffix_for_link("libjoyecs", std::platform::runtime)}",
-                        F"-DJEMODULE_WOOLANG_LIB_FILENAME={_lib_append_suffix_for_link("libwoo", std::platform::runtime)}"
-                        ]) != true)
+                        F"-DJEMODULE_WOOLANG_LIB_FILENAME={_lib_append_suffix_for_link("libwoo", std::platform::runtime)}",
+                    ]) != true)
             {
                 do context->>\context = context.display_msg = "CMake生成失败";;
                 return result::err("CMake生成失败");
@@ -785,19 +788,21 @@ $$REGISTER_SYSTEM_TYPES$$
             do context->>\context = context.progress = 45;;
             
             let compile_result_statu_code = start_process(
-                CMAKE_PATH->to_string,
+                CMAKE_PATH,
                 [
                     CMAKE_PATH->to_string,
                     "--build", building_path,
                     "--config", config,
-                    "-j", thread::concurrency(): string
-                    ]);
-            let compile_result = readall(msvc_compile_result_path);
+                    "-j", thread::concurrency(): string,
+                ]);
+            let compile_result = file::readall(msvc_compile_result_path);
             
             do context
                 ->> \context =
                     context.massive_msg = option::value(
-                        compile_result->or("没有找到编译日志，查看控制台获取更多信息"))
+                        compile_result->map_or(
+                            \b = b as buffer: string;,
+                            "没有找到编译日志，查看控制台获取更多信息"))
                     ;
                 ;
                 
@@ -813,7 +818,7 @@ $$REGISTER_SYSTEM_TYPES$$
             self.project->active_module(self);
             
             // 更新编译版本
-            if (! fsys::writeall(self.path / "version.json", self->generate_varify_info))
+            if (! file::writeall(self.path / "version.json", self->generate_varify_info: buffer))
             {
                 jeapi::gui::form::errmsg("警告", "无法为生成的模块记录版本信息文件，请检查");
             }

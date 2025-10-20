@@ -15,6 +15,7 @@ import pkg::fsys;
 import pkg::process;
 import pkg::iterator;
 import pkg::singleton;
+import pkg::buffer;
 
 import config;
 
@@ -31,6 +32,7 @@ import builtin::editor::gui::edit_forms;
 import builtin::editor::gui::edit_forms::viewport;
 import builtin::editor::gui::style;
 import builtin::editor::gui::edit_forms::entity_creator;
+import builtin::editor::tools::file;
 
 namespace editor
 {
@@ -114,8 +116,10 @@ namespace editor
         {
             do fsys::mkdir(self.m_path / ".temporary" / "jeeditor");
             if (! dumpped->>\kv = [kv[0]: dynamic, kv[1]->to_string: dynamic];->serialize
-                ->> \dat = fsys::writeall(self.m_path / ".temporary" / "jeeditor" / "debugcontext.dump", dat);
-                ->  or(false))
+                ->> \dat = file::writeall(
+                        self.m_path / ".temporary" / "jeeditor" / "debugcontext.dump",
+                        dat: buffer);
+                    ->  or(false))
             {
                 jeapi::gui::form::errmsg("警告", "调试上下文创建失败，这可能导致崩溃无法恢复上次调试状态");
                 je::logwarn("调试上下文创建失败，这可能导致崩溃无法恢复上次调试状态");
@@ -123,7 +127,9 @@ namespace editor
         }
         public func restore_dump(self: Project)
         {
-            match (fsys::readall(self.m_path / ".temporary" / "jeeditor" / "debugcontext.dump")=>> \dat = dat->array::deserialize;)
+            match (file::readall(
+                    self.m_path / ".temporary" / "jeeditor" / "debugcontext.dump")
+                    =>> \dat = dat as buffer: string->array::deserialize;)
             {
                 value(dat)?
                     jeapi::gui::form::ask("是否恢复", "检查到上次引擎在调试过程中意外退出，是否恢复之前的编辑器状态？",
@@ -158,7 +164,7 @@ namespace editor
                 return result::err("未在调试中");
                 
             assert (self.m_worlds->empty);
-
+            
             // 关闭所有世界~~
             do self->get_env->get_universe->get_all_worlds
                 ->> \w = w->close();
@@ -416,8 +422,9 @@ namespace editor
                                 do fsys::mkdir(self.m_path / ".vscode");
                                 let vsc_config_path = self.m_path / ".vscode" / "settings.json";
                                 
-                                let dat = fsys::readall(vsc_config_path)=>>\dat = dat->map::deserialize;->or({}mut);
-                                
+                                let dat = editor::file::readall(vsc_config_path)
+                                    =>>\dat = dat as buffer: string->map::deserialize;->or({}mut);
+                                    
                                 dat->set("wooly.enable": dynamic, true: dynamic);
                                 dat->set("wooly.scanroots": dynamic, [
                                         fsys::normalize(std::host_path())->to_string,
@@ -425,7 +432,7 @@ namespace editor
                                         self->get_vfile_export_path->to_string,
                                     ]: dynamic);
                                     
-                                if (!fsys::writeall(vsc_config_path, dat->serialize->unwrap))
+                                if (!file::writeall(vsc_config_path, dat->serialize->unwrap: buffer))
                                 {
                                     jeapi::gui::form::errmsg("错误", "无法写入VSCode配置文件");
                                     return false;
@@ -450,7 +457,7 @@ namespace editor
                     // 不可以锁定目录
                     if (fsys::isdir(projfile) == true)
                         return false;
-                    let flock = new! process::flock(projfile->to_string);
+                    let flock = new! process::flock(projfile);
                     let result = flock->>\fl = fl->trylock();->or(false);
                     if (result)
                     {
@@ -577,7 +584,9 @@ namespace editor
         
         public func load_worlds_from_list(self: Project)
         {
-            match (fsys::readall(self.m_path / ".temporary" / "jeeditor" / "world.list")=>> \dat = dat->dict::deserialize;)
+            match (file::readall(
+                    self.m_path / ".temporary" / "jeeditor" / "world.list")
+                    =>> \dat = dat as buffer: string->dict::deserialize;)
             {
                 value(dat)?
                     for (let (wpath, isediting) : dat)
@@ -698,8 +707,10 @@ namespace editor
                     ;
                 ->  mapping
                 ->  serialize
-                ->> \dat = fsys::writeall(self.m_path / ".temporary" / "jeeditor" / "world.list", dat);
-                ->  or(false))
+                ->> \dat = file::writeall(
+                        self.m_path / ".temporary" / "jeeditor" / "world.list",
+                        dat: buffer);
+                    ->  or(false))
             {
                 jeapi::gui::form::errmsg("失败", "保存编辑中的世界列表失败");
                 je::logwarn("保存编辑中的世界列表失败");
@@ -724,7 +735,9 @@ namespace editor
                 jeapi::gui::form::errmsg("错误", F"项目中的一些世界保存失败:\n{failed_file_list}\n项目保存未能完成");
                 return false;
             }
-            else if (!fsys::writeall(self.m_path/"project.je4project", dat as dict<string, dynamic>: string))
+            else if (!file::writeall(
+                    self.m_path/"project.je4project",
+                    dat as dict<string, dynamic>: string: buffer))
             {
                 jeapi::gui::form::errmsg("错误", F"保存项目文件失败");
                 return false;
@@ -859,7 +872,7 @@ namespace editor
                         let path = loc / name;
                         do fsys::mkdir(fsys::parent(path));
                         
-                        if (! fsys::writeall(path, content))
+                        if (! file::writeall(path, content: buffer))
                             jeapi::gui::form::errmsg("错误", F"无法写入虚拟文件 '{path->to_string}'");
                     }
                 }
@@ -1103,8 +1116,9 @@ namespace editor
         public func try_load_all_camera_debug_info_map(self: Project)
         {
             let debug_camera_map_path = self.m_path / ".temporary" / "jeeditor" / "world_debug_camera.list";
-            try! data = fsys::readall(debug_camera_map_path)=>> \dat = dat->dict::deserialize;;
-            
+            try! data = file::readall(debug_camera_map_path)
+                =>> \dat = dat as buffer: string->dict::deserialize;;
+                
             return_value! data
                 ->> \k, v = (k->or(""), v->or({}: dict<dynamic, dynamic>)->>\k, v = (k->or(""), v););
                 ;
@@ -1119,7 +1133,7 @@ namespace editor
             let old_dat = self->try_load_all_camera_debug_info_map()->or({})->to_map;
             
             old_dat->set(self->make_path_normalize(p), dat);
-            return fsys::writeall(debug_camera_map_path, old_dat->serialize->unwrap);
+            return file::writeall(debug_camera_map_path, old_dat->serialize->unwrap: buffer);
         }
         public func save_world(self: Project, w: je::world)
         {
@@ -1137,8 +1151,9 @@ namespace editor
                         ;
                         
                     return self->serialize_world(pw.m_world_instance, false)
-                        ->> \dat = fsys::writeall(pw.m_world_path, dat as jeapi::serialize::WorldData: string);
-                        ;
+                        ->> \dat = file::writeall(
+                                pw.m_world_path, dat as jeapi::serialize::WorldData: string: buffer);
+                            ;
                 }
             ->  or(false);
         }
@@ -1147,8 +1162,8 @@ namespace editor
             // 不允许重复加载相同路径的世界
             if (self.m_worlds->forall(\pworld = pworld.m_world_path == file_path;)->empty)
             {
-                match (fsys::readall(file_path)
-                    =>> \dat = dict::deserialize(dat)
+                match (file::readall(file_path)
+                    =>> \dat = dict::deserialize(dat as buffer: string)
                         =>> \d = d: dynamic->trycast:<jeapi::serialize::WorldData::WorldDataRawType>;
                         ->> \d = d->apply(
                                 "debug_camera",

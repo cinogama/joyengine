@@ -7,6 +7,7 @@ import je::gui;
 
 import pkg::fsys;
 import pkg::vm;
+import pkg::buffer;
 
 import builtin::editor::gui::main;
 import builtin::editor::gui::tilemap::main;
@@ -23,6 +24,7 @@ import builtin::editor::project::config;
 import builtin::editor::tools::script_manager;
 import builtin::editor::welcome::main;
 import builtin::editor::environment::main;
+import builtin::editor::tools::file;
 
 using je::gui;
 using jeapi::gui::style;
@@ -134,8 +136,8 @@ namespace editor::gui
                                 formopen->set(false);
                                 if (check)
                                 {
-                                    if (! fsys::writeall(context->get_project->get_path / "editor.je4style",
-                                            dump_current_style_color(): string))
+                                    if (! file::writeall(context->get_project->get_path / "editor.je4style",
+                                            dump_current_style_color(): string: buffer))
                                         errmsg("保存样式失败", "无法写入文件：'" + (context->get_project->get_path / "editor.je4style")->to_string + "'");
                                 }
                                 else

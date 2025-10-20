@@ -1,0 +1,29 @@
+import woo::std;
+
+import pkg::fsys;
+import pkg::filestream;
+import pkg::try;
+import pkg::buffer;
+
+namespace editor::file
+{
+    public func readall(p: fsys::path_t)=> option<buffer>
+    {
+        try! f = filestream::open(p, filestream::mode::read);
+        defer do f->close();
+
+        return_value! f->readbuf(f->len);
+    }
+    public func writeall(p: fsys::path_t, data: buffer)=> bool
+    {
+        match (filestream::open(p, filestream::mode::write))
+        {
+            none? return false;
+            value(f)?
+            {
+                defer do f->close();
+                return f->write(data, 0, data->len);
+            }
+        }
+    }
+}

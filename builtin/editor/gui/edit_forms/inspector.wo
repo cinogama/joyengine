@@ -13,6 +13,7 @@ import pkg::try;
 import pkg::worst;
 import pkg::fsys;
 import pkg::iterator;
+import pkg::buffer;
 
 import builtin::api::gui::file;
 import builtin::api::serialize::main;
@@ -29,6 +30,7 @@ import builtin::editor::project::towoomgr;
 import builtin::editor::gui::browser;
 import builtin::editor::gui::edit_forms::entity_creator;
 import builtin::editor::environment::main;
+import builtin::editor::tools::file;
 
 using je::gui;
 
@@ -251,9 +253,9 @@ namespace editor::gui::edit_forms
                                                                                 {
                                                                                     je::gui::launch(func()
                                                                                         {
-                                                                                            if (!fsys::writeall(
+                                                                                            if (!file::writeall(
                                                                                                     context->get_project->parse_path_normalize(p),
-                                                                                                    updated_prefab_data: string))
+                                                                                                    updated_prefab_data: string: buffer))
                                                                                             {
                                                                                                 jeapi::gui::form::errmsg("失败", F"更新预设体失败，无法写入：{p}");
                                                                                             }

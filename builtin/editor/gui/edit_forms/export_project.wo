@@ -15,6 +15,7 @@ import builtin::editor::project::main;
 import builtin::editor::cpp::main;
 import builtin::editor::project::config;
 import builtin::editor::gui::main;
+import builtin::editor::tools::file;
 
 using je::gui;
 
@@ -249,7 +250,7 @@ namespace editor::gui::edit_forms
                             
                             // 1.2 开始打包
                             do fsys::mkdir(export_path/"builtin");
-                            do fsys::writeall(export_path/"builtin"/".keepme", "");
+                            do file::writeall(export_path/"builtin"/".keepme", "": buffer);
                             
                             for (let (_, (opath, ppath)) : dll_module_path)
                             {
@@ -292,7 +293,8 @@ namespace editor::gui::edit_forms
                             
                             if (fsys::isfile(fsys::workpath() / "icon.ico"))
                             {
-                                do new! process(F"{std::host_path()}/builtin/rcedit-x64.exe",
+                                do new! process(
+                                    fsys::normalize(F"{std::host_path()}/builtin/rcedit-x64.exe"),
                                     [
                                         F"{std::host_path()}/builtin/rcedit-x64.exe",
                                         (export_path / F"{proj->get_name}.exe")->to_string,

@@ -10,6 +10,7 @@ import pkg::worst;
 import pkg::math;
 import pkg::async;
 import pkg::thread;
+import pkg::buffer;
 
 import builtin::api::gui::form;
 import builtin::api::gui::errmsg;
@@ -18,6 +19,7 @@ import builtin::editor::gui::main;
 import builtin::editor::gui::form::ask;
 import builtin::editor::project::main;
 import builtin::editor::gui::browser;
+import builtin::editor::tools::file;
 
 using fsys;
 using iterator;
@@ -164,7 +166,9 @@ namespace editor::gui
                     |> filter(\p = p->to_string->find("/.")->is_none;)
                     |> filter(\p = focus_file_type->find(extension(p)->lower)->is_value;)
                     |> filter(\p = isfile(p);)
-                    |> filter_map(\p = readall(p)->>\content = (p, ReplacingContent::create(p, content));;)
+                    |> filter_map(
+                        \p = editor::file::readall(p)
+                            ->>\content = (p, ReplacingContent::create(p, content as buffer: string));;)
                     |> collect;
                     
             return_ok! RefactorAskContent{
@@ -243,7 +247,7 @@ namespace editor::gui
                 {
                     if (content.m_able_to_update)
                     {
-                        if (! writeall(path, content.m_content))
+                        if (! file::writeall(path, content.m_content: buffer))
                             jeapi::gui::errmsg("保存失败", F"保存文件 `{path->to_string()}` 失败");
                     }
                     else

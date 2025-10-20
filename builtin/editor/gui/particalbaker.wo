@@ -16,6 +16,7 @@ import builtin::editor::gui::form::ask;
 import builtin::editor::gui::form::msg;
 import builtin::editor::gui::scripteditor;
 import builtin::editor::gui::animation2d;
+import builtin::editor::tools::file;
 
 using je::gui;
 
@@ -60,7 +61,7 @@ namespace editor::gui::particalbaker
         }
         public func save(self: ParticalContext)
         {
-            return fsys::writeall(
+            return file::writeall(
                 self.m_path,
                 {
                     ["framecount"] = self.m_frame_count: dynamic,
@@ -69,13 +70,13 @@ namespace editor::gui::particalbaker
                     ["repeatround"] = self.m_repeat_round: dynamic,
                     // 因为 GetText 貌似会自己带上多余的换行符，此处去掉
                     ["script"] = self.m_script->GetText->trim: dynamic,
-                }: string,
+                }: string: buffer,
             );
         }
         public func load(path: fsys::path_t)
         {
-            return fsys::readall(path)
-                =>> \dat = dict::deserialize(dat);
+            return file::readall(path)
+                =>> \dat = dict::deserialize(dat as buffer: string);
                 ->> func(dat)
                 {
                     let fdata = dat->> \k, v = (k as string, v); as dict<string, dynamic>;

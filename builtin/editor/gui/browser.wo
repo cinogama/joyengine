@@ -12,6 +12,7 @@ import pkg::image;
 import pkg::fsys;
 import pkg::worst;
 import pkg::thread;
+import pkg::buffer;
 
 import builtin::editor::project::main;
 import builtin::editor::cpp::main;
@@ -29,6 +30,7 @@ import builtin::api::serialize::main;
 import builtin::editor::gui::tilemap::main;
 import builtin::editor::gui::edit_forms::world_creator;
 import builtin::editor::gui::draw_pannel::main;
+import builtin::editor::tools::file;
 
 using je::gui;
 
@@ -377,7 +379,9 @@ namespace editor::gui
                 [".je4tilemap"] =
                     func (p: PathInfo, context: EditorContext)
                     {
-                        match (fsys::readall(p.path)=>>\dat = dat->dict::deserialize->>\dat = dat->>\k, v = (k as string, v);;;)
+                        match (file::readall(p.path)
+                            =>>\dat = dat as buffer: string->dict::deserialize
+                                ->>\dat = dat->>\k, v = (k as string, v);;;)
                         {
                             value(tilemap_data)?
                             {
@@ -394,12 +398,12 @@ namespace editor::gui
                         do std::shell(F"code {_wrap_path(context->get_project->get_path->to_string())} {_wrap_path(p.path->to_string)}");
                         return option::none;
                     },
-                [".shader"] = 
+                [".shader"] =
                     func (p: PathInfo, context: EditorContext)
                     {
                         do std::shell(F"code {_wrap_path(context->get_project->get_path->to_string())} {_wrap_path(p.path->to_string)}");
                         return option::none;
-                    },                    
+                    },
             };
             
             return registed_open_method
@@ -445,7 +449,7 @@ namespace editor::gui
     {
         if (fsys::exist(path))
             return false;
-        return fsys::writeall(path, content);
+        return file::writeall(path, content: buffer);
     }
     
     func context_menu(path: option<PathInfo>, context: EditorContext)
@@ -931,8 +935,10 @@ using $NEW_PRODUCER_NAME$ = struct{}
                             jeapi::gui::form::input("创建着色器", F"将在{cur_creating_path}创建{shader_display_name}：",
                                 shader_path_name,
                                 \shader_name: string =
-                                    fsys::readall(fsys::normalize(F"{std::host_path()}/builtin/shader/{shader_path_name}.shader"))
-                                        ->> \src = create_shader_at(shader_name, src);
+                                    file::readall(
+                                        fsys::normalize(
+                                            F"{std::host_path()}/builtin/shader/{shader_path_name}.shader"))
+                                        ->> \src = create_shader_at(shader_name, src as buffer: string);
                                         ->  or_do(\ = je::logerr(F"打开内置着色器文件{shader_path_name}失败，请检查编辑器目录");)
                                     ;
                                 ); // end of inputbox
@@ -1242,7 +1248,8 @@ namespace $$MODULE_NAME$$
         void LateUpdate();
     };
 }
-"@;
+"@
+                                                            ;
                                             let system_src = 
 @"#include "$$SYSTEM_NAME$$.hpp"
 
@@ -1276,19 +1283,20 @@ namespace $$MODULE_NAME$$
     {
     }
 }
-"@;
-                                                            let module_name = fsys::purename(path.path);
+"@
+                                                            ;
+                                                        let module_name = fsys::purename(path.path);
                                                         let system_name = name;
                                                         
-                                                        if (!fsys::writeall(path.path/"systems"/F"{system_name}.hpp",
+                                                        if (!file::writeall(path.path/"systems"/F"{system_name}.hpp",
                                                                 system_header
                                                                     ->replace("$$MODULE_NAME$$", module_name)
-                                                                    ->replace("$$SYSTEM_NAME$$", system_name))
+                                                                    ->replace("$$SYSTEM_NAME$$", system_name): buffer)
                                                             ||
-                                                            !fsys::writeall(path.path/"systems"/F"{system_name}.cpp",
+                                                            !file::writeall(path.path/"systems"/F"{system_name}.cpp",
                                                                 system_src
                                                                     ->replace("$$MODULE_NAME$$", module_name)
-                                                                    ->replace("$$SYSTEM_NAME$$", system_name))
+                                                                    ->replace("$$SYSTEM_NAME$$", system_name): buffer)
                                                             )
                                                         {
                                                             do fsys::remove(path.path/"systems"/F"{system_name}.hpp")->unwrap;
@@ -1342,10 +1350,10 @@ namespace $$MODULE_NAME$$
                                                             let module_name = fsys::purename(path.path);
                                                         let component_name = name;
                                                         
-                                                        if (!fsys::writeall(path.path/"components"/F"{component_name}.hpp",
+                                                        if (!file::writeall(path.path/"components"/F"{component_name}.hpp",
                                                                 component_header
                                                                     ->replace("$$MODULE_NAME$$", module_name)
-                                                                    ->replace("$$COMPONENT_NAME$$", component_name))
+                                                                    ->replace("$$COMPONENT_NAME$$", component_name): buffer)
                                                             )
                                                         {
                                                             do fsys::remove(path.path/"components"/F"{component_name}.hpp")->unwrap;
@@ -1635,7 +1643,7 @@ namespace $$MODULE_NAME$$
                                                 func(overwrite){
                                                     if (overwrite)
                                                     {
-                                                        do fsys::writeall(filepath, entity_json);
+                                                        do file::writeall(filepath, entity_json: buffer);
                                                         eid->justdo(func(e)
                                                             {
                                                                 let prefab = e->towoo::add_component:<Editor::Prefab>->unwrap;
@@ -1659,7 +1667,7 @@ namespace $$MODULE_NAME$$
                                         }
                                         if (create)
                                         {
-                                            do fsys::writeall(filepath, entity_json);
+                                            do file::writeall(filepath, entity_json: buffer);
                                             let prefab = e->towoo::add_component:<Editor::Prefab>->unwrap;
                                             prefab.path->set(context->get_project->make_path_normalize(filepath));
                                             force_update();

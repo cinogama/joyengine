@@ -10,6 +10,7 @@ import pkg::iterator;
 import pkg::try;
 import pkg::worst;
 import pkg::singleton;
+import pkg::buffer;
 
 import je;
 import je::gui;
@@ -28,6 +29,7 @@ import builtin::editor::gui::main;
 import builtin::editor::project::towoomgr;
 import builtin::editor::gui::inputmgr;
 import builtin::editor::cpp::main;
+import builtin::editor::tools::file;
 
 jeapi::welcome::display_copyright_msg();
 
@@ -169,8 +171,9 @@ func open_path_to_do_sth(action_after_choice: (option<fsys::path_t>)=>void)
 
 func read_editor_data()
 {
-    return fsys::readall(fsys::normalize(std::host_path()) / "builtin" / "editor.dat.je4cache")
-        =>> \dat = dict::deserialize(dat);
+    return editor::file::readall(
+        fsys::normalize(std::host_path()) / "builtin" / "editor.dat.je4cache")
+        =>> \dat = dict::deserialize(dat as buffer: string);
         ->  or({})
         ;
 }
@@ -195,9 +198,10 @@ func save_editor_data_after_exit(dat: dict<dynamic, dynamic>, proj_name: string,
         ->inlay(0, [proj_name, proj_path->to_string]): dynamic);
         
     assert(
-        fsys::writeall(fsys::normalize(std::host_path()) / "builtin" / "editor.dat.je4cache", newdat->serialize->unwrap)
-        );
-        
+        editor::file::writeall(
+            fsys::normalize(std::host_path()) / "builtin" / "editor.dat.je4cache",
+            newdat->serialize->unwrap: buffer));
+            
     assert(fsys::setworkpath(fsys::normalize(std::host_path())));
 }
 
@@ -360,15 +364,16 @@ func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: di
                             do fsys::mkdir(p->get_path/"resource"/"workflow"/"node");
                             do fsys::mkdir(p->get_path/"resource"/"workflow"/"type");
                             do fsys::mkdir(p->get_path/"resource"/"workflow"/"producer");
-                            do fsys::writeall(p->get_path/"resource"/"workflow"/"node"/".gitkeepme", "");
-                            do fsys::writeall(p->get_path/"resource"/"workflow"/"type"/".gitkeepme", "");
-                            do fsys::writeall(p->get_path/"resource"/"workflow"/"producer"/".gitkeepme", "");
+                            do editor::file::writeall(p->get_path/"resource"/"workflow"/"node"/".gitkeepme", "": buffer);
+                            do editor::file::writeall(p->get_path/"resource"/"workflow"/"type"/".gitkeepme", "": buffer);
+                            do editor::file::writeall(p->get_path/"resource"/"workflow"/"producer"/".gitkeepme", "": buffer);
                             
-                            do fsys::writeall(p->get_path/"resource"/"texture"/"readme.md", 
+                            do editor::file::writeall(p->get_path/"resource"/"texture"/"readme.md", 
 @"# Texture 目录
 ---
 此目录用于保存引擎自动生成的图像资源
-"@);
+"@
+                                : buffer);
                                 do fsys::copy(
                                     fsys::normalize(F"{std::host_path()}/builtin/shader"),
                                 fsys::normalize(F"{p->get_path}/resource/shader"));
@@ -378,7 +383,7 @@ func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: di
                             do fsys::copy(
                                 fsys::normalize(F"{std::host_path()}/builtin/script/editor.wo"),
                                 fsys::normalize(F"{p->get_path}"));
-                            do fsys::writeall(p->get_path / ".gitignore", 
+                            do editor::file::writeall(p->get_path / ".gitignore", 
 @"# JoyEngine ECS git ignore config.
 
 # Ignore temporary files.
@@ -397,8 +402,9 @@ func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: di
 
 # Ignore cache files.
 *.je4cache
-"@);
-                            do fsys::writeall(p->get_path / ".gitattributes", 
+"@
+                                : buffer);
+                            do editor::file::writeall(p->get_path / ".gitattributes", 
 @"# JoyEngine ECS
 
 project.je4project text eol=lf
@@ -411,8 +417,9 @@ project.je4project text eol=lf
 *.je4chunk text eol=lf
 *.je4chunklist text eol=lf
 CMakeLists.txt text eol=lf
-"@);
-                                match (je::towoo::unsafe::dynamic_parser::update_all("@/editor.wo"))
+"@
+                                : buffer);
+                            match (je::towoo::unsafe::dynamic_parser::update_all("@/editor.wo"))
                             {
                                 ok(_)?;
                                 err(msg)?
@@ -443,8 +450,8 @@ func open_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict
     if (! fsys::exist(proj_path))
         return jeapi::gui::form::errmsg("失败", F"加载项目失败，找不到项目文件{proj_path}");
         
-    match (fsys::readall(proj_path)
-        =>> \d = dict::deserialize(d);
+    match (editor::file::readall(proj_path)
+        =>> \d = dict::deserialize(d as buffer: string);
         =>> \d = d: dynamic->trycast:<dict<string, dynamic>>;)
     {
         value(dat)?
@@ -569,10 +576,10 @@ func editor_main_entry()
                                                             {
                                                                 do historys->remove(index);
                                                                 assert(
-                                                                    fsys::writeall(
+                                                                    editor::file::writeall(
                                                                         fsys::normalize(
                                                                             std::host_path())/ "builtin" / "editor.dat.je4cache",
-                                                                        editor_configs->serialize->unwrap));
+                                                                        editor_configs->serialize->unwrap: buffer));
                                                             }
                                                         none?;
                                                     }
