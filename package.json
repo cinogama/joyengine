@@ -18,6 +18,11 @@
             "src" : "3rd/pkg",
             "version" : "1.0.0"
         },
+        "filestream" : {
+            "path" : "pkg",
+            "remote" : "https://git.cinogama.net/cinogamaproject/woolangpackages",
+            "version" : "1.0.0"
+        },
         "fsys" : {
             "path" : "pkg",
             "remote" : "https://git.cinogama.net/cinogamaproject/woolangpackages",

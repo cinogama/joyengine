@@ -6,6 +6,8 @@ import pkg::try;
 import pkg::iterator;
 import pkg::regex;
 import pkg::worst;
+import pkg::filestream;
+import pkg::buffer;
 
 using fsys;
 using iterator;
@@ -13,6 +15,27 @@ using iterator;
 let current_workpath = fsys::workpath();
 let third_party_located_path = current_workpath / "3rd";
 let build_path = current_workpath / "build";
+
+func readall(path: fsys::path_t)=> option<string>
+{
+    try! fs = filestream::open(path, filestream::mode::read);
+    defer do fs->close();
+    
+    let buf = fs->readbuf(fs->len);
+    return option::value(buf: string);
+}
+func writeall(path: fsys::path_t, content: buffer)=> bool
+{
+    match (filestream::open(path, filestream::mode::write))
+    {
+        none? return false;
+        value(fs)?
+        {
+            defer do fs->close();
+            return fs->write(content, 0, content->len);
+        }
+    }
+}
 
 func copy_file_consider_last_modified_time(
     source_path: fsys::path_t, target_path_to_place_dir: fsys::path_t, filter_func: (fsys::path_t)=> bool)=> result<void, string>
@@ -199,9 +222,9 @@ func scan_pkg_entry_leave_function_in_path(i, skip_process_and_socket)
                 continue;
                 
             for (let content : recursive_walk(pkg_dir)
-                    |> iter_result
-                    |> filter(\p = isfile(p) && ext == ".cpp" || ext == ".c" where ext = extension(p)->lower;)
-                    |> filter_map(\p = readall(p);))
+                |> iter_result
+                |> filter(\p = isfile(p) && ext == ".cpp" || ext == ".c" where ext = extension(p)->lower;)
+                |> filter_map(\p = readall(p);))
             {
                 if (!entry_r->search(content) |> collect -> empty)
                 {
@@ -260,7 +283,7 @@ void je_extern_lib_woo_api_finish_impl(wo_dylib_handle_t handle_to_free)
 }
 "@;
         
-    if (!writeall(current_workpath / "src" / "jeecs_extern_library_woo_api.hpp", result))
+    if (!writeall(current_workpath / "src" / "jeecs_extern_library_woo_api.hpp", result: buffer))
         throw! F"Failed to update jeecs_extern_library_woo_api.hpp.";
     return_ok!;
 }
@@ -273,8 +296,8 @@ func generate_je_static_module_decls()=> result<void, string>
     for (let p : walk(current_workpath / "module")->iterator::iter_result)
     {
         if (module_name_regex->test(filename(p))
-                && isdir(p)
-                && exist(p / "CMakeLists.txt"))
+            && isdir(p)
+            && exist(p / "CMakeLists.txt"))
         {
             module_name_list->add(purename(p));
         }
@@ -334,7 +357,7 @@ void je_extern_lib_module_finish_impl(std::vector<wo_dylib_handle_t>* inout_lib_
 }
 "@;
         
-    if (!writeall(current_workpath / "src" / "jeecs_extern_library_module.hpp", result))
+    if (!writeall(current_workpath / "src" / "jeecs_extern_library_module.hpp", result: buffer))
         throw! F"Failed to update jeecs_extern_library_module.hpp.";
         
     return result::ok(do nil);
@@ -345,11 +368,11 @@ func generate_je_3rd_pkg_decls(skip_process_and_socket: bool)=> result<void, str
     let libfuncs = scan_extern_function_in_path(
         recursive_walk(current_workpath / "3rd" / "pkg")->iterator::iter_result
             |> filter(\p = extension(p)->lower == ".wo";), skip_process_and_socket)
-        ->> \libname, funcnames = (libname, funcname_symbolname->to_vec)
-            where funcname_symbolname = funcnames->> \fname = (fname, fname);
+    ->> \libname, funcnames = (libname, funcname_symbolname->to_vec)
+        where funcname_symbolname = funcnames->> \fname = (fname, fname);
         ;
-        ;
-        
+    ;
+    
     let (libentry, libleave) = scan_pkg_entry_leave_function_in_path(
         walk(current_workpath / "3rd" / "pkg")->iterator::iter_result,
         skip_process_and_socket);
@@ -428,7 +451,7 @@ void je_extern_lib_3rd_pkgs_finish_impl(std::vector<wo_dylib_handle_t>* inout_li
 }
 "@;
         
-    if (!writeall(current_workpath / "src" / "jeecs_extern_library_3rd_pkg.hpp", result))
+    if (!writeall(current_workpath / "src" / "jeecs_extern_library_3rd_pkg.hpp", result: buffer))
         throw! F"Failed to update jeecs_extern_library_3rd_pkg.hpp.";
     return_ok!;
 }
@@ -440,7 +463,7 @@ func copy_engine_and_editor_builtin_files()
         build_path,
         \p = !path_str->end_with("towoo/types.wo") && !path_str->end_with("towoo/components.wo")
             where path_str = p->to_string->lower
-        ;);
+            ;);
     try! _ = copy_entier_dir(current_workpath / "builtin", build_path, \_ = true;);
     try! _ = copy_entier_dir(current_workpath / "include", build_path / "builtin", \_ = true;);
     try! _ = copy_entier_dir(current_workpath / "3rd" / "woolang" / "include", build_path / "builtin", \_ = true;);
