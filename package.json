@@ -12,6 +12,11 @@
             "src" : "3rd/pkg",
             "version" : "1.0.0"
         },
+        "concept" : {
+            "path" : "pkg",
+            "remote" : "https://git.cinogama.net/cinogamaproject/woolangpackages",
+            "version" : "1.0.0"
+        },
         "crashhandler" : {
             "path" : "pkg",
             "remote" : "https://git.cinogama.net/cinogamaproject/woolangpackages",

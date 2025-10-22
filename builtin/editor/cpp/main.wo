@@ -46,7 +46,7 @@ namespace editor
     }
     {
         // Cmake所在路径，项目会使用此路径指示的cmake
-        let CMAKE_PATH_MAY_NULL =  std::env("CMAKE")->>\p = fsys::normalize(p);;
+        let CMAKE_PATH_MAY_NULL = std::platform::env("CMAKE")->>\p = fsys::normalize(p);;
         
         // C++模块样例，创建项目文件时会复制这个目录
         let CXX_PROJECT_EXAMPLE_PATH = fsys::normalize(F"{std::host_path()}/builtin/cxxproject");
