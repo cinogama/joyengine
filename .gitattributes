@@ -2,3 +2,5 @@
 /src/jeecs_extern_library_3rd_pkg.cpp text eol=lf
 /src/jeecs_extern_library_module.cpp text eol=lf
 *.dae filter=lfs diff=lfs merge=lfs -text
+/package.json text eol=lf
+/package.lock.json text eol=lf
