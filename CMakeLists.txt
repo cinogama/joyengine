@@ -39,11 +39,7 @@ if (JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD)
     set (WO_CMAKE_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
     string (TOUPPER ${WO_CMAKE_BUILD_TYPE} WO_CMAKE_BUILD_TYPE_UPPER_CASE)
 
-    if ("${WO_CMAKE_BUILD_TYPE_UPPER_CASE}" STREQUAL "DEBUG")
-        set(JE4_FETCHING_BAOZI_CMDLINE "baozi install -source -nonative -profile debug")
-    else ()
-        set(JE4_FETCHING_BAOZI_CMDLINE "baozi install -source -nonative")
-    endif ()
+    set(JE4_FETCHING_BAOZI_CMDLINE "baozi install")
     
     message(STATUS "Fetching woolang packages.")
     

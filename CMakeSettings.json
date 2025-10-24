@@ -13,7 +13,7 @@
       "variables": [
         {
           "name": "JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD",
-          "value": "False",
+          "value": "Ture",
           "type": "BOOL"
         },
         {
@@ -51,7 +51,7 @@
       "variables": [
         {
           "name": "JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD",
-          "value": "False",
+          "value": "Ture",
           "type": "BOOL"
         },
         {
@@ -89,7 +89,7 @@
       "variables": [
         {
           "name": "JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD",
-          "value": "False",
+          "value": "Ture",
           "type": "BOOL"
         },
         {
@@ -132,7 +132,7 @@
       "variables": [
         {
           "name": "JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD",
-          "value": "False",
+          "value": "Ture",
           "type": "BOOL"
         },
         {
