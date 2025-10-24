@@ -38,19 +38,17 @@ set(JE4_IGNORED_WOOLANG_PKG_LIST    "" CACHE STRING    "Woolang package in this 
 if (JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD)
     set (WO_CMAKE_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
     string (TOUPPER ${WO_CMAKE_BUILD_TYPE} WO_CMAKE_BUILD_TYPE_UPPER_CASE)
-
-    set(JE4_FETCHING_BAOZI_CMDLINE "baozi install")
     
     message(STATUS "Fetching woolang packages.")
     
     if (WIN32)
         execute_process(
-            COMMAND cmd /c ${JE4_FETCHING_BAOZI_CMDLINE} 
+            COMMAND baozi install
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
             RESULT_VARIABLE JE4_CMAKE_STATUS_PACAKGE_INSTALL_RESULT)
     else()
         execute_process(
-            COMMAND sh -c "${JE4_FETCHING_BAOZI_CMDLINE}"
+            COMMAND sh -c "baozi install"
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
             RESULT_VARIABLE JE4_CMAKE_STATUS_PACAKGE_INSTALL_RESULT)
     endif()
