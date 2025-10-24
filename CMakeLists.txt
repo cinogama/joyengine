@@ -43,7 +43,7 @@ if (JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD)
     
     if (WIN32)
         execute_process(
-            COMMAND baozi install
+            COMMAND baozi.bat install
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
             RESULT_VARIABLE JE4_CMAKE_STATUS_PACAKGE_INSTALL_RESULT)
     else()
