@@ -2146,7 +2146,10 @@ WO_API wo_api wojeapi_typemgr_get_unregister_count(wo_vm vm, wo_value args)
 {
     return wo_ret_int(vm, (wo_integer_t)jedbg_get_unregister_type_count());
 }
-
+WO_API wo_api wojeapi_get_woolang_commit_sha(wo_vm vm, wo_value args)
+{
+    return wo_ret_string(vm, wo_commit_sha());
+}
 WO_API wo_api wojeapi_get_all_internal_scripts(wo_vm vm, wo_value args)
 {
     wo_value s = wo_reserve_stack(vm, 3, &args);

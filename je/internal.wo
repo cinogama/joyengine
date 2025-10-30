@@ -6,6 +6,8 @@ namespace je
 {
     namespace woolang
     {
+        extern("libjoyecs", "wojeapi_get_woolang_commit_sha")
+            public func get_woolang_commit_sha()=> string;
         extern("libjoyecs", "wojeapi_get_all_internal_scripts")
             public func get_all_internal_scripts()=> dict<string, string>;
     }

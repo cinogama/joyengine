@@ -431,6 +431,7 @@ namespace editor
                                         self.m_path->to_string,
                                         self->get_vfile_export_path->to_string,
                                     ]: dynamic);
+                                dat->set("wooly.usingWoolangVersion": dynamic, je::woolang::get_woolang_commit_sha(): dynamic);
                                     
                                 if (!file::writeall(vsc_config_path, dat->serialize->unwrap: buffer))
                                 {
