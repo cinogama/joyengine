@@ -1,7 +1,8 @@
 {
     "dependence" : {
         "async" : {
-            "path" : "pkg"
+            "path" : "pkg",
+            "src" : "3rd/pkg"
         },
         "buffer" : {
             "path" : "pkg",
