@@ -1,0 +1,18 @@
+# Baozi ignored files
+/pkg
+/.vs
+/.vscode
+/build
+/woolang
+/debug*
+/release*
+/*.exe
+/*.dll
+/woolang
+/woolang_debug
+/woolang32
+/woolang32_debug
+/*.so
+/*.dylib
+/*.lib
+/*.pdb

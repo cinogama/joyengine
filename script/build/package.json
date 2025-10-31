@@ -1,0 +1,32 @@
+{
+    "dependence" : {
+        "buffer" : {
+            "path" : "pkg"
+        },
+        "filestream" : {
+            "path" : "pkg"
+        },
+        "fsys" : {
+            "path" : "pkg"
+        },
+        "iterator" : {
+            "path" : "pkg"
+        },
+        "regex" : {
+            "path" : "pkg"
+        },
+        "try" : {
+            "path" : "pkg"
+        },
+        "worst" : {
+            "path" : "pkg"
+        }
+    },
+    "name" : "build",
+    "test_dependence" : {
+        "test" : {
+            "path" : "pkg"
+        }
+    },
+    "woolang" : {}
+}

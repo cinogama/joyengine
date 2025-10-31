@@ -6,13 +6,15 @@ import pkg::try;
 import pkg::iterator;
 import pkg::regex;
 import pkg::worst;
+import pkg::worst::macro;
 import pkg::filestream;
 import pkg::buffer;
 
 using fsys;
 using iterator;
 
-let current_workpath = fsys::workpath();
+let current_workpath = parent(parent(parent(normalize(__FILE__!))));
+
 let third_party_located_path = current_workpath / "3rd";
 let build_path = current_workpath / "build";
 
@@ -54,14 +56,14 @@ func copy_file_consider_last_modified_time(
     if (!need_copy)
     {
         try! atime = lastwrite(source_path)
-            -> map_err(\eno = F"Unable to get last write time of {source_path->to_string()}: {eno}";);
+            -> or_map(\eno = F"Unable to get last write time of {source_path->to_string()}: {eno}";);
         try! btime = lastwrite(target_file_path)
-            -> map_err(\eno = F"Unable to get last write time of {target_file_path->to_string()}: {eno}";);
+            -> or_map(\eno = F"Unable to get last write time of {target_file_path->to_string()}: {eno}";);
             
         if (atime != btime)
         {
             try! _ = remove(target_file_path)
-                -> map_err(\eno = F"Unable to remove {target_file_path->to_string()}: {eno}";);
+                -> or_map(\eno = F"Unable to remove {target_file_path->to_string()}: {eno}";);
             need_copy = true;
         }
     }
@@ -72,7 +74,7 @@ func copy_file_consider_last_modified_time(
         {
             std::println(F"Copying file {source_path->to_string()} to {target_file_path->to_string()}.");
             try! _ = copy(source_path, target_file_path)
-                -> map_err(\eno = F"Unable to copy {source_path->to_string()} to {target_file_path->to_string()}: {eno}";);
+                -> or_map(\eno = F"Unable to copy {source_path->to_string()} to {target_file_path->to_string()}: {eno}";);
         }
         else
             std::println(
@@ -95,7 +97,7 @@ func copy_entier_dir(source_dir: fsys::path_t, target_path_to_place_dir: fsys::p
     do mkdir(this_target_path);
     
     try! walker = walk(source_dir)
-        -> map_err(\eno = F"Unable to walk source directory {source_dir->to_string()}: {eno}";);
+        -> or_map(\eno = F"Unable to walk source directory {source_dir->to_string()}: {eno}";);
         
     for (let p : walker)
     {
@@ -168,7 +170,7 @@ func copy_pkgs(copy_src_only: bool)=> result<void, string>
         if (isfile(path))
         {
             try! relative_path = relative(path, source_path)
-                -> map_err(\eno = F"Failed to get relative path: {eno}.";);
+                -> or_map(\eno = F"Failed to get relative path: {eno}.";);
                 
             do mkdir(parent(target_path / relative_path));
             

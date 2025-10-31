@@ -35,23 +35,22 @@ set(JE4_IGNORED_WOOLANG_PKG_LIST    "" CACHE STRING    "Woolang package in this 
 ##############################################################################
 # Install packages by baozi before build script,
 
+if (WIN32)
+    set(JE4_BAOZI_NAME baozi.bat)
+else()
+    set(JE4_BAOZI_NAME baozi)
+endif()
+
 if (JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD)
     set (WO_CMAKE_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
     string (TOUPPER ${WO_CMAKE_BUILD_TYPE} WO_CMAKE_BUILD_TYPE_UPPER_CASE)
     
     message(STATUS "Fetching woolang packages.")
     
-    if (WIN32)
-        execute_process(
-            COMMAND baozi.bat install
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-            RESULT_VARIABLE JE4_CMAKE_STATUS_PACAKGE_INSTALL_RESULT)
-    else()
-        execute_process(
-            COMMAND sh -c "baozi install"
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-            RESULT_VARIABLE JE4_CMAKE_STATUS_PACAKGE_INSTALL_RESULT)
-    endif()
+    execute_process(
+        COMMAND ${JE4_BAOZI_NAME} install
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        RESULT_VARIABLE JE4_CMAKE_STATUS_PACAKGE_INSTALL_RESULT)
 
     if (JE4_CMAKE_STATUS_PACAKGE_INSTALL_RESULT EQUAL 0)
         message(STATUS "Woolang packages installed successfully.")
@@ -79,8 +78,8 @@ endif()
 # Execute build script.
 
 execute_process(
-    COMMAND woolang ./script/build.wo --enable-halt-when-panic 1 ${JE4_BUILD_SCRIPT_CMDS} 
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    COMMAND ${JE4_BAOZI_NAME} run --enable-halt-when-panic 1 ${JE4_BUILD_SCRIPT_CMDS} 
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/script/build
     RESULT_VARIABLE JE4_CMAKE_STATUS_BUILD_SCRIPT)
 
 if (JE4_CMAKE_STATUS_BUILD_SCRIPT EQUAL 0)

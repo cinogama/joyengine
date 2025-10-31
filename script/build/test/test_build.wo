@@ -1,0 +1,17 @@
+// Test build.wo
+
+import pkg::test;
+
+import build;
+
+namespace build::unit_tests
+{
+    func test()=> void
+    {
+        test::begin();
+        defer test::end();
+
+        // Add your tests here.
+    }
+    test();
+}

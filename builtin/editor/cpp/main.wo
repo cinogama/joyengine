@@ -131,7 +131,7 @@ namespace editor
                         ||filename(p)->lower->begin_with("libwoo")))
                 {
                     try! _ = copy(p, cxx_proj_path/".engine"/"library"/filename(p))
-                        -> map_err(\errno = F"复制文件：`{p}` 失败({errno})";)
+                        -> or_map(\errno = F"复制文件：`{p}` 失败({errno})";)
                         ;
                 }
             }
@@ -250,7 +250,7 @@ endif()
                         throw! F"无法创建C++模块项目，{cxx_proj_path}目录已经存在";
                         
                     try! _ = copy(CXX_PROJECT_EXAMPLE_PATH, cxx_proj_path)
-                        -> map_err(\errid = F"复制文件失败({errid})";)
+                        -> or_map(\errid = F"复制文件失败({errid})";)
                         =>> \_ = update_engine_file(cxx_proj_path);
                         ;
                         
