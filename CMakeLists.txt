@@ -78,7 +78,7 @@ endif()
 # Execute build script.
 
 execute_process(
-    COMMAND ${JE4_BAOZI_NAME} run --enable-halt-when-panic 1 ${JE4_BUILD_SCRIPT_CMDS} 
+    COMMAND ${JE4_BAOZI_NAME} run ./build.wo --enable-halt-when-panic 1 ${JE4_BUILD_SCRIPT_CMDS} 
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/script/build
     RESULT_VARIABLE JE4_CMAKE_STATUS_BUILD_SCRIPT)
 

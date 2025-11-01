@@ -1294,8 +1294,7 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
                 index_datas.push_back(p1idx);
                 index_datas.push_back(p2idx);
 
-                // NOTE: 在此计算切线向量，需要注意，尽管模型中的面共用顶点，但是我们可以认为切线向量是近似一致的
-                //  我们不需要权衡一个顶点所属的所有面的切线向量，只需要取一个近似值即可
+                // NOTE: 在此计算切线向量，对于多个面共用的顶点，将计算的切线全部累加，最后取单位向量
                 //  不使用模型自带的切线。
 
                 auto& p0 = vertex_datas[p0idx];
