@@ -1,5 +1,0 @@
-# Default Gitlab-CICD for test.
-include:
-  project: '/cinogamaproject/woolangpackages/test'
-  ref: master
-  file: '.gitlab-ci.yml'

@@ -1,10 +1,10 @@
-// Test build.wo
+// Test prebuild.wo
 
 import pkg::test;
 
-import build;
+import prebuild;
 
-namespace build::unit_tests
+namespace prebuild::unit_tests
 {
     func test()=> void
     {

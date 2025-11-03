@@ -22,7 +22,7 @@
             "path" : "pkg"
         }
     },
-    "name" : "build",
+    "name" : "prebuild",
     "test_dependence" : {
         "test" : {
             "path" : "pkg"

@@ -63,30 +63,30 @@ else()
     message(STATUS "JE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD is disabled.")
 endif()
 
-set (JE4_BUILD_SCRIPT_CMDS "")
+set (JE4_PREBUILD_SCRIPT_CMDS "")
 
 if (JE4_STATIC_LINK_MODULE_AND_PKGS)
-     list(APPEND JE4_BUILD_SCRIPT_CMDS "-static-link-pkgs")
+     list(APPEND JE4_PREBUILD_SCRIPT_CMDS "-static-link-pkgs")
 endif()
 if (JE4_ENABLE_OPENGLES300_GAPI AND WIN32)
-    list(APPEND JE4_BUILD_SCRIPT_CMDS "-gles-win32")
+    list(APPEND JE4_PREBUILD_SCRIPT_CMDS "-gles-win32")
 endif()
 if (JE4_ENABLE_WEBGL20_GAPI)
-    list(APPEND JE4_BUILD_SCRIPT_CMDS "-webgl")
+    list(APPEND JE4_PREBUILD_SCRIPT_CMDS "-webgl")
 endif()
 
 # Execute build script.
 
 execute_process(
-    COMMAND ${JE4_BAOZI_NAME} run ./build.wo --enable-halt-when-panic 1 ${JE4_BUILD_SCRIPT_CMDS} 
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/script/build
-    RESULT_VARIABLE JE4_CMAKE_STATUS_BUILD_SCRIPT)
+    COMMAND ${JE4_BAOZI_NAME} run ./prebuild.wo --enable-halt-when-panic 1 ${JE4_PREBUILD_SCRIPT_CMDS} 
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/script/prebuild
+    RESULT_VARIABLE JE4_CMAKE_STATUS_PREBUILD_SCRIPT)
 
-if (JE4_CMAKE_STATUS_BUILD_SCRIPT EQUAL 0)
+if (JE4_CMAKE_STATUS_PREBUILD_SCRIPT EQUAL 0)
     message(STATUS "Build script executed successfully.")
 else()
     message(FATAL_ERROR 
-        "Failed to execute build script(${JE4_CMAKE_STATUS_BUILD_SCRIPT}), please check the \
+        "Failed to execute build script(${JE4_CMAKE_STATUS_PREBUILD_SCRIPT}), please check the \
         error message above.")
 endif()
 
