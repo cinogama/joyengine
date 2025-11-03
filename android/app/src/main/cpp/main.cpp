@@ -9,11 +9,11 @@
 #include <android/asset_manager_jni.h>
 #include <sys/stat.h>
 
+#include <optional>
+
 extern "C" {
 #include <game-activity/native_app_glue/android_native_app_glue.c>
 }
-
-class jegl_android_surface_manager;
 
 struct _jegl_window_android_app
 {
@@ -21,80 +21,67 @@ struct _jegl_window_android_app
     void* m_android_window;
 };
 
-class jegl_android_surface_manager
+class je_game_engine_context_for_android : jeecs::game_engine_context
 {
-    JECS_DISABLE_MOVE_AND_COPY(jegl_android_surface_manager);
+    JECS_DISABLE_MOVE_AND_COPY(je_game_engine_context_for_android);
 
-    size_t _je_log_callback;
-    jeecs::typing::type_unregister_guard* _je_type_guard;
-
-    jegl_context* _jegl_graphic_thread;
-    jegl_sync_state _jegl_graphic_thread_state;
-
-    bool _jegl_android_update_paused;
-    _jegl_window_android_app _jegl_window_android_app;
-
-    static void _jegl_android_sync_thread_created(jegl_context* gthread, void* android_window_app)
+    struct app_and_graphic_context
     {
-        jeecs::debug::loginfo("Graphic interface created!");
+        _jegl_window_android_app m_app_context;
+        jeecs::graphic::graphic_syncer_host* m_graphic_syncer;
+    };
 
-        gthread->m_config.m_userdata = android_window_app;
-        instance()._jegl_graphic_thread = gthread;
-    }
+    bool m_frame_update_paused;
+    std::optional<app_and_graphic_context> m_android_app_context;
+    std::optional<application_request> m_request;
+
+    je_log_regid_t m_registered_log_callback_id;
     static void _je_log_to_android(int level, const char* msg, void*)
     {
         switch (level)
         {
-            case JE_LOG_FATAL:
-                LOGE("%s", msg); break;
-            case JE_LOG_ERROR:
-                LOGE("%s", msg); break;
-            case JE_LOG_WARNING:
-                LOGW("%s", msg); break;
-            case JE_LOG_INFO:
-                LOGI("%s", msg); break;
-            case JE_LOG_NORMAL:
-            default:
-                LOGV("%s", msg); break;
+        case JE_LOG_FATAL:
+            LOGE("%s", msg); break;
+        case JE_LOG_ERROR:
+            LOGE("%s", msg); break;
+        case JE_LOG_WARNING:
+            LOGW("%s", msg); break;
+        case JE_LOG_INFO:
+            LOGI("%s", msg); break;
+        case JE_LOG_NORMAL:
+        default:
+            LOGV("%s", msg); break;
         }
     }
 
-    jegl_android_surface_manager()
-        : _je_log_callback(0)
-        , _je_type_guard(nullptr)
-        , _jegl_graphic_thread(nullptr)
-        ,  _jegl_graphic_thread_state(jegl_sync_state::JEGL_SYNC_SHUTDOWN)
-        ,  _jegl_android_update_paused(false)
-        ,  _jegl_window_android_app({})
+public:
+    struct application_request
     {
-        using namespace jeecs;
-
-        je_init(0, nullptr);
-
-        _je_log_callback = je_log_register_callback(_je_log_to_android, nullptr);
-        _je_type_guard = new typing::type_unregister_guard();
-        entry::module_entry(_je_type_guard);
-
-        jeecs::debug::loginfo("Android application started!");
-    }
-    ~jegl_android_surface_manager()
-    {
-        using namespace jeecs;
-
-        entry::module_leave(_je_type_guard);
-        je_log_unregister_callback(_je_log_callback);
-
-        je_finish();
-    }
+        enum class request_kind
+        {
+            INIT_REND_WINDOW,
+            TERM_REND_WINDOW,
+        };
+        union request_argument
+        {
+            _jegl_window_android_app m_app_context;
+        };
+        request_kind m_type;
+        request_argument m_argm;
+    };
 
 public:
-    static jegl_android_surface_manager& instance()
+    je_game_engine_context_for_android(struct android_app* app)
+        : game_engine_context(0, nullptr)
+        , m_frame_update_paused(true)
+        , m_android_app_context(std::nullopt)
+        , m_request(std::nullopt)
     {
-        static jegl_android_surface_manager _instance;
-        return _instance;
-    }
-    void request_host_init(struct android_app* app)
-    {
+        m_registered_log_callback_id =
+            je_log_register_callback(
+                &je_game_engine_context_for_android::_je_log_to_android,
+                nullptr);
+
         JavaVM* java_vm = app->activity->vm;
         JNIEnv* java_env = nullptr;
 
@@ -110,7 +97,9 @@ public:
         if (native_activity_clazz == nullptr)
             abort();
 
-        jmethodID method_id = java_env->GetMethodID(native_activity_clazz, "doInitJoyEngineBasicConfig", "()V");
+        jmethodID method_id = java_env->GetMethodID(
+            native_activity_clazz, "doInitJoyEngineBasicConfig", "()V");
+
         if (method_id == nullptr)
             abort();
 
@@ -120,91 +109,141 @@ public:
         if (jni_return != JNI_OK)
             abort();
 
+        jeecs::debug::loginfo("Android application started!");
     }
-    void sync_begin(void* android_app, void* android_window)
+    ~je_game_engine_context_for_android()
     {
-        _jegl_window_android_app.m_android_app = android_app;
-        _jegl_window_android_app.m_android_window = android_window;
-
-        if (_jegl_android_update_paused)
-        {
-            assert(_jegl_graphic_thread != nullptr);
-            _jegl_android_update_paused = false;
-        }
-        else
-        {
-            _jegl_android_update_paused = false;
-            _jegl_graphic_thread_state = jegl_sync_state::JEGL_SYNC_SHUTDOWN;
-            jegl_register_sync_thread_callback(
-                _jegl_android_sync_thread_created, &_jegl_window_android_app);
-
-            // Execute script entry in another thread.
-            std::thread(je_main_script_entry).detach();
-        }
-
+        je_log_unregister_callback(m_registered_log_callback_id);
     }
-    void sync_pause()
+
+    enum class app_request_result
     {
-        // The app enters the background, will destroy surface & context..
-        // Send a reboot signal, and stop update until awake by sync_begin.
-        assert(_jegl_graphic_thread != nullptr);
-        _jegl_android_update_paused = true;
+        GRAPHIC_FRAME_NEED_TO_UPDATE,
+        GRAPHIC_FRAME_NOT_READY,
+        GRAPHIC_FAILED_TO_INIT,
+    };
 
-        jegl_reboot_graphic_thread(_jegl_graphic_thread, nullptr);
+    void request_to_init(
+        android_app* app)
+    {
+        auto& request = m_request.emplace();
 
-        // Let update to close interface here.
-        sync_update();
+        request.m_type = application_request::request_kind::INIT_REND_WINDOW;
+        request.m_argm.m_app_context.m_android_app = app;
+        request.m_argm.m_app_context.m_android_window = app->window;
     }
-    bool sync_update()
+
+    void request_to_term()
     {
-        if (_jegl_android_update_paused &&
-            _jegl_graphic_thread_state != jegl_sync_state::JEGL_SYNC_COMPLETE)
-        {
-            je_clock_sleep_for(0.1);
-            return true;
-        }
+        auto& request = m_request.emplace();
+        request.m_type = application_request::request_kind::TERM_REND_WINDOW;
+    }
 
-        if (_jegl_graphic_thread != nullptr)
+    app_request_result process_app_request()
+    {
+        if (m_request.has_value())
         {
-            if (_jegl_graphic_thread_state != jegl_sync_state::JEGL_SYNC_COMPLETE)
-                jegl_sync_init(
-                    _jegl_graphic_thread,
-                    _jegl_graphic_thread_state == jegl_sync_state::JEGL_SYNC_REBOOT);
+            auto request = m_request.value();
+            m_request.reset();
 
-            _jegl_graphic_thread_state = jegl_sync_update(_jegl_graphic_thread);
-            if (_jegl_graphic_thread_state != jegl_sync_state::JEGL_SYNC_COMPLETE)
+            switch (request.m_type)
             {
-                if (jegl_sync_shutdown(
-                    _jegl_graphic_thread,
-                    _jegl_graphic_thread_state == jegl_sync_state::JEGL_SYNC_REBOOT))
-                    _jegl_graphic_thread = nullptr;
-            }
+            case application_request::request_kind::INIT_REND_WINDOW:
+                if (m_frame_update_paused)
+                {
+                    if (!m_android_app_context.has_value())
+                    {
+                        auto* graphic_syncer = prepare_graphic(true);
+                        if (!graphic_syncer->check_context_ready_block(false))
+                        {
+                            // Entry script ended.
+                            jeecs::debug::logerr(
+                                "No graphic context requested during whole entry script execution.");
 
-            return true;
+                            return app_request_result::GRAPHIC_FAILED_TO_INIT;
+                        }
+
+                        auto& app_context = m_android_app_context.emplace();
+
+                        // Set graphic syncer:
+                        app_context.m_graphic_syncer = graphic_syncer;
+
+                        // Update app context:
+                        app_context.m_app_context = request.m_argm.m_app_context;
+
+
+                        auto* graphic_context =
+                            graphic_syncer->get_graphic_context_after_context_ready();
+                        graphic_context->m_config.m_userdata = &app_context.m_app_context;
+
+                        jegl_sync_init(graphic_context, false);
+                    }
+                    else
+                    {
+                        auto& app_context = m_android_app_context.value();
+
+                        assert(app_context.m_graphic_syncer != nullptr);
+
+                        // Update app context:
+                        app_context.m_app_context = request.m_argm.m_app_context;
+
+                        auto* graphic_context =
+                            app_context.m_graphic_syncer->get_graphic_context_after_context_ready();
+                        graphic_context->m_config.m_userdata = &app_context.m_app_context;
+
+                        jegl_reboot_graphic_thread(graphic_context, nullptr);
+                    }
+
+                    m_frame_update_paused = false;
+                }
+                else
+                    // Or bad request? log warning:
+                    jeecs::debug::logwarn("Bad application request in process_app_request.");
+                break;
+            case application_request::request_kind::TERM_REND_WINDOW:
+                if (!m_frame_update_paused)
+                {
+                    m_frame_update_paused = true;
+                }
+                break;
+            }
         }
-        return false;
+        if (m_frame_update_paused)
+            return app_request_result::GRAPHIC_FRAME_NOT_READY;
+        return app_request_result::GRAPHIC_FRAME_NEED_TO_UPDATE;
     }
-};
+    /* RETURN FALSE TO EXIT PROCESS */
+    bool update_frame()
+    {
+        switch (process_app_request())
+        {
+        case app_request_result::GRAPHIC_FRAME_NEED_TO_UPDATE:
+            if (frame() == jeecs::game_engine_context::frame_update_result::FRAME_UPDATE_CLOSE_REQUESTED)
+                return false;
+            break;
+        case app_request_result::GRAPHIC_FRAME_NOT_READY:
+            jeecs::je_clock_sleep_for(0.1);
+            break;
+        case app_request_result::GRAPHIC_FAILED_TO_INIT:
+            return false;
+        default:
+            jeecs::debug::logfatal("Unknown app_request_result value.");
+            return false;
+        }
+        return true;
+    }
+}
 
 AAssetManager* _asset_manager = nullptr;
+je_game_engine_context_for_android* g_android_game_engine_context = nullptr;
+
 struct _je_file_instance
 {
     FILE* m_raw_file;
     AAsset* m_asset_file;
 
-    _je_file_instance(AAsset* asset)
-        : m_raw_file(nullptr)
-        , m_asset_file(asset)
-    {
-        assert(m_asset_file != nullptr);
-    }
-    _je_file_instance(FILE* file)
-        : m_raw_file(file)
-        , m_asset_file(nullptr)
-    {
-        assert(m_raw_file != nullptr);
-    }
-
+    JECS_DISABLE_MOVE_AND_COPY(_je_file_instance);
+public:
     int close()
     {
         if (m_asset_file != nullptr)
@@ -220,95 +259,108 @@ struct _je_file_instance
         return result;
     }
 
+    _je_file_instance(AAsset* asset)
+        : m_raw_file(nullptr)
+        , m_asset_file(asset)
+    {
+        assert(m_asset_file != nullptr);
+    }
+    _je_file_instance(FILE* file)
+        : m_raw_file(file)
+        , m_asset_file(nullptr)
+    {
+        assert(m_raw_file != nullptr);
+    }
+
     ~_je_file_instance()
     {
         assert(m_raw_file == nullptr && m_asset_file == nullptr);
     }
+
+public:
+    static jeecs_raw_file _je_android_file_open(const char* path, size_t* out_len)
+    {
+        if (_asset_manager != nullptr && path[0] == '#')
+        {
+            AAsset* asset = AAssetManager_open(
+                _asset_manager,
+                path[1] == '/' ? path + 2 : path + 1,
+                AASSET_MODE_BUFFER);
+
+            if (asset)
+            {
+                *out_len = AAsset_getLength(asset);
+                return new _je_file_instance(asset);
+            }
+        }
+
+        FILE* fhandle = fopen(path, "rb");
+        if (fhandle)
+        {
+            struct stat cfstat;
+            if (stat(path, &cfstat) != 0)
+            {
+                fclose(fhandle);
+                return nullptr;
+            }
+            *out_len = cfstat.st_size;
+            return new _je_file_instance(fhandle);
+        }
+        return nullptr;
+    }
+    static size_t _je_android_file_read(void* buffer, size_t elemsz, size_t elemcount, jeecs_raw_file file)
+    {
+        auto* finstance = (_je_file_instance*)file;
+        if (finstance->m_asset_file != nullptr)
+        {
+            // TODO: Uncomplete elem, need rewind?
+            return AAsset_read(finstance->m_asset_file, buffer, elemsz * elemcount) / elemsz;
+        }
+        else
+        {
+            assert(finstance->m_raw_file != nullptr);
+            return fread(buffer, elemsz, elemcount, finstance->m_raw_file);
+        }
+    }
+    static size_t _je_android_file_tell(jeecs_raw_file file)
+    {
+        auto* finstance = (_je_file_instance*)file;
+        if (finstance->m_asset_file != nullptr)
+        {
+            return AAsset_getLength64(finstance->m_asset_file)
+                - AAsset_getRemainingLength64(finstance->m_asset_file);
+        }
+        else
+        {
+            assert(finstance->m_raw_file != nullptr);
+            return ftell(finstance->m_raw_file);
+        }
+    }
+    static int _je_android_file_seek(jeecs_raw_file file, int64_t offset, je_read_file_seek_mode mode)
+    {
+        auto* finstance = (_je_file_instance*)file;
+        if (finstance->m_asset_file != nullptr)
+        {
+            if (-1 != AAsset_seek64(finstance->m_asset_file, offset, mode))
+                return 0;
+            return -1;
+        }
+        else
+        {
+            assert(finstance->m_raw_file != nullptr);
+            return fseek(finstance->m_raw_file, offset, mode);
+        }
+    }
+    static int _je_android_file_close(jeecs_raw_file file)
+    {
+        auto* finstance = (_je_file_instance*)file;
+
+        auto ret = finstance->close();
+        delete finstance;
+
+        return ret;
+    }
 };
-
-jeecs_raw_file _je_android_file_open(const char* path, size_t* out_len)
-{
-    if (_asset_manager != nullptr && path[0] == '#')
-    {
-        AAsset* asset = AAssetManager_open(
-            _asset_manager,
-            path[1] == '/' ? path + 2 : path + 1,
-            AASSET_MODE_BUFFER);
-
-        if (asset)
-        {
-            *out_len = AAsset_getLength(asset);
-            return new _je_file_instance(asset);
-        }
-    }
-
-    FILE* fhandle = fopen(path, "rb");
-    if (fhandle)
-    {
-        struct stat cfstat;
-        if (stat(path, &cfstat) != 0)
-        {
-            fclose(fhandle);
-            return nullptr;
-        }
-        *out_len = cfstat.st_size;
-        return new _je_file_instance(fhandle);
-    }
-    return nullptr;
-}
-size_t _je_android_file_read(void* buffer, size_t elemsz, size_t elemcount, jeecs_raw_file file)
-{
-    auto* finstance = (_je_file_instance*)file;
-    if (finstance->m_asset_file != nullptr)
-    {
-        // TODO: Uncomplete elem, need rewind?
-        return AAsset_read(finstance->m_asset_file, buffer, elemsz * elemcount) / elemsz;
-    }
-    else
-    {
-        assert(finstance->m_raw_file != nullptr);
-        return fread(buffer, elemsz, elemcount, finstance->m_raw_file);
-    }
-}
-size_t _je_android_file_tell(jeecs_raw_file file)
-{
-    auto* finstance = (_je_file_instance*)file;
-    if (finstance->m_asset_file != nullptr)
-    {
-        return AAsset_getLength64(finstance->m_asset_file) 
-            - AAsset_getRemainingLength64(finstance->m_asset_file);
-    }
-    else
-    {
-        assert(finstance->m_raw_file != nullptr);
-        return ftell(finstance->m_raw_file);
-    }
-}
-int _je_android_file_seek(jeecs_raw_file file, int64_t offset, je_read_file_seek_mode mode)
-{
-    auto* finstance = (_je_file_instance*)file;
-    if (finstance->m_asset_file != nullptr)
-    {
-        if (-1 != AAsset_seek64(finstance->m_asset_file, offset, mode))
-            return 0;
-        return -1;
-    }
-    else
-    {
-        assert(finstance->m_raw_file != nullptr);
-        return fseek(finstance->m_raw_file, offset, mode);
-    }
-}
-int _je_android_file_close(jeecs_raw_file file)
-{
-    auto* finstance = (_je_file_instance*)file;
-    
-    auto ret = finstance->close();
-
-    delete finstance;
-
-    return ret;
-}
 
 std::string jni_cstring(JNIEnv* env, jstring str)
 {
@@ -333,10 +385,7 @@ extern "C" {
             // "game" class if that suits your needs. Remember to change all instances of userData
             // if you change the class here as a reinterpret_cast is dangerous this in the
             // android_main function and the APP_CMD_TERM_WINDOW handler case.
-
-            jegl_android_surface_manager::instance().sync_begin(
-                    pApp, pApp->window);
-            jeal_global_volume(1.0f);
+            g_android_game_engine_context->request_to_init(pApp);
             break;
         }
         case APP_CMD_TERM_WINDOW:
@@ -344,8 +393,7 @@ extern "C" {
             // resources.
             //
             // We have to check if userData is assigned just in case this comes in really quickly
-            jegl_android_surface_manager::instance().sync_pause();
-            jeal_global_volume(0.0f);
+            g_android_game_engine_context->request_to_term();
             break;
         default:
             break;
@@ -369,7 +417,7 @@ extern "C" {
 
     extern "C" JNIEXPORT void JNICALL
         Java_net_cinogama_joyengineecs4a_MainActivity_initJoyEngine(
-            JNIEnv * env,
+            JNIEnv* env,
             jobject /* this */,
             jobject asset_manager,
             jstring library_path,
@@ -379,11 +427,11 @@ extern "C" {
         _asset_manager = AAssetManager_fromJava(env, asset_manager);
 
         jeecs_register_native_file_operator(
-                _je_android_file_open,
-                _je_android_file_read,
-                _je_android_file_tell,
-                _je_android_file_seek,
-                _je_android_file_close);
+            &_je_file_instance::_je_android_file_open,
+            &_je_file_instance::_je_android_file_read,
+            &_je_file_instance::_je_android_file_tell,
+            &_je_file_instance::_je_android_file_seek,
+            &_je_file_instance::_je_android_file_close);
 
         wo_set_exe_path(jni_cstring(env, library_path).c_str());
         jeecs_file_set_host_path(jni_cstring(env, cache_path).c_str());
@@ -485,10 +533,8 @@ extern "C" {
         // implemented in android_native_app_glue.c.
         android_app_set_motion_event_filter(pApp, motion_event_filter_func);
 
-        auto& jengine_interface_instance =
-                jegl_android_surface_manager::instance();
-
-        jengine_interface_instance.request_host_init(pApp);
+        je_game_engine_context_for_android game_engine_context(pApp);
+        g_android_game_engine_context = &game_engine_context;
 
         // This sets up a typical game/event loop. It will run until the app is destroyed.
         int events;
@@ -500,9 +546,14 @@ extern "C" {
                     pSource->process(pApp, pSource);
                 }
             }
+            
             // Update frame sync.
             _je_handle_inputs(pApp);
-            jengine_interface_instance.sync_update();
+
+            if (!game_engine_context.update_frame())
+                // Exit requested.
+                break;
+
         } while (!pApp->destroyRequested);
 
         jeecs::debug::loginfo("Android application exiting...");

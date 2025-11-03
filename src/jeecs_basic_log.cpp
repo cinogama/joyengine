@@ -136,7 +136,7 @@ je_log_regid_t je_log_register_callback(je_log_callback_t callback, void* userda
     return id;
 }
 
-void* je_log_unregister_callback(size_t regid)
+void* je_log_unregister_callback(je_log_regid_t regid)
 {
     std::lock_guard lg(registered_callbacks_mx);
     assert(registered_callbacks.find(regid) != registered_callbacks.end());

@@ -867,7 +867,7 @@ JE_API je_log_regid_t je_log_register_callback(je_log_callback_t callback, void*
 je_log_unregister_callback [基本接口]
 用于释放（解除注册）一个之前注册的日志发生时回调函数。
 */
-JE_API void* je_log_unregister_callback(size_t regid);
+JE_API void* je_log_unregister_callback(je_log_regid_t regid);
 
 /*
 je_log [基本接口]
@@ -2647,7 +2647,7 @@ jegl_reboot_graphic_thread [基本接口]
 */
 JE_API void jegl_reboot_graphic_thread(
     jegl_context* thread_handle,
-    const jegl_interface_config* config);
+    const jegl_interface_config* config_may_null);
 
 /*
 jegl_load_texture [基本接口]
@@ -9537,14 +9537,16 @@ namespace jeecs
                 self->graphic_context = context;
                 self->cv.notify_one();
             }
-            bool check_context_ready_no_lock()
+            bool check_context_ready_no_lock(bool do_sync_init)
             {
                 if (graphic_context.has_value())
                 {
                     in_frame_current_context = graphic_context.value();
                     graphic_context.reset();
 
-                    jegl_sync_init(in_frame_current_context, false);
+                    if (do_sync_init)
+                        jegl_sync_init(in_frame_current_context, false);
+
                     return true;
                 }
                 return false;
@@ -9559,7 +9561,7 @@ namespace jeecs
                 assert(in_frame_current_context != nullptr);
                 return in_frame_current_context;
             }
-            bool check_context_ready_block()
+            bool check_context_ready_block(bool do_sync_init)
             {
                 for (;;)
                 {
@@ -9569,7 +9571,7 @@ namespace jeecs
                     if (entry_script_ended)
                         return false;
 
-                    if (!check_context_ready_no_lock())
+                    if (!check_context_ready_no_lock(do_sync_init))
                     {
                         jeecs::debug::logerr(
                             "Failed to get graphic context, it should not happend.");
@@ -9579,10 +9581,10 @@ namespace jeecs
                 }
                 return true;
             }
-            bool check_context_ready_noblock()
+            bool check_context_ready_noblock(bool do_sync_init)
             {
                 std::lock_guard g(mx);
-                return check_context_ready_no_lock();
+                return check_context_ready_no_lock(do_sync_init);
             }
             bool frame()
             {
@@ -9609,7 +9611,7 @@ namespace jeecs
             {
                 for (;;)
                 {
-                    if (!check_context_ready_block())
+                    if (!check_context_ready_block(true))
                         break; // If the entry script ended, exit the loop.
 
                     while (frame())
@@ -12397,7 +12399,7 @@ namespace jeecs
             switch (graphic_context_state_for_update_manually)
             {
             case graphic_state::GRAPHIC_CONTEXT_NOT_READY:
-                if (!graphic_syncer->check_context_ready_noblock())
+                if (!graphic_syncer->check_context_ready_noblock(true))
                     break;
 
                 graphic_context_state_for_update_manually = graphic_state::GRAPHIC_CONTEXT_READY;
