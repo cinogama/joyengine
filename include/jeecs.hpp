@@ -12392,6 +12392,14 @@ namespace jeecs
             graphic_syncer = new graphic::graphic_syncer_host(execute_entry);
             return graphic_syncer;
         }
+        void mark_graphic_context_ready_manually()
+        {
+            assert(
+                graphic_syncer != nullptr
+                && graphic_context_state_for_update_manually == graphic_state::GRAPHIC_CONTEXT_NOT_READY);
+
+            graphic_context_state_for_update_manually = graphic_state::GRAPHIC_CONTEXT_READY;
+        }
         frame_update_result frame()
         {
             assert(graphic_syncer != nullptr);
@@ -12402,7 +12410,7 @@ namespace jeecs
                 if (!graphic_syncer->check_context_ready_noblock(true))
                     break;
 
-                graphic_context_state_for_update_manually = graphic_state::GRAPHIC_CONTEXT_READY;
+                mark_graphic_context_ready_manually();
                 /* FALL THROUGH */
                 [[fallthrough]];
             case graphic_state::GRAPHIC_CONTEXT_READY:

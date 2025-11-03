@@ -175,6 +175,8 @@ public:
                         graphic_context->m_config.m_userdata = &app_context.m_app_context;
 
                         jegl_sync_init(graphic_context, false);
+
+                        mark_graphic_context_ready_manually();
                     }
                     else
                     {
