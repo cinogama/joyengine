@@ -23,6 +23,8 @@ set(WO_DISABLE_FUNCTION_FOR_WASM        ON CACHE BOOL "Disable dynamic lib loadi
 set(JE4_IGNORED_WOOLANG_PKG_LIST        "process;socket" CACHE STRING "Ignore process and socket for WASM" FORCE)
 set(JE4_SPECIFY_OPENAL_LIB_NAME         "openal" CACHE STRING "Specify openal lib name" FORCE)
 
+add_compile_options(-pthread)
+
 # WASM64 is not supported well, so we use WASM32 as default.
 if (OFF)
     add_compile_options(-m64)
