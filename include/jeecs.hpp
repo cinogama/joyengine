@@ -9215,7 +9215,8 @@ namespace jeecs
                 int line_count = 0;
 
                 // Calculate the size of the text.
-                int min_px = INT_MAX, min_py = INT_MAX, max_px = INT_MIN, max_py = INT_MIN;
+                bool first_char = true;
+                int min_px = 0, min_py = 0, max_px = 0, max_py = 0;
 
                 walk_through_all_character(
                     [&](std::u32string_view field, std::u32string_view value) {
@@ -9301,11 +9302,21 @@ namespace jeecs
                                         TEXT_OFFSET.y
                                         * base_font_resource->m_scale_x);
 
-                                min_px = min_px > px_min ? px_min : min_px;
-                                min_py = min_py > py_min ? py_min : min_py;
-
-                                max_px = max_px < px_max ? px_max : max_px;
-                                max_py = max_py < py_max ? py_max : max_py;
+                                if (first_char)
+                                {
+                                    min_px = px_min;
+                                    min_py = py_min;
+                                    max_px = px_max;
+                                    max_py = py_max;
+                                    first_char = false;
+                                }
+                                else
+                                {
+                                    min_px = std::min(min_px, px_min);
+                                    min_py = std::min(min_py, py_min);
+                                    max_px = std::max(max_px, px_max);
+                                    max_py = std::max(max_py, py_max);
+                                }
 
                                 next_ch_x += character_info->m_advance_x;
                             }
