@@ -46,7 +46,7 @@ target_link_libraries(joyecs
 # Creates your game shared library. The name must be the same as the
 # one used for loading in your Kotlin/Java or AndroidManifest.txt files.
 add_library(joyengineecs4a SHARED main.cpp)
-
+target_compile_features(joyengineecs4a PRIVATE cxx_std_20)
 # Configure libraries CMake uses to link your target library.
 target_link_libraries(joyengineecs4a
         # JoyEngine core

@@ -35,7 +35,7 @@ set(JE4_IGNORED_WOOLANG_PKG_LIST    "" CACHE STRING    "Woolang package in this 
 ##############################################################################
 # Install packages by baozi before build script,
 
-if (WIN32)
+if (CMAKE_HOST_WIN32)
     set(JE4_BAOZI_NAME baozi.bat)
 else()
     set(JE4_BAOZI_NAME baozi)
@@ -76,7 +76,6 @@ if (JE4_ENABLE_WEBGL20_GAPI)
 endif()
 
 # Execute build script.
-
 execute_process(
     COMMAND ${JE4_BAOZI_NAME} run ./prebuild.wo --enable-halt-when-panic 1 ${JE4_PREBUILD_SCRIPT_CMDS} 
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/script/prebuild
@@ -106,7 +105,9 @@ if(MSVC)
     target_compile_options(joyengine_configs INTERFACE "/source-charset:utf-8")
 else()
     target_compile_options(joyengine_configs INTERFACE -fno-exceptions)
-    target_link_libraries(joyengine_configs INTERFACE pthread)
+    if (NOT ANDROID)
+        target_link_libraries(joyengine_configs INTERFACE pthread)
+    endif()
 endif()
 
 ##############################################################################

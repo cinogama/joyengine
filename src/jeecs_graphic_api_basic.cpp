@@ -760,8 +760,8 @@ bool jegl_update(
 
 void jegl_reboot_graphic_thread(jegl_context* thread_handle, const jegl_interface_config* config_may_null)
 {
-    if (config)
-        thread_handle->m_config = *config;
+    if (config_may_null != nullptr)
+        thread_handle->m_config = *config_may_null;
 
     thread_handle->_m_thread_notifier->m_reboot_flag = true;
 }

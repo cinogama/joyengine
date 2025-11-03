@@ -30,6 +30,20 @@ class je_game_engine_context_for_android : jeecs::game_engine_context
         _jegl_window_android_app m_app_context;
         jeecs::graphic::graphic_syncer_host* m_graphic_syncer;
     };
+    struct application_request
+    {
+        enum class request_kind
+        {
+            INIT_REND_WINDOW,
+            TERM_REND_WINDOW,
+        };
+        union request_argument
+        {
+            _jegl_window_android_app m_app_context;
+        };
+        request_kind m_type;
+        request_argument m_argm;
+    };
 
     bool m_frame_update_paused;
     std::optional<app_and_graphic_context> m_android_app_context;
@@ -53,22 +67,6 @@ class je_game_engine_context_for_android : jeecs::game_engine_context
             LOGV("%s", msg); break;
         }
     }
-
-public:
-    struct application_request
-    {
-        enum class request_kind
-        {
-            INIT_REND_WINDOW,
-            TERM_REND_WINDOW,
-        };
-        union request_argument
-        {
-            _jegl_window_android_app m_app_context;
-        };
-        request_kind m_type;
-        request_argument m_argm;
-    };
 
 public:
     je_game_engine_context_for_android(struct android_app* app)
@@ -222,7 +220,7 @@ public:
                 return false;
             break;
         case app_request_result::GRAPHIC_FRAME_NOT_READY:
-            jeecs::je_clock_sleep_for(0.1);
+            je_clock_sleep_for(0.1);
             break;
         case app_request_result::GRAPHIC_FAILED_TO_INIT:
             return false;
@@ -232,7 +230,7 @@ public:
         }
         return true;
     }
-}
+};
 
 AAssetManager* _asset_manager = nullptr;
 je_game_engine_context_for_android* g_android_game_engine_context = nullptr;

@@ -45,6 +45,8 @@
 #include <initializer_list>
 #include <optional>
 #include <tuple>
+#include <concepts>
+
 #ifdef __cpp_lib_execution
 #   include <execution>
 #endif
@@ -6454,10 +6456,8 @@ namespace jeecs
                     }
 
                     if constexpr (std::is_reference_v<ComponentT>)
-                    {
-                        assert(("Only maynot/anyof canbe here. 'je_ecs_world_update_dependences_archinfo' may have some problem.", false));
+                        // Only maynot/anyof canbe here. 'je_ecs_world_update_dependences_archinfo' may have some problem.
                         abort();
-                    }
                     else
                         return nullptr; // Only maynot/anyof can be here, no need to cast the type;
                 }
@@ -6622,7 +6622,7 @@ namespace jeecs
     */
 
     template<
-        slice_requirement::traits::is_view SliceView, 
+        slice_requirement::traits::is_view SliceView,
         slice_requirement::traits::is_requirement ... SliceRequirements>
     class collection
     {
@@ -6970,7 +6970,7 @@ namespace jeecs
         game_world _m_game_world;
 
         template<
-            slice_requirement::traits::is_view SliceView, 
+            slice_requirement::traits::is_view SliceView,
             slice_requirement::traits::is_requirement... SliceRequirements>
         jeecs::dependence* _fetch_query_slice_cache()
         {
@@ -7028,7 +7028,7 @@ namespace jeecs
         }
 
         template<
-            slice_requirement::traits::is_view SliceView, 
+            slice_requirement::traits::is_view SliceView,
             slice_requirement::traits::is_requirement ... SliceRequirements>
         inline typename collection<SliceView, SliceRequirements...>::slice query()
         {
@@ -7036,7 +7036,7 @@ namespace jeecs
                 _fetch_query_slice_cache<SliceView, SliceRequirements...>());
         }
         template<
-            slice_requirement::traits::is_view SliceView, 
+            slice_requirement::traits::is_view SliceView,
             slice_requirement::traits::is_requirement ... SliceRequirements>
         inline typename collection<SliceView, SliceRequirements...>::entity_slice query_entity()
         {
@@ -8390,8 +8390,8 @@ namespace jeecs
                     {
                         new_texture->pix(ix, iy).set(
                             src->pix(ix + x, iy + y).get());
-            }
-        }
+                    }
+                }
 #else
                 auto color_depth = (int)new_texture_format;
                 auto* dst_pixels = new_texture->resource()->m_raw_texture_data->m_pixels;
@@ -8409,7 +8409,7 @@ namespace jeecs
                 }
 #endif
                 return basic::resource<texture>(new_texture);
-    }
+            }
 
             class pixel
             {
@@ -8541,7 +8541,7 @@ namespace jeecs
                     (int)resource()->m_raw_texture_data->m_width,
                     (int)resource()->m_raw_texture_data->m_height);
             }
-};
+        };
         class shader : public resource_basic
         {
         private:
