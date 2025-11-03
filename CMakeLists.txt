@@ -91,23 +91,24 @@ endif()
 
 ##############################################################################
 
-add_library(joyengine_core_macro INTERFACE)
+add_library(joyengine_core_pre_define_macro INTERFACE)
 if (JE4_BUILD_SHARED_CORE)
-    target_compile_definitions(joyengine_core_macro INTERFACE -DWO_SHARED_LIB)
+    target_compile_definitions(joyengine_core_pre_define_macro INTERFACE -DWO_SHARED_LIB)
 else()
-    target_compile_definitions(joyengine_core_macro INTERFACE -DWO_STATIC_LIB)
+    target_compile_definitions(joyengine_core_pre_define_macro INTERFACE -DWO_STATIC_LIB)
 endif()
 
 add_library(joyengine_configs INTERFACE)
-target_link_libraries(joyengine_configs INTERFACE joyengine_core_macro)
+
+target_link_libraries(joyengine_configs INTERFACE joyengine_core_pre_define_macro)
 target_compile_features(joyengine_configs INTERFACE cxx_std_20)
+
 if(MSVC) 
     target_compile_options(joyengine_configs INTERFACE "/source-charset:utf-8")
 else()
     target_compile_options(joyengine_configs INTERFACE -fno-exceptions)
-    if (NOT ANDROID)
-        target_link_libraries(joyengine_configs INTERFACE pthread)
-    endif()
+    target_compile_options(joyengine_configs INTERFACE -pthread)
+    target_link_options(joyengine_configs INTERFACE -pthread)
 endif()
 
 ##############################################################################
@@ -211,7 +212,7 @@ if (JE4_STATIC_LINK_MODULE_AND_PKGS)
 
             if (TARGET ${pkg_name})
                 # Define link-type-macro for pkg.
-                target_link_libraries(${pkg_name} PRIVATE joyengine_core_macro)
+                target_link_libraries(${pkg_name} PRIVATE joyengine_core_pre_define_macro)
                 target_compile_definitions(${pkg_name} PRIVATE -Dwolib_entry=je_static_wo_pkg_${pkg_name}_entry)
                 target_compile_definitions(${pkg_name} PRIVATE -Dwolib_exit=je_static_wo_pkg_${pkg_name}_exit)
                 target_include_directories(${pkg_name} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/3rd/woolang/include")
@@ -244,7 +245,7 @@ if (JE4_STATIC_LINK_MODULE_AND_PKGS)
 
             if (TARGET ${pure_module_name})
                 # Define link-type-macro for module.
-                target_link_libraries(${pure_module_name} PRIVATE joyengine_core_macro)
+                target_link_libraries(${pure_module_name} PRIVATE joyengine_core_pre_define_macro)
 
                 list(APPEND JE4_STATIC_LINKED_PKG_AND_MODULE_LIST ${pure_module_name})
             else()
