@@ -212,6 +212,8 @@ if (JE4_ENABLE_VULKAN130_GAPI)
     else()
          target_include_directories(joyengine_core_configs INTERFACE 
             "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/vulkan/include")
+
+        # Use dynamic loading vulkan library on desktop platform.
         target_compile_definitions(joyengine_core_configs INTERFACE
             -DIMGUI_IMPL_VULKAN_NO_PROTOTYPES)
     endif()

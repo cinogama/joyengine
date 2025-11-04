@@ -12,7 +12,7 @@
 #   define JE4_VK_USE_DYNAMIC_VK_LIB 1
 #elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
 #   include <vulkan/vulkan_android.h>
-#   define JE4_VK_USE_DYNAMIC_VK_LIB 0
+#   define JE4_VK_USE_DYNAMIC_VK_LIB 1
 #elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_LINUX
 #   include <vulkan/vulkan_xlib.h>
 #   define JE4_VK_USE_DYNAMIC_VK_LIB 1
@@ -370,7 +370,7 @@ namespace jeecs::graphic::api::vk130
             {
 #   if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
                 _instance = wo_load_lib("je/graphiclib/vulkan-1", "vulkan-1.dll", nullptr, false);
-#   elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_LINUX
+#   elif JE4_CURRENT_PLATFORM == JE4_PLATFORM_LINUX || JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
                 _instance = wo_load_lib("je/graphiclib/vulkan", "libvulkan.so.1", nullptr, false);
                 if (_instance == nullptr)
                     _instance = wo_load_lib("je/graphiclib/vulkan", "libvulkan.so", nullptr, false);
@@ -1640,9 +1640,12 @@ namespace jeecs::graphic::api::vk130
             const jegl_interface_config* config,
             bool reboot)
         {
+#ifdef JE_GL_USE_EGL_INSTEAD_GLFW
+            _vk_jegl_interface = new egl();
+#else
             glfwInitVulkanLoader(vkGetInstanceProcAddr);
-
             _vk_jegl_interface = new glfw(reboot ? glfw::HOLD : glfw::VULKAN130);
+#endif
             _vk_jegl_interface->create_interface(config);
 
             _vk_jegl_context = ctx;
@@ -1713,11 +1716,16 @@ namespace jeecs::graphic::api::vk130
             instance_create_info.enabledLayerCount = (uint32_t)required_layers.size();
             instance_create_info.ppEnabledLayerNames = required_layers.data();
 
+            std::vector<const char*> required_extensions;
+#ifdef JE_GL_USE_EGL_INSTEAD_GLFW
+#else
             unsigned int glfw_extension_count = 0;
             const char** glfw_extensions = nullptr;
             glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
 
-            std::vector<const char*> required_extensions(glfw_extensions, glfw_extensions + glfw_extension_count);
+            required_extensions.insert(
+                required_extensions.end(), glfw_extensions, glfw_extensions + glfw_extension_count);
+#endif
             if (vk_validation_layer_supported)
                 required_extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
@@ -1751,6 +1759,8 @@ namespace jeecs::graphic::api::vk130
             }
 
             // 创建Surface，并且绑定窗口句柄
+#ifdef JE_GL_USE_EGL_INSTEAD_GLFW
+#else
             if (VK_SUCCESS != glfwCreateWindowSurface(
                 _vk_instance, (GLFWwindow*)_vk_jegl_interface->interface_handle(), nullptr, &_vk_surface))
             {
@@ -1760,6 +1770,8 @@ namespace jeecs::graphic::api::vk130
                 jeecs::debug::logfatal("Failed to create vk130 glfw surface: %s(%d).",
                     error_message, eno);
             }
+#endif
+
             // 获取可接受的设备
 
             uint32_t enum_deveice_count = 0;
