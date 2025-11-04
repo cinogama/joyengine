@@ -919,10 +919,13 @@ namespace je
             return self: gchandle->close();
         }
         
-        extern("libjoyecs", "wojeapi_stop_universe")
-            public func stop(self: universe)=> void;
+        extern("libjoyecs", "wojeapi_universe_extend_life")
+            public func grow(self: universe)=> void;
+
+        extern("libjoyecs", "wojeapi_universe_reduce_life")
+            public func trim(self: universe)=> void;
             
-        extern("libjoyecs", "wojeapi_wait_universe", slow)
+        extern("libjoyecs", "wojeapi_universe_wait", slow)
             public func wait(self: universe)=> void;
             
         extern("libjoyecs", "wojeapi_universe_get_frame_deltatime")

@@ -1054,8 +1054,8 @@ je_ecs_universe_create [基本接口]
 引擎允许同时存在多个Universe，原则上不同Universe之间的数据严格隔离并无关
 引擎中所有的世界、实体（组件）都位于特定的宇宙中。
 说明：
-    宇宙创建后会创建一个线程，在循环内执行逻辑更新等操作。此循环会在调用
-    je_ecs_universe_stop终止且所有世界关闭之后退出，并依次执行以下操作：
+    宇宙创建后会创建一个线程，在循环内执行逻辑更新等操作。此循环会在宇宙的生命周期结束终止，
+    且所有世界关闭之后退出，并依次执行以下操作：
         1. 处理剩余的Universe消息
         2. 按注册的相反顺序调用退出时回调，若Universe仍有消息未处理，
         返回第一步
@@ -1078,19 +1078,34 @@ JE_API void je_ecs_universe_loop(void* universe);
 /*
 je_ecs_universe_destroy [基本接口]
 销毁一个宇宙，阻塞直到Universe完全销毁
+* 使用此操作销毁宇宙时，无视宇宙的生命周期计数，立即请求终止宇宙的运行
 请参见：
     je_ecs_universe_loop
 */
 JE_API void je_ecs_universe_destroy(void* universe);
 
 /*
-je_ecs_universe_stop [基本接口]
-请求终止指定宇宙的运行，此函数会请求销毁宇宙中的所有世界，宇宙会在所有世界完全关闭
-后终止运行。
-* 这意味着如果在退出过程中创建了新的世界，宇宙的工作将继续持续直到这些世界完全退出，
-    因此不推荐在组件/系统的析构函数中做多余的逻辑操作。析构函数仅用于释放资源。
+je_ecs_universe_grow_lifetime [基本接口]
+延长指定宇宙的生命周期，防止其自动销毁
+* 此函数用于在需要手动管理宇宙生命周期时使用，每次调用都会增加宇宙的引用计数
+* 使用 je_ecs_universe_trim_lifetime 缩短生命周期
+请参见：
+    je_ecs_universe_trim_lifetime
 */
-JE_API void je_ecs_universe_stop(void* universe);
+JE_API void je_ecs_universe_grow_lifetime(void* universe);
+
+/*
+je_ecs_universe_trim_lifetime [基本接口]
+减少指定宇宙的生命周期引用计数
+    * universe 创建时自带有一次引用计数。
+    * 当引用计数归零时，请求终止指定宇宙的运行，此函数会请求销毁宇宙中的所有世界，宇宙
+        会在所有世界完全关闭后终止运行。
+    * 这意味着如果在退出过程中创建了新的世界，宇宙的工作将继续持续直到这些世界完全退出，
+        因此不推荐在组件/系统的析构函数中做多余的逻辑操作。析构函数仅用于释放资源。
+    请参见：
+        je_ecs_universe_grow_lifetime
+*/
+JE_API void je_ecs_universe_trim_lifetime(void* universe);
 
 /*
 je_ecs_universe_register_exit_callback [基本接口]
@@ -1303,12 +1318,6 @@ je_ecs_world_destroy [基本接口]
     je_ecs_world_create_entity_with_components
 */
 JE_API void je_ecs_world_destroy(void* world);
-
-/*
-je_ecs_world_is_valid [基本接口]
-检验指定的世界是否是一个有效的世界——即是否仍然存活且未开始销毁
-*/
-JE_API bool je_ecs_world_is_valid(void* world);
 
 /*
 je_ecs_world_archmgr_updated_version [基本接口]
@@ -6261,11 +6270,6 @@ namespace jeecs
             je_ecs_world_destroy(_m_ecs_world_addr);
         }
 
-        bool is_valid() const noexcept
-        {
-            return je_ecs_world_is_valid(handle());
-        }
-
         void set_able(bool able) const noexcept
         {
             je_ecs_world_set_able(handle(), able);
@@ -6909,9 +6913,13 @@ namespace jeecs
         {
             je_ecs_universe_loop(handle());
         }
-        inline void stop() const noexcept
+        inline void grow() const noexcept
         {
-            je_ecs_universe_stop(handle());
+            je_ecs_universe_grow_lifetime(handle());
+        }
+        inline void trim() const noexcept
+        {
+            je_ecs_universe_trim_lifetime(handle());
         }
         inline double get_real_deltatimed() const
         {

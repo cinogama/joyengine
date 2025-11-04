@@ -113,12 +113,13 @@ namespace jeecs
     {
         JECS_DISABLE_MOVE_AND_COPY(graphic_uhost);
 
-        jegl_context* glthread = nullptr;
+        jegl_context* glthread;
         jeecs::game_universe universe;
 
         // 当图形实现请求跳过绘制时，是否跳过全部绘制流程
         // * 如果为true，则跳过全部的绘制流程，反之，则仍然绘制以非屏幕缓冲区的绘制操作
         bool m_skip_all_draw;
+        bool m_graphic_frame_update;
 
         std::mutex m_rendchain_branchs_mx;
         std::vector<rendchain_branch*> m_rendchain_branchs;
@@ -127,23 +128,29 @@ namespace jeecs
         {
             auto* graphic_host = std::launder(reinterpret_cast<graphic_uhost*>(host));
 
-            constexpr jegl_update_sync_mode SYNC_MODE =
-                rendchain_branch::BRANCH_CHAIN_POOL_SIZE > 1
-                ? jegl_update_sync_mode::JEGL_WAIT_LAST_FRAME_END
-                : jegl_update_sync_mode::JEGL_WAIT_THIS_FRAME_END;
-
-            // ATTENTION: 注意，由于渲染线程在此处翻转，因此任何其他的绘制操作都不能与此同时发生
-            //  由于 _update_frame_universe_job 是一个 universe_after_call_once_job，所以此阶段
-            //  同时不能有其他绘制相关操作。
-            if (!jegl_update(graphic_host->glthread, SYNC_MODE, [](void* p)
-                {
-                    auto* graphic_host = std::launder(reinterpret_cast<graphic_uhost*>(p));
-                    for (auto& branch : graphic_host->m_rendchain_branchs)
-                        branch->flip_chain_buffer();
-                },
-                host))
+            if (graphic_host->m_graphic_frame_update)
             {
-                graphic_host->universe.stop();
+                constexpr jegl_update_sync_mode SYNC_MODE =
+                    rendchain_branch::BRANCH_CHAIN_POOL_SIZE > 1
+                    ? jegl_update_sync_mode::JEGL_WAIT_LAST_FRAME_END
+                    : jegl_update_sync_mode::JEGL_WAIT_THIS_FRAME_END;
+
+                // ATTENTION: 注意，由于渲染线程在此处翻转，因此任何其他的绘制操作都不能与此同时发生
+                //  由于 _update_frame_universe_job 是一个 universe_after_call_once_job，所以此阶段
+                //  同时不能有其他绘制相关操作。
+                if (!jegl_update(graphic_host->glthread, SYNC_MODE, [](void* p)
+                    {
+                        auto* graphic_host = std::launder(reinterpret_cast<graphic_uhost*>(p));
+                        for (auto& branch : graphic_host->m_rendchain_branchs)
+                            branch->flip_chain_buffer();
+                    },
+                    host))
+                {
+                    // 尝试请求退出 universe，在引擎上下文初始化期间，窗口可能在 world 初始化期间被关闭
+                    // 此时上下文会额外获得一个生命周期，届时才会正式退出
+                    graphic_host->m_graphic_frame_update = false;
+                    graphic_host->universe.trim();
+                }
             }
         }
         rendchain_branch* alloc_pipeline()
@@ -208,7 +215,10 @@ namespace jeecs
         }
 
         graphic_uhost(jeecs::game_universe _universe, const jegl_interface_config* _config)
-            : universe(_universe), m_skip_all_draw(true)
+            : glthread(nullptr)
+            , universe(_universe)
+            , m_skip_all_draw(true)
+            , m_graphic_frame_update(true)
         {
             auto host_graphic_api = jegl_get_host_graphic_api();
 

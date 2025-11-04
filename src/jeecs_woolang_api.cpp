@@ -230,8 +230,8 @@ WO_API wo_api wojeapi_apply_camera_framebuf_setting(wo_vm vm, wo_value args)
     if (jeecs::Camera::RendToFramebuffer* rbf = entity->get_component<jeecs::Camera::RendToFramebuffer>())
     {
         rbf->framebuffer = jeecs::graphic::framebuffer::create(
-            (size_t)wo_int(args + 1), 
-            (size_t)wo_int(args + 2), 
+            (size_t)wo_int(args + 1),
+            (size_t)wo_int(args + 2),
             {
                 jegl_texture::format::RGBA,
             },
@@ -282,13 +282,17 @@ WO_API wo_api wojeapi_get_universe_from_world(wo_vm vm, wo_value args)
     return wo_ret_pointer(vm, universe);
 }
 
-WO_API wo_api wojeapi_stop_universe(wo_vm vm, wo_value args)
+WO_API wo_api wojeapi_universe_extend_life(wo_vm vm, wo_value args)
 {
-    jeecs::game_universe(wo_pointer(args + 0)).stop();
+    jeecs::game_universe(wo_pointer(args + 0)).grow();
     return wo_ret_void(vm);
 }
-
-WO_API wo_api wojeapi_wait_universe(wo_vm vm, wo_value args)
+WO_API wo_api wojeapi_universe_reduce_life(wo_vm vm, wo_value args)
+{
+    jeecs::game_universe(wo_pointer(args + 0)).trim();
+    return wo_ret_void(vm);
+}
+WO_API wo_api wojeapi_universe_wait(wo_vm vm, wo_value args)
 {
     jeecs::game_universe(wo_pointer(args + 0)).wait();
     return wo_ret_void(vm);
@@ -511,38 +515,35 @@ WO_API wo_api wojeapi_get_all_entities_from_world(wo_vm vm, wo_value args)
         required_components[i] = t->m_id;
     }
 
-    if (je_ecs_world_is_valid(world_instance))
+    auto entities = jedbg_get_all_entities_in_world(world_instance);
+    auto entity_iter = entities;
+
+    while (*entity_iter)
     {
-        auto entities = jedbg_get_all_entities_in_world(world_instance);
-        auto entity_iter = entities;
+        auto* current_e = *(entity_iter++);
 
-        while (*entity_iter)
+        bool has_required = true;
+        for (auto& required_component : required_components)
         {
-            auto* current_e = *(entity_iter++);
-
-            bool has_required = true;
-            for (auto& required_component : required_components)
+            if (nullptr == je_ecs_world_entity_get_component(current_e, required_component))
             {
-                if (nullptr == je_ecs_world_entity_get_component(current_e, required_component))
-                {
-                    jedbg_free_entity(current_e);
-                    has_required = false;
-                    break;
-                }
-            }
-
-            if (has_required)
-            {
-                wo_set_gchandle(elem, vm, current_e, nullptr,
-                    [](void* entity_ptr)
-                    {
-                        jedbg_free_entity((jeecs::game_entity*)entity_ptr);
-                    });
-                wo_arr_add(out_arr, elem);
+                jedbg_free_entity(current_e);
+                has_required = false;
+                break;
             }
         }
-        je_mem_free(entities);
+
+        if (has_required)
+        {
+            wo_set_gchandle(elem, vm, current_e, nullptr,
+                [](void* entity_ptr)
+                {
+                    jedbg_free_entity((jeecs::game_entity*)entity_ptr);
+                });
+            wo_arr_add(out_arr, elem);
+        }
     }
+    je_mem_free(entities);
 
     return wo_ret_val(vm, out_arr);
 }
@@ -574,10 +575,6 @@ WO_API wo_api wojeapi_reset_editing_entity_uid(wo_vm vm, wo_value args)
     return wo_ret_void(vm);
 }
 
-WO_API wo_api wojeapi_world_is_valid(wo_vm vm, wo_value args)
-{
-    return wo_ret_bool(vm, je_ecs_world_is_valid(wo_pointer(args + 0)));
-}
 WO_API wo_api wojeapi_get_editing_entity_uid(wo_vm vm, wo_value args)
 {
     jeecs::typing::debug_eid_t uid = jedbg_get_editing_entity_uid();
@@ -744,9 +741,9 @@ WO_API wo_api wojeapi_get_component_from_entity(wo_vm vm, wo_value args)
     jeecs::game_entity* entity = (jeecs::game_entity*)wo_pointer(args + 0);
 
     return wo_ret_option_ptr_may_null(
-        vm, 
+        vm,
         je_ecs_world_entity_get_component(entity,
-        ((const jeecs::typing::type_info*)wo_pointer(args + 1))->m_id));
+            ((const jeecs::typing::type_info*)wo_pointer(args + 1))->m_id));
 }
 
 WO_API wo_api wojeapi_add_component_from_entity(wo_vm vm, wo_value args)
@@ -2351,10 +2348,10 @@ WO_API wo_api wojeapi_dynamic_parser_saving(wo_vm vm, wo_value args)
 
         wo_set_val(_je_dynamic_parser_vm_s + 0, value);
         wo_value result = wo_invoke_value(
-            _je_dynamic_parser_global_context._je_dynamic_parser_vm, 
-            &parser->m_saving, 
-            1, 
-            nullptr, 
+            _je_dynamic_parser_global_context._je_dynamic_parser_vm,
+            &parser->m_saving,
+            1,
+            nullptr,
             &_je_dynamic_parser_vm_s);
 
         wo_pop_stack(_je_dynamic_parser_global_context._je_dynamic_parser_vm, 1);
@@ -2385,10 +2382,10 @@ WO_API wo_api wojeapi_dynamic_parser_restoring(wo_vm vm, wo_value args)
         wo_set_val(_je_dynamic_parser_vm_s + 0, args + 2);
 
         wo_value result = wo_invoke_value(
-            _je_dynamic_parser_global_context._je_dynamic_parser_vm, 
-            &parser->m_restoring, 
-            1, 
-            nullptr, 
+            _je_dynamic_parser_global_context._je_dynamic_parser_vm,
+            &parser->m_restoring,
+            1,
+            nullptr,
             &_je_dynamic_parser_vm_s);
 
         wo_pop_stack(_je_dynamic_parser_global_context._je_dynamic_parser_vm, 1);
@@ -2432,7 +2429,7 @@ WO_API wo_api wojeapi_dynamic_parser_edit(wo_vm vm, wo_value args)
 
         wo_value result = wo_invoke_value(
             _je_dynamic_parser_global_context._je_dynamic_parser_vm,
-            &parser->m_edit, 
+            &parser->m_edit,
             2,
             nullptr,
             &_je_dynamic_parser_vm_s);
@@ -2716,7 +2713,7 @@ WO_API wo_api wojeapi_audio_source_set_filter(wo_vm vm, wo_value args)
             *reinterpret_cast<jeecs::basic::resource<jeecs::audio::filter> *>(
                 wo_pointer(elem)));
     }
-        
+
     (*source)->set_filter(filter);
 
     return wo_ret_void(vm);

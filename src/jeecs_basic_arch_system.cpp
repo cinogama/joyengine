@@ -1266,8 +1266,8 @@ namespace jeecs_impl
         arch_manager _m_arch_manager;
 
         bool _m_world_enabled;
+        bool _m_destroying_flag;
 
-        std::atomic_bool _m_destroying_flag;
         std::atomic_size_t _m_archmgr_updated_version;
 
         system_container_t m_systems;
@@ -1292,15 +1292,10 @@ namespace jeecs_impl
         ~ecs_world()
         {
             // Must be destroyed before destruct.
-            assert(is_destroying());
+            assert(_m_destroying_flag);
 
             std::lock_guard g1(_m_alive_worlds_mx);
             _m_alive_worlds.erase(this);
-        }
-        static bool is_valid(ecs_world* world) noexcept
-        {
-            std::shared_lock sg1(_m_alive_worlds_mx);
-            return _m_alive_worlds.find(world) != _m_alive_worlds.end() && !world->is_destroying();
         }
         system_container_t& get_system_instances() noexcept
         {
@@ -1440,8 +1435,7 @@ namespace jeecs_impl
             // Complete command buffer:
             _m_command_buffer.update();
 
-            bool in_destroy = is_destroying();
-            if (in_destroy)
+            if (_m_destroying_flag)
             {
                 // Remove all system from world.
                 std::vector<const jeecs::typing::type_info*> _removing_sys_types;
@@ -1462,7 +1456,6 @@ namespace jeecs_impl
                 // After this round, we should do a round of command buffer update, then close this world.
                 _m_command_buffer.update();
             }
-
             if (_m_arch_manager._arch_modified())
             {
                 ++_m_archmgr_updated_version;
@@ -1479,28 +1472,17 @@ namespace jeecs_impl
                 }
             }
 
-            return !in_destroy;
+            return !_m_destroying_flag;;
         }
 
         inline arch_type::entity create_entity_with_component(const types_set& types, jeecs::game_entity::entity_stat stat)
         {
-            if (is_destroying())
-            {
-                jeecs::debug::logwarn("It's not allowed to create entity while world is closing.");
-                return {};
-            }
-
             auto entity = _m_arch_manager.create_an_entity_with_component(types);
             _m_command_buffer.init_new_entity(entity, stat);
             return entity;
         }
         inline arch_type::entity create_entity_with_prefab(const arch_type::entity* prefab)
         {
-            if (is_destroying())
-            {
-                jeecs::debug::logwarn("It's not allowed to create entity while world is closing.");
-                return {};
-            }
             if (!prefab->is_valid())
             {
                 jeecs::debug::logerr("It's not allowed to create entity with invalid prefab entity, very dangerous.");
@@ -1513,12 +1495,6 @@ namespace jeecs_impl
         }
         inline jeecs::game_system* request_to_append_system(const jeecs::typing::type_info* type)
         {
-            if (is_destroying())
-            {
-                jeecs::debug::logwarn("It's not allowed to add system while world is closing.");
-                return nullptr;
-            }
-
             jeecs::game_system* sys = (jeecs::game_system*)je_mem_alloc(type->m_size);
             type->construct(sys, this);
             get_command_buffer().add_system_instance(type, sys);
@@ -1563,18 +1539,17 @@ namespace jeecs_impl
 
             return false;
         }
-
         inline command_buffer& get_command_buffer() noexcept
         {
             return _m_command_buffer;
         }
-        inline bool is_destroying() const noexcept
-        {
-            return _m_destroying_flag;
-        }
         inline bool is_enabled() const noexcept
         {
             return _m_world_enabled;
+        }
+        inline bool _is_destroying() const noexcept
+        {
+            return _m_destroying_flag;
         }
         inline void _ready_to_destroy() noexcept
         {
@@ -1605,8 +1580,6 @@ namespace jeecs_impl
             return _m_universe;
         }
     };
-
-    void default_job_for_execute_sys_update_for_worlds(void* _ecs_world, void* _);
 
     void command_buffer::update()
     {
@@ -1861,7 +1834,7 @@ namespace jeecs_impl
                 _m_world_command_buffer->m_update_enabled = std::nullopt;
             }
 
-            if (_m_world->is_enabled() || _m_world->is_destroying())
+            if (_m_world->is_enabled() || _m_world->_is_destroying())
             {
                 std::unordered_map<const jeecs::typing::type_info*, jeecs::game_system*> modifying_system_type_and_instances;
 
@@ -1922,12 +1895,10 @@ namespace jeecs_impl
         inline static std::mutex _m_alive_universes_mx;
         inline static std::list<ecs_universe*> _m_alive_universes;
 
-        std::vector<ecs_world*> _m_world_list;
-
         std::mutex _m_removing_worlds_appending_mx;
-
         std::thread _m_universe_update_thread;
-        std::atomic_flag _m_universe_update_thread_stop_flag = {};
+
+        std::vector<ecs_world*> _m_world_list;
 
         // Used for store shared jobs instance.
         std::vector<ecs_job*> _m_shared_pre_jobs;
@@ -1936,24 +1907,24 @@ namespace jeecs_impl
 
         std::mutex _m_next_execute_interval_mx;
 
-        double _m_frame_current_time = 0.;
-        double _m_real_current_time = 0.;
+        // 以下字段需要初始化
+        std::atomic_bool _m_universe_update_thread_stop_flag;
+        std::atomic_size_t _m_universe_life;
+
+        double _m_frame_current_time;
+        double _m_real_current_time;
 
         // 期待的universe同步间隔
         // 由于图形计算等开销，实际上的同步间隔可能大于此值
-        double _m_frame_deltatime = 1. / 60.;
-
+        double _m_frame_deltatime;
         // Universe每次Update时与实际世界时间进行计算得到的值
-        double _m_real_deltatime = 1. / 60.;
-
+        double _m_real_deltatime;
         // Universe每次Update时与实际世界时间进行计算得到的值，与过去若干帧的平均更新间隔
-        double _m_smooth_deltatime = 1. / 60.;
-
+        double _m_smooth_deltatime;
         // 最大DeltaTime值，防止出现巨大的跳变
-        double _m_max_deltatime = 0.2;
-
+        double _m_max_deltatime;
         // 时间缩放
-        double _m_time_scale = 1.0;
+        double _m_time_scale;
 
         struct universe_action
         {
@@ -1996,7 +1967,62 @@ namespace jeecs_impl
         {
             _m_universe_actions.add_one(act);
         }
+        static void default_job_for_execute_sys_update_for_worlds_in_universe(void* _ecs_world, void* _)
+        {
+            ecs_world* cur_world = (ecs_world*)_ecs_world;
 
+            ecs_world::system_container_t& active_systems =
+                cur_world->get_system_instances();
+
+            ParallelForeach(
+                active_systems.begin(), active_systems.end(),
+                [](ecs_world::system_container_t::value_type& val)
+                {
+                    val.first->m_system_updaters->m_pre_update(val.second);
+                });
+            ParallelForeach(
+                active_systems.begin(), active_systems.end(),
+                [](ecs_world::system_container_t::value_type& val)
+                {
+                    val.first->m_system_updaters->m_state_update(val.second);
+                });
+            ParallelForeach(
+                active_systems.begin(), active_systems.end(),
+                [](ecs_world::system_container_t::value_type& val)
+                {
+                    val.first->m_system_updaters->m_update(val.second);
+                });
+            ParallelForeach(
+                active_systems.begin(), active_systems.end(),
+                [](ecs_world::system_container_t::value_type& val)
+                {
+                    val.first->m_system_updaters->m_transform_update(val.second);
+                });
+            ParallelForeach(
+                active_systems.begin(), active_systems.end(),
+                [](ecs_world::system_container_t::value_type& val)
+                {
+                    val.first->m_system_updaters->m_physics_update(val.second);
+                });
+            ParallelForeach(
+                active_systems.begin(), active_systems.end(),
+                [](ecs_world::system_container_t::value_type& val)
+                {
+                    val.first->m_system_updaters->m_late_update(val.second);
+                });
+            ParallelForeach(
+                active_systems.begin(), active_systems.end(),
+                [](ecs_world::system_container_t::value_type& val)
+                {
+                    val.first->m_system_updaters->m_commit_update(val.second);
+                });
+            ParallelForeach(
+                active_systems.begin(), active_systems.end(),
+                [](ecs_world::system_container_t::value_type& val)
+                {
+                    val.first->m_system_updaters->m_graphic_update(val.second);
+                });
+        }
     public:
         void set_frame_deltatime(double delta)
         {
@@ -2295,6 +2321,15 @@ namespace jeecs_impl
 
     public:
         ecs_universe()
+            : _m_universe_update_thread_stop_flag(false)
+            , _m_universe_life(1)
+            , _m_frame_current_time(0.)
+            , _m_real_current_time(0.)
+            , _m_frame_deltatime(1. / 60.)
+            , _m_real_deltatime(1. / 60.)
+            , _m_smooth_deltatime(1. / 60.)
+            , _m_max_deltatime(0.2)
+            , _m_time_scale(1.0)
         {
             std::lock_guard g1(_m_alive_universes_mx);
             _m_alive_universes.push_back(this);
@@ -2303,18 +2338,28 @@ namespace jeecs_impl
 
             // Append default jobs for updating systems.
             je_ecs_universe_register_for_worlds_job(this,
-                default_job_for_execute_sys_update_for_worlds, nullptr, nullptr);
+                ecs_universe::default_job_for_execute_sys_update_for_worlds_in_universe, nullptr, nullptr);
 
-            _m_universe_update_thread_stop_flag.test_and_set();
             _m_universe_update_thread = std::thread(
                 [this]()
                 {
                     while (true)
                     {
                         update();
-                        if (_m_world_list.empty() && !_m_universe_update_thread_stop_flag.test_and_set())
-                            // If there is no world alive, and exit flag is setten, exit this thread.
-                            break;
+
+                        bool exit_flag = _m_universe_update_thread_stop_flag.load(
+                            std::memory_order_relaxed);
+
+                        if (exit_flag)
+                        {
+                            if (_m_world_list.empty())
+                                // If there is no world alive, and exit flag is setten, exit this thread.
+                                break;
+
+                            // Only invoke in game thread!
+                            for (auto* world : _m_world_list)
+                                je_ecs_world_destroy(world);
+                        }
                     }
 
                     // Make sure universe action empty.
@@ -2469,7 +2514,6 @@ namespace jeecs_impl
 
             append_universe_action(action);
         }
-
         ~ecs_universe()
         {
             do
@@ -2488,17 +2532,46 @@ namespace jeecs_impl
 
             DEBUG_ARCH_LOG("Universe: %p closed.", this);
         }
-
-    public:
+    private:
         void stop_universe_loop() noexcept
         {
-            // Only invoke in game thread!
-            for (auto* world : _m_world_list)
-                je_ecs_world_destroy(world);
-
-            _m_universe_update_thread_stop_flag.clear();
+            _m_universe_update_thread_stop_flag.store(
+                true, std::memory_order_relaxed);
         }
+    public:
+        void grow_lifetime() noexcept
+        {
+            auto current_life = _m_universe_life.load();
+            for (;;)
+            {
+                if (current_life == 0)
+                {
+                    jeecs::debug::logfatal("Universe(%p) has been destroyed, cannot use it anymore.", this);
+                    break;
+                }
 
+                if (_m_universe_life.compare_exchange_strong(current_life, current_life + 1))
+                    break;
+            }
+        }
+        void trim_lifetime() noexcept
+        {
+            auto current_life = _m_universe_life.load();
+            for (;;)
+            {
+                if (current_life == 0)
+                {
+                    jeecs::debug::logfatal("Universe(%p) has been destroyed, cannot use it anymore.", this);
+                    break;
+                }
+                if (_m_universe_life.compare_exchange_strong(current_life, current_life - 1))
+                {
+                    if (current_life - 1 == 0)
+                        stop_universe_loop();
+                    break;
+                }
+            }
+        }
         ecs_world* create_world()
         {
             DEBUG_ARCH_LOG("Universe: %p want to create a world.", this);
@@ -2546,63 +2619,6 @@ namespace jeecs_impl
             }
         }
     };
-
-    void default_job_for_execute_sys_update_for_worlds(void* _ecs_world, void* _)
-    {
-        ecs_world* cur_world = (ecs_world*)_ecs_world;
-
-        ecs_world::system_container_t& active_systems =
-            cur_world->get_system_instances();
-
-        ParallelForeach(
-            active_systems.begin(), active_systems.end(),
-            [](ecs_world::system_container_t::value_type& val)
-            {
-                val.first->m_system_updaters->m_pre_update(val.second);
-            });
-        ParallelForeach(
-            active_systems.begin(), active_systems.end(),
-            [](ecs_world::system_container_t::value_type& val)
-            {
-                val.first->m_system_updaters->m_state_update(val.second);
-            });
-        ParallelForeach(
-            active_systems.begin(), active_systems.end(),
-            [](ecs_world::system_container_t::value_type& val)
-            {
-                val.first->m_system_updaters->m_update(val.second);
-            });
-        ParallelForeach(
-            active_systems.begin(), active_systems.end(),
-            [](ecs_world::system_container_t::value_type& val)
-            {
-                val.first->m_system_updaters->m_transform_update(val.second);
-            });
-        ParallelForeach(
-            active_systems.begin(), active_systems.end(),
-            [](ecs_world::system_container_t::value_type& val)
-            {
-                val.first->m_system_updaters->m_physics_update(val.second);
-            });
-        ParallelForeach(
-            active_systems.begin(), active_systems.end(),
-            [](ecs_world::system_container_t::value_type& val)
-            {
-                val.first->m_system_updaters->m_late_update(val.second);
-            });
-        ParallelForeach(
-            active_systems.begin(), active_systems.end(),
-            [](ecs_world::system_container_t::value_type& val)
-            {
-                val.first->m_system_updaters->m_commit_update(val.second);
-            });
-        ParallelForeach(
-            active_systems.begin(), active_systems.end(),
-            [](ecs_world::system_container_t::value_type& val)
-            {
-                val.first->m_system_updaters->m_graphic_update(val.second);
-            });
-    }
 }
 
 void* je_ecs_universe_create()
@@ -2647,9 +2663,14 @@ void je_ecs_universe_destroy(void* ecs_universe)
     delete reinterpret_cast<jeecs_impl::ecs_universe*>(ecs_universe);
 }
 
-void je_ecs_universe_stop(void* ecs_universe)
+void je_ecs_universe_grow_lifetime(void* universe)
 {
-    reinterpret_cast<jeecs_impl::ecs_universe*>(ecs_universe)->stop_universe_loop();
+    reinterpret_cast<jeecs_impl::ecs_universe*>(universe)->grow_lifetime();
+}
+
+void je_ecs_universe_trim_lifetime(void* universe)
+{
+    reinterpret_cast<jeecs_impl::ecs_universe*>(universe)->trim_lifetime();
 }
 
 void* je_arch_get_chunk(void* archtype)
@@ -2796,12 +2817,6 @@ void je_ecs_world_destroy_entity(
 void* je_ecs_world_in_universe(void* world)
 {
     return reinterpret_cast<jeecs_impl::ecs_world*>(world)->get_universe();
-}
-
-bool je_ecs_world_is_valid(void* world)
-{
-    return jeecs_impl::ecs_world::is_valid(
-        std::launder(reinterpret_cast<jeecs_impl::ecs_world*>(world)));
 }
 
 void* je_ecs_world_of_entity(const jeecs::game_entity* entity)

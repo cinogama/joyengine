@@ -33,14 +33,6 @@ namespace je
             }
         }
     }
-    namespace world
-    {
-        namespace internal
-        {
-            extern("libjoyecs", "wojeapi_world_is_valid")
-                public func is_valid(self: world)=> bool;
-        }
-    }
     namespace entity
     {
         namespace internal

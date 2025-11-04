@@ -375,20 +375,26 @@ namespace editor::gui::edit_forms
                                 
                                 // 启动Universe，在Universe中加载世界
                                 let RUNTIME_UNIVERSE = je::universe::create();
+                                {
+                                    // 延长Universe生命周期
+                                    RUNTIME_UNIVERSE->grow();
+                                    
+                                    // Defer: 释放Universe生命周期
+                                    defer RUNTIME_UNIVERSE->trim();
                                
-                                // 在此处应用项目设置
-                                $APPLY_PROJECT_CONFIG$
+                                    // 在此处应用项目设置
+                                    $APPLY_PROJECT_CONFIG$
 
-                                // 在此处加载世界实例
-                                $LOAD_WORLD_INSTANCE$
+                                    // 在此处加载世界实例
+                                    $LOAD_WORLD_INSTANCE$
 
-                                // 在此激活所有世界
-                                for (let (_, world) : LOADED_WORLDS_MAPPING)
-                                    world->set_able(true);
+                                    // 在此激活所有世界
+                                    for (let (_, world) : LOADED_WORLDS_MAPPING)
+                                        world->set_able(true);
 
-                                // 在此调用运行时脚本（如果有）
-                                $IMPORT_RUNTIME_SCRIPT_MAY_NOT_EXIST$
-
+                                    // 在此调用运行时脚本（如果有）
+                                    $IMPORT_RUNTIME_SCRIPT_MAY_NOT_EXIST$                             
+                                }
                                 RUNTIME_UNIVERSE->wait();
 
                                 // 关闭类型管理器
