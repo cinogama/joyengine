@@ -104,7 +104,7 @@ the Khronos License (MIT)."@);
                             TextDisabled("Copyright (c) 2006-2019 Camilla Löwy.");
                             TextDisabled("GLFW is licensed under the zlib/libpng license.");
                             
-                            Text("使用下面这些库为 Vulkan1.3 提供支持：");
+                            Text("使用下面这些库为 Vulkan1.2 提供支持：");
                             
                             Text("Vulkan SDK(Header) https://github.com/KhronosGroup/SPIRV-Headers");
                             TextDisabled("Vulkan SDK(Header) is licensed under the Apache License v2.0 and MIT License");

@@ -175,10 +175,10 @@ if (JE4_ENABLE_METAL_GAPI AND APPLE)
         "../3rd/metal-cpp")
 endif()
 
-# Vulkan 1.3
-if (JE4_ENABLE_VULKAN130_GAPI)
+# Vulkan 1.2
+if (JE4_ENABLE_VULKAN120_GAPI)
     target_compile_definitions(joyengine_core_configs INTERFACE
-        -DJE_ENABLE_VK130_GAPI)
+        -DJE_ENABLE_VK120_GAPI)
 
     list(APPEND imgui_srcs
         "../3rd/imgui/backends/imgui_impl_vulkan.cpp"
@@ -222,7 +222,7 @@ endif()
 # OpenGL3.3 / OpenGLES3.0 / Vulkan needed:
 if (JE4_ENABLE_OPENGL330_GAPI OR 
     JE4_ENABLE_OPENGLES300_GAPI OR 
-    JE4_ENABLE_VULKAN130_GAPI OR
+    JE4_ENABLE_VULKAN120_GAPI OR
     JE4_ENABLE_WEBGL20_GAPI OR
     JE4_ENABLE_DX11_GAPI OR
     (JE4_ENABLE_METAL_GAPI AND APPLE))

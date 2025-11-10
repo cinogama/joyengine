@@ -1,7 +1,7 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
-#ifdef JE_ENABLE_VK130_GAPI
+#ifdef JE_ENABLE_VK120_GAPI
 
 #include "jeecs_imgui_backend_api.hpp"
 
@@ -37,7 +37,7 @@
 #undef max
 #undef min
 
-namespace jeecs::graphic::api::vk130
+namespace jeecs::graphic::api::vk120
 {
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
 #   define VK_API_PLATFORM_API_LIST \
@@ -121,13 +121,10 @@ namespace jeecs::graphic::api::vk130
     VK_API_DECL(vkCmdBeginRenderPass);                      \
     VK_API_DECL(vkCmdEndRenderPass);                        \
     VK_API_DECL(vkCmdBindPipeline);                         \
-    VK_API_DECL(vkCmdBindVertexBuffers2);                   \
     VK_API_DECL(vkCmdDraw);                                 \
     VK_API_DECL(vkCmdSetViewport);                          \
     VK_API_DECL(vkCmdSetScissor);                           \
     VK_API_DECL(vkCmdClearAttachments);                     \
-    VK_API_DECL(vkCmdSetPrimitiveTopology);                 \
-    VK_API_DECL(vkCmdSetPrimitiveRestartEnable);            \
     VK_API_DECL(vkCmdBindDescriptorSets);                   \
     VK_API_DECL(vkCmdCopyBufferToImage);                    \
     VK_API_DECL(vkCmdPipelineBarrier);                      \
@@ -170,12 +167,12 @@ namespace jeecs::graphic::api::vk130
                                                             \
     VK_API_PLATFORM_API_LIST
 
-    struct jegl_vk130_context;
+    struct jegl_vk120_context;
 
-    struct jevk13_framebuffer;
-    struct jevk13_shader_blob
+    struct jevk12_framebuffer;
+    struct jevk12_shader_blob
     {
-        JECS_DISABLE_MOVE_AND_COPY(jevk13_shader_blob);
+        JECS_DISABLE_MOVE_AND_COPY(jevk12_shader_blob);
         struct blob_data
         {
             JECS_DISABLE_MOVE_AND_COPY(blob_data);
@@ -188,21 +185,16 @@ namespace jeecs::graphic::api::vk130
                 // VkDynamicState::VK_DYNAMIC_STATE_PRIMITIVE_TOPOLOGY,
                 VkDynamicState::VK_DYNAMIC_STATE_VIEWPORT,
                 VkDynamicState::VK_DYNAMIC_STATE_SCISSOR,
-                VkDynamicState::VK_DYNAMIC_STATE_PRIMITIVE_TOPOLOGY,
-                VkDynamicState::VK_DYNAMIC_STATE_VERTEX_INPUT_BINDING_STRIDE,
-                VkDynamicState::VK_DYNAMIC_STATE_PRIMITIVE_RESTART_ENABLE,
             };
 
-            jegl_vk130_context* m_context;
+            jegl_vk120_context* m_context;
 
             VkShaderModule m_vertex_shader_module;
             VkShaderModule m_fragment_shader_module;
             VkPipelineShaderStageCreateInfo m_shader_stage_infos[2];
 
             std::vector<VkVertexInputAttributeDescription> m_vertex_input_attribute_descriptions;
-            VkVertexInputBindingDescription m_vertex_input_binding_description;
-            VkPipelineVertexInputStateCreateInfo m_vertex_input_state_create_info;
-            VkPipelineInputAssemblyStateCreateInfo m_input_assembly_state_create_info;
+            
             VkViewport m_viewport;
             VkRect2D m_scissor;
             VkPipelineViewportStateCreateInfo m_viewport_state_create_info;
@@ -231,13 +223,32 @@ namespace jeecs::graphic::api::vk130
             // 的不同渲染目标(格式)创建不同的渲染管线
             //
             // NOTE: DBQ, Metal 也干了！
-            std::unordered_map<jevk13_framebuffer*, VkPipeline>
+            struct vk_topology_pipeline_group
+            {
+                using stride_pipelines_t = std::unordered_map<uint32_t, VkPipeline>;
+                stride_pipelines_t m_topology_pipelines[jegl_vertex::type::VERTEX_TYPE_COUNT];
+
+                VkPipeline& get_or_emplace_pipeline(
+                    jegl_vertex::type topo,
+                    uint32_t stride)
+                {
+                    auto& stride_pipes = m_topology_pipelines[topo];
+                    auto fnd = stride_pipes.find(stride);
+                    if (fnd != stride_pipes.end())
+                        return fnd->second;
+                    auto [it, ok] = stride_pipes.emplace(stride, VK_NULL_HANDLE);
+                    (void)ok;
+
+                    return it->second;
+                }
+            };
+            std::unordered_map<jevk12_framebuffer*, vk_topology_pipeline_group>
                 m_target_pass_pipelines;
         };
 
         jeecs::basic::resource<blob_data> m_blob_data;
 
-        jevk13_shader_blob(blob_data* d)
+        jevk12_shader_blob(blob_data* d)
             : m_blob_data(jeecs::basic::resource<blob_data>(d))
         {
         }
@@ -251,9 +262,9 @@ namespace jeecs::graphic::api::vk130
             return jeecs::graphic::INVALID_UNIFORM_LOCATION;
         }
     };
-    struct jevk13_texture
+    struct jevk12_texture
     {
-        JECS_DISABLE_MOVE_AND_COPY(jevk13_texture);
+        JECS_DISABLE_MOVE_AND_COPY(jevk12_texture);
 
         VkImage m_vk_texture_image;
         VkDeviceMemory m_vk_texture_image_memory;
@@ -261,39 +272,39 @@ namespace jeecs::graphic::api::vk130
         VkImageView m_vk_texture_image_view;
         VkFormat m_vk_texture_format;
 
-        jevk13_texture() = default;
+        jevk12_texture() = default;
     };
-    struct jevk13_uniformbuf
+    struct jevk12_uniformbuf
     {
-        JECS_DISABLE_MOVE_AND_COPY(jevk13_uniformbuf);
+        JECS_DISABLE_MOVE_AND_COPY(jevk12_uniformbuf);
 
         VkBuffer m_uniform_buffer;
         VkDeviceMemory m_uniform_buffer_memory;
 
         uint32_t m_real_binding_place;
 
-        jevk13_uniformbuf() = default;
+        jevk12_uniformbuf() = default;
     };
-    struct jevk13_shader
+    struct jevk12_shader
     {
-        JECS_DISABLE_MOVE_AND_COPY(jevk13_shader);
+        JECS_DISABLE_MOVE_AND_COPY(jevk12_shader);
 
-        jeecs::basic::resource<jevk13_shader_blob::blob_data> m_blob_data;
+        jeecs::basic::resource<jevk12_shader_blob::blob_data> m_blob_data;
 
         size_t m_uniform_cpu_buffer_size;
         bool m_uniform_cpu_buffer_updated;
         uint8_t* m_uniform_cpu_buffer;
 
-        std::vector<jevk13_uniformbuf*> m_uniform_variables;
+        std::vector<jevk12_uniformbuf*> m_uniform_variables;
 
         size_t m_next_allocate_ubos_for_uniform_variable;
         size_t m_command_commit_round;
 
-        VkPipeline prepare_pipeline(jegl_vk130_context* context);
-        jevk13_uniformbuf* allocate_ubo_for_vars(jegl_vk130_context* context);
-        jevk13_uniformbuf* get_last_usable_variable(jegl_vk130_context* context);
+        VkPipeline prepare_pipeline(jegl_vk120_context* context, jegl_vertex::type kind, uint32_t stride);
+        jevk12_uniformbuf* allocate_ubo_for_vars(jegl_vk120_context* context);
+        jevk12_uniformbuf* get_last_usable_variable(jegl_vk120_context* context);
 
-        jevk13_shader(jevk13_shader_blob* blob)
+        jevk12_shader(jevk12_shader_blob* blob)
             : m_blob_data(blob->m_blob_data)
             , m_uniform_cpu_buffer_size(blob->m_blob_data->m_uniform_size)
             , m_uniform_cpu_buffer_updated(false)
@@ -310,20 +321,20 @@ namespace jeecs::graphic::api::vk130
             else
                 m_uniform_cpu_buffer = nullptr;
         }
-        ~jevk13_shader();
+        ~jevk12_shader();
     };
-    struct jevk13_framebuffer
+    struct jevk12_framebuffer
     {
-        JECS_DISABLE_MOVE_AND_COPY(jevk13_framebuffer);
+        JECS_DISABLE_MOVE_AND_COPY(jevk12_framebuffer);
 
         VkRenderPass m_rendpass;
 
-        std::unordered_set<jevk13_shader_blob::blob_data*>
+        std::unordered_set<jevk12_shader_blob::blob_data*>
             m_shaders_generate_pipeline_for_this_frame;
 
-        std::vector<jevk13_texture*> m_color_attachments;
+        std::vector<jevk12_texture*> m_color_attachments;
 
-        jevk13_texture* m_depth_attachment;
+        jevk12_texture* m_depth_attachment;
         VkFramebuffer m_framebuffer;
 
         size_t m_width;
@@ -332,13 +343,13 @@ namespace jeecs::graphic::api::vk130
         size_t m_rend_rounds;
         bool m_is_screen_framebuffer;
 
-        jevk13_framebuffer() = default;
+        jevk12_framebuffer() = default;
     };
-    struct jevk13_vertex
+    struct jevk12_vertex
     {
-        JECS_DISABLE_MOVE_AND_COPY(jevk13_vertex);
+        JECS_DISABLE_MOVE_AND_COPY(jevk12_vertex);
 
-        jevk13_vertex() = default;
+        jevk12_vertex() = default;
 
         VkBuffer m_vk_vertex_buffer;
         VkDeviceMemory m_vk_vertex_buffer_memory;
@@ -350,14 +361,14 @@ namespace jeecs::graphic::api::vk130
         VkDeviceSize m_size;
         VkDeviceSize m_stride;
 
-        VkPrimitiveTopology m_topology;
+        jegl_vertex::type m_topology;
     };
 
-    struct jegl_vk130_context
+    struct jegl_vk120_context
     {
-        JECS_DISABLE_MOVE_AND_COPY(jegl_vk130_context);
+        JECS_DISABLE_MOVE_AND_COPY(jegl_vk120_context);
 
-        jegl_vk130_context() = default;
+        jegl_vk120_context() = default;
 
 #if JE4_VK_USE_DYNAMIC_VK_LIB
         struct vklibrary_instance_proxy
@@ -485,7 +496,7 @@ namespace jeecs::graphic::api::vk130
                 nullptr,
                 &result_layout))
             {
-                jeecs::debug::logfatal("Failed to create vk130 uniform variables descriptor set layout.");
+                jeecs::debug::logfatal("Failed to create vk120 uniform variables descriptor set layout.");
                 abort();
             }
             return result_layout;
@@ -498,10 +509,10 @@ namespace jeecs::graphic::api::vk130
 
         struct swapchain_image_content
         {
-            jegl_vk130_context* m_main_context;
+            jegl_vk120_context* m_main_context;
 
-            jevk13_framebuffer* m_framebuffer;
-            jevk13_texture* m_textures_only_for_free[2];
+            jevk12_framebuffer* m_framebuffer;
+            jevk12_texture* m_textures_only_for_free[2];
 
             std::list<VkCommandBuffer> m_using_command_buffers;
             std::list<VkSemaphore> m_using_semaphores;
@@ -532,10 +543,10 @@ namespace jeecs::graphic::api::vk130
                 release_using_resources();
             }
             swapchain_image_content(
-                jegl_vk130_context* main_contant,
-                jevk13_framebuffer* framebuffer,
-                jevk13_texture* color_attachment,
-                jevk13_texture* depth_attachment)
+                jegl_vk120_context* main_contant,
+                jevk12_framebuffer* framebuffer,
+                jevk12_texture* color_attachment,
+                jevk12_texture* depth_attachment)
                 : m_main_context(main_contant)
                 , m_framebuffer(framebuffer)
                 , m_textures_only_for_free{ color_attachment, depth_attachment }
@@ -565,13 +576,13 @@ namespace jeecs::graphic::api::vk130
                 VkDescriptorType::VK_DESCRIPTOR_TYPE_SAMPLER,
                 VkDescriptorType::VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER };
 
-            jegl_vk130_context* m_context;
+            jegl_vk120_context* m_context;
 
             VkDescriptorSetLayout m_layout;
             std::list<VkDescriptorPool> m_pools;
             std::list<VkDescriptorSet> m_free_sets;
 
-            single_descriptor_set_allocator(jegl_vk130_context* ctx, VkDescriptorSetLayout layout)
+            single_descriptor_set_allocator(jegl_vk120_context* ctx, VkDescriptorSetLayout layout)
                 : m_context(ctx), m_layout(layout)
             {
             }
@@ -638,7 +649,7 @@ namespace jeecs::graphic::api::vk130
                     if (VK_SUCCESS != m_context->vkCreateDescriptorPool(
                         m_context->_vk_logic_device, &pool_create_info, nullptr, &new_created_pool))
                     {
-                        jeecs::debug::logfatal("Failed to create vk130 descriptor pool.");
+                        jeecs::debug::logfatal("Failed to create vk120 descriptor pool.");
                     }
                     m_pools.push_back(new_created_pool);
                 }
@@ -654,7 +665,7 @@ namespace jeecs::graphic::api::vk130
             constexpr static size_t MAX_TEXTURE_LAYOUT = MAX_LAYOUT_COUNT;
             constexpr static size_t MAX_SAMPLER_LAYOUT = MAX_LAYOUT_COUNT;
 
-            jegl_vk130_context* m_context;
+            jegl_vk120_context* m_context;
 
             single_descriptor_set_allocator<descriptor_set_type::UNIFORM_VARIABLES>
                 m_vk_shader_uniform_variable_sets;
@@ -843,7 +854,7 @@ namespace jeecs::graphic::api::vk130
                     nullptr);
             }
 
-            descriptor_set_allocator(jegl_vk130_context* context)
+            descriptor_set_allocator(jegl_vk120_context* context)
                 : m_context(context), m_vk_shader_uniform_variable_sets(
                     context, context->_vk_global_descriptor_set_layouts[descriptor_set_type::UNIFORM_VARIABLES]),
                 m_vk_shader_uniform_block_sets(
@@ -887,13 +898,13 @@ namespace jeecs::graphic::api::vk130
                 }
                 for (auto& textures : m_binded_textures)
                 {
-                    textures.imageLayout = VkImageLayout::VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL;
+                    textures.imageLayout = VkImageLayout::VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
                     textures.imageView = VK_NULL_HANDLE;
                     textures.sampler = VK_NULL_HANDLE;
                 }
                 for (auto& samplers : m_binded_samplers)
                 {
-                    samplers.imageLayout = VkImageLayout::VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL;
+                    samplers.imageLayout = VkImageLayout::VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
                     samplers.imageView = VK_NULL_HANDLE;
                     samplers.sampler = VK_NULL_HANDLE;
                 }
@@ -903,7 +914,7 @@ namespace jeecs::graphic::api::vk130
         {
             JECS_DISABLE_MOVE_AND_COPY(command_buffer_allocator);
 
-            jegl_vk130_context* m_context;
+            jegl_vk120_context* m_context;
 
             VkCommandPool m_command_pool;
 
@@ -970,7 +981,7 @@ namespace jeecs::graphic::api::vk130
                 swapchain_image->m_using_semaphores.clear();
             }
 
-            command_buffer_allocator(jegl_vk130_context* context)
+            command_buffer_allocator(jegl_vk120_context* context)
             {
                 m_context = context;
                 assert(m_context != nullptr);
@@ -989,7 +1000,7 @@ namespace jeecs::graphic::api::vk130
                     nullptr,
                     &m_command_pool))
                 {
-                    jeecs::debug::logfatal("Failed to create vk130 default command pool.");
+                    jeecs::debug::logfatal("Failed to create vk120 default command pool.");
                 }
             }
             ~command_buffer_allocator()
@@ -1019,9 +1030,9 @@ namespace jeecs::graphic::api::vk130
         uint32_t _vk_presenting_swapchain_image_index;
         swapchain_image_content* _vk_current_swapchain_image_content;
 
-        jevk13_framebuffer* _vk_current_target_framebuffer;
+        jevk12_framebuffer* _vk_current_target_framebuffer;
         VkCommandBuffer _vk_current_command_buffer;
-        jevk13_shader* _vk_current_binded_shader;
+        jevk12_shader* _vk_current_binded_shader;
         size_t _vk_command_commit_round;
 
         VkSemaphore _vk_last_command_buffer_semaphore;
@@ -1083,7 +1094,7 @@ namespace jeecs::graphic::api::vk130
                 nullptr,
                 &result))
             {
-                jeecs::debug::logfatal("Failed to create vk130 semaphore.");
+                jeecs::debug::logfatal("Failed to create vk120 semaphore.");
             }
             return result;
         }
@@ -1102,7 +1113,7 @@ namespace jeecs::graphic::api::vk130
             VkFence result = VK_NULL_HANDLE;
             if (VK_SUCCESS != vkCreateFence(_vk_logic_device, &fence_create_info, nullptr, &result))
             {
-                jeecs::debug::logfatal("Failed to create vk130 fence.");
+                jeecs::debug::logfatal("Failed to create vk120 fence.");
             }
             return result;
         }
@@ -1112,14 +1123,14 @@ namespace jeecs::graphic::api::vk130
         }
 
         // TODO: 这里的参数应该还包含fb的附件配置信息
-        jevk13_framebuffer* create_frame_buffer(
+        jevk12_framebuffer* create_frame_buffer(
             size_t w,
             size_t h,
-            const std::vector<jevk13_texture*>& attachment_colors,
-            jevk13_texture* attachment_depth,
+            const std::vector<jevk12_texture*>& attachment_colors,
+            jevk12_texture* attachment_depth,
             VkImageLayout final_layout)
         {
-            jevk13_framebuffer* result = new jevk13_framebuffer{};
+            jevk12_framebuffer* result = new jevk12_framebuffer{};
 
             result->m_rend_rounds = 0;
             result->m_is_screen_framebuffer = true;
@@ -1212,7 +1223,7 @@ namespace jeecs::graphic::api::vk130
                 nullptr,
                 &result->m_rendpass))
             {
-                jeecs::debug::logfatal("Failed to create vk130 default render pass.");
+                jeecs::debug::logfatal("Failed to create vk120 default render pass.");
             }
 
             result->m_color_attachments = attachment_colors;
@@ -1241,24 +1252,32 @@ namespace jeecs::graphic::api::vk130
             if (VK_SUCCESS != vkCreateFramebuffer(
                 _vk_logic_device, &framebuffer_create_info, nullptr, &result->m_framebuffer))
             {
-                jeecs::debug::logfatal("Failed to create vk130 swapchain framebuffer.");
+                jeecs::debug::logfatal("Failed to create vk120 swapchain framebuffer.");
             }
             return result;
         }
-        void destroy_frame_buffer(jevk13_framebuffer* fb)
+        void destroy_frame_buffer(jevk12_framebuffer* fb)
         {
             for (auto& shader : fb->m_shaders_generate_pipeline_for_this_frame)
             {
                 auto fnd = shader->m_target_pass_pipelines.find(fb);
                 assert(fnd != shader->m_target_pass_pipelines.end());
 
-                vkDestroyPipeline(_vk_logic_device, fnd->second, nullptr);
+                for (const auto& pipelines : fnd->second.m_topology_pipelines)
+                {
+                    for (auto [stride, pipeline] : pipelines)
+                    {
+                        (void)stride;
+                        vkDestroyPipeline(_vk_logic_device, pipeline, nullptr);
+                    }
+                }
+
                 shader->m_target_pass_pipelines.erase(fnd);
             }
 
             vkDestroyRenderPass(_vk_logic_device, fb->m_rendpass, nullptr);
             vkDestroyFramebuffer(_vk_logic_device, fb->m_framebuffer, nullptr);
-            delete fb; // Fix: Add missing delete to prevent memory leak
+            delete fb;
         }
         void destroy_swap_chain()
         {
@@ -1392,7 +1411,7 @@ namespace jeecs::graphic::api::vk130
                 _vk_surface_present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR;
             else
             {
-                jeecs::debug::logfatal("Failed to create vk130 swapchain, unsupported present mode.");
+                jeecs::debug::logfatal("Failed to create vk120 swapchain, unsupported present mode.");
             }
 
             _vk_presenting_swapchain_image_index = UINT32_MAX;
@@ -1444,7 +1463,7 @@ namespace jeecs::graphic::api::vk130
 
             if (VK_SUCCESS != vkCreateSwapchainKHR(_vk_logic_device, &swapchain_create_info, nullptr, &_vk_swapchain))
             {
-                jeecs::debug::logfatal("Failed to create vk130 swapchain.");
+                jeecs::debug::logfatal("Failed to create vk120 swapchain.");
             }
 
             uint32_t swapchain_real_image_count = 0;
@@ -1464,12 +1483,12 @@ namespace jeecs::graphic::api::vk130
                     VkImageLayout::VK_IMAGE_LAYOUT_UNDEFINED,
                     VkImageLayout::VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
-                jevk13_texture* color_attachment = create_framebuf_texture_with_swapchain_image(
+                jevk12_texture* color_attachment = create_framebuf_texture_with_swapchain_image(
                     swapchain_images[i],
                     _vk_surface_format.format,
                     VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT);
 
-                jevk13_texture* depth_attachment = create_framebuf_texture(
+                jevk12_texture* depth_attachment = create_framebuf_texture(
                     (jegl_texture::format)(jegl_texture::format::DEPTH | jegl_texture::format::FRAMEBUF),
                     RESOLUTION_WIDTH,
                     RESOLUTION_HEIGHT);
@@ -1637,16 +1656,16 @@ namespace jeecs::graphic::api::vk130
             return std::nullopt;
         }
 
-        jegl_vk130_context(
+        jegl_vk120_context(
             jegl_context* ctx,
             const jegl_interface_config* config,
             bool reboot)
         {
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
-            _vk_jegl_interface = new egl(egl::VULKAN130);
+            _vk_jegl_interface = new egl(egl::VULKAN120);
 #else
             glfwInitVulkanLoader(vkGetInstanceProcAddr);
-            _vk_jegl_interface = new glfw(reboot ? glfw::HOLD : glfw::VULKAN130);
+            _vk_jegl_interface = new glfw(reboot ? glfw::HOLD : glfw::VULKAN120);
 #endif
             _vk_jegl_interface->create_interface(config);
 
@@ -1703,7 +1722,7 @@ namespace jeecs::graphic::api::vk130
 #undef JE_VERSION_WRAP
 #define JE_VERSION_WRAP(A, B, C) VK_MAKE_API_VERSION(0, A, B, C)
             application_info.engineVersion = JE_CORE_VERSION;
-            application_info.apiVersion = VK_API_VERSION_1_3;
+            application_info.apiVersion = VK_API_VERSION_1_2;
 
             VkInstanceCreateInfo instance_create_info = {};
             instance_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -1742,7 +1761,7 @@ namespace jeecs::graphic::api::vk130
 
             if (VK_SUCCESS != vkCreateInstance(&instance_create_info, nullptr, &_vk_instance))
             {
-                jeecs::debug::logfatal("Failed to create vk130 instance.");
+                jeecs::debug::logfatal("Failed to create vk120 instance.");
             }
 
             // 在此初始化vkAPI
@@ -1784,7 +1803,7 @@ namespace jeecs::graphic::api::vk130
                 nullptr /* pAllocator */,
                 &_vk_surface))
             {
-                jeecs::debug::logfatal("Failed to create vk130 android surface.");
+                jeecs::debug::logfatal("Failed to create vk120 android surface.");
             }
 #   else
 #       error "Unsupported platform for EGL."
@@ -1796,7 +1815,7 @@ namespace jeecs::graphic::api::vk130
                 const char* error_message = nullptr;
                 auto eno = glfwGetError(&error_message);
 
-                jeecs::debug::logfatal("Failed to create vk130 glfw surface: %s(%d).",
+                jeecs::debug::logfatal("Failed to create vk120 glfw surface: %s(%d).",
                     error_message, eno);
             }
 #endif
@@ -1816,7 +1835,6 @@ namespace jeecs::graphic::api::vk130
 
             std::vector<const char*> required_device_extensions = {
                 VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-                // "VK_EXT_extended_dynamic_state3",
             };
 
             size_t SKIP_DEVICE = 0;
@@ -1848,7 +1866,7 @@ namespace jeecs::graphic::api::vk130
 
             if (_vk_device == nullptr)
             {
-                jeecs::debug::logfatal("Failed to get vk130 device.");
+                jeecs::debug::logfatal("Failed to get vk120 device.");
             }
 
 #ifndef NDEBUG
@@ -1907,7 +1925,7 @@ namespace jeecs::graphic::api::vk130
 
             VkDeviceCreateInfo device_create_info = {};
             device_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-            device_create_info.pNext = nullptr;;
+            device_create_info.pNext = nullptr;
             device_create_info.flags = 0;
             device_create_info.queueCreateInfoCount = (uint32_t)queue_create_infos.size();
             device_create_info.pQueueCreateInfos = queue_create_infos.data();
@@ -1921,7 +1939,7 @@ namespace jeecs::graphic::api::vk130
 
             if (VK_SUCCESS != vkCreateDevice(_vk_device, &device_create_info, nullptr, &_vk_logic_device))
             {
-                jeecs::debug::logfatal("Failed to create vk130 logic device.");
+                jeecs::debug::logfatal("Failed to create vk120 logic device.");
             }
 
             vkGetDeviceQueue(
@@ -1998,7 +2016,7 @@ namespace jeecs::graphic::api::vk130
             if (VK_SUCCESS != vkCreateDescriptorPool(
                 _vk_logic_device, &imgui_descriptor_pool_info, nullptr, &_vk_dear_imgui_descriptor_pool))
             {
-                jeecs::debug::logfatal("Failed to create vk130 imgui descriptor pool.");
+                jeecs::debug::logfatal("Failed to create vk120 imgui descriptor pool.");
             }
 
             recreate_swap_chain_for_current_surface();
@@ -2018,7 +2036,7 @@ namespace jeecs::graphic::api::vk130
         }
         void shutdown(bool reboot)
         {
-            jegui_shutdown_vk130(reboot);
+            jegui_shutdown_vk120(reboot);
 
             destroy_swap_chain();
 
@@ -2056,14 +2074,14 @@ namespace jeecs::graphic::api::vk130
 
             if (VK_SUCCESS != vkBeginCommandBuffer(cmdbuf, &command_buffer_begin_info))
             {
-                jeecs::debug::logfatal("Failed to begin vk130 command buffer record.");
+                jeecs::debug::logfatal("Failed to begin vk120 command buffer record.");
             }
         }
         void end_command_buffer_record(VkCommandBuffer cmdbuf)
         {
             if (VK_SUCCESS != vkEndCommandBuffer(cmdbuf))
             {
-                jeecs::debug::logfatal("Failed to end vk130 command buffer record.");
+                jeecs::debug::logfatal("Failed to end vk120 command buffer record.");
             }
         }
         /////////////////////////////////////////////////////
@@ -2102,7 +2120,7 @@ namespace jeecs::graphic::api::vk130
                 nullptr,
                 &result))
             {
-                jeecs::debug::logfatal("Failed to allocate vk130 device buffer memory.");
+                jeecs::debug::logfatal("Failed to allocate vk120 device buffer memory.");
             }
 
             return result;
@@ -2129,7 +2147,7 @@ namespace jeecs::graphic::api::vk130
                 nullptr,
                 out_device_buffer))
             {
-                jeecs::debug::logfatal("Failed to create vk130 device buffer.");
+                jeecs::debug::logfatal("Failed to create vk120 device buffer.");
             }
 
             VkMemoryRequirements vertex_buffer_memory_requirements;
@@ -2228,13 +2246,13 @@ namespace jeecs::graphic::api::vk130
                 nullptr,
                 &result))
             {
-                jeecs::debug::logfatal("Failed to create vk130 sampler.");
+                jeecs::debug::logfatal("Failed to create vk120 sampler.");
             }
             return result;
         }
-        jevk13_shader_blob* create_shader_blob(jegl_resource* resource)
+        jevk12_shader_blob* create_shader_blob(jegl_resource* resource)
         {
-            jevk13_shader_blob::blob_data* shader_blob = new jevk13_shader_blob::blob_data{};
+            jevk12_shader_blob::blob_data* shader_blob = new jevk12_shader_blob::blob_data{};
             assert(resource != nullptr && resource->m_type == jegl_resource::type::SHADER && resource->m_raw_shader_data != nullptr);
 
             shader_blob->m_context = this;
@@ -2269,7 +2287,7 @@ namespace jeecs::graphic::api::vk130
                 nullptr,
                 &shader_blob->m_vertex_shader_module))
             {
-                jeecs::debug::logfatal("Failed to create vk130 vertex shader module.");
+                jeecs::debug::logfatal("Failed to create vk120 vertex shader module.");
             }
 
             VkShaderModuleCreateInfo fragment_shader_module_create_info = {};
@@ -2286,7 +2304,7 @@ namespace jeecs::graphic::api::vk130
                 nullptr,
                 &shader_blob->m_fragment_shader_module))
             {
-                jeecs::debug::logfatal("Failed to create vk130 fragment shader module.");
+                jeecs::debug::logfatal("Failed to create vk120 fragment shader module.");
             }
 
             VkPipelineShaderStageCreateInfo vertex_shader_stage_info = {};
@@ -2378,36 +2396,6 @@ namespace jeecs::graphic::api::vk130
                         resource->m_path == nullptr ? "<builtin>" : resource->m_path);
                 }
             }
-
-            shader_blob->m_vertex_input_binding_description = {};
-            shader_blob->m_vertex_input_binding_description.binding = 0;
-            shader_blob->m_vertex_input_binding_description.stride = (uint32_t)vertex_point_data_size;
-            shader_blob->m_vertex_input_binding_description.inputRate =
-                VkVertexInputRate::VK_VERTEX_INPUT_RATE_VERTEX;
-
-            shader_blob->m_vertex_input_state_create_info = {};
-            shader_blob->m_vertex_input_state_create_info.sType =
-                VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-            shader_blob->m_vertex_input_state_create_info.pNext = nullptr;
-            shader_blob->m_vertex_input_state_create_info.flags = 0;
-            shader_blob->m_vertex_input_state_create_info.vertexBindingDescriptionCount = 1;
-            shader_blob->m_vertex_input_state_create_info.pVertexBindingDescriptions =
-                &shader_blob->m_vertex_input_binding_description;
-            shader_blob->m_vertex_input_state_create_info.vertexAttributeDescriptionCount =
-                (uint32_t)shader_blob->m_vertex_input_attribute_descriptions.size();
-            shader_blob->m_vertex_input_state_create_info.pVertexAttributeDescriptions =
-                shader_blob->m_vertex_input_attribute_descriptions.data();
-
-            // TODO: 根据JoyEngine的绘制设计，此处需要允许动态调整或者创建多个图形管线以匹配不同的绘制需求
-            //       这里暂时先挂个最常见的绘制图元模式
-            shader_blob->m_input_assembly_state_create_info = {};
-            shader_blob->m_input_assembly_state_create_info.sType =
-                VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-            shader_blob->m_input_assembly_state_create_info.pNext = nullptr;
-            shader_blob->m_input_assembly_state_create_info.flags = 0;
-            shader_blob->m_input_assembly_state_create_info.topology =
-                VkPrimitiveTopology::VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
-            shader_blob->m_input_assembly_state_create_info.primitiveRestartEnable = VK_TRUE;
 
             shader_blob->m_viewport = {};
             shader_blob->m_viewport.x = 0;
@@ -2686,8 +2674,8 @@ namespace jeecs::graphic::api::vk130
             shader_blob->m_dynamic_state_create_info.pNext = nullptr;
             shader_blob->m_dynamic_state_create_info.flags = 0;
             shader_blob->m_dynamic_state_create_info.dynamicStateCount =
-                sizeof(jevk13_shader_blob::blob_data::m_dynamic_states) / sizeof(VkDynamicState);
-            shader_blob->m_dynamic_state_create_info.pDynamicStates = jevk13_shader_blob::blob_data::m_dynamic_states;
+                sizeof(jevk12_shader_blob::blob_data::m_dynamic_states) / sizeof(VkDynamicState);
+            shader_blob->m_dynamic_state_create_info.pDynamicStates = jevk12_shader_blob::blob_data::m_dynamic_states;
 
             // 创建管道布局
             VkPipelineLayoutCreateInfo pipeline_layout_create_info = {};
@@ -2705,49 +2693,35 @@ namespace jeecs::graphic::api::vk130
                 nullptr,
                 &shader_blob->m_pipeline_layout))
             {
-                jeecs::debug::logfatal("Failed to create vk130 pipeline layout.");
+                jeecs::debug::logfatal("Failed to create vk120 pipeline layout.");
             }
 
-            auto* result = new jevk13_shader_blob(shader_blob);
+            auto* result = new jevk12_shader_blob(shader_blob);
             return result;
         }
-        void destroy_shader_blob(jevk13_shader_blob* blob)
+        void destroy_shader_blob(jevk12_shader_blob* blob)
         {
             delete blob;
         }
 
-        jevk13_shader* create_shader_with_blob(jevk13_shader_blob* blob)
+        jevk12_shader* create_shader_with_blob(jevk12_shader_blob* blob)
         {
             assert(blob != nullptr);
 
-            jevk13_shader* shader = new jevk13_shader(blob);
+            jevk12_shader* shader = new jevk12_shader(blob);
 
             return shader;
         }
-        void destroy_shader(jevk13_shader* shader)
+        void destroy_shader(jevk12_shader* shader)
         {
             delete shader;
         }
 
-        jevk13_vertex* create_vertex_instance(jegl_resource* resource)
+        jevk12_vertex* create_vertex_instance(jegl_resource* resource)
         {
-            jevk13_vertex* vertex = new jevk13_vertex();
+            jevk12_vertex* vertex = new jevk12_vertex();
 
-            switch (resource->m_raw_vertex_data->m_type)
-            {
-            case jegl_vertex::type::LINESTRIP:
-                vertex->m_topology = VkPrimitiveTopology::VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
-                break;
-            case jegl_vertex::type::TRIANGLES:
-                vertex->m_topology = VkPrimitiveTopology::VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-                break;
-            case jegl_vertex::type::TRIANGLESTRIP:
-                vertex->m_topology = VkPrimitiveTopology::VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
-                break;
-            default:
-                jeecs::debug::logfatal("Unsupported vertex type.");
-                break;
-            }
+            vertex->m_topology = resource->m_raw_vertex_data->m_type;
 
             size_t vertex_buffer_size = resource->m_raw_vertex_data->m_vertex_length;
 
@@ -2808,7 +2782,7 @@ namespace jeecs::graphic::api::vk130
 
             return vertex;
         }
-        void destroy_vertex_instance(jevk13_vertex* vertex)
+        void destroy_vertex_instance(jevk12_vertex* vertex)
         {
             vkDestroyBuffer(_vk_logic_device, vertex->m_vk_vertex_buffer, nullptr);
             vkFreeMemory(_vk_logic_device, vertex->m_vk_vertex_buffer_memory, nullptr);
@@ -2845,7 +2819,7 @@ namespace jeecs::graphic::api::vk130
                 nullptr,
                 &result))
             {
-                jeecs::debug::logfatal("Failed to create vk130 image view.");
+                jeecs::debug::logfatal("Failed to create vk120 image view.");
             }
 
             return result;
@@ -2886,7 +2860,7 @@ namespace jeecs::graphic::api::vk130
                 nullptr,
                 out_image))
             {
-                jeecs::debug::logfatal("Failed to create vk130 image.");
+                jeecs::debug::logfatal("Failed to create vk120 image.");
             }
 
             VkMemoryRequirements image_memory_requirements;
@@ -2905,9 +2879,9 @@ namespace jeecs::graphic::api::vk130
 
             *out_image_view = create_image_view(*out_image, format, aspect_flags);
         }
-        jevk13_texture* create_framebuf_texture_with_swapchain_image(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags)
+        jevk12_texture* create_framebuf_texture_with_swapchain_image(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags)
         {
-            jevk13_texture* texture = new jevk13_texture{};
+            jevk12_texture* texture = new jevk12_texture{};
 
             texture->m_vk_texture_image = VK_NULL_HANDLE; // 不设置此项，不需要释放
             texture->m_vk_texture_image_view = create_image_view(image, format, aspect_flags);
@@ -2916,11 +2890,11 @@ namespace jeecs::graphic::api::vk130
 
             return texture;
         }
-        jevk13_texture* create_framebuf_texture(jegl_texture::format format, size_t w, size_t h)
+        jevk12_texture* create_framebuf_texture(jegl_texture::format format, size_t w, size_t h)
         {
             assert(format & jegl_texture::format::FRAMEBUF);
 
-            jevk13_texture* texture = new jevk13_texture{};
+            jevk12_texture* texture = new jevk12_texture{};
 
             if (format & jegl_texture::format::DEPTH)
             {
@@ -3121,7 +3095,7 @@ namespace jeecs::graphic::api::vk130
             end_temp_command_buffer_record(command_buffer);
         }
 
-        void trans_and_update_texture_pixels(jevk13_texture* texture, jegl_texture* texture_raw_data)
+        void trans_and_update_texture_pixels(jevk12_texture* texture, jegl_texture* texture_raw_data)
         {
             VkBuffer texture_data_buffer;
             VkDeviceMemory texture_data_buffer_memory;
@@ -3191,7 +3165,7 @@ namespace jeecs::graphic::api::vk130
             vkFreeMemory(_vk_logic_device, texture_data_buffer_memory, nullptr);
         }
 
-        jevk13_texture* create_texture_instance(jegl_resource* resource)
+        jevk12_texture* create_texture_instance(jegl_resource* resource)
         {
             jegl_texture* texture_raw_data = resource->m_raw_texture_data;
             bool is_cube = 0 != (texture_raw_data->m_format & jegl_texture::format::CUBE);
@@ -3208,7 +3182,7 @@ namespace jeecs::graphic::api::vk130
             }
             else
             {
-                jevk13_texture* texture = new jevk13_texture{};
+                jevk12_texture* texture = new jevk12_texture{};
 
                 VkFormat image_format;
                 switch (texture_raw_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
@@ -3240,7 +3214,7 @@ namespace jeecs::graphic::api::vk130
                 return texture;
             }
         }
-        void destroy_texture_instance(jevk13_texture* texture)
+        void destroy_texture_instance(jevk12_texture* texture)
         {
             vkDestroyImageView(_vk_logic_device, texture->m_vk_texture_image_view, nullptr);
 
@@ -3252,9 +3226,9 @@ namespace jeecs::graphic::api::vk130
             delete texture;
         }
 
-        jevk13_uniformbuf* create_uniform_buffer_with_size(uint32_t real_binding_place, size_t size)
+        jevk12_uniformbuf* create_uniform_buffer_with_size(uint32_t real_binding_place, size_t size)
         {
-            jevk13_uniformbuf* uniformbuf = new jevk13_uniformbuf{};
+            jevk12_uniformbuf* uniformbuf = new jevk12_uniformbuf{};
 
             uniformbuf->m_real_binding_place = real_binding_place;
 
@@ -3269,19 +3243,19 @@ namespace jeecs::graphic::api::vk130
 
             return uniformbuf;
         }
-        jevk13_uniformbuf* create_uniform_buffer(jegl_resource* resource)
+        jevk12_uniformbuf* create_uniform_buffer(jegl_resource* resource)
         {
             return create_uniform_buffer_with_size(
                 (uint32_t)resource->m_raw_uniformbuf_data->m_buffer_binding_place,
                 resource->m_raw_uniformbuf_data->m_buffer_size);
         }
-        void destroy_uniform_buffer(jevk13_uniformbuf* uniformbuf)
+        void destroy_uniform_buffer(jevk12_uniformbuf* uniformbuf)
         {
             vkDestroyBuffer(_vk_logic_device, uniformbuf->m_uniform_buffer, nullptr);
             vkFreeMemory(_vk_logic_device, uniformbuf->m_uniform_buffer_memory, nullptr);
             delete uniformbuf;
         }
-        void update_uniform_buffer_with_range(jevk13_uniformbuf* ubuf, void* data, size_t offset, size_t size)
+        void update_uniform_buffer_with_range(jevk12_uniformbuf* ubuf, void* data, size_t offset, size_t size)
         {
             void* mdata;
 
@@ -3297,8 +3271,8 @@ namespace jeecs::graphic::api::vk130
         }
         void update_uniform_buffer(jegl_resource* resource)
         {
-            jevk13_uniformbuf* uniformbuf =
-                reinterpret_cast<jevk13_uniformbuf*>(resource->m_handle.m_ptr);
+            jevk12_uniformbuf* uniformbuf =
+                reinterpret_cast<jevk12_uniformbuf*>(resource->m_handle.m_ptr);
 
             auto* raw_uniformbuf_data = resource->m_raw_uniformbuf_data;
             if (raw_uniformbuf_data != nullptr)
@@ -3423,11 +3397,11 @@ namespace jeecs::graphic::api::vk130
 
             // 结束录制！回到默认帧缓冲
             cmd_begin_frame_buffer(nullptr, 0, 0, 0, 0);
-            jegui_update_vk130(_vk_current_command_buffer);
+            jegui_update_vk120(_vk_current_command_buffer);
             finish_frame_buffer();
         }
         /////////////////////////////////////////////////////
-        void cmd_begin_frame_buffer(jevk13_framebuffer* framebuf, int32_t x, int32_t y, int32_t w, int32_t h)
+        void cmd_begin_frame_buffer(jevk12_framebuffer* framebuf, int32_t x, int32_t y, int32_t w, int32_t h)
         {
             if (_vk_current_target_framebuffer != nullptr)
                 finish_frame_buffer();
@@ -3493,8 +3467,6 @@ namespace jeecs::graphic::api::vk130
                 (uint32_t)_vk_current_target_framebuffer->m_width,
                 (uint32_t)_vk_current_target_framebuffer->m_height };
             vkCmdSetScissor(_vk_current_command_buffer, 0, 1, &scissor);
-
-            vkCmdSetPrimitiveRestartEnable(_vk_current_command_buffer, VK_TRUE);
         }
         void cmd_clear_frame_buffer_color(size_t attachment_id, const float color[4])
         {
@@ -3551,7 +3523,7 @@ namespace jeecs::graphic::api::vk130
                 1,
                 &clear_rect);
         }
-        bool cmd_bind_shader_pipeline(jevk13_shader* shader_may_null)
+        bool cmd_bind_shader_pipeline(jevk12_shader* shader_may_null)
         {
             assert(_vk_current_target_framebuffer != nullptr);
 
@@ -3567,23 +3539,22 @@ namespace jeecs::graphic::api::vk130
                 _vk_descriptor_set_allocator->bind_sampler(
                     (size_t)sampler.m_sampler_id, sampler.m_vk_sampler);
             }
-
-            vkCmdBindPipeline(
-                _vk_current_command_buffer,
-                VkPipelineBindPoint::VK_PIPELINE_BIND_POINT_GRAPHICS,
-                shader_may_null->prepare_pipeline(this));
-
-            _vk_descriptor_set_allocator->bind_pipeline_layout(
-                shader_may_null->m_blob_data->m_pipeline_layout);
-
             return true;
         }
-        void cmd_draw_vertex(jevk13_vertex* vertex)
+        void cmd_draw_vertex(jevk12_vertex* vertex)
         {
             assert(_vk_current_target_framebuffer != nullptr);
             assert(_vk_current_binded_shader != nullptr);
 
             VkDeviceSize offsets = 0;
+
+            vkCmdBindPipeline(
+                _vk_current_command_buffer,
+                VkPipelineBindPoint::VK_PIPELINE_BIND_POINT_GRAPHICS,
+                _vk_current_binded_shader->prepare_pipeline(this, vertex->m_topology, vertex->m_stride));
+
+            _vk_descriptor_set_allocator->bind_pipeline_layout(
+                _vk_current_binded_shader->m_blob_data->m_pipeline_layout);
 
             if (_vk_current_binded_shader->m_uniform_cpu_buffer_size != 0)
             {
@@ -3607,18 +3578,8 @@ namespace jeecs::graphic::api::vk130
             _vk_descriptor_set_allocator->apply_binding_work(
                 _vk_current_swapchain_image_content);
 
-            vkCmdSetPrimitiveTopology(
-                _vk_current_command_buffer,
-                vertex->m_topology);
-
-            vkCmdBindVertexBuffers2(
-                _vk_current_command_buffer,
-                0,
-                1,
-                &vertex->m_vk_vertex_buffer,
-                &offsets,
-                &vertex->m_size,
-                &vertex->m_stride);
+            vkCmdBindVertexBuffers(
+                _vk_current_command_buffer, 0, 1, &vertex->m_vk_vertex_buffer, &offsets);
 
             vkCmdBindIndexBuffer(
                 _vk_current_command_buffer,
@@ -3652,14 +3613,14 @@ namespace jeecs::graphic::api::vk130
 
             auto cmdbuf = begin_temp_command_buffer_records();
 
-            jegui_init_vk130(
+            jegui_init_vk120(
                 _vk_jegl_context,
                 [](jegl_context* ctx, jegl_resource* res)
                 {
                     auto* this_context =
-                        reinterpret_cast<jegl_vk130_context*>(ctx->m_graphic_impl_context);
+                        reinterpret_cast<jegl_vk120_context*>(ctx->m_graphic_impl_context);
 
-                    auto vk13_texture = reinterpret_cast<jevk13_texture*>(res->m_handle.m_ptr);
+                    auto vk12_texture = reinterpret_cast<jevk12_texture*>(res->m_handle.m_ptr);
                     auto desc_set = this_context
                         ->_vk_dear_imgui_descriptor_set_allocator
                         ->allocate_descriptor_set(
@@ -3677,7 +3638,7 @@ namespace jeecs::graphic::api::vk130
 
                     VkDescriptorImageInfo image_info = {};
                     image_info.sampler = this_context->_vk_dear_imgui_sampler;
-                    image_info.imageView = vk13_texture->m_vk_texture_image_view;
+                    image_info.imageView = vk12_texture->m_vk_texture_image_view;
                     image_info.imageLayout = VkImageLayout::VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
                     write_desc_set.pImageInfo = &image_info;
@@ -3701,7 +3662,7 @@ namespace jeecs::graphic::api::vk130
 #if JE4_VK_USE_DYNAMIC_VK_LIB
                 [](const char* funcname, void* userdata)
                 {
-                    jegl_vk130_context* ctx = reinterpret_cast<jegl_vk130_context*>(userdata);
+                    jegl_vk120_context* ctx = reinterpret_cast<jegl_vk120_context*>(userdata);
                     return ctx->vkGetInstanceProcAddr(ctx->_vk_instance, funcname);
                 },
 #else
@@ -3713,12 +3674,20 @@ namespace jeecs::graphic::api::vk130
         }
     };
 
-    jevk13_shader_blob::blob_data::~blob_data()
+    jevk12_shader_blob::blob_data::~blob_data()
     {
-        for (auto& [framebuf, pipeline] : m_target_pass_pipelines)
+        for (auto& [framebuf, pipelines] : m_target_pass_pipelines)
         {
             framebuf->m_shaders_generate_pipeline_for_this_frame.erase(this);
-            m_context->vkDestroyPipeline(m_context->_vk_logic_device, pipeline, nullptr);
+
+            for (const auto& pipelines : pipelines.m_topology_pipelines)
+            {
+                for (auto [stride, pipeline] : pipelines)
+                {
+                    (void)stride;
+                    m_context->vkDestroyPipeline(m_context->_vk_logic_device, pipeline, nullptr);
+                }
+            }
         }
 
         m_context->vkDestroyPipelineLayout(m_context->_vk_logic_device, m_pipeline_layout, nullptr);
@@ -3728,7 +3697,7 @@ namespace jeecs::graphic::api::vk130
         for (auto& sampler : m_samplers)
             m_context->vkDestroySampler(m_context->_vk_logic_device, sampler.m_vk_sampler, nullptr);
     }
-    jevk13_shader::~jevk13_shader()
+    jevk12_shader::~jevk12_shader()
     {
         if (m_uniform_cpu_buffer != nullptr)
         {
@@ -3741,7 +3710,8 @@ namespace jeecs::graphic::api::vk130
         }
     }
 
-    VkPipeline jevk13_shader::prepare_pipeline(jegl_vk130_context* context)
+    VkPipeline jevk12_shader::prepare_pipeline(
+        jegl_vk120_context* context, jegl_vertex::type kind, uint32_t stride)
     {
         assert(context->_vk_current_target_framebuffer != nullptr);
 
@@ -3750,23 +3720,57 @@ namespace jeecs::graphic::api::vk130
         assert(target_pass != VK_NULL_HANDLE);
 
         auto* shader_blob = m_blob_data.get();
-        auto fnd = shader_blob->m_target_pass_pipelines.find(target_framebuffer_instance);
-        if (fnd != shader_blob->m_target_pass_pipelines.end())
-            return fnd->second;
 
-        do
+        VkPrimitiveTopology vk_topology;
+        switch (kind)
         {
-            // Generate relation ship between shader and framebuffer
-            auto result = target_framebuffer_instance->
-                m_shaders_generate_pipeline_for_this_frame.insert(shader_blob);
-            (void)result;
-            assert(result.second);
-        } while (0);
+        case jegl_vertex::type::LINESTRIP:
+            vk_topology = VkPrimitiveTopology::VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
+            break;
+        case jegl_vertex::type::TRIANGLES:
+            vk_topology = VkPrimitiveTopology::VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+            break;
+        case jegl_vertex::type::TRIANGLESTRIP:
+            vk_topology = VkPrimitiveTopology::VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+            break;
+        default:
+            jeecs::debug::logfatal("Unsupported vertex type.");
+            abort();
+        }
+
+        auto& topology_pipeline =
+            shader_blob->m_target_pass_pipelines[target_framebuffer_instance].get_or_emplace_pipeline(
+                kind, stride);
+
+        if (topology_pipeline != VK_NULL_HANDLE)
+            return topology_pipeline;
+
+        (void)target_framebuffer_instance->
+            m_shaders_generate_pipeline_for_this_frame.insert(shader_blob);
 
         m_blob_data->m_rasterization_state_create_info.frontFace =
             target_framebuffer_instance->m_is_screen_framebuffer
             ? VkFrontFace::VK_FRONT_FACE_COUNTER_CLOCKWISE
             : VkFrontFace::VK_FRONT_FACE_CLOCKWISE;
+
+        VkVertexInputBindingDescription vertex_input_binding_description = {};
+        vertex_input_binding_description.binding = 0;
+        vertex_input_binding_description.stride = stride;
+        vertex_input_binding_description.inputRate =
+            VkVertexInputRate::VK_VERTEX_INPUT_RATE_VERTEX;
+
+        VkPipelineVertexInputStateCreateInfo vertex_input_state_create_info = {};
+        vertex_input_state_create_info.sType =
+            VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        vertex_input_state_create_info.pNext = nullptr;
+        vertex_input_state_create_info.flags = 0;
+        vertex_input_state_create_info.vertexBindingDescriptionCount = 1;
+        vertex_input_state_create_info.pVertexBindingDescriptions =
+            &vertex_input_binding_description;
+        vertex_input_state_create_info.vertexAttributeDescriptionCount =
+            (uint32_t)shader_blob->m_vertex_input_attribute_descriptions.size();
+        vertex_input_state_create_info.pVertexAttributeDescriptions =
+            shader_blob->m_vertex_input_attribute_descriptions.data();
 
         VkGraphicsPipelineCreateInfo pipeline_create_info = {};
         pipeline_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -3774,8 +3778,18 @@ namespace jeecs::graphic::api::vk130
         pipeline_create_info.flags = 0;
         pipeline_create_info.stageCount = 2;
         pipeline_create_info.pStages = m_blob_data->m_shader_stage_infos;
-        pipeline_create_info.pVertexInputState = &m_blob_data->m_vertex_input_state_create_info;
-        pipeline_create_info.pInputAssemblyState = &m_blob_data->m_input_assembly_state_create_info;
+        pipeline_create_info.pVertexInputState = &vertex_input_state_create_info;
+
+        VkPipelineInputAssemblyStateCreateInfo input_assembly_state_create_info = {};
+        input_assembly_state_create_info.sType =
+            VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+        input_assembly_state_create_info.pNext = nullptr;
+        input_assembly_state_create_info.flags = 0;
+        input_assembly_state_create_info.topology = vk_topology;
+        input_assembly_state_create_info.primitiveRestartEnable =
+            VK_FALSE;
+
+        pipeline_create_info.pInputAssemblyState = &input_assembly_state_create_info;
         pipeline_create_info.pViewportState = &m_blob_data->m_viewport_state_create_info;
         pipeline_create_info.pRasterizationState = &m_blob_data->m_rasterization_state_create_info;
         pipeline_create_info.pMultisampleState = &m_blob_data->m_multi_sample_state_create_info;
@@ -3784,8 +3798,17 @@ namespace jeecs::graphic::api::vk130
         std::vector<VkPipelineColorBlendAttachmentState> attachment_states(
             context->_vk_current_target_framebuffer->m_color_attachments.size());
 
+        size_t shader_output_color_attachment = 0;
         for (auto& state : attachment_states)
+        {
             state = m_blob_data->m_color_blend_attachment_state;
+
+            if (shader_output_color_attachment > target_framebuffer_instance->m_color_attachments.size())
+                // Ignore useless output color attachment.
+                state.colorWriteMask = 0;
+
+            ++shader_output_color_attachment;
+        }
 
         VkPipelineColorBlendStateCreateInfo color_blend_state_create_info = {};
         color_blend_state_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
@@ -3808,27 +3831,22 @@ namespace jeecs::graphic::api::vk130
         pipeline_create_info.basePipelineHandle = VK_NULL_HANDLE; // TODO: 看着我们可以使用子渲染管线？稍后考虑
         pipeline_create_info.basePipelineIndex = -1;
 
-        VkPipeline pipeline;
+        VkPipeline new_pipeline;
         if (VK_SUCCESS != context->vkCreateGraphicsPipelines(
             context->_vk_logic_device,
             VK_NULL_HANDLE,
             1,
             &pipeline_create_info,
             nullptr,
-            &pipeline))
+            &new_pipeline))
         {
-            jeecs::debug::logfatal("Failed to create vk130 graphics pipeline.");
+            jeecs::debug::logfatal("Failed to create vk120 graphics pipeline.");
             abort();
         }
 
-        auto result = shader_blob->m_target_pass_pipelines.insert(
-            std::make_pair(target_framebuffer_instance, pipeline));
-        (void)result;
-        assert(result.second);
-
-        return pipeline;
+        return (topology_pipeline = new_pipeline);
     }
-    jevk13_uniformbuf* jevk13_shader::allocate_ubo_for_vars(jegl_vk130_context* context)
+    jevk12_uniformbuf* jevk12_shader::allocate_ubo_for_vars(jegl_vk120_context* context)
     {
         if (m_next_allocate_ubos_for_uniform_variable >= m_uniform_variables.size())
         {
@@ -3848,7 +3866,7 @@ namespace jeecs::graphic::api::vk130
         return m_uniform_variables[m_next_allocate_ubos_for_uniform_variable++];
     }
 
-    jevk13_uniformbuf* jevk13_shader::get_last_usable_variable(jegl_vk130_context* context)
+    jevk12_uniformbuf* jevk12_shader::get_last_usable_variable(jegl_vk120_context* context)
     {
         if (m_next_allocate_ubos_for_uniform_variable == 0)
         {
@@ -3872,23 +3890,23 @@ namespace jeecs::graphic::api::vk130
         startup(jegl_context* gthread, const jegl_interface_config* config, bool reboot)
     {
         if (!reboot)
-            jeecs::debug::log("Graphic thread (Vulkan130) start!");
+            jeecs::debug::log("Graphic thread (Vulkan120) start!");
 
-        jegl_vk130_context* context = new jegl_vk130_context(gthread, config, reboot);
+        jegl_vk120_context* context = new jegl_vk120_context(gthread, config, reboot);
         return context;
     }
     void pre_shutdown(jegl_context*, jegl_context::graphic_impl_context_t ctx, bool reboot)
     {
-        jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
+        jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
 
         context->pre_shutdown();
     }
     void shutdown(jegl_context*, jegl_context::graphic_impl_context_t ctx, bool reboot)
     {
         if (!reboot)
-            jeecs::debug::log("Graphic thread (Vulkan130) shutdown!");
+            jeecs::debug::log("Graphic thread (Vulkan120) shutdown!");
 
-        jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
+        jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
 
         context->shutdown(reboot);
         context->_vk_jegl_interface->shutdown(reboot);
@@ -3899,7 +3917,7 @@ namespace jeecs::graphic::api::vk130
 
     jegl_update_action pre_update(jegl_context::graphic_impl_context_t ctx)
     {
-        jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
+        jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
 
         context->_vk_current_binded_shader = nullptr;
         ++context->_vk_command_commit_round;
@@ -3922,7 +3940,7 @@ namespace jeecs::graphic::api::vk130
 
             // Wait for device idle.
             context->vkDeviceWaitIdle(context->_vk_logic_device);
-            jegui_shutdown_vk130(true);
+            jegui_shutdown_vk120(true);
             context->recreate_swap_chain_for_current_surface();
             context->imgui_init();
 
@@ -3943,7 +3961,7 @@ namespace jeecs::graphic::api::vk130
     jegl_update_action commit_update(
         jegl_context::graphic_impl_context_t ctx, jegl_update_action)
     {
-        jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
+        jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
 
         context->late_update();
 
@@ -3952,7 +3970,7 @@ namespace jeecs::graphic::api::vk130
 
     jegl_resource_blob create_resource_blob(jegl_context::graphic_impl_context_t ctx, jegl_resource* resource)
     {
-        jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
+        jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
         switch (resource->m_type)
         {
         case jegl_resource::type::SHADER:
@@ -3974,22 +3992,22 @@ namespace jeecs::graphic::api::vk130
     {
         if (blob != nullptr)
         {
-            jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
+            jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
 
-            auto* shader_blob = reinterpret_cast<jevk13_shader_blob*>(blob);
+            auto* shader_blob = reinterpret_cast<jevk12_shader_blob*>(blob);
             context->destroy_shader_blob(shader_blob);
         }
     }
 
     void create_resource(jegl_context::graphic_impl_context_t ctx, jegl_resource_blob blob, jegl_resource* resource)
     {
-        jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
+        jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
         switch (resource->m_type)
         {
         case jegl_resource::type::SHADER:
         {
             assert(blob != nullptr);
-            auto* shader_blob = reinterpret_cast<jevk13_shader_blob*>(blob);
+            auto* shader_blob = reinterpret_cast<jevk12_shader_blob*>(blob);
             resource->m_handle.m_ptr = context->create_shader_with_blob(shader_blob);
 
             auto* raw_shader_data = resource->m_raw_shader_data;
@@ -4026,8 +4044,8 @@ namespace jeecs::graphic::api::vk130
             break;
         case jegl_resource::type::FRAMEBUF:
         {
-            std::vector<jevk13_texture*> color_attachments;
-            jevk13_texture* depth_attachment = nullptr;
+            std::vector<jevk12_texture*> color_attachments;
+            jevk12_texture* depth_attachment = nullptr;
 
             jeecs::basic::resource<jeecs::graphic::texture>* attachments =
                 reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture> *>(
@@ -4039,7 +4057,7 @@ namespace jeecs::graphic::api::vk130
                 jegl_using_resource(attachment->resource());
 
                 auto* attach_texture_instance =
-                    reinterpret_cast<jevk13_texture*>(attachment->resource()->m_handle.m_ptr);
+                    reinterpret_cast<jevk12_texture*>(attachment->resource()->m_handle.m_ptr);
                 if (0 != (attachment->resource()->m_raw_texture_data->m_format & jegl_texture::format::DEPTH))
                     depth_attachment = attach_texture_instance;
                 else
@@ -4068,7 +4086,7 @@ namespace jeecs::graphic::api::vk130
     void close_resource(jegl_context::graphic_impl_context_t ctx, jegl_resource* resource);
     void using_resource(jegl_context::graphic_impl_context_t ctx, jegl_resource* resource)
     {
-        jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
+        jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
         switch (resource->m_type)
         {
         case jegl_resource::type::SHADER:
@@ -4081,7 +4099,7 @@ namespace jeecs::graphic::api::vk130
                     resource->m_modified = false;
                     // Modified, free current resource id, reload one.
 
-                    jevk13_texture* texture = reinterpret_cast<jevk13_texture*>(resource->m_handle.m_ptr);
+                    jevk12_texture* texture = reinterpret_cast<jevk12_texture*>(resource->m_handle.m_ptr);
                     context->trans_and_update_texture_pixels(texture, resource->m_raw_texture_data);
                 }
             }
@@ -4103,26 +4121,26 @@ namespace jeecs::graphic::api::vk130
     }
     void close_resource(jegl_context::graphic_impl_context_t ctx, jegl_resource* resource)
     {
-        jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
+        jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
 
         context->vkDeviceWaitIdle(context->_vk_logic_device);
 
         switch (resource->m_type)
         {
         case jegl_resource::type::SHADER:
-            context->destroy_shader(reinterpret_cast<jevk13_shader*>(resource->m_handle.m_ptr));
+            context->destroy_shader(reinterpret_cast<jevk12_shader*>(resource->m_handle.m_ptr));
             break;
         case jegl_resource::type::TEXTURE:
-            context->destroy_texture_instance(reinterpret_cast<jevk13_texture*>(resource->m_handle.m_ptr));
+            context->destroy_texture_instance(reinterpret_cast<jevk12_texture*>(resource->m_handle.m_ptr));
             break;
         case jegl_resource::type::VERTEX:
-            context->destroy_vertex_instance(reinterpret_cast<jevk13_vertex*>(resource->m_handle.m_ptr));
+            context->destroy_vertex_instance(reinterpret_cast<jevk12_vertex*>(resource->m_handle.m_ptr));
             break;
         case jegl_resource::type::FRAMEBUF:
-            context->destroy_frame_buffer(reinterpret_cast<jevk13_framebuffer*>(resource->m_handle.m_ptr));
+            context->destroy_frame_buffer(reinterpret_cast<jevk12_framebuffer*>(resource->m_handle.m_ptr));
             break;
         case jegl_resource::type::UNIFORMBUF:
-            context->destroy_uniform_buffer(reinterpret_cast<jevk13_uniformbuf*>(resource->m_handle.m_ptr));
+            context->destroy_uniform_buffer(reinterpret_cast<jevk12_uniformbuf*>(resource->m_handle.m_ptr));
             break;
         default:
             break;
@@ -4131,25 +4149,25 @@ namespace jeecs::graphic::api::vk130
 
     void draw_vertex_with_shader(jegl_context::graphic_impl_context_t ctx, jegl_resource* vertex)
     {
-        jegl_vk130_context* context =
-            reinterpret_cast<jegl_vk130_context*>(ctx);
+        jegl_vk120_context* context =
+            reinterpret_cast<jegl_vk120_context*>(ctx);
 
         context->cmd_draw_vertex(
-            reinterpret_cast<jevk13_vertex*>(vertex->m_handle.m_ptr));
+            reinterpret_cast<jevk12_vertex*>(vertex->m_handle.m_ptr));
     }
 
     bool bind_shader(jegl_context::graphic_impl_context_t ctx, jegl_resource* shader)
     {
-        jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
+        jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
 
-        auto* shader_instance = reinterpret_cast<jevk13_shader*>(shader->m_handle.m_ptr);
+        auto* shader_instance = reinterpret_cast<jevk12_shader*>(shader->m_handle.m_ptr);
         return context->cmd_bind_shader_pipeline(shader_instance);
     }
     void bind_uniform_buffer(jegl_context::graphic_impl_context_t ctx, jegl_resource* uniformbuf)
     {
-        jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
-        jevk13_uniformbuf* uniformbuf_instance =
-            reinterpret_cast<jevk13_uniformbuf*>(uniformbuf->m_handle.m_ptr);
+        jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
+        jevk12_uniformbuf* uniformbuf_instance =
+            reinterpret_cast<jevk12_uniformbuf*>(uniformbuf->m_handle.m_ptr);
 
         context->_vk_descriptor_set_allocator->bind_uniform_buffer(
             uniformbuf_instance->m_real_binding_place, uniformbuf_instance->m_uniform_buffer);
@@ -4157,9 +4175,9 @@ namespace jeecs::graphic::api::vk130
 
     void bind_texture(jegl_context::graphic_impl_context_t ctx, jegl_resource* texture, size_t pass)
     {
-        jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
+        jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
 
-        auto* texture_instance = reinterpret_cast<jevk13_texture*>(texture->m_handle.m_ptr);
+        auto* texture_instance = reinterpret_cast<jevk12_texture*>(texture->m_handle.m_ptr);
         context->_vk_descriptor_set_allocator->bind_texture(
             (uint32_t)pass,
             texture_instance->m_vk_texture_image_view);
@@ -4171,15 +4189,15 @@ namespace jeecs::graphic::api::vk130
         const int32_t(*viewport_xywh)[4],
         const jegl_frame_buffer_clear_operation* clear_operations)
     {
-        jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
+        jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
 
-        jevk13_framebuffer* target_framebuf = nullptr;
+        jevk12_framebuffer* target_framebuf = nullptr;
 
         // Reset current binded shader.
         context->_vk_current_binded_shader = nullptr;
 
         if (framebuf != nullptr)
-            target_framebuf = reinterpret_cast<jevk13_framebuffer*>(
+            target_framebuf = reinterpret_cast<jevk12_framebuffer*>(
                 framebuf->m_handle.m_ptr);
 
         int32_t x = 0, y = 0, w = 0, h = 0;
@@ -4222,7 +4240,7 @@ namespace jeecs::graphic::api::vk130
         jegl_shader::uniform_type type,
         const void* val)
     {
-        jegl_vk130_context* context = reinterpret_cast<jegl_vk130_context*>(ctx);
+        jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
 
         auto* current_shader = context->_vk_current_binded_shader;
 
@@ -4281,9 +4299,9 @@ namespace jeecs::graphic::api::vk130
 }
 
 // 导出图形接口！
-void jegl_using_vk130_apis(jegl_graphic_api* write_to_apis)
+void jegl_using_vk120_apis(jegl_graphic_api* write_to_apis)
 {
-    using namespace jeecs::graphic::api::vk130;
+    using namespace jeecs::graphic::api::vk120;
 
     write_to_apis->interface_startup = startup;
     write_to_apis->interface_shutdown_before_resource_release = pre_shutdown;
@@ -4309,8 +4327,8 @@ void jegl_using_vk130_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->set_uniform = set_uniform;
 }
 #else
-void jegl_using_vk130_apis(jegl_graphic_api* write_to_apis)
+void jegl_using_vk120_apis(jegl_graphic_api* write_to_apis)
 {
-    jeecs::debug::logfatal("vk130 not available.");
+    jeecs::debug::logfatal("vk120 not available.");
 }
 #endif

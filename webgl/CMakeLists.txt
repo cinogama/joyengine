@@ -13,7 +13,7 @@ set(JE4_ENABLE_DX11_GAPI                OFF CACHE BOOL "Disable DX11 on WebGL" F
 set(JE4_ENABLE_OPENGL330_GAPI           OFF CACHE BOOL "Disable OpenGL 3.3 on WebGL" FORCE)
 set(JE4_ENABLE_OPENGLES300_GAPI         OFF CACHE BOOL "Disable OpenGLES 3.0 on WebGL" FORCE)
 set(JE4_ENABLE_WEBGL20_GAPI             ON CACHE BOOL "Enable WebGL 2.0 on WebGL" FORCE)
-set(JE4_ENABLE_VULKAN130_GAPI           OFF CACHE BOOL "Disable Vulkan1.3 on WebGL" FORCE)
+set(JE4_ENABLE_VULKAN120_GAPI           OFF CACHE BOOL "Disable Vulkan 1.2 on WebGL" FORCE)
 set(JE4_ENABLE_METAL_GAPI               OFF CACHE BOOL "Disable Metal on WebGL" FORCE)
 
 set(WO_DISABLE_COMPILER                 ON CACHE BOOL "Disable compiler on WebGL to reduce size" FORCE)

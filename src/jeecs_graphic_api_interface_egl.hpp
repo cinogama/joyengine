@@ -7,8 +7,13 @@
 
 #include "jeecs_graphic_api_interface.hpp"
 
+#if JE4_CURRENT_PLATFORM != JE4_PLATFORM_ANDROID
+#   error EGL interface is only implemented for Android platform.
+#endif
+
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
+#include <android/native_window.h>
 
 namespace jeecs::graphic
 {
@@ -16,28 +21,25 @@ namespace jeecs::graphic
     {
         JECS_DISABLE_MOVE_AND_COPY(egl);
 
-#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
         struct _jegl_window_android_app
         {
             void* m_android_app;
             void* m_android_window;
         };
-#else
-#   error Unknown platform.
-#endif
+
     public:
         enum interface_type
         {
             OPENGLES300,
-            VULKAN130,
+            VULKAN120,
         };
         struct egl_context
         {
             interface_type m_type;
             EGLNativeWindowType m_window;
-#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
+
             struct android_app* m_app;
-#endif  
+
             // Used for Opengl ES only.
             EGLDisplay m_display;
             EGLSurface m_surface;
@@ -47,8 +49,8 @@ namespace jeecs::graphic
     private:
         egl_context m_context;
 
-        EGLint _m_recorded_width;
-        EGLint _m_recorded_height;
+        int32_t _m_recorded_width;
+        int32_t _m_recorded_height;
 
     public:
         egl(interface_type type)
@@ -61,15 +63,11 @@ namespace jeecs::graphic
         virtual void create_interface(
             const jegl_interface_config* config) override
         {
-#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
             auto* data = (_jegl_window_android_app*)config->m_userdata;
             assert(data != nullptr);
 
             m_context.m_window = (EGLNativeWindowType)data->m_android_window;
             m_context.m_app = (struct android_app*)data->m_android_app;
-#else
-            m_context.m_window = nullptr;
-#endif
 
             switch (m_context.m_type)
             {
@@ -143,7 +141,7 @@ namespace jeecs::graphic
                     eglSwapInterval(m_context.m_display, 0);
                 break;
             }
-            case VULKAN130:
+            case VULKAN120:
                 break;
             default:
                 // Unknown interface type.
@@ -157,41 +155,26 @@ namespace jeecs::graphic
         }
         virtual update_result update() override
         {
-            switch (m_context.m_type)
+            int32_t width = ANativeWindow_getWidth(m_context.m_window);
+            int32_t height = ANativeWindow_getHeight(m_context.m_window);
+
+            bool _window_size_resized = false;
+
+            if (_m_recorded_width != width || _m_recorded_height != height)
             {
-            case OPENGLES300:
-            {
-                EGLint width;
-                eglQuerySurface(m_context.m_display, m_context.m_surface, EGL_WIDTH, &width);
+                _m_recorded_width = width;
+                _m_recorded_height = height;
 
-                EGLint height;
-                eglQuerySurface(m_context.m_display, m_context.m_surface, EGL_HEIGHT, &height);
+                je_io_update_window_size((int)width, (int)height);
 
-                bool _window_size_resized = false;
-
-                if (_m_recorded_width != width || _m_recorded_height != height)
-                {
-                    _m_recorded_width = width;
-                    _m_recorded_height = height;
-
-                    je_io_update_window_size((int)width, (int)height);
-
-                    _window_size_resized = true;
-                }
-
-                if (_m_recorded_width == 0 || _m_recorded_height == 0)
-                    return update_result::PAUSE;
-
-                if (_window_size_resized)
-                    return update_result::RESIZE;
-                break;
+                _window_size_resized = true;
             }
-            case VULKAN130:
-                break;
-            default:
-                // Unknown interface type.
-                abort();
-            }
+
+            if (_m_recorded_width == 0 || _m_recorded_height == 0)
+                return update_result::PAUSE;
+
+            if (_window_size_resized)
+                return update_result::RESIZE;
 
             return update_result::NORMAL;
         }
@@ -205,7 +188,7 @@ namespace jeecs::graphic
                 eglDestroySurface(m_context.m_display, m_context.m_surface);
                 eglTerminate(m_context.m_display);
                 break;
-            case VULKAN130:
+            case VULKAN120:
                 break;
             default:
                 // Unknown interface type.
@@ -215,11 +198,7 @@ namespace jeecs::graphic
 
         virtual void* interface_handle() const override
         {
-#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
             return (void*)&m_context;
-#else
-            return nullptr;
-#endif
         }
     };
 }

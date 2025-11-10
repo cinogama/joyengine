@@ -1,7 +1,7 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
-#if defined(JE_ENABLE_VK130_GAPI)
+#if defined(JE_ENABLE_VK120_GAPI)
 #include "jeecs_imgui_backend_api.hpp"
 
 #include <imgui.h>
@@ -17,7 +17,7 @@
 #   include <GLFW/glfw3.h>
 #endif
 
-void jegui_init_vk130(
+void jegui_init_vk120(
     jegl_context *ctx,
     jegui_user_image_loader_t get_img_res,
     jegui_user_sampler_loader_t apply_shader_sampler,
@@ -47,7 +47,7 @@ void jegui_init_vk130(
     ImGui_ImplVulkan_CreateFontsTexture(cmdbuf);
 }
 
-void jegui_update_vk130(VkCommandBuffer cmdbuf)
+void jegui_update_vk120(VkCommandBuffer cmdbuf)
 {
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
@@ -87,7 +87,7 @@ void jegui_update_vk130(VkCommandBuffer cmdbuf)
         &cmdbuf);
 }
 
-void jegui_shutdown_vk130(bool reboot)
+void jegui_shutdown_vk120(bool reboot)
 {
     jegui_shutdown_basic(reboot);
     ImGui_ImplVulkan_Shutdown();

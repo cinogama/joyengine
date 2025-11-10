@@ -24,7 +24,7 @@ option(JE4_ENABLE_DX11_GAPI         "Enable DX11 Graphic api"           OFF)
 option(JE4_ENABLE_OPENGL330_GAPI    "Enable OpenGL 3.3 Graphic API"     OFF)
 option(JE4_ENABLE_OPENGLES300_GAPI  "Enable OpenGLES 3.0 Graphic API"   OFF)
 option(JE4_ENABLE_WEBGL20_GAPI      "Enable WebGL 2.0 Graphic API"      OFF)
-option(JE4_ENABLE_VULKAN130_GAPI    "Enable Vulkan 1.3 Graphic API"     OFF)
+option(JE4_ENABLE_VULKAN120_GAPI    "Enable Vulkan 1.3 Graphic API"     OFF)
 option(JE4_ENABLE_METAL_GAPI        "Enable Metal Graphic API"          OFF)
 
 set(JE4_SPECIFY_OPENAL_LIB_NAME     "" CACHE STRING     "Specified openal library name, \
@@ -156,7 +156,7 @@ endif()
 if (JE4_ENABLE_DX11_GAPI 
     OR JE4_ENABLE_OPENGL330_GAPI 
     OR JE4_ENABLE_OPENGLES300_GAPI 
-    OR JE4_ENABLE_VULKAN130_GAPI)
+    OR JE4_ENABLE_VULKAN120_GAPI)
 
     if (NOT ANDROID)
         set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glfw" FORCE)

@@ -47,7 +47,7 @@ namespace jeecs::graphic
             HOLD,
             OPENGL330,
             OPENGLES300,
-            VULKAN130,
+            VULKAN120,
             DIRECTX11,
             METAL,
         };
@@ -406,7 +406,7 @@ namespace jeecs::graphic
                 glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_NATIVE_CONTEXT_API);
 #endif
                 break;
-            case interface_type::VULKAN130:
+            case interface_type::VULKAN120:
             case interface_type::DIRECTX11:
             case interface_type::METAL:
                 glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);

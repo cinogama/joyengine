@@ -243,8 +243,8 @@ namespace jeecs
                     config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " WebGL 2.0)";
 #   endif
 #endif
-                else if (host_graphic_api == jegl_using_vk130_apis)
-                    config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " Vulkan1.3)";
+                else if (host_graphic_api == jegl_using_vk120_apis)
+                    config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " Vulkan 1.2)";
                 else if (host_graphic_api == jegl_using_metal_apis)
                     config.m_title = "JoyEngineECS(JoyEngine " JE_CORE_VERSION " Metal)";
                 else if (host_graphic_api == jegl_using_none_apis)

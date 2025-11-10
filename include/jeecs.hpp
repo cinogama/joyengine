@@ -1961,6 +1961,8 @@ struct jegl_vertex
         LINESTRIP = 0,
         TRIANGLES,
         TRIANGLESTRIP,
+
+        VERTEX_TYPE_COUNT,
     };
     enum data_type
     {
@@ -2902,13 +2904,13 @@ jegl_using_opengl3_apis [基本接口]
 JE_API void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis);
 
 /*
-jegl_using_vulkan130_apis [基本接口]
-加载Vulkan API v1.3集合，通常与jegl_start_graphic_thread一起使用以指定图形线程使用的基本图形
+jegl_using_vulkan120_apis [基本接口]
+加载Vulkan API v1.2集合，通常与jegl_start_graphic_thread一起使用以指定图形线程使用的基本图形
 实现。
 请参见：
     jegl_start_graphic_thread
 */
-JE_API void jegl_using_vk130_apis(jegl_graphic_api* write_to_apis);
+JE_API void jegl_using_vk120_apis(jegl_graphic_api* write_to_apis);
 
 /*
 jegl_using_metal_apis [基本接口]
