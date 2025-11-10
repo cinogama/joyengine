@@ -207,7 +207,7 @@ namespace jeecs::graphic::api::gl3
         {
             m_interface =
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
-                new egl();
+                new egl(egl::OPENGLES300);
 #else
                 new glfw(reboot
                     ? glfw::HOLD

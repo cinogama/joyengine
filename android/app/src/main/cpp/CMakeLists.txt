@@ -16,12 +16,12 @@ set(JE4_ENABLE_DX11_GAPI                OFF CACHE BOOL "Disable DX11 on Android"
 set(JE4_ENABLE_OPENGL330_GAPI           OFF CACHE BOOL "Disable OpenGL 3.3 on Android" FORCE)
 set(JE4_ENABLE_OPENGLES300_GAPI         ON CACHE BOOL "Enable OpenGLES 3.0 on Android" FORCE)
 set(JE4_ENABLE_WEBGL20_GAPI             OFF CACHE BOOL "Disable WebGL 2.0 on Android" FORCE)
-set(JE4_ENABLE_VULKAN130_GAPI           OFF CACHE BOOL "Disable Vulkan1.3 on Android" FORCE)
+set(JE4_ENABLE_VULKAN130_GAPI           ON CACHE BOOL "Enable Vulkan1.3 on Android" FORCE)
 set(JE4_ENABLE_METAL_GAPI               OFF CACHE BOOL "Disable Metal on Android" FORCE)
 
 set(WO_DISABLE_COMPILER                 ON CACHE BOOL "Disable compiler on Android to reduce size" FORCE)
 set(WO_SUPPORT_ASMJIT                   OFF CACHE BOOL "Disable JIT on Android" FORCE)
-set(WO_DISABLE_FUNCTION_FOR_WASM        ON CACHE BOOL "Disable dynamic lib loading" FORCE)
+set(WO_DISABLE_FUNCTION_FOR_WASM        OFF CACHE BOOL "Enable dynamic lib loading (For vulkan)" FORCE)
 
 # Searches for a package provided by the game activity dependency
 find_package(game-activity REQUIRED CONFIG)
@@ -41,7 +41,8 @@ target_link_libraries(joyecs
         PUBLIC GLESv3
         PUBLIC jnigraphics
         PUBLIC android
-        PUBLIC log)
+        PUBLIC log
+        PUBLIC vulkan)
 
 # Creates your game shared library. The name must be the same as the
 # one used for loading in your Kotlin/Java or AndroidManifest.txt files.

@@ -28,9 +28,9 @@ void jegui_init_gl330(
     jegui_init_basic(ctx, get_img_res, apply_shader_sampler);
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
-    jegui_android_init((struct android_app *)window_handle);
+    jegui_android_init(window_handle);
 #else
-#error Unsupport platform.
+#   error Unsupport platform.
 #endif
 #else
     ImGui_ImplGlfw_InitForOpenGL((GLFWwindow *)window_handle, true);

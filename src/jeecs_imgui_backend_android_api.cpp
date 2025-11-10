@@ -7,6 +7,7 @@
 #   include <jni.h>
 #   include <game-activity/native_app_glue/android_native_app_glue.h>
 #   include "jeecs_imgui_backend_android_api.hpp"
+#   include "jeecs_graphic_api_interface_egl.hpp"
 
 thread_local struct android_app* _je_tg_android_app = nullptr;
 
@@ -19,10 +20,13 @@ void jegui_android_handleInputEvent()
     io.AddMouseButtonEvent(0, jeecs::input::mousedown(0, jeecs::input::mousecode::LEFT));
 }
 
-void jegui_android_init(struct android_app* app)
+void jegui_android_init(void* egl_interface)
 {
-    _je_tg_android_app = app;
-    ImGui_ImplAndroid_Init(_je_tg_android_app->window);
+    const auto* egl_ctx = 
+        reinterpret_cast<const jeecs::graphic::egl::egl_context*>(egl_interface);
+
+    _je_tg_android_app = egl_ctx->m_app;
+    ImGui_ImplAndroid_Init(egl_ctx->m_window);
 }
 void jegui_android_shutdown()
 {

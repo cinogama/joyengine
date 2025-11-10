@@ -1,6 +1,6 @@
 #pragma once
 
-void jegui_android_init(struct android_app* app);
+void jegui_android_init(void* egl_interface);
 void jegui_android_shutdown();
 
 void jegui_android_handleInputEvent();
