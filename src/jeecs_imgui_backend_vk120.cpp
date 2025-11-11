@@ -34,11 +34,11 @@ void jegui_init_vk120(
         ImGui_ImplVulkan_LoadFunctions(loader_func_maynull, user_data);
 
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
-#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
+#   if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
     jegui_android_init(window_handle);
-#else
-#error Unsupport platform.
-#endif
+#   else
+#       error Unsupport platform.
+#   endif
 #else
     ImGui_ImplGlfw_InitForVulkan((GLFWwindow *)window_handle, true);
 #endif
@@ -50,7 +50,7 @@ void jegui_init_vk120(
 void jegui_update_vk120(VkCommandBuffer cmdbuf)
 {
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
-#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
+#   if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
     ImGuiIO &io = ImGui::GetIO();
 
     jegui_android_PollUnicodeChars();
@@ -62,18 +62,18 @@ void jegui_update_vk120(VkCommandBuffer cmdbuf)
 
     jegui_android_handleInputEvent();
 
-#else
-#error Unsupport platform.
-#endif
+#   else
+#       error Unsupport platform.
+#   endif
 #endif
 
     ImGui_ImplVulkan_NewFrame();
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
-#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
+#   if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
     ImGui_ImplAndroid_NewFrame();
-#else
-#error Unsupport platform.
-#endif
+#   else
+#       error Unsupport platform.
+#   endif
 #else
     ImGui_ImplGlfw_NewFrame();
 #endif
@@ -92,15 +92,14 @@ void jegui_shutdown_vk120(bool reboot)
     jegui_shutdown_basic(reboot);
     ImGui_ImplVulkan_Shutdown();
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
-#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
+#   if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
     jegui_android_shutdown();
-#else
-#error Unsupport platform.
-#endif
+#   else
+#   error Unsupport platform.
+#   endif
 #else
     ImGui_ImplGlfw_Shutdown();
 #endif
     ImGui::DestroyContext();
 }
-
 #endif

@@ -194,7 +194,16 @@ namespace jeecs::graphic::api::vk120
             VkPipelineShaderStageCreateInfo m_shader_stage_infos[2];
 
             std::vector<VkVertexInputAttributeDescription> m_vertex_input_attribute_descriptions;
-            
+            size_t m_shader_output_color_attachment_count;
+
+            struct blend_statement
+            {
+                VkBlendOp m_blend_equation;
+                VkBlendFactor m_blend_src_factor;
+                VkBlendFactor m_blend_dst_factor;
+            };
+            std::optional<blend_statement> m_blend_statement;
+
             VkViewport m_viewport;
             VkRect2D m_scissor;
             VkPipelineViewportStateCreateInfo m_viewport_state_create_info;
@@ -205,7 +214,6 @@ namespace jeecs::graphic::api::vk120
 
             VkPipelineDepthStencilStateCreateInfo m_depth_stencil_state_create_info;
             VkPipelineMultisampleStateCreateInfo m_multi_sample_state_create_info;
-            VkPipelineColorBlendAttachmentState m_color_blend_attachment_state;
             VkPipelineDynamicStateCreateInfo m_dynamic_state_create_info;
             VkPipelineLayout m_pipeline_layout;
 
@@ -2397,6 +2405,73 @@ namespace jeecs::graphic::api::vk120
                 }
             }
 
+            shader_blob->m_shader_output_color_attachment_count =
+                resource->m_raw_shader_data->m_fragment_out_count;
+
+            const auto parse_vk_enum_blend_method = [](jegl_shader::blend_method method)
+                {
+                    switch (method)
+                    {
+                    case jegl_shader::blend_method::ZERO:
+                        return VkBlendFactor::VK_BLEND_FACTOR_ZERO;
+                    case jegl_shader::blend_method::ONE:
+                        return VkBlendFactor::VK_BLEND_FACTOR_ONE;
+                    case jegl_shader::blend_method::SRC_COLOR:
+                        return VkBlendFactor::VK_BLEND_FACTOR_SRC_COLOR;
+                    case jegl_shader::blend_method::SRC_ALPHA:
+                        return VkBlendFactor::VK_BLEND_FACTOR_SRC_ALPHA;
+                    case jegl_shader::blend_method::ONE_MINUS_SRC_ALPHA:
+                        return VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+                    case jegl_shader::blend_method::ONE_MINUS_SRC_COLOR:
+                        return VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
+                    case jegl_shader::blend_method::DST_COLOR:
+                        return VkBlendFactor::VK_BLEND_FACTOR_DST_COLOR;
+                    case jegl_shader::blend_method::DST_ALPHA:
+                        return VkBlendFactor::VK_BLEND_FACTOR_DST_ALPHA;
+                    case jegl_shader::blend_method::ONE_MINUS_DST_ALPHA:
+                        return VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+                    case jegl_shader::blend_method::ONE_MINUS_DST_COLOR:
+                        return VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
+                    default:
+                        jeecs::debug::logerr("Invalid blend src method.");
+                        return VkBlendFactor::VK_BLEND_FACTOR_ONE;
+                    }
+                };
+            const auto parse_vk_enum_blend_equation = [](jegl_shader::blend_equation equation)
+                {
+                    switch (equation)
+                    {
+                    case jegl_shader::blend_equation::ADD:
+                        return VkBlendOp::VK_BLEND_OP_ADD;
+                    case jegl_shader::blend_equation::SUBTRACT:
+                        return VkBlendOp::VK_BLEND_OP_SUBTRACT;
+                    case jegl_shader::blend_equation::REVERSE_SUBTRACT:
+                        return VkBlendOp::VK_BLEND_OP_REVERSE_SUBTRACT;
+                    case jegl_shader::blend_equation::MIN:
+                        return VkBlendOp::VK_BLEND_OP_MIN;
+                    case jegl_shader::blend_equation::MAX:
+                        return VkBlendOp::VK_BLEND_OP_MAX;
+                    default:
+                        jeecs::debug::logerr("Invalid blend equation.");
+                        return VkBlendOp::VK_BLEND_OP_ADD;
+                    }
+                };
+
+            if (resource->m_raw_shader_data->m_blend_equation == jegl_shader::blend_equation::DISABLED)
+            {
+                assert(shader_blob->m_blend_statement.has_value() == false);
+            }
+            else
+            {
+                auto& blend_state = shader_blob->m_blend_statement.emplace();
+                blend_state.m_blend_equation =
+                    parse_vk_enum_blend_equation(resource->m_raw_shader_data->m_blend_equation);
+                blend_state.m_blend_src_factor =
+                    parse_vk_enum_blend_method(resource->m_raw_shader_data->m_blend_src_mode);
+                blend_state.m_blend_dst_factor =
+                    parse_vk_enum_blend_method(resource->m_raw_shader_data->m_blend_dst_mode);
+            }
+
             shader_blob->m_viewport = {};
             shader_blob->m_viewport.x = 0;
             shader_blob->m_viewport.y = 0;
@@ -2531,81 +2606,6 @@ namespace jeecs::graphic::api::vk120
             shader_blob->m_depth_stencil_state_create_info.back = {};
             shader_blob->m_depth_stencil_state_create_info.minDepthBounds = 0;
             shader_blob->m_depth_stencil_state_create_info.maxDepthBounds = 1;
-
-            // 混色方法，这个不需要动态调整，直接从shader配置中读取混合模式
-            shader_blob->m_color_blend_attachment_state = {};
-            if (resource->m_raw_shader_data->m_blend_equation == jegl_shader::blend_equation::DISABLED)
-                shader_blob->m_color_blend_attachment_state.blendEnable = VK_FALSE;
-            else
-            {
-                shader_blob->m_color_blend_attachment_state.blendEnable = VK_TRUE;
-
-                auto parse_vk_enum_blend_method = [](jegl_shader::blend_method method)
-                    {
-                        switch (method)
-                        {
-                        case jegl_shader::blend_method::ZERO:
-                            return VkBlendFactor::VK_BLEND_FACTOR_ZERO;
-                        case jegl_shader::blend_method::ONE:
-                            return VkBlendFactor::VK_BLEND_FACTOR_ONE;
-                        case jegl_shader::blend_method::SRC_COLOR:
-                            return VkBlendFactor::VK_BLEND_FACTOR_SRC_COLOR;
-                        case jegl_shader::blend_method::SRC_ALPHA:
-                            return VkBlendFactor::VK_BLEND_FACTOR_SRC_ALPHA;
-                        case jegl_shader::blend_method::ONE_MINUS_SRC_ALPHA:
-                            return VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-                        case jegl_shader::blend_method::ONE_MINUS_SRC_COLOR:
-                            return VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
-                        case jegl_shader::blend_method::DST_COLOR:
-                            return VkBlendFactor::VK_BLEND_FACTOR_DST_COLOR;
-                        case jegl_shader::blend_method::DST_ALPHA:
-                            return VkBlendFactor::VK_BLEND_FACTOR_DST_ALPHA;
-                        case jegl_shader::blend_method::ONE_MINUS_DST_ALPHA:
-                            return VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
-                        case jegl_shader::blend_method::ONE_MINUS_DST_COLOR:
-                            return VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
-                        default:
-                            jeecs::debug::logerr("Invalid blend src method.");
-                            return VkBlendFactor::VK_BLEND_FACTOR_ONE;
-                        }
-                    };
-                auto parse_vk_enum_blend_equation = [](jegl_shader::blend_equation equation)
-                    {
-                        switch (equation)
-                        {
-                        case jegl_shader::blend_equation::ADD:
-                            return VkBlendOp::VK_BLEND_OP_ADD;
-                        case jegl_shader::blend_equation::SUBTRACT:
-                            return VkBlendOp::VK_BLEND_OP_SUBTRACT;
-                        case jegl_shader::blend_equation::REVERSE_SUBTRACT:
-                            return VkBlendOp::VK_BLEND_OP_REVERSE_SUBTRACT;
-                        case jegl_shader::blend_equation::MIN:
-                            return VkBlendOp::VK_BLEND_OP_MIN;
-                        case jegl_shader::blend_equation::MAX:
-                            return VkBlendOp::VK_BLEND_OP_MAX;
-                        default:
-                            jeecs::debug::logerr("Invalid blend equation.");
-                            return VkBlendOp::VK_BLEND_OP_ADD;
-                        }
-                    };
-
-                shader_blob->m_color_blend_attachment_state.srcAlphaBlendFactor
-                    = shader_blob->m_color_blend_attachment_state.srcColorBlendFactor
-                    = parse_vk_enum_blend_method(resource->m_raw_shader_data->m_blend_src_mode);
-                shader_blob->m_color_blend_attachment_state.dstAlphaBlendFactor
-                    = shader_blob->m_color_blend_attachment_state.dstColorBlendFactor
-                    = parse_vk_enum_blend_method(resource->m_raw_shader_data->m_blend_dst_mode);
-
-                shader_blob->m_color_blend_attachment_state.colorBlendOp
-                    = shader_blob->m_color_blend_attachment_state.alphaBlendOp
-                    = parse_vk_enum_blend_equation(resource->m_raw_shader_data->m_blend_equation);
-            }
-
-            shader_blob->m_color_blend_attachment_state.colorWriteMask =
-                VkColorComponentFlagBits::VK_COLOR_COMPONENT_R_BIT |
-                VkColorComponentFlagBits::VK_COLOR_COMPONENT_G_BIT |
-                VkColorComponentFlagBits::VK_COLOR_COMPONENT_B_BIT |
-                VkColorComponentFlagBits::VK_COLOR_COMPONENT_A_BIT;
 
             // 此处处理UBO布局，类似DX11，我们的Uniform变量实际上是放在 location = 0 的UBO中的
             // 遍历Uniform，按照vulkan对于ubo的大小和对齐规则，计算实际偏移量；最后得到整个uniform的大小
@@ -3795,17 +3795,57 @@ namespace jeecs::graphic::api::vk120
         pipeline_create_info.pMultisampleState = &m_blob_data->m_multi_sample_state_create_info;
         pipeline_create_info.pDepthStencilState = &m_blob_data->m_depth_stencil_state_create_info;
 
+        const size_t framebuffer_color_attachment_count =
+            target_framebuffer_instance->m_color_attachments.size();
+        const size_t enabled_color_attachment_count =
+            std::min(
+                framebuffer_color_attachment_count,
+                shader_blob->m_shader_output_color_attachment_count);
+
         std::vector<VkPipelineColorBlendAttachmentState> attachment_states(
-            context->_vk_current_target_framebuffer->m_color_attachments.size());
+            std::max(
+                framebuffer_color_attachment_count,
+                shader_blob->m_shader_output_color_attachment_count),
+            VkPipelineColorBlendAttachmentState{});
 
         size_t shader_output_color_attachment = 0;
         for (auto& state : attachment_states)
         {
-            state = m_blob_data->m_color_blend_attachment_state;
-
-            if (shader_output_color_attachment > target_framebuffer_instance->m_color_attachments.size())
-                // Ignore useless output color attachment.
+            if (shader_output_color_attachment > enabled_color_attachment_count)
+            {
+                state.blendEnable = VK_FALSE;
                 state.colorWriteMask = 0;
+            }
+            else
+            {
+                if (shader_blob->m_blend_statement.has_value())
+                {
+                    const auto& beldn_state = shader_blob->m_blend_statement.value();
+
+                    state.blendEnable = VK_TRUE;
+
+                    state.srcAlphaBlendFactor
+                        = state.srcColorBlendFactor
+                        = beldn_state.m_blend_src_factor;
+                    state.dstAlphaBlendFactor
+                        = state.dstColorBlendFactor
+                        = beldn_state.m_blend_dst_factor;
+
+                    state.colorBlendOp
+                        = state.alphaBlendOp
+                        = beldn_state.m_blend_equation;
+                }
+                else
+                {
+                    state.blendEnable = VK_FALSE;
+                }
+
+                state.colorWriteMask =
+                    VkColorComponentFlagBits::VK_COLOR_COMPONENT_R_BIT |
+                    VkColorComponentFlagBits::VK_COLOR_COMPONENT_G_BIT |
+                    VkColorComponentFlagBits::VK_COLOR_COMPONENT_B_BIT |
+                    VkColorComponentFlagBits::VK_COLOR_COMPONENT_A_BIT;
+            }
 
             ++shader_output_color_attachment;
         }
