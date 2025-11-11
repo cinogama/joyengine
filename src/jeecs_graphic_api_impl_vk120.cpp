@@ -3803,9 +3803,7 @@ namespace jeecs::graphic::api::vk120
                 shader_blob->m_shader_output_color_attachment_count);
 
         std::vector<VkPipelineColorBlendAttachmentState> attachment_states(
-            std::max(
-                framebuffer_color_attachment_count,
-                shader_blob->m_shader_output_color_attachment_count),
+            framebuffer_color_attachment_count,
             VkPipelineColorBlendAttachmentState{});
 
         size_t shader_output_color_attachment = 0;
