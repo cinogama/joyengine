@@ -1556,8 +1556,8 @@ JE_API double je_clock_time();
 
 /*
 je_clock_time_stamp [基本接口]
-获取引擎的运行时间戳，单位是毫秒
-获取到的时间是引擎自启动到当前为止的时间
+获取当前时间戳，单位是毫秒
+    * 这个时间与 je_clock_time 获取到的时间不同，*不是* 引擎启动时起的计时
 */
 JE_API jeecs::typing::timestamp_ms_t je_clock_time_stamp();
 
