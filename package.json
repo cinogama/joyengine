@@ -23,6 +23,10 @@
             "path" : "pkg",
             "src" : "3rd/pkg"
         },
+        "guid" : {
+            "path" : "pkg",
+            "src" : "3rd/pkg"
+        },
         "image" : {
             "path" : "pkg",
             "src" : "3rd/pkg"
@@ -46,6 +50,9 @@
         "math" : {
             "path" : "pkg",
             "src" : "3rd/pkg"
+        },
+        "node_editor" : {
+            "path" : "pkg"
         },
         "process" : {
             "path" : "pkg",
