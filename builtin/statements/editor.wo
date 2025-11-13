@@ -1,0 +1,236 @@
+import woo::std;
+
+import je::gui;
+
+import pkg::node_editor;
+import pkg::guid;
+
+import statements;
+
+using je::gui;
+
+namespace jeecs
+{
+    namespace statements
+    {
+        using GraphEditor = struct{
+            graph_context: GraphContext,
+            node_context: node_editor::EditorContext,
+            
+            allocated_id: mut int,
+            generated_node_id_for_node: map<guid::GUID, NodeEditState>,
+            generated_pin_id_for_iopin: map<guid::GUID, node_editor::PinId>,
+        }
+        {
+            using NodeEditState = struct{
+                position: mut (real, real),
+                id: node_editor::NodeId,
+            }
+            {
+                func create(editor: GraphEditor)
+                {
+                    return NodeEditState{
+                        position = mut (0.0, 0.0),
+                        id = editor->allocate_id:<node_editor::NodeId>(),
+                    };
+                }
+            }
+            
+            public func create(graph_context: GraphContext)
+            {
+                return GraphEditor{
+                    graph_context = graph_context,
+                    node_context = node_editor::CreateContext(),
+                    
+                    allocated_id = mut 0,
+                    generated_node_id_for_node = {}mut,
+                    generated_pin_id_for_iopin = {}mut,
+                };
+            }
+            func allocate_id<Id>(self: GraphEditor)
+                where 0: Id is Id;
+            {
+                return (self.allocated_id +:= 1): Id;
+            }
+            func get_node(self: GraphEditor, node_id: guid::GUID)
+            {
+                return self.generated_node_id_for_node->get_or_set_do(
+                    node_id,
+                    \= NodeEditState::create(self););
+            }
+            func get_pinid(self: GraphEditor, iopin_id: guid::GUID)
+            {
+                return self.generated_pin_id_for_iopin->get_or_set_do(
+                    iopin_id,
+                    \= self->allocate_id:<node_editor::PinId>(););
+            }
+            
+            /////////////////////
+            
+            let DEFAULT_NODE_COLOR = 0xFF444444;
+            let DEFAULT_NODE_DESCRIPTION = "";
+            
+            func i32_to_color32(color: int)
+            {
+                let a = color->band(0xFF);
+                let b = color->bshr(8)->band(0xFF);
+                let g = color->bshr(16)->band(0xFF);
+                let r = color->bshr(24)->band(0xFF);
+                return (r, g, b, a);
+            }
+            func draw_pin(color: int)
+            {
+                // TODO:
+                do color;
+                
+                Dummy((20., 20.));
+                // TODO: 此处绘制图片
+                
+                let (lt, rb) = GetItemRect();
+                let c = ((lt.0 + rb.0) / 2., (lt.1 + rb.1) / 2.);
+                
+                return (lt, rb, c);
+            }
+            func edit_eval_node(self: GraphEditor, node: node_editor::Graph::INodeCollection)
+            {
+                {
+                    BeginGroup();
+                    defer EndGroup();
+                    
+                    for (let (name, iostate, iinput): node.inputs)
+                    {
+                        let (lt, rb, c) = draw_pin(iostate.typecolor);
+                        SameLine();
+                        Text(name);
+                        
+                        node_editor::BeginInputPin(self->get_pinid(iostate.uid));
+                        node_editor::PinPivotRect(c, c);
+                        node_editor::PinRect(lt, rb);
+                        node_editor::EndPin();
+                        
+                        iinput->edit();
+                    }
+                }
+                SameLine();
+                Dummy((1., 20.));
+                SameLine();
+                {
+                    BeginGroup();
+                    defer EndGroup();
+                    
+                    for (let (name, iostate) : node.outputs)
+                    {
+                        Text(name);
+                        SameLine();
+                        let (lt, rb, c) = draw_pin(iostate.typecolor);
+                        
+                        node_editor::BeginOutputPin(self->get_pinid(iostate.uid));
+                        node_editor::PinPivotRect(c, c);
+                        node_editor::PinRect(lt, rb);
+                        node_editor::EndPin();
+                    }
+                }
+            }
+            func edit_flow_node(self: GraphEditor, node: node_editor::Graph::IFlowNodeCollection)
+            {
+                {
+                    BeginGroup();
+                    defer EndGroup();
+                    
+                    for (let (name, iostate, _): node.flowinputs)
+                    {
+                        let (lt, rb, c) = draw_pin(iostate.typecolor);
+                        SameLine();
+                        Text(name);
+                        
+                        node_editor::BeginInputPin(self->get_pinid(iostate.uid));
+                        node_editor::PinPivotRect(c, c);
+                        node_editor::PinRect(lt, rb);
+                        node_editor::EndPin();
+                    }
+                    
+                    Dummy((1., 10.));
+                    
+                    for (let (name, iostate, iinput): node.inputs)
+                    {
+                        let (lt, rb, c) = draw_pin(iostate.typecolor);
+                        SameLine();
+                        Text(name);
+                        
+                        node_editor::BeginInputPin(self->get_pinid(iostate.uid));
+                        node_editor::PinPivotRect(c, c);
+                        node_editor::PinRect(lt, rb);
+                        node_editor::EndPin();
+                        
+                        iinput->edit();
+                    }
+                }
+                SameLine();
+                Dummy((1., 20.));
+                SameLine();
+                {
+                    BeginGroup();
+                    defer EndGroup();
+                    
+                    for (let (name, iostate) : node.flowoutputs)
+                    {
+                        Text(name);
+                        SameLine();
+                        let (lt, rb, c) = draw_pin(iostate.typecolor);
+                        
+                        node_editor::BeginOutputPin(self->get_pinid(iostate.uid));
+                        node_editor::PinPivotRect(c, c);
+                        node_editor::PinRect(lt, rb);
+                        node_editor::EndPin();
+                    }
+                }
+            }
+            func edit_node<T>(self: GraphEditor, nuid: guid::GUID, node: T)
+                where
+                node is node_editor::Graph::INodeCollection
+                || node is node_editor::Graph::IFlowNodeCollection
+                ;
+            {
+                let edit_node = self->get_node(nuid);
+                {
+                    node_editor::PushStyleColor(
+                        node_editor::StyleColor::StyleColor_NodeBg,
+                        i32_to_color32(node.color->or(DEFAULT_NODE_COLOR)));
+                    defer node_editor::PopStyleColor(1);
+                    
+                    node_editor::BeginNode(edit_node.id);
+                    defer node_editor::EndNode();
+                    
+                    Text(node.name);
+                    TextDisabled(node.description->or(DEFAULT_NODE_DESCRIPTION));
+                    
+                    if (node is node_editor::Graph::INodeCollection)
+                        self->edit_eval_node(node);
+                    else
+                        self->edit_flow_node(node);
+                }
+                edit_node.position = node_editor::GetNodePosition(edit_node.id);
+            }
+        }
+        
+        namespace gui
+        {
+            public func Edit(label: string, editor_context: GraphEditor)
+            {
+                node_editor::Begin(label, editor_context.node_context);
+                defer node_editor::End();
+                
+                PushStyleColor(ImGuiCol::ImGuiCol_Text, (255, 255, 255, 255));
+                defer PopStyleColor(1);
+                
+                for (let (nuid, node) : editor_context.graph_context->walk_eval_nodes)
+                    editor_context->edit_node(nuid, node);
+                    
+                for (let (nuid, node) : editor_context.graph_context->walk_flow_nodes)
+                    editor_context->edit_node(nuid, node);
+                    
+            // TODO: 绘制链接线
+            }
+        }
+    }
+}

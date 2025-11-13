@@ -1,0 +1,20 @@
+import pkg::node_editor;
+
+namespace jeecs
+{
+    namespace statements
+    {
+        public alias GraphContext = node_editor::Graph;
+        
+        let _node_types = node_editor::Graph::NodeTypes::create();
+        
+        public func register_node<NodeT>()
+        {
+            _node_types->register:<NodeT>();
+        }
+        public func create_graph_context()=> GraphContext
+        {
+            return node_editor::Graph::create(_node_types);
+        }
+    }
+}
