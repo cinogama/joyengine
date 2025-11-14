@@ -74,9 +74,8 @@ namespace jeapi::gui::widget
             EndPopup();
         }
         
-        if (is_hovered)
+        if (is_hovered && BeginTooltip())
         {
-            BeginTooltip();
             Text(path);
             EndTooltip();
         }

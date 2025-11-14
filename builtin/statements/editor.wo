@@ -6,6 +6,7 @@ import pkg::node_editor;
 import pkg::guid;
 import pkg::iterator;
 import pkg::try;
+import pkg::worst;
 
 import statements;
 
@@ -23,9 +24,82 @@ namespace jeapi
             generated_node_id_for_node: map<guid::GUID, NodeEditState>,
             generated_pin_id_for_iopin: map<guid::GUID, node_editor::PinId>,
             generated_link_id_for_2_iopin: map<string, (node_editor::LinkId, guid::GUID, guid::GUID)>,
+            
+            total_tree_nodes: NodeTree,
+            query_input_type_nodes: map<string, NodeTree>,
+            query_output_type_nodes: map<string, NodeTree>,
+            query_flow_input_type_nodes: map<string, NodeTree>,
+            query_flow_output_type_nodes: map<string, NodeTree>,
+            
+            // 接下来这些是编辑时的状态，一团乱麻~ 每帧更新
+            hovered_pin_iostate: mut option<node_editor::Graph::IOState>,
+            mouse_on_canvas_pos: mut (real, real),
+            
+            mouse_on_node: mut option<guid::GUID>,
+            creating_by_dragging_from_pin: mut option<guid::GUID>,
+            fast_create_node_context_menu_has_opened: mut bool,
+            mouse_on_canvas_pos_when_context_menu_before_opened: mut (real, real),
         }
         {
+            using NodeTree = struct{
+                tree: map<string, NodeTreeNode>,
+            }
+            {
+                union NodeTreeNode
+                {
+                    Node(string),
+                    SubTree(NodeTree),
+                }
+                
+                public func create(names: array<string>)
+                {
+                    let self = NodeTree{
+                        tree = {}mut,
+                    };
+                    
+                    walk_names@
+                        for (let name : names)
+                        {
+                            let name_path = name->split("/") |> iterator::collect;
+                            let mut current = self.tree;
+                            
+                            for (let part : name_path->iter |> iterator::take(name_path->len - 1))
+                            {
+                                let next = current->get_or_set_do(
+                                    part,
+                                    \= NodeTreeNode::SubTree(NodeTree{tree = {}mut}););
+                                    
+                                match (next)
+                                {
+                                    SubTree(d)? current = d.tree;
+                                    Node(_)?
+                                        // 冲突了，无法创建树
+                                        break walk_names;
+                                }
+                            }
+                            current->set(
+                                name_path->unwrap_back,
+                                NodeTreeNode::Node(name));
+                        }
+                        
+                    return self;
+                }
+            }
+            
+            func reset_edit_state_pre_edit(self: GraphEditor)
+            {
+                self.hovered_pin_iostate = option::none;
+            }
+            func reset_edit_state_after_edit_if_context_menu_closed(self: GraphEditor)
+            {
+                self.mouse_on_node = option::none;
+                self.creating_by_dragging_from_pin = option::none;
+                self.fast_create_node_context_menu_has_opened = false;
+                self.mouse_on_canvas_pos_when_context_menu_before_opened = self.mouse_on_canvas_pos;
+            }
+            
             using NodeEditState = struct{
+                _resync_position_to_editor: mut bool,
                 position: mut (real, real),
                 id: node_editor::NodeId,
             }
@@ -33,9 +107,15 @@ namespace jeapi
                 func create(editor: GraphEditor)
                 {
                     return NodeEditState{
+                        _resync_position_to_editor = mut false,
                         position = mut (0.0, 0.0),
                         id = editor->allocate_id:<node_editor::NodeId>(),
                     };
+                }
+                func set_position(self: NodeEditState, pos: (real, real))
+                {
+                    self.position = pos;
+                    self._resync_position_to_editor = true;
                 }
             }
             
@@ -49,6 +129,21 @@ namespace jeapi
                     generated_node_id_for_node = {}mut,
                     generated_pin_id_for_iopin = {}mut,
                     generated_link_id_for_2_iopin = {}mut,
+                    
+                    total_tree_nodes = NodeTree::create(
+                        graph_context->get_node_types->get_node_type_names()),
+                    query_input_type_nodes = {}mut,
+                    query_output_type_nodes = {}mut,
+                    query_flow_input_type_nodes = {}mut,
+                    query_flow_output_type_nodes = {}mut,
+                    
+                    hovered_pin_iostate = mut option::none,
+                    mouse_on_canvas_pos = mut (0.0, 0.0),
+                    
+                    mouse_on_node = mut option::none,
+                    creating_by_dragging_from_pin = mut option::none,
+                    fast_create_node_context_menu_has_opened = mut false,
+                    mouse_on_canvas_pos_when_context_menu_before_opened = mut (0.0, 0.0),
                 };
             }
             func allocate_id<Id>(self: GraphEditor)
@@ -112,10 +207,9 @@ namespace jeapi
                 let r = color->bshr(24)->band(0xFF);
                 return (r, g, b, a);
             }
-            func draw_pin(color: int)
+            func draw_pin(self: GraphEditor, iostate: node_editor::Graph::IOState)
             {
-                // TODO:
-                do color;
+                // TODO: Set color.
                 
                 Dummy((20., 20.));
                 // TODO: 此处绘制图片
@@ -123,6 +217,9 @@ namespace jeapi
                 let (lt, rb) = GetItemRect();
                 let c = ((lt.0 + rb.0) / 2., (lt.1 + rb.1) / 2.);
                 
+                if (IsItemHovered())
+                    self.hovered_pin_iostate = option::value(iostate);
+                    
                 return (lt, rb, c);
             }
             func edit_eval_node(self: GraphEditor, node: node_editor::Graph::INodeCollection)
@@ -133,7 +230,7 @@ namespace jeapi
                     
                     for (let (name, iostate, iinput): node.inputs)
                     {
-                        let (lt, rb, c) = draw_pin(iostate.typecolor);
+                        let (lt, rb, c) = draw_pin(self, iostate);
                         SameLine();
                         Text(name);
                         
@@ -156,7 +253,7 @@ namespace jeapi
                     {
                         Text(name);
                         SameLine();
-                        let (lt, rb, c) = draw_pin(iostate.typecolor);
+                        let (lt, rb, c) = draw_pin(self, iostate);
                         
                         node_editor::BeginOutputPin(self->get_pinid(iostate.uid));
                         node_editor::PinPivotRect(c, c);
@@ -173,7 +270,7 @@ namespace jeapi
                     
                     for (let (name, iostate, _): node.flowinputs)
                     {
-                        let (lt, rb, c) = draw_pin(iostate.typecolor);
+                        let (lt, rb, c) = draw_pin(self, iostate);
                         SameLine();
                         Text(name);
                         
@@ -187,7 +284,7 @@ namespace jeapi
                     
                     for (let (name, iostate, iinput): node.inputs)
                     {
-                        let (lt, rb, c) = draw_pin(iostate.typecolor);
+                        let (lt, rb, c) = draw_pin(self, iostate);
                         SameLine();
                         Text(name);
                         
@@ -210,7 +307,7 @@ namespace jeapi
                     {
                         Text(name);
                         SameLine();
-                        let (lt, rb, c) = draw_pin(iostate.typecolor);
+                        let (lt, rb, c) = draw_pin(self, iostate);
                         
                         node_editor::BeginOutputPin(self->get_pinid(iostate.uid));
                         node_editor::PinPivotRect(c, c);
@@ -243,7 +340,18 @@ namespace jeapi
                     else
                         self->edit_flow_node(node);
                 }
-                edit_node.position = node_editor::GetNodePosition(edit_node.id);
+                if (IsMouseHoveringRect(GetItemRect()...))
+                    self.mouse_on_node = option::value(nuid);
+                    
+                if (edit_node._resync_position_to_editor)
+                {
+                    node_editor::SetNodePosition(
+                        edit_node.id,
+                        edit_node.position);
+                    edit_node._resync_position_to_editor = false;
+                }
+                else
+                    edit_node.position = node_editor::GetNodePosition(edit_node.id);
             }
         }
         
@@ -269,9 +377,8 @@ namespace jeapi
                     value(pinid)?
                         if (node_editor::AcceptNewItem())
                         {
-                            // TODO;
-                            do editor_context;
-                            do pinid;
+                            editor_context.creating_by_dragging_from_pin =
+                                editor_context->find_io_uid(pinid);
                         }
                     none?;
                 }
@@ -339,7 +446,7 @@ namespace jeapi
                                     try! (auid, buid) = editor_context->find_link_uids(linkid);
                                     editor_context.graph_context->disconnect_uid(auid, buid);
                                 }
-
+                                
                                 return_value!;
                             };
                     }
@@ -364,28 +471,139 @@ namespace jeapi
                     query_delete_links(editor_context);
                 }
             }
+            func create_node_menu_context(editor_context: GraphEditor, nodes: GraphEditor::NodeTree)=> void
+            {
+                for (let (name, node) : nodes.tree)
+                {
+                    match (node)
+                    {
+                        Node(name)?
+                            if (MenuItem(name))
+                            {
+                                match (editor_context.graph_context->create_node_with_name(name))
+                                {
+                                    none?;
+                                    value(node_uid)?
+                                    {
+                                        editor_context->get_node(node_uid)->set_position(
+                                            editor_context.mouse_on_canvas_pos_when_context_menu_before_opened);
+                                    }
+                                }
+                            }
+                        SubTree(subtree)?
+                        {
+                            if (BeginMenu(name))
+                            {
+                                defer EndMenu();
+                                create_node_menu_context(editor_context, subtree);
+                            }
+                        }
+                    }
+                }
+            }
+            public func show_context_menu(editor_context: GraphEditor)
+            {
+                match (editor_context.creating_by_dragging_from_pin)
+                {
+                    none?;
+                    value(_)?
+                        if (editor_context.fast_create_node_context_menu_has_opened == false)
+                        {
+                            editor_context.fast_create_node_context_menu_has_opened = true;
+                            OpenPopup("NodeEditorCreateContextMenu");
+                        }
+                }
+                
+                if (BeginPopup("NodeEditorCreateContextMenu"))
+                {
+                    defer EndPopup();
+                    create_node_menu_context(editor_context, editor_context.total_tree_nodes);
+                }
+                else if (BeginPopupContextItemLabel("NodeEditorMainContextMenu"))
+                {
+                    defer EndPopup();
+                    if (BeginMenu("新节点..."))
+                    {
+                        defer EndMenu();
+                        create_node_menu_context(editor_context, editor_context.total_tree_nodes);
+                    }
+                    
+                    match (editor_context.mouse_on_node)
+                    {
+                        none?;
+                        value(node_uid)?
+                        {
+                            Separator();
+                            
+                            if (MenuItem("删除节点"))
+                            {
+                                do editor_context.graph_context->remove_node_uid(node_uid);
+                            }
+                            if (MenuItem("复制"))
+                            {
+                                do editor_context.graph_context->clone_node_uid(node_uid)
+                                    ->> \cloned_node_uid =
+                                        editor_context->get_node(cloned_node_uid)->set_position(
+                                            editor_context.mouse_on_canvas_pos_when_context_menu_before_opened);
+                                        ;
+                                ;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    editor_context->reset_edit_state_after_edit_if_context_menu_closed();
+                }
+            }
             public func Edit(label: string, editor_context: GraphEditor)
             {
-                node_editor::Begin(label, editor_context.node_context);
-                defer node_editor::End();
+                let mouse_pos_in_viewport = GetMousePos();
                 
-                PushStyleColor(ImGuiCol::ImGuiCol_Text, (255, 255, 255, 255));
-                defer PopStyleColor(1);
-                
-                for (let (nuid, node) : editor_context.graph_context->walk_eval_nodes)
-                    editor_context->edit_node(nuid, node);
-                    
-                for (let (nuid, node) : editor_context.graph_context->walk_flow_nodes)
-                    editor_context->edit_node(nuid, node);
-                    
-                for (let (outlink, inlink) : editor_context.graph_context->walk_all_link)
+                editor_context->reset_edit_state_pre_edit();
                 {
-                    let a = editor_context->get_pinid(outlink);
-                    let b = editor_context->get_pinid(inlink);
+                    node_editor::Begin(label, editor_context.node_context);
+                    defer node_editor::End();
                     
-                    draw_link(editor_context, outlink, inlink, a, b);
+                    editor_context.mouse_on_canvas_pos =
+                        node_editor::ScreenToCanvas(mouse_pos_in_viewport);
+                        
+                    PushStyleColor(ImGuiCol::ImGuiCol_Text, (255, 255, 255, 255));
+                    defer PopStyleColor(1);
+                    
+                    for (let (nuid, node) : editor_context.graph_context->walk_eval_nodes)
+                        editor_context->edit_node(nuid, node);
+                        
+                    for (let (nuid, node) : editor_context.graph_context->walk_flow_nodes)
+                        editor_context->edit_node(nuid, node);
+                        
+                    for (let (outlink, inlink) : editor_context.graph_context->walk_all_link)
+                    {
+                        let a = editor_context->get_pinid(outlink);
+                        let b = editor_context->get_pinid(inlink);
+                        
+                        draw_link(editor_context, outlink, inlink, a, b);
+                    }
+                    update_new_node_and_link(editor_context);
+                    update_delete_node_and_link(editor_context);
                 }
-                update_new_node_and_link(editor_context);
+                
+                // TODO: 在此展开编辑菜单
+                show_context_menu(editor_context);
+                
+                // 如果鼠标悬浮在某个引脚上，显示类型提示
+                match (editor_context.hovered_pin_iostate)
+                {
+                    none?;
+                    value(hovered_iostate)?
+                    {
+                        if (BeginTooltip())
+                        {
+                            defer EndTooltip();
+                            Text(hovered_iostate.typename);
+                        }
+                    }
+                }
             }
         }
     }

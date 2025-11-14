@@ -49,9 +49,8 @@ namespace editor::gui::edit_forms
                                     // 更换渲染中的世界
                                     do context->get_project->reset_editing_world(world)->unwrap;
                                 }
-                                if (is_hovered)
+                                if (is_hovered && BeginTooltip())
                                 {
-                                    BeginTooltip();
                                     Text(world->name);
                                     match (context->get_project->get_world_path(world))
                                     {

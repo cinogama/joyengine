@@ -46,9 +46,8 @@ namespace jeapi::gui::form
                 Text("在运行过程中发生了 Woolang Panic!");
                 SameLine();
                 TextDisabled("(?)");
-                if (IsItemHovered())
+                if (IsItemHovered() && BeginTooltip())
                 {
-                    BeginTooltip();
                     Text("什么是 Woolang Panic?");
                     TextDisabled("Woolang Panic 是Woolang脚本异常处理机制的一部分");
                     TextDisabled("当一些难以恢复的错误发生时（例如尝试越界访问数组）");

@@ -99,9 +99,8 @@ namespace editor::gui::edit_forms
             }
             none? /* 没有文件拖入，不干任何事情 */;
         }
-        if (is_hovered)
+        if (is_hovered && BeginTooltip())
         {
-            BeginTooltip();
             Text(shader->path);
             EndTooltip();
         }
@@ -431,9 +430,8 @@ namespace editor::gui::edit_forms
                                                                                     Text("（有变动）");
                                                                                     PopStyleColor(1);
                                                                                     
-                                                                                    if (IsItemHovered())
+                                                                                    if (IsItemHovered() && BeginTooltip())
                                                                                     {
-                                                                                        BeginTooltip();
                                                                                         TextDisabled(F"预设体：{this_component_prefab_data}");
                                                                                         TextDisabled(F"当前：{real_data}");
                                                                                         EndTooltip();

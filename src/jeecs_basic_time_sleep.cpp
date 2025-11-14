@@ -64,11 +64,11 @@ void je_clock_sleep_for(double time)
 #endif
     this_thread::sleep_for((time - jeecs::_g_time_ctx._sleep_suppression) * 1s);
 
-    while (je_clock_time() < current_time_point + time)
-        this_thread::yield();
-
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
     _result = timeEndPeriod(1);
     assert(_result == TIMERR_NOERROR);
 #endif
+
+    while (je_clock_time() < current_time_point + time)
+        this_thread::yield();
 }

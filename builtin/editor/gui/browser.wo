@@ -1601,9 +1601,8 @@ namespace $$MODULE_NAME$$
                                 ;);
                                 
                 }
-                else if (action == Action::Hovered)
+                else if (action == Action::Hovered && BeginTooltip())
                 {
-                    BeginTooltip();
                     Text(fsys::filename(item.path));
                     if (IMAGE_FILE_EXTERN_NAMES->find(item.externname)->is_value)
                     {
@@ -1813,9 +1812,8 @@ namespace $$MODULE_NAME$$
                                 
                             do Selectable(F"[{self.m_display_setting[level][0]}] {info}");
                             
-                            if (IsItemHovered())
+                            if (IsItemHovered() && BeginTooltip())
                             {
-                                BeginTooltip();
                                 Text(info);
                                 EndTooltip();
                             }

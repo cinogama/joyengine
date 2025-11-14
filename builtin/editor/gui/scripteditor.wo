@@ -191,10 +191,9 @@ namespace editor::gui
                     let clicked = SelectableSelected(F"{history.m_abs->replace("\n", "")}...##{index}",
                         self.m_history_index == index);
                     let is_hovered = IsItemHovered();
-                    if (is_hovered)
+                    if (is_hovered && BeginTooltip())
                     {
                         // 鼠标悬浮在选项上？显示脚本内容！
-                        BeginTooltip();
                         Text(history.m_script);
                         EndTooltip();
                     }

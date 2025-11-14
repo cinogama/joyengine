@@ -374,8 +374,8 @@ func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: di
 此目录用于保存引擎自动生成的图像资源
 "@
                                 : buffer);
-                                do fsys::copy(
-                                    fsys::normalize(F"{std::host_path()}/builtin/shader"),
+                            do fsys::copy(
+                                fsys::normalize(F"{std::host_path()}/builtin/shader"),
                                 fsys::normalize(F"{p->get_path}/resource/shader"));
                             do fsys::copy(
                                 fsys::normalize(F"{std::host_path()}/builtin/font"),
@@ -483,6 +483,61 @@ func open_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict
     
 }
 
+import pkg::node_editor;
+import pkg::async;
+import pkg::interface;
+import builtin::statements;
+import builtin::statements::editor;
+
+using ExampleNode = struct{
+    a: node_editor::Input<int>,
+    b: node_editor::Output<int>,
+}
+{
+    public let name = "ExampleNode";
+    
+    public func create(c: node_editor::Graph::NodeIOCreator)=> ExampleNode
+        where require!(ExampleNode: node_editor::INode);
+    {
+        return ExampleNode{
+            a = c->in:<int>("a", 42),
+            b = c->out:<int>("b"),
+        };
+    }
+    async! public func eval(self: ExampleNode)=> void
+    {
+        do try!{
+            try! v = await! self.a->eval;
+            
+            std::println <| F"ExampleNode eval: a = {v}";
+            self.b->set_value(v * 2);
+            return_value!;
+        };
+    }
+}
+
+using ExampleFlowNode = struct{
+    a: node_editor::InputFlow<void>,
+    b: node_editor::OutputFlow<void>,
+}
+{
+    public let name = "ExampleFlowNode";
+    
+    public func create(c: node_editor::Graph::FlowNodeIOCreator)=> ExampleFlowNode
+        where require!(ExampleFlowNode: node_editor::IFlowNode);
+    {
+        return ExampleFlowNode{
+            a = c->flow_in:<void>("a"),
+            b = c->flow_out:<void>("b"),
+        };
+    }
+    async! public func forward(self: ExampleFlowNode)=> void
+    {
+        std::println <| "ExampleFlowNode forward start";
+        await! self.b->forward(do nil);
+    }
+}
+
 func editor_main_entry()
 {
     // 确保编辑器退出时释放所有单例，单例的生命周期太长了……
@@ -506,6 +561,28 @@ func editor_main_entry()
             if (std::platform::os != std::platform::os_type::WIN32 ||
                 editor::CxxProject::is_builder_ready())
             {
+                jeapi::statements::register_node:<ExampleNode>();
+                jeapi::statements::register_node:<ExampleFlowNode>();
+
+                let g = jeapi::statements::create_graph_context();
+                do g->create_node:<ExampleNode>();
+                do g->create_node:<ExampleNode>();
+                do g->create_node:<ExampleFlowNode>();
+                do g->create_node:<ExampleFlowNode>();
+                let ge = jeapi::statements::GraphEditor::create(g);
+
+                launch(func(){
+                        let show = Begin("TEST");
+                        defer End();
+                        
+                        if (show)
+                        {
+                            jeapi::statements::gui::Edit("Test2", ge);
+                        }
+                        
+                        return true;
+                    });
+                    
                 launch(
                     func(){
                         let open = new! std::mutable(true);
@@ -519,10 +596,8 @@ func editor_main_entry()
                             Text("欢迎使用JoyEngine");
                             SameLine();
                             TextDisabled(F"({je::internal::build_version()})");
-                            if (IsItemHovered())
+                            if (IsItemHovered() && BeginTooltip())
                             {
-                                BeginTooltip();
-                                
                                 Text(je::internal::build_version_info());
                                 Text("来自提交：");
                                 SameLine();

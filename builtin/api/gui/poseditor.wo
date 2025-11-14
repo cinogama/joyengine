@@ -91,11 +91,10 @@ namespace jeapi::gui::widget
                 let hovered = has_hovered_point == false &&
                     IsMouseHoveringRect((pos.0 - 5., pos.1 - 5.), (pos.0 + 5., pos.1 + 5.));
                     
-                if (hovered)
+                if (hovered && BeginTooltip())
                 {
                     has_hovered_point = true;
                     // 显示实际坐标
-                    BeginTooltip();
                     Text(F"x: {x}, y: {y}");
                     EndTooltip();
                 }

@@ -211,7 +211,9 @@ wo_integer_t crc64_of_source_and_api()
     const char* crc64_src = R"(
 import woo::std;
 import je::internal;
+
 import pkg::fsys;
+import pkg::iterator;
 
 using std;
 using je::internal;
@@ -219,11 +221,10 @@ using je::internal;
 func main()
 {
     let root_dir = fsys::normalize(std::host_path());
-    let files = fsys::allsubpath(root_dir/"builtin/api")
-        ->  or([])
-        ->  connect(fsys::allsubpath(root_dir/"builtin/editor")
-                ->or([]));
-
+    let files = fsys::recursive_walk(root_dir/"builtin")
+        |> iterator::iter_result
+        |> iterator::filter(\p = fsys::isfile(p) && fsys::extension(p)->lower == ".wo";)
+        ;
     let mut crc64_result = "wooscript_crc64_";
 
     for (let p : files)
@@ -231,7 +232,6 @@ func main()
         let path = p->to_string;
         crc64_result += F"{crc64file(path)->or(0)}:{crc64str(path)};";
     }
-
     return crc64str(crc64_result);
 }
 

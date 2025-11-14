@@ -1052,29 +1052,31 @@ namespace jeapi::gui
             {
                 value(node)?
                 {
-                    BeginTooltip();
-                    Text(node.instance->name());
-                    
-                    if (!node.producers->empty() || !node.inputs->empty() || !node.outputs->empty())
-                        TextDisabled("上一次求值结果：");
+                    if (BeginTooltip())
+                    {
+                        defer EndTooltip();
                         
-                    if (!node.producers->empty() || !node.inputs->empty())
-                    {
-                        TextDisabled("输入：");
-                        for (let p : node.producers)
-                            Text(F"{p.name}: {p.producer->to_string()}");
+                        Text(node.instance->name());
+                        
+                        if (!node.producers->empty() || !node.inputs->empty() || !node.outputs->empty())
+                            TextDisabled("上一次求值结果：");
                             
-                        for (let p : node.inputs)
-                            Text(F"{p.name}: {p.typeval->to_string()}");
+                        if (!node.producers->empty() || !node.inputs->empty())
+                        {
+                            TextDisabled("输入：");
+                            for (let p : node.producers)
+                                Text(F"{p.name}: {p.producer->to_string()}");
+                                
+                            for (let p : node.inputs)
+                                Text(F"{p.name}: {p.typeval->to_string()}");
+                        }
+                        if (!node.outputs->empty())
+                        {
+                            TextDisabled("输出：");
+                            for (let p : node.outputs)
+                                Text(F"{p.name}: {p.typeval->to_string()}");
+                        }
                     }
-                    if (!node.outputs->empty())
-                    {
-                        TextDisabled("输出：");
-                        for (let p : node.outputs)
-                            Text(F"{p.name}: {p.typeval->to_string()}");
-                    }
-                    
-                    EndTooltip();
                 }
                 none?;
             }

@@ -70,8 +70,7 @@ void jegui_set_font(
 
 WO_API wo_api je_gui_begin_tool_tip(wo_vm vm, wo_value args)
 {
-    ImGui::BeginTooltip();
-    return wo_ret_void(vm);
+    return wo_ret_bool(vm, ImGui::BeginTooltip());
 }
 
 WO_API wo_api je_gui_end_tool_tip(wo_vm vm, wo_value args)
@@ -193,6 +192,14 @@ WO_API wo_api je_gui_get_main_viewport_pos(wo_vm vm, wo_value args)
 {
     wo_value s = wo_reserve_stack(vm, 1, &args);
     auto vpos = ImGui::GetMainViewport()->Pos;
+
+    return wo_ret_val(vm, set_float2_to_struct(s + 0, vm, vpos.x, vpos.y));
+}
+
+WO_API wo_api je_gui_get_this_viewport_pos(wo_vm vm, wo_value args)
+{
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+    auto vpos = ImGui::GetWindowViewport()->Pos;
 
     return wo_ret_val(vm, set_float2_to_struct(s + 0, vm, vpos.x, vpos.y));
 }

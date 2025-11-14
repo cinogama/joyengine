@@ -420,9 +420,8 @@ namespace editor::gui
                                     none?;
                                 }
                                 
-                                if (IsItemHovered())
+                                if (IsItemHovered() && BeginTooltip())
                                 {
-                                    BeginTooltip();
                                     TextDisabled(path->to_string());
                                     for (let (pre, post, _) : replace_content.m_replacing_place)
                                     {
