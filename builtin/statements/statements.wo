@@ -1,6 +1,6 @@
 import pkg::node_editor;
 
-namespace jeecs
+namespace jeapi
 {
     namespace statements
     {

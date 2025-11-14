@@ -11,7 +11,7 @@ import statements;
 
 using je::gui;
 
-namespace jeecs
+namespace jeapi
 {
     namespace statements
     {
