@@ -4,6 +4,7 @@ import je::gui;
 
 import pkg::node_editor;
 import pkg::guid;
+import pkg::iterator;
 
 import statements;
 
@@ -20,6 +21,7 @@ namespace jeecs
             allocated_id: mut int,
             generated_node_id_for_node: map<guid::GUID, NodeEditState>,
             generated_pin_id_for_iopin: map<guid::GUID, node_editor::PinId>,
+            generated_link_id_for_2_iopin: map<string, node_editor::LinkId>,
         }
         {
             using NodeEditState = struct{
@@ -45,6 +47,7 @@ namespace jeecs
                     allocated_id = mut 0,
                     generated_node_id_for_node = {}mut,
                     generated_pin_id_for_iopin = {}mut,
+                    generated_link_id_for_2_iopin = {}mut,
                 };
             }
             func allocate_id<Id>(self: GraphEditor)
@@ -63,6 +66,17 @@ namespace jeecs
                 return self.generated_pin_id_for_iopin->get_or_set_do(
                     iopin_id,
                     \= self->allocate_id:<node_editor::PinId>(););
+            }
+            func get_linkid(self: GraphEditor, out_iopin_id: guid::GUID, in_iopin_id: guid::GUID)
+            {
+                let link_key =
+                    out_iopin_id < in_iopin_id
+                        ? F"{out_iopin_id}->{in_iopin_id}"
+                        | F"{in_iopin_id}->{out_iopin_id}";
+                        
+                return self.generated_link_id_for_2_iopin->get_or_set_do(
+                    link_key,
+                    \= self->allocate_id:<node_editor::LinkId>(););
             }
             
             /////////////////////
@@ -215,6 +229,37 @@ namespace jeecs
         
         namespace gui
         {
+            func update_new_node_and_new_link()
+            {
+                let creating = node_editor::BeginCreate((0, 255, 255, 255), 2.);
+                defer node_editor::EndCreate();
+                if (creating)
+                {
+                    match (node_editor::QueryNewNode())
+                    {
+                        value(pinid)?
+                            if (node_editor::AcceptNewItem())
+                            {
+                                // TODO;
+                                do pinid;
+                            }
+                        none?;
+                    }
+                    
+                    match (node_editor::QueryNewLink())
+                    {
+                        value((mut a, mut b))?
+                        {
+                            // TODO;
+                            do a;
+                            do b;
+                            node_editor::RejectNewItemColor((255, 0, 0, 255), 2.);
+                        }
+                        none?;
+                    }
+                }
+                
+            }
             public func Edit(label: string, editor_context: GraphEditor)
             {
                 node_editor::Begin(label, editor_context.node_context);
@@ -229,7 +274,16 @@ namespace jeecs
                 for (let (nuid, node) : editor_context.graph_context->walk_flow_nodes)
                     editor_context->edit_node(nuid, node);
                     
-            // TODO: 绘制链接线
+                for (let (outlink, inlink) : editor_context.graph_context->walk_all_link)
+                {
+                    let a = editor_context->get_pinid(outlink);
+                    let b = editor_context->get_pinid(inlink);
+                    let linkid = editor_context->get_linkid(outlink, inlink);
+                    let color = GraphEditor::i32_to_color32(
+                        editor_context.graph_context->query_io_state(outlink)->unwrap.typecolor);
+                        
+                    node_editor::Link(linkid, a, b, color, 2.);
+                }
             }
         }
     }
