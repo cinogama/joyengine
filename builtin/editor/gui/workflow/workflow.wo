@@ -1,169 +1,273 @@
-// workflow.wo
-
-import je;
 import woo::std;
+
+import je::gui;
 
 import pkg::fsys;
 import pkg::iterator;
 import pkg::try;
-import pkg::vm;
 import pkg::buffer;
+import pkg::worst;
 
+import builtin::statements;
+import builtin::statements::editor;
+import builtin::editor::tools::file;
 import builtin::api::gui::form;
-import builtin::editor::gui::main;
-import builtin::editor::project::main;
-import builtin::editor::environment::main;
-import builtin::editor::gui::form::msg;
+import builtin::api::gui::errmsg;
+import builtin::editor::gui::form::input;
+import builtin::editor::gui::form::ask;
 
-namespace editor::gui::workflow
+using je::gui;
+
+namespace editor::gui::edit_forms
 {
-    public func open(path: fsys::path_t, context: EditorContext)
-    {
-        let workflow_node_path = context->get_project->get_path / "resource" / "workflow" / "node";
+    /*
+    /XXX.je4workflow
+    |
+    |-> editor.wo               // 里面会用 JE_WORKFLOW_FETCH_AND_IMPORT_ALL_SCRIPT_IN_NODE_PATH 宏
+    |                           // 导入所有 Node 声明，外部可以通过 editor 的入口调用 workflow 编辑器
+    |
+    |-> loader.wo               // 里面会用 JE_WORKFLOW_FETCH_AND_IMPORT_ALL_SCRIPT_IN_NODE_PATH 宏
+    |                           // 导入所有 Node 声明，不过 exec 不包含编辑器逻辑，只通过接收 je4workflow
+    |                           // 文件来构建工作流并执行
+    |-> nodes..
+    |   |-> types..
+    |
+    |-> XXXXXXX.je4workflow
+    |-> XXXXXXX.dispatch.wo
+    |
+    |-> YYYYYYY.je4workflow
+    |-> YYYYYYY.dispatch.wo
+    |
+    |-> ZZZZZZZ.je4workflow
+    |-> ZZZZZZZ.dispatch.wo
+    */
+    
+    using WorkFlowEditorContext = struct{
+        location_path: fsys::path_t,
+        workflows: map<string, WorkContext>,
         
-        using NodeInfo = struct{
-            m_name: string,
-            m_namespace: array<string>,
-            m_path: fsys::path_t,
-        };
-        
-        let nodes = []mut: vec<NodeInfo>;
-        
-        for (let np : fsys::recursive_walk(workflow_node_path)->iterator::iter_result)
-        {
-            if (!fsys::isfile(np) || fsys::extension(np)->lower != ".wo")
-                continue;
-                
-            do try!
-            {
-                let purename = fsys::purename(np);
-                try! relative = fsys::relative(fsys::parent(np), workflow_node_path);
-                
-                nodes->add(
-                    NodeInfo{
-                        m_name = purename,
-                        m_namespace = relative->split("/")
-                            |> iterator::filter(\p = p != "" && p  != ".";)
-                            |> iterator::collect,
-                        m_path = np,
-                    });
-                return_ok!;
-            };
-        }
-        
-        let mut source = @"
-import woo::std;
-import je;
-import je::gui;
-
-namespace Editor
-{
-    let mut _universe = option::none: option<je::universe>;
-
-    public func get_universe()
-    {
-        return _universe->unwrap;
+        current_editing_workflow: mut option<(string, WorkContext)>,
     }
-    extern func set_universe(u: je::universe)
     {
-        _universe = option::value(u);
-    }
-}
-"@;
-            
-        alias dyn_map = map<dynamic, dynamic>;
-        let node_type_map = {}mut: dyn_map;
-        for (let n : nodes)
-        {
-            source += "import resource::workflow::node::"
-                + n.m_namespace->reduce(\l,r = l + "::" + r;)
-                ->> \v = v + "::";
-                -> or("")
-                + n.m_name
-                + ";\n"
-                ;
-                
-            let mut write_node_map = node_type_map: dynamic;
-            for (let name : n.m_namespace)
-                write_node_map = write_node_map->unsafe::cast:<dyn_map>->get_or_set(name: dynamic, {}mut: dynamic);
-                
-            write_node_map->unsafe::cast:<dyn_map>->set(n.m_name: dynamic, nil: dynamic);
+        using WorkContext = struct{
+            workflow_path: fsys::path_t,
+            graph: jeapi::statements::GraphContext,
+            graph_edit_context: jeapi::statements::GraphEditor,
         }
-        source += "import builtin::api::gui::form;\n";
-        source += "import builtin::api::gui::nodeeditor;\n";
-        source += "import builtin::editor::gui::form::ask;\n";
-        source += "import builtin::editor::gui::form::msg;\n";
-        source += "import pkg::fsys;\n";
-        
-        source += "using jeapi::gui::node_editor;\n";
-        
-        source += "func main(){\n";
-        source += "    let nodedict = {\n";
-        
-        func generate_node_dict(node_map: dyn_map)=> string
         {
-            let mut source = "";
-            for (let (name, subpath_or_nil) : node_map)
+            func create(p: fsys::path_t)
             {
-                let name_str = name as string;
-                if (subpath_or_nil is nil)
+                if (fsys::isfile(p))
                 {
-                    source += "        [\"" + name_str + "\"] = NodeDictItem::Node(INode::creator:<" + name_str + ">),\n";
+                    try! dat = editor::file::readall(p)
+                        -> ok_or(F"无法读取 Workflow 文件 {p->to_string}")
+                        ;
+                    try! (graph, dyn) = jeapi::statements::load_graph_and_extra_data(dat as buffer: string)
+                        -> ok_or(F"无法解析 Workflow 文件 {p->to_string}")
+                        ;
+                        
+                    return_ok!
+                        WorkContext
+                        {
+                            workflow_path = p,
+                            graph = graph,
+                            graph_edit_context = jeapi::statements::GraphEditor::create(graph, option::value(dyn)),
+                        };
                 }
                 else
                 {
-                    source += "        [\"" + name_str + "\"] = NodeDictItem::Dict({\n";
-                    source += generate_node_dict(subpath_or_nil->unsafe::cast:<dyn_map>);
-                    source += "        }),\n";
+                    let graph = jeapi::statements::create_graph_context();
+                    let self =
+                        WorkContext
+                        {
+                            workflow_path = p,
+                            graph = graph,
+                            graph_edit_context = jeapi::statements::GraphEditor::create(graph, option::none),
+                        };
+                    try! _ = self->save();
+                    return_ok! self;
                 }
             }
-            return source;
+            func save(self: WorkContext)
+            {
+                let dat = jeapi::statements::save_with_extra_data(
+                    self.graph,
+                    self.graph_edit_context);
+                    
+                if (!editor::file::writeall(
+                        self.workflow_path,
+                        dat: buffer))
+                    throw! F"无法保存 Workflow 文件到 {self.workflow_path->to_string}";
+                    
+                return_ok!;
+            }
         }
-        source += generate_node_dict(node_type_map);
-        source += "    };\n";
-        source += F"    let doc_path = fsys::normalize(" + path->to_string->enstring + ");\n";
-        source += "    let node_editor = jeapi::gui::node_editor::create(\"workflow_node_editor\", nodedict);\n";
-        source += "    do file::readall(doc_path)->>\\dat = node_editor->restore(dat);;\n";
-        source += F"    let form = jeapi::gui::form::create(\"Workflow 编辑器: \" + doc_path->to_string, true,\n";
-        source += @"    func(_){
-            node_editor->update();
-        }"@;
-            source += "        );\n";
-        source += "    form->set_docking(true);\n";
-        source += "    form->set_autoresize(false);\n";
-        source += @"   form->set_callback_close(func(){
-            jeapi::gui::form::ask("即将关闭Workflow编辑器", 
-            "是否保存到:" + doc_path->to_string + "?", func(save){
-                if (save)
+        
+        public func create(workflow_path: fsys::path_t)
+        {
+            if (!fsys::isdir(workflow_path))
+                throw!;
+                
+            return_value!
+                WorkFlowEditorContext
                 {
-                    if (!file::writeall(doc_path, node_editor->dump()))
+                    location_path = workflow_path,
+                    
+                    // 遍历当前目录下的所有 je4workflow 文件
+                    workflows = fsys::walk(workflow_path)
+                        -> iterator::iter_result
+                        -> iterator::filter(\p = fsys::isfile(p) && fsys::extension(p)->lower == ".je4workflow";)
+                        |> iterator::filter_map(\p = WorkContext::create(p)->okay->>\wc = (fsys::purename(p), wc);;)
+                        |> iterator::collect
+                        -> mapping
+                        -> unsafe::asmap
+                        ,
+                    current_editing_workflow = mut option::none,
+                };
+        }
+        func new_workflow(self: WorkFlowEditorContext, name: string)
+        {
+            if (self.workflows->contains(name))
+                throw! F"工作流 {name} 已经存在";
+                
+            try! wc = WorkContext::create(
+                self.location_path / F"{name}.je4workflow");
+                
+            self.workflows->set(name, wc);
+            
+            return_ok! wc;
+        }
+        func save_all(self: WorkFlowEditorContext)
+        {
+            match (self.workflows->iter
+                |> iterator::map(\(_, wc) = wc->save();)
+                |> iterator::try_collect)
+            {
+                ok(_)? return true;
+                err(e)? {
+                    jeapi::gui::errmsg(
+                        "保存 Workflow 失败",
+                        F"无法保存某些 Workflow 文件：{e}");
+                    return false;
+                }
+            }
+        }
+        func main_menu(self: WorkFlowEditorContext)
+        {
+            if (BeginMenuBar())
+            {
+                defer EndMenuBar();
+                
+                if (BeginMenu("文件"))
+                {
+                    defer EndMenu();
+                    
+                    if (MenuItemEnabled(
+                            "保存当前 Workflow",
+                            self.current_editing_workflow->is_value))
                     {
-                        jeapi::gui::form::msg("保存失败", "保存Workflow失败");
-                        return;
+                        match (self.current_editing_workflow->unwrap.1->save())
+                        {
+                            ok(_)?;
+                            err(e)? {
+                                jeapi::gui::errmsg(
+                                    "保存 Workflow 失败",
+                                    F"无法保存 Workflow 文件：{e}");
+                            }
+                        }
+                    }
+                    if (MenuItem("全部保存"))
+                    {
+                        do self->save_all();
+                    }
+                    
+                    Separator();
+                    
+                    if (MenuItem("创建新的 Workflow"))
+                    {
+                        jeapi::gui::form::input(
+                            "新建 Workflow",
+                            "请输入新的 Workflow 名称(不含扩展名)：",
+                            "",
+                            func(name)
+                            {
+                                do try!
+                                {
+                                    return self->new_workflow(name);
+                                } catch! e {
+                                    jeapi::gui::errmsg(
+                                        "创建新的 Workflow 失败",
+                                        F"无法创建新的 Workflow {name}：{e}");
+                                };
+                            });
                     }
                 }
-                form->force_close();
-            });
-            return false;
-        });"@;
-            source += "\n";
-        source += "    form->set_size_constraint(300., 200., 3000., 3000.);\n";
-        source += "    if (!form->show())\n";
-        source += "         jeapi::gui::form::errmsg(\"打开失败\", doc_path->to_string + \"已在编辑中，不能重复打开\");\n";
-        source += "}\n";
-        source += "main();\n";
-        
-        do try!
-        {
-            try! vm = vm::create(path->to_string + ".wo", source: buffer);
-            do vm->run();
-            do vm->invoke("Editor::set_universe",
-                [context->get_project->get_env->get_universe: dynamic]);
-            return_ok!;
+            }
         }
-        catch! e
+        func edit_form(self: WorkFlowEditorContext, _: jeapi::gui::form)
         {
-            jeapi::gui::form::errmsg("加载Workflow失败", e);
-        };
+            self->main_menu();
+            
+            let (_, h) = GetContentRegionAvail();
+            if (BeginListBox("##editing_workflow_list", 200., h))
+            {
+                defer EndListBox();
+                
+                for (let (name, wc) :
+                    self.workflows->unmapping->std::sort(
+                        \(aname, _), (bname, _) = aname < bname;))
+                {
+                    if (SelectableSelected(
+                            name,
+                            self.current_editing_workflow
+                                ->> \(cur_name, _) = cur_name == name;
+                                ->or(false)))
+                    {
+                        self.current_editing_workflow =
+                            option::value((name, wc));
+                    }
+                }
+            }
+            SameLine();
+            match (self.current_editing_workflow)
+            {
+                none?;
+                value((_, wc))?
+                {
+                    jeapi::statements::gui::Edit(
+                        "##editing_workflow_edit", wc.graph_edit_context);
+                }
+            }
+        }
+        public func show_edit_form(workflow_path: fsys::path_t)
+        {
+            try! self = create(workflow_path);
+            let f = jeapi::gui::form::create(
+                F"Workflow 编辑器 - {workflow_path->to_string}",
+                true,
+                \f = self->edit_form(f););
+                
+            f->set_size_constraint(500., 200., 2000., 2000.);
+            f->set_apply_attribute(WindowsAttribute::ImGuiWindowFlags_MenuBar, true);
+            f->set_autoresize(false);
+            f->set_docking(true);
+            f->set_callback_close(
+               func()
+               {
+                    jeapi::gui::form::ask(
+                        "保存更改",
+                        "是否保存对所有 Workflow 的更改？",
+                        func(yes)
+                        {
+                            if (yes && !self->save_all())
+                                return;
+
+                            f->force_close();
+                        });
+                    return false;
+               });
+            do f->show();
+            return_value!;
+        }
     }
 }

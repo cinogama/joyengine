@@ -13,6 +13,9 @@ import pkg::fsys;
 import pkg::worst;
 import pkg::thread;
 import pkg::buffer;
+import pkg::try;
+import pkg::iterator;
+import pkg::vm;
 
 import builtin::editor::project::main;
 import builtin::editor::cpp::main;
@@ -193,7 +196,7 @@ namespace editor::gui
         [".shader"] = je::graphic::texture::load(option::none, F"!/builtin/icon/ShaderFile.png")->unwrap,
         
         [".je4module"] = je::graphic::texture::load(option::none, F"!/builtin/icon/CppProgram.png")->unwrap,
-        [".je4workflow"] = je::graphic::texture::load(option::none, F"!/builtin/icon/InputPin.png")->unwrap,
+        [".je4workflows"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Workflow.png")->unwrap,
         
         [".je4world"] = je::graphic::texture::load(option::none, F"!/builtin/icon/World.png")->unwrap,
         [".je4entity"] = je::graphic::texture::load(option::none, F"!/builtin/icon/Entity.png")->unwrap,
@@ -342,12 +345,6 @@ namespace editor::gui
                             =>> \w =context->get_project->reset_editing_world(w);
                             ->  error
                         ;,
-                [".je4workflow"] =
-                    func(p: PathInfo, context: EditorContext)
-                    {
-                        workflow::open(p.path, context);
-                        return option::none;
-                    },
                 [".je4animation"] =
                     func(p: PathInfo, context: EditorContext)
                     {
@@ -605,8 +602,11 @@ using je;
 extern func main(_: universe, _: option<world>, _: option<entity>)
 {
 }
-"@;
-                        jeapi::gui::form::input("新建编辑器工具脚本", F"在{cur_creating_path}新建编辑器工具脚本", "NewScript",
+"@
+                        ;
+                        
+                    jeapi::gui::form::input("新建编辑器工具脚本", F"在{cur_creating_path}新建编辑器工具脚本",
+                        "NewScript",
                         \filename: string = fsys::exist(file_path)
                             ? jeapi::gui::form::errmsg("创建编辑器工具脚本失败", "同名文件已经存在")
                             | write_file_if_not_exist(file_path, F"// {filename}.je.wo\n{default_empty_script}")
@@ -616,226 +616,250 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                 }
                 if (BeginMenu("Workflow"))
                 {
-                    if (MenuItem("新建 Workflow 图"))
-                    {
-                        jeapi::gui::form::input("新建 Workflow 图", F"在{cur_creating_path}新建 Workflow 图", "NewWorkflow",
-                            \filename: string = fsys::exist(file_path)
-                                ? jeapi::gui::form::errmsg("创建Workflow 图失败", "同名文件已经存在")
-                                | write_file_if_not_exist(file_path, "{}")
-                                ? force_update()
-                                | jeapi::gui::form::errmsg("创建Workflow图失败", "无法创建文件，可能是文件名非法或磁盘已满")
-                                    where file_path = fsys::normalize(cur_creating_path) / (filename + ".je4workflow"););
-                    }
-                    Separator();
-                    if (MenuItem("新建Node"))
-                    {
-                        let default_empty_script = 
-@"
-import woo::std;
-import je;
-import je::gui;
-
-import pkg::interface;
-
-import builtin::api::gui::nodeeditor;
-
-using je::gui;
-using jeapi::gui::node_editor;
-
-using $NEW_NODE_NAME$ = struct{}
-{
-    alias NodeEditor = jeapi::gui::node_editor;
-    
-    public func create(_: NodeEditor)=> $NEW_NODE_NAME$
-        where require!($NEW_NODE_NAME$: INode);
-    {
-        return $NEW_NODE_NAME${};
-    }
-    public func name(_: $NEW_NODE_NAME$)=> string
-    {
-        return "$NEW_NODE_NAME$";
-    }
-    public func color(_: $NEW_NODE_NAME$)
-    {
-        return (0, 0, 0, 127);
-    }
-    public func onUpdate(_: $NEW_NODE_NAME$, _: NodeEditor, _: string)=> void
-    {
-    }
-    public func onDelete(_: $NEW_NODE_NAME$, _: NodeEditor)=> bool
-    {
-        return true;
-    }
-    public func onEval(_: $NEW_NODE_NAME$, _: NodeEditor)=> bool
-    {
-        return true;
-    }
-    public func to_string(_: $NEW_NODE_NAME$)=> string
-    {
-        return "";
-    }
-    public func parse(_: $NEW_NODE_NAME$, _: string)=> void
-    {
-    }
-}
-"@;
-                            if (false == fsys::normalize(cur_creating_path)->to_string()->begin_with(
-                                (context->get_project->get_path / "resource" / "workflow" / "node")->to_string))
-                            jeapi::gui::form::errmsg("创建Workflow Node失败", "Node只能在@/resource/workflow/node目录下创建");
-                        else
-                        {
-                            jeapi::gui::form::input("新建 Workflow Node", F"在{cur_creating_path}新建 Workflow Node", "NewNode",
-                                func(filename: string)
-                                {
-                                    let file_path = fsys::normalize(cur_creating_path) / (filename + ".wo");
-                                    if (fsys::exist(file_path))
-                                        jeapi::gui::form::errmsg("创建Workflow Node失败", "同名文件已经存在");
-                                        
-                                    if (write_file_if_not_exist(file_path, default_empty_script->replace("$NEW_NODE_NAME$", filename)))
-                                        force_update();
-                                    else
-                                        jeapi::gui::form::errmsg("创建Workflow Node失败", "无法创建文件，可能是文件名非法或磁盘已满");
-                                });
-                        }
-                    }
+                    defer EndMenu();
                     
-                    if (MenuItem("新建Type"))
+                    if (MenuItem("创建新的 Workflow 集"))
                     {
-                        let default_empty_script = 
-@"
+                        jeapi::gui::form::input("创建 Workflow 集", F"将在{cur_creating_path}创建新的 Workflow 集：",
+                            "NewWorkflow",
+                            func(filename)
+                            {
+                                do try!
+                                {
+                                    try! new_path = fsys::mkdir(
+                                        fsys::normalize(cur_creating_path) / F"{filename}.je4workflows")
+                                        -> or_map(\errid = F"无法创建 Workflow 集目录({errid})";)
+                                        ;
+                                        
+                                    let runtime_src = 
+@"// Runtime
 import woo::std;
-import je;
-import je::gui;
 
-import pkg::interface;
+import builtin::statements;
+import builtin::statements::types;
+import builtin::statements::runtime;
 
-import builtin::api::gui::nodeeditor;
+import pkg::decorator;
+import pkg::async;
+import pkg::node_editor;
+import pkg::any;
 
-using je::gui;
-using jeapi::gui::node_editor;
+import nodes;
 
-using $NEW_TYPE_NAME$ = struct{}
+namespace workflow::runtime
 {
-    public func create()=> $NEW_TYPE_NAME$
-        where require!($NEW_TYPE_NAME$: ITyped);
-    {
-        return $NEW_TYPE_NAME${};
-    }
-    public func to_string(_: $NEW_TYPE_NAME$)=> string
-    {
-        return "";
-    }
-    public func parse(_: $NEW_TYPE_NAME$, _: string)=> void
-    {
-    }
-    public func edit(_: $NEW_TYPE_NAME$, _: string)=> void
-    {
-        PushItemWidth(100.);
-        {
-        }
-        PopItemWidth();
-    }
-    public func typename(_: $NEW_TYPE_NAME$)=> string
-    {
-        return "$NEW_TYPE_NAME$";
-    }
-    public func maxoutput(_: $NEW_TYPE_NAME$)=> int
-    {
-        return 0;
-    }
-    public func color(_: $NEW_TYPE_NAME$)=> (int, int, int, int)
-    {
-        return (180, 140, 150, 255);
-    }
+    using jeapi::statements;
 
-    public func get(_: $NEW_TYPE_NAME$)
+    decorator![register_dispatcher("main")]
+    async! func main(graph: GraphContext)
     {
-        // Get value from typevalue
-    }
-    public func set(_: $NEW_TYPE_NAME$, _: void)
-    {
-        // Set the value into typevalue
+        for (let (_, node) : graph->walk_flow_nodes())
+        {
+            do node;
+        }
     }
 }
-"@;
-                            jeapi::gui::form::input("新建 Workflow Type", F"在{cur_creating_path}新建 Workflow Type", "NewType",
-                            func(filename: string)
-                            {
-                                let file_path = fsys::normalize(cur_creating_path) / (filename + ".wo");
-                                if (fsys::exist(file_path))
-                                    jeapi::gui::form::errmsg("创建Workflow Type失败", "同名文件已经存在");
-                                    
-                                if (write_file_if_not_exist(file_path, default_empty_script->replace("$NEW_TYPE_NAME$", filename)))
-                                    force_update();
-                                else
-                                    jeapi::gui::form::errmsg("创建Workflow Type失败", "无法创建文件，可能是文件名非法或磁盘已满");
-                            });
-                    }
-                    if (MenuItem("新建Producer"))
-                    {
-                        let default_empty_script =
-@"
-import woo::std;
-import je;
-import je::gui;
+"@
+;
 
-import pkg::interface;
+                                    let nodes_list = 
+@"// Donot modify this file!
+;
+"@
+                                        ;
+                                        
+                                    let workflow_editor_launcher = 
+@"// Donot modify this file!
 
-import builtin::api::gui::nodeeditor;
+import builtin::statements;
+import builtin::editor::gui::workflow;
 
-using je::gui;
-using jeapi::gui::node_editor;
+import pkg::worst::macro;
+import pkg::fsys;
 
-using $NEW_PRODUCER_NAME$ = struct{}
+import nodes;
+
+match (editor::gui::edit_forms::WorkFlowEditorContext::show_edit_form(
+    fsys::parent(fsys::normalize(__FILE__!))))
 {
-    public func create()=> $NEW_PRODUCER_NAME$
-        where require!($NEW_PRODUCER_NAME$: IProducer);
-    {
-        return $NEW_PRODUCER_NAME${};
-    }
-    public func reset(_: $NEW_PRODUCER_NAME$)
-    {
-    }
-    public func finished(_: $NEW_PRODUCER_NAME$)=> bool
-    {
+    value(_)?
         return true;
-    }
-    public func to_string(_: $NEW_PRODUCER_NAME$)=> string
-    {
-        return "";
-    }
-    public func parse(_: $NEW_PRODUCER_NAME$, _: string)=> void
-    {
-    }
-    public func edit(_: $NEW_PRODUCER_NAME$, _: string)=> void
-    {
-        PushItemWidth(100.);
-        {
-        }
-        PopItemWidth();
-    }
-
-    public func next(_: $NEW_PRODUCER_NAME$)
-    {
-        return option::none;
-    }
+    none?
+        return false;
 }
-"@;
-                            
-                        jeapi::gui::form::input("新建 Workflow Producer", F"在{cur_creating_path}新建 Workflow Producer", "NewProducer",
-                            func(filename: string)
-                            {
-                                let file_path = fsys::normalize(cur_creating_path) / (filename + ".wo");
-                                if (fsys::exist(file_path))
-                                    jeapi::gui::form::errmsg("创建Workflow Producer失败", "同名文件已经存在");
+"@
+                                        ;
+                                        
+                                    defer force_update();
                                     
-                                if (write_file_if_not_exist(file_path, default_empty_script->replace("$NEW_PRODUCER_NAME$", filename)))
-                                    force_update();
+                                    if (!write_file_if_not_exist(
+                                            new_path / "nodes.wo",
+                                            nodes_list))
+                                        throw! "无法创建 Workflow 节点列表文件";
+                                        
+                                    if (!write_file_if_not_exist(
+                                            new_path / "editor.wo",
+                                            workflow_editor_launcher))
+                                        throw! "无法创建 Workflow 编辑器启动脚本文件";
+                                        
+                                    if (!write_file_if_not_exist(
+                                            new_path / "runtime.wo",
+                                            runtime_src))
+                                        throw! "无法创建 Workflow 运行时脚本文件";
+
+                                    try! _ = fsys::mkdir(new_path / "nodes" / "types")
+                                        -> or_map(\errid = F"无法创建 Workflow 节点和类型目录({errid})";)
+                                        ;
+                                        
+                                    if (!write_file_if_not_exist(
+                                            new_path / "nodes" / "types" / ".gitkeepme",
+                                            ""))
+                                        throw! "无法创建 Workflow 类型目录占位文件";
+                                        
+                                    return_ok!;
+                                    
+                                } catch! e {
+                                
+                                    jeapi::gui::form::errmsg(
+                                        "创建 Workflow 集失败",
+                                        F"无法创建 Workflow 集 `{filename}`({e})");
+                                };
+                                
+                            });
+                            
+                    }
+                    if (MenuItem("创建 Eval Node 声明"))
+                    {
+                        jeapi::gui::form::input(
+                            "创建 Workflow Eval Node 声明",
+                            F"将在{cur_creating_path}创建 Workflow Eval Node 声明：",
+                            "NewEvalNode",
+                            func(filename)
+                            {
+                                let node_declaration_template =
+@"// $NODE_NAME$.wo
+import woo::std;
+
+import je;
+
+import pkg::node_editor;
+import pkg::async;
+import pkg::interface;
+import pkg::try;
+
+import builtin::statements;
+import builtin::statements::types;
+
+namespace workflow::nodes
+{
+    using node_editor;
+
+    using $NODE_NAME$ = struct{
+    }
+    {
+        public let name = "Eval/$NODE_NAME$";
+        public let color = 0xFFAA8855;
+        public let description = "";
+        
+        public func create(_: node_editor::Graph::NodeIOCreator)=> $NODE_NAME$
+            where require!($NODE_NAME$: node_editor::INode);
+        {
+            return $NODE_NAME${
+            };
+        }
+        async! public func eval(self: $NODE_NAME$)=> void
+        {
+            do try!
+            {
+                do self;
+                return_value!;
+
+            } catch! {
+                je::logwarn("节点 `$NODE_NAME$` 求值终止");
+            };
+        }
+    }
+    jeapi::statements::register_node:<$NODE_NAME$>();
+}
+"@
+                                    ;
+                                    
+                                if (!write_file_if_not_exist(
+                                        fsys::normalize(cur_creating_path) / F"{filename}.wo",
+                                        node_declaration_template->replace("$NODE_NAME$", filename)))
+                                    jeapi::gui::form::errmsg(
+                                        "创建 Eval Node 声明失败",
+                                        F"无法创建文件，可能是文件名非法或磁盘已满");
                                 else
-                                    jeapi::gui::form::errmsg("创建Workflow Producer失败", "无法创建文件，可能是文件名非法或磁盘已满");
+                                    force_update();
                             });
                     }
-                    EndMenu();
+                    if (MenuItem("创建 Flow Node 声明"))
+                    {
+                        jeapi::gui::form::input(
+                            "创建 Workflow Flow Node 声明",
+                            F"将在{cur_creating_path}创建 Workflow Flow Node 声明：",
+                            "NewFlowNode",
+                            func(filename)
+                            {
+                                let node_declaration_template =
+@"// $NODE_NAME$.wo
+import woo::std;
+
+import je;
+
+import pkg::node_editor;
+import pkg::async;
+import pkg::interface;
+import pkg::try;
+
+import builtin::statements;
+import builtin::statements::types;
+
+namespace workflow::nodes
+{
+    using node_editor;
+
+    using $NODE_NAME$ = struct{
+    }
+    {
+        public let name = "Flow/$NODE_NAME$";
+        public let color = 0xFF88AA55;
+        public let description = "";
+        
+        public func create(_: node_editor::Graph::FlowNodeIOCreator)=> $NODE_NAME$
+            where require!($NODE_NAME$: node_editor::IFlowNode);
+        {
+            return $NODE_NAME${
+            };
+        }
+        async! public func forward(self: $NODE_NAME$)=> void
+        {
+            do try!
+            {
+                do self;
+                return_value!;
+
+            } catch! {
+                je::logwarn("流程节点 `$NODE_NAME$` 执行终止");
+            };
+        }
+    }
+    jeapi::statements::register_node:<$NODE_NAME$>();
+}
+"@
+                                    ;
+                                    
+                                if (!write_file_if_not_exist(
+                                        fsys::normalize(cur_creating_path) / F"{filename}.wo",
+                                        node_declaration_template->replace("$NODE_NAME$", filename)))
+                                    jeapi::gui::form::errmsg(
+                                        "创建 Flow Node 声明失败",
+                                        F"无法创建文件，可能是文件名非法或磁盘已满");
+                                else
+                                    force_update();
+                            });
+                    }
                 }
                 Separator();
                 if (MenuItem("世界"))
@@ -1117,6 +1141,54 @@ using $NEW_PRODUCER_NAME$ = struct{}
                 update_shader(context, path.path->to_string());
             }
             Separator();
+        }
+        else if (path.externname == ".je4workflows")
+        {
+            if (MenuItem(F"编辑 Workflow 集"))
+            {
+                // 更新指定目录的 nodes.wo 清单脚本
+                
+                let all_imports =
+                    "// Donot modify this file!\n"
+                        + fsys::recursive_walk(path.path / "nodes")
+                        |> iterator::iter_result
+                        |> iterator::filter(\p = fsys::isfile(p) && fsys::extension(p)->lower == ".wo";)
+                        |> iterator::map(
+                            func(p)
+                            {
+                                let replaced = fsys::relative(p, path.path)->unwrap->replace("/", "::");
+                                return F"export import {replaced->sub_len(0, replaced->len - 3)};"; // .wo
+                            })
+                        |> iterator::reduce(\l, r = l + "\n" + r;)
+                        -> or(";")
+                        ;
+                        
+                if (!file::writeall(
+                        path.path / "nodes.wo",
+                        all_imports: buffer))
+                {
+                    jeapi::gui::form::errmsg(
+                        "更新 Workflow 节点清单失败",
+                        F"无法写入文件{path.path / "nodes.wo"}");
+                }
+                else
+                {
+                    do try!
+                    {
+                        try! vmm = vm::load((path.path / "editor.wo")->to_string);
+                        try! val = vmm->run
+                            -> ok_or("运行 Workflow 编辑器脚本失败");
+                            
+                        if (!(val: bool))
+                            throw! "Workflow 打开失败";
+                            
+                        return_ok!;
+                        
+                    } catch! e {
+                        jeapi::gui::form::errmsg("打开 Workflow 编辑器失败", F"无法运行 Workflow 编辑器脚本({e})");
+                    };
+                }
+            }
         }
         else if (path.externname == ".je4module")
         {

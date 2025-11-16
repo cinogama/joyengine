@@ -1148,6 +1148,12 @@ WO_API wo_api je_gui_content_region_avail(wo_vm vm, wo_value args)
     return wo_ret_val(vm, set_float2_to_struct(s + 0, vm, sz.x, sz.y));
 }
 
+WO_API wo_api je_gui_set_next_item_width(wo_vm vm, wo_value args)
+{
+    ImGui::SetNextItemWidth(wo_float(args + 0));
+    return wo_ret_void(vm);
+}
+
 WO_API wo_api je_gui_set_next_window_size_constraints(wo_vm vm, wo_value args)
 {
     ImGui::SetNextWindowSizeConstraints(val2vec2(args + 0), val2vec2(args + 1));

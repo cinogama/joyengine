@@ -165,6 +165,10 @@ func copy_pkgs(copy_src_only: bool)=> result<void, string>
 {
     let source_path = current_workpath / "pkg";
     let target_path = build_path / "pkg";
+    
+    if (isdir(target_path))
+        do remove(target_path);
+        
     do mkdir(target_path);
     
     for (let path : recursive_walk(current_workpath / "pkg") |> iterator::iter_result)

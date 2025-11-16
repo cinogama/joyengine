@@ -1,0 +1,75 @@
+import woo::std;
+
+import je;
+
+import pkg::async;
+import pkg::try;
+import pkg::vm;
+import pkg::buffer;
+import pkg::fsys;
+
+import builtin::statements;
+
+namespace jeapi
+{
+    namespace statements
+    {
+        public func launch(
+            workflow_path: string,
+            dispatch_job_name: string,
+            graph_name: string)
+        {
+            let rumtime_path = workflow_path + "/runtime.wo";
+            // 在编辑器环境下，使用 @/ 目录会导致相对路径导入出现一些问题
+            // 获取实际路径给 VM 使用以确保导入顺利执行。
+            let fact_runtime_path = rumtime_path->begin_with("@/")
+                ? fsys::workpath()->to_string() + rumtime_path->sub(1)
+                | rumtime_path;
+            let graph_path = workflow_path + F"/{graph_name}.je4workflow";
+            
+            
+            return okay <| try!
+            {
+                try! runtime_content = je::file::readall(rumtime_path)
+                    -> ok_or(F"无法读取 Workflow 运行时文件 {rumtime_path}");
+                try! vm_instance = vm::create(
+                    fact_runtime_path, runtime_content: buffer);
+                    
+                try! graph_data = je::file::readall(graph_path)
+                    -> ok_or(F"无法读取 Workflow `{workflow_path}` 的图文件 {graph_path}");
+                    
+                try! _ = vm_instance->run()
+                    -> ok_or(F"初始化 Workflow `{workflow_path}` 的运行时失败");
+                    
+                try! d = vm_instance->invoke(
+                    "jeapi::statements::dispatch",
+                    [dispatch_job_name: dynamic, graph_data: dynamic])
+                -> ok_or(F"调用Workflow `{workflow_path}` 的调度器 {dispatch_job_name} 失败");
+                
+                return d-> unsafe::cast:<option<async<void>>>
+                    -> ok_or(F"Workflow `{workflow_path}` 中无法找到调度器 {dispatch_job_name}");
+                    
+            } catch! e {
+                je::logerr(F"启动 Workflow 失败: {e}");
+            };
+        }
+        
+        static let registered_dispathchers = {}mut: map<string, (GraphContext)=> async<void>>;
+        public func register_dispatcher(f: (GraphContext)=> async<void>, name: string)
+        {
+            if (registered_dispathchers->contains(name))
+                std::panic(F"Dispatcher 名称 {name} 已被注册");
+                
+            registered_dispathchers->set(name, f);
+        }
+        extern func dispatch(name: string, graph_data: string)=> option<async<void>>
+        {
+            let (graph, _) = load_graph_and_extra_data(graph_data)
+                ->ok_or("无法解析图数据")
+                ->unwrap;
+                
+            try! f = registered_dispathchers->get(name);
+            return_value! f(graph);
+        }
+    }
+}

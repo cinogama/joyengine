@@ -674,12 +674,13 @@ namespace je::gui
     extern("libjoyecs", "je_gui_content_region_avail")
         public func GetContentRegionAvail()=> ImVec2;
         
+    extern("libjoyecs", "je_gui_set_next_item_width")
+        public func SetNextItemWidth(w: real)=> void;
+
     extern("libjoyecs", "je_gui_set_next_window_size_constraints")
         public func SetNextWindowSizeConstraints(minsz: ImVec2, maxsz: ImVec2)=> void;
-        
     extern("libjoyecs", "je_gui_set_next_window_size")
         public func SetNextWindowSize(sz: ImVec2)=> void;
-        
     extern("libjoyecs", "je_gui_set_next_window_pos")
         public func SetNextWindowPos(pos: ImVec2)=> void;
         
@@ -975,22 +976,19 @@ namespace je::gui
         
         extern("libjoyecs", "je_gui_node_editor_context_create")
             public func CreateContext()=> EditorContext;
-            
+
         extern("libjoyecs", "je_gui_node_editor_begin")
-            public func Begin(label: string, ctx: EditorContext)=> void;
-            
+            public func Begin(label: string, ctx: EditorContext)=> void;      
         extern("libjoyecs", "je_gui_node_editor_end")
             public func End()=> void;
-            
+
         extern("libjoyecs", "je_gui_node_editor_begin_node")
             public func BeginNode(id: NodeId)=> void;
-            
         extern("libjoyecs", "je_gui_node_editor_end_node")
             public func EndNode()=> void;
             
         extern("libjoyecs", "je_gui_node_editor_begin_input_pin")
             public func BeginInputPin(id: PinId)=> void;
-            
         extern("libjoyecs", "je_gui_node_editor_begin_output_pin")
             public func BeginOutputPin(id: PinId)=> void;
             

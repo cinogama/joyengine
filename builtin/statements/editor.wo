@@ -1,5 +1,6 @@
 import woo::std;
 
+import je;
 import je::gui;
 
 import pkg::node_editor;
@@ -31,16 +32,36 @@ namespace jeapi
             query_flow_input_type_nodes: map<string, NodeTree>,
             query_flow_output_type_nodes: map<string, NodeTree>,
             
+            input_pin_image: option<je::graphic::texture>,
+            output_pin_image: option<je::graphic::texture>,
+            flow_pin_image: option<je::graphic::texture>,
+            
             // 接下来这些是编辑时的状态，一团乱麻~ 每帧更新
+            try_linking_from_io_typename: mut option<string>,
+            
             hovered_pin_iostate: mut option<node_editor::Graph::IOState>,
             mouse_on_canvas_pos: mut (real, real),
             
+            context_menu_shown: mut bool,
             mouse_on_node: mut option<guid::GUID>,
             creating_by_dragging_from_pin: mut option<guid::GUID>,
             fast_create_node_context_menu_has_opened: mut bool,
             mouse_on_canvas_pos_when_context_menu_before_opened: mut (real, real),
         }
         {
+            public func save_extra_data(self: GraphEditor)
+            {
+                let result = {}mut: map<string, mut array<real>>;
+
+                for (let (uid, state) : self.generated_node_id_for_node)
+                {
+                    if (self.graph_context->query_eval_node_uid(uid)->is_value
+                        || self.graph_context->query_flow_node_uid(uid)->is_value)
+                        result[uid: string] = [state.position.0, state.position.1];
+                }
+                return result: dynamic;
+            }
+            
             using NodeTree = struct{
                 tree: map<string, NodeTreeNode>,
             }
@@ -85,13 +106,61 @@ namespace jeapi
                     return self;
                 }
             }
-            
+            func query_iostate_portable_node_tree(self: GraphEditor, iostate: node_editor::Graph::IOState)
+            {
+                if (iostate.kind == node_editor::Graph::IOState::IOKind::Input)
+                {
+                    return self.query_output_type_nodes->get_or_set_do(
+                        iostate.typename,
+                        \=
+                            NodeTree::create(
+                                self.graph_context->query_node_type_with_output_type(
+                                    iostate.typename))
+                            ;
+                        );
+                }
+                else if (iostate.kind == node_editor::Graph::IOState::IOKind::Output)
+                {
+                    return self.query_input_type_nodes->get_or_set_do(
+                        iostate.typename,
+                        \=
+                            NodeTree::create(
+                                self.graph_context->query_node_type_with_input_type(
+                                    iostate.typename))
+                            ;
+                        );
+                }
+                else if (iostate.kind == node_editor::Graph::IOState::IOKind::InputFlow)
+                {
+                    return self.query_flow_output_type_nodes->get_or_set_do(
+                        iostate.typename,
+                        \=
+                            NodeTree::create(
+                                self.graph_context->query_node_type_with_flowoutput_type(
+                                    iostate.typename))
+                            ;
+                        );
+                }
+                else if (iostate.kind == node_editor::Graph::IOState::IOKind::OutputFlow)
+                {
+                    return self.query_flow_input_type_nodes->get_or_set_do(
+                        iostate.typename,
+                        \=
+                            NodeTree::create(
+                                self.graph_context->query_node_type_with_flowinput_type(
+                                    iostate.typename))
+                            ;
+                        );
+                }
+                return std::panic("Unreachable");
+            }
             func reset_edit_state_pre_edit(self: GraphEditor)
             {
                 self.hovered_pin_iostate = option::none;
             }
             func reset_edit_state_after_edit_if_context_menu_closed(self: GraphEditor)
             {
+                self.context_menu_shown = false;
                 self.mouse_on_node = option::none;
                 self.creating_by_dragging_from_pin = option::none;
                 self.fast_create_node_context_menu_has_opened = false;
@@ -119,9 +188,9 @@ namespace jeapi
                 }
             }
             
-            public func create(graph_context: GraphContext)
+            public func create(graph_context: GraphContext, extra_data: option<dynamic>)
             {
-                return GraphEditor{
+                let self = GraphEditor{
                     graph_context = graph_context,
                     node_context = node_editor::CreateContext(),
                     
@@ -137,14 +206,36 @@ namespace jeapi
                     query_flow_input_type_nodes = {}mut,
                     query_flow_output_type_nodes = {}mut,
                     
+                    input_pin_image = je::graphic::texture::load(option::none, "!/builtin/icon/InputPin.png"),
+                    output_pin_image = je::graphic::texture::load(option::none, "!/builtin/icon/OutputPin.png"),
+                    flow_pin_image = je::graphic::texture::load(option::none, "!/builtin/icon/FlowPin.png"),
+                    
+                    try_linking_from_io_typename = mut option::none,
+                    
                     hovered_pin_iostate = mut option::none,
                     mouse_on_canvas_pos = mut (0.0, 0.0),
                     
+                    context_menu_shown = mut false,
                     mouse_on_node = mut option::none,
                     creating_by_dragging_from_pin = mut option::none,
                     fast_create_node_context_menu_has_opened = mut false,
                     mouse_on_canvas_pos_when_context_menu_before_opened = mut (0.0, 0.0),
                 };
+                
+                match (extra_data=>>\d = d->trycast:<dict<string, array<real>>>;)
+                {
+                    none?;
+                    value(dat)?
+                    {
+                        for (let (uidstr, pos) : dat)
+                        {
+                            self->get_node(uidstr: guid::GUID)->set_position(
+                                (pos->get_or(0, 0.), pos->get_or(1, 0.)));
+                        }
+                    }
+                }
+                
+                return self;
             }
             func allocate_id<Id>(self: GraphEditor)
                 where 0: Id is Id;
@@ -209,10 +300,34 @@ namespace jeapi
             }
             func draw_pin(self: GraphEditor, iostate: node_editor::Graph::IOState)
             {
-                // TODO: Set color.
+                let mut shown_image = option::none: option<je::graphic::texture>;
+                if (iostate.kind == node_editor::Graph::IOState::IOKind::Input)
+                    shown_image = self.input_pin_image;
+                else if (iostate.kind == node_editor::Graph::IOState::IOKind::Output)
+                    shown_image = self.output_pin_image;
+                else
+                    shown_image = self.flow_pin_image;
+                    
+                let mut alpha_scale = 1.0: real;
+                match (self.try_linking_from_io_typename)
+                {
+                    value(name)?
+                        if (name != iostate.typename)
+                            // Hide image.
+                            alpha_scale = 0.1;
+                    none?;
+                }
                 
-                Dummy((20., 20.));
-                // TODO: 此处绘制图片
+                match (shown_image)
+                {
+                    none?
+                        Dummy((20., 20.));
+                    value(img)?
+                    {
+                        let (r, g, b, a) = i32_to_color32(iostate.typecolor);
+                        ImageSizeColor(img, 20., 20., (r, g, b, (a: real * alpha_scale): int));
+                    }
+                }
                 
                 let (lt, rb) = GetItemRect();
                 let c = ((lt.0 + rb.0) / 2., (lt.1 + rb.1) / 2.);
@@ -239,7 +354,8 @@ namespace jeapi
                         node_editor::PinRect(lt, rb);
                         node_editor::EndPin();
                         
-                        iinput->edit();
+                        if (self.graph_context->query_link_to_uid(iostate.uid)->empty())
+                            iinput->edit();
                     }
                 }
                 SameLine();
@@ -293,7 +409,8 @@ namespace jeapi
                         node_editor::PinRect(lt, rb);
                         node_editor::EndPin();
                         
-                        iinput->edit();
+                        if (self.graph_context->query_link_to_uid(iostate.uid)->empty())
+                            iinput->edit();
                     }
                 }
                 SameLine();
@@ -340,7 +457,7 @@ namespace jeapi
                     else
                         self->edit_flow_node(node);
                 }
-                if (IsMouseHoveringRect(GetItemRect()...))
+                if (IsMouseHoveringRect(GetItemRect()...) && ! self.context_menu_shown)
                     self.mouse_on_node = option::value(nuid);
                     
                 if (edit_node._resync_position_to_editor)
@@ -361,25 +478,50 @@ namespace jeapi
                 editor_context: GraphEditor,
                 auid: guid::GUID,
                 buid: guid::GUID,
-                a: node_editor::PinId,
-                b: node_editor::PinId)
+                apin: node_editor::PinId,
+                bpin: node_editor::PinId)
             {
                 let linkid = editor_context->get_linkid(auid, buid);
-                let color = GraphEditor::i32_to_color32(
-                    editor_context.graph_context->query_io_state(auid)->unwrap.typecolor);
+                
+                let mut alpha_scale = 1.;
+                let iostate = editor_context.graph_context->query_iostate(auid)->unwrap;
+                
+                let (r, g, b, a) = GraphEditor::i32_to_color32(
+                    iostate.typecolor);
                     
-                node_editor::Link(linkid, a, b, color, 2.);
+                match (editor_context.try_linking_from_io_typename)
+                {
+                    value(name)?
+                        if (name != iostate.typename)
+                            alpha_scale = 0.1;
+                    none?;
+                }
+                
+                node_editor::Link(linkid, apin, bpin, (r, g, b, (a: real * alpha_scale): int), 2.);
             }
             func query_new_node(editor_context: GraphEditor)
             {
                 match (node_editor::QueryNewNode())
                 {
                     value(pinid)?
+                    {
+                        match (editor_context->find_io_uid(pinid)
+                            =>> \iouid = editor_context.graph_context->query_iostate(iouid);)
+                        {
+                            none?;
+                            value(iostate)?
+                            {
+                                editor_context.try_linking_from_io_typename =
+                                    option::value(iostate.typename);
+                            }
+                        }
+                        
                         if (node_editor::AcceptNewItem())
                         {
                             editor_context.creating_by_dragging_from_pin =
                                 editor_context->find_io_uid(pinid);
                         }
+                    }
                     none?;
                 }
             }
@@ -394,6 +536,12 @@ namespace jeapi
                             try! auid = editor_context->find_io_uid(a);
                             try! buid = editor_context->find_io_uid(b);
                             
+                            try! aiostate = editor_context.graph_context->query_iostate(auid);
+                            try! biostate = editor_context.graph_context->query_iostate(buid);
+                            
+                            if (aiostate.nuid == biostate.nuid)
+                                throw!;
+                                
                             if (node_editor::AcceptNewItem())
                             {
                                 if (editor_context.graph_context->connect_uid(auid, buid)->or(false))
@@ -455,6 +603,8 @@ namespace jeapi
             {
                 let creating = node_editor::BeginCreate((0, 255, 255, 255), 2.);
                 defer node_editor::EndCreate();
+                
+                editor_context.try_linking_from_io_typename = option::none;
                 if (creating)
                 {
                     query_new_node(editor_context);
@@ -471,8 +621,16 @@ namespace jeapi
                     query_delete_links(editor_context);
                 }
             }
-            func create_node_menu_context(editor_context: GraphEditor, nodes: GraphEditor::NodeTree)=> void
+            func create_node_menu_context(
+                editor_context: GraphEditor, nodes: GraphEditor::NodeTree)=> option<guid::GUID>
             {
+                if (nodes.tree->len == 0)
+                {
+                    do MenuItemEnabled("(无可用节点)", false);
+                    return option::none;
+                }
+                
+                let mut result = option::none: option<guid::GUID>;
                 for (let (name, node) : nodes.tree)
                 {
                     match (node)
@@ -485,8 +643,12 @@ namespace jeapi
                                     none?;
                                     value(node_uid)?
                                     {
-                                        editor_context->get_node(node_uid)->set_position(
+                                        let node_edit_state =
+                                            editor_context->get_node(node_uid);
+                                        node_edit_state->set_position(
                                             editor_context.mouse_on_canvas_pos_when_context_menu_before_opened);
+                                            
+                                        result = option::value(node_uid);
                                     }
                                 }
                             }
@@ -495,13 +657,73 @@ namespace jeapi
                             if (BeginMenu(name))
                             {
                                 defer EndMenu();
-                                create_node_menu_context(editor_context, subtree);
+                                match (create_node_menu_context(editor_context, subtree))
+                                {
+                                    none?;
+                                    value(node_edit_state)?
+                                        result = option::value(node_edit_state);
+                                }
                             }
                         }
                     }
                 }
+                return result;
             }
-            public func show_context_menu(editor_context: GraphEditor)
+            func fast_create_link_with_pin(
+                editor_context: GraphEditor, nuid: guid::GUID, piostate: node_editor::Graph::IOState)
+            {
+                if (piostate.kind == node_editor::Graph::IOState::IOKind::Input)
+                {
+                    // 只有 EvalNode 才有 Output
+                    try! outputs = editor_context.graph_context->query_eval_node_uid(nuid)
+                        ->> \n = n.outputs;
+                        ;
+                    try! (_, o_iostate) = outputs->iter |> iterator::find(\(_, iostate) = iostate.typename == piostate.typename;);
+                    
+                    return editor_context.graph_context->connect_uid(
+                        o_iostate.uid,
+                        piostate.uid);
+                }
+                else if (piostate.kind == node_editor::Graph::IOState::IOKind::Output)
+                {
+                    try! inputs = editor_context.graph_context->query_eval_node_uid(nuid)
+                        ->> \n = n.inputs;
+                        -> or_bind(\=
+                                editor_context.graph_context->query_flow_node_uid(nuid)
+                                    ->> \n = n.inputs;
+                                ;);
+                                
+                    try! (_, i_iostate, _) = inputs->iter |> iterator::find(\(_, iostate, _) = iostate.typename == piostate.typename;);
+                    
+                    return editor_context.graph_context->connect_uid(
+                        i_iostate.uid,
+                        piostate.uid);
+                }
+                else if (piostate.kind == node_editor::Graph::IOState::IOKind::InputFlow)
+                {
+                    try! flowoutputs = editor_context.graph_context->query_flow_node_uid(nuid)
+                        ->> \n = n.flowoutputs;
+                        ;
+                    try! (_, o_iostate) = flowoutputs->iter |> iterator::find(\(_, iostate) = iostate.typename == piostate.typename;);
+                    
+                    return editor_context.graph_context->connect_uid(
+                        o_iostate.uid,
+                        piostate.uid);
+                }
+                else if (piostate.kind == node_editor::Graph::IOState::IOKind::OutputFlow)
+                {
+                    try! flowinputs = editor_context.graph_context->query_flow_node_uid(nuid)
+                        ->> \n = n.flowinputs;
+                        ;
+                    try! (_, i_iostate, _) = flowinputs->iter |> iterator::find(\(_, iostate, _) = iostate.typename == piostate.typename;);
+                    
+                    return editor_context.graph_context->connect_uid(
+                        i_iostate.uid,
+                        piostate.uid);
+                }
+                return std::panic("Unreachable");
+            }
+            func show_context_menu(editor_context: GraphEditor)
             {
                 match (editor_context.creating_by_dragging_from_pin)
                 {
@@ -517,15 +739,38 @@ namespace jeapi
                 if (BeginPopup("NodeEditorCreateContextMenu"))
                 {
                     defer EndPopup();
-                    create_node_menu_context(editor_context, editor_context.total_tree_nodes);
+                    
+                    editor_context.context_menu_shown = true;
+                    match (editor_context.creating_by_dragging_from_pin
+                        =>> \pin_uid = editor_context.graph_context->query_iostate(pin_uid);)
+                    {
+                        none?;
+                        value(iostate)?
+                        {
+                            match (create_node_menu_context(
+                                    editor_context, editor_context->query_iostate_portable_node_tree(iostate)))
+                            {
+                                none?;
+                                value(created_nuid)?
+                                    // 寻找第一个可行的节点怼进去；
+                                    do fast_create_link_with_pin(
+                                        editor_context,
+                                        created_nuid,
+                                        iostate);
+                            }
+                        }
+                    }
+                    
                 }
                 else if (BeginPopupContextItemLabel("NodeEditorMainContextMenu"))
                 {
                     defer EndPopup();
+                    
+                    editor_context.context_menu_shown = true;
                     if (BeginMenu("新节点..."))
                     {
                         defer EndMenu();
-                        create_node_menu_context(editor_context, editor_context.total_tree_nodes);
+                        do create_node_menu_context(editor_context, editor_context.total_tree_nodes);
                     }
                     
                     match (editor_context.mouse_on_node)
@@ -588,7 +833,7 @@ namespace jeapi
                     update_delete_node_and_link(editor_context);
                 }
                 
-                // TODO: 在此展开编辑菜单
+                // 在此展开编辑菜单
                 show_context_menu(editor_context);
                 
                 // 如果鼠标悬浮在某个引脚上，显示类型提示

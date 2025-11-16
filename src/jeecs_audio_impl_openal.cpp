@@ -769,7 +769,6 @@ namespace jeecs
                 current_device_name += strlen(current_device_name) + 1;
             }
 
-            m_current_play_device.reset();
             update_enumed_play_devices(std::move(new_opened_devices));
 
             if (m_enumed_play_devices.empty())

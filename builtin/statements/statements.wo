@@ -1,4 +1,8 @@
+import woo::std;
+
 import pkg::node_editor;
+import pkg::worst;
+import pkg::try;
 
 namespace jeapi
 {
@@ -16,5 +20,41 @@ namespace jeapi
         {
             return node_editor::Graph::create(_node_types);
         }
+        
+        namespace type_traits
+        {
+            public let can_be_extra_saving<T> =
+                std::type_traits::is_same:<T, void>
+                    || concept!(t: T){
+                        t->save_extra_data as dynamic;
+                    };
+        }
+        
+        public func save_with_extra_data<T>(graph: GraphContext, extra: T)=> string
+            where type_traits::can_be_extra_saving:<T>;
+        {
+            return {
+                ["graph"] = graph->dump()->save_to_dict: dynamic,
+                ["extra"] = (extra is void ? nil | extra->save_extra_data): dynamic,
+
+            }: string;
+        }
+        public func load_graph_and_extra_data(
+            str: string)=> option<(GraphContext, dynamic)>
+        {
+            try! d = dict::deserialize(str)
+                =>> \d = d: dynamic->trycast:<dict<string, dynamic>>();
+                ;
+
+            try! graph_dump = d->get("graph")
+                =>> \graph_dict = graph_dict: dynamic->trycast:<dict<string, dynamic>>();
+                =>> \graph_dict = node_editor::Graph::GraphDumpData::load_from_dict(graph_dict);
+                ;
+
+            let graph = node_editor::Graph::restore(_node_types, graph_dump);
+            return_value! (graph, d->get_or("extra", nil: dynamic));
+        }
+
+        do save_with_extra_data:<void>;
     }
 }

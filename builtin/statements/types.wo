@@ -1,0 +1,189 @@
+import woo::std;
+
+import je::gui;
+import je::towoo::types;
+
+import pkg::guid;
+import pkg::worst;
+
+using je::gui;
+
+namespace void
+{
+    namespace node_editor
+    {
+        public let name = "void";
+        public let color = 0xAAAAAAFF;  // RRGGBBAA
+    }
+}
+
+namespace int
+{
+    namespace node_editor
+    {
+        public let name = "int";
+        public let color = 0xAAFFAAFF;  // RRGGBBAA
+        
+        public func edit(self: int, uid: guid::GUID)=> option<int>
+        {
+            SetNextItemWidth(175.);
+            return InputInt(F"##{uid: string}", self);
+        }
+    }
+}
+
+namespace real
+{
+    namespace node_editor
+    {
+        public let name = "real";
+        public let color = 0xAAAAFFAA;  // RRGGBBAA
+        
+        public func edit(self: real, uid: guid::GUID)=> option<real>
+        {
+            SetNextItemWidth(175.);
+            return InputFloat(F"##{uid: string}", self);
+        }
+    }
+}
+
+namespace vec2
+{
+    namespace node_editor
+    {
+        public let name = "vec2";
+        public let color = 0xFFAFAFFF;  // RRGGBBAA
+        
+        public func edit(self: vec2, uid: guid::GUID)=> option<vec2>
+        {
+            SetNextItemWidth(175.);
+            return InputFloat2(F"##{uid: string}", self...)->> \v = v: vec2;;
+        }
+        public func save(self: vec2)=> string
+        {
+            return [self.0, self.1]->serialize->unwrap;
+        }
+        public func restore(str: string)=> vec2
+        {
+            return array::deserialize(str)
+                =>> \arr = arr: dynamic->trycast:<array<real>>();
+                -> map_or(
+                    \arr = (arr->get_or(0, 0.), arr->get_or(1, 0.)): vec2;,
+                    (0., 0.): vec2)
+                ;
+        }
+    }
+}
+
+namespace vec3
+{
+    namespace node_editor
+    {
+        public let name = "vec3";
+        public let color = 0xFFAF5FFF;  // RRGGBBAA
+        
+        public func edit(self: vec3, uid: guid::GUID)=> option<vec3>
+        {
+            SetNextItemWidth(175.);
+            return InputFloat3(F"##{uid: string}", self...)->> \v = v: vec3;;
+        }
+        public func save(self: vec3)=> string
+        {
+            return [self.0, self.1, self.2]->serialize->unwrap;
+        }
+        public func restore(str: string)=> vec3
+        {
+            return array::deserialize(str)
+                =>> \arr = arr: dynamic->trycast:<array<real>>();
+                -> map_or(
+                    \arr = (arr->get_or(0, 0.), arr->get_or(1, 0.), arr->get_or(2, 0.)): vec3;,
+                    (0., 0., 0.): vec3)
+                ;
+        }
+    }
+}
+
+namespace vec4
+{
+    namespace node_editor
+    {
+        public let name = "vec4";
+        public let color = 0xFFAF00FF;  // RRGGBBAA
+        
+        public func edit(self: vec4, uid: guid::GUID)=> option<vec4>
+        {
+            SetNextItemWidth(175.);
+            return InputFloat4(F"##{uid: string}", self...)->> \v = v: vec4;;
+        }
+        public func save(self: vec4)=> string
+        {
+            return [self.0, self.1, self.2, self.3]->serialize->unwrap;
+        }
+        public func restore(str: string)=> vec4
+        {
+            return array::deserialize(str)
+                =>> \arr = arr: dynamic->trycast:<array<real>>();
+                -> map_or(
+                    \arr = (arr->get_or(0, 0.), arr->get_or(1, 0.), arr->get_or(2, 0.), arr->get_or(3, 0.)): vec4;,
+                    (0., 0., 0., 0.): vec4)
+                ;
+        }
+    }
+}
+
+namespace ivec2
+{
+    namespace node_editor
+    {
+        public let name = "ivec2";
+        public let color = 0xAAFFAFFF;  // RRGGBBAA
+        
+        public func edit(self: ivec2, uid: guid::GUID)=> option<ivec2>
+        {
+            SetNextItemWidth(175.);
+            return InputInt2(F"##{uid: string}", self...)->> \v = v: ivec2;;
+        }
+        public func save(self: ivec2)=> string
+        {
+            return [self.0, self.1]->serialize->unwrap;
+        }
+        public func restore(str: string)=> ivec2
+        {
+            return array::deserialize(str)
+                =>> \arr = arr: dynamic->trycast:<array<int>>();
+                -> map_or(
+                    \arr = (arr->get_or(0, 0), arr->get_or(1, 0)): ivec2;,
+                    (0, 0): ivec2)
+                ;
+        }
+    }
+}
+
+namespace string
+{
+    namespace node_editor
+    {
+        public let name = "string";
+        public let color = 0xFFFFAFAF;  // RRGGBBAA
+        
+        public func edit(self: string, uid: guid::GUID)=> option<string>
+        {
+            SetNextItemWidth(175.);
+            return InputText(F"##{uid: string}", self);
+        }
+    }
+}
+
+namespace bool
+{
+    namespace node_editor
+    {
+        public let name = "bool";
+        public let color = 0xFFFFD7FF;  // RRGGBBAA
+        
+        public func edit(self: bool, uid: guid::GUID)=> option<bool>
+        {
+            return CheckBox(F"##{uid: string}", self);
+        }
+    }
+}

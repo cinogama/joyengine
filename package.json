@@ -1,5 +1,8 @@
 {
     "dependence" : {
+        "any" : {
+            "path" : "pkg"
+        },
         "async" : {
             "path" : "pkg",
             "src" : "3rd/pkg"
@@ -14,6 +17,9 @@
         "crashhandler" : {
             "path" : "pkg",
             "src" : "3rd/pkg"
+        },
+        "decorator" : {
+            "path" : "pkg"
         },
         "filestream" : {
             "path" : "pkg",
