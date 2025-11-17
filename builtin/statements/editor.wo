@@ -793,6 +793,10 @@ namespace jeapi
                                         ;
                                 ;
                             }
+                            if (MenuItem(F"复制GUID {node_uid}"))
+                            {
+                                SetClipboardText(node_uid: string);
+                            }
                         }
                     }
                 }
