@@ -651,7 +651,7 @@ namespace workflow::runtime
     using jeapi::statements;
 
     decorator![register_dispatcher("main")]
-    async! func main(graph: GraphContext)
+    async! func main(graph: GraphContext, ...)
     {
         for (let (_, node) : graph->walk_flow_nodes())
         {
