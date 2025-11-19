@@ -336,9 +336,9 @@ namespace editor::gui
                     value(async_job)?
                     {
                         Text("正在检查：");
-                        match (async_job->forward())
+                        match (async_job->dispatch())
                         {
-                            returned(need_check)?
+                            Ready(need_check)?
                             {
                                 prepare_job_async->set <| option::none;
                                 if (!need_check)

@@ -97,10 +97,10 @@ namespace je
             {
                 // Used for reload specify shader; called when shader updated or moved;
                 // RETURN TRUE MEANS OK
-                extern("libjoyecs", "wojeapi_reload_shader_of_entity", slow)
+                extern("libjoyecs", "wojeapi_reload_shader_of_entity")
                     public func try_reload_shaders(self: entity, old_shad: string, new_shad: string)=> bool;
                     
-                extern("libjoyecs", "wojeapi_reload_texture_of_entity", slow)
+                extern("libjoyecs", "wojeapi_reload_texture_of_entity")
                     public func try_reload_textures(self: entity, old_tex: string, new_tex: string)=> bool;
             }
             

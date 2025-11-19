@@ -50,7 +50,7 @@ namespace editor
                 {
                     match (lastwrite(p))
                     {
-                        ok(last_modify_time)?
+                        value(last_modify_time)?
                         {
                             let file_purename = pure_component_or_system_name(purename(p));
                             if (_repeat_checker->contains(file_purename))
@@ -66,7 +66,7 @@ namespace editor
                                 fetched_scripts->set(p, last_modify_time);
                             }
                         }
-                        err(_)?;
+                        none?;
                     }
                 }
             }
@@ -171,10 +171,10 @@ namespace editor
                 {
                     match (lastwrite(p))
                     {
-                        ok(last_modify_time)?
+                        value(last_modify_time)?
                             if (last_modify_time != c)
                                 return true;
-                        err(_)?;
+                        none?;
                     }
                 }
             }
@@ -191,9 +191,9 @@ namespace editor
                 {
                     match (lastwrite(p))
                     {
-                        ok(last_modify_time)?
+                        value(last_modify_time)?
                             fetched_scripts->set(p, last_modify_time);
-                        err(_)?;
+                        none?;
                     }
                 }
             }

@@ -255,7 +255,7 @@ namespace jeecs
             }
             void JEParseToScriptType(wo_vm vm, wo_value v) const
             {
-                wo_set_string_fmt(v, vm, "%016llX-%016llX",
+                wo_set_string_fmt(v, "%016llX-%016llX",
                     (unsigned long long)a,
                     (unsigned long long)b);
             }
@@ -7404,7 +7404,7 @@ namespace jeecs
             }
             void JEParseToScriptType(wo_vm vm, wo_value v) const
             {
-                wo_set_struct(v, vm, 2);
+                wo_set_struct(v, 2);
                 _wo_value elem;
 
                 wo_set_float(&elem, x);
@@ -7550,7 +7550,7 @@ namespace jeecs
             }
             void JEParseToScriptType(wo_vm vm, wo_value v) const
             {
-                wo_set_struct(v, vm, 2);
+                wo_set_struct(v, 2);
                 _wo_value elem;
 
                 wo_set_int(&elem, (wo_integer_t)x);
@@ -7739,7 +7739,7 @@ namespace jeecs
             }
             void JEParseToScriptType(wo_vm vm, wo_value v) const
             {
-                wo_set_struct(v, vm, 3);
+                wo_set_struct(v, 3);
                 _wo_value elem;
 
                 wo_set_float(&elem, x);
@@ -7937,7 +7937,7 @@ namespace jeecs
             }
             void JEParseToScriptType(wo_vm vm, wo_value v) const
             {
-                wo_set_struct(v, vm, 4);
+                wo_set_struct(v, 4);
                 _wo_value elem;
 
                 wo_set_float(&elem, x);
@@ -8242,7 +8242,7 @@ namespace jeecs
             }
             void JEParseToScriptType(wo_vm vm, wo_value v) const
             {
-                wo_set_struct(v, vm, 4);
+                wo_set_struct(v, 4);
                 _wo_value elem;
 
                 wo_set_float(&elem, x);
@@ -10787,14 +10787,14 @@ namespace jeecs
                     wo_value val = wo_register(vm, WO_REG_T0);
                     wo_value arr = wo_register(vm, WO_REG_T1);
 
-                    wo_set_struct(v, vm, 3);
+                    wo_set_struct(v, 3);
 
                     wo_set_int(val, (wo_integer_t)m_point_count);
                     wo_struct_set(v, 0, val);
 
                     size_t layer_count = m_strength.size();
 
-                    wo_set_arr(arr, vm, (wo_integer_t)layer_count);
+                    wo_set_arr(arr, (wo_integer_t)layer_count);
                     for (size_t i = 0; i < layer_count; ++i)
                     {
                         wo_set_float(val, m_strength.at(i));
@@ -10802,7 +10802,7 @@ namespace jeecs
                     }
                     wo_struct_set(v, 1, arr);
 
-                    wo_set_arr(arr, vm, (wo_integer_t)m_positions.size());
+                    wo_set_arr(arr, (wo_integer_t)m_positions.size());
                     for (size_t i = 0; i < m_positions.size(); ++i)
                     {
                         m_positions.at(i).JEParseToScriptType(vm, val);
@@ -10926,7 +10926,7 @@ namespace jeecs
                 {
                     wo_value pos = wo_register(vm, WO_REG_T1);
 
-                    wo_set_arr(v, vm, (wo_integer_t)m_block_points.size());
+                    wo_set_arr(v, (wo_integer_t)m_block_points.size());
 
                     for (size_t i = 0; i < m_block_points.size(); ++i)
                     {
@@ -11377,21 +11377,21 @@ namespace jeecs
                     wo_value animation = wo_register(vm, WO_REG_T0);
                     wo_value tmp = wo_register(vm, WO_REG_T1);
 
-                    wo_set_arr(v, vm, (wo_integer_t)m_animations.size());
+                    wo_set_arr(v, (wo_integer_t)m_animations.size());
 
                     for (size_t i = 0; i < m_animations.size(); ++i)
                     {
                         auto animation_inst = m_animations.at(i);
-                        wo_set_struct(animation, vm, 3);
+                        wo_set_struct(animation, 3);
 
-                        wo_set_string(tmp, vm, animation_inst.m_path.c_str());
+                        wo_set_string(tmp, animation_inst.m_path.c_str());
                         wo_struct_set(animation, 0, tmp);
 
                         auto action = animation_inst.get_action();
                         if (action.has_value())
-                            wo_set_option_string(tmp, vm, action.value().c_str());
+                            wo_set_option_string(tmp, action.value().c_str());
                         else
-                            wo_set_option_none(tmp, vm);
+                            wo_set_option_none(tmp);
 
                         wo_struct_set(animation, 1, tmp);
 
@@ -11993,12 +11993,12 @@ namespace jeecs
                 [](const basic::fileresource<void>* v, wo_vm vm, wo_value value)
                 {
                     wo_value result = wo_register(vm, WO_REG_T0);
-                    wo_set_struct(value, vm, 1);
+                    wo_set_struct(value, 1);
 
                     if (v->has_resource())
-                        wo_set_option_string(result, vm, v->get_path()->c_str());
+                        wo_set_option_string(result, v->get_path()->c_str());
                     else
-                        wo_set_option_none(result, vm);
+                        wo_set_option_none(result);
 
                     wo_struct_set(value, 0, result);
                 },
@@ -12020,12 +12020,12 @@ namespace jeecs
                 [](const basic::fileresource<audio::buffer>* v, wo_vm vm, wo_value value)
                 {
                     wo_value result = wo_register(vm, WO_REG_T0);
-                    wo_set_struct(value, vm, 1);
+                    wo_set_struct(value, 1);
 
                     if (v->has_resource())
-                        wo_set_option_string(result, vm, v->get_path()->c_str());
+                        wo_set_option_string(result, v->get_path()->c_str());
                     else
-                        wo_set_option_none(result, vm);
+                        wo_set_option_none(result);
 
                     wo_struct_set(value, 0, result);
                 },
@@ -12128,7 +12128,7 @@ namespace jeecs
                 guard,
                 [](const jeecs::basic::string* v, wo_vm vm, wo_value value)
                 {
-                    wo_set_string(value, vm, v->c_str());
+                    wo_set_string(value, v->c_str());
                 },
                 [](jeecs::basic::string* v, wo_vm, wo_value value)
                 {
@@ -12140,7 +12140,7 @@ namespace jeecs
                 guard,
                 [](const std::string* v, wo_vm vm, wo_value value)
                 {
-                    wo_set_string(value, vm, v->c_str());
+                    wo_set_string(value, v->c_str());
                 },
                 [](std::string* v, wo_vm, wo_value value)
                 {

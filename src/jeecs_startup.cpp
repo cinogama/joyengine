@@ -74,30 +74,35 @@ wo_bool_t _jedbg_hook_woolang_panic(
         rterrcode, reason, functionname, src_file, lineno,
         trace == nullptr ? "<no-found>" : trace);
 
-    wo_value _je_global_panic_hooker_s =
-        wo_reserve_stack(_je_global_context._je_global_panic_hooker, 7, nullptr);
-
-    wo_set_string(_je_global_panic_hooker_s + 0, _je_global_context._je_global_panic_hooker, src_file);
-    wo_set_int(_je_global_panic_hooker_s + 1, (wo_integer_t)lineno);
-    wo_set_string(_je_global_panic_hooker_s + 2, _je_global_context._je_global_panic_hooker, functionname);
-    wo_set_int(_je_global_panic_hooker_s + 3, (wo_integer_t)rterrcode);
-    wo_set_string(_je_global_panic_hooker_s + 4, _je_global_context._je_global_panic_hooker, reason);
-    wo_set_string(_je_global_panic_hooker_s + 5, _je_global_context._je_global_panic_hooker, trace == nullptr ? "<no-found>" : trace);
-
-    wo_pin_value_get(_je_global_panic_hooker_s + 6, _je_global_context._je_global_panic_hook_function);
-
-    if (nullptr == wo_invoke_value(
-        _je_global_context._je_global_panic_hooker,
-        _je_global_panic_hooker_s + 6,
-        6,
-        nullptr,
-        &_je_global_panic_hooker_s))
+    auto swapback = wo_swap_gcguard(_je_global_context._je_global_panic_hooker);
     {
-        jeecs::debug::logwarn("Engine's woolang panic hook failed, try default.");
-        assert(_je_global_context._je_global_old_panic_handler != nullptr);
-        _je_global_context._je_global_old_panic_handler(vm, src_file, lineno, functionname, rterrcode, reason);
+        wo_value _je_global_panic_hooker_s =
+            wo_reserve_stack(_je_global_context._je_global_panic_hooker, 7, nullptr);
+
+        wo_set_string(_je_global_panic_hooker_s + 0, src_file);
+        wo_set_int(_je_global_panic_hooker_s + 1, (wo_integer_t)lineno);
+        wo_set_string(_je_global_panic_hooker_s + 2, functionname);
+        wo_set_int(_je_global_panic_hooker_s + 3, (wo_integer_t)rterrcode);
+        wo_set_string(_je_global_panic_hooker_s + 4, reason);
+        wo_set_string(_je_global_panic_hooker_s + 5, trace == nullptr ? "<no-found>" : trace);
+
+        wo_pin_value_get(_je_global_panic_hooker_s + 6, _je_global_context._je_global_panic_hook_function);
+
+        if (nullptr == wo_invoke_value(
+            _je_global_context._je_global_panic_hooker,
+            _je_global_panic_hooker_s + 6,
+            6,
+            nullptr,
+            &_je_global_panic_hooker_s))
+        {
+            jeecs::debug::logwarn("Engine's woolang panic hook failed, try default.");
+            assert(_je_global_context._je_global_old_panic_handler != nullptr);
+            _je_global_context._je_global_old_panic_handler(vm, src_file, lineno, functionname, rterrcode, reason);
+        }
+        wo_pop_stack(_je_global_context._je_global_panic_hooker, 7);
     }
-    wo_pop_stack(_je_global_context._je_global_panic_hooker, 7);
+    wo_swap_gcguard(swapback);
+
     return WO_FALSE;
 }
 

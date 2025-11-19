@@ -15,16 +15,16 @@ namespace je
         
     namespace towoo
     {
-        extern("libjoyecs", "wojeapi_towoo_update_api", slow)
+        extern("libjoyecs", "wojeapi_towoo_update_api")
             public func update_api()=> void;
             
-        extern("libjoyecs", "wojeapi_towoo_register_system", slow)
+        extern("libjoyecs", "wojeapi_towoo_register_system")
             public func update_system(name: string, path: string)=> option<typeinfo>;
             
         extern("libjoyecs", "wojeapi_towoo_unregister_system")
             public func unregister_system(t: typeinfo)=> void;
             
-        extern("libjoyecs", "wojeapi_towoo_update_component", slow)
+        extern("libjoyecs", "wojeapi_towoo_update_component")
             public func update_component(name: string, path: string)=> option<typeinfo>;
             
         extern("libjoyecs", "wojeapi_towoo_unregister_component")
@@ -34,13 +34,13 @@ namespace je
         {
             namespace dynamic_parser
             {
-                extern("libjoyecs", "wojeapi_dynamic_parser_update_script", slow)
+                extern("libjoyecs", "wojeapi_dynamic_parser_update_script")
                     public func update_all(path: string)=> result<void, string>;
                     
-                extern("libjoyecs", "wojeapi_dynamic_parser_update_type", slow)
+                extern("libjoyecs", "wojeapi_dynamic_parser_update_type")
                     public func update_type()=> void;
                     
-                extern("libjoyecs", "wojeapi_dynamic_parser_clear", slow)
+                extern("libjoyecs", "wojeapi_dynamic_parser_clear")
                     public func clear()=> void;
                     
                 extern("libjoyecs", "wojeapi_dynamic_parser_saving")
@@ -72,13 +72,13 @@ namespace je
         
     namespace file
     {
-        extern("libjoyecs", "wojeapi_read_file_all", slow)
+        extern("libjoyecs", "wojeapi_read_file_all")
             public func readall(path: string)=> option<string>;
         namespace cache
         {
-            extern("libjoyecs", "wojeapi_file_cache_write_all", slow)
+            extern("libjoyecs", "wojeapi_file_cache_write_all")
                 public func saveall(path: string, content: string)=> bool;
-            extern("libjoyecs", "wojeapi_file_cache_read_all", slow)
+            extern("libjoyecs", "wojeapi_file_cache_read_all")
                 public func readall(path: string)=> option<string>;
         }
     }
@@ -742,7 +742,7 @@ namespace je
     }
     namespace graphic
     {
-        extern("libjoyecs", "wojeapi_graphic_shrink_cache", slow)
+        extern("libjoyecs", "wojeapi_graphic_shrink_cache")
             public func shrink_cache(u: universe, target_count: int)=> void;
             
         public using vertex = gchandle
@@ -755,10 +755,10 @@ namespace je
                 TRIANGLESTRIP,
             }
             
-            extern("libjoyecs", "wojeapi_vertex_load", slow)
+            extern("libjoyecs", "wojeapi_vertex_load")
                 public func load(univ: option<universe>, path: string)=> option<vertex>;
                 
-            extern("libjoyecs", "wojeapi_vertex_create", slow)
+            extern("libjoyecs", "wojeapi_vertex_create")
                 public func create(vtype: type, vertices: array<real>, indices: array<int>, formats: array<int>)=> vertex;
                 
             extern("libjoyecs", "wojeapi_vertex_path")
@@ -767,13 +767,13 @@ namespace je
         
         public using texture = gchandle
         {
-            extern("libjoyecs", "wojeapi_texture_open", slow)
+            extern("libjoyecs", "wojeapi_texture_open")
                 public func load(univ: option<universe>, path: string)=> option<texture>;
                 
-            extern("libjoyecs", "wojeapi_texture_create", slow)
+            extern("libjoyecs", "wojeapi_texture_create")
                 public func create(width: int, height: int)=> texture;
                 
-            extern("libjoyecs", "wojeapi_texture_clip", slow)
+            extern("libjoyecs", "wojeapi_texture_clip")
                 public func clip(src: texture, x: int, y: int, w: int, h: int)=> texture;
                 
             extern("libjoyecs", "wojeapi_texture_bind_path")
@@ -812,22 +812,22 @@ namespace je
         
         public using font = gchandle
         {
-            extern("libjoyecs", "wojeapi_font_open", slow)
+            extern("libjoyecs", "wojeapi_font_open")
                 public func load(path: string, font_width: int)=> option<font>;
                 
-            extern("libjoyecs", "wojeapi_font_load_char", slow)
+            extern("libjoyecs", "wojeapi_font_load_char")
                 public func load_char(self: font, ch: char)=> character;
                 
-            extern("libjoyecs", "wojeapi_font_string_texture", slow)
+            extern("libjoyecs", "wojeapi_font_string_texture")
                 public func load_string(self: font, str: string)=> texture;
         }
         
         public using shader = gchandle
         {
-            extern("libjoyecs", "wojeapi_shader_open", slow)
+            extern("libjoyecs", "wojeapi_shader_open")
                 public func load(univ: option<universe>, path: string)=> option<shader>;
                 
-            extern("libjoyecs", "wojeapi_shader_create", slow)
+            extern("libjoyecs", "wojeapi_shader_create")
                 public func create(vpath: string, src: string)=> option<shader>;
                 
             extern("libjoyecs", "wojeapi_shader_path")
@@ -925,7 +925,7 @@ namespace je
         extern("libjoyecs", "wojeapi_universe_reduce_life")
             public func trim(self: universe)=> void;
             
-        extern("libjoyecs", "wojeapi_universe_wait", slow)
+        extern("libjoyecs", "wojeapi_universe_wait")
             public func wait(self: universe)=> void;
             
         extern("libjoyecs", "wojeapi_universe_get_frame_deltatime")
@@ -962,7 +962,7 @@ namespace je
         extern("libjoyecs", "wojeapi_set_able_world")
             public func set_able(self: world, able: bool)=> void;
             
-        extern("libjoyecs", "wojeapi_add_system_to_world", slow)
+        extern("libjoyecs", "wojeapi_add_system_to_world")
             public func add_system(self: world, systype: typeinfo)=> bool;
             
         extern("libjoyecs", "wojeapi_add_entity_to_world_with_components")
