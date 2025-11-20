@@ -660,8 +660,8 @@ namespace workflow::runtime
     }
 }
 "@
-;
-
+                                        ;
+                                        
                                     let nodes_list = 
 @"// Donot modify this file!
 ;
@@ -706,7 +706,7 @@ match (editor::gui::edit_forms::WorkFlowEditorContext::show_edit_form(
                                             new_path / "runtime.wo",
                                             runtime_src))
                                         throw! "无法创建 Workflow 运行时脚本文件";
-
+                                        
                                     try! _ = fsys::mkdir(new_path / "nodes" / "types")
                                         -> or_map(\errid = F"无法创建 Workflow 节点和类型目录({errid})";)
                                         ;
@@ -833,16 +833,17 @@ namespace workflow::nodes
             return $NODE_NAME${
             };
         }
-        async! public func forward(self: $NODE_NAME$)=> void
+        async! public func forward(self: $NODE_NAME$)=> OutputFlow::ForwardState
         {
-            do try!
-            {
-                do self;
-                return_value!;
+            return or(OutputFlow::ForwardState::Stop) <| 
+                try!
+                {
+                    do self;
+                    return_value! OutputFlow::ForwardState::Stop;
 
-            } catch! {
-                je::logwarn("流程节点 `$NODE_NAME$` 执行终止");
-            };
+                } catch! {
+                    je::logwarn("流程节点 `$NODE_NAME$` 执行终止");
+                };
         }
     }
     jeapi::statements::register_node:<$NODE_NAME$>();
