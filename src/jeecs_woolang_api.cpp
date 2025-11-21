@@ -2364,11 +2364,17 @@ void _je_dynamic_parser_update_types()
                 wo_unref_value edit_func;
 
                 if (wo_extern_symb(
-                    &saving_func, _je_dynamic_parser_global_context._je_dynamic_parser_vm, (script_woolang_typename + "::parser::saving").c_str()) == WO_TRUE
+                    &saving_func, 
+                    _je_dynamic_parser_global_context._je_dynamic_parser_vm, 
+                    (script_woolang_typename + "::parser::saving").c_str()) == WO_TRUE
                     && wo_extern_symb(
-                        &restoring_func, _je_dynamic_parser_global_context._je_dynamic_parser_vm, (script_woolang_typename + "::parser::restoring").c_str()) == WO_TRUE
+                        &restoring_func,
+                        _je_dynamic_parser_global_context._je_dynamic_parser_vm, 
+                        (script_woolang_typename + "::parser::restoring").c_str()) == WO_TRUE
                     && wo_extern_symb(
-                        &edit_func, _je_dynamic_parser_global_context._je_dynamic_parser_vm, (script_woolang_typename + "::parser::edit").c_str()) == WO_TRUE)
+                        &edit_func, 
+                        _je_dynamic_parser_global_context._je_dynamic_parser_vm, 
+                        (script_woolang_typename + "::parser::edit").c_str()) == WO_TRUE)
                 {
                     auto p = std::make_unique<dynamic_parser_impl_t>();
 
