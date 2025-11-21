@@ -360,14 +360,6 @@ func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: di
                             // 在此处创建资源目录，包含一些基本的资源和未来自动创建的资源
                             do fsys::mkdir(p->get_path/"resource");
                             do fsys::mkdir(p->get_path/"resource"/"texture");
-                            do fsys::mkdir(p->get_path/"resource"/"workflow");
-                            do fsys::mkdir(p->get_path/"resource"/"workflow"/"node");
-                            do fsys::mkdir(p->get_path/"resource"/"workflow"/"type");
-                            do fsys::mkdir(p->get_path/"resource"/"workflow"/"producer");
-                            do editor::file::writeall(p->get_path/"resource"/"workflow"/"node"/".gitkeepme", "": buffer);
-                            do editor::file::writeall(p->get_path/"resource"/"workflow"/"type"/".gitkeepme", "": buffer);
-                            do editor::file::writeall(p->get_path/"resource"/"workflow"/"producer"/".gitkeepme", "": buffer);
-                            
                             do editor::file::writeall(p->get_path/"resource"/"texture"/"readme.md", 
 @"# Texture 目录
 ---
