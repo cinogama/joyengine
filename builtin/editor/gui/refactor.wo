@@ -338,7 +338,7 @@ namespace editor::gui
                         Text("正在检查：");
                         match (async_job->dispatch())
                         {
-                            Ready(need_check)?
+                            value(need_check)?
                             {
                                 prepare_job_async->set <| option::none;
                                 if (!need_check)
@@ -348,7 +348,7 @@ namespace editor::gui
                                     this_form->close;
                                 }
                             }
-                            _?;
+                            none?;
                         }
                     }
                     none?
