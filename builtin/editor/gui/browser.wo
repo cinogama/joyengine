@@ -833,13 +833,13 @@ namespace workflow::nodes
             return $NODE_NAME${
             };
         }
-        async! public func forward(self: $NODE_NAME$)=> OutputFlow::ForwardState
+        async! public func forward(self: $NODE_NAME$)=> OutputFlow::NextFlow
         {
-            return or(OutputFlow::ForwardState::Stop) <| 
+            return or(OutputFlow::NextFlow::Stop) <| 
                 try!
                 {
                     do self;
-                    return_value! OutputFlow::ForwardState::Stop;
+                    return_value! OutputFlow::NextFlow::Stop;
 
                 } catch! {
                     je::logwarn("流程节点 `$NODE_NAME$` 执行终止");
