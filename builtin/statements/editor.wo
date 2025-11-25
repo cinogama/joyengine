@@ -337,7 +337,7 @@ namespace jeapi
                     
                 return (lt, rb, c);
             }
-            func edit_eval_node(self: GraphEditor, node: node_editor::Graph::INodeCollection)
+            func edit_eval_node(self: GraphEditor, node: node_editor::Graph::INodeCollection, nuid: guid::GUID)
             {
                 {
                     BeginGroup();
@@ -377,8 +377,9 @@ namespace jeapi
                         node_editor::EndPin();
                     }
                 }
+                node.node->edit(nuid);
             }
-            func edit_flow_node(self: GraphEditor, node: node_editor::Graph::IFlowNodeCollection)
+            func edit_flow_node(self: GraphEditor, node: node_editor::Graph::IFlowNodeCollection, nuid: guid::GUID)
             {
                 {
                     BeginGroup();
@@ -432,6 +433,7 @@ namespace jeapi
                         node_editor::EndPin();
                     }
                 }
+                node.flownode->edit(nuid);
             }
             func edit_node<T>(self: GraphEditor, nuid: guid::GUID, node: T)
                 where
@@ -453,9 +455,9 @@ namespace jeapi
                     TextDisabled(node.description->or(DEFAULT_NODE_DESCRIPTION));
                     
                     if (node is node_editor::Graph::INodeCollection)
-                        self->edit_eval_node(node);
+                        self->edit_eval_node(node, nuid);
                     else
-                        self->edit_flow_node(node);
+                        self->edit_flow_node(node, nuid);
                 }
                 if (IsMouseHoveringRect(GetItemRect()...) && ! self.context_menu_shown)
                     self.mouse_on_node = option::value(nuid);
