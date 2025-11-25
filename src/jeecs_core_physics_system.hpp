@@ -194,8 +194,13 @@ namespace jeecs
             }
         };
 
-        std::map<size_t, std::unique_ptr<Physics2DWorldContext>> _m_alive_physic_worlds;
-        size_t m_simulate_round_count;
+        std::map<size_t, std::unique_ptr<Physics2DWorldContext>> 
+                _m_alive_physic_worlds;
+        size_t  m_simulate_round_count;
+
+        // NOTE: It seems that box2d have some threading-problem. when two world contain Physics2DUpdatingSystem
+        //      start up at same time, crash might happend.
+        inline static std::mutex m_physics_box2d_mx;
 
         Physics2DUpdatingSystem(game_world world)
             : game_system(world), m_simulate_round_count(0)
@@ -223,6 +228,8 @@ namespace jeecs
 
             std::map<size_t, std::unique_ptr<Physics2DWorldContext>>
                 _m_this_frame_alive_worlds;
+
+            std::lock_guard g(m_physics_box2d_mx);
 
             for (auto&& [e, world] : query_entity<
                 view typesof(Physics2D::World&)
