@@ -8,8 +8,10 @@ import pkg::guid;
 import pkg::iterator;
 import pkg::try;
 import pkg::worst;
+import pkg::math;
 
 import statements;
+import runtime;
 
 using je::gui;
 
@@ -52,7 +54,7 @@ namespace jeapi
             public func save_extra_data(self: GraphEditor)
             {
                 let result = {}mut: map<string, mut array<real>>;
-
+                
                 for (let (uid, state) : self.generated_node_id_for_node)
                 {
                     if (self.graph_context->query_eval_node_uid(uid)->is_value
@@ -443,9 +445,22 @@ namespace jeapi
             {
                 let edit_node = self->get_node(nuid);
                 {
+                    let mut color_high_light_factor =
+                        RuntimeDebugger::check_node_active(nuid)
+                            ? 1.5 + 0.5 * math::sin(5. * std::time())
+                            | 1.0;
+                            
+                    let (r, g, b, a) =
+                        i32_to_color32(node.color->or(DEFAULT_NODE_COLOR));
+                        
                     node_editor::PushStyleColor(
                         node_editor::StyleColor::StyleColor_NodeBg,
-                        i32_to_color32(node.color->or(DEFAULT_NODE_COLOR)));
+                        (
+                            (r: real * color_high_light_factor): int,
+                            (g: real * color_high_light_factor): int,
+                            (b: real * color_high_light_factor): int,
+                            (a: real * color_high_light_factor): int,
+                        ));
                     defer node_editor::PopStyleColor(1);
                     
                     node_editor::BeginNode(edit_node.id);

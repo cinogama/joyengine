@@ -265,6 +265,7 @@ namespace jeecs::graphic
 #else
                 glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_NATIVE_CONTEXT_API);
 #endif
+
                 break;
             case interface_type::VULKAN120:
             case interface_type::DIRECTX11:
@@ -399,7 +400,7 @@ namespace jeecs::graphic
 #endif
                     glfwSwapInterval(0);
             }
-
+            
             glfwSetWindowSizeCallback(_m_windows, glfw_callback_windows_size_changed);
             glfwSetWindowPosCallback(_m_windows, glfw_callback_windows_pos_changed);
             glfwSetKeyCallback(_m_windows, glfw_callback_keyboard_stage_changed);

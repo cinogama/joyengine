@@ -7,6 +7,10 @@ import pkg::try;
 import pkg::vm;
 import pkg::buffer;
 import pkg::fsys;
+import pkg::node_editor;
+import pkg::interface;
+import pkg::guid;
+import pkg::singleton;
 
 import builtin::statements;
 
@@ -14,6 +18,81 @@ namespace jeapi
 {
     namespace statements
     {
+        using RuntimeDebugger = struct{
+            graph: GraphContext,
+            entered_nodes: map<guid::GUID, int>,
+        }
+        {
+            using DebuggerCollection = struct{
+                global_entered_nodes: map<guid::GUID, int>,
+            }
+            {
+                let instance = singleton::create(
+                    "je::statements::runtime::jeapi::statements::RuntimeDebugger::DebuggerCollection",
+                    0x7FFF_FFFF_FFFF_FFFF,
+                    \= DebuggerCollection{global_entered_nodes = {}mut};);
+            }
+            
+            public func hook(graph: GraphContext)
+                where require!(RuntimeDebugger: node_editor::IGraphDebugger);
+            {
+                let debugger = RuntimeDebugger{
+                    graph = graph,
+                    entered_nodes = {}mut: map<guid::GUID, int>,
+                };
+                
+                graph->register_debugger(debugger);
+                return debugger;
+            }
+            public func unhook(self: RuntimeDebugger)
+            {
+                DebuggerCollection::instance->apply(
+                    func(c: DebuggerCollection)
+                    {
+                        for (let (nuid, count) : self.entered_nodes)
+                        {
+                            c.global_entered_nodes->set(
+                                nuid,
+                                c.global_entered_nodes->get_or(nuid, 0) - count);
+                        }
+                    });
+                self.graph->unregister_debugger();
+            }
+            
+            public func enter_node(self: RuntimeDebugger, nuid: guid::GUID)
+            {
+                self.entered_nodes->set(
+                    nuid, self.entered_nodes->get_or(nuid, 0) + 1);
+                DebuggerCollection::instance->apply(
+                    func(c: DebuggerCollection)
+                    {
+                        c.global_entered_nodes->set(
+                            nuid, c.global_entered_nodes->get_or(nuid, 0) + 1);
+                    });
+            }
+            public func leave_node(self: RuntimeDebugger, nuid: guid::GUID)
+            {
+                self.entered_nodes->set(
+                    nuid, self.entered_nodes->get_or(nuid, 1) - 1);
+                DebuggerCollection::instance->apply(
+                    func(c: DebuggerCollection)
+                    {
+                        c.global_entered_nodes->set(
+                            nuid, c.global_entered_nodes->get_or(nuid, 1) - 1);
+                    });
+            }
+
+            public func check_node_active(nuid: guid::GUID)=> bool
+            {
+                let is_active = DebuggerCollection::instance->apply(
+                    func(c: DebuggerCollection)
+                    {
+                        return c.global_entered_nodes->get_or(nuid, 0) > 0;
+                    });
+                return is_active;
+            }
+        }
+        
         using Runtime = struct{
             vm_state: vm,
             workflow_path: string,
@@ -32,7 +111,7 @@ namespace jeapi
                     -> ok_or(F"无法读取 Workflow 运行时文件 {rumtime_path}");
                 try! vm_instance = vm::create(
                     fact_runtime_path, runtime_content: buffer);
-
+                    
                 try! _ = vm_instance->run()
                     -> ok_or(F"初始化 Workflow `{workflow_path}` 的运行时失败");
                     
@@ -63,7 +142,7 @@ namespace jeapi
                 };
             }
         }
-
+        
         static let registered_dispathchers = {}mut: map<string, (GraphContext, ...)=> async<void>>;
         public func register_dispatcher(f: (GraphContext, ...)=> async<void>, name: string)
         {
@@ -77,7 +156,7 @@ namespace jeapi
             let (graph, _) = load_graph_and_extra_data(graph_data)
                 ->ok_or("无法解析图数据")
                 ->unwrap;
-                
+                                
             try! f = registered_dispathchers->get(name);
             return_value! f(graph, ......);
         }

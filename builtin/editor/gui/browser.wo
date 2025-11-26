@@ -653,6 +653,9 @@ namespace workflow::runtime
     decorator![register_dispatcher("main")]
     async! func main(graph: GraphContext, ...)
     {
+        let hook = RuntimeDebugger::hook(graph);
+        defer hook->unhook();
+
         for (let (_, node) : graph->walk_flow_nodes())
         {
             do node;
