@@ -631,6 +631,13 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                                         -> or_map(\errid = F"无法创建 Workflow 集目录({errid})";)
                                         ;
                                         
+                                    let gitattributes = 
+@"# JoyEngine ECS Workflows
+
+/editor.wo text eol=lf
+/nodes.wo text eol=lf
+"@
+;
                                     let runtime_src = 
 @"// Runtime
 import woo::std;
@@ -695,6 +702,11 @@ match (editor::gui::edit_forms::WorkFlowEditorContext::show_edit_form(
                                         
                                     defer force_update();
                                     
+                                    if (!write_file_if_not_exist(
+                                            new_path / ".gitattributes",
+                                            gitattributes))
+                                        throw! "无法创建 Workflow 集 Git 属性文件";
+
                                     if (!write_file_if_not_exist(
                                             new_path / "nodes.wo",
                                             nodes_list))
