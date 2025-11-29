@@ -194,8 +194,8 @@ namespace jeecs
             }
         };
 
-        std::map<size_t, std::unique_ptr<Physics2DWorldContext>> 
-                _m_alive_physic_worlds;
+        std::map<size_t, std::unique_ptr<Physics2DWorldContext>>
+            _m_alive_physic_worlds;
         size_t  m_simulate_round_count;
 
         // NOTE: It seems that box2d have some threading-problem. when two world contain Physics2DUpdatingSystem
@@ -211,15 +211,11 @@ namespace jeecs
 
         inline static bool check_if_need_update_vec2(const b2Vec2& a, const math::vec2& b) noexcept
         {
-            if (a.x == b.x && a.y == b.y)
-                return false;
-            return true;
+            return !math::almost_equal(a.x, b.x) || !math::almost_equal(a.y, b.y);
         }
         inline static bool check_if_need_update_float(float a, float b) noexcept
         {
-            if (a == b)
-                return false;
-            return true;
+            return !math::almost_equal(a, b);
         }
 
         void PhysicsUpdate()

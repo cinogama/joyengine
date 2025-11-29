@@ -7098,6 +7098,15 @@ namespace jeecs
         constexpr static float DEG2RAD = PI / 180.f;
         constexpr static float EPSILON = FLT_EPSILON;
 
+        template<std::floating_point T>
+        inline bool almost_equal(T a, T b, T eps = (T)1e-6) noexcept
+        {
+            if (a == b)
+                return true;
+
+            return abs(a - b) <= eps;
+        }
+
         template <typename T>
         static T clamp(T src, T min, T max)
         {

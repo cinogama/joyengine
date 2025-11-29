@@ -1704,7 +1704,8 @@ namespace jeecs_impl
                                     }
 #ifndef NDEBUG
                                     else
-                                        jeecs::debug::logwarn("Trying to remove '%s' from entity '%p:%zuv%zu', but the specify entity donot contain this component, skip.",
+                                        jeecs::debug::logwarn(
+                                            "Trying to remove '%s' from entity '%p:%zuv%zu', but the specify entity donot contain this component, skip.",
                                             jeecs::typing::type_info::of(tid)->m_typename,
                                             current_entity._m_in_chunk, current_entity._m_id, current_entity._m_version);
 #endif
@@ -1719,7 +1720,8 @@ namespace jeecs_impl
                                     else
                                     {
 #ifndef NDEBUG
-                                        jeecs::debug::logwarn("Trying to append '%s' to entity '%p:%zuv%zu', but the specify entity already contained this component, replace it.",
+                                        jeecs::debug::logwarn(
+                                            "Trying to append '%s' to entity '%p:%zuv%zu', but the specify entity already contained this component, replace it.",
                                             jeecs::typing::type_info::of(tid)->m_typename,
                                             current_entity._m_in_chunk, current_entity._m_id, current_entity._m_version);
 #endif
