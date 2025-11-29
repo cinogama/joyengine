@@ -15,11 +15,11 @@
 
 namespace jeecs
 {
-#define JE_CHECK_NEED_AND_SET_UNIFORM(ACTION, UNIFORM, ITEM, TYPE, ...)                                      \
-    do                                                                                                       \
-    {                                                                                                        \
-        if (UNIFORM->m_builtin_uniform_##ITEM != graphic::INVALID_UNIFORM_LOCATION)                                     \
-            jegl_rchain_set_uniform_##TYPE(ACTION, &UNIFORM->m_builtin_uniform_##ITEM, __VA_ARGS__); \
+#define JE_CHECK_NEED_AND_SET_UNIFORM(ACTION, UNIFORM, ITEM, TYPE, ...)                                     \
+    do                                                                                                      \
+    {                                                                                                       \
+        if (UNIFORM->m_builtin_uniform_##ITEM != graphic::INVALID_UNIFORM_LOCATION)                         \
+            jegl_rchain_set_uniform_##TYPE(ACTION, &UNIFORM->m_builtin_uniform_##ITEM, __VA_ARGS__);        \
     } while (0)
 
     using namespace Transform;
