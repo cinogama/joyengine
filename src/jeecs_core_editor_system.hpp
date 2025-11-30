@@ -892,7 +892,7 @@ public let frag =
             self_lum = vec4!(show_color * 100., 1.),
         }
         where show_color = lerp(f.color, vec3!(1., 1., 1.), vec3!(ratio, ratio, ratio))
-            , ratio = step(0.5, JE_COLOR->x)
+            , ratio = step(JE_COLOR->x, 0.5)
         ;
     ;
         )" })

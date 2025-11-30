@@ -230,6 +230,8 @@ namespace je::gui
         
     extern("libjoyecs", "je_gui_is_mouse_dragging")
         public func IsMouseDragging(attr: ImGuiMouseButton)=> bool;
+    extern("libjoyecs", "je_gui_is_mouse_clicked")
+        public func IsMouseClicked(attr: ImGuiMouseButton)=> bool;
     extern("libjoyecs", "je_gui_is_mouse_down")
         public func IsMouseDown(attr: ImGuiMouseButton)=> bool;
     extern("libjoyecs", "je_gui_is_mouse_released")

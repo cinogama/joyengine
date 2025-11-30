@@ -742,6 +742,28 @@ namespace jeapi
             }
             func show_context_menu(editor_context: GraphEditor)
             {
+                static let mut right_mouse_down_time = 0.,
+                mut mouse_down_pos = (0., 0.);
+                
+                if (IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Right))
+                {
+                    right_mouse_down_time = std::time();
+                    mouse_down_pos = GetMousePos();
+                }
+                
+                if (IsItemHovered() && IsMouseReleased(ImGuiMouseButton::ImGuiMouseButton_Right))
+                {
+                    if (std::time() - right_mouse_down_time < 0.2)
+                    {
+                        let (mx, my) = GetMousePos();
+                        if (math::abs(mx - mouse_down_pos.0) < 5.
+                            && math::abs(my - mouse_down_pos.1) < 5.)
+                        {
+                            OpenPopup("NodeEditorMainContextMenu");
+                        }
+                    }
+                }
+                
                 match (editor_context.creating_by_dragging_from_pin)
                 {
                     none?;
@@ -777,9 +799,9 @@ namespace jeapi
                             }
                         }
                     }
-                    
                 }
-                else if (BeginPopupContextItemLabel("NodeEditorMainContextMenu"))
+                
+                else if (BeginPopup("NodeEditorMainContextMenu"))
                 {
                     defer EndPopup();
                     

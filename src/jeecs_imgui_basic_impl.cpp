@@ -641,6 +641,10 @@ WO_API wo_api je_gui_is_mouse_down(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm, ImGui::IsMouseDown((ImGuiMouseButton)wo_int(args + 0)));
 }
+WO_API wo_api je_gui_is_mouse_clicked(wo_vm vm, wo_value args)
+{
+    return wo_ret_bool(vm, ImGui::IsMouseClicked((ImGuiMouseButton)wo_int(args + 0)));
+}
 WO_API wo_api je_gui_is_mouse_released(wo_vm vm, wo_value args)
 {
     return wo_ret_bool(vm, ImGui::IsMouseReleased((ImGuiMouseButton)wo_int(args + 0)));

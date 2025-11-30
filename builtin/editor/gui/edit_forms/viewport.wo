@@ -78,6 +78,8 @@ namespace editor::gui::edit_forms
             je::gui::SetNextWindowSizeConstraints((300., 200.), (2000., 1100.));
             open->set(true);
             
+            let mut enable_editor_system = false;
+            
             match (BeginAttrOpen("调试器视口",
                     WindowsAttribute::ImGuiWindowFlags_MenuBar
                         + WindowsAttribute::ImGuiWindowFlags_NoBringToFrontOnFocus
@@ -379,45 +381,58 @@ namespace editor::gui::edit_forms
                                         let (mx, my) = GetMousePos();
                                         je::internal::update_editor_mouse_pos(mx - lupx - wx, my - lupy - wy);
                                         
-                                        static let mut mouse_hovered_flag = false;
-                                        if (IsItemHovered() || mouse_hovered_flag)
-                                        {
-                                            // 在渲染区域内！
-                                            windows_moveable = false;
-                                            je::internal::enable_editor_system(true);
+                                        static let mut right_button_down_last_frame = false;
+                                        
+                                        let left_and_right_mouse_button_released =
+                                            !je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Left)
+                                            && !je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Right);
                                             
+                                        static let mut mouse_valid_to_editor = false;
+                                        if (IsItemHovered())
+                                        {
+                                            // 只要鼠标悬浮在渲染区域内，就禁止窗口被移动
+                                            windows_moveable = false;
+                                            
+                                            if (left_and_right_mouse_button_released)
+                                                // 只有在鼠标释放的情况下，悬浮鼠标在渲染区域内，才开始允许编辑器工作
+                                                mouse_valid_to_editor = true;
+                                        }
+                                        else
+                                        {
+                                            windows_moveable = true;
+                                            mouse_valid_to_editor = false;
+                                        }
+                                        
+                                        // 如果允许编辑，那么启用编辑器
+                                        enable_editor_system = mouse_valid_to_editor;
+                                        
+                                        let mouse_right_button_down = je::gui::IsMouseDown(
+                                            je::gui::ImGuiMouseButton::ImGuiMouseButton_Right);
+                                            
+                                        if (mouse_valid_to_editor)
+                                        {
                                             static let mut right_key_down_time = 0.,
                                             mut mouse_click_x = 0.,
                                             mut mouse_click_y = 0.;
                                             
-                                            if (je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Left))
-                                                mouse_hovered_flag = true;
-                                                
-                                            if (je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Right))
+                                            if (mouse_right_button_down)
                                             {
-                                                if (!mouse_hovered_flag)
+                                                if (! right_button_down_last_frame)
                                                 {
                                                     right_key_down_time = std::time();
                                                     mouse_click_x = mx;
                                                     mouse_click_y = my;
                                                 }
-                                                
-                                                mouse_hovered_flag = true;
                                             }
                                             else
                                             {
-                                                mouse_hovered_flag = false;
-                                                
                                                 if (std::time() - right_key_down_time < 0.2
                                                     && (mouse_click_x - mx, mouse_click_y - my): vec2->length < 5.)
                                                     OpenPopup("RightClickContextMenu");
                                             }
                                         }
-                                        else
-                                        {
-                                            windows_moveable = true;
-                                            je::internal::enable_editor_system(false);
-                                        }
+                                        
+                                        right_button_down_last_frame = mouse_right_button_down;
                                         
                                         let (frame_tex_width, frame_tex_height) = frametex->size;
                                         if (frame_tex_width != available_width: int
@@ -558,6 +573,7 @@ namespace editor::gui::edit_forms
                     open->set(false);
             }
             
+            je::internal::enable_editor_system(enable_editor_system);
             End();
         }
     }
