@@ -648,14 +648,50 @@ namespace jeapi
                 }
                 
                 let mut result = option::none: option<guid::GUID>;
-                for (let (name, node) : nodes.tree)
+                let mut is_first_node = false;
+                for (let (name, node) :
+                    nodes.tree->unmapping
+                        |> std::sort(
+                            func((lname, lnode), (rname, rnode))
+                            {
+                                let mut lnode_is_subtree = false;
+                                let mut rnode_is_subtree = false;
+                                
+                                match (lnode)
+                                {
+                                    Node(_)?
+                                        lnode_is_subtree = false;
+                                    SubTree(_)?
+                                        lnode_is_subtree = true;
+                                }
+                                match (rnode)
+                                {
+                                    Node(_)?
+                                        rnode_is_subtree = false;
+                                    SubTree(_)?
+                                        rnode_is_subtree = true;
+                                }
+                                
+                                if (lnode_is_subtree && ! rnode_is_subtree)
+                                    return true;
+                                else if (! lnode_is_subtree && rnode_is_subtree)
+                                    return false;
+                                else
+                                    return lname < rname;
+                            }))
                 {
                     match (node)
                     {
-                        Node(name)?
+                        Node(node_name)?
+                        {
+                            if (is_first_node)
+                            {
+                                is_first_node = false;
+                                Separator();
+                            }
                             if (MenuItem(name))
                             {
-                                match (editor_context.graph_context->create_node_with_name(name))
+                                match (editor_context.graph_context->create_node_with_name(node_name))
                                 {
                                     none?;
                                     value(node_uid)?
@@ -669,8 +705,10 @@ namespace jeapi
                                     }
                                 }
                             }
+                        }
                         SubTree(subtree)?
                         {
+                            is_first_node = true;
                             if (BeginMenu(name))
                             {
                                 defer EndMenu();
