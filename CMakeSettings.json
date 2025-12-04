@@ -18,17 +18,17 @@
         },
         {
           "name": "JE4_ENABLE_DX11_GAPI",
-          "value": "True",
+          "value": "False",
           "type": "BOOL"
         },
         {
           "name": "JE4_ENABLE_OPENGL330_GAPI",
-          "value": "True",
+          "value": "False",
           "type": "BOOL"
         },
         {
           "name": "JE4_ENABLE_VULKAN120_GAPI",
-          "value": "True",
+          "value": "False",
           "type": "BOOL"
         },
         {

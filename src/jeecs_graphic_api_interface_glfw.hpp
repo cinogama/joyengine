@@ -374,7 +374,7 @@ namespace jeecs::graphic
                 icon_data.height = (int)icon_texture->height();
                 // Here need a y-direct flip.
                 auto* image_pixels = icon_texture->resource()->m_raw_texture_data->m_pixels;
-                icon_data.pixels = (unsigned char*)je_mem_alloc((size_t)icon_data.width * (size_t)icon_data.height * 4);
+                icon_data.pixels = (unsigned char*)malloc((size_t)icon_data.width * (size_t)icon_data.height * 4);
                 assert(icon_data.pixels != nullptr);
 
                 for (size_t iy = 0; iy < (size_t)icon_data.height; ++iy)
@@ -386,7 +386,7 @@ namespace jeecs::graphic
 
                 glfwSetWindowIcon(_m_windows, 1, &icon_data);
 
-                je_mem_free(icon_data.pixels);
+                free(icon_data.pixels);
             }
 
             if (glfwGetWindowAttrib(_m_windows, GLFW_CLIENT_API) != GLFW_NO_API)

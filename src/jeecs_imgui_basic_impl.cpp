@@ -471,7 +471,7 @@ WO_API wo_api je_gui_draw_list_add_image(wo_vm vm, wo_value args)
     ImDrawList* dlist = (ImDrawList*)wo_pointer(args + 0);
 
     jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture> *)wo_pointer(args + 3);
-    jegl_using_resource((*texture)->resource());
+    jegl_bind_texture((*texture)->resource(), 0);
 
     const ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
 
@@ -940,7 +940,7 @@ WO_API wo_api je_gui_image(wo_vm vm, wo_value args)
 {
     jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture> *)wo_pointer(args + 0);
 
-    jegl_using_resource((*texture)->resource());
+    jegl_bind_texture((*texture)->resource(), 0);
 
     const ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
 
@@ -955,8 +955,8 @@ WO_API wo_api je_gui_image(wo_vm vm, wo_value args)
             _je_gui_tls_ctx._jegl_context,
             (*texture)->resource()),
         ImVec2(
-            (float)((*texture)->resource())->m_raw_texture_data->m_width,
-            (float)((*texture)->resource())->m_raw_texture_data->m_height),
+            (float)((*texture)->resource()->m_width),
+            (float)((*texture)->resource()->m_height)),
         uvmin,
         uvmax);
 
@@ -968,7 +968,7 @@ WO_API wo_api je_gui_image_scale(wo_vm vm, wo_value args)
 {
     jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture> *)wo_pointer(args + 0);
 
-    jegl_using_resource((*texture)->resource());
+    jegl_bind_texture((*texture)->resource(), 0);
 
     const ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
 
@@ -982,8 +982,8 @@ WO_API wo_api je_gui_image_scale(wo_vm vm, wo_value args)
         _je_gui_tls_ctx._jegl_context,
         (*texture)->resource()),
         ImVec2(
-            ((*texture)->resource())->m_raw_texture_data->m_width * wo_float(args + 1),
-            ((*texture)->resource())->m_raw_texture_data->m_height * wo_float(args + 1)),
+            (float)((*texture)->resource()->m_width) * wo_float(args + 1),
+            (float)((*texture)->resource()->m_height) * wo_float(args + 1)),
         uvmin,
         uvmax);
 
@@ -995,7 +995,7 @@ WO_API wo_api je_gui_image_size(wo_vm vm, wo_value args)
 {
     jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture> *)wo_pointer(args + 0);
 
-    jegl_using_resource((*texture)->resource());
+    jegl_bind_texture((*texture)->resource(), 0);
 
     const ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
 
@@ -1023,7 +1023,7 @@ WO_API wo_api je_gui_image_size_color(wo_vm vm, wo_value args)
 {
     jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture> *)wo_pointer(args + 0);
 
-    jegl_using_resource((*texture)->resource());
+    jegl_bind_texture((*texture)->resource(), 0);
 
     const ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
 
@@ -1053,7 +1053,7 @@ WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args)
     wo_string_t label = wo_string(args + 0);
     jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture> *)wo_pointer(args + 1);
 
-    jegl_using_resource((*texture)->resource());
+    jegl_bind_texture((*texture)->resource(), 0);
 
     const ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
 
@@ -1071,8 +1071,8 @@ WO_API wo_api je_gui_imagebutton(wo_vm vm, wo_value args)
             _je_gui_tls_ctx._jegl_context,
             (*texture)->resource()),
         ImVec2(
-            (float)((*texture)->resource())->m_raw_texture_data->m_width,
-            (float)((*texture)->resource())->m_raw_texture_data->m_height),
+            (float)((*texture)->resource()->m_width),
+            (float)((*texture)->resource()->m_height)),
         uvmin,
         uvmax);
 
@@ -1085,7 +1085,7 @@ WO_API wo_api je_gui_imagebutton_scale(wo_vm vm, wo_value args)
     wo_string_t label = wo_string(args + 0);
     jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture> *)wo_pointer(args + 1);
 
-    jegl_using_resource((*texture)->resource());
+    jegl_bind_texture((*texture)->resource(), 0);
 
     const ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
 
@@ -1103,8 +1103,8 @@ WO_API wo_api je_gui_imagebutton_scale(wo_vm vm, wo_value args)
             _je_gui_tls_ctx._jegl_context,
             (*texture)->resource()),
         ImVec2(
-            ((*texture)->resource())->m_raw_texture_data->m_width * wo_float(args + 2),
-            ((*texture)->resource())->m_raw_texture_data->m_height * wo_float(args + 2)),
+            (float)((*texture)->resource()->m_width) * wo_float(args + 2),
+            (float)((*texture)->resource()->m_height) * wo_float(args + 2)),
         uvmin, uvmax);
 
     dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
@@ -1116,7 +1116,7 @@ WO_API wo_api je_gui_imagebutton_size(wo_vm vm, wo_value args)
     wo_string_t label = wo_string(args + 0);
     jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture> *)wo_pointer(args + 1);
 
-    jegl_using_resource((*texture)->resource());
+    jegl_bind_texture((*texture)->resource(), 0);
 
     const ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
 
@@ -2299,6 +2299,7 @@ void jegui_init_basic(
     _je_gui_tls_ctx._jegl_bind_shader_sampler_state = apply_shader_sampler;
 
     _je_gui_tls_ctx._jegl_rend_texture_shader = jeecs::graphic::shader::create(
+        gl_context,
         "!/builtin/imgui_image_displayer.shader",
         R"(
 import je::shader;
@@ -2391,13 +2392,13 @@ public func frag(vf: v2f)
 
     if (general_ttf_file)
     {
-        void* file_buf = je_mem_alloc(general_ttf_file->m_file_length);
+        void* file_buf = malloc(general_ttf_file->m_file_length);
         jeecs_file_read(file_buf, sizeof(char), general_ttf_file->m_file_length, general_ttf_file);
 
         void* latin_file_buf = nullptr;
         if (latin_ttf_file != nullptr)
         {
-            latin_file_buf = je_mem_alloc(latin_ttf_file->m_file_length);
+            latin_file_buf = malloc(latin_ttf_file->m_file_length);
             jeecs_file_read(latin_file_buf, sizeof(char), latin_ttf_file->m_file_length, latin_ttf_file);
         }
 
@@ -2449,7 +2450,7 @@ public func frag(vf: v2f)
                 nullptr,
                 io.Fonts->GetGlyphRangesChineseFull());
 
-        // je_mem_free(file_buf); // No need to free.
+        // free(file_buf); // No need to free.
         jeecs_file_close(general_ttf_file);
     }
 }
@@ -2458,7 +2459,7 @@ void jegui_update_basic(
     jegui_platform_draw_callback_t platform_draw_callback,
     void* data)
 {
-    jegl_using_resource(_je_gui_tls_ctx._jegl_rend_texture_shader.value()->resource());
+    jegl_bind_shader(_je_gui_tls_ctx._jegl_rend_texture_shader.value()->resource());
 
     ImGui::NewFrame();
     auto* viewport = ImGui::GetMainViewport();

@@ -828,7 +828,7 @@ namespace je
                 public func load(univ: option<universe>, path: string)=> option<shader>;
                 
             extern("libjoyecs", "wojeapi_shader_create")
-                public func create(vpath: string, src: string)=> option<shader>;
+                public func create(univ: option<universe>, vpath: string, src: string)=> option<shader>;
                 
             extern("libjoyecs", "wojeapi_shader_path")
                 public func path(self: shader)=> string;

@@ -1925,16 +1925,14 @@ jegl_resource_handle [类型]
 */
 struct jegl_resource_handle
 {
-    using graphic_impl_handle_t = void*;
-
     const char* m_path_may_null_if_builtin;
-    graphic_impl_handle_t m_ptr;
     jegl_resource_bind_counter* m_raw_ref_count;
 
     jegl_context* m_graphic_thread;
     jeecs::typing::version_t m_graphic_thread_version;
 
     bool m_modified;
+    void* m_ptr;
 };
 
 /*
@@ -2363,14 +2361,14 @@ struct jegl_graphic_api
         void (*)(jegl_context::graphic_impl_context_t, jegl_vertex*);
 
     using framebuffer_init_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_resource_blob, jegl_frame_buffer*);
+        void (*)(jegl_context::graphic_impl_context_t, jegl_frame_buffer*);
     using framebuffer_update_func_t =
         void (*)(jegl_context::graphic_impl_context_t, jegl_frame_buffer*);
     using framebuffer_close_func_t =
         void (*)(jegl_context::graphic_impl_context_t, jegl_frame_buffer*);
 
     using ubuffer_init_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_resource_blob, jegl_uniform_buffer*);
+        void (*)(jegl_context::graphic_impl_context_t, jegl_uniform_buffer*);
     using ubuffer_update_func_t =
         void (*)(jegl_context::graphic_impl_context_t, jegl_uniform_buffer*);
     using ubuffer_close_func_t =
@@ -2634,6 +2632,8 @@ JE_API void jegl_reboot_graphic_thread(
     jegl_context* thread_handle,
     const jegl_interface_config* config_may_null);
 
+JE_API void jegl_share_resource_handle(jegl_resource_handle* resource_handle);
+#define jegl_share_resource(resource) jegl_share_resource_handle(&(resource)->m_handle)
 ///////////////////////////// TEXTURE /////////////////////////////
 
 /*
@@ -2736,6 +2736,7 @@ jegl_load_shader_source [基本接口]
     jegl_load_shader
 */
 JE_API jegl_shader* jegl_load_shader_source(
+    jegl_context* context,
     const char* path,
     const char* src,
     bool is_virtual_file);
@@ -8322,7 +8323,7 @@ namespace jeecs
                     || std::is_same_v<T, jegl_frame_buffer>
                     || std::is_same_v<T, jegl_uniform_buffer>
                     ;
-                
+
                 // { a.m_handle } -> std::same_as<jegl_resource_handle>;
             };
         }
@@ -8339,6 +8340,24 @@ namespace jeecs
                 : _m_resource(res)
             {
                 assert(_m_resource != nullptr);
+            }
+            ~resource_basic()noexcept
+            {
+                if constexpr (std::is_same_v<T, jegl_shader>)
+                    jegl_close_shader(_m_resource);
+                else if constexpr (std::is_same_v<T, jegl_texture>)
+                    jegl_close_texture(_m_resource);
+                else if constexpr (std::is_same_v<T, jegl_vertex>)
+                    jegl_close_vertex(_m_resource);
+                else if constexpr (std::is_same_v<T, jegl_frame_buffer>)
+                    jegl_close_framebuf(_m_resource);
+                else if constexpr (std::is_same_v<T, jegl_uniform_buffer>)
+                    jegl_close_uniformbuf(_m_resource);
+                else
+                {
+                    static_assert(sizeof(T) == 0,
+                        "Unsupported graphic resource type.");
+                }
             }
 
         public:
@@ -8425,7 +8444,6 @@ namespace jeecs
                 pixel(jegl_texture* _texture, size_t x, size_t y) noexcept
                     : _m_texture(_texture), _m_x(x), _m_y(y)
                 {
-                    assert(_texture->m_type == jegl_resource::type::TEXTURE);
                     assert(sizeof(jegl_texture::pixel_data_t) == 1);
 
                     auto color_depth =
@@ -8551,9 +8569,10 @@ namespace jeecs
         public:
             jegl_shader::builtin_uniform_location* m_builtin;
 
-            static std::optional<basic::resource<shader>> create(const std::string& name_path, const std::string& src)
+            static std::optional<basic::resource<shader>> create(
+                jegl_context* context_may_null, const std::string& name_path, const std::string& src)
             {
-                jegl_shader* res = jegl_load_shader_source(name_path.c_str(), src.c_str(), true);
+                jegl_shader* res = jegl_load_shader_source(context_may_null, name_path.c_str(), src.c_str(), true);
                 if (res != nullptr)
                     return basic::resource<shader>(new shader(res));
                 return std::nullopt;

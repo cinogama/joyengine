@@ -1374,7 +1374,7 @@ WO_API wo_api wojeapi_texture_clip(wo_vm vm, wo_value args)
 WO_API wo_api wojeapi_texture_bind_path(wo_vm vm, wo_value args)
 {
     auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture> *)wo_pointer(args + 0);
-    auto& path = (*loaded_texture)->resource()->m_path;
+    auto& path = (*loaded_texture)->resource()->m_handle.m_path_may_null_if_builtin;
     if (path != nullptr)
         je_mem_free((void*)path);
     path = jeecs::basic::make_new_string(wo_string(args + 1));
@@ -1401,7 +1401,7 @@ WO_API wo_api wojeapi_texture_take_snapshot(wo_vm vm, wo_value args)
 {
     auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture> *)wo_pointer(args + 0);
 
-    auto tex_raw = loaded_texture->get()->resource()->m_raw_texture_data;
+    auto tex_raw = loaded_texture->get()->resource();
     if (tex_raw->m_pixels)
     {
         auto memsz = tex_raw->m_width * tex_raw->m_height *
@@ -1422,7 +1422,7 @@ WO_API wo_api wojeapi_texture_restore_snapshot(wo_vm vm, wo_value args)
     auto* loaded_texture = (jeecs::basic::resource<jeecs::graphic::texture> *)wo_pointer(args + 0);
     auto* texture_buf = wo_pointer(args + 1);
 
-    auto tex_raw = loaded_texture->get()->resource()->m_raw_texture_data;
+    auto tex_raw = loaded_texture->get()->resource();
     if (tex_raw->m_pixels)
     {
         auto memsz = tex_raw->m_width * tex_raw->m_height *
@@ -1601,18 +1601,17 @@ WO_API wo_api wojeapi_shader_open(wo_vm vm, wo_value args)
     jegl_context* gcontext = nullptr;
 
     wo_value universe_ptr = s + 0;
-    auto has_value = wo_option_get(universe_ptr, args + 0);
+    if (wo_option_get(universe_ptr, args + 0))
+    {
+        gcontext = jegl_uhost_get_context(
+            jegl_uhost_get_or_create_for_universe(
+                wo_pointer(universe_ptr), nullptr));
+    }
 
     std::optional<jeecs::basic::resource<jeecs::graphic::shader>> loaded_shader;
 
     auto leaved = wo_leave_gcguard(vm);
     {
-        if (has_value)
-        {
-            gcontext = jegl_uhost_get_context(
-                jegl_uhost_get_or_create_for_universe(
-                    wo_pointer(universe_ptr), nullptr));
-        }
         loaded_shader = jeecs::graphic::shader::load(gcontext, wo_string(args + 1));
     }
     if (leaved)
@@ -1632,11 +1631,24 @@ WO_API wo_api wojeapi_shader_open(wo_vm vm, wo_value args)
 
 WO_API wo_api wojeapi_shader_create(wo_vm vm, wo_value args)
 {
+    wo_value s = wo_reserve_stack(vm, 1, &args);
+
+    jegl_context* gcontext = nullptr;
+
+    wo_value universe_ptr = s + 0;
+    if (wo_option_get(universe_ptr, args + 0))
+    {
+        gcontext = jegl_uhost_get_context(
+            jegl_uhost_get_or_create_for_universe(
+                wo_pointer(universe_ptr), nullptr));
+    }
+
     std::optional<jeecs::basic::resource<jeecs::graphic::shader>> loaded_shader;
     
     auto leaved = wo_leave_gcguard(vm);
     {
-        loaded_shader = jeecs::graphic::shader::create(wo_string(args + 0), wo_string(args + 1));
+        loaded_shader = jeecs::graphic::shader::create(
+            gcontext, wo_string(args + 1), wo_string(args + 2));
     }
     if (leaved)
         wo_enter_gcguard(vm);
@@ -1833,7 +1845,7 @@ WO_API wo_api wojeapi_vertex_path(wo_vm vm, wo_value args)
 {
     auto* loaded_vertex = (jeecs::basic::resource<jeecs::graphic::vertex> *)wo_pointer(args + 0);
 
-    if (auto path = (*loaded_vertex)->resource()->m_path)
+    if (auto path = (*loaded_vertex)->resource()->m_handle.m_path_may_null_if_builtin)
         return wo_ret_option_string(vm, path);
     return wo_ret_option_none(vm);
 }
@@ -1909,7 +1921,7 @@ WO_API wo_api wojeapi_get_uniforms_from_shader(wo_vm vm, wo_value args)
     wo_value out_map = s + 0;
     wo_set_map(out_map, 0);
 
-    auto* uniforms = (*shader)->resource()->m_raw_shader_data->m_custom_uniforms;
+    auto* uniforms = (*shader)->resource()->m_custom_uniforms;
     wo_value key = s + 1;
     wo_value val = s + 2;
     wo_value elem = s + 3;
@@ -2087,7 +2099,7 @@ WO_API wo_api wojeapi_shader_path(wo_vm vm, wo_value args)
 {
     auto* shader = (jeecs::basic::resource<jeecs::graphic::shader> *)wo_pointer(args + 0);
 
-    if (auto str = (*shader)->resource()->m_path)
+    if (auto str = (*shader)->resource()->m_handle.m_path_may_null_if_builtin)
         return wo_ret_string(vm, str);
     return wo_ret_string(vm, "< Built-in shader >");
 }
@@ -2116,7 +2128,7 @@ WO_API wo_api wojeapi_texture_path(wo_vm vm, wo_value args)
 {
     auto* texture = (jeecs::basic::resource<jeecs::graphic::texture> *)wo_pointer(args + 0);
 
-    if (auto str = (*texture)->resource()->m_path)
+    if (auto str = (*texture)->resource()->m_handle.m_path_may_null_if_builtin)
         return wo_ret_option_string(vm, str);
     return wo_ret_option_none(vm);
 }

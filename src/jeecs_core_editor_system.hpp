@@ -245,7 +245,9 @@ namespace jeecs
             , m_parallel_light2d_icon{ _create_missing_default_icon() }
             , m_selecting_default_texture{
                 graphic::texture::create(1, 1, jegl_texture::format::RGBA) }
-                , m_gizmo_shader{ graphic::shader::create("!/builtin/gizmo.shader",                                                                                                                                                                                                                                                                                                               {R"(
+                , m_gizmo_shader{ graphic::shader::create(
+                    nullptr,
+                    "!/builtin/gizmo.shader",                                                                                                                                                                                                                                                                                                               {R"(
 import woo::std;
 
 import je::shader;
@@ -301,7 +303,9 @@ public let frag =
 )"})
                                                                                                                                                                                                                                                                                                  .value() },
             m_gizmo_camera_visual_cone_shader{
-                graphic::shader::create("!/builtin/gizmo_camera_visual_cone.shader",
+                graphic::shader::create(
+                    nullptr,
+                    "!/builtin/gizmo_camera_visual_cone.shader",
                 {R"(
 import woo::std;
 
@@ -352,7 +356,9 @@ public func frag(_: v2f)
 )"})
                 .value() },
             m_gizmo_physics2d_collider_shader{
-                graphic::shader::create("!/builtin/gizmo_physics2d_collider.shader",
+                graphic::shader::create(
+                    nullptr,
+                    "!/builtin/gizmo_physics2d_collider.shader",
                 {R"(
 import woo::std;
 
@@ -400,7 +406,9 @@ public let frag =
 )"})
             .value() }
             , m_gizmo_selecting_item_highlight_shader{
-                graphic::shader::create("!/builtin/gizmo_selecting_item_highlight.shader",
+                graphic::shader::create(
+                    nullptr,
+                    "!/builtin/gizmo_selecting_item_highlight.shader",
                 {R"(
 import woo::std;
 
@@ -669,40 +677,40 @@ public func frag(vf: v2f)
 
             const float selector_size = 0.1f;
 
-            circ_x->resource()->m_raw_vertex_data->m_y_min += -selector_size;
-            circ_x->resource()->m_raw_vertex_data->m_y_max += selector_size;
-            circ_x->resource()->m_raw_vertex_data->m_z_min += -selector_size;
-            circ_x->resource()->m_raw_vertex_data->m_z_max += selector_size;
+            circ_x->resource()->m_y_min += -selector_size;
+            circ_x->resource()->m_y_max += selector_size;
+            circ_x->resource()->m_z_min += -selector_size;
+            circ_x->resource()->m_z_max += selector_size;
 
-            circ_y->resource()->m_raw_vertex_data->m_x_min += -selector_size;
-            circ_y->resource()->m_raw_vertex_data->m_x_max += selector_size;
-            circ_y->resource()->m_raw_vertex_data->m_z_min += -selector_size;
-            circ_y->resource()->m_raw_vertex_data->m_z_max += selector_size;
+            circ_y->resource()->m_x_min += -selector_size;
+            circ_y->resource()->m_x_max += selector_size;
+            circ_y->resource()->m_z_min += -selector_size;
+            circ_y->resource()->m_z_max += selector_size;
 
-            circ_z->resource()->m_raw_vertex_data->m_x_min += -selector_size;
-            circ_z->resource()->m_raw_vertex_data->m_x_max += selector_size;
-            circ_z->resource()->m_raw_vertex_data->m_y_min += -selector_size;
-            circ_z->resource()->m_raw_vertex_data->m_y_max += selector_size;
+            circ_z->resource()->m_x_min += -selector_size;
+            circ_z->resource()->m_x_max += selector_size;
+            circ_z->resource()->m_y_min += -selector_size;
+            circ_z->resource()->m_y_max += selector_size;
 
-            circ_x->resource()->m_raw_vertex_data->m_x_min =
-                circ_y->resource()->m_raw_vertex_data->m_y_min =
-                circ_z->resource()->m_raw_vertex_data->m_z_min =
-                axis_x->resource()->m_raw_vertex_data->m_y_min =
-                axis_x->resource()->m_raw_vertex_data->m_z_min =
-                axis_y->resource()->m_raw_vertex_data->m_x_min =
-                axis_y->resource()->m_raw_vertex_data->m_z_min =
-                axis_z->resource()->m_raw_vertex_data->m_x_min =
-                axis_z->resource()->m_raw_vertex_data->m_y_min = -selector_size;
+            circ_x->resource()->m_x_min =
+                circ_y->resource()->m_y_min =
+                circ_z->resource()->m_z_min =
+                axis_x->resource()->m_y_min =
+                axis_x->resource()->m_z_min =
+                axis_y->resource()->m_x_min =
+                axis_y->resource()->m_z_min =
+                axis_z->resource()->m_x_min =
+                axis_z->resource()->m_y_min = -selector_size;
 
-            circ_x->resource()->m_raw_vertex_data->m_x_max =
-                circ_y->resource()->m_raw_vertex_data->m_y_max =
-                circ_z->resource()->m_raw_vertex_data->m_z_max =
-                axis_x->resource()->m_raw_vertex_data->m_y_max =
-                axis_x->resource()->m_raw_vertex_data->m_z_max =
-                axis_y->resource()->m_raw_vertex_data->m_x_max =
-                axis_y->resource()->m_raw_vertex_data->m_z_max =
-                axis_z->resource()->m_raw_vertex_data->m_x_max =
-                axis_z->resource()->m_raw_vertex_data->m_y_max = selector_size;
+            circ_x->resource()->m_x_max =
+                circ_y->resource()->m_y_max =
+                circ_z->resource()->m_z_max =
+                axis_x->resource()->m_y_max =
+                axis_x->resource()->m_z_max =
+                axis_y->resource()->m_x_max =
+                axis_y->resource()->m_z_max =
+                axis_z->resource()->m_x_max =
+                axis_z->resource()->m_y_max = selector_size;
         }
         ~DefaultEditorSystem()
         {
@@ -846,6 +854,7 @@ public func frag(vf: v2f)
 
                     basic::resource<graphic::shader>
                         axis_shader = graphic::shader::create(
+                            nullptr,
                             "!/builtin/mover_axis.shader",
                             { R"(
 import woo::std;
@@ -899,6 +908,7 @@ public let frag =
                         .value();
                     basic::resource<graphic::shader>
                         select_box_shader = graphic::shader::create(
+                            nullptr,
                             "!/builtin/select_box.shader",
                             { R"(
 import woo::std;
@@ -1359,8 +1369,8 @@ public let frag =
                 const math::vec3& postion,
                 const math::quat& rotation,
                 const math::vec3& scale,
-                jegl_resource* shader,
-                jegl_resource* vertex,
+                jegl_shader* shader,
+                jegl_vertex* vertex,
                 jegl_rchain_texture_group* group) -> jegl_rendchain_rend_action*
                 {
                     if (enable_draw_gizmo_at_framebuf.has_value())
@@ -1377,7 +1387,7 @@ public let frag =
                             vertex,
                             group);
 
-                        auto* builtin_uniform = &shader->m_raw_shader_data->m_builtin_uniforms;
+                        auto* builtin_uniform = &shader->m_builtin_uniforms;
 
                         math::transform(MAT4_GIZMO_M, postion, rotation, scale);
 
@@ -1728,12 +1738,12 @@ public let frag =
                             localScale.scale = localScale.scale * (
                                 eshape->vertex.has_value()
                                 ? jeecs::math::vec3(
-                                    eshape->vertex.value()->resource()->m_raw_vertex_data->m_x_max
-                                    - eshape->vertex.value()->resource()->m_raw_vertex_data->m_x_min,
-                                    eshape->vertex.value()->resource()->m_raw_vertex_data->m_y_max
-                                    - eshape->vertex.value()->resource()->m_raw_vertex_data->m_y_min,
-                                    eshape->vertex.value()->resource()->m_raw_vertex_data->m_z_max
-                                    - eshape->vertex.value()->resource()->m_raw_vertex_data->m_z_min
+                                    eshape->vertex.value()->resource()->m_x_max
+                                    - eshape->vertex.value()->resource()->m_x_min,
+                                    eshape->vertex.value()->resource()->m_y_max
+                                    - eshape->vertex.value()->resource()->m_y_min,
+                                    eshape->vertex.value()->resource()->m_z_max
+                                    - eshape->vertex.value()->resource()->m_z_min
                                 )
                                 : jeecs::math::vec3(1.0f, 1.0f, 0.0f));
                         }
@@ -2035,20 +2045,20 @@ WO_API wo_api wojeapi_reload_texture_of_entity(wo_vm vm, wo_value args)
     if (!newtexture.has_value())
         return wo_ret_bool(vm, false);
 
-    jeecs::Renderer::Textures* textures = 
+    jeecs::Renderer::Textures* textures =
         entity->get_component<jeecs::Renderer::Textures>();
 
     if (textures != nullptr)
     {
         for (auto& texture_res : textures->textures)
         {
-            assert(texture_res.m_texture != nullptr 
+            assert(texture_res.m_texture != nullptr
                 && texture_res.m_texture->resource() != nullptr);
 
-            const char* existed_texture_path = 
-                texture_res.m_texture->resource()->m_path;
+            const char* existed_texture_path =
+                texture_res.m_texture->resource()->m_handle.m_path_may_null_if_builtin;
 
-            if (existed_texture_path != nullptr 
+            if (existed_texture_path != nullptr
                 && old_texture_path == existed_texture_path)
                 texture_res.m_texture = newtexture.value();
         }
@@ -2076,7 +2086,7 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
             {
                 jeecs::Editor::BadShadersUniform::bad_shader_data bad_shader(path);
 
-                auto* uniform_var = shader->resource()->m_raw_shader_data->m_custom_uniforms;
+                auto* uniform_var = shader->resource()->m_custom_uniforms;
                 while (uniform_var != nullptr)
                 {
                     bad_shader.m_vars[uniform_var->m_name] = *uniform_var;
@@ -2087,18 +2097,20 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
         auto copy_shader_generator =
             [gcontext](jeecs::basic::resource<jeecs::graphic::shader>* newshader, auto oldshader)
             {
-                assert(newshader != nullptr && (*newshader)->resource()->m_path != nullptr);
+                assert(newshader != nullptr
+                    && (*newshader)->resource()->m_handle.m_path_may_null_if_builtin != nullptr);
 
                 jeecs::basic::resource<jeecs::graphic::shader> new_shader_instance = *newshader;
 
                 // Load and create new shader instance, must be successful.
-                *newshader = jeecs::graphic::shader::load(gcontext, new_shader_instance->resource()->m_path).value();
+                *newshader = jeecs::graphic::shader::load(
+                    gcontext, new_shader_instance->resource()->m_handle.m_path_may_null_if_builtin).value();
 
                 const char builtin_uniform_varname[] = "JE_";
 
                 if constexpr (std::is_same<decltype(oldshader), jeecs::basic::resource<jeecs::graphic::shader>>::value)
                 {
-                    auto* uniform_var = oldshader->resource()->m_raw_shader_data->m_custom_uniforms;
+                    auto* uniform_var = oldshader->resource()->m_custom_uniforms;
                     while (uniform_var != nullptr)
                     {
                         if (strncmp(uniform_var->m_name, builtin_uniform_varname, sizeof(builtin_uniform_varname) - 1) != 0)
@@ -2128,7 +2140,8 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
                 for (auto& shader : shaders->shaders)
                 {
                     assert(shader != nullptr);
-                    if (shader->resource()->m_path != nullptr && old_shader_path == shader->resource()->m_path)
+                    if (shader->resource()->m_handle.m_path_may_null_if_builtin != nullptr
+                        && old_shader_path == shader->resource()->m_handle.m_path_may_null_if_builtin)
                     {
                         need_update = true;
                         break;
@@ -2142,7 +2155,8 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
                     if (ok_or_bad_shader.is_ok())
                     {
                         auto& ok_shader = ok_or_bad_shader.get_ok();
-                        if (ok_shader->resource()->m_path != nullptr && old_shader_path == ok_shader->resource()->m_path)
+                        if (ok_shader->resource()->m_handle.m_path_may_null_if_builtin != nullptr
+                            && old_shader_path == ok_shader->resource()->m_handle.m_path_may_null_if_builtin)
                         {
                             need_update = true;
                             break;
@@ -2170,7 +2184,8 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
                         for (auto& shader : shaders->shaders)
                         {
                             assert(shader != nullptr);
-                            if (shader->resource()->m_path != nullptr && old_shader_path == shader->resource()->m_path)
+                            if (shader->resource()->m_handle.m_path_may_null_if_builtin != nullptr
+                                && old_shader_path == shader->resource()->m_handle.m_path_may_null_if_builtin)
                                 shader = copy_shader_generator(&new_shader.value(), shader);
                         }
                     }
@@ -2181,7 +2196,8 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
                             if (ok_or_bad_shader.is_ok())
                             {
                                 auto& ok_shader = ok_or_bad_shader.get_ok();
-                                if (ok_shader->resource()->m_path != nullptr && old_shader_path == ok_shader->resource()->m_path)
+                                if (ok_shader->resource()->m_handle.m_path_may_null_if_builtin != nullptr
+                                    && old_shader_path == ok_shader->resource()->m_handle.m_path_may_null_if_builtin)
                                     ok_or_bad_shader = copy_shader_generator(&new_shader.value(), ok_shader);
                             }
                             else if (ok_or_bad_shader.get_bad().m_path == old_shader_path)
@@ -2208,7 +2224,8 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
                             assert(shader != nullptr);
 
                             // 1.1.1.1 If shader is old one, move the data to BadShadersUniform, or move shader directly
-                            if (shader->resource()->m_path != nullptr && old_shader_path == shader->resource()->m_path)
+                            if (shader->resource()->m_handle.m_path_may_null_if_builtin != nullptr
+                                && old_shader_path == shader->resource()->m_handle.m_path_may_null_if_builtin)
                                 bad_uniforms->stored_uniforms.emplace_back(bad_shader_generator(new_shader_path, shader));
                             else
                                 bad_uniforms->stored_uniforms.emplace_back(shader);
@@ -2222,7 +2239,8 @@ WO_API wo_api wojeapi_reload_shader_of_entity(wo_vm vm, wo_value args)
                             if (ok_or_bad_shader.is_ok())
                             {
                                 auto& ok_shader = ok_or_bad_shader.get_ok();
-                                if (ok_shader->resource()->m_path != nullptr && old_shader_path == ok_shader->resource()->m_path)
+                                if (ok_shader->resource()->m_handle.m_path_may_null_if_builtin != nullptr
+                                    && old_shader_path == ok_shader->resource()->m_handle.m_path_may_null_if_builtin)
                                     ok_or_bad_shader = bad_shader_generator(new_shader_path, ok_shader);
                             }
                         }
