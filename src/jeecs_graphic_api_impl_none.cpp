@@ -136,12 +136,6 @@ namespace jeecs::graphic::api::none
         const jegl_frame_buffer_clear_operation*)
     {
     }
-    void clear_framebuffer_color(jegl_context::graphic_impl_context_t, float[4])
-    {
-    }
-    void clear_framebuffer_depth(jegl_context::graphic_impl_context_t)
-    {
-    }
 
     void set_uniform(jegl_context::graphic_impl_context_t, uint32_t, jegl_shader::uniform_type, const void*)
     {
