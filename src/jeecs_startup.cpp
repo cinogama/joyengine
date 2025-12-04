@@ -54,7 +54,6 @@ jegl_graphic_api_entry jegl_get_host_graphic_api(void)
 #elif defined(JE_ENABLE_GL330_GAPI) || defined(JE_ENABLE_GLES300_GAPI) || defined(JE_ENABLE_WEBGL20_GAPI)
         return jegl_using_opengl3_apis;
 #else
-        jeecs::debug::logwarn("No default graphic-api supported.");
         return jegl_using_none_apis;
 #endif
     }

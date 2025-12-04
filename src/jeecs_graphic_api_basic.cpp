@@ -182,12 +182,6 @@ namespace Assimp
 #include <stack>
 #include <queue>
 
-struct _jegl_destroy_resource
-{
-    jegl_resource* m_destroy_resource;
-    _jegl_destroy_resource* last;
-};
-
 struct jegl_resource_bind_counter
 {
     JECS_DISABLE_MOVE_AND_COPY(jegl_resource_bind_counter);
@@ -199,142 +193,425 @@ struct jegl_resource_bind_counter
     }
 };
 
+namespace jeecs::graphic
+{
+    struct created_resource
+    {
+        enum class kind
+        {
+            UNKNOWN,
+            SHADER,
+            TEXTURE,
+            VERTEX,
+            UNIFORM_BUFFER,
+            FRAME_BUFFER
+        };
+        union deleting_graphic_resource
+        {
+            void* m_raw_ptr;
+
+            jegl_shader* m_shader;
+            jegl_texture* m_texture;
+            jegl_vertex* m_vertex;
+            jegl_uniform_buffer* m_uniform_buffer;
+            jegl_frame_buffer* m_frame_buffer;
+        };
+
+        kind m_type;
+        deleting_graphic_resource m_resource;
+
+        created_resource(const created_resource&) = default;
+        created_resource(created_resource&&) = default;
+        created_resource& operator = (const created_resource&) = default;
+        created_resource& operator = (created_resource&&) = default;
+        ~created_resource() = default;
+
+        constexpr created_resource(jegl_shader* shader)
+            : m_type(kind::SHADER)
+        {
+            m_resource.m_shader = shader;
+        }
+        constexpr created_resource(jegl_texture* texture)
+            : m_type(kind::TEXTURE)
+        {
+            m_resource.m_texture = texture;
+        }
+        constexpr created_resource(jegl_vertex* vertex)
+            : m_type(kind::VERTEX)
+        {
+            m_resource.m_vertex = vertex;
+        }
+        constexpr created_resource(jegl_uniform_buffer* uniform_buffer)
+            : m_type(kind::UNIFORM_BUFFER)
+        {
+            m_resource.m_uniform_buffer = uniform_buffer;
+        }
+        constexpr created_resource(jegl_frame_buffer* frame_buffer)
+            : m_type(kind::FRAME_BUFFER)
+        {
+            m_resource.m_frame_buffer = frame_buffer;
+        }
+        bool operator == (const created_resource& another) const noexcept
+        {
+            return m_resource.m_raw_ptr == another.m_resource.m_raw_ptr;
+        }
+
+        template<requirements::basic_graphic_resource T>
+        T* resource() const
+        {
+            if constexpr (std::is_same_v<T, jegl_shader>)
+            {
+                assert(m_type == kind::SHADER);
+                return m_resource.m_shader;
+            }
+            else if constexpr (std::is_same_v<T, jegl_texture>)
+            {
+                assert(m_type == kind::TEXTURE);
+                return m_resource.m_texture;
+            }
+            else if constexpr (std::is_same_v<T, jegl_vertex>)
+            {
+                assert(m_type == kind::VERTEX);
+                return m_resource.m_vertex;
+            }
+            else if constexpr (std::is_same_v<T, jegl_uniform_buffer>)
+            {
+                assert(m_type == kind::UNIFORM_BUFFER);
+                return m_resource.m_uniform_buffer;
+            }
+            else if constexpr (std::is_same_v<T, jegl_frame_buffer>)
+            {
+                assert(m_type == kind::FRAME_BUFFER);
+                return m_resource.m_frame_buffer;
+            }
+            else
+            {
+                static_assert(!sizeof(T*), "Unsupported resource type.");
+            }
+        }
+
+        template<requirements::basic_graphic_resource T>
+        T* try_resource() const
+        {
+            if constexpr (std::is_same_v<T, jegl_shader>)
+            {
+                if (m_type != kind::SHADER)
+                    return nullptr;
+                return m_resource.m_shader;
+            }
+            else if constexpr (std::is_same_v<T, jegl_texture>)
+            {
+                if (m_type != kind::TEXTURE)
+                    return nullptr;
+                return m_resource.m_texture;
+            }
+            else if constexpr (std::is_same_v<T, jegl_vertex>)
+            {
+                if (m_type != kind::VERTEX)
+                    return nullptr;
+                return m_resource.m_vertex;
+            }
+            else if constexpr (std::is_same_v<T, jegl_uniform_buffer>)
+            {
+                if (m_type != kind::UNIFORM_BUFFER)
+                    return nullptr;
+                return m_resource.m_uniform_buffer;
+            }
+            else if constexpr (std::is_same_v<T, jegl_frame_buffer>)
+            {
+                if (m_type != kind::FRAME_BUFFER)
+                    return nullptr;
+                return m_resource.m_frame_buffer;
+            }
+            else
+            {
+                static_assert(!sizeof(T*), "Unsupported resource type.");
+            }
+        }
+
+        void drop_resource() const
+        {
+            switch (m_type)
+            {
+            case kind::SHADER:
+                jegl_close_shader(m_resource.m_shader);
+                break;
+            case kind::TEXTURE:
+                jegl_close_texture(m_resource.m_texture);
+                break;
+            case kind::VERTEX:
+                jegl_close_vertex(m_resource.m_vertex);
+                break;
+            case kind::UNIFORM_BUFFER:
+                jegl_close_uniformbuf(m_resource.m_uniform_buffer);
+                break;
+            case kind::FRAME_BUFFER:
+                jegl_close_framebuf(m_resource.m_frame_buffer);
+                break;
+
+            default:
+                abort();
+            }
+        }
+        void free_resouce_body() const
+        {
+            free(m_resource.m_raw_ptr);
+        }
+        jegl_resource_handle* get_handle() const
+        {
+            switch (m_type)
+            {
+            case kind::SHADER:
+                return &m_resource.m_shader->m_handle;
+            case kind::TEXTURE:
+                return &m_resource.m_texture->m_handle;
+            case kind::VERTEX:
+                return &m_resource.m_vertex->m_handle;
+            case kind::UNIFORM_BUFFER:
+                return &m_resource.m_uniform_buffer->m_handle;
+            case kind::FRAME_BUFFER:
+                return &m_resource.m_frame_buffer->m_handle;
+            default:
+                abort();
+            }
+        }
+    };
+    // Created blobs.
+    struct cached_resource_blob
+    {
+        using kind = created_resource::kind;
+
+        kind m_type;
+
+        size_t m_version;
+        jegl_resource_blob m_blob_may_null;
+    };
+    struct resource_to_destroy
+    {
+        resource_to_destroy* last;
+        created_resource m_resource;
+    };
+}
+
+namespace std
+{
+    template<>
+    struct hash<jeecs::graphic::created_resource>
+    {
+        size_t operator()(const jeecs::graphic::created_resource& res) const noexcept
+        {
+            return std::hash<void*>()(res.m_resource.m_raw_ptr);
+        }
+    };
+}
+
 struct jegl_context_notifier
 {
-    std::atomic_bool m_graphic_terminated;
+    bool m_graphic_terminated;
+    bool m_graphic_reboot;
 
     std::mutex m_update_mx;
-    std::atomic_bool m_update_flag;
     std::condition_variable m_update_waiter;
-
-    std::atomic_bool m_reboot_flag;
+    bool m_update_request_flag;
 
     std::promise<void> m_promise;
 
     // Aliving resource.
-    std::unordered_set<jegl_resource*> _m_created_resources;
-
-    // Created blobs.
-    struct cached_resource_blob
-    {
-        size_t m_version;
-        jegl_resource_blob m_blob;
-    };
-
-    struct cached_resource
-    {
-        jegl_resource* m_resource;
-    };
+    std::unordered_set<jeecs::graphic::created_resource> _m_created_resources;
 
     // NOTE: _m_cached_resources 不需要单独上锁，因为对此的操作都将在一个更大的全
     //      局锁(参见_je_graphic_shared_context_instance)的保护下
-    std::unordered_map<std::string, cached_resource> _m_cached_resources;
+    std::unordered_map<std::string, jeecs::graphic::created_resource> _m_cached_resources;
 
     // NOTE: _m_cached_resource_blobs 不需要上锁，因为对此的操作都被局限在图形
     //      线程内部，不会发生并发访问。
-    std::unordered_map<std::string, cached_resource_blob> _m_cached_resource_blobs;
+    std::unordered_map<std::string, jeecs::graphic::cached_resource_blob> _m_cached_resource_blobs;
 
-    jeecs::basic::atomic_list<_jegl_destroy_resource> _m_closing_resources;
+    jeecs::basic::atomic_list<jeecs::graphic::resource_to_destroy> _m_closing_resources;
 };
 
-thread_local jegl_context* _current_graphic_thread = nullptr;
-
-struct shared_resource_instance
+namespace jeecs::graphic
 {
-    jegl_resource* const m_resource;
+    thread_local jegl_context* _current_graphic_thread = nullptr;
 
-    JECS_DISABLE_MOVE_AND_COPY(shared_resource_instance);
-    shared_resource_instance(jegl_resource* res)
-        : m_resource(res)
+    struct _je_graphic_shared_context
     {
-        assert(m_resource != nullptr);
-    }
-    ~shared_resource_instance()
-    {
-        jegl_close_resource(m_resource);
-    }
-};
+        // NOTE: Resource blob 受限于机制，本体是缓存在图形上下文中的，此处用于记录blob
+        // 的unload-count-version，用于通知图形线程何时应当释放blob资源。
+        std::shared_mutex share_smx;
 
-struct _je_graphic_shared_context
-{
-    // NOTE: Resource blob 受限于机制，本体是缓存在图形上下文中的，此处用于记录blob
-    // 的unload-count-version，用于通知图形线程何时应当释放blob资源。
-    std::shared_mutex share_smx;
+        std::unordered_map<std::string, size_t> shared_unload_counts;
+        std::unordered_map<std::string, size_t> shared_resource_used_counts;
 
-    std::unordered_map<std::string, size_t> shared_unload_counts;
-    std::unordered_map<std::string, size_t> shared_resource_used_counts;
-
-    size_t _get_shared_blob_unload_counter(const std::string& path)
-    {
-        auto fnd = shared_unload_counts.find(path);
-        if (fnd == shared_unload_counts.end())
-            return 0;
-        return fnd->second;
-    }
-    void _unload_share(const std::string& path)
-    {
-        ++shared_unload_counts[path];
-    }
-
-    bool _obsolete_shared_resource_cache_nolock(const char* path, bool free_blob);
-    bool mark_shared_resources_outdated(const char* path);
-
-    static jegl_resource* _share_resource(jegl_resource* resource)
-    {
-        assert(resource != nullptr);
-        ++resource->m_raw_ref_count->m_binding_count;
-        return resource;
-    }
-
-    void _free_resource_in_gcontext(jegl_context* context)
-    {
-        std::lock_guard g1(share_smx);
-
-        for (auto& [_, res] : context->_m_thread_notifier->_m_cached_resources)
-            jegl_close_resource(res.m_resource);
-    }
-    jegl_resource* try_update_shared_resource(jegl_context* context, jegl_resource* resource)
-    {
-        if (context != nullptr)
+        size_t _get_shared_blob_unload_counter(const std::string& path)
         {
-            assert(resource != nullptr && resource->m_path != nullptr);
+            auto fnd = shared_unload_counts.find(path);
+            if (fnd == shared_unload_counts.end())
+                return 0;
+            return fnd->second;
+        }
+        void _unload_share(const std::string& path)
+        {
+            ++shared_unload_counts[path];
+        }
 
+        bool _obsolete_shared_resource_cache_nolock(const char* path, bool free_blob);
+        bool mark_shared_resources_outdated(const char* path);
+
+        static void _share_resource(jegl_resource_handle* resource)
+        {
+            assert(resource != nullptr);
+            ++resource->m_raw_ref_count->m_binding_count;
+        }
+
+        void _free_resource_in_gcontext(jegl_context* context)
+        {
             std::lock_guard g1(share_smx);
 
-            auto fnd = context->_m_thread_notifier->_m_cached_resources.find(resource->m_path);
-            if (fnd != context->_m_thread_notifier->_m_cached_resources.end() && fnd->second.m_resource->m_type == resource->m_type)
-            {
-                jegl_close_resource(resource);
-                return _share_resource(fnd->second.m_resource);
-            }
-
-            // Create a new one!
-            auto& shared_resource_cache = context->_m_thread_notifier->_m_cached_resources[resource->m_path];
-            shared_resource_cache.m_resource = resource;
-            return _share_resource(resource);
+            for (auto& [_, res] : context->_m_thread_notifier->_m_cached_resources)
+                res.drop_resource();
         }
-        return resource;
-    }
 
-    jegl_resource* try_load_shared_resource(jegl_context* context, const char* path)
-    {
-        if (context != nullptr)
+        template<requirements::basic_graphic_resource T>
+        T* try_update_shared_resource(jegl_context* context, T* resource)
         {
-            std::shared_lock sg1(share_smx);
-
-            auto fnd = context->_m_thread_notifier->_m_cached_resources.find(path);
-            if (fnd != context->_m_thread_notifier->_m_cached_resources.end())
+            if (context != nullptr)
             {
-                shared_resource_used_counts[path]++;
-                return _share_resource(fnd->second.m_resource);
+                const char* resource_path = resource->m_handle.m_path_may_null_if_builtin;
+                assert(resource != nullptr && resource_path != nullptr);
+
+                std::lock_guard g1(share_smx);
+
+                jeecs::graphic::created_resource appending_resource(resource);
+                auto&& [cached_resource, insert_succ] =
+                    context->_m_thread_notifier->_m_cached_resources.insert(
+                        std::make_pair(resource_path, appending_resource));
+
+                if (insert_succ)
+                {
+                    _share_resource(appending_resource.get_handle());
+                    return resource;
+                }
+                else if (cached_resource->second.m_type == appending_resource.m_type)
+                {
+                    // 就在刚刚创建的瞬间，已经有一个相同路径的资源存在了，放弃新创建的
+                    appending_resource.drop_resource();
+
+                    _share_resource(cached_resource->second.get_handle());
+                    return cached_resource->second.resource<T>();
+                }
+                else
+                {
+                    // WTF?
+                    debug::logwarn(
+                        "Different type of resource with same path detected in shared resource cache: `%s`.",
+                        resource_path);
+                    return resource;
+                }
             }
+            return resource;
         }
 
-        return nullptr;
+        template<requirements::basic_graphic_resource T>
+        T* /* MAY NULL */ try_load_shared_resource(jegl_context* context, const char* path)
+        {
+            if (context != nullptr)
+            {
+                std::shared_lock sg1(share_smx);
+
+                auto fnd = context->_m_thread_notifier->_m_cached_resources.find(path);
+                if (fnd != context->_m_thread_notifier->_m_cached_resources.end())
+                {
+                    auto* res = fnd->second.try_resource<T>();
+                    if (res != nullptr)
+                    {
+                        shared_resource_used_counts[path]++;
+                        _share_resource(&res->m_handle);
+
+                        return res;
+                    }
+                }
+            }
+            return nullptr;
+        }
+        void shrink_shared_resource_cache(size_t target_resource_count);
+    };
+    _je_graphic_shared_context _je_graphic_shared_context_instance;
+
+    std::vector<jegl_context*> _jegl_alive_glthread_list;
+    std::shared_mutex _jegl_alive_glthread_list_mx;
+
+    bool _je_graphic_shared_context::_obsolete_shared_resource_cache_nolock(const char* path, bool free_blob)
+    {
+        if (free_blob)
+            _unload_share(path);
+
+        bool marked = false;
+        for (jegl_context* ctx : _jegl_alive_glthread_list)
+        {
+            auto fnd = ctx->_m_thread_notifier->_m_cached_resources.find(path);
+            if (fnd != ctx->_m_thread_notifier->_m_cached_resources.end())
+            {
+                fnd->second.drop_resource();
+                ctx->_m_thread_notifier->_m_cached_resources.erase(fnd);
+                marked = true;
+            }
+        }
+        return marked;
     }
-    void shrink_shared_resource_cache(size_t target_resource_count);
-};
-_je_graphic_shared_context _je_graphic_shared_context_instance;
+    bool _je_graphic_shared_context::mark_shared_resources_outdated(const char* path)
+    {
+        std::shared_lock sg1(_jegl_alive_glthread_list_mx);
+        std::lock_guard g1(share_smx);
+
+        return _obsolete_shared_resource_cache_nolock(path, true);
+    }
+    void _je_graphic_shared_context::shrink_shared_resource_cache(size_t target_resource_count)
+    {
+        std::shared_lock sg1(_jegl_alive_glthread_list_mx);
+        std::lock_guard g1(share_smx);
+
+        struct obsolete_resource
+        {
+            std::string m_path;
+            size_t m_loadcount;
+            bool operator>(const obsolete_resource& another) const noexcept
+            {
+                return m_loadcount > another.m_loadcount;
+            }
+        };
+
+        std::priority_queue<
+            obsolete_resource,
+            std::vector<obsolete_resource>,
+            std::greater<obsolete_resource>>
+            obs_queue;
+
+        for (auto& [path, loadcount] : shared_resource_used_counts)
+            obs_queue.push(obsolete_resource{ path, loadcount });
+
+        while (obs_queue.size() > target_resource_count)
+        {
+            const auto& obs_res = obs_queue.top();
+
+            shared_resource_used_counts.erase(obs_res.m_path);
+            _obsolete_shared_resource_cache_nolock(obs_res.m_path.c_str(), false);
+
+            obs_queue.pop();
+        }
+    }
+
+    jeecs_sync_callback_func_t _jegl_sync_callback_func = nullptr;
+    void* _jegl_sync_callback_arg = nullptr;
+
+    enum class jegl_resouce_state
+    {
+        READY,
+        NEED_INIT,
+        NEED_UPDATE,
+        INVALID_CONTEXT,
+    };
+}
 
 #if JE4_ENABLE_SHADER_WRAP_GENERATOR
 struct shader_wrapper;
@@ -344,78 +621,13 @@ void jegl_shader_free_generated_shader_source(jegl_shader* write_to_shader);
 
 //////////////////////////////////// API /////////////////////////////////////////
 
-std::vector<jegl_context*> _jegl_alive_glthread_list;
-std::shared_mutex _jegl_alive_glthread_list_mx;
-
-bool _je_graphic_shared_context::_obsolete_shared_resource_cache_nolock(const char* path, bool free_blob)
-{
-    if (free_blob)
-        _unload_share(path);
-
-    bool marked = false;
-    for (jegl_context* ctx : _jegl_alive_glthread_list)
-    {
-        auto fnd = ctx->_m_thread_notifier->_m_cached_resources.find(path);
-        if (fnd != ctx->_m_thread_notifier->_m_cached_resources.end())
-        {
-            jegl_close_resource(fnd->second.m_resource);
-            ctx->_m_thread_notifier->_m_cached_resources.erase(fnd);
-            marked = true;
-        }
-    }
-    return marked;
-}
-bool _je_graphic_shared_context::mark_shared_resources_outdated(const char* path)
-{
-    std::shared_lock sg1(_jegl_alive_glthread_list_mx);
-    std::lock_guard g1(share_smx);
-
-    return _obsolete_shared_resource_cache_nolock(path, true);
-}
-void _je_graphic_shared_context::shrink_shared_resource_cache(size_t target_resource_count)
-{
-    std::shared_lock sg1(_jegl_alive_glthread_list_mx);
-    std::lock_guard g1(share_smx);
-
-    struct obsolete_resource
-    {
-        std::string m_path;
-        size_t m_loadcount;
-        bool operator>(const obsolete_resource& another) const noexcept
-        {
-            return m_loadcount > another.m_loadcount;
-        }
-    };
-
-    std::priority_queue<
-        obsolete_resource,
-        std::vector<obsolete_resource>,
-        std::greater<obsolete_resource>>
-        obs_queue;
-
-    for (auto& [path, loadcount] : shared_resource_used_counts)
-        obs_queue.push(obsolete_resource{ path, loadcount });
-
-    while (obs_queue.size() > target_resource_count)
-    {
-        const auto& obs_res = obs_queue.top();
-
-        shared_resource_used_counts.erase(obs_res.m_path);
-        _obsolete_shared_resource_cache_nolock(obs_res.m_path.c_str(), false);
-
-        obs_queue.pop();
-    }
-}
-
-jeecs_sync_callback_func_t _jegl_sync_callback_func = nullptr;
-void* _jegl_sync_callback_arg = nullptr;
 
 void jegl_sync_init(jegl_context* thread, bool isreboot)
 {
-    if (_current_graphic_thread == nullptr)
-        _current_graphic_thread = thread;
+    if (jeecs::graphic::_current_graphic_thread == nullptr)
+        jeecs::graphic::_current_graphic_thread = thread;
 
-    assert(_current_graphic_thread == thread);
+    assert(jeecs::graphic::_current_graphic_thread == thread);
 
     if (thread->m_universe_instance != nullptr)
     {
@@ -435,29 +647,92 @@ void jegl_sync_init(jegl_context* thread, bool isreboot)
     ++thread->m_version;
 }
 
-void jegl_share_resource(jegl_resource* resource)
+void _jegl_close_resouce_instance_by_api(
+    jegl_context* thread, const jeecs::graphic::created_resource* res)
 {
-    _je_graphic_shared_context::_share_resource(resource);
+    switch (res->m_type)
+    {
+    case jeecs::graphic::created_resource::kind::SHADER:
+        thread->m_apis->shader_close(
+            thread->m_graphic_impl_context,
+            res->resource<jegl_shader>());
+        break;
+    case jeecs::graphic::created_resource::kind::TEXTURE:
+        thread->m_apis->texture_close(
+            thread->m_graphic_impl_context,
+            res->resource<jegl_texture>());
+        break;
+    case jeecs::graphic::created_resource::kind::VERTEX:
+        thread->m_apis->vertex_close(
+            thread->m_graphic_impl_context,
+            res->resource<jegl_vertex>());
+        break;
+    case jeecs::graphic::created_resource::kind::UNIFORM_BUFFER:
+        thread->m_apis->ubuffer_close(
+            thread->m_graphic_impl_context,
+            res->resource<jegl_uniform_buffer>());
+        break;
+    case jeecs::graphic::created_resource::kind::FRAME_BUFFER:
+        thread->m_apis->framebuffer_close(
+            thread->m_graphic_impl_context,
+            res->resource<jegl_frame_buffer>());
+        break;
+    default:
+        jeecs::debug::logfatal(
+            "Unknown graphic resource `%d` type when destroying resource in graphic thread.",
+            (int)res->m_type);
+    }
+}
+
+void _jegl_close_resouce_blob_by_api(
+    jegl_context* thread, const jeecs::graphic::cached_resource_blob* blob)
+{
+    if (blob->m_blob_may_null == nullptr)
+        // No need to free.
+        return;
+
+    switch (blob->m_type)
+    {
+    case jeecs::graphic::created_resource::kind::SHADER:
+        thread->m_apis->shader_close_blob(
+            thread->m_graphic_impl_context,
+            blob->m_blob_may_null);
+        break;
+    case jeecs::graphic::created_resource::kind::TEXTURE:
+        thread->m_apis->texture_close_blob(
+            thread->m_graphic_impl_context,
+            blob->m_blob_may_null);
+        break;
+    case jeecs::graphic::created_resource::kind::VERTEX:
+        thread->m_apis->vertex_close_blob(
+            thread->m_graphic_impl_context,
+            blob->m_blob_may_null);
+        break;
+    default:
+        jeecs::debug::logfatal(
+            "Unknown graphic resource blob `%d` type when destroying resource blob in graphic thread.",
+            (int)blob->m_type);
+    }
 }
 
 jegl_sync_state jegl_sync_update(jegl_context* thread)
 {
     std::unordered_map<
-        _jegl_destroy_resource*,
+        jeecs::graphic::resource_to_destroy*,
         bool /* Need close graphic resource */>
         _waiting_to_free_resource;
 
-    if (!thread->_m_thread_notifier->m_graphic_terminated.load())
+    if (!thread->_m_thread_notifier->m_graphic_terminated)
     {
         do
         {
             std::unique_lock uq1(thread->_m_thread_notifier->m_update_mx);
             thread->_m_thread_notifier->m_update_waiter.wait(uq1, [thread]() -> bool
-                { return thread->_m_thread_notifier->m_update_flag; });
+                { return thread->_m_thread_notifier->m_update_request_flag; });
         } while (0);
 
         // Ready for rend..
-        if (thread->_m_thread_notifier->m_graphic_terminated.load() || thread->_m_thread_notifier->m_reboot_flag)
+        if (thread->_m_thread_notifier->m_graphic_terminated || thread->_m_thread_notifier->m_graphic_reboot)
             goto is_reboot_or_shutdown;
 
         const auto frame_update_state =
@@ -467,7 +742,7 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
         {
         case jegl_update_action::JEGL_UPDATE_STOP:
             // graphic thread want to exit. mark stop update.
-            thread->_m_thread_notifier->m_graphic_terminated.store(true);
+            thread->_m_thread_notifier->m_graphic_terminated = true;
             break;
         case jegl_update_action::JEGL_UPDATE_SKIP:
             if (thread->m_config.m_fps == 0)
@@ -489,7 +764,7 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
             thread->m_apis->update_draw_commit(
                 thread->m_graphic_impl_context, frame_update_state))
         {
-            thread->_m_thread_notifier->m_graphic_terminated.store(true);
+            thread->_m_thread_notifier->m_graphic_terminated = true;
         }
 
         auto* del_res = thread->_m_thread_notifier->_m_closing_resources.pick_all();
@@ -498,19 +773,20 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
             auto* cur_del_res = del_res;
             del_res = del_res->last;
 
-            assert(cur_del_res->m_destroy_resource->m_graphic_thread == thread);
+            auto closing_resource_handle = cur_del_res->m_resource.get_handle();
+            assert(closing_resource_handle->m_graphic_thread == thread);
 
-            if (cur_del_res->m_destroy_resource->m_graphic_thread_version == thread->m_version)
+            if (closing_resource_handle->m_graphic_thread_version == thread->m_version)
                 _waiting_to_free_resource[cur_del_res] = true;
             else
-                // Free this
+                // Free this only.
                 _waiting_to_free_resource[cur_del_res] = false;
         }
 
         do
         {
             std::lock_guard g1(thread->_m_thread_notifier->m_update_mx);
-            thread->_m_thread_notifier->m_update_flag = false;
+            thread->_m_thread_notifier->m_update_request_flag = false;
             thread->_m_thread_notifier->m_update_waiter.notify_all();
         } while (0);
 
@@ -518,20 +794,24 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
         {
             if (need_close)
             {
-                thread->m_apis->close_resource(thread->m_graphic_impl_context, deleting_resource->m_destroy_resource);
-                thread->_m_thread_notifier->_m_created_resources.erase(deleting_resource->m_destroy_resource);
+                _jegl_close_resouce_instance_by_api(thread, &deleting_resource->m_resource);
+                auto result = thread->_m_thread_notifier->_m_created_resources.erase(
+                    deleting_resource->m_resource);
+
+                (void)result;
+                assert(result == 1);
             }
 
-            delete deleting_resource->m_destroy_resource;
+            deleting_resource->m_resource.free_resouce_body();
             delete deleting_resource;
         }
     }
     else
     {
     is_reboot_or_shutdown:
-        if (thread->_m_thread_notifier->m_reboot_flag)
+        if (thread->_m_thread_notifier->m_graphic_reboot)
         {
-            thread->_m_thread_notifier->m_reboot_flag = false;
+            thread->_m_thread_notifier->m_graphic_reboot = false;
             return jegl_sync_state::JEGL_SYNC_REBOOT;
         }
         return jegl_sync_state::JEGL_SYNC_SHUTDOWN;
@@ -549,15 +829,18 @@ bool jegl_sync_shutdown(jegl_context* thread, bool isreboot)
 
     for (auto& [_, resource_blob] : thread->_m_thread_notifier->_m_cached_resource_blobs)
     {
-        thread->m_apis->close_resource_blob_cache(thread->m_graphic_impl_context, resource_blob.m_blob);
+        _jegl_close_resouce_blob_by_api(thread, &resource_blob);
     }
     thread->_m_thread_notifier->_m_cached_resource_blobs.clear();
 
-    for (auto* resource : thread->_m_thread_notifier->_m_created_resources)
+    for (auto& resource : thread->_m_thread_notifier->_m_created_resources)
     {
-        thread->m_apis->close_resource(thread->m_graphic_impl_context, resource);
-        resource->m_graphic_thread = nullptr;
-        resource->m_graphic_thread_version = 0;
+        _jegl_close_resouce_instance_by_api(thread, &resource);
+
+        auto* resouce_handle = resource.get_handle();
+
+        resouce_handle->m_graphic_thread = nullptr;
+        resouce_handle->m_graphic_thread_version = 0;
     }
     thread->_m_thread_notifier->_m_created_resources.clear();
 
@@ -572,7 +855,7 @@ bool jegl_sync_shutdown(jegl_context* thread, bool isreboot)
     {
         // Really shutdown, give promise!
         thread->_m_thread_notifier->m_promise.set_value();
-        _current_graphic_thread = nullptr;
+        jeecs::graphic::_current_graphic_thread = nullptr;
         return true;
     }
     return false;
@@ -583,8 +866,8 @@ void jegl_register_sync_thread_callback(
 {
     assert(callback != nullptr);
 
-    _jegl_sync_callback_func = callback;
-    _jegl_sync_callback_arg = arg;
+    jeecs::graphic::_jegl_sync_callback_func = callback;
+    jeecs::graphic::_jegl_sync_callback_arg = arg;
 }
 
 jegl_context* jegl_start_graphic_thread(
@@ -637,28 +920,30 @@ jegl_context* jegl_start_graphic_thread(
     // Register finish functions
     do
     {
-        std::lock_guard g1(_jegl_alive_glthread_list_mx);
+        std::lock_guard g1(jeecs::graphic::_jegl_alive_glthread_list_mx);
 
-        if (_jegl_alive_glthread_list.end() ==
-            std::find(_jegl_alive_glthread_list.begin(), _jegl_alive_glthread_list.end(),
+        if (jeecs::graphic::_jegl_alive_glthread_list.end() ==
+            std::find(
+                jeecs::graphic::_jegl_alive_glthread_list.begin(),
+                jeecs::graphic::_jegl_alive_glthread_list.end(),
                 thread_handle))
         {
-            _jegl_alive_glthread_list.push_back(thread_handle);
+            jeecs::graphic::_jegl_alive_glthread_list.push_back(thread_handle);
         }
     } while (0);
 
     // Take place.
     thread_handle->m_config = config;
-    thread_handle->_m_thread_notifier->m_graphic_terminated.store(false);
-    thread_handle->_m_thread_notifier->m_update_flag = false;
-    thread_handle->_m_thread_notifier->m_reboot_flag = false;
+    thread_handle->_m_thread_notifier->m_graphic_terminated = false;
+    thread_handle->_m_thread_notifier->m_update_request_flag = false;
+    thread_handle->_m_thread_notifier->m_graphic_reboot = false;
     thread_handle->m_universe_instance = universe_instance;
     thread_handle->_m_frame_rend_work = frame_rend_work;
     thread_handle->_m_frame_rend_work_arg = arg;
 
-    assert(_jegl_sync_callback_func != nullptr);
-    thread_handle->_m_sync_callback_arg = _jegl_sync_callback_arg;
-    _jegl_sync_callback_func(thread_handle, _jegl_sync_callback_arg);
+    assert(jeecs::graphic::_jegl_sync_callback_func != nullptr);
+    thread_handle->_m_sync_callback_arg = jeecs::graphic::_jegl_sync_callback_arg;
+    jeecs::graphic::_jegl_sync_callback_func(thread_handle, jeecs::graphic::_jegl_sync_callback_arg);
 
     return thread_handle;
 }
@@ -668,8 +953,8 @@ void jegl_finish()
     std::vector<jegl_context*> shutdown_glthreads;
     do
     {
-        std::lock_guard g1(_jegl_alive_glthread_list_mx);
-        shutdown_glthreads = _jegl_alive_glthread_list;
+        std::lock_guard g1(jeecs::graphic::_jegl_alive_glthread_list_mx);
+        shutdown_glthreads = jeecs::graphic::_jegl_alive_glthread_list;
     } while (0);
     for (auto alive_glthread : shutdown_glthreads)
     {
@@ -681,30 +966,34 @@ void jegl_terminate_graphic_thread(jegl_context* thread)
 {
     do
     {
-        std::lock_guard g1(_jegl_alive_glthread_list_mx);
-        auto fnd = std::find(_jegl_alive_glthread_list.begin(), _jegl_alive_glthread_list.end(), thread);
-        if (fnd == _jegl_alive_glthread_list.end())
+        std::lock_guard g1(jeecs::graphic::_jegl_alive_glthread_list_mx);
+        auto fnd = std::find(
+            jeecs::graphic::_jegl_alive_glthread_list.begin(),
+            jeecs::graphic::_jegl_alive_glthread_list.end(),
+            thread);
+        if (fnd == jeecs::graphic::_jegl_alive_glthread_list.end())
             return;
         else
         {
-            _jegl_alive_glthread_list.erase(fnd);
+            jeecs::graphic::_jegl_alive_glthread_list.erase(fnd);
         }
 
     } while (0);
 
-    thread->_m_thread_notifier->m_graphic_terminated.store(true);
+    thread->_m_thread_notifier->m_graphic_terminated = true;
 
     do
     {
         std::lock_guard g1(thread->_m_thread_notifier->m_update_mx);
-        thread->_m_thread_notifier->m_update_flag = true;
+        thread->_m_thread_notifier->m_update_request_flag = true;
         thread->_m_thread_notifier->m_update_waiter.notify_all();
     } while (0);
 
     // Sync thread and wait for shutting-down
     thread->_m_thread_notifier->m_promise.get_future().get();
 
-    _je_graphic_shared_context_instance._free_resource_in_gcontext(thread);
+    // Close shared resources in contexrt.
+    jeecs::graphic::_je_graphic_shared_context_instance._free_resource_in_gcontext(thread);
 
     auto* closing_resource = thread->_m_thread_notifier->_m_closing_resources.pick_all();
     while (closing_resource)
@@ -712,7 +1001,7 @@ void jegl_terminate_graphic_thread(jegl_context* thread)
         auto* cur_closing_resource = closing_resource;
         closing_resource = closing_resource->last;
 
-        delete cur_closing_resource->m_destroy_resource;
+        cur_closing_resource->m_resource.free_resouce_body();
         delete cur_closing_resource;
     }
 
@@ -728,7 +1017,7 @@ bool jegl_update(
     jegl_update_sync_callback_t callback_after_wait_may_null,
     void* callback_param)
 {
-    if (thread->_m_thread_notifier->m_graphic_terminated.load())
+    if (thread->_m_thread_notifier->m_graphic_terminated)
         return false;
 
     std::unique_lock uq1(thread->_m_thread_notifier->m_update_mx);
@@ -736,20 +1025,20 @@ bool jegl_update(
     {
         // Wait until `last` frame draw end.
         thread->_m_thread_notifier->m_update_waiter.wait(uq1, [thread]() -> bool
-            { return !thread->_m_thread_notifier->m_update_flag; });
+            { return !thread->_m_thread_notifier->m_update_request_flag; });
 
         if (nullptr != callback_after_wait_may_null)
             callback_after_wait_may_null(callback_param);
     }
 
-    thread->_m_thread_notifier->m_update_flag = true;
+    thread->_m_thread_notifier->m_update_request_flag = true;
     thread->_m_thread_notifier->m_update_waiter.notify_all();
 
     if (mode == jegl_update_sync_mode::JEGL_WAIT_THIS_FRAME_END)
     {
         // Wait until `this` frame draw end.
         thread->_m_thread_notifier->m_update_waiter.wait(uq1, [thread]() -> bool
-            { return !thread->_m_thread_notifier->m_update_flag; });
+            { return !thread->_m_thread_notifier->m_update_request_flag; });
 
         if (nullptr != callback_after_wait_may_null)
             callback_after_wait_may_null(callback_param);
@@ -763,240 +1052,286 @@ void jegl_reboot_graphic_thread(jegl_context* thread_handle, const jegl_interfac
     if (config_may_null != nullptr)
         thread_handle->m_config = *config_may_null;
 
-    thread_handle->_m_thread_notifier->m_reboot_flag = true;
+    thread_handle->_m_thread_notifier->m_graphic_reboot = true;
 }
 
 bool jegl_mark_shared_resources_outdated(const char* path)
 {
-    return _je_graphic_shared_context_instance.mark_shared_resources_outdated(path);
+    return jeecs::graphic::_je_graphic_shared_context_instance.mark_shared_resources_outdated(
+        path);
 }
 
-bool jegl_using_resource(jegl_resource* resource)
+jeecs::graphic::cached_resource_blob::kind _jegl_try_get_resource_blob(
+    jegl_resource_handle* resource_handle,
+    jegl_resource_blob* out_blob,
+    size_t* out_blob_version)
 {
-    bool need_init_resource = false;
+    jeecs::graphic::cached_resource_blob::kind found = jeecs::graphic::cached_resource_blob::kind::UNKNOWN;
+    jegl_resource_blob blob = nullptr;
+    size_t resource_blob_version = 0;
 
-    if (!_current_graphic_thread)
+    if (resource_handle->m_path_may_null_if_builtin != nullptr)
     {
-        jeecs::debug::logerr("Graphic resource only usable in graphic thread.");
-        return false;
-    }
-
-    if (resource->m_graphic_thread != nullptr
-        && _current_graphic_thread != resource->m_graphic_thread)
-    {
-        jeecs::debug::logerr("This resource has been used in graphic thread: %p.",
-            resource->m_graphic_thread);
-        return false;
-    }
-    else if (nullptr == resource->m_graphic_thread
-        || resource->m_graphic_thread_version != _current_graphic_thread->m_version)
-    {
-        need_init_resource = true;
-    }
-
-    // If resource is died, ignore it.
-    if (resource->m_custom_resource == nullptr && need_init_resource)
-    {
-        // Bad resource, it has been closed without any init job.
-        jeecs::debug::logerr("This resource has been closed but not been inited: %p.",
-            resource);
-        return false;
-    }
-
-    if (need_init_resource)
-    {
-        resource->m_graphic_thread = _current_graphic_thread;
-        resource->m_graphic_thread_version = _current_graphic_thread->m_version;
-        resource->m_graphic_thread_version = _current_graphic_thread->m_version;
-
-        jegl_resource_blob resource_blob = nullptr;
-
-        size_t resource_blob_version = 0;
-        if (resource->m_path != nullptr)
+        do
         {
-            do
+            std::shared_lock sg1(
+                jeecs::graphic::_je_graphic_shared_context_instance.share_smx);
+
+            resource_blob_version =
+                jeecs::graphic::_je_graphic_shared_context_instance._get_shared_blob_unload_counter(
+                    resource_handle->m_path_may_null_if_builtin);
+        } while (0);
+
+
+        auto& cached_resource_blob_list =
+            jeecs::graphic::_current_graphic_thread->_m_thread_notifier->_m_cached_resource_blobs;
+
+        auto fnd = cached_resource_blob_list.find(resource_handle->m_path_may_null_if_builtin);
+        if (fnd != cached_resource_blob_list.end())
+        {
+            // Check if outdated?
+            if (fnd->second.m_version == resource_blob_version)
             {
-                std::shared_lock sg1(_je_graphic_shared_context_instance.share_smx);
-
-                resource_blob_version =
-                    _je_graphic_shared_context_instance._get_shared_blob_unload_counter(
-                        resource->m_path);
-            } while (0);
-
-            auto fnd = _current_graphic_thread->_m_thread_notifier
-                ->_m_cached_resource_blobs.find(resource->m_path);
-
-            if (fnd != _current_graphic_thread->_m_thread_notifier
-                ->_m_cached_resource_blobs.end())
+                found = fnd->second.m_type;
+                blob = fnd->second.m_blob_may_null;
+            }
+            else
             {
-                // Check if outdated?
-                if (fnd->second.m_version == resource_blob_version)
-                    resource_blob = fnd->second.m_blob;
-                else
-                {
-                    // Clear outdated blob.
-                    _current_graphic_thread->m_apis
-                        ->close_resource_blob_cache(
-                            _current_graphic_thread->m_graphic_impl_context,
-                            fnd->second.m_blob);
-                }
+                // Clear outdated blob.
+                _jegl_close_resouce_blob_by_api(
+                    jeecs::graphic::_current_graphic_thread, &fnd->second);
+                cached_resource_blob_list.erase(fnd);
             }
         }
-
-        if (resource_blob == nullptr)
-            resource_blob = _current_graphic_thread->m_apis->create_resource_blob_cache(
-                _current_graphic_thread->m_graphic_impl_context, resource);
-
-        if (resource->m_path != nullptr)
-        {
-            auto& cached_blob = _current_graphic_thread->_m_thread_notifier
-                ->_m_cached_resource_blobs[resource->m_path];
-
-            cached_blob.m_blob = resource_blob;
-            cached_blob.m_version = resource_blob_version;
-        }
-
-        // Create resource by blob.
-        _current_graphic_thread->m_apis->create_resource(
-            _current_graphic_thread->m_graphic_impl_context, resource_blob, resource);
-
-        if (resource->m_path == nullptr)
-            _current_graphic_thread->m_apis->close_resource_blob_cache(
-                _current_graphic_thread->m_graphic_impl_context, resource_blob);
-
-        _current_graphic_thread->_m_thread_notifier->_m_created_resources.insert(resource);
     }
 
-    _current_graphic_thread->m_apis->using_resource(
-        _current_graphic_thread->m_graphic_impl_context, resource);
-
-    return need_init_resource;
+    *out_blob = blob;
+    *out_blob_version = resource_blob_version;
+    return found;
 }
 
-void _jegl_free_resource_instance(jegl_resource* resource)
+bool _jegl_try_update_resource_blob(
+    jegl_resource_handle* resource_handle,
+    jeecs::graphic::cached_resource_blob::kind blob_type,
+    jegl_resource_blob blob_may_null,
+    size_t blob_version)
 {
-    assert(resource != nullptr);
-    assert(resource->m_custom_resource == nullptr);
-    assert(resource->m_raw_ref_count == nullptr);
+    if (resource_handle->m_path_may_null_if_builtin == nullptr)
+    {
+        if (blob_may_null != nullptr)
+        {
+            jeecs::debug::logwarn(
+                "Cannot cache resource blob for anonymous resource.");
+
+            return false;
+        }
+
+        // If blob is null, return true to avoid useless blob close operation.
+        return true;
+    }
+
+    assert(resource_handle->m_path_may_null_if_builtin != nullptr);
+
+    auto result = jeecs::graphic::_current_graphic_thread->_m_thread_notifier
+        ->_m_cached_resource_blobs.insert(
+            std::make_pair(
+                resource_handle->m_path_may_null_if_builtin,
+                jeecs::graphic::cached_resource_blob
+                {
+                    blob_type,
+                    blob_version,
+                    blob_may_null,
+                }));
+
+    if (blob_may_null != nullptr)
+        return result.second;
+
+    // If blob is null, return true to avoid useless blob close operation.
+    return true;
+}
+
+template<jeecs::graphic::requirements::basic_graphic_resource T>
+jeecs::graphic::jegl_resouce_state _jegl_check_resource_state(
+    T* resource)
+{
+    auto* resource_handle = &resource->m_handle;
+
+    if (!jeecs::graphic::_current_graphic_thread)
+    {
+        jeecs::debug::logerr("Graphic resource only usable in graphic thread.");
+        return jeecs::graphic::jegl_resouce_state::INVALID_CONTEXT;
+    }
+
+    if (resource_handle->m_graphic_thread != nullptr
+        && jeecs::graphic::_current_graphic_thread != resource_handle->m_graphic_thread)
+    {
+        jeecs::debug::logerr("This resource has been used in graphic thread: %p.",
+            resource_handle->m_graphic_thread);
+        return jeecs::graphic::jegl_resouce_state::INVALID_CONTEXT;
+    }
+    else if (nullptr == resource_handle->m_graphic_thread
+        || resource_handle->m_graphic_thread_version != jeecs::graphic::_current_graphic_thread->m_version)
+    {
+        resource_handle->m_modified = false;
+        resource_handle->m_graphic_thread = jeecs::graphic::_current_graphic_thread;
+        resource_handle->m_graphic_thread_version = jeecs::graphic::_current_graphic_thread->m_version;
+
+        auto result = resource_handle->m_graphic_thread->_m_thread_notifier->_m_created_resources.insert(
+            resource);
+
+        (void)result;
+        assert(result.second); // New resource must be inserted.
+
+        return jeecs::graphic::jegl_resouce_state::NEED_INIT;
+    }
+    else if (resource_handle->m_modified)
+    {
+        resource_handle->m_modified = false;
+        return jeecs::graphic::jegl_resouce_state::NEED_UPDATE;
+    }
+
+    return jeecs::graphic::jegl_resouce_state::READY;
+}
+
+void _jegl_free_resource_instance(
+    jeecs::graphic::resource_to_destroy* /* created by `new` */ del_res)
+{
+    assert(del_res != nullptr);
+
+    auto* resource_handle = del_res->m_resource.get_handle();
+    assert(resource_handle->m_raw_ref_count == nullptr);
 
     // Send this resource to destroing list;
-    auto* del_res = new _jegl_destroy_resource;
-    del_res->m_destroy_resource = resource;
 
-    std::shared_lock sg1(_jegl_alive_glthread_list_mx);
+    std::shared_lock sg1(jeecs::graphic::_jegl_alive_glthread_list_mx);
     auto fnd = std::find(
-        _jegl_alive_glthread_list.begin(),
-        _jegl_alive_glthread_list.end(),
-        del_res->m_destroy_resource->m_graphic_thread);
+        jeecs::graphic::_jegl_alive_glthread_list.begin(),
+        jeecs::graphic::_jegl_alive_glthread_list.end(),
+        resource_handle->m_graphic_thread);
 
-    if (fnd != _jegl_alive_glthread_list.end())
+    if (fnd != jeecs::graphic::_jegl_alive_glthread_list.end())
         (*fnd)->_m_thread_notifier->_m_closing_resources.add_one(del_res);
     else
     {
         // 既然这个资源已经没有管理线程了，直接就地杀了埋了
-        if (del_res->m_destroy_resource->m_graphic_thread != nullptr)
+        if (resource_handle->m_graphic_thread != nullptr)
             jeecs::debug::logwarn("Resource %p cannot free by correct graphic context, maybe it is out-dated? Free it!",
-                del_res->m_destroy_resource);
+                resource_handle);
 
-        delete del_res->m_destroy_resource;
+        del_res->m_resource.free_resouce_body();
         delete del_res;
     }
 }
 
 void _jegl_free_vertex_bone_data(const jegl_vertex::bone_data* b)
 {
-    je_mem_free((void*)b->m_name);
-    je_mem_free((void*)b);
+    je_mem_free(const_cast<char*>(b->m_name));
+    free(const_cast<jegl_vertex::bone_data*>(b));
 }
 
-void jegl_close_resource(jegl_resource* resource)
+bool _jegl_close_resource_handle(jegl_resource_handle* resource_handle)
 {
-    assert(resource != nullptr);
-    assert(resource->m_custom_resource != nullptr);
-
-    if (0 == --resource->m_raw_ref_count->m_binding_count)
+    if (0 == --resource_handle->m_raw_ref_count->m_binding_count)
     {
-        switch (resource->m_type)
-        {
-        case jegl_resource::TEXTURE:
-            // close resource's raw data, then send this resource to closing-queue
-            if (resource->m_raw_texture_data->m_pixels)
-            {
-                assert(0 == (resource->m_raw_texture_data->m_format & jegl_texture::format::FORMAT_MASK));
-                stbi_image_free(resource->m_raw_texture_data->m_pixels);
-                delete resource->m_raw_texture_data;
-            }
-            else
-                assert(0 != (resource->m_raw_texture_data->m_format & jegl_texture::format::FORMAT_MASK));
-            break;
-        case jegl_resource::SHADER:
-            // close resource's raw data, then send this resource to closing-queue
-            jegl_shader_free_generated_shader_source(resource->m_raw_shader_data);
-            delete resource->m_raw_shader_data;
-            break;
-        case jegl_resource::VERTEX:
-            // close resource's raw data, then send this resource to closing-queue
-            je_mem_free((void*)resource->m_raw_vertex_data->m_vertexs);
-            je_mem_free((void*)resource->m_raw_vertex_data->m_indices);
-            je_mem_free((void*)resource->m_raw_vertex_data->m_formats);
-            for (size_t bone_idx = 0; bone_idx < resource->m_raw_vertex_data->m_bone_count; ++bone_idx)
-                _jegl_free_vertex_bone_data(resource->m_raw_vertex_data->m_bones[bone_idx]);
+        delete resource_handle->m_raw_ref_count;
+        resource_handle->m_raw_ref_count = nullptr;
 
-            je_mem_free((void*)resource->m_raw_vertex_data->m_bones);
+        if (resource_handle->m_path_may_null_if_builtin)
+            je_mem_free(const_cast<char*>(resource_handle->m_path_may_null_if_builtin));
 
-            delete resource->m_raw_vertex_data;
-            break;
-        case jegl_resource::FRAMEBUF:
-            // Close all frame rend out texture
-            if (!resource->m_raw_framebuf_data)
-                assert(resource->m_raw_framebuf_data->m_attachment_count == 0);
-            else
-            {
-                assert(resource->m_raw_framebuf_data->m_attachment_count > 0);
-                jeecs::basic::resource<jeecs::graphic::texture>* attachments =
-                    reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture> *>(
-                        resource->m_raw_framebuf_data->m_output_attachments);
+        return true;
+    }
+    return false;
+}
 
-                for (size_t i = 0; i < resource->m_raw_framebuf_data->m_attachment_count; ++i)
-                    attachments[i].~shared_pointer();
+void _jegl_init_resource_handle(
+    jegl_resource_handle* resource_handle,
+    const char* path_may_null_if_builtin)
+{
+    if (path_may_null_if_builtin != nullptr)
+    {
+        resource_handle->m_path_may_null_if_builtin =
+            jeecs::basic::make_new_string(path_may_null_if_builtin);
+    }
+    else
+        resource_handle->m_path_may_null_if_builtin = nullptr;
 
-                free(attachments);
-            }
-            delete resource->m_raw_framebuf_data;
-            break;
-        case jegl_resource::UNIFORMBUF:
-            je_mem_free(resource->m_raw_uniformbuf_data->m_buffer);
-            delete resource->m_raw_uniformbuf_data;
-            break;
-        default:
-            jeecs::debug::logerr("Unknown resource type to close.");
-            return;
-        }
+    resource_handle->m_raw_ref_count = new jegl_resource_bind_counter(1);
 
-        if (resource->m_path)
-            je_mem_free((void*)resource->m_path);
+    resource_handle->m_graphic_thread = nullptr;
+    resource_handle->m_graphic_thread_version = 0;
+    resource_handle->m_modified = false;
+    resource_handle->m_ptr = nullptr;
+}
 
-        delete resource->m_raw_ref_count;
-        resource->m_raw_ref_count = nullptr;
-        resource->m_custom_resource = nullptr;
-
-        _jegl_free_resource_instance(resource);
+void jegl_close_shader(jegl_shader* shader)
+{
+    if (_jegl_close_resource_handle(&shader->m_handle))
+    {
+        jegl_shader_free_generated_shader_source(shader);
     }
 }
 
-jegl_resource* _create_resource()
+void jegl_close_texture(jegl_texture* texture)
 {
-    jegl_resource* res = new jegl_resource{};
-    res->m_raw_ref_count = new jegl_resource_bind_counter(1);
-    return res;
+    if (_jegl_close_resource_handle(&texture->m_handle))
+    {
+        // close resource's raw data, then send this resource to closing-queue
+        if (texture->m_pixels)
+        {
+            assert(0 == (texture->m_format & jegl_texture::format::FORMAT_MASK));
+            stbi_image_free(texture->m_pixels);
+        }
+        else
+            assert(0 != (texture->m_format & jegl_texture::format::FORMAT_MASK));
+    }
 }
 
-jegl_resource* jegl_create_texture(size_t width, size_t height, jegl_texture::format format)
+void jegl_close_vertex(jegl_vertex* vertex)
 {
-    jegl_resource* texture = _create_resource();
-    texture->m_type = jegl_resource::TEXTURE;
-    texture->m_raw_texture_data = new jegl_texture();
-    texture->m_path = nullptr;
+    if (_jegl_close_resource_handle(&vertex->m_handle))
+    {
+        // close resource's raw data, then send this resource to closing-queue
+        free(const_cast<void*>(vertex->m_vertexs));
+        free(const_cast<uint32_t*>(vertex->m_indices));
+        free(const_cast<jegl_vertex::data_layout*>(vertex->m_formats));
+
+        for (size_t bone_idx = 0; bone_idx < vertex->m_bone_count; ++bone_idx)
+            _jegl_free_vertex_bone_data(vertex->m_bones[bone_idx]);
+
+        free(const_cast<jegl_vertex::bone_data**>(vertex->m_bones));
+    }
+}
+
+void jegl_close_framebuf(jegl_frame_buffer* framebuf)
+{
+    if (_jegl_close_resource_handle(&framebuf->m_handle))
+    {
+        // Close all frame rend out texture
+        assert(framebuf->m_attachment_count > 0);
+        jeecs::basic::resource<jeecs::graphic::texture>* attachments =
+            reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture> *>(
+                framebuf->m_output_attachments);
+
+        for (size_t i = 0; i < framebuf->m_attachment_count; ++i)
+            attachments[i].~shared_pointer();
+
+        free(attachments);
+    }
+}
+
+void jegl_close_uniformbuf(jegl_uniform_buffer* ubuffer)
+{
+    if (_jegl_close_resource_handle(&ubuffer->m_handle))
+        free(ubuffer->m_buffer);
+}
+
+jegl_texture* jegl_create_texture(size_t width, size_t height, jegl_texture::format format)
+{
+    jegl_texture* texture_instance =
+        reinterpret_cast<jegl_texture*>(malloc(sizeof(jegl_texture)));
+
+    assert(texture_instance != nullptr);
 
     if (width == 0)
         width = 1;
@@ -1005,27 +1340,30 @@ jegl_resource* jegl_create_texture(size_t width, size_t height, jegl_texture::fo
 
     if ((format & jegl_texture::format::FORMAT_MASK) == 0)
     {
-        texture->m_raw_texture_data->m_pixels =
+        texture_instance->m_pixels =
             (jegl_texture::pixel_data_t*)malloc(width * height * format);
 
-        assert(texture->m_raw_texture_data->m_pixels != nullptr);
-        memset(texture->m_raw_texture_data->m_pixels, 0, width * height * format);
+        assert(texture_instance->m_pixels != nullptr);
+        memset(texture_instance->m_pixels, 0, width * height * format);
     }
     else
         // For special format texture such as depth, do not alloc for pixel.
-        texture->m_raw_texture_data->m_pixels = nullptr;
+        texture_instance->m_pixels = nullptr;
 
-    texture->m_raw_texture_data->m_width = width;
-    texture->m_raw_texture_data->m_height = height;
-    texture->m_raw_texture_data->m_format = format;
+    texture_instance->m_width = width;
+    texture_instance->m_height = height;
+    texture_instance->m_format = format;
 
-    return texture;
+    _jegl_init_resource_handle(&texture_instance->m_handle, nullptr);
+    return texture_instance;
 }
 
-jegl_resource* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path);
-void _jegl_create_shader_cache(jegl_resource* shader_resource, wo_integer_t virtual_file_crc64);
+jegl_shader* _jegl_create_shader_instance_and_init(void);
+jegl_shader* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path);
+void _jegl_create_shader_cache(jegl_shader* shader_resource, wo_integer_t virtual_file_crc64);
 
-jegl_resource* jegl_load_shader_source(const char* path, const char* src, bool is_virtual_file)
+jegl_shader* _jegl_load_shader_source_impl(
+    const char* path, const char* src, bool is_virtual_file)
 {
     if (is_virtual_file)
     {
@@ -1058,19 +1396,17 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src, bool i
     {
         shader_wrapper* shader_graph = reinterpret_cast<shader_wrapper*>(wo_pointer(retval));
 
-        jegl_shader* _shader = new jegl_shader();
+        jegl_shader* shader_instance =
+            _jegl_create_shader_instance_and_init();
 
-        jegl_shader_generate_shader_source(shader_graph, _shader);
+        jegl_shader_generate_shader_source(shader_graph, shader_instance);
 
-        jegl_resource* shader = _create_resource();
-        shader->m_type = jegl_resource::SHADER;
-        shader->m_raw_shader_data = _shader;
-        shader->m_path = jeecs::basic::make_new_string(path);
-
-        _jegl_create_shader_cache(shader, is_virtual_file ? wo_crc64_str(src) : 0);
+        _jegl_init_resource_handle(&shader_instance->m_handle, path);
+        _jegl_create_shader_cache(shader_instance, is_virtual_file ? wo_crc64_str(src) : 0);
 
         wo_close_vm(vmm);
-        return shader;
+
+        return shader_instance;
     }
     else
     {
@@ -1084,34 +1420,53 @@ jegl_resource* jegl_load_shader_source(const char* path, const char* src, bool i
 #endif
 }
 
-jegl_resource* jegl_try_update_shared_resource(jegl_context* context, jegl_resource* resource)
+jegl_shader* jegl_load_shader_source(
+    jegl_context* context, const char* path, const char* src, bool is_virtual_file)
 {
-    return _je_graphic_shared_context_instance.try_update_shared_resource(context, resource);
-}
-jegl_resource* jegl_try_load_shared_resource(jegl_context* context, const char* path)
-{
-    return _je_graphic_shared_context_instance.try_load_shared_resource(context, path);
-}
-void jegl_shrink_shared_resource_cache(jegl_context* context, size_t shrink_target_count)
-{
-    _je_graphic_shared_context_instance.shrink_shared_resource_cache(shrink_target_count);
+    if (is_virtual_file)
+    {
+        auto* shared_shader =
+            jeecs::graphic::_je_graphic_shared_context_instance.try_load_shared_resource<jegl_shader>(
+                context, path);
+
+        if (shared_shader != nullptr)
+            return shared_shader;
+    }
+
+    auto* shader_instance = _jegl_load_shader_source_impl(path, src, is_virtual_file);
+
+    if (shader_instance != nullptr && shader_instance->m_enable_to_shared)
+        return jeecs::graphic::_je_graphic_shared_context_instance.try_update_shared_resource(
+            context, shader_instance);
+
+    return shader_instance;
 }
 
-jegl_resource* jegl_load_shader(jegl_context* context, const char* path)
+void jegl_shrink_shared_resource_cache(jegl_context* context, size_t shrink_target_count)
 {
-    auto* shared_shader = jegl_try_load_shared_resource(context, path);
-    if (shared_shader != nullptr && shared_shader->m_type == jegl_resource::type::SHADER)
+    jeecs::graphic::_je_graphic_shared_context_instance.shrink_shared_resource_cache(
+        shrink_target_count);
+}
+
+jegl_shader* jegl_load_shader(jegl_context* context, const char* path)
+{
+    auto* shared_shader =
+        jeecs::graphic::_je_graphic_shared_context_instance.try_load_shared_resource<jegl_shader>(
+            context, path);
+
+    if (shared_shader != nullptr)
         return shared_shader;
 
     if (jeecs_file* shader_cache = jeecs_load_cache_file(path, SHADER_CACHE_VERSION, 0))
     {
-        auto* shader_resource = _jegl_load_shader_cache(shader_cache, path);
+        auto* cached_shader_instance = _jegl_load_shader_cache(shader_cache, path);
+        assert(cached_shader_instance != nullptr);
 
-        assert(shader_resource != nullptr && shader_resource->m_raw_shader_data != nullptr);
+        if (cached_shader_instance->m_enable_to_shared)
+            return jeecs::graphic::_je_graphic_shared_context_instance.try_update_shared_resource(
+                context, cached_shader_instance);
 
-        if (shader_resource->m_raw_shader_data->m_enable_to_shared)
-            return jegl_try_update_shared_resource(context, shader_resource);
-        return shader_resource;
+        return cached_shader_instance;
     }
     if (jeecs_file* texfile = jeecs_file_open(path))
     {
@@ -1121,34 +1476,34 @@ jegl_resource* jegl_load_shader(jegl_context* context, const char* path)
 
         jeecs_file_close(texfile);
 
-        auto* shader_resource = jegl_load_shader_source(path, src, false);
+        auto* shader_resource = jegl_load_shader_source(context, path, src, false);
         free(src);
 
-        if (shader_resource != nullptr)
-        {
-            assert(shader_resource != nullptr && shader_resource->m_raw_shader_data != nullptr);
-            if (shader_resource->m_raw_shader_data->m_enable_to_shared)
-                return jegl_try_update_shared_resource(context, shader_resource);
-            return shader_resource;
-        }
-        return nullptr;
+        return shader_resource;
     }
     jeecs::debug::logerr("Fail to open file: '%s'", path);
     return nullptr;
 }
 
-jegl_resource* jegl_load_texture(jegl_context* context, const char* path)
+void jegl_share_resource_handle(jegl_resource_handle* resource_handle)
 {
-    auto* shared_texture = jegl_try_load_shared_resource(context, path);
-    if (shared_texture != nullptr && shared_texture->m_type == jegl_resource::type::TEXTURE)
+    jeecs::graphic::_je_graphic_shared_context::_share_resource(
+        resource_handle);
+}
+
+jegl_texture* jegl_load_texture(jegl_context* context, const char* path)
+{
+    auto* shared_texture =
+        jeecs::graphic::_je_graphic_shared_context_instance.try_load_shared_resource<jegl_texture>(
+            context, path);
+
+    if (shared_texture != nullptr)
         return shared_texture;
 
     if (jeecs_file* texfile = jeecs_file_open(path))
     {
-        jegl_resource* texture = _create_resource();
-        texture->m_type = jegl_resource::TEXTURE;
-        texture->m_raw_texture_data = new jegl_texture();
-        texture->m_path = jeecs::basic::make_new_string(path);
+        jegl_texture* texture_instance =
+            reinterpret_cast<jegl_texture*>(malloc(sizeof(jegl_texture)));
 
         int w, h, cdepth;
 
@@ -1162,35 +1517,143 @@ jegl_resource* jegl_load_texture(jegl_context* context, const char* path)
         res_reader.skip = [](void* f, int n)
             { jeecs_file_seek((jeecs_file*)f, (size_t)n, je_read_file_seek_mode::JE_READ_FILE_SEEK_CURRENT); };
 
-        texture->m_raw_texture_data->m_pixels = stbi_load_from_callbacks(&res_reader, texfile, &w, &h, &cdepth, STBI_rgb_alpha);
+        texture_instance->m_pixels = stbi_load_from_callbacks(
+            &res_reader, texfile, &w, &h, &cdepth, STBI_rgb_alpha);
 
         jeecs_file_close(texfile);
 
-        if (texture->m_raw_texture_data->m_pixels == nullptr)
+        if (texture_instance->m_pixels == nullptr)
         {
             jeecs::debug::logerr("Cannot load texture: Invalid image format of file: '%s'", path);
-            delete texture->m_raw_texture_data;
-            delete texture;
+            free(texture_instance);
             return nullptr;
         }
 
-        texture->m_raw_texture_data->m_width = (size_t)w;
-        texture->m_raw_texture_data->m_height = (size_t)h;
-        texture->m_raw_texture_data->m_format = jegl_texture::RGBA;
+        texture_instance->m_width = (size_t)w;
+        texture_instance->m_height = (size_t)h;
+        texture_instance->m_format = jegl_texture::RGBA;
 
-        return jegl_try_update_shared_resource(context, texture);
+        _jegl_init_resource_handle(&texture_instance->m_handle, path);
+
+        return jeecs::graphic::_je_graphic_shared_context_instance.try_update_shared_resource(
+            context, texture_instance);
     }
 
     jeecs::debug::loginfo("Cannot load texture: Failed to open file: '%s'", path);
     return nullptr;
 }
 
-jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
+jegl_vertex* _jegl_create_vertex_impl(
+    jegl_vertex::type type,
+    const void* datas,
+    size_t data_length,
+    const uint32_t* indices,
+    size_t index_count,
+    const jegl_vertex::data_layout* format,
+    size_t format_count)
+{
+    size_t data_size_per_point = 0;
+    for (size_t i = 0; i < format_count; ++i)
+        data_size_per_point += format[i].m_count * 4; /* Both int32 & float32 is 4 byte*/
+
+    auto data_group_count = data_length / data_size_per_point;
+
+    if (data_size_per_point == 0)
+    {
+        jeecs::debug::logerr("Bad format, point donot contain any data.");
+        return nullptr;
+    }
+    if (data_group_count == 0)
+    {
+        jeecs::debug::logerr("Vertex data donot contain any completed point.");
+        return nullptr;
+    }
+
+    if (data_length % data_size_per_point)
+        jeecs::debug::logwarn("Vertex data & format not matched, please check.");
+
+    assert(format_count > 0);
+
+    jegl_vertex* vertex = reinterpret_cast<jegl_vertex*>(malloc(sizeof(jegl_vertex)));
+
+    vertex->m_type = type;
+    vertex->m_data_size_per_point = data_size_per_point;
+    vertex->m_bones = nullptr;
+    vertex->m_bone_count = 0;
+
+    void* data_buffer = (void*)malloc(data_length);
+    memcpy(data_buffer, datas, data_length);
+    vertex->m_vertexs = data_buffer;
+    vertex->m_vertex_length = data_length;
+
+    uint32_t* index_buffer = (uint32_t*)malloc(index_count * sizeof(uint32_t));
+    memcpy(index_buffer, indices, index_count * sizeof(uint32_t));
+    vertex->m_indices = index_buffer;
+    vertex->m_index_count = index_count;
+
+    jegl_vertex::data_layout* formats =
+        (jegl_vertex::data_layout*)malloc(format_count * sizeof(jegl_vertex::data_layout));
+    memcpy(formats, format,
+        format_count * sizeof(jegl_vertex::data_layout));
+    vertex->m_formats = formats;
+    vertex->m_format_count = format_count;
+
+    // Calc size by default:
+    float
+        x_min = 0.f,
+        x_max = 0.f,
+        y_min = 0.f, y_max = 0.f,
+        z_min = 0.f, z_max = 0.f;
+
+    if (format[0].m_count == 3 && format[0].m_type == jegl_vertex::data_type::FLOAT32)
+    {
+        // First data group is position(by default).
+        x_min = x_max = reinterpret_cast<const float*>(datas)[0];
+        y_min = y_max = reinterpret_cast<const float*>(datas)[1];
+        z_min = z_max = reinterpret_cast<const float*>(datas)[2];
+
+        // First data group is position(by default).
+        for (size_t i = 1; i < data_group_count; ++i)
+        {
+            const float* fdata = reinterpret_cast<const float*>(
+                reinterpret_cast<const char*>(datas) + i * data_size_per_point);
+
+            float x = fdata[0];
+            float y = fdata[1];
+            float z = fdata[2];
+
+            x_min = std::min(x, x_min);
+            x_max = std::max(x, x_max);
+            y_min = std::min(y, y_min);
+            y_max = std::max(y, y_max);
+            z_min = std::min(z, z_min);
+            z_max = std::max(z, z_max);
+        }
+    }
+    else
+        jeecs::debug::logwarn(
+            "Position data of vertex(%p) mismatch, first data should be position and with length '3'",
+            vertex);
+
+    vertex->m_x_min = x_min;
+    vertex->m_x_max = x_max;
+    vertex->m_y_min = y_min;
+    vertex->m_y_max = y_max;
+    vertex->m_z_min = z_min;
+    vertex->m_z_max = z_max;
+
+    return vertex;
+}
+
+jegl_vertex* jegl_load_vertex(jegl_context* context, const char* path)
 {
     const size_t MAX_BONE_COUNT = 256;
 
-    auto* shared_vertex = jegl_try_load_shared_resource(context, path);
-    if (shared_vertex != nullptr && shared_vertex->m_type == jegl_resource::type::VERTEX)
+    auto* shared_vertex =
+        jeecs::graphic::_je_graphic_shared_context_instance.try_load_shared_resource<jegl_vertex>(
+            context, path);
+
+    if (shared_vertex != nullptr)
         return shared_vertex;
 
     Assimp::Importer importer;
@@ -1321,7 +1784,7 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
             for (size_t bone_idx = 0; bone_idx < mesh->mNumBones; ++bone_idx)
             {
                 jegl_vertex::bone_data* bone_data =
-                    (jegl_vertex::bone_data*)je_mem_alloc(sizeof(jegl_vertex::bone_data));
+                    (jegl_vertex::bone_data*)malloc(sizeof(jegl_vertex::bone_data));
 
                 assert(bone_data != nullptr);
                 bone_data->m_name = jeecs::basic::make_new_string(mesh->mBones[bone_idx]->mName.C_Str());
@@ -1385,7 +1848,7 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
         }
     }
 
-    auto* vertex = jegl_create_vertex(
+    auto* vertex = _jegl_create_vertex_impl(
         jegl_vertex::type::TRIANGLES,
         vertex_datas.data(),
         vertex_datas.size() * sizeof(jegl_standard_model_vertex_t),
@@ -1396,10 +1859,8 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
 
     if (vertex != nullptr)
     {
-        vertex->m_path = jeecs::basic::make_new_string(path);
-
         const jegl_vertex::bone_data** cbones =
-            (const jegl_vertex::bone_data**)je_mem_alloc(
+            (const jegl_vertex::bone_data**)malloc(
                 bones.size() * sizeof(const jegl_vertex::bone_data*));
 
         memcpy(
@@ -1407,10 +1868,13 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
             bones.data(),
             bones.size() * sizeof(const jegl_vertex::bone_data*));
 
-        vertex->m_raw_vertex_data->m_bones = cbones;
-        vertex->m_raw_vertex_data->m_bone_count = bones.size();
+        vertex->m_bones = cbones;
+        vertex->m_bone_count = bones.size();
 
-        return jegl_try_update_shared_resource(context, vertex);
+        _jegl_init_resource_handle(&vertex->m_handle, path);
+
+        return jeecs::graphic::_je_graphic_shared_context_instance.try_update_shared_resource(
+            context, vertex);
     }
     else
     {
@@ -1420,7 +1884,8 @@ jegl_resource* jegl_load_vertex(jegl_context* context, const char* path)
     return nullptr;
 }
 
-jegl_resource* jegl_create_vertex(
+
+jegl_vertex* jegl_create_vertex(
     jegl_vertex::type type,
     const void* datas,
     size_t data_length,
@@ -1429,102 +1894,22 @@ jegl_resource* jegl_create_vertex(
     const jegl_vertex::data_layout* format,
     size_t format_count)
 {
-    size_t data_size_per_point = 0;
-    for (size_t i = 0; i < format_count; ++i)
-        data_size_per_point += format[i].m_count * 4; /* Both int32 & float32 is 4 byte*/
+    auto* vertex = _jegl_create_vertex_impl(
+        type,
+        datas,
+        data_length,
+        indices,
+        index_count,
+        format,
+        format_count);
 
-    auto data_group_count = data_length / data_size_per_point;
-
-    if (data_size_per_point == 0)
-    {
-        jeecs::debug::logerr("Bad format, point donot contain any data.");
-        return nullptr;
-    }
-    if (data_group_count == 0)
-    {
-        jeecs::debug::logerr("Vertex data donot contain any completed point.");
-        return nullptr;
-    }
-
-    if (data_length % data_size_per_point)
-        jeecs::debug::logwarn("Vertex data & format not matched, please check.");
-
-    assert(format_count > 0);
-
-    jegl_resource* vertex = _create_resource();
-    vertex->m_type = jegl_resource::VERTEX;
-    vertex->m_raw_vertex_data = new jegl_vertex();
-
-    vertex->m_raw_vertex_data->m_type = type;
-    vertex->m_raw_vertex_data->m_data_size_per_point = data_size_per_point;
-    vertex->m_raw_vertex_data->m_bones = nullptr;
-    vertex->m_raw_vertex_data->m_bone_count = 0;
-
-    void* data_buffer = (void*)je_mem_alloc(data_length);
-    memcpy(data_buffer, datas, data_length);
-    vertex->m_raw_vertex_data->m_vertexs = data_buffer;
-    vertex->m_raw_vertex_data->m_vertex_length = data_length;
-
-    uint32_t* index_buffer = (uint32_t*)je_mem_alloc(index_count * sizeof(uint32_t));
-    memcpy(index_buffer, indices, index_count * sizeof(uint32_t));
-    vertex->m_raw_vertex_data->m_indices = index_buffer;
-    vertex->m_raw_vertex_data->m_index_count = index_count;
-
-    jegl_vertex::data_layout* formats =
-        (jegl_vertex::data_layout*)je_mem_alloc(format_count * sizeof(jegl_vertex::data_layout));
-    memcpy(formats, format,
-        format_count * sizeof(jegl_vertex::data_layout));
-    vertex->m_raw_vertex_data->m_formats = formats;
-    vertex->m_raw_vertex_data->m_format_count = format_count;
-
-    // Calc size by default:
-    float
-        x_min = 0.f,
-        x_max = 0.f,
-        y_min = 0.f, y_max = 0.f,
-        z_min = 0.f, z_max = 0.f;
-
-    if (format[0].m_count == 3 && format[0].m_type == jegl_vertex::data_type::FLOAT32)
-    {
-        // First data group is position(by default).
-        x_min = x_max = reinterpret_cast<const float*>(datas)[0];
-        y_min = y_max = reinterpret_cast<const float*>(datas)[1];
-        z_min = z_max = reinterpret_cast<const float*>(datas)[2];
-
-        // First data group is position(by default).
-        for (size_t i = 1; i < data_group_count; ++i)
-        {
-            const float* fdata = reinterpret_cast<const float*>(
-                reinterpret_cast<const char*>(datas) + i * data_size_per_point);
-
-            float x = fdata[0];
-            float y = fdata[1];
-            float z = fdata[2];
-
-            x_min = std::min(x, x_min);
-            x_max = std::max(x, x_max);
-            y_min = std::min(y, y_min);
-            y_max = std::max(y, y_max);
-            z_min = std::min(z, z_min);
-            z_max = std::max(z, z_max);
-        }
-    }
-    else
-        jeecs::debug::logwarn(
-            "Position data of vertex(%p) mismatch, first data should be position and with length '3'",
-            vertex);
-
-    vertex->m_raw_vertex_data->m_x_min = x_min;
-    vertex->m_raw_vertex_data->m_x_max = x_max;
-    vertex->m_raw_vertex_data->m_y_min = y_min;
-    vertex->m_raw_vertex_data->m_y_max = y_max;
-    vertex->m_raw_vertex_data->m_z_min = z_min;
-    vertex->m_raw_vertex_data->m_z_max = z_max;
+    if (vertex != nullptr)
+        _jegl_init_resource_handle(&vertex->m_handle, nullptr);
 
     return vertex;
 }
 
-jegl_resource* jegl_create_framebuf(
+jegl_frame_buffer* jegl_create_framebuf(
     size_t width,
     size_t height,
     const jegl_texture::format* color_attachment_formats,
@@ -1537,20 +1922,19 @@ jegl_resource* jegl_create_framebuf(
         return nullptr;
     }
 
-    jegl_resource* framebuf = _create_resource();
-    framebuf->m_type = jegl_resource::FRAMEBUF;
-    framebuf->m_raw_framebuf_data = new jegl_frame_buffer();
-    framebuf->m_path = nullptr;
+    jegl_frame_buffer* framebuf =
+        reinterpret_cast<jegl_frame_buffer*>(
+            malloc(sizeof(jegl_frame_buffer)));
 
-    framebuf->m_raw_framebuf_data->m_attachment_count =
+    framebuf->m_attachment_count =
         color_attachment_count + (contain_depth_attachment ? 1 : 0);
-    framebuf->m_raw_framebuf_data->m_width = width;
-    framebuf->m_raw_framebuf_data->m_height = height;
+    framebuf->m_width = width;
+    framebuf->m_height = height;
 
     jeecs::basic::resource<jeecs::graphic::texture>* attachments =
         reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture> *>(
             malloc(
-                framebuf->m_raw_framebuf_data->m_attachment_count
+                framebuf->m_attachment_count
                 * sizeof(jeecs::basic::resource<jeecs::graphic::texture>)));
 
     for (size_t i = 0; i < color_attachment_count; ++i)
@@ -1571,216 +1955,405 @@ jegl_resource* jegl_create_framebuf(
                     jegl_texture::format::DEPTH
                     | jegl_texture::format::FRAMEBUF)));
 
-    framebuf->m_raw_framebuf_data->m_output_attachments =
+    framebuf->m_output_attachments =
         (jegl_frame_buffer::attachment_t*)attachments;
 
+    _jegl_init_resource_handle(&framebuf->m_handle, nullptr);
     return framebuf;
 }
 
-jegl_resource* jegl_create_uniformbuf(
+jegl_uniform_buffer* jegl_create_uniformbuf(
     size_t binding_place,
     size_t length)
 {
-    jegl_resource* uniformbuf = _create_resource();
-    uniformbuf->m_type = jegl_resource::UNIFORMBUF;
-    uniformbuf->m_raw_uniformbuf_data = new jegl_uniform_buffer();
-    uniformbuf->m_path = nullptr;
+    jegl_uniform_buffer* uniformbuf =
+        reinterpret_cast<jegl_uniform_buffer*>(
+            malloc(sizeof(jegl_uniform_buffer)));
 
-    uniformbuf->m_raw_uniformbuf_data->m_buffer = (uint8_t*)je_mem_alloc(length);
-    uniformbuf->m_raw_uniformbuf_data->m_buffer_size = length;
-    uniformbuf->m_raw_uniformbuf_data->m_buffer_binding_place = binding_place;
+    uniformbuf->m_buffer = (uint8_t*)malloc(length);
+    uniformbuf->m_buffer_size = length;
+    uniformbuf->m_buffer_binding_place = binding_place;
 
-    uniformbuf->m_raw_uniformbuf_data->m_update_begin_offset = 0;
-    uniformbuf->m_raw_uniformbuf_data->m_update_length = 0;
+    uniformbuf->m_update_begin_offset = 0;
+    uniformbuf->m_update_length = 0;
 
+    _jegl_init_resource_handle(&uniformbuf->m_handle, nullptr);
     return uniformbuf;
 }
 
-void jegl_update_uniformbuf(jegl_resource* uniformbuf, const void* buf, size_t update_offset, size_t update_length)
+void jegl_update_uniformbuf(
+    jegl_uniform_buffer* uniformbuf,
+    const void* buf,
+    size_t update_offset,
+    size_t update_length)
 {
-    assert(uniformbuf->m_type == jegl_resource::UNIFORMBUF && update_length != 0);
-
     if (update_length != 0)
     {
-        memcpy(uniformbuf->m_raw_uniformbuf_data->m_buffer + update_offset, buf, update_length);
-        if (!uniformbuf->m_modified)
+        memcpy(uniformbuf->m_buffer + update_offset, buf, update_length);
+        if (!uniformbuf->m_handle.m_modified)
         {
-            uniformbuf->m_modified = true;
+            uniformbuf->m_handle.m_modified = true;
 
-            uniformbuf->m_raw_uniformbuf_data->m_update_begin_offset = update_offset;
-            uniformbuf->m_raw_uniformbuf_data->m_update_length = update_length;
+            uniformbuf->m_update_begin_offset = update_offset;
+            uniformbuf->m_update_length = update_length;
         }
         else
         {
-            assert(uniformbuf->m_raw_uniformbuf_data->m_update_length != 0);
+            assert(uniformbuf->m_update_length != 0);
 
-            size_t new_begin = std::min(uniformbuf->m_raw_uniformbuf_data->m_update_begin_offset, update_offset);
+            size_t new_begin = std::min(uniformbuf->m_update_begin_offset, update_offset);
             size_t new_end = std::max(
-                uniformbuf->m_raw_uniformbuf_data->m_update_begin_offset + uniformbuf->m_raw_uniformbuf_data->m_update_length,
+                uniformbuf->m_update_begin_offset + uniformbuf->m_update_length,
                 update_offset + update_length);
 
-            uniformbuf->m_raw_uniformbuf_data->m_update_begin_offset = new_begin;
-            uniformbuf->m_raw_uniformbuf_data->m_update_length = new_end - new_begin;
+            uniformbuf->m_update_begin_offset = new_begin;
+            uniformbuf->m_update_length = new_end - new_begin;
         }
     }
 }
 
-bool jegl_bind_shader(jegl_resource* shader)
+bool jegl_bind_shader(jegl_shader* shader)
 {
-    assert(shader->m_type == jegl_resource::SHADER);
-    bool need_init_uvar = jegl_using_resource(shader);
-
-    if (!_current_graphic_thread->m_apis->bind_shader(_current_graphic_thread->m_graphic_impl_context, shader))
-        return false;
-
-    auto uniform_vars = shader->m_raw_shader_data != nullptr
-        ? shader->m_raw_shader_data->m_custom_uniforms
-        : nullptr;
-
-    while (uniform_vars)
+    bool updated = false, need_init = false;
+    switch (_jegl_check_resource_state(shader))
     {
-        if (uniform_vars->m_index != jeecs::graphic::INVALID_UNIFORM_LOCATION)
+    case jeecs::graphic::jegl_resouce_state::READY:
+        break;
+    case jeecs::graphic::jegl_resouce_state::NEED_UPDATE:
+        updated = true;
+        break;
+    case jeecs::graphic::jegl_resouce_state::NEED_INIT:
+    {
+        updated = need_init = true;
+
+        jegl_resource_blob shader_blob;
+        size_t shader_blob_version;
+
+        auto found_blob_kind = _jegl_try_get_resource_blob(&shader->m_handle, &shader_blob, &shader_blob_version);
+        if (found_blob_kind == jeecs::graphic::cached_resource_blob::kind::SHADER)
         {
-            if (uniform_vars->m_updated || need_init_uvar)
+            jeecs::graphic::_current_graphic_thread->m_apis->shader_init(
+                jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
+                shader_blob,
+                shader);
+        }
+        else
+        {
+            // Failed to get blob, need create it first.
+            shader_blob = jeecs::graphic::_current_graphic_thread->m_apis->shader_create_blob(
+                jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
+                shader);
+
+            jeecs::graphic::_current_graphic_thread->m_apis->shader_init(
+                jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
+                shader_blob,
+                shader);
+
+            if (found_blob_kind != jeecs::graphic::cached_resource_blob::kind::UNKNOWN
+                || !_jegl_try_update_resource_blob(
+                    &shader->m_handle,
+                    jeecs::graphic::cached_resource_blob::kind::SHADER,
+                    shader_blob,
+                    shader_blob_version))
             {
-                assert(uniform_vars->m_uniform_type != jegl_shader::uniform_type::TEXTURE);
-
-                uniform_vars->m_updated = false;
-
-                jegl_set_uniform_value(
-                    uniform_vars->m_index,
-                    uniform_vars->m_uniform_type,
-                    &uniform_vars->m_value);
+                // Failed to update blob, need free it.
+                jeecs::graphic::_current_graphic_thread->m_apis->shader_close_blob(
+                    jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
+                    shader_blob);
             }
         }
-        uniform_vars = uniform_vars->m_next;
+        break;
+    }
+    case jeecs::graphic::jegl_resouce_state::INVALID_CONTEXT:
+    default:
+        return false;
     }
 
+    if (!jeecs::graphic::_current_graphic_thread->m_apis->bind_shader(
+        jeecs::graphic::_current_graphic_thread->m_graphic_impl_context, shader))
+        return false;
+
+    if (updated)
+    {
+        auto uniform_vars = shader->m_custom_uniforms;
+        while (uniform_vars)
+        {
+            if (uniform_vars->m_index != jeecs::graphic::INVALID_UNIFORM_LOCATION)
+            {
+                if (uniform_vars->m_updated || need_init)
+                {
+                    assert(uniform_vars->m_uniform_type != jegl_shader::uniform_type::TEXTURE);
+
+                    uniform_vars->m_updated = false;
+
+                    jegl_set_uniform_value(
+                        uniform_vars->m_index,
+                        uniform_vars->m_uniform_type,
+                        &uniform_vars->m_value);
+                }
+            }
+            uniform_vars = uniform_vars->m_next;
+        }
+    }
     return true;
 }
 
-void jegl_bind_uniform_buffer(jegl_resource* uniformbuf)
+void jegl_bind_uniform_buffer(jegl_uniform_buffer* uniformbuf)
 {
-    jegl_using_resource(uniformbuf);
-    _current_graphic_thread->m_apis->bind_uniform_buffer(
-        _current_graphic_thread->m_graphic_impl_context, uniformbuf);
+    switch (_jegl_check_resource_state(uniformbuf))
+    {
+    case jeecs::graphic::jegl_resouce_state::READY:
+        break;
+    case jeecs::graphic::jegl_resouce_state::NEED_UPDATE:
+        jeecs::graphic::_current_graphic_thread->m_apis->ubuffer_update(
+            jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
+            uniformbuf);
+        break;
+    case jeecs::graphic::jegl_resouce_state::NEED_INIT:
+        jeecs::graphic::_current_graphic_thread->m_apis->ubuffer_init(
+            jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
+            uniformbuf);
+        break;
+    case jeecs::graphic::jegl_resouce_state::INVALID_CONTEXT:
+    default:
+        // Donot bind invalid resource.
+        return;
+    }
+    jeecs::graphic::_current_graphic_thread->m_apis->bind_uniform_buffer(
+        jeecs::graphic::_current_graphic_thread->m_graphic_impl_context, uniformbuf);
 }
 
-void jegl_draw_vertex(jegl_resource* vert)
+void jegl_draw_vertex(jegl_vertex* vert)
 {
-    jegl_using_resource(vert);
-    _current_graphic_thread->m_apis->draw_vertex(
-        _current_graphic_thread->m_graphic_impl_context, vert);
+    switch (_jegl_check_resource_state(vert))
+    {
+    case jeecs::graphic::jegl_resouce_state::READY:
+        break;
+    case jeecs::graphic::jegl_resouce_state::NEED_UPDATE:
+        jeecs::graphic::_current_graphic_thread->m_apis->vertex_update(
+            jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
+            vert);
+        break;
+    case jeecs::graphic::jegl_resouce_state::NEED_INIT:
+    {
+        jegl_resource_blob vertex_blob;
+        size_t vertex_blob_version;
+
+        auto found_blob_kind = _jegl_try_get_resource_blob(&vert->m_handle, &vertex_blob, &vertex_blob_version);
+        if (found_blob_kind == jeecs::graphic::cached_resource_blob::kind::VERTEX)
+        {
+            jeecs::graphic::_current_graphic_thread->m_apis->vertex_init(
+                jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
+                vertex_blob,
+                vert);
+        }
+        else
+        {
+            // Failed to get blob, need create it first.
+            vertex_blob = jeecs::graphic::_current_graphic_thread->m_apis->vertex_create_blob(
+                jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
+                vert);
+
+            jeecs::graphic::_current_graphic_thread->m_apis->vertex_init(
+                jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
+                vertex_blob,
+                vert);
+
+            if (found_blob_kind != jeecs::graphic::cached_resource_blob::kind::UNKNOWN
+                || !_jegl_try_update_resource_blob(
+                    &vert->m_handle,
+                    jeecs::graphic::cached_resource_blob::kind::VERTEX,
+                    vertex_blob,
+                    vertex_blob_version))
+            {
+                // Failed to update blob, need free it.
+                jeecs::graphic::_current_graphic_thread->m_apis->vertex_close_blob(
+                    jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
+                    vertex_blob);
+            }
+        }
+        break;
+    }
+    case jeecs::graphic::jegl_resouce_state::INVALID_CONTEXT:
+    default:
+        // Donot bind invalid resource.
+        return;
+    }
+    jeecs::graphic::_current_graphic_thread->m_apis->draw_vertex(
+        jeecs::graphic::_current_graphic_thread->m_graphic_impl_context, vert);
 }
 
 void jegl_rend_to_framebuffer(
-    jegl_resource* framebuffer,
+    jegl_frame_buffer* framebuffer,
     const int32_t(*viewport_xywh)[4],
     const jegl_frame_buffer_clear_operation* clear_operations)
 {
     if (framebuffer != nullptr)
-        jegl_using_resource(framebuffer);
-
-    _current_graphic_thread->m_apis->bind_framebuf(
-        _current_graphic_thread->m_graphic_impl_context,
+    {
+        switch (_jegl_check_resource_state(framebuffer))
+        {
+        case jeecs::graphic::jegl_resouce_state::READY:
+            break;
+        case jeecs::graphic::jegl_resouce_state::NEED_UPDATE:
+            jeecs::graphic::_current_graphic_thread->m_apis->framebuffer_update(
+                jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
+                framebuffer);
+            break;
+        case jeecs::graphic::jegl_resouce_state::NEED_INIT:
+            jeecs::graphic::_current_graphic_thread->m_apis->framebuffer_init(
+                jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
+                framebuffer);
+            break;
+        case jeecs::graphic::jegl_resouce_state::INVALID_CONTEXT:
+        default:
+            // Donot bind invalid resource.
+            return;
+        }
+    }
+    jeecs::graphic::_current_graphic_thread->m_apis->bind_framebuf(
+        jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
         framebuffer,
         viewport_xywh,
         clear_operations);
 }
 
-void jegl_bind_texture(jegl_resource* texture, size_t pass)
+void jegl_bind_texture(jegl_texture* texture, size_t pass)
 {
-    jegl_using_resource(texture);
-    _current_graphic_thread->m_apis->bind_texture(
-        _current_graphic_thread->m_graphic_impl_context, texture, pass);
+    switch (_jegl_check_resource_state(texture))
+    {
+    case jeecs::graphic::jegl_resouce_state::READY:
+        break;
+    case jeecs::graphic::jegl_resouce_state::NEED_UPDATE:
+        jeecs::graphic::_current_graphic_thread->m_apis->texture_update(
+            jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
+            texture);
+        break;
+    case jeecs::graphic::jegl_resouce_state::NEED_INIT:
+    {
+        jegl_resource_blob texture_blob;
+        size_t texture_blob_version;
+
+        auto found_blob_kind = _jegl_try_get_resource_blob(&texture->m_handle, &texture_blob, &texture_blob_version);
+        if (found_blob_kind == jeecs::graphic::cached_resource_blob::kind::TEXTURE)
+        {
+            jeecs::graphic::_current_graphic_thread->m_apis->texture_init(
+                jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
+                texture_blob,
+                texture);
+        }
+        else
+        {
+            // Failed to get blob, need create it first.
+            texture_blob = jeecs::graphic::_current_graphic_thread->m_apis->texture_create_blob(
+                jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
+                texture);
+
+            jeecs::graphic::_current_graphic_thread->m_apis->texture_init(
+                jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
+                texture_blob,
+                texture);
+
+            if (found_blob_kind != jeecs::graphic::cached_resource_blob::kind::UNKNOWN
+                || !_jegl_try_update_resource_blob(
+                    &texture->m_handle,
+                    jeecs::graphic::cached_resource_blob::kind::TEXTURE,
+                    texture_blob,
+                    texture_blob_version))
+            {
+                // Failed to update blob, need free it.
+                jeecs::graphic::_current_graphic_thread->m_apis->vertex_close_blob(
+                    jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
+                    texture_blob);
+            }
+        }
+        break;
+    }
+    case jeecs::graphic::jegl_resouce_state::INVALID_CONTEXT:
+    default:
+        // Donot bind invalid resource.
+        return;
+    }
+    jeecs::graphic::_current_graphic_thread->m_apis->bind_texture(
+        jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
+        texture,
+        pass);
 }
 
 void jegl_uniform_int(uint32_t location, int value)
 {
-    // NOTE: This method designed for using after 'jegl_using_resource'
-    _current_graphic_thread->m_apis->set_uniform(
-        _current_graphic_thread->m_graphic_impl_context, location, jegl_shader::INT, &value);
+    jeecs::graphic::_current_graphic_thread->m_apis->set_uniform(
+        jeecs::graphic::_current_graphic_thread->m_graphic_impl_context, location, jegl_shader::INT, &value);
 }
 
 void jegl_uniform_int2(uint32_t location, int x, int y)
 {
-    // NOTE: This method designed for using after 'jegl_using_resource'
     int value[2] = { x, y };
-    _current_graphic_thread->m_apis->set_uniform(
-        _current_graphic_thread->m_graphic_impl_context, location, jegl_shader::INT2, &value);
+    jeecs::graphic::_current_graphic_thread->m_apis->set_uniform(
+        jeecs::graphic::_current_graphic_thread->m_graphic_impl_context, location, jegl_shader::INT2, &value);
 }
 
 void jegl_uniform_int3(uint32_t location, int x, int y, int z)
 {
-    // NOTE: This method designed for using after 'jegl_using_resource'
     int value[3] = { x, y, z };
-    _current_graphic_thread->m_apis->set_uniform(
-        _current_graphic_thread->m_graphic_impl_context, location, jegl_shader::INT3, &value);
+    jeecs::graphic::_current_graphic_thread->m_apis->set_uniform(
+        jeecs::graphic::_current_graphic_thread->m_graphic_impl_context, location, jegl_shader::INT3, &value);
 }
 
 void jegl_uniform_int4(uint32_t location, int x, int y, int z, int w)
 {
-    // NOTE: This method designed for using after 'jegl_using_resource'
     int value[4] = { x, y, z, w };
-    _current_graphic_thread->m_apis->set_uniform(
-        _current_graphic_thread->m_graphic_impl_context, location, jegl_shader::INT4, &value);
+    jeecs::graphic::_current_graphic_thread->m_apis->set_uniform(
+        jeecs::graphic::_current_graphic_thread->m_graphic_impl_context, location, jegl_shader::INT4, &value);
 }
 
 void jegl_uniform_float(uint32_t location, float value)
 {
-    // NOTE: This method designed for using after 'jegl_using_resource'
-    _current_graphic_thread->m_apis->set_uniform(
-        _current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT, &value);
+    jeecs::graphic::_current_graphic_thread->m_apis->set_uniform(
+        jeecs::graphic::_current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT, &value);
 }
 
 void jegl_uniform_float2(uint32_t location, float x, float y)
 {
-    // NOTE: This method designed for using after 'jegl_using_resource'
     float value[] = { x, y };
-    _current_graphic_thread->m_apis->set_uniform(
-        _current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT2, &value);
+    jeecs::graphic::_current_graphic_thread->m_apis->set_uniform(
+        jeecs::graphic::_current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT2, &value);
 }
 
 void jegl_uniform_float3(uint32_t location, float x, float y, float z)
 {
-    // NOTE: This method designed for using after 'jegl_using_resource'
     float value[] = { x, y, z };
-    _current_graphic_thread->m_apis->set_uniform(
-        _current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT3, &value);
+    jeecs::graphic::_current_graphic_thread->m_apis->set_uniform(
+        jeecs::graphic::_current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT3, &value);
 }
 
 void jegl_uniform_float4(uint32_t location, float x, float y, float z, float w)
 {
-    // NOTE: This method designed for using after 'jegl_using_resource'
     float value[] = { x, y, z, w };
-    _current_graphic_thread->m_apis->set_uniform(
-        _current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT4, &value);
+    jeecs::graphic::_current_graphic_thread->m_apis->set_uniform(
+        jeecs::graphic::_current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT4, &value);
 }
 
 void jegl_uniform_float2x2(uint32_t location, const float (*mat)[2])
 {
-    // NOTE: This method designed for using after 'jegl_using_resource'
-    _current_graphic_thread->m_apis->set_uniform(
-        _current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT2X2, mat);
+    jeecs::graphic::_current_graphic_thread->m_apis->set_uniform(
+        jeecs::graphic::_current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT2X2, mat);
 }
 
 void jegl_uniform_float3x3(uint32_t location, const float (*mat)[3])
 {
-    // NOTE: This method designed for using after 'jegl_using_resource'
-    _current_graphic_thread->m_apis->set_uniform(
-        _current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT3X3, mat);
+    jeecs::graphic::_current_graphic_thread->m_apis->set_uniform(
+        jeecs::graphic::_current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT3X3, mat);
 }
 
 void jegl_uniform_float4x4(uint32_t location, const float (*mat)[4])
 {
-    // NOTE: This method designed for using after 'jegl_using_resource'
-    _current_graphic_thread->m_apis->set_uniform(
-        _current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT4X4, mat);
+    jeecs::graphic::_current_graphic_thread->m_apis->set_uniform(
+        jeecs::graphic::_current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT4X4, mat);
 }
 
 void jegl_set_uniform_value(
     uint32_t location, jegl_shader::uniform_type type, const void* data)
 {
-    _current_graphic_thread->m_apis->set_uniform(
-        _current_graphic_thread->m_graphic_impl_context, location, type, data);
+    jeecs::graphic::_current_graphic_thread->m_apis->set_uniform(
+        jeecs::graphic::_current_graphic_thread->m_graphic_impl_context, location, type, data);
 }

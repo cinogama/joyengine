@@ -61,7 +61,9 @@ namespace jeecs
                           {jegl_vertex::data_type::FLOAT32, 3},
                       })
                       .value() },
-            default_shader{ graphic::shader::create("!/builtin/builtin_default.shader", R"(
+            default_shader{ graphic::shader::create(
+                nullptr,
+                "!/builtin/builtin_default.shader", R"(
 // Default shader
 import woo::std;
 
@@ -312,8 +314,7 @@ public let frag =
 
             assert(light_shape->resource() != nullptr);
 
-            const auto* const raw_vertex_data =
-                light_shape->resource()->m_raw_vertex_data;
+            const auto* const raw_vertex_data = light_shape->resource();
             if (raw_vertex_data != nullptr)
             {
                 size.x *= 2.0f * std::max(abs(raw_vertex_data->m_x_max), abs(raw_vertex_data->m_x_min));
@@ -953,6 +954,7 @@ public let frag =
                 }
                 , _defer_light2d_shadow_point_pass{
                     jeecs::graphic::shader::create(
+                        nullptr,
                         "!/builtin/defer_light2d_shadow_point.shader",
                         R"(
 import woo::std;
@@ -1008,6 +1010,7 @@ public func frag(_: v2f)
                 }
                 , _defer_light2d_shadow_parallel_pass{
                     jeecs::graphic::shader::create(
+                        nullptr,
                         "!/builtin/defer_light2d_shadow_parallel.shader",
                         R"(
 import woo::std;
@@ -1063,6 +1066,7 @@ public func frag(_: v2f)
                 }
                 , _defer_light2d_shadow_point_reverse_pass{
                 jeecs::graphic::shader::create(
+                    nullptr,
                     "!/builtin/defer_light2d_shadow_reverse_point.shader",
                     R"(
 import woo::std;
@@ -1118,6 +1122,7 @@ public func frag(_: v2f)
                 }
                 , _defer_light2d_shadow_parallel_reverse_pass{
                     jeecs::graphic::shader::create(
+                        nullptr,
                         "!/builtin/defer_light2d_shadow_reverse_parallel.shader",
                         R"(
 import woo::std;
@@ -1173,6 +1178,7 @@ public func frag(_: v2f)
                 }
                 , _defer_light2d_shadow_shape_point_pass{
                     jeecs::graphic::shader::create(
+                        nullptr,
                         "!/builtin/defer_light2d_shadow_point_shape.shader",
                         R"(
 import woo::std;
@@ -1249,6 +1255,7 @@ public func frag(vf: v2f)
                 }
                 , _defer_light2d_shadow_shape_parallel_pass{
                     jeecs::graphic::shader::create(
+                        nullptr,
                         "!/builtin/defer_light2d_shadow_parallel_shape.shader",
                         R"(
 import woo::std;
@@ -1321,6 +1328,7 @@ public func frag(vf: v2f)
                 }
                 , _defer_light2d_shadow_sprite_point_pass{
                     jeecs::graphic::shader::create(
+                        nullptr,
                         "!/builtin/defer_light2d_shadow_point_sprite.shader",
                         R"(
 import woo::std;
@@ -1394,6 +1402,7 @@ public func frag(vf: v2f)
                 }
                 , _defer_light2d_shadow_sprite_parallel_pass{
                 jeecs::graphic::shader::create(
+                    nullptr,
                     "!/builtin/defer_light2d_shadow_parallel_sprite.shader"
                     , R"(
 import woo::std;
@@ -1463,6 +1472,7 @@ public func frag(vf: v2f)
                 }
                 , _defer_light2d_shadow_sub_pass{
                     jeecs::graphic::shader::create(
+                        nullptr,
                         "!/builtin/defer_light2d_shadow_sub.shader",
                         R"(
 import woo::std;
@@ -1743,15 +1753,15 @@ public func frag(vf: v2f)
                 view typesof(
                     Translation&,
                     Shaders&,
-                    Textures*, 
-                    Shape&, 
-                    Rendqueue*, 
+                    Textures*,
+                    Shape&,
+                    Rendqueue*,
                     Color*
                 ),
                 except typesof(
-                    Point, 
+                    Point,
                     Parallel,
-                    Range, 
+                    Range,
                     Origin
                 )
             >())
@@ -1926,17 +1936,17 @@ public func frag(vf: v2f)
             for (auto&& [trans, blockshadow, shapeshadow, spriteshadow, selfshadow, texture, shape] : query<
                 view typesof(
                     Translation&,
-                    BlockShadow*, 
-                    ShapeShadow*, 
-                    SpriteShadow*, 
-                    SelfShadow*, 
-                    Textures*, 
+                    BlockShadow*,
+                    ShapeShadow*,
+                    SpriteShadow*,
+                    SelfShadow*,
+                    Textures*,
                     Shape&
                 ),
                 anyof typesof(
-                    BlockShadow, 
-                    ShapeShadow, 
-                    SpriteShadow, 
+                    BlockShadow,
+                    ShapeShadow,
+                    SpriteShadow,
                     SelfShadow
                 )
             >())
