@@ -2634,8 +2634,32 @@ JE_API void jegl_reboot_graphic_thread(
 
 JE_API void jegl_share_resource_handle(jegl_resource_handle* resource_handle);
 #define jegl_share_resource(resource) jegl_share_resource_handle(&(resource)->m_handle)
-///////////////////////////// TEXTURE /////////////////////////////
 
+///////////////////////////// SHADER /////////////////////////////
+/*
+jegl_load_shader_source [基本接口]
+从源码加载一个着色器实例，可创建或使用缓存文件以加速着色器的加载
+    * 实际上jegl_load_shader会读取文件内容之后，调用此函数进行实际上的着色器加载
+若不需要创建缓存文件，请将 is_virtual_file 指定为 false
+请参见：
+    jegl_load_shader
+*/
+JE_API jegl_shader* jegl_load_shader_source(
+    jegl_context* context,
+    const char* path,
+    const char* src,
+    bool is_virtual_file);
+
+/*
+jegl_load_shader [基本接口]
+从源码文件加载一个着色器实例，会创建或使用缓存文件以加速着色器的加载
+*/
+JE_API jegl_shader* jegl_load_shader(
+    jegl_context* context,
+    const char* path);
+
+JE_API void jegl_close_shader(jegl_shader* shader);
+///////////////////////////// TEXTURE /////////////////////////////
 /*
 jegl_load_texture [基本接口]
 从指定路径加载一个纹理资源，加载的路径规则与 jeecs_file_open 相同
@@ -2668,7 +2692,6 @@ JE_API jegl_texture* /* NOT NULL */ jegl_create_texture(
 JE_API void jegl_close_texture(jegl_texture* texture);
 
 ///////////////////////////// VERTEX /////////////////////////////
-
 /*
 jegl_load_vertex [基本接口]
 从指定路径加载一个顶点（模型）资源，加载的路径规则与 jeecs_file_open 相同
@@ -2724,32 +2747,6 @@ JE_API jegl_frame_buffer* jegl_create_framebuf(
     bool contain_depth_attachment);
 
 JE_API void jegl_close_framebuf(jegl_frame_buffer* framebuffer);
-
-///////////////////////////// SHADER /////////////////////////////
-
-/*
-jegl_load_shader_source [基本接口]
-从源码加载一个着色器实例，可创建或使用缓存文件以加速着色器的加载
-    * 实际上jegl_load_shader会读取文件内容之后，调用此函数进行实际上的着色器加载
-若不需要创建缓存文件，请将 is_virtual_file 指定为 false
-请参见：
-    jegl_load_shader
-*/
-JE_API jegl_shader* jegl_load_shader_source(
-    jegl_context* context,
-    const char* path,
-    const char* src,
-    bool is_virtual_file);
-
-/*
-jegl_load_shader [基本接口]
-从源码文件加载一个着色器实例，会创建或使用缓存文件以加速着色器的加载
-*/
-JE_API jegl_shader* jegl_load_shader(
-    jegl_context* context,
-    const char* path);
-
-JE_API void jegl_close_shader(jegl_shader* shader);
 
 ///////////////////////////// UNIFORM BUFFER /////////////////////////////
 

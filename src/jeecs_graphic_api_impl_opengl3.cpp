@@ -926,13 +926,13 @@ namespace jeecs::graphic::api::gl3
     void shader_close_resource_blob(
         jegl_context::graphic_impl_context_t ctx, jegl_resource_blob blob)
     {
-        auto* shader_blob = std::launder(reinterpret_cast<jegl3_shader_blob*>(blob));
-        delete shader_blob;
+        delete reinterpret_cast<jegl3_shader_blob*>(blob);
     }
 
     jegl_resource_blob texture_create_resource_blob(
         jegl_context::graphic_impl_context_t ctx, jegl_texture* resource)
     {
+        return nullptr;
     }
     void texture_close_resource_blob(
         jegl_context::graphic_impl_context_t ctx, jegl_resource_blob blob)
@@ -942,6 +942,7 @@ namespace jeecs::graphic::api::gl3
     jegl_resource_blob vertex_create_resource_blob(
         jegl_context::graphic_impl_context_t ctx, jegl_vertex* resource)
     {
+        return nullptr;
     }
     void vertex_close_resource_blob(
         jegl_context::graphic_impl_context_t ctx, jegl_resource_blob blob)
@@ -956,7 +957,7 @@ namespace jeecs::graphic::api::gl3
         resource->m_handle.m_ptr = nullptr;
         if (blob != nullptr)
         {
-            auto* shader_blob = std::launder(reinterpret_cast<jegl3_shader_blob*>(blob));
+            auto* shader_blob = reinterpret_cast<jegl3_shader_blob*>(blob);
 
             auto shader_program = shader_blob->m_shared_blob_data->m_shader_program_instance;
             glUseProgram(shader_program);
@@ -973,7 +974,6 @@ namespace jeecs::graphic::api::gl3
             resource->m_handle.m_ptr = shader_instance;
 
             auto shared_blob_data = shader_instance->m_shared_blob_data.get();
-
             auto& builtin_uniforms = resource->m_builtin_uniforms;
 
             builtin_uniforms.m_builtin_uniform_ndc_scale = shared_blob_data->get_built_in_location("JE_NDC_SCALE");
@@ -1034,7 +1034,6 @@ namespace jeecs::graphic::api::gl3
 
                 uniform_block = uniform_block->m_next;
             }
-
         }
     }
     void shader_update(
@@ -1318,7 +1317,7 @@ namespace jeecs::graphic::api::gl3
         {
             jegl_texture* frame_texture = attachments[i]->resource();
 
-            jegl_using_resource(frame_texture);
+            jegl_bind_texture(frame_texture, 0);
 
             GLenum using_attachment = attachment;
             GLenum buffer_texture_type = GL_TEXTURE_2D;
@@ -1367,27 +1366,6 @@ namespace jeecs::graphic::api::gl3
         delete reinterpret_cast<jegl_gl3_framebuf*>(resource->m_handle.m_ptr);
     }
 
-
-    void gl_init_resource(jegl_context::graphic_impl_context_t, jegl_resource_blob blob, jegl_resource* resource)
-    {
-        assert(resource->m_custom_resource != nullptr);
-
-        switch (resource->m_type)
-        {
-        case jegl_resource::type::SHADER:
-        case jegl_resource::type::TEXTURE:
-        case jegl_resource::type::VERTEX:
-        case jegl_resource::type::FRAMEBUF:
-        case jegl_resource::type::UNIFORMBUF:
-        {
-            resource->m_handle.m_ptr = new jegl_gl3_uniformbuf(resource);
-            break;
-        }
-        default:
-            jeecs::debug::logerr("Unknown resource type when initing resource(%p), please check.", resource);
-            break;
-        }
-    }
     void _gl_update_depth_test_method(jegl_gl3_context* ctx, GLenum mode)
     {
         if (ctx->ACTIVE_DEPTH_MODE != mode)
@@ -1452,7 +1430,7 @@ namespace jeecs::graphic::api::gl3
         }
     }
 
-    bool _gl_using_shader_program(jegl_gl3_context* context, jegl_resource* resource)
+    bool _gl_using_shader_program(jegl_gl3_context* context, jegl_shader* resource)
     {
         jegl_gl3_shader* shader_instance =
             reinterpret_cast<jegl_gl3_shader*>(resource->m_handle.m_ptr);
@@ -1480,108 +1458,16 @@ namespace jeecs::graphic::api::gl3
         return true;
     }
 
-    void gl_using_resource(jegl_context::graphic_impl_context_t, jegl_resource* resource)
+    bool gl_bind_shader(jegl_context::graphic_impl_context_t context, jegl_shader* shader)
     {
-        switch (resource->m_type)
-        {
-        case jegl_resource::type::SHADER:
-            break;
-        case jegl_resource::type::TEXTURE:
-            if (resource->m_modified)
-            {
-                if (resource->m_raw_texture_data != nullptr)
-                {
-                    resource->m_modified = false;
-
-                    // Update texture's pixels, only normal pixel data will be updated.
-                    glBindTexture(GL_TEXTURE_2D, (GLuint)resource->m_handle.m_uint1);
-
-                    // Textures FORMAT & SIZE will not be changed.
-                    bool is_16bit = 0 != (resource->m_raw_texture_data->m_format & jegl_texture::format::FLOAT16);
-                    glTexImage2D(
-                        GL_TEXTURE_2D,
-                        0,
-                        GL_RGBA,
-                        (GLsizei)resource->m_raw_texture_data->m_width,
-                        (GLsizei)resource->m_raw_texture_data->m_height,
-                        0,
-                        GL_RGBA,
-                        is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
-                        resource->m_raw_texture_data->m_pixels);
-                }
-            }
-            break;
-        case jegl_resource::type::VERTEX:
-            break;
-        case jegl_resource::type::FRAMEBUF:
-            break;
-        case jegl_resource::type::UNIFORMBUF:
-        {
-            if (resource->m_modified)
-            {
-                resource->m_modified = false;
-                if (resource->m_raw_uniformbuf_data != nullptr)
-                {
-
-                }
-            }
-
-            break;
-        }
-        default:
-            jeecs::debug::logerr("Unknown resource type(%d) when using when resource %p.", (int)resource->m_type, resource);
-            break;
-        }
-    }
-
-    void gl_close_resource(jegl_context::graphic_impl_context_t, jegl_resource* resource)
-    {
-        switch (resource->m_type)
-        {
-        case jegl_resource::type::SHADER:
-        {
-            delete reinterpret_cast<jegl_gl3_shader*>(resource->m_handle.m_ptr);
-            break;
-        }
-        case jegl_resource::type::TEXTURE:
-            glDeleteTextures(1, &resource->m_handle.m_uint1);
-            break;
-        case jegl_resource::type::VERTEX:
-        {
-            jegl3_vertex_data* vdata = std::launder(reinterpret_cast<jegl3_vertex_data*>(resource->m_handle.m_ptr));
-            glDeleteVertexArrays(1, &vdata->m_vao);
-            glDeleteBuffers(1, &vdata->m_vbo);
-            glDeleteBuffers(1, &vdata->m_ebo);
-            delete vdata;
-            break;
-        }
-        case jegl_resource::type::FRAMEBUF:
-        {
-            jegl_gl3_framebuf* fdata =
-                std::launder(reinterpret_cast<jegl_gl3_framebuf*>(resource->m_handle.m_ptr));
-
-            delete fdata;
-            break;
-        }
-        case jegl_resource::type::UNIFORMBUF:
-            glDeleteBuffers(1, &resource->m_handle.m_uint1);
-            break;
-        default:
-            jeecs::debug::logerr("Unknown resource type when closing resource %p, please check.", resource);
-            break;
-        }
-    }
-
-    bool gl_bind_shader(jegl_context::graphic_impl_context_t context, jegl_resource* shader)
-    {
-        jegl_gl3_context* ctx = std::launder(reinterpret_cast<jegl_gl3_context*>(context));
+        jegl_gl3_context* ctx = reinterpret_cast<jegl_gl3_context*>(context);
         return _gl_using_shader_program(ctx, shader);
     }
 
-    void gl_bind_uniform_buffer(jegl_context::graphic_impl_context_t, jegl_resource* uniformbuf)
+    void gl_bind_uniform_buffer(jegl_context::graphic_impl_context_t, jegl_uniform_buffer* uniformbuf)
     {
         jegl_gl3_uniformbuf* ubuf =
-            std::launder(reinterpret_cast<jegl_gl3_uniformbuf*>(uniformbuf->m_handle.m_ptr));
+            reinterpret_cast<jegl_gl3_uniformbuf*>(uniformbuf->m_handle.m_ptr);
 
         glBindBufferRange(
             GL_UNIFORM_BUFFER,
@@ -1591,22 +1477,24 @@ namespace jeecs::graphic::api::gl3
             ubuf->m_uniform_buffer_size);
     }
 
-    void gl_bind_texture(jegl_context::graphic_impl_context_t ctx, jegl_resource* texture, size_t pass)
+    void gl_bind_texture(jegl_context::graphic_impl_context_t ctx, jegl_texture* texture, size_t pass)
     {
-        jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
+        jegl_gl3_context* context = reinterpret_cast<jegl_gl3_context*>(ctx);
+        jegl_gl3_texture* texture_instance =
+            reinterpret_cast<jegl_gl3_texture*>(texture->m_handle.m_ptr);
 
-        if (0 != ((jegl_texture::format)texture->m_handle.m_uint2 & jegl_texture::format::CUBE))
+        if (0 != (texture_instance->m_texture_format & jegl_texture::format::CUBE))
             context->bind_texture_pass_impl(
-                (GLint)pass, GL_TEXTURE_CUBE_MAP, (GLuint)texture->m_handle.m_uint1);
+                (GLint)pass, GL_TEXTURE_CUBE_MAP, texture_instance->m_texture_id);
         else
             context->bind_texture_pass_impl(
-                (GLint)pass, GL_TEXTURE_2D, (GLuint)texture->m_handle.m_uint1);
+                (GLint)pass, GL_TEXTURE_2D, texture_instance->m_texture_id);
     }
 
-    void gl_draw_vertex_with_shader(jegl_context::graphic_impl_context_t ctx, jegl_resource* vert)
+    void gl_draw_vertex_with_shader(jegl_context::graphic_impl_context_t ctx, jegl_vertex* vert)
     {
-        jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(ctx));
-        jegl3_vertex_data* vdata = std::launder(reinterpret_cast<jegl3_vertex_data*>(vert->m_handle.m_ptr));
+        jegl_gl3_context* context = reinterpret_cast<jegl_gl3_context*>(ctx);
+        jegl3_vertex_data* vdata = reinterpret_cast<jegl3_vertex_data*>(vert->m_handle.m_ptr);
 
         auto* current_shader = context->current_active_shader_may_null;
         assert(current_shader != nullptr);
@@ -1637,7 +1525,7 @@ namespace jeecs::graphic::api::gl3
 
     void gl_set_rend_to_framebuffer(
         jegl_context::graphic_impl_context_t ctx,
-        jegl_resource* framebuffer,
+        jegl_frame_buffer* framebuffer,
         const int32_t(*viewport_xywh)[4],
         const jegl_frame_buffer_clear_operation* clear_operations)
     {
@@ -1747,13 +1635,6 @@ void jegl_using_opengl3_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->vertex_close = vertex_close;
     write_to_apis->framebuffer_close = framebuffer_close;
     write_to_apis->ubuffer_close = ubuffer_close;
-
-    /*   write_to_apis->create_resource_blob_cache = gl_create_resource_blob;
-       write_to_apis->close_resource_blob_cache = gl_close_resource_blob;
-
-       write_to_apis->create_resource = gl_init_resource;
-       write_to_apis->using_resource = gl_using_resource;
-       write_to_apis->close_resource = gl_close_resource;*/
 
     write_to_apis->bind_uniform_buffer = gl_bind_uniform_buffer;
     write_to_apis->bind_texture = gl_bind_texture;

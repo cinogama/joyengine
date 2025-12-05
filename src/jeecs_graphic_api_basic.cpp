@@ -1115,11 +1115,13 @@ bool _jegl_try_update_resource_blob(
 {
     if (resource_handle->m_path_may_null_if_builtin == nullptr)
     {
-        jeecs::debug::logwarn(
-            "Cannot cache resource blob for anonymous resource.");
-
         if (blob_may_null != nullptr)
+        {
+            jeecs::debug::logwarn(
+                "Cannot cache resource blob for anonymous resource.");
+
             return false;
+        }
 
         // If blob is null, return true to avoid useless blob close operation.
         return true;
@@ -1383,7 +1385,7 @@ jegl_shader* _jegl_load_shader_source_impl(
 
         jegl_shader_generate_shader_source(shader_graph, shader_instance);
 
-        _jegl_init_resource_handle(&shader_instance->m_handle, nullptr);
+        _jegl_init_resource_handle(&shader_instance->m_handle, path);
         _jegl_create_shader_cache(shader_instance, is_virtual_file ? wo_crc64_str(src) : 0);
 
         wo_close_vm(vmm);
@@ -2012,31 +2014,39 @@ bool jegl_bind_shader(jegl_shader* shader)
         size_t shader_blob_version;
 
         auto found_blob_kind = _jegl_try_get_resource_blob(&shader->m_handle, &shader_blob, &shader_blob_version);
-        if (found_blob_kind != jeecs::graphic::cached_resource_blob::kind::SHADER)
+        if (found_blob_kind == jeecs::graphic::cached_resource_blob::kind::SHADER)
+        {
+            jeecs::graphic::_current_graphic_thread->m_apis->shader_init(
+                jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
+                shader_blob,
+                shader);
+        }
+        else
         {
             // Failed to get blob, need create it first.
             shader_blob = jeecs::graphic::_current_graphic_thread->m_apis->shader_create_blob(
                 jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
                 shader);
-        }
 
-        jeecs::graphic::_current_graphic_thread->m_apis->shader_init(
-            jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
-            shader_blob,
-            shader);
-
-        if (found_blob_kind != jeecs::graphic::cached_resource_blob::kind::UNKNOWN
-            || !_jegl_try_update_resource_blob(
-                &shader->m_handle,
-                jeecs::graphic::cached_resource_blob::kind::SHADER,
-                shader_blob,
-                shader_blob_version))
-        {
-            // Failed to update blob, need free it.
-            jeecs::graphic::_current_graphic_thread->m_apis->shader_close_blob(
+            jeecs::graphic::_current_graphic_thread->m_apis->shader_init(
                 jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
-                shader_blob);
+                shader_blob,
+                shader);
+
+            if (found_blob_kind != jeecs::graphic::cached_resource_blob::kind::UNKNOWN
+                || !_jegl_try_update_resource_blob(
+                    &shader->m_handle,
+                    jeecs::graphic::cached_resource_blob::kind::SHADER,
+                    shader_blob,
+                    shader_blob_version))
+            {
+                // Failed to update blob, need free it.
+                jeecs::graphic::_current_graphic_thread->m_apis->shader_close_blob(
+                    jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
+                    shader_blob);
+            }
         }
+        break;
     }
     case jeecs::graphic::jegl_resouce_state::INVALID_CONTEXT:
     default:
@@ -2084,11 +2094,10 @@ void jegl_bind_uniform_buffer(jegl_uniform_buffer* uniformbuf)
             uniformbuf);
         break;
     case jeecs::graphic::jegl_resouce_state::NEED_INIT:
-    {
         jeecs::graphic::_current_graphic_thread->m_apis->ubuffer_init(
             jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
             uniformbuf);
-    }
+        break;
     case jeecs::graphic::jegl_resouce_state::INVALID_CONTEXT:
     default:
         // Donot bind invalid resource.
@@ -2115,31 +2124,39 @@ void jegl_draw_vertex(jegl_vertex* vert)
         size_t vertex_blob_version;
 
         auto found_blob_kind = _jegl_try_get_resource_blob(&vert->m_handle, &vertex_blob, &vertex_blob_version);
-        if (found_blob_kind != jeecs::graphic::cached_resource_blob::kind::VERTEX)
+        if (found_blob_kind == jeecs::graphic::cached_resource_blob::kind::VERTEX)
+        {
+            jeecs::graphic::_current_graphic_thread->m_apis->vertex_init(
+                jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
+                vertex_blob,
+                vert);
+        }
+        else
         {
             // Failed to get blob, need create it first.
             vertex_blob = jeecs::graphic::_current_graphic_thread->m_apis->vertex_create_blob(
                 jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
                 vert);
-        }
 
-        jeecs::graphic::_current_graphic_thread->m_apis->vertex_init(
-            jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
-            vertex_blob,
-            vert);
-
-        if (found_blob_kind != jeecs::graphic::cached_resource_blob::kind::UNKNOWN
-            || !_jegl_try_update_resource_blob(
-                &vert->m_handle, 
-                jeecs::graphic::cached_resource_blob::kind::VERTEX,
-                vertex_blob, 
-                vertex_blob_version))
-        {
-            // Failed to update blob, need free it.
-            jeecs::graphic::_current_graphic_thread->m_apis->vertex_close_blob(
+            jeecs::graphic::_current_graphic_thread->m_apis->vertex_init(
                 jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
-                vertex_blob);
+                vertex_blob,
+                vert);
+
+            if (found_blob_kind != jeecs::graphic::cached_resource_blob::kind::UNKNOWN
+                || !_jegl_try_update_resource_blob(
+                    &vert->m_handle,
+                    jeecs::graphic::cached_resource_blob::kind::VERTEX,
+                    vertex_blob,
+                    vertex_blob_version))
+            {
+                // Failed to update blob, need free it.
+                jeecs::graphic::_current_graphic_thread->m_apis->vertex_close_blob(
+                    jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
+                    vertex_blob);
+            }
         }
+        break;
     }
     case jeecs::graphic::jegl_resouce_state::INVALID_CONTEXT:
     default:
@@ -2167,18 +2184,16 @@ void jegl_rend_to_framebuffer(
                 framebuffer);
             break;
         case jeecs::graphic::jegl_resouce_state::NEED_INIT:
-        {
             jeecs::graphic::_current_graphic_thread->m_apis->framebuffer_init(
                 jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
                 framebuffer);
-        }
+            break;
         case jeecs::graphic::jegl_resouce_state::INVALID_CONTEXT:
         default:
             // Donot bind invalid resource.
             return;
         }
     }
-
     jeecs::graphic::_current_graphic_thread->m_apis->bind_framebuf(
         jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
         framebuffer,
@@ -2203,31 +2218,39 @@ void jegl_bind_texture(jegl_texture* texture, size_t pass)
         size_t texture_blob_version;
 
         auto found_blob_kind = _jegl_try_get_resource_blob(&texture->m_handle, &texture_blob, &texture_blob_version);
-        if (found_blob_kind != jeecs::graphic::cached_resource_blob::kind::TEXTURE)
+        if (found_blob_kind == jeecs::graphic::cached_resource_blob::kind::TEXTURE)
+        {
+            jeecs::graphic::_current_graphic_thread->m_apis->texture_init(
+                jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
+                texture_blob,
+                texture);
+        }
+        else
         {
             // Failed to get blob, need create it first.
             texture_blob = jeecs::graphic::_current_graphic_thread->m_apis->texture_create_blob(
                 jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
                 texture);
-        }
 
-        jeecs::graphic::_current_graphic_thread->m_apis->texture_init(
-            jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
-            texture_blob,
-            texture);
-
-        if (found_blob_kind != jeecs::graphic::cached_resource_blob::kind::UNKNOWN
-            || !_jegl_try_update_resource_blob(
-                &texture->m_handle, 
-                jeecs::graphic::cached_resource_blob::kind::TEXTURE,
-                texture_blob,
-                texture_blob_version))
-        {
-            // Failed to update blob, need free it.
-            jeecs::graphic::_current_graphic_thread->m_apis->vertex_close_blob(
+            jeecs::graphic::_current_graphic_thread->m_apis->texture_init(
                 jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
-                texture_blob);
+                texture_blob,
+                texture);
+
+            if (found_blob_kind != jeecs::graphic::cached_resource_blob::kind::UNKNOWN
+                || !_jegl_try_update_resource_blob(
+                    &texture->m_handle,
+                    jeecs::graphic::cached_resource_blob::kind::TEXTURE,
+                    texture_blob,
+                    texture_blob_version))
+            {
+                // Failed to update blob, need free it.
+                jeecs::graphic::_current_graphic_thread->m_apis->vertex_close_blob(
+                    jeecs::graphic::_current_graphic_thread->m_graphic_impl_context,
+                    texture_blob);
+            }
         }
+        break;
     }
     case jeecs::graphic::jegl_resouce_state::INVALID_CONTEXT:
     default:
@@ -2242,14 +2265,12 @@ void jegl_bind_texture(jegl_texture* texture, size_t pass)
 
 void jegl_uniform_int(uint32_t location, int value)
 {
-    // NOTE: This method designed for using after 'jegl_using_resource'
     jeecs::graphic::_current_graphic_thread->m_apis->set_uniform(
         jeecs::graphic::_current_graphic_thread->m_graphic_impl_context, location, jegl_shader::INT, &value);
 }
 
 void jegl_uniform_int2(uint32_t location, int x, int y)
 {
-    // NOTE: This method designed for using after 'jegl_using_resource'
     int value[2] = { x, y };
     jeecs::graphic::_current_graphic_thread->m_apis->set_uniform(
         jeecs::graphic::_current_graphic_thread->m_graphic_impl_context, location, jegl_shader::INT2, &value);
@@ -2257,7 +2278,6 @@ void jegl_uniform_int2(uint32_t location, int x, int y)
 
 void jegl_uniform_int3(uint32_t location, int x, int y, int z)
 {
-    // NOTE: This method designed for using after 'jegl_using_resource'
     int value[3] = { x, y, z };
     jeecs::graphic::_current_graphic_thread->m_apis->set_uniform(
         jeecs::graphic::_current_graphic_thread->m_graphic_impl_context, location, jegl_shader::INT3, &value);
@@ -2265,7 +2285,6 @@ void jegl_uniform_int3(uint32_t location, int x, int y, int z)
 
 void jegl_uniform_int4(uint32_t location, int x, int y, int z, int w)
 {
-    // NOTE: This method designed for using after 'jegl_using_resource'
     int value[4] = { x, y, z, w };
     jeecs::graphic::_current_graphic_thread->m_apis->set_uniform(
         jeecs::graphic::_current_graphic_thread->m_graphic_impl_context, location, jegl_shader::INT4, &value);
@@ -2273,14 +2292,12 @@ void jegl_uniform_int4(uint32_t location, int x, int y, int z, int w)
 
 void jegl_uniform_float(uint32_t location, float value)
 {
-    // NOTE: This method designed for using after 'jegl_using_resource'
     jeecs::graphic::_current_graphic_thread->m_apis->set_uniform(
         jeecs::graphic::_current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT, &value);
 }
 
 void jegl_uniform_float2(uint32_t location, float x, float y)
 {
-    // NOTE: This method designed for using after 'jegl_using_resource'
     float value[] = { x, y };
     jeecs::graphic::_current_graphic_thread->m_apis->set_uniform(
         jeecs::graphic::_current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT2, &value);
@@ -2288,7 +2305,6 @@ void jegl_uniform_float2(uint32_t location, float x, float y)
 
 void jegl_uniform_float3(uint32_t location, float x, float y, float z)
 {
-    // NOTE: This method designed for using after 'jegl_using_resource'
     float value[] = { x, y, z };
     jeecs::graphic::_current_graphic_thread->m_apis->set_uniform(
         jeecs::graphic::_current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT3, &value);
@@ -2296,7 +2312,6 @@ void jegl_uniform_float3(uint32_t location, float x, float y, float z)
 
 void jegl_uniform_float4(uint32_t location, float x, float y, float z, float w)
 {
-    // NOTE: This method designed for using after 'jegl_using_resource'
     float value[] = { x, y, z, w };
     jeecs::graphic::_current_graphic_thread->m_apis->set_uniform(
         jeecs::graphic::_current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT4, &value);
@@ -2304,21 +2319,18 @@ void jegl_uniform_float4(uint32_t location, float x, float y, float z, float w)
 
 void jegl_uniform_float2x2(uint32_t location, const float (*mat)[2])
 {
-    // NOTE: This method designed for using after 'jegl_using_resource'
     jeecs::graphic::_current_graphic_thread->m_apis->set_uniform(
         jeecs::graphic::_current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT2X2, mat);
 }
 
 void jegl_uniform_float3x3(uint32_t location, const float (*mat)[3])
 {
-    // NOTE: This method designed for using after 'jegl_using_resource'
     jeecs::graphic::_current_graphic_thread->m_apis->set_uniform(
         jeecs::graphic::_current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT3X3, mat);
 }
 
 void jegl_uniform_float4x4(uint32_t location, const float (*mat)[4])
 {
-    // NOTE: This method designed for using after 'jegl_using_resource'
     jeecs::graphic::_current_graphic_thread->m_apis->set_uniform(
         jeecs::graphic::_current_graphic_thread->m_graphic_impl_context, location, jegl_shader::FLOAT4X4, mat);
 }
