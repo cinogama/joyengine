@@ -23,7 +23,7 @@
         },
         {
           "name": "JE4_ENABLE_OPENGL330_GAPI",
-          "value": "False",
+          "value": "True",
           "type": "BOOL"
         },
         {
