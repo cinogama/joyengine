@@ -18,7 +18,7 @@
         },
         {
           "name": "JE4_ENABLE_DX11_GAPI",
-          "value": "False",
+          "value": "True",
           "type": "BOOL"
         },
         {
