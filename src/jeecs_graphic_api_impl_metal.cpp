@@ -1170,8 +1170,8 @@ namespace jeecs::graphic::api::metal
                 res->m_raw_framebuf_data->m_height);
 
             jeecs::basic::resource<jeecs::graphic::texture>* attachments =
-                std::launder(reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture> *>(
-                    res->m_raw_framebuf_data->m_output_attachments));
+                reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture> *>(
+                    res->m_raw_framebuf_data->m_output_attachments);
 
             size_t color_attachment_count = 0;
 

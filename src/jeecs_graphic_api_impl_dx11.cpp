@@ -498,7 +498,7 @@ namespace jeecs::graphic::api::dx11
     }
     void dx11_shutdown(jegl_context*, jegl_context::graphic_impl_context_t userdata, bool reboot)
     {
-        jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(userdata));
+        jegl_dx11_context* context = reinterpret_cast<jegl_dx11_context*>(userdata);
 
         if (!reboot)
             jeecs::debug::log("Graphic thread (DX11) shutdown!");
@@ -544,8 +544,7 @@ namespace jeecs::graphic::api::dx11
 
     jegl_update_action dx11_pre_update(jegl_context::graphic_impl_context_t ctx)
     {
-        jegl_dx11_context* context =
-            std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
+        jegl_dx11_context* context = reinterpret_cast<jegl_dx11_context*>(ctx);
 
         context->m_current_target_framebuffer = nullptr;
         context->m_current_target_shader = nullptr;
@@ -574,7 +573,7 @@ namespace jeecs::graphic::api::dx11
     jegl_update_action dx11_commit_update(
         jegl_context::graphic_impl_context_t ctx, jegl_update_action)
     {
-        jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
+        jegl_dx11_context* context = reinterpret_cast<jegl_dx11_context*>(ctx);
 
         // 回到默认帧缓冲区
         context->m_dx_context->OMSetRenderTargets(1,
@@ -1156,7 +1155,7 @@ namespace jeecs::graphic::api::dx11
         jegl_resource_blob blob,
         jegl_shader* shader)
     {
-        jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
+        jegl_dx11_context* context = reinterpret_cast<jegl_dx11_context*>(ctx);
         if (blob != nullptr)
         {
             auto* shader_blob =
@@ -1547,9 +1546,9 @@ namespace jeecs::graphic::api::dx11
                 resource->m_width,
                 resource->m_height);
 
-        jeecs::basic::resource<jeecs::graphic::texture>* attachments =
-            std::launder(reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture> *>(
-                resource->m_output_attachments));
+        jeecs::basic::resource<jeecs::graphic::texture>* attachments = 
+            reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture> *>(
+                resource->m_output_attachments);
 
         size_t color_attachment_count = 0;
         for (size_t i = 0; i < resource->m_attachment_count; ++i)
@@ -1582,9 +1581,8 @@ namespace jeecs::graphic::api::dx11
                     depth_view_describe.Flags = 0;
 
                     JERCHECK(context->m_dx_device->CreateDepthStencilView(
-                        std::launder(
                             reinterpret_cast<jedx11_texture*>(
-                                attachment->resource()->m_handle.m_ptr))->m_texture.Get(),
+                                attachment->resource()->m_handle.m_ptr)->m_texture.Get(),
                         &depth_view_describe,
                         jedx11_framebuffer_res->m_depth_view.GetAddressOf()));
 
@@ -1596,9 +1594,8 @@ namespace jeecs::graphic::api::dx11
             else
             {
                 JERCHECK(context->m_dx_device->CreateRenderTargetView(
-                    std::launder(
                         reinterpret_cast<jedx11_texture*>(
-                            attachment->resource()->m_handle.m_ptr))->m_texture.Get(),
+                            attachment->resource()->m_handle.m_ptr)->m_texture.Get(),
                     nullptr,
                     jedx11_framebuffer_res->m_rend_views[color_attachment_count].GetAddressOf()));
 
@@ -1767,7 +1764,7 @@ namespace jeecs::graphic::api::dx11
                 context->m_current_target_shader->m_uniforms.GetAddressOf());
         }
 
-        auto* vertex = std::launder(reinterpret_cast<jedx11_vertex*>(vert->m_handle.m_ptr));
+        auto* vertex = reinterpret_cast<jedx11_vertex*>(vert->m_handle.m_ptr);
 
         const UINT offset = 0;
         const UINT strides = vertex->m_stride;
@@ -1846,7 +1843,7 @@ namespace jeecs::graphic::api::dx11
         const int32_t(*viewport_xywh)[4],
         const jegl_frame_buffer_clear_operation* clear_operations)
     {
-        jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
+        jegl_dx11_context* context = reinterpret_cast<jegl_dx11_context*>(ctx);
 
         // Reset current binded shader.
         context->m_current_target_shader = nullptr;
@@ -1963,7 +1960,7 @@ namespace jeecs::graphic::api::dx11
         jegl_shader::uniform_type type,
         const void* val)
     {
-        jegl_dx11_context* context = std::launder(reinterpret_cast<jegl_dx11_context*>(ctx));
+        jegl_dx11_context* context = reinterpret_cast<jegl_dx11_context*>(ctx);
 
         if (location == jeecs::graphic::INVALID_UNIFORM_LOCATION
             || context->m_current_target_shader == nullptr)

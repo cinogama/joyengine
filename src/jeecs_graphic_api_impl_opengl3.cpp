@@ -498,7 +498,7 @@ namespace jeecs::graphic::api::gl3
     }
     void gl_shutdown(jegl_context*, jegl_context::graphic_impl_context_t userdata, bool reboot)
     {
-        jegl_gl3_context* context = std::launder(reinterpret_cast<jegl_gl3_context*>(userdata));
+        jegl_gl3_context* context = reinterpret_cast<jegl_gl3_context*>(userdata);
 
         if (!reboot)
             jeecs::debug::log("Graphic thread (OpenGL3) shutdown!");
@@ -1282,7 +1282,7 @@ namespace jeecs::graphic::api::gl3
         jegl_uniform_buffer* resource)
     {
         jegl_gl3_uniformbuf* ubuf =
-            std::launder(reinterpret_cast<jegl_gl3_uniformbuf*>(resource->m_handle.m_ptr));
+            reinterpret_cast<jegl_gl3_uniformbuf*>(resource->m_handle.m_ptr);
 
         assert(resource->m_update_length != 0);
 
