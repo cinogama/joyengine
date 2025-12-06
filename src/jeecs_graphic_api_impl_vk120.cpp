@@ -1930,6 +1930,7 @@ namespace jeecs::graphic::api::vk120
             }
 
             VkPhysicalDeviceFeatures device_features = {};
+            device_features.independentBlend = VK_TRUE;
 
             VkDeviceCreateInfo device_create_info = {};
             device_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -2258,18 +2259,18 @@ namespace jeecs::graphic::api::vk120
             }
             return result;
         }
-        jevk12_shader_blob* create_shader_blob(jegl_resource* resource)
+        jevk12_shader_blob* create_shader_blob(jegl_shader* resource)
         {
             jevk12_shader_blob::blob_data* shader_blob = new jevk12_shader_blob::blob_data{};
-            assert(resource != nullptr && resource->m_type == jegl_resource::type::SHADER && resource->m_raw_shader_data != nullptr);
+            assert(resource != nullptr);
 
             shader_blob->m_context = this;
 
             // 此处创建采样器
-            shader_blob->m_samplers.resize(resource->m_raw_shader_data->m_sampler_count);
-            for (size_t i = 0; i < resource->m_raw_shader_data->m_sampler_count; ++i)
+            shader_blob->m_samplers.resize(resource->m_sampler_count);
+            for (size_t i = 0; i < resource->m_sampler_count; ++i)
             {
-                const jegl_shader::sampler_method& method = resource->m_raw_shader_data->m_sampler_methods[i];
+                const jegl_shader::sampler_method& method = resource->m_sampler_methods[i];
 
                 shader_blob->m_samplers[i].m_vk_sampler =
                     create_sampler(
@@ -2286,8 +2287,8 @@ namespace jeecs::graphic::api::vk120
             vertex_shader_module_create_info.pNext = nullptr;
             vertex_shader_module_create_info.flags = 0;
             vertex_shader_module_create_info.codeSize =
-                resource->m_raw_shader_data->m_vertex_spirv_count * sizeof(jegl_shader::spir_v_code_t);
-            vertex_shader_module_create_info.pCode = resource->m_raw_shader_data->m_vertex_spirv_codes;
+                resource->m_vertex_spirv_count * sizeof(jegl_shader::spir_v_code_t);
+            vertex_shader_module_create_info.pCode = resource->m_vertex_spirv_codes;
 
             if (VK_SUCCESS != vkCreateShaderModule(
                 _vk_logic_device,
@@ -2303,8 +2304,8 @@ namespace jeecs::graphic::api::vk120
             fragment_shader_module_create_info.pNext = nullptr;
             fragment_shader_module_create_info.flags = 0;
             fragment_shader_module_create_info.codeSize =
-                resource->m_raw_shader_data->m_fragment_spirv_count * sizeof(jegl_shader::spir_v_code_t);
-            fragment_shader_module_create_info.pCode = resource->m_raw_shader_data->m_fragment_spirv_codes;
+                resource->m_fragment_spirv_count * sizeof(jegl_shader::spir_v_code_t);
+            fragment_shader_module_create_info.pCode = resource->m_fragment_spirv_codes;
 
             if (VK_SUCCESS != vkCreateShaderModule(
                 _vk_logic_device,
@@ -2337,15 +2338,15 @@ namespace jeecs::graphic::api::vk120
             // 预备管线所需的资源~
 
             shader_blob->m_vertex_input_attribute_descriptions.resize(
-                resource->m_raw_shader_data->m_vertex_in_count);
+                resource->m_vertex_in_count);
 
             size_t vertex_point_data_size = 0;
-            for (size_t i = 0; i < resource->m_raw_shader_data->m_vertex_in_count; ++i)
+            for (size_t i = 0; i < resource->m_vertex_in_count; ++i)
             {
                 shader_blob->m_vertex_input_attribute_descriptions[i].binding = 0;
                 shader_blob->m_vertex_input_attribute_descriptions[i].location = (uint32_t)i;
                 shader_blob->m_vertex_input_attribute_descriptions[i].offset = (uint32_t)vertex_point_data_size;
-                switch (resource->m_raw_shader_data->m_vertex_in[i])
+                switch (resource->m_vertex_in[i])
                 {
                 case jegl_shader::uniform_type::INT:
                     shader_blob->m_vertex_input_attribute_descriptions[i].format = VkFormat::VK_FORMAT_R32_SINT;
@@ -2400,13 +2401,15 @@ namespace jeecs::graphic::api::vk120
                 default:
                     jeecs::debug::logfatal(
                         "Unsupported vertex input type '%d' in shader '%s'.",
-                        (int)resource->m_raw_shader_data->m_vertex_in[i],
-                        resource->m_path == nullptr ? "<builtin>" : resource->m_path);
+                        (int)resource->m_vertex_in[i],
+                        resource->m_handle.m_path_may_null_if_builtin != nullptr
+                        ? resource->m_handle.m_path_may_null_if_builtin
+                        : "<builtin>");
                 }
             }
 
             shader_blob->m_shader_output_color_attachment_count =
-                resource->m_raw_shader_data->m_fragment_out_count;
+                resource->m_fragment_out_count;
 
             const auto parse_vk_enum_blend_method = [](jegl_shader::blend_method method)
                 {
@@ -2457,7 +2460,7 @@ namespace jeecs::graphic::api::vk120
                     }
                 };
 
-            if (resource->m_raw_shader_data->m_blend_equation == jegl_shader::blend_equation::DISABLED)
+            if (resource->m_blend_equation == jegl_shader::blend_equation::DISABLED)
             {
                 assert(shader_blob->m_blend_statement.has_value() == false);
             }
@@ -2465,11 +2468,11 @@ namespace jeecs::graphic::api::vk120
             {
                 auto& blend_state = shader_blob->m_blend_statement.emplace();
                 blend_state.m_blend_equation =
-                    parse_vk_enum_blend_equation(resource->m_raw_shader_data->m_blend_equation);
+                    parse_vk_enum_blend_equation(resource->m_blend_equation);
                 blend_state.m_blend_src_factor =
-                    parse_vk_enum_blend_method(resource->m_raw_shader_data->m_blend_src_mode);
+                    parse_vk_enum_blend_method(resource->m_blend_src_mode);
                 blend_state.m_blend_dst_factor =
-                    parse_vk_enum_blend_method(resource->m_raw_shader_data->m_blend_dst_mode);
+                    parse_vk_enum_blend_method(resource->m_blend_dst_mode);
             }
 
             shader_blob->m_viewport = {};
@@ -2504,7 +2507,7 @@ namespace jeecs::graphic::api::vk120
             shader_blob->m_rasterization_state_create_info.polygonMode =
                 VkPolygonMode::VK_POLYGON_MODE_FILL;
 
-            switch (resource->m_raw_shader_data->m_cull_mode)
+            switch (resource->m_cull_mode)
             {
             case jegl_shader::cull_mode::FRONT:
                 shader_blob->m_rasterization_state_create_info.cullMode = VkCullModeFlagBits::VK_CULL_MODE_FRONT_BIT;
@@ -2518,8 +2521,10 @@ namespace jeecs::graphic::api::vk120
             default:
                 jeecs::debug::logfatal(
                     "Unsupported cull mode '%d' in shader '%s'.",
-                    (int)resource->m_raw_shader_data->m_cull_mode,
-                    resource->m_path == nullptr ? "<builtin>" : resource->m_path);
+                    (int)resource->m_cull_mode,
+                    resource->m_handle.m_path_may_null_if_builtin != nullptr
+                    ? resource->m_handle.m_path_may_null_if_builtin
+                    : "<builtin>");
                 break;
             }
 
@@ -2550,7 +2555,7 @@ namespace jeecs::graphic::api::vk120
             shader_blob->m_depth_stencil_state_create_info.pNext = nullptr;
             shader_blob->m_depth_stencil_state_create_info.flags = 0;
 
-            switch (resource->m_raw_shader_data->m_depth_mask)
+            switch (resource->m_depth_mask)
             {
             case jegl_shader::depth_mask_method::DISABLE:
                 shader_blob->m_depth_stencil_state_create_info.depthWriteEnable = VK_FALSE;
@@ -2561,13 +2566,15 @@ namespace jeecs::graphic::api::vk120
             default:
                 jeecs::debug::logfatal(
                     "Unsupported depth mask method '%d' in shader '%s'.",
-                    (int)resource->m_raw_shader_data->m_depth_mask,
-                    resource->m_path == nullptr ? "<builtin>" : resource->m_path);
+                    (int)resource->m_depth_mask,
+                    resource->m_handle.m_path_may_null_if_builtin != nullptr
+                    ? resource->m_handle.m_path_may_null_if_builtin
+                    : "<builtin>");
                 break;
             }
 
             shader_blob->m_depth_stencil_state_create_info.depthTestEnable = VK_TRUE;
-            switch (resource->m_raw_shader_data->m_depth_test)
+            switch (resource->m_depth_test)
             {
             case jegl_shader::depth_test_method::NEVER:
                 shader_blob->m_depth_stencil_state_create_info.depthCompareOp = VkCompareOp::VK_COMPARE_OP_NEVER;
@@ -2596,8 +2603,10 @@ namespace jeecs::graphic::api::vk120
             default:
                 jeecs::debug::logfatal(
                     "Unsupported depth test method '%d' in shader '%s'.",
-                    (int)resource->m_raw_shader_data->m_depth_test,
-                    resource->m_path == nullptr ? "<builtin>" : resource->m_path);
+                    (int)resource->m_depth_test,
+                    resource->m_handle.m_path_may_null_if_builtin != nullptr
+                    ? resource->m_handle.m_path_may_null_if_builtin
+                    : "<builtin>");
                 break;
             }
             shader_blob->m_depth_stencil_state_create_info.depthBoundsTestEnable = VK_FALSE;
@@ -2611,7 +2620,7 @@ namespace jeecs::graphic::api::vk120
             // 遍历Uniform，按照vulkan对于ubo的大小和对齐规则，计算实际偏移量；最后得到整个uniform的大小
             uint32_t last_elem_end_place = 0;
             size_t max_allign = 4;
-            auto* uniforms = resource->m_raw_shader_data->m_custom_uniforms;
+            auto* uniforms = resource->m_custom_uniforms;
             while (uniforms != nullptr)
             {
                 size_t unit_size = 0;
@@ -2712,18 +2721,19 @@ namespace jeecs::graphic::api::vk120
 
             return shader;
         }
-        void destroy_shader(jevk12_shader* shader)
+        void destroy_shader(jevk12_shader* shader_may_null)
         {
-            delete shader;
+            if (shader_may_null != nullptr)
+                delete shader_may_null;
         }
 
-        jevk12_vertex* create_vertex_instance(jegl_resource* resource)
+        jevk12_vertex* create_vertex_instance(jegl_vertex* resource)
         {
             jevk12_vertex* vertex = new jevk12_vertex();
 
-            vertex->m_topology = resource->m_raw_vertex_data->m_type;
+            vertex->m_topology = resource->m_type;
 
-            size_t vertex_buffer_size = resource->m_raw_vertex_data->m_vertex_length;
+            size_t vertex_buffer_size = resource->m_vertex_length;
 
             // 获取所需分配的内存类型
             alloc_vk_device_buffer_memory(
@@ -2744,7 +2754,7 @@ namespace jeecs::graphic::api::vk120
                 &vertex_buffer_memory_ptr);
             memcpy(
                 vertex_buffer_memory_ptr,
-                resource->m_raw_vertex_data->m_vertexs,
+                resource->m_vertexs,
                 vertex_buffer_size);
             vkUnmapMemory(
                 _vk_logic_device,
@@ -2752,7 +2762,7 @@ namespace jeecs::graphic::api::vk120
 
             // 创建索引缓冲区
             alloc_vk_device_buffer_memory(
-                resource->m_raw_vertex_data->m_index_count * sizeof(uint32_t),
+                resource->m_index_count * sizeof(uint32_t),
                 VkBufferUsageFlagBits::VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
                 VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                 VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -2764,21 +2774,20 @@ namespace jeecs::graphic::api::vk120
                 _vk_logic_device,
                 vertex->m_vk_index_buffer_memory,
                 0,
-                resource->m_raw_vertex_data->m_index_count * sizeof(uint32_t),
+                resource->m_index_count * sizeof(uint32_t),
                 0,
                 &index_buffer_memory_ptr);
             memcpy(
                 index_buffer_memory_ptr,
-                resource->m_raw_vertex_data->m_indices,
-                resource->m_raw_vertex_data->m_index_count * sizeof(uint32_t));
+                resource->m_indices,
+                resource->m_index_count * sizeof(uint32_t));
             vkUnmapMemory(
                 _vk_logic_device,
                 vertex->m_vk_index_buffer_memory);
 
-            vertex->m_vertex_point_count =
-                (uint32_t)resource->m_raw_vertex_data->m_index_count;
+            vertex->m_vertex_point_count = (uint32_t)resource->m_index_count;
             vertex->m_size = (VkDeviceSize)vertex_buffer_size;
-            vertex->m_stride = (VkDeviceSize)resource->m_raw_vertex_data->m_data_size_per_point;
+            vertex->m_stride = (VkDeviceSize)resource->m_data_size_per_point;
 
             return vertex;
         }
@@ -3165,27 +3174,26 @@ namespace jeecs::graphic::api::vk120
             vkFreeMemory(_vk_logic_device, texture_data_buffer_memory, nullptr);
         }
 
-        jevk12_texture* create_texture_instance(jegl_resource* resource)
+        jevk12_texture* create_texture_instance(jegl_texture* resource)
         {
-            jegl_texture* texture_raw_data = resource->m_raw_texture_data;
-            bool is_cube = 0 != (texture_raw_data->m_format & jegl_texture::format::CUBE);
+            bool is_cube = 0 != (resource->m_format & jegl_texture::format::CUBE);
 
             // Support for cube textures is not implemented yet
             (void)is_cube;
 
-            if (texture_raw_data->m_format & jegl_texture::format::FRAMEBUF)
+            if (resource->m_format & jegl_texture::format::FRAMEBUF)
             {
                 return create_framebuf_texture(
-                    texture_raw_data->m_format,
-                    texture_raw_data->m_width,
-                    texture_raw_data->m_height);
+                    resource->m_format,
+                    resource->m_width,
+                    resource->m_height);
             }
             else
             {
                 jevk12_texture* texture = new jevk12_texture{};
 
                 VkFormat image_format;
-                switch (texture_raw_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
+                switch (resource->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
                 {
                 case jegl_texture::format::RGBA:
                     image_format = VkFormat::VK_FORMAT_R8G8B8A8_UNORM;
@@ -3196,8 +3204,8 @@ namespace jeecs::graphic::api::vk120
                 }
 
                 create_image(
-                    texture_raw_data->m_width,
-                    texture_raw_data->m_height,
+                    resource->m_width,
+                    resource->m_height,
                     image_format,
                     VkImageTiling::VK_IMAGE_TILING_OPTIMAL,
                     VkImageUsageFlagBits::VK_IMAGE_USAGE_TRANSFER_DST_BIT |
@@ -3210,7 +3218,7 @@ namespace jeecs::graphic::api::vk120
 
                 texture->m_vk_texture_format = image_format;
 
-                trans_and_update_texture_pixels(texture, texture_raw_data);
+                trans_and_update_texture_pixels(texture, resource);
                 return texture;
             }
         }
@@ -3243,11 +3251,11 @@ namespace jeecs::graphic::api::vk120
 
             return uniformbuf;
         }
-        jevk12_uniformbuf* create_uniform_buffer(jegl_resource* resource)
+        jevk12_uniformbuf* create_uniform_buffer(jegl_uniform_buffer* resource)
         {
             return create_uniform_buffer_with_size(
-                (uint32_t)resource->m_raw_uniformbuf_data->m_buffer_binding_place,
-                resource->m_raw_uniformbuf_data->m_buffer_size);
+                (uint32_t)resource->m_buffer_binding_place,
+                resource->m_buffer_size);
         }
         void destroy_uniform_buffer(jevk12_uniformbuf* uniformbuf)
         {
@@ -3269,21 +3277,17 @@ namespace jeecs::graphic::api::vk120
             memcpy(mdata, data, size);
             vkUnmapMemory(_vk_logic_device, ubuf->m_uniform_buffer_memory);
         }
-        void update_uniform_buffer(jegl_resource* resource)
+        void update_uniform_buffer(jegl_uniform_buffer* resource)
         {
             jevk12_uniformbuf* uniformbuf =
                 reinterpret_cast<jevk12_uniformbuf*>(resource->m_handle.m_ptr);
 
-            auto* raw_uniformbuf_data = resource->m_raw_uniformbuf_data;
-            if (raw_uniformbuf_data != nullptr)
-            {
-                assert(raw_uniformbuf_data->m_update_length != 0);
-                update_uniform_buffer_with_range(
-                    uniformbuf,
-                    raw_uniformbuf_data->m_buffer + raw_uniformbuf_data->m_update_begin_offset,
-                    raw_uniformbuf_data->m_update_begin_offset,
-                    raw_uniformbuf_data->m_buffer_size);
-            }
+            assert(resource->m_update_length != 0);
+            update_uniform_buffer_with_range(
+                uniformbuf,
+                resource->m_buffer + resource->m_update_begin_offset,
+                resource->m_update_begin_offset,
+                resource->m_buffer_size);
         }
 
         /////////////////////////////////////////////////////
@@ -3615,7 +3619,7 @@ namespace jeecs::graphic::api::vk120
 
             jegui_init_vk120(
                 _vk_jegl_context,
-                [](jegl_context* ctx, jegl_resource* res)
+                [](jegl_context* ctx, jegl_texture* res)
                 {
                     auto* this_context =
                         reinterpret_cast<jegl_vk120_context*>(ctx->m_graphic_impl_context);
@@ -3654,7 +3658,7 @@ namespace jeecs::graphic::api::vk120
 
                     return (uint64_t)desc_set;
                 },
-                [](jegl_context*, jegl_resource*) {},
+                [](jegl_context*, jegl_shader*) {},
                 _vk_jegl_interface->interface_handle(),
                 &init_info,
                 _vk_swapchain_images.front()->m_framebuffer->m_rendpass,
@@ -4006,50 +4010,49 @@ namespace jeecs::graphic::api::vk120
         return jegl_update_action::JEGL_UPDATE_CONTINUE;
     }
 
-    jegl_resource_blob create_resource_blob(jegl_context::graphic_impl_context_t ctx, jegl_resource* resource)
+    jegl_resource_blob shader_create_resource_blob(
+        jegl_context::graphic_impl_context_t ctx, jegl_shader* shader)
     {
         jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
-        switch (resource->m_type)
-        {
-        case jegl_resource::type::SHADER:
-            return context->create_shader_blob(resource);
-        case jegl_resource::type::TEXTURE:
-            break;
-        case jegl_resource::type::VERTEX:
-            break;
-        case jegl_resource::type::FRAMEBUF:
-            break;
-        case jegl_resource::type::UNIFORMBUF:
-            break;
-        default:
-            break;
-        }
+
+        return context->create_shader_blob(shader);
+    }
+    void shader_close_resource_blob(
+        jegl_context::graphic_impl_context_t ctx, jegl_resource_blob blob)
+    {
+        jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
+
+        context->destroy_shader_blob(reinterpret_cast<jevk12_shader_blob*>(blob));
+    }
+    jegl_resource_blob texture_create_resource_blob(
+        jegl_context::graphic_impl_context_t, jegl_texture*)
+    {
         return nullptr;
     }
-    void close_resource_blob(jegl_context::graphic_impl_context_t ctx, jegl_resource_blob blob)
+    void texture_close_resource_blob(
+        jegl_context::graphic_impl_context_t, jegl_resource_blob)
     {
-        if (blob != nullptr)
-        {
-            jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
-
-            auto* shader_blob = reinterpret_cast<jevk12_shader_blob*>(blob);
-            context->destroy_shader_blob(shader_blob);
-        }
+    }
+    jegl_resource_blob vertex_create_resource_blob(
+        jegl_context::graphic_impl_context_t, jegl_vertex*)
+    {
+        return nullptr;
+    }
+    void vertex_close_resource_blob(
+        jegl_context::graphic_impl_context_t, jegl_resource_blob)
+    {
     }
 
-    void create_resource(jegl_context::graphic_impl_context_t ctx, jegl_resource_blob blob, jegl_resource* resource)
+    void init_shader(jegl_context::graphic_impl_context_t ctx, jegl_resource_blob blob, jegl_shader* shader)
     {
         jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
-        switch (resource->m_type)
-        {
-        case jegl_resource::type::SHADER:
-        {
-            assert(blob != nullptr);
-            auto* shader_blob = reinterpret_cast<jevk12_shader_blob*>(blob);
-            resource->m_handle.m_ptr = context->create_shader_with_blob(shader_blob);
 
-            auto* raw_shader_data = resource->m_raw_shader_data;
-            auto& builtin_uniforms = raw_shader_data->m_builtin_uniforms;
+        auto* shader_blob = reinterpret_cast<jevk12_shader_blob*>(blob);
+        if (shader_blob != nullptr)
+        {
+            shader->m_handle.m_ptr = context->create_shader_with_blob(shader_blob);
+
+            auto& builtin_uniforms = shader->m_builtin_uniforms;
 
             builtin_uniforms.m_builtin_uniform_ndc_scale = shader_blob->get_built_in_location("JE_NDC_SCALE");
             builtin_uniforms.m_builtin_uniform_m = shader_blob->get_built_in_location("JE_M");
@@ -4066,126 +4069,119 @@ namespace jeecs::graphic::api::vk120
             builtin_uniforms.m_builtin_uniform_local_scale = shader_blob->get_built_in_location("JE_LOCAL_SCALE");
             builtin_uniforms.m_builtin_uniform_color = shader_blob->get_built_in_location("JE_COLOR");
 
-            auto* uniforms = raw_shader_data->m_custom_uniforms;
+            auto* uniforms = shader->m_custom_uniforms;
             while (uniforms != nullptr)
             {
                 uniforms->m_index = shader_blob->get_built_in_location(uniforms->m_name);
                 uniforms = uniforms->m_next;
             }
-            break;
-        }
-        case jegl_resource::type::TEXTURE:
-            resource->m_handle.m_ptr = context->create_texture_instance(resource);
-            break;
-        case jegl_resource::type::VERTEX:
-            resource->m_handle.m_ptr = context->create_vertex_instance(resource);
-            break;
-        case jegl_resource::type::FRAMEBUF:
-        {
-            std::vector<jevk12_texture*> color_attachments;
-            jevk12_texture* depth_attachment = nullptr;
-
-            jeecs::basic::resource<jeecs::graphic::texture>* attachments =
-                reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture> *>(
-                    resource->m_raw_framebuf_data->m_output_attachments);
-
-            for (size_t i = 0; i < resource->m_raw_framebuf_data->m_attachment_count; ++i)
-            {
-                auto& attachment = attachments[i];
-                jegl_using_resource(attachment->resource());
-
-                auto* attach_texture_instance =
-                    reinterpret_cast<jevk12_texture*>(attachment->resource()->m_handle.m_ptr);
-                if (0 != (attachment->resource()->m_raw_texture_data->m_format & jegl_texture::format::DEPTH))
-                    depth_attachment = attach_texture_instance;
-                else
-                    color_attachments.push_back(attach_texture_instance);
-            }
-
-            auto* frame_buffer_instance = context->create_frame_buffer(
-                resource->m_raw_framebuf_data->m_width,
-                resource->m_raw_framebuf_data->m_height,
-                color_attachments,
-                depth_attachment,
-                VkImageLayout::VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-            frame_buffer_instance->m_is_screen_framebuffer = false;
-
-            resource->m_handle.m_ptr = frame_buffer_instance;
-            break;
-        }
-        case jegl_resource::type::UNIFORMBUF:
-            resource->m_handle.m_ptr = context->create_uniform_buffer(resource);
-            break;
-        default:
-            break;
         }
     }
-    void close_resource(jegl_context::graphic_impl_context_t ctx, jegl_resource* resource);
-    void using_resource(jegl_context::graphic_impl_context_t ctx, jegl_resource* resource)
-    {
-        jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
-        switch (resource->m_type)
-        {
-        case jegl_resource::type::SHADER:
-            break;
-        case jegl_resource::type::TEXTURE:
-            if (resource->m_modified)
-            {
-                if (resource->m_raw_texture_data != nullptr)
-                {
-                    resource->m_modified = false;
-                    // Modified, free current resource id, reload one.
-
-                    jevk12_texture* texture = reinterpret_cast<jevk12_texture*>(resource->m_handle.m_ptr);
-                    context->trans_and_update_texture_pixels(texture, resource->m_raw_texture_data);
-                }
-            }
-            break;
-        case jegl_resource::type::VERTEX:
-            break;
-        case jegl_resource::type::FRAMEBUF:
-            break;
-        case jegl_resource::type::UNIFORMBUF:
-            if (resource->m_modified)
-            {
-                resource->m_modified = false;
-                context->update_uniform_buffer(resource);
-            }
-            break;
-        default:
-            break;
-        }
-    }
-    void close_resource(jegl_context::graphic_impl_context_t ctx, jegl_resource* resource)
+    void init_texture(jegl_context::graphic_impl_context_t ctx, jegl_resource_blob, jegl_texture* texture)
     {
         jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
 
-        context->vkDeviceWaitIdle(context->_vk_logic_device);
+        texture->m_handle.m_ptr = context->create_texture_instance(texture);
+    }
+    void init_vertex(jegl_context::graphic_impl_context_t ctx, jegl_resource_blob, jegl_vertex* vertex)
+    {
+        jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
 
-        switch (resource->m_type)
+        vertex->m_handle.m_ptr = context->create_vertex_instance(vertex);
+    }
+    void init_framebuffer(jegl_context::graphic_impl_context_t ctx, jegl_frame_buffer* fbuffer)
+    {
+        jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
+
+        std::vector<jevk12_texture*> color_attachments;
+        jevk12_texture* depth_attachment = nullptr;
+
+        jeecs::basic::resource<jeecs::graphic::texture>* attachments =
+            reinterpret_cast<jeecs::basic::resource<jeecs::graphic::texture> *>(
+                fbuffer->m_output_attachments);
+
+        for (size_t i = 0; i < fbuffer->m_attachment_count; ++i)
         {
-        case jegl_resource::type::SHADER:
-            context->destroy_shader(reinterpret_cast<jevk12_shader*>(resource->m_handle.m_ptr));
-            break;
-        case jegl_resource::type::TEXTURE:
-            context->destroy_texture_instance(reinterpret_cast<jevk12_texture*>(resource->m_handle.m_ptr));
-            break;
-        case jegl_resource::type::VERTEX:
-            context->destroy_vertex_instance(reinterpret_cast<jevk12_vertex*>(resource->m_handle.m_ptr));
-            break;
-        case jegl_resource::type::FRAMEBUF:
-            context->destroy_frame_buffer(reinterpret_cast<jevk12_framebuffer*>(resource->m_handle.m_ptr));
-            break;
-        case jegl_resource::type::UNIFORMBUF:
-            context->destroy_uniform_buffer(reinterpret_cast<jevk12_uniformbuf*>(resource->m_handle.m_ptr));
-            break;
-        default:
-            break;
+            auto& attachment = attachments[i];
+            jegl_bind_texture(attachment->resource(), 0);
+
+            auto* attach_texture_instance =
+                reinterpret_cast<jevk12_texture*>(attachment->resource()->m_handle.m_ptr);
+            if (0 != (attachment->resource()->m_format & jegl_texture::format::DEPTH))
+                depth_attachment = attach_texture_instance;
+            else
+                color_attachments.push_back(attach_texture_instance);
         }
+
+        auto* frame_buffer_instance = context->create_frame_buffer(
+            fbuffer->m_width,
+            fbuffer->m_height,
+            color_attachments,
+            depth_attachment,
+            VkImageLayout::VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+        frame_buffer_instance->m_is_screen_framebuffer = false;
+
+        fbuffer->m_handle.m_ptr = frame_buffer_instance;
+    }
+    void init_ubuffer(jegl_context::graphic_impl_context_t ctx, jegl_uniform_buffer* ubuffer)
+    {
+        jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
+
+        ubuffer->m_handle.m_ptr = context->create_uniform_buffer(ubuffer);
     }
 
-    void draw_vertex_with_shader(jegl_context::graphic_impl_context_t ctx, jegl_resource* vertex)
+    void update_shader(jegl_context::graphic_impl_context_t ctx, jegl_shader* shader)
+    {
+    }
+    void update_texture(jegl_context::graphic_impl_context_t ctx, jegl_texture* texture)
+    {
+        jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
+
+        // Modified, free current resource id, reload one.
+        context->trans_and_update_texture_pixels(
+            reinterpret_cast<jevk12_texture*>(texture->m_handle.m_ptr), 
+            texture);
+    }
+    void update_vertex(jegl_context::graphic_impl_context_t ctx, jegl_vertex* vertex)
+    {
+    }
+    void update_framebuffer(jegl_context::graphic_impl_context_t ctx, jegl_frame_buffer* fbuffer)
+    {
+    }
+    void update_ubuffer(jegl_context::graphic_impl_context_t ctx, jegl_uniform_buffer* ubuffer)
+    {
+        jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
+        context->update_uniform_buffer(ubuffer);
+    }
+
+    void close_shader(jegl_context::graphic_impl_context_t ctx, jegl_shader* shader)
+    {
+        jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
+        context->destroy_shader(reinterpret_cast<jevk12_shader*>(shader->m_handle.m_ptr));
+    }
+    void close_texture(jegl_context::graphic_impl_context_t ctx, jegl_texture* texture)
+    {
+        jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
+        context->destroy_texture_instance(reinterpret_cast<jevk12_texture*>(texture->m_handle.m_ptr));
+    }
+    void close_vertex(jegl_context::graphic_impl_context_t ctx, jegl_vertex* vertex)
+    {
+        jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
+        context->destroy_vertex_instance(reinterpret_cast<jevk12_vertex*>(vertex->m_handle.m_ptr));
+    }
+    void close_framebuffer(jegl_context::graphic_impl_context_t ctx, jegl_frame_buffer* fbuffer)
+    {
+        jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
+        context->destroy_frame_buffer(reinterpret_cast<jevk12_framebuffer*>(fbuffer->m_handle.m_ptr));
+    }
+    void close_ubuffer(jegl_context::graphic_impl_context_t ctx, jegl_uniform_buffer* ubuffer)
+    {
+        jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
+        context->destroy_uniform_buffer(reinterpret_cast<jevk12_uniformbuf*>(ubuffer->m_handle.m_ptr));
+    }
+
+    void draw_vertex_with_shader(jegl_context::graphic_impl_context_t ctx, jegl_vertex* vertex)
     {
         jegl_vk120_context* context =
             reinterpret_cast<jegl_vk120_context*>(ctx);
@@ -4194,14 +4190,14 @@ namespace jeecs::graphic::api::vk120
             reinterpret_cast<jevk12_vertex*>(vertex->m_handle.m_ptr));
     }
 
-    bool bind_shader(jegl_context::graphic_impl_context_t ctx, jegl_resource* shader)
+    bool bind_shader(jegl_context::graphic_impl_context_t ctx, jegl_shader* shader)
     {
         jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
 
         auto* shader_instance = reinterpret_cast<jevk12_shader*>(shader->m_handle.m_ptr);
         return context->cmd_bind_shader_pipeline(shader_instance);
     }
-    void bind_uniform_buffer(jegl_context::graphic_impl_context_t ctx, jegl_resource* uniformbuf)
+    void bind_uniform_buffer(jegl_context::graphic_impl_context_t ctx, jegl_uniform_buffer* uniformbuf)
     {
         jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
         jevk12_uniformbuf* uniformbuf_instance =
@@ -4211,7 +4207,7 @@ namespace jeecs::graphic::api::vk120
             uniformbuf_instance->m_real_binding_place, uniformbuf_instance->m_uniform_buffer);
     }
 
-    void bind_texture(jegl_context::graphic_impl_context_t ctx, jegl_resource* texture, size_t pass)
+    void bind_texture(jegl_context::graphic_impl_context_t ctx, jegl_texture* texture, size_t pass)
     {
         jegl_vk120_context* context = reinterpret_cast<jegl_vk120_context*>(ctx);
 
@@ -4223,7 +4219,7 @@ namespace jeecs::graphic::api::vk120
 
     void set_rend_to_framebuffer(
         jegl_context::graphic_impl_context_t ctx,
-        jegl_resource* framebuf,
+        jegl_frame_buffer* framebuf,
         const int32_t(*viewport_xywh)[4],
         const jegl_frame_buffer_clear_operation* clear_operations)
     {
@@ -4348,12 +4344,31 @@ void jegl_using_vk120_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->update_frame_ready = pre_update;
     write_to_apis->update_draw_commit = commit_update;
 
-    write_to_apis->create_resource_blob_cache = create_resource_blob;
-    write_to_apis->close_resource_blob_cache = close_resource_blob;
+    write_to_apis->shader_create_blob = shader_create_resource_blob;
+    write_to_apis->texture_create_blob = texture_create_resource_blob;
+    write_to_apis->vertex_create_blob = vertex_create_resource_blob;
 
-    write_to_apis->create_resource = create_resource;
-    write_to_apis->using_resource = using_resource;
-    write_to_apis->close_resource = close_resource;
+    write_to_apis->shader_close_blob = shader_close_resource_blob;
+    write_to_apis->texture_close_blob = texture_close_resource_blob;
+    write_to_apis->vertex_close_blob = vertex_close_resource_blob;
+
+    write_to_apis->shader_init = init_shader;
+    write_to_apis->texture_init = init_texture;
+    write_to_apis->vertex_init = init_vertex;
+    write_to_apis->framebuffer_init = init_framebuffer;
+    write_to_apis->ubuffer_init = init_ubuffer;
+
+    write_to_apis->shader_update = update_shader;
+    write_to_apis->texture_update = update_texture;
+    write_to_apis->vertex_update = update_vertex;
+    write_to_apis->framebuffer_update = update_framebuffer;
+    write_to_apis->ubuffer_update = update_ubuffer;
+
+    write_to_apis->shader_close = close_shader;
+    write_to_apis->texture_close = close_texture;
+    write_to_apis->vertex_close = close_vertex;
+    write_to_apis->framebuffer_close = close_framebuffer;
+    write_to_apis->ubuffer_close = close_ubuffer;
 
     write_to_apis->bind_uniform_buffer = bind_uniform_buffer;
     write_to_apis->bind_texture = bind_texture;

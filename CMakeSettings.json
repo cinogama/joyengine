@@ -28,7 +28,7 @@
         },
         {
           "name": "JE4_ENABLE_VULKAN120_GAPI",
-          "value": "False",
+          "value": "True",
           "type": "BOOL"
         },
         {
