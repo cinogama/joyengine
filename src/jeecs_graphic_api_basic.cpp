@@ -407,13 +407,12 @@ namespace std
 
 struct jegl_context_notifier
 {
-    std::atomic_bool m_graphic_terminated;
+    bool m_graphic_terminated;
+    bool m_graphic_reboot;
 
     std::mutex m_update_mx;
-    std::atomic_bool m_update_flag;
     std::condition_variable m_update_waiter;
-
-    std::atomic_bool m_reboot_flag;
+    bool m_update_request_flag;
 
     std::promise<void> m_promise;
 
@@ -723,17 +722,17 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
         bool /* Need close graphic resource */>
         _waiting_to_free_resource;
 
-    if (!thread->_m_thread_notifier->m_graphic_terminated.load())
+    if (!thread->_m_thread_notifier->m_graphic_terminated)
     {
         do
         {
             std::unique_lock uq1(thread->_m_thread_notifier->m_update_mx);
             thread->_m_thread_notifier->m_update_waiter.wait(uq1, [thread]() -> bool
-                { return thread->_m_thread_notifier->m_update_flag; });
+                { return thread->_m_thread_notifier->m_update_request_flag; });
         } while (0);
 
         // Ready for rend..
-        if (thread->_m_thread_notifier->m_graphic_terminated.load() || thread->_m_thread_notifier->m_reboot_flag)
+        if (thread->_m_thread_notifier->m_graphic_terminated || thread->_m_thread_notifier->m_graphic_reboot)
             goto is_reboot_or_shutdown;
 
         const auto frame_update_state =
@@ -743,7 +742,7 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
         {
         case jegl_update_action::JEGL_UPDATE_STOP:
             // graphic thread want to exit. mark stop update.
-            thread->_m_thread_notifier->m_graphic_terminated.store(true);
+            thread->_m_thread_notifier->m_graphic_terminated = true;
             break;
         case jegl_update_action::JEGL_UPDATE_SKIP:
             if (thread->m_config.m_fps == 0)
@@ -765,7 +764,7 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
             thread->m_apis->update_draw_commit(
                 thread->m_graphic_impl_context, frame_update_state))
         {
-            thread->_m_thread_notifier->m_graphic_terminated.store(true);
+            thread->_m_thread_notifier->m_graphic_terminated = true;
         }
 
         auto* del_res = thread->_m_thread_notifier->_m_closing_resources.pick_all();
@@ -787,7 +786,7 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
         do
         {
             std::lock_guard g1(thread->_m_thread_notifier->m_update_mx);
-            thread->_m_thread_notifier->m_update_flag = false;
+            thread->_m_thread_notifier->m_update_request_flag = false;
             thread->_m_thread_notifier->m_update_waiter.notify_all();
         } while (0);
 
@@ -796,8 +795,11 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
             if (need_close)
             {
                 _jegl_close_resouce_instance_by_api(thread, &deleting_resource->m_resource);
-                thread->_m_thread_notifier->_m_created_resources.erase(
+                auto result = thread->_m_thread_notifier->_m_created_resources.erase(
                     deleting_resource->m_resource);
+
+                (void)result;
+                assert(result == 1);
             }
 
             deleting_resource->m_resource.free_resouce_body();
@@ -807,9 +809,9 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
     else
     {
     is_reboot_or_shutdown:
-        if (thread->_m_thread_notifier->m_reboot_flag)
+        if (thread->_m_thread_notifier->m_graphic_reboot)
         {
-            thread->_m_thread_notifier->m_reboot_flag = false;
+            thread->_m_thread_notifier->m_graphic_reboot = false;
             return jegl_sync_state::JEGL_SYNC_REBOOT;
         }
         return jegl_sync_state::JEGL_SYNC_SHUTDOWN;
@@ -932,9 +934,9 @@ jegl_context* jegl_start_graphic_thread(
 
     // Take place.
     thread_handle->m_config = config;
-    thread_handle->_m_thread_notifier->m_graphic_terminated.store(false);
-    thread_handle->_m_thread_notifier->m_update_flag = false;
-    thread_handle->_m_thread_notifier->m_reboot_flag = false;
+    thread_handle->_m_thread_notifier->m_graphic_terminated = false;
+    thread_handle->_m_thread_notifier->m_update_request_flag = false;
+    thread_handle->_m_thread_notifier->m_graphic_reboot = false;
     thread_handle->m_universe_instance = universe_instance;
     thread_handle->_m_frame_rend_work = frame_rend_work;
     thread_handle->_m_frame_rend_work_arg = arg;
@@ -978,18 +980,19 @@ void jegl_terminate_graphic_thread(jegl_context* thread)
 
     } while (0);
 
-    thread->_m_thread_notifier->m_graphic_terminated.store(true);
+    thread->_m_thread_notifier->m_graphic_terminated = true;
 
     do
     {
         std::lock_guard g1(thread->_m_thread_notifier->m_update_mx);
-        thread->_m_thread_notifier->m_update_flag = true;
+        thread->_m_thread_notifier->m_update_request_flag = true;
         thread->_m_thread_notifier->m_update_waiter.notify_all();
     } while (0);
 
     // Sync thread and wait for shutting-down
     thread->_m_thread_notifier->m_promise.get_future().get();
 
+    // Close shared resources in contexrt.
     jeecs::graphic::_je_graphic_shared_context_instance._free_resource_in_gcontext(thread);
 
     auto* closing_resource = thread->_m_thread_notifier->_m_closing_resources.pick_all();
@@ -1014,7 +1017,7 @@ bool jegl_update(
     jegl_update_sync_callback_t callback_after_wait_may_null,
     void* callback_param)
 {
-    if (thread->_m_thread_notifier->m_graphic_terminated.load())
+    if (thread->_m_thread_notifier->m_graphic_terminated)
         return false;
 
     std::unique_lock uq1(thread->_m_thread_notifier->m_update_mx);
@@ -1022,20 +1025,20 @@ bool jegl_update(
     {
         // Wait until `last` frame draw end.
         thread->_m_thread_notifier->m_update_waiter.wait(uq1, [thread]() -> bool
-            { return !thread->_m_thread_notifier->m_update_flag; });
+            { return !thread->_m_thread_notifier->m_update_request_flag; });
 
         if (nullptr != callback_after_wait_may_null)
             callback_after_wait_may_null(callback_param);
     }
 
-    thread->_m_thread_notifier->m_update_flag = true;
+    thread->_m_thread_notifier->m_update_request_flag = true;
     thread->_m_thread_notifier->m_update_waiter.notify_all();
 
     if (mode == jegl_update_sync_mode::JEGL_WAIT_THIS_FRAME_END)
     {
         // Wait until `this` frame draw end.
         thread->_m_thread_notifier->m_update_waiter.wait(uq1, [thread]() -> bool
-            { return !thread->_m_thread_notifier->m_update_flag; });
+            { return !thread->_m_thread_notifier->m_update_request_flag; });
 
         if (nullptr != callback_after_wait_may_null)
             callback_after_wait_may_null(callback_param);
@@ -1049,7 +1052,7 @@ void jegl_reboot_graphic_thread(jegl_context* thread_handle, const jegl_interfac
     if (config_may_null != nullptr)
         thread_handle->m_config = *config_may_null;
 
-    thread_handle->_m_thread_notifier->m_reboot_flag = true;
+    thread_handle->_m_thread_notifier->m_graphic_reboot = true;
 }
 
 bool jegl_mark_shared_resources_outdated(const char* path)
@@ -1140,12 +1143,19 @@ bool _jegl_try_update_resource_blob(
                     blob_may_null,
                 }));
 
-    return result.second;
+    if (blob_may_null != nullptr)
+        return result.second;
+
+    // If blob is null, return true to avoid useless blob close operation.
+    return true;
 }
 
+template<jeecs::graphic::requirements::basic_graphic_resource T>
 jeecs::graphic::jegl_resouce_state _jegl_check_resource_state(
-    jegl_resource_handle* resource_handle)
+    T* resource)
 {
+    auto* resource_handle = &resource->m_handle;
+
     if (!jeecs::graphic::_current_graphic_thread)
     {
         jeecs::debug::logerr("Graphic resource only usable in graphic thread.");
@@ -1165,6 +1175,12 @@ jeecs::graphic::jegl_resouce_state _jegl_check_resource_state(
         resource_handle->m_modified = false;
         resource_handle->m_graphic_thread = jeecs::graphic::_current_graphic_thread;
         resource_handle->m_graphic_thread_version = jeecs::graphic::_current_graphic_thread->m_version;
+
+        auto result = resource_handle->m_graphic_thread->_m_thread_notifier->_m_created_resources.insert(
+            resource);
+
+        (void)result;
+        assert(result.second); // New resource must be inserted.
 
         return jeecs::graphic::jegl_resouce_state::NEED_INIT;
     }
@@ -1999,7 +2015,7 @@ void jegl_update_uniformbuf(
 bool jegl_bind_shader(jegl_shader* shader)
 {
     bool updated = false, need_init = false;
-    switch (_jegl_check_resource_state(&shader->m_handle))
+    switch (_jegl_check_resource_state(shader))
     {
     case jeecs::graphic::jegl_resouce_state::READY:
         break;
@@ -2084,7 +2100,7 @@ bool jegl_bind_shader(jegl_shader* shader)
 
 void jegl_bind_uniform_buffer(jegl_uniform_buffer* uniformbuf)
 {
-    switch (_jegl_check_resource_state(&uniformbuf->m_handle))
+    switch (_jegl_check_resource_state(uniformbuf))
     {
     case jeecs::graphic::jegl_resouce_state::READY:
         break;
@@ -2109,7 +2125,7 @@ void jegl_bind_uniform_buffer(jegl_uniform_buffer* uniformbuf)
 
 void jegl_draw_vertex(jegl_vertex* vert)
 {
-    switch (_jegl_check_resource_state(&vert->m_handle))
+    switch (_jegl_check_resource_state(vert))
     {
     case jeecs::graphic::jegl_resouce_state::READY:
         break;
@@ -2174,7 +2190,7 @@ void jegl_rend_to_framebuffer(
 {
     if (framebuffer != nullptr)
     {
-        switch (_jegl_check_resource_state(&framebuffer->m_handle))
+        switch (_jegl_check_resource_state(framebuffer))
         {
         case jeecs::graphic::jegl_resouce_state::READY:
             break;
@@ -2203,7 +2219,7 @@ void jegl_rend_to_framebuffer(
 
 void jegl_bind_texture(jegl_texture* texture, size_t pass)
 {
-    switch (_jegl_check_resource_state(&texture->m_handle))
+    switch (_jegl_check_resource_state(texture))
     {
     case jeecs::graphic::jegl_resouce_state::READY:
         break;

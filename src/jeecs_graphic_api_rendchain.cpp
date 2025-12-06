@@ -168,8 +168,6 @@ void jegl_rchain_begin(
     jegl_frame_buffer* framebuffer,
     int32_t x, int32_t y, uint32_t w, uint32_t h)
 {
-    assert(framebuffer == nullptr);
-
     chain->m_target_frame_buffer = framebuffer;
     chain->m_target_frame_buffer_viewport[0] = x;
     chain->m_target_frame_buffer_viewport[1] = y;

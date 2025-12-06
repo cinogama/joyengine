@@ -196,6 +196,7 @@ namespace jeecs::graphic::api::dx11
 
         // 重设交换链并且重新创建渲染目标视图
         jegl_dx11_context::MSWRLComPtr<ID3D11Texture2D> back_buffer;
+
         JERCHECK(context->m_dx_swapchain->ResizeBuffers(
             1, (UINT)context->RESOLUTION_WIDTH, (UINT)context->RESOLUTION_HEIGHT, DXGI_FORMAT_R8G8B8A8_UNORM, 0));
         JERCHECK(context->m_dx_swapchain->GetBuffer(
@@ -276,19 +277,19 @@ namespace jeecs::graphic::api::dx11
             &rasterizer_describe,
             context->m_rasterizers[
                 static_cast<size_t>(
-                    jegl_shader::cull_mode::NONE)].GetAddressOf()));
+                    jegl_shader::cull_mode::NONE)].ReleaseAndGetAddressOf()));
         rasterizer_describe.CullMode = D3D11_CULL_FRONT;
         JERCHECK(context->m_dx_device->CreateRasterizerState(
             &rasterizer_describe,
             context->m_rasterizers[
                 static_cast<size_t>(
-                    jegl_shader::cull_mode::FRONT)].GetAddressOf()));
+                    jegl_shader::cull_mode::FRONT)].ReleaseAndGetAddressOf()));
         rasterizer_describe.CullMode = D3D11_CULL_BACK;
         JERCHECK(context->m_dx_device->CreateRasterizerState(
             &rasterizer_describe,
             context->m_rasterizers[
                 static_cast<size_t>(
-                    jegl_shader::cull_mode::BACK)].GetAddressOf()));
+                    jegl_shader::cull_mode::BACK)].ReleaseAndGetAddressOf()));
 
         rasterizer_describe.FrontCounterClockwise = FALSE;
 
@@ -297,19 +298,19 @@ namespace jeecs::graphic::api::dx11
             &rasterizer_describe,
             context->m_rasterizers_r2b[
                 static_cast<size_t>(
-                    jegl_shader::cull_mode::NONE)].GetAddressOf()));
+                    jegl_shader::cull_mode::NONE)].ReleaseAndGetAddressOf()));
         rasterizer_describe.CullMode = D3D11_CULL_FRONT;
         JERCHECK(context->m_dx_device->CreateRasterizerState(
             &rasterizer_describe,
             context->m_rasterizers_r2b[
                 static_cast<size_t>(
-                    jegl_shader::cull_mode::FRONT)].GetAddressOf()));
+                    jegl_shader::cull_mode::FRONT)].ReleaseAndGetAddressOf()));
         rasterizer_describe.CullMode = D3D11_CULL_BACK;
         JERCHECK(context->m_dx_device->CreateRasterizerState(
             &rasterizer_describe,
             context->m_rasterizers_r2b[
                 static_cast<size_t>(
-                    jegl_shader::cull_mode::BACK)].GetAddressOf()));
+                    jegl_shader::cull_mode::BACK)].ReleaseAndGetAddressOf()));
 
         // 设置视口变换
         D3D11_VIEWPORT viewport;
@@ -501,6 +502,15 @@ namespace jeecs::graphic::api::dx11
 
         if (!reboot)
             jeecs::debug::log("Graphic thread (DX11) shutdown!");
+       
+        // 确保退出全屏模式
+        if (context->m_dx_swapchain)
+        {
+            BOOL isFullscreen = FALSE;
+            Microsoft::WRL::ComPtr<IDXGIOutput> ignoredOutput;
+            if (SUCCEEDED(context->m_dx_swapchain->GetFullscreenState(&isFullscreen, ignoredOutput.GetAddressOf())) && isFullscreen)
+                context->m_dx_swapchain->SetFullscreenState(FALSE, nullptr);
+        }
 
         jegui_shutdown_dx11(reboot);
 
@@ -795,7 +805,7 @@ namespace jeecs::graphic::api::dx11
 #endif
             ,
             0,
-            fragment_blob.ReleaseAndGetAddressOf(),
+            fragment_blob.GetAddressOf(),
             &error_blob);
 
         if (FAILED(compile_result))

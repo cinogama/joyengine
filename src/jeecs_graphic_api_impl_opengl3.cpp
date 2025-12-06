@@ -1045,7 +1045,11 @@ namespace jeecs::graphic::api::gl3
         jegl_context::graphic_impl_context_t,
         jegl_shader* resource)
     {
-        delete reinterpret_cast<jegl_gl3_shader*>(resource->m_handle.m_ptr);
+        jegl_gl3_shader* shader_instance =
+            reinterpret_cast<jegl_gl3_shader*>(resource->m_handle.m_ptr);
+
+        if (shader_instance != nullptr)
+            delete shader_instance;
     }
 
     void texture_init(

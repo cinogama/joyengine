@@ -2625,7 +2625,7 @@ JE_API bool jegl_update(
 
 /*
 jegl_reboot_graphic_thread [基本接口]
-以指定的配置重启一个图形线程
+以指定的配置请求重启一个图形线程
     * 若不需要改变图形配置，请使用nullptr
 */
 JE_API void jegl_reboot_graphic_thread(
@@ -8313,16 +8313,12 @@ namespace jeecs
         namespace requirements
         {
             template<typename T>
-            concept basic_graphic_resource = requires(T a) {
-                std::is_same_v<T, jegl_shader>
-                    || std::is_same_v<T, jegl_texture>
-                    || std::is_same_v<T, jegl_vertex>
-                    || std::is_same_v<T, jegl_frame_buffer>
-                    || std::is_same_v<T, jegl_uniform_buffer>
-                    ;
-
-                // { a.m_handle } -> std::same_as<jegl_resource_handle>;
-            };
+            concept basic_graphic_resource =
+                std::same_as<T, jegl_shader> ||
+                std::same_as<T, jegl_texture> ||
+                std::same_as<T, jegl_vertex> ||
+                std::same_as<T, jegl_frame_buffer> ||
+                std::same_as<T, jegl_uniform_buffer>;
         }
 
         template<requirements::basic_graphic_resource T>
@@ -8584,7 +8580,9 @@ namespace jeecs
 
             void set_uniform(const std::string& name, int val) noexcept
             {
-                auto* jegl_shad_uniforms = resource()->m_custom_uniforms;
+                auto* shader_instance = resource();
+
+                auto* jegl_shad_uniforms = shader_instance->m_custom_uniforms;
                 while (jegl_shad_uniforms)
                 {
                     if (jegl_shad_uniforms->m_name == name)
@@ -8597,7 +8595,9 @@ namespace jeecs
                         else
                         {
                             jegl_shad_uniforms->m_value.m_int = val;
-                            jegl_shad_uniforms->m_updated = true;
+
+                            shader_instance->m_handle.m_modified =
+                                jegl_shad_uniforms->m_updated = true;
                         }
                         return;
                     }
@@ -8606,7 +8606,9 @@ namespace jeecs
             }
             void set_uniform(const std::string& name, int x, int y) noexcept
             {
-                auto* jegl_shad_uniforms = resource()->m_custom_uniforms;
+                auto* shader_instance = resource();
+
+                auto* jegl_shad_uniforms = shader_instance->m_custom_uniforms;
                 while (jegl_shad_uniforms)
                 {
                     if (jegl_shad_uniforms->m_name == name)
@@ -8620,7 +8622,9 @@ namespace jeecs
                         {
                             jegl_shad_uniforms->m_value.m_int2[0] = x;
                             jegl_shad_uniforms->m_value.m_int2[1] = y;
-                            jegl_shad_uniforms->m_updated = true;
+
+                            shader_instance->m_handle.m_modified =
+                                jegl_shad_uniforms->m_updated = true;
                         }
                         return;
                     }
@@ -8629,7 +8633,9 @@ namespace jeecs
             }
             void set_uniform(const std::string& name, int x, int y, int z) noexcept
             {
-                auto* jegl_shad_uniforms = resource()->m_custom_uniforms;
+                auto* shader_instance = resource();
+
+                auto* jegl_shad_uniforms = shader_instance->m_custom_uniforms;
                 while (jegl_shad_uniforms)
                 {
                     if (jegl_shad_uniforms->m_name == name)
@@ -8644,7 +8650,9 @@ namespace jeecs
                             jegl_shad_uniforms->m_value.m_int3[0] = x;
                             jegl_shad_uniforms->m_value.m_int3[1] = y;
                             jegl_shad_uniforms->m_value.m_int3[2] = z;
-                            jegl_shad_uniforms->m_updated = true;
+
+                            shader_instance->m_handle.m_modified =
+                                jegl_shad_uniforms->m_updated = true;
                         }
                         return;
                     }
@@ -8653,7 +8661,9 @@ namespace jeecs
             }
             void set_uniform(const std::string& name, int x, int y, int z, int w) noexcept
             {
-                auto* jegl_shad_uniforms = resource()->m_custom_uniforms;
+                auto* shader_instance = resource();
+
+                auto* jegl_shad_uniforms = shader_instance->m_custom_uniforms;
                 while (jegl_shad_uniforms)
                 {
                     if (jegl_shad_uniforms->m_name == name)
@@ -8669,7 +8679,9 @@ namespace jeecs
                             jegl_shad_uniforms->m_value.m_int4[1] = y;
                             jegl_shad_uniforms->m_value.m_int4[2] = z;
                             jegl_shad_uniforms->m_value.m_int4[3] = w;
-                            jegl_shad_uniforms->m_updated = true;
+
+                            shader_instance->m_handle.m_modified =
+                                jegl_shad_uniforms->m_updated = true;
                         }
                         return;
                     }
@@ -8678,7 +8690,9 @@ namespace jeecs
             }
             void set_uniform(const std::string& name, float val) noexcept
             {
-                auto* jegl_shad_uniforms = resource()->m_custom_uniforms;
+                auto* shader_instance = resource();
+
+                auto* jegl_shad_uniforms = shader_instance->m_custom_uniforms;
                 while (jegl_shad_uniforms)
                 {
                     if (jegl_shad_uniforms->m_name == name)
@@ -8691,7 +8705,9 @@ namespace jeecs
                         else
                         {
                             jegl_shad_uniforms->m_value.m_float = val;
-                            jegl_shad_uniforms->m_updated = true;
+
+                            shader_instance->m_handle.m_modified =
+                                jegl_shad_uniforms->m_updated = true;
                         }
                         return;
                     }
@@ -8700,7 +8716,9 @@ namespace jeecs
             }
             void set_uniform(const std::string& name, const math::vec2& val) noexcept
             {
-                auto* jegl_shad_uniforms = resource()->m_custom_uniforms;
+                auto* shader_instance = resource();
+
+                auto* jegl_shad_uniforms = shader_instance->m_custom_uniforms;
                 while (jegl_shad_uniforms)
                 {
                     if (jegl_shad_uniforms->m_name == name)
@@ -8714,7 +8732,9 @@ namespace jeecs
                         {
                             jegl_shad_uniforms->m_value.m_float2[0] = val.x;
                             jegl_shad_uniforms->m_value.m_float2[1] = val.y;
-                            jegl_shad_uniforms->m_updated = true;
+
+                            shader_instance->m_handle.m_modified =
+                                jegl_shad_uniforms->m_updated = true;
                         }
                         return;
                     }
@@ -8723,7 +8743,9 @@ namespace jeecs
             }
             void set_uniform(const std::string& name, const math::vec3& val) noexcept
             {
-                auto* jegl_shad_uniforms = resource()->m_custom_uniforms;
+                auto* shader_instance = resource();
+
+                auto* jegl_shad_uniforms = shader_instance->m_custom_uniforms;
                 while (jegl_shad_uniforms)
                 {
                     if (jegl_shad_uniforms->m_name == name)
@@ -8738,7 +8760,9 @@ namespace jeecs
                             jegl_shad_uniforms->m_value.m_float3[0] = val.x;
                             jegl_shad_uniforms->m_value.m_float3[1] = val.y;
                             jegl_shad_uniforms->m_value.m_float3[2] = val.z;
-                            jegl_shad_uniforms->m_updated = true;
+
+                            shader_instance->m_handle.m_modified =
+                                jegl_shad_uniforms->m_updated = true;
                         }
                         return;
                     }
@@ -8747,7 +8771,9 @@ namespace jeecs
             }
             void set_uniform(const std::string& name, const math::vec4& val) noexcept
             {
-                auto* jegl_shad_uniforms = resource()->m_custom_uniforms;
+                auto* shader_instance = resource();
+
+                auto* jegl_shad_uniforms = shader_instance->m_custom_uniforms;
                 while (jegl_shad_uniforms)
                 {
                     if (jegl_shad_uniforms->m_name == name)
@@ -8763,7 +8789,9 @@ namespace jeecs
                             jegl_shad_uniforms->m_value.m_float4[1] = val.y;
                             jegl_shad_uniforms->m_value.m_float4[2] = val.z;
                             jegl_shad_uniforms->m_value.m_float4[3] = val.w;
-                            jegl_shad_uniforms->m_updated = true;
+
+                            shader_instance->m_handle.m_modified =
+                                jegl_shad_uniforms->m_updated = true;
                         }
                         return;
                     }

@@ -856,6 +856,7 @@ jegl_shader* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
     for (uint64_t i = 0; i < custom_uniform_count; ++i)
     {
         jegl_shader::unifrom_variables* current_variable = new jegl_shader::unifrom_variables();
+
         if (shader_instance->m_custom_uniforms == nullptr)
             shader_instance->m_custom_uniforms = current_variable;
 
@@ -877,7 +878,9 @@ jegl_shader* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
         jeecs_file_read(&current_variable->m_value.m_float4x4, sizeof(float[4][4]), 1, cache_file);
 
         current_variable->m_index = jeecs::graphic::INVALID_UNIFORM_LOCATION;
-        current_variable->m_updated = false;
+
+        // For all variable, update it at first time.
+        current_variable->m_updated = true;
 
         last_create_variable = current_variable;
         current_variable->m_next = nullptr;
