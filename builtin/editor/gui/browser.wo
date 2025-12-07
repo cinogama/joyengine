@@ -1126,7 +1126,8 @@ namespace workflow::nodes
         // 从universe中获取所有world，更新world中所有实体
         let wrapped_path = context->get_project->make_path_normalize(fsys::normalize(path));
         
-        do je::internal::mark_shared_glresource_outdated(wrapped_path);
+        let universe = context->get_project->get_env->get_universe;
+        do je::internal::mark_shared_glresource_outdated(universe, wrapped_path);
         if (!for_all_entity_in_universe_do(context,
                 \e: je::entity = e->internal::graphic::try_reload_shaders(wrapped_path, wrapped_path);
                 ))
@@ -1137,7 +1138,8 @@ namespace workflow::nodes
     public func update_texture(context: EditorContext, wrapped_path: string)
     {
         // 从universe中获取所有world，更新world中所有实体
-        do je::internal::mark_shared_glresource_outdated(wrapped_path);
+        let universe = context->get_project->get_env->get_universe;
+        do je::internal::mark_shared_glresource_outdated(universe, wrapped_path);
         if (!for_all_entity_in_universe_do(context,
                 \e: je::entity = e->internal::graphic::try_reload_textures(wrapped_path, wrapped_path);
                 ))

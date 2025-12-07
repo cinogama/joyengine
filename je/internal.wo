@@ -187,7 +187,7 @@ namespace je
             public func register_panic_hook(f: (string, int, string, int, string, string)=> void)=> void;
             
         extern("libjoyecs", "wojeapi_mark_shared_glresource_outdated")
-            public func mark_shared_glresource_outdated(respath: string)=> bool;
+            public func mark_shared_glresource_outdated(u: universe, respath: string)=> bool;
             
         extern("libjoyecs", "wojeapi_init_graphic_pipeline_for_editor")
             public func init_graphic_pipeline_for_editor(u: universe)=> void;

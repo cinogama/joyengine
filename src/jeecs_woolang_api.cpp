@@ -111,7 +111,12 @@ WO_API wo_api wojeapi_file_cache_read_all(wo_vm vm, wo_value args)
 
 WO_API wo_api wojeapi_mark_shared_glresource_outdated(wo_vm vm, wo_value args)
 {
-    return wo_ret_bool(vm, jegl_mark_shared_resources_outdated(wo_string(args + 0)));
+    auto* uhost = jegl_uhost_get_or_create_for_universe(wo_pointer(args + 0), nullptr);
+    return wo_ret_bool(
+        vm, 
+        jegl_mark_shared_resources_outdated(
+            jegl_uhost_get_context(uhost), 
+            wo_string(args + 1)));
 }
 
 WO_API wo_api wojeapi_init_graphic_pipeline_for_editor(wo_vm vm, wo_value args)
@@ -1285,21 +1290,6 @@ WO_API wo_api wojeapi_type_basic_type(wo_vm vm, wo_value args)
 }
 
 ///////////////////////////////////////////////////////////////////////
-WO_API wo_api wojeapi_graphic_shrink_cache(wo_vm vm, wo_value args)
-{
-    auto leaved = wo_leave_gcguard(vm);
-    {
-        jegl_context* gcontext = jegl_uhost_get_context(
-            jegl_uhost_get_or_create_for_universe(
-                wo_pointer(args + 0), nullptr));
-
-        jegl_shrink_shared_resource_cache(gcontext, (size_t)wo_int(args + 1));
-    }
-    if (leaved)
-        wo_enter_gcguard(vm);
-
-    return wo_ret_void(vm);
-}
 
 WO_API wo_api wojeapi_texture_open(wo_vm vm, wo_value args)
 {

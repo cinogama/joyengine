@@ -742,9 +742,6 @@ namespace je
     }
     namespace graphic
     {
-        extern("libjoyecs", "wojeapi_graphic_shrink_cache")
-            public func shrink_cache(u: universe, target_count: int)=> void;
-            
         public using vertex = gchandle
         {
             public enum type
