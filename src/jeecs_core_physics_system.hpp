@@ -158,6 +158,11 @@ namespace jeecs
                 }
             }
 
+            ~Physics2DWorldContext()
+            {
+                b2DestroyWorld(m_physics_world);
+            }
+
             bool update_world_config(
                 const Physics2D::World* world,
                 size_t simulate_round_count)
