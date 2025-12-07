@@ -1896,9 +1896,11 @@ jegl_context [类型]
 */
 struct jegl_context
 {
+    // 用户定义的图形实现上下文指针，供图形接口实现使用
     using graphic_impl_context_t = void*;
-    using frame_job_func_t =
-        void (*)(jegl_context*, void*, jegl_update_action);
+
+    // 图形帧渲染任务函数类型定义，图形线程负责每帧调用一次此函数
+    using frame_job_func_t = void (*)(jegl_context*, void*, jegl_update_action);
 
     frame_job_func_t _m_frame_rend_work;
     void* _m_frame_rend_work_arg;
@@ -1914,12 +1916,33 @@ struct jegl_context
     graphic_impl_context_t m_graphic_impl_context;
 };
 
+using jegl_resource_blob = void*;
+struct jegl_resource_bind_counter;
+
+/*
+jegl_resource_handle [类型]
+图形资源句柄，储存有资源的路径、底层图形实现指针和引用计数等信息
+*/
+struct jegl_resource_handle
+{
+    const char* m_path_may_null_if_builtin;
+    jegl_resource_bind_counter* m_raw_ref_count;
+
+    jegl_context* m_graphic_thread;
+    jeecs::typing::version_t m_graphic_thread_version;
+
+    bool m_modified;
+    void* m_ptr;
+};
+
 /*
 jegl_texture [类型]
 纹理原始数据，储存有纹理的采样方式和像素数据等信息
 */
 struct jegl_texture
 {
+    jegl_resource_handle m_handle;
+
     using pixel_data_t = uint8_t;
     enum format : uint16_t
     {
@@ -1949,6 +1972,8 @@ struct jegl_texture
     size_t m_modified_max_x;
     size_t m_modified_max_y;
 };
+static_assert(
+    std::is_trivial_v<jegl_texture> && 0 == offsetof(jegl_texture, m_handle));
 
 /*
 jegl_vertex [类型]
@@ -1956,6 +1981,8 @@ jegl_vertex [类型]
 */
 struct jegl_vertex
 {
+    jegl_resource_handle m_handle;
+
     enum type
     {
         LINESTRIP = 0,
@@ -1998,6 +2025,8 @@ struct jegl_vertex
     const bone_data** m_bones;
     size_t m_bone_count;
 };
+static_assert(
+    std::is_trivial_v<jegl_vertex> && 0 == offsetof(jegl_vertex, m_handle));
 
 /*
 jegl_shader [类型]
@@ -2005,6 +2034,8 @@ jegl_shader [类型]
 */
 struct jegl_shader
 {
+    jegl_resource_handle m_handle;
+
     enum fliter_mode
     {
         NEAREST,
@@ -2044,24 +2075,23 @@ struct jegl_shader
     };
     struct builtin_uniform_location
     {
-        // NOTE: 不要写入这个位置，ndc_scale 是为了纠正渲染到纹理的 UV 映射关系用的
-        //  仅由底层的图形库实现负责写入；改变和翻转 ndc 需要底层图形库配合正面旋向
-        //  相关设置才能保证渲染结果正确
-        uint32_t m_builtin_uniform_ndc_scale = jeecs::graphic::PENDING_UNIFORM_LOCATION;
+        // NOTE: m_builtin_uniform_ndc_scale 是图形库的保留变量，任何情况下都不要
+        //      从外部修改它的值，它会在渲染时被图形库自动更新为正确的NDC缩放值
+        uint32_t m_builtin_uniform_ndc_scale;
 
-        uint32_t m_builtin_uniform_m = jeecs::graphic::PENDING_UNIFORM_LOCATION;
-        uint32_t m_builtin_uniform_mv = jeecs::graphic::PENDING_UNIFORM_LOCATION;
-        uint32_t m_builtin_uniform_mvp = jeecs::graphic::PENDING_UNIFORM_LOCATION;
+        uint32_t m_builtin_uniform_m;
+        uint32_t m_builtin_uniform_mv;
+        uint32_t m_builtin_uniform_mvp;
 
-        uint32_t m_builtin_uniform_local_scale = jeecs::graphic::PENDING_UNIFORM_LOCATION;
+        uint32_t m_builtin_uniform_local_scale;
 
-        uint32_t m_builtin_uniform_tiling = jeecs::graphic::PENDING_UNIFORM_LOCATION;
-        uint32_t m_builtin_uniform_offset = jeecs::graphic::PENDING_UNIFORM_LOCATION;
+        uint32_t m_builtin_uniform_tiling;
+        uint32_t m_builtin_uniform_offset;
 
-        uint32_t m_builtin_uniform_color = jeecs::graphic::PENDING_UNIFORM_LOCATION;
+        uint32_t m_builtin_uniform_color;
 
-        uint32_t m_builtin_uniform_light2d_resolution = jeecs::graphic::PENDING_UNIFORM_LOCATION;
-        uint32_t m_builtin_uniform_light2d_decay = jeecs::graphic::PENDING_UNIFORM_LOCATION;
+        uint32_t m_builtin_uniform_light2d_resolution;
+        uint32_t m_builtin_uniform_light2d_decay;
     };
 
     struct unifrom_variables
@@ -2209,6 +2239,8 @@ struct jegl_shader
     sampler_method* m_sampler_methods;
     size_t m_sampler_count;
 };
+static_assert(
+    std::is_trivial_v<jegl_shader> && 0 == offsetof(jegl_shader, m_handle));
 
 /*
 jegl_frame_buffer [类型]
@@ -2216,6 +2248,8 @@ jegl_frame_buffer [类型]
 */
 struct jegl_frame_buffer
 {
+    jegl_resource_handle m_handle;
+
     // In fact, attachment_t is jeecs::basic::resource<jeecs::graphic::texture>
     typedef struct attachment_t attachment_t;
     attachment_t* m_output_attachments;
@@ -2223,6 +2257,8 @@ struct jegl_frame_buffer
     size_t m_width;
     size_t m_height;
 };
+static_assert(
+    std::is_trivial_v<jegl_frame_buffer> && 0 == offsetof(jegl_frame_buffer, m_handle));
 
 /*
 jegl_uniform_buffer [类型]
@@ -2230,6 +2266,8 @@ jegl_uniform_buffer [类型]
 */
 struct jegl_uniform_buffer
 {
+    jegl_resource_handle m_handle;
+
     size_t m_buffer_binding_place;
     size_t m_buffer_size;
     uint8_t* m_buffer;
@@ -2238,56 +2276,8 @@ struct jegl_uniform_buffer
     size_t m_update_begin_offset;
     size_t m_update_length;
 };
-
-using jegl_resource_blob = void*;
-struct jegl_resource_bind_counter;
-
-/*
-jegl_resource [类型]
-图形资源初级封装，纹理、着色器、帧缓冲区等均为图形资源
-*/
-struct jegl_resource
-{
-    using jegl_custom_resource_t = void*;
-    enum type : uint8_t
-    {
-        VERTEX,     // Mesh
-        TEXTURE,    // Texture
-        SHADER,     // Shader
-        FRAMEBUF,   // Framebuffer
-        UNIFORMBUF, // UniformBlock
-    };
-    union resource_handle
-    {
-        void* m_ptr;
-        size_t m_hdl;
-        struct
-        {
-            uint32_t m_uint1;
-            uint32_t m_uint2;
-        };
-    };
-
-    jegl_resource_bind_counter* m_raw_ref_count;
-
-    jegl_context* m_graphic_thread;
-    jeecs::typing::version_t m_graphic_thread_version;
-    resource_handle m_handle;
-
-    type m_type;
-    bool m_modified;
-
-    const char* m_path;
-    union
-    {
-        jegl_custom_resource_t m_custom_resource;
-        jegl_texture* m_raw_texture_data;
-        jegl_vertex* m_raw_vertex_data;
-        jegl_shader* m_raw_shader_data;
-        jegl_frame_buffer* m_raw_framebuf_data;
-        jegl_uniform_buffer* m_raw_uniformbuf_data;
-    };
-};
+static_assert(
+    std::is_trivial_v<jegl_uniform_buffer> && 0 == offsetof(jegl_uniform_buffer, m_handle));
 
 /*
 jegl_frame_buffer_clear_operation [类型]
@@ -2325,6 +2315,7 @@ jegl_graphic_api [类型]
 */
 struct jegl_graphic_api
 {
+    // 图形基本启动和关闭接口
     using startup_func_t =
         jegl_context::graphic_impl_context_t(*)(jegl_context*, const jegl_interface_config*, bool);
     using shutdown_func_t =
@@ -2335,39 +2326,76 @@ struct jegl_graphic_api
     using commit_func_t =
         jegl_update_action(*)(jegl_context::graphic_impl_context_t, jegl_update_action);
 
-    using create_blob_func_t =
-        jegl_resource_blob(*)(jegl_context::graphic_impl_context_t, jegl_resource*);
-    using close_blob_func_t =
+    // 资源创建相关接口
+    using shader_create_blob_func_t =
+        jegl_resource_blob(*)(jegl_context::graphic_impl_context_t, jegl_shader*);
+    using shader_close_blob_func_t =
         void (*)(jegl_context::graphic_impl_context_t, jegl_resource_blob);
+    using shader_init_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, jegl_resource_blob, jegl_shader*);
+    using shader_update_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, jegl_shader*);
+    using shader_close_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, jegl_shader*);
 
-    using create_resource_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_resource_blob, jegl_resource*);
-    using using_resource_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_resource*);
-    using close_resource_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_resource*);
+    using texture_create_blob_func_t =
+        jegl_resource_blob(*)(jegl_context::graphic_impl_context_t, jegl_texture*);
+    using texture_close_blob_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, jegl_resource_blob);
+    using texture_init_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, jegl_resource_blob, jegl_texture*);
+    using texture_update_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, jegl_texture*);
+    using texture_close_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, jegl_texture*);
 
-    using bind_ubuffer_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_resource*);
-    using bind_shader_func_t =
-        bool (*)(jegl_context::graphic_impl_context_t, jegl_resource*);
-    using bind_texture_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_resource*, size_t);
-    using draw_vertex_func_t =
-        void (*)(jegl_context::graphic_impl_context_t, jegl_resource*);
+    using vertex_create_blob_func_t =
+        jegl_resource_blob(*)(jegl_context::graphic_impl_context_t, jegl_vertex*);
+    using vertex_close_blob_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, jegl_resource_blob);
+    using vertex_init_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, jegl_resource_blob, jegl_vertex*);
+    using vertex_update_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, jegl_vertex*);
+    using vertex_close_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, jegl_vertex*);
 
+    using framebuffer_init_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, jegl_frame_buffer*);
+    using framebuffer_update_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, jegl_frame_buffer*);
+    using framebuffer_close_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, jegl_frame_buffer*);
+
+    using ubuffer_init_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, jegl_uniform_buffer*);
+    using ubuffer_update_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, jegl_uniform_buffer*);
+    using ubuffer_close_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, jegl_uniform_buffer*);
+
+    // Shader uniform 设置相关接口
+    using set_uniform_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, uint32_t, jegl_shader::uniform_type, const void*);
+
+    // 绘制相关接口
+    using viewport_xyzw_t = int32_t[4];
     using bind_framebuf_func_t =
         void (*)(
             jegl_context::graphic_impl_context_t,
-            jegl_resource* framebuffer,
-            const int32_t(*viewport_xywh)[4],
-            const jegl_frame_buffer_clear_operation* clear_operations);
-    using set_uniform_func_t =
-        void (*)(
-            jegl_context::graphic_impl_context_t,
-            uint32_t location,
-            jegl_shader::uniform_type type,
-            const void* data_ptr);
+            jegl_frame_buffer* /* MAY NULL */,
+            const viewport_xyzw_t*,
+            const jegl_frame_buffer_clear_operation*);
+
+    using bind_ubuffer_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, jegl_uniform_buffer*);
+    using bind_shader_func_t =
+        bool (*)(jegl_context::graphic_impl_context_t, jegl_shader*);
+    using bind_texture_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, jegl_texture*, size_t);
+    using draw_vertex_func_t =
+        void (*)(jegl_context::graphic_impl_context_t, jegl_vertex*);
+
 
     /*
     jegl_graphic_api::interface_startup [成员]
@@ -2421,104 +2449,46 @@ struct jegl_graphic_api
     /*
     jegl_graphic_api::update_draw_commit [成员]
     图形接口在完成指示的渲染操作之后会调用的接口，图形实现应当在此接口中，将既存的提交任务提交到图形设备中（以最大化利用
-    设备空闲），如果可以，渲染GUI的任务也应当在此处实现，并一并提交。
+    设备空闲），如果可以，渲染GUI的任务也应当在此处实现，然后一并提交。
         * 接口若返回 jegl_update_action::STOP，则表示图形实现请求关闭渲染，在帧同步工作完成后进入图形线程的退出流程。
         * 接口若返回 jegl_update_action::SKIP，由于并没有后续的渲染任务可被跳过，因此事实上如同返回 jegl_update_action::CONTINUE。
     */
     commit_func_t update_draw_commit;
 
-    /*
-    jegl_graphic_api::create_resource_blob_cache [成员]
-    图形接口在创建资源之前会调用此接口以生成运行时缓存。该缓存将被传入create_resource用于加速资源的创建。
-        * 一个常见的用途是，在创建着色器之前，先根据着色器的原始资源创建出预备的缓存，然后在create_resource中使用此缓存
-            实例化真正的着色器实例。
-        * 若确实没有值得缓存的数据，可以返回nullptr，如果这么做，close_resource_blob_cache和create_resource时也将收到nullptr。
-        * 图形实现应当为缓存信息预备能够指示类型信息的字段，以便于close_resource_blob_cache时可以用正确的方法释放缓存。
-    请参见：
-        jegl_graphic_api::close_resource_blob_cache
-        jegl_graphic_api::create_resource
-    */
-    create_blob_func_t create_resource_blob_cache;
+    shader_create_blob_func_t shader_create_blob;
+    texture_create_blob_func_t texture_create_blob;
+    vertex_create_blob_func_t vertex_create_blob;
 
-    /*
-    jegl_graphic_api::close_resource_blob_cache [成员]
-    释放一个图形实现的缓存，这通常是因为图形线程被请求关闭，或者引擎认为该缓存已经过时。
-        * 图形实现应当检查缓存是否为nullptr，以及缓存的类型，然后再释放缓存。
-    */
-    close_blob_func_t close_resource_blob_cache;
+    shader_close_blob_func_t shader_close_blob;
+    texture_close_blob_func_t texture_close_blob;
+    vertex_close_blob_func_t vertex_close_blob;
 
-    /*
-    jegl_graphic_api::create_resource [成员]
-    创建一个图形资源，图形实现应当检查资源的类型，通过类型实例中提供的原始数据以初始化创建图形资源，并将资源句柄保存到实例
-    的m_handle字段中。
-    */
-    create_resource_func_t create_resource;
+    shader_init_func_t shader_init;
+    texture_init_func_t texture_init;
+    vertex_init_func_t vertex_init;
+    framebuffer_init_func_t framebuffer_init;
+    ubuffer_init_func_t  ubuffer_init;
 
-    /*
-    jegl_graphic_api::using_resource [成员]
-    在正式使用一个图形资源之前，会调用此接口对资源进行更新、预备工作；此接口常用于更新纹理、一致缓冲区数据
-        * 具体的操作可以是是图形资源实现的
-        * 在使用资源的原始数据部分时，请检查原始数据字段是否置空；一些情况下图像任务仍然会使用已经被请求释放的图形资源（
-        这通常是因为相关的绘制操作已经被“录制”），这种图形资源的原始数据已经被销毁并置空；不过JoyEngine保证使用的图形资
-        源本身尚未被close_resource关闭。
-    请参见：
-        jegl_graphic_api::close_resource
-    */
-    using_resource_func_t using_resource;
+    shader_update_func_t shader_update;
+    texture_update_func_t texture_update;
+    vertex_update_func_t vertex_update;
+    framebuffer_update_func_t framebuffer_update;
+    ubuffer_update_func_t  ubuffer_update;
 
-    /*
-    jegl_graphic_api::close_resource [成员]
-    关闭一个图形资源，图形实现应当检查资源的类型，通过类型实例中提供的原始数据以释放图形资源。
-    */
-    close_resource_func_t close_resource;
+    shader_close_func_t shader_close;
+    texture_close_func_t texture_close;
+    vertex_close_func_t vertex_close;
+    framebuffer_close_func_t framebuffer_close;
+    ubuffer_close_func_t  ubuffer_close;
 
-    /*
-    jegl_graphic_api::bind_uniform_buffer [成员]
-    绑定一个一致缓冲区到对应位置
-        * 约定：由于RendChain的延迟渲染特性，接口假定所有相同的 uniform_buffer 实例在一帧之内
-            不会发生数据改动。
-    */
-    bind_ubuffer_func_t bind_uniform_buffer;
+    set_uniform_func_t set_uniform;
 
-    /*
-    jegl_graphic_api::bind_texture [成员]
-    绑定一个纹理到对应的通道位置。
-    */
-    bind_texture_func_t bind_texture;
-
-    /*
-    jegl_graphic_api::bind_shader [成员]
-    绑定一个着色器作为当前渲染使用的着色器。
-        * 如果着色器因内部原因（一个典型的例子是因为引擎生成的shader代码不可用）而无法使用，图形实现应当
-            清空其内部绑定的着色器，如同完全没有绑定过任何着色器一般，并返回 false。
-    */
-    bind_shader_func_t bind_shader;
-
-    /*
-    jegl_graphic_api::bind_framebuf [成员]
-    设置渲染目标，若传入nullptr，则目标为屏幕空间。
-        * 视口若不指定（viewport_xywh = nullptr），则如同使用 (0, 0, 0, 0)
-        * viewport_xywh 的 x, y 允许为负数，但是 w 和 h 不允许为负数
-        * 视口的宽度和高度若为0，则使用帧缓冲区的宽度和高度
-        * clear_operations 链表用于指示缓冲区的清除操作，允许为 nullptr，表示不进行任何清除操作
-            链表的最后一项的 m_next 应当为 nullptr
-    */
     bind_framebuf_func_t bind_framebuf;
 
-    /*
-    jegl_graphic_api::draw_vertex [成员]
-    使用之前绑定的着色器和纹理，绘制给定的顶点模型。
-        * 如果之前没有绑定着色器，或者绑定的着色器因内部原因不可用，则不进行任何绘制操作。
-        * 任意绘制操作都应当位于一帧内的目标缓冲区绑定作用域内，图形库不考虑违背此约定导致的任何问题。
-    */
+    bind_ubuffer_func_t bind_uniform_buffer;
+    bind_shader_func_t bind_shader;
+    bind_texture_func_t bind_texture;
     draw_vertex_func_t draw_vertex;
-
-    /*
-    jegl_graphic_api::set_uniform [成员]
-    向当前正在绑定的着色器设置一致变量。
-        * 如果之前没有绑定着色器，或者绑定的着色器因内部原因不可用，则不进行任何绘制操作。
-    */
-    set_uniform_func_t set_uniform;
 };
 static_assert(sizeof(jegl_graphic_api) % sizeof(void*) == 0);
 
@@ -2655,13 +2625,41 @@ JE_API bool jegl_update(
 
 /*
 jegl_reboot_graphic_thread [基本接口]
-以指定的配置重启一个图形线程
+以指定的配置请求重启一个图形线程
     * 若不需要改变图形配置，请使用nullptr
 */
 JE_API void jegl_reboot_graphic_thread(
     jegl_context* thread_handle,
     const jegl_interface_config* config_may_null);
 
+JE_API void jegl_share_resource_handle(jegl_resource_handle* resource_handle);
+#define jegl_share_resource(resource) jegl_share_resource_handle(&(resource)->m_handle)
+
+///////////////////////////// SHADER /////////////////////////////
+/*
+jegl_load_shader_source [基本接口]
+从源码加载一个着色器实例，可创建或使用缓存文件以加速着色器的加载
+    * 实际上jegl_load_shader会读取文件内容之后，调用此函数进行实际上的着色器加载
+若不需要创建缓存文件，请将 is_virtual_file 指定为 false
+请参见：
+    jegl_load_shader
+*/
+JE_API jegl_shader* jegl_load_shader_source(
+    jegl_context* context,
+    const char* path,
+    const char* src,
+    bool is_virtual_file);
+
+/*
+jegl_load_shader [基本接口]
+从源码文件加载一个着色器实例，会创建或使用缓存文件以加速着色器的加载
+*/
+JE_API jegl_shader* jegl_load_shader(
+    jegl_context* context,
+    const char* path);
+
+JE_API void jegl_close_shader(jegl_shader* shader);
+///////////////////////////// TEXTURE /////////////////////////////
 /*
 jegl_load_texture [基本接口]
 从指定路径加载一个纹理资源，加载的路径规则与 jeecs_file_open 相同
@@ -2671,7 +2669,7 @@ jegl_load_texture [基本接口]
     jeecs_file_open
     jegl_close_resource
 */
-JE_API jegl_resource* jegl_load_texture(
+JE_API jegl_texture* jegl_load_texture(
     jegl_context* context,
     const char* path);
 
@@ -2686,11 +2684,14 @@ jegl_create_texture [基本接口]
 请参见：
     jegl_close_resource
 */
-JE_API jegl_resource* /* NOT NULL */ jegl_create_texture(
+JE_API jegl_texture* /* NOT NULL */ jegl_create_texture(
     size_t width,
     size_t height,
     jegl_texture::format format);
 
+JE_API void jegl_close_texture(jegl_texture* texture);
+
+///////////////////////////// VERTEX /////////////////////////////
 /*
 jegl_load_vertex [基本接口]
 从指定路径加载一个顶点（模型）资源，加载的路径规则与 jeecs_file_open 相同
@@ -2707,7 +2708,7 @@ jegl_load_vertex [基本接口]
     jeecs_file_open
     jegl_close_resource
 */
-JE_API jegl_resource* jegl_load_vertex(
+JE_API jegl_vertex* jegl_load_vertex(
     jegl_context* context,
     const char* path);
 
@@ -2718,7 +2719,7 @@ jegl_create_vertex [基本接口]
 请参见：
     jegl_close_resource
 */
-JE_API jegl_resource* jegl_create_vertex(
+JE_API jegl_vertex* jegl_create_vertex(
     jegl_vertex::type type,
     const void* datas,
     size_t data_length,
@@ -2727,6 +2728,10 @@ JE_API jegl_resource* jegl_create_vertex(
     const jegl_vertex::data_layout* format,
     size_t format_count);
 
+JE_API void jegl_close_vertex(jegl_vertex* vertex);
+
+///////////////////////////// FRAMEBUFFER /////////////////////////////
+
 /*
 jegl_create_framebuf [基本接口]
 使用指定的附件配置创建一个纹理缓冲区资源
@@ -2734,12 +2739,41 @@ jegl_create_framebuf [基本接口]
 请参见：
     jegl_close_resource
 */
-JE_API jegl_resource* jegl_create_framebuf(
+JE_API jegl_frame_buffer* jegl_create_framebuf(
     size_t width,
     size_t height,
     const jegl_texture::format* color_attachment_formats,
     size_t color_attachment_count,
     bool contain_depth_attachment);
+
+JE_API void jegl_close_framebuf(jegl_frame_buffer* framebuffer);
+
+///////////////////////////// UNIFORM BUFFER /////////////////////////////
+
+/*
+jegl_create_uniformbuf [基本接口]
+创建一个指定大小和绑定位置的一致变量缓冲区资源
+    * 所有的图形资源都通过 jegl_close_resource 关闭并等待图形线程释放
+请参见：
+    jegl_close_resource
+*/
+JE_API jegl_uniform_buffer* jegl_create_uniformbuf(
+    size_t binding_place,
+    size_t length);
+
+/*
+jegl_update_uniformbuf [基本接口]
+更新一个一致变量缓冲区中，指定位置起，若干长度的数据
+*/
+JE_API void jegl_update_uniformbuf(
+    jegl_uniform_buffer* uniformbuf,
+    const void* buf,
+    size_t update_offset,
+    size_t update_length);
+
+JE_API void jegl_close_uniformbuf(jegl_uniform_buffer* uniformbuf);
+
+//////////////////////////////////////////////////////////
 
 struct je_stb_font_data;
 typedef void (*je_font_char_updater_t)(jegl_texture::pixel_data_t*, size_t, size_t);
@@ -2819,48 +2853,6 @@ JE_API void jegl_shrink_shared_resource_cache(
     jegl_context* context, size_t shrink_target_count);
 
 /*
-jegl_load_shader_source [基本接口]
-从源码加载一个着色器实例，可创建或使用缓存文件以加速着色器的加载
-    * 实际上jegl_load_shader会读取文件内容之后，调用此函数进行实际上的着色器加载
-若不需要创建缓存文件，请将 is_virtual_file 指定为 false
-请参见：
-    jegl_load_shader
-*/
-JE_API jegl_resource* jegl_load_shader_source(
-    const char* path,
-    const char* src,
-    bool is_virtual_file);
-
-/*
-jegl_load_shader [基本接口]
-从源码文件加载一个着色器实例，会创建或使用缓存文件以加速着色器的加载
-*/
-JE_API jegl_resource* jegl_load_shader(
-    jegl_context* context,
-    const char* path);
-
-/*
-jegl_create_uniformbuf [基本接口]
-创建一个指定大小和绑定位置的一致变量缓冲区资源
-    * 所有的图形资源都通过 jegl_close_resource 关闭并等待图形线程释放
-请参见：
-    jegl_close_resource
-*/
-JE_API jegl_resource* jegl_create_uniformbuf(
-    size_t binding_place,
-    size_t length);
-
-/*
-jegl_update_uniformbuf [基本接口]
-更新一个一致变量缓冲区中，指定位置起，若干长度的数据
-*/
-JE_API void jegl_update_uniformbuf(
-    jegl_resource* uniformbuf,
-    const void* buf,
-    size_t update_offset,
-    size_t update_length);
-
-/*
 jegl_graphic_api_entry [类型]
 基础图形库的入口类型
 指向一个用于初始化基础图形接口的入口函数
@@ -2931,38 +2923,12 @@ jegl_using_dx11_apis [基本接口]
 JE_API void jegl_using_dx11_apis(jegl_graphic_api* write_to_apis);
 
 /*
-jegl_using_resource [基本接口]
-当图形资源即将被使用时，此接口被调用用于创建/更新资源。
-    * 通常不需要手动调用，通常用于在图形线程的外部功能需要初始化资源时调用（例如GUI）
-    * 函数返回true表示此资源在本次调用期间完成初始化
-    * 此函数只允许在图形线程内调用
-    * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
-*/
-JE_API bool jegl_using_resource(jegl_resource* resource);
-
-/*
-jegl_share_resource [基本接口]
-对资源的占有，通常用于避免正在使用的图形资源被其他持有者释放
-    * 占有的资源应当在使用完毕后，使用 jegl_close_resource 释放
-参见：
-    jegl_close_resource
-*/
-JE_API void jegl_share_resource(jegl_resource* resource);
-
-/*
-jegl_close_resource [基本接口]
-关闭指定的图形资源，图形资源的原始数据信息会被立即回收，对应图形库的实际资源会在
-对应的图形线程中延迟销毁
-*/
-JE_API void jegl_close_resource(jegl_resource* resource);
-
-/*
 jegl_bind_texture [基本接口]
 将指定的纹理绑定到指定的纹理通道
     * 此函数只允许在图形线程内调用
     * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
 */
-JE_API void jegl_bind_texture(jegl_resource* texture, size_t pass);
+JE_API void jegl_bind_texture(jegl_texture* texture, size_t pass);
 
 /*
 jegl_bind_shader [基本接口]
@@ -2971,14 +2937,14 @@ jegl_bind_shader [基本接口]
     * 当着色器发生内部错误（通常是引擎生成的shader代码无法被图形库正常编译）时，
         绑定失败，返回false
 */
-JE_API bool jegl_bind_shader(jegl_resource* shader);
+JE_API bool jegl_bind_shader(jegl_shader* shader);
 
 /*
 jegl_bind_uniform_buffer [基本接口]
     * 此函数只允许在图形线程内调用
     * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
 */
-JE_API void jegl_bind_uniform_buffer(jegl_resource* uniformbuf);
+JE_API void jegl_bind_uniform_buffer(jegl_uniform_buffer* uniformbuf);
 
 /*
 jegl_draw_vertex [基本接口]
@@ -2990,7 +2956,7 @@ jegl_draw_vertex [基本接口]
     jegl_bind_shader
     jegl_bind_texture
 */
-JE_API void jegl_draw_vertex(jegl_resource* vert);
+JE_API void jegl_draw_vertex(jegl_vertex* vert);
 
 /*
 jegl_rend_to_framebuffer [基本接口]
@@ -3002,7 +2968,7 @@ clear_operations 用于指定颜色附件或深度附件清除值，若为 nullp
     * 任意图形资源只被设计运作于单个图形线程，不允许不同图形线程共享一个图形资源
 */
 JE_API void jegl_rend_to_framebuffer(
-    jegl_resource* framebuffer,
+    jegl_frame_buffer* framebuffer,
     const int32_t(*viewport_xywh)[4],
     const jegl_frame_buffer_clear_operation* clear_operations);
 
@@ -3077,14 +3043,15 @@ jegl_rchain_begin [基本接口]
 */
 JE_API void jegl_rchain_begin(
     jegl_rendchain* chain,
-    jegl_resource* framebuffer,
+    jegl_frame_buffer* framebuffer,
     int32_t x, int32_t y, uint32_t w, uint32_t h);
 
 /*
 jegl_rchain_bind_uniform_buffer [基本接口]
 绑定绘制链的一致变量缓冲区
 */
-JE_API void jegl_rchain_bind_uniform_buffer(jegl_rendchain* chain, jegl_resource* uniformbuffer);
+JE_API void jegl_rchain_bind_uniform_buffer(
+    jegl_rendchain* chain, jegl_uniform_buffer* uniformbuffer);
 
 /*
 jegl_rchain_clear_color_buffer [基本接口]
@@ -3123,8 +3090,8 @@ jegl_rchain_draw [基本接口]
 */
 JE_API jegl_rendchain_rend_action* jegl_rchain_draw(
     jegl_rendchain* chain,
-    jegl_resource* shader,
-    jegl_resource* vertex,
+    jegl_shader* shader,
+    jegl_vertex* vertex,
     jegl_rchain_texture_group* texture_group_may_null);
 
 /*
@@ -3135,7 +3102,7 @@ jegl_rchain_set_uniform_buffer [基本接口]
 */
 JE_API void jegl_rchain_set_uniform_buffer(
     jegl_rendchain_rend_action* act,
-    jegl_resource* uniform_buffer);
+    jegl_uniform_buffer* uniform_buffer);
 
 /*
 jegl_rchain_set_uniform_int [基本接口]
@@ -3280,7 +3247,7 @@ JE_API void jegl_rchain_bind_texture(
     jegl_rendchain* chain,
     jegl_rchain_texture_group* texture_group,
     size_t binding_pass,
-    jegl_resource* texture);
+    jegl_texture* texture);
 
 /*
 jegl_rchain_commit [基本接口]
@@ -3296,7 +3263,7 @@ jegl_rchain_get_target_framebuf [基本接口]
 获取当前绘制链的目标帧缓冲区
     * 如果当前绘制链的目标帧缓冲区是屏幕缓冲区，则返回 nullptr
 */
-JE_API jegl_resource* jegl_rchain_get_target_framebuf(
+JE_API jegl_frame_buffer* /* MAY NULL */ jegl_rchain_get_target_framebuf(
     jegl_rendchain* chain);
 
 /*
@@ -3365,7 +3332,7 @@ jegl_branch_new_chain [基本接口]
 */
 JE_API jegl_rendchain* jegl_branch_new_chain(
     jeecs::rendchain_branch* branch,
-    jegl_resource* framebuffer,
+    jegl_frame_buffer* framebuffer,
     int32_t x,
     int32_t y,
     uint32_t w,
@@ -3387,8 +3354,10 @@ JE_API void jegui_set_font(
     size_t size);
 
 typedef uint64_t jegui_user_image_handle_t;
-typedef jegui_user_image_handle_t(*jegui_user_image_loader_t)(jegl_context*, jegl_resource*);
-typedef void (*jegui_user_sampler_loader_t)(jegl_context*, jegl_resource*);
+using jegui_user_image_loader_t =
+jegui_user_image_handle_t(*)(jegl_context*, jegl_texture*);
+using jegui_user_sampler_loader_t =
+void (*)(jegl_context*, jegl_shader*);
 
 /*
 jegui_init_basic [基本接口]
@@ -8341,33 +8310,58 @@ namespace jeecs
 
     namespace graphic
     {
+        namespace requirements
+        {
+            template<typename T>
+            concept basic_graphic_resource =
+                std::same_as<T, jegl_shader> ||
+                std::same_as<T, jegl_texture> ||
+                std::same_as<T, jegl_vertex> ||
+                std::same_as<T, jegl_frame_buffer> ||
+                std::same_as<T, jegl_uniform_buffer>;
+        }
+
+        template<requirements::basic_graphic_resource T>
         class resource_basic
         {
             JECS_DISABLE_MOVE_AND_COPY(resource_basic);
 
-            jegl_resource* _m_resource;
+            T* _m_resource;
 
         protected:
-            resource_basic(jegl_resource* res) noexcept
+            resource_basic(T* res) noexcept
                 : _m_resource(res)
             {
                 assert(_m_resource != nullptr);
             }
+            ~resource_basic()noexcept
+            {
+                if constexpr (std::is_same_v<T, jegl_shader>)
+                    jegl_close_shader(_m_resource);
+                else if constexpr (std::is_same_v<T, jegl_texture>)
+                    jegl_close_texture(_m_resource);
+                else if constexpr (std::is_same_v<T, jegl_vertex>)
+                    jegl_close_vertex(_m_resource);
+                else if constexpr (std::is_same_v<T, jegl_frame_buffer>)
+                    jegl_close_framebuf(_m_resource);
+                else if constexpr (std::is_same_v<T, jegl_uniform_buffer>)
+                    jegl_close_uniformbuf(_m_resource);
+                else
+                {
+                    static_assert(sizeof(T) == 0,
+                        "Unsupported graphic resource type.");
+                }
+            }
 
         public:
-            inline jegl_resource* resource() const noexcept
+            inline T* resource() const noexcept
             {
                 return _m_resource;
             }
-            ~resource_basic()
-            {
-                assert(_m_resource != nullptr);
-                jegl_close_resource(_m_resource);
-            }
         };
-        class texture : public resource_basic
+        class texture : public resource_basic<jegl_texture>
         {
-            explicit texture(jegl_resource* res)
+            explicit texture(jegl_texture* res)
                 : resource_basic(res)
             {
             }
@@ -8375,14 +8369,14 @@ namespace jeecs
         public:
             static std::optional<basic::resource<texture>> load(jegl_context* context, const std::string& str)
             {
-                jegl_resource* res = jegl_load_texture(context, str.c_str());
+                jegl_texture* res = jegl_load_texture(context, str.c_str());
                 if (res != nullptr)
                     return basic::resource<texture>(new texture(res));
                 return std::nullopt;
             }
             static basic::resource<texture> create(size_t width, size_t height, jegl_texture::format format)
             {
-                jegl_resource* res = jegl_create_texture(width, height, format);
+                jegl_texture* res = jegl_create_texture(width, height, format);
 
                 // Create texture must be successfully.
                 assert(res != nullptr);
@@ -8393,9 +8387,11 @@ namespace jeecs
             {
                 jegl_texture::format new_texture_format =
                     (jegl_texture::format)(
-                        src->resource()->m_raw_texture_data->m_format
+                        src->resource()->m_format
                         & jegl_texture::format::COLOR_DEPTH_MASK);
-                jegl_resource* res = jegl_create_texture(w, h, new_texture_format);
+
+                jegl_texture* res =
+                    jegl_create_texture(w, h, new_texture_format);
 
                 // Create texture must be successfully.
                 assert(res != nullptr);
@@ -8413,11 +8409,11 @@ namespace jeecs
                 }
 #else
                 auto color_depth = (int)new_texture_format;
-                auto* dst_pixels = new_texture->resource()->m_raw_texture_data->m_pixels;
-                auto* src_pixels = src->resource()->m_raw_texture_data->m_pixels;
+                auto* dst_pixels = new_texture->resource()->m_pixels;
+                auto* src_pixels = src->resource()->m_pixels;
 
-                size_t src_w = std::min(w, src->resource()->m_raw_texture_data->m_width);
-                size_t src_h = std::min(h, src->resource()->m_raw_texture_data->m_height);
+                size_t src_w = std::min(w, src->resource()->m_width);
+                size_t src_h = std::min(h, src->resource()->m_height);
 
                 for (size_t iy = 0; iy < src_h; ++iy)
                 {
@@ -8432,23 +8428,22 @@ namespace jeecs
 
             class pixel
             {
-                jegl_resource* _m_texture;
+                jegl_texture* _m_texture;
                 jegl_texture::pixel_data_t*
                     _m_pixel;
                 size_t _m_x, _m_y;
 
             public:
-                pixel(jegl_resource* _texture, size_t x, size_t y) noexcept
+                pixel(jegl_texture* _texture, size_t x, size_t y) noexcept
                     : _m_texture(_texture), _m_x(x), _m_y(y)
                 {
-                    assert(_texture->m_type == jegl_resource::type::TEXTURE);
                     assert(sizeof(jegl_texture::pixel_data_t) == 1);
 
                     auto color_depth =
-                        _m_texture->m_raw_texture_data->m_format & jegl_texture::format::COLOR_DEPTH_MASK;
+                        _m_texture->m_format & jegl_texture::format::COLOR_DEPTH_MASK;
 
-                    if (x < _m_texture->m_raw_texture_data->m_width && y < _m_texture->m_raw_texture_data->m_height)
-                        _m_pixel = _m_texture->m_raw_texture_data->m_pixels + y * _m_texture->m_raw_texture_data->m_width * color_depth + x * color_depth;
+                    if (x < _m_texture->m_width && y < _m_texture->m_height)
+                        _m_pixel = _m_texture->m_pixels + y * _m_texture->m_width * color_depth + x * color_depth;
                     else
                         _m_pixel = nullptr;
                 }
@@ -8456,7 +8451,7 @@ namespace jeecs
                 {
                     if (_m_pixel == nullptr)
                         return {};
-                    switch (_m_texture->m_raw_texture_data->m_format)
+                    switch (_m_texture->m_format)
                     {
                     case jegl_texture::format::MONO:
                         return math::vec4{
@@ -8480,34 +8475,31 @@ namespace jeecs
                     if (_m_pixel == nullptr)
                         return;
 
-                    auto* raw_texture_data = _m_texture->m_raw_texture_data;
+                    auto* raw_texture_data = _m_texture;
 
-                    if (_m_texture->m_graphic_thread != nullptr)
+                    if (!_m_texture->m_handle.m_modified)
                     {
-                        if (!_m_texture->m_modified)
-                        {
-                            // Set texture modified flag & range.
-                            raw_texture_data->m_modified_max_x = _m_x;
-                            raw_texture_data->m_modified_max_y = _m_y;
+                        // Set texture modified flag & range.
+                        raw_texture_data->m_modified_max_x = _m_x;
+                        raw_texture_data->m_modified_max_y = _m_y;
+                        raw_texture_data->m_modified_min_x = _m_x;
+                        raw_texture_data->m_modified_min_y = _m_y;
+
+                        _m_texture->m_handle.m_modified = true;
+                    }
+                    else
+                    {
+                        // Update texture updating range.
+
+                        if (_m_x < raw_texture_data->m_modified_min_x)
                             raw_texture_data->m_modified_min_x = _m_x;
+                        else if (_m_x > raw_texture_data->m_modified_max_x)
+                            raw_texture_data->m_modified_max_x = _m_x;
+
+                        if (_m_y < raw_texture_data->m_modified_min_y)
                             raw_texture_data->m_modified_min_y = _m_y;
-
-                            _m_texture->m_modified = true;
-                        }
-                        else
-                        {
-                            // Update texture updating range.
-
-                            if (_m_x < raw_texture_data->m_modified_min_x)
-                                raw_texture_data->m_modified_min_x = _m_x;
-                            else if (_m_x > raw_texture_data->m_modified_max_x)
-                                raw_texture_data->m_modified_max_x = _m_x;
-
-                            if (_m_y < raw_texture_data->m_modified_min_y)
-                                raw_texture_data->m_modified_min_y = _m_y;
-                            else if (_m_y > raw_texture_data->m_modified_max_y)
-                                raw_texture_data->m_modified_max_y = _m_y;
-                        }
+                        else if (_m_y > raw_texture_data->m_modified_max_y)
+                            raw_texture_data->m_modified_max_y = _m_y;
                     }
 
                     switch (raw_texture_data->m_format)
@@ -8545,44 +8537,42 @@ namespace jeecs
             }
             inline size_t height() const noexcept
             {
-                assert(resource()->m_raw_texture_data != nullptr);
-                return resource()->m_raw_texture_data->m_height;
+                return resource()->m_height;
             }
             inline size_t width() const noexcept
             {
-                assert(resource()->m_raw_texture_data != nullptr);
-                return resource()->m_raw_texture_data->m_width;
+                return resource()->m_width;
             }
             inline math::ivec2 size() const noexcept
             {
-                assert(resource()->m_raw_texture_data != nullptr);
                 return math::ivec2(
-                    (int)resource()->m_raw_texture_data->m_width,
-                    (int)resource()->m_raw_texture_data->m_height);
+                    (int)resource()->m_width,
+                    (int)resource()->m_height);
             }
         };
-        class shader : public resource_basic
+        class shader : public resource_basic<jegl_shader>
         {
         private:
-            explicit shader(jegl_resource* res)
+            explicit shader(jegl_shader* res)
                 : resource_basic(res), m_builtin(nullptr)
             {
-                m_builtin = &this->resource()->m_raw_shader_data->m_builtin_uniforms;
+                m_builtin = &this->resource()->m_builtin_uniforms;
             }
 
         public:
             jegl_shader::builtin_uniform_location* m_builtin;
 
-            static std::optional<basic::resource<shader>> create(const std::string& name_path, const std::string& src)
+            static std::optional<basic::resource<shader>> create(
+                jegl_context* context_may_null, const std::string& name_path, const std::string& src)
             {
-                jegl_resource* res = jegl_load_shader_source(name_path.c_str(), src.c_str(), true);
+                jegl_shader* res = jegl_load_shader_source(context_may_null, name_path.c_str(), src.c_str(), true);
                 if (res != nullptr)
                     return basic::resource<shader>(new shader(res));
                 return std::nullopt;
             }
             static std::optional<basic::resource<shader>> load(jegl_context* context, const std::string& src_path)
             {
-                jegl_resource* res = jegl_load_shader(context, src_path.c_str());
+                jegl_shader* res = jegl_load_shader(context, src_path.c_str());
                 if (res != nullptr)
                     return basic::resource<shader>(new shader(res));
                 return std::nullopt;
@@ -8590,7 +8580,9 @@ namespace jeecs
 
             void set_uniform(const std::string& name, int val) noexcept
             {
-                auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
+                auto* shader_instance = resource();
+
+                auto* jegl_shad_uniforms = shader_instance->m_custom_uniforms;
                 while (jegl_shad_uniforms)
                 {
                     if (jegl_shad_uniforms->m_name == name)
@@ -8603,7 +8595,9 @@ namespace jeecs
                         else
                         {
                             jegl_shad_uniforms->m_value.m_int = val;
-                            jegl_shad_uniforms->m_updated = true;
+
+                            shader_instance->m_handle.m_modified =
+                                jegl_shad_uniforms->m_updated = true;
                         }
                         return;
                     }
@@ -8612,7 +8606,9 @@ namespace jeecs
             }
             void set_uniform(const std::string& name, int x, int y) noexcept
             {
-                auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
+                auto* shader_instance = resource();
+
+                auto* jegl_shad_uniforms = shader_instance->m_custom_uniforms;
                 while (jegl_shad_uniforms)
                 {
                     if (jegl_shad_uniforms->m_name == name)
@@ -8626,7 +8622,9 @@ namespace jeecs
                         {
                             jegl_shad_uniforms->m_value.m_int2[0] = x;
                             jegl_shad_uniforms->m_value.m_int2[1] = y;
-                            jegl_shad_uniforms->m_updated = true;
+
+                            shader_instance->m_handle.m_modified =
+                                jegl_shad_uniforms->m_updated = true;
                         }
                         return;
                     }
@@ -8635,7 +8633,9 @@ namespace jeecs
             }
             void set_uniform(const std::string& name, int x, int y, int z) noexcept
             {
-                auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
+                auto* shader_instance = resource();
+
+                auto* jegl_shad_uniforms = shader_instance->m_custom_uniforms;
                 while (jegl_shad_uniforms)
                 {
                     if (jegl_shad_uniforms->m_name == name)
@@ -8650,7 +8650,9 @@ namespace jeecs
                             jegl_shad_uniforms->m_value.m_int3[0] = x;
                             jegl_shad_uniforms->m_value.m_int3[1] = y;
                             jegl_shad_uniforms->m_value.m_int3[2] = z;
-                            jegl_shad_uniforms->m_updated = true;
+
+                            shader_instance->m_handle.m_modified =
+                                jegl_shad_uniforms->m_updated = true;
                         }
                         return;
                     }
@@ -8659,7 +8661,9 @@ namespace jeecs
             }
             void set_uniform(const std::string& name, int x, int y, int z, int w) noexcept
             {
-                auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
+                auto* shader_instance = resource();
+
+                auto* jegl_shad_uniforms = shader_instance->m_custom_uniforms;
                 while (jegl_shad_uniforms)
                 {
                     if (jegl_shad_uniforms->m_name == name)
@@ -8675,7 +8679,9 @@ namespace jeecs
                             jegl_shad_uniforms->m_value.m_int4[1] = y;
                             jegl_shad_uniforms->m_value.m_int4[2] = z;
                             jegl_shad_uniforms->m_value.m_int4[3] = w;
-                            jegl_shad_uniforms->m_updated = true;
+
+                            shader_instance->m_handle.m_modified =
+                                jegl_shad_uniforms->m_updated = true;
                         }
                         return;
                     }
@@ -8684,7 +8690,9 @@ namespace jeecs
             }
             void set_uniform(const std::string& name, float val) noexcept
             {
-                auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
+                auto* shader_instance = resource();
+
+                auto* jegl_shad_uniforms = shader_instance->m_custom_uniforms;
                 while (jegl_shad_uniforms)
                 {
                     if (jegl_shad_uniforms->m_name == name)
@@ -8697,7 +8705,9 @@ namespace jeecs
                         else
                         {
                             jegl_shad_uniforms->m_value.m_float = val;
-                            jegl_shad_uniforms->m_updated = true;
+
+                            shader_instance->m_handle.m_modified =
+                                jegl_shad_uniforms->m_updated = true;
                         }
                         return;
                     }
@@ -8706,7 +8716,9 @@ namespace jeecs
             }
             void set_uniform(const std::string& name, const math::vec2& val) noexcept
             {
-                auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
+                auto* shader_instance = resource();
+
+                auto* jegl_shad_uniforms = shader_instance->m_custom_uniforms;
                 while (jegl_shad_uniforms)
                 {
                     if (jegl_shad_uniforms->m_name == name)
@@ -8720,7 +8732,9 @@ namespace jeecs
                         {
                             jegl_shad_uniforms->m_value.m_float2[0] = val.x;
                             jegl_shad_uniforms->m_value.m_float2[1] = val.y;
-                            jegl_shad_uniforms->m_updated = true;
+
+                            shader_instance->m_handle.m_modified =
+                                jegl_shad_uniforms->m_updated = true;
                         }
                         return;
                     }
@@ -8729,7 +8743,9 @@ namespace jeecs
             }
             void set_uniform(const std::string& name, const math::vec3& val) noexcept
             {
-                auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
+                auto* shader_instance = resource();
+
+                auto* jegl_shad_uniforms = shader_instance->m_custom_uniforms;
                 while (jegl_shad_uniforms)
                 {
                     if (jegl_shad_uniforms->m_name == name)
@@ -8744,7 +8760,9 @@ namespace jeecs
                             jegl_shad_uniforms->m_value.m_float3[0] = val.x;
                             jegl_shad_uniforms->m_value.m_float3[1] = val.y;
                             jegl_shad_uniforms->m_value.m_float3[2] = val.z;
-                            jegl_shad_uniforms->m_updated = true;
+
+                            shader_instance->m_handle.m_modified =
+                                jegl_shad_uniforms->m_updated = true;
                         }
                         return;
                     }
@@ -8753,7 +8771,9 @@ namespace jeecs
             }
             void set_uniform(const std::string& name, const math::vec4& val) noexcept
             {
-                auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
+                auto* shader_instance = resource();
+
+                auto* jegl_shad_uniforms = shader_instance->m_custom_uniforms;
                 while (jegl_shad_uniforms)
                 {
                     if (jegl_shad_uniforms->m_name == name)
@@ -8769,7 +8789,9 @@ namespace jeecs
                             jegl_shad_uniforms->m_value.m_float4[1] = val.y;
                             jegl_shad_uniforms->m_value.m_float4[2] = val.z;
                             jegl_shad_uniforms->m_value.m_float4[3] = val.w;
-                            jegl_shad_uniforms->m_updated = true;
+
+                            shader_instance->m_handle.m_modified =
+                                jegl_shad_uniforms->m_updated = true;
                         }
                         return;
                     }
@@ -8778,7 +8800,7 @@ namespace jeecs
             }
             const uint32_t* get_uniform_location(const std::string& name)
             {
-                auto* jegl_shad_uniforms = resource()->m_raw_shader_data->m_custom_uniforms;
+                auto* jegl_shad_uniforms = resource()->m_custom_uniforms;
                 while (jegl_shad_uniforms)
                 {
                     if (jegl_shad_uniforms->m_name == name)
@@ -8790,9 +8812,9 @@ namespace jeecs
                 return nullptr;
             }
         };
-        class vertex : public resource_basic
+        class vertex : public resource_basic<jegl_vertex>
         {
-            explicit vertex(jegl_resource* res)
+            explicit vertex(jegl_vertex* res)
                 : resource_basic(res)
             {
             }
@@ -8828,9 +8850,9 @@ namespace jeecs
                 return std::nullopt;
             }
         };
-        class framebuffer : public resource_basic
+        class framebuffer : public resource_basic<jegl_frame_buffer>
         {
-            explicit framebuffer(jegl_resource* res)
+            explicit framebuffer(jegl_frame_buffer* res)
                 : resource_basic(res)
             {
             }
@@ -8855,11 +8877,11 @@ namespace jeecs
             }
             std::optional<basic::resource<texture>> get_attachment(size_t index) const
             {
-                if (index < resource()->m_raw_framebuf_data->m_attachment_count)
+                if (index < resource()->m_attachment_count)
                 {
-                    auto* attachments = std::launder(
+                    auto* attachments =
                         reinterpret_cast<basic::resource<graphic::texture> *>(
-                            resource()->m_raw_framebuf_data->m_output_attachments));
+                            resource()->m_output_attachments);
                     return attachments[index];
                 }
                 return std::nullopt;
@@ -8867,22 +8889,22 @@ namespace jeecs
 
             inline size_t height() const noexcept
             {
-                return resource()->m_raw_framebuf_data->m_height;
+                return resource()->m_height;
             }
             inline size_t width() const noexcept
             {
-                return resource()->m_raw_framebuf_data->m_width;
+                return resource()->m_width;
             }
             inline math::ivec2 size() const noexcept
             {
                 return math::ivec2(
-                    (int)resource()->m_raw_framebuf_data->m_width,
-                    (int)resource()->m_raw_framebuf_data->m_height);
+                    (int)resource()->m_width,
+                    (int)resource()->m_height);
             }
         };
-        class uniformbuffer : public resource_basic
+        class uniformbuffer : public resource_basic<jegl_uniform_buffer>
         {
-            explicit uniformbuffer(jegl_resource* res)
+            explicit uniformbuffer(jegl_uniform_buffer* res)
                 : resource_basic(res)
             {
                 assert(resource() != nullptr);
@@ -8892,7 +8914,7 @@ namespace jeecs
             static std::optional<basic::resource<uniformbuffer>> create(
                 size_t binding_place, size_t buffersize)
             {
-                jegl_resource* res = jegl_create_uniformbuf(binding_place, buffersize);
+                jegl_uniform_buffer* res = jegl_create_uniformbuf(binding_place, buffersize);
                 if (res != nullptr)
                     return basic::resource<uniformbuffer>(new uniformbuffer(res));
                 return std::nullopt;
@@ -9361,7 +9383,7 @@ namespace jeecs
                     jegl_texture::format::RGBA);
 
                 std::memset(
-                    new_texture->resource()->m_raw_texture_data->m_pixels,
+                    new_texture->resource()->m_pixels,
                     0,
                     size_x * size_y * 4);
 
@@ -11795,7 +11817,7 @@ namespace jeecs
                 const quat& rotation,
                 const vec3& scale) const
             {
-                jegl_vertex* raw_vertex_data = mesh->resource()->m_raw_vertex_data;
+                jegl_vertex* raw_vertex_data = mesh->resource();
 
                 intersect_result minResult = false;
                 minResult.distance = INFINITY;
@@ -11879,7 +11901,7 @@ namespace jeecs
                 {
                     if (entity_shape_may_null->vertex.has_value())
                     {
-                        auto* vertex_dat = entity_shape_may_null->vertex.value()->resource()->m_raw_vertex_data;
+                        auto* vertex_dat = entity_shape_may_null->vertex.value()->resource();
                         entity_box_center = vec3(
                             (vertex_dat->m_x_max + vertex_dat->m_x_min) / 2.0f,
                             (vertex_dat->m_y_max + vertex_dat->m_y_min) / 2.0f,

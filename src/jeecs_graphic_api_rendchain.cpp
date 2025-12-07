@@ -17,15 +17,15 @@ struct jegl_uniform_data_node
 };
 struct jegl_rchain_texture_group
 {
-    std::unordered_map<size_t, jegl_resource*> m_binding_textures;
+    std::unordered_map<size_t, jegl_texture*> m_binding_textures;
 };
 struct jegl_rendchain_rend_action
 {
     jegl_rendchain* m_chain;
-    jegl_resource* m_vertex;
-    jegl_resource* m_shader;
+    jegl_vertex* m_vertex;
+    jegl_shader* m_shader;
     std::vector<jegl_uniform_data_node*> m_binding_uniforms;
-    std::vector<jegl_resource*> m_uniform_buffers;
+    std::vector<jegl_uniform_buffer*> m_uniform_buffers;
     jegl_rchain_texture_group* m_binding_texture_group;
 };
 struct jegl_rendchain
@@ -34,10 +34,97 @@ struct jegl_rendchain
 
     jegl_rendchain() = default;
 
-    jegl_resource* m_target_frame_buffer;
+    jegl_frame_buffer* m_target_frame_buffer;
     int32_t m_target_frame_buffer_viewport[4];
 
-    std::unordered_set<jegl_resource*> m_used_resource;
+    struct used_resources
+    {
+        struct resource_release_method
+        {
+            using release_method_t = void(*)(void*);
+
+            release_method_t m_release_method;
+            void* m_graphic_resource_instance;
+
+            static void release_shader(void* shader_ptr)
+            {
+                jegl_close_shader(reinterpret_cast<jegl_shader*>(shader_ptr));
+            }
+            static void release_texture(void* texture_ptr)
+            {
+                jegl_close_texture(reinterpret_cast<jegl_texture*>(texture_ptr));
+            }
+            static void release_vertex(void* vertex_ptr)
+            {
+                jegl_close_vertex(reinterpret_cast<jegl_vertex*>(vertex_ptr));
+            }
+            static void release_uniform_buffer(void* uniform_buffer_ptr)
+            {
+                jegl_close_uniformbuf(reinterpret_cast<jegl_uniform_buffer*>(uniform_buffer_ptr));
+            }
+            static void release_frame_buffer(void* frame_buffer_ptr)
+            {
+                jegl_close_framebuf(reinterpret_cast<jegl_frame_buffer*>(frame_buffer_ptr));
+            }
+
+            resource_release_method(const resource_release_method&) = default;
+            resource_release_method(resource_release_method&&) = default;
+            resource_release_method& operator=(const resource_release_method&) = default;
+            resource_release_method& operator=(resource_release_method&&) = default;
+
+            resource_release_method(jegl_shader* shader)
+                : m_release_method(&release_shader)
+                , m_graphic_resource_instance(shader)
+            {
+            }
+            resource_release_method(jegl_texture* texture)
+                : m_release_method(&release_texture)
+                , m_graphic_resource_instance(texture)
+            {
+            }
+            resource_release_method(jegl_vertex* vertex)
+                : m_release_method(&release_vertex)
+                , m_graphic_resource_instance(vertex)
+            {
+            }
+            resource_release_method(jegl_uniform_buffer* uniform_buffer)
+                : m_release_method(&release_uniform_buffer)
+                , m_graphic_resource_instance(uniform_buffer)
+            {
+            }
+            resource_release_method(jegl_frame_buffer* frame_buffer)
+                : m_release_method(&release_frame_buffer)
+                , m_graphic_resource_instance(frame_buffer)
+            {
+            }
+
+            void release()
+            {
+                m_release_method(m_graphic_resource_instance);
+            }
+        };
+        std::unordered_map<jegl_resource_handle*, resource_release_method> m_used_shader;
+
+        template<jeecs::graphic::requirements::basic_graphic_resource T>
+        void use_resource(T* resource)
+        {
+            auto it = m_used_shader.find(&resource->m_handle);
+            if (it == m_used_shader.end())
+            {
+                jegl_share_resource(resource);
+                m_used_shader.emplace(
+                    &resource->m_handle,
+                    resource_release_method(resource));
+            }
+        }
+        void release_all()
+        {
+            for (auto& [_, release_method] : m_used_shader)
+                release_method.release();
+            m_used_shader.clear();
+        }
+    };
+    used_resources m_used_resource;
 
     jegl_frame_buffer_clear_operation*
         m_clear_operation;
@@ -52,23 +139,10 @@ struct jegl_rendchain
     size_t m_binding_textures_count;
     std::vector<jegl_rchain_texture_group*> m_binding_textures;
 
-    std::vector<jegl_resource*> m_binding_uniform_buffer;
+    std::vector<jegl_uniform_buffer*> m_binding_uniform_buffer;
 
     size_t m_rend_action_count;
     std::vector<jegl_rendchain_rend_action> m_rend_actions;
-
-    void using_resource(jegl_resource* res)
-    {
-        if (m_used_resource.insert(res).second)
-            jegl_share_resource(res);
-    }
-    void clear_used_resource()
-    {
-        for (auto* res : m_used_resource)
-            jegl_close_resource(res);
-
-        m_used_resource.clear();
-    }
 };
 
 jegl_rendchain* jegl_rchain_create()
@@ -78,7 +152,7 @@ jegl_rendchain* jegl_rchain_create()
 }
 void jegl_rchain_close(jegl_rendchain* chain)
 {
-    chain->clear_used_resource();
+    chain->m_used_resource.release_all();
 
     for (auto* op : chain->m_created_clear_operations)
         delete op;
@@ -91,11 +165,9 @@ void jegl_rchain_close(jegl_rendchain* chain)
 }
 void jegl_rchain_begin(
     jegl_rendchain* chain,
-    jegl_resource* framebuffer,
+    jegl_frame_buffer* framebuffer,
     int32_t x, int32_t y, uint32_t w, uint32_t h)
 {
-    assert(framebuffer == nullptr || framebuffer->m_type == jegl_resource::type::FRAMEBUF);
-
     chain->m_target_frame_buffer = framebuffer;
     chain->m_target_frame_buffer_viewport[0] = x;
     chain->m_target_frame_buffer_viewport[1] = y;
@@ -103,7 +175,7 @@ void jegl_rchain_begin(
     chain->m_target_frame_buffer_viewport[3] = static_cast<int32_t>(h);
 
     chain->m_clear_operation = nullptr;
-    chain->clear_used_resource();
+    chain->m_used_resource.release_all();
     chain->m_binding_uniform_buffer.clear();
     chain->m_used_clear_operation_count = 0;
     chain->m_used_uniform_count = 0;
@@ -111,13 +183,12 @@ void jegl_rchain_begin(
     chain->m_binding_textures_count = 0;
 
     if (framebuffer != nullptr)
-        chain->using_resource(framebuffer);
+        chain->m_used_resource.use_resource(framebuffer);
 }
 void jegl_rchain_bind_uniform_buffer(
-    jegl_rendchain* chain, jegl_resource* uniformbuffer)
+    jegl_rendchain* chain, jegl_uniform_buffer* uniformbuffer)
 {
-    assert(uniformbuffer->m_type == jegl_resource::type::UNIFORMBUF);
-    chain->using_resource(uniformbuffer);
+    chain->m_used_resource.use_resource(uniformbuffer);
     chain->m_binding_uniform_buffer.push_back(uniformbuffer);
 }
 
@@ -181,13 +252,10 @@ jegl_rchain_texture_group* jegl_rchain_allocate_texture_group(jegl_rendchain* ch
     return texture_group;
 }
 jegl_rendchain_rend_action* jegl_rchain_draw(
-    jegl_rendchain* chain, jegl_resource* shader, jegl_resource* vertex, jegl_rchain_texture_group* texture_group)
+    jegl_rendchain* chain, jegl_shader* shader, jegl_vertex* vertex, jegl_rchain_texture_group* texture_group)
 {
-    assert(shader->m_type == jegl_resource::type::SHADER);
-    assert(vertex->m_type == jegl_resource::type::VERTEX);
-
-    chain->using_resource(shader);
-    chain->using_resource(vertex);
+    chain->m_used_resource.use_resource(shader);
+    chain->m_used_resource.use_resource(vertex);
 
     const size_t current_id = chain->m_rend_action_count++;
     if (current_id >= chain->m_rend_actions.size())
@@ -207,9 +275,9 @@ jegl_rendchain_rend_action* jegl_rchain_draw(
 
 void jegl_rchain_set_uniform_buffer(
     jegl_rendchain_rend_action* act,
-    jegl_resource* uniform_buffer)
+    jegl_uniform_buffer* uniform_buffer)
 {
-    act->m_chain->using_resource(uniform_buffer);
+    act->m_chain->m_used_resource.use_resource(uniform_buffer);
     act->m_uniform_buffers.push_back(uniform_buffer);
 }
 
@@ -406,16 +474,15 @@ void jegl_rchain_bind_texture(
     jegl_rendchain* chain,
     jegl_rchain_texture_group* texture_group,
     size_t binding_pass,
-    jegl_resource* texture)
+    jegl_texture* texture)
 {
-    assert(texture->m_type == jegl_resource::type::TEXTURE);
     assert(texture_group != nullptr);
 
     texture_group->m_binding_textures[binding_pass] = texture;
-    chain->using_resource(texture);
+    chain->m_used_resource.use_resource(texture);
 }
 
-jegl_resource* jegl_rchain_get_target_framebuf(jegl_rendchain* chain)
+jegl_frame_buffer* /* MAY NULL */ jegl_rchain_get_target_framebuf(jegl_rendchain* chain)
 {
     return chain->m_target_frame_buffer;
 }
@@ -451,20 +518,17 @@ void jegl_rchain_commit(jegl_rendchain* chain, jegl_context* glthread)
 
         if (jegl_bind_shader(action.m_shader))
         {
-            if (action.m_shader->m_raw_shader_data != nullptr)
+            for (auto* uniform_data : action.m_binding_uniforms)
             {
-                for (auto* uniform_data : action.m_binding_uniforms)
-                {
-                    if (jeecs::graphic::PENDING_UNIFORM_LOCATION == *uniform_data->m_binding_place_addr)
-                        continue;
+                if (jeecs::graphic::PENDING_UNIFORM_LOCATION == *uniform_data->m_binding_place_addr)
+                    continue;
 
-                    assert(uniform_data->m_type != jegl_shader::uniform_type::TEXTURE);
+                assert(uniform_data->m_type != jegl_shader::uniform_type::TEXTURE);
 
-                    jegl_set_uniform_value(
-                        *uniform_data->m_binding_place_addr,
-                        uniform_data->m_type,
-                        &uniform_data->m_value);
-                }
+                jegl_set_uniform_value(
+                    *uniform_data->m_binding_place_addr,
+                    uniform_data->m_type,
+                    &uniform_data->m_value);
             }
             jegl_draw_vertex(action.m_vertex);
         }
