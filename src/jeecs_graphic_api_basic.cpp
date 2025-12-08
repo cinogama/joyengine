@@ -388,6 +388,12 @@ namespace jeecs::graphic
     {
         resource_to_destroy* last;
         created_resource m_resource;
+
+        template<requirements::basic_graphic_resource T>
+        resource_to_destroy(T* res)
+            : m_resource(res)
+        {
+        }
     };
 }
 
@@ -465,8 +471,6 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_s
 void jegl_shader_free_generated_shader_source(jegl_shader* write_to_shader);
 
 //////////////////////////////////// API /////////////////////////////////////////
-
-
 void jegl_sync_init(jegl_context* thread, bool isreboot)
 {
     if (jeecs::graphic::_current_graphic_thread == nullptr)
@@ -1191,6 +1195,7 @@ void jegl_close_shader(jegl_shader* shader)
     if (_jegl_close_resource_handle(&shader->m_handle))
     {
         jegl_shader_free_generated_shader_source(shader);
+        _jegl_free_resource_instance(new jeecs::graphic::resource_to_destroy(shader));
     }
 }
 
@@ -1206,6 +1211,7 @@ void jegl_close_texture(jegl_texture* texture)
         }
         else
             assert(0 != (texture->m_format & jegl_texture::format::FORMAT_MASK));
+        _jegl_free_resource_instance(new jeecs::graphic::resource_to_destroy(texture));
     }
 }
 
@@ -1222,6 +1228,7 @@ void jegl_close_vertex(jegl_vertex* vertex)
             _jegl_free_vertex_bone_data(vertex->m_bones[bone_idx]);
 
         free(const_cast<jegl_vertex::bone_data**>(vertex->m_bones));
+        _jegl_free_resource_instance(new jeecs::graphic::resource_to_destroy(vertex));
     }
 }
 
@@ -1239,13 +1246,17 @@ void jegl_close_framebuf(jegl_frame_buffer* framebuf)
             attachments[i].~shared_pointer();
 
         free(attachments);
+        _jegl_free_resource_instance(new jeecs::graphic::resource_to_destroy(framebuf));
     }
 }
 
 void jegl_close_uniformbuf(jegl_uniform_buffer* ubuffer)
 {
     if (_jegl_close_resource_handle(&ubuffer->m_handle))
+    {
         free(ubuffer->m_buffer);
+        _jegl_free_resource_instance(new jeecs::graphic::resource_to_destroy(ubuffer));
+    }
 }
 
 jegl_texture* jegl_create_texture(size_t width, size_t height, jegl_texture::format format)
