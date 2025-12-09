@@ -1962,8 +1962,7 @@ namespace jeecs::graphic::api::dx11
     {
         jegl_dx11_context* context = reinterpret_cast<jegl_dx11_context*>(ctx);
 
-        if (location == jeecs::graphic::INVALID_UNIFORM_LOCATION
-            || context->m_current_target_shader == nullptr)
+        if (location == jeecs::graphic::INVALID_UNIFORM_LOCATION)
             return;
 
         context->m_current_target_shader->m_uniform_updated = true;

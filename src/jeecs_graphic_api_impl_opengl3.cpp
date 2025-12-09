@@ -516,8 +516,7 @@ namespace jeecs::graphic::api::gl3
     {
         jegl_gl3_context* context = reinterpret_cast<jegl_gl3_context*>(ctx);
 
-        if (location == jeecs::graphic::INVALID_UNIFORM_LOCATION
-            || context->current_active_shader_may_null == nullptr)
+        if (location == jeecs::graphic::INVALID_UNIFORM_LOCATION)
             return;
 
         auto* current_shader = context->current_active_shader_may_null;

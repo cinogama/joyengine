@@ -1430,11 +1430,9 @@ namespace jeecs::graphic::api::metal
         const void* val)
     {
         auto* metal_context = reinterpret_cast<jegl_metal_context*>(ctx);
-
         auto* current_shader = metal_context->m_render_states.m_current_target_shader;
 
-        if (location == jeecs::graphic::INVALID_UNIFORM_LOCATION
-            || current_shader == nullptr)
+        if (location == jeecs::graphic::INVALID_UNIFORM_LOCATION)
             return;
 
         current_shader->m_uniform_buffer_updated = true;

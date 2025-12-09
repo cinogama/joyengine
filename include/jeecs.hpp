@@ -1871,7 +1871,7 @@ struct jegl_interface_config
     // 不限制帧率请设置为 SIZE_MAX
     size_t m_fps;
 
-    // 窗口标题
+    // 窗口标题，不可为 nullptr
     const char* m_title;
 
     // 用户数据，针对一些特殊的平台，可能需要通过此参数传递一些特定的参数
@@ -2455,39 +2455,206 @@ struct jegl_graphic_api
     */
     commit_func_t update_draw_commit;
 
+    /*
+    jegl_graphic_api::shader_create_blob [成员]
+    图形接口创建着色器资源的底层数据块，jegl_load_shader_source 和 jegl_load_shader 在调用 shader_init 之前，会调用此接口创建 blob，
+    对于具有相同路径的着色器资源，在先前创建的 blob 失效之前，不会重复调用此接口。
+    图形实现可以利用 blob 加速着色器的创建流程。
+        * 可以返回 nullptr，即便如此，在对应资源失效之前，此接口依然只被调用一次。
+        * 如果接口返回 nullptr，shader_init 将收到一个 nullptr 作为 blob 参数。
+        * 如果接口返回 nullptr，对应的 shader_close_blob 将不会被调用。
+    */
     shader_create_blob_func_t shader_create_blob;
+
+    /*
+    jegl_graphic_api::texture_create_blob [成员]
+    图形接口创建纹理资源的底层数据块，jegl_load_texture 在调用 texture_init 之前，会调用此接口创建 blob，
+    对于具有相同路径的纹理资源，在先前创建的 blob 失效之前，不会重复调用此接口。
+    图形实现可以利用 blob 加速纹理的创建流程。
+        * 可以返回 nullptr，即便如此，在对应资源失效之前，此接口依然只被调用一次。
+        * 如果接口返回 nullptr，texture_init 将收到一个 nullptr 作为 blob 参数。
+        * 如果接口返回 nullptr，对应的 texture_close_blob 将不会被调用。
+    */
     texture_create_blob_func_t texture_create_blob;
+
+    /*
+    jegl_graphic_api::vertex_create_blob [成员]
+    图形接口创建顶点资源的底层数据块，jegl_load_vertex 在调用 vertex_init 之前，会调用此接口创建 blob，
+    对于具有相同路径的顶点资源，在先前创建的 blob 失效之前，不会重复调用此接口。
+    图形实现可以利用 blob 加速顶点数据的创建流程。
+        * 可以返回 nullptr，即便如此，在对应资源失效之前，此接口依然只被调用一次。
+        * 如果接口返回 nullptr，vertex_init 将收到一个 nullptr 作为 blob 参数。
+        * 如果接口返回 nullptr，对应的 vertex_close_blob 将不会被调用。
+    */
     vertex_create_blob_func_t vertex_create_blob;
 
+    /*
+    jegl_graphic_api::shader_close_blob [成员]
+    图形接口关闭着色器资源的底层数据块，当一个资源失效或者图形上下文退出时，由引擎的中间层负责在适当的
+    时机调用此接口释放对应的 blob。
+        * 仅当所需释放的 blob 不是 nullptr 时，此接口才会被调用。
+    */
     shader_close_blob_func_t shader_close_blob;
+
+    /*
+    jegl_graphic_api::texture_close_blob [成员]
+    图形接口关闭纹理资源的底层数据块，当一个资源失效或者图形上下文退出时，由引擎的中间层负责在适当的
+    时机调用此接口释放对应的 blob。
+        * 仅当所需释放的 blob 不是 nullptr 时，此接口才会被调用。
+    */
     texture_close_blob_func_t texture_close_blob;
+
+    /*
+    jegl_graphic_api::vertex_close_blob [成员]
+    图形接口关闭顶点资源的底层数据块，当一个资源失效或者图形上下文退出时，由引擎的中间层负责在适当的
+    时机调用此接口释放对应的 blob。
+        * 仅当所需释放的 blob 不是 nullptr 时，此接口才会被调用。
+    */
     vertex_close_blob_func_t vertex_close_blob;
 
+    /*
+    jegl_graphic_api::shader_init [成员]
+    初始化并创建着色器在图形层对应的资源，此接口将在资源被首次使用时（jegl_bind_shader）调用，图形实现
+    应当在此接口中完成所需的准备工作。
+    */
     shader_init_func_t shader_init;
+
+    /*
+    jegl_graphic_api::texture_init [成员]
+    初始化并创建纹理在图形层对应的资源，此接口将在资源被首次使用时（jegl_bind_texture）调用，图形实现
+    应当在此接口中完成所需的准备工作。
+    */
     texture_init_func_t texture_init;
+
+    /*
+    jegl_graphic_api::vertex_init [成员]
+    初始化并创建顶点在图形层对应的资源，此接口将在资源被首次使用时（jegl_draw_vertex）调用，图形实现
+    应当在此接口中完成所需的准备工作。
+    */
     vertex_init_func_t vertex_init;
+
+    /*
+    jegl_graphic_api::framebuffer_init [成员]
+    初始化并创建帧缓冲区在图形层对应的资源，此接口将在资源被首次使用时（jegl_bind_framebuf）调用，图形实现
+    应当在此接口中完成所需的准备工作。
+
+    引擎的中间层在创建 frambuffer 实例时，已经创建了对应的附件纹理资源（m_output_attachments），图形实现应
+    当使用 jegl_bind_texture 或者其他适当的接口确保这些附件纹理资源已经被正确创建和初始化。
+    */
     framebuffer_init_func_t framebuffer_init;
+
+    /*
+    jegl_graphic_api::ubuffer_init [成员]
+    初始化并创建一致变量缓冲区在图形层对应的资源，此接口将在资源被首次使用时（jegl_bind_uniform_buffer）调用，图形实现
+    应当在此接口中完成所需的准备工作。
+    */
     ubuffer_init_func_t  ubuffer_init;
 
+    /*
+    jegl_graphic_api::shader_update [成员]
+    当一个 shader 资源的 m_modified 标记被设置为 true 时，引擎中间层将在此资源的下次使用时调用此接口。图形接口
+    负责准备好对应的更新工作。
+    */
     shader_update_func_t shader_update;
+
+    /*
+    jegl_graphic_api::texture_update [成员]
+    当一个 texture 资源的 m_modified 标记被设置为 true 时，引擎中间层将在此资源的下次使用时调用此接口。图形接口
+    负责准备好对应的更新工作。
+    */
     texture_update_func_t texture_update;
+
+    /*
+    jegl_graphic_api::vertex_update [成员]
+    当一个 vertex 资源的 m_modified 标记被设置为 true 时，引擎中间层将在此资源的下次使用时调用此接口。图形接口
+    负责准备好对应的更新工作。
+    */
     vertex_update_func_t vertex_update;
+
+    /*
+    jegl_graphic_api::framebuffer_update [成员]
+    当一个 framebuffer 资源的 m_modified 标记被设置为 true 时，引擎中间层将在此资源的下次使用时调用此接口。图形接口
+    负责准备好对应的更新工作。
+    */
     framebuffer_update_func_t framebuffer_update;
+
+    /*
+    jegl_graphic_api::ubuffer_update [成员]
+    当一个 ubuffer 资源的 m_modified 标记被设置为 true 时，引擎中间层将在此资源的下次使用时调用此接口。图形接口
+    负责准备好对应的更新工作。
+    */
     ubuffer_update_func_t  ubuffer_update;
 
+    /*
+    jegl_graphic_api::shader_close [成员]
+    图形接口关闭着色器资源，当一个着色器资源被释放时，引擎中间层将调用此接口，图形实现
+    应当在此接口中完成着色器资源的释放工作。
+    */
     shader_close_func_t shader_close;
-    texture_close_func_t texture_close;
-    vertex_close_func_t vertex_close;
-    framebuffer_close_func_t framebuffer_close;
-    ubuffer_close_func_t  ubuffer_close;
 
+    /*
+    jegl_graphic_api::texture_close [成员]
+    图形接口关闭纹理资源，当一个纹理资源被释放时，引擎中间层将调用此接口，图形实现
+    应当在此接口中完成纹理资源的释放工作。
+    */
+    texture_close_func_t texture_close;
+
+    /*
+    jegl_graphic_api::vertex_close [成员]
+    图形接口关闭顶点资源，当一个顶点资源被释放时，引擎中间层将调用此接口，图形实现
+    应当在此接口中完成顶点资源的释放工作。
+    */
+    vertex_close_func_t vertex_close;
+
+    /*
+    jegl_graphic_api::framebuffer_close [成员]
+    图形接口关闭帧缓冲区资源，当一个帧缓冲区资源被释放时，引擎中间层将调用此接口，图形实现
+    应当在此接口中完成帧缓冲区资源的释放工作。
+    */
+    framebuffer_close_func_t framebuffer_close;
+
+    /*
+    jegl_graphic_api::ubuffer_close [成员]
+    图形接口关闭一致变量缓冲区资源，当一个一致变量缓冲区资源被释放时，引擎中间层将调用此接口，
+    图形实现应当在此接口中完成一致变量缓冲区资源的释放工作。
+    */
+    ubuffer_close_func_t ubuffer_close;
+
+    /*
+    jegl_graphic_api::set_uniform [成员]
+    图形接口设置当前绑定着色器的一致变量值，图形实现应当保证：如果传入的位置参数 location 无效
+    （即值为 INVALID_UNIFORM_LOCATION）时，函数不会执行任何操作。
+
+    除此之外，出于性能考虑，图形实现不负责检查指定位置的变量类型、位置和大小是否合法。也不检查
+    当前是否绑定有有效的着色器。
+    */
     set_uniform_func_t set_uniform;
 
+    /*
+    jegl_graphic_api::bind_framebuf [成员]
+    图形接口绑定帧缓冲区，若指定的帧缓冲区为 nullptr，则绑定到屏幕缓冲区
+    */
     bind_framebuf_func_t bind_framebuf;
 
+    /*
+    jegl_graphic_api::bind_uniform_buffer [成员]
+    图形接口绑定一致变量缓冲区
+    */
     bind_ubuffer_func_t bind_uniform_buffer;
+    /*
+    jegl_graphic_api::bind_shader [成员]
+    图形接口绑定着色器
+    */
     bind_shader_func_t bind_shader;
+    /*
+    jegl_graphic_api::bind_texture [成员]
+    图形接口绑定纹理到指定通道
+    */
     bind_texture_func_t bind_texture;
+    /*
+    jegl_graphic_api::draw_vertex [成员]
+    由图形实现负责使用当前绑定的着色器和纹理绘制指定的顶点
+    */
     draw_vertex_func_t draw_vertex;
 };
 static_assert(sizeof(jegl_graphic_api) % sizeof(void*) == 0);
@@ -2632,7 +2799,20 @@ JE_API void jegl_reboot_graphic_thread(
     jegl_context* thread_handle,
     const jegl_interface_config* config_may_null);
 
+/*
+jegl_share_resource_handle [基本接口]
+增加指定资源句柄的引用计数，使得对应的图形资源需要额外执行一次 close 操作才能被释放
+    * 此函数通常用于实现资源的共享引用
+*/
 JE_API void jegl_share_resource_handle(jegl_resource_handle* resource_handle);
+
+/*
+jegl_share_resource [宏]
+对 jegl_share_resource_handle 的封装宏，用于增加指定资源的引用计数
+    * 此宏通常用于实现资源的共享引用
+请参见：
+    jegl_share_resource_handle
+*/
 #define jegl_share_resource(resource) jegl_share_resource_handle(&(resource)->m_handle)
 
 ///////////////////////////// SHADER /////////////////////////////
@@ -2640,9 +2820,14 @@ JE_API void jegl_share_resource_handle(jegl_resource_handle* resource_handle);
 jegl_load_shader_source [基本接口]
 从源码加载一个着色器实例，可创建或使用缓存文件以加速着色器的加载
     * 实际上jegl_load_shader会读取文件内容之后，调用此函数进行实际上的着色器加载
-若不需要创建缓存文件，请将 is_virtual_file 指定为 false
+        若不需要创建缓存文件，请将 is_virtual_file 指定为 false
+    * 图形资源被创建时，其自动获取一个引用计数；使用 jegl_share_resource可增加引
+        用计数，使用 jegl_close_shader 可减少引用计数；当资源的引用计数变为 0 时，
+        资源将被释放
 请参见：
     jegl_load_shader
+    jegl_share_resource
+    jegl_close_shader
 */
 JE_API jegl_shader* jegl_load_shader_source(
     jegl_context* context,
@@ -2653,21 +2838,39 @@ JE_API jegl_shader* jegl_load_shader_source(
 /*
 jegl_load_shader [基本接口]
 从源码文件加载一个着色器实例，会创建或使用缓存文件以加速着色器的加载
+    * 图形资源被创建时，其自动获取一个引用计数；使用 jegl_share_resource可增加引
+        用计数，使用 jegl_close_shader 可减少引用计数；当资源的引用计数变为 0 时，
+        资源将被释放
+请参见：
+    jegl_share_resource
+    jegl_close_shader
 */
 JE_API jegl_shader* jegl_load_shader(
     jegl_context* context,
     const char* path);
 
+/*
+jegl_close_shader [基本接口]
+关闭一个着色器资源（使得其引用计数减少），如果资源被 jegl_share_resource 引用过多次，
+那么需要对应调用多次才能真正释放资源；
+    * 如果此操作使得资源的引用计数变为 0，资源应当被立即视为不可用；对应的底层图形资
+        源将由资源对应的图形线程上下文在适当的时机释放。
+请参见：
+    jegl_share_resource
+*/
 JE_API void jegl_close_shader(jegl_shader* shader);
 ///////////////////////////// TEXTURE /////////////////////////////
 /*
 jegl_load_texture [基本接口]
 从指定路径加载一个纹理资源，加载的路径规则与 jeecs_file_open 相同
     * 若指定的文件不存在或不是一个合法的纹理，则返回nullptr
-    * 所有的图形资源都通过 jegl_close_resource 关闭并等待图形线程释放
+    * 图形资源被创建时，其自动获取一个引用计数；使用 jegl_share_resource可增加引
+        用计数，使用 jegl_close_texture 可减少引用计数；当资源的引用计数变为 0 时，
+        资源将被释放
 请参见：
     jeecs_file_open
-    jegl_close_resource
+    jegl_share_resource
+    jegl_close_texture
 */
 JE_API jegl_texture* jegl_load_texture(
     jegl_context* context,
@@ -2679,16 +2882,29 @@ jegl_create_texture [基本接口]
     * 若指定的格式包含 COLOR16、DEPTH、FRAMEBUF、CUBE 或有 MSAA 支持，则不创建像素缓冲，
         对应纹理原始数据的像素将被设置为 nullptr
     * 若创建像素缓冲，像素缓存的将按字节置为 0 填充初始化
-    * 所有的图形资源都通过 jegl_close_resource 关闭并等待图形线程释放
     * 考虑到部分图形库的实现，如果指定的宽度或高度为 0，jegl_create_texture将视其为 1
+    * 图形资源被创建时，其自动获取一个引用计数；使用 jegl_share_resource可增加引
+        用计数，使用 jegl_close_texture 可减少引用计数；当资源的引用计数变为 0 时，
+        资源将被释放
+    * 使用此接口创建的纹理，其对应的资源路径为 nullptr
 请参见：
-    jegl_close_resource
+    jegl_share_resource
+    jegl_close_texture
 */
 JE_API jegl_texture* /* NOT NULL */ jegl_create_texture(
     size_t width,
     size_t height,
     jegl_texture::format format);
 
+/*
+jegl_close_texture [基本接口]
+关闭一个纹理资源（使得其引用计数减少），如果资源被 jegl_share_resource 引用过多次，
+那么需要对应调用多次才能真正释放资源；
+    * 如果此操作使得资源的引用计数变为 0，资源应当被立即视为不可用；对应的底层图形资
+        源将由资源对应的图形线程上下文在适当的时机释放。
+请参见：
+    jegl_share_resource
+*/
 JE_API void jegl_close_texture(jegl_texture* texture);
 
 ///////////////////////////// VERTEX /////////////////////////////
@@ -2696,7 +2912,6 @@ JE_API void jegl_close_texture(jegl_texture* texture);
 jegl_load_vertex [基本接口]
 从指定路径加载一个顶点（模型）资源，加载的路径规则与 jeecs_file_open 相同
     * 若指定的文件不存在或不是一个合法的模型，则返回nullptr
-    * 所有的图形资源都通过 jegl_close_resource 关闭并等待图形线程释放
     * 使用此方法加载的模型，始终按照三角面排布，其顶点数据格式如下所示：
         顶点坐标        3 * f32
         UV映射坐标      2 * f32
@@ -2704,9 +2919,13 @@ jegl_load_vertex [基本接口]
         骨骼索引        4 * i32
         骨骼权重        4 * f32
     * 对于绑定骨骼数量小于4的顶点，保证空余位置的骨骼索引被 0 填充，权重为 0.f
+    * 图形资源被创建时，其自动获取一个引用计数；使用 jegl_share_resource可增加引
+        用计数，使用 jegl_close_vertex 可减少引用计数；当资源的引用计数变为 0 时，
+        资源将被释放
 请参见：
     jeecs_file_open
-    jegl_close_resource
+    jegl_share_resource
+    jegl_close_vertex
 */
 JE_API jegl_vertex* jegl_load_vertex(
     jegl_context* context,
@@ -2715,9 +2934,13 @@ JE_API jegl_vertex* jegl_load_vertex(
 /*
 jegl_create_vertex [基本接口]
 用指定的顶点数据创建一个顶点（模型）资源
-    * 所有的图形资源都通过 jegl_close_resource 关闭并等待图形线程释放
+    * 图形资源被创建时，其自动获取一个引用计数；使用 jegl_share_resource可增加引
+        用计数，使用 jegl_close_vertex 可减少引用计数；当资源的引用计数变为 0 时，
+        资源将被释放
+    * 使用此接口创建的顶点，其对应的资源路径为 nullptr
 请参见：
-    jegl_close_resource
+    jegl_share_resource
+    jegl_close_vertex
 */
 JE_API jegl_vertex* jegl_create_vertex(
     jegl_vertex::type type,
@@ -2728,6 +2951,15 @@ JE_API jegl_vertex* jegl_create_vertex(
     const jegl_vertex::data_layout* format,
     size_t format_count);
 
+/*
+jegl_close_vertex [基本接口]
+关闭一个顶点（模型）资源（使得其引用计数减少），如果资源被 jegl_share_resource 引用过多次，
+那么需要对应调用多次才能真正释放资源；
+    * 如果此操作使得资源的引用计数变为 0，资源应当被立即视为不可用；对应的底层图形资
+        源将由资源对应的图形线程上下文在适当的时机释放。
+请参见：
+    jegl_share_resource
+*/
 JE_API void jegl_close_vertex(jegl_vertex* vertex);
 
 ///////////////////////////// FRAMEBUFFER /////////////////////////////
@@ -2735,9 +2967,13 @@ JE_API void jegl_close_vertex(jegl_vertex* vertex);
 /*
 jegl_create_framebuf [基本接口]
 使用指定的附件配置创建一个纹理缓冲区资源
-    * 所有的图形资源都通过 jegl_close_resource 关闭并等待图形线程释放
+    * 图形资源被创建时，其自动获取一个引用计数；使用 jegl_share_resource可增加引
+        用计数，使用 jegl_close_framebuf 可减少引用计数；当资源的引用计数变为 0 时，
+        资源将被释放
+    * 使用此接口创建的顶点，其对应的资源路径为 nullptr
 请参见：
-    jegl_close_resource
+    jegl_share_resource
+    jegl_close_framebuf
 */
 JE_API jegl_frame_buffer* jegl_create_framebuf(
     size_t width,
@@ -2746,6 +2982,15 @@ JE_API jegl_frame_buffer* jegl_create_framebuf(
     size_t color_attachment_count,
     bool contain_depth_attachment);
 
+/*
+jegl_close_framebuf [基本接口]
+关闭一个纹理缓冲区资源（使得其引用计数减少），如果资源被 jegl_share_resource 引用过多次，
+那么需要对应调用多次才能真正释放资源；
+    * 如果此操作使得资源的引用计数变为 0，资源应当被立即视为不可用；对应的底层图形资
+        源将由资源对应的图形线程上下文在适当的时机释放。
+请参见：
+    jegl_share_resource
+*/
 JE_API void jegl_close_framebuf(jegl_frame_buffer* framebuffer);
 
 ///////////////////////////// UNIFORM BUFFER /////////////////////////////
@@ -2753,9 +2998,13 @@ JE_API void jegl_close_framebuf(jegl_frame_buffer* framebuffer);
 /*
 jegl_create_uniformbuf [基本接口]
 创建一个指定大小和绑定位置的一致变量缓冲区资源
-    * 所有的图形资源都通过 jegl_close_resource 关闭并等待图形线程释放
+    * 图形资源被创建时，其自动获取一个引用计数；使用 jegl_share_resource可增加引
+        用计数，使用 jegl_close_uniformbuf 可减少引用计数；当资源的引用计数变为 0 时，
+        资源将被释放
+    * 使用此接口创建的顶点，其对应的资源路径为 nullptr
 请参见：
-    jegl_close_resource
+    jegl_share_resource
+    jegl_close_uniformbuf
 */
 JE_API jegl_uniform_buffer* jegl_create_uniformbuf(
     size_t binding_place,
@@ -2771,6 +3020,15 @@ JE_API void jegl_update_uniformbuf(
     size_t update_offset,
     size_t update_length);
 
+/*
+jegl_close_uniformbuf [基本接口]
+关闭一个一致变量缓冲区资源（使得其引用计数减少），如果资源被 jegl_share_resource 引用过多次，
+那么需要对应调用多次才能真正释放资源；
+    * 如果此操作使得资源的引用计数变为 0，资源应当被立即视为不可用；对应的底层图形资
+        源将由资源对应的图形线程上下文在适当的时机释放。
+请参见：
+    jegl_share_resource
+*/
 JE_API void jegl_close_uniformbuf(jegl_uniform_buffer* uniformbuf);
 
 //////////////////////////////////////////////////////////

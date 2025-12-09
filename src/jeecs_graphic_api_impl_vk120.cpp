@@ -4278,8 +4278,7 @@ namespace jeecs::graphic::api::vk120
 
         auto* current_shader = context->_vk_current_binded_shader;
 
-        if (location == jeecs::graphic::INVALID_UNIFORM_LOCATION
-            || current_shader == nullptr)
+        if (location == jeecs::graphic::INVALID_UNIFORM_LOCATION)
             return;
 
         assert(current_shader->m_uniform_cpu_buffer_size != 0);

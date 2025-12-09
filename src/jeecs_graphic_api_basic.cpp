@@ -726,7 +726,12 @@ jegl_context* jegl_start_graphic_thread(
     void* arg)
 {
     jegl_context* thread_handle = nullptr;
-    if (register_func != nullptr)
+
+    if (config.m_title == nullptr)
+    {
+        jeecs::debug::logerr("Cannot startup graphic thread without valid title.");
+    }
+    else if (register_func != nullptr)
     {
         thread_handle = new jegl_context();
 
@@ -759,39 +764,38 @@ jegl_context* jegl_start_graphic_thread(
             thread_handle = nullptr;
         }
     }
-
-    if (thread_handle == nullptr)
+    if (thread_handle != nullptr)
     {
-        jeecs::debug::logfatal("Fail to start up graphic thread, abort and return nullptr.");
-    }
-
-    // Register finish functions
-    do
-    {
-        std::lock_guard g1(jeecs::graphic::_jegl_alive_glthread_list_mx);
-
-        if (jeecs::graphic::_jegl_alive_glthread_list.end() ==
-            std::find(
-                jeecs::graphic::_jegl_alive_glthread_list.begin(),
-                jeecs::graphic::_jegl_alive_glthread_list.end(),
-                thread_handle))
+        // Register finish functions
+        do
         {
-            jeecs::graphic::_jegl_alive_glthread_list.push_back(thread_handle);
-        }
-    } while (0);
+            std::lock_guard g1(jeecs::graphic::_jegl_alive_glthread_list_mx);
 
-    // Take place.
-    thread_handle->m_config = config;
-    thread_handle->_m_thread_notifier->m_graphic_terminated = false;
-    thread_handle->_m_thread_notifier->m_update_request_flag = false;
-    thread_handle->_m_thread_notifier->m_graphic_reboot = false;
-    thread_handle->m_universe_instance = universe_instance;
-    thread_handle->_m_frame_rend_work = frame_rend_work;
-    thread_handle->_m_frame_rend_work_arg = arg;
+            if (jeecs::graphic::_jegl_alive_glthread_list.end() ==
+                std::find(
+                    jeecs::graphic::_jegl_alive_glthread_list.begin(),
+                    jeecs::graphic::_jegl_alive_glthread_list.end(),
+                    thread_handle))
+            {
+                jeecs::graphic::_jegl_alive_glthread_list.push_back(thread_handle);
+            }
+        } while (0);
 
-    assert(jeecs::graphic::_jegl_sync_callback_func != nullptr);
-    thread_handle->_m_sync_callback_arg = jeecs::graphic::_jegl_sync_callback_arg;
-    jeecs::graphic::_jegl_sync_callback_func(thread_handle, jeecs::graphic::_jegl_sync_callback_arg);
+        // Take place.
+        thread_handle->m_config = config;
+        thread_handle->_m_thread_notifier->m_graphic_terminated = false;
+        thread_handle->_m_thread_notifier->m_update_request_flag = false;
+        thread_handle->_m_thread_notifier->m_graphic_reboot = false;
+        thread_handle->m_universe_instance = universe_instance;
+        thread_handle->_m_frame_rend_work = frame_rend_work;
+        thread_handle->_m_frame_rend_work_arg = arg;
+
+        assert(jeecs::graphic::_jegl_sync_callback_func != nullptr);
+        thread_handle->_m_sync_callback_arg = jeecs::graphic::_jegl_sync_callback_arg;
+        jeecs::graphic::_jegl_sync_callback_func(thread_handle, jeecs::graphic::_jegl_sync_callback_arg);
+    }
+    else
+        jeecs::debug::logfatal("Fail to start up graphic thread, abort and return nullptr.");
 
     return thread_handle;
 }
@@ -918,7 +922,7 @@ bool jegl_mark_shared_resources_outdated(
     if (context->_m_thread_notifier->_m_outdated_resource_blobs.insert(path).second)
     {
         std::lock_guard g2(context->_m_thread_notifier->_m_cached_resources_mx);
-        
+
         auto fnd = context->_m_thread_notifier->_m_cached_resources.find(path);
         if (fnd != context->_m_thread_notifier->_m_cached_resources.end())
         {
@@ -1995,6 +1999,7 @@ bool jegl_bind_shader(jegl_shader* shader)
 
     if (!jeecs::graphic::_current_graphic_thread->m_apis->bind_shader(
         jeecs::graphic::_current_graphic_thread->m_graphic_impl_context, shader))
+        // Failed to bind shader, bad shader?
         return false;
 
     if (updated)
