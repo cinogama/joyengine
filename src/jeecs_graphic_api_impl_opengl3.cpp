@@ -214,11 +214,7 @@ namespace jeecs::graphic::api::gl3
 
         size_t RESOLUTION_WIDTH = 0;
         size_t RESOLUTION_HEIGHT = 0;
-
-        GLuint m_binded_texture_passes[MAX_TEXTURE_UNITS] = {};
-        GLenum m_binded_texture_passes_type[MAX_TEXTURE_UNITS] = {};
-        GLuint m_binded_sampler_passes[MAX_TEXTURE_UNITS] = {};
-
+                
         // 缓存当前绑定在 binding point 0 的 uniform buffer
         GLuint m_current_shader_ubo = 0;
 
@@ -258,24 +254,12 @@ namespace jeecs::graphic::api::gl3
 
         void bind_texture_pass_impl(GLint pass, GLenum type, GLuint texture)
         {
-            assert(pass >= 0 && static_cast<size_t>(pass) < MAX_TEXTURE_UNITS);
-            if (m_binded_texture_passes[pass] != texture
-                || m_binded_texture_passes_type[pass] != type)
-            {
-                glActiveTexture(GL_TEXTURE0 + pass);
-                glBindTexture(type, texture);
-                m_binded_texture_passes[pass] = texture;
-                m_binded_texture_passes_type[pass] = type;
-            }
+            glActiveTexture(GL_TEXTURE0 + pass);
+            glBindTexture(type, texture);
         }
         void bind_sampler_pass_impl(GLuint pass, GLuint sampler)
         {
-            assert(pass < MAX_TEXTURE_UNITS);
-            if (m_binded_sampler_passes[pass] != sampler)
-            {
-                glBindSampler(pass, sampler);
-                m_binded_sampler_passes[pass] = sampler;
-            }
+            glBindSampler(pass, sampler);
         }
     };
     struct jegl_gl3_uniformbuf
@@ -446,9 +430,9 @@ namespace jeecs::graphic::api::gl3
             [](jegl_context*, jegl_texture* res)
             {
                 jegl_gl3_texture* texture_instance =
-                    reinterpret_cast<jegl_gl3_texture*>(res->m_handle.m_ptr); \
+                    reinterpret_cast<jegl_gl3_texture*>(res->m_handle.m_ptr);
 
-                    return (uint64_t)texture_instance->m_texture_id;
+                return (uint64_t)texture_instance->m_texture_id;
             },
             [](jegl_context* jctx, jegl_shader* res)
             {
@@ -459,14 +443,12 @@ namespace jeecs::graphic::api::gl3
                 jegl_gl3_context* ctx =
                     reinterpret_cast<jegl_gl3_context*>(jctx->m_graphic_impl_context);
 
-                // ImGui 有自己的状态管理，需要强制重新绑定采样器并更新缓存
                 const auto& blob_shared = shader_instance->m_shared_blob_data;
                 for (size_t i = 0; i < blob_shared->m_sampler_count; i += 1)
                 {
                     auto& sampler = blob_shared->m_samplers[i];
                     for (auto id : sampler.m_passes)
                     {
-                        ctx->m_binded_sampler_passes[id] = sampler.m_sampler;
                         glBindSampler(id, sampler.m_sampler);
                     }
                 }
@@ -1559,8 +1541,8 @@ namespace jeecs::graphic::api::gl3
 
         context->bind_texture_pass_impl(
             (GLint)pass,
-            (0 == (texture_instance->m_texture_format & jegl_texture::format::CUBE)) 
-            ? GL_TEXTURE_2D 
+            (0 == (texture_instance->m_texture_format & jegl_texture::format::CUBE))
+            ? GL_TEXTURE_2D
             : GL_TEXTURE_CUBE_MAP,
             texture_instance->m_texture_id);
     }
