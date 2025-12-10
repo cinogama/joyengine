@@ -480,7 +480,8 @@ namespace jeecs::graphic::api::metal
             },
             [](jegl_context* ctx, jegl_shader* res)
             {
-                // TODO: IMGUI 似乎无法实现这个效果？
+                // TODO: Metal + IMGUI 似乎无法通过自定义回调绑定采样器
+                // 
                 //auto* metal_context =
                 //    reinterpret_cast<jegl_metal_context*>(ctx->m_graphic_impl_context);
                 //auto* shader_instance = reinterpret_cast<metal_shader*>(res->m_handle.m_ptr);
