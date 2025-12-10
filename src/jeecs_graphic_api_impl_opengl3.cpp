@@ -250,7 +250,8 @@ namespace jeecs::graphic::api::gl3
         void bind_texture_pass_impl(GLint pass, GLenum type, GLuint texture)
         {
             assert(pass < 128);
-            if (m_binded_texture_passes[pass] != texture || m_binded_texture_passes_type[pass] != texture)
+            if (m_binded_texture_passes[pass] != texture 
+                || m_binded_texture_passes_type[pass] != type)
             {
                 glActiveTexture(GL_TEXTURE0 + pass);
                 glBindTexture(type, texture);
