@@ -3564,7 +3564,7 @@ namespace jeecs::graphic::api::vk120
             {
                 if (_vk_current_binded_shader->m_uniform_cpu_buffer_updated)
                 {
-                    _vk_current_binded_shader->m_uniform_cpu_buffer_updated = true;
+                    _vk_current_binded_shader->m_uniform_cpu_buffer_updated = false;
 
                     auto* new_ubo = _vk_current_binded_shader->allocate_ubo_for_vars(this);
 
@@ -4284,7 +4284,6 @@ namespace jeecs::graphic::api::vk120
         assert(current_shader->m_uniform_cpu_buffer_size != 0);
         assert(current_shader->m_uniform_cpu_buffer != nullptr);
 
-        current_shader->m_uniform_cpu_buffer_updated = true;
         size_t data_size_byte_length = 0;
 
         void* target_buffer = current_shader->m_uniform_cpu_buffer + location;
@@ -4311,13 +4310,24 @@ namespace jeecs::graphic::api::vk120
             break;
         case jegl_shader::FLOAT3X3:
         {
+            // 3x3 矩阵需要特殊处理，每行按 16 字节对齐
             float* target_storage = reinterpret_cast<float*>(target_buffer);
             const float* source_storage = reinterpret_cast<const float*>(val);
+
+            // 检查数据是否已经相同，避免不必要的更新
+            bool needs_update = 
+                memcmp(target_storage, source_storage, 12) != 0 ||
+                memcmp(target_storage + 4, source_storage + 3, 12) != 0 ||
+                memcmp(target_storage + 8, source_storage + 6, 12) != 0;
+
+            if (!needs_update)
+                return;
 
             memcpy(target_storage, source_storage, 12);
             memcpy(target_storage + 4, source_storage + 3, 12);
             memcpy(target_storage + 8, source_storage + 6, 12);
 
+            current_shader->m_uniform_cpu_buffer_updated = true;
             return;
         }
         case jegl_shader::FLOAT4X4:
@@ -4325,9 +4335,15 @@ namespace jeecs::graphic::api::vk120
             break;
         default:
             jeecs::debug::logerr("Unknown uniform variable type to set.");
-            break;
+            return;
         }
+
+        // 检查数据是否已经相同，避免不必要的更新
+        if (memcmp(target_buffer, val, data_size_byte_length) == 0)
+            return;
+
         memcpy(target_buffer, val, data_size_byte_length);
+        current_shader->m_uniform_cpu_buffer_updated = true;
     }
 }
 

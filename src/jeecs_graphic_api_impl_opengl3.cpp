@@ -206,6 +206,8 @@ namespace jeecs::graphic::api::gl3
             glDeleteFramebuffers(1, &m_fbo);
         }
     };
+    constexpr size_t MAX_TEXTURE_UNITS = 128;
+
     struct jegl_gl3_context
     {
         basic_interface* m_interface;
@@ -213,12 +215,16 @@ namespace jeecs::graphic::api::gl3
         size_t RESOLUTION_WIDTH = 0;
         size_t RESOLUTION_HEIGHT = 0;
 
-        GLuint m_binded_texture_passes[128] = {};
-        GLenum m_binded_texture_passes_type[128] = {};
+        GLuint m_binded_texture_passes[MAX_TEXTURE_UNITS] = {};
+        GLenum m_binded_texture_passes_type[MAX_TEXTURE_UNITS] = {};
+        GLuint m_binded_sampler_passes[MAX_TEXTURE_UNITS] = {};
+
+        // 缓存当前绑定在 binding point 0 的 uniform buffer
+        GLuint m_current_shader_ubo = 0;
 
         jegl_gl3_shader* current_active_shader_may_null = nullptr;
         GLenum ACTIVE_DEPTH_MODE = GL_INVALID_ENUM;
-        GLenum ACTIVE_MASK_MODE = GL_INVALID_ENUM;
+        GLboolean ACTIVE_MASK_MODE = GL_INVALID_ENUM;
         GLenum ACTIVE_BLEND_EQUATION = GL_INVALID_ENUM;
         GLenum ACTIVE_BLEND_SRC_MODE = GL_INVALID_ENUM;
         GLenum ACTIVE_BLEND_DST_MODE = GL_INVALID_ENUM;
@@ -249,14 +255,23 @@ namespace jeecs::graphic::api::gl3
 
         void bind_texture_pass_impl(GLint pass, GLenum type, GLuint texture)
         {
-            assert(pass < 128);
-            if (m_binded_texture_passes[pass] != texture 
+            assert(pass >= 0 && static_cast<size_t>(pass) < MAX_TEXTURE_UNITS);
+            if (m_binded_texture_passes[pass] != texture
                 || m_binded_texture_passes_type[pass] != type)
             {
                 glActiveTexture(GL_TEXTURE0 + pass);
                 glBindTexture(type, texture);
                 m_binded_texture_passes[pass] = texture;
                 m_binded_texture_passes_type[pass] = type;
+            }
+        }
+        void bind_sampler_pass_impl(GLuint pass, GLuint sampler)
+        {
+            assert(pass < MAX_TEXTURE_UNITS);
+            if (m_binded_sampler_passes[pass] != sampler)
+            {
+                glBindSampler(pass, sampler);
+                m_binded_sampler_passes[pass] = sampler;
             }
         }
     };
@@ -293,14 +308,14 @@ namespace jeecs::graphic::api::gl3
         }
     };
 
-    void _gl_bind_shader_samplers(jegl_gl3_shader* shader_instance)
+    void _gl_bind_shader_samplers(jegl_gl3_context* ctx, jegl_gl3_shader* shader_instance)
     {
         const auto& blob_shared = shader_instance->m_shared_blob_data;
         for (size_t i = 0; i < blob_shared->m_sampler_count; i += 1)
         {
             auto& sampler = blob_shared->m_samplers[i];
             for (auto id : sampler.m_passes)
-                glBindSampler((GLuint)id, sampler.m_sampler);
+                ctx->bind_sampler_pass_impl(id, sampler.m_sampler);
         }
     }
 
@@ -432,13 +447,26 @@ namespace jeecs::graphic::api::gl3
 
                     return (uint64_t)texture_instance->m_texture_id;
             },
-            [](jegl_context*, jegl_shader* res)
+            [](jegl_context* jctx, jegl_shader* res)
             {
                 jegl_gl3_shader* shader_instance =
                     reinterpret_cast<jegl_gl3_shader*>(res->m_handle.m_ptr);
 
                 assert(shader_instance != nullptr);
-                _gl_bind_shader_samplers(shader_instance);
+                jegl_gl3_context* ctx =
+                    reinterpret_cast<jegl_gl3_context*>(jctx->m_graphic_impl_context);
+
+                // ImGui 有自己的状态管理，需要强制重新绑定采样器并更新缓存
+                const auto& blob_shared = shader_instance->m_shared_blob_data;
+                for (size_t i = 0; i < blob_shared->m_sampler_count; i += 1)
+                {
+                    auto& sampler = blob_shared->m_samplers[i];
+                    for (auto id : sampler.m_passes)
+                    {
+                        ctx->m_binded_sampler_passes[id] = sampler.m_sampler;
+                        glBindSampler(id, sampler.m_sampler);
+                    }
+                }
             },
             context->m_interface->interface_handle(),
             reboot);
@@ -525,7 +553,6 @@ namespace jeecs::graphic::api::gl3
             reinterpret_cast<intptr_t>(
                 current_shader->uniform_cpu_buffers) + location);
 
-        bool continuous_copy = true;
         size_t data_size_byte_length = 0;
         switch (type)
         {
@@ -550,28 +577,41 @@ namespace jeecs::graphic::api::gl3
             break;
         case jegl_shader::FLOAT3X3:
         {
-            continuous_copy = false;
-            data_size_byte_length = 48;
+            // 3x3 矩阵在 std140 布局中需要特殊处理，每行按 vec4 对齐
+            data_size_byte_length = 48;  // 3 * 16 bytes (std140 对齐)
 
             float* target_storage = reinterpret_cast<float*>(target_buffer);
             const float* source_storage = reinterpret_cast<const float*>(val);
 
+            // 检查数据是否已经相同，避免不必要的更新
+            bool needs_update =
+                memcmp(target_storage + 0, source_storage + 0, 12) != 0 ||
+                memcmp(target_storage + 4, source_storage + 3, 12) != 0 ||
+                memcmp(target_storage + 8, source_storage + 6, 12) != 0;
+
+            if (!needs_update)
+                return;
+
             memcpy(target_storage + 0, source_storage + 0, 12);
             memcpy(target_storage + 4, source_storage + 3, 12);
             memcpy(target_storage + 8, source_storage + 6, 12);
-            break;
+            goto update_dirty_range;
         }
         case jegl_shader::FLOAT4X4:
             data_size_byte_length = 64;
             break;
         default:
             jeecs::debug::logerr("Unknown uniform variable type to set.");
-            break;
+            return;
         }
 
-        if (continuous_copy)
-            memcpy(target_buffer, val, data_size_byte_length);
+        // 检查数据是否已经相同，避免不必要的内存拷贝和 GPU 更新
+        if (memcmp(target_buffer, val, data_size_byte_length) == 0)
+            return;
 
+        memcpy(target_buffer, val, data_size_byte_length);
+
+    update_dirty_range:
         if (current_shader->uniform_buffer_update_size == 0)
         {
             current_shader->uniform_buffer_update_offset = location;
@@ -1067,10 +1107,9 @@ namespace jeecs::graphic::api::gl3
         bool is_depth = 0 != (resource->m_format & jegl_texture::format::DEPTH);
         bool is_cube = 0 != (resource->m_format & jegl_texture::format::CUBE);
 
-        auto gl_texture_type = GL_TEXTURE_2D;
+        // 根据是否为 cube 纹理选择正确的纹理类型
+        GLenum gl_texture_type = is_cube ? GL_TEXTURE_CUBE_MAP : GL_TEXTURE_2D;
         glBindTexture(gl_texture_type, texture);
-
-        assert(GL_TEXTURE_2D == gl_texture_type);
 
         const GLenum jegl_texture_cube_map_ways[] = {
             GL_TEXTURE_CUBE_MAP_POSITIVE_X,
@@ -1168,18 +1207,44 @@ namespace jeecs::graphic::api::gl3
             reinterpret_cast<jegl_gl3_texture*>(resource->m_handle.m_ptr);
 
         // Update texture's pixels, only normal pixel data will be updated.
+        // NOTE: 深度纹理和 Cube 纹理不支持更新
+        if (0 != (resource->m_format & jegl_texture::format::DEPTH) ||
+            0 != (resource->m_format & jegl_texture::format::CUBE))
+        {
+            jeecs::debug::logerr("Depth or Cube texture update is not supported.");
+            return;
+        }
+
         glBindTexture(GL_TEXTURE_2D, texture_instance->m_texture_id);
 
-        // Textures FORMAT & SIZE will not be changed.
+        // 根据纹理格式确定正确的 OpenGL 格式
         bool is_16bit = 0 != (resource->m_format & jegl_texture::format::FLOAT16);
+        GLint texture_aim_format = GL_RGBA;
+        GLint texture_src_format = GL_RGBA;
+
+        switch (resource->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
+        {
+        case jegl_texture::format::MONO:
+            texture_src_format = GL_LUMINANCE;
+            texture_aim_format = is_16bit ? GL_R16F : GL_LUMINANCE;
+            break;
+        case jegl_texture::format::RGBA:
+            texture_src_format = GL_RGBA;
+            texture_aim_format = is_16bit ? GL_RGBA16F : GL_RGBA;
+            break;
+        default:
+            jeecs::debug::logerr("Unknown texture raw-data format for update.");
+            return;
+        }
+
         glTexImage2D(
             GL_TEXTURE_2D,
             0,
-            GL_RGBA,
+            texture_aim_format,
             (GLsizei)resource->m_width,
             (GLsizei)resource->m_height,
             0,
-            GL_RGBA,
+            texture_src_format,
             is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
             resource->m_pixels);
     }
@@ -1456,7 +1521,7 @@ namespace jeecs::graphic::api::gl3
                 shared_blob_state->m_blend_src_mode,
                 shared_blob_state->m_blend_dst_mode);
         _gl_update_cull_mode_method(context, shared_blob_state->m_cull_face_method);
-        _gl_bind_shader_samplers(shader_instance);
+        _gl_bind_shader_samplers(context, shader_instance);
         glUseProgram(shader_instance->m_shared_blob_data->m_shader_program_instance);
 
         return true;
@@ -1487,12 +1552,12 @@ namespace jeecs::graphic::api::gl3
         jegl_gl3_texture* texture_instance =
             reinterpret_cast<jegl_gl3_texture*>(texture->m_handle.m_ptr);
 
-        if (0 != (texture_instance->m_texture_format & jegl_texture::format::CUBE))
-            context->bind_texture_pass_impl(
-                (GLint)pass, GL_TEXTURE_CUBE_MAP, texture_instance->m_texture_id);
-        else
-            context->bind_texture_pass_impl(
-                (GLint)pass, GL_TEXTURE_2D, texture_instance->m_texture_id);
+        context->bind_texture_pass_impl(
+            (GLint)pass,
+            (0 == (texture_instance->m_texture_format & jegl_texture::format::CUBE)) 
+            ? GL_TEXTURE_2D 
+            : GL_TEXTURE_CUBE_MAP,
+            texture_instance->m_texture_id);
     }
 
     void gl_draw_vertex_with_shader(jegl_context::graphic_impl_context_t ctx, jegl_vertex* vert)
@@ -1505,8 +1570,13 @@ namespace jeecs::graphic::api::gl3
 
         if (current_shader->uniform_cpu_buffers != nullptr)
         {
-            glBindBufferRange(GL_UNIFORM_BUFFER, 0,
-                current_shader->uniforms, 0, current_shader->uniform_buffer_size);
+            // 仅在 uniform buffer 发生变化时才重新绑定
+            if (context->m_current_shader_ubo != current_shader->uniforms)
+            {
+                context->m_current_shader_ubo = current_shader->uniforms;
+                glBindBufferRange(GL_UNIFORM_BUFFER, 0,
+                    current_shader->uniforms, 0, current_shader->uniform_buffer_size);
+            }
 
             if (current_shader->uniform_buffer_update_size != 0)
             {

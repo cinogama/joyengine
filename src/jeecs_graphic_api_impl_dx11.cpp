@@ -32,6 +32,10 @@ namespace jeecs::graphic::api::dx11
     struct jedx11_uniformbuf;
     struct jedx11_framebuffer;
 
+    constexpr size_t MAX_TEXTURE_SLOTS = 128;
+    constexpr size_t MAX_SAMPLER_SLOTS = 16;
+    constexpr size_t MAX_CONSTANT_BUFFER_SLOTS = 14;
+
     struct jegl_dx11_context
     {
         JECS_DISABLE_MOVE_AND_COPY(jegl_dx11_context);
@@ -70,6 +74,47 @@ namespace jeecs::graphic::api::dx11
 
         jedx11_shader* m_current_target_shader;
         jedx11_framebuffer* m_current_target_framebuffer;
+
+        // 状态缓存
+        ID3D11ShaderResourceView* m_binded_texture_views[MAX_TEXTURE_SLOTS] = {};
+        ID3D11SamplerState* m_binded_sampler_states[MAX_SAMPLER_SLOTS] = {};
+        ID3D11Buffer* m_binded_vs_constant_buffers[MAX_CONSTANT_BUFFER_SLOTS] = {};
+        ID3D11Buffer* m_binded_ps_constant_buffers[MAX_CONSTANT_BUFFER_SLOTS] = {};
+
+        void bind_texture_view_impl(UINT slot, ID3D11ShaderResourceView* view)
+        {
+            if (slot < MAX_TEXTURE_SLOTS && m_binded_texture_views[slot] != view)
+            {
+                m_binded_texture_views[slot] = view;
+                m_dx_context->VSSetShaderResources(slot, 1, &view);
+                m_dx_context->PSSetShaderResources(slot, 1, &view);
+            }
+        }
+        void bind_sampler_state_impl(UINT slot, ID3D11SamplerState* sampler)
+        {
+            if (slot < MAX_SAMPLER_SLOTS && m_binded_sampler_states[slot] != sampler)
+            {
+                m_binded_sampler_states[slot] = sampler;
+                m_dx_context->VSSetSamplers(slot, 1, &sampler);
+                m_dx_context->PSSetSamplers(slot, 1, &sampler);
+            }
+        }
+        void bind_vs_constant_buffer_impl(UINT slot, ID3D11Buffer* buffer)
+        {
+            if (slot < MAX_CONSTANT_BUFFER_SLOTS && m_binded_vs_constant_buffers[slot] != buffer)
+            {
+                m_binded_vs_constant_buffers[slot] = buffer;
+                m_dx_context->VSSetConstantBuffers(slot, 1, &buffer);
+            }
+        }
+        void bind_ps_constant_buffer_impl(UINT slot, ID3D11Buffer* buffer)
+        {
+            if (slot < MAX_CONSTANT_BUFFER_SLOTS && m_binded_ps_constant_buffers[slot] != buffer)
+            {
+                m_binded_ps_constant_buffers[slot] = buffer;
+                m_dx_context->PSSetConstantBuffers(slot, 1, &buffer);
+            }
+        }
     };
 
     struct jedx11_texture
@@ -478,8 +523,10 @@ namespace jeecs::graphic::api::dx11
             {
                 auto* context = reinterpret_cast<jegl_dx11_context*>(ctx->m_graphic_impl_context);
                 auto* shader = reinterpret_cast<jedx11_shader*>(res->m_handle.m_ptr);
+                // ImGui 有自己的状态管理，需要强制重新绑定采样器并更新缓存
                 for (auto& sampler : shader->m_samplers)
                 {
+                    context->m_binded_sampler_states[sampler.m_sampler_id] = sampler.m_sampler.Get();
                     context->m_dx_context->VSSetSamplers(
                         sampler.m_sampler_id, 1, sampler.m_sampler.GetAddressOf());
                     context->m_dx_context->PSSetSamplers(
@@ -1061,14 +1108,14 @@ namespace jeecs::graphic::api::dx11
                 {
                     if (sampler.m_mag == jegl_shader::fliter_mode::LINEAR)
                     {
-                        if (sampler.m_mag == jegl_shader::fliter_mode::LINEAR)
+                        if (sampler.m_mip == jegl_shader::fliter_mode::LINEAR)
                             sampler_describe.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
                         else
                             sampler_describe.Filter = D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT;
                     }
                     else
                     {
-                        if (sampler.m_mag == jegl_shader::fliter_mode::LINEAR)
+                        if (sampler.m_mip == jegl_shader::fliter_mode::LINEAR)
                             sampler_describe.Filter = D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR;
                         else
                             sampler_describe.Filter = D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT;
@@ -1741,27 +1788,27 @@ namespace jeecs::graphic::api::dx11
                 }
             }
 
-            if (context->m_current_target_shader->m_uniform_updated)
+            if (current_shader_instance->m_uniform_updated)
             {
-                context->m_current_target_shader->m_uniform_updated = false;
+                current_shader_instance->m_uniform_updated = false;
                 D3D11_MAPPED_SUBRESOURCE mappedData;
                 JERCHECK(context->m_dx_context->Map(
-                    context->m_current_target_shader->m_uniforms.Get(),
+                    current_shader_instance->m_uniforms.Get(),
                     0,
                     D3D11_MAP_WRITE_DISCARD,
                     0,
                     &mappedData));
 
                 memcpy(mappedData.pData,
-                    context->m_current_target_shader->m_uniform_cpu_buffers,
-                    context->m_current_target_shader->m_uniform_buffer_size);
+                    current_shader_instance->m_uniform_cpu_buffers,
+                    current_shader_instance->m_uniform_buffer_size);
 
-                context->m_dx_context->Unmap(context->m_current_target_shader->m_uniforms.Get(), 0);
+                context->m_dx_context->Unmap(current_shader_instance->m_uniforms.Get(), 0);
             }
-            context->m_dx_context->VSSetConstantBuffers(0, 1,
-                context->m_current_target_shader->m_uniforms.GetAddressOf());
-            context->m_dx_context->PSSetConstantBuffers(0, 1,
-                context->m_current_target_shader->m_uniforms.GetAddressOf());
+            
+            // 使用缓存的常量缓冲区绑定
+            context->bind_vs_constant_buffer_impl(0, current_shader_instance->m_uniforms.Get());
+            context->bind_ps_constant_buffer_impl(0, current_shader_instance->m_uniforms.Get());
         }
 
         auto* vertex = reinterpret_cast<jedx11_vertex*>(vert->m_handle.m_ptr);
@@ -1802,12 +1849,11 @@ namespace jeecs::graphic::api::dx11
         context->m_dx_context->OMSetBlendState(shader_instance->m_blend.Get(), _useless, UINT_MAX);
         context->m_dx_context->OMSetDepthStencilState(shader_instance->m_depth.Get(), 0);
 
+        // 使用缓存的采样器绑定
         for (auto& sampler : shader_instance->m_samplers)
         {
-            context->m_dx_context->VSSetSamplers(
-                sampler.m_sampler_id, 1, sampler.m_sampler.GetAddressOf());
-            context->m_dx_context->PSSetSamplers(
-                sampler.m_sampler_id, 1, sampler.m_sampler.GetAddressOf());
+            context->bind_sampler_state_impl(
+                sampler.m_sampler_id, sampler.m_sampler.Get());
         }
         return true;
     }
@@ -1817,10 +1863,11 @@ namespace jeecs::graphic::api::dx11
         jegl_dx11_context* context = reinterpret_cast<jegl_dx11_context*>(ctx);
 
         auto* uniformbuf_instance = reinterpret_cast<jedx11_uniformbuf*>(uniformbuf->m_handle.m_ptr);
-        context->m_dx_context->VSSetConstantBuffers(
-            uniformbuf_instance->m_binding_place, 1, uniformbuf_instance->m_uniformbuf.GetAddressOf());
-        context->m_dx_context->PSSetConstantBuffers(
-            uniformbuf_instance->m_binding_place, 1, uniformbuf_instance->m_uniformbuf.GetAddressOf());
+        // 使用缓存的常量缓冲区绑定
+        context->bind_vs_constant_buffer_impl(
+            uniformbuf_instance->m_binding_place, uniformbuf_instance->m_uniformbuf.Get());
+        context->bind_ps_constant_buffer_impl(
+            uniformbuf_instance->m_binding_place, uniformbuf_instance->m_uniformbuf.Get());
     }
 
     void dx11_bind_texture(jegl_context::graphic_impl_context_t ctx, jegl_texture* texture, size_t pass)
@@ -1830,10 +1877,9 @@ namespace jeecs::graphic::api::dx11
         auto* texture_instance = reinterpret_cast<jedx11_texture*>(texture->m_handle.m_ptr);
         if (texture_instance->m_texture_view.Get() != nullptr)
         {
-            context->m_dx_context->VSSetShaderResources(
-                (UINT)pass, 1, texture_instance->m_texture_view.GetAddressOf());
-            context->m_dx_context->PSSetShaderResources(
-                (UINT)pass, 1, texture_instance->m_texture_view.GetAddressOf());
+            // 使用缓存的纹理视图绑定
+            context->bind_texture_view_impl(
+                (UINT)pass, texture_instance->m_texture_view.Get());
         }
     }
 
@@ -1965,7 +2011,6 @@ namespace jeecs::graphic::api::dx11
         if (location == jeecs::graphic::INVALID_UNIFORM_LOCATION)
             return;
 
-        context->m_current_target_shader->m_uniform_updated = true;
         assert(context->m_current_target_shader->m_uniform_buffer_size != 0);
         assert(context->m_current_target_shader->m_uniform_cpu_buffers != nullptr);
 
@@ -1996,13 +2041,24 @@ namespace jeecs::graphic::api::dx11
             break;
         case jegl_shader::FLOAT3X3:
         {
+            // 3x3 矩阵在 DX11 中需要特殊处理，每行按 16 字节对齐
             float* target_storage = reinterpret_cast<float*>(target_buffer);
             const float* source_storage = reinterpret_cast<const float*>(val);
+
+            // 检查数据是否已经相同，避免不必要的更新
+            bool needs_update = 
+                memcmp(target_storage, source_storage, 12) != 0 ||
+                memcmp(target_storage + 4, source_storage + 3, 12) != 0 ||
+                memcmp(target_storage + 8, source_storage + 6, 12) != 0;
+
+            if (!needs_update)
+                return;
 
             memcpy(target_storage, source_storage, 12);
             memcpy(target_storage + 4, source_storage + 3, 12);
             memcpy(target_storage + 8, source_storage + 6, 12);
 
+            context->m_current_target_shader->m_uniform_updated = true;
             return;
         }
         case jegl_shader::FLOAT4X4:
@@ -2010,9 +2066,15 @@ namespace jeecs::graphic::api::dx11
             break;
         default:
             jeecs::debug::logerr("Unknown uniform variable type to set.");
-            break;
+            return;
         }
+
+        // 检查数据是否已经相同，避免不必要的更新
+        if (memcmp(target_buffer, val, data_size_byte_length) == 0)
+            return;
+
         memcpy(target_buffer, val, data_size_byte_length);
+        context->m_current_target_shader->m_uniform_updated = true;
     }
 }
 
