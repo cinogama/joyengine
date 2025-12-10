@@ -24,9 +24,6 @@ namespace jeecs::graphic::api::metal
     struct metal_shader;
     struct metal_framebuffer;
 
-    constexpr size_t MAX_TEXTURE_SLOTS = 128;
-    constexpr size_t MAX_SAMPLER_SLOTS = 16;
-
     struct jegl_metal_context
     {
         JECS_DISABLE_MOVE_AND_COPY(jegl_metal_context);
@@ -55,34 +52,8 @@ namespace jeecs::graphic::api::metal
 
             MTL::CommandBuffer* m_currnet_command_buffer;
             MTL::RenderCommandEncoder* m_current_command_encoder;
-
-            // 状态缓存
-            MTL::Texture* m_binded_textures[MAX_TEXTURE_SLOTS] = {};
-            MTL::SamplerState* m_binded_samplers[MAX_SAMPLER_SLOTS] = {};
         };
         render_runtime_states m_render_states;
-
-        void bind_texture_impl(uint32_t slot, MTL::Texture* texture)
-        {
-            if (slot < MAX_TEXTURE_SLOTS && m_render_states.m_binded_textures[slot] != texture)
-            {
-                m_render_states.m_binded_textures[slot] = texture;
-                m_render_states.m_current_command_encoder->setFragmentTexture(texture, slot);
-            }
-        }
-        void bind_sampler_impl(uint32_t slot, MTL::SamplerState* sampler)
-        {
-            if (slot < MAX_SAMPLER_SLOTS && m_render_states.m_binded_samplers[slot] != sampler)
-            {
-                m_render_states.m_binded_samplers[slot] = sampler;
-                m_render_states.m_current_command_encoder->setFragmentSamplerState(sampler, slot);
-            }
-        }
-        void reset_binding_cache()
-        {
-            memset(m_render_states.m_binded_textures, 0, sizeof(m_render_states.m_binded_textures));
-            memset(m_render_states.m_binded_samplers, 0, sizeof(m_render_states.m_binded_samplers));
-        }
 
         void create_main_depth_texture(int w, int h)
         {
@@ -478,7 +449,7 @@ namespace jeecs::graphic::api::metal
 
                 return (uint64_t)tex->m_texture;
             },
-            [](jegl_context* ctx, jegl_shader* res)
+            [](jegl_context* /*ctx*/, jegl_shader* /*res*/)
             {
                 // TODO: Metal + IMGUI 似乎无法通过自定义回调绑定采样器
                 // 
@@ -486,11 +457,8 @@ namespace jeecs::graphic::api::metal
                 //    reinterpret_cast<jegl_metal_context*>(ctx->m_graphic_impl_context);
                 //auto* shader_instance = reinterpret_cast<metal_shader*>(res->m_handle.m_ptr);
                 //auto& shader_shared_state = *shader_instance->m_shared_state;
-                //// ImGui 有自己的状态管理，需要强制重新绑定采样器并更新缓存
                 //for (const auto& sampler_struct : shader_shared_state.m_samplers)
                 //{
-                //    metal_context->m_render_states.m_binded_samplers[sampler_struct.m_sampler_id] = 
-                //        sampler_struct.m_sampler;
                 //    metal_context->m_render_states.m_current_command_encoder->setFragmentSamplerState(
                 //        sampler_struct.m_sampler,
                 //        sampler_struct.m_sampler_id);
@@ -920,7 +888,6 @@ namespace jeecs::graphic::api::metal
                 case jegl_shader::uniform_type::FLOAT2X2:
                     unit_size = 16;
                     allign_base = 8;
-                    break;
                 case jegl_shader::uniform_type::FLOAT3X3:
                     unit_size = 48;
                     allign_base = 16;
@@ -1440,12 +1407,11 @@ namespace jeecs::graphic::api::metal
             metal_context->m_render_states.m_current_command_encoder->setFrontFacingWinding(
                 MTL::WindingClockwise);
 
-        // 使用缓存的采样器绑定
         for (const auto& sampler_struct : shader_shared_state.m_samplers)
         {
-            metal_context->bind_sampler_impl(
-                sampler_struct.m_sampler_id,
-                sampler_struct.m_sampler);
+            metal_context->m_render_states.m_current_command_encoder->setFragmentSamplerState(
+                sampler_struct.m_sampler,
+                sampler_struct.m_sampler_id);
         }
 
         return true;
@@ -1456,8 +1422,8 @@ namespace jeecs::graphic::api::metal
         auto* texture_instance = reinterpret_cast<metal_texture*>(res->m_handle.m_ptr);
 
         // 由于其他图形库不支持在顶点着色器中使用纹理采样，所以这里不绑定顶点着色器纹理
-        // 使用缓存的纹理绑定
-        metal_context->bind_texture_impl((uint32_t)pass, texture_instance->m_texture);
+        metal_context->m_render_states.m_current_command_encoder->setFragmentTexture(
+            texture_instance->m_texture, (uint32_t)pass);
     }
     void set_uniform(
         jegl_context::graphic_impl_context_t ctx,
@@ -1786,9 +1752,6 @@ namespace jeecs::graphic::api::metal
         metal_context->m_render_states.m_current_command_encoder =
             metal_context->m_render_states.m_currnet_command_buffer->renderCommandEncoder(
                 target_framebuffer_desc);
-
-        // 切换 encoder 后重置绑定缓存
-        metal_context->reset_binding_cache();
 
         // Set viewport
         int32_t x = 0, y = 0, w = 0, h = 0;
