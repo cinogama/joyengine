@@ -224,7 +224,10 @@ namespace jeecs::graphic::api::gl3
 
         jegl_gl3_shader* current_active_shader_may_null = nullptr;
         GLenum ACTIVE_DEPTH_MODE = GL_INVALID_ENUM;
-        GLboolean ACTIVE_MASK_MODE = GL_INVALID_ENUM;
+
+        // 此处使用 GLenum 是因为 GLboolean 无法准确表示未初始化状态，
+        // 我们需要知道这玩意儿实际上是 GLboolean
+        GLenum /*GLboolean*/ ACTIVE_MASK_MODE = GL_INVALID_ENUM;
         GLenum ACTIVE_BLEND_EQUATION = GL_INVALID_ENUM;
         GLenum ACTIVE_BLEND_SRC_MODE = GL_INVALID_ENUM;
         GLenum ACTIVE_BLEND_DST_MODE = GL_INVALID_ENUM;
@@ -1445,9 +1448,11 @@ namespace jeecs::graphic::api::gl3
     }
     void _gl_update_depth_mask_method(jegl_gl3_context* ctx, GLboolean mode)
     {
-        if (ctx->ACTIVE_MASK_MODE != mode)
+        const GLenum mode_enum = static_cast<GLenum>(mode);
+
+        if (ctx->ACTIVE_MASK_MODE != mode_enum)
         {
-            ctx->ACTIVE_MASK_MODE = mode;
+            ctx->ACTIVE_MASK_MODE = mode_enum;
             glDepthMask(mode);
         }
     }

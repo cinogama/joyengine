@@ -480,19 +480,20 @@ namespace jeecs::graphic::api::metal
             },
             [](jegl_context* ctx, jegl_shader* res)
             {
-                auto* metal_context =
-                    reinterpret_cast<jegl_metal_context*>(ctx->m_graphic_impl_context);
-                auto* shader_instance = reinterpret_cast<metal_shader*>(res->m_handle.m_ptr);
-                auto& shader_shared_state = *shader_instance->m_shared_state;
-                // ImGui 有自己的状态管理，需要强制重新绑定采样器并更新缓存
-                for (const auto& sampler_struct : shader_shared_state.m_samplers)
-                {
-                    metal_context->m_render_states.m_binded_samplers[sampler_struct.m_sampler_id] = 
-                        sampler_struct.m_sampler;
-                    metal_context->m_render_states.m_current_command_encoder->setFragmentSamplerState(
-                        sampler_struct.m_sampler,
-                        sampler_struct.m_sampler_id);
-                }
+                // TODO: IMGUI 似乎无法实现这个效果？
+                //auto* metal_context =
+                //    reinterpret_cast<jegl_metal_context*>(ctx->m_graphic_impl_context);
+                //auto* shader_instance = reinterpret_cast<metal_shader*>(res->m_handle.m_ptr);
+                //auto& shader_shared_state = *shader_instance->m_shared_state;
+                //// ImGui 有自己的状态管理，需要强制重新绑定采样器并更新缓存
+                //for (const auto& sampler_struct : shader_shared_state.m_samplers)
+                //{
+                //    metal_context->m_render_states.m_binded_samplers[sampler_struct.m_sampler_id] = 
+                //        sampler_struct.m_sampler;
+                //    metal_context->m_render_states.m_current_command_encoder->setFragmentSamplerState(
+                //        sampler_struct.m_sampler,
+                //        sampler_struct.m_sampler_id);
+                //}
             },
             // If glfw enabled.
             glfw_window,
