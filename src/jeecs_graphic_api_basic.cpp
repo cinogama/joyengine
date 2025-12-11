@@ -417,29 +417,29 @@ struct jegl_context_notifier
     {
         // 最大缓存资源数量（0 表示不限制）
         size_t m_max_cached_count = 256;
-        // 资源在未被引用后的最小保留时间（毫秒）
-        jeecs::typing::timestamp_ms_t m_min_hold_time_ms = 30000; // 30秒
-        // 资源最大空闲时间，超过此时间即使未达到缓存上限也会被清理（毫秒）
-        jeecs::typing::timestamp_ms_t m_max_idle_time_ms = 300000; // 5分钟
-        // 缓存清理检查间隔（毫秒）
-        jeecs::typing::timestamp_ms_t m_cleanup_interval_ms = 5000; // 5秒
+        // 资源在未被引用后的最小保留帧数
+        uint64_t m_min_hold_frames = 1800; // 约 30 秒 @ 60fps
+        // 资源最大空闲帧数，超过此帧数即使未达到缓存上限也会被清理
+        uint64_t m_max_idle_frames = 18000; // 约 5 分钟 @ 60fps
+        // 缓存清理检查间隔（帧数）
+        uint64_t m_cleanup_interval_frames = 300; // 约 5 秒 @ 60fps
     };
 
     struct cached_resource
     {
         jeecs::graphic::created_resource m_resource;
-        // 资源加入缓存的时间
-        jeecs::typing::timestamp_ms_t m_cache_time;
-        // 资源最后一次被访问的时间（用于 LRU 策略）
-        mutable jeecs::typing::timestamp_ms_t m_last_access_time;
+        // 资源加入缓存时的帧号
+        uint64_t m_cache_frame;
+        // 资源最后一次被访问的帧号（用于 LRU 策略）
+        mutable uint64_t m_last_access_frame;
         // 资源被访问的次数（用于热点资源判断）
         mutable uint32_t m_access_count;
     
         template<jeecs::graphic::requirements::basic_graphic_resource T>
-        cached_resource(T* res)
+        cached_resource(T* res, uint64_t current_frame)
             : m_resource(res)
-            , m_cache_time(je_clock_time_stamp())
-            , m_last_access_time(m_cache_time)
+            , m_cache_frame(current_frame)
+            , m_last_access_frame(current_frame)
             , m_access_count(1)
         {
         }
@@ -450,17 +450,16 @@ struct jegl_context_notifier
         ~cached_resource() = default;
 
         // 记录一次访问
-        void touch() const
+        void touch(uint64_t current_frame) const
         {
-            m_last_access_time = je_clock_time_stamp();
+            m_last_access_frame = current_frame;
             ++m_access_count;
         }
 
-        // 获取资源的空闲时间
-        jeecs::typing::timestamp_ms_t idle_time(
-            jeecs::typing::timestamp_ms_t current_time) const
+        // 获取资源的空闲帧数
+        uint64_t idle_frames(uint64_t current_frame) const
         {
-            return current_time - m_last_access_time;
+            return current_frame - m_last_access_frame;
         }
 
         // 判断资源是否正在被使用（引用计数 > 1 表示缓存外还有引用）
@@ -471,22 +470,22 @@ struct jegl_context_notifier
         }
 
         // 计算资源的清理优先级（值越小越应该被清理）
-        // 考虑因素：空闲时间、访问频率
-        int64_t eviction_priority(jeecs::typing::timestamp_ms_t current_time) const
+        // 考虑因素：空闲帧数、访问频率
+        int64_t eviction_priority(uint64_t current_frame) const
         {
             // 正在使用的资源优先级最高，不应被清理
             if (is_in_use())
                 return INT64_MAX;
 
-            // 优先级 = 访问次数 * 1000 - 空闲时间
-            // 访问次数越多、空闲时间越短，优先级越高
+            // 优先级 = 访问次数 * 1000 - 空闲帧数
+            // 访问次数越多、空闲帧数越短，优先级越高
             return static_cast<int64_t>(m_access_count) * 1000 
-                   - static_cast<int64_t>(idle_time(current_time));
+                   - static_cast<int64_t>(idle_frames(current_frame));
         }
 
         // 尝试清理资源（仅当满足清理条件时）
         bool try_evict(
-            jeecs::typing::timestamp_ms_t current_time,
+            uint64_t current_frame,
             const cache_config& config,
             bool force_if_idle) const
         {
@@ -494,17 +493,17 @@ struct jegl_context_notifier
             if (is_in_use())
                 return false;
 
-            const auto idle = idle_time(current_time);
+            const auto idle = idle_frames(current_frame);
 
-            // 如果空闲时间超过最大空闲时间，强制清理
-            if (idle >= config.m_max_idle_time_ms)
+            // 如果空闲帧数超过最大空闲帧数，强制清理
+            if (idle >= config.m_max_idle_frames)
             {
                 m_resource.drop_resource();
                 return true;
             }
 
-            // 如果是强制清理（缓存满了）且超过最小保留时间
-            if (force_if_idle && idle >= config.m_min_hold_time_ms)
+            // 如果是强制清理（缓存满了）且超过最小保留帧数
+            if (force_if_idle && idle >= config.m_min_hold_frames)
             {
                 m_resource.drop_resource();
                 return true;
@@ -536,8 +535,10 @@ struct jegl_context_notifier
 
     // 缓存管理配置
     cache_config _m_cache_config;
-    // 上次执行缓存清理的时间
-    jeecs::typing::timestamp_ms_t _m_last_cleanup_time = 0;
+    // 上次执行缓存清理的帧号
+    uint64_t _m_last_cleanup_frame = 0;
+    // 当前帧计数
+    uint64_t _m_current_frame = 0;
 
     // 已经加载的资源缓存，会有一个清理机制，在必要时释放没有人使用的资源。
     std::shared_mutex _m_cached_resources_mx;
@@ -729,17 +730,20 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
             notifier->m_graphic_terminated = true;
         }
 
+        // 递增帧计数
+        ++notifier->_m_current_frame;
+
         // Check if cached resources need to be cleaned.
         do
         {
-            const auto this_time = je_clock_time_stamp();
+            const auto current_frame = notifier->_m_current_frame;
             const auto& config = notifier->_m_cache_config;
 
-            // 检查是否到了清理时间
-            if (this_time - notifier->_m_last_cleanup_time < config.m_cleanup_interval_ms)
+            // 检查是否到了清理帧
+            if (current_frame - notifier->_m_last_cleanup_frame < config.m_cleanup_interval_frames)
                 break; // 还没到清理间隔，跳过
 
-            notifier->_m_last_cleanup_time = this_time;
+            notifier->_m_last_cleanup_frame = current_frame;
 
             std::lock_guard g1(notifier->_m_cached_resources_mx);
             
@@ -760,7 +764,7 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
                 for (const auto& [path, cached_res] : notifier->_m_cached_resources)
                 {
                     priority_list.emplace_back(
-                        cached_res.eviction_priority(this_time), path);
+                        cached_res.eviction_priority(current_frame), path);
                 }
 
                 // 按优先级排序（优先级低的排前面）
@@ -774,7 +778,7 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
                     auto fnd = notifier->_m_cached_resources.find(path);
                     if (fnd != notifier->_m_cached_resources.end())
                     {
-                        if (fnd->second.try_evict(this_time, config, true))
+                        if (fnd->second.try_evict(current_frame, config, true))
                         {
                             resources_to_evict.push_back(path);
                             if (0 == target_evict_count--)
@@ -785,10 +789,10 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
             }
             else
             {
-                // 缓存未超限，仅清理超过最大空闲时间的资源
+                // 缓存未超限，仅清理超过最大空闲帧数的资源
                 for (const auto& [path, cached_res] : notifier->_m_cached_resources)
                 {
-                    if (cached_res.try_evict(this_time, config, false))
+                    if (cached_res.try_evict(current_frame, config, false))
                         resources_to_evict.push_back(path);
                 }
             }
@@ -1120,9 +1124,9 @@ void jegl_set_cache_config(
     if (config_may_null != nullptr)
     {
         cache_config.m_max_cached_count = config_may_null->m_max_cached_count;
-        cache_config.m_min_hold_time_ms = config_may_null->m_min_hold_time_ms;
-        cache_config.m_max_idle_time_ms = config_may_null->m_max_idle_time_ms;
-        cache_config.m_cleanup_interval_ms = config_may_null->m_cleanup_interval_ms;
+        cache_config.m_min_hold_frames = config_may_null->m_min_hold_frames;
+        cache_config.m_max_idle_frames = config_may_null->m_max_idle_frames;
+        cache_config.m_cleanup_interval_frames = config_may_null->m_cleanup_interval_frames;
     }
     else
     {
@@ -1138,9 +1142,9 @@ void jegl_get_cache_config(
     const auto& cache_config = thread_handle->_m_thread_notifier->_m_cache_config;
     
     out_config->m_max_cached_count = cache_config.m_max_cached_count;
-    out_config->m_min_hold_time_ms = cache_config.m_min_hold_time_ms;
-    out_config->m_max_idle_time_ms = cache_config.m_max_idle_time_ms;
-    out_config->m_cleanup_interval_ms = cache_config.m_cleanup_interval_ms;
+    out_config->m_min_hold_frames = cache_config.m_min_hold_frames;
+    out_config->m_max_idle_frames = cache_config.m_max_idle_frames;
+    out_config->m_cleanup_interval_frames = cache_config.m_cleanup_interval_frames;
 }
 
 void jegl_get_cache_statistics(
@@ -1284,8 +1288,8 @@ T* /* MAY NULL */ _jegl_try_load_shared_resource(jegl_context* context, const ch
             auto* res = fnd->second.m_resource.try_resource<T>();
             if (res != nullptr)
             {
-                // 更新访问时间和访问计数（用于 LRU 策略）
-                fnd->second.touch();
+                // 更新访问帧号和访问计数（用于 LRU 策略）
+                fnd->second.touch(context->_m_thread_notifier->_m_current_frame);
                 
                 jegl_share_resource(res);
                 return res;
@@ -1304,7 +1308,8 @@ T* _jegl_try_update_shared_resource(jegl_context* context, T* resource)
 
         std::lock_guard g1(context->_m_thread_notifier->_m_cached_resources_mx);
 
-        jegl_context_notifier::cached_resource cachine_resource(resource);
+        jegl_context_notifier::cached_resource cachine_resource(
+            resource, context->_m_thread_notifier->_m_current_frame);
         auto&& [cached_resource, insert_succ] =
             context->_m_thread_notifier->_m_cached_resources.insert(
                 std::make_pair(resource_path, cachine_resource));

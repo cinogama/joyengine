@@ -2803,16 +2803,16 @@ JE_API void jegl_reboot_graphic_thread(
 jegl_cache_config_t [类型]
 图形资源缓存配置结构体
     * m_max_cached_count: 最大缓存资源数量（0 表示不限制，默认 256）
-    * m_min_hold_time_ms: 资源在未被引用后的最小保留时间（毫秒，默认 30000）
-    * m_max_idle_time_ms: 资源最大空闲时间，超过此时间即使未达到缓存上限也会被清理（毫秒，默认 300000）
-    * m_cleanup_interval_ms: 缓存清理检查间隔（毫秒，默认 5000）
+    * m_min_hold_frames: 资源在未被引用后的最小保留帧数（默认 1800，约 30 秒 @ 60fps）
+    * m_max_idle_frames: 资源最大空闲帧数，超过此帧数即使未达到缓存上限也会被清理（默认 18000，约 5 分钟 @ 60fps）
+    * m_cleanup_interval_frames: 缓存清理检查间隔帧数（默认 300，约 5 秒 @ 60fps）
 */
 struct jegl_cache_config_t
 {
     size_t m_max_cached_count;
-    uint64_t m_min_hold_time_ms;
-    uint64_t m_max_idle_time_ms;
-    uint64_t m_cleanup_interval_ms;
+    uint64_t m_min_hold_frames;
+    uint64_t m_max_idle_frames;
+    uint64_t m_cleanup_interval_frames;
 };
 
 /*
