@@ -13,6 +13,8 @@
 #include <assimp/IOSystem.hpp>
 #include <assimp/IOStream.hpp>
 
+#include <forward_list>
+
 namespace Assimp
 {
     class je_file_io_stream : public IOStream
@@ -411,8 +413,43 @@ namespace std
 
 struct jegl_context_notifier
 {
+    struct cached_resource
+    {
+        jeecs::graphic::created_resource m_resource;
+        jeecs::typing::timestamp_ms_t m_cache_time;
+    
+        template<jeecs::graphic::requirements::basic_graphic_resource T>
+        cached_resource(T* res)
+            : m_resource(res)
+            , m_cache_time(je_clock_time_stamp())
+        {
+        }
+        cached_resource(const cached_resource&) = default;
+        cached_resource(cached_resource&&) = default;
+        cached_resource& operator = (const cached_resource&) = default;
+        cached_resource& operator = (cached_resource&&) = default;
+        ~cached_resource() = default;
+
+        bool try_drop_no_lock(
+            jeecs::typing::timestamp_ms_t current_time,
+            jeecs::typing::timestamp_ms_t outdata_time) const
+        {
+            if (1 < m_resource.get_handle()->m_raw_ref_count->m_binding_count.load(std::memory_order_relaxed))
+                // this resource is still in use.
+                return false;
+
+            if (current_time - m_cache_time < outdata_time)
+                // not outdated yet.
+                return false;
+
+            // Drop it.
+            m_resource.drop_resource();
+            return true;
+        }
+    };
+
     using cached_resource_map_t =
-        std::unordered_map<std::string, jeecs::graphic::created_resource>;
+        std::unordered_map<std::string, cached_resource>;
     using cached_resource_blob_t =
         std::unordered_map<std::string, jeecs::graphic::cached_resource_blob>;
     using outdated_resource_blob_t =
@@ -615,6 +652,26 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
         {
             thread->_m_thread_notifier->m_graphic_terminated = true;
         }
+
+        // Check if cached resources need to be cleaned.
+        do
+        {
+            const auto this_time = je_clock_time_stamp();
+            std::forward_list<const char*> outdated_resource_keys;
+
+            std::lock_guard g1(thread->_m_thread_notifier->_m_cached_resources_mx);
+            for (auto &[path, cached_res] : thread->_m_thread_notifier->_m_cached_resources)
+            {
+                if (cached_res.try_drop_no_lock(this_time, 1000 /* 1 sec */))
+                    outdated_resource_keys.push_front(path.c_str());
+            }
+
+            for (auto* path : outdated_resource_keys)
+            {
+                thread->_m_thread_notifier->_m_cached_resources.erase(path);
+            }
+
+        } while (0);
 
         auto* del_res = thread->_m_thread_notifier->_m_closing_resources.pick_all();
         while (del_res)
@@ -851,7 +908,7 @@ void jegl_terminate_graphic_thread(jegl_context* thread)
         for (auto& [_path, cached_resource] : thread->_m_thread_notifier->_m_cached_resources)
         {
             (void)_path;
-            cached_resource.drop_resource();
+            cached_resource.m_resource.drop_resource();
         }
     } while (0);
 
@@ -926,7 +983,7 @@ bool jegl_mark_shared_resources_outdated(
         auto fnd = context->_m_thread_notifier->_m_cached_resources.find(path);
         if (fnd != context->_m_thread_notifier->_m_cached_resources.end())
         {
-            fnd->second.drop_resource();
+            fnd->second.m_resource.drop_resource();
             context->_m_thread_notifier->_m_cached_resources.erase(fnd);
         }
 
@@ -1030,7 +1087,7 @@ T* /* MAY NULL */ _jegl_try_load_shared_resource(jegl_context* context, const ch
         auto fnd = context->_m_thread_notifier->_m_cached_resources.find(path);
         if (fnd != context->_m_thread_notifier->_m_cached_resources.end())
         {
-            auto* res = fnd->second.try_resource<T>();
+            auto* res = fnd->second.m_resource.try_resource<T>();
             if (res != nullptr)
             {
                 jegl_share_resource(res);
@@ -1050,23 +1107,23 @@ T* _jegl_try_update_shared_resource(jegl_context* context, T* resource)
 
         std::lock_guard g1(context->_m_thread_notifier->_m_cached_resources_mx);
 
-        jeecs::graphic::created_resource appending_resource(resource);
+        jegl_context_notifier::cached_resource cachine_resource(resource);
         auto&& [cached_resource, insert_succ] =
             context->_m_thread_notifier->_m_cached_resources.insert(
-                std::make_pair(resource_path, appending_resource));
+                std::make_pair(resource_path, cachine_resource));
 
         if (insert_succ)
         {
-            jegl_share_resource_handle(appending_resource.get_handle());
+            jegl_share_resource_handle(cachine_resource.m_resource.get_handle());
             return resource;
         }
-        else if (cached_resource->second.m_type == appending_resource.m_type)
+        else if (cached_resource->second.m_resource.m_type == cachine_resource.m_resource.m_type)
         {
             // 就在刚刚创建的瞬间，已经有一个相同路径的资源存在了，放弃新创建的
-            appending_resource.drop_resource();
+            cachine_resource.m_resource.drop_resource();
 
-            jegl_share_resource_handle(cached_resource->second.get_handle());
-            return cached_resource->second.resource<T>();
+            jegl_share_resource_handle(cached_resource->second.m_resource.get_handle());
+            return cached_resource->second.m_resource.resource<T>();
         }
         else
         {
