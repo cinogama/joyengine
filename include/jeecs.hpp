@@ -2800,6 +2800,50 @@ JE_API void jegl_reboot_graphic_thread(
     const jegl_interface_config* config_may_null);
 
 /*
+jegl_cache_config_t [类型]
+图形资源缓存配置结构体
+    * m_max_cached_count: 最大缓存资源数量（0 表示不限制，默认 256）
+    * m_min_hold_time_ms: 资源在未被引用后的最小保留时间（毫秒，默认 30000）
+    * m_max_idle_time_ms: 资源最大空闲时间，超过此时间即使未达到缓存上限也会被清理（毫秒，默认 300000）
+    * m_cleanup_interval_ms: 缓存清理检查间隔（毫秒，默认 5000）
+*/
+struct jegl_cache_config_t
+{
+    size_t m_max_cached_count;
+    uint64_t m_min_hold_time_ms;
+    uint64_t m_max_idle_time_ms;
+    uint64_t m_cleanup_interval_ms;
+};
+
+/*
+jegl_set_cache_config [基本接口]
+设置图形资源缓存配置
+    * 传入 nullptr 将重置为默认配置
+*/
+JE_API void jegl_set_cache_config(
+    jegl_context* thread_handle,
+    const jegl_cache_config_t* config_may_null);
+
+/*
+jegl_get_cache_config [基本接口]
+获取当前图形资源缓存配置
+*/
+JE_API void jegl_get_cache_config(
+    jegl_context* thread_handle,
+    jegl_cache_config_t* out_config);
+
+/*
+jegl_get_cache_statistics [基本接口]
+获取当前缓存统计信息
+    * out_cached_count: 当前缓存的资源数量
+    * out_in_use_count: 当前正在使用（引用计数>1）的资源数量
+*/
+JE_API void jegl_get_cache_statistics(
+    jegl_context* thread_handle,
+    size_t* out_cached_count,
+    size_t* out_in_use_count);
+
+/*
 jegl_share_resource_handle [基本接口]
 增加指定资源句柄的引用计数，使得对应的图形资源需要额外执行一次 close 操作才能被释放
     * 此函数通常用于实现资源的共享引用

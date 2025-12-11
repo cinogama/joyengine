@@ -413,15 +413,34 @@ namespace std
 
 struct jegl_context_notifier
 {
+    struct cache_config
+    {
+        // 最大缓存资源数量（0 表示不限制）
+        size_t m_max_cached_count = 256;
+        // 资源在未被引用后的最小保留时间（毫秒）
+        jeecs::typing::timestamp_ms_t m_min_hold_time_ms = 30000; // 30秒
+        // 资源最大空闲时间，超过此时间即使未达到缓存上限也会被清理（毫秒）
+        jeecs::typing::timestamp_ms_t m_max_idle_time_ms = 300000; // 5分钟
+        // 缓存清理检查间隔（毫秒）
+        jeecs::typing::timestamp_ms_t m_cleanup_interval_ms = 5000; // 5秒
+    };
+
     struct cached_resource
     {
         jeecs::graphic::created_resource m_resource;
+        // 资源加入缓存的时间
         jeecs::typing::timestamp_ms_t m_cache_time;
+        // 资源最后一次被访问的时间（用于 LRU 策略）
+        mutable jeecs::typing::timestamp_ms_t m_last_access_time;
+        // 资源被访问的次数（用于热点资源判断）
+        mutable uint32_t m_access_count;
     
         template<jeecs::graphic::requirements::basic_graphic_resource T>
         cached_resource(T* res)
             : m_resource(res)
             , m_cache_time(je_clock_time_stamp())
+            , m_last_access_time(m_cache_time)
+            , m_access_count(1)
         {
         }
         cached_resource(const cached_resource&) = default;
@@ -430,21 +449,68 @@ struct jegl_context_notifier
         cached_resource& operator = (cached_resource&&) = default;
         ~cached_resource() = default;
 
-        bool try_drop_no_lock(
-            jeecs::typing::timestamp_ms_t current_time,
-            jeecs::typing::timestamp_ms_t outdata_time) const
+        // 记录一次访问
+        void touch() const
         {
-            if (1 < m_resource.get_handle()->m_raw_ref_count->m_binding_count.load(std::memory_order_relaxed))
-                // this resource is still in use.
+            m_last_access_time = je_clock_time_stamp();
+            ++m_access_count;
+        }
+
+        // 获取资源的空闲时间
+        jeecs::typing::timestamp_ms_t idle_time(
+            jeecs::typing::timestamp_ms_t current_time) const
+        {
+            return current_time - m_last_access_time;
+        }
+
+        // 判断资源是否正在被使用（引用计数 > 1 表示缓存外还有引用）
+        bool is_in_use() const
+        {
+            return m_resource.get_handle()->m_raw_ref_count->m_binding_count.load(
+                std::memory_order_relaxed) > 1;
+        }
+
+        // 计算资源的清理优先级（值越小越应该被清理）
+        // 考虑因素：空闲时间、访问频率
+        int64_t eviction_priority(jeecs::typing::timestamp_ms_t current_time) const
+        {
+            // 正在使用的资源优先级最高，不应被清理
+            if (is_in_use())
+                return INT64_MAX;
+
+            // 优先级 = 访问次数 * 1000 - 空闲时间
+            // 访问次数越多、空闲时间越短，优先级越高
+            return static_cast<int64_t>(m_access_count) * 1000 
+                   - static_cast<int64_t>(idle_time(current_time));
+        }
+
+        // 尝试清理资源（仅当满足清理条件时）
+        bool try_evict(
+            jeecs::typing::timestamp_ms_t current_time,
+            const cache_config& config,
+            bool force_if_idle) const
+        {
+            // 正在被使用的资源不能清理
+            if (is_in_use())
                 return false;
 
-            if (current_time - m_cache_time < outdata_time)
-                // not outdated yet.
-                return false;
+            const auto idle = idle_time(current_time);
 
-            // Drop it.
-            m_resource.drop_resource();
-            return true;
+            // 如果空闲时间超过最大空闲时间，强制清理
+            if (idle >= config.m_max_idle_time_ms)
+            {
+                m_resource.drop_resource();
+                return true;
+            }
+
+            // 如果是强制清理（缓存满了）且超过最小保留时间
+            if (force_if_idle && idle >= config.m_min_hold_time_ms)
+            {
+                m_resource.drop_resource();
+                return true;
+            }
+
+            return false;
         }
     };
 
@@ -467,6 +533,11 @@ struct jegl_context_notifier
     bool m_update_request_flag;
 
     std::promise<void> m_promise;
+
+    // 缓存管理配置
+    cache_config _m_cache_config;
+    // 上次执行缓存清理的时间
+    jeecs::typing::timestamp_ms_t _m_last_cleanup_time = 0;
 
     // 已经加载的资源缓存，会有一个清理机制，在必要时释放没有人使用的资源。
     std::shared_mutex _m_cached_resources_mx;
@@ -608,17 +679,22 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
         bool /* Need close graphic resource */>
         _waiting_to_free_resource;
 
-    if (!thread->_m_thread_notifier->m_graphic_terminated)
+    auto* notifier = thread->_m_thread_notifier;
+    if (!notifier->m_graphic_terminated)
     {
         do
         {
-            std::unique_lock uq1(thread->_m_thread_notifier->m_update_mx);
-            thread->_m_thread_notifier->m_update_waiter.wait(uq1, [thread]() -> bool
-                { return thread->_m_thread_notifier->m_update_request_flag; });
+            std::unique_lock uq1(notifier->m_update_mx);
+            notifier->m_update_waiter.wait(
+                uq1, 
+                [notifier]() -> bool
+                { 
+                    return notifier->m_update_request_flag; 
+                });
         } while (0);
 
         // Ready for rend..
-        if (thread->_m_thread_notifier->m_graphic_terminated || thread->_m_thread_notifier->m_graphic_reboot)
+        if (notifier->m_graphic_terminated || notifier->m_graphic_reboot)
             goto is_reboot_or_shutdown;
 
         const auto frame_update_state =
@@ -628,7 +704,7 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
         {
         case jegl_update_action::JEGL_UPDATE_STOP:
             // graphic thread want to exit. mark stop update.
-            thread->_m_thread_notifier->m_graphic_terminated = true;
+            notifier->m_graphic_terminated = true;
             break;
         case jegl_update_action::JEGL_UPDATE_SKIP:
             if (thread->m_config.m_fps == 0)
@@ -650,30 +726,82 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
             thread->m_apis->update_draw_commit(
                 thread->m_graphic_impl_context, frame_update_state))
         {
-            thread->_m_thread_notifier->m_graphic_terminated = true;
+            notifier->m_graphic_terminated = true;
         }
 
         // Check if cached resources need to be cleaned.
         do
         {
             const auto this_time = je_clock_time_stamp();
-            std::forward_list<const char*> outdated_resource_keys;
+            const auto& config = notifier->_m_cache_config;
 
-            std::lock_guard g1(thread->_m_thread_notifier->_m_cached_resources_mx);
-            for (auto &[path, cached_res] : thread->_m_thread_notifier->_m_cached_resources)
+            // 检查是否到了清理时间
+            if (this_time - notifier->_m_last_cleanup_time < config.m_cleanup_interval_ms)
+                break; // 还没到清理间隔，跳过
+
+            notifier->_m_last_cleanup_time = this_time;
+
+            std::lock_guard g1(notifier->_m_cached_resources_mx);
+            
+            const size_t cache_count = notifier->_m_cached_resources.size();
+            const bool need_evict_for_space = 
+                config.m_max_cached_count > 0 && cache_count > config.m_max_cached_count;
+
+            // 收集需要清理的资源
+            std::vector<std::string> resources_to_evict;
+
+            if (need_evict_for_space)
             {
-                if (cached_res.try_drop_no_lock(this_time, 1000 /* 1 sec */))
-                    outdated_resource_keys.push_front(path.c_str());
+                // 缓存超出限制，需要根据优先级清理
+                // 收集所有资源及其优先级
+                std::vector<std::pair<int64_t, std::string>> priority_list;
+                priority_list.reserve(cache_count);
+
+                for (const auto& [path, cached_res] : notifier->_m_cached_resources)
+                {
+                    priority_list.emplace_back(
+                        cached_res.eviction_priority(this_time), path);
+                }
+
+                // 按优先级排序（优先级低的排前面）
+                std::sort(priority_list.begin(), priority_list.end(),
+                    [](const auto& a, const auto& b) { return a.first < b.first; });
+
+                // 清理直到低于限制或无法继续清理
+                size_t target_evict_count = config.m_max_cached_count / 4; // 清理到 75% 水位
+                for (const auto& [priority, path] : priority_list)
+                {
+                    auto fnd = notifier->_m_cached_resources.find(path);
+                    if (fnd != notifier->_m_cached_resources.end())
+                    {
+                        if (fnd->second.try_evict(this_time, config, true))
+                        {
+                            resources_to_evict.push_back(path);
+                            if (0 == target_evict_count--)
+                                break; // 达到清理目标，停止
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // 缓存未超限，仅清理超过最大空闲时间的资源
+                for (const auto& [path, cached_res] : notifier->_m_cached_resources)
+                {
+                    if (cached_res.try_evict(this_time, config, false))
+                        resources_to_evict.push_back(path);
+                }
             }
 
-            for (auto* path : outdated_resource_keys)
+            // 从缓存中移除已清理的资源
+            for (const auto& path : resources_to_evict)
             {
-                thread->_m_thread_notifier->_m_cached_resources.erase(path);
+                notifier->_m_cached_resources.erase(path);
             }
 
         } while (0);
 
-        auto* del_res = thread->_m_thread_notifier->_m_closing_resources.pick_all();
+        auto* del_res = notifier->_m_closing_resources.pick_all();
         while (del_res)
         {
             auto* cur_del_res = del_res;
@@ -691,9 +819,9 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
 
         do
         {
-            std::lock_guard g1(thread->_m_thread_notifier->m_update_mx);
-            thread->_m_thread_notifier->m_update_request_flag = false;
-            thread->_m_thread_notifier->m_update_waiter.notify_all();
+            std::lock_guard g1(notifier->m_update_mx);
+            notifier->m_update_request_flag = false;
+            notifier->m_update_waiter.notify_all();
         } while (0);
 
         for (auto [deleting_resource, need_close] : _waiting_to_free_resource)
@@ -701,7 +829,7 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
             if (need_close)
             {
                 _jegl_close_resouce_instance_by_api(thread, &deleting_resource->m_resource);
-                auto result = thread->_m_thread_notifier->_m_created_resources.erase(
+                auto result = notifier->_m_created_resources.erase(
                     deleting_resource->m_resource);
 
                 (void)result;
@@ -715,9 +843,9 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
     else
     {
     is_reboot_or_shutdown:
-        if (thread->_m_thread_notifier->m_graphic_reboot)
+        if (notifier->m_graphic_reboot)
         {
-            thread->_m_thread_notifier->m_graphic_reboot = false;
+            notifier->m_graphic_reboot = false;
             return jegl_sync_state::JEGL_SYNC_REBOOT;
         }
         return jegl_sync_state::JEGL_SYNC_SHUTDOWN;
@@ -728,17 +856,18 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
 
 bool jegl_sync_shutdown(jegl_context* thread, bool isreboot)
 {
+    auto* notifier = thread->_m_thread_notifier;
     thread->m_apis->interface_shutdown_before_resource_release(
         thread,
         thread->m_graphic_impl_context,
         isreboot);
 
-    for (auto& [_, resource_blob] : thread->_m_thread_notifier->_m_created_resource_blobs)
+    for (auto& [_, resource_blob] : notifier->_m_created_resource_blobs)
         _jegl_close_resource_blob_by_api(thread, &resource_blob);
 
-    thread->_m_thread_notifier->_m_created_resource_blobs.clear();
+    notifier->_m_created_resource_blobs.clear();
 
-    for (auto& resource : thread->_m_thread_notifier->_m_created_resources)
+    for (auto& resource : notifier->_m_created_resources)
     {
         _jegl_close_resouce_instance_by_api(thread, &resource);
 
@@ -747,7 +876,7 @@ bool jegl_sync_shutdown(jegl_context* thread, bool isreboot)
         resouce_handle->m_graphic_thread = nullptr;
         resouce_handle->m_graphic_thread_version = 0;
     }
-    thread->_m_thread_notifier->_m_created_resources.clear();
+    notifier->_m_created_resources.clear();
 
     thread->m_apis->interface_shutdown(
         thread,
@@ -759,7 +888,7 @@ bool jegl_sync_shutdown(jegl_context* thread, bool isreboot)
     if (!isreboot)
     {
         // Really shutdown, give promise!
-        thread->_m_thread_notifier->m_promise.set_value();
+        notifier->m_promise.set_value();
         jeecs::graphic::_current_graphic_thread = nullptr;
         return true;
     }
@@ -889,30 +1018,31 @@ void jegl_terminate_graphic_thread(jegl_context* thread)
 
     } while (0);
 
-    thread->_m_thread_notifier->m_graphic_terminated = true;
+    auto* notifier = thread->_m_thread_notifier;
+    notifier->m_graphic_terminated = true;
 
     do
     {
-        std::lock_guard g1(thread->_m_thread_notifier->m_update_mx);
-        thread->_m_thread_notifier->m_update_request_flag = true;
-        thread->_m_thread_notifier->m_update_waiter.notify_all();
+        std::lock_guard g1(notifier->m_update_mx);
+        notifier->m_update_request_flag = true;
+        notifier->m_update_waiter.notify_all();
     } while (0);
 
     // Sync thread and wait for shutting-down
-    thread->_m_thread_notifier->m_promise.get_future().get();
+    notifier->m_promise.get_future().get();
 
     // Close shared resources in contexrt.
     do
     {
-        std::shared_lock sg1(thread->_m_thread_notifier->_m_cached_resources_mx);
-        for (auto& [_path, cached_resource] : thread->_m_thread_notifier->_m_cached_resources)
+        std::shared_lock sg1(notifier->_m_cached_resources_mx);
+        for (auto& [_path, cached_resource] : notifier->_m_cached_resources)
         {
             (void)_path;
             cached_resource.m_resource.drop_resource();
         }
     } while (0);
 
-    auto* closing_resource = thread->_m_thread_notifier->_m_closing_resources.pick_all();
+    auto* closing_resource = notifier->_m_closing_resources.pick_all();
     while (closing_resource)
     {
         auto* cur_closing_resource = closing_resource;
@@ -922,7 +1052,6 @@ void jegl_terminate_graphic_thread(jegl_context* thread)
         delete cur_closing_resource;
     }
 
-    // delete std::launder(reinterpret_cast<std::atomic_bool*>(thread->m_stop_update));
     delete thread->_m_thread_notifier;
     delete thread->m_apis;
     delete thread;
@@ -934,28 +1063,38 @@ bool jegl_update(
     jegl_update_sync_callback_t callback_after_wait_may_null,
     void* callback_param)
 {
-    if (thread->_m_thread_notifier->m_graphic_terminated)
+    auto* notifier = thread->_m_thread_notifier;
+
+    if (notifier->m_graphic_terminated)
         return false;
 
-    std::unique_lock uq1(thread->_m_thread_notifier->m_update_mx);
+    std::unique_lock uq1(notifier->m_update_mx);
     if (mode == jegl_update_sync_mode::JEGL_WAIT_LAST_FRAME_END)
     {
         // Wait until `last` frame draw end.
-        thread->_m_thread_notifier->m_update_waiter.wait(uq1, [thread]() -> bool
-            { return !thread->_m_thread_notifier->m_update_request_flag; });
+        notifier->m_update_waiter.wait(
+            uq1, 
+            [notifier]() -> bool
+            { 
+                return !notifier->m_update_request_flag;
+            });
 
         if (nullptr != callback_after_wait_may_null)
             callback_after_wait_may_null(callback_param);
     }
 
-    thread->_m_thread_notifier->m_update_request_flag = true;
-    thread->_m_thread_notifier->m_update_waiter.notify_all();
+    notifier->m_update_request_flag = true;
+    notifier->m_update_waiter.notify_all();
 
     if (mode == jegl_update_sync_mode::JEGL_WAIT_THIS_FRAME_END)
     {
         // Wait until `this` frame draw end.
-        thread->_m_thread_notifier->m_update_waiter.wait(uq1, [thread]() -> bool
-            { return !thread->_m_thread_notifier->m_update_request_flag; });
+        notifier->m_update_waiter.wait(
+            uq1,
+            [notifier]() -> bool
+            { 
+                return !notifier->m_update_request_flag;
+            });
 
         if (nullptr != callback_after_wait_may_null)
             callback_after_wait_may_null(callback_param);
@@ -970,6 +1109,61 @@ void jegl_reboot_graphic_thread(jegl_context* thread_handle, const jegl_interfac
         thread_handle->m_config = *config_may_null;
 
     thread_handle->_m_thread_notifier->m_graphic_reboot = true;
+}
+
+void jegl_set_cache_config(
+    jegl_context* thread_handle,
+    const jegl_cache_config_t* config_may_null)
+{
+    auto& cache_config = thread_handle->_m_thread_notifier->_m_cache_config;
+    
+    if (config_may_null != nullptr)
+    {
+        cache_config.m_max_cached_count = config_may_null->m_max_cached_count;
+        cache_config.m_min_hold_time_ms = config_may_null->m_min_hold_time_ms;
+        cache_config.m_max_idle_time_ms = config_may_null->m_max_idle_time_ms;
+        cache_config.m_cleanup_interval_ms = config_may_null->m_cleanup_interval_ms;
+    }
+    else
+    {
+        // 重置为默认配置
+        cache_config = jegl_context_notifier::cache_config{};
+    }
+}
+
+void jegl_get_cache_config(
+    jegl_context* thread_handle,
+    jegl_cache_config_t* out_config)
+{
+    const auto& cache_config = thread_handle->_m_thread_notifier->_m_cache_config;
+    
+    out_config->m_max_cached_count = cache_config.m_max_cached_count;
+    out_config->m_min_hold_time_ms = cache_config.m_min_hold_time_ms;
+    out_config->m_max_idle_time_ms = cache_config.m_max_idle_time_ms;
+    out_config->m_cleanup_interval_ms = cache_config.m_cleanup_interval_ms;
+}
+
+void jegl_get_cache_statistics(
+    jegl_context* thread_handle,
+    size_t* out_cached_count,
+    size_t* out_in_use_count)
+{
+    std::shared_lock sg1(thread_handle->_m_thread_notifier->_m_cached_resources_mx);
+    
+    size_t cached_count = 0;
+    size_t in_use_count = 0;
+    
+    for (const auto& [path, cached_res] : thread_handle->_m_thread_notifier->_m_cached_resources)
+    {
+        ++cached_count;
+        if (cached_res.is_in_use())
+            ++in_use_count;
+    }
+    
+    if (out_cached_count != nullptr)
+        *out_cached_count = cached_count;
+    if (out_in_use_count != nullptr)
+        *out_in_use_count = in_use_count;
 }
 
 bool jegl_mark_shared_resources_outdated(
@@ -1090,6 +1284,9 @@ T* /* MAY NULL */ _jegl_try_load_shared_resource(jegl_context* context, const ch
             auto* res = fnd->second.m_resource.try_resource<T>();
             if (res != nullptr)
             {
+                // 更新访问时间和访问计数（用于 LRU 策略）
+                fnd->second.touch();
+                
                 jegl_share_resource(res);
                 return res;
             }
