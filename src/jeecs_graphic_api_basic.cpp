@@ -1141,7 +1141,9 @@ T* _jegl_try_update_shared_resource(jegl_context* context, T* resource)
             context->_m_thread_notifier->_m_cached_resources.insert(
                 std::make_pair(resource_path, caching_statement));
 
-        auto& cached_resource = cached_resource_pair.second;
+        jegl_context_notifier::cached_resource_statement& cached_resource = 
+            cached_resource_pair->second;
+
         if (insert_succ)
         {
             jegl_share_resource_handle(caching_statement.m_resource.get_handle());
