@@ -425,18 +425,14 @@ struct jegl_context_notifier
         {
         }
 
-        cached_resource_statement(
-            const cached_resource_statement&) = default;
-        cached_resource_statement(
-            cached_resource_statement&&) = default;
-        cached_resource_statement& operator = (
-            const cached_resource_statement&) = default;
-        cached_resource_statement& operator = (
-            cached_resource_statement&&) = default;
+        cached_resource_statement(const cached_resource_statement&) = default;
+        cached_resource_statement(cached_resource_statement&&) = default;
+        cached_resource_statement& operator = (const cached_resource_statement&) = default;
+        cached_resource_statement& operator = (cached_resource_statement&&) = default;
 
         bool try_drop()
         {
-            constexpr uint8_t MAX_KEEP_COUNT = 15;
+            constexpr uint8_t MAX_KEEP_COUNT = 16;
 
             if (m_resource.get_handle()->m_raw_ref_count->m_binding_count.load() > 1)
             {
@@ -444,7 +440,7 @@ struct jegl_context_notifier
                 if (++m_keeped_count > MAX_KEEP_COUNT)
                     m_keeped_count = MAX_KEEP_COUNT;
             }
-            else if (--m_keeped_count == 0)
+            else if ((m_keeped_count >>= 1) == 0)
             {
                 // 此资源没有其他持有者，并且 keep 计数归零，可以回收。
                 m_resource.drop_resource();
@@ -666,12 +662,13 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
             notifier->m_graphic_terminated = true;
         }
 
-        // 当资源新增估计占用值达到 GPU_MEMORY_CLEANUP_THRESHOLD 时，审视一遍缓存资源，释放没有被使用的资源。
-        //      HINT: 这个数值约等于四个 2048 * 2048 RGBA8 贴图的大小。
-        constexpr size_t GPU_MEMORY_CLEANUP_THRESHOLD = 64 * 1024 * 1024;
-        if (notifier->_m_increased_gpu_memory_size >= GPU_MEMORY_CLEANUP_THRESHOLD)
+        // HINT: 这个数值约等于 2048 * 2048 RGBA8 贴图的大小。
+        constexpr size_t GPU_MEMORY_CLEANUP_THRESHOLD = 16 * 1024 * 1024;
+
+        if (// 当资源新增的估计占用值达到 GPU_MEMORY_CLEANUP_THRESHOLD 时：
+            notifier->_m_increased_gpu_memory_size >= GPU_MEMORY_CLEANUP_THRESHOLD)
         {
-            // 显存资源每新增 GPU_MEMORY_CLEANUP_THRESHOLD 字节，就审视一遍是否有可以释放的缓存资源。
+            // 检查一遍是否有可以释放的缓存资源。
             notifier->_m_increased_gpu_memory_size -= GPU_MEMORY_CLEANUP_THRESHOLD;
 
             std::lock_guard g1(notifier->_m_cached_resources_mx);
@@ -680,10 +677,8 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
             for (auto& [res_key, cached_res] : notifier->_m_cached_resources)
             {
                 if (cached_res.try_drop())
-                {
-                    // 标记为待移除
+                    // 缓存的资源被释放，标记为待移除
                     resources_to_erase.push_front(res_key.c_str());
-                }
             }
             for (const char* res_key : resources_to_erase)
             {
@@ -2137,6 +2132,11 @@ void jegl_bind_uniform_buffer(jegl_uniform_buffer* uniformbuf)
         gapi->ubuffer_init(
             thread_handle->m_graphic_impl_context,
             uniformbuf);
+
+        // Count the taken GPU memory size.
+        thread_handle->_m_thread_notifier->_m_increased_gpu_memory_size
+            += uniformbuf->m_buffer_size;
+
         break;
     case jeecs::graphic::jegl_resouce_state::INVALID_CONTEXT:
     default:
@@ -2290,7 +2290,10 @@ void jegl_bind_texture(jegl_texture* texture, size_t pass)
 
             // Count the taken GPU memory size.
             thread_handle->_m_thread_notifier->_m_increased_gpu_memory_size
-                += texture->m_width * texture->m_height * (texture->m_format & jegl_texture::format::COLOR_DEPTH_MASK);
+                += texture->m_width
+                * texture->m_height
+                * (texture->m_format & jegl_texture::format::COLOR_DEPTH_MASK)
+                * ((texture->m_format & jegl_texture::format::FLOAT16) ? 2 : 1);
 
             if (found_blob_kind != jeecs::graphic::cached_resource_blob::kind::UNKNOWN
                 || !_jegl_try_update_resource_blob(
