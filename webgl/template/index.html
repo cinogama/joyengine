@@ -119,7 +119,9 @@
             canvas: document.getElementById('canvas'),
             totalDependencies: 0,
             toggleTopBarCalled: false,
-            print: () => { },
+            print: function (...args) {
+                console.log(...args);
+            },
             setStatus: function (text) {
                 const progressBar = document.getElementById('progressBar');
                 const progressBarContainer = document.getElementById('progressBarContainer');
