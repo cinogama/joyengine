@@ -1402,7 +1402,7 @@ jegl_shader* _jegl_load_shader_source_impl(
         return nullptr;
     }
 
-    wo_run(vmm);
+    wo_bootup(vmm, WO_FALSE);
 
     wo_unref_value generate_shader_func;
 

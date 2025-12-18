@@ -245,8 +245,7 @@ return main();
     wo_vm vmm = wo_create_vm();
     if (wo_load_source(vmm, "builtin/je_varify_crc64.wo", crc64_src))
     {
-        wo_jit(vmm);
-        wo_value result = wo_run(vmm);
+        wo_value result = wo_bootup(vmm, WO_FALSE);
         if (result != nullptr)
             crc64_result = wo_int(result);
     }

@@ -2200,7 +2200,7 @@ WO_API wo_api wojeapi_towoo_update_component(wo_vm vm, wo_value args)
             }
             else
             {
-                if (nullptr == wo_run(cvm))
+                if (nullptr == wo_bootup(cvm, WO_FALSE))
                 {
                     jeecs::debug::logerr("Failed to register: '%s', init failed: '%s'.",
                         component_name, wo_get_runtime_error(cvm));
@@ -2428,9 +2428,7 @@ std::optional<std::string> _je_dynamic_parser_update_all(const char* path)
         return std::optional(result);
     }
 
-    wo_jit(newvm);
-    wo_run(newvm);
-
+    wo_bootup(newvm, WO_FALSE);
     free(content);
 
     _je_dynamic_parser_clear();
