@@ -23,10 +23,9 @@ namespace editor::gui::drawpannel
     {
         func create(path: fsys::path_t)
         {
-            try! vmm = vm::load(path->to_string);
-            do vmm->jit;
-            
-            try! _ = vmm->run()
+            try! vmm = vm::load(path->to_string, option::none);
+
+            try! _ = vmm->bootup(true)
                 -> ok_or(F"脚本 {path->to_string} 执行失败")
                 ;
                 

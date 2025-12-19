@@ -109,10 +109,11 @@ namespace jeapi
                     
                 try! runtime_content = je::file::readall(rumtime_path)
                     -> ok_or(F"无法读取 Workflow 运行时文件 {rumtime_path}");
-                try! vm_instance = vm::create(
-                    fact_runtime_path, runtime_content: buffer);
+                try! vm_instance = vm::load(
+                    fact_runtime_path, 
+                    option::value <| runtime_content: buffer);
                     
-                try! _ = vm_instance->run()
+                try! _ = vm_instance->bootup(false)
                     -> ok_or(F"初始化 Workflow `{workflow_path}` 的运行时失败");
                     
                 return_ok! Runtime{

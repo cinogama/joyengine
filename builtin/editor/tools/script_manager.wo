@@ -27,24 +27,25 @@ namespace editor::tools
                 return result::err("没有找到此脚本");
             value(path)?
             {
-                match (vm::load(path->to_string()))
+                match (vm::load(path->to_string(), option::none))
                 {
                     err(msg)?
                         return result::err(F"运行脚本失败：{msg}");
                     ok(vmm)?
                     {
+                        defer do vmm->close();
+
                         let invoke_script =
                             func(opentity: option<je::entity>)
                             {
-                                do vmm->jit;
-                                do vmm->run;
+                                do vmm->bootup(true);
                                 do vmm->invoke("main", [
                                         proj->get_env->get_universe as je::universe: dynamic,
                                         proj->get_editing_world as option<je::world>: dynamic,
                                         opentity as option<je::entity>: dynamic,
                                     ]);
-                                do vmm->close();
                             };
+                            
                         match (ctx->get_editing_entity)
                         {
                             value(euid)? euid->dosth(invoke_script);

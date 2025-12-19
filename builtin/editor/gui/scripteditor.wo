@@ -446,14 +446,13 @@ namespace editor::gui
         func run_script(self: ScriptEditor)
         {
             try! history = new! History(self.m_project, self.m_source->GetText);
-            try! vmm = vm::create(F"_jeditor_{JobID()}.wo", self.m_source->GetText: buffer);
+            try! vmm = vm::load(F"_jeditor_{JobID()}.wo", option::value <| self.m_source->GetText: buffer);
             
             assert(self.m_history->shrink(self.m_history_index));
             self.m_history->add(history);
             self.m_history_index += 1;
             
-            do vmm->jit;
-            if (!vmm->run->is_value
+            if (!vmm->bootup(true)->is_value
                 || !self.m_hook_callback(vmm)->is_value)
             {
                 return result::err("运行脚本时发生错误");

@@ -118,14 +118,19 @@ namespace editor::gui::edit_forms
                     
                 return Action::ACTION(func(pconfig, fimg){
                         pconfig->log(F"正在编译脚本：{packpath}");
-                        match (vm::load(originpath->to_string))
+                        match (vm::load(originpath->to_string, option::none))
                         {
                             ok(vminstance)?
                             {
+                                let builder = buffer::builder::create();
+                                builder->appendbuffer(vminstance->dump_binary(saving_woolang_pdi));
+                                
                                 assert(
-                                    vminstance->save_binary(saving_woolang_pdi)...
-                                        -> \bindata, binlen = fimg->pack_buffer(bindata->ptr, binlen, packpath);
-                                        );
+                                    fimg->pack_buffer(
+                                        builder->ptr(0, builder->len),
+                                        builder->len,
+                                        packpath));
+                                        
                                 return [];
                             }
                             err(_)?
@@ -481,12 +486,17 @@ namespace editor::gui::edit_forms
                                 ->replace("$APPLY_RESOLUTION$", F"je::internal::set_window_size({config.m_resolution[0]}, {config.m_resolution[1]});")
                                 ->replace("$APPLY_TITLE$", F"je::internal::set_window_title({proj->get_name->enstring});");
                                 
-                            let (start_up_script_binary, start_up_script_binary_sz) =
-                                new! vm("@/builtin/main.wo", final_boot_script: buffer)
+                            let builder = buffer::builder::create();
+                            builder->appendbuffer(
+                                vm::load("@/builtin/main.wo", option::value <| final_boot_script: buffer)
                                     ->unwrap
-                                    ->save_binary(saving_woolang_pdi);
+                                    ->dump_binary(saving_woolang_pdi));
                                     
-                            assert(fimg->pack_buffer(start_up_script_binary->ptr, start_up_script_binary_sz, "@/builtin/main.wo"));
+                            assert(
+                                fimg->pack_buffer(
+                                    builder->ptr(0, builder->len), 
+                                    builder->len, 
+                                    "@/builtin/main.wo"));
                             
                             // 2. 结束，保存镜像
                             fimg->finish();

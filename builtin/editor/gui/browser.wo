@@ -1193,8 +1193,8 @@ namespace workflow::nodes
                 {
                     do try!
                     {
-                        try! vmm = vm::load((path.path / "editor.wo")->to_string);
-                        try! val = vmm->run
+                        try! vmm = vm::load((path.path / "editor.wo")->to_string, option::none);
+                        try! val = vmm->bootup(false)
                             -> ok_or("运行 Workflow 编辑器脚本失败");
                             
                         if (!(val: bool))
