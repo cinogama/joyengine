@@ -58,9 +58,9 @@ func copy_file_consider_last_modified_time(
     if (!need_copy)
     {
         try! atime = lastwrite(source_path)
-            -> or_map(\eno = F"Unable to get last write time of {source_path->to_string()}: {eno}";);
+            -> ok_or(F"Unable to get last write time of {source_path->to_string()}.");
         try! btime = lastwrite(target_file_path)
-            -> or_map(\eno = F"Unable to get last write time of {target_file_path->to_string()}: {eno}";);
+            -> ok_or(F"Unable to get last write time of {target_file_path->to_string()}.");
             
         if (atime != btime)
         {
@@ -493,7 +493,7 @@ func main()
     let mut copy_pkg_src_only = false;
     let mut skip_process_and_socket = false;
     
-    for (let cmd : std::args())
+    for (let cmd : std::cmdlines())
     {
         if (cmd == "-static-link-pkgs")
             copy_pkg_src_only = true;

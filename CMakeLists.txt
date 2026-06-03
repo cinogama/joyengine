@@ -176,9 +176,10 @@ if (JE4_STATIC_LINK_MODULE_AND_PKGS)
     target_compile_definitions(joyengine_configs INTERFACE -DJE4_STATIC_LINK_MODULE_AND_PKGS=1)
 
     set(BAOZI_BUILD_BY_MGR          OFF     CACHE BOOL "Donot apply something for baozi, we will compile it ourself." FORCE)
-    set(BAOZI_WOOLIB_NAME           ""      CACHE STRING "Static link, don't need link woolang library." FORCE)
+    set(BAOZI_INCLUDE_PATH          "${CMAKE_CURRENT_SOURCE_DIR}/3rd/woolang/include"
+                                            CACHE STRING "Specify package include path for compiling." FORCE)
     set(BAOZI_BUILD_SHARED          OFF     CACHE BOOL "Build static link library." FORCE)
-    set(BAOZI_CMAKE_FORMAT_VERSION  "1.0.2" CACHE STRING "Used baozi cmake-doc version." FORCE)
+    set(BAOZI_CMAKE_FORMAT_VERSION  "1.1.0" CACHE STRING "Used baozi cmake-doc version." FORCE)
     set(BUILD_SHARED_LIBS           OFF     CACHE BOOL "Build static modules." FORCE)
 
     macro(JE4_GET_SUB_DIR_LIST result curdir)
