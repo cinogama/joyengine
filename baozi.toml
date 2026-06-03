@@ -1,0 +1,101 @@
+name = "joyengineecs"
+no_compile = true
+
+[dependence]
+[dependence.any]
+path = "pkg"
+
+[dependence.async]
+path = "pkg"
+src = "3rd/pkg"
+
+[dependence.iterator]
+path = "pkg"
+src = "3rd/pkg"
+
+[dependence.dumpling]
+path = "pkg"
+src = "3rd/pkg"
+
+[dependence.filestream]
+path = "pkg"
+src = "3rd/pkg"
+
+[dependence.concept]
+path = "pkg"
+
+[dependence.buffer]
+path = "pkg"
+src = "3rd/pkg"
+
+[dependence.crashhandler]
+path = "pkg"
+src = "3rd/pkg"
+
+[dependence.worst]
+path = "pkg"
+src = "3rd/pkg"
+
+[dependence.decorator]
+path = "pkg"
+
+[dependence.fsys]
+path = "pkg"
+src = "3rd/pkg"
+
+[dependence.guid]
+path = "pkg"
+src = "3rd/pkg"
+
+[dependence.socket]
+path = "pkg"
+src = "3rd/pkg"
+
+[dependence.image]
+path = "pkg"
+src = "3rd/pkg"
+
+[dependence.process]
+path = "pkg"
+src = "3rd/pkg"
+
+[dependence.interface]
+path = "pkg"
+src = "3rd/pkg"
+
+[dependence.list]
+path = "pkg"
+src = "3rd/pkg"
+
+[dependence.makenew]
+path = "pkg"
+src = "3rd/pkg"
+
+[dependence.math]
+path = "pkg"
+src = "3rd/pkg"
+
+[dependence.node_editor]
+path = "pkg"
+
+[dependence.regex]
+path = "pkg"
+src = "3rd/pkg"
+
+[dependence.singleton]
+path = "pkg"
+src = "3rd/pkg"
+
+[dependence.thread]
+path = "pkg"
+src = "3rd/pkg"
+
+[dependence.try]
+path = "pkg"
+src = "3rd/pkg"
+
+[dependence.woshader]
+path = "pkg"
+
+[woolang]
+[test_dependence]
