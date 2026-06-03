@@ -17,4 +17,4 @@
 /*.dylib
 /*.lib
 /*.pdb
-/baozi.lock.toml
+# /baozi.lock.toml
