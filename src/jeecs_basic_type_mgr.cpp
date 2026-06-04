@@ -164,7 +164,7 @@ namespace jeecs_impl
             const jeecs::typing::type_info *_membertype,
             const char *_member_name,
             const char *_woovalue_type_may_null,
-            wo_value _woovalue_init_may_null,
+            woort_value _woovalue_init_may_null,
             ptrdiff_t _member_offset) noexcept
         {
             if (_classtype->m_member_types == nullptr)
@@ -193,11 +193,12 @@ namespace jeecs_impl
             meminfo->m_member_offset = _member_offset;
             meminfo->m_next_member = nullptr;
 
-            if (_woovalue_type_may_null != nullptr && _woovalue_init_may_null != nullptr)
+            if (_woovalue_type_may_null != nullptr && _woovalue_init_may_null != WOORT_IGNORE)
             {
                 meminfo->m_woovalue_type_may_null = jeecs::basic::make_new_string(_woovalue_type_may_null);
-                meminfo->m_woovalue_init_may_null = wo_create_pin_value();
-                wo_pin_value_set(meminfo->m_woovalue_init_may_null, _woovalue_init_may_null);
+                meminfo->m_woovalue_init_may_null = woort_GC_Pin_create(1);
+                woort_GC_Pin_set_value(
+                    meminfo->m_woovalue_init_may_null, 0, _woovalue_init_may_null);
             }
 
             auto **m_new_member_ptr = &class_member_info->m_members;
@@ -294,7 +295,7 @@ namespace jeecs_impl
                     je_mem_free((void *)current_member->m_woovalue_type_may_null);
 
                 if (current_member->m_woovalue_init_may_null != nullptr)
-                    wo_close_pin_value(current_member->m_woovalue_init_may_null);
+                    woort_GC_Pin_destroy(current_member->m_woovalue_init_may_null);
 
                 delete current_member;
             }
@@ -489,7 +490,7 @@ void je_register_member(
     const jeecs::typing::type_info *_membertype,
     const char *_member_name,
     const char *_woovalue_type_may_null,
-    wo_value _woovalue_init_may_null,
+    woort_value _woovalue_init_may_null,
     ptrdiff_t _member_offset)
 {
     jeecs_impl::global_factory_holder::holder()
