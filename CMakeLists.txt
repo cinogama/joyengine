@@ -214,8 +214,8 @@ if (JE4_STATIC_LINK_MODULE_AND_PKGS)
             if (TARGET ${pkg_name})
                 # Define link-type-macro for pkg.
                 target_link_libraries(${pkg_name} PRIVATE joyengine_core_pre_define_macro)
-                target_compile_definitions(${pkg_name} PRIVATE -Dwolib_entry=je_static_wo_pkg_${pkg_name}_entry)
-                target_compile_definitions(${pkg_name} PRIVATE -Dwolib_exit=je_static_wo_pkg_${pkg_name}_exit)
+                target_compile_definitions(${pkg_name} PRIVATE -Dwoort_lib_entry=je_static_wo_pkg_${pkg_name}_entry)
+                target_compile_definitions(${pkg_name} PRIVATE -Dwoort_lib_leave=je_static_wo_pkg_${pkg_name}_leave)
                 target_include_directories(${pkg_name} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/3rd/woolang/include")
 
                 if (JE4_BUILD_SHARED_CORE AND NOT MSVC)

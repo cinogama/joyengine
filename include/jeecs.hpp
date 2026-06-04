@@ -12,8 +12,8 @@
 
 #include "wo.h"
 
-#define WO_FAIL_JE_FATAL_ERROR 0xD101
-#define WO_FAIL_JE_BAD_INIT_SHADER_VALUE 0xD102
+#define WO_FAIL_JE_FATAL_ERROR 0xD201
+#define WO_FAIL_JE_BAD_INIT_SHADER_VALUE 0xD202
 
 #include <cstdint>
 #include <cstring>
@@ -4673,7 +4673,7 @@ namespace jeecs
         inline void logfatal(const char* format, ArgTs &&...args)
         {
             je_log(JE_LOG_FATAL, format, args...);
-            wo_fail(WO_FAIL_JE_FATAL_ERROR, format, args...);
+            woort_panic(WO_FAIL_JE_FATAL_ERROR, format, args...);
         }
     }
 

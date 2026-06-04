@@ -21,23 +21,23 @@ namespace jeecs
 
         struct woovalue
         {
-            wo_pin_value m_pin_value;
+            woort_GCPin* m_pin_value;
             woovalue()
             {
-                m_pin_value = wo_create_pin_value();
+                m_pin_value = woort_GC_Pin_create(1);
             }
             ~woovalue()
             {
                 if (m_pin_value != nullptr)
-                    wo_close_pin_value(m_pin_value);
+                    woort_GC_Pin_destroy(m_pin_value);
             }
             woovalue(const woovalue &val)
                 : woovalue()
             {
-                _wo_value tmpval;
+                woort_Value tmpval;
 
-                wo_pin_value_get(&tmpval, val.m_pin_value);
-                wo_pin_value_set(m_pin_value, &tmpval);
+                woort_GC_Pin_get_internal_value(&tmpval, val.m_pin_value, 0);
+                woort_GC_Pin_set_internal_value(m_pin_value, 0, &tmpval);
             }
             woovalue(woovalue &&val)
             {
@@ -46,17 +46,17 @@ namespace jeecs
             }
             woovalue &operator=(const woovalue &val)
             {
-                _wo_value tmpval;
+                woort_Value tmpval;
 
-                wo_pin_value_get(&tmpval, val.m_pin_value);
-                wo_pin_value_set(m_pin_value, &tmpval);
+                woort_GC_Pin_get_internal_value(&tmpval, val.m_pin_value, 0);
+                woort_GC_Pin_set_internal_value(m_pin_value, 0, &tmpval);
 
                 return *this;
             }
             woovalue &operator=(woovalue &&val)
             {
                 if (m_pin_value != nullptr)
-                    wo_close_pin_value(m_pin_value);
+                    woort_GC_Pin_destroy(m_pin_value);
 
                 m_pin_value = val.m_pin_value;
                 val.m_pin_value = nullptr;
@@ -72,13 +72,13 @@ namespace jeecs
             {
                 return "";
             }
-            void JEParseFromScriptType(wo_vm vm, wo_value v)
+            void JEParseFromScriptType(woort_value v)
             {
-                wo_pin_value_set(m_pin_value, v);
+                woort_GC_Pin_set_value(m_pin_value, 0, v);
             }
-            void JEParseToScriptType(wo_vm vm, wo_value v) const
+            void JEParseToScriptType(woort_value v) const
             {
-                wo_pin_value_get(v, m_pin_value);
+                woort_GC_Pin_get_value(v, m_pin_value, 0);
             }
         };
     }

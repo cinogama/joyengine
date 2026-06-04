@@ -218,8 +218,8 @@ func scan_pkg_entry_leave_function_in_path(i, skip_process_and_socket)
     let entrys = {}mut: map<string, void>;
     let leaves = {}mut: map<string, void>;
     
-    let entry_r = regex::expr:<{@"\s+wolib_entry\s*\("@}>;
-    let leave_r = regex::expr:<{@"\s+wolib_exit\s*\("@}>;
+    let entry_r = regex::expr:<{@"\s+woort_lib_entry\s*\("@}>;
+    let leave_r = regex::expr:<{@"\s+woort_lib_leave\s*\("@}>;
     
     for (let pkg_dir : i)
     {
@@ -266,28 +266,28 @@ func generate_je_api_decls()=> result<void, string>
 "@;
         for (let (_, funcs) : libfuncs)
         for (let f : funcs)
-            result += F"WO_API wo_api {f}(wo_vm vm, wo_value args);\n";
+            result += F"WOORT_API woort_api {f}(void);\n";
             
     result += @"
 woort_Dylib* je_extern_lib_woo_api_init_impl()
 {
-    wo_extern_lib_func_t je_fs[] = {
+    woort_ExternLibFunc je_fs[] = {
 "@;
         
     for (let (_, funcs) : libfuncs)
         for (let f : funcs)
-            result += F"        wo_extern_lib_func_t\{\"{f}\", (void*)&{f}\},\n";
+            result += F"        woort_ExternLibFunc\{\"{f}\", (void*)&{f}\},\n";
             
     result += 
-@"      WO_EXTERN_LIB_FUNC_END,
+@"      WOORT_EXTERN_LIB_FUNC_END,
     };
-    return wo_fake_lib("libjoyecs", je_fs, nullptr);
+    return woort_dylib_fake("libjoyecs", je_fs, nullptr);
 }
 
 void je_extern_lib_woo_api_finish_impl(woort_Dylib* handle_to_free)
 {
     assert(handle_to_free != nullptr);
-    wo_unload_lib(handle_to_free, WO_DYLIB_UNREF_AND_BURY);
+    woort_dylib_unload(handle_to_free, WOORT_DYLIB_UNREF_AND_BURY);
 }
 "@;
         
@@ -341,12 +341,12 @@ void je_extern_lib_module_init_impl(std::vector<woort_Dylib*>* out_lib_handles)
         
     for (let mname : module_name_list)
     {
-        result += F"    wo_extern_lib_func_t {mname}_fs[] = \{\n";
-        result += F"        wo_extern_lib_func_t\{\"jeecs_module_entry\", (void*)&jestatic_module_{mname}_entry\},\n";
-        result += F"        wo_extern_lib_func_t\{\"jeecs_module_leave\", (void*)&jestatic_module_{mname}_leave\},\n";
-        result += F"        WO_EXTERN_LIB_FUNC_END,\n    };\n";
+        result += F"    woort_ExternLibFunc {mname}_fs[] = \{\n";
+        result += F"        woort_ExternLibFunc\{\"jeecs_module_entry\", (void*)&jestatic_module_{mname}_entry\},\n";
+        result += F"        woort_ExternLibFunc\{\"jeecs_module_leave\", (void*)&jestatic_module_{mname}_leave\},\n";
+        result += F"        WOORT_EXTERN_LIB_FUNC_END,\n    };\n";
         result += F"    out_lib_handles->push_back(\n"
-            + F"        wo_fake_lib(\"{mname}\", {mname}_fs, nullptr));\n\n";
+            + F"        woort_dylib_fake(\"{mname}\", {mname}_fs, nullptr));\n\n";
     }
     
     result += @"
@@ -359,7 +359,7 @@ void je_extern_lib_module_finish_impl(std::vector<woort_Dylib*>* inout_lib_handl
     for (auto* lib : *inout_lib_handles)
     {
         assert(lib != nullptr);
-        wo_unload_lib(lib, WO_DYLIB_UNREF_AND_BURY);
+        woort_dylib_unload(lib, WOORT_DYLIB_UNREF_AND_BURY);
     }
     inout_lib_handles->clear();
 }
@@ -375,12 +375,13 @@ func generate_je_3rd_pkg_decls(skip_process_and_socket: bool)=> result<void, str
 {
     let libfuncs = scan_extern_function_in_path(
         recursive_walk(current_workpath / "3rd" / "pkg")->iterator::iter_result
-            |> filter(\p = extension(p)->lower == ".wo";), skip_process_and_socket)
-    ->> \libname, funcnames = (libname, funcname_symbolname->to_vec)
-        where funcname_symbolname = funcnames->> \fname = (fname, fname);
+            |> filter(\p = extension(p)->lower == ".wo";),
+        skip_process_and_socket)
+        ->> \libname, funcnames = (libname, funcname_symbolname->to_vec)
+            where funcname_symbolname = funcnames->> \fname = (fname, fname);
+            ;
         ;
-    ;
-    
+        
     let (libentry, libleave) = scan_pkg_entry_leave_function_in_path(
         walk(current_workpath / "3rd" / "pkg")->iterator::iter_result,
         skip_process_and_socket);
@@ -398,7 +399,7 @@ func generate_je_3rd_pkg_decls(skip_process_and_socket: bool)=> result<void, str
     for (let (_, funcnames) : libfuncs)
     {
         for (let (funcname, _) : funcnames)
-            result += F"WO_API wo_api {funcname}(wo_vm vm, wo_value args);\n";
+            result += F"WOORT_API woort_api {funcname}(void);\n";
             
         result += "\n";
     }
@@ -408,17 +409,17 @@ func generate_je_3rd_pkg_decls(skip_process_and_socket: bool)=> result<void, str
     for (let pkgname : libentry)
     {
         let entry_func_name = F"je_static_wo_pkg_{pkgname}_entry";
-        result += F"WO_API void {entry_func_name}(woort_Dylib* lib_instance);\n";
-        libfuncs["lib" + pkgname]->add((entry_func_name, "wolib_entry"));
+        result += F"WOORT_API void {entry_func_name}(woort_Dylib* lib_instance);\n";
+        libfuncs["lib" + pkgname]->add((entry_func_name, "woort_lib_entry"));
     }
     
     result += "\n";
     
     for (let pkgname : libleave)
     {
-        let exit_func_name = F"je_static_wo_pkg_{pkgname}_exit";
-        result += F"WO_API void {exit_func_name}();\n";
-        libfuncs["lib" + pkgname]->add((exit_func_name, "wolib_exit"));
+        let exit_func_name = F"je_static_wo_pkg_{pkgname}_leave";
+        result += F"WOORT_API void {exit_func_name}();\n";
+        libfuncs["lib" + pkgname]->add((exit_func_name, "woort_lib_leave"));
     }
     
     result += @"
@@ -433,13 +434,13 @@ void je_extern_lib_3rd_pkgs_init_impl(std::vector<woort_Dylib*>* out_lib_handles
         
     for (let (libname, funcnames) : libfuncs)
     {
-        result += F"    wo_extern_lib_func_t {libname}_fs[] = \{\n";
+        result += F"    woort_ExternLibFunc {libname}_fs[] = \{\n";
         for (let (funcname, symbolname) : funcnames)
-            result += F"        wo_extern_lib_func_t\{\"{symbolname}\", (void*)&{funcname}\},\n";
+            result += F"        woort_ExternLibFunc\{\"{symbolname}\", (void*)&{funcname}\},\n";
             
-        result += F"        WO_EXTERN_LIB_FUNC_END,\n    };\n";
+        result += F"        WOORT_EXTERN_LIB_FUNC_END,\n    };\n";
         result += F"    out_lib_handles->push_back(\n"
-            + F"        wo_fake_lib(\"{libname}\", {libname}_fs, nullptr));\n\n";
+            + F"        woort_dylib_fake(\"{libname}\", {libname}_fs, nullptr));\n\n";
     }
     
     result += @"
@@ -453,7 +454,7 @@ void je_extern_lib_3rd_pkgs_finish_impl(std::vector<woort_Dylib*>* inout_lib_han
     for (auto* lib : *inout_lib_handles)
     {
         assert(lib != nullptr);
-        wo_unload_lib(lib, WO_DYLIB_UNREF_AND_BURY);
+        woort_dylib_unload(lib, WOORT_DYLIB_UNREF_AND_BURY);
     }
     inout_lib_handles->clear();
 }

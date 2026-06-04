@@ -84,76 +84,91 @@ namespace jeecs
                         jeecs_file_read(buf.data(), sizeof(char), buf.size(), physics_group_config);
                         jeecs_file_close(physics_group_config);
 
-                        wo_vm vmm = wo_create_vm();
-                        if (!wo_load_binary(vmm, path.c_str(), buf.data(), buf.size()))
-                            jeecs::debug::logerr("Unable to resolve physics group config: '%s':\n%s.",
-                                path.c_str(), wo_get_compile_error(vmm, WO_NOTHING));
+                        wo_CompileErrors* cerror;
+                        woort_CodeEnv* const cenv = wo_load_binary(path.c_str(), buf.data(), buf.size(), &cerror);
+
+                        if (cenv == nullptr)
+                        {
+                            jeecs::debug::logerr(
+                                "Unable to resolve physics group config: '%s':\n%s.",
+                                path.c_str(),
+                                wo_get_compile_error(cerror, WO_PLAIM));
+
+                            wo_compile_errors_free(cerror);
+                        }
                         else
                         {
-                            // array<group_config_info_t>
-                            wo_value result = wo_run(vmm);
-
-                            wo_value vmm_s = wo_reserve_stack(vmm, 4, nullptr);
-
-                            // group_config_info_t: struct{types, collider_mask}
-                            wo_value group_config_info = vmm_s + 0;
-
-                            // array<(const type_info*, Requirement)>
-                            wo_value filter_types = vmm_s + 1;
-
-                            // Requirement
-                            wo_value group_requirement = vmm_s + 2;
-
-                            // int/const type_info*
-                            wo_value group_collide_with_mask = vmm_s + 3;
-
-                            if (result == nullptr)
-                                jeecs::debug::logerr("Unable to resolve physics group config: '%s': %s.",
-                                    path.c_str(), wo_get_runtime_error(vmm));
-                            else if (wo_valuetype(result) != WO_ARRAY_TYPE)
-                                jeecs::debug::logerr("Unable to resolve physics group config: '%s': Unexpected value type.",
-                                    path.c_str());
+                            woort_vm* const vmm = woort_vm_create();
+                            if (vmm == nullptr)
+                                jeecs::debug::logerr("Unable to resolve physics group config: Out of memory.");
                             else
                             {
-                                // Resolve!
-
-                                wo_integer_t configed_group_count = wo_arr_len(result);
-                                if (configed_group_count > (wo_integer_t)MAX_GROUP_COUNT)
+                                woort_vm* const last = woort_vm_swap(vmm);
                                 {
-                                    jeecs::debug::logwarn("The number of physics2d collision groups is limited to 16, "
-                                        "but the %d group(s) are provided in this configuration: `%s`, excess groups will be ignored",
-                                        (int)configed_group_count, path.c_str());
-                                    configed_group_count = (wo_integer_t)MAX_GROUP_COUNT;
-                                }
+                                    woort_value s;
+                                    (void)woort_push_reserve(5, &s);
 
-                                for (wo_integer_t i = 0; i < (wo_integer_t)MAX_GROUP_COUNT; ++i)
-                                {
-                                    auto& group = m_group_configs[i];
-                                    if (i < configed_group_count)
+                                    const woort_value result = s + 0;
+
+                                    // group_config_info_t: struct{types, collider_mask}
+                                    const woort_value group_config_info = s + 1;
+                                    // array<(const type_info*, Requirement)>
+                                    const woort_value filter_types = s + 2;
+                                    // Requirement
+                                    const woort_value group_requirement = s + 3;
+                                    // int/const type_info*
+                                    const woort_value group_collide_with_mask = s + 4;
+
+                                    const woort_VmCallStatus status = woort_bootup_codeenv(result, cenv);
+
+                                    if (status != WOORT_VM_CALL_STATUS_NORMAL)
+                                        jeecs::debug::logerr("Unable to resolve physics group config: '%s': %s.",
+                                            path.c_str(), woort_vm_get_runtime_error(vmm));
+                                    else
                                     {
-                                        wo_arr_get(group_config_info, result, i);
-                                        wo_struct_get(filter_types, group_config_info, 0);
-                                        for (wo_integer_t ii = wo_arr_len(filter_types); ii > 0; --ii)
+                                        // Resolve!
+                                        size_t configed_group_count = woort_vec_len(result);
+                                        if (configed_group_count > static_cast<size_t>(MAX_GROUP_COUNT))
                                         {
-                                            wo_arr_get(group_collide_with_mask, filter_types, ii - 1);
-                                            wo_struct_get(group_requirement, group_collide_with_mask, 1);
-                                            wo_struct_get(group_collide_with_mask, group_collide_with_mask, 0);
-                                            group.m_group_filter.push_back(
-                                                group_config::filter_config{
-                                                    (const typing::type_info*)wo_pointer(group_collide_with_mask),
-                                                    (requirement::type)wo_int(group_requirement),
-                                                });
+                                            jeecs::debug::logwarn("The number of physics2d collision groups is limited to 16, "
+                                                "but the %d group(s) are provided in this configuration: `%s`, excess groups will be ignored",
+                                                (int)configed_group_count, path.c_str());
+                                            configed_group_count = static_cast<size_t>(MAX_GROUP_COUNT);
                                         }
 
-                                        wo_struct_get(filter_types, group_config_info, 1);
-                                        group.m_collision_mask = (uint16_t)wo_int(filter_types);
+                                        for (size_t i = 0; i < static_cast<size_t>(MAX_GROUP_COUNT); ++i)
+                                        {
+                                            auto& group = m_group_configs[i];
+                                            if (i < configed_group_count)
+                                            {
+                                                woort_vec_get(group_config_info, result, i);
+                                                woort_struct_get(filter_types, group_config_info, 0);
+                                                for (size_t ii = woort_vec_len(filter_types); ii > 0; --ii)
+                                                {
+                                                    woort_vec_get(group_collide_with_mask, filter_types, ii - 1);
+                                                    woort_struct_get(group_requirement, group_collide_with_mask, 1);
+                                                    woort_struct_get(group_collide_with_mask, group_collide_with_mask, 0);
+                                                    group.m_group_filter.push_back(
+                                                        group_config::filter_config{
+                                                            static_cast<const typing::type_info*>(woort_pointer(group_collide_with_mask)),
+                                                            static_cast<requirement::type>(woort_int(group_requirement)),
+                                                        });
+                                                }
+
+                                                woort_struct_get(filter_types, group_config_info, 1);
+                                                group.m_collision_mask = static_cast<uint16_t>(woort_int(filter_types));
+                                            }
+                                            else
+                                                group.m_collision_mask = 0x0000;
+                                        }
                                     }
-                                    else
-                                        group.m_collision_mask = 0x0000;
+                                    ////
                                 }
+                                (void)woort_vm_swap(nullptr);
+                                woort_vm_close(vmm);
                             }
+                            woort_codeenv_drop(cenv);
                         }
-                        wo_close_vm(vmm);
                     }
                 }
             }
