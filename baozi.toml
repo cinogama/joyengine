@@ -34,7 +34,6 @@ src = "3rd/pkg"
 
 [dependence.worst]
 path = "pkg"
-src = "3rd/pkg"
 
 [dependence.decorator]
 path = "pkg"

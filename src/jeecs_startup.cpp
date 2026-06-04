@@ -23,9 +23,8 @@ void je_extern_lib_module_finish();
 
 struct _je_static_context_t
 {
-    wo_fail_handler_t _je_global_old_panic_handler = nullptr;
-    wo_vm _je_global_panic_hooker = nullptr;
-    wo_pin_value _je_global_panic_hook_function;
+    woort_vm* _je_global_panic_hooker = nullptr;
+    woort_GCPin* _je_global_panic_hook_function;
 
     jegl_graphic_api_entry _jegl_host_graphic_api = nullptr;
 
@@ -60,67 +59,85 @@ jegl_graphic_api_entry jegl_get_host_graphic_api(void)
     return _je_global_context._jegl_host_graphic_api;
 }
 
-wo_bool_t _jedbg_hook_woolang_panic(
-    wo_vm vm,
-    wo_string_t src_file,
-    uint32_t lineno,
-    wo_string_t functionname,
-    uint32_t rterrcode,
-    wo_string_t reason)
+woort_PanicHandler_Action _jedbg_hook_woolang_panic(
+    woort_vm* vm,
+    const char* functionname,
+    const char* src_file,
+    int lineno,
+    int rterrcode,
+    const char* reason)
 {
-    auto* trace = vm == nullptr ? nullptr : wo_debug_trace_callstack(vm, 32);
-    jeecs::debug::logerr("Woolang Panic(%x):%s (%s in %s: %u):\n%s",
-        rterrcode, reason, functionname, src_file, lineno,
-        trace == nullptr ? "<no-found>" : trace);
-
-    auto swapback = wo_swap_gcguard(_je_global_context._je_global_panic_hooker);
+    std::string trace;
+    
+    if (vm == nullptr)
+        trace = "<No vm running>";
+    else
     {
-        wo_value _je_global_panic_hooker_s =
-            wo_reserve_stack(_je_global_context._je_global_panic_hooker, 7, nullptr);
+        woort_VMRuntime_TraceCallstack_Iter trace_iter;
+        woort_VMRuntime_trace_begin(vm, &trace_iter);
 
-        wo_set_string(_je_global_panic_hooker_s + 0, src_file);
-        wo_set_int(_je_global_panic_hooker_s + 1, (wo_integer_t)lineno);
-        wo_set_string(_je_global_panic_hooker_s + 2, functionname);
-        wo_set_int(_je_global_panic_hooker_s + 3, (wo_integer_t)rterrcode);
-        wo_set_string(_je_global_panic_hooker_s + 4, reason);
-        wo_set_string(_je_global_panic_hooker_s + 5, trace == nullptr ? "<no-found>" : trace);
+        woort_VMRuntime_TraceCallstack frame;
+        while (woort_VMRuntime_trace_next(&trace_iter, &frame))
+        {
+            // TODO;
+        }
+    }
 
-        wo_pin_value_get(_je_global_panic_hooker_s + 6, _je_global_context._je_global_panic_hook_function);
+    jeecs::debug::logerr("Woolang Panic(%x):%s (%s in %s: %u):\n%s",
+        rterrcode, reason, functionname, src_file, lineno, trace.c_str());
 
-        if (nullptr == wo_invoke_value(
-            _je_global_context._je_global_panic_hooker,
+    woort_vm* const last_vm = woort_vm_swap(_je_global_context._je_global_panic_hooker);
+    {
+        woort_value _je_global_panic_hooker_s;
+        if (!woort_push_reserve(7, &_je_global_panic_hooker_s))
+            // Stack overflow.
+            return WOORT_PANIC_HANDLER_ACTION_USE_DEFAULT_HANDLER;
+
+        woort_set_string(_je_global_panic_hooker_s + 0, src_file);
+        woort_set_int(_je_global_panic_hooker_s + 1, (woort_Int)lineno);
+        woort_set_string(_je_global_panic_hooker_s + 2, functionname);
+        woort_set_int(_je_global_panic_hooker_s + 3, (woort_Int)rterrcode);
+        woort_set_string(_je_global_panic_hooker_s + 4, reason);
+        woort_set_string(_je_global_panic_hooker_s + 5, trace.c_str());
+
+        woort_GC_Pin_get_value(
             _je_global_panic_hooker_s + 6,
-            6,
-            nullptr,
-            &_je_global_panic_hooker_s))
+            _je_global_context._je_global_panic_hook_function,
+            0);
+
+        const auto invoke_result =
+            woort_invoke(WOORT_IGNORE, _je_global_panic_hooker_s + 6);
+
+        woort_pop(7);
+
+        if (invoke_result != WOORT_VM_CALL_STATUS_NORMAL)
         {
             jeecs::debug::logwarn("Engine's woolang panic hook failed, try default.");
-            assert(_je_global_context._je_global_old_panic_handler != nullptr);
-            _je_global_context._je_global_old_panic_handler(vm, src_file, lineno, functionname, rterrcode, reason);
-        }
-        wo_pop_stack(_je_global_context._je_global_panic_hooker, 7);
+            return WOORT_PANIC_HANDLER_ACTION_USE_DEFAULT_HANDLER;
+        }        
     }
-    wo_swap_gcguard(swapback);
+    (void)woort_vm_swap(last_vm);
 
-    return WO_FALSE;
+    return WOORT_PANIC_HANDLER_ACTION_ABORT;
 }
 
-WO_API wo_api wojeapi_editor_register_panic_hook(wo_vm vm, wo_value args)
+WOORT_API woort_api wojeapi_editor_register_panic_hook(void)
 {
     if (_je_global_context._je_global_panic_hooker != nullptr)
         // ATTENTION: Unsafe for multi thread.
-        wo_release_vm(_je_global_context._je_global_panic_hooker);
+        woort_vm_close(_je_global_context._je_global_panic_hooker);
 
-    _je_global_context._je_global_panic_hooker = wo_borrow_vm(vm);
-    _je_global_context._je_global_panic_hook_function = wo_create_pin_value();
+    _je_global_context._je_global_panic_hooker = woort_vm_create();
+    if (_je_global_context._je_global_panic_hooker == nullptr)
+        return woort_ret_panic("Failed to create vm.");
 
-    wo_pin_value_set(_je_global_context._je_global_panic_hook_function, args + 0);
+    _je_global_context._je_global_panic_hook_function = woort_GC_Pin_create(1);
+    woort_GC_Pin_set_value(_je_global_context._je_global_panic_hook_function, 0, 0);
 
-    if (_je_global_context._je_global_old_panic_handler == nullptr)
-        _je_global_context._je_global_old_panic_handler =
-        wo_register_fail_handler(_jedbg_hook_woolang_panic);
+    todo;
+    (void)woort_set_panic_callback(&_jedbg_hook_woolang_panic);
 
-    return wo_ret_void(vm);
+    return woort_ret_void();
 }
 
 void je_default_graphic_interface_sync_func(jegl_context* gthread, void*)
@@ -193,8 +210,8 @@ void je_init(int argc, char** argv)
         }
     }
 
-    jeecs_file_set_host_path(wo_exe_path());
-    jeecs_file_set_runtime_path(wo_exe_path());
+    jeecs_file_set_host_path(woort_exe_path());
+    jeecs_file_set_runtime_path(woort_exe_path());
 
     je_extern_lib_woo_api_init();
     je_extern_lib_3rd_pkgs_init();
@@ -208,9 +225,9 @@ void je_init(int argc, char** argv)
     _jeecs_entry_register_core_systems(_je_global_context._je_unregister_guard);
 }
 
-wo_integer_t crc64_of_source_and_api()
+uint64_t crc64_of_source_and_api()
 {
-    wo_integer_t crc64_result = 0;
+    uint64_t crc64_result = 0;
 
     const char* crc64_src = R"(
 import woo::std;
@@ -242,23 +259,38 @@ func main()
 return main();
 )";
 
-    wo_vm vmm = wo_create_vm();
-    if (wo_load_source(vmm, "builtin/je_varify_crc64.wo", crc64_src))
+    woort_CodeEnv* const cenv = 
+        wo_load_source("builtin/je_varify_crc64.wo", crc64_src, nullptr);
+
+    if (cenv != nullptr)
     {
-        wo_value result = wo_bootup(vmm, WO_FALSE);
-        if (result != nullptr)
-            crc64_result = wo_int(result);
+        woort_vm* const vmm = woort_vm_create();
+        if (vmm != nullptr)
+        {
+            woort_vm * const last = woort_vm_swap(vmm);
+            {
+                woort_value s;
+                (void)woort_push_reserve(1, &s);
+
+                if (woort_bootup_codeenv(s, cenv) == WOORT_VM_CALL_STATUS_NORMAL)
+                {
+                    crc64_result = static_cast<uint64_t>(woort_int(s));
+                }
+            }
+            (void)woort_vm_swap(last);
+
+            woort_vm_close(vmm);
+        }
+        woort_codeenv_drop(cenv);
     }
-
-    wo_close_vm(vmm);
-
+    
     if (crc64_result == 0)
         jeecs::debug::logerr("Unable to eval crc64 of builtin editor scripts.");
 
     return crc64_result;
 }
 
-wo_vm _jewo_open_file_to_compile_vm(const char* vpath)
+woort_CodeEnv* _jewo_open_file_to_compile_vm(const char* vpath)
 {
     auto* src_file_handle = jeecs_file_open(vpath);
     if (src_file_handle == nullptr)
@@ -268,21 +300,24 @@ wo_vm _jewo_open_file_to_compile_vm(const char* vpath)
     jeecs_file_read(src_buffer.data(), sizeof(char), src_file_handle->m_file_length, src_file_handle);
     jeecs_file_close(src_file_handle);
 
-    wo_vm vmm = wo_create_vm();
-    if (wo_load_binary(vmm, vpath, src_buffer.data(), src_buffer.size()))
-        return vmm;
+    wo_CompileErrors * cerror;
+    woort_CodeEnv* const cenv = 
+        wo_load_binary(vpath, src_buffer.data(), src_buffer.size(), &cerror);
+
+    if (cenv != nullptr)
+        return cenv;
 
     jeecs::debug::logwarn("Failed to load & create woolang source '%s':\n%s",
         vpath,
-        wo_get_compile_error(vmm, WO_NEED_COLOR));
+        wo_get_compile_error(cerror, WO_COLORFUL));
 
-    wo_close_vm(vmm);
+    wo_compile_errors_free(cerror);
     return nullptr;
 }
 
-wo_vm try_open_cached_binary()
+woort_CodeEnv* try_open_cached_binary()
 {
-    wo_integer_t expect_crc = 0;
+    uint64_t expect_crc = 0;
     auto* srccrc = jeecs_file_open("@/builtin/editor.crc.je4cache");
     if (srccrc == nullptr)
         return nullptr;
@@ -303,41 +338,44 @@ bool je_main_script_entry()
 {
     bool failed_in_start_script = false;
 
-    wo_vm vmm = nullptr;
-    if ((vmm = _jewo_open_file_to_compile_vm("@/builtin/main.wo")) != nullptr)
+    woort_CodeEnv* cenv = nullptr;
+    if ((cenv = _jewo_open_file_to_compile_vm("@/builtin/main.wo")) != nullptr)
     {
         // Load normal entry.
     }
-    else if ((vmm = try_open_cached_binary()) != nullptr)
+    else if ((cenv = try_open_cached_binary()) != nullptr)
     {
         // Cache loaded, skip,
     }
-    else if ((vmm = _jewo_open_file_to_compile_vm(
+    else if ((cenv = _jewo_open_file_to_compile_vm(
         (std::string(jeecs_file_get_host_path()) + "/builtin/editor/main.wo").c_str())) != nullptr)
     {
         size_t binary_length;
-        void* buffer = wo_dump_binary(vmm, true, &binary_length);
-
-        FILE* objdump = fopen((std::string(wo_exe_path()) + "/builtin/editor.woo.je4cache").c_str(), "wb");
-        if (objdump != nullptr)
+        void* buffer;
+        
+        if (woort_CodeEnv_save_binary(cenv, &buffer, &binary_length))
         {
-            size_t writelen = fwrite(buffer, 1, binary_length, objdump);
-            assert(writelen == binary_length);
-            (void)writelen;
+            FILE* objdump = fopen((std::string(woort_exe_path()) + "/builtin/editor.woo.je4cache").c_str(), "wb");
+            if (objdump != nullptr)
+            {
+                size_t writelen = fwrite(buffer, 1, binary_length, objdump);
+                assert(writelen == binary_length);
+                (void)writelen;
 
-            fclose(objdump);
-        }
-        auto api_src_crc64 = crc64_of_source_and_api();
-        FILE* srccrc = fopen((std::string(wo_exe_path()) + "/builtin/editor.crc.je4cache").c_str(), "wb");
-        if (srccrc != nullptr)
-        {
-            size_t writecount = fwrite(&api_src_crc64, sizeof(api_src_crc64), 1, srccrc);
-            assert(writecount == 1);
-            (void)writecount;
+                fclose(objdump);
+            }
+            auto api_src_crc64 = crc64_of_source_and_api();
+            FILE* srccrc = fopen((std::string(woort_exe_path()) + "/builtin/editor.crc.je4cache").c_str(), "wb");
+            if (srccrc != nullptr)
+            {
+                size_t writecount = fwrite(&api_src_crc64, sizeof(api_src_crc64), 1, srccrc);
+                assert(writecount == 1);
+                (void)writecount;
 
-            fclose(srccrc);
+                fclose(srccrc);
+            }
+            woort_free(buffer);
         }
-        wo_free_binary(buffer);
     }
     else
     {
@@ -346,9 +384,21 @@ bool je_main_script_entry()
 
     if (failed_in_start_script == false)
     {
-        wo_jit(vmm);
-        wo_run(vmm);
-        wo_close_vm(vmm);
+        woort_vm* const vmm = woort_vm_create();
+        if (vmm == nullptr)
+            jeecs::debug::logerr("Failed to create vm instance.");
+        else
+        {
+            woort_vm* const last = woort_vm_swap(vmm);
+            {
+                (void)woort_bootup_codeenv(WOORT_IGNORE, cenv);
+            }
+            (void)woort_vm_swap(last);
+
+            woort_vm_close(vmm);
+        }
+
+        woort_codeenv_drop(cenv);
     }
 
     return !failed_in_start_script;
@@ -366,17 +416,14 @@ void je_finish()
 
     if (_je_global_context._je_global_panic_hooker != nullptr)
     {
-        wo_release_vm(_je_global_context._je_global_panic_hooker);
-        wo_close_pin_value(_je_global_context._je_global_panic_hook_function);
+        woort_vm_close(_je_global_context._je_global_panic_hooker);
+        woort_GC_Pin_destroy(_je_global_context._je_global_panic_hook_function);
 
         _je_global_context._je_global_panic_hooker = nullptr;
         _je_global_context._je_global_panic_hook_function = nullptr;
     }
-    if (_je_global_context._je_global_old_panic_handler != nullptr)
-    {
-        wo_register_fail_handler(_je_global_context._je_global_old_panic_handler);
-        _je_global_context._je_global_old_panic_handler = nullptr;
-    }
+    
+    woort_set_panic_callback(NULL);
 
     wo_finish([](void*)
         {
