@@ -269,7 +269,7 @@ func generate_je_api_decls()=> result<void, string>
             result += F"WO_API wo_api {f}(wo_vm vm, wo_value args);\n";
             
     result += @"
-wo_dylib_handle_t je_extern_lib_woo_api_init_impl()
+woort_Dylib* je_extern_lib_woo_api_init_impl()
 {
     wo_extern_lib_func_t je_fs[] = {
 "@;
@@ -284,7 +284,7 @@ wo_dylib_handle_t je_extern_lib_woo_api_init_impl()
     return wo_fake_lib("libjoyecs", je_fs, nullptr);
 }
 
-void je_extern_lib_woo_api_finish_impl(wo_dylib_handle_t handle_to_free)
+void je_extern_lib_woo_api_finish_impl(woort_Dylib* handle_to_free)
 {
     assert(handle_to_free != nullptr);
     wo_unload_lib(handle_to_free, WO_DYLIB_UNREF_AND_BURY);
@@ -325,7 +325,7 @@ extern "C"
         
     for (let mname : module_name_list)
     {
-        result += F"JE_EXPORT void jestatic_module_{mname}_entry(wo_dylib_handle_t lib_instance);\n";
+        result += F"JE_EXPORT void jestatic_module_{mname}_entry(woort_Dylib* lib_instance);\n";
         result += F"JE_EXPORT void jestatic_module_{mname}_leave();\n";
     }
     
@@ -333,7 +333,7 @@ extern "C"
 }
 #endif
 
-void je_extern_lib_module_init_impl(std::vector<wo_dylib_handle_t>* out_lib_handles)
+void je_extern_lib_module_init_impl(std::vector<woort_Dylib*>* out_lib_handles)
 {
     assert(out_lib_handles != nullptr && out_lib_handles->empty());
 #if JE4_STATIC_LINK_MODULE_AND_PKGS
@@ -353,7 +353,7 @@ void je_extern_lib_module_init_impl(std::vector<wo_dylib_handle_t>* out_lib_hand
 #endif
 }
 
-void je_extern_lib_module_finish_impl(std::vector<wo_dylib_handle_t>* inout_lib_handles)
+void je_extern_lib_module_finish_impl(std::vector<woort_Dylib*>* inout_lib_handles)
 {
     assert(inout_lib_handles != nullptr);
     for (auto* lib : *inout_lib_handles)
@@ -408,7 +408,7 @@ func generate_je_3rd_pkg_decls(skip_process_and_socket: bool)=> result<void, str
     for (let pkgname : libentry)
     {
         let entry_func_name = F"je_static_wo_pkg_{pkgname}_entry";
-        result += F"WO_API void {entry_func_name}(wo_dylib_handle_t lib_instance);\n";
+        result += F"WO_API void {entry_func_name}(woort_Dylib* lib_instance);\n";
         libfuncs["lib" + pkgname]->add((entry_func_name, "wolib_entry"));
     }
     
@@ -424,7 +424,7 @@ func generate_je_3rd_pkg_decls(skip_process_and_socket: bool)=> result<void, str
     result += @"
 #endif
 
-void je_extern_lib_3rd_pkgs_init_impl(std::vector<wo_dylib_handle_t>* out_lib_handles)
+void je_extern_lib_3rd_pkgs_init_impl(std::vector<woort_Dylib*>* out_lib_handles)
 {
     assert(out_lib_handles != nullptr && out_lib_handles->empty()); 
 
@@ -446,7 +446,7 @@ void je_extern_lib_3rd_pkgs_init_impl(std::vector<wo_dylib_handle_t>* out_lib_ha
 #endif    
 }
 
-void je_extern_lib_3rd_pkgs_finish_impl(std::vector<wo_dylib_handle_t>* inout_lib_handles)
+void je_extern_lib_3rd_pkgs_finish_impl(std::vector<woort_Dylib*>* inout_lib_handles)
 {
 "@;
     result += @"

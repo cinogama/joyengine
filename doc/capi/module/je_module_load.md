@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API wo_dylib_handle_t je_module_load(const char* name, const char* path);
+JE_API woort_Dylib* je_module_load(const char* name, const char* path);
 ```
 
 ## 描述
@@ -21,13 +21,13 @@ JE_API wo_dylib_handle_t je_module_load(const char* name, const char* path);
 
 | 类型 | 描述 |
 |------|------|
-| wo_dylib_handle_t | 动态库句柄，加载失败返回 nullptr |
+| woort_Dylib* | 动态库句柄，加载失败返回 nullptr |
 
 ## 用法示例
 
 ```cpp
 // 加载动态库
-wo_dylib_handle_t lib = je_module_load("my_plugin", "@/plugins/my_plugin.dll");
+woort_Dylib* lib = je_module_load("my_plugin", "@/plugins/my_plugin.dll");
 
 if (lib != nullptr) {
     // 获取函数

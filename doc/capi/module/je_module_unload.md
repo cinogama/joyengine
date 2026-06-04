@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API void je_module_unload(wo_dylib_handle_t lib);
+JE_API void je_module_unload(woort_Dylib* lib);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_module_unload(wo_dylib_handle_t lib);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| lib | wo_dylib_handle_t | 要卸载的动态库句柄 |
+| lib | woort_Dylib* | 要卸载的动态库句柄 |
 
 ## 返回值
 
@@ -23,7 +23,7 @@ JE_API void je_module_unload(wo_dylib_handle_t lib);
 ## 用法示例
 
 ```cpp
-wo_dylib_handle_t lib = je_module_load("plugin", "@/plugins/plugin.dll");
+woort_Dylib* lib = je_module_load("plugin", "@/plugins/plugin.dll");
 
 // 使用模块...
 

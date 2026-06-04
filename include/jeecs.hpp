@@ -182,7 +182,7 @@ namespace jeecs
 
         struct type_info;
 
-        using module_entry_t = void (*)(wo_dylib_handle_t);
+        using module_entry_t = void (*)(woort_Dylib*);
         using module_leave_t = void (*)(void);
 
         using construct_func_t = void (*)(void*, void*, const jeecs::typing::type_info*);
@@ -193,8 +193,8 @@ namespace jeecs
         using on_enable_or_disable_func_t = void (*)(void*);
         using update_func_t = void (*)(void*);
 
-        using parse_c2w_func_t = void (*)(const void*, wo_vm, wo_value);
-        using parse_w2c_func_t = void (*)(void*, wo_vm, wo_value);
+        using parse_c2w_func_t = void (*)(const void*, woort_value);
+        using parse_w2c_func_t = void (*)(void*, woort_value);
 
         using entity_id_in_chunk_t = uint32_t;
         using version_t = uint32_t;
@@ -246,16 +246,16 @@ namespace jeecs
             {
                 return "public using uuid = string;";
             }
-            void JEParseFromScriptType(wo_vm vm, wo_value v)
+            void JEParseFromScriptType(woort_value v)
             {
                 unsigned long long aa, bb;
-                ((void)sscanf(wo_string(v), "%llX-%llX", &aa, &bb));
+                ((void)sscanf(woort_string(v), "%llX-%llX", &aa, &bb));
                 a = (uint64_t)aa;
                 b = (uint64_t)bb;
             }
-            void JEParseToScriptType(wo_vm vm, wo_value v) const
+            void JEParseToScriptType(woort_value v) const
             {
-                wo_set_string_fmt(v, "%016llX-%016llX",
+                woort_set_string_fmt(v, "%016llX-%016llX",
                     (unsigned long long)a,
                     (unsigned long long)b);
             }
@@ -971,7 +971,7 @@ JE_API void je_register_member(
     const jeecs::typing::type_info* _membertype,
     const char* _member_name,
     const char* _woovalue_type_may_null,
-    wo_value _woovalue_init_may_null,
+    woort_value _woovalue_init_may_null /* Use WOORT_IGNORE as none init */,
     ptrdiff_t _member_offset);
 
 /*
@@ -1795,7 +1795,7 @@ jeecs_load_cache_file [基本接口]
 JE_API jeecs_file* jeecs_load_cache_file(
     const char* filepath,
     uint32_t format_version,
-    wo_integer_t virtual_crc64);
+    uint64_t virtual_crc64);
 
 // If usecrc64 != 0, cache file will use it instead of reading from origin file.
 
@@ -1814,7 +1814,7 @@ jeecs_create_cache_file [基本接口]
 JE_API void* jeecs_create_cache_file(
     const char* filepath,
     uint32_t format_version,
-    wo_integer_t usecrc64);
+    uint64_t usecrc64);
 
 /*
 jeecs_write_cache_file [基本接口]
@@ -3886,19 +3886,19 @@ JE_API void je_io_gamepad_stick_set_deadzone(
 je_module_load [基本接口]
 以name为名字，加载指定路径的动态库（遵循woolang规则）加载失败返回nullptr
 */
-JE_API wo_dylib_handle_t je_module_load(const char* name, const char* path);
+JE_API woort_Dylib* je_module_load(const char* name, const char* path);
 
 /*
 je_module_func [基本接口]
 从动态库中加载某个函数，返回函数的地址
 */
-JE_API void* je_module_func(wo_dylib_handle_t lib, const char* funcname);
+JE_API void* je_module_func(woort_Dylib* lib, const char* funcname);
 
 /*
 je_module_unload [基本接口]
 立即卸载某个动态库
 */
-JE_API void je_module_unload(wo_dylib_handle_t lib);
+JE_API void je_module_unload(woort_Dylib* lib);
 
 // Audio
 struct jeal_native_play_device_instance;
@@ -4687,12 +4687,13 @@ namespace jeecs
                 { T::JERefRegsiter(guard) } -> std::same_as<void>;
             };
             template<typename T>
-            concept has_JEScriptTypeInterface = requires(T t, const T ct, wo_vm vm, wo_value val)
+            concept has_JEScriptTypeInterface = requires(
+                T t, const T ct, woort_value val)
             {
                 { T::JEScriptTypeName() } -> std::same_as<const char*>;
                 { T::JEScriptTypeDeclare() } -> std::same_as<const char*>;
-                { t.JEParseFromScriptType(vm, val) } -> std::same_as<void>;
-                { ct.JEParseToScriptType(vm, val) } -> std::same_as<void>;
+                { t.JEParseFromScriptType(val) } -> std::same_as<void>;
+                { ct.JEParseToScriptType(val) } -> std::same_as<void>;
             };
 
             template <typename U>
@@ -6023,7 +6024,7 @@ namespace jeecs
                 const char* m_member_name;
 
                 const char* m_woovalue_type_may_null;
-                wo_pin_value m_woovalue_init_may_null;
+                woort_GCPin* m_woovalue_init_may_null;
 
                 const type_info* m_member_type;
                 ptrdiff_t m_member_offset;
@@ -6345,8 +6346,8 @@ namespace jeecs
         template <typename T>
         inline void register_script_parser(
             jeecs::typing::type_unregister_guard* guard,
-            void (*c2w)(const T*, wo_vm, wo_value),
-            void (*w2c)(T*, wo_vm, wo_value),
+            void (*c2w)(const T*, woort_value),
+            void (*w2c)(T*, woort_value),
             const std::string& woolang_typename,
             const std::string& woolang_typedecl)
         {
@@ -7620,26 +7621,39 @@ namespace jeecs
             {
                 return "public using vec2 = (real, real);";
             }
-            void JEParseFromScriptType(wo_vm vm, wo_value v)
+            void JEParseFromScriptType(woort_value v)
             {
-                _wo_value elem;
+                woort_value s;
+                if (!woort_push_reserve(1, &s))
+                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                else
+                {
+                    woort_struct_get(s, v, 0);
+                    x = woort_float(s);
 
-                wo_struct_get(&elem, v, 0);
-                x = wo_float(&elem);
+                    woort_struct_get(s, v, 1);
+                    y = woort_float(s);
 
-                wo_struct_get(&elem, v, 1);
-                y = wo_float(&elem);
+                    woort_pop(1);
+                }
             }
-            void JEParseToScriptType(wo_vm vm, wo_value v) const
+            void JEParseToScriptType(woort_value v) const
             {
-                wo_set_struct(v, 2);
-                _wo_value elem;
+                woort_value s;
+                if (!woort_push_reserve(1, &s))
+                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                else
+                {
+                    woort_set_struct(v, 2);
 
-                wo_set_float(&elem, x);
-                wo_struct_set(v, 0, &elem);
+                    woort_set_float(s, x);
+                    woort_struct_set(v, 0, s);
 
-                wo_set_float(&elem, y);
-                wo_struct_set(v, 1, &elem);
+                    woort_set_float(s, y);
+                    woort_struct_set(v, 1, s);
+
+                    woort_pop(1);
+                }
             }
         };
         inline static constexpr vec2 operator*(float _f, const vec2& _v2) noexcept
@@ -7766,26 +7780,39 @@ namespace jeecs
                 return std::min(x, y);
             }
 
-            void JEParseFromScriptType(wo_vm vm, wo_value v)
+            void JEParseFromScriptType(woort_value v)
             {
-                _wo_value elem;
+                woort_value s;
+                if (!woort_push_reserve(1, &s))
+                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                else
+                {
+                    woort_struct_get(s, v, 0);
+                    x = (int)woort_int(s);
 
-                wo_struct_get(&elem, v, 0);
-                x = (int)wo_int(&elem);
+                    woort_struct_get(s, v, 1);
+                    y = (int)woort_int(s);
 
-                wo_struct_get(&elem, v, 1);
-                y = (int)wo_int(&elem);
+                    woort_pop(1);
+                }
             }
-            void JEParseToScriptType(wo_vm vm, wo_value v) const
+            void JEParseToScriptType(woort_value v) const
             {
-                wo_set_struct(v, 2);
-                _wo_value elem;
+                woort_value s;
+                if (!woort_push_reserve(1, &s))
+                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                else
+                {
+                    woort_set_struct(v, 2);
 
-                wo_set_int(&elem, (wo_integer_t)x);
-                wo_struct_set(v, 0, &elem);
+                    woort_set_int(s, (woort_Int)x);
+                    woort_struct_set(v, 0, s);
 
-                wo_set_int(&elem, (wo_integer_t)y);
-                wo_struct_set(v, 1, &elem);
+                    woort_set_int(s, (woort_Int)y);
+                    woort_struct_set(v, 1, s);
+
+                    woort_pop(1);
+                }
             }
         };
 
@@ -7952,32 +7979,45 @@ namespace jeecs
             {
                 return "public using vec3 = (real, real, real);";
             }
-            void JEParseFromScriptType(wo_vm vm, wo_value v)
+            void JEParseFromScriptType(woort_value v)
             {
-                _wo_value elem;
+                woort_value s;
+                if (!woort_push_reserve(1, &s))
+                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                else
+                {
+                    woort_struct_get(s, v, 0);
+                    x = woort_float(s);
 
-                wo_struct_get(&elem, v, 0);
-                x = wo_float(&elem);
+                    woort_struct_get(s, v, 1);
+                    y = woort_float(s);
 
-                wo_struct_get(&elem, v, 1);
-                y = wo_float(&elem);
+                    woort_struct_get(s, v, 2);
+                    z = woort_float(s);
 
-                wo_struct_get(&elem, v, 2);
-                z = wo_float(&elem);
+                    woort_pop(1);
+                }
             }
-            void JEParseToScriptType(wo_vm vm, wo_value v) const
+            void JEParseToScriptType(woort_value v) const
             {
-                wo_set_struct(v, 3);
-                _wo_value elem;
+                woort_value s;
+                if (!woort_push_reserve(1, &s))
+                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                else
+                {
+                    woort_set_struct(v, 3);
 
-                wo_set_float(&elem, x);
-                wo_struct_set(v, 0, &elem);
+                    woort_set_float(s, x);
+                    woort_struct_set(v, 0, s);
 
-                wo_set_float(&elem, y);
-                wo_struct_set(v, 1, &elem);
+                    woort_set_float(s, y);
+                    woort_struct_set(v, 1, s);
 
-                wo_set_float(&elem, z);
-                wo_struct_set(v, 2, &elem);
+                    woort_set_float(s, z);
+                    woort_struct_set(v, 2, s);
+
+                    woort_pop(1);
+                }
             }
         };
         inline static constexpr vec3 operator*(float _f, const vec3& _v3) noexcept
@@ -8147,38 +8187,51 @@ namespace jeecs
             {
                 return "public using vec4 = (real, real, real, real);";
             }
-            void JEParseFromScriptType(wo_vm vm, wo_value v)
+            void JEParseFromScriptType(woort_value v)
             {
-                _wo_value elem;
+                woort_value s;
+                if (!woort_push_reserve(1, &s))
+                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                else
+                {
+                    woort_struct_get(s, v, 0);
+                    x = woort_float(s);
 
-                wo_struct_get(&elem, v, 0);
-                x = wo_float(&elem);
+                    woort_struct_get(s, v, 1);
+                    y = woort_float(s);
 
-                wo_struct_get(&elem, v, 1);
-                y = wo_float(&elem);
+                    woort_struct_get(s, v, 2);
+                    z = woort_float(s);
 
-                wo_struct_get(&elem, v, 2);
-                z = wo_float(&elem);
+                    woort_struct_get(s, v, 3);
+                    w = woort_float(s);
 
-                wo_struct_get(&elem, v, 3);
-                w = wo_float(&elem);
+                    woort_pop(1);
+                }
             }
-            void JEParseToScriptType(wo_vm vm, wo_value v) const
+            void JEParseToScriptType(woort_value v) const
             {
-                wo_set_struct(v, 4);
-                _wo_value elem;
+                woort_value s;
+                if (!woort_push_reserve(1, &s))
+                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                else
+                {
+                    woort_set_struct(v, 4);
 
-                wo_set_float(&elem, x);
-                wo_struct_set(v, 0, &elem);
+                    woort_set_float(s, x);
+                    woort_struct_set(v, 0, s);
 
-                wo_set_float(&elem, y);
-                wo_struct_set(v, 1, &elem);
+                    woort_set_float(s, y);
+                    woort_struct_set(v, 1, s);
 
-                wo_set_float(&elem, z);
-                wo_struct_set(v, 2, &elem);
+                    woort_set_float(s, z);
+                    woort_struct_set(v, 2, s);
 
-                wo_set_float(&elem, w);
-                wo_struct_set(v, 3, &elem);
+                    woort_set_float(s, w);
+                    woort_struct_set(v, 3, s);
+
+                    woort_pop(1);
+                }
             }
         };
         inline static constexpr vec4 operator*(float _f, const vec4& _v4) noexcept
@@ -8452,38 +8505,51 @@ namespace jeecs
             {
                 return "public using quat = (real, real, real, real);";
             }
-            void JEParseFromScriptType(wo_vm vm, wo_value v)
+            void JEParseFromScriptType(woort_value v)
             {
-                _wo_value elem;
+                woort_value s;
+                if (!woort_push_reserve(1, &s))
+                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                else
+                {
+                    woort_struct_get(s, v, 0);
+                    x = woort_float(s);
 
-                wo_struct_get(&elem, v, 0);
-                x = wo_float(&elem);
+                    woort_struct_get(s, v, 1);
+                    y = woort_float(s);
 
-                wo_struct_get(&elem, v, 1);
-                y = wo_float(&elem);
+                    woort_struct_get(s, v, 2);
+                    z = woort_float(s);
 
-                wo_struct_get(&elem, v, 2);
-                z = wo_float(&elem);
+                    woort_struct_get(s, v, 3);
+                    w = woort_float(s);
 
-                wo_struct_get(&elem, v, 3);
-                w = wo_float(&elem);
+                    woort_pop(1);
+                }
             }
-            void JEParseToScriptType(wo_vm vm, wo_value v) const
+            void JEParseToScriptType(woort_value v) const
             {
-                wo_set_struct(v, 4);
-                _wo_value elem;
+                woort_value s;
+                if (!woort_push_reserve(1, &s))
+                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                else
+                {
+                    woort_set_struct(v, 4);
 
-                wo_set_float(&elem, x);
-                wo_struct_set(v, 0, &elem);
+                    woort_set_float(s, x);
+                    woort_struct_set(v, 0, s);
 
-                wo_set_float(&elem, y);
-                wo_struct_set(v, 1, &elem);
+                    woort_set_float(s, y);
+                    woort_struct_set(v, 1, s);
 
-                wo_set_float(&elem, z);
-                wo_struct_set(v, 2, &elem);
+                    woort_set_float(s, z);
+                    woort_struct_set(v, 2, s);
 
-                wo_set_float(&elem, w);
-                wo_struct_set(v, 3, &elem);
+                    woort_set_float(s, w);
+                    woort_struct_set(v, 3, s);
+
+                    woort_pop(1);
+                }
             }
         };
 
@@ -9391,7 +9457,13 @@ namespace jeecs
             basic::resource<texture> u8text_texture(
                 const std::string& text)
             {
-                return text_texture_impl(*this, wo_str_to_u32str(text.c_str()));
+                const size_t sz = woort_str_to_u32str(text.c_str(), nullptr, 0);
+                std::u32string wstr;
+
+                wstr.resize(sz);
+                (void)woort_str_to_u32str(text.c_str(), wstr.data(), sz);
+
+                return text_texture_impl(*this, wstr);
             }
 
             je_font* resource() const noexcept
@@ -9511,7 +9583,13 @@ namespace jeecs
 
                 walk_through_all_character(
                     [&](std::u32string_view field, std::u32string_view value) {
-                        const auto u8value = wo_u32strn_to_str(value.data(), value.size());
+                        const size_t sz = woort_u32strn_to_str(
+                            value.data(), value.size(), nullptr, 0);
+
+                        std::string u8value;
+                        u8value.resize(sz);
+                        (void)woort_u32strn_to_str(
+                            value.data(), value.size(), u8value.data(), sz);
 
                         if (field == U"scale")
                         {
@@ -9550,7 +9628,7 @@ namespace jeecs
                         else if (field == U"offset")
                         {
                             math::vec2 offset;
-                            ((void)sscanf(u8value, "(%f,%f)", &offset.x, &offset.y));
+                            ((void)sscanf(u8value.c_str(), "(%f,%f)", &offset.x, &offset.y));
                             TEXT_OFFSET += offset;
                         }
                     },
@@ -9639,12 +9717,18 @@ namespace jeecs
 
                 walk_through_all_character(
                     [&](std::u32string_view field, std::u32string_view value) {
-                        const auto u8value = wo_u32strn_to_str(value.data(), value.size());
+                        const size_t sz = woort_u32strn_to_str(
+                            value.data(), value.size(), nullptr, 0);
+
+                        std::string u8value;
+                        u8value.resize(sz);
+                        (void)woort_u32strn_to_str(
+                            value.data(), value.size(), u8value.data(), sz);
 
                         if (field == U"color")
                         {
                             char color[9] = "00000000";
-                            strncpy(color, u8value, 8);
+                            strncpy(color, u8value.c_str(), 8);
 
                             unsigned int colordata = strtoul(color, NULL, 16);
 
@@ -9675,7 +9759,7 @@ namespace jeecs
                         else if (field == U"offset")
                         {
                             math::vec2 offset;
-                            ((void)sscanf(u8value, "(%f,%f)", &offset.x, &offset.y));
+                            ((void)sscanf(u8value.c_str(), "(%f,%f)", &offset.x, &offset.y));
                             TEXT_OFFSET = TEXT_OFFSET + offset;
                         }
                     },
@@ -11026,70 +11110,89 @@ namespace jeecs
                         "    };\n"
                         "}";
                 }
-                void JEParseFromScriptType(wo_vm vm, wo_value v)
+                void JEParseFromScriptType(woort_value v)
                 {
-                    wo_value val = wo_register(vm, WO_REG_T0);
-                    wo_value strengths = wo_register(vm, WO_REG_T1);
-                    wo_value positions = wo_register(vm, WO_REG_T2);
-
-                    wo_struct_get(val, v, 0);
-                    wo_struct_get(strengths, v, 1);
-                    wo_struct_get(positions, v, 2);
-                    size_t position_count = (size_t)wo_int(val);
-                    size_t layer_count = (size_t)wo_arr_len(strengths);
-
-                    m_point_count = position_count;
-                    m_positions.clear();
-                    m_strength.clear();
-
-                    m_light_mesh.reset();
-
-                    for (size_t ilayer = 0; ilayer < layer_count; ++ilayer)
+                    woort_value s;
+                    if (!woort_push_reserve(3, &s))
+                        woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                    else
                     {
-                        float strength = 0.0f;
-                        if (wo_arr_try_get(val, strengths, ilayer))
-                            strength = (float)wo_float(val);
+                        const woort_value val = s + 0;
+                        const woort_value strengths = s + 1;
+                        const woort_value positions = s + 2;
 
-                        m_strength.push_back(strength);
+                        woort_struct_get(val, v, 0);
+                        woort_struct_get(strengths, v, 1);
+                        woort_struct_get(positions, v, 2);
+                        size_t position_count = (size_t)woort_int(val);
 
-                        for (size_t iposition = 0; iposition < position_count; ++iposition)
+                        size_t layer_count = woort_vec_len(strengths);
+
+                        m_point_count = position_count;
+                        m_positions.clear();
+                        m_strength.clear();
+
+                        m_light_mesh.reset();
+
+                        for (size_t ilayer = 0; ilayer < layer_count; ++ilayer)
                         {
-                            math::vec2 pos = {};
+                            float strength = 0.0f;
+                            if (woort_vec_get(val, strengths, ilayer))
+                                strength = woort_unbox_float(val);
 
-                            if (wo_arr_try_get(val, positions, iposition + ilayer * position_count))
-                                pos.JEParseFromScriptType(vm, val);
+                            m_strength.push_back(strength);
 
-                            m_positions.push_back(pos);
+                            for (size_t iposition = 0; iposition < position_count; ++iposition)
+                            {
+                                math::vec2 pos = {};
+
+                                if (woort_vec_get(val, positions, iposition + ilayer * position_count))
+                                    pos.JEParseFromScriptType(val);
+
+                                m_positions.push_back(pos);
+                            }
                         }
+
+                        woort_pop(3);
                     }
                 }
-                void JEParseToScriptType(wo_vm vm, wo_value v) const
+                void JEParseToScriptType(woort_value v) const
                 {
-                    wo_value val = wo_register(vm, WO_REG_T0);
-                    wo_value arr = wo_register(vm, WO_REG_T1);
-
-                    wo_set_struct(v, 3);
-
-                    wo_set_int(val, (wo_integer_t)m_point_count);
-                    wo_struct_set(v, 0, val);
-
-                    size_t layer_count = m_strength.size();
-
-                    wo_set_arr(arr, (wo_integer_t)layer_count);
-                    for (size_t i = 0; i < layer_count; ++i)
+                    woort_value s;
+                    if (!woort_push_reserve(2, &s))
+                        woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                    else
                     {
-                        wo_set_float(val, m_strength.at(i));
-                        wo_arr_set(arr, (wo_integer_t)i, val);
-                    }
-                    wo_struct_set(v, 1, arr);
+                        const woort_value val = s + 0;
+                        const woort_value arr = s + 1;
 
-                    wo_set_arr(arr, (wo_integer_t)m_positions.size());
-                    for (size_t i = 0; i < m_positions.size(); ++i)
-                    {
-                        m_positions.at(i).JEParseToScriptType(vm, val);
-                        wo_arr_set(arr, (wo_integer_t)i, val);
+                        woort_set_struct(v, 3);
+
+                        woort_set_int(val, (woort_Int)m_point_count);
+                        woort_struct_set(v, 0, val);
+
+                        size_t layer_count = m_strength.size();
+
+                        woort_set_vec(arr);
+                        woort_vec_resize(arr, layer_count);
+                        for (size_t i = 0; i < layer_count; ++i)
+                        {
+                            woort_set_box_float(val, m_strength.at(i));
+                            (void)woort_vec_set(arr, i, val);
+                        }
+                        woort_struct_set(v, 1, arr);
+
+                        woort_set_vec(arr);
+                        woort_vec_resize(arr, m_positions.size());
+                        for (size_t i = 0; i < m_positions.size(); ++i)
+                        {
+                            m_positions.at(i).JEParseToScriptType(val);
+                            (void)woort_vec_set(arr, i, val);
+                        }
+                        woort_struct_set(v, 2, arr);
+
+                        woort_pop(2);
                     }
-                    wo_struct_set(v, 2, arr);
                 }
             };
 
@@ -11184,35 +11287,48 @@ namespace jeecs
                         "    public using block_mesh = array<vec2>;\n"
                         "}";
                 }
-                void JEParseFromScriptType(wo_vm vm, wo_value v)
+                void JEParseFromScriptType(woort_value v)
                 {
                     m_block_mesh.reset();
 
-                    wo_value pos = wo_register(vm, WO_REG_T0);
-                    size_t point_count = (size_t)wo_arr_len(v);
-
-                    m_block_points.clear();
-
-                    for (size_t i = 0; i < point_count; ++i)
+                    woort_value pos;
+                    if (!woort_push_reserve(1, &pos))
+                        woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                    else
                     {
-                        wo_arr_get(pos, v, (wo_integer_t)i);
+                        const size_t point_count = woort_vec_len(v);
 
-                        math::vec2 position;
-                        position.JEParseFromScriptType(vm, pos);
+                        m_block_points.clear();
 
-                        m_block_points.push_back(position);
+                        for (size_t i = 0; i < point_count; ++i)
+                        {
+                            (void)woort_vec_get(pos, v, i);
+
+                            math::vec2 position;
+                            position.JEParseFromScriptType(pos);
+
+                            m_block_points.push_back(position);
+                        }
+
+                        woort_pop(1);
                     }
                 }
-                void JEParseToScriptType(wo_vm vm, wo_value v) const
+                void JEParseToScriptType(woort_value v) const
                 {
-                    wo_value pos = wo_register(vm, WO_REG_T1);
-
-                    wo_set_arr(v, (wo_integer_t)m_block_points.size());
-
-                    for (size_t i = 0; i < m_block_points.size(); ++i)
+                    woort_value pos;
+                    if (!woort_push_reserve(1, &pos))
+                        woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                    else
                     {
-                        m_block_points.at(i).JEParseToScriptType(vm, pos);
-                        wo_arr_set(v, (wo_integer_t)i, pos);
+                        woort_set_vec(v);
+                        woort_vec_resize(v, m_block_points.size());
+                        for (size_t i = 0; i < m_block_points.size(); ++i)
+                        {
+                            m_block_points.at(i).JEParseToScriptType(pos);
+                            (void)woort_vec_set(v, i, pos);
+                        }
+
+                        woort_pop(1);
                     }
                 }
             };
@@ -11625,61 +11741,79 @@ namespace jeecs
                         "    public using animation_list = array<animation_state>;\n"
                         "}";
                 }
-                void JEParseFromScriptType(wo_vm vm, wo_value v)
+                void JEParseFromScriptType(woort_value v)
                 {
                     m_animations.clear();
 
-                    wo_value animation = wo_register(vm, WO_REG_T0);
-                    wo_value tmp = wo_register(vm, WO_REG_T1);
-                    size_t animation_count = (size_t)wo_arr_len(v);
-
-                    for (size_t i = 0; i < animation_count; ++i)
+                    woort_value s;
+                    if (!woort_push_reserve(2, &s))
+                        woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                    else
                     {
-                        m_animations.push_back(animation_data_set{});
-                        auto& animation_inst = m_animations.back();
+                        const woort_value animation = s + 0;
+                        const woort_value tmp = s + 1;
 
-                        wo_arr_get(animation, v, (wo_integer_t)i);
+                        const size_t animation_count = woort_vec_len(v);
 
-                        wo_struct_get(tmp, animation, 0);
-                        animation_inst.load_animation(wo_string(tmp));
+                        for (size_t i = 0; i < animation_count; ++i)
+                        {
+                            m_animations.push_back(animation_data_set{});
+                            auto& animation_inst = m_animations.back();
 
-                        wo_struct_get(tmp, animation, 1);
-                        if (wo_option_get(tmp, tmp))
-                            animation_inst.set_action(wo_string(tmp));
-                        else
-                            animation_inst.stop();
+                            (void)woort_vec_get(animation, v, i);
 
-                        wo_struct_get(tmp, animation, 2);
-                        animation_inst.set_loop(wo_bool(tmp));
+                            woort_struct_get(tmp, animation, 0);
+                            animation_inst.load_animation(woort_string(tmp));
+
+                            woort_struct_get(tmp, animation, 1);
+                            if (woort_option_get(tmp, tmp))
+                                animation_inst.set_action(woort_string(tmp));
+                            else
+                                animation_inst.stop();
+
+                            woort_struct_get(tmp, animation, 2);
+                            animation_inst.set_loop(woort_bool(tmp));
+                        }
+
+                        woort_pop(2);
                     }
                 }
-                void JEParseToScriptType(wo_vm vm, wo_value v) const
+                void JEParseToScriptType(woort_value v) const
                 {
-                    wo_value animation = wo_register(vm, WO_REG_T0);
-                    wo_value tmp = wo_register(vm, WO_REG_T1);
-
-                    wo_set_arr(v, (wo_integer_t)m_animations.size());
-
-                    for (size_t i = 0; i < m_animations.size(); ++i)
+                    woort_value s;
+                    if (!woort_push_reserve(2, &s))
+                        woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                    else
                     {
-                        auto animation_inst = m_animations.at(i);
-                        wo_set_struct(animation, 3);
+                        const woort_value animation = s + 0;
+                        const woort_value tmp = s + 1;
 
-                        wo_set_string(tmp, animation_inst.m_path.c_str());
-                        wo_struct_set(animation, 0, tmp);
+                        woort_set_vec(v);
+                        woort_vec_resize(v, m_animations.size());
 
-                        auto action = animation_inst.get_action();
-                        if (action.has_value())
-                            wo_set_option_string(tmp, action.value().c_str());
-                        else
-                            wo_set_option_none(tmp);
+                        for (size_t i = 0; i < m_animations.size(); ++i)
+                        {
+                            auto animation_inst = m_animations.at(i);
+                            woort_set_struct(animation, 3);
 
-                        wo_struct_set(animation, 1, tmp);
+                            woort_set_string(tmp, animation_inst.m_path.c_str());
+                            woort_struct_set(animation, 0, tmp);
 
-                        wo_set_bool(tmp, animation_inst.m_loop);
-                        wo_struct_set(animation, 2, tmp);
+                            auto action = animation_inst.get_action();
+                            if (action.has_value())
+                                woort_set_option_string(tmp, action.value().c_str());
+                            else
+                                woort_set_option_none(tmp);
 
-                        wo_arr_set(v, (wo_integer_t)i, animation);
+                            woort_struct_set(animation, 1, tmp);
+
+                            woort_set_bool(tmp, animation_inst.m_loop);
+                            woort_struct_set(animation, 2, tmp);
+
+                            (void)woort_vec_set(v, i, animation);
+                        }
+
+                        woort_pop(2);
                     }
                 }
             };
@@ -12269,79 +12403,77 @@ namespace jeecs
             // 1. register basic types
             type_info::register_type<math::ivec2>(guard, nullptr);
 
+            auto file_resource_uniform_parser_c2w =
+                [](const auto* v, woort_value value)
+                {
+                    woort_value s;
+                    if (!woort_push_reserve(1, &s))
+                        woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                    else
+                    {
+                        woort_set_struct(value, 1);
+
+                        if (v->has_resource())
+                            woort_set_option_string(s, v->get_path()->c_str());
+                        else
+                            woort_set_option_none(s);
+
+                        woort_struct_set(value, 0, s);
+
+                        woort_pop(1);
+                    }
+                };
+            auto file_resource_uniform_parser_w2c =
+                [](auto* v, woort_value value)
+                {
+                    woort_value s;
+                    if (!woort_push_reserve(1, &s))
+                        woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
+                    else
+                    {
+                        woort_struct_get(s, value, 0);
+
+                        if (woort_option_get(s, s))
+                            v->load(woort_string(s));
+                        else
+                            v->clear();
+
+                        woort_pop(1);
+                    }
+                };
             typing::register_script_parser<basic::fileresource<void>>(
                 guard,
-                [](const basic::fileresource<void>* v, wo_vm vm, wo_value value)
-                {
-                    wo_value result = wo_register(vm, WO_REG_T0);
-                    wo_set_struct(value, 1);
-
-                    if (v->has_resource())
-                        wo_set_option_string(result, v->get_path()->c_str());
-                    else
-                        wo_set_option_none(result);
-
-                    wo_struct_set(value, 0, result);
-                },
-                [](basic::fileresource<void>* v, wo_vm vm, wo_value value)
-                {
-                    wo_value result = wo_register(vm, WO_REG_T0);
-                    wo_struct_get(result, value, 0);
-
-                    if (wo_option_get(result, result))
-                        v->load(wo_string(result));
-                    else
-                        v->clear();
-                },
+                file_resource_uniform_parser_c2w,
+                file_resource_uniform_parser_w2c,
                 "fileresource_void",
                 "public using fileresource_void = struct{ public path: option<string> };");
 
             typing::register_script_parser<basic::fileresource<audio::buffer>>(
                 guard,
-                [](const basic::fileresource<audio::buffer>* v, wo_vm vm, wo_value value)
-                {
-                    wo_value result = wo_register(vm, WO_REG_T0);
-                    wo_set_struct(value, 1);
-
-                    if (v->has_resource())
-                        wo_set_option_string(result, v->get_path()->c_str());
-                    else
-                        wo_set_option_none(result);
-
-                    wo_struct_set(value, 0, result);
-                },
-                [](basic::fileresource<audio::buffer>* v, wo_vm vm, wo_value value)
-                {
-                    wo_value result = wo_register(vm, WO_REG_T0);
-                    wo_struct_get(result, value, 0);
-
-                    if (wo_option_get(result, result))
-                        v->load(wo_string(result));
-                    else
-                        v->clear();
-                },
+                file_resource_uniform_parser_c2w,
+                file_resource_uniform_parser_w2c,
                 "fileresource_audio_buffer",
                 "public using fileresource_audio_buffer = fileresource_void;");
 
             typing::register_script_parser<bool>(
                 guard,
-                [](const bool* v, wo_vm, wo_value value)
+                [](const bool* v, woort_value value)
                 {
-                    wo_set_bool(value, *v);
+                    woort_set_bool(value, *v);
                 },
-                [](bool* v, wo_vm, wo_value value)
+                [](bool* v, woort_value value)
                 {
-                    *v = wo_bool(value);
+                    *v = woort_bool(value);
                 },
                 "bool", "");
 
-            auto integer_uniform_parser_c2w = [](const auto* v, wo_vm, wo_value value)
+            auto integer_uniform_parser_c2w = [](const auto* v, woort_value value)
                 {
-                    wo_set_int(value, (wo_integer_t)*v);
+                    woort_set_int(value, (woort_Int)*v);
                 };
-            auto integer_uniform_parser_w2c = [](auto* v, wo_vm, wo_value value)
+            auto integer_uniform_parser_w2c = [](auto* v, woort_value value)
                 {
-                    *v = (typename std::remove_reference<decltype(*v)>::type)wo_int(value);
+                    *v = (typename std::remove_reference<decltype(*v)>::type)woort_int(value);
                 };
             typing::register_script_parser<int8_t>(guard, integer_uniform_parser_c2w, integer_uniform_parser_w2c,
                 "int8", "public alias int8 = int;");
@@ -12384,60 +12516,60 @@ namespace jeecs
 
             typing::register_script_parser<float>(
                 guard,
-                [](const float* v, wo_vm, wo_value value)
+                [](const float* v, woort_value value)
                 {
-                    wo_set_float(value, *v);
+                    woort_set_float(value, *v);
                 },
-                [](float* v, wo_vm, wo_value value)
+                [](float* v, woort_value value)
                 {
-                    *v = wo_float(value);
+                    *v = woort_float(value);
                 },
                 "float", "public alias float = real;");
             typing::register_script_parser<double>(
                 guard,
-                [](const double* v, wo_vm, wo_value value)
+                [](const double* v, woort_value value)
                 {
-                    wo_set_real(value, *v);
+                    woort_set_real(value, *v);
                 },
-                [](double* v, wo_vm, wo_value value)
+                [](double* v, woort_value value)
                 {
-                    *v = wo_real(value);
+                    *v = woort_real(value);
                 },
                 "real", "");
 
             typing::register_script_parser<jeecs::basic::string>(
                 guard,
-                [](const jeecs::basic::string* v, wo_vm vm, wo_value value)
+                [](const jeecs::basic::string* v, woort_value value)
                 {
-                    wo_set_string(value, v->c_str());
+                    woort_set_string(value, v->c_str());
                 },
-                [](jeecs::basic::string* v, wo_vm, wo_value value)
+                [](jeecs::basic::string* v, woort_value value)
                 {
-                    *v = wo_string(value);
+                    *v = woort_string(value);
                 },
                 "string", "");
 
             typing::register_script_parser<std::string>(
                 guard,
-                [](const std::string* v, wo_vm vm, wo_value value)
+                [](const std::string* v, woort_value value)
                 {
-                    wo_set_string(value, v->c_str());
+                    woort_set_string(value, v->c_str());
                 },
-                [](std::string* v, wo_vm, wo_value value)
+                [](std::string* v, woort_value value)
                 {
-                    *v = wo_string(value);
+                    *v = woort_string(value);
                 },
                 "string", "");
 
             typing::register_script_parser<UserInterface::Origin::origin_center>(
                 guard,
-                [](const UserInterface::Origin::origin_center* v, wo_vm vm, wo_value value)
+                [](const UserInterface::Origin::origin_center* v, woort_value value)
                 {
-                    wo_set_int(value, *v);
+                    woort_set_int(value, *v);
                 },
-                [](UserInterface::Origin::origin_center* v, wo_vm, wo_value value)
+                [](UserInterface::Origin::origin_center* v, woort_value value)
                 {
-                    *v = (UserInterface::Origin::origin_center)wo_int(value);
+                    *v = static_cast<UserInterface::Origin::origin_center>(woort_int(value));
                 },
                 "UserInterface::Origin::origin_center",
                 "namespace UserInterface::Origin\n"

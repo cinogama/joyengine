@@ -11,7 +11,7 @@
 #   define JE_HAVE_EXTERN_LIB_MODULE
 #endif
 
-std::vector<wo_dylib_handle_t> _je_static_module_lib_handle;
+std::vector<woort_Dylib*> _je_static_module_lib_handle;
 void je_extern_lib_module_init()
 {
     assert(_je_static_module_lib_handle.empty());

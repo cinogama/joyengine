@@ -13,7 +13,7 @@
 #   define JE_HAVE_EXTERN_LIB_3RD_PKG
 #endif
 
-std::vector<wo_dylib_handle_t> _je_3rd_pkg_lib_handle;
+std::vector<woort_Dylib*> _je_3rd_pkg_lib_handle;
 void je_extern_lib_3rd_pkgs_init()
 {
     assert(_je_3rd_pkg_lib_handle.empty()); 

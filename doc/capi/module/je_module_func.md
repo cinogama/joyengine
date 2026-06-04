@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API void* je_module_func(wo_dylib_handle_t lib, const char* funcname);
+JE_API void* je_module_func(woort_Dylib* lib, const char* funcname);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void* je_module_func(wo_dylib_handle_t lib, const char* funcname);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| lib | wo_dylib_handle_t | 动态库句柄 |
+| lib | woort_Dylib* | 动态库句柄 |
 | funcname | const char* | 函数名称 |
 
 ## 返回值
@@ -26,7 +26,7 @@ JE_API void* je_module_func(wo_dylib_handle_t lib, const char* funcname);
 ## 用法示例
 
 ```cpp
-wo_dylib_handle_t lib = je_module_load("plugin", "@/plugins/plugin.dll");
+woort_Dylib* lib = je_module_load("plugin", "@/plugins/plugin.dll");
 
 if (lib != nullptr) {
     // 获取函数指针

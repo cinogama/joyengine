@@ -25,11 +25,12 @@ struct _je_static_context_t
 {
     woort_vm* _je_global_panic_hooker = nullptr;
     woort_GCPin* _je_global_panic_hook_function;
+    woort_PanicHandlerFunction _je_global_last_panic_handler;
 
     jegl_graphic_api_entry _jegl_host_graphic_api = nullptr;
 
     std::mutex _je_delay_free_libs_mx;
-    std::list<void*> _je_delay_free_libs;
+    std::list<woort_Dylib*> _je_delay_free_libs;
 
     jeecs::typing::type_unregister_guard* _je_unregister_guard = nullptr;
 };
@@ -134,8 +135,8 @@ WOORT_API woort_api wojeapi_editor_register_panic_hook(void)
     _je_global_context._je_global_panic_hook_function = woort_GC_Pin_create(1);
     woort_GC_Pin_set_value(_je_global_context._je_global_panic_hook_function, 0, 0);
 
-    todo;
-    (void)woort_set_panic_callback(&_jedbg_hook_woolang_panic);
+    _je_global_context._je_global_last_panic_handler =
+        woort_set_panic_callback(&_jedbg_hook_woolang_panic);
 
     return woort_ret_void();
 }
@@ -421,6 +422,9 @@ void je_finish()
 
         _je_global_context._je_global_panic_hooker = nullptr;
         _je_global_context._je_global_panic_hook_function = nullptr;
+
+        woort_set_panic_callback(_je_global_context._je_global_last_panic_handler);
+        _je_global_context._je_global_last_panic_handler = nullptr;
     }
     
     woort_set_panic_callback(NULL);
@@ -428,7 +432,7 @@ void je_finish()
     wo_finish([](void*)
         {
             for (auto* mod : _je_global_context._je_delay_free_libs)
-                wo_unload_lib(mod, WO_DYLIB_UNREF);
+                woort_dylib_unload(mod, WOORT_DYLIB_UNREF);
 
             _je_global_context._je_delay_free_libs.clear();
 
@@ -465,12 +469,12 @@ const char* je_build_commit()
         ;
 }
 
-wo_dylib_handle_t je_module_load(const char* name, const char* path)
+woort_Dylib* je_module_load(const char* name, const char* path)
 {
-    if (wo_dylib_handle_t lib = wo_load_lib(name, path, nullptr, false))
+    if (woort_Dylib* lib = woort_dylib_load(name, path, nullptr, false))
     {
         if (auto entry = (jeecs::typing::module_entry_t)
-            wo_load_func(lib, "jeecs_module_entry"))
+            woort_dylib_load_func(lib, "jeecs_module_entry"))
             entry(lib);
 
         jeecs::debug::loginfo("Module: '%s'(%p) loaded", path, lib);
@@ -480,19 +484,19 @@ wo_dylib_handle_t je_module_load(const char* name, const char* path)
     return nullptr;
 }
 
-void* je_module_func(wo_dylib_handle_t lib, const char* funcname)
+void* je_module_func(woort_Dylib* lib, const char* funcname)
 {
     assert(lib);
-    return wo_load_func(lib, funcname);
+    return woort_dylib_load_func(lib, funcname);
 }
 
-void je_module_unload(wo_dylib_handle_t lib)
+void je_module_unload(woort_Dylib* lib)
 {
     assert(lib);
-    if (auto leave = (jeecs::typing::module_leave_t)wo_load_func(lib, "jeecs_module_leave"))
+    if (auto leave = (jeecs::typing::module_leave_t)woort_dylib_load_func(lib, "jeecs_module_leave"))
         leave();
     jeecs::debug::loginfo("Module: '%p' request to unload.", lib);
-    wo_unload_lib(lib, WO_DYLIB_BURY);
+    woort_dylib_unload(lib, WOORT_DYLIB_BURY);
 
     // NOTE: Woolang GCptr may invoke some function defined in lib in GC Thread job,
     //  to make sure safety, all the lib will be free in je_finish.
