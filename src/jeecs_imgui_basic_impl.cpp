@@ -124,9 +124,9 @@ WOORT_API woort_api je_gui_accept_drag_drop_payload(void)
 {
     if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(woort_string(0)))
     {
-        return wo_ret_option_string(vm, (const char*)payload->Data);
+        return woort_ret_option_string((const char*)payload->Data);
     }
-    return wo_ret_option_none(vm);
+    return woort_ret_option_none();
 }
 WOORT_API woort_api je_gui_end_accept_drop_source(void)
 {
@@ -141,129 +141,138 @@ WOORT_API woort_api je_gui_set_next_item_open(void)
 
 WOORT_API woort_api je_gui_set_clip_board_text(void)
 {
-    ImGui::SetClipboardText(woort_string(args));
+    ImGui::SetClipboardText(woort_string(0));
     return woort_ret_void();
 }
 
 WOORT_API woort_api je_gui_get_clip_board_text(void)
 {
     const char* t = ImGui::GetClipboardText();
-    return wo_ret_string(vm, t == nullptr ? "" : t);
+    return woort_ret_string(t == nullptr ? "" : t);
 }
 
-wo_value set_float2_to_struct(wo_value v, float x, float y)
+woort_value set_float2_to_struct(woort_value v, float x, float y)
 {
-    wo_set_struct(v, 2);
-    _wo_value elem;
-    wo_set_float(&elem, x);
-    wo_struct_set(v, 0, &elem);
-    wo_set_float(&elem, y);
-    wo_struct_set(v, 1, &elem);
+    woort_set_struct(v, 2);
+    woort_value elem;
+    woort_set_float(elem, x);
+    woort_struct_set(v, 0, elem);
+    woort_set_float(elem, y);
+    woort_struct_set(v, 1, elem);
     return v;
 }
-wo_value set_float3_to_struct(wo_value v, float x, float y, float z)
+woort_value set_float3_to_struct(woort_value v, float x, float y, float z)
 {
-    wo_set_struct(v, 3);
-    _wo_value elem;
-    wo_set_float(&elem, x);
-    wo_struct_set(v, 0, &elem);
-    wo_set_float(&elem, y);
-    wo_struct_set(v, 1, &elem);
-    wo_set_float(&elem, z);
-    wo_struct_set(v, 2, &elem);
+    woort_set_struct(v, 3);
+    woort_value elem;
+    woort_set_float(elem, x);
+    woort_struct_set(v, 0, elem);
+    woort_set_float(elem, y);
+    woort_struct_set(v, 1, elem);
+    woort_set_float(elem, z);
+    woort_struct_set(v, 2, elem);
     return v;
 }
-wo_value set_float4_to_struct(wo_value v, wo_vm vm, float x, float y, float z, float w)
+woort_value set_float4_to_struct(woort_value v, float x, float y, float z, float w)
 {
-    wo_set_struct(v, 4);
-    _wo_value elem;
-    wo_set_float(&elem, x);
-    wo_struct_set(v, 0, &elem);
-    wo_set_float(&elem, y);
-    wo_struct_set(v, 1, &elem);
-    wo_set_float(&elem, z);
-    wo_struct_set(v, 2, &elem);
-    wo_set_float(&elem, w);
-    wo_struct_set(v, 3, &elem);
+    woort_set_struct(v, 4);
+    woort_value elem;
+    woort_set_float(elem, x);
+    woort_struct_set(v, 0, elem);
+    woort_set_float(elem, y);
+    woort_struct_set(v, 1, elem);
+    woort_set_float(elem, z);
+    woort_struct_set(v, 2, elem);
+    woort_set_float(elem, w);
+    woort_struct_set(v, 3, elem);
     return v;
 }
 
 WOORT_API woort_api je_gui_get_main_viewport_pos(void)
 {
-    wo_value s = wo_reserve_stack(vm, 1, &args);
+    woort_value s;
+    woort_push_reserve(1, &s);
     auto vpos = ImGui::GetMainViewport()->Pos;
 
-    return wo_ret_val(vm, set_float2_to_struct(s + 0, vpos.x, vpos.y));
+    return woort_ret_value(set_float2_to_struct(s + 0, vpos.x, vpos.y));
 }
 
 WOORT_API woort_api je_gui_get_this_viewport_pos(void)
 {
-    wo_value s = wo_reserve_stack(vm, 1, &args);
+    woort_value s;
+    woort_push_reserve(1, &s);
     auto vpos = ImGui::GetWindowViewport()->Pos;
 
-    return wo_ret_val(vm, set_float2_to_struct(s + 0, vpos.x, vpos.y));
+    return woort_ret_value(set_float2_to_struct(s + 0, vpos.x, vpos.y));
 }
 
 WOORT_API woort_api je_gui_get_window_pos(void)
 {
-    wo_value s = wo_reserve_stack(vm, 1, &args);
+    woort_value s;
+    woort_push_reserve(1, &s);
     auto wpos = ImGui::GetWindowPos();
 
-    return wo_ret_val(vm, set_float2_to_struct(s + 0, wpos.x, wpos.y));
+    return woort_ret_value(set_float2_to_struct(s + 0, wpos.x, wpos.y));
 }
 
 WOORT_API woort_api je_gui_get_mouse_pos(void)
 {
-    wo_value s = wo_reserve_stack(vm, 1, &args);
+    woort_value s;
+    woort_push_reserve(1, &s);
 
     auto&& mpos = ImGui::GetMousePos();
-    return wo_ret_val(vm, set_float2_to_struct(s + 0, mpos.x, mpos.y));
+    return woort_ret_value(set_float2_to_struct(s + 0, mpos.x, mpos.y));
 }
 
 WOORT_API woort_api je_gui_get_mouse_wheel(void)
 {
-    wo_value s = wo_reserve_stack(vm, 1, &args);
+    woort_value s;
+    woort_push_reserve(1, &s);
 
     auto& imgui_io = ImGui::GetIO();
-    return wo_ret_val(vm, set_float2_to_struct(s + 0, imgui_io.MouseWheelH, imgui_io.MouseWheel));
+    return woort_ret_value(set_float2_to_struct(s + 0, imgui_io.MouseWheelH, imgui_io.MouseWheel));
 }
 
 WOORT_API woort_api je_gui_get_mouse_delta_pos(void)
 {
-    wo_value s = wo_reserve_stack(vm, 1, &args);
+    woort_value s;
+    woort_push_reserve(1, &s);
 
     auto&& mdpos = ImGui::GetIO().MouseDelta;
-    return wo_ret_val(vm, set_float2_to_struct(s + 0, mdpos.x, mdpos.y));
+    return woort_ret_value(set_float2_to_struct(s + 0, mdpos.x, mdpos.y));
 }
 
 WOORT_API woort_api je_gui_get_cursor_pos(void)
 {
-    wo_value s = wo_reserve_stack(vm, 1, &args);
+    woort_value s;
+    woort_push_reserve(1, &s);
 
     auto&& cpos = ImGui::GetCursorPos();
-    return wo_ret_val(vm, set_float2_to_struct(s + 0, cpos.x, cpos.y));
+    return woort_ret_value(set_float2_to_struct(s + 0, cpos.x, cpos.y));
 }
 WOORT_API woort_api je_gui_get_item_rect_size(void)
 {
-    wo_value s = wo_reserve_stack(vm, 1, &args);
+    woort_value s;
+    woort_push_reserve(1, &s);
 
     auto&& isize = ImGui::GetItemRectSize();
-    return wo_ret_val(vm, set_float2_to_struct(s + 0, isize.x, isize.y));
+    return woort_ret_value(set_float2_to_struct(s + 0, isize.x, isize.y));
 }
 
 WOORT_API woort_api je_gui_get_item_rect(void)
 {
-    wo_value s = wo_reserve_stack(vm, 2, &args);
+    woort_value s;
+    woort_push_reserve(2, &s);
 
     auto&& isizemin = ImGui::GetItemRectMin();
     auto&& isizemax = ImGui::GetItemRectMax();
 
-    wo_set_struct(s + 0, 2);
+    woort_set_struct(s + 0, 2);
 
-    wo_struct_set(s + 0, 0, set_float2_to_struct(s + 1, isizemin.x, isizemin.y));
-    wo_struct_set(s + 0, 1, set_float2_to_struct(s + 1, isizemax.x, isizemax.y));
+    woort_struct_set(s + 0, 0, set_float2_to_struct(s + 1, isizemin.x, isizemin.y));
+    woort_struct_set(s + 0, 1, set_float2_to_struct(s + 1, isizemax.x, isizemax.y));
 
-    return wo_ret_val(vm, s + 0);
+    return woort_ret_value(s + 0);
 }
 
 WOORT_API woort_api je_gui_push_id_str(void)
@@ -284,7 +293,7 @@ WOORT_API woort_api je_gui_pop_id(void)
 
 WOORT_API woort_api je_gui_get_id(void)
 {
-    return wo_ret_int(vm, (wo_integer_t)ImGui::GetID(woort_string(0)));
+    return woort_ret_int((woort_Int)ImGui::GetID(woort_string(0)));
 }
 
 WOORT_API woort_api je_gui_beginpopup_contextitem(void)
@@ -322,51 +331,52 @@ WOORT_API woort_api je_gui_begintabitem(void)
 
 WOORT_API woort_api je_gui_begintabitem_open(void)
 {
-    wo_value s = wo_reserve_stack(vm, 2, &args);
+    woort_value s;
+    woort_push_reserve(2, &s);
 
     bool open = true;
     bool display = ImGui::BeginTabItem(woort_string(0), &open, (ImGuiTabBarFlags)woort_int(1));
 
-    wo_value ret = s + 0;
-    wo_value elem = s + 1;
+    woort_value ret = s + 0;
+    woort_value elem = s + 1;
 
-    wo_set_struct(ret, 2);
+    woort_set_struct(ret, 2);
 
-    wo_set_bool(elem, display);
-    wo_struct_set(ret, 0, elem);
-    wo_set_bool(elem, open);
-    wo_struct_set(ret, 1, elem);
+    woort_set_bool(elem, display);
+    woort_struct_set(ret, 0, elem);
+    woort_set_bool(elem, open);
+    woort_struct_set(ret, 1, elem);
 
-    return wo_ret_val(vm, ret);
+    return woort_ret_value(ret);
 }
 
-ImVec2 val2vec2(wo_value v)
+ImVec2 val2vec2(woort_value v)
 {
-    _wo_value tmp;
-    wo_struct_get(&tmp, v, 0);
-    float x = wo_float(&tmp);
-    wo_struct_get(&tmp, v, 1);
-    float y = wo_float(&tmp);
+    woort_value tmp;
+    woort_struct_get(&tmp, v, 0);
+    float x = woort_float(tmp);
+    woort_struct_get(&tmp, v, 1);
+    float y = woort_float(tmp);
     return ImVec2(x, y);
 }
-ImVec4 val2vec4(wo_value v)
+ImVec4 val2vec4(woort_value v)
 {
-    _wo_value tmp;
-    wo_struct_get(&tmp, v, 0);
-    float x = wo_float(&tmp);
-    wo_struct_get(&tmp, v, 1);
-    float y = wo_float(&tmp);
-    wo_struct_get(&tmp, v, 2);
-    float z = wo_float(&tmp);
-    wo_struct_get(&tmp, v, 3);
-    float w = wo_float(&tmp);
+    woort_value tmp;
+    woort_struct_get(&tmp, v, 0);
+    float x = woort_float(tmp);
+    woort_struct_get(&tmp, v, 1);
+    float y = woort_float(tmp);
+    woort_struct_get(&tmp, v, 2);
+    float z = woort_float(tmp);
+    woort_struct_get(&tmp, v, 3);
+    float w = woort_float(tmp);
     return ImVec4(x, y, z, w);
 }
 
 WOORT_API woort_api je_gui_push_clip_rect(void)
 {
-    wo_value from = args + 0;
-    wo_value to = args + 1;
+    woort_value from = 0;
+    woort_value to = 1;
     ImGui::PushClipRect(
         val2vec2(from),
         val2vec2(to),
@@ -382,32 +392,32 @@ WOORT_API woort_api je_gui_pop_clip_rect(void)
     return woort_ret_void();
 }
 
-ImU32 val2color32(wo_value v)
+ImU32 val2color32(woort_value v)
 {
-    _wo_value tmp;
-    wo_struct_get(&tmp, v, 0);
-    int x = wo_int(&tmp);
-    wo_struct_get(&tmp, v, 1);
-    int y = wo_int(&tmp);
-    wo_struct_get(&tmp, v, 2);
-    int z = wo_int(&tmp);
-    wo_struct_get(&tmp, v, 3);
-    int w = wo_int(&tmp);
+    woort_value tmp;
+    woort_struct_get(&tmp, v, 0);
+    int x = woort_int(tmp);
+    woort_struct_get(&tmp, v, 1);
+    int y = woort_int(tmp);
+    woort_struct_get(&tmp, v, 2);
+    int z = woort_int(tmp);
+    woort_struct_get(&tmp, v, 3);
+    int w = woort_int(tmp);
 
     return IM_COL32(x, y, z, w);
 }
 
-ImVec4 val2colorf4(wo_value v)
+ImVec4 val2colorf4(woort_value v)
 {
-    _wo_value tmp;
-    wo_struct_get(&tmp, v, 0);
-    float x = (float)wo_int(&tmp);
-    wo_struct_get(&tmp, v, 1);
-    float y = (float)wo_int(&tmp);
-    wo_struct_get(&tmp, v, 2);
-    float z = (float)wo_int(&tmp);
-    wo_struct_get(&tmp, v, 3);
-    float w = (float)wo_int(&tmp);
+    woort_value tmp;
+    woort_struct_get(&tmp, v, 0);
+    float x = (float)woort_int(tmp);
+    woort_struct_get(&tmp, v, 1);
+    float y = (float)woort_int(tmp);
+    woort_struct_get(&tmp, v, 2);
+    float z = (float)woort_int(tmp);
+    woort_struct_get(&tmp, v, 3);
+    float w = (float)woort_int(tmp);
 
     return ImVec4(
         x / 255.0f,
@@ -418,7 +428,7 @@ ImVec4 val2colorf4(wo_value v)
 
 WOORT_API woort_api je_gui_push_style_color(void)
 {
-    ImGui::PushStyleColor((ImGuiCol)woort_int(0), val2color32(args + 1));
+    ImGui::PushStyleColor((ImGuiCol)woort_int(0), val2color32(1));
     return woort_ret_void();
 }
 
@@ -430,47 +440,47 @@ WOORT_API woort_api je_gui_pop_style_color(void)
 
 WOORT_API woort_api je_gui_get_window_draw_list(void)
 {
-    return wo_ret_pointer(vm, ImGui::GetWindowDrawList());
+    return woort_ret_pointer(ImGui::GetWindowDrawList());
 }
 
 WOORT_API woort_api je_gui_draw_list_add_rect(void)
 {
-    ImDrawList* list = (ImDrawList*)woort_pointer(args + 0);
-    list->AddRect(val2vec2(args + 1), val2vec2(args + 2), val2color32(args + 3), 0.f, 0, wo_float(args + 4));
+    ImDrawList* list = (ImDrawList*)woort_pointer(0);
+    list->AddRect(val2vec2(1), val2vec2(2), val2color32(3), 0.f, 0, woort_float(4));
     return woort_ret_void();
 }
 WOORT_API woort_api je_gui_draw_list_add_rect_filled(void)
 {
-    ImDrawList* list = (ImDrawList*)woort_pointer(args + 0);
-    list->AddRectFilled(val2vec2(args + 1), val2vec2(args + 2), val2color32(args + 3));
+    ImDrawList* list = (ImDrawList*)woort_pointer(0);
+    list->AddRectFilled(val2vec2(1), val2vec2(2), val2color32(3));
     return woort_ret_void();
 }
 
 WOORT_API woort_api je_gui_draw_list_add_triangle(void)
 {
-    ImDrawList* list = (ImDrawList*)woort_pointer(args + 0);
-    list->AddTriangle(val2vec2(args + 1), val2vec2(args + 2), val2vec2(args + 3), val2color32(args + 4), wo_float(args + 5));
+    ImDrawList* list = (ImDrawList*)woort_pointer(0);
+    list->AddTriangle(val2vec2(1), val2vec2(2), val2vec2(3), val2color32(4), woort_float(5));
     return woort_ret_void();
 }
 WOORT_API woort_api je_gui_draw_list_add_triangle_filled(void)
 {
-    ImDrawList* list = (ImDrawList*)woort_pointer(args + 0);
-    list->AddTriangleFilled(val2vec2(args + 1), val2vec2(args + 2), val2vec2(args + 3), val2color32(args + 4));
+    ImDrawList* list = (ImDrawList*)woort_pointer(0);
+    list->AddTriangleFilled(val2vec2(1), val2vec2(2), val2vec2(3), val2color32(4));
     return woort_ret_void();
 }
 
 WOORT_API woort_api je_gui_draw_list_add_text(void)
 {
-    ImDrawList* list = (ImDrawList*)woort_pointer(args + 0);
-    list->AddText(val2vec2(args + 1), val2color32(args + 2), woort_string(3));
+    ImDrawList* list = (ImDrawList*)woort_pointer(0);
+    list->AddText(val2vec2(1), val2color32(2), woort_string(3));
     return woort_ret_void();
 }
 
 WOORT_API woort_api je_gui_draw_list_add_image(void)
 {
-    ImDrawList* dlist = (ImDrawList*)woort_pointer(args + 0);
+    ImDrawList* dlist = (ImDrawList*)woort_pointer(0);
 
-    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(args + 3);
+    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(3);
     jegl_bind_texture((*texture)->resource(), 0);
 
     const ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
@@ -487,44 +497,44 @@ WOORT_API woort_api je_gui_draw_list_add_image(void)
         (ImTextureID)_je_gui_tls_ctx._jegl_get_native_texture(
             _je_gui_tls_ctx._jegl_context,
             (*texture)->resource()),
-        val2vec2(args + 1),
-        val2vec2(args + 2),
+        val2vec2(1),
+        val2vec2(2),
         uvmin,
         uvmax,
-        val2color32(args + 4));
+        val2color32(4));
     dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
     return woort_ret_void();
 }
 
 WOORT_API woort_api je_gui_draw_list_add_line(void)
 {
-    ImDrawList* list = (ImDrawList*)woort_pointer(args + 0);
-    list->AddLine(val2vec2(args + 1), val2vec2(args + 2), val2color32(args + 3), wo_float(args + 4));
+    ImDrawList* list = (ImDrawList*)woort_pointer(0);
+    list->AddLine(val2vec2(1), val2vec2(2), val2color32(3), woort_float(4));
     return woort_ret_void();
 }
 
 WOORT_API woort_api je_gui_draw_list_add_circle(void)
 {
-    ImDrawList* list = (ImDrawList*)woort_pointer(args + 0);
-    list->AddCircle(val2vec2(args + 1), wo_float(args + 2), val2color32(args + 3), 0, wo_float(args + 4));
+    ImDrawList* list = (ImDrawList*)woort_pointer(0);
+    list->AddCircle(val2vec2(1), woort_float(2), val2color32(3), 0, woort_float(4));
     return woort_ret_void();
 }
 WOORT_API woort_api je_gui_draw_list_add_filled_circle(void)
 {
-    ImDrawList* list = (ImDrawList*)woort_pointer(args + 0);
-    list->AddCircleFilled(val2vec2(args + 1), wo_float(args + 2), val2color32(args + 3));
+    ImDrawList* list = (ImDrawList*)woort_pointer(0);
+    list->AddCircleFilled(val2vec2(1), woort_float(2), val2color32(3));
     return woort_ret_void();
 }
 WOORT_API woort_api je_gui_draw_list_add_bezier_quad(void)
 {
-    ImDrawList* list = (ImDrawList*)woort_pointer(args + 0);
-    list->AddBezierQuadratic(val2vec2(args + 1), val2vec2(args + 2), val2vec2(args + 3), val2color32(args + 4), wo_float(args + 5));
+    ImDrawList* list = (ImDrawList*)woort_pointer(0);
+    list->AddBezierQuadratic(val2vec2(1), val2vec2(2), val2vec2(3), val2color32(4), woort_float(5));
     return woort_ret_void();
 }
 WOORT_API woort_api je_gui_draw_list_add_bezier_cubic(void)
 {
-    ImDrawList* list = (ImDrawList*)woort_pointer(args + 0);
-    list->AddBezierCubic(val2vec2(args + 1), val2vec2(args + 2), val2vec2(args + 3), val2vec2(args + 4), val2color32(args + 5), wo_float(args + 6));
+    ImDrawList* list = (ImDrawList*)woort_pointer(0);
+    list->AddBezierCubic(val2vec2(1), val2vec2(2), val2vec2(3), val2vec2(4), val2color32(5), woort_float(6));
     return woort_ret_void();
 }
 
@@ -574,7 +584,7 @@ WOORT_API woort_api je_gui_endpopup(void)
 
 WOORT_API woort_api je_gui_begin_listbox(void)
 {
-    return woort_ret_bool(ImGui::BeginListBox(woort_string(0), ImVec2(wo_float(args + 1), wo_float(args + 2))));
+    return woort_ret_bool(ImGui::BeginListBox(woort_string(0), ImVec2(woort_float(1), woort_float(2))));
 }
 WOORT_API woort_api je_gui_begin_selectable(void)
 {
@@ -625,7 +635,7 @@ WOORT_API woort_api je_gui_is_itemhovered(void)
 WOORT_API woort_api je_gui_is_mousehoveringrect(void)
 {
     return woort_ret_bool(ImGui::IsMouseHoveringRect(
-        val2vec2(args + 0), val2vec2(args + 1)));
+        val2vec2(0), val2vec2(1)));
 }
 
 WOORT_API woort_api je_gui_is_item_active(void)
@@ -681,85 +691,89 @@ WOORT_API woort_api je_gui_treepop(void)
 
 WOORT_API woort_api je_gui_listbox(void)
 {
-    wo_value s = wo_reserve_stack(vm, 1, &args);
+    woort_value s;
+    woort_push_reserve(1, &s);
 
     int selected_item = -1;
     int max_height_item = -1;
 
-    std::vector<const char*> items((size_t)wo_arr_len(args + 1));
-    wo_value elem = s + 0;
+    std::vector<const char*> items((size_t)woort_vec_len(1));
+    woort_value elem = s + 0;
     for (size_t i = 0; i < items.size(); i++)
     {
-        wo_arr_get(elem, args + 1, i);
+        woort_vec_get(elem, 1, i);
         items[i] = woort_string(elem);
     }
 
     bool val_changed = ImGui::ListBox(woort_string(0), &selected_item, items.data(), (int)items.size(), max_height_item);
 
     if (val_changed)
-        return wo_ret_option_int(vm, selected_item);
-    return wo_ret_option_none(vm);
+        return woort_ret_option_int(selected_item);
+    return woort_ret_option_none();
 }
 WOORT_API woort_api je_gui_listbox_select(void)
 {
-    wo_value s = wo_reserve_stack(vm, 1, &args);
+    woort_value s;
+    woort_push_reserve(1, &s);
 
     int selected_item = (int)woort_int(2);
     int max_height_item = -1;
 
-    std::vector<const char*> items((size_t)wo_arr_len(args + 1));
-    wo_value elem = s + 0;
+    std::vector<const char*> items((size_t)woort_vec_len(1));
+    woort_value elem = s + 0;
     for (size_t i = 0; i < items.size(); i++)
     {
-        wo_arr_get(elem, args + 1, i);
+        woort_vec_get(elem, 1, i);
         items[i] = woort_string(elem);
     }
 
     bool val_changed = ImGui::ListBox(woort_string(0), &selected_item, items.data(), (int)items.size(), max_height_item);
 
     if (val_changed)
-        return wo_ret_option_int(vm, selected_item);
-    return wo_ret_option_none(vm);
+        return woort_ret_option_int(selected_item);
+    return woort_ret_option_none();
 }
 WOORT_API woort_api je_gui_listbox_select_height(void)
 {
-    wo_value s = wo_reserve_stack(vm, 1, &args);
+    woort_value s;
+    woort_push_reserve(1, &s);
 
     int selected_item = (int)woort_int(2);
     int max_height_item = (int)woort_int(3);
 
-    std::vector<const char*> items((size_t)wo_arr_len(args + 1));
-    wo_value elem = s + 0;
+    std::vector<const char*> items((size_t)woort_vec_len(1));
+    woort_value elem = s + 0;
     for (size_t i = 0; i < items.size(); i++)
     {
-        wo_arr_get(elem, args + 1, i);
+        woort_vec_get(elem, 1, i);
         items[i] = woort_string(elem);
     }
 
     bool val_changed = ImGui::ListBox(woort_string(0), &selected_item, items.data(), (int)items.size(), max_height_item);
 
     if (val_changed)
-        return wo_ret_option_int(vm, selected_item);
-    return wo_ret_option_none(vm);
+        return woort_ret_option_int(selected_item);
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api je_gui_listbox_withsize(void)
 {
-    wo_value s = wo_reserve_stack(vm, 1, &args);
+    woort_value s;
+    woort_push_reserve(1, &s);
 
     // func ListBox(label:string, items:array<string>, ref select_item:int, width:real, height:real)=> int;
     int origin_selected_index = (int)woort_int(2);
     int selected_index = -1;
     bool value_updated = false;
 
-    wo_value elem = s + 0;
+    woort_value elem = s + 0;
 
-    if (ImGui::BeginListBox(woort_string(0), ImVec2(wo_float(args + 3), wo_float(args + 4))))
+    if (ImGui::BeginListBox(woort_string(0), ImVec2(woort_float(3), woort_float(4))))
     {
-        size_t sz = (size_t)wo_arr_len(args + 1);
+        size_t sz = (size_t)woort_vec_len(1);
         for (size_t i = 0; i < sz; i++)
         {
-            wo_arr_get(elem, args + 1, i);
+            woort_vec_get(elem, 1, i);
             woort_U8CString item = woort_string(elem);
             if (ImGui::Selectable(item, (int)i == origin_selected_index))
             {
@@ -773,33 +787,33 @@ WOORT_API woort_api je_gui_listbox_withsize(void)
         ImGui::EndListBox();
     }
     if (value_updated)
-        return wo_ret_option_int(vm, selected_index);
-    return wo_ret_option_none(vm);
+        return woort_ret_option_int(selected_index);
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api je_gui_job_vm_handle(void)
 {
-    return wo_ret_pointer(vm, vm);
+    return woort_ret_pointer(woort_VMRuntime_current());
 }
 
 WOORT_API woort_api je_gui_begin(void)
 {
-    bool showing = ImGui::Begin(woort_string(args));
+    bool showing = ImGui::Begin(woort_string(0));
     return woort_ret_bool(showing);
 }
 WOORT_API woort_api je_gui_begin_attr(void)
 {
-    bool showing = ImGui::Begin(woort_string(args), 0, (ImGuiWindowFlags)woort_int(1));
+    bool showing = ImGui::Begin(woort_string(0), 0, (ImGuiWindowFlags)woort_int(1));
     return woort_ret_bool(showing);
 }
 WOORT_API woort_api je_gui_begin_open(void)
 {
     bool windows_flag = true;
-    bool showing = ImGui::Begin(woort_string(args), &windows_flag, (ImGuiWindowFlags)woort_int(1));
+    bool showing = ImGui::Begin(woort_string(0), &windows_flag, (ImGuiWindowFlags)woort_int(1));
 
     if (windows_flag)
-        return wo_ret_option_bool(vm, showing);
-    return wo_ret_option_none(vm);
+        return woort_ret_option_bool(showing);
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api je_gui_is_window_focused(void)
@@ -824,7 +838,7 @@ WOORT_API woort_api je_gui_begin_child_attr(void)
 WOORT_API woort_api je_gui_begin_child_size(void)
 {
     return woort_ret_bool(ImGui::BeginChild(woort_string(0),
-        ImVec2(wo_float(args + 1), wo_float(args + 2)), true));
+        ImVec2(woort_float(1), woort_float(2)), true));
 }
 
 WOORT_API woort_api je_gui_end_child(void)
@@ -835,25 +849,25 @@ WOORT_API woort_api je_gui_end_child(void)
 
 WOORT_API woort_api je_gui_progress_bar(void)
 {
-    ImGui::ProgressBar(wo_float(args + 0));
+    ImGui::ProgressBar(woort_float(0));
     return woort_ret_void();
 }
 
 WOORT_API woort_api je_gui_progress_bar_size(void)
 {
-    ImGui::ProgressBar(wo_float(args + 0), val2vec2(args + 1));
+    ImGui::ProgressBar(woort_float(0), val2vec2(1));
     return woort_ret_void();
 }
 
 WOORT_API woort_api je_gui_text(void)
 {
-    ImGui::Text("%s", woort_string(args));
+    ImGui::Text("%s", woort_string(0));
     return woort_ret_void();
 }
 
 WOORT_API woort_api je_gui_text_disabled(void)
 {
-    ImGui::TextDisabled("%s", woort_string(args));
+    ImGui::TextDisabled("%s", woort_string(0));
     return woort_ret_void();
 }
 
@@ -864,12 +878,12 @@ WOORT_API woort_api je_gui_button(void)
 
 WOORT_API woort_api je_gui_button_size(void)
 {
-    return woort_ret_bool(ImGui::Button(woort_string(0), val2vec2(args + 1)));
+    return woort_ret_bool(ImGui::Button(woort_string(0), val2vec2(1)));
 }
 
 WOORT_API woort_api je_gui_invisible_button(void)
 {
-    return woort_ret_bool(ImGui::InvisibleButton(woort_string(0), val2vec2(args + 1)));
+    return woort_ret_bool(ImGui::InvisibleButton(woort_string(0), val2vec2(1)));
 }
 
 WOORT_API woort_api je_gui_begin_main_menu_bar(void)
@@ -896,11 +910,11 @@ WOORT_API woort_api je_gui_menu_item_selected(void)
 {
     bool selected = woort_bool(2);
     bool clicked = ImGui::MenuItem(woort_string(0), woort_string(1), &selected, woort_bool(3));
-    wo_set_bool(args + 2, selected);
+    woort_set_bool(2, selected);
 
     if (clicked)
-        return wo_ret_option_bool(vm, selected);
-    return wo_ret_option_none(vm);
+        return woort_ret_option_bool(selected);
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api je_gui_end_main_menu_bar(void)
@@ -938,7 +952,7 @@ WOORT_API woort_api je_gui_separator(void)
 
 WOORT_API woort_api je_gui_image(void)
 {
-    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(args + 0);
+    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(0);
 
     jegl_bind_texture((*texture)->resource(), 0);
 
@@ -966,7 +980,7 @@ WOORT_API woort_api je_gui_image(void)
 }
 WOORT_API woort_api je_gui_image_scale(void)
 {
-    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(args + 0);
+    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(0);
 
     jegl_bind_texture((*texture)->resource(), 0);
 
@@ -982,8 +996,8 @@ WOORT_API woort_api je_gui_image_scale(void)
         _je_gui_tls_ctx._jegl_context,
         (*texture)->resource()),
         ImVec2(
-            (float)((*texture)->resource()->m_width) * wo_float(args + 1),
-            (float)((*texture)->resource()->m_height) * wo_float(args + 1)),
+            (float)((*texture)->resource()->m_width) * woort_float(1),
+            (float)((*texture)->resource()->m_height) * woort_float(1)),
         uvmin,
         uvmax);
 
@@ -993,7 +1007,7 @@ WOORT_API woort_api je_gui_image_scale(void)
 }
 WOORT_API woort_api je_gui_image_size(void)
 {
-    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(args + 0);
+    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(0);
 
     jegl_bind_texture((*texture)->resource(), 0);
 
@@ -1009,8 +1023,8 @@ WOORT_API woort_api je_gui_image_size(void)
         _je_gui_tls_ctx._jegl_context,
         (*texture)->resource()),
         ImVec2(
-            wo_float(args + 1),
-            wo_float(args + 2)),
+            woort_float(1),
+            woort_float(2)),
         uvmin,
         uvmax);
 
@@ -1021,7 +1035,8 @@ WOORT_API woort_api je_gui_image_size(void)
 
 WOORT_API woort_api je_gui_image_size_color(void)
 {
-    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(args + 0);
+    jeecs::basic::resource<jeecs::graphic::texture>* texture = 
+        (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(0);
 
     jegl_bind_texture((*texture)->resource(), 0);
 
@@ -1037,11 +1052,11 @@ WOORT_API woort_api je_gui_image_size_color(void)
         _je_gui_tls_ctx._jegl_context,
         (*texture)->resource()),
         ImVec2(
-            wo_float(args + 1),
-            wo_float(args + 2)),
+            woort_float(1),
+            woort_float(2)),
         uvmin,
         uvmax,
-        val2colorf4(args + 3));
+        val2colorf4(3));
 
     dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
 
@@ -1051,7 +1066,7 @@ WOORT_API woort_api je_gui_image_size_color(void)
 WOORT_API woort_api je_gui_imagebutton(void)
 {
     woort_U8CString label = woort_string(0);
-    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(args + 1);
+    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(1);
 
     jegl_bind_texture((*texture)->resource(), 0);
 
@@ -1083,7 +1098,7 @@ WOORT_API woort_api je_gui_imagebutton(void)
 WOORT_API woort_api je_gui_imagebutton_scale(void)
 {
     woort_U8CString label = woort_string(0);
-    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(args + 1);
+    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(1);
 
     jegl_bind_texture((*texture)->resource(), 0);
 
@@ -1103,8 +1118,8 @@ WOORT_API woort_api je_gui_imagebutton_scale(void)
             _je_gui_tls_ctx._jegl_context,
             (*texture)->resource()),
         ImVec2(
-            (float)((*texture)->resource()->m_width) * wo_float(args + 2),
-            (float)((*texture)->resource()->m_height) * wo_float(args + 2)),
+            (float)((*texture)->resource()->m_width) * woort_float(2),
+            (float)((*texture)->resource()->m_height) * woort_float(2)),
         uvmin, uvmax);
 
     dlist->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
@@ -1114,7 +1129,7 @@ WOORT_API woort_api je_gui_imagebutton_scale(void)
 WOORT_API woort_api je_gui_imagebutton_size(void)
 {
     woort_U8CString label = woort_string(0);
-    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(args + 1);
+    jeecs::basic::resource<jeecs::graphic::texture>* texture = (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(1);
 
     jegl_bind_texture((*texture)->resource(), 0);
 
@@ -1134,8 +1149,8 @@ WOORT_API woort_api je_gui_imagebutton_size(void)
             _je_gui_tls_ctx._jegl_context,
             (*texture)->resource()),
         ImVec2(
-            wo_float(args + 2),
-            wo_float(args + 3)),
+            woort_float(2),
+            woort_float(3)),
         uvmin,
         uvmax);
 
@@ -1146,69 +1161,71 @@ WOORT_API woort_api je_gui_imagebutton_size(void)
 
 WOORT_API woort_api je_gui_content_region_avail(void)
 {
-    wo_value s = wo_reserve_stack(vm, 1, &args);
+    woort_value s;
+    woort_push_reserve(1, &s);
 
     auto&& sz = ImGui::GetContentRegionAvail();
-    return wo_ret_val(vm, set_float2_to_struct(s + 0, sz.x, sz.y));
+    return woort_ret_value(set_float2_to_struct(s + 0, sz.x, sz.y));
 }
 
 WOORT_API woort_api je_gui_set_next_item_width(void)
 {
-    ImGui::SetNextItemWidth(wo_float(args + 0));
+    ImGui::SetNextItemWidth(woort_float(0));
     return woort_ret_void();
 }
 
 WOORT_API woort_api je_gui_set_next_window_size_constraints(void)
 {
-    ImGui::SetNextWindowSizeConstraints(val2vec2(args + 0), val2vec2(args + 1));
+    ImGui::SetNextWindowSizeConstraints(val2vec2(0), val2vec2(1));
     return woort_ret_void();
 }
 
 WOORT_API woort_api je_gui_set_next_window_size(void)
 {
-    ImGui::SetNextWindowSize(val2vec2(args + 0));
+    ImGui::SetNextWindowSize(val2vec2(0));
     return woort_ret_void();
 }
 
 WOORT_API woort_api je_gui_set_next_window_pos(void)
 {
-    ImGui::SetNextWindowPos(val2vec2(args + 0));
+    ImGui::SetNextWindowPos(val2vec2(0));
     return woort_ret_void();
 }
 
 WOORT_API woort_api je_gui_colorbutton(void)
 {
-    return woort_ret_bool(ImGui::ColorButton(woort_string(0), val2vec4(args + 1)));
+    return woort_ret_bool(ImGui::ColorButton(woort_string(0), val2vec4(1)));
 }
 WOORT_API woort_api je_gui_colorpicker4(void)
 {
-    wo_value s = wo_reserve_stack(vm, 2, &args);
+    woort_value s;
+    woort_push_reserve(2, &s);
 
     float rgba[4] = {};
 
-    wo_value elem = s + 0;
-    wo_struct_get(elem, args + 1, 0);
-    rgba[0] = wo_float(elem);
-    wo_struct_get(elem, args + 1, 1);
-    rgba[1] = wo_float(elem);
-    wo_struct_get(elem, args + 1, 2);
-    rgba[2] = wo_float(elem);
-    wo_struct_get(elem, args + 1, 3);
-    rgba[3] = wo_float(elem);
+    woort_value elem = s + 0;
+    woort_struct_get(elem, 1, 0);
+    rgba[0] = woort_float(elem);
+    woort_struct_get(elem, 1, 1);
+    rgba[1] = woort_float(elem);
+    woort_struct_get(elem, 1, 2);
+    rgba[2] = woort_float(elem);
+    woort_struct_get(elem, 1, 3);
+    rgba[3] = woort_float(elem);
 
     if (ImGui::ColorPicker4(woort_string(0), rgba))
     {
-        wo_value result = s + 1;
-        set_float4_to_struct(result, vm, rgba[0], rgba[1], rgba[2], rgba[3]);
+        woort_value result = s + 1;
+        set_float4_to_struct(result, rgba[0], rgba[1], rgba[2], rgba[3]);
 
-        return wo_ret_option_val(vm, result);
+        return woort_ret_option_value(result);
     }
-    return wo_ret_option_none(vm);
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api je_gui_push_item_width(void)
 {
-    ImGui::PushItemWidth(wo_float(args + 0));
+    ImGui::PushItemWidth(woort_float(0));
     return woort_ret_void();
 }
 
@@ -1223,9 +1240,9 @@ WOORT_API woort_api je_gui_input_text_box(void)
     std::string buf = woort_string(1);
     if (ImGui::InputText(woort_string(0), &buf))
     {
-        return wo_ret_option_string(vm, buf.c_str());
+        return woort_ret_option_string(buf.c_str());
     }
-    return wo_ret_option_none(vm);
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api je_gui_input_text_attr_box(void)
@@ -1233,17 +1250,17 @@ WOORT_API woort_api je_gui_input_text_attr_box(void)
     std::string buf = woort_string(1);
     if (ImGui::InputText(woort_string(0), &buf, (ImGuiInputFlags)woort_int(2)))
     {
-        return wo_ret_option_string(vm, buf.c_str());
+        return woort_ret_option_string(buf.c_str());
     }
-    return wo_ret_option_none(vm);
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api je_gui_checkbox(void)
 {
     bool checked = woort_bool(1);
     if (ImGui::Checkbox(woort_string(0), &checked))
-        return wo_ret_option_bool(vm, checked);
-    return wo_ret_option_none(vm);
+        return woort_ret_option_bool(checked);
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api je_gui_input_int_box(void)
@@ -1255,12 +1272,13 @@ WOORT_API woort_api je_gui_input_int_box(void)
     update = ImGui::InputInt(label, &value);
 
     if (update)
-        return wo_ret_option_int(vm, value);
-    return wo_ret_option_none(vm);
+        return woort_ret_option_int(value);
+    return woort_ret_option_none();
 }
 WOORT_API woort_api je_gui_input_int2_box(void)
 {
-    wo_value s = wo_reserve_stack(vm, 2, &args);
+    woort_value s;
+    woort_push_reserve(2, &s);
 
     woort_U8CString label = woort_string(0);
     int values[] = { (int)woort_int(1), (int)woort_int(2) };
@@ -1270,22 +1288,23 @@ WOORT_API woort_api je_gui_input_int2_box(void)
 
     if (update)
     {
-        wo_value result = s + 0;
-        wo_value elem = s + 1;
+        woort_value result = s + 0;
+        woort_value elem = s + 1;
 
-        wo_set_struct(result, 2);
+        woort_set_struct(result, 2);
 
-        wo_set_int(elem, (int)values[0]);
-        wo_struct_set(result, 0, elem);
-        wo_set_int(elem, (int)values[1]);
-        wo_struct_set(result, 1, elem);
-        return wo_ret_ok_val(vm, result);
+        woort_set_int(elem, (int)values[0]);
+        woort_struct_set(result, 0, elem);
+        woort_set_int(elem, (int)values[1]);
+        woort_struct_set(result, 1, elem);
+        return woort_ret_result_ok_value(result);
     }
-    return wo_ret_option_none(vm);
+    return woort_ret_option_none();
 }
 WOORT_API woort_api je_gui_input_int3_box(void)
 {
-    wo_value s = wo_reserve_stack(vm, 2, &args);
+    woort_value s;
+    woort_push_reserve(2, &s);
 
     woort_U8CString label = woort_string(0);
     int values[] = { (int)woort_int(1), (int)woort_int(2), (int)woort_int(3) };
@@ -1295,24 +1314,25 @@ WOORT_API woort_api je_gui_input_int3_box(void)
 
     if (update)
     {
-        wo_value result = s + 0;
-        wo_value elem = s + 1;
+        woort_value result = s + 0;
+        woort_value elem = s + 1;
 
-        wo_set_struct(result, 3);
+        woort_set_struct(result, 3);
 
-        wo_set_int(elem, (int)values[0]);
-        wo_struct_set(result, 0, elem);
-        wo_set_int(elem, (int)values[1]);
-        wo_struct_set(result, 1, elem);
-        wo_set_int(elem, (int)values[2]);
-        wo_struct_set(result, 2, elem);
-        return wo_ret_ok_val(vm, result);
+        woort_set_int(elem, (int)values[0]);
+        woort_struct_set(result, 0, elem);
+        woort_set_int(elem, (int)values[1]);
+        woort_struct_set(result, 1, elem);
+        woort_set_int(elem, (int)values[2]);
+        woort_struct_set(result, 2, elem);
+        return woort_ret_result_ok_value(result);
     }
-    return wo_ret_option_none(vm);
+    return woort_ret_option_none();
 }
 WOORT_API woort_api je_gui_input_int4_box(void)
 {
-    wo_value s = wo_reserve_stack(vm, 2, &args);
+    woort_value s;
+    woort_push_reserve(2, &s);
 
     woort_U8CString label = woort_string(0);
     int values[] = { (int)woort_int(1), (int)woort_int(2), (int)woort_int(3), (int)woort_int(4) };
@@ -1322,116 +1342,120 @@ WOORT_API woort_api je_gui_input_int4_box(void)
 
     if (update)
     {
-        wo_value result = s + 0;
-        wo_value elem = s + 1;
+        woort_value result = s + 0;
+        woort_value elem = s + 1;
 
-        wo_set_struct(result, 4);
+        woort_set_struct(result, 4);
 
-        wo_set_int(elem, (int)values[0]);
-        wo_struct_set(result, 0, elem);
-        wo_set_int(elem, (int)values[1]);
-        wo_struct_set(result, 1, elem);
-        wo_set_int(elem, (int)values[2]);
-        wo_struct_set(result, 2, elem);
-        wo_set_int(elem, (int)values[3]);
-        wo_struct_set(result, 3, elem);
-        return wo_ret_ok_val(vm, result);
+        woort_set_int(elem, (int)values[0]);
+        woort_struct_set(result, 0, elem);
+        woort_set_int(elem, (int)values[1]);
+        woort_struct_set(result, 1, elem);
+        woort_set_int(elem, (int)values[2]);
+        woort_struct_set(result, 2, elem);
+        woort_set_int(elem, (int)values[3]);
+        woort_struct_set(result, 3, elem);
+        return woort_ret_result_ok_value(result);
     }
-    return wo_ret_option_none(vm);
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api je_gui_drag_float(void)
 {
     woort_U8CString label = woort_string(0);
-    float value = wo_float(args + 1);
-    float speed = wo_float(args + 2);
-    float minval = wo_float(args + 3);
-    float maxval = wo_float(args + 4);
+    float value = woort_float(1);
+    float speed = woort_float(2);
+    float minval = woort_float(3);
+    float maxval = woort_float(4);
     if (ImGui::DragFloat(label, &value, speed, minval, maxval))
-        return wo_ret_option_float(vm, value);
-    return wo_ret_option_none(vm);
+        return woort_ret_option_float(value);
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api je_gui_input_float_box(void)
 {
     woort_U8CString label = woort_string(0);
-    float value = wo_float(args + 1);
+    float value = woort_float(1);
     bool update = false;
 
     update = ImGui::InputFloat(label, &value);
 
     if (update)
-        return wo_ret_option_float(vm, value);
-    return wo_ret_option_none(vm);
+        return woort_ret_option_float(value);
+    return woort_ret_option_none();
 }
 WOORT_API woort_api je_gui_input_float2_box(void)
 {
-    wo_value s = wo_reserve_stack(vm, 1, &args);
+    woort_value s;
+    woort_push_reserve(1, &s);
 
     woort_U8CString label = woort_string(0);
-    float values[] = { wo_float(args + 1), wo_float(args + 2) };
+    float values[] = { woort_float(1), woort_float(2) };
     bool update = false;
 
     update = ImGui::InputFloat2(label, values);
 
     if (update)
     {
-        return wo_ret_option_val(vm, set_float2_to_struct(s + 0, values[0], values[1]));
+        return woort_ret_option_value(set_float2_to_struct(s + 0, values[0], values[1]));
     }
-    return wo_ret_option_none(vm);
+    return woort_ret_option_none();
 }
 WOORT_API woort_api je_gui_input_float3_box(void)
 {
-    wo_value s = wo_reserve_stack(vm, 1, &args);
+    woort_value s;
+    woort_push_reserve(1, &s);
 
     woort_U8CString label = woort_string(0);
-    float values[] = { wo_float(args + 1), wo_float(args + 2), wo_float(args + 3) };
+    float values[] = { woort_float(1), woort_float(2), woort_float(3) };
     bool update = false;
 
     update = ImGui::InputFloat3(label, values);
 
     if (update)
     {
-        return wo_ret_option_val(vm, set_float3_to_struct(s + 0, values[0], values[1], values[2]));
+        return woort_ret_option_value(set_float3_to_struct(s + 0, values[0], values[1], values[2]));
     }
-    return wo_ret_option_none(vm);
+    return woort_ret_option_none();
 }
 WOORT_API woort_api je_gui_input_float4_box(void)
 {
-    wo_value s = wo_reserve_stack(vm, 1, &args);
+    woort_value s;
+    woort_push_reserve(1, &s);
 
     woort_U8CString label = woort_string(0);
-    float values[] = { wo_float(args + 1), wo_float(args + 2), wo_float(args + 3), wo_float(args + 4) };
+    float values[] = { woort_float(1), woort_float(2), woort_float(3), woort_float(4) };
     bool update = false;
 
     update = ImGui::InputFloat4(label, values);
 
     if (update)
     {
-        return wo_ret_option_val(vm, set_float4_to_struct(s + 0, vm, values[0], values[1], values[2], values[3]));
+        return woort_ret_option_value(set_float4_to_struct(s + 0, values[0], values[1], values[2], values[3]));
     }
-    return wo_ret_option_none(vm);
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api je_gui_input_float_format_box(void)
 {
     woort_U8CString label = woort_string(0);
-    float value = wo_float(args + 1);
+    float value = woort_float(1);
     bool update = false;
 
     woort_U8CString format = woort_string(2);
     update = ImGui::InputFloat(label, &value, 0.f, 0.f, format);
 
     if (update)
-        return wo_ret_option_float(vm, value);
-    return wo_ret_option_none(vm);
+        return woort_ret_option_float(value);
+    return woort_ret_option_none();
 }
 WOORT_API woort_api je_gui_input_float2_format_box(void)
 {
-    wo_value s = wo_reserve_stack(vm, 1, &args);
+    woort_value s;
+    woort_push_reserve(1, &s);
 
     woort_U8CString label = woort_string(0);
-    float values[] = { wo_float(args + 1), wo_float(args + 2) };
+    float values[] = { woort_float(1), woort_float(2) };
     bool update = false;
 
     woort_U8CString format = woort_string(3);
@@ -1439,16 +1463,17 @@ WOORT_API woort_api je_gui_input_float2_format_box(void)
 
     if (update)
     {
-        return wo_ret_option_val(vm, set_float2_to_struct(s + 0, values[0], values[1]));
+        return woort_ret_option_value(set_float2_to_struct(s + 0, values[0], values[1]));
     }
-    return wo_ret_option_none(vm);
+    return woort_ret_option_none();
 }
 WOORT_API woort_api je_gui_input_float3_format_box(void)
 {
-    wo_value s = wo_reserve_stack(vm, 1, &args);
+    woort_value s;
+    woort_push_reserve(1, &s);
 
     woort_U8CString label = woort_string(0);
-    float values[] = { wo_float(args + 1), wo_float(args + 2), wo_float(args + 3) };
+    float values[] = { woort_float(1), woort_float(2), woort_float(3) };
     bool update = false;
 
     woort_U8CString format = woort_string(4);
@@ -1456,16 +1481,17 @@ WOORT_API woort_api je_gui_input_float3_format_box(void)
 
     if (update)
     {
-        return wo_ret_option_val(vm, set_float3_to_struct(s + 0, values[0], values[1], values[2]));
+        return woort_ret_option_value(set_float3_to_struct(s + 0, values[0], values[1], values[2]));
     }
-    return wo_ret_option_none(vm);
+    return woort_ret_option_none();
 }
 WOORT_API woort_api je_gui_input_float4_format_box(void)
 {
-    wo_value s = wo_reserve_stack(vm, 1, &args);
+    woort_value s;
+    woort_push_reserve(1, &s);
 
     woort_U8CString label = woort_string(0);
-    float values[] = { wo_float(args + 1), wo_float(args + 2), wo_float(args + 3), wo_float(args + 4) };
+    float values[] = { woort_float(1), woort_float(2), woort_float(3), woort_float(4) };
     bool update = false;
 
     woort_U8CString format = woort_string(5);
@@ -1473,9 +1499,9 @@ WOORT_API woort_api je_gui_input_float4_format_box(void)
 
     if (update)
     {
-        return wo_ret_option_val(vm, set_float4_to_struct(s + 0, vm, values[0], values[1], values[2], values[3]));
+        return woort_ret_option_value(set_float4_to_struct(s + 0, values[0], values[1], values[2], values[3]));
     }
-    return wo_ret_option_none(vm);
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api je_gui_input_text_multiline(void)
@@ -1486,8 +1512,8 @@ WOORT_API woort_api je_gui_input_text_multiline(void)
     updated = ImGui::InputTextMultiline(woort_string(0), &buf);
 
     if (updated)
-        return wo_ret_option_string(vm, buf.c_str());
-    return wo_ret_option_none(vm);
+        return woort_ret_option_string(buf.c_str());
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api je_gui_input_text_multiline_size(void)
@@ -1496,48 +1522,54 @@ WOORT_API woort_api je_gui_input_text_multiline_size(void)
     bool updated = false;
 
     updated = ImGui::InputTextMultiline(woort_string(0), &buf,
-        ImVec2(wo_float(args + 2), wo_float(args + 3)));
+        ImVec2(woort_float(2), woort_float(3)));
 
     if (updated)
-        return wo_ret_option_string(vm, buf.c_str());
-    return wo_ret_option_none(vm);
+        return woort_ret_option_string(buf.c_str());
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api je_gui_combo(void)
 {
-    wo_value s = wo_reserve_stack(vm, 1, &args);
+    woort_value s;
+    woort_push_reserve(1, &s);
 
     std::vector<const char*> combo_items;
-    wo_value elem = s + 0;
-    for (wo_size_t i = 0; i < wo_arr_len(args + 1); ++i)
+    woort_value elem = s + 0;
+    for (size_t i = 0; i < woort_vec_len(1); ++i)
     {
-        wo_arr_get(elem, args + 1, i);
+        woort_vec_get(elem, 1, i);
         combo_items.push_back(woort_string(elem));
     }
 
     int current_item = -1;
-    if (wo_option_get(elem, args + 2))
-        current_item = (int)wo_int(elem);
+    if (woort_option_get(elem, 2))
+        current_item = (int)woort_int(elem);
 
     auto updated = ImGui::Combo(woort_string(0), &current_item, combo_items.data(), (int)combo_items.size());
 
     if (updated)
-        return wo_ret_option_int(vm, current_item);
-    return wo_ret_option_none(vm);
+        return woort_ret_option_int(current_item);
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api je_gui_launch(void)
 {
-    wo_vm vmm = wo_borrow_vm(vm);
+    woort_VMRuntime* parent = woort_VMRuntime_current();
+    woort_VMRuntime* new_vm = woort_vm_create();
 
-    auto swapback = wo_swap_gcguard(vmm);
+    woort_VMRuntime* prev = woort_vm_swap(new_vm);
     {
-        wo_dispatch_value(vmm, args + 0, 0, nullptr, nullptr);
+        woort_value fn;
+        woort_push_reserve(1, &fn);
+        woort_import_value(fn, parent, 0);
+        woort_spawn(WOORT_IGNORE, fn);
+        woort_pop(1);
     }
-    wo_swap_gcguard(swapback);
+    woort_vm_swap(prev);
 
     gui_wo_job_coroutine* guico = new gui_wo_job_coroutine;
-    guico->work_vm = vmm;
+    guico->work_vm = new_vm;
     _wo_new_job_list.add_one(guico);
 
     return woort_ret_void();
@@ -1551,7 +1583,8 @@ WOORT_API woort_api je_gui_stop_all_work(void)
 
 WOORT_API woort_api je_gui_get_input_state(void)
 {
-    wo_value s = wo_reserve_stack(vm, 2, &args);
+    woort_value s;
+    woort_push_reserve(2, &s);
     ImGuiKey kcode = (ImGuiKey)woort_int(0);
 
     std::lock_guard g1(_key_state_record_mx);
@@ -1566,40 +1599,40 @@ WOORT_API woort_api je_gui_get_input_state(void)
         fnd = _key_state_record.find(kcode);
     }
 
-    wo_value v = s + 0;
-    wo_value elem = s + 1;
+    woort_value v = s + 0;
+    woort_value elem = s + 1;
 
-    wo_set_struct(v, 2);
+    woort_set_struct(v, 2);
 
-    wo_set_bool(elem, fnd->second.m_last_frame_down);
-    wo_struct_set(v, 0, elem);
-    wo_set_bool(elem, fnd->second.m_this_frame_down);
-    wo_struct_set(v, 1, elem);
-    return wo_ret_val(vm, v);
+    woort_set_bool(elem, fnd->second.m_last_frame_down);
+    woort_struct_set(v, 0, elem);
+    woort_set_bool(elem, fnd->second.m_this_frame_down);
+    woort_struct_set(v, 1, elem);
+    return woort_ret_value(v);
 }
 
 WOORT_API woort_api je_gui_register_exit_callback(void)
 {
     if (_je_gui_static_ctx._jegui_exit_callback_handler_vm != nullptr)
-        return wo_ret_panic(vm, "Callback has been registered.");
+        return woort_ret_panic("Callback has been registered.");
 
     assert(
         _je_gui_static_ctx._jegui_exit_callback_handler_vm == nullptr && _je_gui_static_ctx._jegui_exit_callback_function == nullptr);
 
-    _je_gui_static_ctx._jegui_exit_callback_handler_vm = wo_borrow_vm(vm);
-    _je_gui_static_ctx._jegui_exit_callback_function = wo_create_pin_value();
+    _je_gui_static_ctx._jegui_exit_callback_handler_vm = woort_vm_create();
+    _je_gui_static_ctx._jegui_exit_callback_function = woort_GC_Pin_create(1);
 
-    wo_pin_value_set(_je_gui_static_ctx._jegui_exit_callback_function, args + 0);
+    woort_GC_Pin_set_value(_je_gui_static_ctx._jegui_exit_callback_function, 0, 0);
 
     return woort_ret_void();
 }
 WOORT_API woort_api je_gui_unregister_exit_callback(void)
 {
     if (_je_gui_static_ctx._jegui_exit_callback_handler_vm == nullptr)
-        return wo_ret_panic(vm, "Callback not found.");
+        return woort_ret_panic("Callback not found.");
 
-    wo_release_vm(_je_gui_static_ctx._jegui_exit_callback_handler_vm);
-    wo_close_pin_value(_je_gui_static_ctx._jegui_exit_callback_function);
+    woort_vm_close(_je_gui_static_ctx._jegui_exit_callback_handler_vm);
+    woort_GC_Pin_destroy(_je_gui_static_ctx._jegui_exit_callback_function);
 
     _je_gui_static_ctx._jegui_exit_callback_handler_vm = nullptr;
     _je_gui_static_ctx._jegui_exit_callback_function = nullptr;
@@ -1609,16 +1642,17 @@ WOORT_API woort_api je_gui_unregister_exit_callback(void)
 
 WOORT_API woort_api je_gui_set_font(void)
 {
-    wo_value s = wo_reserve_stack(vm, 1, &args);
+    woort_value s;
+    woort_push_reserve(1, &s);
 
-    wo_value elem = s + 0;
+    woort_value elem = s + 0;
     const char* font_path = nullptr;
     const char* latin_font_path = nullptr;
 
-    if (wo_option_get(elem, args + 0))
+    if (woort_option_get(elem, 0))
         font_path = woort_string(elem);
 
-    if (wo_option_get(elem, args + 1))
+    if (woort_option_get(elem, 1))
         latin_font_path = woort_string(elem);
 
     jegui_set_font(font_path, latin_font_path, (size_t)woort_int(2));
@@ -1628,30 +1662,32 @@ WOORT_API woort_api je_gui_set_font(void)
 
 WOORT_API woort_api je_gui_style_get_config_color(void)
 {
-    wo_value s = wo_reserve_stack(vm, 1, &args);
+    woort_value s;
+    woort_push_reserve(1, &s);
 
     ImGuiStyle* style = &ImGui::GetStyle();
     auto color = style->Colors[woort_int(0)];
 
-    return wo_ret_val(vm, set_float4_to_struct(s + 0, vm, color.x, color.y, color.z, color.w));
+    return woort_ret_value(set_float4_to_struct(s + 0, color.x, color.y, color.z, color.w));
 }
 
 WOORT_API woort_api je_gui_style_set_config_color(void)
 {
-    wo_value s = wo_reserve_stack(vm, 1, &args);
+    woort_value s;
+    woort_push_reserve(1, &s);
 
     ImGuiStyle* style = &ImGui::GetStyle();
     auto& color = style->Colors[woort_int(0)];
 
-    wo_value elem = s + 0;
-    wo_struct_get(elem, args + 1, 0);
-    color.x = wo_float(elem);
-    wo_struct_get(elem, args + 1, 1);
-    color.y = wo_float(elem);
-    wo_struct_get(elem, args + 1, 2);
-    color.z = wo_float(elem);
-    wo_struct_get(elem, args + 1, 3);
-    color.w = wo_float(elem);
+    woort_value elem = s + 0;
+    woort_struct_get(elem, 1, 0);
+    color.x = woort_float(elem);
+    woort_struct_get(elem, 1, 1);
+    color.y = woort_float(elem);
+    woort_struct_get(elem, 1, 2);
+    color.z = woort_float(elem);
+    woort_struct_get(elem, 1, 3);
+    color.w = woort_float(elem);
     return woort_ret_void();
 }
 
@@ -1675,7 +1711,7 @@ WOORT_API woort_api je_gui_style_set_config_color_light(void)
 
 WOORT_API woort_api je_gui_dock_space(void)
 {
-    ImGui::DockSpace((ImGuiID)woort_int(0), val2vec2(args + 1), (ImGuiDockNodeFlags)woort_int(2));
+    ImGui::DockSpace((ImGuiID)woort_int(0), val2vec2(1), (ImGuiDockNodeFlags)woort_int(2));
     return woort_ret_void();
 }
 
@@ -1687,13 +1723,13 @@ WOORT_API woort_api je_gui_dock_space_over_viewport(void)
 
 WOORT_API woort_api je_gui_push_style_real(void)
 {
-    ImGui::PushStyleVar((ImGuiStyleVar)woort_int(0), wo_float(args + 1));
+    ImGui::PushStyleVar((ImGuiStyleVar)woort_int(0), woort_float(1));
     return woort_ret_void();
 }
 
 WOORT_API woort_api je_gui_push_style_vec2(void)
 {
-    ImGui::PushStyleVar((ImGuiStyleVar)woort_int(0), val2vec2(args + 1));
+    ImGui::PushStyleVar((ImGuiStyleVar)woort_int(0), val2vec2(1));
     return woort_ret_void();
 }
 
@@ -1704,12 +1740,12 @@ WOORT_API woort_api je_gui_pop_style_var(void)
 }
 WOORT_API woort_api je_gui_set_window_font_scale(void)
 {
-    ImGui::SetWindowFontScale(wo_float(args + 0));
+    ImGui::SetWindowFontScale(woort_float(0));
     return woort_ret_void();
 }
 WOORT_API woort_api je_gui_dummy(void)
 {
-    ImGui::Dummy(val2vec2(args + 0));
+    ImGui::Dummy(val2vec2(0));
     return woort_ret_void();
 }
 
@@ -1717,16 +1753,19 @@ WOORT_API woort_api je_gui_code_editor_language_definition_create(void)
 {
     TextEditor::LanguageDefinition* defs = new TextEditor::LanguageDefinition;
     defs->mName = woort_string(0);
-    return wo_ret_gchandle(vm, defs, nullptr,
+    return woort_ret_gchandle(
+        defs,
+        WOORT_IGNORE,
         [](void* p)
         {
             delete std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(p));
-        });
+        },
+        nullptr);
 }
 WOORT_API woort_api je_gui_code_editor_language_definition_add_keyword(void)
 {
     TextEditor::LanguageDefinition* defs =
-        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(args + 0)));
+        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(0)));
 
     defs->mKeywords.insert(woort_string(1));
     return woort_ret_void();
@@ -1734,7 +1773,7 @@ WOORT_API woort_api je_gui_code_editor_language_definition_add_keyword(void)
 WOORT_API woort_api je_gui_code_editor_language_definition_add_identifier(void)
 {
     TextEditor::LanguageDefinition* defs =
-        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(args + 0)));
+        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(0)));
 
     TextEditor::Identifier ident;
     ident.mDeclaration = woort_string(2);
@@ -1747,7 +1786,7 @@ WOORT_API woort_api je_gui_code_editor_language_definition_add_identifier(void)
 WOORT_API woort_api je_gui_code_editor_language_definition_add_token_regex(void)
 {
     TextEditor::LanguageDefinition* defs =
-        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(args + 0)));
+        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(0)));
 
     defs->mTokenRegexStrings.push_back(
         std::make_pair(woort_string(1), (TextEditor::PaletteIndex)woort_int(2)));
@@ -1757,7 +1796,7 @@ WOORT_API woort_api je_gui_code_editor_language_definition_add_token_regex(void)
 WOORT_API woort_api je_gui_code_editor_language_definition_set_mlcomment(void)
 {
     TextEditor::LanguageDefinition* defs =
-        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(args + 0)));
+        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(0)));
 
     defs->mCommentStart = woort_string(1);
     defs->mCommentEnd = woort_string(2);
@@ -1767,7 +1806,7 @@ WOORT_API woort_api je_gui_code_editor_language_definition_set_mlcomment(void)
 WOORT_API woort_api je_gui_code_editor_language_definition_set_slcomment(void)
 {
     TextEditor::LanguageDefinition* defs =
-        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(args + 0)));
+        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(0)));
 
     defs->mSingleLineComment = woort_string(1);
 
@@ -1776,7 +1815,7 @@ WOORT_API woort_api je_gui_code_editor_language_definition_set_slcomment(void)
 WOORT_API woort_api je_gui_code_editor_language_definition_set_case_sensitive(void)
 {
     TextEditor::LanguageDefinition* defs =
-        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(args + 0)));
+        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(0)));
 
     defs->mCaseSensitive = woort_bool(1);
 
@@ -1785,7 +1824,7 @@ WOORT_API woort_api je_gui_code_editor_language_definition_set_case_sensitive(vo
 WOORT_API woort_api je_gui_code_editor_language_definition_set_auto_indentation(void)
 {
     TextEditor::LanguageDefinition* defs =
-        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(args + 0)));
+        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(0)));
 
     defs->mAutoIndentation = woort_bool(1);
 
@@ -1794,18 +1833,18 @@ WOORT_API woort_api je_gui_code_editor_language_definition_set_auto_indentation(
 WOORT_API woort_api je_gui_code_editor_language_definition_set_preproc_char(void)
 {
     TextEditor::LanguageDefinition* defs =
-        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(args + 0)));
+        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(0)));
 
-    defs->mPreprocChar = (char)wo_char(args + 1);
+    defs->mPreprocChar = (char)(char)woort_int(1);
 
     return woort_ret_void();
 }
 
 WOORT_API woort_api je_gui_code_editor_set_language_definition(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(args + 0)));
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
     TextEditor::LanguageDefinition* defs =
-        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(args + 1)));
+        std::launder(reinterpret_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(1)));
 
     text_editor->SetLanguageDefinition(*defs);
 
@@ -1813,58 +1852,60 @@ WOORT_API woort_api je_gui_code_editor_set_language_definition(void)
 }
 WOORT_API woort_api je_gui_code_editor_undoable(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(args + 0)));
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
     return woort_ret_bool(text_editor->CanUndo());
 }
 WOORT_API woort_api je_gui_code_editor_redoable(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(args + 0)));
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
     return woort_ret_bool(text_editor->CanRedo());
 }
 WOORT_API woort_api je_gui_code_editor_undo(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(args + 0)));
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
     text_editor->Undo();
     return woort_ret_void();
 }
 WOORT_API woort_api je_gui_code_editor_redo(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(args + 0)));
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
     text_editor->Redo();
     return woort_ret_void();
 }
 WOORT_API woort_api je_gui_code_editor_get_cursor_pos(void)
 {
-    wo_value s = wo_reserve_stack(vm, 2, &args);
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(args + 0)));
+    woort_value s;
+    woort_push_reserve(2, &s);
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
 
-    wo_value result = s + 0;
-    wo_value elem = s + 1;
+    woort_value result = s + 0;
+    woort_value elem = s + 1;
 
     auto pos = text_editor->GetCursorPosition();
 
-    wo_set_struct(result, 2);
+    woort_set_struct(result, 2);
 
-    wo_set_int(elem, pos.mLine);
-    wo_struct_set(result, 0, elem);
+    woort_set_int(elem, pos.mLine);
+    woort_struct_set(result, 0, elem);
 
-    wo_set_int(elem, pos.mColumn);
-    wo_struct_set(result, 1, elem);
+    woort_set_int(elem, pos.mColumn);
+    woort_struct_set(result, 1, elem);
 
-    return wo_ret_val(vm, result);
+    return woort_ret_value(result);
 }
 WOORT_API woort_api je_gui_code_editor_set_cursor_pos(void)
 {
-    wo_value s = wo_reserve_stack(vm, 1, &args);
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(args + 0)));
+    woort_value s;
+    woort_push_reserve(1, &s);
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
 
-    wo_value elem = s + 0;
+    woort_value elem = s + 0;
 
-    wo_struct_get(elem, args + 1, 0);
-    int line = (int)wo_int(elem);
+    woort_struct_get(elem, 1, 0);
+    int line = (int)woort_int(elem);
 
-    wo_struct_get(elem, args + 1, 1);
-    int column = (int)wo_int(elem);
+    woort_struct_get(elem, 1, 1);
+    int column = (int)woort_int(elem);
 
     text_editor->SetCursorPosition(TextEditor::Coordinates(line, column));
 
@@ -1872,34 +1913,34 @@ WOORT_API woort_api je_gui_code_editor_set_cursor_pos(void)
 }
 WOORT_API woort_api je_gui_code_editor_insert_text(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(args + 0)));
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
     text_editor->InsertText(woort_string(1));
     return woort_ret_void();
 }
 WOORT_API woort_api je_gui_code_editor_copy(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(args + 0)));
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
     text_editor->Copy();
 
     return woort_ret_void();
 }
 WOORT_API woort_api je_gui_code_editor_cut(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(args + 0)));
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
     text_editor->Cut();
 
     return woort_ret_void();
 }
 WOORT_API woort_api je_gui_code_editor_paste(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(args + 0)));
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
     text_editor->Paste();
 
     return woort_ret_void();
 }
 WOORT_API woort_api je_gui_code_editor_delete(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(args + 0)));
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
     text_editor->Delete();
 
     return woort_ret_void();
@@ -1910,23 +1951,26 @@ WOORT_API woort_api je_gui_code_editor_create(void)
 
     text_editor->SetPalette(TextEditor::GetDarkPalette());
 
-    return wo_ret_gchandle(vm, text_editor, nullptr,
+    return woort_ret_gchandle(
+        text_editor, 
+        WOORT_IGNORE,
         [](void* p)
         {
             delete std::launder(reinterpret_cast<TextEditor*>(p));
-        });
+        },
+        nullptr);
 }
 
 WOORT_API woort_api je_gui_code_editor_get_text(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(args + 0)));
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
 
-    return wo_ret_string(vm, text_editor->GetText().c_str());
+    return woort_ret_string(text_editor->GetText().c_str());
 }
 
 WOORT_API woort_api je_gui_code_editor_set_text(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(args + 0)));
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
 
     text_editor->SetText(woort_string(1));
     return woort_ret_void();
@@ -1934,7 +1978,7 @@ WOORT_API woort_api je_gui_code_editor_set_text(void)
 
 WOORT_API woort_api je_gui_code_editor_show(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(args + 0)));
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
     text_editor->Render(woort_string(0));
 
     return woort_ret_void();
@@ -1942,8 +1986,8 @@ WOORT_API woort_api je_gui_code_editor_show(void)
 
 WOORT_API woort_api je_gui_code_editor_show_size(void)
 {
-    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(args + 0)));
-    text_editor->Render(woort_string(1), val2vec2(args + 2), woort_bool(3));
+    TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
+    text_editor->Render(woort_string(1), val2vec2(2), woort_bool(3));
 
     return woort_ret_void();
 }
@@ -1954,18 +1998,21 @@ WOORT_API woort_api je_gui_node_editor_context_create(void)
     c.SettingsFile = nullptr;
 
     ax::NodeEditor::EditorContext* ctx = ax::NodeEditor::CreateEditor(&c);
-    return wo_ret_gchandle(vm, ctx, nullptr,
+    return woort_ret_gchandle(
+        ctx, 
+        WOORT_IGNORE,
         [](void* p)
         {
             ax::NodeEditor::DestroyEditor(
                 reinterpret_cast<ax::NodeEditor::EditorContext*>(p));
-        });
+        },
+        nullptr);
 }
 
 WOORT_API woort_api je_gui_node_editor_begin(void)
 {
     ax::NodeEditor::EditorContext* ctx =
-        reinterpret_cast<ax::NodeEditor::EditorContext*>(woort_gcpointer(args + 1));
+        reinterpret_cast<ax::NodeEditor::EditorContext*>(woort_gcpointer(1));
 
     ax::NodeEditor::SetCurrentEditor(ctx);
     ax::NodeEditor::Begin(woort_string(0));
@@ -2011,13 +2058,13 @@ WOORT_API woort_api je_gui_node_editor_end_pin(void)
 
 WOORT_API woort_api je_gui_node_editor_pin_pivot_rect(void)
 {
-    ax::NodeEditor::PinPivotRect(val2vec2(args + 0), val2vec2(args + 1));
+    ax::NodeEditor::PinPivotRect(val2vec2(0), val2vec2(1));
     return woort_ret_void();
 }
 
 WOORT_API woort_api je_gui_node_editor_pin_rect(void)
 {
-    ax::NodeEditor::PinRect(val2vec2(args + 0), val2vec2(args + 1));
+    ax::NodeEditor::PinRect(val2vec2(0), val2vec2(1));
     return woort_ret_void();
 }
 
@@ -2027,19 +2074,18 @@ WOORT_API woort_api je_gui_node_editor_link(void)
         woort_int(0),
         woort_int(1),
         woort_int(2),
-        val2colorf4(args + 3),
-        wo_float(args + 4));
+        val2colorf4(3),
+        woort_float(4));
 
     return woort_ret_void();
 }
 
 WOORT_API woort_api je_gui_node_editor_begin_create(void)
 {
-    return wo_ret_bool(
-        vm,
+    return woort_ret_bool(
         ax::NodeEditor::BeginCreate(
-            val2colorf4(args + 0),
-            wo_float(args + 1)));
+            val2colorf4(0),
+            woort_float(1)));
 }
 
 WOORT_API woort_api je_gui_node_editor_end_create(void)
@@ -2073,15 +2119,15 @@ WOORT_API woort_api je_gui_node_editor_reject_new_item(void)
 WOORT_API woort_api je_gui_node_editor_accept_new_item_color(void)
 {
     return woort_ret_bool(ax::NodeEditor::AcceptNewItem(
-        val2colorf4(args + 0),
-        wo_float(args + 1)));
+        val2colorf4(0),
+        woort_float(1)));
 }
 
 WOORT_API woort_api je_gui_node_editor_reject_new_item_color(void)
 {
     ax::NodeEditor::RejectNewItem(
-        val2colorf4(args + 0),
-        wo_float(args + 1));
+        val2colorf4(0),
+        woort_float(1));
     return woort_ret_void();
 }
 
@@ -2098,25 +2144,26 @@ WOORT_API woort_api je_gui_node_editor_reject_deleted_item(void)
 
 WOORT_API woort_api je_gui_node_editor_query_new_link(void)
 {
-    wo_value s = wo_reserve_stack(vm, 2, &args);
+    woort_value s;
+    woort_push_reserve(2, &s);
 
     ax::NodeEditor::PinId start, end;
     if (ax::NodeEditor::QueryNewLink(&start, &end))
     {
-        wo_value v = s + 0;
-        wo_value elem = s + 1;
+        woort_value v = s + 0;
+        woort_value elem = s + 1;
 
-        wo_set_struct(v, 2);
+        woort_set_struct(v, 2);
 
-        wo_set_int(elem, (wo_int_t)start.Get());
-        wo_struct_set(v, 0, elem);
+        woort_set_int(elem, (woort_Int)start.Get());
+        woort_struct_set(v, 0, elem);
 
-        wo_set_int(elem, (wo_int_t)end.Get());
-        wo_struct_set(v, 1, elem);
+        woort_set_int(elem, (woort_Int)end.Get());
+        woort_struct_set(v, 1, elem);
 
-        return wo_ret_option_val(vm, v);
+        return woort_ret_option_value(v);
     }
-    return wo_ret_option_none(vm);
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api je_gui_node_editor_query_new_node(void)
@@ -2124,10 +2171,10 @@ WOORT_API woort_api je_gui_node_editor_query_new_node(void)
     ax::NodeEditor::PinId pin;
     if (ax::NodeEditor::QueryNewNode(&pin))
     {
-        return wo_ret_option_int(vm, (wo_int_t)pin.Get());
+        return woort_ret_option_int((woort_Int)pin.Get());
     }
 
-    return wo_ret_option_none(vm);
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api je_gui_node_editor_query_deleted_node(void)
@@ -2135,9 +2182,9 @@ WOORT_API woort_api je_gui_node_editor_query_deleted_node(void)
     ax::NodeEditor::NodeId node;
     if (ax::NodeEditor::QueryDeletedNode(&node))
     {
-        return wo_ret_option_int(vm, (wo_int_t)node.Get());
+        return woort_ret_option_int((woort_Int)node.Get());
     }
-    return wo_ret_option_none(vm);
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api je_gui_node_editor_query_deleted_link(void)
@@ -2145,16 +2192,16 @@ WOORT_API woort_api je_gui_node_editor_query_deleted_link(void)
     ax::NodeEditor::LinkId link;
     if (ax::NodeEditor::QueryDeletedLink(&link))
     {
-        return wo_ret_option_int(vm, (wo_int_t)link.Get());
+        return woort_ret_option_int((woort_Int)link.Get());
     }
-    return wo_ret_option_none(vm);
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api je_gui_node_editor_push_style_color(void)
 {
     ax::NodeEditor::PushStyleColor(
         (ax::NodeEditor::StyleColor)woort_int(0),
-        val2colorf4(args + 1));
+        val2colorf4(1));
 
     return woort_ret_void();
 }
@@ -2177,27 +2224,28 @@ WOORT_API woort_api je_gui_node_editor_delete_link(void)
 
 WOORT_API woort_api je_gui_node_editor_get_node_position(void)
 {
-    wo_value s = wo_reserve_stack(vm, 2, &args);
+    woort_value s;
+    woort_push_reserve(2, &s);
 
     auto v2 = ax::NodeEditor::GetNodePosition((ax::NodeEditor::NodeId)woort_int(0));
 
-    wo_value result = s + 0;
-    wo_value val = s + 1;
+    woort_value result = s + 0;
+    woort_value val = s + 1;
 
-    wo_set_struct(result, 2);
+    woort_set_struct(result, 2);
 
-    wo_set_float(val, v2.x);
-    wo_struct_set(result, 0, val);
+    woort_set_float(val, v2.x);
+    woort_struct_set(result, 0, val);
 
-    wo_set_float(val, v2.y);
-    wo_struct_set(result, 1, val);
+    woort_set_float(val, v2.y);
+    woort_struct_set(result, 1, val);
 
-    return wo_ret_val(vm, result);
+    return woort_ret_value(result);
 }
 
 WOORT_API woort_api je_gui_node_editor_set_node_position(void)
 {
-    ax::NodeEditor::SetNodePosition((ax::NodeEditor::NodeId)woort_int(0), val2vec2(args + 1));
+    ax::NodeEditor::SetNodePosition((ax::NodeEditor::NodeId)woort_int(0), val2vec2(1));
     return woort_ret_void();
 }
 
@@ -2206,8 +2254,8 @@ WOORT_API woort_api je_gui_node_editor_get_hovered_node(void)
     auto id = ax::NodeEditor::GetHoveredNode();
 
     if ((bool)id)
-        return wo_ret_option_int(vm, (wo_int_t)id.Get());
-    return wo_ret_option_none(vm);
+        return woort_ret_option_int((woort_Int)id.Get());
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api je_gui_node_editor_get_hovered_pin(void)
@@ -2215,8 +2263,8 @@ WOORT_API woort_api je_gui_node_editor_get_hovered_pin(void)
     auto id = ax::NodeEditor::GetHoveredPin();
 
     if ((bool)id)
-        return wo_ret_option_int(vm, (wo_int_t)id.Get());
-    return wo_ret_option_none(vm);
+        return woort_ret_option_int((woort_Int)id.Get());
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api je_gui_node_editor_get_hovered_link(void)
@@ -2224,8 +2272,8 @@ WOORT_API woort_api je_gui_node_editor_get_hovered_link(void)
     auto id = ax::NodeEditor::GetHoveredLink();
 
     if ((bool)id)
-        return wo_ret_option_int(vm, (wo_int_t)id.Get());
-    return wo_ret_option_none(vm);
+        return woort_ret_option_int((woort_Int)id.Get());
+    return woort_ret_option_none();
 }
 
 WOORT_API woort_api je_gui_node_editor_is_node_selected(void)
@@ -2237,42 +2285,44 @@ WOORT_API woort_api je_gui_node_editor_is_node_selected(void)
 
 WOORT_API woort_api je_gui_node_editor_canvas_to_screen(void)
 {
-    wo_value s = wo_reserve_stack(vm, 2, &args);
+    woort_value s;
+    woort_push_reserve(2, &s);
 
-    auto v2 = ax::NodeEditor::CanvasToScreen(val2vec2(args + 0));
+    auto v2 = ax::NodeEditor::CanvasToScreen(val2vec2(0));
 
-    wo_value result = s + 0;
-    wo_value val = s + 1;
+    woort_value result = s + 0;
+    woort_value val = s + 1;
 
-    wo_set_struct(result, 2);
+    woort_set_struct(result, 2);
 
-    wo_set_float(val, v2.x);
-    wo_struct_set(result, 0, val);
+    woort_set_float(val, v2.x);
+    woort_struct_set(result, 0, val);
 
-    wo_set_float(val, v2.y);
-    wo_struct_set(result, 1, val);
+    woort_set_float(val, v2.y);
+    woort_struct_set(result, 1, val);
 
-    return wo_ret_val(vm, result);
+    return woort_ret_value(result);
 }
 
 WOORT_API woort_api je_gui_node_editor_screen_to_canvas(void)
 {
-    wo_value s = wo_reserve_stack(vm, 2, &args);
+    woort_value s;
+    woort_push_reserve(2, &s);
 
-    auto v2 = ax::NodeEditor::ScreenToCanvas(val2vec2(args + 0));
+    auto v2 = ax::NodeEditor::ScreenToCanvas(val2vec2(0));
 
-    wo_value result = s + 0;
-    wo_value val = s + 1;
+    woort_value result = s + 0;
+    woort_value val = s + 1;
 
-    wo_set_struct(result, 2);
+    woort_set_struct(result, 2);
 
-    wo_set_float(val, v2.x);
-    wo_struct_set(result, 0, val);
+    woort_set_float(val, v2.x);
+    woort_struct_set(result, 0, val);
 
-    wo_set_float(val, v2.y);
-    wo_struct_set(result, 1, val);
+    woort_set_float(val, v2.y);
+    woort_struct_set(result, 1, val);
 
-    return wo_ret_val(vm, result);
+    return woort_ret_value(result);
 }
 
 WOORT_API woort_api je_gui_node_editor_suspend(void)
@@ -2500,14 +2550,16 @@ void jegui_update_basic(
             auto cur_job = chain;
             chain = chain->last;
 
-            auto result = wo_dispatch(cur_job->work_vm, nullptr, nullptr);
-            if (result == WO_CONTINUE)
+            woort_VMRuntime* prev = woort_vm_swap(cur_job->work_vm);
+            woort_VmCallStatus result = woort_resume(WOORT_IGNORE);
+            woort_vm_swap(prev);
+            if (result == WOORT_VM_CALL_STATUS_YIELD)
             {
                 _wo_job_list.add_one(cur_job);
                 continue;
             }
 
-            wo_release_vm(cur_job->work_vm);
+            woort_vm_close(cur_job->work_vm);
             delete cur_job;
         }
 
@@ -2541,7 +2593,7 @@ void jegui_shutdown_basic(bool reboot)
             auto cur_job = chain;
             chain = chain->last;
 
-            wo_release_vm(cur_job->work_vm);
+            woort_vm_close(cur_job->work_vm);
             delete cur_job;
         }
 
@@ -2551,7 +2603,7 @@ void jegui_shutdown_basic(bool reboot)
             auto cur_job = new_job_chain;
             new_job_chain = new_job_chain->last;
 
-            wo_release_vm(cur_job->work_vm);
+            woort_vm_close(cur_job->work_vm);
             delete cur_job;
         }
     }
@@ -2570,7 +2622,7 @@ bool jegui_shutdown_callback()
     woort_vm* const last = woort_vm_swap(_je_gui_static_ctx._jegui_exit_callback_handler_vm);
     {
         woort_value tmp;
-        if (woort_push_reserve(1, &tmp))
+        if (!woort_push_reserve(1, &tmp))
             woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow.");
         else
         {

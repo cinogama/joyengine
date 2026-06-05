@@ -23,7 +23,7 @@ namespace jeecs
             struct towoo_step_work
             {
                 dependence m_dependence;
-                _wo_value m_function;
+                woort_Value m_function;
                 std::vector<const typing::type_info*> m_used_components;
                 bool m_is_single_work;
             };
@@ -31,40 +31,42 @@ namespace jeecs
             {
                 JECS_DISABLE_MOVE_AND_COPY(towoo_system_info);
 
-                wo_vm m_base_vm;
+                woort_CodeEnv* m_code_env;
                 bool m_is_good;
 
-                std::optional<wo_unref_value> m_on_active_function;
-                std::optional<wo_unref_value> m_on_disable_function;
-                wo_unref_value m_create_function;
-                wo_unref_value m_close_function;
+                std::optional<woort_Value> m_on_active_function;
+                std::optional<woort_Value> m_on_disable_function;
+                woort_Value m_create_function;
+                woort_Value m_close_function;
 
                 std::vector<towoo_step_work> m_preworks;
                 std::vector<towoo_step_work> m_works;
                 std::vector<towoo_step_work> m_lateworks;
 
-                towoo_system_info(wo_vm vm)
-                    : m_base_vm(vm)
+                towoo_system_info(woort_CodeEnv* cenv)
+                    : m_code_env(cenv)
                 {
                 }
                 ~towoo_system_info()
                 {
-                    wo_close_vm(m_base_vm);
+                    woort_CodeEnv_drop(m_code_env);
                 }
             };
 
             inline static std::shared_mutex _registered_towoo_base_systems_mx;
-            inline static std::unordered_map<const typing::type_info*, std::unique_ptr<towoo_system_info>>
+            inline static std::unordered_map<
+                const typing::type_info*, std::unique_ptr<towoo_system_info>>
                 _registered_towoo_base_systems;
 
             // 执行代码使用的虚拟机
-            wo_vm m_job_vm;
-            wo_pin_value m_context;
+            woort_vm* m_job_vm;
+            woort_value m_context;
 
-            std::optional<wo_unref_value> m_on_active_function;
-            std::optional<wo_unref_value> m_on_disable_function;
-            wo_unref_value m_create_function;
-            wo_unref_value m_close_function;
+            std::optional<woort_value> m_on_active_function;
+            std::optional<woort_value> m_on_disable_function;
+            woort_value m_create_function;
+            woort_value m_close_function;
+            woort_value m_work_function;
 
             const jeecs::typing::type_info* m_type;
 
@@ -85,36 +87,64 @@ namespace jeecs
 
                 if (base_info->m_is_good)
                 {
-                    m_job_vm = wo_borrow_vm(base_info->m_base_vm);
+                    m_job_vm = woort_vm_create();
 
-                    wo_set_val(&m_create_function, &base_info->m_create_function);
-                    wo_set_val(&m_close_function, &base_info->m_close_function);
-                    if (base_info->m_on_active_function.has_value())
-                        wo_set_val(&m_on_active_function.emplace(), &base_info->m_on_active_function.value());
-                    if (base_info->m_on_disable_function.has_value())
-                        wo_set_val(&m_on_disable_function.emplace(), &base_info->m_on_disable_function.value());
-
-                    m_pre_dependences = base_info->m_preworks;
-                    m_dependences = base_info->m_works;
-                    m_late_dependences = base_info->m_lateworks;
-
-                    wo_value m_job_vm_s = wo_reserve_stack(m_job_vm, 1, nullptr);
-                    wo_set_pointer(m_job_vm_s + 0, w.handle());
-
-                    wo_value v = wo_invoke_value(m_job_vm, &m_create_function, 1, nullptr, &m_job_vm_s);
-                    wo_pop_stack(m_job_vm, 1);
-
-                    if (v == nullptr)
-                    {
-                        jeecs::debug::logerr("Failed to invoke 'create' function for system: '%s'.",
+                    if (m_job_vm == nullptr)
+                        jeecs::debug::logerr("Failed to create vm for system: '%s'.",
                             m_type->m_typename);
-                        wo_release_vm(m_job_vm);
-                        m_job_vm = nullptr;
-                    }
                     else
                     {
-                        m_context = wo_create_pin_value();
-                        wo_pin_value_set(m_context, v);
+                        woort_vm* const last = woort_vm_swap(m_job_vm);
+                        {
+                            woort_value s;
+                            if (!woort_push_reserve(6, &s))
+                            {
+                                jeecs::debug::logerr("Failed to reserve stack for system: '%s'.",
+                                    m_type->m_typename);
+
+                                woort_vm_close(m_job_vm);
+                                m_job_vm = nullptr;
+                            }
+                            else
+                            {
+                                m_pre_dependences = base_info->m_preworks;
+                                m_dependences = base_info->m_works;
+                                m_late_dependences = base_info->m_lateworks;
+
+                                m_context = s + 0;
+                                woort_set_pointer(m_context, m_job_vm);
+
+                                m_create_function = s + 1;
+                                *woort_internal_value(m_create_function) = base_info->m_create_function;
+
+                                m_close_function = s + 2;
+                                *woort_internal_value(m_close_function) = base_info->m_close_function;
+
+                                if (base_info->m_on_active_function.has_value())
+                                {
+                                    *woort_internal_value(s + 3) = base_info->m_on_active_function.value();
+                                    m_on_active_function.emplace(s + 3);
+                                }
+                                if (base_info->m_on_disable_function.has_value())
+                                {
+                                    *woort_internal_value(s + 4) = base_info->m_on_active_function.value();
+                                    m_on_disable_function.emplace(s + 4);
+                                }
+
+                                m_work_function = s + 5;
+
+                                if (WOORT_VM_CALL_STATUS_NORMAL != woort_invoke(m_context, m_create_function))
+                                {
+                                    jeecs::debug::logerr("Failed to invoke 'create' function for system: '%s'.",
+                                        m_type->m_typename);
+
+                                    woort_vm_close(m_job_vm);
+                                    m_job_vm = nullptr;
+                                }
+
+                            }
+                        }
+                        woort_vm_swap(last);
                     }
                 }
                 else
@@ -128,43 +158,42 @@ namespace jeecs
             {
                 if (m_job_vm != nullptr)
                 {
-                    wo_value s = wo_reserve_stack(m_job_vm, 1, nullptr);
-
-                    wo_pin_value_get(s, m_context);
-                    wo_value v = wo_invoke_value(m_job_vm, &m_close_function, 1, nullptr, &s);
-                    if (v == nullptr)
+                    woort_vm* const last = woort_vm_swap(m_job_vm);
                     {
-                        jeecs::debug::logerr("Failed to invoke 'close' function for system: '%s'.",
-                            m_type->m_typename);
+                        if (WOORT_VM_CALL_STATUS_NORMAL != woort_invoke(WOORT_IGNORE, m_close_function))
+                        {
+                            jeecs::debug::logerr("Failed to invoke 'close' function for system: '%s'.",
+                                m_type->m_typename);
+                        }
                     }
-
-                    wo_release_vm(m_job_vm);
-                    wo_close_pin_value(m_context);
+                    woort_vm_swap(last);
+                    woort_vm_close(m_job_vm);
                 }
             }
 
             static void create_component_struct(
-                wo_value writeval,
+                woort_value writeval,
+                woort_value tmpval,
                 void* component,
                 const typing::type_info* ctype)
             {
                 assert(component != nullptr);
 
-                _wo_value tmp;
                 if (ctype->m_member_types != nullptr)
                 {
-                    wo_set_struct(writeval, ctype->m_member_types->m_member_count + 1);
+                    woort_set_struct(writeval, ctype->m_member_types->m_member_count + 1);
 
                     uint16_t member_idx = 0;
                     auto* member_tinfo = ctype->m_member_types->m_members;
                     while (member_tinfo != nullptr)
                     {
                         // Set member;
-                        wo_set_pointer(&tmp,
+                        woort_set_pointer(tmpval,
                             reinterpret_cast<void*>(
-                                reinterpret_cast<intptr_t>(component) + member_tinfo->m_member_offset));
+                                reinterpret_cast<intptr_t>(component) 
+                                + member_tinfo->m_member_offset));
 
-                        wo_struct_set(writeval, member_idx + 1, &tmp);
+                        woort_struct_set(writeval, member_idx + 1, tmpval);
 
                         ++member_idx;
                         member_tinfo = member_tinfo->m_next_member;
@@ -172,11 +201,11 @@ namespace jeecs
                 }
                 else
                 {
-                    wo_set_struct(writeval, 1);
+                    woort_set_struct(writeval, 1);
                 }
 
-                wo_set_pointer(&tmp, component);
-                wo_struct_set(writeval, 0, &tmp);
+                woort_set_pointer(tmpval, component);
+                woort_struct_set(writeval, 0, tmpval);
             }
 
             void update_step_work(std::vector<towoo_step_work>& works)
@@ -185,112 +214,115 @@ namespace jeecs
 
                 if (m_job_vm == nullptr)
                     return;
-                auto entered = wo_enter_gcguard(m_job_vm);
 
-                for (auto& work : works)
+                woort_vm* const last= woort_vm_swap(m_job_vm);
                 {
-                    if (work.m_is_single_work)
+                    for (auto& work : works)
                     {
-                        wo_value s = wo_reserve_stack(m_job_vm, 1, nullptr);
-                        wo_pin_value_get(s, m_context);
-
-                        // Invoke!
-                        wo_invoke_value(m_job_vm, &work.m_function, 1, nullptr, &s);
-                        wo_pop_stack(m_job_vm, 1);
-                    }
-                    else
-                    {
-                        work.m_dependence.update(get_world());
-                        for (const auto& archinfo : work.m_dependence.m_archs)
+                        if (work.m_is_single_work)
                         {
-                            auto cur_chunk = je_arch_get_chunk(archinfo.m_arch);
-                            while (cur_chunk)
+                            *woort_internal_value(m_work_function) = work.m_function;
+
+                            // Invoke!
+                            woort_invoke(WOORT_IGNORE, m_work_function);
+                        }
+                        else
+                        {
+                            work.m_dependence.update(get_world());
+                            for (const auto& archinfo : work.m_dependence.m_archs)
                             {
-                                auto entity_meta_addr = je_arch_entity_meta_addr_in_chunk(cur_chunk);
-                                typing::version_t version;
-                                for (jeecs::typing::entity_id_in_chunk_t eid = 0; eid < archinfo.m_entity_count; ++eid)
+                                auto cur_chunk = je_arch_get_chunk(archinfo.m_arch);
+                                const size_t used_component_count = work.m_used_components.size();
+
+                                woort_value s;
+                                woort_push_reserve(used_component_count + 2, &s);
+
+                                // Push context
+                                woort_set_value(s + 0, m_context);
+
+                                while (cur_chunk)
                                 {
-                                    if (jeecs::game_entity::entity_stat::READY == entity_meta_addr[eid].m_stat)
+                                    auto entity_meta_addr = je_arch_entity_meta_addr_in_chunk(cur_chunk);
+                                    typing::version_t version;
+                                    for (jeecs::typing::entity_id_in_chunk_t eid = 0; eid < archinfo.m_entity_count; ++eid)
                                     {
-                                        version = entity_meta_addr[eid].m_version;
-
-                                        // game_entity{ cur_chunk, eid, version }
-                                        // Valid! prepare to invoke!
-                                        const size_t used_component_count = work.m_used_components.size();
-                                        wo_value s = wo_reserve_stack(m_job_vm, used_component_count + 2 + 1, nullptr);
-
-                                        wo_value tmp_elem = s + used_component_count + 2;
-
-                                        for (auto cmpidx = work.m_used_components.begin(); cmpidx != work.m_used_components.end(); ++cmpidx)
+                                        if (jeecs::game_entity::entity_stat::READY == entity_meta_addr[eid].m_stat)
                                         {
-                                            const size_t cmpid = cmpidx - work.m_used_components.begin();
+                                            version = entity_meta_addr[eid].m_version;
 
-                                            void* component = slice_requirement::base::view_base::get_component_from_archchunk_ptr(
-                                                &archinfo, cur_chunk, eid, cmpid);
+                                            // game_entity{ cur_chunk, eid, version }
+                                            // Valid! prepare to invoke!
 
-                                            const auto* typeinfo = *cmpidx;
+                                            for (auto cmpidx = work.m_used_components.begin(); cmpidx != work.m_used_components.end(); ++cmpidx)
+                                            {
+                                                const size_t cmpid = cmpidx - work.m_used_components.begin();
 
-                                            wo_value component_st = s + 2 + cmpid;
-                                            switch (work.m_dependence.m_requirements[cmpid].m_require)
-                                            {
-                                            case jeecs::requirement::type::CONTAINS:
-                                            {
-                                                create_component_struct(component_st, component, typeinfo);
-                                                break;
-                                            }
-                                            case jeecs::requirement::type::MAYNOT:
-                                            {
-                                                if (component == nullptr)
+                                                void* component = slice_requirement::base::view_base::get_component_from_archchunk_ptr(
+                                                    &archinfo, cur_chunk, eid, cmpid);
+
+                                                const auto* typeinfo = *cmpidx;
+
+                                                const woort_value component_st = s + 2 + cmpid;
+                                                switch (work.m_dependence.m_requirements[cmpid].m_require)
                                                 {
-                                                    // option::none
-                                                    wo_set_option_none(component_st);
-                                                }
-                                                else
+                                                case jeecs::requirement::type::CONTAINS:
                                                 {
-                                                    // option::value
-                                                    create_component_struct(tmp_elem, component, typeinfo);
-                                                    wo_set_option_val(component_st, tmp_elem);
+                                                    create_component_struct(component_st, m_work_function, component, typeinfo);
+                                                    break;
                                                 }
-                                                break;
+                                                case jeecs::requirement::type::MAYNOT:
+                                                {
+                                                    if (component == nullptr)
+                                                    {
+                                                        // option::none
+                                                        woort_set_option_none(component_st);
+                                                    }
+                                                    else
+                                                    {
+                                                        // option::value
+                                                        create_component_struct(component_st, m_work_function, component, typeinfo);
+                                                        woort_set_option_value(component_st, component_st);
+                                                    }
+                                                    break;
+                                                }
+                                                case jeecs::requirement::type::ANYOF:
+                                                case jeecs::requirement::type::EXCEPT:
+                                                default:
+                                                    break;
+                                                }
                                             }
-                                            case jeecs::requirement::type::ANYOF:
-                                            case jeecs::requirement::type::EXCEPT:
-                                            default:
-                                                break;
-                                            }
+
+                                            // Push entity
+                                            woort_set_gchandle(
+                                                s + 1,
+                                                new jeecs::game_entity{
+                                                    cur_chunk,
+                                                    eid,
+                                                    version
+                                                },
+                                                WOORT_IGNORE,
+                                                [](void* eptr)
+                                                { 
+                                                    delete static_cast<jeecs::game_entity*>(eptr); 
+                                                },
+                                                nullptr);
+
+                                            // Invoke!
+                                            *woort_internal_value(m_work_function) = work.m_function;
+                                            woort_invoke(WOORT_IGNORE, m_work_function);
                                         }
-
-                                        // Push entity
-                                        wo_set_gchandle(
-                                            s + 1,
-                                            m_job_vm,
-                                            new jeecs::game_entity{
-                                                cur_chunk,
-                                                eid,
-                                                version
-                                            },
-                                            nullptr,
-                                            [](void* eptr)
-                                            { delete std::launder(reinterpret_cast<jeecs::game_entity*>(eptr)); });
-
-                                        // Push context
-                                        wo_pin_value_get(s + 0, m_context);
-
-                                        // Invoke!
-                                        wo_invoke_value(m_job_vm, &work.m_function, used_component_count + 2, nullptr, &s);
-                                        wo_pop_stack(m_job_vm, used_component_count + 2 + 1);
                                     }
+
+                                    // Update next chunk.
+                                    cur_chunk = je_arch_next_chunk(cur_chunk);
                                 }
 
-                                // Update next chunk.
-                                cur_chunk = je_arch_next_chunk(cur_chunk);
+                                woort_pop(used_component_count + 2);
                             }
                         }
                     }
                 }
-
-                if (entered)
-                    wo_leave_gcguard(m_job_vm);
+                (void*)woort_vm_swap(last);
 
                 script::current_script_game_system_instance = nullptr;
             }
@@ -302,24 +334,17 @@ namespace jeecs
 
                 if (m_on_active_function.has_value())
                 {
-                    wo_value s = wo_reserve_stack(m_job_vm, 1, nullptr);
-                    wo_pin_value_get(s, m_context);
-                    // Invoke!
-                    wo_invoke_value(m_job_vm, &m_on_active_function.value(), 1, nullptr, &s);
-                    wo_pop_stack(m_job_vm, 1);
+                    woort_invoke(WOORT_IGNORE, m_on_active_function.value());
                 }
             }
             void OnDisable()
             {
                 if (m_job_vm == nullptr)
                     return;
+
                 if (m_on_disable_function.has_value())
                 {
-                    wo_value s = wo_reserve_stack(m_job_vm, 1, nullptr);
-                    wo_pin_value_get(s, m_context);
-                    // Invoke!
-                    wo_invoke_value(m_job_vm, &m_on_disable_function.value(), 1, nullptr, &s);
-                    wo_pop_stack(m_job_vm, 1);
+                    woort_invoke(WOORT_IGNORE, m_on_disable_function.value());
                 }
             }
 
