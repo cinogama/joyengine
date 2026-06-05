@@ -69,7 +69,7 @@ woort_PanicHandler_Action _jedbg_hook_woolang_panic(
     const char* reason)
 {
     std::string trace;
-    
+
     if (vm == nullptr)
         trace = "<No vm running>";
     else
@@ -115,7 +115,7 @@ woort_PanicHandler_Action _jedbg_hook_woolang_panic(
         {
             jeecs::debug::logwarn("Engine's woolang panic hook failed, try default.");
             return WOORT_PANIC_HANDLER_ACTION_USE_DEFAULT_HANDLER;
-        }        
+        }
     }
     (void)woort_vm_swap(last_vm);
 
@@ -130,7 +130,7 @@ WOORT_API woort_api wojeapi_editor_register_panic_hook(void)
 
     _je_global_context._je_global_panic_hooker = woort_vm_create();
     if (_je_global_context._je_global_panic_hooker == nullptr)
-        return woort_ret_panic("Failed to create vm.");
+        return woort_ret_panic("Unable to register panic hook: Failed to create vm.");
 
     _je_global_context._je_global_panic_hook_function = woort_GC_Pin_create(1);
     woort_GC_Pin_set_value(_je_global_context._je_global_panic_hook_function, 0, 0);
@@ -260,7 +260,7 @@ func main()
 return main();
 )";
 
-    woort_CodeEnv* const cenv = 
+    woort_CodeEnv* const cenv =
         wo_load_source("builtin/je_varify_crc64.wo", crc64_src, nullptr);
 
     if (cenv != nullptr)
@@ -268,12 +268,12 @@ return main();
         woort_vm* const vmm = woort_vm_create();
         if (vmm != nullptr)
         {
-            woort_vm * const last = woort_vm_swap(vmm);
+            woort_vm* const last = woort_vm_swap(vmm);
             {
                 woort_value s;
-                (void)woort_push_reserve(1, &s);
-
-                if (woort_bootup_codeenv(s, cenv) == WOORT_VM_CALL_STATUS_NORMAL)
+                if (!woort_push_reserve(1, &s))
+                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow.");
+                else if (woort_bootup_codeenv(s, cenv) == WOORT_VM_CALL_STATUS_NORMAL)
                 {
                     crc64_result = static_cast<uint64_t>(woort_int(s));
                 }
@@ -284,7 +284,7 @@ return main();
         }
         woort_codeenv_drop(cenv);
     }
-    
+
     if (crc64_result == 0)
         jeecs::debug::logerr("Unable to eval crc64 of builtin editor scripts.");
 
@@ -301,8 +301,8 @@ woort_CodeEnv* _jewo_open_file_to_compile_vm(const char* vpath)
     jeecs_file_read(src_buffer.data(), sizeof(char), src_file_handle->m_file_length, src_file_handle);
     jeecs_file_close(src_file_handle);
 
-    wo_CompileErrors * cerror;
-    woort_CodeEnv* const cenv = 
+    wo_CompileErrors* cerror;
+    woort_CodeEnv* const cenv =
         wo_load_binary(vpath, src_buffer.data(), src_buffer.size(), &cerror);
 
     if (cenv != nullptr)
@@ -353,7 +353,7 @@ bool je_main_script_entry()
     {
         size_t binary_length;
         void* buffer;
-        
+
         if (woort_CodeEnv_save_binary(cenv, &buffer, &binary_length))
         {
             FILE* objdump = fopen((std::string(woort_exe_path()) + "/builtin/editor.woo.je4cache").c_str(), "wb");
@@ -426,7 +426,7 @@ void je_finish()
         woort_set_panic_callback(_je_global_context._je_global_last_panic_handler);
         _je_global_context._je_global_last_panic_handler = nullptr;
     }
-    
+
     woort_set_panic_callback(NULL);
 
     wo_finish([](void*)

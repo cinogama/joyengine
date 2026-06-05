@@ -99,8 +99,7 @@ namespace Assimp
     public:
         je_file_io_system()
             : m_current_dir(jeecs_file_get_runtime_path())
-        {
-        }
+        {}
 
         bool Exists(const char* pFile) const override
         {
@@ -191,8 +190,7 @@ struct jegl_resource_bind_counter
     std::atomic_int32_t m_binding_count;
     jegl_resource_bind_counter(int32_t init)
         : m_binding_count(init)
-    {
-    }
+    {}
 };
 
 namespace jeecs::graphic
@@ -394,8 +392,7 @@ namespace jeecs::graphic
         template<requirements::basic_graphic_resource T>
         resource_to_destroy(T* res)
             : m_resource(res)
-        {
-        }
+        {}
     };
 }
 
@@ -422,8 +419,7 @@ struct jegl_context_notifier
         cached_resource_statement(T* res)
             : m_resource(res)
             , m_keeped_count(0)
-        {
-        }
+        {}
 
         cached_resource_statement(const cached_resource_statement&) = default;
         cached_resource_statement(cached_resource_statement&&) = default;
@@ -1136,7 +1132,7 @@ T* _jegl_try_update_shared_resource(jegl_context* context, T* resource)
             context->_m_thread_notifier->_m_cached_resources.insert(
                 std::make_pair(resource_path, caching_statement));
 
-        jegl_context_notifier::cached_resource_statement& cached_resource = 
+        jegl_context_notifier::cached_resource_statement& cached_resource =
             cached_resource_pair->second;
 
         if (insert_succ)
@@ -1381,7 +1377,7 @@ jegl_texture* jegl_create_texture(size_t width, size_t height, jegl_texture::for
 
 jegl_shader* _jegl_create_shader_instance_and_init(void);
 jegl_shader* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path);
-void _jegl_create_shader_cache(jegl_shader* shader_resource, wo_integer_t virtual_file_crc64);
+void _jegl_create_shader_cache(jegl_shader* shader_resource, uint64_t virtual_file_crc64);
 
 jegl_shader* _jegl_load_shader_source_impl(
     const char* path, const char* src, bool is_virtual_file)
@@ -1393,48 +1389,65 @@ jegl_shader* _jegl_load_shader_source_impl(
     }
 
 #if JE4_ENABLE_SHADER_WRAP_GENERATOR
-    wo_vm vmm = wo_create_vm();
-    if (!wo_load_source(vmm, path, src))
+    jegl_shader* instance = nullptr;
+
+    wo_CompileErrors* cerror;
+    woort_CodeEnv* const cenv = wo_load_source(path, src, &cerror);
+    if (cenv == nullptr)
     {
         // Compile error
-        jeecs::debug::logerr("Fail to load shader: %s.\n%s", path, wo_get_compile_error(vmm, WO_DEFAULT));
-        wo_close_vm(vmm);
-        return nullptr;
-    }
-
-    wo_bootup(vmm, WO_FALSE);
-
-    wo_unref_value generate_shader_func;
-
-    if (!wo_extern_symb(&generate_shader_func, vmm, "je::shader::generate_shader"))
-    {
-        jeecs::debug::logerr("Fail to load shader: %s. you should import je::shader.", path);
-        wo_close_vm(vmm);
-        return nullptr;
-    }
-
-    if (wo_value retval = wo_invoke_value(vmm, &generate_shader_func, 0, nullptr, nullptr))
-    {
-        shader_wrapper* shader_graph = reinterpret_cast<shader_wrapper*>(wo_pointer(retval));
-
-        jegl_shader* shader_instance =
-            _jegl_create_shader_instance_and_init();
-
-        jegl_shader_generate_shader_source(shader_graph, shader_instance);
-
-        _jegl_init_resource_handle(&shader_instance->m_handle, path);
-        _jegl_create_shader_cache(shader_instance, is_virtual_file ? wo_crc64_str(src) : 0);
-
-        wo_close_vm(vmm);
-
-        return shader_instance;
+        jeecs::debug::logerr("Fail to load shader: %s.\n%s", path, wo_get_compile_error(cerror, WO_PLAIM));
+        wo_compile_errors_free(cerror);
     }
     else
     {
-        jeecs::debug::logerr("Fail to load shader: %s: %s.", path, wo_get_runtime_error(vmm));
-        wo_close_vm(vmm);
-        return nullptr;
+        woort_vm* const vmm = woort_vm_create();
+        if (vmm == nullptr)
+            jeecs::debug::logerr("Fail to load shader: %s.\nFailed to create vm.");
+        else
+        {
+            woort_vm* const last = woort_vm_swap(vmm);
+
+            woort_value result;
+            if (!woort_push_reserve(1, &result))
+            {
+                jeecs::debug::logerr("Fail to load shader: %s.\nStack overflow.");
+            }
+            else if (WOORT_VM_CALL_STATUS_NORMAL != woort_bootup_codeenv(result, cenv))
+            {
+                jeecs::debug::logerr("Fail to load shader: %s.\n%s.",
+                    woort_vm_get_runtime_error(vmm));
+            }
+            else if (!woort_load_extern_const(result, cenv, "je::shader::generate_shader"))
+            {
+                jeecs::debug::logerr("Fail to load shader: %s. need to import je::shader.",
+                    path);
+            }
+            else if (WOORT_VM_CALL_STATUS_NORMAL != woort_invoke(result, result))
+            {
+                jeecs::debug::logerr("Fail to load shader: %s: %s.", path,
+                    woort_vm_get_runtime_error(vmm));
+            }
+            else
+            {
+                shader_wrapper* const shader_graph =
+                    static_cast<shader_wrapper*>(woort_gcpointer(result));
+
+                instance = _jegl_create_shader_instance_and_init();
+
+                jegl_shader_generate_shader_source(shader_graph, instance);
+
+                _jegl_init_resource_handle(&instance->m_handle, path);
+                _jegl_create_shader_cache(instance, is_virtual_file ? wo_crc64_str(src) : 0);
+            }
+
+            (void)woort_vm_swap(last);
+            woort_vm_close(vmm);
+        }
+        woort_codeenv_drop(cenv);
     }
+
+    return instance;
 #else
     jeecs::debug::logerr("Shader generator has been disabled.");
     return nullptr;
