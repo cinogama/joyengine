@@ -3051,98 +3051,82 @@ WOORT_API woort_api wojeapi_audio_source_set_offset(void)
 
 WOORT_API woort_api wojeapi_audio_listener_info(void)
 {
-    wo_value stacks = wo_reserve_stack(3, &args);
-    wo_value result = stacks + 0;
-    wo_value elem = stacks + 1;
-    wo_value elem2 = stacks + 2;
+    woort_value s;
+    if (!woort_push_reserve(2, &s))
+        return woort_ret_panic("Stack overflow.");
+
+    const woort_value result = s + 0;
+    const woort_value elem = s + 1;
 
     auto* listener_instance = jeal_get_listener();
 
-    wo_set_struct(result, 6);
+    woort_set_struct(result, 6);
 
-    wo_set_float(elem, listener_instance->m_gain);
-    wo_struct_set(result, 0, elem);
+    woort_struct_set_float(result, 0, listener_instance->m_gain);
+    woort_struct_set_float(result, 1, listener_instance->m_global_gain);
 
-    wo_set_float(elem, listener_instance->m_global_gain);
-    wo_struct_set(result, 1, elem);
-
-    wo_set_struct(elem, 3);
+    woort_set_struct(elem, 3);
     for (uint16_t i = 0; i < 3; ++i)
     {
-        wo_set_float(elem2, listener_instance->m_location[i]);
-        wo_struct_set(elem, i, elem2);
+        woort_struct_set_float(elem, i, listener_instance->m_location[i]);
     }
-    wo_struct_set(result, 2, elem);
+    woort_struct_set(result, 2, elem);
 
-    wo_set_struct(elem, 3);
+    woort_set_struct(elem, 3);
     for (uint16_t i = 0; i < 3; ++i)
     {
-        wo_set_float(elem2, listener_instance->m_velocity[i]);
-        wo_struct_set(elem, i, elem2);
+        woort_struct_set_float(elem, i, listener_instance->m_velocity[i]);
     }
-    wo_struct_set(result, 3, elem);
+    woort_struct_set(result, 3, elem);
 
-    wo_set_struct(elem, 3);
+    woort_set_struct(elem, 3);
     for (uint16_t i = 0; i < 3; ++i)
     {
-        wo_set_float(elem2, listener_instance->m_forward[i]);
-        wo_struct_set(elem, i, elem2);
+        woort_struct_set_float(elem, i, listener_instance->m_forward[i]);
     }
-    wo_struct_set(result, 4, elem);
+    woort_struct_set(result, 4, elem);
 
-    wo_set_struct(elem, 3);
+    woort_set_struct(elem, 3);
     for (uint16_t i = 0; i < 3; ++i)
     {
-        wo_set_float(elem2, listener_instance->m_upward[i]);
-        wo_struct_set(elem, i, elem2);
+        woort_struct_set_float(elem, i, listener_instance->m_upward[i]);
     }
-    wo_struct_set(result, 5, elem);
+    woort_struct_set(result, 5, elem);
 
     return woort_ret_value(result);
 }
 WOORT_API woort_api wojeapi_audio_listener_update(void)
 {
-    wo_value stacks = wo_reserve_stack(2, &args);
-    wo_value elem = stacks + 0;
-    wo_value elem2 = stacks + 1;
-
-    wo_value updated_info = 0;
+    const woort_value updated_info = 0;
 
     jeecs::audio::listener::update(
         [&](jeal_listener* lstn)
         {
-            wo_struct_get(elem, updated_info, 0);
-            lstn->m_gain = woort_float(elem);
+            lstn->m_gain = woort_struct_get_float(updated_info, 0);
+            lstn->m_global_gain = woort_struct_get_float(updated_info, 1);
 
-            wo_struct_get(elem, updated_info, 1);
-            lstn->m_global_gain = woort_float(elem);
-
-            wo_struct_get(elem, updated_info, 2);
+            woort_struct_get(WOORT_RETURN_SLOT, updated_info, 2);
             for (uint16_t i = 0; i < 3; ++i)
             {
-                wo_struct_get(elem2, elem, i);
-                lstn->m_location[i] = woort_float(elem2);
+                lstn->m_location[i] = woort_struct_get_float(WOORT_RETURN_SLOT, i);
             }
 
-            wo_struct_get(elem, updated_info, 3);
+            woort_struct_get(WOORT_RETURN_SLOT, updated_info, 3);
             for (uint16_t i = 0; i < 3; ++i)
             {
-                wo_struct_get(elem2, elem, i);
-                lstn->m_velocity[i] = woort_float(elem2);
+                lstn->m_velocity[i] = woort_struct_get_float(WOORT_RETURN_SLOT, i);
             }
 
-            wo_struct_get(elem, updated_info, 4);
+            woort_struct_get(WOORT_RETURN_SLOT, updated_info, 4);
             for (uint16_t i = 0; i < 3; ++i)
             {
-                wo_struct_get(elem2, elem, i);
-                lstn->m_forward[i] = woort_float(elem2);
+                lstn->m_forward[i] = woort_struct_get_float(WOORT_RETURN_SLOT, i);
             }
 
-            wo_struct_get(elem, updated_info, 5);
+            woort_struct_get(WOORT_RETURN_SLOT, updated_info, 5);
             for (uint16_t i = 0; i < 3; ++i)
             {
-                wo_struct_get(elem2, elem, i);
-                lstn->m_upward[i] = woort_float(elem2);
+                lstn->m_upward[i] = woort_struct_get_float(WOORT_RETURN_SLOT, i);
             }
         });
 
@@ -3221,10 +3205,13 @@ WOORT_API woort_api wojeapi_audio_effect_create(void)
 }
 WOORT_API woort_api wojeapi_audio_effect_info(void)
 {
-    wo_value stacks = wo_reserve_stack(3, &args);
-    wo_value result = stacks + 0;
-    wo_value elem = stacks + 1;
-    wo_value elem2 = stacks + 2;
+    woort_value s;
+    if (!woort_push_reserve(3, &s))
+        return woort_ret_panic("Stack overflow.");
+
+    const woort_value result = s + 0;
+    const woort_value elem = s + 1;
+    const woort_value elem2 = s + 2;
 
     void* effect_res_ptr = woort_gcpointer(0);
     woolang_je_audio_effect_kind kind = (woolang_je_audio_effect_kind)woort_int(1);
