@@ -1708,7 +1708,7 @@ WOORT_API woort_api wojeapi_font_string_texture(void)
     jeecs::basic::resource<jeecs::graphic::texture>* text_texture;
 
     const woort_U8CString text = woort_string(1);
-    
+
     std::u32string wstr;
     wstr.resize(woort_str_to_u32str(text, nullptr, 0));
     (void)woort_str_to_u32str(text, wstr.data(), wstr.size());
@@ -1722,10 +1722,10 @@ WOORT_API woort_api wojeapi_font_string_texture(void)
     (void)woort_vm_swap(last);
 
     return woort_ret_gchandle(
-        text_texture, 
-        WOORT_IGNORE, 
+        text_texture,
+        WOORT_IGNORE,
         [](void* ptr)
-        { 
+        {
             delete (jeecs::basic::resource<jeecs::graphic::texture> *)ptr;
         },
         nullptr);
@@ -1756,7 +1756,7 @@ WOORT_API woort_api wojeapi_shader_open(void)
     if (loaded_shader.has_value())
     {
         return woort_ret_option_gchandle(
-            new jeecs::basic::resource<jeecs::graphic::shader>(loaded_shader.value()), 
+            new jeecs::basic::resource<jeecs::graphic::shader>(loaded_shader.value()),
             WOORT_IGNORE,
             [](void* ptr)
             {
@@ -1790,7 +1790,7 @@ WOORT_API woort_api wojeapi_shader_create(void)
     if (loaded_shader.has_value())
     {
         return woort_ret_gchandle(
-            new jeecs::basic::resource<jeecs::graphic::shader>(loaded_shader.value()), 
+            new jeecs::basic::resource<jeecs::graphic::shader>(loaded_shader.value()),
             WOORT_IGNORE,
             [](void* ptr)
             {
@@ -1819,7 +1819,7 @@ WOORT_API woort_api wojeapi_textures_of_entity(void)
     {
         for (auto& texture : textures->textures)
         {
-            woort_set_gchandle(val, 
+            woort_set_gchandle(val,
                 new jeecs::basic::resource<jeecs::graphic::texture>(texture.m_texture),
                 WOORT_IGNORE,
                 [](void* ptr)
@@ -1945,7 +1945,7 @@ WOORT_API woort_api wojeapi_vertex_create(void)
         (void)woort_vec_get(WOORT_RETURN_SLOT, 3, i);
         formats[i] = {
             jegl_vertex::data_type::FLOAT32,
-            (size_t)woort_unbox_int(WOORT_RETURN_SLOT) 
+            (size_t)woort_unbox_int(WOORT_RETURN_SLOT)
         };
     }
 
@@ -1964,7 +1964,7 @@ WOORT_API woort_api wojeapi_vertex_create(void)
 
     if (loaded_vertex.has_value())
         return woort_ret_gchandle(
-            new jeecs::basic::resource<jeecs::graphic::vertex>(loaded_vertex.value()), 
+            new jeecs::basic::resource<jeecs::graphic::vertex>(loaded_vertex.value()),
             WOORT_IGNORE,
             [](void* ptr)
             {
@@ -1977,7 +1977,7 @@ WOORT_API woort_api wojeapi_vertex_create(void)
 
 WOORT_API woort_api wojeapi_vertex_path(void)
 {
-    auto* loaded_vertex = 
+    auto* loaded_vertex =
         (jeecs::basic::resource<jeecs::graphic::vertex> *)woort_gcpointer(0);
 
     if (auto path = (*loaded_vertex)->resource()->m_handle.m_path_may_null_if_builtin)
@@ -2003,7 +2003,7 @@ WOORT_API woort_api wojeapi_shaders_of_entity(void)
         for (auto& shader : shaders->shaders)
         {
             woort_set_gchandle(elem,
-                new jeecs::basic::resource<jeecs::graphic::shader>(shader), 
+                new jeecs::basic::resource<jeecs::graphic::shader>(shader),
                 WOORT_IGNORE,
                 [](void* ptr)
                 {
@@ -2067,7 +2067,7 @@ WOORT_API woort_api wojeapi_get_uniforms_from_shader(void)
     woort_set_map(out_map);
 
     auto* uniforms = (*shader)->resource()->m_custom_uniforms;
-   
+
     while (uniforms)
     {
         woort_set_struct(val, 2);
@@ -2313,7 +2313,7 @@ WOORT_API woort_api wojeapi_towoo_update_component(void)
         else
         {
             (void)jeecs_file_read(src, sizeof(char), texfile->m_file_length, texfile);
- 
+
             wo_CompileErrors* cerror;
             woort_CodeEnv* const cenv =
                 wo_load_binary(component_path, src, texfile->m_file_length, &cerror);
@@ -2390,7 +2390,7 @@ WOORT_API woort_api wojeapi_towoo_update_component(void)
 
 WOORT_API woort_api wojeapi_towoo_unregister_component(void)
 {
-    const jeecs::typing::type_info* t = 
+    const jeecs::typing::type_info* t =
         (const jeecs::typing::type_info*)woort_pointer(0);
 
     je_typing_unregister(t);
@@ -2428,27 +2428,35 @@ WOORT_API woort_api wojeapi_get_all_internal_scripts(void)
 
     woort_set_map(result);
 
-    auto* iter = wo_open_virtual_file_iter();
-    while (woort_string_t vpath = wo_next_virtual_file_iter(iter))
-    {
-        if (auto* vfhandle = wo_open_virtual_file(vpath))
-        {
-            size_t len;
-            auto* dat = wo_virtual_file_data(vfhandle, &len);
+    char** paths = nullptr;
+    size_t count = woort_vfs_get_all_paths(&paths);
 
-            wo_set_buffer(val, dat, len);
+    for (size_t i = 0; i < count; ++i)
+    {
+        const char* vpath = paths[i];
+        char* data = nullptr;
+        size_t len = 0;
+        if (woort_vfs_read(vpath, &data, &len))
+        {
+            woort_set_buffer(val, data, len);
             woort_map_set_by_string(result, vpath, val);
+
+            woort_free(data);
         }
     }
-    wo_close_virtual_file_iter(iter);
+
+    for (size_t i = 0; i < count; ++i)
+        woort_free(paths[i]);
+    woort_free(paths);
+
     return woort_ret_value(result);
 }
 
 struct dynamic_parser_impl_t
 {
-    wo_unref_value m_saving;
-    wo_unref_value m_restoring;
-    wo_unref_value m_edit;
+    woort_Value m_saving;
+    woort_Value m_restoring;
+    woort_Value m_edit;
 
     const jeecs::typing::typeinfo_script_parser*
         m_script_parser;
@@ -2462,26 +2470,25 @@ struct dynamic_parser_global_context_t
     std::mutex _je_dynamic_parser_mx;
 
     parser_table_t _je_dynamic_parser_impls;
-    wo_vm _je_dynamic_parser_vm = nullptr;
+    woort_CodeEnv* _je_dynamic_parser_cenv = nullptr;
 };
 static dynamic_parser_global_context_t _je_dynamic_parser_global_context;
 
-
 void _je_dynamic_parser_clear()
 {
-    if (_je_dynamic_parser_global_context._je_dynamic_parser_vm != nullptr)
+    if (_je_dynamic_parser_global_context._je_dynamic_parser_cenv != nullptr)
     {
         _je_dynamic_parser_global_context._je_dynamic_parser_impls.clear();
 
-        wo_close_vm(_je_dynamic_parser_global_context._je_dynamic_parser_vm);
-        _je_dynamic_parser_global_context._je_dynamic_parser_vm = nullptr;
+        woort_codeenv_drop(_je_dynamic_parser_global_context._je_dynamic_parser_cenv);
+        _je_dynamic_parser_global_context._je_dynamic_parser_cenv = nullptr;
     }
 
     assert(_je_dynamic_parser_global_context._je_dynamic_parser_impls.empty());
 }
-void _je_dynamic_parser_update_types()
+void _je_dynamic_parser_update_types(woort_value tmp)
 {
-    if (_je_dynamic_parser_global_context._je_dynamic_parser_vm != nullptr)
+    if (_je_dynamic_parser_global_context._je_dynamic_parser_cenv != nullptr)
     {
         _je_dynamic_parser_global_context._je_dynamic_parser_impls.clear();
 
@@ -2495,30 +2502,44 @@ void _je_dynamic_parser_update_types()
             {
                 std::string script_woolang_typename = script_parser->m_woolang_typename;
 
-                wo_unref_value saving_func;
-                wo_unref_value restoring_func;
-                wo_unref_value edit_func;
+                woort_Value* const tmp_internal_storage = woort_internal_value(tmp);
 
-                if (wo_extern_symb(
-                    &saving_func,
-                    _je_dynamic_parser_global_context._je_dynamic_parser_
-                    (script_woolang_typename + "::parser::saving").c_str()) == WO_TRUE
-                    && wo_extern_symb(
-                        &restoring_func,
-                        _je_dynamic_parser_global_context._je_dynamic_parser_
-                        (script_woolang_typename + "::parser::restoring").c_str()) == WO_TRUE
-                    && wo_extern_symb(
-                        &edit_func,
-                        _je_dynamic_parser_global_context._je_dynamic_parser_
-                        (script_woolang_typename + "::parser::edit").c_str()) == WO_TRUE)
+                auto p = std::make_unique<dynamic_parser_impl_t>();
+
+                bool succ = true;
+                if (woort_load_extern_const(
+                    tmp,
+                    _je_dynamic_parser_global_context._je_dynamic_parser_cenv,
+                    (script_woolang_typename + "::parser::saving").c_str()))
                 {
-                    auto p = std::make_unique<dynamic_parser_impl_t>();
+                    p->m_saving = *tmp_internal_storage;
+                }
+                else
+                    succ = false;
 
-                    wo_set_val(&p->m_saving, &saving_func);
-                    wo_set_val(&p->m_restoring, &restoring_func);
-                    wo_set_val(&p->m_edit, &edit_func);
+                if (woort_load_extern_const(
+                    tmp,
+                    _je_dynamic_parser_global_context._je_dynamic_parser_cenv,
+                    (script_woolang_typename + "::parser::restoring").c_str()))
+                {
+                    p->m_restoring = *tmp_internal_storage;
+                }
+                else
+                    succ = false;
+
+                if (woort_load_extern_const(
+                    tmp,
+                    _je_dynamic_parser_global_context._je_dynamic_parser_cenv,
+                    (script_woolang_typename + "::parser::edit").c_str()))
+                {
+                    p->m_edit = *tmp_internal_storage;
+                }
+                else
+                    succ = false;
+
+                if (succ)
+                {
                     p->m_script_parser = script_parser;
-
                     _je_dynamic_parser_global_context._je_dynamic_parser_impls.insert(
                         std::make_pair((*cur_type)->m_id, std::move(p)));
                 }
@@ -2544,30 +2565,65 @@ std::optional<std::string> _je_dynamic_parser_update_all(const char* path)
 
     size_t filelen = file->m_file_length;
 
-    char* content = (char*)malloc(filelen + 1);
-    jeecs_file_read(content, sizeof(char), filelen, file);
-
-    content[filelen] = 0;
-
-    jeecs_file_close(file);
-
-    wo_vm newvm = wo_create_vm();
-    if (wo_load_binary(newpath, content, filelen) == WO_FALSE)
+    char* const content = (char*)malloc(filelen + 1);
+    if (content == nullptr)
     {
-        free(content);
-
-        std::string result = wo_get_compile_error(newWO_DEFAULT);
-        wo_close_vm(newvm);
-
-        return std::optional(result);
+        return std::optional("Out of memory.");
     }
 
-    wo_bootup(newWO_FALSE);
+    (void)jeecs_file_read(content, sizeof(char), filelen, file);
+
+    wo_CompileErrors* cerror;
+    woort_CodeEnv* const cenv = wo_load_binary(path, content, filelen, &cerror);
     free(content);
 
-    _je_dynamic_parser_clear();
-    _je_dynamic_parser_global_context._je_dynamic_parser_vm = newvm;
-    _je_dynamic_parser_update_types();
+    if (cenv == nullptr)
+    {
+        std::optional<std::string> r;
+        r.emplace(wo_get_compile_error(cerror, WO_PLAIM));
+
+        wo_compile_errors_free(cerror);
+
+        return r;
+    }
+
+    woort_vm* const vmm = woort_vm_create();
+    if (vmm == nullptr)
+    {
+        woort_codeenv_drop(cenv);
+        return std::optional("Out of memory.");
+    }
+
+    woort_vm* const last = woort_vm_swap(vmm);
+    {
+        woort_value s;
+        if (!woort_push_reserve(1, &s))
+        {
+            (void)woort_vm_swap(last);
+            woort_codeenv_drop(cenv);
+            woort_vm_close(vmm);
+
+            return std::optional("Stack overflow.");
+        }
+
+        if (WOORT_VM_CALL_STATUS_NORMAL != woort_bootup_codeenv(WOORT_IGNORE, cenv))
+        {
+            (void)woort_vm_swap(last);
+
+            std::optional<std::string> r;
+            r.emplace(woort_vm_get_runtime_error(vmm));
+
+            woort_codeenv_drop(cenv);
+            woort_vm_close(vmm);
+            return r;
+        }
+
+        _je_dynamic_parser_clear();
+        _je_dynamic_parser_global_context._je_dynamic_parser_cenv = cenv;
+        _je_dynamic_parser_update_types(s);
+    }
+    (void)woort_vm_swap(last);
+    woort_vm_close(vmm);
 
     return std::nullopt;
 }
@@ -2578,78 +2634,74 @@ WOORT_API woort_api wojeapi_dynamic_parser_update_script(void)
 {
     std::optional<std::string> result;
 
-    auto leaved = wo_leave_gcguard();
+    woort_vm* const last = woort_vm_swap(nullptr);
     {
         std::lock_guard g1(_je_dynamic_parser_global_context._je_dynamic_parser_mx);
         result = _je_dynamic_parser_update_all(woort_string(0));
     }
-    if (leaved)
-        wo_enter_gcguard();
+    (void)woort_vm_swap(last);
 
     if (result.has_value())
-        return woort_ret_err_string(result.value().c_str());
-    return woort_ret_ok_void();
+        return woort_ret_result_err_string(result.value().c_str());
+    return woort_ret_result_ok_void();
 }
 
 WOORT_API woort_api wojeapi_dynamic_parser_update_type(void)
 {
-    auto leaved = wo_leave_gcguard();
-    {
-        std::lock_guard g1(_je_dynamic_parser_global_context._je_dynamic_parser_mx);
-        _je_dynamic_parser_update_types();
-    }
-    if (leaved)
-        wo_enter_gcguard();
+    woort_value s;
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
+
+    woort_vm* const last = woort_vm_swap(nullptr);
+    std::lock_guard g1(_je_dynamic_parser_global_context._je_dynamic_parser_mx);
+    (void)woort_vm_swap(last);
+
+    _je_dynamic_parser_update_types(s);
 
     return woort_ret_void();
 }
 
 WOORT_API woort_api wojeapi_dynamic_parser_clear(void)
 {
-    auto leaved = wo_leave_gcguard();
+    woort_vm* const last = woort_vm_swap(nullptr);
     {
         std::lock_guard g1(_je_dynamic_parser_global_context._je_dynamic_parser_mx);
         _je_dynamic_parser_clear();
     }
-    if (leaved)
-        wo_enter_gcguard();
+    (void)woort_vm_swap(last);
 
     return woort_ret_void();
 }
 
 WOORT_API woort_api wojeapi_dynamic_parser_saving(void)
 {
-    wo_value s = wo_reserve_stack(1, &args);
+    woort_value s;
+    if (!woort_push_reserve(2, &s))
+        return woort_ret_panic("Stack overflow.");
+
     std::lock_guard g1(_je_dynamic_parser_global_context._je_dynamic_parser_mx);
 
-    auto* type = (const jeecs::typing::type_info*)wo_pointer(0);
+    auto* type = (const jeecs::typing::type_info*)woort_pointer(0);
     auto fnd = _je_dynamic_parser_global_context._je_dynamic_parser_impls.find(type->m_id);
 
     if (fnd != _je_dynamic_parser_global_context._je_dynamic_parser_impls.end())
     {
-        assert(_je_dynamic_parser_global_context._je_dynamic_parser_vm != nullptr);
+        assert(_je_dynamic_parser_global_context._je_dynamic_parser_cenv != nullptr);
 
-        auto* val = wo_pointer(1);
+        auto* val = woort_pointer(1);
         auto& parser = fnd->second;
 
-        wo_value value = s + 0;
+        const woort_value value = s + 0;
+        const woort_value func = s + 1;
+
         parser->m_script_parser->m_script_parse_c2w(val, value);
 
-        wo_value _je_dynamic_parser_vm_s = wo_reserve_stack(
-            _je_dynamic_parser_global_context._je_dynamic_parser_1, nullptr);
+        *woort_internal_value(func) = parser->m_saving;
 
-        wo_set_val(_je_dynamic_parser_vm_s + 0, value);
-        wo_value result = wo_invoke_value(
-            _je_dynamic_parser_global_context._je_dynamic_parser_vm,
-            &parser->m_saving,
-            1,
-            nullptr,
-            &_je_dynamic_parser_vm_s);
+        if (WOORT_VM_CALL_STATUS_NORMAL != woort_invoke(value, func))
+            return woort_ret_panic("Failed to invoke `save` callback.");
 
-        wo_pop_stack(_je_dynamic_parser_global_context._je_dynamic_parser_1);
-
-        if (result != nullptr)
-            return woort_ret_option_value(result);
+        return woort_ret_option_value(value);
     }
     return woort_ret_option_none();
 }
@@ -2658,12 +2710,12 @@ WOORT_API woort_api wojeapi_dynamic_parser_restoring(void)
 {
     std::lock_guard g1(_je_dynamic_parser_global_context._je_dynamic_parser_mx);
 
-    auto* type = (const jeecs::typing::type_info*)wo_pointer(0);
+    auto* type = (const jeecs::typing::type_info*)woort_pointer(0);
     auto fnd = _je_dynamic_parser_global_context._je_dynamic_parser_impls.find(type->m_id);
 
     if (fnd != _je_dynamic_parser_global_context._je_dynamic_parser_impls.end())
     {
-        assert(_je_dynamic_parser_global_context._je_dynamic_parser_vm != nullptr);
+        assert(_je_dynamic_parser_global_context._je_dynamic_parser_cenv != nullptr);
 
         void* val = wo_pointer(1);
         auto& parser = fnd->second;
