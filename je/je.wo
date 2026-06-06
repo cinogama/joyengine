@@ -905,16 +905,14 @@ namespace je
         }
     }
     
-    public using universe = gchandle;
+    public using universe = handle;
     namespace universe
     {
         extern("libjoyecs", "wojeapi_create_universe")
             public func create()=> universe;
             
-        public func close(self: universe)
-        {
-            return self: gchandle->close();
-        }
+        extern("libjoyecs", "wojeapi_close_universe")
+        public func close(self: universe)=> void;
         
         extern("libjoyecs", "wojeapi_universe_extend_life")
             public func grow(self: universe)=> void;
