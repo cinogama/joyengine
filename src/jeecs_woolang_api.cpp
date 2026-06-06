@@ -2798,32 +2798,19 @@ WOORT_API woort_api wojeapi_audio_buffer_load(void)
 }
 WOORT_API woort_api wojeapi_audio_buffer_info(void)
 {
-    wo_value stacks = wo_reserve_stack(2, &args);
-    wo_value result = stacks + 0;
-    wo_value elem = stacks + 1;
-
     jeecs::basic::resource<jeecs::audio::buffer>* buffer =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::buffer> *>(wo_pointer(0));
+        static_cast<jeecs::basic::resource<jeecs::audio::buffer> *>(woort_gcpointer(0));
 
-    wo_set_struct(result, 5);
+    woort_set_struct(WOORT_RETURN_SLOT, 5);
     auto* buffer_instance = (*buffer)->handle();
 
-    wo_set_int(elem, (woort_int_t)buffer_instance->m_size);
-    wo_struct_set(result, 0, elem);
+    woort_struct_set(WOORT_RETURN_SLOT, 0, (woort_Int)buffer_instance->m_size);
+    woort_struct_set(WOORT_RETURN_SLOT, 1, (woort_Int)buffer_instance->m_sample_rate);
+    woort_struct_set(WOORT_RETURN_SLOT, 2, (woort_Int)buffer_instance->m_sample_size);
+    woort_struct_set(WOORT_RETURN_SLOT, 3, (woort_Int)buffer_instance->m_byte_rate);
+    woort_struct_set(WOORT_RETURN_SLOT, 4, (woort_Int)buffer_instance->m_format);
 
-    wo_set_int(elem, (woort_int_t)buffer_instance->m_sample_rate);
-    wo_struct_set(result, 1, elem);
-
-    wo_set_int(elem, (woort_int_t)buffer_instance->m_sample_size);
-    wo_struct_set(result, 2, elem);
-
-    wo_set_int(elem, (woort_int_t)buffer_instance->m_byte_rate);
-    wo_struct_set(result, 3, elem);
-
-    wo_set_int(elem, (woort_int_t)buffer_instance->m_format);
-    wo_struct_set(result, 4, elem);
-
-    return woort_ret_value(result);
+    return woort_ret();
 }
 /*
 extern("libjoyecs", "wojeapi_audio_filter_create")
@@ -2838,65 +2825,44 @@ extern("libjoyecs", "wojeapi_audio_filter_update")
 WOORT_API woort_api wojeapi_audio_filter_create(void)
 {
     return woort_ret_gchandle(
-        vm,
         new jeecs::basic::resource<jeecs::audio::filter>(jeecs::audio::filter::create()),
-        nullptr,
+        WOORT_IGNORE,
         [](void* p)
         {
             delete reinterpret_cast<jeecs::basic::resource<jeecs::audio::filter>*>(p);
-        });
+        },
+        nullptr);
 }
 
 WOORT_API woort_api wojeapi_audio_filter_info(void)
 {
-    wo_value stacks = wo_reserve_stack(2, &args);
-    wo_value result = stacks + 0;
-    wo_value elem = stacks + 1;
-
     jeecs::basic::resource<jeecs::audio::filter>* filter =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::filter> *>(wo_pointer(0));
+        reinterpret_cast<jeecs::basic::resource<jeecs::audio::filter> *>(woort_gcpointer(0));
 
-    wo_set_struct(result, 4);
+    woort_set_struct(WOORT_RETURN_SLOT, 4);
 
     auto* filter_instance = (*filter)->handle();
 
-    wo_set_int(elem, (woort_int_t)filter_instance->m_type);
-    wo_struct_set(result, 0, elem);
+    woort_struct_set_int(WOORT_RETURN_SLOT, 0, (woort_Int)filter_instance->m_type);
+    woort_struct_set_float(WOORT_RETURN_SLOT, 1, filter_instance->m_gain);
+    woort_struct_set_float(WOORT_RETURN_SLOT, 2, filter_instance->m_gain_lf);
+    woort_struct_set_float(WOORT_RETURN_SLOT, 3, filter_instance->m_gain_hf);
 
-    wo_set_float(elem, filter_instance->m_gain);
-    wo_struct_set(result, 1, elem);
-
-    wo_set_float(elem, filter_instance->m_gain_lf);
-    wo_struct_set(result, 2, elem);
-
-    wo_set_float(elem, filter_instance->m_gain_hf);
-    wo_struct_set(result, 3, elem);
-
-    return woort_ret_value(result);
+    return woort_ret();
 }
 
 WOORT_API woort_api wojeapi_audio_filter_update(void)
 {
-    wo_value stacks = wo_reserve_stack(1, &args);
-    wo_value elem = stacks + 0;
-
     jeecs::basic::resource<jeecs::audio::filter>* filter =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::filter> *>(wo_pointer(0));
-    wo_value updated_info = 1;
+        reinterpret_cast<jeecs::basic::resource<jeecs::audio::filter> *>(woort_gcpointer(0));
+    const woort_value updated_info = 1;
 
     (*filter)->update([&](jeal_filter* flt)
         {
-            wo_struct_get(elem, updated_info, 0);
-            flt->m_type = (jeal_filter_type)woort_int(elem);
-
-            wo_struct_get(elem, updated_info, 1);
-            flt->m_gain = woort_float(elem);
-
-            wo_struct_get(elem, updated_info, 2);
-            flt->m_gain_lf = woort_float(elem);
-
-            wo_struct_get(elem, updated_info, 3);
-            flt->m_gain_hf = woort_float(elem);
+            flt->m_type = (jeal_filter_type)woort_struct_get_int(updated_info, 0);
+            flt->m_gain = woort_struct_get_float(updated_info, 1);
+            flt->m_gain_lf = woort_struct_get_float(updated_info, 2);
+            flt->m_gain_hf = woort_struct_get_float(updated_info, 3);
         });
 
     return woort_ret_void();
@@ -2905,89 +2871,72 @@ WOORT_API woort_api wojeapi_audio_filter_update(void)
 WOORT_API woort_api wojeapi_audio_source_create(void)
 {
     return woort_ret_gchandle(
-        vm,
         new jeecs::basic::resource<jeecs::audio::source>(jeecs::audio::source::create()),
-        nullptr,
+        WOORT_IGNORE,
         [](void* p)
         {
             delete reinterpret_cast<jeecs::basic::resource<jeecs::audio::source>*>(p);
-        });
+        },
+        nullptr);
 }
 WOORT_API woort_api wojeapi_audio_source_info(void)
 {
-    wo_value stacks = wo_reserve_stack(3, &args);
-    wo_value result = stacks + 0;
-    wo_value elem = stacks + 1;
-    wo_value elem2 = stacks + 2;
+    woort_value elem;
+    if (!woort_push_reserve(1, &elem))
+        return woort_ret_panic("Stack overflow.");
 
     jeecs::basic::resource<jeecs::audio::source>* source =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(wo_pointer(0));
+        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(woort_gcpointer(0));
 
-    wo_set_struct(result, 5);
+    woort_set_struct(WOORT_RETURN_SLOT, 5);
 
     auto* source_instance = (*source)->handle();
 
-    wo_set_bool(elem, source_instance->m_loop);
-    wo_struct_set(result, 0, elem);
+    woort_struct_set_bool(WOORT_RETURN_SLOT, 0, source_instance->m_loop);
+    woort_struct_set_float(WOORT_RETURN_SLOT, 1, source_instance->m_gain);
+    woort_struct_set_float(WOORT_RETURN_SLOT, 2, source_instance->m_pitch);
 
-    wo_set_float(elem, source_instance->m_gain);
-    wo_struct_set(result, 1, elem);
-
-    wo_set_float(elem, source_instance->m_pitch);
-    wo_struct_set(result, 2, elem);
-
-    wo_set_struct(elem, 3);
+    woort_set_struct(elem, 3);
     for (uint16_t i = 0; i < 3; ++i)
     {
-        wo_set_float(elem2, source_instance->m_location[i]);
-        wo_struct_set(elem, i, elem2);
+        woort_struct_set_float(elem, i, source_instance->m_location[i]);
     }
-    wo_struct_set(result, 3, elem);
+    woort_struct_set(WOORT_RETURN_SLOT, 3, elem);
 
-    wo_set_struct(elem, 3);
+    woort_set_struct(elem, 3);
     for (uint16_t i = 0; i < 3; ++i)
     {
-        wo_set_float(elem2, source_instance->m_velocity[i]);
-        wo_struct_set(elem, i, elem2);
+        woort_struct_set_float(elem, i, source_instance->m_velocity[i]);
     }
-    wo_struct_set(result, 4, elem);
+    woort_struct_set(WOORT_RETURN_SLOT, 4, elem);
 
-    return woort_ret_value(result);
+    return woort_ret();
 }
 WOORT_API woort_api wojeapi_audio_source_update(void)
 {
-    wo_value stacks = wo_reserve_stack(2, &args);
-    wo_value elem = stacks + 0;
-    wo_value elem2 = stacks + 1;
-
     jeecs::basic::resource<jeecs::audio::source>* source =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(wo_pointer(0));
-    wo_value updated_info = 1;
+        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(woort_gcpointer(0));
+    const woort_value updated_info = 1;
 
     (*source)->update(
         [&](jeal_source* src)
         {
-            wo_struct_get(elem, updated_info, 0);
-            src->m_loop = wo_bool(elem);
+            src->m_loop = woort_struct_get_bool(updated_info, 0);
+            src->m_gain = woort_struct_get_float(updated_info, 1);
+            src->m_pitch = woort_struct_get_float(updated_info, 2);
 
-            wo_struct_get(elem, updated_info, 1);
-            src->m_gain = woort_float(elem);
-
-            wo_struct_get(elem, updated_info, 2);
-            src->m_pitch = woort_float(elem);
-
-            wo_struct_get(elem, updated_info, 3);
+            woort_struct_get(WOORT_RETURN_SLOT, updated_info, 3);
             for (uint16_t i = 0; i < 3; ++i)
             {
-                wo_struct_get(elem2, elem, i);
-                src->m_location[i] = woort_float(elem2);
+                src->m_location[i] = 
+                    woort_struct_get_float(WOORT_RETURN_SLOT, i);
             }
 
-            wo_struct_get(elem, updated_info, 4);
+            woort_struct_get(WOORT_RETURN_SLOT, updated_info, 4);
             for (uint16_t i = 0; i < 3; ++i)
             {
-                wo_struct_get(elem2, elem, i);
-                src->m_velocity[i] = woort_float(elem2);
+                src->m_velocity[i] = 
+                    woort_struct_get_float(WOORT_RETURN_SLOT, i);
             }
         });
 
@@ -2996,7 +2945,7 @@ WOORT_API woort_api wojeapi_audio_source_update(void)
 WOORT_API woort_api wojeapi_audio_source_play(void)
 {
     jeecs::basic::resource<jeecs::audio::source>* source =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(wo_pointer(0));
+        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(woort_gcpointer(0));
 
     (*source)->play();
 
@@ -3005,7 +2954,7 @@ WOORT_API woort_api wojeapi_audio_source_play(void)
 WOORT_API woort_api wojeapi_audio_source_stop(void)
 {
     jeecs::basic::resource<jeecs::audio::source>* source =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(wo_pointer(0));
+        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(woort_gcpointer(0));
 
     (*source)->stop();
 
@@ -3014,7 +2963,7 @@ WOORT_API woort_api wojeapi_audio_source_stop(void)
 WOORT_API woort_api wojeapi_audio_source_pause(void)
 {
     jeecs::basic::resource<jeecs::audio::source>* source =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(wo_pointer(0));
+        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(woort_gcpointer(0));
 
     (*source)->pause();
 
@@ -3023,9 +2972,9 @@ WOORT_API woort_api wojeapi_audio_source_pause(void)
 WOORT_API woort_api wojeapi_audio_source_set_buffer(void)
 {
     jeecs::basic::resource<jeecs::audio::source>* source =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(wo_pointer(0));
+        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(woort_gcpointer(0));
     jeecs::basic::resource<jeecs::audio::buffer>* buffer =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::buffer> *>(wo_pointer(1));
+        reinterpret_cast<jeecs::basic::resource<jeecs::audio::buffer> *>(woort_gcpointer(1));
 
     (*source)->set_playing_buffer(*buffer);
 
@@ -3033,18 +2982,15 @@ WOORT_API woort_api wojeapi_audio_source_set_buffer(void)
 }
 WOORT_API woort_api wojeapi_audio_source_set_filter(void)
 {
-    wo_value stacks = wo_reserve_stack(1, &args);
-    wo_value elem = stacks + 0;
-
     jeecs::basic::resource<jeecs::audio::source>* source =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(wo_pointer(0));
+        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(woort_gcpointer(0));
 
     std::optional<jeecs::basic::resource<jeecs::audio::filter>> filter;
-    if (wo_option_get(elem, 1))
+    if (woort_option_get(WOORT_RETURN_SLOT, 1))
     {
         filter.emplace(
-            *reinterpret_cast<jeecs::basic::resource<jeecs::audio::filter> *>(
-                wo_pointer(elem)));
+            *static_cast<jeecs::basic::resource<jeecs::audio::filter> *>(
+                woort_gcpointer(WOORT_RETURN_SLOT)));
     }
 
     (*source)->set_filter(filter);
@@ -3053,26 +2999,23 @@ WOORT_API woort_api wojeapi_audio_source_set_filter(void)
 }
 WOORT_API woort_api wojeapi_audio_source_bind_effect_slot_and_filter(void)
 {
-    wo_value stacks = wo_reserve_stack(1, &args);
-    wo_value elem = stacks + 0;
-
     jeecs::basic::resource<jeecs::audio::source>* source =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(wo_pointer(0));
+        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(woort_gcpointer(0));
 
     std::optional<jeecs::basic::resource<jeecs::audio::effect_slot>> effect_slot;
     std::optional<jeecs::basic::resource<jeecs::audio::filter>> filter;
 
-    if (wo_option_get(elem, 1))
+    if (woort_option_get(WOORT_RETURN_SLOT, 1))
     {
         effect_slot.emplace(
-            *reinterpret_cast<jeecs::basic::resource<jeecs::audio::effect_slot> *>(
-                wo_pointer(elem)));
+            *static_cast<jeecs::basic::resource<jeecs::audio::effect_slot> *>(
+                woort_gcpointer(WOORT_RETURN_SLOT)));
     }
-    if (wo_option_get(elem, 2))
+    if (woort_option_get(WOORT_RETURN_SLOT, 2))
     {
         filter.emplace(
-            *reinterpret_cast<jeecs::basic::resource<jeecs::audio::filter> *>(
-                wo_pointer(elem)));
+            *static_cast<jeecs::basic::resource<jeecs::audio::filter> *>(
+                woort_gcpointer(WOORT_RETURN_SLOT)));
     }
 
     (*source)->bind_effect_slot((size_t)woort_int(3), effect_slot, filter);
@@ -3082,21 +3025,24 @@ WOORT_API woort_api wojeapi_audio_source_bind_effect_slot_and_filter(void)
 WOORT_API woort_api wojeapi_audio_source_get_state(void)
 {
     jeecs::basic::resource<jeecs::audio::source>* source =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(wo_pointer(0));
+        static_cast<jeecs::basic::resource<jeecs::audio::source> *>(
+            woort_gcpointer(0));
 
-    return woort_ret_int((woort_integer_t)(*source)->get_state());
+    return woort_ret_int((woort_Int)(*source)->get_state());
 }
 WOORT_API woort_api wojeapi_audio_source_get_offset(void)
 {
     jeecs::basic::resource<jeecs::audio::source>* source =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(wo_pointer(0));
+        static_cast<jeecs::basic::resource<jeecs::audio::source> *>(
+            woort_gcpointer(0));
 
-    return woort_ret_int((woort_integer_t)(*source)->get_playing_offset());
+    return woort_ret_int((woort_Int)(*source)->get_playing_offset());
 }
 WOORT_API woort_api wojeapi_audio_source_set_offset(void)
 {
     jeecs::basic::resource<jeecs::audio::source>* source =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::source> *>(wo_pointer(0));
+        static_cast<jeecs::basic::resource<jeecs::audio::source> *>(
+            woort_gcpointer(0));
 
     (*source)->set_playing_offset((size_t)woort_int(1));
 
@@ -3230,16 +3176,16 @@ WOORT_API woort_api wojeapi_audio_effect_create(void)
     woolang_je_audio_effect_kind kind = (woolang_je_audio_effect_kind)woort_int(0);
     switch (kind)
     {
-#define woort_ret_jeal_new_effect(effect_type_name)                                                          \
-    woort_ret_gchandle(                                                                                      \
-                                                                                                      \
+#define woort_ret_jeal_new_effect(effect_type_name)                                                       \
+    woort_ret_gchandle(                                                                                   \
         new wo_je_effect_res_t(effect_type_name)(                                                         \
             jeecs::audio::effect<effect_type_name>::create()),                                            \
-        nullptr,                                                                                          \
+        WOORT_IGNORE,                                                                                     \
         [](void *p)                                                                                       \
         {                                                                                                 \
-            delete reinterpret_cast<jeecs::basic::resource<jeecs::audio::effect<effect_type_name>> *>(p); \
-        })
+            delete static_cast<jeecs::basic::resource<jeecs::audio::effect<effect_type_name>> *>(p);      \
+        },                                                                                                \
+        nullptr)
 
     case woolang_je_audio_effect_kind::REVERB:
         return woort_ret_jeal_new_effect(jeal_effect_reverb);
@@ -3280,15 +3226,15 @@ WOORT_API woort_api wojeapi_audio_effect_info(void)
     wo_value elem = stacks + 1;
     wo_value elem2 = stacks + 2;
 
-    void* effect_res_ptr = wo_pointer(0);
+    void* effect_res_ptr = woort_gcpointer(0);
     woolang_je_audio_effect_kind kind = (woolang_je_audio_effect_kind)woort_int(1);
 
     switch (kind)
     {
     case woolang_je_audio_effect_kind::REVERB:
     {
-        auto* effect =
-            reinterpret_cast<wo_je_effect_res_t(jeal_effect_reverb)*>(effect_res_ptr);
+        auto* effect = static_cast<wo_je_effect_res_t(jeal_effect_reverb)*>(
+            effect_res_ptr);
 
         auto* info = (*effect)->handle();
 
