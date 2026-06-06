@@ -352,24 +352,16 @@ WOORT_API woort_api je_gui_begintabitem_open(void)
 
 ImVec2 val2vec2(woort_value v)
 {
-    woort_value tmp;
-    woort_struct_get(&tmp, v, 0);
-    float x = woort_float(tmp);
-    woort_struct_get(&tmp, v, 1);
-    float y = woort_float(tmp);
+    const float x = woort_struct_get_float(v, 0);
+    const float y = woort_struct_get_float(v, 1);
     return ImVec2(x, y);
 }
 ImVec4 val2vec4(woort_value v)
 {
-    woort_value tmp;
-    woort_struct_get(&tmp, v, 0);
-    float x = woort_float(tmp);
-    woort_struct_get(&tmp, v, 1);
-    float y = woort_float(tmp);
-    woort_struct_get(&tmp, v, 2);
-    float z = woort_float(tmp);
-    woort_struct_get(&tmp, v, 3);
-    float w = woort_float(tmp);
+    const float x = woort_struct_get_float(v, 0);
+    const float y = woort_struct_get_float(v, 1);
+    const float z = woort_struct_get_float(v, 2);
+    const float w = woort_struct_get_float(v, 3);
     return ImVec4(x, y, z, w);
 }
 
@@ -394,30 +386,20 @@ WOORT_API woort_api je_gui_pop_clip_rect(void)
 
 ImU32 val2color32(woort_value v)
 {
-    woort_value tmp;
-    woort_struct_get(&tmp, v, 0);
-    int x = woort_int(tmp);
-    woort_struct_get(&tmp, v, 1);
-    int y = woort_int(tmp);
-    woort_struct_get(&tmp, v, 2);
-    int z = woort_int(tmp);
-    woort_struct_get(&tmp, v, 3);
-    int w = woort_int(tmp);
+    const int x = (int)woort_struct_get_int(v, 0);
+    const int y = (int)woort_struct_get_int(v, 1);
+    const int z = (int)woort_struct_get_int(v, 2);
+    const int w = (int)woort_struct_get_int(v, 3);
 
     return IM_COL32(x, y, z, w);
 }
 
 ImVec4 val2colorf4(woort_value v)
 {
-    woort_value tmp;
-    woort_struct_get(&tmp, v, 0);
-    float x = (float)woort_int(tmp);
-    woort_struct_get(&tmp, v, 1);
-    float y = (float)woort_int(tmp);
-    woort_struct_get(&tmp, v, 2);
-    float z = (float)woort_int(tmp);
-    woort_struct_get(&tmp, v, 3);
-    float w = (float)woort_int(tmp);
+    const float x = woort_struct_get_float(v, 0);
+    const float y = woort_struct_get_float(v, 1);
+    const float z = woort_struct_get_float(v, 2);
+    const float w = woort_struct_get_float(v, 3);
 
     return ImVec4(
         x / 255.0f,
@@ -1555,18 +1537,17 @@ WOORT_API woort_api je_gui_combo(void)
 
 WOORT_API woort_api je_gui_launch(void)
 {
-    woort_VMRuntime* parent = woort_VMRuntime_current();
     woort_VMRuntime* new_vm = woort_vm_create();
 
-    woort_VMRuntime* prev = woort_vm_swap(new_vm);
+    woort_VMRuntime* const last = woort_vm_swap(new_vm);
     {
         woort_value fn;
         woort_push_reserve(1, &fn);
-        woort_import_value(fn, parent, 0);
+        woort_import_value(fn, last, 0);
         woort_spawn(WOORT_IGNORE, fn);
         woort_pop(1);
     }
-    woort_vm_swap(prev);
+    woort_vm_swap(last);
 
     gui_wo_job_coroutine* guico = new gui_wo_job_coroutine;
     guico->work_vm = new_vm;

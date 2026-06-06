@@ -453,16 +453,23 @@ namespace Renderer
     }
     namespace Shaders
     {
-        extern("libjoyecs", "wojeapi_towoo_renderer_shaders_set_uniform")
+        /* extern("libjoyecs", "wojeapi_towoo_renderer_shaders_set_uniform_i") */
+        /* extern("libjoyecs", "wojeapi_towoo_renderer_shaders_set_uniform_r") */
+        /* extern("libjoyecs", "wojeapi_towoo_renderer_shaders_set_uniform_v") */
+        extern("libjoyecs",
+            val is int ? "wojeapi_towoo_renderer_shaders_set_uniform_i"
+                | val is real ? "wojeapi_towoo_renderer_shaders_set_uniform_r"
+                | "wojeapi_towoo_renderer_shaders_set_uniform_v")
             public func set_uniform<T>(self: Shaders, name: string, val: T)=> void
                 where val is int
             || val is real
             || val is vec2
             || val is vec3
             || val is vec4;
-            extern("libjoyecs", "wojeapi_towoo_renderer_shaders_set_shaders")
-                public func set_shaders(self: Shaders, shaders: array<je::graphic::shader>)=> void;
-                
+        ;
+        extern("libjoyecs", "wojeapi_towoo_renderer_shaders_set_shaders")
+            public func set_shaders(self: Shaders, shaders: array<je::graphic::shader>)=> void;
+            
         extern("libjoyecs", "wojeapi_towoo_renderer_shaders_get_shaders")
             public func get_shaders(self: Shaders)=> array<je::graphic::shader>;
     }
@@ -489,7 +496,7 @@ namespace Animation
             
         extern("libjoyecs", "wojeapi_towoo_animation_frameanimation_stop_animation")
             public func stop_action(self: FrameAnimation, animation_id: int)=> void;
-
+            
         extern("libjoyecs", "wojeapi_towoo_animation_frameanimation_is_playing")
             public func is_playing(self: FrameAnimation, animation_id: int)=> bool;
     }
