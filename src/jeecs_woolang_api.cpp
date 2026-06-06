@@ -2297,87 +2297,102 @@ WOORT_API woort_api wojeapi_towoo_update_component(void)
 
     woort_vm* const last = woort_vm_swap(nullptr);
 
-    if (jeecs_file* texfile = jeecs_file_open(component_path))
+    jeecs_file* const texfile = jeecs_file_open(component_path);
+    if (texfile == nullptr)
     {
-        char* src = (char*)malloc(texfile->m_file_length + 1);
-        jeecs_file_read(src, sizeof(char), texfile->m_file_length, texfile);
-        src[texfile->m_file_length] = 0;
-
-        wo_vm cvm = wo_create_vm();
-        bool result = wo_load_binary(ccomponent_path, src, texfile->m_file_length);
-
-        jeecs_file_close(texfile);
-
-        free(src);
-        if (result)
-        {
-            // Invoke "_init_towoo_component", if failed... boom!
-            wo_unref_value initfunc;
-            if (wo_extern_symb(&initfunc, c"_init_towoo_component") == WO_FALSE)
-            {
-                jeecs::debug::logerr("Failed to register: '%s' cannot find '_init_towoo_component' in '%s', "
-                    "forget to import je/towoo/component.wo ?",
-                    component_name, component_path);
-                wo_close_vm(cvm);
-            }
-            else
-            {
-                if (nullptr == wo_bootup(cWO_FALSE))
-                {
-                    jeecs::debug::logerr("Failed to register: '%s', init failed: '%s'.",
-                        component_name, wo_get_runtime_error(cvm));
-                    wo_close_vm(cvm);
-                }
-                else
-                {
-                    auto entered = wo_enter_gcguard(cvm);
-
-                    wo_value cvm_s = wo_reserve_stack(c1, nullptr);
-                    wo_set_string(cvm_s + 0, component_name);
-                    auto* retval = wo_invoke_value(c & initfunc, 1, nullptr, &cvm_s);
-                    wo_pop_stack(c1);
-
-                    if (entered)
-                        wo_leave_gcguard(cvm);
-
-                    if (nullptr == retval)
-                    {
-                        jeecs::debug::logerr("Failed to register: '%s', '_init_towoo_component' failed: '%s'.",
-                            component_name, wo_get_runtime_error(cvm));
-                        wo_close_vm(cvm);
-                    }
-                    else
-                    {
-                        auto result = woort_ret_option_value(retval);
-                        wo_close_vm(cvm);
-
-                        (void)woort_vm_swap(last);
-
-                        return result;
-                    }
-                }
-            }
-        }
-        else
-        {
-            jeecs::debug::logerr("Failed to register: '%s' failed to compile:\n%s",
-                component_name, wo_get_compile_error(cWO_NEED_COLOR));
-            wo_close_vm(cvm);
-        }
+        jeecs::debug::logerr("Failed to register: '%s', unable to open file '%s'.",
+            component_name, component_path);
     }
     else
     {
-        jeecs::debug::logerr("Failed to register: '%s' unable to open file '%s'.",
-            component_name, component_path);
-    }
+        char* const src = (char*)malloc(texfile->m_file_length);
+        if (src == nullptr)
+        {
+            jeecs::debug::logerr("Failed to register: '%s', out of memory.", component_name);
+        }
+        else
+        {
+            (void)jeecs_file_read(src, sizeof(char), texfile->m_file_length, texfile);
+ 
+            wo_CompileErrors* cerror;
+            woort_CodeEnv* const cenv =
+                wo_load_binary(component_path, src, texfile->m_file_length, &cerror);
 
+            jeecs_file_close(texfile);
+            free(src);
+
+            if (cenv == nullptr)
+            {
+                jeecs::debug::logerr("Failed to register: '%s' failed to compile:\n%s",
+                    component_name, wo_get_compile_error(cerror, WO_COLORFUL));
+                wo_compile_errors_free(cerror);
+            }
+            else
+            {
+                woort_vm* const vmm = woort_vm_create();
+                if (vmm == nullptr)
+                {
+                    jeecs::debug::logerr(
+                        "Failed to register: '%s' failed to create vm.", component_name);
+                }
+                else
+                {
+                    woort_vm* const last2 = woort_vm_swap(vmm);
+                    {
+                        woort_value s2;
+                        if (!woort_push_reserve(2, &s2))
+                        {
+                            jeecs::debug::logerr(
+                                "Failed to register: '%s', failed to reserve stack.", component_name);
+                        }
+                        else if (!woort_load_extern_const(s2 + 1, cenv, "_init_towoo_component"))
+                        {
+                            jeecs::debug::logerr("Failed to register: '%s' cannot find '_init_towoo_component' in '%s', "
+                                "forget to import je/towoo/component.wo ?",
+                                component_name, component_path);
+                        }
+                        else if (WOORT_VM_CALL_STATUS_NORMAL != woort_bootup_codeenv(WOORT_IGNORE, cenv))
+                        {
+                            jeecs::debug::logerr("Failed to register: '%s', init failed: '%s'.",
+                                component_name, woort_vm_get_runtime_error(vmm));
+                        }
+                        else
+                        {
+                            woort_set_string(s2 + 0, component_name);
+                            if (WOORT_VM_CALL_STATUS_NORMAL != woort_invoke(s2 + 1, s2 + 1))
+                            {
+                                jeecs::debug::logerr("Failed to register: '%s', '_init_towoo_component' failed: '%s'.",
+                                    component_name, woort_vm_get_runtime_error(vmm));
+                            }
+                            else
+                            {
+                                (void*)woort_vm_swap(last2);
+                                woort_codeenv_drop(cenv);
+                                (void)woort_vm_swap(last);
+
+                                woort_import_value(WOORT_RETURN_SLOT, vmm, s2 + 1);
+                                woort_vm_close(vmm);
+
+                                return woort_ret_option_value(WOORT_RETURN_SLOT);
+                            }
+                        }
+                    }
+                    (void*)woort_vm_swap(last2);
+                    woort_vm_close(vmm);
+                }
+                woort_codeenv_drop(cenv);
+            }
+        }
+    }
     (void)woort_vm_swap(last);
     return woort_ret_option_none();
 }
 
 WOORT_API woort_api wojeapi_towoo_unregister_component(void)
 {
-    const jeecs::typing::type_info* t = (const jeecs::typing::type_info*)wo_pointer(0);
+    const jeecs::typing::type_info* t = 
+        (const jeecs::typing::type_info*)woort_pointer(0);
+
     je_typing_unregister(t);
 
     return woort_ret_void();
@@ -2385,19 +2400,18 @@ WOORT_API woort_api wojeapi_towoo_unregister_component(void)
 
 WOORT_API woort_api wojeapi_towoo_update_api(void)
 {
-    auto leaved = wo_leave_gcguard();
+    woort_vm* const last = woort_vm_swap(nullptr);
     {
         je_towoo_update_api();
     }
-    if (leaved)
-        wo_enter_gcguard();
+    (void)woort_vm_swap(last);
 
     return woort_ret_void();
 }
 
 WOORT_API woort_api wojeapi_typemgr_get_unregister_count(void)
 {
-    return woort_ret_int((woort_integer_t)jedbg_get_unregister_type_count());
+    return woort_ret_int((woort_Int)jedbg_get_unregister_type_count());
 }
 WOORT_API woort_api wojeapi_get_woolang_commit_sha(void)
 {
@@ -2405,13 +2419,14 @@ WOORT_API woort_api wojeapi_get_woolang_commit_sha(void)
 }
 WOORT_API woort_api wojeapi_get_all_internal_scripts(void)
 {
-    wo_value s = wo_reserve_stack(3, &args);
+    woort_value s;
+    if (!woort_push_reserve(2, &s))
+        return woort_ret_panic("Stack overflow.");
 
-    wo_value result = s + 0;
-    wo_value key = s + 1;
-    wo_value val = s + 2;
+    const woort_value result = s + 0;
+    const woort_value val = s + 1;
 
-    wo_set_map(result, 0);
+    woort_set_map(result);
 
     auto* iter = wo_open_virtual_file_iter();
     while (woort_string_t vpath = wo_next_virtual_file_iter(iter))
@@ -2421,9 +2436,8 @@ WOORT_API woort_api wojeapi_get_all_internal_scripts(void)
             size_t len;
             auto* dat = wo_virtual_file_data(vfhandle, &len);
 
-            wo_set_string(key, vpath);
             wo_set_buffer(val, dat, len);
-            wo_map_set(result, key, val);
+            woort_map_set_by_string(result, vpath, val);
         }
     }
     wo_close_virtual_file_iter(iter);
