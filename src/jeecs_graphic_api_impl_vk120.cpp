@@ -412,7 +412,7 @@ namespace jeecs::graphic::api::vk120
             template <typename FT>
             FT api(const char* name)
             {
-                auto* result_ft = reinterpret_cast<FT>(wo_load_func(_instance, name));
+                auto* result_ft = reinterpret_cast<FT>(woort_dylib_load_func(_instance, name));
                 if (result_ft == nullptr)
                 {
                     jeecs::debug::logfatal("Failed to get vulkan library api: '%s'.", name);

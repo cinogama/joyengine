@@ -4862,15 +4862,15 @@ namespace jeecs
                     reinterpret_cast<T*>(_ptr)->GraphicUpdate();
             }
 
-            static void parse_from_script_type(void* _ptr, wo_vm vm, wo_value val)
+            static void parse_from_script_type(void* _ptr, woort_value val)
             {
                 if constexpr (traits::has_JEScriptTypeInterface<T>)
-                    reinterpret_cast<T*>(_ptr)->JEParseFromScriptType(vm, val);
+                    reinterpret_cast<T*>(_ptr)->JEParseFromScriptType(val);
             }
-            static void parse_to_script_type(const void* _ptr, wo_vm vm, wo_value val)
+            static void parse_to_script_type(const void* _ptr, woort_value val)
             {
                 if constexpr (traits::has_JEScriptTypeInterface<T>)
-                    reinterpret_cast<const T*>(_ptr)->JEParseToScriptType(vm, val);
+                    reinterpret_cast<const T*>(_ptr)->JEParseToScriptType(val);
             }
         };
     }
@@ -6328,7 +6328,7 @@ namespace jeecs
                 membt,
                 membname,
                 nullptr,
-                nullptr,
+                WOORT_IGNORE,
                 member_offset);
         }
 

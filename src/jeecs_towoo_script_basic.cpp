@@ -382,9 +382,11 @@ namespace jeecs
                             woort_Value tmp;
 
                             // TODO: Not impled yet.
-                            woort_GC_Pin_get_internal_value_without_barrier(&tmp, member->m_woovalue_init_may_null, 0);
-                            wo_pin_value_get(&tmp, member->m_woovalue_init_may_null);
-                            wo_pin_value_set_dup(val->m_pin_value, &tmp);
+                            woort_GC_Pin_get_internal_value_without_barrier(
+                                &tmp, member->m_woovalue_init_may_null, 0);
+
+                            //wo_pin_value_get(&tmp, member->m_woovalue_init_may_null);
+                            //wo_pin_value_set_dup(val->m_pin_value, &tmp);
                         }
 
                         member = member->m_next_member;
@@ -1106,14 +1108,14 @@ void wo_set_quat(woort_value target, const jeecs::math::quat& v)
 template <typename T>
 T& wo_component(woort_value val)
 {
-    _wo_value tmp;
+    woort_Value tmp;
     wo_struct_get(&tmp, val, 0);
     return *static_cast<T*>(woort_pointer(&tmp));
 }
 template <typename T>
 T* wo_option_component(woort_value val)
 {
-    _wo_value tmp;
+    woort_Value tmp;
     if (wo_option_get(&tmp, val))
     {
         wo_struct_get(&tmp, &tmp, 0);

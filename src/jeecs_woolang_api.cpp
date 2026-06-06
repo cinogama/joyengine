@@ -3478,13 +3478,9 @@ WOORT_API woort_api wojeapi_audio_effect_info(void)
 }
 WOORT_API woort_api wojeapi_audio_effect_update(void)
 {
-    wo_value stacks = wo_reserve_stack(2, &args);
-    wo_value elem = stacks + 0;
-    wo_value elem2 = stacks + 1;
-
-    void* effect = wo_pointer(0);
+    void* effect = woort_gcpointer(0);
     woolang_je_audio_effect_kind kind = (woolang_je_audio_effect_kind)woort_int(1);
-    wo_value updated_info = 2;
+    const woort_value updated_info = 2;
 
     switch (kind)
     {
@@ -3495,44 +3491,20 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
 
         (*effect_instance)->update([&](jeal_effect_reverb* eff)
             {
-                wo_struct_get(elem, updated_info, 0);
-                eff->m_density = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 1);
-                eff->m_diffusion = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 2);
-                eff->m_gain = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 3);
-                eff->m_gain_hf = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 4);
-                eff->m_decay_time = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 5);
-                eff->m_decay_hf_ratio = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 6);
-                eff->m_reflections_gain = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 7);
-                eff->m_reflections_delay = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 8);
-                eff->m_late_reverb_gain = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 9);
-                eff->m_late_reverb_delay = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 10);
-                eff->m_air_absorption_gain_hf = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 11);
-                eff->m_room_rolloff_factor = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 12);
-                eff->m_decay_hf_limit = (wo_bool_t)wo_bool(elem); });
+                eff->m_density = woort_struct_get_float(updated_info, 0);
+                eff->m_diffusion = woort_struct_get_float(updated_info, 1);
+                eff->m_gain = woort_struct_get_float(updated_info, 2);
+                eff->m_gain_hf = woort_struct_get_float(updated_info, 3);
+                eff->m_decay_time = woort_struct_get_float(updated_info, 4);
+                eff->m_decay_hf_ratio = woort_struct_get_float(updated_info, 5);
+                eff->m_reflections_gain = woort_struct_get_float(updated_info, 6);
+                eff->m_reflections_delay = woort_struct_get_float(updated_info, 7);
+                eff->m_late_reverb_gain = woort_struct_get_float(updated_info, 8);
+                eff->m_late_reverb_delay = woort_struct_get_float(updated_info, 9);
+                eff->m_air_absorption_gain_hf = woort_struct_get_float(updated_info, 10);
+                eff->m_room_rolloff_factor = woort_struct_get_float(updated_info, 11);
+                eff->m_decay_hf_limit = woort_struct_get_bool(updated_info, 12);
+            });
         break;
     }
     case woolang_je_audio_effect_kind::CHORUS:
@@ -3542,23 +3514,13 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
 
         (*effect_instance)->update([&](jeal_effect_chorus* eff)
             {
-                wo_struct_get(elem, updated_info, 0);
-                eff->m_waveform = (jeal_effect_chorus::waveform)woort_int(elem);
-
-                wo_struct_get(elem, updated_info, 1);
-                eff->m_phase = (int)woort_int(elem);
-
-                wo_struct_get(elem, updated_info, 2);
-                eff->m_rate = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 3);
-                eff->m_depth = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 4);
-                eff->m_feedback = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 5);
-                eff->m_delay = woort_float(elem); });
+                eff->m_waveform = (jeal_effect_chorus::waveform)woort_struct_get_int(updated_info, 0);
+                eff->m_phase = (int)woort_struct_get_int(updated_info, 1);
+                eff->m_rate = woort_struct_get_float(updated_info, 2);
+                eff->m_depth = woort_struct_get_float(updated_info, 3);
+                eff->m_feedback = woort_struct_get_float(updated_info, 4);
+                eff->m_delay = woort_struct_get_float(updated_info, 5);
+            });
         break;
     }
     case woolang_je_audio_effect_kind::DISTORTION:
@@ -3568,20 +3530,12 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
 
         (*effect_instance)->update([&](jeal_effect_distortion* eff)
             {
-                wo_struct_get(elem, updated_info, 0);
-                eff->m_edge = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 1);
-                eff->m_gain = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 2);
-                eff->m_lowpass_cutoff = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 3);
-                eff->m_equalizer_center_freq = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 4);
-                eff->m_equalizer_bandwidth = woort_float(elem); });
+                eff->m_edge = woort_struct_get_float(updated_info, 0);
+                eff->m_gain = woort_struct_get_float(updated_info, 1);
+                eff->m_lowpass_cutoff = woort_struct_get_float(updated_info, 2);
+                eff->m_equalizer_center_freq = woort_struct_get_float(updated_info, 3);
+                eff->m_equalizer_bandwidth = woort_struct_get_float(updated_info, 4);
+            });
         break;
     }
     case woolang_je_audio_effect_kind::ECHO:
@@ -3591,20 +3545,12 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
 
         (*effect_instance)->update([&](jeal_effect_echo* eff)
             {
-                wo_struct_get(elem, updated_info, 0);
-                eff->m_delay = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 1);
-                eff->m_lr_delay = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 2);
-                eff->m_damping = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 3);
-                eff->m_feedback = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 4);
-                eff->m_spread = woort_float(elem); });
+                eff->m_delay = woort_struct_get_float(updated_info, 0);
+                eff->m_lr_delay = woort_struct_get_float(updated_info, 1);
+                eff->m_damping = woort_struct_get_float(updated_info, 2);
+                eff->m_feedback = woort_struct_get_float(updated_info, 3);
+                eff->m_spread = woort_struct_get_float(updated_info, 4);
+            });
         break;
     }
     case woolang_je_audio_effect_kind::FLANGER:
@@ -3614,23 +3560,13 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
 
         (*effect_instance)->update([&](jeal_effect_flanger* eff)
             {
-                wo_struct_get(elem, updated_info, 0);
-                eff->m_waveform = (jeal_effect_flanger::waveform)woort_int(elem);
-
-                wo_struct_get(elem, updated_info, 1);
-                eff->m_phase = (int)woort_int(elem);
-
-                wo_struct_get(elem, updated_info, 2);
-                eff->m_rate = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 3);
-                eff->m_depth = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 4);
-                eff->m_feedback = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 5);
-                eff->m_delay = woort_float(elem); });
+                eff->m_waveform = (jeal_effect_flanger::waveform)woort_struct_get_int(updated_info, 0);
+                eff->m_phase = (int)woort_struct_get_int(updated_info, 1);
+                eff->m_rate = woort_struct_get_float(updated_info, 2);
+                eff->m_depth = woort_struct_get_float(updated_info, 3);
+                eff->m_feedback = woort_struct_get_float(updated_info, 4);
+                eff->m_delay = woort_struct_get_float(updated_info, 5);
+            });
         break;
     }
     case woolang_je_audio_effect_kind::FREQUENCY_SHIFTER:
@@ -3640,14 +3576,10 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
 
         (*effect_instance)->update([&](jeal_effect_frequency_shifter* eff)
             {
-                wo_struct_get(elem, updated_info, 0);
-                eff->m_frequency = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 1);
-                eff->m_left_direction = (jeal_effect_frequency_shifter::direction)woort_int(elem);
-
-                wo_struct_get(elem, updated_info, 2);
-                eff->m_right_direction = (jeal_effect_frequency_shifter::direction)woort_int(elem); });
+                eff->m_frequency = woort_struct_get_float(updated_info, 0);
+                eff->m_left_direction = (jeal_effect_frequency_shifter::direction)woort_struct_get_int(updated_info, 1);
+                eff->m_right_direction = (jeal_effect_frequency_shifter::direction)woort_struct_get_int(updated_info, 2);
+            });
         break;
     }
     case woolang_je_audio_effect_kind::VOCAL_MORPHER:
@@ -3657,23 +3589,13 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
 
         (*effect_instance)->update([&](jeal_effect_vocal_morpher* eff)
             {
-                wo_struct_get(elem, updated_info, 0);
-                eff->m_phoneme_a = (jeal_effect_vocal_morpher::phoneme)woort_int(elem);
-
-                wo_struct_get(elem, updated_info, 1);
-                eff->m_phoneme_a_coarse_tuning = (int)woort_int(elem);
-
-                wo_struct_get(elem, updated_info, 2);
-                eff->m_phoneme_b = (jeal_effect_vocal_morpher::phoneme)woort_int(elem);
-
-                wo_struct_get(elem, updated_info, 3);
-                eff->m_phoneme_b_coarse_tuning = (int)woort_int(elem);
-
-                wo_struct_get(elem, updated_info, 4);
-                eff->m_waveform = (jeal_effect_vocal_morpher::waveform)woort_int(elem);
-
-                wo_struct_get(elem, updated_info, 5);
-                eff->m_rate = woort_float(elem); });
+                eff->m_phoneme_a = (jeal_effect_vocal_morpher::phoneme)woort_struct_get_int(updated_info, 0);
+                eff->m_phoneme_a_coarse_tuning = (int)woort_struct_get_int(updated_info, 1);
+                eff->m_phoneme_b = (jeal_effect_vocal_morpher::phoneme)woort_struct_get_int(updated_info, 2);
+                eff->m_phoneme_b_coarse_tuning = (int)woort_struct_get_int(updated_info, 3);
+                eff->m_waveform = (jeal_effect_vocal_morpher::waveform)woort_struct_get_int(updated_info, 4);
+                eff->m_rate = woort_struct_get_float(updated_info, 5);
+            });
         break;
     }
     case woolang_je_audio_effect_kind::PITCH_SHIFTER:
@@ -3683,11 +3605,9 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
 
         (*effect_instance)->update([&](jeal_effect_pitch_shifter* eff)
             {
-                wo_struct_get(elem, updated_info, 0);
-                eff->m_coarse_tune = (int)woort_int(elem);
-
-                wo_struct_get(elem, updated_info, 1);
-                eff->m_fine_tune = (int)woort_int(elem); });
+                eff->m_coarse_tune = (int)woort_struct_get_int(updated_info, 0);
+                eff->m_fine_tune = (int)woort_struct_get_int(updated_info, 1);
+            });
         break;
     }
     case woolang_je_audio_effect_kind::RING_MODULATOR:
@@ -3697,14 +3617,10 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
 
         (*effect_instance)->update([&](jeal_effect_ring_modulator* eff)
             {
-                wo_struct_get(elem, updated_info, 0);
-                eff->m_frequency = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 1);
-                eff->m_highpass_cutoff = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 2);
-                eff->m_waveform = (jeal_effect_ring_modulator::waveform)woort_int(elem); });
+                eff->m_frequency = woort_struct_get_float(updated_info, 0);
+                eff->m_highpass_cutoff = woort_struct_get_float(updated_info, 1);
+                eff->m_waveform = (jeal_effect_ring_modulator::waveform)woort_struct_get_int(updated_info, 2);
+            });
         break;
     }
     case woolang_je_audio_effect_kind::AUTOWAH:
@@ -3714,17 +3630,11 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
 
         (*effect_instance)->update([&](jeal_effect_autowah* eff)
             {
-                wo_struct_get(elem, updated_info, 0);
-                eff->m_attack_time = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 1);
-                eff->m_release_time = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 2);
-                eff->m_resonance = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 3);
-                eff->m_peak_gain = woort_float(elem); });
+                eff->m_attack_time = woort_struct_get_float(updated_info, 0);
+                eff->m_release_time = woort_struct_get_float(updated_info, 1);
+                eff->m_resonance = woort_struct_get_float(updated_info, 2);
+                eff->m_peak_gain = woort_struct_get_float(updated_info, 3);
+            });
         break;
     }
     case woolang_je_audio_effect_kind::COMPRESSOR:
@@ -3734,8 +3644,8 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
 
         (*effect_instance)->update([&](jeal_effect_compressor* eff)
             {
-                wo_struct_get(elem, updated_info, 0);
-                eff->m_enabled = (wo_bool_t)wo_bool(elem); });
+                eff->m_enabled = woort_struct_get_bool(updated_info, 0);
+            });
         break;
     }
     case woolang_je_audio_effect_kind::EQUALIZER:
@@ -3745,35 +3655,17 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
 
         (*effect_instance)->update([&](jeal_effect_equalizer* eff)
             {
-                wo_struct_get(elem, updated_info, 0);
-                eff->m_low_gain = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 1);
-                eff->m_low_cutoff = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 2);
-                eff->m_mid1_gain = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 3);
-                eff->m_mid1_center = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 4);
-                eff->m_mid1_width = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 5);
-                eff->m_mid2_gain = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 6);
-                eff->m_mid2_center = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 7);
-                eff->m_mid2_width = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 8);
-                eff->m_high_gain = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 9);
-                eff->m_high_cutoff = woort_float(elem); });
+                eff->m_low_gain = woort_struct_get_float(updated_info, 0);
+                eff->m_low_cutoff = woort_struct_get_float(updated_info, 1);
+                eff->m_mid1_gain = woort_struct_get_float(updated_info, 2);
+                eff->m_mid1_center = woort_struct_get_float(updated_info, 3);
+                eff->m_mid1_width = woort_struct_get_float(updated_info, 4);
+                eff->m_mid2_gain = woort_struct_get_float(updated_info, 5);
+                eff->m_mid2_center = woort_struct_get_float(updated_info, 6);
+                eff->m_mid2_width = woort_struct_get_float(updated_info, 7);
+                eff->m_high_gain = woort_struct_get_float(updated_info, 8);
+                eff->m_high_cutoff = woort_struct_get_float(updated_info, 9);
+            });
         break;
     }
     case woolang_je_audio_effect_kind::EAXREVERB:
@@ -3783,82 +3675,38 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
 
         (*effect_instance)->update([&](jeal_effect_eaxreverb* eff)
             {
-                wo_struct_get(elem, updated_info, 0);
-                eff->m_density = woort_float(elem);
+                eff->m_density = woort_struct_get_float(updated_info, 0);
+                eff->m_diffusion = woort_struct_get_float(updated_info, 1);
+                eff->m_gain = woort_struct_get_float(updated_info, 2);
+                eff->m_gain_hf = woort_struct_get_float(updated_info, 3);
+                eff->m_gain_lf = woort_struct_get_float(updated_info, 4);
+                eff->m_decay_time = woort_struct_get_float(updated_info, 5);
+                eff->m_decay_hf_ratio = woort_struct_get_float(updated_info, 6);
+                eff->m_decay_lf_ratio = woort_struct_get_float(updated_info, 7);
+                eff->m_reflections_gain = woort_struct_get_float(updated_info, 8);
+                eff->m_reflections_delay = woort_struct_get_float(updated_info, 9);
 
-                wo_struct_get(elem, updated_info, 1);
-                eff->m_diffusion = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 2);
-                eff->m_gain = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 3);
-                eff->m_gain_hf = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 4);
-                eff->m_gain_lf = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 5);
-                eff->m_decay_time = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 6);
-                eff->m_decay_hf_ratio = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 7);
-                eff->m_decay_lf_ratio = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 8);
-                eff->m_reflections_gain = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 9);
-                eff->m_reflections_delay = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 10);
+                woort_struct_get(WOORT_RETURN_SLOT, updated_info, 10);
                 for (uint16_t i = 0; i < 3; ++i)
-                {
-                    wo_struct_get(elem2, elem, i);
-                    eff->m_reflections_pan_xyz[i] = woort_float(elem2);
-                }
+                    eff->m_reflections_pan_xyz[i] = woort_struct_get_float(WOORT_RETURN_SLOT, i);
 
-                wo_struct_get(elem, updated_info, 11);
-                eff->m_late_reverb_gain = woort_float(elem);
+                eff->m_late_reverb_gain = woort_struct_get_float(updated_info, 11);
+                eff->m_late_reverb_delay = woort_struct_get_float(updated_info, 12);
 
-                wo_struct_get(elem, updated_info, 12);
-                eff->m_late_reverb_delay = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 13);
+                woort_struct_get(WOORT_RETURN_SLOT, updated_info, 13);
                 for (uint16_t i = 0; i < 3; ++i)
-                {
-                    wo_struct_get(elem2, elem, i);
-                    eff->m_late_reverb_pan_xyz[i] = woort_float(elem2);
-                }
+                    eff->m_late_reverb_pan_xyz[i] = woort_struct_get_float(WOORT_RETURN_SLOT, i);
 
-                wo_struct_get(elem, updated_info, 14);
-                eff->m_echo_time = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 15);
-                eff->m_echo_depth = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 16);
-                eff->m_modulation_time = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 17);
-                eff->m_modulation_depth = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 18);
-                eff->m_air_absorption_gain_hf = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 19);
-                eff->m_hf_reference = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 20);
-                eff->m_lf_reference = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 21);
-                eff->m_room_rolloff_factor = woort_float(elem);
-
-                wo_struct_get(elem, updated_info, 22);
-                eff->m_decay_hf_limit = (wo_bool_t)wo_bool(elem); });
+                eff->m_echo_time = woort_struct_get_float(updated_info, 14);
+                eff->m_echo_depth = woort_struct_get_float(updated_info, 15);
+                eff->m_modulation_time = woort_struct_get_float(updated_info, 16);
+                eff->m_modulation_depth = woort_struct_get_float(updated_info, 17);
+                eff->m_air_absorption_gain_hf = woort_struct_get_float(updated_info, 18);
+                eff->m_hf_reference = woort_struct_get_float(updated_info, 19);
+                eff->m_lf_reference = woort_struct_get_float(updated_info, 20);
+                eff->m_room_rolloff_factor = woort_struct_get_float(updated_info, 21);
+                eff->m_decay_hf_limit = woort_struct_get_bool(updated_info, 22);
+            });
         break;
     }
     default:
@@ -3871,60 +3719,64 @@ WOORT_API woort_api wojeapi_audio_effect_update(void)
 WOORT_API woort_api wojeapi_audio_effect_slot_create(void)
 {
     return woort_ret_gchandle(
-        vm,
-        new jeecs::basic::resource<jeecs::audio::effect_slot>(jeecs::audio::effect_slot::create()),
-        nullptr,
+        new jeecs::basic::resource<jeecs::audio::effect_slot>(
+            jeecs::audio::effect_slot::create()),
+        WOORT_IGNORE,
         [](void* p)
-        { delete reinterpret_cast<jeecs::basic::resource<jeecs::audio::effect_slot>*>(p); });
+        { 
+            delete static_cast<jeecs::basic::resource<jeecs::audio::effect_slot>*>(p); 
+        },
+        nullptr);
 }
 
 WOORT_API woort_api wojeapi_audio_effect_slot_bind_effect(void)
 {
     auto* effect_slot =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::effect_slot> *>(wo_pointer(0));
-    auto* effect = wo_pointer(1);
+        static_cast<jeecs::basic::resource<jeecs::audio::effect_slot> *>(
+            woort_gcpointer(0));
+    auto* effect = woort_gcpointer(1);
     woolang_je_audio_effect_kind kind = (woolang_je_audio_effect_kind)woort_int(2);
 
     switch (kind)
     {
     case woolang_je_audio_effect_kind::REVERB:
-        (*effect_slot)->bind_effect(*reinterpret_cast<wo_je_effect_res_t(jeal_effect_reverb)*>(effect));
+        (*effect_slot)->bind_effect(*static_cast<wo_je_effect_res_t(jeal_effect_reverb)*>(effect));
         break;
     case woolang_je_audio_effect_kind::CHORUS:
-        (*effect_slot)->bind_effect(*reinterpret_cast<wo_je_effect_res_t(jeal_effect_chorus)*>(effect));
+        (*effect_slot)->bind_effect(*static_cast<wo_je_effect_res_t(jeal_effect_chorus)*>(effect));
         break;
     case woolang_je_audio_effect_kind::DISTORTION:
-        (*effect_slot)->bind_effect(*reinterpret_cast<wo_je_effect_res_t(jeal_effect_distortion)*>(effect));
+        (*effect_slot)->bind_effect(*static_cast<wo_je_effect_res_t(jeal_effect_distortion)*>(effect));
         break;
     case woolang_je_audio_effect_kind::ECHO:
-        (*effect_slot)->bind_effect(*reinterpret_cast<wo_je_effect_res_t(jeal_effect_echo)*>(effect));
+        (*effect_slot)->bind_effect(*static_cast<wo_je_effect_res_t(jeal_effect_echo)*>(effect));
         break;
     case woolang_je_audio_effect_kind::FLANGER:
-        (*effect_slot)->bind_effect(*reinterpret_cast<wo_je_effect_res_t(jeal_effect_flanger)*>(effect));
+        (*effect_slot)->bind_effect(*static_cast<wo_je_effect_res_t(jeal_effect_flanger)*>(effect));
         break;
     case woolang_je_audio_effect_kind::FREQUENCY_SHIFTER:
-        (*effect_slot)->bind_effect(*reinterpret_cast<wo_je_effect_res_t(jeal_effect_frequency_shifter)*>(effect));
+        (*effect_slot)->bind_effect(*static_cast<wo_je_effect_res_t(jeal_effect_frequency_shifter)*>(effect));
         break;
     case woolang_je_audio_effect_kind::VOCAL_MORPHER:
-        (*effect_slot)->bind_effect(*reinterpret_cast<wo_je_effect_res_t(jeal_effect_vocal_morpher)*>(effect));
+        (*effect_slot)->bind_effect(*static_cast<wo_je_effect_res_t(jeal_effect_vocal_morpher)*>(effect));
         break;
     case woolang_je_audio_effect_kind::PITCH_SHIFTER:
-        (*effect_slot)->bind_effect(*reinterpret_cast<wo_je_effect_res_t(jeal_effect_pitch_shifter)*>(effect));
+        (*effect_slot)->bind_effect(*static_cast<wo_je_effect_res_t(jeal_effect_pitch_shifter)*>(effect));
         break;
     case woolang_je_audio_effect_kind::RING_MODULATOR:
-        (*effect_slot)->bind_effect(*reinterpret_cast<wo_je_effect_res_t(jeal_effect_ring_modulator)*>(effect));
+        (*effect_slot)->bind_effect(*static_cast<wo_je_effect_res_t(jeal_effect_ring_modulator)*>(effect));
         break;
     case woolang_je_audio_effect_kind::AUTOWAH:
-        (*effect_slot)->bind_effect(*reinterpret_cast<wo_je_effect_res_t(jeal_effect_autowah)*>(effect));
+        (*effect_slot)->bind_effect(*static_cast<wo_je_effect_res_t(jeal_effect_autowah)*>(effect));
         break;
     case woolang_je_audio_effect_kind::COMPRESSOR:
-        (*effect_slot)->bind_effect(*reinterpret_cast<wo_je_effect_res_t(jeal_effect_compressor)*>(effect));
+        (*effect_slot)->bind_effect(*static_cast<wo_je_effect_res_t(jeal_effect_compressor)*>(effect));
         break;
     case woolang_je_audio_effect_kind::EQUALIZER:
-        (*effect_slot)->bind_effect(*reinterpret_cast<wo_je_effect_res_t(jeal_effect_equalizer)*>(effect));
+        (*effect_slot)->bind_effect(*static_cast<wo_je_effect_res_t(jeal_effect_equalizer)*>(effect));
         break;
     case woolang_je_audio_effect_kind::EAXREVERB:
-        (*effect_slot)->bind_effect(*reinterpret_cast<wo_je_effect_res_t(jeal_effect_eaxreverb)*>(effect));
+        (*effect_slot)->bind_effect(*static_cast<wo_je_effect_res_t(jeal_effect_eaxreverb)*>(effect));
         break;
     default:
         return woort_ret_panic("Unknown audio effect type: %d", (int)kind);
@@ -3936,36 +3788,31 @@ WOORT_API woort_api wojeapi_audio_effect_slot_bind_effect(void)
 
 WOORT_API woort_api wojeapi_audio_effect_slot_info(void)
 {
-    wo_value stacks = wo_reserve_stack(2, &args);
-    wo_value result = stacks + 0;
-    wo_value elem = stacks + 1;
-
     auto* effect_slot =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::effect_slot> *>(wo_pointer(0));
+        static_cast<jeecs::basic::resource<jeecs::audio::effect_slot> *>(
+            woort_gcpointer(0));
 
     auto effect_slot_info = (*effect_slot)->handle();
 
-    wo_set_struct(result, 1);
+    woort_set_struct(WOORT_RETURN_SLOT, 1);
 
-    wo_set_float(elem, effect_slot_info->m_gain);
-    wo_struct_set(result, 0, elem);
+    woort_struct_set_float(WOORT_RETURN_SLOT, 0, effect_slot_info->m_gain);
 
-    return woort_ret_value(result);
+    return woort_ret();
 }
 
 WOORT_API woort_api wojeapi_audio_effect_slot_update(void)
 {
-    wo_value stacks = wo_reserve_stack(1, &args);
-    wo_value elem = stacks + 0;
-
     auto* effect_slot =
-        reinterpret_cast<jeecs::basic::resource<jeecs::audio::effect_slot> *>(wo_pointer(0));
-    wo_value info = 1;
+        static_cast<jeecs::basic::resource<jeecs::audio::effect_slot> *>(
+            woort_gcpointer(0));
+
+    const woort_value info = 1;
 
     (*effect_slot)->update([&](jeal_effect_slot* eff)
         {
-            wo_struct_get(elem, info, 0);
-            eff->m_gain = woort_float(elem); });
+            eff->m_gain = woort_struct_get_float(info, 0);
+        });
 
     return woort_ret_void();
 }
@@ -3974,7 +3821,7 @@ WOORT_API woort_api wojeapi_input_update_mouse_state(void)
 {
     auto group = (size_t)woort_int(0);
     auto key = (jeecs::input::mousecode)woort_int(1);
-    auto down = wo_bool(2);
+    auto down = woort_bool(2);
 
     je_io_update_mouse_state(group, key, down);
 
@@ -3990,7 +3837,7 @@ WOORT_API woort_api wojeapi_input_update_wheel(void)
 WOORT_API woort_api wojeapi_input_update_key_state(void)
 {
     auto key = (jeecs::input::keycode)woort_int(0);
-    auto down = wo_bool(1);
+    auto down = woort_bool(1);
 
     je_io_update_key_state(key, down);
 
