@@ -6,8 +6,8 @@ import je;
 import je::gui;
 
 import pkg::fsys;
-import pkg::vm;
 import pkg::buffer;
+import pkg::makenew;
 
 import builtin::editor::gui::main;
 import builtin::editor::gui::tilemap::main;

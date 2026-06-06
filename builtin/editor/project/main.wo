@@ -16,6 +16,7 @@ import pkg::process;
 import pkg::iterator;
 import pkg::singleton;
 import pkg::buffer;
+import pkg::makenew;
 
 import config;
 

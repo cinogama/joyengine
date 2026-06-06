@@ -5,7 +5,7 @@ no_compile = true
 [dependence.any]
 path = "pkg"
 
-[dependence.async]
+[dependence.dumpling]
 path = "pkg"
 src = "3rd/pkg"
 
@@ -13,7 +13,7 @@ src = "3rd/pkg"
 path = "pkg"
 src = "3rd/pkg"
 
-[dependence.dumpling]
+[dependence.async]
 path = "pkg"
 src = "3rd/pkg"
 
@@ -28,12 +28,12 @@ path = "pkg"
 path = "pkg"
 src = "3rd/pkg"
 
+[dependence.worst]
+path = "pkg"
+
 [dependence.crashhandler]
 path = "pkg"
 src = "3rd/pkg"
-
-[dependence.worst]
-path = "pkg"
 
 [dependence.decorator]
 path = "pkg"
@@ -42,19 +42,19 @@ path = "pkg"
 path = "pkg"
 src = "3rd/pkg"
 
-[dependence.guid]
-path = "pkg"
-src = "3rd/pkg"
-
 [dependence.socket]
 path = "pkg"
 src = "3rd/pkg"
 
-[dependence.image]
+[dependence.guid]
 path = "pkg"
 src = "3rd/pkg"
 
 [dependence.process]
+path = "pkg"
+src = "3rd/pkg"
+
+[dependence.image]
 path = "pkg"
 src = "3rd/pkg"
 
@@ -66,11 +66,11 @@ src = "3rd/pkg"
 path = "pkg"
 src = "3rd/pkg"
 
-[dependence.makenew]
+[dependence.math]
 path = "pkg"
 src = "3rd/pkg"
 
-[dependence.math]
+[dependence.makenew]
 path = "pkg"
 src = "3rd/pkg"
 
@@ -95,6 +95,10 @@ src = "3rd/pkg"
 
 [dependence.woshader]
 path = "pkg"
+
+[dependence.platform]
+path = "pkg"
+src = "3rd/pkg"
 
 [woolang]
 [test_dependence]

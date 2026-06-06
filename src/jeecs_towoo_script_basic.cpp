@@ -1106,21 +1106,19 @@ void wo_set_quat(woort_value target, const jeecs::math::quat& v)
 }
 
 template <typename T>
-T& wo_component(woort_value val)
+T& wo_component(woort_value val, woort_value tmp)
 {
-    woort_Value tmp;
-    wo_struct_get(&tmp, val, 0);
-    return *static_cast<T*>(woort_pointer(&tmp));
+    woort_struct_get(tmp, val, 0);
+    return *static_cast<T*>(woort_pointer(tmp));
 }
+
 template <typename T>
-T* wo_option_component(woort_value val)
+T* wo_option_component(woort_value val, woort_value tmp)
 {
-    woort_Value tmp;
-    if (wo_option_get(&tmp, val))
+    if (woort_option_get(tmp, val))
     {
-        wo_struct_get(&tmp, &tmp, 0);
-        return static_cast<T*>(
-            woort_pointer(&tmp));
+        woort_struct_get(tmp, tmp, 0);
+        return static_cast<T*>(woort_pointer(tmp));
     }
     return nullptr;
 }
@@ -1140,8 +1138,8 @@ WOORT_API woort_api wojeapi_towoo_ray_from_camera(void)
 {
     return woort_ret_gchandle(
         new jeecs::math::ray(
-            wo_component<jeecs::Transform::Translation>(0),
-            wo_component<jeecs::Camera::Projection>(1),
+            wo_component<jeecs::Transform::Translation>(0, WOORT_RETURN_SLOT),
+            wo_component<jeecs::Camera::Projection>(1, WOORT_RETURN_SLOT),
             wo_vec2(2),
             woort_bool(3)),
         WOORT_IGNORE,
@@ -1153,8 +1151,8 @@ WOORT_API woort_api wojeapi_towoo_ray_intersect_entity(void)
 {
     auto* ray = (jeecs::math::ray*)woort_gcpointer(0);
     auto result = ray->intersect_entity(
-        wo_component<jeecs::Transform::Translation>(1),
-        wo_option_component<jeecs::Renderer::Shape>(2),
+        wo_component<jeecs::Transform::Translation>(1, WOORT_RETURN_SLOT),
+        wo_option_component<jeecs::Renderer::Shape>(2, WOORT_RETURN_SLOT),
         woort_bool(3));
 
     if (result.intersected)
@@ -1227,7 +1225,8 @@ WOORT_API woort_api wojeapi_towoo_physics2d_collisionresult_all(void)
     if (!woort_push_reserve(3, &s))
         return woort_ret_panic("Stack overflow.");
 
-    auto& collisionResult = wo_component<jeecs::Physics2D::CollisionResult>(0);
+    auto& collisionResult = 
+        wo_component<jeecs::Physics2D::CollisionResult>(0, WOORT_RETURN_SLOT);
 
     const woort_value c = s + 0;
     const woort_value elem = s + 1;
@@ -1257,8 +1256,10 @@ WOORT_API woort_api wojeapi_towoo_physics2d_collisionresult_check(void)
     if (!woort_push_reserve(2, &s))
         return woort_ret_panic("Stack overflow.");
 
-    auto& collisionResult = wo_component<jeecs::Physics2D::CollisionResult>(0);
-    auto& rigidbody = wo_component<jeecs::Physics2D::Rigidbody>(1);
+    auto& collisionResult = 
+        wo_component<jeecs::Physics2D::CollisionResult>(0, WOORT_RETURN_SLOT);
+    auto& rigidbody = 
+        wo_component<jeecs::Physics2D::Rigidbody>(1, WOORT_RETURN_SLOT);
 
     auto* result = collisionResult.check(&rigidbody);
     if (result != nullptr)
@@ -1280,7 +1281,9 @@ WOORT_API woort_api wojeapi_towoo_physics2d_collisionresult_check(void)
 
 WOORT_API woort_api wojeapi_towoo_renderer_textures_bind_texture(void)
 {
-    auto& textures = wo_component<jeecs::Renderer::Textures>(0);
+    auto& textures = 
+        wo_component<jeecs::Renderer::Textures>(0, WOORT_RETURN_SLOT);
+
     size_t pass = (size_t)woort_int(1);
     auto* tex = (jeecs::basic::resource<jeecs::graphic::texture> *)woort_gcpointer(2);
 
@@ -1290,7 +1293,8 @@ WOORT_API woort_api wojeapi_towoo_renderer_textures_bind_texture(void)
 
 WOORT_API woort_api wojeapi_towoo_renderer_textures_get_texture(void)
 {
-    auto& textures = wo_component<jeecs::Renderer::Textures>(0);
+    auto& textures = 
+        wo_component<jeecs::Renderer::Textures>(0, WOORT_RETURN_SLOT);
     size_t pass = (size_t)woort_int(1);
 
     auto tex = textures.get_texture(pass);
@@ -1311,7 +1315,9 @@ WOORT_API woort_api wojeapi_towoo_renderer_textures_get_texture(void)
 
 WOORT_API woort_api wojeapi_towoo_renderer_shaders_set_uniform_i(void)
 {
-    auto& shaders = wo_component<jeecs::Renderer::Shaders>(0);
+    auto& shaders = 
+        wo_component<jeecs::Renderer::Shaders>(0, WOORT_RETURN_SLOT);
+
     const char* name = woort_string(1);
 
     shaders.set_uniform(name, (int)woort_int(2));
@@ -1320,7 +1326,9 @@ WOORT_API woort_api wojeapi_towoo_renderer_shaders_set_uniform_i(void)
 
 WOORT_API woort_api wojeapi_towoo_renderer_shaders_set_uniform_r(void)
 {
-    auto& shaders = wo_component<jeecs::Renderer::Shaders>(0);
+    auto& shaders = 
+        wo_component<jeecs::Renderer::Shaders>(0, WOORT_RETURN_SLOT);
+
     const char* name = woort_string(1);
 
     shaders.set_uniform(name, woort_float(2));
@@ -1329,7 +1337,9 @@ WOORT_API woort_api wojeapi_towoo_renderer_shaders_set_uniform_r(void)
 
 WOORT_API woort_api wojeapi_towoo_renderer_shaders_set_uniform_v(void)
 {
-    auto& shaders = wo_component<jeecs::Renderer::Shaders>(0);
+    auto& shaders = 
+        wo_component<jeecs::Renderer::Shaders>(0, WOORT_RETURN_SLOT);
+
     const char* name = woort_string(1);
     const woort_value val = 2;
 
@@ -1352,7 +1362,7 @@ WOORT_API woort_api wojeapi_towoo_renderer_shaders_set_uniform_v(void)
 
 WOORT_API woort_api wojeapi_towoo_renderer_shaders_set_shaders(void)
 {
-    auto& shaders = wo_component<jeecs::Renderer::Shaders>(0);
+    auto& shaders = wo_component<jeecs::Renderer::Shaders>(0, WOORT_RETURN_SLOT);
 
     shaders.shaders.clear();
     const size_t setting_shaders_len = woort_vec_len(1);
@@ -1372,7 +1382,8 @@ WOORT_API woort_api wojeapi_towoo_renderer_shaders_get_shaders(void)
     if (!woort_push_reserve(2, &s))
         return woort_ret_panic("Stack overflow.");
 
-    auto& shaders = wo_component<jeecs::Renderer::Shaders>(0);
+    auto& shaders = 
+        wo_component<jeecs::Renderer::Shaders>(0, WOORT_RETURN_SLOT);
 
     const woort_value c = s + 0;
     const woort_value elem = s + 1;
@@ -1398,52 +1409,62 @@ WOORT_API woort_api wojeapi_towoo_renderer_shaders_get_shaders(void)
 
 WOORT_API woort_api wojeapi_towoo_transform_translation_global_pos(void)
 {
-    auto& trans = wo_component<jeecs::Transform::Translation>(0);
+    auto& trans = 
+        wo_component<jeecs::Transform::Translation>(0, WOORT_RETURN_SLOT);
 
     wo_set_vec3(WOORT_RETURN_SLOT, trans.world_position);
-    return woort_ret_value(WOORT_RETURN_SLOT);
+    return woort_ret();
 }
 WOORT_API woort_api wojeapi_towoo_transform_translation_global_rot(void)
 {
-    auto& trans = wo_component<jeecs::Transform::Translation>(0);
+    auto& trans = 
+        wo_component<jeecs::Transform::Translation>(0, WOORT_RETURN_SLOT);
 
     wo_set_quat(WOORT_RETURN_SLOT, trans.world_rotation);
-    return woort_ret_value(WOORT_RETURN_SLOT);
+    return woort_ret();
 }
 
 WOORT_API woort_api wojeapi_towoo_transform_translation_parent_pos(void)
 {
-    auto& trans = wo_component<jeecs::Transform::Translation>(0);
+    auto& trans = 
+        wo_component<jeecs::Transform::Translation>(0, WOORT_RETURN_SLOT);
     wo_set_vec3(
         WOORT_RETURN_SLOT,
         trans.get_parent_position(
-            wo_option_component<jeecs::Transform::LocalPosition>(1),
-            wo_option_component<jeecs::Transform::LocalRotation>(2)));
-    return woort_ret_value(WOORT_RETURN_SLOT);
+            wo_option_component<jeecs::Transform::LocalPosition>(1, WOORT_RETURN_SLOT),
+            wo_option_component<jeecs::Transform::LocalRotation>(2, WOORT_RETURN_SLOT)));
+    return woort_ret();
 }
 WOORT_API woort_api wojeapi_towoo_transform_translation_parent_rot(void)
 {
-    auto& trans = wo_component<jeecs::Transform::Translation>(0);
+    auto& trans = 
+        wo_component<jeecs::Transform::Translation>(0, WOORT_RETURN_SLOT);
 
-    wo_set_quat(WOORT_RETURN_SLOT, trans.get_parent_rotation(wo_option_component<jeecs::Transform::LocalRotation>(1)));
-    return woort_ret_value(WOORT_RETURN_SLOT);
+    wo_set_quat(WOORT_RETURN_SLOT, trans.get_parent_rotation(
+        wo_option_component<jeecs::Transform::LocalRotation>(1, WOORT_RETURN_SLOT)));
+    return woort_ret();
 }
 
 WOORT_API woort_api wojeapi_towoo_transform_translation_set_global_pos(void)
 {
-    auto& trans = wo_component<jeecs::Transform::Translation>(0);
+    auto& trans = wo_component<jeecs::Transform::Translation>(
+        0, WOORT_RETURN_SLOT);
     auto pos = wo_vec3(1);
-    auto* lpos = wo_option_component<jeecs::Transform::LocalPosition>(2);
-    auto* lrot = wo_option_component<jeecs::Transform::LocalRotation>(3);
+    auto* lpos = wo_option_component<jeecs::Transform::LocalPosition>(
+        2, WOORT_RETURN_SLOT);
+    auto* lrot = wo_option_component<jeecs::Transform::LocalRotation>(
+        3, WOORT_RETURN_SLOT);
 
     trans.set_global_position(pos, lpos, lrot);
     return woort_ret_void();
 }
 WOORT_API woort_api wojeapi_towoo_transform_translation_set_global_rot(void)
 {
-    auto& trans = wo_component<jeecs::Transform::Translation>(0);
+    auto& trans = wo_component<jeecs::Transform::Translation>(
+        0, WOORT_RETURN_SLOT);
     auto rot = wo_quat(1);
-    auto* lrot = wo_option_component<jeecs::Transform::LocalRotation>(2);
+    auto* lrot = wo_option_component<jeecs::Transform::LocalRotation>(
+        2, WOORT_RETURN_SLOT);
 
     trans.set_global_rotation(rot, lrot);
     return woort_ret_void();
@@ -1451,7 +1472,7 @@ WOORT_API woort_api wojeapi_towoo_transform_translation_set_global_rot(void)
 
 WOORT_API woort_api wojeapi_towoo_animation_frameanimation_active_animation(void)
 {
-    auto& anim = wo_component<jeecs::Animation::FrameAnimation>(0);
+    auto& anim = wo_component<jeecs::Animation::FrameAnimation>(0, WOORT_RETURN_SLOT);
     anim.animations.active_action(
         (size_t)woort_int(1), woort_string(2), woort_bool(3));
 
@@ -1460,7 +1481,7 @@ WOORT_API woort_api wojeapi_towoo_animation_frameanimation_active_animation(void
 
 WOORT_API woort_api wojeapi_towoo_animation_frameanimation_stop_animation(void)
 {
-    auto& anim = wo_component<jeecs::Animation::FrameAnimation>(0);
+    auto& anim = wo_component<jeecs::Animation::FrameAnimation>(0, WOORT_RETURN_SLOT);
     anim.animations.stop_action((size_t)woort_int(1));
 
     return woort_ret_void();
@@ -1468,14 +1489,14 @@ WOORT_API woort_api wojeapi_towoo_animation_frameanimation_stop_animation(void)
 
 WOORT_API woort_api wojeapi_towoo_animation_frameanimation_is_playing(void)
 {
-    auto& anim = wo_component<jeecs::Animation::FrameAnimation>(0);
+    auto& anim = wo_component<jeecs::Animation::FrameAnimation>(0, WOORT_RETURN_SLOT);
 
     return woort_ret_bool(anim.animations.is_playing((size_t)woort_int(1)));
 }
 
 WOORT_API woort_api wojeapi_towoo_audio_playing_set_buffer(void)
 {
-    auto& playing = wo_component<jeecs::Audio::Playing>(0);
+    auto& playing = wo_component<jeecs::Audio::Playing>(0, WOORT_RETURN_SLOT);
 
     auto* buf = (jeecs::basic::resource<jeecs::audio::buffer> *)woort_gcpointer(1);
     playing.set_buffer(*buf);
@@ -1485,7 +1506,7 @@ WOORT_API woort_api wojeapi_towoo_audio_playing_set_buffer(void)
 
 WOORT_API woort_api wojeapi_towoo_audio_source_get_source(void)
 {
-    auto& source = wo_component<jeecs::Audio::Source>(0);
+    auto& source = wo_component<jeecs::Audio::Source>(0, WOORT_RETURN_SLOT);
     return woort_ret_gchandle(
         new jeecs::basic::resource<jeecs::audio::source>(source.source),
         WOORT_IGNORE,
@@ -1499,7 +1520,7 @@ WOORT_API woort_api wojeapi_towoo_userinterface_origin_layout(void)
     if (!woort_push_reserve(2, &s))
         return woort_ret_panic("Stack overflow.");
 
-    auto& origin = wo_component<jeecs::UserInterface::Origin>(0);
+    auto& origin = wo_component<jeecs::UserInterface::Origin>(0, WOORT_RETURN_SLOT);
 
     auto r = wo_vec2(1);
 
@@ -1525,7 +1546,7 @@ WOORT_API woort_api wojeapi_towoo_userinterface_origin_layout(void)
 
 WOORT_API woort_api wojeapi_towoo_userinterface_origin_mouse_on(void)
 {
-    auto& origin = wo_component<jeecs::UserInterface::Origin>(0);
+    auto& origin = wo_component<jeecs::UserInterface::Origin>(0, WOORT_RETURN_SLOT);
 
     auto r = wo_vec2(1);
     auto a = woort_float(2);

@@ -4,7 +4,6 @@ import je;
 
 import pkg::async;
 import pkg::try;
-import pkg::vm;
 import pkg::buffer;
 import pkg::fsys;
 import pkg::node_editor;

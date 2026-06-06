@@ -93,9 +93,13 @@ endif()
 
 add_library(joyengine_core_pre_define_macro INTERFACE)
 if (JE4_BUILD_SHARED_CORE)
-    target_compile_definitions(joyengine_core_pre_define_macro INTERFACE -DWO_SHARED_LIB)
+    target_compile_definitions(joyengine_core_pre_define_macro 
+        INTERFACE -DWO_SHARED_LIB
+        INTERFACE -DWOORT_SHARED_LIB)
 else()
-    target_compile_definitions(joyengine_core_pre_define_macro INTERFACE -DWO_STATIC_LIB)
+    target_compile_definitions(joyengine_core_pre_define_macro 
+        INTERFACE -DWO_STATIC_LIB
+        INTERFACE -DWOORT_STATIC_LIB)
 endif()
 
 add_library(joyengine_configs INTERFACE)
@@ -301,4 +305,5 @@ endif()
 target_link_libraries(jedriver PRIVATE 
     joyengine_configs
     joyecs
-    woolang)
+    woolang
+    woort)

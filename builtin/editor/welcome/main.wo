@@ -2,6 +2,7 @@
 // 嗯，大憨批程序，就是一个用来显示欢迎信息的小实例
 
 import woo::std;
+import woo::debug;
 
 import je;
 import je::internal;
@@ -43,7 +44,7 @@ namespace jeapi::welcome
                         {
                             Text(je::internal::build_version_info());
 
-                            let (a, b, c, d) = std::platform::version;
+                            let (a, b, c, d) = std::debug::runtime_version();
                             Text(F"Powered by woolang {a}.{b}.{c}.{d}");
                             Separator();
                             

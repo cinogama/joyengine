@@ -4,7 +4,6 @@ import je;
 import je::gui;
 
 import pkg::fsys;
-import pkg::vm;
 import pkg::makenew;
 import pkg::image;
 import pkg::buffer;

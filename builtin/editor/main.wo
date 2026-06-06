@@ -1,6 +1,5 @@
 import woo::std;
 import woo::debug;
-import woo::shell;
 
 import pkg::crashhandler;
 import pkg::fsys;
@@ -11,6 +10,7 @@ import pkg::try;
 import pkg::worst;
 import pkg::singleton;
 import pkg::buffer;
+import pkg::platform;
 
 import je;
 import je::gui;
@@ -550,7 +550,7 @@ func editor_main_entry()
                                     if (MenuItem("加载此项目"))
                                         open_project_at(fsys::normalize(dat[1]), u, editor_configs, open);
                                     if (MenuItem("打开项目所在路径"))
-                                        do std::shell(F"explorer \"{fsys::normalize(dat[1])->to_string->replace("/", "\\")}\"");
+                                        do platform::shell(F"explorer \"{fsys::normalize(dat[1])->to_string->replace("/", "\\")}\"");
                                     Separator();
                                     if (MenuItem("从历史记录中移除"))
                                     {

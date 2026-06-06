@@ -7,7 +7,6 @@ import je::gui;
 import pkg::iterator;
 import pkg::try;
 import pkg::makenew;
-import pkg::vm;
 import pkg::worst;
 import pkg::buffer;
 import pkg::fsys;

@@ -6,7 +6,6 @@ import je::internal;
 
 import pkg::makenew;
 import pkg::fsys;
-import pkg::vm;
 import pkg::process;
 import pkg::buffer;
 import pkg::thread;

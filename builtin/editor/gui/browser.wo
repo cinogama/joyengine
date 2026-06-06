@@ -1,5 +1,4 @@
 import woo::std;
-import woo::shell;
 
 import je;
 import je::gui;
@@ -15,7 +14,7 @@ import pkg::thread;
 import pkg::buffer;
 import pkg::try;
 import pkg::iterator;
-import pkg::vm;
+import pkg::platform;
 
 import builtin::editor::project::main;
 import builtin::editor::cpp::main;
@@ -392,13 +391,13 @@ namespace editor::gui
                 [".wo"] =
                     func (p: PathInfo, context: EditorContext)
                     {
-                        do std::shell(F"code {_wrap_path(context->get_project->get_path->to_string())} {_wrap_path(p.path->to_string)}");
+                        do platform::shell(F"code {_wrap_path(context->get_project->get_path->to_string())} {_wrap_path(p.path->to_string)}");
                         return option::none;
                     },
                 [".shader"] =
                     func (p: PathInfo, context: EditorContext)
                     {
-                        do std::shell(F"code {_wrap_path(context->get_project->get_path->to_string())} {_wrap_path(p.path->to_string)}");
+                        do platform::shell(F"code {_wrap_path(context->get_project->get_path->to_string())} {_wrap_path(p.path->to_string)}");
                         return option::none;
                     },
             };
@@ -410,7 +409,7 @@ namespace editor::gui
                     {
                         do new! thread(func()
                             {
-                                let result = std::shell(p.path->to_string());
+                                let result = platform::shell(p.path->to_string());
                                 if (0 != result)
                                     jeapi::gui::form::errmsg("失败", F"无法打开'{p.path->to_string()}'({result})");
                                     
@@ -1040,7 +1039,7 @@ namespace workflow::nodes
                 ;
                 
             if (MenuItem("在资源管理器中显示"))
-                do std::shell(F"explorer \"{fsys::normalize(cur_creating_path)->to_string->replace("/", "\\")}\"");
+                do platform::shell(F"explorer \"{fsys::normalize(cur_creating_path)->to_string->replace("/", "\\")}\"");
                 
             if (MenuItem(F"刷新"))
             {
@@ -1261,7 +1260,7 @@ namespace workflow::nodes
                         let file_path = path.path/"components"/F"{s}.hpp";
                         
                         if (MenuItem("在VSCode中打开"))
-                            do std::shell(F"code {_wrap_path(path.path->to_string())} {_wrap_path(file_path->to_string)}");
+                            do platform::shell(F"code {_wrap_path(path.path->to_string())} {_wrap_path(file_path->to_string)}");
                         if (MenuItem("移除此组件"))
                             jeapi::gui::form::ask("确认移除组件？", F"是否从模块{fsys::filename(path.path)}中移除组件{s}?",
                                 func(sure: bool){
@@ -1281,7 +1280,7 @@ namespace workflow::nodes
                         let file_path = path.path/"systems"/F"{s}.cpp";
                         
                         if (MenuItem("在VSCode中打开"))
-                            do std::shell(F"code {_wrap_path(path.path->to_string)} {_wrap_path(file_path->to_string)}");
+                            do platform::shell(F"code {_wrap_path(path.path->to_string)} {_wrap_path(file_path->to_string)}");
                         if (MenuItem("移除此系统"))
                             jeapi::gui::form::ask("确认移除系统？", F"是否从模块{fsys::filename(path.path)}中移除系统{s}?",
                                 func(sure: bool){

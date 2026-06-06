@@ -13,7 +13,6 @@ import pkg::interface;
 import pkg::makenew;
 import pkg::math;
 import pkg::worst;
-import pkg::vm;
 
 import tools;
 import imagescripts;

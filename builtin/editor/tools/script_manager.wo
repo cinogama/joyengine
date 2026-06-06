@@ -3,7 +3,6 @@ import woo::std;
 import je;
 import je::gui;
 
-import pkg::vm;
 import pkg::fsys;
 
 import builtin::editor::project::main;
