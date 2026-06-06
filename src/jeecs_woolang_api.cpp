@@ -1002,10 +1002,8 @@ WOORT_API woort_api wojeapi_wheel_count(void)
 
     woort_set_struct(result, 2);
 
-    woort_set_float(elem, wheel.x);
-    woort_struct_set(result, 0, elem);
-    woort_set_float(elem, wheel.y);
-    woort_struct_set(result, 1, elem);
+    woort_struct_set_float(result, 0, wheel.x);
+    woort_struct_set_float(result, 1, wheel.y);
 
     return woort_ret_value(result);
 }
@@ -1024,67 +1022,68 @@ WOORT_API woort_api wojeapi_input_window_size(void)
 
     woort_set_struct(result, 2);
 
-    woort_set_int(elem, (woort_Int)winsz.x);
-    woort_struct_set(result, 0, elem);
-    woort_set_int(elem, (woort_Int)winsz.y);
-    woort_struct_set(result, 1, elem);
+    woort_struct_set_int(result, 0, (woort_Int)winsz.x);
+    woort_struct_set_int(result, 1, (woort_Int)winsz.y);
 
     return woort_ret_value(result);
 }
 
 WOORT_API woort_api wojeapi_input_window_pos(void)
 {
-    wo_value s = wo_reserve_stack(2, &args);
+    woort_value s;
 
-    auto winsz = jeecs::input::windowpos();
+    if (!woort_push_reserve(2, &s))
+        return woort_ret_panic("Stack overflow.");
 
-    wo_value result = s + 0;
-    wo_value elem = s + 1;
+    auto winpos = jeecs::input::windowpos();
 
-    wo_set_struct(result, 2);
+    const woort_value result = s + 0;
+    const woort_value elem = s + 1;
 
-    wo_set_int(elem, (woort_int_t)winsz.x);
-    wo_struct_set(result, 0, elem);
-    wo_set_int(elem, (woort_int_t)winsz.y);
-    wo_struct_set(result, 1, elem);
+    woort_set_struct(result, 2);
+
+    woort_struct_set_int(result, 0, (woort_Int)winpos.x);
+    woort_struct_set_int(result, 1, (woort_Int)winpos.y);
 
     return woort_ret_value(result);
 }
 
 WOORT_API woort_api wojeapi_input_mouse_pos(void)
 {
-    wo_value s = wo_reserve_stack(2, &args);
+    woort_value s;
 
-    auto winsz = jeecs::input::mousepos((size_t)woort_int(0));
+    if (!woort_push_reserve(2, &s))
+        return woort_ret_panic("Stack overflow.");
 
-    wo_value result = s + 0;
-    wo_value elem = s + 1;
+    auto mousepos = jeecs::input::mousepos((size_t)woort_int(0));
 
-    wo_set_struct(result, 2);
+    const woort_value result = s + 0;
+    const woort_value elem = s + 1;
 
-    wo_set_int(elem, (woort_int_t)winsz.x);
-    wo_struct_set(result, 0, elem);
-    wo_set_int(elem, (woort_int_t)winsz.y);
-    wo_struct_set(result, 1, elem);
+    woort_set_struct(result, 2);
+
+    woort_struct_set_int(result, 0, (woort_Int)mousepos.x);
+    woort_struct_set_int(result, 1, (woort_Int)mousepos.y);
 
     return woort_ret_value(result);
 }
 
 WOORT_API woort_api wojeapi_input_mouse_view_pos(void)
 {
-    wo_value s = wo_reserve_stack(2, &args);
+    woort_value s;
 
-    auto winsz = jeecs::input::mouseviewpos((size_t)woort_int(0));
+    if (!woort_push_reserve(2, &s))
+        return woort_ret_panic("Stack overflow.");
 
-    wo_value result = s + 0;
-    wo_value elem = s + 1;
+    auto mouseview = jeecs::input::mouseviewpos((size_t)woort_int(0));
 
-    wo_set_struct(result, 2);
+    const woort_value result = s + 0;
+    const woort_value elem = s + 1;
 
-    wo_set_float(elem, winsz.x);
-    wo_struct_set(result, 0, elem);
-    wo_set_float(elem, winsz.y);
-    wo_struct_set(result, 1, elem);
+    woort_set_struct(result, 2);
+
+    woort_struct_set_float(result, 0, mouseview.x);
+    woort_struct_set_float(result, 1, mouseview.y);
 
     return woort_ret_value(result);
 }
@@ -1092,7 +1091,7 @@ WOORT_API woort_api wojeapi_input_mouse_view_pos(void)
 WOORT_API woort_api wojeapi_input_gamepad_button(void)
 {
     jeecs::input::gamepad* gamepad =
-        (jeecs::input::gamepad*)wo_pointer(0);
+        (jeecs::input::gamepad*)woort_gcpointer(0);
     jeecs::input::gamepadcode kcode =
         (jeecs::input::gamepadcode)woort_int(1);
 
@@ -1100,30 +1099,32 @@ WOORT_API woort_api wojeapi_input_gamepad_button(void)
 }
 WOORT_API woort_api wojeapi_input_gamepad_axis(void)
 {
-    wo_value s = wo_reserve_stack(2, &args);
+    woort_value s;
+
+    if (!woort_push_reserve(2, &s))
+        return woort_ret_panic("Stack overflow.");
 
     jeecs::input::gamepad* gamepad =
-        (jeecs::input::gamepad*)wo_pointer(0);
+        (jeecs::input::gamepad*)woort_gcpointer(0);
     jeecs::input::joystickcode kcode =
         (jeecs::input::joystickcode)woort_int(1);
 
     auto axis = gamepad->stick(kcode);
 
-    wo_value result = s + 0;
-    wo_value elem = s + 1;
+    const woort_value result = s + 0;
+    const woort_value elem = s + 1;
 
-    wo_set_struct(result, 2);
-    wo_set_float(elem, axis.x);
-    wo_struct_set(result, 0, elem);
-    wo_set_float(elem, axis.y);
-    wo_struct_set(result, 1, elem);
+    woort_set_struct(result, 2);
+
+    woort_struct_set_float(result, 0, axis.x);
+    woort_struct_set_float(result, 1, axis.y);
 
     return woort_ret_value(result);
 }
 WOORT_API woort_api wojeapi_input_gamepad_actived(void)
 {
     jeecs::input::gamepad* gamepad =
-        (jeecs::input::gamepad*)wo_pointer(0);
+        (jeecs::input::gamepad*)woort_gcpointer(0);
 
     jeecs::typing::timestamp_ms_t actived;
     if (gamepad->actived(&actived))
@@ -1133,22 +1134,29 @@ WOORT_API woort_api wojeapi_input_gamepad_actived(void)
 }
 WOORT_API woort_api wojeapi_input_gamepad_get_all(void)
 {
-    wo_value s = wo_reserve_stack(2, &args);
+    woort_value s;
+
+    if (!woort_push_reserve(2, &s))
+        return woort_ret_panic("Stack overflow.");
 
     auto gamepads = jeecs::input::gamepad::all();
 
-    wo_value result = s + 0;
-    wo_value elem = s + 1;
+    const woort_value result = s + 0;
+    const woort_value elem = s + 1;
 
-    wo_set_arr(result, 0);
+    woort_set_vec(result);
     for (auto& gamepad : gamepads)
     {
-        wo_set_gchandle(elem, new jeecs::input::gamepad(gamepad), nullptr,
+        woort_set_gchandle(
+            elem, 
+            new jeecs::input::gamepad(gamepad), 
+            WOORT_IGNORE,
             [](void* p)
             {
                 delete (jeecs::input::gamepad*)p;
-            });
-        wo_arr_add(result, elem);
+            },
+            nullptr);
+        woort_vec_push(result, elem);
     }
 
     return woort_ret_value(result);
@@ -1158,11 +1166,14 @@ WOORT_API woort_api wojeapi_input_gamepad_last(void)
     auto gamepad = jeecs::input::gamepad::last();
     if (gamepad.has_value())
     {
-        return woort_ret_option_gchandle(new jeecs::input::gamepad(gamepad.value()), nullptr,
+        return woort_ret_option_gchandle(
+            new jeecs::input::gamepad(gamepad.value()), 
+            WOORT_IGNORE,
             [](void* p)
             {
                 delete (jeecs::input::gamepad*)p;
-            });
+            },
+            nullptr);
     }
     return woort_ret_option_none();
 }
@@ -1182,11 +1193,15 @@ WOORT_API woort_api wojeapi_input_update_window_title(void)
 // ECS OTHER
 WOORT_API woort_api wojeapi_log(void)
 {
-    size_t argc = (size_t)wo_argc();
+    size_t argc = (size_t)woort_int(0);
     std::string disp;
 
     for (size_t i = 0; i < argc; i++)
-        disp += wo_cast_string(i);
+    {
+        char* str = woort_serialize_dynbox(i + 1, WOORT_SERIALIZE_FLAG_NONE);
+        disp += str;
+        woort_free(str);
+    }
 
     jeecs::debug::log("%s", disp.c_str());
     return woort_ret_void();
