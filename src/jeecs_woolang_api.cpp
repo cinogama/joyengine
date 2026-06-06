@@ -3206,12 +3206,11 @@ WOORT_API woort_api wojeapi_audio_effect_create(void)
 WOORT_API woort_api wojeapi_audio_effect_info(void)
 {
     woort_value s;
-    if (!woort_push_reserve(3, &s))
+    if (!woort_push_reserve(2, &s))
         return woort_ret_panic("Stack overflow.");
 
     const woort_value result = s + 0;
     const woort_value elem = s + 1;
-    const woort_value elem2 = s + 2;
 
     void* effect_res_ptr = woort_gcpointer(0);
     woolang_je_audio_effect_kind kind = (woolang_je_audio_effect_kind)woort_int(1);
@@ -3225,46 +3224,21 @@ WOORT_API woort_api wojeapi_audio_effect_info(void)
 
         auto* info = (*effect)->handle();
 
-        wo_set_struct(result, 13);
+        woort_set_struct(result, 13);
 
-        wo_set_float(elem, info->m_density);
-        wo_struct_set(result, 0, elem);
-
-        wo_set_float(elem, info->m_diffusion);
-        wo_struct_set(result, 1, elem);
-
-        wo_set_float(elem, info->m_gain);
-        wo_struct_set(result, 2, elem);
-
-        wo_set_float(elem, info->m_gain_hf);
-        wo_struct_set(result, 3, elem);
-
-        wo_set_float(elem, info->m_decay_time);
-        wo_struct_set(result, 4, elem);
-
-        wo_set_float(elem, info->m_decay_hf_ratio);
-        wo_struct_set(result, 5, elem);
-
-        wo_set_float(elem, info->m_reflections_gain);
-        wo_struct_set(result, 6, elem);
-
-        wo_set_float(elem, info->m_reflections_delay);
-        wo_struct_set(result, 7, elem);
-
-        wo_set_float(elem, info->m_late_reverb_gain);
-        wo_struct_set(result, 8, elem);
-
-        wo_set_float(elem, info->m_late_reverb_delay);
-        wo_struct_set(result, 9, elem);
-
-        wo_set_float(elem, info->m_air_absorption_gain_hf);
-        wo_struct_set(result, 10, elem);
-
-        wo_set_float(elem, info->m_room_rolloff_factor);
-        wo_struct_set(result, 11, elem);
-
-        wo_set_bool(elem, info->m_decay_hf_limit);
-        wo_struct_set(result, 12, elem);
+        woort_struct_set_float(result, 0, info->m_density);
+        woort_struct_set_float(result, 1, info->m_diffusion);
+        woort_struct_set_float(result, 2, info->m_gain);
+        woort_struct_set_float(result, 3, info->m_gain_hf);
+        woort_struct_set_float(result, 4, info->m_decay_time);
+        woort_struct_set_float(result, 5, info->m_decay_hf_ratio);
+        woort_struct_set_float(result, 6, info->m_reflections_gain);
+        woort_struct_set_float(result, 7, info->m_reflections_delay);
+        woort_struct_set_float(result, 8, info->m_late_reverb_gain);
+        woort_struct_set_float(result, 9, info->m_late_reverb_delay);
+        woort_struct_set_float(result, 10, info->m_air_absorption_gain_hf);
+        woort_struct_set_float(result, 11, info->m_room_rolloff_factor);
+        woort_struct_set_bool(result, 12, info->m_decay_hf_limit);
 
         break;
     }
@@ -3275,25 +3249,14 @@ WOORT_API woort_api wojeapi_audio_effect_info(void)
 
         auto* info = (*effect)->handle();
 
-        wo_set_struct(result, 6);
+        woort_set_struct(result, 6);
 
-        wo_set_int(elem, (woort_integer_t)info->m_waveform);
-        wo_struct_set(result, 0, elem);
-
-        wo_set_int(elem, (woort_integer_t)info->m_phase);
-        wo_struct_set(result, 1, elem);
-
-        wo_set_float(elem, info->m_rate);
-        wo_struct_set(result, 2, elem);
-
-        wo_set_float(elem, info->m_depth);
-        wo_struct_set(result, 3, elem);
-
-        wo_set_float(elem, info->m_feedback);
-        wo_struct_set(result, 4, elem);
-
-        wo_set_float(elem, info->m_delay);
-        wo_struct_set(result, 5, elem);
+        woort_struct_set_int(result, 0, (woort_Int)info->m_waveform);
+        woort_struct_set_int(result, 1, (woort_Int)info->m_phase);
+        woort_struct_set_float(result, 2, info->m_rate);
+        woort_struct_set_float(result, 3, info->m_depth);
+        woort_struct_set_float(result, 4, info->m_feedback);
+        woort_struct_set_float(result, 5, info->m_delay);
 
         break;
     }
@@ -3304,22 +3267,13 @@ WOORT_API woort_api wojeapi_audio_effect_info(void)
 
         auto* info = (*effect)->handle();
 
-        wo_set_struct(result, 5);
+        woort_set_struct(result, 5);
 
-        wo_set_float(elem, info->m_edge);
-        wo_struct_set(result, 0, elem);
-
-        wo_set_float(elem, info->m_gain);
-        wo_struct_set(result, 1, elem);
-
-        wo_set_float(elem, info->m_lowpass_cutoff);
-        wo_struct_set(result, 2, elem);
-
-        wo_set_float(elem, info->m_equalizer_center_freq);
-        wo_struct_set(result, 3, elem);
-
-        wo_set_float(elem, info->m_equalizer_bandwidth);
-        wo_struct_set(result, 4, elem);
+        woort_struct_set_float(result, 0, info->m_edge);
+        woort_struct_set_float(result, 1, info->m_gain);
+        woort_struct_set_float(result, 2, info->m_lowpass_cutoff);
+        woort_struct_set_float(result, 3, info->m_equalizer_center_freq);
+        woort_struct_set_float(result, 4, info->m_equalizer_bandwidth);
 
         break;
     }
@@ -3330,22 +3284,13 @@ WOORT_API woort_api wojeapi_audio_effect_info(void)
 
         auto* info = (*effect)->handle();
 
-        wo_set_struct(result, 5);
+        woort_set_struct(result, 5);
 
-        wo_set_float(elem, info->m_delay);
-        wo_struct_set(result, 0, elem);
-
-        wo_set_float(elem, info->m_lr_delay);
-        wo_struct_set(result, 1, elem);
-
-        wo_set_float(elem, info->m_damping);
-        wo_struct_set(result, 2, elem);
-
-        wo_set_float(elem, info->m_feedback);
-        wo_struct_set(result, 3, elem);
-
-        wo_set_float(elem, info->m_spread);
-        wo_struct_set(result, 4, elem);
+        woort_struct_set_float(result, 0, info->m_delay);
+        woort_struct_set_float(result, 1, info->m_lr_delay);
+        woort_struct_set_float(result, 2, info->m_damping);
+        woort_struct_set_float(result, 3, info->m_feedback);
+        woort_struct_set_float(result, 4, info->m_spread);
 
         break;
     }
@@ -3356,25 +3301,14 @@ WOORT_API woort_api wojeapi_audio_effect_info(void)
 
         auto* info = (*effect)->handle();
 
-        wo_set_struct(result, 6);
+        woort_set_struct(result, 6);
 
-        wo_set_int(elem, (woort_integer_t)info->m_waveform);
-        wo_struct_set(result, 0, elem);
-
-        wo_set_int(elem, (woort_integer_t)info->m_phase);
-        wo_struct_set(result, 1, elem);
-
-        wo_set_float(elem, info->m_rate);
-        wo_struct_set(result, 2, elem);
-
-        wo_set_float(elem, info->m_depth);
-        wo_struct_set(result, 3, elem);
-
-        wo_set_float(elem, info->m_feedback);
-        wo_struct_set(result, 4, elem);
-
-        wo_set_float(elem, info->m_delay);
-        wo_struct_set(result, 5, elem);
+        woort_struct_set_int(result, 0, (woort_Int)info->m_waveform);
+        woort_struct_set_int(result, 1, (woort_Int)info->m_phase);
+        woort_struct_set_float(result, 2, info->m_rate);
+        woort_struct_set_float(result, 3, info->m_depth);
+        woort_struct_set_float(result, 4, info->m_feedback);
+        woort_struct_set_float(result, 5, info->m_delay);
 
         break;
     }
@@ -3385,16 +3319,11 @@ WOORT_API woort_api wojeapi_audio_effect_info(void)
 
         auto* info = (*effect)->handle();
 
-        wo_set_struct(result, 3);
+        woort_set_struct(result, 3);
 
-        wo_set_float(elem, info->m_frequency);
-        wo_struct_set(result, 0, elem);
-
-        wo_set_int(elem, (woort_integer_t)info->m_left_direction);
-        wo_struct_set(result, 1, elem);
-
-        wo_set_int(elem, (woort_integer_t)info->m_right_direction);
-        wo_struct_set(result, 2, elem);
+        woort_struct_set_float(result, 0, info->m_frequency);
+        woort_struct_set_int(result, 1, (woort_Int)info->m_left_direction);
+        woort_struct_set_int(result, 2, (woort_Int)info->m_right_direction);
 
         break;
     }
@@ -3405,25 +3334,14 @@ WOORT_API woort_api wojeapi_audio_effect_info(void)
 
         auto* info = (*effect)->handle();
 
-        wo_set_struct(result, 6);
+        woort_set_struct(result, 6);
 
-        wo_set_int(elem, (woort_integer_t)info->m_phoneme_a);
-        wo_struct_set(result, 0, elem);
-
-        wo_set_int(elem, (woort_integer_t)info->m_phoneme_a_coarse_tuning);
-        wo_struct_set(result, 1, elem);
-
-        wo_set_int(elem, (woort_integer_t)info->m_phoneme_b);
-        wo_struct_set(result, 2, elem);
-
-        wo_set_int(elem, (woort_integer_t)info->m_phoneme_b_coarse_tuning);
-        wo_struct_set(result, 3, elem);
-
-        wo_set_int(elem, (woort_integer_t)info->m_waveform);
-        wo_struct_set(result, 4, elem);
-
-        wo_set_float(elem, info->m_rate);
-        wo_struct_set(result, 5, elem);
+        woort_struct_set_int(result, 0, (woort_Int)info->m_phoneme_a);
+        woort_struct_set_int(result, 1, (woort_Int)info->m_phoneme_a_coarse_tuning);
+        woort_struct_set_int(result, 2, (woort_Int)info->m_phoneme_b);
+        woort_struct_set_int(result, 3, (woort_Int)info->m_phoneme_b_coarse_tuning);
+        woort_struct_set_int(result, 4, (woort_Int)info->m_waveform);
+        woort_struct_set_float(result, 5, info->m_rate);
 
         break;
     }
@@ -3434,13 +3352,10 @@ WOORT_API woort_api wojeapi_audio_effect_info(void)
 
         auto* info = (*effect)->handle();
 
-        wo_set_struct(result, 2);
+        woort_set_struct(result, 2);
 
-        wo_set_int(elem, (woort_integer_t)info->m_coarse_tune);
-        wo_struct_set(result, 0, elem);
-
-        wo_set_int(elem, (woort_integer_t)info->m_fine_tune);
-        wo_struct_set(result, 1, elem);
+        woort_struct_set_int(result, 0, (woort_Int)info->m_coarse_tune);
+        woort_struct_set_int(result, 1, (woort_Int)info->m_fine_tune);
 
         break;
     }
@@ -3451,16 +3366,11 @@ WOORT_API woort_api wojeapi_audio_effect_info(void)
 
         auto* info = (*effect)->handle();
 
-        wo_set_struct(result, 3);
+        woort_set_struct(result, 3);
 
-        wo_set_float(elem, info->m_frequency);
-        wo_struct_set(result, 0, elem);
-
-        wo_set_float(elem, info->m_highpass_cutoff);
-        wo_struct_set(result, 1, elem);
-
-        wo_set_int(elem, (woort_integer_t)info->m_waveform);
-        wo_struct_set(result, 2, elem);
+        woort_struct_set_float(result, 0, info->m_frequency);
+        woort_struct_set_float(result, 1, info->m_highpass_cutoff);
+        woort_struct_set_int(result, 2, (woort_Int)info->m_waveform);
 
         break;
     }
@@ -3471,19 +3381,12 @@ WOORT_API woort_api wojeapi_audio_effect_info(void)
 
         auto* info = (*effect)->handle();
 
-        wo_set_struct(result, 4);
+        woort_set_struct(result, 4);
 
-        wo_set_float(elem, info->m_attack_time);
-        wo_struct_set(result, 0, elem);
-
-        wo_set_float(elem, info->m_release_time);
-        wo_struct_set(result, 1, elem);
-
-        wo_set_float(elem, info->m_resonance);
-        wo_struct_set(result, 2, elem);
-
-        wo_set_float(elem, info->m_peak_gain);
-        wo_struct_set(result, 3, elem);
+        woort_struct_set_float(result, 0, info->m_attack_time);
+        woort_struct_set_float(result, 1, info->m_release_time);
+        woort_struct_set_float(result, 2, info->m_resonance);
+        woort_struct_set_float(result, 3, info->m_peak_gain);
 
         break;
     }
@@ -3494,10 +3397,9 @@ WOORT_API woort_api wojeapi_audio_effect_info(void)
 
         auto* info = (*effect)->handle();
 
-        wo_set_struct(result, 1);
+        woort_set_struct(result, 1);
 
-        wo_set_bool(elem, info->m_enabled);
-        wo_struct_set(result, 0, elem);
+        woort_struct_set_bool(result, 0, info->m_enabled);
 
         break;
     }
@@ -3508,37 +3410,18 @@ WOORT_API woort_api wojeapi_audio_effect_info(void)
 
         auto* info = (*effect)->handle();
 
-        wo_set_struct(result, 10);
+        woort_set_struct(result, 10);
 
-        wo_set_float(elem, info->m_low_gain);
-        wo_struct_set(result, 0, elem);
-
-        wo_set_float(elem, info->m_low_cutoff);
-        wo_struct_set(result, 1, elem);
-
-        wo_set_float(elem, info->m_mid1_gain);
-        wo_struct_set(result, 2, elem);
-
-        wo_set_float(elem, info->m_mid1_center);
-        wo_struct_set(result, 3, elem);
-
-        wo_set_float(elem, info->m_mid1_width);
-        wo_struct_set(result, 4, elem);
-
-        wo_set_float(elem, info->m_mid2_gain);
-        wo_struct_set(result, 5, elem);
-
-        wo_set_float(elem, info->m_mid2_center);
-        wo_struct_set(result, 6, elem);
-
-        wo_set_float(elem, info->m_mid2_width);
-        wo_struct_set(result, 7, elem);
-
-        wo_set_float(elem, info->m_high_gain);
-        wo_struct_set(result, 8, elem);
-
-        wo_set_float(elem, info->m_high_cutoff);
-        wo_struct_set(result, 9, elem);
+        woort_struct_set_float(result, 0, info->m_low_gain);
+        woort_struct_set_float(result, 1, info->m_low_cutoff);
+        woort_struct_set_float(result, 2, info->m_mid1_gain);
+        woort_struct_set_float(result, 3, info->m_mid1_center);
+        woort_struct_set_float(result, 4, info->m_mid1_width);
+        woort_struct_set_float(result, 5, info->m_mid2_gain);
+        woort_struct_set_float(result, 6, info->m_mid2_center);
+        woort_struct_set_float(result, 7, info->m_mid2_width);
+        woort_struct_set_float(result, 8, info->m_high_gain);
+        woort_struct_set_float(result, 9, info->m_high_cutoff);
 
         break;
     }
@@ -3549,86 +3432,41 @@ WOORT_API woort_api wojeapi_audio_effect_info(void)
 
         auto* info = (*effect)->handle();
 
-        wo_set_struct(result, 23);
+        woort_set_struct(result, 23);
 
-        wo_set_float(elem, info->m_density);
-        wo_struct_set(result, 0, elem);
+        woort_struct_set_float(result, 0, info->m_density);
+        woort_struct_set_float(result, 1, info->m_diffusion);
+        woort_struct_set_float(result, 2, info->m_gain);
+        woort_struct_set_float(result, 3, info->m_gain_hf);
+        woort_struct_set_float(result, 4, info->m_gain_lf);
+        woort_struct_set_float(result, 5, info->m_decay_time);
+        woort_struct_set_float(result, 6, info->m_decay_hf_ratio);
+        woort_struct_set_float(result, 7, info->m_decay_lf_ratio);
+        woort_struct_set_float(result, 8, info->m_reflections_gain);
+        woort_struct_set_float(result, 9, info->m_reflections_delay);
 
-        wo_set_float(elem, info->m_diffusion);
-        wo_struct_set(result, 1, elem);
-
-        wo_set_float(elem, info->m_gain);
-        wo_struct_set(result, 2, elem);
-
-        wo_set_float(elem, info->m_gain_hf);
-        wo_struct_set(result, 3, elem);
-
-        wo_set_float(elem, info->m_gain_lf);
-        wo_struct_set(result, 4, elem);
-
-        wo_set_float(elem, info->m_decay_time);
-        wo_struct_set(result, 5, elem);
-
-        wo_set_float(elem, info->m_decay_hf_ratio);
-        wo_struct_set(result, 6, elem);
-
-        wo_set_float(elem, info->m_decay_lf_ratio);
-        wo_struct_set(result, 7, elem);
-
-        wo_set_float(elem, info->m_reflections_gain);
-        wo_struct_set(result, 8, elem);
-
-        wo_set_float(elem, info->m_reflections_delay);
-        wo_struct_set(result, 9, elem);
-
-        wo_set_struct(elem, 3);
+        woort_set_struct(elem, 3);
         for (uint16_t i = 0; i < 3; ++i)
-        {
-            wo_set_float(elem2, info->m_reflections_pan_xyz[i]);
-            wo_struct_set(elem, i, elem2);
-        }
-        wo_struct_set(result, 10, elem);
+            woort_struct_set_float(elem, i, info->m_reflections_pan_xyz[i]);
+        woort_struct_set(result, 10, elem);
 
-        wo_set_float(elem, info->m_late_reverb_gain);
-        wo_struct_set(result, 11, elem);
+        woort_struct_set_float(result, 11, info->m_late_reverb_gain);
+        woort_struct_set_float(result, 12, info->m_late_reverb_delay);
 
-        wo_set_float(elem, info->m_late_reverb_delay);
-        wo_struct_set(result, 12, elem);
-
-        wo_set_struct(elem, 3);
+        woort_set_struct(elem, 3);
         for (uint16_t i = 0; i < 3; ++i)
-        {
-            wo_set_float(elem2, info->m_late_reverb_pan_xyz[i]);
-            wo_struct_set(elem, i, elem2);
-        }
-        wo_struct_set(result, 13, elem);
+            woort_struct_set_float(elem, i, info->m_late_reverb_pan_xyz[i]);
+        woort_struct_set(result, 13, elem);
 
-        wo_set_float(elem, info->m_echo_time);
-        wo_struct_set(result, 14, elem);
-
-        wo_set_float(elem, info->m_echo_depth);
-        wo_struct_set(result, 15, elem);
-
-        wo_set_float(elem, info->m_modulation_time);
-        wo_struct_set(result, 16, elem);
-
-        wo_set_float(elem, info->m_modulation_depth);
-        wo_struct_set(result, 17, elem);
-
-        wo_set_float(elem, info->m_air_absorption_gain_hf);
-        wo_struct_set(result, 18, elem);
-
-        wo_set_float(elem, info->m_hf_reference);
-        wo_struct_set(result, 19, elem);
-
-        wo_set_float(elem, info->m_lf_reference);
-        wo_struct_set(result, 20, elem);
-
-        wo_set_float(elem, info->m_room_rolloff_factor);
-        wo_struct_set(result, 21, elem);
-
-        wo_set_bool(elem, info->m_decay_hf_limit);
-        wo_struct_set(result, 22, elem);
+        woort_struct_set_float(result, 14, info->m_echo_time);
+        woort_struct_set_float(result, 15, info->m_echo_depth);
+        woort_struct_set_float(result, 16, info->m_modulation_time);
+        woort_struct_set_float(result, 17, info->m_modulation_depth);
+        woort_struct_set_float(result, 18, info->m_air_absorption_gain_hf);
+        woort_struct_set_float(result, 19, info->m_hf_reference);
+        woort_struct_set_float(result, 20, info->m_lf_reference);
+        woort_struct_set_float(result, 21, info->m_room_rolloff_factor);
+        woort_struct_set_bool(result, 22, info->m_decay_hf_limit);
 
         break;
     }
