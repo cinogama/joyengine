@@ -1228,7 +1228,7 @@ WOORT_API woort_api wojeapi_towoo_physics2d_collisionresult_all(void)
     auto& collisionResult = wo_component<jeecs::Physics2D::CollisionResult>(0);
 
     const woort_value c = s + 0;
-    const woort_value key = s + 1;
+    const woort_value elem = s + 1;
     const woort_value val = s + 2;
 
     woort_set_map(c);
@@ -1236,15 +1236,14 @@ WOORT_API woort_api wojeapi_towoo_physics2d_collisionresult_all(void)
 
     for (auto& [rigidbody, result] : collisionResult.results)
     {
-        woort_set_box_pointer(key, rigidbody);
         woort_set_struct(val, 2);
 
-        (void)woort_map_set(c, key, val);
+        (void)woort_map_set_by_pointer(c, rigidbody, val);
 
-        wo_set_vec2(key, result.position);
-        woort_struct_set(val, 0, key);
-        wo_set_vec2(key, result.normalize);
-        woort_struct_set(val, 1, key);
+        wo_set_vec2(elem, result.position);
+        woort_struct_set(val, 0, elem);
+        wo_set_vec2(elem, result.normalize);
+        woort_struct_set(val, 1, elem);
     }
 
     return woort_ret_value(c);

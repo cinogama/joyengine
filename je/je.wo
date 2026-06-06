@@ -280,10 +280,10 @@ namespace je
                 ->forall(\type: typeinfo = type->is_system(););
         }
         
-        extern("libjoyecs", "wojeapi_type_of", repeat)
+        extern("libjoyecs", "wojeapi_type_of_name")
             public func load(name: ::string)=> option<typeinfo>;
             
-        extern("libjoyecs", "wojeapi_type_of", repeat)
+        extern("libjoyecs", "wojeapi_type_of_id")
             public func loadid(id: ::int)=> option<typeinfo>;
             
         extern("libjoyecs", "wojeapi_type_id")
