@@ -4,6 +4,8 @@ import je;
 import je::gui;
 
 import pkg::fsys;
+import pkg::dumpling;
+import pkg::try;
 
 import builtin::editor::project::main;
 import builtin::editor::environment::main;
@@ -26,33 +28,26 @@ namespace editor::tools
                 return result::err("没有找到此脚本");
             value(path)?
             {
-                match (vm::load(path->to_string(), option::none))
-                {
-                    err(msg)?
-                        return result::err(F"运行脚本失败：{msg}");
-                    ok(vmm)?
-                    {
-                        defer do vmm->close();
-
-                        let invoke_script =
-                            func(opentity: option<je::entity>)
-                            {
-                                do vmm->bootup(true);
-                                do vmm->invoke("main", [
-                                        proj->get_env->get_universe as je::universe: dynamic,
-                                        proj->get_editing_world as option<je::world>: dynamic,
-                                        opentity as option<je::entity>: dynamic,
-                                    ]);
-                            };
-                            
-                        match (ctx->get_editing_entity)
+                dumpling::dispatch(
+                    func(){
+                        try! program = or_map(\e = e->to_string;) <| dumpling::Program::load(path);
+                        
+                        match (program->unsafe::load_extern:<(je::universe, option<je::world>, option<je::entity>)=> void>(
+                                "main"))
                         {
-                            value(euid)? euid->dosth(invoke_script);
-                            none? invoke_script(option::none);
+                            value(main_func)?
+                                match (ctx->get_editing_entity)
+                                {
+                                    value(euid)?
+                                        euid->dosth(
+                                            \e = main_func(proj->get_env->get_universe, proj->get_editing_world, e););
+                                    none?
+                                        main_func(
+                                            proj->get_env->get_universe, proj->get_editing_world, option::none);
+                                }
+                            none?;
                         }
-                        return result::ok(nil: void);
-                    }
-                }
+                    });
             }
         }
     }

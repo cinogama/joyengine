@@ -1193,17 +1193,17 @@ namespace workflow::nodes
                 {
                     do try!
                     {
-                        try! vmm = vm::load((path.path / "editor.wo")->to_string, option::none);
-                        try! val = vmm->bootup(false)
-                            -> ok_or("运行 Workflow 编辑器脚本失败");
-                            
-                        if (!(val: bool))
-                            throw! "Workflow 打开失败";
-                            
-                        return_ok!;
+                        let r = dumpling::dispatch(
+                            func()
+                            {
+                                return dumpling::Program::load(path.path / "editor.wo")
+                                    -> or_map(\e = e->to_string;);
+                            });
+
+                        return r=>> \rr = rr;;
                         
                     } catch! e {
-                        jeapi::gui::form::errmsg("打开 Workflow 编辑器失败", F"无法运行 Workflow 编辑器脚本({e})");
+                        jeapi::gui::form::errmsg("打开 Workflow 编辑器失败", F"无法运行 Workflow 编辑器脚本({e as string})");
                     };
                 }
             }

@@ -9,6 +9,8 @@ import pkg::image;
 import pkg::buffer;
 import pkg::math;
 import pkg::thread;
+import pkg::dumpling;
+import pkg::try;
 
 import builtin::editor::gui::main;
 import builtin::editor::gui::form::ask;
@@ -239,27 +241,40 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                         {
                             if (MenuItem("烘焙"))
                             {
-                                match (vm::load(partical_context.m_path->to_string + " : script.wo",
-                                        option::value <| partical_context.m_script->GetText: buffer))
+                                try!
                                 {
-                                    ok(vmm)?
-                                    {
-                                        if (!vmm->bootup(true)->is_value)
-                                            jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本运行终止，可能存在错误，请检查日志");
-                                            
-                                        econtext.m_frame_index = 1;
-                                        econtext.m_solved_launch_count = 0;
-                                        
-                                        do new! thread(func(){
-                                                econtext.m_enable_bake = false;
-                                                if (!vmm->invoke("_start_baking", [partical_context: dynamic, econtext: dynamic])->is_value)
-                                                    jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本运行终止，可能存在错误，请检查日志");
-                                                econtext.m_enable_bake = true;
-                                            });
-                                    }
-                                    err(msg)?
-                                        jeapi::gui::form::errmsg("烘焙失败", F"烘焙脚本存在错误\n{msg}");
-                                }
+                                    return bind(\r = r;) <|
+                                        dumpling::dispatch(
+                                            func()
+                                            {
+                                                try! program =
+                                                    or_map(\e = e-> to_string;) <| dumpling::Program::create(
+                                                        partical_context.m_path->to_string + " : script.wo",
+                                                        partical_context.m_script->GetText: buffer);
+                                                        
+                                                try! f = ok_or("未找到脚本的入口函数 `_start_baking`") <|
+                                                    program->unsafe::load_extern:<(ParticalContext, _EditorContext)=> void>(
+                                                        "_start_baking");
+                                                        
+                                                do new! thread(
+                                                    func()
+                                                    {
+                                                        econtext.m_enable_bake = false;
+                                                        defer econtext.m_enable_bake = true;
+                                                        
+                                                        do dumpling::dispatch(
+                                                            func(){
+                                                                f(partical_context, econtext);
+                                                            }
+                                                        );
+                                                    });
+                                                    
+                                                return_ok!;
+                                            }
+                                        );
+                                } catch! e {
+                                    jeapi::gui::form::errmsg("烘焙失败", e);
+                                };
                             }
                         }
                         else

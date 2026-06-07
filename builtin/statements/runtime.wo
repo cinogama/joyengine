@@ -10,6 +10,7 @@ import pkg::node_editor;
 import pkg::interface;
 import pkg::guid;
 import pkg::singleton;
+import pkg::dumpling;
 
 import builtin::statements;
 
@@ -80,7 +81,7 @@ namespace jeapi
                             nuid, c.global_entered_nodes->get_or(nuid, 1) - 1);
                     });
             }
-
+            
             public func check_node_active(nuid: guid::GUID)=> bool
             {
                 let is_active = DebuggerCollection::instance->apply(
@@ -93,7 +94,7 @@ namespace jeapi
         }
         
         using Runtime = struct{
-            vm_state: vm,
+            dispatcher: (string, string, ...)=> option<async<void>>,
             workflow_path: string,
         }
         {
@@ -108,22 +109,26 @@ namespace jeapi
                     
                 try! runtime_content = je::file::readall(rumtime_path)
                     -> ok_or(F"无法读取 Workflow 运行时文件 {rumtime_path}");
-                try! vm_instance = vm::load(
-                    fact_runtime_path, 
-                    option::value <| runtime_content: buffer);
                     
-                try! _ = vm_instance->bootup(false)
-                    -> ok_or(F"初始化 Workflow `{workflow_path}` 的运行时失败");
+                try! prog = bind(\r = r;) <| dumpling::dispatch(
+                    func()
+                    {
+                        return or_map(\e = e->to_string;) <| dumpling::Program::create(
+                            fact_runtime_path,
+                            runtime_content: buffer);
+                    });
                     
+                try! dispatcher =
+                    ok_or("`jeapi::statements::dispatch` not found.") <|
+                        prog->unsafe::load_extern:<(string, string, ...)=> option<async<void>>>(
+                            "jeapi::statements::dispatch");
+                        
                 return_ok! Runtime{
-                    vm_state = vm_instance,
+                    dispatcher = dispatcher,
                     workflow_path = workflow_path,
                 };
             }
-            public func close(self: Runtime)
-            {
-                return self.vm_state->close();
-            }
+
             public func launch(self: Runtime, entry_name: string, graph_name: string, ...)
             {
                 let graph_path = self.workflow_path + F"/{graph_name}.je4workflow";
@@ -134,12 +139,7 @@ namespace jeapi
                     try! graph_data = je::file::readall(graph_path)
                         -> ok_or(F"无法读取的图文件 {graph_path}");
                         
-                    try! d = self.vm_state->invoke(
-                        "jeapi::statements::dispatch",
-                        [entry_name: dynamic, graph_data: dynamic]->connect(args))
-                    -> ok_or(F"调用Workflow `{self.workflow_path}` 的入口函数失败");
-                    
-                    return d-> unsafe::cast:<option<async<void>>>
+                    return self.dispatcher(entry_name, graph_data, args...)
                         -> ok_or(F"无法找到入口 `{entry_name}`");
                 } catch! e {
                     je::logerr(F"发起 Workflow `{self.workflow_path}` 失败: {e}");
@@ -160,7 +160,7 @@ namespace jeapi
             let (graph, _) = load_graph_and_extra_data(graph_data)
                 ->ok_or("无法解析图数据")
                 ->unwrap;
-                                
+                
             try! f = registered_dispathchers->get(name);
             return_value! f(graph, ......);
         }
