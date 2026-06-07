@@ -1087,7 +1087,7 @@ namespace workflow::nodes
         
         if (engine_path_crc64 == specify_module_path_crc64)
         {
-            module->update_compile(std::platform::runtime_type::DEBUG);
+            module->update_compile(platform::BuildType::DEBUG);
         }
         else
         {
@@ -1104,7 +1104,7 @@ namespace workflow::nodes
                         }
                     }
                     else; // 点NO 啥也不干~
-                    module->update_compile(std::platform::runtime_type::DEBUG);
+                    module->update_compile(platform::BuildType::DEBUG);
                 });
         }
     }

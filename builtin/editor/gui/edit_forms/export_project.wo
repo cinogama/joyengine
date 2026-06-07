@@ -9,6 +9,7 @@ import pkg::fsys;
 import pkg::process;
 import pkg::buffer;
 import pkg::thread;
+import pkg::platform;
 
 import builtin::editor::project::main;
 import builtin::editor::cpp::main;
@@ -219,7 +220,7 @@ namespace editor::gui::edit_forms
                     {
                         config->log("正在编译模块");
                         let compile_results = proj->get_all_modules
-                            ->> \k, v = (k, (v, v->compile(std::platform::runtime_type::RELEASE, option::none)));
+                            ->> \k, v = (k, (v, v->compile(platform::BuildType::RELEASE, option::none)));
                             ;
                         let error_compiling = compile_results->forall(\_, r = r[1]->is_err;);
                         if (error_compiling->empty == false)
@@ -240,7 +241,7 @@ namespace editor::gui::edit_forms
                             let dll_module_path = compile_results
                                 ->  unmapping
                                 ->> \kv = (kv[1][0], bind_wrap_path(kv[1][0]->get_build_dll_path(
-                                                std::platform::runtime_type::RELEASE)->unwrap)); // 必须有
+                                                platform::BuildType::RELEASE)->unwrap)); // 必须有
                                     ;
                                     
                             let copy_origin = func(opath: fsys::path_t, ppath: string)
@@ -309,7 +310,7 @@ namespace editor::gui::edit_forms
                                 ;
                             }
                             
-                            do CxxProject::get_dylib_files_by_config(std::platform::runtime_type::RELEASE)
+                            do CxxProject::get_dylib_files_by_config(platform::BuildType::RELEASE)
                                 ->> \libpath =
                                     do fsys::copy(
                                         fsys::normalize(

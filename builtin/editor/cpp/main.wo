@@ -61,14 +61,14 @@ namespace editor
             return CMAKE_PATH_MAY_NULL->>\p = fsys::isfile(p);->or(false);
         }
         
-        func _config_name(rttype: std::platform::runtime_type)
+        func _config_name(rttype: platform::BuildType)
         {
-            return rttype == std::platform::runtime_type::DEBUG ? "debug" | "relwithdebinfo";
+            return rttype == platform::BuildType::DEBUG ? "debug" | "relwithdebinfo";
         }
         
-        func _lib_append_suffix_for_link(libname: string, rttype: std::platform::runtime_type)
+        func _lib_append_suffix_for_link(libname: string, rttype: platform::BuildType)
         {
-            let isdebug = rttype == std::platform::runtime_type::DEBUG;
+            let isdebug = rttype == platform::BuildType::DEBUG;
             
             return libname
                 + (std::platform::bitwidth == 32 ? "32" | "")
@@ -80,9 +80,9 @@ namespace editor
                     | ".so")
                 ;
         }
-        func _lib_append_suffix(libname: string, rttype: std::platform::runtime_type)
+        func _lib_append_suffix(libname: string, rttype: platform::BuildType)
         {
-            let isdebug = rttype == std::platform::runtime_type::DEBUG;
+            let isdebug = rttype == platform::BuildType::DEBUG;
             
             return libname
                 + (std::platform::bitwidth == 32 ? "32" | "")
@@ -94,7 +94,7 @@ namespace editor
                     | ".so")
                 ;
         }
-        public func get_dylib_files_by_config(rttype: std::platform::runtime_type)
+        public func get_dylib_files_by_config(rttype: platform::BuildType)
         {
             let libname = ["libjoyecs", "libwoo"];
             return libname
@@ -262,7 +262,7 @@ endif()
                     };
                     
                     try! _ = created_module->regenerate_cmake_doc;
-                    created_module->update_compile(std::platform::runtime_type::DEBUG);
+                    created_module->update_compile(platform::BuildType::DEBUG);
                     
                     return_ok! created_module;
                 }
@@ -290,7 +290,7 @@ endif()
             }
             return option::none;
         }
-        func load_library_of_platform(self: CxxProject, rttype: std::platform::runtime_type)
+        func load_library_of_platform(self: CxxProject, rttype: platform::BuildType)
         {
             assert(!self.module_instance->is_value);
             match (search_file_in(get_current_runtime_path(self->get_runtime_path(rttype))->unwrap, ".dll"))
@@ -340,15 +340,15 @@ endif()
             
             return newest_path;
         }
-        func get_runtime_path(self: CxxProject, rttype: std::platform::runtime_type)
+        func get_runtime_path(self: CxxProject, rttype: platform::BuildType)
         {
             return self.path/".runtime"/_config_name(rttype);
         }
-        public func get_build_dll_path(self: CxxProject, rttype: std::platform::runtime_type)
+        public func get_build_dll_path(self: CxxProject, rttype: platform::BuildType)
         {
             return search_file_in(self.path/".build"/_config_name(rttype), ".dll");
         }
-        func update_library_of_platform(self: CxxProject, rttype: std::platform::runtime_type)
+        func update_library_of_platform(self: CxxProject, rttype: platform::BuildType)
         {
             using fsys;
             
@@ -494,7 +494,7 @@ endif()
                     return result::err(errmsg);
                 ok(mut created_module)?
                 {
-                    let rttype = std::platform::runtime_type::DEBUG;
+                    let rttype = platform::BuildType::DEBUG;
                     
                     // 校验最后一次编译时的引擎版本，如果不一致，那么删掉全部动态库
                     let is_same_version = file::readall(path / "version.json")
@@ -576,7 +576,7 @@ endif()
             compile_result  : mut option<result<result<string, string>, string>>,
         };
         
-        public func update_compile(self: CxxProject, rttype: std::platform::runtime_type)
+        public func update_compile(self: CxxProject, rttype: platform::BuildType)
         {
             // 起个线程跑编译，然后弄个窗口显示一下进度
             
@@ -664,7 +664,7 @@ endif()
                         }));
         }
         
-        public func compile(self: CxxProject, rttype: std::platform::runtime_type, context: option<compile_context>)
+        public func compile(self: CxxProject, rttype: platform::BuildType, context: option<compile_context>)
         {
             let config = _config_name(rttype);
             
