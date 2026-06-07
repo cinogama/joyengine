@@ -71,11 +71,11 @@ namespace editor
             let isdebug = rttype == platform::BuildType::DEBUG;
             
             return libname
-                + (std::platform::bitwidth == 32 ? "32" | "")
+                + (platform::bit_width == 32 ? "32" | "")
                 + (isdebug ? "_debug" | "")
-                + (std::platform::os == std::platform::os_type::WIN32
+                + (platform::os == platform::Os::WINDOWS
                     ? ".lib"
-                    | std::platform::os == std::platform::os_type::MACOS
+                    | platform::os == platform::Os::MACOS
                     ? ".a"
                     | ".so")
                 ;
@@ -85,11 +85,11 @@ namespace editor
             let isdebug = rttype == platform::BuildType::DEBUG;
             
             return libname
-                + (std::platform::bitwidth == 32 ? "32" | "")
+                + (platform::bit_width == 32 ? "32" | "")
                 + (isdebug ? "_debug" | "")
-                + (std::platform::os == std::platform::os_type::WIN32
+                + (platform::os == platform::Os::WINDOWS
                     ? ".dll"
-                    | std::platform::os == std::platform::os_type::MACOS
+                    | platform::os == platform::Os::MACOS
                     ? ".dylib"
                     | ".so")
                 ;
@@ -772,8 +772,8 @@ $$REGISTER_SYSTEM_TYPES$$
                         "-B", building_path,
                         F"-DCMAKE_BUILD_TYPE={config}",
                         F"-DBUILD_SHARED_LIBS=ON",
-                        F"-DJEMODULE_ENGINE_CORE_LIB_FILENAME={_lib_append_suffix_for_link("libjoyecs", std::platform::runtime)}",
-                        F"-DJEMODULE_WOOLANG_LIB_FILENAME={_lib_append_suffix_for_link("libwoo", std::platform::runtime)}",
+                        F"-DJEMODULE_ENGINE_CORE_LIB_FILENAME={_lib_append_suffix_for_link("libjoyecs", platform::build_type)}",
+                        F"-DJEMODULE_WOOLANG_LIB_FILENAME={_lib_append_suffix_for_link("libwoo", platform::build_type)}",
                     ]) != true)
             {
                 do context->>\context = context.display_msg = "CMake生成失败";;

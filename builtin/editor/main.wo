@@ -52,7 +52,7 @@ using Path = struct {
         // NOTE: 这里只考虑Windows的A-Z盘符，什么AA AB AC，就算windows未来支持也给爷滚
         let arr = ["/"]mut;
         
-        if (std::platform::os == std::platform::os_type::WIN32)
+        if (platform::os == platform::Os::WINDOWS)
         {
             for (let mut ch = 'A'; ch <= 'Z'; ch += 1: char)
                 arr->add([ch]->str + ":/");
@@ -495,7 +495,7 @@ func editor_main_entry()
             
             je::internal::init_graphic_pipeline_for_editor(u->get_universe());
             
-            if (std::platform::os != std::platform::os_type::WIN32 ||
+            if (platform::os != platform::Os::WINDOWS ||
                 editor::CxxProject::is_builder_ready())
             {
                 launch(

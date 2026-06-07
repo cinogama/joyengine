@@ -15,6 +15,7 @@ import pkg::buffer;
 import pkg::try;
 import pkg::iterator;
 import pkg::platform;
+import pkg::dumpling;
 
 import builtin::editor::project::main;
 import builtin::editor::cpp::main;
