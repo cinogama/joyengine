@@ -447,7 +447,7 @@ namespace jeapi
                 {
                     let mut color_high_light_factor =
                         RuntimeDebugger::check_node_active(nuid)
-                            ? 1.5 + 0.5 * math::sin(5. * std::time())
+                            ? 1.5 + 0.5 * math::sin(5. * std::clock())
                             | 1.0;
                             
                     let (r, g, b, a) =
@@ -785,13 +785,13 @@ namespace jeapi
                 
                 if (IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Right))
                 {
-                    right_mouse_down_time = std::time();
+                    right_mouse_down_time = std::clock();
                     mouse_down_pos = GetMousePos();
                 }
                 
                 if (IsItemHovered() && IsMouseReleased(ImGuiMouseButton::ImGuiMouseButton_Right))
                 {
-                    if (std::time() - right_mouse_down_time < 0.2)
+                    if (std::clock() - right_mouse_down_time < 0.2)
                     {
                         let (mx, my) = GetMousePos();
                         if (math::abs(mx - mouse_down_pos.0) < 5.

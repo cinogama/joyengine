@@ -499,21 +499,21 @@ namespace je
             }
             
             private let kind<EffectT> =
-                std::type_traits::is_same:<EffectT, reverb> ? effect_kind::REVERB |
-                    std::type_traits::is_same:<EffectT, chorus> ? effect_kind::CHORUS |
-                        std::type_traits::is_same:<EffectT, distortion> ? effect_kind::DISTORTION |
-                            std::type_traits::is_same:<EffectT, echo> ? effect_kind::ECHO |
-                                std::type_traits::is_same:<EffectT, flanger> ? effect_kind::FLANGER |
-                                    std::type_traits::is_same:<EffectT, frequency_shifter> ? effect_kind::FREQUENCY_SHIFTER |
-                                        std::type_traits::is_same:<EffectT, vocal_morpher> ? effect_kind::VOCAL_MORPHER |
-                                            std::type_traits::is_same:<EffectT, pitch_shifter> ? effect_kind::PITCH_SHIFTER |
-                                                std::type_traits::is_same:<EffectT, ring_modulator> ? effect_kind::RING_MODULATOR |
-                                                    std::type_traits::is_same:<EffectT, autowah> ? effect_kind::AUTOWAH |
-                                                        std::type_traits::is_same:<EffectT, compressor> ? effect_kind::COMPRESSOR |
-                                                            std::type_traits::is_same:<EffectT, equalizer> ? effect_kind::EQUALIZER |
-                                                                std::type_traits::is_same:<EffectT, eaxreverb> ? effect_kind::EAXREVERB |
-                                                                    effect_kind::UNKOWN;
-                                                                    
+                std::type_traits::is_same:<EffectT, reverb> ? effect_kind::REVERB
+                    | std::type_traits::is_same:<EffectT, chorus> ? effect_kind::CHORUS
+                    | std::type_traits::is_same:<EffectT, distortion> ? effect_kind::DISTORTION
+                    | std::type_traits::is_same:<EffectT, echo> ? effect_kind::ECHO
+                    | std::type_traits::is_same:<EffectT, flanger> ? effect_kind::FLANGER
+                    | std::type_traits::is_same:<EffectT, frequency_shifter> ? effect_kind::FREQUENCY_SHIFTER
+                    | std::type_traits::is_same:<EffectT, vocal_morpher> ? effect_kind::VOCAL_MORPHER
+                    | std::type_traits::is_same:<EffectT, pitch_shifter> ? effect_kind::PITCH_SHIFTER
+                    | std::type_traits::is_same:<EffectT, ring_modulator> ? effect_kind::RING_MODULATOR
+                    | std::type_traits::is_same:<EffectT, autowah> ? effect_kind::AUTOWAH
+                    | std::type_traits::is_same:<EffectT, compressor> ? effect_kind::COMPRESSOR
+                    | std::type_traits::is_same:<EffectT, equalizer> ? effect_kind::EQUALIZER
+                    | std::type_traits::is_same:<EffectT, eaxreverb> ? effect_kind::EAXREVERB
+                    | effect_kind::UNKOWN;
+                    
             public func create<EffectT>()=> effect<EffectT>
                 where kind:<EffectT> != effect_kind::UNKOWN;
             {
@@ -632,13 +632,13 @@ namespace je
             {
                 return self: gchandle->close();
             }
-
+            
             extern("libjoyecs", "wojeapi_audio_filter_create")
                 public func create()=> filter;
                 
             extern("libjoyecs", "wojeapi_audio_filter_info")
                 public func info(self: filter)=> filter_data_t;
-
+                
             public func update(self: filter, f: (filter_data_t)=> void)=> void
             {
                 extern("libjoyecs", "wojeapi_audio_filter_update")
@@ -698,7 +698,7 @@ namespace je
                 
             extern("libjoyecs", "wojeapi_audio_source_set_buffer")
                 public func set_buffer(self: source, buffer: buffer)=> void;
-
+                
             extern("libjoyecs", "wojeapi_audio_source_set_filter")
                 public func set_filter(self: source, filter: option<filter>)=> void;
                 
@@ -912,11 +912,11 @@ namespace je
             public func create()=> universe;
             
         extern("libjoyecs", "wojeapi_close_universe")
-        public func close(self: universe)=> void;
-        
+            public func close(self: universe)=> void;
+            
         extern("libjoyecs", "wojeapi_universe_extend_life")
             public func grow(self: universe)=> void;
-
+            
         extern("libjoyecs", "wojeapi_universe_reduce_life")
             public func trim(self: universe)=> void;
             

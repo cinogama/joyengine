@@ -624,7 +624,7 @@ func editor_main_entry()
                             
                             let shine_text = func(text: string)
                             {
-                                if ((std::time() * 2.): int % 2 == 0)
+                                if ((std::clock() * 2.): int % 2 == 0)
                                     Text(text);
                                 else
                                     TextDisabled(text);

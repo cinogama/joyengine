@@ -241,7 +241,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                         {
                             if (MenuItem("烘焙"))
                             {
-                                try!
+                                do try!
                                 {
                                     return bind(\r = r;) <|
                                         dumpling::dispatch(
@@ -322,10 +322,10 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                     
                     do BeginChildSize("##review", 395., h: real * 395. / w: real);
                     
-                    if (std::time() - econtext.m_last_update_time >= partical_context.m_frame_rate)
+                    if (std::clock() - econtext.m_last_update_time >= partical_context.m_frame_rate)
                     {
                         econtext.m_frame_index += 1;
-                        econtext.m_last_update_time = std::time();
+                        econtext.m_last_update_time = std::clock();
                     }
                     
                     econtext.m_frame_index = frames->empty
@@ -399,7 +399,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
         partical_context: ParticalContext)
     {
         let editor_context = _EditorContext{
-            m_last_update_time = mut std::time(),
+            m_last_update_time = mut std::clock(),
             m_frame_index = mut 0,
             m_enable_bake = mut true,
             

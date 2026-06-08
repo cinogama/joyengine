@@ -13,6 +13,8 @@ import pkg::interface;
 import pkg::makenew;
 import pkg::math;
 import pkg::worst;
+import pkg::dumpling;
+import pkg::try;
 
 import tools;
 import imagescripts;
@@ -174,7 +176,10 @@ namespace editor::gui::drawpannel
     
     interface! IDrawtool
     {
-        public func close(self)=> void;
+        public func close(self)=> void
+        {
+            do self;
+        }
         public func OnMouseDown(self, tex: graphic::texture, col: color4_t, pos: (int, int))=> void;
         public func OnMouseHold(self, tex: graphic::texture, col: color4_t, pos: (int, int))=> void;
         public func OnMouseUp(self, tex: graphic::texture, col: color4_t, pos: (int, int))=> void;
@@ -373,7 +378,8 @@ namespace editor::gui::drawpannel
                                             }
                                             if (MenuItem("脚本编辑器..."))
                                             {
-                                            let DEFAULT_SCRIPT_SRC = 
+                                                let DEFAULT_SCRIPT_SRC = 
+
 @"// 图像处理脚本
 import je;
 import je::editor::graphic;
@@ -390,15 +396,20 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
     let (r, g, b, a) = tex(t, x, y);
     return (r, g, b, a);
 }
-"@;
-                                                    new! ScriptEditor(context, DEFAULT_SCRIPT_SRC, "图像效果", false)
-                                                    ->set_callback(func(vmm)
+"@
+                                                    ;
+                                                new! ScriptEditor(context, DEFAULT_SCRIPT_SRC, "图像效果", false)
+                                                    ->set_callback(func(prog)
                                                         {
-                                                            let result = vmm->invoke(
-                                                                "main", [texture: dynamic, (0, 0): dynamic, (immut texture)->size: dynamic]);
+                                                            try! entry =
+                                                                prog->unsafe::load_extern:<(je::graphic::texture, (int, int), (int, int))=> void>(
+                                                                    "main");
+                                                                    
+                                                            entry(immut texture, (0, 0), (immut texture)->size);
+
                                                             history_mgr->save_step();
                                                             
-                                                            return result;
+                                                            return_value! nil: dynamic;
                                                         });
                                             }
                                             EndMenu();
@@ -730,7 +741,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
             
             block_size = (mut 16, mut 16),
         };
-        launch(\=edittexture(
+        launch(\= edittexture(
                     context,
                     option::none,
                     passes,

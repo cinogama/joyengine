@@ -10,6 +10,7 @@ import pkg::process;
 import pkg::buffer;
 import pkg::thread;
 import pkg::platform;
+import pkg::dumpling;
 
 import builtin::editor::project::main;
 import builtin::editor::cpp::main;
@@ -63,6 +64,8 @@ namespace editor::gui::edit_forms
     
     func _default_rule(saving_woolang_pdi: bool, originpath: fsys::path_t, packpath: string)=> Action
     {
+        do saving_woolang_pdi;
+
         // 如果是文件，才考虑打包
         if (fsys::isfile(originpath))
         {
@@ -118,12 +121,12 @@ namespace editor::gui::edit_forms
                     
                 return Action::ACTION(func(pconfig, fimg){
                         pconfig->log(F"正在编译脚本：{packpath}");
-                        match (vm::load(originpath->to_string, option::none))
+                        match (dumpling::Program::dump_file(originpath))
                         {
-                            ok(vminstance)?
+                            ok(script_binary_buffer)?
                             {
                                 let builder = buffer::builder::create();
-                                builder->appendbuffer(vminstance->dump_binary(saving_woolang_pdi));
+                                builder->appendbuffer(script_binary_buffer);
                                 
                                 assert(
                                     fimg->pack_buffer(
@@ -488,9 +491,8 @@ namespace editor::gui::edit_forms
                                 
                             let builder = buffer::builder::create();
                             builder->appendbuffer(
-                                vm::load("@/builtin/main.wo", option::value <| final_boot_script: buffer)
-                                    ->unwrap
-                                    ->dump_binary(saving_woolang_pdi));
+                                dumpling::Program::dump_source("@/builtin/main.wo", final_boot_script: buffer)
+                                    ->unwrap);
                                     
                             assert(
                                 fimg->pack_buffer(

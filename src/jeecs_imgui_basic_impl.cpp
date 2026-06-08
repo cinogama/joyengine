@@ -27,7 +27,9 @@ std::unordered_map<ImGuiKey, key_state> _key_state_record;
 
 struct gui_wo_job_coroutine
 {
+    std::optional<woort_value> function_to_spawn;
     woort_vm* work_vm;
+
     gui_wo_job_coroutine* last;
 };
 jeecs::basic::atomic_list<gui_wo_job_coroutine> _wo_job_list;
@@ -1539,18 +1541,23 @@ WOORT_API woort_api je_gui_launch(void)
 {
     woort_VMRuntime* new_vm = woort_vm_create();
 
+    woort_value fn;
     woort_VMRuntime* const last = woort_vm_swap(new_vm);
     {
-        woort_value fn;
-        woort_push_reserve(1, &fn);
+        if (!woort_push_reserve(1, &fn))
+        {
+            (void)woort_vm_swap(last);
+            return woort_ret_panic("New vm stack overflow.");
+        }
         woort_import_value(fn, last, 0);
-        woort_spawn(WOORT_IGNORE, fn);
-        woort_pop(1);
     }
-    woort_vm_swap(last);
+    (void)woort_vm_swap(last);
 
     gui_wo_job_coroutine* guico = new gui_wo_job_coroutine;
+
+    guico->function_to_spawn.emplace(fn);
     guico->work_vm = new_vm;
+
     _wo_new_job_list.add_one(guico);
 
     return woort_ret_void();
@@ -2531,9 +2538,19 @@ void jegui_update_basic(
             auto cur_job = chain;
             chain = chain->last;
 
+            woort_VmCallStatus result;
+
             woort_VMRuntime* prev = woort_vm_swap(cur_job->work_vm);
-            woort_VmCallStatus result = woort_resume(WOORT_IGNORE);
-            woort_vm_swap(prev);
+            {
+                if (cur_job->function_to_spawn.has_value())
+                {
+                    result = woort_spawn(WOORT_IGNORE, cur_job->function_to_spawn.value());
+                    cur_job->function_to_spawn.reset();
+                }
+                else
+                    result = woort_resume(WOORT_IGNORE);
+            }
+            (void)woort_vm_swap(prev);
             if (result == WOORT_VM_CALL_STATUS_YIELD)
             {
                 _wo_job_list.add_one(cur_job);

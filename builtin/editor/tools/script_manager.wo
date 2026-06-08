@@ -28,7 +28,7 @@ namespace editor::tools
                 return result::err("没有找到此脚本");
             value(path)?
             {
-                dumpling::dispatch(
+                return bind(\r = r;) <| dumpling::dispatch(
                     func(){
                         try! program = or_map(\e = e->to_string;) <| dumpling::Program::load(path);
                         
@@ -36,6 +36,7 @@ namespace editor::tools
                                 "main"))
                         {
                             value(main_func)?
+                            {
                                 match (ctx->get_editing_entity)
                                 {
                                     value(euid)?
@@ -45,7 +46,10 @@ namespace editor::tools
                                         main_func(
                                             proj->get_env->get_universe, proj->get_editing_world, option::none);
                                 }
-                            none?;
+                                return_ok!;
+                            }
+                            none?
+                                throw! "未找到脚本的 `main` 入口";
                         }
                     });
             }

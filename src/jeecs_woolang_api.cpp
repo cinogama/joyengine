@@ -340,9 +340,10 @@ WOORT_API woort_api wojeapi_universe_reduce_life(void)
 }
 WOORT_API woort_api wojeapi_universe_wait(void)
 {
+    jeecs::game_universe u(woort_pointer(0));
     woort_vm* const last = woort_vm_swap(nullptr);
     {
-        jeecs::game_universe(woort_pointer(0)).wait();
+        u.wait();
     }
     (void)woort_vm_swap(last);
 
@@ -1191,83 +1192,52 @@ WOORT_API woort_api wojeapi_input_update_window_title(void)
 }
 
 // ECS OTHER
-WOORT_API woort_api wojeapi_log(void)
+static std::string _wojeapi_log_string(void)
 {
-    size_t argc = (size_t)woort_int(0);
+    const size_t argc = (size_t)woort_int(0);
     std::string disp;
 
     for (size_t i = 0; i < argc; i++)
     {
-        char* str = woort_serialize_dynbox(i + 1, WOORT_SERIALIZE_FLAG_NONE);
-        disp += str;
-        woort_free(str);
+        if (woort_unbox_type(i + 1) == WOORT_BOX_VALUE_TYPE_STRING)
+            disp += woort_string(i + 1);
+        else
+        {
+            char* str = woort_serialize_dynbox(i + 1, WOORT_SERIALIZE_FLAG_NONE);
+            disp += str;
+            woort_free(str);
+        }
     }
+    return disp;
+}
 
-    jeecs::debug::log("%s", disp.c_str());
+WOORT_API woort_api wojeapi_log(void)
+{
+    jeecs::debug::log("%s", _wojeapi_log_string().c_str());
     return woort_ret_void();
 }
 
 WOORT_API woort_api wojeapi_loginfo(void)
 {
-    size_t argc = (size_t)woort_int(0);
-    std::string disp;
-
-    for (size_t i = 0; i < argc; i++)
-    {
-        char* str = woort_serialize_dynbox(i + 1, WOORT_SERIALIZE_FLAG_NONE);
-        disp += str;
-        woort_free(str);
-    }
-
-    jeecs::debug::loginfo("%s", disp.c_str());
+    jeecs::debug::loginfo("%s", _wojeapi_log_string().c_str());
     return woort_ret_void();
 }
 
 WOORT_API woort_api wojeapi_logwarn(void)
 {
-    size_t argc = (size_t)woort_int(0);
-    std::string disp;
-
-    for (size_t i = 0; i < argc; i++)
-    {
-        char* str = woort_serialize_dynbox(i + 1, WOORT_SERIALIZE_FLAG_NONE);
-        disp += str;
-        woort_free(str);
-    }
-
-    jeecs::debug::logwarn("%s", disp.c_str());
+    jeecs::debug::logwarn("%s", _wojeapi_log_string().c_str());
     return woort_ret_void();
 }
 
 WOORT_API woort_api wojeapi_logerr(void)
 {
-    size_t argc = (size_t)woort_int(0);
-    std::string disp;
-
-    for (size_t i = 0; i < argc; i++)
-    {
-        char* str = woort_serialize_dynbox(i + 1, WOORT_SERIALIZE_FLAG_NONE);
-        disp += str;
-        woort_free(str);
-    }
-
-    jeecs::debug::logerr("%s", disp.c_str());
+    jeecs::debug::logerr("%s", _wojeapi_log_string().c_str());
     return woort_ret_void();
 }
 
 WOORT_API woort_api wojeapi_logfatal(void)
 {
-    size_t argc = (size_t)woort_int(0);
-    std::string disp;
-
-    for (size_t i = 0; i < argc; i++)
-    {
-        char* str = woort_serialize_dynbox(i + 1, WOORT_SERIALIZE_FLAG_NONE);
-        disp += str;
-        woort_free(str);
-    }
-
-    jeecs::debug::logfatal("%s", disp.c_str());
+    jeecs::debug::logfatal("%s", _wojeapi_log_string().c_str());
     return woort_ret_void();
 }
 
@@ -1442,6 +1412,8 @@ WOORT_API woort_api wojeapi_texture_open(void)
 
     std::optional<jeecs::basic::resource<jeecs::graphic::texture>> loaded_texture;
 
+    const woort_U8CString path = woort_string(1);
+
     woort_vm* const last = woort_vm_swap(nullptr);
     {
         jegl_context* gcontext = nullptr;
@@ -1450,7 +1422,7 @@ WOORT_API woort_api wojeapi_texture_open(void)
             gcontext = jegl_uhost_get_context(
                 jegl_uhost_get_or_create_for_universe(universe_addr, nullptr));
         }
-        loaded_texture = jeecs::graphic::texture::load(gcontext, woort_string(1));
+        loaded_texture = jeecs::graphic::texture::load(gcontext, path);
     }
     (void)woort_vm_swap(last);
 

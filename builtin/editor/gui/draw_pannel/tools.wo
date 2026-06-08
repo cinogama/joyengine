@@ -485,10 +485,6 @@ namespace editor::gui::drawpannel::tools
         m_magic_scripts: option<ApplyScriptHost>,
     }
     {
-        public func close(self: MagicRange)
-        {
-            do self.m_magic_scripts->> \m = m->close();;
-        }
         public func create(host: result<ApplyScriptHost, string>)
         {
             match (host)

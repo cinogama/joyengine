@@ -1602,11 +1602,11 @@ namespace $$MODULE_NAME$$
         Text(path.name);
         EndGroup();
         
-        static let mut _last_click_time = std::time();
+        static let mut _last_click_time = std::clock();
         
         if(clicked)
         {
-            let _current_click_time = std::time();
+            let _current_click_time = std::clock();
             if (_current_click_time - _last_click_time < 0.2)
                 return Action::DoubleClick;
                 

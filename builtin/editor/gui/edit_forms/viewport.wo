@@ -177,12 +177,12 @@ namespace editor::gui::edit_forms
                             else if (jeapi::gui::inputmgr::keyspush([ImGuiKey::ImGuiKey_Tab]))
                             {
                                 static let mut last_click_time = 0.;
-                                if (std::time() - last_click_time <= 0.2)
+                                if (std::clock() - last_click_time <= 0.2)
                                 {
                                     if ((mover_mode +:= 1: je::internal::mover_mode) > je::internal::mover_mode::SCALE)
                                         mover_mode = je::internal::mover_mode::SELECTION;
                                 }
-                                last_click_time = std::time();
+                                last_click_time = std::clock();
                             }
                             
                             if (BeginMenuEnabled(F"{MOVER_MODE[mover_mode]}|{COORD_MODE[coord_mode]}", debug_camera_entity->is_value))
@@ -419,14 +419,14 @@ namespace editor::gui::edit_forms
                                             {
                                                 if (! right_button_down_last_frame)
                                                 {
-                                                    right_key_down_time = std::time();
+                                                    right_key_down_time = std::clock();
                                                     mouse_click_x = mx;
                                                     mouse_click_y = my;
                                                 }
                                             }
                                             else
                                             {
-                                                if (std::time() - right_key_down_time < 0.2
+                                                if (std::clock() - right_key_down_time < 0.2
                                                     && (mouse_click_x - mx, mouse_click_y - my): vec2->length < 5.)
                                                     OpenPopup("RightClickContextMenu");
                                             }

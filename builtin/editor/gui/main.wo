@@ -21,13 +21,13 @@ namespace editor::gui
         public func create(intg: real)
         {
             return Timer{
-                m_last_update_time = mut std::time(),
+                m_last_update_time = mut std::clock(),
                 m_update_intg = intg,
             };
         }
         func update(self: Timer)
         {
-            let cur_time = std::time();
+            let cur_time = std::clock();
             if (cur_time - self.m_last_update_time >= self.m_update_intg)
             {
                 self.m_last_update_time = cur_time;
@@ -151,7 +151,7 @@ namespace editor::gui
             }
             
             // 在此处运行和更新固定更新逻辑
-            self.m_fix_update_jobs->copy(self.m_fix_update_jobs
+            self.m_fix_update_jobs->copy_from(self.m_fix_update_jobs
                 =>> \job_delegate = job_delegate() ? [job_delegate]mut | []mut;
                 );
                 
