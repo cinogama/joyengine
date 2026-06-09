@@ -156,37 +156,25 @@ WOORT_API woort_api je_gui_get_clip_board_text(void)
 woort_value set_float2_to_struct(woort_value v, float x, float y)
 {
     woort_set_struct(v, 2);
-    woort_value elem;
-    woort_set_float(elem, x);
-    woort_struct_set(v, 0, elem);
-    woort_set_float(elem, y);
-    woort_struct_set(v, 1, elem);
+    woort_struct_set_float(v, 0, x);
+    woort_struct_set_float(v, 1, y);
     return v;
 }
 woort_value set_float3_to_struct(woort_value v, float x, float y, float z)
 {
     woort_set_struct(v, 3);
-    woort_value elem;
-    woort_set_float(elem, x);
-    woort_struct_set(v, 0, elem);
-    woort_set_float(elem, y);
-    woort_struct_set(v, 1, elem);
-    woort_set_float(elem, z);
-    woort_struct_set(v, 2, elem);
+    woort_struct_set_float(v, 0, x);
+    woort_struct_set_float(v, 1, y);
+    woort_struct_set_float(v, 2, z);
     return v;
 }
 woort_value set_float4_to_struct(woort_value v, float x, float y, float z, float w)
 {
     woort_set_struct(v, 4);
-    woort_value elem;
-    woort_set_float(elem, x);
-    woort_struct_set(v, 0, elem);
-    woort_set_float(elem, y);
-    woort_struct_set(v, 1, elem);
-    woort_set_float(elem, z);
-    woort_struct_set(v, 2, elem);
-    woort_set_float(elem, w);
-    woort_struct_set(v, 3, elem);
+    woort_struct_set_float(v, 0, x);
+    woort_struct_set_float(v, 1, y);
+    woort_struct_set_float(v, 2, z);
+    woort_struct_set_float(v, 3, w);
     return v;
 }
 

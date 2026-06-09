@@ -7623,37 +7623,14 @@ namespace jeecs
             }
             void JEParseFromScriptType(woort_value v)
             {
-                woort_value s;
-                if (!woort_push_reserve(1, &s))
-                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
-                else
-                {
-                    woort_struct_get(s, v, 0);
-                    x = woort_float(s);
-
-                    woort_struct_get(s, v, 1);
-                    y = woort_float(s);
-
-                    woort_pop(1);
-                }
+                x = woort_struct_get_float(v, 0);
+                y = woort_struct_get_float(v, 1);
             }
             void JEParseToScriptType(woort_value v) const
             {
-                woort_value s;
-                if (!woort_push_reserve(1, &s))
-                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
-                else
-                {
-                    woort_set_struct(v, 2);
-
-                    woort_set_float(s, x);
-                    woort_struct_set(v, 0, s);
-
-                    woort_set_float(s, y);
-                    woort_struct_set(v, 1, s);
-
-                    woort_pop(1);
-                }
+                woort_set_struct(v, 2);
+                woort_struct_set_float(v, 0, x);
+                woort_struct_set_float(v, 1, y);
             }
         };
         inline static constexpr vec2 operator*(float _f, const vec2& _v2) noexcept
@@ -7782,37 +7759,14 @@ namespace jeecs
 
             void JEParseFromScriptType(woort_value v)
             {
-                woort_value s;
-                if (!woort_push_reserve(1, &s))
-                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
-                else
-                {
-                    woort_struct_get(s, v, 0);
-                    x = (int)woort_int(s);
-
-                    woort_struct_get(s, v, 1);
-                    y = (int)woort_int(s);
-
-                    woort_pop(1);
-                }
+                x = static_cast<int>(woort_struct_get_int(v, 0));
+                y = static_cast<int>(woort_struct_get_int(v, 1));
             }
             void JEParseToScriptType(woort_value v) const
             {
-                woort_value s;
-                if (!woort_push_reserve(1, &s))
-                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
-                else
-                {
-                    woort_set_struct(v, 2);
-
-                    woort_set_int(s, (woort_Int)x);
-                    woort_struct_set(v, 0, s);
-
-                    woort_set_int(s, (woort_Int)y);
-                    woort_struct_set(v, 1, s);
-
-                    woort_pop(1);
-                }
+                woort_set_struct(v, 2);
+                woort_struct_set_int(v, 0, static_cast<woort_Int>(x));
+                woort_struct_set_int(v, 1, static_cast<woort_Int>(y));
             }
         };
 
@@ -7981,43 +7935,16 @@ namespace jeecs
             }
             void JEParseFromScriptType(woort_value v)
             {
-                woort_value s;
-                if (!woort_push_reserve(1, &s))
-                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
-                else
-                {
-                    woort_struct_get(s, v, 0);
-                    x = woort_float(s);
-
-                    woort_struct_get(s, v, 1);
-                    y = woort_float(s);
-
-                    woort_struct_get(s, v, 2);
-                    z = woort_float(s);
-
-                    woort_pop(1);
-                }
+                x = woort_struct_get_float(v, 0);
+                y = woort_struct_get_float(v, 1);
+                z = woort_struct_get_float(v, 2);
             }
             void JEParseToScriptType(woort_value v) const
             {
-                woort_value s;
-                if (!woort_push_reserve(1, &s))
-                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
-                else
-                {
-                    woort_set_struct(v, 3);
-
-                    woort_set_float(s, x);
-                    woort_struct_set(v, 0, s);
-
-                    woort_set_float(s, y);
-                    woort_struct_set(v, 1, s);
-
-                    woort_set_float(s, z);
-                    woort_struct_set(v, 2, s);
-
-                    woort_pop(1);
-                }
+                woort_set_struct(v, 3);
+                woort_struct_set_float(v, 0, x);
+                woort_struct_set_float(v, 1, y);
+                woort_struct_set_float(v, 2, z);
             }
         };
         inline static constexpr vec3 operator*(float _f, const vec3& _v3) noexcept
@@ -8189,49 +8116,18 @@ namespace jeecs
             }
             void JEParseFromScriptType(woort_value v)
             {
-                woort_value s;
-                if (!woort_push_reserve(1, &s))
-                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
-                else
-                {
-                    woort_struct_get(s, v, 0);
-                    x = woort_float(s);
-
-                    woort_struct_get(s, v, 1);
-                    y = woort_float(s);
-
-                    woort_struct_get(s, v, 2);
-                    z = woort_float(s);
-
-                    woort_struct_get(s, v, 3);
-                    w = woort_float(s);
-
-                    woort_pop(1);
-                }
+                x = woort_struct_get_float(v, 0);
+                y = woort_struct_get_float(v, 1);
+                z = woort_struct_get_float(v, 2);
+                w = woort_struct_get_float(v, 3);
             }
             void JEParseToScriptType(woort_value v) const
             {
-                woort_value s;
-                if (!woort_push_reserve(1, &s))
-                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
-                else
-                {
-                    woort_set_struct(v, 4);
-
-                    woort_set_float(s, x);
-                    woort_struct_set(v, 0, s);
-
-                    woort_set_float(s, y);
-                    woort_struct_set(v, 1, s);
-
-                    woort_set_float(s, z);
-                    woort_struct_set(v, 2, s);
-
-                    woort_set_float(s, w);
-                    woort_struct_set(v, 3, s);
-
-                    woort_pop(1);
-                }
+                woort_set_struct(v, 4);
+                woort_struct_set_float(v, 0, x);
+                woort_struct_set_float(v, 1, y);
+                woort_struct_set_float(v, 2, z);
+                woort_struct_set_float(v, 3, w);
             }
         };
         inline static constexpr vec4 operator*(float _f, const vec4& _v4) noexcept
@@ -8507,49 +8403,18 @@ namespace jeecs
             }
             void JEParseFromScriptType(woort_value v)
             {
-                woort_value s;
-                if (!woort_push_reserve(1, &s))
-                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
-                else
-                {
-                    woort_struct_get(s, v, 0);
-                    x = woort_float(s);
-
-                    woort_struct_get(s, v, 1);
-                    y = woort_float(s);
-
-                    woort_struct_get(s, v, 2);
-                    z = woort_float(s);
-
-                    woort_struct_get(s, v, 3);
-                    w = woort_float(s);
-
-                    woort_pop(1);
-                }
+                x = woort_struct_get_float(v, 0);
+                y = woort_struct_get_float(v, 1);
+                z = woort_struct_get_float(v, 2);
+                w = woort_struct_get_float(v, 3);
             }
             void JEParseToScriptType(woort_value v) const
             {
-                woort_value s;
-                if (!woort_push_reserve(1, &s))
-                    woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow");
-                else
-                {
-                    woort_set_struct(v, 4);
-
-                    woort_set_float(s, x);
-                    woort_struct_set(v, 0, s);
-
-                    woort_set_float(s, y);
-                    woort_struct_set(v, 1, s);
-
-                    woort_set_float(s, z);
-                    woort_struct_set(v, 2, s);
-
-                    woort_set_float(s, w);
-                    woort_struct_set(v, 3, s);
-
-                    woort_pop(1);
-                }
+                woort_set_struct(v, 4);
+                woort_struct_set_float(v, 0, x);
+                woort_struct_set_float(v, 1, y);
+                woort_struct_set_float(v, 2, z);
+                woort_struct_set_float(v, 3, w);
             }
         };
 

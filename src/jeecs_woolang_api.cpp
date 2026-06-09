@@ -2606,10 +2606,12 @@ WOORT_API woort_api wojeapi_dynamic_parser_update_script(void)
 {
     std::optional<std::string> result;
 
+    const woort_U8CString parser_path = woort_string(0);
+
     woort_vm* const last = woort_vm_swap(nullptr);
     {
         std::lock_guard g1(_je_dynamic_parser_global_context._je_dynamic_parser_mx);
-        result = _je_dynamic_parser_update_all(woort_string(0));
+        result = _je_dynamic_parser_update_all(parser_path);
     }
     (void)woort_vm_swap(last);
 
