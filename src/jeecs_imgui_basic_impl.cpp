@@ -1608,9 +1608,9 @@ WOORT_API woort_api je_gui_register_exit_callback(void)
         _je_gui_static_ctx._jegui_exit_callback_handler_vm == nullptr && _je_gui_static_ctx._jegui_exit_callback_function == nullptr);
 
     _je_gui_static_ctx._jegui_exit_callback_handler_vm = woort_vm_create();
-    _je_gui_static_ctx._jegui_exit_callback_function = woort_GC_Pin_create(1);
+    _je_gui_static_ctx._jegui_exit_callback_function = woort_GCPin_create(1);
 
-    woort_GC_Pin_set_value(_je_gui_static_ctx._jegui_exit_callback_function, 0, 0);
+    woort_GCPin_set(_je_gui_static_ctx._jegui_exit_callback_function, 0, 0);
 
     return woort_ret_void();
 }
@@ -1620,7 +1620,7 @@ WOORT_API woort_api je_gui_unregister_exit_callback(void)
         return woort_ret_panic("Callback not found.");
 
     woort_vm_close(_je_gui_static_ctx._jegui_exit_callback_handler_vm);
-    woort_GC_Pin_destroy(_je_gui_static_ctx._jegui_exit_callback_function);
+    woort_GCPin_destroy(_je_gui_static_ctx._jegui_exit_callback_function);
 
     _je_gui_static_ctx._jegui_exit_callback_handler_vm = nullptr;
     _je_gui_static_ctx._jegui_exit_callback_function = nullptr;
@@ -2624,7 +2624,7 @@ bool jegui_shutdown_callback()
             woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow.");
         else
         {
-            woort_GC_Pin_get_value(tmp, _je_gui_static_ctx._jegui_exit_callback_function, 0);
+            woort_GCPin_get(tmp, _je_gui_static_ctx._jegui_exit_callback_function, 0);
             if (WOORT_VM_CALL_STATUS_NORMAL == woort_invoke(tmp, tmp))
                 close = woort_bool(tmp);
         }

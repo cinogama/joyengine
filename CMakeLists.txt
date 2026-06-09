@@ -108,7 +108,7 @@ target_link_libraries(joyengine_configs INTERFACE joyengine_core_pre_define_macr
 target_compile_features(joyengine_configs INTERFACE cxx_std_20)
 
 if(MSVC) 
-    target_compile_options(joyengine_configs INTERFACE "/source-charset:utf-8")
+    target_compile_options(joyengine_configs INTERFACE "/utf-8")
 else()
     target_compile_options(joyengine_configs INTERFACE -fno-exceptions)
     target_compile_options(joyengine_configs INTERFACE -pthread)
@@ -133,10 +133,6 @@ endif()
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static box2d 3.1" FORCE)
 add_subdirectory("3rd/box2d")
 
-if(MSVC)
-    # Set char set to UTF-8 for assimp.
-    add_compile_options("/source-charset:utf-8")
-endif()
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static assimp" FORCE)
 set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "Build zlib in assimp" FORCE)
 add_subdirectory("3rd/assimp")

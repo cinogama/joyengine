@@ -24,39 +24,68 @@ namespace jeecs
             woort_GCPin* m_pin_value;
             woovalue()
             {
-                m_pin_value = woort_GC_Pin_create(1);
+                const bool entry_tmp_gc_guard = woort_GC_sync_marking_lock();
+                {
+                    m_pin_value = woort_GCPin_create(1);
+                }
+                if (entry_tmp_gc_guard)
+                    woort_GC_sync_marking_unlock();
+
             }
             ~woovalue()
             {
                 if (m_pin_value != nullptr)
-                    woort_GC_Pin_destroy(m_pin_value);
+                {
+                    const bool entry_tmp_gc_guard = woort_GC_sync_marking_lock();
+                    {
+                        woort_GCPin_destroy(m_pin_value);
+                    }
+                    if (entry_tmp_gc_guard)
+                        woort_GC_sync_marking_unlock();
+                }
             }
-            woovalue(const woovalue &val)
+            woovalue(const woovalue& val)
                 : woovalue()
             {
                 woort_Value tmpval;
-
-                woort_GC_Pin_get_internal_value(&tmpval, val.m_pin_value, 0);
-                woort_GC_Pin_set_internal_value(m_pin_value, 0, &tmpval);
+                const bool entry_tmp_gc_guard = woort_GC_sync_marking_lock();
+                {
+                    woort_GCPin_get_internal(&tmpval, val.m_pin_value, 0);
+                    woort_GCPin_set_internal(m_pin_value, 0, &tmpval);
+                }
+                if (entry_tmp_gc_guard)
+                    woort_GC_sync_marking_unlock();
             }
-            woovalue(woovalue &&val)
+            woovalue(woovalue&& val)
             {
                 m_pin_value = val.m_pin_value;
                 val.m_pin_value = nullptr;
             }
-            woovalue &operator=(const woovalue &val)
+            woovalue& operator=(const woovalue& val)
             {
                 woort_Value tmpval;
 
-                woort_GC_Pin_get_internal_value(&tmpval, val.m_pin_value, 0);
-                woort_GC_Pin_set_internal_value(m_pin_value, 0, &tmpval);
+                const bool entry_tmp_gc_guard = woort_GC_sync_marking_lock();
+                {
+                    woort_GCPin_get_internal(&tmpval, val.m_pin_value, 0);
+                    woort_GCPin_set_internal(m_pin_value, 0, &tmpval);
+                }
+                if (entry_tmp_gc_guard)
+                    woort_GC_sync_marking_unlock();
 
                 return *this;
             }
-            woovalue &operator=(woovalue &&val)
+            woovalue& operator=(woovalue&& val)
             {
                 if (m_pin_value != nullptr)
-                    woort_GC_Pin_destroy(m_pin_value);
+                {
+                    const bool entry_tmp_gc_guard = woort_GC_sync_marking_lock();
+                    {
+                        woort_GCPin_destroy(m_pin_value);
+                    }
+                    if (entry_tmp_gc_guard)
+                        woort_GC_sync_marking_unlock();
+                }
 
                 m_pin_value = val.m_pin_value;
                 val.m_pin_value = nullptr;
@@ -64,21 +93,21 @@ namespace jeecs
                 return *this;
             }
 
-            static const char *JEScriptTypeName()
+            static const char* JEScriptTypeName()
             {
                 return "dynamic";
             }
-            static const char *JEScriptTypeDeclare()
+            static const char* JEScriptTypeDeclare()
             {
                 return "";
             }
             void JEParseFromScriptType(woort_value v)
             {
-                woort_GC_Pin_set_value(m_pin_value, 0, v);
+                woort_GCPin_set(m_pin_value, 0, v);
             }
             void JEParseToScriptType(woort_value v) const
             {
-                woort_GC_Pin_get_value(v, m_pin_value, 0);
+                woort_GCPin_get(v, m_pin_value, 0);
             }
         };
     }

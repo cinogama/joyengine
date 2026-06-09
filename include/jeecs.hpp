@@ -971,7 +971,7 @@ JE_API void je_register_member(
     const jeecs::typing::type_info* _membertype,
     const char* _member_name,
     const char* _woovalue_type_may_null,
-    woort_value _woovalue_init_may_null /* Use WOORT_IGNORE as none init */,
+    woort_value _boxed_woovalue_init_may_ignored /* Use WOORT_IGNORE as none init */,
     ptrdiff_t _member_offset);
 
 /*

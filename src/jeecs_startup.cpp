@@ -101,7 +101,7 @@ woort_PanicHandler_Action _jedbg_hook_woolang_panic(
         woort_set_string(_je_global_panic_hooker_s + 4, reason);
         woort_set_string(_je_global_panic_hooker_s + 5, trace.c_str());
 
-        woort_GC_Pin_get_value(
+        woort_GCPin_get(
             _je_global_panic_hooker_s + 6,
             _je_global_context._je_global_panic_hook_function,
             0);
@@ -132,8 +132,8 @@ WOORT_API woort_api wojeapi_editor_register_panic_hook(void)
     if (_je_global_context._je_global_panic_hooker == nullptr)
         return woort_ret_panic("Unable to register panic hook: Failed to create vm.");
 
-    _je_global_context._je_global_panic_hook_function = woort_GC_Pin_create(1);
-    woort_GC_Pin_set_value(_je_global_context._je_global_panic_hook_function, 0, 0);
+    _je_global_context._je_global_panic_hook_function = woort_GCPin_create(1);
+    woort_GCPin_set(_je_global_context._je_global_panic_hook_function, 0, 0);
 
     _je_global_context._je_global_last_panic_handler =
         woort_set_panic_callback(&_jedbg_hook_woolang_panic);
@@ -418,16 +418,22 @@ void je_finish()
     if (_je_global_context._je_global_panic_hooker != nullptr)
     {
         woort_vm_close(_je_global_context._je_global_panic_hooker);
-        woort_GC_Pin_destroy(_je_global_context._je_global_panic_hook_function);
 
+        const bool entry_tmp_gc_guard = woort_GC_sync_marking_lock();
+        {
+            woort_GCPin_destroy(_je_global_context._je_global_panic_hook_function);
+        }
+        if (entry_tmp_gc_guard)
+            woort_GC_sync_marking_unlock();
+        
         _je_global_context._je_global_panic_hooker = nullptr;
         _je_global_context._je_global_panic_hook_function = nullptr;
 
-        woort_set_panic_callback(_je_global_context._je_global_last_panic_handler);
+        (void)woort_set_panic_callback(_je_global_context._je_global_last_panic_handler);
         _je_global_context._je_global_last_panic_handler = nullptr;
     }
 
-    woort_set_panic_callback(NULL);
+    (void)woort_set_panic_callback(NULL);
 
     wo_finish([](void*)
         {

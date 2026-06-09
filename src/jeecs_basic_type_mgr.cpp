@@ -164,7 +164,7 @@ namespace jeecs_impl
             const jeecs::typing::type_info *_membertype,
             const char *_member_name,
             const char *_woovalue_type_may_null,
-            woort_value _woovalue_init_may_null,
+            woort_value _boxed_woovalue_init_may_ignored,
             ptrdiff_t _member_offset) noexcept
         {
             if (_classtype->m_member_types == nullptr)
@@ -193,12 +193,12 @@ namespace jeecs_impl
             meminfo->m_member_offset = _member_offset;
             meminfo->m_next_member = nullptr;
 
-            if (_woovalue_type_may_null != nullptr && _woovalue_init_may_null != WOORT_IGNORE)
+            if (_woovalue_type_may_null != nullptr && _boxed_woovalue_init_may_ignored != WOORT_IGNORE)
             {
                 meminfo->m_woovalue_type_may_null = jeecs::basic::make_new_string(_woovalue_type_may_null);
-                meminfo->m_woovalue_init_may_null = woort_GC_Pin_create(1);
-                woort_GC_Pin_set_value(
-                    meminfo->m_woovalue_init_may_null, 0, _woovalue_init_may_null);
+                meminfo->m_woovalue_init_may_null = woort_GCPin_create(1);
+                woort_GCPin_set(
+                    meminfo->m_woovalue_init_may_null, 0, _boxed_woovalue_init_may_ignored);
             }
 
             auto **m_new_member_ptr = &class_member_info->m_members;
@@ -294,8 +294,13 @@ namespace jeecs_impl
                 if (current_member->m_member_name != nullptr)
                     je_mem_free((void *)current_member->m_woovalue_type_may_null);
 
-                if (current_member->m_woovalue_init_may_null != nullptr)
-                    woort_GC_Pin_destroy(current_member->m_woovalue_init_may_null);
+                const bool entry_tmp_gc_guard = woort_GC_sync_marking_lock();
+                {
+                    if (current_member->m_woovalue_init_may_null != nullptr)
+                        woort_GCPin_destroy(current_member->m_woovalue_init_may_null);
+                }
+                if (entry_tmp_gc_guard)
+                    woort_GC_sync_marking_unlock();
 
                 delete current_member;
             }
@@ -490,7 +495,7 @@ void je_register_member(
     const jeecs::typing::type_info *_membertype,
     const char *_member_name,
     const char *_woovalue_type_may_null,
-    woort_value _woovalue_init_may_null,
+    woort_value _boxed_woovalue_init_may_ignored,
     ptrdiff_t _member_offset)
 {
     jeecs_impl::global_factory_holder::holder()
@@ -499,7 +504,7 @@ void je_register_member(
             _membertype,
             _member_name,
             _woovalue_type_may_null,
-            _woovalue_init_may_null,
+            _boxed_woovalue_init_may_ignored,
             _member_offset);
 }
 
