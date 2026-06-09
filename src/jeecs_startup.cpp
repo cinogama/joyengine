@@ -80,7 +80,34 @@ woort_PanicHandler_Action _jedbg_hook_woolang_panic(
         woort_VMRuntime_TraceCallstack frame;
         while (woort_VMRuntime_trace_next(&trace_iter, &frame))
         {
-            // TODO;
+            const char* const func = frame.m_function_name;
+            const char* const file = frame.m_file_or_lib_name;
+            const size_t line = frame.m_location_begin[0];
+            const size_t col = frame.m_location_begin[1];
+
+            char buf[512];
+            if (func != nullptr && file != nullptr)
+            {
+                if (frame.m_has_location)
+                    snprintf(buf, sizeof(buf), "    at %s (%s:%zu:%zu)\n",
+                        func, file, line + 1, col + 1);
+                else
+                    snprintf(buf, sizeof(buf), "    at %s (%s)\n", func, file);
+            }
+            else if (func != nullptr)
+                snprintf(buf, sizeof(buf), "    at %s\n", func);
+            else if (file != nullptr)
+            {
+                if (frame.m_has_location && line != 0)
+                    snprintf(buf, sizeof(buf), "    at <unknown> (%s:%zu:%zu)\n",
+                        file, line + 1, col + 1);
+                else
+                    snprintf(buf, sizeof(buf), "    at <unknown> (%s)\n", file);
+            }
+            else
+                snprintf(buf, sizeof(buf), "    at <unknown>\n");
+
+            trace += buf;
         }
     }
 
