@@ -181,7 +181,8 @@ woort_value set_float4_to_struct(woort_value v, float x, float y, float z, float
 WOORT_API woort_api je_gui_get_main_viewport_pos(void)
 {
     woort_value s;
-    woort_push_reserve(1, &s);
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
     auto vpos = ImGui::GetMainViewport()->Pos;
 
     return woort_ret_value(set_float2_to_struct(s + 0, vpos.x, vpos.y));
@@ -190,7 +191,8 @@ WOORT_API woort_api je_gui_get_main_viewport_pos(void)
 WOORT_API woort_api je_gui_get_this_viewport_pos(void)
 {
     woort_value s;
-    woort_push_reserve(1, &s);
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
     auto vpos = ImGui::GetWindowViewport()->Pos;
 
     return woort_ret_value(set_float2_to_struct(s + 0, vpos.x, vpos.y));
@@ -199,7 +201,8 @@ WOORT_API woort_api je_gui_get_this_viewport_pos(void)
 WOORT_API woort_api je_gui_get_window_pos(void)
 {
     woort_value s;
-    woort_push_reserve(1, &s);
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
     auto wpos = ImGui::GetWindowPos();
 
     return woort_ret_value(set_float2_to_struct(s + 0, wpos.x, wpos.y));
@@ -208,7 +211,8 @@ WOORT_API woort_api je_gui_get_window_pos(void)
 WOORT_API woort_api je_gui_get_mouse_pos(void)
 {
     woort_value s;
-    woort_push_reserve(1, &s);
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
 
     auto&& mpos = ImGui::GetMousePos();
     return woort_ret_value(set_float2_to_struct(s + 0, mpos.x, mpos.y));
@@ -217,7 +221,8 @@ WOORT_API woort_api je_gui_get_mouse_pos(void)
 WOORT_API woort_api je_gui_get_mouse_wheel(void)
 {
     woort_value s;
-    woort_push_reserve(1, &s);
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
 
     auto& imgui_io = ImGui::GetIO();
     return woort_ret_value(set_float2_to_struct(s + 0, imgui_io.MouseWheelH, imgui_io.MouseWheel));
@@ -226,7 +231,8 @@ WOORT_API woort_api je_gui_get_mouse_wheel(void)
 WOORT_API woort_api je_gui_get_mouse_delta_pos(void)
 {
     woort_value s;
-    woort_push_reserve(1, &s);
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
 
     auto&& mdpos = ImGui::GetIO().MouseDelta;
     return woort_ret_value(set_float2_to_struct(s + 0, mdpos.x, mdpos.y));
@@ -235,7 +241,8 @@ WOORT_API woort_api je_gui_get_mouse_delta_pos(void)
 WOORT_API woort_api je_gui_get_cursor_pos(void)
 {
     woort_value s;
-    woort_push_reserve(1, &s);
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
 
     auto&& cpos = ImGui::GetCursorPos();
     return woort_ret_value(set_float2_to_struct(s + 0, cpos.x, cpos.y));
@@ -243,7 +250,8 @@ WOORT_API woort_api je_gui_get_cursor_pos(void)
 WOORT_API woort_api je_gui_get_item_rect_size(void)
 {
     woort_value s;
-    woort_push_reserve(1, &s);
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
 
     auto&& isize = ImGui::GetItemRectSize();
     return woort_ret_value(set_float2_to_struct(s + 0, isize.x, isize.y));
@@ -252,7 +260,8 @@ WOORT_API woort_api je_gui_get_item_rect_size(void)
 WOORT_API woort_api je_gui_get_item_rect(void)
 {
     woort_value s;
-    woort_push_reserve(2, &s);
+    if (!woort_push_reserve(2, &s))
+        return woort_ret_panic("Stack overflow.");
 
     auto&& isizemin = ImGui::GetItemRectMin();
     auto&& isizemax = ImGui::GetItemRectMax();
@@ -322,7 +331,8 @@ WOORT_API woort_api je_gui_begintabitem(void)
 WOORT_API woort_api je_gui_begintabitem_open(void)
 {
     woort_value s;
-    woort_push_reserve(2, &s);
+    if (!woort_push_reserve(2, &s))
+        return woort_ret_panic("Stack overflow.");
 
     bool open = true;
     bool display = ImGui::BeginTabItem(woort_string(0), &open, (ImGuiTabBarFlags)woort_int(1));
@@ -664,7 +674,8 @@ WOORT_API woort_api je_gui_treepop(void)
 WOORT_API woort_api je_gui_listbox(void)
 {
     woort_value s;
-    woort_push_reserve(1, &s);
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
 
     int selected_item = -1;
     int max_height_item = -1;
@@ -673,7 +684,7 @@ WOORT_API woort_api je_gui_listbox(void)
     woort_value elem = s + 0;
     for (size_t i = 0; i < items.size(); i++)
     {
-        woort_vec_get(elem, 1, i);
+        (void)woort_vec_get(elem, 1, i);
         items[i] = woort_string(elem);
     }
 
@@ -686,7 +697,8 @@ WOORT_API woort_api je_gui_listbox(void)
 WOORT_API woort_api je_gui_listbox_select(void)
 {
     woort_value s;
-    woort_push_reserve(1, &s);
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
 
     int selected_item = (int)woort_int(2);
     int max_height_item = -1;
@@ -695,7 +707,7 @@ WOORT_API woort_api je_gui_listbox_select(void)
     woort_value elem = s + 0;
     for (size_t i = 0; i < items.size(); i++)
     {
-        woort_vec_get(elem, 1, i);
+        (void)woort_vec_get(elem, 1, i);
         items[i] = woort_string(elem);
     }
 
@@ -708,7 +720,8 @@ WOORT_API woort_api je_gui_listbox_select(void)
 WOORT_API woort_api je_gui_listbox_select_height(void)
 {
     woort_value s;
-    woort_push_reserve(1, &s);
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
 
     int selected_item = (int)woort_int(2);
     int max_height_item = (int)woort_int(3);
@@ -717,7 +730,7 @@ WOORT_API woort_api je_gui_listbox_select_height(void)
     woort_value elem = s + 0;
     for (size_t i = 0; i < items.size(); i++)
     {
-        woort_vec_get(elem, 1, i);
+        (void)woort_vec_get(elem, 1, i);
         items[i] = woort_string(elem);
     }
 
@@ -731,7 +744,8 @@ WOORT_API woort_api je_gui_listbox_select_height(void)
 WOORT_API woort_api je_gui_listbox_withsize(void)
 {
     woort_value s;
-    woort_push_reserve(1, &s);
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
 
     // func ListBox(label:string, items:array<string>, ref select_item:int, width:real, height:real)=> int;
     int origin_selected_index = (int)woort_int(2);
@@ -745,7 +759,7 @@ WOORT_API woort_api je_gui_listbox_withsize(void)
         size_t sz = (size_t)woort_vec_len(1);
         for (size_t i = 0; i < sz; i++)
         {
-            woort_vec_get(elem, 1, i);
+            (void)woort_vec_get(elem, 1, i);
             woort_U8CString item = woort_string(elem);
             if (ImGui::Selectable(item, (int)i == origin_selected_index))
             {
@@ -1134,7 +1148,8 @@ WOORT_API woort_api je_gui_imagebutton_size(void)
 WOORT_API woort_api je_gui_content_region_avail(void)
 {
     woort_value s;
-    woort_push_reserve(1, &s);
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
 
     auto&& sz = ImGui::GetContentRegionAvail();
     return woort_ret_value(set_float2_to_struct(s + 0, sz.x, sz.y));
@@ -1171,7 +1186,8 @@ WOORT_API woort_api je_gui_colorbutton(void)
 WOORT_API woort_api je_gui_colorpicker4(void)
 {
     woort_value s;
-    woort_push_reserve(2, &s);
+    if (!woort_push_reserve(2, &s))
+        return woort_ret_panic("Stack overflow.");
 
     float rgba[4] = {};
 
@@ -1250,7 +1266,8 @@ WOORT_API woort_api je_gui_input_int_box(void)
 WOORT_API woort_api je_gui_input_int2_box(void)
 {
     woort_value s;
-    woort_push_reserve(2, &s);
+    if (!woort_push_reserve(2, &s))
+        return woort_ret_panic("Stack overflow.");
 
     woort_U8CString label = woort_string(0);
     int values[] = { (int)woort_int(1), (int)woort_int(2) };
@@ -1276,7 +1293,8 @@ WOORT_API woort_api je_gui_input_int2_box(void)
 WOORT_API woort_api je_gui_input_int3_box(void)
 {
     woort_value s;
-    woort_push_reserve(2, &s);
+    if (!woort_push_reserve(2, &s))
+        return woort_ret_panic("Stack overflow.");
 
     woort_U8CString label = woort_string(0);
     int values[] = { (int)woort_int(1), (int)woort_int(2), (int)woort_int(3) };
@@ -1304,7 +1322,8 @@ WOORT_API woort_api je_gui_input_int3_box(void)
 WOORT_API woort_api je_gui_input_int4_box(void)
 {
     woort_value s;
-    woort_push_reserve(2, &s);
+    if (!woort_push_reserve(2, &s))
+        return woort_ret_panic("Stack overflow.");
 
     woort_U8CString label = woort_string(0);
     int values[] = { (int)woort_int(1), (int)woort_int(2), (int)woort_int(3), (int)woort_int(4) };
@@ -1359,7 +1378,8 @@ WOORT_API woort_api je_gui_input_float_box(void)
 WOORT_API woort_api je_gui_input_float2_box(void)
 {
     woort_value s;
-    woort_push_reserve(1, &s);
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
 
     woort_U8CString label = woort_string(0);
     float values[] = { woort_float(1), woort_float(2) };
@@ -1376,7 +1396,8 @@ WOORT_API woort_api je_gui_input_float2_box(void)
 WOORT_API woort_api je_gui_input_float3_box(void)
 {
     woort_value s;
-    woort_push_reserve(1, &s);
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
 
     woort_U8CString label = woort_string(0);
     float values[] = { woort_float(1), woort_float(2), woort_float(3) };
@@ -1393,7 +1414,8 @@ WOORT_API woort_api je_gui_input_float3_box(void)
 WOORT_API woort_api je_gui_input_float4_box(void)
 {
     woort_value s;
-    woort_push_reserve(1, &s);
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
 
     woort_U8CString label = woort_string(0);
     float values[] = { woort_float(1), woort_float(2), woort_float(3), woort_float(4) };
@@ -1424,7 +1446,8 @@ WOORT_API woort_api je_gui_input_float_format_box(void)
 WOORT_API woort_api je_gui_input_float2_format_box(void)
 {
     woort_value s;
-    woort_push_reserve(1, &s);
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
 
     woort_U8CString label = woort_string(0);
     float values[] = { woort_float(1), woort_float(2) };
@@ -1442,7 +1465,8 @@ WOORT_API woort_api je_gui_input_float2_format_box(void)
 WOORT_API woort_api je_gui_input_float3_format_box(void)
 {
     woort_value s;
-    woort_push_reserve(1, &s);
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
 
     woort_U8CString label = woort_string(0);
     float values[] = { woort_float(1), woort_float(2), woort_float(3) };
@@ -1460,7 +1484,8 @@ WOORT_API woort_api je_gui_input_float3_format_box(void)
 WOORT_API woort_api je_gui_input_float4_format_box(void)
 {
     woort_value s;
-    woort_push_reserve(1, &s);
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
 
     woort_U8CString label = woort_string(0);
     float values[] = { woort_float(1), woort_float(2), woort_float(3), woort_float(4) };
@@ -1504,13 +1529,14 @@ WOORT_API woort_api je_gui_input_text_multiline_size(void)
 WOORT_API woort_api je_gui_combo(void)
 {
     woort_value s;
-    woort_push_reserve(1, &s);
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
 
     std::vector<const char*> combo_items;
     woort_value elem = s + 0;
     for (size_t i = 0; i < woort_vec_len(1); ++i)
     {
-        woort_vec_get(elem, 1, i);
+        (void)woort_vec_get(elem, 1, i);
         combo_items.push_back(woort_string(elem));
     }
 
@@ -1560,7 +1586,8 @@ WOORT_API woort_api je_gui_stop_all_work(void)
 WOORT_API woort_api je_gui_get_input_state(void)
 {
     woort_value s;
-    woort_push_reserve(2, &s);
+    if (!woort_push_reserve(2, &s))
+        return woort_ret_panic("Stack overflow.");
     ImGuiKey kcode = (ImGuiKey)woort_int(0);
 
     std::lock_guard g1(_key_state_record_mx);
@@ -1619,7 +1646,8 @@ WOORT_API woort_api je_gui_unregister_exit_callback(void)
 WOORT_API woort_api je_gui_set_font(void)
 {
     woort_value s;
-    woort_push_reserve(1, &s);
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
 
     woort_value elem = s + 0;
     const char* font_path = nullptr;
@@ -1639,7 +1667,8 @@ WOORT_API woort_api je_gui_set_font(void)
 WOORT_API woort_api je_gui_style_get_config_color(void)
 {
     woort_value s;
-    woort_push_reserve(1, &s);
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
 
     ImGuiStyle* style = &ImGui::GetStyle();
     auto color = style->Colors[woort_int(0)];
@@ -1650,7 +1679,8 @@ WOORT_API woort_api je_gui_style_get_config_color(void)
 WOORT_API woort_api je_gui_style_set_config_color(void)
 {
     woort_value s;
-    woort_push_reserve(1, &s);
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
 
     ImGuiStyle* style = &ImGui::GetStyle();
     auto& color = style->Colors[woort_int(0)];
@@ -1851,7 +1881,8 @@ WOORT_API woort_api je_gui_code_editor_redo(void)
 WOORT_API woort_api je_gui_code_editor_get_cursor_pos(void)
 {
     woort_value s;
-    woort_push_reserve(2, &s);
+    if (!woort_push_reserve(2, &s))
+        return woort_ret_panic("Stack overflow.");
     TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
 
     woort_value result = s + 0;
@@ -1872,7 +1903,8 @@ WOORT_API woort_api je_gui_code_editor_get_cursor_pos(void)
 WOORT_API woort_api je_gui_code_editor_set_cursor_pos(void)
 {
     woort_value s;
-    woort_push_reserve(1, &s);
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
     TextEditor* text_editor = std::launder(reinterpret_cast<TextEditor*>(woort_gcpointer(0)));
 
     woort_value elem = s + 0;
@@ -2121,7 +2153,8 @@ WOORT_API woort_api je_gui_node_editor_reject_deleted_item(void)
 WOORT_API woort_api je_gui_node_editor_query_new_link(void)
 {
     woort_value s;
-    woort_push_reserve(2, &s);
+    if (!woort_push_reserve(2, &s))
+        return woort_ret_panic("Stack overflow.");
 
     ax::NodeEditor::PinId start, end;
     if (ax::NodeEditor::QueryNewLink(&start, &end))
@@ -2201,7 +2234,8 @@ WOORT_API woort_api je_gui_node_editor_delete_link(void)
 WOORT_API woort_api je_gui_node_editor_get_node_position(void)
 {
     woort_value s;
-    woort_push_reserve(2, &s);
+    if (!woort_push_reserve(2, &s))
+        return woort_ret_panic("Stack overflow.");
 
     auto v2 = ax::NodeEditor::GetNodePosition((ax::NodeEditor::NodeId)woort_int(0));
 
@@ -2262,7 +2296,8 @@ WOORT_API woort_api je_gui_node_editor_is_node_selected(void)
 WOORT_API woort_api je_gui_node_editor_canvas_to_screen(void)
 {
     woort_value s;
-    woort_push_reserve(2, &s);
+    if (!woort_push_reserve(2, &s))
+        return woort_ret_panic("Stack overflow.");
 
     auto v2 = ax::NodeEditor::CanvasToScreen(val2vec2(0));
 
@@ -2283,7 +2318,8 @@ WOORT_API woort_api je_gui_node_editor_canvas_to_screen(void)
 WOORT_API woort_api je_gui_node_editor_screen_to_canvas(void)
 {
     woort_value s;
-    woort_push_reserve(2, &s);
+    if (!woort_push_reserve(2, &s))
+        return woort_ret_panic("Stack overflow.");
 
     auto v2 = ax::NodeEditor::ScreenToCanvas(val2vec2(0));
 

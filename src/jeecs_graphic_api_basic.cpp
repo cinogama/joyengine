@@ -3,9 +3,6 @@
 
 #include "jeecs_cache_version.hpp"
 
-#define JE_IMPL
-#include "jeecs.hpp"
-
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
@@ -14,6 +11,7 @@
 #include <assimp/IOStream.hpp>
 
 #include <forward_list>
+#include <algorithm>
 
 namespace Assimp
 {
@@ -353,7 +351,7 @@ namespace jeecs::graphic
                 abort();
             }
         }
-        void free_resouce_body() const
+        void free_resource_body() const
         {
             free(m_resource.m_raw_ptr);
         }
@@ -720,7 +718,7 @@ jegl_sync_state jegl_sync_update(jegl_context* thread)
                 assert(result == 1);
             }
 
-            deleting_resource->m_resource.free_resouce_body();
+            deleting_resource->m_resource.free_resource_body();
             delete deleting_resource;
         }
     }
@@ -931,7 +929,7 @@ void jegl_terminate_graphic_thread(jegl_context* thread)
         auto* cur_closing_resource = closing_resource;
         closing_resource = closing_resource->last;
 
-        cur_closing_resource->m_resource.free_resouce_body();
+        cur_closing_resource->m_resource.free_resource_body();
         delete cur_closing_resource;
     }
 
@@ -1228,7 +1226,7 @@ void _jegl_free_resource_instance(
             jeecs::debug::logwarn("Resource %p cannot free by correct graphic context, maybe it is out-dated? Free it!",
                 resource_handle);
 
-        del_res->m_resource.free_resouce_body();
+        del_res->m_resource.free_resource_body();
         delete del_res;
     }
 }
@@ -1828,7 +1826,7 @@ jegl_vertex* jegl_load_vertex(jegl_context* context, const char* path)
                 }
 
                 bones.push_back(bone_data);
-                size_t bone_id = bone_data->m_index;
+                const size_t bone_id = bone_data->m_index;
 
                 if (bone_id >= MAX_BONE_COUNT)
                     // Too many bones, skip to avoid overflow.
@@ -2315,7 +2313,7 @@ void jegl_bind_texture(jegl_texture* texture, size_t pass)
                     texture_blob))
             {
                 // Failed to update blob, need free it.
-                gapi->vertex_close_blob(
+                gapi->texture_close_blob(
                     thread_handle->m_graphic_impl_context,
                     texture_blob);
             }

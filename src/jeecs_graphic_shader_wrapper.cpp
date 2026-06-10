@@ -1184,7 +1184,7 @@ WOORT_API woort_api jeecs_shader_wrap_result_pack(void)
     for (size_t i = 0; i < uniform_variables_count; ++i)
     {
         auto& uniform_variable = wrapper->m_uniform_vars.at(i);
-        woort_vec_get(tmp, uniform_variables, i);
+        (void)woort_vec_get(tmp, uniform_variables, i);
 
         woort_struct_get(tmp2, tmp, 0);
         uniform_variable.m_name = woort_string(tmp2);
@@ -1296,7 +1296,7 @@ WOORT_API woort_api jeecs_shader_wrap_result_pack(void)
     for (size_t i = 0; i < uniform_block_count; ++i)
     {
         auto& uniform_block = wrapper->m_uniform_blocks.at(i);
-        woort_vec_get(tmp, uniform_blocks, i);
+        (void)woort_vec_get(tmp, uniform_blocks, i);
 
         woort_struct_get(tmp2, tmp, 0);
         uniform_block.m_name = woort_string(tmp2);

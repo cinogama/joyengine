@@ -143,11 +143,11 @@ namespace jeecs
                                                 auto& group = m_group_configs[i];
                                                 if (i < configed_group_count)
                                                 {
-                                                    woort_vec_get(group_config_info, result, i);
+                                                    (void)woort_vec_get(group_config_info, result, i);
                                                     woort_struct_get(filter_types, group_config_info, 0);
                                                     for (size_t ii = woort_vec_len(filter_types); ii > 0; --ii)
                                                     {
-                                                        woort_vec_get(group_collide_with_mask, filter_types, ii - 1);
+                                                        (void)woort_vec_get(group_collide_with_mask, filter_types, ii - 1);
                                                         woort_struct_get(group_requirement, group_collide_with_mask, 1);
                                                         woort_struct_get(group_collide_with_mask, group_collide_with_mask, 0);
                                                         group.m_group_filter.push_back(

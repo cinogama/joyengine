@@ -5457,10 +5457,8 @@ namespace jeecs
         */
         constexpr static size_t allign_size(size_t _origin_sz, size_t _allign_base)
         {
-            size_t aligned_sz = (_origin_sz / _allign_base) * _allign_base;
-            if (aligned_sz == _origin_sz)
-                return aligned_sz;
-            return aligned_sz + _allign_base;
+            assert(_allign_base != 0 && (_allign_base & (_allign_base - 1)) == 0);
+            return (_origin_sz + _allign_base - 1) & ~(_allign_base - 1);
         }
 
         template <typename T, typename... ArgTs>

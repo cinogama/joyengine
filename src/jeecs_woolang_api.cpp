@@ -1799,7 +1799,7 @@ WOORT_API woort_api wojeapi_textures_of_entity(void)
                     delete (jeecs::basic::resource<jeecs::graphic::shader> *)ptr;
                 },
                 nullptr);
-            woort_map_set_by_int(out_map, (woort_Int)texture.m_pass_id, val);
+            (void)woort_map_set_by_int(out_map, (woort_Int)texture.m_pass_id, val);
         }
     }
 
@@ -2043,7 +2043,7 @@ WOORT_API woort_api wojeapi_get_uniforms_from_shader(void)
     while (uniforms)
     {
         woort_set_struct(val, 2);
-        woort_map_set_by_string(out_map, uniforms->m_name, val);
+        (void)woort_map_set_by_string(out_map, uniforms->m_name, val);
 
         if (uniforms->m_uniform_type >= jegl_shader::uniform_type::INT
             && uniforms->m_uniform_type <= jegl_shader::uniform_type::FLOAT4)
@@ -2338,7 +2338,7 @@ WOORT_API woort_api wojeapi_towoo_update_component(void)
                             }
                             else
                             {
-                                (void*)woort_vm_swap(last2);
+                                (void)woort_vm_swap(last2);
                                 woort_codeenv_drop(cenv);
                                 (void)woort_vm_swap(last);
 
@@ -2349,7 +2349,7 @@ WOORT_API woort_api wojeapi_towoo_update_component(void)
                             }
                         }
                     }
-                    (void*)woort_vm_swap(last2);
+                    (void)woort_vm_swap(last2);
                     woort_vm_close(vmm);
                 }
                 woort_codeenv_drop(cenv);
@@ -2411,7 +2411,7 @@ WOORT_API woort_api wojeapi_get_all_internal_scripts(void)
         if (woort_vfs_read(vpath, &data, &len))
         {
             woort_set_buffer(val, data, len);
-            woort_map_set_by_string(result, vpath, val);
+            (void)woort_map_set_by_string(result, vpath, val);
 
             woort_free(data);
         }

@@ -22,7 +22,6 @@
 #define ParallelForeach std::for_each
 #endif
 
-#define CHECK(A, B) ((A - B >= -0.0001))
 #define jeoffsetof(T, M) ((::size_t)&reinterpret_cast<char const volatile &>((((T *)0)->M)))
 
 /*
@@ -1078,12 +1077,12 @@ namespace jeecs_impl
         std::shared_mutex _m_command_buffer_mx;
         std::shared_mutex _m_command_executer_guard_mx;
 
-        using entity_ommand_buffer_map_t =
+        using entity_command_buffer_map_t =
             std::map<arch_type::entity, _entity_command_buffer*>;
 
         ecs_world* _m_world;
         _world_command_buffer* _m_world_command_buffer;
-        entity_ommand_buffer_map_t _m_entity_command_buffers;
+        entity_command_buffer_map_t _m_entity_command_buffers;
 
         _entity_command_buffer* _find_or_create_buffer_for_entity(const arch_type::entity& e)
         {
@@ -1472,7 +1471,7 @@ namespace jeecs_impl
                 }
             }
 
-            return !_m_destroying_flag;;
+            return !_m_destroying_flag;
         }
 
         inline arch_type::entity create_entity_with_component(const types_set& types, jeecs::game_entity::entity_stat stat)
@@ -1734,8 +1733,10 @@ namespace jeecs_impl
                             }
 
                             // 3. Almost done! get new arch type:
-                            auto* current_arch_type = current_entity.chunk()->get_arch_type();
-                            auto* new_arch_type_my_null = current_arch_type->get_arch_mgr()->find_or_add_arch(new_chunk_types);
+                            auto* const current_arch_type = current_entity.chunk()->get_arch_type();
+                            auto* const new_arch_type_my_null =
+                                current_arch_type->get_arch_mgr()->find_or_add_arch(
+                                    new_chunk_types);
 
                             if (new_arch_type_my_null == current_arch_type)
                             {
