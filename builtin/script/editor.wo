@@ -25,11 +25,11 @@ namespace bool
     {
         public extern func saving(val: bool)=> string
         {
-            return val: string;
+            return val as string;
         }
         public extern func restoring(dat: string)=> bool
         {
-            return dat: bool;
+            return dat as bool;
         }
         public extern func edit(val: bool, tag: string)=> option<bool>
         {
@@ -43,11 +43,11 @@ namespace uint8
     {
         public extern func saving(val: uint8)=> string
         {
-            return val: string;
+            return val as string;
         }
         public extern func restoring(dat: string)=> uint8
         {
-            return dat: uint8;
+            return dat as uint8;
         }
         public extern func edit(val: uint8, tag: string)=> option<uint8>
         {
@@ -61,11 +61,11 @@ namespace uint16
     {
         public extern func saving(val: uint16)=> string
         {
-            return val: string;
+            return val as string;
         }
         public extern func restoring(dat: string)=> uint16
         {
-            return dat: uint16;
+            return dat as uint16;
         }
         public extern func edit(val: uint16, tag: string)=> option<uint16>
         {
@@ -79,11 +79,11 @@ namespace uint32
     {
         public extern func saving(val: uint32)=> string
         {
-            return val: string;
+            return val as string;
         }
         public extern func restoring(dat: string)=> uint32
         {
-            return dat: uint32;
+            return dat as uint32;
         }
         public extern func edit(val: uint32, tag: string)=> option<uint32>
         {
@@ -97,11 +97,11 @@ namespace uint64
     {
         public extern func saving(val: uint64)=> string
         {
-            return val: string;
+            return val as string;
         }
         public extern func restoring(dat: string)=> uint64
         {
-            return dat: uint64;
+            return dat as uint64;
         }
         public extern func edit(val: uint64, tag: string)=> option<uint64>
         {
@@ -115,11 +115,11 @@ namespace int8
     {
         public extern func saving(val: int8)=> string
         {
-            return val: string;
+            return val as string;
         }
         public extern func restoring(dat: string)=> int8
         {
-            return dat: int8;
+            return dat as int8;
         }
         public extern func edit(val: int8, tag: string)=> option<int8>
         {
@@ -133,11 +133,11 @@ namespace int16
     {
         public extern func saving(val: int16)=> string
         {
-            return val: string;
+            return val as string;
         }
         public extern func restoring(dat: string)=> int16
         {
-            return dat: int16;
+            return dat as int16;
         }
         public extern func edit(val: int16, tag: string)=> option<int16>
         {
@@ -151,11 +151,11 @@ namespace int32
     {
         public extern func saving(val: int32)=> string
         {
-            return val: string;
+            return val as string;
         }
         public extern func restoring(dat: string)=> int32
         {
-            return dat: int32;
+            return dat as int32;
         }
         public extern func edit(val: int32, tag: string)=> option<int32>
         {
@@ -169,11 +169,11 @@ namespace int64
     {
         public extern func saving(val: int64)=> string
         {
-            return val: string;
+            return val as string;
         }
         public extern func restoring(dat: string)=> int64
         {
-            return dat: int64;
+            return dat as int64;
         }
         public extern func edit(val: int64, tag: string)=> option<int64>
         {
@@ -187,11 +187,11 @@ namespace float
     {
         public extern func saving(val: float)=> string
         {
-            return val: string;
+            return val as string;
         }
         public extern func restoring(dat: string)=> float
         {
-            return dat: float;
+            return dat as float;
         }
         public extern func edit(val: float, tag: string)=> option<float>
         {
@@ -205,11 +205,11 @@ namespace real
     {
         public extern func saving(val: real)=> string
         {
-            return val: string;
+            return val as string;
         }
         public extern func restoring(dat: string)=> real
         {
-            return dat: real;
+            return dat as real;
         }
         public extern func edit(val: real, tag: string)=> option<real>
         {
@@ -227,12 +227,12 @@ namespace ivec2
         }
         public extern func restoring(dat: string)=> ivec2
         {
-            let data = dat->array::deserialize->or([0: dynamic, 0: dynamic])->> \x = x: int;;
-            return (data->get_or(0, 0), data->get_or(1, 0)): ivec2;
+            let data = dat->array::deserialize->or([0 as dynamic, 0 as dynamic])->> \x = x as int;;
+            return (data->get_or(0, 0), data->get_or(1, 0)) as ivec2;
         }
         public extern func edit(val: ivec2, tag: string)=> option<ivec2>
         {
-            return InputInt2(F"##{tag}", val.0, val.1)->>\v = v: ivec2;;
+            return InputInt2(F"##{tag}", val.0, val.1)->>\v = v as ivec2;;
         }
     }
 }
@@ -246,12 +246,12 @@ namespace vec2
         }
         public extern func restoring(dat: string)=> vec2
         {
-            let data = dat->array::deserialize->or([0: dynamic, 0: dynamic])->> \x = x: real;;
-            return (data->get_or(0, 0.), data->get_or(1, 0.)): vec2;
+            let data = dat->array::deserialize->or([0 as dynamic, 0 as dynamic])->> \x = x as real;;
+            return (data->get_or(0, 0.), data->get_or(1, 0.)) as vec2;
         }
         public extern func edit(val: vec2, tag: string)=> option<vec2>
         {
-            return InputFloat2(F"##{tag}", val.0, val.1)->>\v = v: vec2;;
+            return InputFloat2(F"##{tag}", val.0, val.1)->>\v = v as vec2;;
         }
     }
 }
@@ -265,12 +265,12 @@ namespace vec3
         }
         public extern func restoring(dat: string)=> vec3
         {
-            let data = dat->array::deserialize->or([0: dynamic, 0: dynamic, 0: dynamic])->> \x = x: real;;
-            return (data->get_or(0, 0.), data->get_or(1, 0.), data->get_or(2, 0.)): vec3;
+            let data = dat->array::deserialize->or([0 as dynamic, 0 as dynamic, 0 as dynamic])->> \x = x as real;;
+            return (data->get_or(0, 0.), data->get_or(1, 0.), data->get_or(2, 0.)) as vec3;
         }
         public extern func edit(val: vec3, tag: string)=> option<vec3>
         {
-            return InputFloat3(F"##{tag}", val.0, val.1, val.2)->>\v = v: vec3;;
+            return InputFloat3(F"##{tag}", val.0, val.1, val.2)->>\v = v as vec3;;
         }
     }
 }
@@ -284,12 +284,12 @@ namespace vec4
         }
         public extern func restoring(dat: string)=> vec4
         {
-            let data = dat->array::deserialize->or([0: dynamic, 0: dynamic, 0: dynamic, 0: dynamic])->> \x = x: real;;
-            return (data->get_or(0, 0.), data->get_or(1, 0.), data->get_or(2, 0.), data->get_or(3, 0.)): vec4;
+            let data = dat->array::deserialize->or([0 as dynamic, 0 as dynamic, 0 as dynamic, 0 as dynamic])->> \x = x as real;;
+            return (data->get_or(0, 0.), data->get_or(1, 0.), data->get_or(2, 0.), data->get_or(3, 0.)) as vec4;
         }
         public extern func edit(val: vec4, tag: string)=> option<vec4>
         {
-            return InputFloat4(F"##{tag}", val.0, val.1, val.2, val.3)->>\v = v: vec4;;
+            return InputFloat4(F"##{tag}", val.0, val.1, val.2, val.3)->>\v = v as vec4;;
         }
     }
 }
@@ -303,8 +303,8 @@ namespace quat
         }
         public extern func restoring(dat: string)=> quat
         {
-            let data = dat->array::deserialize->or([0: dynamic, 0: dynamic, 0: dynamic, 0: dynamic])->> \x = x: real;;
-            return (data->get_or(0, 0.), data->get_or(1, 0.), data->get_or(2, 0.), data->get_or(3, 0.)): quat;
+            let data = dat->array::deserialize->or([0 as dynamic, 0 as dynamic, 0 as dynamic, 0 as dynamic])->> \x = x as real;;
+            return (data->get_or(0, 0.), data->get_or(1, 0.), data->get_or(2, 0.), data->get_or(3, 0.)) as quat;
         }
         public extern func edit(val: quat, tag: string)=> option<quat>
         {
@@ -379,15 +379,15 @@ namespace uuid
     {
         public extern func saving(val: uuid)=> string
         {
-            return val: string;
+            return val as string;
         }
         public extern func restoring(dat: string)=> uuid
         {
-            return dat: uuid;
+            return dat as uuid;
         }
         public extern func edit(val: uuid, tag: string)=> option<uuid>
         {
-            return InputText(F"##{tag}", val: string)->> \dat = dat: uuid;;
+            return InputText(F"##{tag}", val as string)->> \dat = dat as uuid;;
         }
     }
 }
@@ -397,15 +397,15 @@ namespace string
     {
         public extern func saving(val: string)=> string
         {
-            return val: string;
+            return val as string;
         }
         public extern func restoring(dat: string)=> string
         {
-            return dat: string;
+            return dat as string;
         }
         public extern func edit(val: string, tag: string)=> option<string>
         {
-            return InputText(F"##{tag}", val: string);
+            return InputText(F"##{tag}", val as string);
         }
     }
 }
@@ -416,9 +416,9 @@ namespace Light2D::Range::light_shape
         public extern func saving(val: Light2D::Range::light_shape)=> string
         {
             let dat = {
-                ["m_point_count"] = val.m_point_count: dynamic,
-                ["m_strength"] = val.m_strength: dynamic,
-                ["m_positions"] = val.m_positions->>\v2 = v2->parser::saving;: dynamic,
+                ["m_point_count"] = val.m_point_count as dynamic,
+                ["m_strength"] = val.m_strength as dynamic,
+                ["m_positions"] = val.m_positions->>\v2 = v2->parser::saving; as dynamic,
             };
             
             return dat->serialize->unwrap;
@@ -428,9 +428,9 @@ namespace Light2D::Range::light_shape
             let data = dat->dict::deserialize->or({});
             return Light2D::Range::light_shape
             {
-                m_point_count = data->get_or("m_point_count": dynamic, 0: dynamic)->or(0),
-                m_strength = data->get_or("m_strength": dynamic, []: dynamic)->or([]: array<dynamic>)->> \e = e->or(0.0);,
-                m_positions = data->get_or("m_positions": dynamic, []: dynamic)->or([]: array<dynamic>)->> \v2 = vec2::parser::restoring(v2: string);,
+                m_point_count = data->get_or("m_point_count" as dynamic, 0 as dynamic)->or(0),
+                m_strength = data->get_or("m_strength" as dynamic, [] as dynamic)->or([] as array<dynamic>)->> \e = e->or(0.0);,
+                m_positions = data->get_or("m_positions" as dynamic, [] as dynamic)->or([] as array<dynamic>)->> \v2 = vec2::parser::restoring(v2 as string);,
             };
         }
         public extern func edit(val: Light2D::Range::light_shape, tag: string)=> option<Light2D::Range::light_shape>
@@ -444,8 +444,8 @@ namespace Light2D::Range::light_shape
             {
                 value(count)?
                 {
-                    strength_data = strength_data->resize(count, 0.0: real);
-                    point_data = point_data->resize(count * val.m_point_count, (0., 0.): vec2);
+                    strength_data = strength_data->resize(count, 0.0 as real);
+                    point_data = point_data->resize(count * val.m_point_count, (0., 0.) as vec2);
                     
                     need_update = true;
                 }
@@ -459,7 +459,7 @@ namespace Light2D::Range::light_shape
             {
                 value(count)?
                 {
-                    let v = vec::create(count * layer_count, mut (0., 0.): vec2);
+                    let v = vec::create(count * layer_count, mut (0., 0.) as vec2);
                     for (let mut ilayer = 0; ilayer < layer_count; ilayer += 1)
                     {
                         for (let mut ipoint = 0; ipoint < math::min(count, point_count); ipoint += 1)
@@ -475,7 +475,7 @@ namespace Light2D::Range::light_shape
                 none?;
             }
             
-            let layered_positions = []mut: vec<array<vec2>>;
+            let layered_positions = []mut as vec<array<vec2>>;
             for (let mut offset = 0; offset < layer_count; offset += 1)
                 layered_positions->add(
                     point_data->sub_len(offset * point_count, point_count));
@@ -485,11 +485,11 @@ namespace Light2D::Range::light_shape
             match (jeapi::gui::widget::poseditor(
                     F"##shape##{tag}",
                     math::min(GetContentRegionAvail().0, 400.),
-                    layered_positions as vec<array<vec2>>->unsafe::cast:<array<array<(real, real)>>>,
+                    layered_positions: vec<array<vec2>>->unsafe::cast:<array<array<(real, real)>>>,
                     0.01,
                     func(a, i)
                     {
-                        let r = []mut: vec<((real, real), (real, real))>;
+                        let r = []mut as vec<((real, real), (real, real))>;
                         for (let (idx, p) : a[i]->iter |> iterator::enumerate)
                         {
                             r->add((a[i][(idx > 0 ? idx | a[i]->len) - 1], p));
@@ -506,7 +506,7 @@ namespace Light2D::Range::light_shape
                     point_data = posgroups
                         ->  reduce(\l, r = l->connect(r);)
                         ->  or([])
-                        ->> \e = e: vec2;
+                        ->> \e = e as vec2;
                         ;
                     need_update = true;
                 }
@@ -514,7 +514,7 @@ namespace Light2D::Range::light_shape
                     ;
             }
             
-            let new_strength_data = []mut: vec<real>;
+            let new_strength_data = []mut as vec<real>;
             for (let (i, st) : strength_data->iter |> iterator::enumerate)
             {
                 Text(F"强度 {i}");
@@ -552,7 +552,7 @@ namespace Light2D::BlockShadow::block_mesh
     {
         public extern func saving(val: Light2D::BlockShadow::block_mesh)=> string
         {
-            return val: array<vec2>
+            return val as array<vec2>
                 ->> \v2 = v2->parser::saving;
                 -> serialize->unwrap
                 ;
@@ -560,17 +560,17 @@ namespace Light2D::BlockShadow::block_mesh
         public extern func restoring(dat: string)=> Light2D::BlockShadow::block_mesh
         {
             return dat->array::deserialize->or([])
-                ->> \v2 = vec2::parser::restoring(v2: string);
-                : block_mesh;
+                ->> \v2 = vec2::parser::restoring(v2 as string);
+                as block_mesh;
         }
         public extern func edit(mut val: Light2D::BlockShadow::block_mesh, tag: string)=> option<Light2D::BlockShadow::block_mesh>
         {
             let mut size_changed = false;
-            match (InputInt(F"size##{tag}", val: array<vec2>->len)->>\n = n < 0 ? 0 | n;)
+            match (InputInt(F"size##{tag}", val as array<vec2>->len)->>\n = n < 0 ? 0 | n;)
             {
                 value(newsize)?
                 {
-                    val = val: array<vec2>->resize(newsize, (0., 0.): vec2): Light2D::BlockShadow::block_mesh;
+                    val = val as array<vec2>->resize(newsize, (0., 0.) as vec2) as Light2D::BlockShadow::block_mesh;
                     size_changed = true;
                 }
                 none?;
@@ -579,11 +579,11 @@ namespace Light2D::BlockShadow::block_mesh
             match (jeapi::gui::widget::poseditor(
                     F"##block_mesh##{tag}",
                     math::min(GetContentRegionAvail().0, 400.),
-                    [val: array<vec2>->>\p = p: (real, real);],
+                    [val as array<vec2>->>\p = p as (real, real);],
                     0.01,
                     func(a, i)
                     {
-                        let r = []mut: vec<((real, real), (real, real))>;
+                        let r = []mut as vec<((real, real), (real, real))>;
                         for (let (idx, p) : a[i]->iter |> iterator::enumerate)
                         {
                             if (idx > 0)
@@ -594,7 +594,7 @@ namespace Light2D::BlockShadow::block_mesh
                 ))
             {
                 value(posgroups)?
-                    return option::value(posgroups[0] as array<(real, real)>->>\p = p: vec2;: Light2D::BlockShadow::block_mesh);
+                    return option::value(posgroups[0]: array<(real, real)>->>\p = p as vec2; as Light2D::BlockShadow::block_mesh);
                 none?
                     if (size_changed)
                         return option::value(val);
@@ -610,11 +610,11 @@ namespace UserInterface::Origin::origin_center
     {
         public extern func saving(val: UserInterface::Origin::origin_center)=> string
         {
-            return val: int: string;
+            return val as int as string;
         }
         public extern func restoring(dat: string)=> UserInterface::Origin::origin_center
         {
-            return dat: int: UserInterface::Origin::origin_center;
+            return dat as int as UserInterface::Origin::origin_center;
         }
         public extern func edit(val: UserInterface::Origin::origin_center, tag: string)=> option<UserInterface::Origin::origin_center>
         {
@@ -663,11 +663,11 @@ namespace Animation::FrameAnimation::animation_list
     {
         public extern func saving(val: Animation::FrameAnimation::animation_list)=> string
         {
-            return val: array<animation_state>
+            return val as array<animation_state>
                 ->> \state = [
-                        state.m_path: dynamic,
-                        state.m_action->is_value ? state.m_action->unwrap: dynamic | nil: dynamic,
-                        state.m_loop: dynamic];
+                        state.m_path as dynamic,
+                        state.m_action->is_value ? state.m_action->unwrap as dynamic | nil as dynamic,
+                        state.m_loop as dynamic];
                     ->  serialize
                     ->  unwrap;
         }
@@ -677,40 +677,40 @@ namespace Animation::FrameAnimation::animation_list
                 ->> \state =
                     animation_state
                     {
-                        m_path = state_dat->get_or(0, "": dynamic)->or(""),
-                        m_action = state_dat->get_or(1, nil: dynamic)->trycast:<string>,
-                        m_loop = state_dat->get_or(2, false: dynamic)->or(false),
+                        m_path = state_dat->get_or(0, "" as dynamic)->or(""),
+                        m_action = state_dat->get_or(1, nil as dynamic)->trycast:<string>,
+                        m_loop = state_dat->get_or(2, false as dynamic)->or(false),
                     }
                     where 
-                        state_dat = state->or([]: array<dynamic>)
+                        state_dat = state->or([] as array<dynamic>)
                     ;
-                : animation_list;
+                as animation_list;
             ;
         }
         public extern func edit(mut val: Animation::FrameAnimation::animation_list, tag: string)=> option<Animation::FrameAnimation::animation_list>
         {
             let mut need_update = false;
             
-            match (InputInt(F"size##{tag}", val: array<animation_state>->len)->>\n = n < 0 ? 0 | n;)
+            match (InputInt(F"size##{tag}", val as array<animation_state>->len)->>\n = n < 0 ? 0 | n;)
             {
                 value(newsize)?
                 {
-                    val = val: array<animation_state>
+                    val = val as array<animation_state>
                         ->resize(newsize,
                             animation_state
                             {
                                 m_path = "",
                                 m_action = option::none,
                                 m_loop = false,
-                            }): Animation::FrameAnimation::animation_list;
+                            }) as Animation::FrameAnimation::animation_list;
                     need_update = true;
                 }
                 none?;
             }
             
-            let mut newval = []mut: vec<animation_state>;
+            let mut newval = []mut as vec<animation_state>;
             
-            for (let (idx, state) : val: array<animation_state>->iter |> iterator::enumerate)
+            for (let (idx, state) : val as array<animation_state>->iter |> iterator::enumerate)
             {
                 let mut path = state.m_path;
                 let mut animation = state.m_action;
@@ -766,7 +766,7 @@ namespace Animation::FrameAnimation::animation_list
             }
             
             if (need_update)
-                return option::value(newval->to_array: Animation::FrameAnimation::animation_list);
+                return option::value(newval->to_array as Animation::FrameAnimation::animation_list);
             else
                 return option::none;
         }

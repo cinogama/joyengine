@@ -14,10 +14,10 @@ namespace jeapi::loader
         {
             return je::file::readall(wpath)
                 =>> \dat = dat->dict::deserialize;
-                =>> \dat = dat: dynamic->trycast:<serialize::EntityData::EntityDataRawType>;
+                =>> \dat = dat as dynamic->trycast:<serialize::EntityData::EntityDataRawType>;
                 =>> \dat =
                     jeapi::serialize::prefab::instantiate(
-                        w, dat: serialize::EntityData, false)
+                        w, dat as serialize::EntityData, false)
                     ;
                 ->> \e = entityloader
                     {

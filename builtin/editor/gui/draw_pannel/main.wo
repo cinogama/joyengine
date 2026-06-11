@@ -409,7 +409,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
 
                                                             history_mgr->save_step();
                                                             
-                                                            return_value! nil: dynamic;
+                                                             return_value! nil: dynamic;
                                                         });
                                             }
                                             EndMenu();
@@ -516,8 +516,8 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                                 drawlist->AddRectFilled(p0, p1, (75, 75, 75, 255));
                                 drawlist->AddImage(
                                     (lux + draw_context.offset_x, luy + draw_context.offset_y),
-                                    (lux + draw_context.scale * tex_width:real + draw_context.offset_x,
-                                        luy + draw_context.scale * tex_height:real + draw_context.offset_y),
+                                     (lux + draw_context.scale * tex_width: real + draw_context.offset_x,
+                                        luy + draw_context.scale * tex_height: real + draw_context.offset_y),
                                     immut texture,
                                     (255, 255, 255, 255));
                                     
@@ -530,7 +530,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                                         let real_xoffset = xoffset: real * draw_context.scale;
                                         drawlist->AddLine(
                                             (lux + draw_context.offset_x + real_xoffset, luy + draw_context.offset_y),
-                                            (lux + draw_context.offset_x + real_xoffset, luy + draw_context.offset_y + tex_height:real * draw_context.scale),
+                                            (lux + draw_context.offset_x + real_xoffset, luy + draw_context.offset_y + tex_height: real * draw_context.scale),
                                             block_high_light ? (0, 0, 0, 40) | (0, 0, 0, 20),
                                             block_high_light ? 2.0 | 1.0);
                                     }
@@ -543,7 +543,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                                         let real_yoffset = yoffset: real * draw_context.scale;
                                         drawlist->AddLine(
                                             (lux + draw_context.offset_x, luy + draw_context.offset_y + real_yoffset),
-                                            (lux + draw_context.offset_x + tex_width:real * draw_context.scale, luy + draw_context.offset_y + real_yoffset),
+                                            (lux + draw_context.offset_x + tex_width: real * draw_context.scale, luy + draw_context.offset_y + real_yoffset),
                                             block_high_light ? (0, 0, 0, 40) | (0, 0, 0, 20),
                                             block_high_light ? 2.0 | 1.0);
                                     }
@@ -554,7 +554,7 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
                                 let mpixx = ((mposx - lux - draw_context.offset_x) / draw_context.scale): int: real;
                                 let mpixy = ((mposy - luy - draw_context.offset_y) / draw_context.scale): int: real;
                                 
-                                if (mpixx >= 0. && mpixx < tex_width:real && mpixy >= 0. && mpixy < tex_height:real)
+                                if (mpixx >= 0. && mpixx < tex_width: real && mpixy >= 0. && mpixy < tex_height: real)
                                 {
                                     // Ok 鼠标指向的像素位置是合法的，高亮！
                                     let highlight_p0 = (mpixx * draw_context.scale + draw_context.offset_x + lux, mpixy * draw_context.scale + draw_context.offset_y + luy);

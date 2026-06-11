@@ -316,7 +316,7 @@ namespace editor::gui::drawpannel::tools
                 let (lbpos, range) = get_standard_range_by_two_pos(self.m_first_pos, self.m_last_pos);
                 let (rx, ry) = (range.0: real / 2., range.1: real / 2.);
                 let (cx, cy) = (lbpos.0: real + rx, lbpos.1: real + ry);
-                
+
                 let my_round = \v: real = (v - 0.5): int;;
                 let my_round2 = \v: real = (v + 0.5): int;;
                 
@@ -405,7 +405,7 @@ namespace editor::gui::drawpannel::tools
                 let (lbpos, range) = get_standard_range_by_two_pos(self.m_first_pos, self.m_last_pos);
                 // let (cx, cy) = (lbpos.0 + range.0 / 2, lbpos.1 + range.1 / 2);
                 let (rx, ry) = (range.0: real / 2., range.1: real / 2.);
-                
+
                 for (let mut x = 0; x < range.0; x += 1)
                 {
                     for (let mut y = 0; y < range.1; y += 1)

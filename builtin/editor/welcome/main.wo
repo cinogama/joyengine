@@ -212,8 +212,8 @@ are generated using Bison and comply with GPLv3 with special bison exception."@
                 }
                 je::log(display_bar);
                 
-                do chtex: gchandle->close();
-                do f: gchandle->close();
+                do chtex as gchandle->close();
+                do f as gchandle->close();
             }
             none?
                 ;

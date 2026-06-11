@@ -132,9 +132,9 @@ namespace jeapi::gui
         public func set_apply_attribute(self: form, attribute: WindowsAttribute, apply: bool)
         {
             if (apply)
-                self._attribute = self._attribute: int->bor(attribute: int): WindowsAttribute;
+                self._attribute = self._attribute as int->bor(attribute as int) as WindowsAttribute;
             else
-                self._attribute = self._attribute: int->band(attribute: int->bnot): WindowsAttribute;
+                self._attribute = self._attribute as int->band(attribute as int->bnot) as WindowsAttribute;
         }
         
         public func set_docking(self: form, dockable: bool)

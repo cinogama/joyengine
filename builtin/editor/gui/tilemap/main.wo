@@ -51,33 +51,33 @@ namespace editor::gui::tilemap
         {
             let mut name = "";
             
-            if (band(self: int, UP: int) != 0)
+            if (band(self as int, UP as int) != 0)
                 name += "u";
-            if (band(self: int, DOWN: int) != 0)
+            if (band(self as int, DOWN as int) != 0)
                 name += "d";
-            if (band(self: int, LEFT: int) != 0)
+            if (band(self as int, LEFT as int) != 0)
                 name += "l";
-            if (band(self: int, RIGHT: int) != 0)
+            if (band(self as int, RIGHT as int) != 0)
                 name += "r";
                 
-            if (band(self: int, LEFTUP: int) != 0)
+            if (band(self as int, LEFTUP as int) != 0)
             {
-                assert(band(self: int, LEFT: int) != 0 && band(self: int, UP: int) != 0);
+                assert(band(self as int, LEFT as int) != 0 && band(self as int, UP as int) != 0);
                 name += "a";
             }
-            if (band(self: int, LEFTDOWN: int) != 0)
+            if (band(self as int, LEFTDOWN as int) != 0)
             {
-                assert(band(self: int, LEFT: int) != 0 && band(self: int, DOWN: int) != 0);
+                assert(band(self as int, LEFT as int) != 0 && band(self as int, DOWN as int) != 0);
                 name += "b";
             }
-            if (band(self: int, RIGHTUP: int) != 0)
+            if (band(self as int, RIGHTUP as int) != 0)
             {
-                assert(band(self: int, RIGHT: int) != 0 && band(self: int, UP: int) != 0);
+                assert(band(self as int, RIGHT as int) != 0 && band(self as int, UP as int) != 0);
                 name += "c";
             }
-            if (band(self: int, RIGHTDOWN: int) != 0)
+            if (band(self as int, RIGHTDOWN as int) != 0)
             {
-                assert(band(self: int, RIGHT: int) != 0 && band(self: int, DOWN: int) != 0);
+                assert(band(self as int, RIGHT as int) != 0 && band(self as int, DOWN as int) != 0);
                 name += "d";
             }
             return name == "" ? "x" | immut name;
@@ -95,11 +95,11 @@ namespace editor::gui::tilemap
             let (tile_w, tile_h) = (maintex_w / xcount, maintex_h / ycount);
             let (mut lux, mut luy) = (ix * tile_w, (ycount - iy) * tile_h);
             
-            if (band(self: int, UP: int) != 0)
+            if (band(self as int, UP as int) != 0)
             {
-                if (band(self: int, LEFT: int) != 0)
+                if (band(self as int, LEFT as int) != 0)
                 {
-                    if (band(self: int, LEFTUP: int) != 0)
+                    if (band(self as int, LEFTUP as int) != 0)
                     {
                         lux += tile_w;
                         luy -= tile_h * 2;
@@ -116,7 +116,7 @@ namespace editor::gui::tilemap
             }
             else
             {
-                if (band(self: int, LEFT: int) != 0)
+                if (band(self as int, LEFT as int) != 0)
                 {
                     lux += tile_w;
                     luy -= tile_h;
@@ -148,11 +148,11 @@ namespace editor::gui::tilemap
             let (mut lux, mut luy) = (ix * tile_w, (ycount - iy) * tile_h);
             
             // 左下角，顾名思义只关心坐标和下边以及左下部分的情况
-            if (band(self: int, DOWN: int) != 0)
+            if (band(self as int, DOWN as int) != 0)
             {
-                if (band(self: int, LEFT: int) != 0)
+                if (band(self as int, LEFT as int) != 0)
                 {
-                    if (band(self: int, LEFTDOWN: int) != 0)
+                    if (band(self as int, LEFTDOWN as int) != 0)
                     {
                         lux += tile_w;
                         luy -= tile_h + tile_h / 2;
@@ -170,7 +170,7 @@ namespace editor::gui::tilemap
             }
             else
             {
-                if (band(self: int, LEFT: int) != 0)
+                if (band(self as int, LEFT as int) != 0)
                 {
                     lux += tile_w;
                     luy -= tile_h * 2 + tile_h / 2;
@@ -202,11 +202,11 @@ namespace editor::gui::tilemap
             let (mut lux, mut luy) = (ix * tile_w, (ycount - iy) * tile_h);
             
             // 右上角，顾名思义只关心坐标和上边以及右上部分的情况
-            if (band(self: int, UP: int) != 0)
+            if (band(self as int, UP as int) != 0)
             {
-                if (band(self: int, RIGHT: int) != 0)
+                if (band(self as int, RIGHT as int) != 0)
                 {
-                    if (band(self: int, RIGHTUP: int) != 0)
+                    if (band(self as int, RIGHTUP as int) != 0)
                     {
                         lux += tile_w / 2;
                         luy -= tile_h * 2;
@@ -224,7 +224,7 @@ namespace editor::gui::tilemap
             }
             else
             {
-                if (band(self: int, RIGHT: int) != 0)
+                if (band(self as int, RIGHT as int) != 0)
                 {
                     lux += tile_w / 2;
                     luy -= tile_h;
@@ -257,11 +257,11 @@ namespace editor::gui::tilemap
             let (mut lux, mut luy) = (ix * tile_w, (ycount - iy) * tile_h);
             
             // 右下角，顾名思义只关心坐标和下边以及右下部分的情况
-            if (band(self: int, DOWN: int) != 0)
+            if (band(self as int, DOWN as int) != 0)
             {
-                if (band(self: int, RIGHT: int) != 0)
+                if (band(self as int, RIGHT as int) != 0)
                 {
-                    if (band(self: int, RIGHTDOWN: int) != 0)
+                    if (band(self as int, RIGHTDOWN as int) != 0)
                     {
                         lux += tile_w / 2;
                         luy -= tile_h + tile_h / 2;
@@ -280,7 +280,7 @@ namespace editor::gui::tilemap
             }
             else
             {
-                if (band(self: int, RIGHT: int) != 0)
+                if (band(self as int, RIGHT as int) != 0)
                 {
                     lux += tile_w / 2;
                     luy -= tile_h * 2 + tile_h / 2;
@@ -462,9 +462,9 @@ namespace editor::gui::tilemap
         func serialize(self: Tile)
         {
             return {
-                ["auto_wrap"] = self.auto_wrap->is_value as bool: dynamic,
-                ["walkable"] = self.walkable as bool: dynamic,
-                ["non_periodic_expansion"] = self.non_periodic_expansion as bool: dynamic,
+                ["auto_wrap"] = self.auto_wrap->is_value: bool as dynamic,
+                ["walkable"] = self.walkable: bool as dynamic,
+                ["non_periodic_expansion"] = self.non_periodic_expansion: bool as dynamic,
             };
         }
     }
@@ -487,18 +487,18 @@ namespace editor::gui::tilemap
                 ->  or(result::err("创建TileSet的纹理必须是从文件加载的"))
                 ;
                 
-            let tiles = []mut: vec<array<Tile>>;
+            let tiles = []mut as vec<array<Tile>>;
             for (let mut ix = 0; ix < xcount; ix += 1)
             {
-                let ytiles = []mut: vec<Tile>;
+                let ytiles = []mut as vec<Tile>;
                 for (let mut iy = 0; iy < ycount; iy += 1)
                 {
                     try! tile = new! Tile(context, tilemaptex, crc64, uid_val, ix, iy, xcount, ycount);
                     ytiles->add(tile);
                 }
-                tiles->add(ytiles as vec<Tile>->unsafe::cast :<array<Tile>>());
+                tiles->add(ytiles: vec<Tile>->unsafe::cast as <array<Tile>>());
             }
-            return result::ok(tiles as vec<array<Tile>>->unsafe::cast :<array<array<Tile>>>());
+            return result::ok(tiles: vec<array<Tile>>->unsafe::cast as <array<array<Tile>>>());
         }
         
         func create(context: EditorContext, name: string, uid_val: string, tilemaptex: graphic::texture, xcount: int, ycount: int)
@@ -564,22 +564,22 @@ namespace editor::gui::tilemap
             let size = self->getsize;
             
             return result::ok({
-                    ["name"] = self.name as string: dynamic,
-                    ["texture"] = texture_path->unwrap as string: dynamic,
-                    ["size"] = [size[0], size[1]]: dynamic,
-                    ["uid"] = self.uid as string: dynamic,
-                    ["tiles"] = self.tiles=>>\tiles = tiles;->>\t = t->serialize; as array<dict<string, dynamic>>: dynamic,
+                    ["name"] = self.name: string as dynamic,
+                    ["texture"] = texture_path->unwrap: string as dynamic,
+                    ["size"] = [size[0], size[1]] as dynamic,
+                    ["uid"] = self.uid: string as dynamic,
+                    ["tiles"] = self.tiles=>>\tiles = tiles;->>\t = t->serialize;: array<dict<string, dynamic>> as dynamic,
                 });
         }
         
         // 从给定的数据进行反序列化，并且创建TileMapSet实例
         func deserialize(context: EditorContext, data: dict<string, dynamic>)
         {
-            let name = data["name"] as string;
-            let texture_path = data["texture"] as string;
-            let size = data["size"] as array<dynamic>->>\e = e as int;;
-            let uid_val = data["uid"] as string;
-            let tiles = data["tiles"] as array<dynamic>->>\e = e as dict<dynamic, dynamic>->>\k, v = (k as string, v);;;
+            let name = data["name"]: string;
+            let texture_path = data["texture"]: string;
+            let size = data["size"]: array<dynamic>->>\e = e: int;;
+            let uid_val = data["uid"]: string;
+            let tiles = data["tiles"]: array<dynamic>->>\e = e: dict<dynamic, dynamic>->>\k, v = (k: string, v);;;
             
             let texture = graphic::texture::load(option::none, texture_path);
             if (texture->is_value == false)
@@ -592,9 +592,9 @@ namespace editor::gui::tilemap
                 {
                     let tiledata = tiles[ix * size[1] + iy];
                     let tile = tileset->gettile(ix, iy)->unwrap;
-                    tile->set_auto_warping(tiledata->get_or("auto_wrap", false: dynamic)->or(false));
-                    tile.walkable = tiledata->get_or("walkable", false: dynamic)->or(false);
-                    tile.non_periodic_expansion = tiledata->get_or("non_periodic_expansion", false: dynamic)->or(false);
+                    tile->set_auto_warping(tiledata->get_or("auto_wrap", false as dynamic)->or(false));
+                    tile.walkable = tiledata->get_or("walkable", false as dynamic)->or(false);
+                    tile.non_periodic_expansion = tiledata->get_or("non_periodic_expansion", false as dynamic)->or(false);
                 }
             }
             
@@ -658,7 +658,7 @@ namespace editor::gui::tilemap
                 match (tileset->serialize)
                 {
                     ok(data)?
-                        if (!file::writeall(tileset_path, data: string: buffer))
+                        if (!file::writeall(tileset_path, data as string as buffer))
                             jeapi::gui::form::errmsg("错误", F"无法保存TileSet到{tileset_path->to_string}: 无法写入文件");
                     err(msg)?
                         jeapi::gui::form::errmsg("错误", F"无法保存TileSet到{tileset_path->to_string}: {msg}");
@@ -698,7 +698,7 @@ namespace editor::gui::tilemap
                         value(data)?
                             match (TileMapSet::deserialize(
                                     self.m_context,
-                                    data as buffer: string->dict::deserialize->or({})->>\k, v = (k as string, v);))
+                                    data: buffer as string->dict::deserialize->or({})->>\k, v = (k: string, v);))
                             {
                                 ok(tileset)?
                                     self.m_tile_sets->add(tileset);
@@ -716,14 +716,14 @@ namespace editor::gui::tilemap
         func dump_tiles(self: TileEditContext)
         {
             // 获取m_tile_sets的uid
-            let tileset_id_mapping = {}mut: map<string, int>;
+            let tileset_id_mapping = {}mut as map<string, int>;
             for (let (index, tileset): self.m_tile_sets->iter |> iterator::enumerate)
             {
                 tileset_id_mapping->set(tileset.uid, index);
             }
             
-            let tilelists = []mut: vec<array<int>>;
-            let unwalkable_mapping = {}mut: map<int, map<int, void>>;
+            let tilelists = []mut as vec<array<int>>;
+            let unwalkable_mapping = {}mut as map<int, map<int, void>>;
             for (let (layer, tiles): self.m_layerd_tiles)
             {
                 for (let (x, ytiles): tiles)
@@ -738,19 +738,19 @@ namespace editor::gui::tilemap
             }
             
             return {
-                ["tilesets"] = self.m_tile_sets->>\t = t.uid;->to_array as array<string>: dynamic,
-                ["tiles"] = tilelists->> \v = v: string;: dynamic,
+                ["tilesets"] = self.m_tile_sets->>\t = t.uid;->to_array: array<string> as dynamic,
+                ["tiles"] = tilelists->> \v = v as string; as dynamic,
             };
         }
         
         // 从mapdata中读取瓦片数据并创建瓦片实例
         func load_tiles(self: TileEditContext, mapdata: dict<string, dynamic>)
         {
-            let tileset_id_mapping = mapdata->get_or("tilesets", []: dynamic) as array<dynamic>->>\e = e as string;;
-            let tiles = mapdata->get_or("tiles", []: dynamic) as array<dynamic>->>\e = array::deserialize(e as string)->unwrap->>\e = e as int;;;
+            let tileset_id_mapping = mapdata->get_or("tilesets", [] as dynamic): array<dynamic>->>\e = e: string;;
+            let tiles = mapdata->get_or("tiles", [] as dynamic): array<dynamic>->>\e = array::deserialize(e: string)->unwrap->>\e = e: int;;;
             
             let existed_tileset_uid = self.m_tile_sets->>\tileset = (tileset.uid, tileset);->mapping;
-            let tileset_mapping = {}mut: map<int, TileMapSet>;
+            let tileset_mapping = {}mut as map<int, TileMapSet>;
             for (let (index, tileset_id): tileset_id_mapping->iter |> iterator::enumerate)
             {
                 match (existed_tileset_uid->get(tileset_id))
@@ -834,7 +834,7 @@ namespace editor::gui::tilemap
                                 match (create_context.m_texture)
                                 {
                                     value(tex)?
-                                        ImageScale(tex, math::min(200. / tex->size[0]: real, 300. / tex->size[1]: real));
+                                        ImageScale(tex, math::min(200. / tex->size[0] as real, 300. / tex->size[1] as real));
                                     none? Text("暂无预览");
                                 }
                                 
@@ -996,11 +996,11 @@ namespace editor::gui::tilemap
                             let drawlist = GetWindowDrawList();
                             let (avaliw, _) = GetContentRegionAvail();
                             let (texw, texh) = tset.texture->size;
-                            let scale = avaliw / texw: real;
-                            let (rangew, rangeh) = (avaliw <= 100. ? 100. | avaliw, texh: real * scale  <= 100. ? 100. | texh: real * scale);
+                            let scale = avaliw / texw as real;
+                            let (rangew, rangeh) = (avaliw <= 100. ? 100. | avaliw, texh as real * scale  <= 100. ? 100. | texh as real * scale);
                             
                             let (blockcountx, blockcounty) = tset->getsize;
-                            let (blockw, blockh) = (rangew / blockcountx: real, rangeh / blockcounty: real);
+                            let (blockw, blockh) = (rangew / blockcountx as real, rangeh / blockcounty as real);
                             
                             match (CheckBox("自动铺开", self->get_selected_tile->>\t = t.auto_wrap->is_value;->or(false)))
                             {
@@ -1039,8 +1039,8 @@ namespace editor::gui::tilemap
                             
                             let (mposx, mposy) = GetMousePos();
                             let (mpblockx, mpblocky) = (
-                                ((mposx - lux) / blockw): int: real,
-                                ((mposy - luy) / blockh): int: real
+                                ((mposx - lux) / blockw) as int as real,
+                                ((mposy - luy) / blockh) as int as real
                                 );
                                 
                             PushClipRect(p0, p1);
@@ -1054,7 +1054,7 @@ namespace editor::gui::tilemap
                             if (ismouse_hovered)
                             {
                                 if (je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Left))
-                                    self.m_selected_tile = (mpblockx: int, mpblocky: int);
+                                    self.m_selected_tile = (mpblockx as int, mpblocky as int);
                                 else
                                     drawlist->AddRectFilled(
                                         (lux + mpblockx * blockw, luy + mpblocky * blockh),
@@ -1064,8 +1064,8 @@ namespace editor::gui::tilemap
                             
                             let (locx, locy) = self.m_selected_tile;
                             drawlist->AddRect(
-                                (lux + locx: real * blockw, luy + locy: real * blockh),
-                                (lux + locx: real * blockw + blockw, luy + locy: real * blockh + blockh),
+                                (lux + locx as real * blockw, luy + locy as real * blockh),
+                                (lux + locx as real * blockw + blockw, luy + locy as real * blockh + blockh),
                                 (255, 255, 255, 255), 2.);
                                 
                             PopClipRect();
@@ -1098,27 +1098,27 @@ namespace editor::gui::tilemap
                     if (self->get_tile(layer, x, y + 1)->>\t = std::is_same(t, centertile);->or(false))
                         way += WrapingTileWay::DOWN;
                         
-                    if (way: int->band(WrapingTileWay::UP: int) != 0)
+                    if (way as int->band(WrapingTileWay::UP as int) != 0)
                     {
-                        if (way: int->band(WrapingTileWay::RIGHT: int) != 0)
+                        if (way as int->band(WrapingTileWay::RIGHT as int) != 0)
                         {
                             if (self->get_tile(layer, x + 1, y - 1)->>\t = std::is_same(t, centertile);->or(false))
                                 way += WrapingTileWay::RIGHTUP;
                         }
-                        if (way: int->band(WrapingTileWay::LEFT: int) != 0)
+                        if (way as int->band(WrapingTileWay::LEFT as int) != 0)
                         {
                             if (self->get_tile(layer, x - 1, y - 1)->>\t = std::is_same(t, centertile);->or(false))
                                 way += WrapingTileWay::LEFTUP;
                         }
                     }
-                    if (way: int->band(WrapingTileWay::DOWN: int) != 0)
+                    if (way as int->band(WrapingTileWay::DOWN as int) != 0)
                     {
-                        if (way: int->band(WrapingTileWay::RIGHT: int) != 0)
+                        if (way as int->band(WrapingTileWay::RIGHT as int) != 0)
                         {
                             if (self->get_tile(layer, x + 1, y + 1)->>\t = std::is_same(t, centertile);->or(false))
                                 way += WrapingTileWay::RIGHTDOWN;
                         }
-                        if (way: int->band(WrapingTileWay::LEFT: int) != 0)
+                        if (way as int->band(WrapingTileWay::LEFT as int) != 0)
                         {
                             if (self->get_tile(layer, x - 1, y + 1)->>\t = std::is_same(t, centertile);->or(false))
                                 way += WrapingTileWay::LEFTDOWN;
@@ -1167,8 +1167,8 @@ namespace editor::gui::tilemap
                                 tilealpha = 75;
                                 
                             drawlist->AddImage(
-                                (lux + x: real * scaled_tile_size + oldoffsetx, luy + y: real * scaled_tile_size + oldoffsety),
-                                (lux + x: real * scaled_tile_size + scaled_tile_size + oldoffsetx, luy + y: real * scaled_tile_size + scaled_tile_size + oldoffsety),
+                                (lux + x as real * scaled_tile_size + oldoffsetx, luy + y as real * scaled_tile_size + oldoffsety),
+                                (lux + x as real * scaled_tile_size + scaled_tile_size + oldoffsetx, luy + y as real * scaled_tile_size + scaled_tile_size + oldoffsety),
                                 tile->get_texture(self.m_context, self->get_tile_way(layer, x, y)),
                                 (255, 255, 255, tilealpha));
                         }
@@ -1177,11 +1177,11 @@ namespace editor::gui::tilemap
                 
                 if (self.m_scale >= 1. && self.m_show_grid)
                 {
-                    for (let mut ix = 0; ix <= (draww / scaled_tile_size): int; ix += 1)
+                    for (let mut ix = 0; ix <= (draww / scaled_tile_size) as int; ix += 1)
                     {
-                        let x = ix: real * scaled_tile_size;
+                        let x = ix as real * scaled_tile_size;
                         
-                        let current_x_id = ix - (oldoffsetx / scaled_tile_size): int;
+                        let current_x_id = ix - (oldoffsetx / scaled_tile_size) as int;
                         
                         drawlist->AddLine(
                             (lux + x + oldoffsetx % scaled_tile_size, luy),
@@ -1191,11 +1191,11 @@ namespace editor::gui::tilemap
                                 | current_x_id % 16 == 0 ? (255, 255, 255, 127) | (127, 127, 127, 127),
                             2.);
                     }
-                    for (let mut iy = 0; iy <= (drawh / scaled_tile_size): int; iy += 1)
+                    for (let mut iy = 0; iy <= (drawh / scaled_tile_size) as int; iy += 1)
                     {
-                        let y = iy: real * scaled_tile_size;
+                        let y = iy as real * scaled_tile_size;
                         
-                        let current_y_id = iy - (oldoffsety / scaled_tile_size): int;
+                        let current_y_id = iy - (oldoffsety / scaled_tile_size) as int;
                         
                         drawlist->AddLine(
                             (lux, luy + y + oldoffsety % scaled_tile_size),
@@ -1216,8 +1216,8 @@ namespace editor::gui::tilemap
                     let (mposx, mposy) = GetMousePos();
                     
                     let (mpblockx, mpblocky) = (
-                        math::floor((mposx - lux - oldoffsetx) / scaled_tile_size): real,
-                        math::floor((mposy - luy - oldoffsety) / scaled_tile_size): real,
+                        math::floor((mposx - lux - oldoffsetx) / scaled_tile_size) as real,
+                        math::floor((mposy - luy - oldoffsety) / scaled_tile_size) as real,
                     );
                     
                     let mut highlight_alpha = 100;
@@ -1238,12 +1238,12 @@ namespace editor::gui::tilemap
                     else if (je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Left))
                     {
                         highlight_alpha = 50;
-                        self->apply_draw_tile(mpblockx: int, mpblocky: int);
+                        self->apply_draw_tile(mpblockx as int, mpblocky as int);
                     }
                     else if (je::gui::IsMouseDown(je::gui::ImGuiMouseButton::ImGuiMouseButton_Right))
                     {
                         highlight_alpha = 50;
-                        self->clear_draw_tile(mpblockx: int, mpblocky: int);
+                        self->clear_draw_tile(mpblockx as int, mpblocky as int);
                     }
                     
                     drawlist->AddRectFilled(
@@ -1332,9 +1332,9 @@ namespace editor::gui::tilemap
                     let RANDOM_ROTATION = func(x: real, y: real){
                         static let functions = [
                             \x: real, y: real = (x, y);,
-                            \x: real, y: real = (1.0-y-1.0/tile_reso: real, x);,
-                            \x: real, y: real = (1.0-x-1.0/tile_reso: real, 1.0 - y-1.0/tile_reso: real);,
-                            \x: real, y: real = (1.0-x-1.0/tile_reso: real, y);,
+                            \x: real, y: real = (1.0-y-1.0/tile_reso as real, x);,
+                            \x: real, y: real = (1.0-x-1.0/tile_reso as real, 1.0 - y-1.0/tile_reso as real);,
+                            \x: real, y: real = (1.0-x-1.0/tile_reso as real, y);,
                         ];
                         return functions[RANDOM_METHOD](x, y);
                     };
@@ -1346,8 +1346,8 @@ namespace editor::gui::tilemap
                                     \v: int, min_val: int, max_val: int =
                                         v < min_val ? min_val | v > max_val ? max_val | v
                                         ;
-                                    , px = math::round(nx * tile_texture_w: real)
-                                    , py = math::round(ny * tile_texture_h: real)
+                                    , px = math::round(nx * tile_texture_w as real)
+                                    , py = math::round(ny * tile_texture_h as real)
                                     , (nx, ny) = RANDOM_ROTATION(ux, uy)
                             ;
                         ;
@@ -1364,7 +1364,7 @@ namespace editor::gui::tilemap
                                 result_image->getpix(result_img_pos);
                                 
                             let (dr, dg, db, da) = NEAREST_SAMPLER(
-                                ix: real / tile_reso: real, iy: real / tile_reso: real);
+                                ix as real / tile_reso as real, iy as real / tile_reso as real);
                                 
                             result_image->setpix(result_img_pos, (
                                     math::lerp(r, dr, da),
@@ -1386,7 +1386,7 @@ namespace editor::gui::tilemap
             let width = max_x - min_x + 1;
             let height = max_y - min_y + 1;
             
-            let result_images = {}mut: map<int, image>;
+            let result_images = {}mut as map<int, image>;
             let get_target_image = func(layer: int)
             {
                 if (result_images->contains(layer))
@@ -1416,9 +1416,9 @@ namespace editor::gui::tilemap
                     let RANDOM_ROTATION = func(x: real, y: real){
                         static let functions = [
                             \x: real, y: real = (x, y);,
-                            \x: real, y: real = (1.0-y-1.0/tile_reso: real, x);,
-                            \x: real, y: real = (1.0-x-1.0/tile_reso: real, 1.0 - y-1.0/tile_reso: real);,
-                            \x: real, y: real = (1.0-x-1.0/tile_reso: real, y);,
+                            \x: real, y: real = (1.0-y-1.0/tile_reso as real, x);,
+                            \x: real, y: real = (1.0-x-1.0/tile_reso as real, 1.0 - y-1.0/tile_reso as real);,
+                            \x: real, y: real = (1.0-x-1.0/tile_reso as real, y);,
                         ];
                         return functions[RANDOM_METHOD](x, y);
                     };
@@ -1430,8 +1430,8 @@ namespace editor::gui::tilemap
                                     \v: int, min_val: int, max_val: int =
                                         v < min_val ? min_val | v > max_val ? max_val | v
                                         ;
-                                    , px = math::round(nx * tile_texture_w: real)
-                                    , py = math::round(ny * tile_texture_h: real)
+                                    , px = math::round(nx * tile_texture_w as real)
+                                    , py = math::round(ny * tile_texture_h as real)
                                     , (nx, ny) = RANDOM_ROTATION(ux, uy)
                             ;
                         ;
@@ -1445,12 +1445,12 @@ namespace editor::gui::tilemap
                             let result_img_pos = (tx * tile_reso + ix, ty * tile_reso + iy);
                             
                             result_image->setpix(result_img_pos, NEAREST_SAMPLER(
-                                    ix: real / tile_reso: real, iy: real / tile_reso: real));
+                                    ix as real / tile_reso as real, iy as real / tile_reso as real));
                         }
                         
                 });
                 
-            return result_images->unsafe::cast:<dict<int, image>>;
+            return result_images->unsafe::cast as <dict<int, image>>;
         }
         
         using ChunkDatas = struct{
@@ -1471,7 +1471,7 @@ namespace editor::gui::tilemap
                 m_layers: map<int, Layer>,
             };
             
-            let chunks = {}mut: map<int, map<int, Chunk>>;
+            let chunks = {}mut as map<int, map<int, Chunk>>;
             let GET_CHUNK_POS = func (x: int, y: int)
             {
                 return (x / chunksize - (x < 0 ? 1 | 0), y / chunksize - (y < 0 ? 1 | 0));
@@ -1522,9 +1522,9 @@ namespace editor::gui::tilemap
                     let RANDOM_ROTATION = func(x: real, y: real){
                         static let functions = [
                             \x: real, y: real = (x, y);,
-                            \x: real, y: real = (1.0-y-1.0/tile_reso: real, x);,
-                            \x: real, y: real = (1.0-x-1.0/tile_reso: real, 1.0 - y-1.0/tile_reso: real);,
-                            \x: real, y: real = (1.0-x-1.0/tile_reso: real, y);,
+                            \x: real, y: real = (1.0-y-1.0/tile_reso as real, x);,
+                            \x: real, y: real = (1.0-x-1.0/tile_reso as real, 1.0 - y-1.0/tile_reso as real);,
+                            \x: real, y: real = (1.0-x-1.0/tile_reso as real, y);,
                         ];
                         return functions[RANDOM_METHOD](x, y);
                     };
@@ -1536,8 +1536,8 @@ namespace editor::gui::tilemap
                                     \v: int, min_val: int, max_val: int =
                                         v < min_val ? min_val | v > max_val ? max_val | v
                                         ;
-                                    , px = math::round(nx * tile_texture_w: real)
-                                    , py = math::round(ny * tile_texture_h: real)
+                                    , px = math::round(nx * tile_texture_w as real)
+                                    , py = math::round(ny * tile_texture_h as real)
                                     , (nx, ny) = RANDOM_ROTATION(ux, uy)
                             ;
                         ;
@@ -1554,11 +1554,11 @@ namespace editor::gui::tilemap
                             let result_img_pos = (tx * tile_reso + ix, ty * tile_reso + iy);
                             
                             chunk_layer.m_image->setpix(result_img_pos, NEAREST_SAMPLER(
-                                    ix: real / tile_reso: real, iy: real / tile_reso: real));
+                                    ix as real / tile_reso as real, iy as real / tile_reso as real));
                         }
                 });
                 
-            let result = []mut: vec<ChunkDatas>;
+            let result = []mut as vec<ChunkDatas>;
             for (let (x, ychunks): chunks)
             {
                 for (let (negy, chunk): ychunks)
@@ -1667,7 +1667,7 @@ namespace editor::gui::tilemap
                                             m_position: (int, int),
                                             m_image_layers: array<int>,
                                         };
-                                        let saved_chunks = []mut: vec<SavedChunkInformation>;
+                                        let saved_chunks = []mut as vec<SavedChunkInformation>;
                                         for (let chunk: context->generate_chunked_texture(export_image.m_tile_pcount, chunksz))
                                         {
                                             saved_chunks->add(SavedChunkInformation
@@ -1682,13 +1682,13 @@ namespace editor::gui::tilemap
                                                     jeapi::gui::form::errmsg("错误", F"无法保存纹理到{target_chunk_path->to_string}");
                                                     
                                                 let chunk_info = {
-                                                    ["walkable"] = walkable: dynamic,
-                                                    ["texture"] = F"chunk_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}_{layer}.png": dynamic,
-                                                    ["size"] = chunksz: dynamic,
+                                                    ["walkable"] = walkable as dynamic,
+                                                    ["texture"] = F"chunk_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}_{layer}.png" as dynamic,
+                                                    ["size"] = chunksz as dynamic,
                                                 };
                                                 if (!file::writeall(
                                                         target_chunk_path / F"chunk_{chunk.m_chunk_pos.0}_{chunk.m_chunk_pos.1}_{layer}.je4chunk",
-                                                        chunk_info: string: buffer))
+                                                        chunk_info as string as buffer))
                                                 {
                                                     jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_chunk_path->to_string}");
                                                 }
@@ -1697,7 +1697,7 @@ namespace editor::gui::tilemap
                                         }
                                         
                                         // 保存区块信息
-                                        let chunks_pos_info = {}mut: ::map<int, ::map<int, string>>;
+                                        let chunks_pos_info = {}mut as ::map<int, ::map<int, string>>;
                                         for (let chunk: saved_chunks)
                                         {
                                             if (!chunks_pos_info->contains(chunk.m_position.0))
@@ -1707,18 +1707,18 @@ namespace editor::gui::tilemap
                                             
                                             if (!\dat = file::writeall(
                                                         target_chunk_path / F"chunk_{chunk.m_position.0}_{chunk.m_position.1}.je4chunk",
-                                                        dat: buffer);
+                                                        dat as buffer);
                                                     <| {
                                                         ["layers"] = chunk.m_image_layers
                                                         ->> \layerid = (layerid, F"chunk_{chunk.m_position.0}_{chunk.m_position.1}_{layerid}.je4chunk");
                                                         ->  mapping
-                                                        }: string)
+                                                        } as string)
                                             {
                                                 jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_chunk_path->to_string}");
                                             }
                                         }
                                         
-                                        if (file::writeall(target_chunk_path / F"chunklist.je4chunklist", chunks_pos_info: string: buffer) == false)
+                                        if (file::writeall(target_chunk_path / F"chunklist.je4chunklist", chunks_pos_info as string as buffer) == false)
                                             jeapi::gui::form::errmsg("错误", F"无法保存区块信息到{target_path->to_string}");
                                     }
                                     none?;
@@ -1821,7 +1821,7 @@ namespace editor::gui::tilemap
                             formopen->set(false);
                             if (opt)
                             {
-                                if (!file::writeall(tilemap_file, editctx->dump_tiles: string: buffer))
+                                if (!file::writeall(tilemap_file, editctx->dump_tiles as string as buffer))
                                 {
                                     jeapi::gui::form::errmsg("错误", F"无法保存TileMap到{tilemap_file->to_string}: 无法写入文件");
                                     formopen->set(true);

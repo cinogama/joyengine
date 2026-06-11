@@ -49,9 +49,9 @@ namespace jeapi::loader
                     {
                         value(dat)?
                         {
-                            try! sz = dat->get("size": dynamic)=>> \v = v->trycast:<int>;;
-                            try! tex = dat->get("texture": dynamic)=>> \v = v->trycast:<string>;;
-                            try! wkable = dat->get("walkable": dynamic)
+                            try! sz = dat->get("size" as dynamic)=>> \v = v->trycast:<int>;;
+                            try! tex = dat->get("texture" as dynamic)=>> \v = v->trycast:<string>;;
+                            try! wkable = dat->get("walkable" as dynamic)
                                 =>> \v = v->trycast:<array<dynamic>>;
                                 ->> \v = v
                                     ->> \e = e->or(false);
@@ -128,7 +128,7 @@ namespace jeapi::loader
             {
                 match (file::readall(chunk_path)
                     =>> \dat = dat->dict::deserialize;
-                    =>> \dat = dat->get("layers": dynamic);
+                    =>> \dat = dat->get("layers" as dynamic);
                     =>> \dat = dat->trycast:<dict<dynamic, dynamic>>;)
                 {
                     value(dat)?

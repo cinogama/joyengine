@@ -27,7 +27,7 @@ namespace int
         public func edit(self: int, uid: guid::GUID)=> option<int>
         {
             SetNextItemWidth(175.);
-            return InputInt(F"##{uid: string}", self);
+            return InputInt(F"##{uid as string}", self);
         }
     }
 }
@@ -42,7 +42,7 @@ namespace real
         public func edit(self: real, uid: guid::GUID)=> option<real>
         {
             SetNextItemWidth(175.);
-            return InputFloat(F"##{uid: string}", self);
+            return InputFloat(F"##{uid as string}", self);
         }
     }
 }
@@ -57,7 +57,7 @@ namespace vec2
         public func edit(self: vec2, uid: guid::GUID)=> option<vec2>
         {
             SetNextItemWidth(175.);
-            return InputFloat2(F"##{uid: string}", self...)->> \v = v: vec2;;
+            return InputFloat2(F"##{uid as string}", self...)->> \v = v as vec2;;
         }
         public func save(self: vec2)=> string
         {
@@ -66,10 +66,10 @@ namespace vec2
         public func restore(str: string)=> vec2
         {
             return array::deserialize(str)
-                =>> \arr = arr: dynamic->trycast:<array<real>>();
+                =>> \arr = arr as dynamic->trycast:<array<real>>();
                 -> map_or(
-                    \arr = (arr->get_or(0, 0.), arr->get_or(1, 0.)): vec2;,
-                    (0., 0.): vec2)
+                    \arr = (arr->get_or(0, 0.), arr->get_or(1, 0.)) as vec2;,
+                    (0., 0.) as vec2)
                 ;
         }
     }
@@ -85,7 +85,7 @@ namespace vec3
         public func edit(self: vec3, uid: guid::GUID)=> option<vec3>
         {
             SetNextItemWidth(175.);
-            return InputFloat3(F"##{uid: string}", self...)->> \v = v: vec3;;
+            return InputFloat3(F"##{uid as string}", self...)->> \v = v as vec3;;
         }
         public func save(self: vec3)=> string
         {
@@ -94,10 +94,10 @@ namespace vec3
         public func restore(str: string)=> vec3
         {
             return array::deserialize(str)
-                =>> \arr = arr: dynamic->trycast:<array<real>>();
+                =>> \arr = arr as dynamic->trycast:<array<real>>();
                 -> map_or(
-                    \arr = (arr->get_or(0, 0.), arr->get_or(1, 0.), arr->get_or(2, 0.)): vec3;,
-                    (0., 0., 0.): vec3)
+                    \arr = (arr->get_or(0, 0.), arr->get_or(1, 0.), arr->get_or(2, 0.)) as vec3;,
+                    (0., 0., 0.) as vec3)
                 ;
         }
     }
@@ -113,7 +113,7 @@ namespace vec4
         public func edit(self: vec4, uid: guid::GUID)=> option<vec4>
         {
             SetNextItemWidth(175.);
-            return InputFloat4(F"##{uid: string}", self...)->> \v = v: vec4;;
+            return InputFloat4(F"##{uid as string}", self...)->> \v = v as vec4;;
         }
         public func save(self: vec4)=> string
         {
@@ -122,10 +122,10 @@ namespace vec4
         public func restore(str: string)=> vec4
         {
             return array::deserialize(str)
-                =>> \arr = arr: dynamic->trycast:<array<real>>();
+                =>> \arr = arr as dynamic->trycast:<array<real>>();
                 -> map_or(
-                    \arr = (arr->get_or(0, 0.), arr->get_or(1, 0.), arr->get_or(2, 0.), arr->get_or(3, 0.)): vec4;,
-                    (0., 0., 0., 0.): vec4)
+                    \arr = (arr->get_or(0, 0.), arr->get_or(1, 0.), arr->get_or(2, 0.), arr->get_or(3, 0.)) as vec4;,
+                    (0., 0., 0., 0.) as vec4)
                 ;
         }
     }
@@ -141,7 +141,7 @@ namespace ivec2
         public func edit(self: ivec2, uid: guid::GUID)=> option<ivec2>
         {
             SetNextItemWidth(175.);
-            return InputInt2(F"##{uid: string}", self...)->> \v = v: ivec2;;
+            return InputInt2(F"##{uid as string}", self...)->> \v = v as ivec2;;
         }
         public func save(self: ivec2)=> string
         {
@@ -150,10 +150,10 @@ namespace ivec2
         public func restore(str: string)=> ivec2
         {
             return array::deserialize(str)
-                =>> \arr = arr: dynamic->trycast:<array<int>>();
+                =>> \arr = arr as dynamic->trycast:<array<int>>();
                 -> map_or(
-                    \arr = (arr->get_or(0, 0), arr->get_or(1, 0)): ivec2;,
-                    (0, 0): ivec2)
+                    \arr = (arr->get_or(0, 0), arr->get_or(1, 0)) as ivec2;,
+                    (0, 0) as ivec2)
                 ;
         }
     }
@@ -169,7 +169,7 @@ namespace string
         public func edit(self: string, uid: guid::GUID)=> option<string>
         {
             SetNextItemWidth(175.);
-            return InputText(F"##{uid: string}", self);
+            return InputText(F"##{uid as string}", self);
         }
     }
 }
@@ -183,7 +183,7 @@ namespace bool
         
         public func edit(self: bool, uid: guid::GUID)=> option<bool>
         {
-            return CheckBox(F"##{uid: string}", self);
+            return CheckBox(F"##{uid as string}", self);
         }
     }
 }

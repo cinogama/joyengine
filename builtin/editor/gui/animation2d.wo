@@ -46,8 +46,8 @@ namespace editor::gui::animation2d
         {
             match (self)
             {
-                INT(i)? return i: string;
-                FLOAT(r)? return r: string;
+                INT(i)? return i as string;
+                FLOAT(r)? return r as string;
                 VEC2((x, y))? return F"({x}, {y})";
                 VEC3((x, y, z))? return F"({x}, {y}, {z})";
                 VEC4((x, y, z, w))? return F"({x}, {y}, {z}, {w})";
@@ -159,7 +159,7 @@ namespace editor::gui::animation2d
         ;
     {
         if (a is int)
-            return math::round(a: real + (b: real - a: real) * deg);
+            return math::round(a as real + (b as real - a as real) * deg);
         else if (a is real)
             return a + (b - a) * deg;
         else if (a is (real, real))
@@ -219,7 +219,7 @@ namespace editor::gui::animation2d
             
             func read_typed_value(bufdata: buffer::builder)
             {
-                let value_type = bufdata->readui8(): DataValueType;
+                let value_type = bufdata->readui8() as DataValueType;
                 if (value_type == DataValueType::INT)
                     return DataValue::INT(bufdata->readi32());
                 else if (value_type == DataValueType::FLOAT)
@@ -255,14 +255,14 @@ namespace editor::gui::animation2d
                     let z = bufdata->readf32();
                     let w = bufdata->readf32();
                     
-                    return DataValue::QUAT4((x, y, z, w):quat->euler_angle: (real, real, real));
+                    return DataValue::QUAT4((x, y, z, w) as quat->euler_angle as (real, real, real));
                 }
                 return std::panic(F"Unknown type: {value_type}");
             }
             
             // 0. 读取魔数
             if (bufdata->readui32 != 0xA213A710)
-                return result::err(0: buffer::builder::errno_t);
+                return result::err(0 as buffer::builder::errno_t);
                 
             // 1. 读取动作数量
             let animation_count = bufdata->readi64;
@@ -271,7 +271,7 @@ namespace editor::gui::animation2d
                 // 2. 读取当前动作的帧数量和名称
                 let frame_count = bufdata->readi64;
                 let frame_name_len = bufdata->readi64;
-                let frame_name = bufdata->readbuffer(frame_name_len) as buffer: string;
+                let frame_name = bufdata->readbuffer(frame_name_len): buffer as string;
                 
                 let frames = AnimationActionData{m_frames = []mut};
                 self.m_animations->set(frame_name, frames);
@@ -292,10 +292,10 @@ namespace editor::gui::animation2d
                     {
                         // 4. 读取帧组件数据
                         let component_name_len = bufdata->readi64();
-                        let component_name = bufdata->readbuffer(component_name_len) as buffer: string;
+                        let component_name = bufdata->readbuffer(component_name_len): buffer as string;
                         
                         let member_name_len = bufdata->readi64();
-                        let member_name = bufdata->readbuffer(member_name_len) as buffer: string;
+                        let member_name = bufdata->readbuffer(member_name_len): buffer as string;
                         
                         let offset_mode = bufdata->readui8() != 0;
                         
@@ -314,7 +314,7 @@ namespace editor::gui::animation2d
                     {
                         // 5. 读取一致变量数据
                         let uniform_name_len = bufdata->readi64();
-                        let uniform_name = bufdata->readbuffer(uniform_name_len) as buffer: string;
+                        let uniform_name = bufdata->readbuffer(uniform_name_len): buffer as string;
                         
                         let value = read_typed_value(bufdata);
                         
@@ -344,7 +344,7 @@ namespace editor::gui::animation2d
                 result = result
                     ->appendi64(action_data.m_frames->len)
                     ->appendi64(action_name->byte_len)
-                    + action_name as string : buffer;
+                    + action_name: string as buffer;
                     
                 for (let frame: action_data.m_frames)
                 {
@@ -355,38 +355,38 @@ namespace editor::gui::animation2d
                     for (let cdata : frame.m_component_dats)
                     {
                         result = result->appendi64(cdata.m_component_name->byte_len)
-                            + cdata.m_component_name as string: buffer;
+                            + cdata.m_component_name: string as buffer;
                         result = result->appendi64(cdata.m_member_name->byte_len)
-                            + cdata.m_member_name as string: buffer;
+                            + cdata.m_member_name: string as buffer;
                         result = result->appendui8(cdata.m_offset_mode? 1 | 0);
                         match (cdata.m_value)
                         {
                             INT(n)?
                             {
-                                result = result->appendui8(DataValueType::INT : int);
+                                result = result->appendui8(DataValueType::INT as int);
                                 result = result->appendi32(n);
                             }
                             FLOAT(x)?
                             {
-                                result = result->appendui8(DataValueType::FLOAT : int);
+                                result = result->appendui8(DataValueType::FLOAT as int);
                                 result = result->appendf32(x);
                             }
                             VEC2((x, y))?
                             {
-                                result = result->appendui8(DataValueType::VEC2 : int);
+                                result = result->appendui8(DataValueType::VEC2 as int);
                                 result = result->appendf32(x);
                                 result = result->appendf32(y);
                             }
                             VEC3((x, y, z))?
                             {
-                                result = result->appendui8(DataValueType::VEC3 : int);
+                                result = result->appendui8(DataValueType::VEC3 as int);
                                 result = result->appendf32(x);
                                 result = result->appendf32(y);
                                 result = result->appendf32(z);
                             }
                             VEC4((x, y, z, w))?
                             {
-                                result = result->appendui8(DataValueType::VEC4 : int);
+                                result = result->appendui8(DataValueType::VEC4 as int);
                                 result = result->appendf32(x);
                                 result = result->appendf32(y);
                                 result = result->appendf32(z);
@@ -396,7 +396,7 @@ namespace editor::gui::animation2d
                             {
                                 let (x, y, z, w) = quat::euler(ex, ey, ez);
                                 
-                                result = result->appendui8(DataValueType::QUAT4 : int);
+                                result = result->appendui8(DataValueType::QUAT4 as int);
                                 result = result->appendf32(x);
                                 result = result->appendf32(y);
                                 result = result->appendf32(z);
@@ -409,36 +409,36 @@ namespace editor::gui::animation2d
                     for (let udata : frame.m_uniform_dats)
                     {
                         result = result->appendi64(udata.m_uniform_name->byte_len)
-                            + udata.m_uniform_name as string: buffer;
+                            + udata.m_uniform_name: string as buffer;
                             
                         match (udata.m_value)
                         {
                             INT(n)?
                             {
-                                result = result->appendui8(DataValueType::INT : int);
+                                result = result->appendui8(DataValueType::INT as int);
                                 result = result->appendi32(n);
                             }
                             FLOAT(x)?
                             {
-                                result = result->appendui8(DataValueType::FLOAT : int);
+                                result = result->appendui8(DataValueType::FLOAT as int);
                                 result = result->appendf32(x);
                             }
                             VEC2((x, y))?
                             {
-                                result = result->appendui8(DataValueType::VEC2 : int);
+                                result = result->appendui8(DataValueType::VEC2 as int);
                                 result = result->appendf32(x);
                                 result = result->appendf32(y);
                             }
                             VEC3((x, y, z))?
                             {
-                                result = result->appendui8(DataValueType::VEC3 : int);
+                                result = result->appendui8(DataValueType::VEC3 as int);
                                 result = result->appendf32(x);
                                 result = result->appendf32(y);
                                 result = result->appendf32(z);
                             }
                             VEC4((x, y, z, w))?
                             {
-                                result = result->appendui8(DataValueType::VEC4 : int);
+                                result = result->appendui8(DataValueType::VEC4 as int);
                                 result = result->appendf32(x);
                                 result = result->appendf32(y);
                                 result = result->appendf32(z);
@@ -448,7 +448,7 @@ namespace editor::gui::animation2d
                             {
                                 let (x, y, z, w) = quat::euler(ex, ey, ez);
                                 
-                                result = result->appendui8(DataValueType::QUAT4 : int);
+                                result = result->appendui8(DataValueType::QUAT4 as int);
                                 result = result->appendf32(x);
                                 result = result->appendf32(y);
                                 result = result->appendf32(z);
@@ -484,13 +484,13 @@ namespace editor::gui::animation2d
                                 FrameComponentData{
                                     m_component_name = "Renderer::Textures",
                                     m_member_name = "offset",
-                                    m_value = mut DataValue::VEC2((i: real, j: real)),
+                                    m_value = mut DataValue::VEC2((i as real, j as real)),
                                     m_offset_mode = mut false,
                                 },
                                 FrameComponentData{
                                     m_component_name = "Renderer::Textures",
                                     m_member_name = "tiling",
-                                    m_value = mut DataValue::VEC2((1. / x: real, 1. / y: real)),
+                                    m_value = mut DataValue::VEC2((1. / x as real, 1. / y as real)),
                                     m_offset_mode = mut false,
                                 },
                             ]mut,
@@ -585,11 +585,11 @@ namespace editor::gui::animation2d
                                                     {
                                                         Text("帧数量");
                                                         SameLine();
-                                                        do InputInt("##framecount", framecount->get)->>\nt = nt > 0 ? framecount->set(nt) | nil: void;;
+                                                        do InputInt("##framecount", framecount->get)->>\nt = nt > 0 ? framecount->set(nt) | nil as void;;
                                                         
                                                         Text("帧时间");
                                                         SameLine();
-                                                        do InputFloatFormat("##frametime", frametime->get, "%.6f")->>\nt = nt >= 0. ? frametime->set(nt) | nil: void;;
+                                                        do InputFloatFormat("##frametime", frametime->get, "%.6f")->>\nt = nt >= 0. ? frametime->set(nt) | nil as void;;
                                                         
                                                         if (Button("创建"))
                                                         {
@@ -659,7 +659,7 @@ namespace editor::gui::animation2d
                             {
                                 for (let (i, frame_data) : animation.m_frames->iter |> iterator::enumerate)
                                 {
-                                    if (SelectableSelected(i: string, animation_context.m_selected_frame == i))
+                                    if (SelectableSelected(i as string, animation_context.m_selected_frame == i))
                                         animation_context.m_selected_frame = i;
                                         
                                     if (BeginPopupContextItem())
@@ -726,7 +726,7 @@ namespace editor::gui::animation2d
                                                                 }
                                                                 else
                                                                 {
-                                                                    do InputInt("作用帧数", lerp_frame_count->get)->>\nv = (nv >= 0 && nv <= animation.m_frames->len - i) ? lerp_frame_count->set(nv) | (nil: void);;
+                                                                    do InputInt("作用帧数", lerp_frame_count->get)->>\nv = (nv >= 0 && nv <= animation.m_frames->len - i) ? lerp_frame_count->set(nv) | (nil as void);;
                                                                     TextDisabled(F"* 取值范围 0 ~ {animation.m_frames->len - i}");
                                                                     
                                                                     do CheckBox("以帧时间作为插值系数", lerp_by_ftime_mode->get)->>\nv = lerp_by_ftime_mode->set(nv);;
@@ -843,7 +843,7 @@ namespace editor::gui::animation2d
                                                                                             m_member_name = member_name,
                                                                                             m_value = mut lerp_data_value(editing_value->get, lerp_end_value->get,
                                                                                                 total_frame_time == 0.
-                                                                                                    ? fidx: real / (lerp_frame_count->get - 1): real
+                                                                        ? fidx as real / (lerp_frame_count->get - 1) as real
                                                                                                     | deltaed_time / total_frame_time),
                                                                                             m_offset_mode = mut offset_mode->get,
                                                                                         });
@@ -933,7 +933,7 @@ namespace editor::gui::animation2d
                                                                 }
                                                                 else
                                                                 {
-                                                                    do InputInt("作用帧数", lerp_frame_count->get)->>\nv = (nv >= 0 && nv <= animation.m_frames->len - i) ? lerp_frame_count->set(nv) | (nil: void);;
+                                                                    do InputInt("作用帧数", lerp_frame_count->get)->>\nv = (nv >= 0 && nv <= animation.m_frames->len - i) ? lerp_frame_count->set(nv) | (nil as void);;
                                                                     TextDisabled(F"* 取值范围 0 ~ {animation.m_frames->len - i}");
                                                                     
                                                                     do CheckBox("以帧时间作为插值系数", lerp_by_ftime_mode->get)->>\nv = lerp_by_ftime_mode->set(nv);;
@@ -1014,7 +1014,7 @@ namespace editor::gui::animation2d
                                                                                     m_uniform_name = uniform_name->get,
                                                                                     m_value = mut lerp_data_value(editing_value, lerp_end_value,
                                                                                         total_frame_time == 0.
-                                                                                            ? fidx: real / (lerp_frame_count->get - 1): real
+                                                                                            ? fidx as real / (lerp_frame_count->get - 1) as real
                                                                                             | deltaed_time / total_frame_time),
                                                                                 });
                                                                                 

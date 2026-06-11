@@ -14,10 +14,10 @@ namespace jeapi::loader
         {
             return je::file::readall(wpath)
                 =>> \dat = dat->dict::deserialize;
-                =>> \dat = dat: dynamic->trycast:<serialize::WorldData::WorldDataRawType>;
+                =>> \dat = dat as dynamic->trycast:<serialize::WorldData::WorldDataRawType>;
                 ->> \dat = worldloader{
                         __m_world = je::world::create(u),
-                        __m_data = dat: serialize::WorldData,
+                        __m_data = dat as serialize::WorldData,
                     }
                     ;
                 ;

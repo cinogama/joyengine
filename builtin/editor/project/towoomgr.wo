@@ -160,7 +160,7 @@ namespace editor
                     }
                 }
             }
-            self.m_loaded_towoo = new_scripts as map<path_t, (unix1970_time_t, je::typeinfo)>
+            self.m_loaded_towoo = new_scripts: map<path_t, (unix1970_time_t, je::typeinfo)>
                 ->unsafe::cast :<dict<path_t, (unix1970_time_t, je::typeinfo)>>();
         }
         public func fast_check_for_update(self: ToWooContext)

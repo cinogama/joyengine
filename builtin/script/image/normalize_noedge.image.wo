@@ -31,12 +31,12 @@ public func pixel(t: je::graphic::texture, x: int, y: int)
     let dy = height(wraptex(t, x, y + 1)) - height(wraptex(t, x, y - 1));
 
     // 开始求导！
-    let adx = 1.0 / w: real;
+    let adx = 1.0 / w as real;
     let ady = 0.;
     let adz = dx;
 
     let bdx = 0.;
-    let bdy = 1.0 / h: real;
+    let bdy = 1.0 / h as real;
     let bdz = dy;
 
     let nx = ady * bdz - adz * bdy;

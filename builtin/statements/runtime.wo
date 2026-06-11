@@ -38,7 +38,7 @@ namespace jeapi
             {
                 let debugger = RuntimeDebugger{
                     graph = graph,
-                    entered_nodes = {}mut: map<guid::GUID, int>,
+                    entered_nodes = {}mut as map<guid::GUID, int>,
                 };
                 
                 graph->register_debugger(debugger);
@@ -147,7 +147,7 @@ namespace jeapi
             }
         }
         
-        static let registered_dispathchers = {}mut: map<string, (GraphContext, ...)=> async<void>>;
+        static let registered_dispathchers = {}mut as map<string, (GraphContext, ...)=> async<void>>;
         public func register_dispatcher(f: (GraphContext, ...)=> async<void>, name: string)
         {
             if (registered_dispathchers->contains(name))

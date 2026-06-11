@@ -228,9 +228,9 @@ namespace editor::gui::edit_forms
                                 let update_gizmo_option = func(item: je::internal::gizmo_mode, able: bool)
                                 {
                                     if (able)
-                                        gizmo->set(gizmo->get->bor(item: int));
-                                    else
-                                        gizmo->set(gizmo->get->band(item: int->bnot));
+                                    gizmo->set(gizmo->get->bor(item: int));
+                                else
+                                    gizmo->set(gizmo->get->band(item: int->bnot));
                                 };
                                 
                                 do MenuItemSelected("摄像机", 0 != gizmo->get->band(je::internal::gizmo_mode::CAMERA: int))
@@ -470,7 +470,7 @@ namespace editor::gui::edit_forms
                                                         w,
                                                         {
                                                             ["prefab"] = proj->make_path_normalize(filepath): dynamic
-                                                            }: jeapi::serialize::EntityData,
+                                                        } as jeapi::serialize::EntityData,
                                                         true);
                                                         
                                                     do e->>\e = set_new_created_entity_pos(w, e);;
@@ -535,8 +535,8 @@ namespace editor::gui::edit_forms
                                                                                     let localscale = e->towoo::get_component :<Transform::LocalScale>()->unwrap;
                                                                                     let (px, py) = tex->size;
                                                                                     localscale.scale->set(
-                                                                                        (px: real / entity_create_context.pixel_per_unit: real,
-                                                                                            py: real / entity_create_context.pixel_per_unit: real,
+                                                                                        (px as real / entity_create_context.pixel_per_unit as real,
+                                                                                            py as real / entity_create_context.pixel_per_unit as real,
                                                                                             1.): vec3);
                                                                                 }
                                                                                 none?

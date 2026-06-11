@@ -258,7 +258,7 @@ namespace editor::gui::edit_forms
                             
                             // 1.2 开始打包
                             do fsys::mkdir(export_path/"builtin");
-                            do file::writeall(export_path/"builtin"/".keepme", "": buffer);
+                            do file::writeall(export_path/"builtin"/".keepme", "" as buffer);
                             
                             for (let (_, (opath, ppath)) : dll_module_path)
                             {
@@ -346,14 +346,14 @@ namespace editor::gui::edit_forms
                                     let world_dat = je::file::readall(path)
                                         =>> \dat = dict::deserialize(dat);
                                         ->  unwrap
-                                        ->> \k, v = (k as string, v);
+                                        ->> \k, v = (k: string, v);
                                         ;
                                     
                                     LOADED_WORLDS_MAPPING->set(
                                         path, 
                                         jeapi::serialize::world::instantiate(
                                             RUNTIME_UNIVERSE, 
-                                            world_dat: jeapi::serialize::WorldData,
+                                            world_dat as jeapi::serialize::WorldData,
                                             false));
                                 }
 

@@ -26,7 +26,7 @@ namespace jeapi
             public let can_be_extra_saving<T> =
                 std::type_traits::is_same:<T, void>
                     || concept!(t: T){
-                        t->save_extra_data as dynamic;
+                        t->save_extra_data: dynamic;
                     };
         }
         
@@ -34,25 +34,25 @@ namespace jeapi
             where type_traits::can_be_extra_saving:<T>;
         {
             return {
-                ["graph"] = graph->dump()->save_to_dict: dynamic,
-                ["extra"] = (extra is void ? nil | extra->save_extra_data): dynamic,
+                ["graph"] = graph->dump()->save_to_dict as dynamic,
+                ["extra"] = (extra is void ? nil | extra->save_extra_data) as dynamic,
 
-            }: string;
+            } as string;
         }
         public func load_graph_and_extra_data(
             str: string)=> option<(GraphContext, dynamic)>
         {
             try! d = dict::deserialize(str)
-                =>> \d = d: dynamic->trycast:<dict<string, dynamic>>();
+                =>> \d = d as dynamic->trycast:<dict<string, dynamic>>();
                 ;
 
             try! graph_dump = d->get("graph")
-                =>> \graph_dict = graph_dict: dynamic->trycast:<dict<string, dynamic>>();
+                =>> \graph_dict = graph_dict as dynamic->trycast:<dict<string, dynamic>>();
                 =>> \graph_dict = node_editor::Graph::GraphDumpData::load_from_dict(graph_dict);
                 ;
 
             let graph = node_editor::Graph::restore(_node_types, graph_dump);
-            return_value! (graph, d->get_or("extra", nil: dynamic));
+            return_value! (graph, d->get_or("extra", nil as dynamic));
         }
 
         do save_with_extra_data:<void>;
