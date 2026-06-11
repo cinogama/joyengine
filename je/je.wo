@@ -118,23 +118,23 @@ namespace je
         UNKNOWN = 0,
         
         APOSTROPHE = 39,    // '\''
-        COMMA = ',': int,
-        MINUS = '-': int,
-        PERIOD = '.': int,
-        SLASH = '/': int,
+        COMMA = ',' as int,
+        MINUS = '-' as int,
+        PERIOD = '.' as int,
+        SLASH = '/' as int,
         
-        A = 'A': int, B, C, D, E, F, G, H, I, J, K, L,
+        A = 'A' as int, B, C, D, E, F, G, H, I, J, K, L,
         M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
-        _1 = '1': int, _2, _3, _4, _5, _6, _7, _8, _9,
+        _1 = '1' as int, _2, _3, _4, _5, _6, _7, _8, _9,
         _0,
-        _ = ' ': int,
+        _ = ' ' as int,
         
-        SEMICOLON = ';': int,
-        EQUAL = '=': int,
-        LEFT_BRACKET = '[': int,
-        BACKSLASH = '\\': int,
-        RIGHT_BRACKET = ']': int,
-        GRAVE_ACCENT = '`': int,
+        SEMICOLON = ';' as int,
+        EQUAL = '=' as int,
+        LEFT_BRACKET = '[' as int,
+        BACKSLASH = '\\' as int,
+        RIGHT_BRACKET = ']' as int,
+        GRAVE_ACCENT = '`' as int,
         
         L_SHIFT = 128,
         R_SHIFT,
@@ -555,7 +555,7 @@ namespace je
                 
             public func close(self: effect_slot)=> bool
             {
-                return self: gchandle->close();
+                return self as gchandle->close();
             }
             
             public func bind_effect<EffectT>(self: effect_slot, effect_instance: effect<EffectT>)=> void
@@ -602,7 +602,7 @@ namespace je
             
             public func close(self: buffer)=> bool
             {
-                return self: gchandle->close();
+                return self as gchandle->close();
             }
             
             extern("libjoyecs", "wojeapi_audio_buffer_load")
@@ -630,7 +630,7 @@ namespace je
             
             public func close(self: filter)=> bool
             {
-                return self: gchandle->close();
+                return self as gchandle->close();
             }
             
             extern("libjoyecs", "wojeapi_audio_filter_create")
@@ -671,7 +671,7 @@ namespace je
                 
             public func close(self: source)=> bool
             {
-                return self: gchandle->close();
+                return self as gchandle->close();
             }
             
             extern("libjoyecs", "wojeapi_audio_source_info")

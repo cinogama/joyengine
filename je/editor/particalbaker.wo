@@ -30,13 +30,13 @@ public func u2p(upos: (real, real))=> (real, real)
 {
     let (w, h) = partical_context.m_frame_size;
     let (px, py) = upos;
-    return (px / 2. * w: real, py / 2. * h: real);
+    return (px / 2. * w as real, py / 2. * h as real);
 }
 public func p2u(upos: (real, real))=> (real, real)
 {
     let (w, h) = partical_context.m_frame_size;
     let (ipx, ipy) = upos;
-    return (ipx / w: real * 2.0, ipy / h: real * 2.0);
+    return (ipx / w as real * 2.0, ipy / h as real * 2.0);
 }
 public func clamp(v: real)
 {
@@ -81,7 +81,7 @@ public func deltatime()
 public func pixelsize()
 {
     let (w, h) = partical_context.m_frame_size;
-    return (1. / w: real, 1./ h: real);
+    return (1. / w as real, 1./ h as real);
 }
 public func launch(frame_place: int, partical_count: int)
 {

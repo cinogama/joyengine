@@ -968,7 +968,7 @@ namespace je::gui
         {
             public func close(self: EditorContext)
             {
-                return self: gchandle->close;
+                return self as gchandle->close;
             }
         }
         
