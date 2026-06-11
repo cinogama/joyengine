@@ -391,7 +391,7 @@ namespace editor
                         {
                             Text("最大差分时间");
                             let result = InputFloatFormat("##最大差分时间", env->get_universe->get_max_deltatime(), "%.6f");
-                            do result->>\val= val > 0. ? env->get_universe->set_max_deltatime(val) | nil: void;;
+                            do result->>\val= val > 0. ? env->get_universe->set_max_deltatime(val) | nil as void;;
                             TextDisabled("DeltaTime相关函数将不会返回大于此值的差分时间");
                             TextDisabled("* 保证大于 0.0");
                             return result->>\_=do nil;;
@@ -433,7 +433,7 @@ namespace editor
                                         self->get_vfile_export_path->to_string,
                                     ] as dynamic);
                                 dat->set("wooly.usingWoolangVersion" as dynamic, je::woolang::get_woolang_commit_sha() as dynamic);
-                                    
+                                
                                 if (!file::writeall(vsc_config_path, dat->serialize->unwrap as buffer))
                                 {
                                     jeapi::gui::form::errmsg("错误", "无法写入VSCode配置文件");
@@ -820,7 +820,7 @@ namespace editor
                     {
                         if (last_edit_world == world)
                             return result::ok(do nil); // 新老世界相同，跳过更新
-
+                            
                         last_edit_world->remove_system(self->get_config_editor_system);
                     }
                     none?;
@@ -1055,11 +1055,13 @@ namespace editor
                                     ;
                                 )
                             ->> \edat = edat: dict<dynamic, dynamic>->erase("euid" as dynamic);
-                            as dynamic);
-                        mdat->set("systems", dat["systems"]: array<dynamic>->std::sort(
-                                \l, r = (l: string) < (r: string);
                                 as dynamic);
-                                
+                        mdat->set(
+                            "systems",
+                            dat["systems"]: array<dynamic>
+                                -> std::sort(
+                                    \l, r = (l: string) < (r: string);) as dynamic);
+                                    
                         if (contain_debug_camera)
                         {
                             do self->get_debug_camera_info(w)
@@ -1168,7 +1170,7 @@ namespace editor
                         =>> \d = d as dynamic->trycast:<jeapi::serialize::WorldData::WorldDataRawType>;
                         ->> \d = d->apply(
                                 "debug_camera",
-                                self->try_fetch_camera_debug_info_map(file_path)->or({} as dynamic)
+                                self->try_fetch_camera_debug_info_map(file_path)->or({}) as dynamic
                                 )
                             ;
                         ;

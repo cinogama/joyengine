@@ -496,9 +496,9 @@ namespace editor::gui::tilemap
                     try! tile = new! Tile(context, tilemaptex, crc64, uid_val, ix, iy, xcount, ycount);
                     ytiles->add(tile);
                 }
-                tiles->add(ytiles: vec<Tile>->unsafe::cast as <array<Tile>>());
+                tiles->add(ytiles: vec<Tile>->unsafe::cast:<array<Tile>>());
             }
-            return result::ok(tiles: vec<array<Tile>>->unsafe::cast as <array<array<Tile>>>());
+            return result::ok(tiles: vec<array<Tile>>->unsafe::cast:<array<array<Tile>>>());
         }
         
         func create(context: EditorContext, name: string, uid_val: string, tilemaptex: graphic::texture, xcount: int, ycount: int)
@@ -1450,7 +1450,7 @@ namespace editor::gui::tilemap
                         
                 });
                 
-            return result_images->unsafe::cast as <dict<int, image>>;
+            return result_images->unsafe::cast:<dict<int, image>>;
         }
         
         using ChunkDatas = struct{

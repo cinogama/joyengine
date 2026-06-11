@@ -108,7 +108,7 @@ namespace editor::gui
                 
                 m_current_edit_state = mut option::none,
                 
-                m_hook_callback = mut \_ = option::value(nil: dynamic);,
+                m_hook_callback = mut \_ = option::value(nil as dynamic);,
             };
             self.m_source->SetLanguageDefinition(WOOLANG_LANGUAGE_DEFINITION);
             self.m_source->SetText(template_script);
@@ -456,7 +456,7 @@ namespace editor::gui
                     func()
                     {
                         return or_map(\e = e->to_string;) <|
-                            dumpling::Program::create(F"_jeditor_{JobID()}.wo", self.m_source->GetText: buffer);
+                            dumpling::Program::create(F"_jeditor_{JobID()}.wo", self.m_source->GetText as buffer);
                     });
                     
             try! program = program_result;

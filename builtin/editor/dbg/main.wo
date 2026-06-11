@@ -16,12 +16,14 @@ namespace jeapi::debug
             public func select(self: option<Eeid>)
             {
                 // 这个类型转换确实很屑，嘻嘻嘻……
-                je::entity::internal::set_editing_uid(self->>\v=v: Eeid as handle: je::entity::internal::euid_t;);
+                je::entity::internal::set_editing_uid(
+                    self->> \v = v: Eeid as handle as je::entity::internal::euid_t;);
             }
             public func editing()
             {
                 // 这个类型转换还是很屑，嘻嘻嘻……
-                return je::entity::internal::get_editing_uid()->>\v=v: je::entity::internal::euid_t as handle: Eeid;;
+                return je::entity::internal::get_editing_uid()
+                    ->> \v = v: je::entity::internal::euid_t as handle as Eeid;;
             }
         }
         public func dosth(self: Eeid, f: (option<je::entity>)=>void)
@@ -48,7 +50,7 @@ namespace jeapi::debug
         
     public func get_entity_editor_id(entity: je::entity)=> option<Eeid>
     {
-        return entity->internal::get_entity_uid->>\eid = eid as handle: Eeid;;
+        return entity->internal::get_entity_uid->>\eid = eid as handle as Eeid;;
     }
     
     alias OperationCallback = (option<je::entity>)=>void;
@@ -78,10 +80,10 @@ namespace jeapi::debug
                 {
                     value(euid)?
                         do current_request->get(euid)
-                        ->> \jobs = jobs
+                            ->> \jobs = jobs
                                 ->> \job = job(option::value(e));;
-                        ->> \_ = current_request->remove(euid);
-                        ;
+                            ->> \_ = current_request->remove(euid);
+                            ;
                     none?;
                 }
             };
@@ -89,7 +91,7 @@ namespace jeapi::debug
         for (let (_, jobs) : current_request)
         {
             do jobs->> \job = job(option::none);;
-            // gui::form::errmsg("失败", F"操作无法完成，不存在的实体：\n{euid}");;
+        // gui::form::errmsg("失败", F"操作无法完成，不存在的实体：\n{euid}");;
         }
     }
     
@@ -135,12 +137,12 @@ namespace jeapi::debug
                             {
                                 value(parentech)?
                                     parentech.childs: array<EntityChilds>
-                                    ->  unsafe::cast:<vec<EntityChilds>>
-                                    ->  add(ech)
-                                    ;
+                                        ->  unsafe::cast:<vec<EntityChilds>>
+                                        ->  add(ech)
+                                        ;
                                 none?
                                     // 在anchored_entity里面没找到uid对应的父实体，则放到待定集，最后再处理
-                                pending_entity->add(ech);
+                                    pending_entity->add(ech);
                             }
                         }
                     }
@@ -156,13 +158,13 @@ namespace jeapi::debug
             {
                 value(parentech)?
                     parentech.childs: array<EntityChilds>
-                    ->  unsafe::cast:<vec<EntityChilds>>
-                    ->  add(pending_ech)
-                    ;
+                        ->  unsafe::cast:<vec<EntityChilds>>
+                        ->  add(pending_ech)
+                        ;
                 none?
                     // 完全不存在！视为是根实体
-                // TODO: 直接转成普通实体？
-                root_entity->add(pending_ech);
+                    // TODO: 直接转成普通实体？
+                    root_entity->add(pending_ech);
             }
         }
         

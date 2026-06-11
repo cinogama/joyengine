@@ -240,7 +240,7 @@ namespace jeapi
                 return self;
             }
             func allocate_id<Id>(self: GraphEditor)
-                where 0: Id is Id;
+                where 0 as Id is Id;
             {
                 return (self.allocated_id +:= 1) as Id;
             }

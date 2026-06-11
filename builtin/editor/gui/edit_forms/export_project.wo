@@ -491,7 +491,7 @@ namespace editor::gui::edit_forms
                                 
                             let builder = buffer::builder::create();
                             builder->appendbuffer(
-                                dumpling::Program::dump_source("@/builtin/main.wo", final_boot_script: buffer)
+                                dumpling::Program::dump_source("@/builtin/main.wo", final_boot_script as buffer)
                                     ->unwrap);
                                     
                             assert(

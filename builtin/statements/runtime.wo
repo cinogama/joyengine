@@ -115,7 +115,7 @@ namespace jeapi
                     {
                         return or_map(\e = e->to_string;) <| dumpling::Program::create(
                             fact_runtime_path,
-                            runtime_content: buffer);
+                            runtime_content as buffer);
                     });
                     
                 try! dispatcher =

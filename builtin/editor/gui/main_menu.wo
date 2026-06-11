@@ -139,7 +139,7 @@ namespace editor::gui
                                 if (check)
                                 {
                                     if (! file::writeall(context->get_project->get_path / "editor.je4style",
-                                            dump_current_style_color(): string: buffer))
+                                            dump_current_style_color() as string as buffer))
                                         errmsg("保存样式失败", "无法写入文件：'" + (context->get_project->get_path / "editor.je4style")->to_string + "'");
                                 }
                                 else
@@ -324,7 +324,7 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                                                 none?
                                                     invoke_entry(option::none);
                                             }
-                                            return option::value(nil: dynamic);
+                                            return option::value(nil as dynamic);
                                         });
                             }
                             
@@ -342,7 +342,7 @@ extern func main(_: universe, _: option<world>, _: option<entity>)
                         }
                         if (context->get_project->is_in_safe_mode)
                         {
-                            let show_red = std::clock(): int % 2 == 0;
+                            let show_red = std::clock() as int % 2 == 0;
                             
                             if (show_red)
                                 PushStyleColor(ImGuiCol::ImGuiCol_Text, (255, 0, 0, 255));

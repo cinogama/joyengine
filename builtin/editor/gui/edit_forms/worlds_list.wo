@@ -41,7 +41,7 @@ namespace editor::gui::edit_forms
                             for (let world : context->get_project->get_env->get_universe->get_all_worlds)
                             {
                                 let current_world_is_editing = editing_world->>\w = w == world;->or(false);
-                                let is_selected = SelectableSelected(F"{world->name}##{world as je::world: handle}",
+                                let is_selected = SelectableSelected(F"{world->name}##{world: je::world as handle}",
                                     current_world_is_editing);
                                 let is_hovered = IsItemHovered();
                                 if (is_selected)

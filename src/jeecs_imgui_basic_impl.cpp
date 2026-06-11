@@ -396,10 +396,10 @@ ImU32 val2color32(woort_value v)
 
 ImVec4 val2colorf4(woort_value v)
 {
-    const float x = woort_struct_get_float(v, 0);
-    const float y = woort_struct_get_float(v, 1);
-    const float z = woort_struct_get_float(v, 2);
-    const float w = woort_struct_get_float(v, 3);
+    const float x = (float)woort_struct_get_int(v, 0);
+    const float y = (float)woort_struct_get_int(v, 1);
+    const float z = (float)woort_struct_get_int(v, 2);
+    const float w = (float)woort_struct_get_int(v, 3);
 
     return ImVec4(
         x / 255.0f,

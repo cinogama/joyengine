@@ -62,7 +62,7 @@ namespace editor::gui::edit_forms
                     try! dat = editor::file::readall(p)
                         -> ok_or(F"无法读取 Workflow 文件 {p->to_string}")
                         ;
-                    try! (graph, dyn) = jeapi::statements::load_graph_and_extra_data(dat as buffer: string)
+                    try! (graph, dyn) = jeapi::statements::load_graph_and_extra_data(dat: buffer as string)
                         -> ok_or(F"无法解析 Workflow 文件 {p->to_string}")
                         ;
                         
@@ -96,7 +96,7 @@ namespace editor::gui::edit_forms
                     
                 if (!editor::file::writeall(
                         self.workflow_path,
-                        dat: buffer))
+                        dat as buffer))
                     throw! F"无法保存 Workflow 文件到 {self.workflow_path->to_string}";
                     
                 return_ok!;

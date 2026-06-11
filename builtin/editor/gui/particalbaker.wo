@@ -65,19 +65,19 @@ namespace editor::gui::particalbaker
             return file::writeall(
                 self.m_path,
                 {
-                    ["framecount"] = self.m_frame_count: dynamic,
-                    ["framesize"] = [self.m_frame_size[0], self.m_frame_size[1]]: dynamic,
-                    ["framerate"] = self.m_frame_rate: dynamic,
-                    ["repeatround"] = self.m_repeat_round: dynamic,
+                    ["framecount"] = self.m_frame_count as dynamic,
+                    ["framesize"] = [self.m_frame_size[0], self.m_frame_size[1]] as dynamic,
+                    ["framerate"] = self.m_frame_rate as dynamic,
+                    ["repeatround"] = self.m_repeat_round as dynamic,
                     // 因为 GetText 貌似会自己带上多余的换行符，此处去掉
-                    ["script"] = self.m_script->GetText->trim: dynamic,
-                }: string: buffer,
+                    ["script"] = self.m_script->GetText->trim as dynamic,
+                } as string as buffer,
             );
         }
         public func load(path: fsys::path_t)
         {
             return file::readall(path)
-                =>> \dat = dict::deserialize(dat as buffer: string);
+                =>> \dat = dict::deserialize(dat: buffer as string);
                 ->> func(dat)
                 {
                     let fdata = dat->> \k, v = (k as string, v); as dict<string, dynamic>;
@@ -169,7 +169,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
         
         let attrib = econtext.m_first_show
             ? WindowsAttribute::ImGuiWindowFlags_AlwaysAutoResize
-            | 0: WindowsAttribute
+            | 0 as WindowsAttribute
             ;
             
         econtext.m_first_show = false;
@@ -203,7 +203,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                                         if (ok)
                                         {
                                             let framecount = partical_context.m_frames_caches->len;
-                                            let width = math::round(math::sqrt(framecount: real));
+                                            let width = math::round(math::sqrt(framecount as real));
                                             let height = width * width >= framecount ? width | width + 1;
                                             let (w, h) = partical_context.m_frame_size;
                                             
@@ -250,7 +250,7 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                                                 try! program =
                                                     or_map(\e = e-> to_string;) <| dumpling::Program::create(
                                                         partical_context.m_path->to_string + " : script.wo",
-                                                        partical_context.m_script->GetText: buffer);
+                                                        partical_context.m_script->GetText as buffer);
                                                         
                                                 try! f = ok_or("未找到脚本的入口函数 `_start_baking`") <|
                                                     program->unsafe::load_extern:<(ParticalContext, _EditorContext)=> void>(
@@ -296,31 +296,31 @@ public func color(_/*frame*/: int, context: PerparticleContext)
                     Text("帧数");
                     SameLine();
                     do InputInt("##framecount", partical_context.m_frame_count)
-                        ->> \c = c > 0 ? (partical_context.m_frame_count = c) | (nil: void);;
+                        ->> \c = c > 0 ? (partical_context.m_frame_count = c) | (nil as void);;
                         
                     Text("尺寸");
                     SameLine();
                     do InputInt2("##framesize", partical_context.m_frame_size...)
-                        ->> \s = (x > 0 && y > 0) ? (partical_context.m_frame_size = s) | (nil: void)
+                        ->> \s = (x > 0 && y > 0) ? (partical_context.m_frame_size = s) | (nil as void)
                             where (x, y) = s
                             ;;
                             
                     Text("帧速率(秒/帧)");
                     SameLine();
                     do InputFloatFormat("##framerate", partical_context.m_frame_rate, "%.6f")
-                        ->> \r = r > 0. ? (partical_context.m_frame_rate = r) | (nil: void);;
+                        ->> \r = r > 0. ? (partical_context.m_frame_rate = r) | (nil as void);;
                         
                     Text("粒子渲染趟数");
                     SameLine();
                     do InputInt("##repeatcount", partical_context.m_repeat_round)
-                        ->> \r = r > 0 ? (partical_context.m_repeat_round = r) | (nil: void);;
+                        ->> \r = r > 0 ? (partical_context.m_repeat_round = r) | (nil as void);;
                         
                     let (w, h) = partical_context.m_frame_size;
                     
                     let frames = partical_context.m_frames_caches;
-                    ProgressBar(frames->empty ? 0. | econtext.m_frame_index: real / frames->len: real);
+                    ProgressBar(frames->empty ? 0. | econtext.m_frame_index as real / frames->len as real);
                     
-                    do BeginChildSize("##review", 395., h: real * 395. / w: real);
+                    do BeginChildSize("##review", 395., h as real * 395. / w as real);
                     
                     if (std::clock() - econtext.m_last_update_time >= partical_context.m_frame_rate)
                     {

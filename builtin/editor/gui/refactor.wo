@@ -168,7 +168,7 @@ namespace editor::gui
                     |> filter(\p = isfile(p);)
                     |> filter_map(
                         \p = editor::file::readall(p)
-                            ->>\content = (p, ReplacingContent::create(p, content as buffer: string));;)
+                            ->>\content = (p, ReplacingContent::create(p, content: buffer as string));;)
                     |> collect;
                     
             return_ok! RefactorAskContent{
@@ -247,7 +247,7 @@ namespace editor::gui
                 {
                     if (content.m_able_to_update)
                     {
-                        if (! file::writeall(path, content.m_content: buffer))
+                        if (! file::writeall(path, content.m_content as buffer))
                             jeapi::gui::errmsg("保存失败", F"保存文件 `{path->to_string()}` 失败");
                     }
                     else
