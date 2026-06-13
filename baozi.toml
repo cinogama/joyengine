@@ -1,6 +1,7 @@
 name = "joyengineecs"
 no_compile = true
 
+[woolang]
 [dependence]
 [dependence.any]
 path = "pkg"
@@ -100,5 +101,7 @@ path = "pkg"
 path = "pkg"
 src = "3rd/pkg"
 
-[woolang]
+[dependence.toml]
+path = "pkg"
+
 [test_dependence]

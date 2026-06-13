@@ -876,6 +876,7 @@ void jegl_finish()
         std::lock_guard g1(jeecs::graphic::_jegl_alive_glthread_list_mx);
         shutdown_glthreads = jeecs::graphic::_jegl_alive_glthread_list;
     } while (0);
+
     for (auto alive_glthread : shutdown_glthreads)
     {
         jegl_terminate_graphic_thread(alive_glthread);
@@ -884,22 +885,6 @@ void jegl_finish()
 
 void jegl_terminate_graphic_thread(jegl_context* thread)
 {
-    do
-    {
-        std::lock_guard g1(jeecs::graphic::_jegl_alive_glthread_list_mx);
-        auto fnd = std::find(
-            jeecs::graphic::_jegl_alive_glthread_list.begin(),
-            jeecs::graphic::_jegl_alive_glthread_list.end(),
-            thread);
-        if (fnd == jeecs::graphic::_jegl_alive_glthread_list.end())
-            return;
-        else
-        {
-            jeecs::graphic::_jegl_alive_glthread_list.erase(fnd);
-        }
-
-    } while (0);
-
     thread->_m_thread_notifier->m_graphic_terminated = true;
 
     do
@@ -921,6 +906,22 @@ void jegl_terminate_graphic_thread(jegl_context* thread)
             (void)_path;
             cached_resource.m_resource.drop_resource();
         }
+    } while (0);
+
+    do
+    {
+        std::lock_guard g1(jeecs::graphic::_jegl_alive_glthread_list_mx);
+        auto fnd = std::find(
+            jeecs::graphic::_jegl_alive_glthread_list.begin(),
+            jeecs::graphic::_jegl_alive_glthread_list.end(),
+            thread);
+        if (fnd == jeecs::graphic::_jegl_alive_glthread_list.end())
+            return;
+        else
+        {
+            jeecs::graphic::_jegl_alive_glthread_list.erase(fnd);
+        }
+
     } while (0);
 
     auto* closing_resource = thread->_m_thread_notifier->_m_closing_resources.pick_all();
@@ -1222,7 +1223,9 @@ void _jegl_free_resource_instance(
     else
     {
         // 既然这个资源已经没有管理线程了，直接就地杀了埋了
-        if (resource_handle->m_graphic_thread != nullptr)
+        assert(resource_handle->m_graphic_thread == nullptr);
+
+        if (resource_handle->m_ptr != nullptr)
             jeecs::debug::logwarn("Resource %p cannot free by correct graphic context, maybe it is out-dated? Free it!",
                 resource_handle);
 
