@@ -11,13 +11,13 @@ import pkg::math;
 import pkg::thread;
 import pkg::dumpling;
 import pkg::try;
+import pkg::toml;
 
 import builtin::editor::gui::main;
 import builtin::editor::gui::form::ask;
 import builtin::editor::gui::form::msg;
 import builtin::editor::gui::scripteditor;
 import builtin::editor::gui::animation2d;
-import builtin::editor::tools::file;
 
 using je::gui;
 
@@ -62,36 +62,32 @@ namespace editor::gui::particalbaker
         }
         public func save(self: ParticalContext)
         {
-            return file::writeall(
-                self.m_path,
-                {
-                    ["framecount"] = self.m_frame_count as dynamic,
-                    ["framesize"] = [self.m_frame_size[0], self.m_frame_size[1]] as dynamic,
-                    ["framerate"] = self.m_frame_rate as dynamic,
-                    ["repeatround"] = self.m_repeat_round as dynamic,
-                    // 因为 GetText 貌似会自己带上多余的换行符，此处去掉
-                    ["script"] = self.m_script->GetText->trim as dynamic,
-                } as string as buffer,
-            );
+            let dat = toml::new_table();
+            dat->set("framecount", self.m_frame_count);
+            dat->set("framesize", toml::from <| [self.m_frame_size[0], self.m_frame_size[1]]);
+            dat->set("framerate", self.m_frame_rate);
+            dat->set("repeatround", self.m_repeat_round);
+            // 因为 GetText 貌似会自己带上多余的换行符，此处去掉
+            dat->set("script", self.m_script->GetText->trim);
+            return toml::save(dat, self.m_path)->is_ok;
         }
         public func load(path: fsys::path_t)
         {
-            return file::readall(path)
-                =>> \dat = dict::deserialize(dat: buffer as string);
+            return toml::load(path)->okay
                 ->> func(dat)
                 {
-                    let fdata = dat->> \k, v = (k as string, v); as dict<string, dynamic>;
+                    let fsize = dat["framesize"]->as_array()->unwrap;
                     let self = ParticalContext{
-                        m_frame_count = mut fdata["framecount"] as int,
-                        m_frame_size = mut (fdata["framesize"] as array<dynamic>[0] as int, fdata["framesize"] as array<dynamic>[1] as int),
-                        m_frame_rate = mut fdata["framerate"] as real,
-                        m_repeat_round = mut fdata["repeatround"] as int,
+                        m_frame_count = mut dat["framecount"]->as_int()->unwrap,
+                        m_frame_size = mut (fsize[0]->as_int()->unwrap, fsize[1]->as_int()->unwrap),
+                        m_frame_rate = mut dat["framerate"]->as_float()->unwrap,
+                        m_repeat_round = mut dat["repeatround"]->as_int()->unwrap,
                         m_frames_caches = mut [],
                         m_script = CodeEditorContext::create(),
                         m_path = path,
                     };
                     
-                    self.m_script->SetText <| fdata["script"] as string;
+                    self.m_script->SetText <| dat["script"]->as_string()->unwrap;
                     self.m_script->SetLanguageDefinition(WOOLANG_LANGUAGE_DEFINITION);
                     
                     return self;
