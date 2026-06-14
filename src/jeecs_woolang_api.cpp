@@ -1836,7 +1836,7 @@ WOORT_API woort_api wojeapi_set_shape_for_entity(void)
     if (jeecs::Renderer::Shape* shape = entity->get_component<jeecs::Renderer::Shape>())
     {
         if (woort_option_get(WOORT_RETURN_SLOT, 1))
-            shape->vertex.emplace(*(jeecs::basic::resource<jeecs::graphic::vertex> *)woort_pointer(WOORT_RETURN_SLOT));
+            shape->vertex.emplace(*(jeecs::basic::resource<jeecs::graphic::vertex> *)woort_gcpointer(WOORT_RETURN_SLOT));
         else
             shape->vertex.reset();
     }
@@ -1853,8 +1853,14 @@ WOORT_API woort_api wojeapi_get_shape_of_entity(void)
     if (jeecs::Renderer::Shape* shape = entity->get_component<jeecs::Renderer::Shape>())
     {
         if (shape->vertex.has_value())
-            return woort_ret_option_pointer(
-                new jeecs::basic::resource<jeecs::graphic::vertex>(shape->vertex.value()));
+            return woort_ret_option_gchandle(
+                new jeecs::basic::resource<jeecs::graphic::vertex>(shape->vertex.value()),
+                WOORT_IGNORE,
+                [](void* ptr)
+                {
+                    delete (jeecs::basic::resource<jeecs::graphic::vertex> *)ptr;
+                },
+                nullptr);
     }
 
     return woort_ret_option_none();
@@ -2008,7 +2014,7 @@ WOORT_API woort_api wojeapi_set_shaders_of_entity(void)
             (void)woort_vec_get(WOORT_RETURN_SLOT, shader_array, i);
 
             jeecs::basic::resource<jeecs::graphic::shader>* shader =
-                (jeecs::basic::resource<jeecs::graphic::shader> *)woort_pointer(
+                (jeecs::basic::resource<jeecs::graphic::shader> *)woort_gcpointer(
                     WOORT_RETURN_SLOT);
             shaders->shaders.push_back(*shader);
         }
