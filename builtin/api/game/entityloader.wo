@@ -1,6 +1,7 @@
 import woo::std;
 import je;
 import pkg::worst;
+import pkg::toml;
 import builtin::api::serialize::main;
 
 namespace jeapi::loader
@@ -13,11 +14,10 @@ namespace jeapi::loader
         public func create(w: je::world, wpath: string)
         {
             return je::file::readall(wpath)
-                =>> \dat = dat->dict::deserialize;
-                =>> \dat = dat as dynamic->trycast:<serialize::EntityData::EntityDataRawType>;
+                =>> \dat = toml::parse(dat)->okay
                 =>> \dat =
                     jeapi::serialize::prefab::instantiate(
-                        w, dat as serialize::EntityData, false)
+                        w, serialize::EntityData { m_data = dat }, false)
                     ;
                 ->> \e = entityloader
                     {

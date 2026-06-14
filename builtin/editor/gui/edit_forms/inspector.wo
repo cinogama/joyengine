@@ -14,6 +14,7 @@ import pkg::worst;
 import pkg::fsys;
 import pkg::iterator;
 import pkg::buffer;
+import pkg::toml;
 
 import builtin::api::gui::file;
 import builtin::api::serialize::main;
@@ -230,8 +231,17 @@ namespace editor::gui::edit_forms
                                             {
                                                 let p = prefab->unwrap.path->get;
                                                 components_data = prefab_data_cache::fetch_or_update(p)
-                                                    =>> \d = d as jeapi::serialize::EntityData::EntityDataRawType->get("components");
-                                                    =>> \d = d->trycast:<dict<string, dict<string, string>>>;
+                                                    =>> \d = d.m_data->get("components")
+                                                        =>> \c = c->as_table()
+                                                            ->> \c = c
+                                                                ->> \cname, members = (
+                                                                        cname,
+                                                                        members->as_table()->or({})
+                                                                            ->> \m, v = (m, v->as_string()->or("<?>"));)
+                                                                    ;
+                                                                ;
+                                                            ;
+                                                        ;
                                                     ;
                                                     
                                                 let prefab_menu = func(){
@@ -254,7 +264,7 @@ namespace editor::gui::edit_forms
                                                                                         {
                                                                                             if (!file::writeall(
                                                                                                     context->get_project->parse_path_normalize(p),
-                                                                                                    updated_prefab_data as string as buffer))
+                                                                                                    updated_prefab_data.m_data->to_toml() as buffer))
                                                                                             {
                                                                                                 jeapi::gui::form::errmsg("失败", F"更新预设体失败，无法写入：{p}");
                                                                                             }

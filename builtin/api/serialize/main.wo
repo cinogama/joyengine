@@ -8,6 +8,7 @@ import je::internal;
 
 import pkg::iterator;
 import pkg::worst;
+import pkg::toml;
 
 import builtin::api::gui::errmsg;
 
@@ -27,14 +28,12 @@ namespace jeapi::serialize
         return tinfo;
     }
     
-    public using EntityData = EntityDataRawType
-    {
-        public alias EntityDataRawType = dict<string, dynamic>;
-    }
-    public using WorldData = WorldDataRawType
-    {
-        public alias WorldDataRawType = dict<string, dynamic>;
-    }
+    public using EntityData = struct{
+        public m_data: toml::Toml,
+        };
+    public using WorldData = struct{
+        public m_data: toml::Toml,
+        };
     
     namespace prefab
     {
@@ -46,10 +45,8 @@ namespace jeapi::serialize
                 {
                     let raw_dat = entity::raw_entity(e, false, true);
                     match (je::file::readall(path)
-                        =>> \dat = dat->dict::deserialize
-                            =>> \d = d->get("prefab" as dynamic)
-                                ->> \v = v as string;
-                                ;
+                        =>> \dat = toml::parse(dat)->okay
+                            =>> \d = d["prefab"]->as_string;
                             ;
                         )
                     {
@@ -64,12 +61,12 @@ namespace jeapi::serialize
                     return option::none;
             }
         }
-        func _is_same_shader(a: array<dynamic>, b: array<dynamic>)
+        func _is_same_shader(a: toml::Toml, b: toml::Toml)
         {
-            if (a[0] as string == b[0] as string)
+            if (a[0]->as_string()->or("") == b[0]->as_string()->or(""))
             {
-                let am = a[1]->unsafe::cast:<dict<string, dynamic>>;
-                let bm = b[1]->unsafe::cast:<dict<string, dynamic>>;
+                let am = a[1]->as_table()->or({} as dict<string, toml::Toml>);
+                let bm = b[1]->as_table()->or({} as dict<string, toml::Toml>);
                 
                 if (am->len != bm->len)
                     return false;
@@ -80,7 +77,7 @@ namespace jeapi::serialize
                         return false;
                         
                     let bval = bm[m];
-                    if (val as string != bval as string)
+                    if (val->to_toml() != bval->to_toml())
                         return false;
                 }
             }
@@ -98,64 +95,60 @@ namespace jeapi::serialize
         }
         func dump_for_prefab_instance(p: string, dat: EntityData)
         {
-            let result = dat as EntityData::EntityDataRawType->to_map;
+            let result = dat.m_data->clone;
             
-            result->set("prefab", p as dynamic);
+            result->set("prefab", p);
             
-            let components = result->get("components")
-                ->> \d=d->unsafe::cast:<dict<string, dict<string, string>>>
-                    ->> \k, v = (k, v->to_map);
-                    ->  to_map
-                    ;
-                ->  or({}mut);
-                
             let shaders = result->get("shaders")
-                ->> \d = d->unsafe::cast:<array<array<dynamic>>>;
+                =>> \d = d->as_array();
                 ->  or([])
                 ;
             let textures = result->get("textures")
-                ->> \d = d->unsafe::cast:<dict<int, string>>;
+                =>> \d = d->as_table();
                 ->  or({})
                 ;
             let shape = result->get("shape")
-                ->> \d = d: string;
+                =>> \d = d->as_string();
                 -> or("");
                 
             let prefab_data = prefab::load(p);
             match (prefab_data
-                =>> \d = d as EntityData::EntityDataRawType->get("components");
-                =>> \d = d->trycast:<dict<string, dict<string, string>>>;)
+                =>> \d = d.m_data->get("components");
+                =>> \d = d->as_table();)
             {
                 value(prefab_component_dat)?
                 {
                     let removed_component = []mut as vec<string>;
+                    let components_may = result->get("components");
                     for (let (c, ms) : prefab_component_dat)
                     {
-                        if (components->contains(c))
+                        match (components_may=>>\cmp = cmp->get(c);)
                         {
-                            let result_ms = components[c];
-                            for (let (m, v) : ms)
+                            value(result_ms)?
                             {
-                                // Always safe member for NO-SYNC component to keep data.
-                                if (!prefab::is_no_data_sync_component_typename(c) &&
-                                    result_ms->get(m)->> \vv = vv == v;-> or(false))
-                                    assert(result_ms->remove(m));
+                                let ms_tbl = ms->as_table()->or({});
+                                for (let (m, v) : ms_tbl)
+                                {
+                                    // Always safe member for NO-SYNC component to keep data.
+                                    if (!prefab::is_no_data_sync_component_typename(c) &&
+                                        result_ms->get(m)->> \vv = vv->as_string()->or("") == v->as_string()->or("");-> or(false))
+                                        do result_ms->erase_key(m);
+                                }
+                                if (result_ms->len == 0)
+                                    do components_may->unwrap->erase_key(c);
                             }
-                            if (result_ms->empty)
-                                assert(components->remove(c));
+                            none?
+                                removed_component->add(c);
                         }
-                        else
-                            removed_component->add(c);
                     }
-                    result->set("components", components as dynamic);
-                    result->set("removed_components", removed_component as dynamic);
+                    result->set("removed_components", toml::from <| removed_component);
                 }
                 none?;
             }
             // 比较一下纹理和着色器是否一致，若一致则无视
             match (prefab_data
-                =>> \d = d as EntityData::EntityDataRawType->get("shaders");
-                =>> \d = d->trycast:<array<array<dynamic>>>;)
+                =>> \d = d.m_data->get("shaders");
+                =>> \d = d->as_array();)
             {
                 value(prefab_shader_dat)?
                 {
@@ -171,14 +164,14 @@ namespace jeapi::serialize
                             }
                         }
                         if (remove_shaders)
-                            do result->remove("shaders");
+                            do result->erase_key("shaders");
                     }
                 }
                 none?;
             }
             match (prefab_data
-                =>> \d = d as EntityData::EntityDataRawType->get("textures");
-                =>> \d = d->trycast:<dict<int, string>>;)
+                =>> \d = d.m_data->get("textures");
+                =>> \d = d->as_table();)
             {
                 value(prefab_texture_dat)?
                 {
@@ -187,30 +180,31 @@ namespace jeapi::serialize
                     {
                         for (let (idx, ptex) : prefab_texture_dat)
                         {
-                            if (textures->contains(idx) == false || textures[idx] != ptex)
+                            if (textures->contains(idx) == false ||
+                                textures[idx]->as_string()->or("") != ptex->as_string()->or(""))
                             {
                                 remove_textures = false;
                                 break;
                             }
                         }
                         if (remove_textures)
-                            do result->remove("textures");
+                            do result->erase_key("textures");
                     }
                 }
                 none?;
             }
             match (prefab_data
-                =>> \d = d as EntityData::EntityDataRawType->get("shape")
-                    ->> \d = d as string;
+                =>> \d = d.m_data->get("shape")
+                    =>> \d = d->as_string();
                     ;)
             {
                 value(prefab_shape)?
                     if (shape == prefab_shape)
-                        do result->remove("shape");
+                        do result->erase_key("shape");
                 none?;
             }
             
-            return result->unsafe::asdict as EntityData;
+            return EntityData { m_data = result };
         }
         func try_dump_may_prefab_instance(e: je::entity, dat: EntityData)
         {
@@ -224,60 +218,58 @@ namespace jeapi::serialize
         }
         func combine_prefab_data(a: EntityData, b: EntityData)
         {
-            let d = a as EntityData::EntityDataRawType->to_map;
-            
-            let base_components = d->get_or("components", {} as dynamic): dict<dynamic, dynamic>
-                ->> \k, v = (
-                        k as string, v: dict<dynamic, dynamic>
-                            ->> \k, v = (k as string, v as string);
-                            ->  to_map)
-                    ;
-                ->  to_map;
-                
-            if (b as EntityData::EntityDataRawType->contains("name"))
-                d->set("name", b["name"]);
-            if (b as EntityData::EntityDataRawType->contains("components"))
+            let d = a.m_data->clone;
+            let braw = b.m_data;
+
+            if (braw->contains("name"))
+                d->set("name", braw["name"]);
+            if (braw->contains("components"))
             {
-                let components = b["components"]: dict<dynamic, dynamic>
-                    ->> \k, v = (k: string, member_dats)
-                        where member_dats = v: dict<dynamic, dynamic>
-                            ->> \k, v = (k: string, v: string);
-                        ;
-                    ;
-                for (let (c, ms) : components)
+                if (d->contains("components") == false)
+                    d->set("components", toml::new_table());
+                let base_components = d->get("components")->unwrap;
+                
+                let bcomps = braw["components"]->as_table()->or({});
+                for (let (c, ms) : bcomps)
                 {
-                    let members = base_components->get_or_set(c, {}mut);
-                    for (let (m, v) : ms)
+                    if (base_components->contains(c) == false)
+                        base_components->set(c, toml::new_table());
+                    let members = base_components->get(c)->unwrap;
+                    let ms_tbl = ms->as_table()->or({});
+                    for (let (m, v) : ms_tbl)
                         members->set(m, v);
                 }
             }
-            if (b as EntityData::EntityDataRawType->contains("removed_components"))
+            if (braw->contains("removed_components"))
             {
-                for (let c: b["removed_components"]: array<dynamic>)
-                    do base_components->remove(c as string);
+                if (d->contains("components"))
+                {
+                    let base_components = d->get("components")->unwrap;
+                    for (let c_toml : braw["removed_components"]->as_array()->or([]))
+                    {
+                        let c = c_toml->as_string()->or("");
+                        if (base_components->contains(c))
+                            do base_components->erase_key(c);
+                    }
+                }
             }
-            d->set("components", base_components as dynamic);
-            do b as EntityData::EntityDataRawType->get("textures")->>\texs = d->set("textures", texs);;
-            do b as EntityData::EntityDataRawType->get("shaders")->>\shads = d->set("shaders", shads);;
-            do b as EntityData::EntityDataRawType->get("shape")->>\shap = d->set("shape", shap);;
+            do braw->get("textures")->>\texs = d->set("textures", texs);;
+            do braw->get("shaders")->>\shads = d->set("shaders", shads);;
+            do braw->get("shape")->>\shap = d->set("shape", shap);;
             
-            return d->unsafe::asdict as EntityData;
+            return EntityData { m_data = d };
         }
         public func load(path: string)=> option<EntityData>
         {
             match (je::file::readall(path)
-                =>> \dat = dat->dict::deserialize
-                    ->> \d = d
-                        ->> \k, v = (k as string, v);
-                        ;
-                    ;)
+                =>> \dat = toml::parse(dat)->okay;)
             {
                 value(dat)?
                 {
-                    let parent_prefab = dat->get("prefab")
-                        =>> \p = prefab::load(p as string);
-                        ->  or({} as EntityData);
-                    return option::value(combine_prefab_data(parent_prefab, dat as EntityData));
+                    let parent_prefab = dat["prefab"]->as_string()
+                        =>> \p = prefab::load(p);
+                        ->  or(EntityData { m_data = toml::new_table() });
+                    return option::value(combine_prefab_data(parent_prefab, EntityData { m_data = dat }));
                 }
                 none?
                     return option::none;
@@ -309,8 +301,8 @@ namespace jeapi::serialize
                 ;
         }
         
-        alias ShaderUniformVariablesDictT = dict<string, array<dynamic>>;
-        //                          uniform_name uniform_vals
+        alias ShaderUniformVariablesDictT = dict<string, toml::Toml>;
+        //                          uniform_name uniform_vals (Toml array)
         func get_entity_shaders_informs(saving_entity: je::entity)=> array<(string, ShaderUniformVariablesDictT)>
         {
             // 获取实体绑定的shader和uniform信息, uniform 信息仅包括int/float/float2，3，4类型的信息
@@ -318,32 +310,59 @@ namespace jeapi::serialize
                 ->> \shad = (shad->path, shad_uniforms_dats())
                     where shad_uniforms_dats = func()
                     {
-                        let result = {}mut as map<string, array<dynamic>>;
+                        let result = {}mut as map<string, toml::Toml>;
                         for(let (name, uniform_val) : shad->get_uniforms())
                         {
                             if (name->begin_with("JE_"))
                                 continue; // 引擎的内置shader-uniform变量，跳过
+                            let arr = toml::new_array();
                             match (uniform_val)
                             {
                                 integer(n)?
-                                    result->set(name, [n as dynamic]);
+                                    arr->push(n);
                                 integer2((x, y))?
-                                    result->set(name, [x as dynamic, y as dynamic]);
+                                {
+                                    arr->push(x);
+                                    arr->push(y);
+                                }
                                 integer3((x, y, z))?
-                                    result->set(name, [x as dynamic, y as dynamic, z as dynamic]);
+                                {
+                                    arr->push(x);
+                                    arr->push(y);
+                                    arr->push(z);
+                                }
                                 integer4((x, y, z, w))?
-                                    result->set(name, [x as dynamic, y as dynamic, z as dynamic, w as dynamic]);
+                                {
+                                    arr->push(x);
+                                    arr->push(y);
+                                    arr->push(z);
+                                    arr->push(w);
+                                }
                                 float(x)?
-                                    result->set(name, [x as dynamic]);
+                                    arr->push(x);
                                 float2((x, y))?
-                                    result->set(name, [x as dynamic, y as dynamic]);
+                                {
+                                    arr->push(x);
+                                    arr->push(y);
+                                }
                                 float3((x, y, z))?
-                                    result->set(name, [x as dynamic, y as dynamic, z as dynamic]);
+                                {
+                                    arr->push(x);
+                                    arr->push(y);
+                                    arr->push(z);
+                                }
                                 float4((x, y, z, w))?
-                                    result->set(name, [x as dynamic, y as dynamic, z as dynamic, w as dynamic]);
+                                {
+                                    arr->push(x);
+                                    arr->push(y);
+                                    arr->push(z);
+                                    arr->push(w);
+                                }
                                 texture(_)? /* do nothing */;
                                 others? /* do nothing */;
                             }
+                            if (arr->len > 0)
+                                result->set(name, arr);
                         }
                         return result->to_dict;
                     }
@@ -352,80 +371,105 @@ namespace jeapi::serialize
         }
         func raw_entity(saving_entity: je::entity, need_euid: bool, drop_no_keep_component_meber: bool)=> option<EntityData>
         {
-            return
-                saving_entity
-                    ->  internal::get_components_types()
-                    ->  forall(\t = !t->name->begin_with("Editor::");)
-                    =>> \t = component_instance->is_value ? [(t, component_instance->unwrap)] | []
+            let components_map = saving_entity
+                ->  internal::get_components_types()
+                ->  forall(\t = !t->name->begin_with("Editor::");)
+                =>> \t = component_instance->is_value ? [(t, component_instance->unwrap)] | []
+                    where
+                        component_instance = saving_entity->get_component(t);
+                    ->> \tc = (t->name, collect_members)
                         where
-                            component_instance = saving_entity->get_component(t);
-                        ->> \tc = (t->name, collect_members)
-                            where
-                                collect_members =
-                                    drop_no_keep_component_meber && prefab::is_no_data_sync_component_typename(t->name)
-                                        ? {}
-                                        | c->get_members()
-                                        ->> \(name, type, addr) = (
-                                                name,
-                                                towoo::unsafe::dynamic_parser::saving(type, addr)
-                                                    ->or("<?>"))
-                                            ;
-                                        ->  mapping,
-                                    (t, c) = tc;
-                        ->  mapping
-                        // 如果一个实体没有任何组件，那么就等于不存在，实际上编辑器应该避免只有编辑器
-                        // 组件的实体出现在世界中，但是如果真的发生了，那么就视为option::none;
-                        ->  \m = m->empty? option::none | option::value(m);
-                        ->> \m =
-                            {
-                                ["name"] = saving_entity->internal::name as dynamic,
-                                ["components"] = m as dynamic,
-                                // 如果纹理是内置的，也就是说这个纹理实际上没有路径，那么跳过它
-                                ["textures"] = saving_entity->get_entity_texture_passes
-                                =>> \k, v = used_texture_id_pass->find(k)->is_value && v->is_value
-                                    ? {[k] = v->unwrap}
-                                    | {}
-                                    ;
-                                as dynamic,
-                                ["shaders"] = saving_entity->get_entity_shaders_informs->>\(sname, sdata) = [sname as dynamic, sdata as dynamic]; as dynamic,
-                                ["shape"] = saving_entity->get_shape=>>\shape = shape->path;->or("") as dynamic,
-                            }
-                            where used_texture_id_pass = saving_entity->get_shaders()
-                                =>> \shader = shader->get_uniforms()
-                                    ->  unmapping
-                                    =>> \nv = nv...
-                                        ->  func(name, uniformval)
-                                        {
-                                            if (!name->begin_with("JE_"))
-                                            {
-                                                match (uniformval)
-                                                {
-                                                    texture(id)?
-                                                        return [id];
-                                                    _?;
-                                                }
-                                            }
-                                            return [];
-                                        }
+                            collect_members =
+                                drop_no_keep_component_meber && prefab::is_no_data_sync_component_typename(t->name)
+                                    ? {}
+                                    | c->get_members()
+                                    ->> \(name, type, addr) = (
+                                            name,
+                                            towoo::unsafe::dynamic_parser::saving(type, addr)
+                                                ->or("<?>"))
                                         ;
-                                    ;
-                                ->> \id = (id, nil);
-                                ->  mapping
-                                ->  unmapping // remove all repeated elems.
-                                ->> \idn = idn[0];
-                            ;
-                        ->> \dat =
-                            (
-                                need_euid
-                                    ? dat->apply(
-                                        "euid",
-                                        saving_entity
-                                            ->internal::get_entity_uid
-                                            ->or(0 as handle as je::entity::internal::euid_t) as handle as int as dynamic)
-                                    | dat
-                                    ) as EntityData
-                            ;
+                                    ->  mapping,
+                                (t, c) = tc;
+                ->  mapping
+                ;
+            
+            // 如果一个实体没有任何组件，那么就等于不存在，实际上编辑器应该避免只有编辑器
+            // 组件的实体出现在世界中，但是如果真的发生了，那么就视为option::none;
+            if (components_map->empty)
+                return option::none;
+            
+            // 构建 components Toml 表
+            let components_tbl = toml::new_table();
+            for (let (cname, members) : components_map)
+                components_tbl->set(cname, toml::from <| members);
+            
+            // 收集被 shader uniform 引用的纹理通道
+            let used_texture_id_pass = saving_entity->get_shaders()
+                =>> \shader = shader->get_uniforms()
+                    ->  unmapping
+                    =>> \nv = nv...
+                        ->  func(name, uniformval)
+                        {
+                            if (!name->begin_with("JE_"))
+                            {
+                                match (uniformval)
+                                {
+                                    texture(id)?
+                                        return [id];
+                                    _?;
+                                }
+                            }
+                            return [];
+                        }
                         ;
+                    ;
+                ->> \id = (id, nil);
+                ->  mapping
+                ->  unmapping // remove all repeated elems.
+                ->> \idn = idn[0];
+            ;
+            
+            // 构建 textures Toml 表 (passid 用字符串键)
+            // 如果纹理是内置的，也就是说这个纹理实际上没有路径，那么跳过它
+            let textures_tbl = toml::new_table();
+            for (let (passid, texopt) : saving_entity->get_entity_texture_passes)
+            {
+                if (used_texture_id_pass->find(passid)->is_value && texopt->is_value)
+                    textures_tbl->set(F"{passid}", texopt->unwrap);
+            }
+            
+            // 构建 shaders Toml 数组: [shader_path, {uniform_name: [values]}]
+            let shaders_arr = toml::new_array();
+            for (let (sname, sdata) : saving_entity->get_entity_shaders_informs)
+            {
+                let entry = toml::new_array();
+                entry->push(sname);
+                let uniforms_tbl = toml::new_table();
+                for (let (uname, uarr) : sdata)
+                    uniforms_tbl->set(uname, uarr);
+                entry->push(uniforms_tbl);
+                shaders_arr->push(entry);
+            }
+            
+            let shape = saving_entity->get_shape=>>\s = s->path;->or("");
+            
+            // 构建根表
+            let dat = toml::new_table();
+            dat->set("name", saving_entity->internal::name);
+            dat->set("components", components_tbl);
+            dat->set("textures", textures_tbl);
+            dat->set("shaders", shaders_arr);
+            dat->set("shape", shape);
+            
+            if (need_euid)
+            {
+                dat->set("euid",
+                    saving_entity
+                        ->internal::get_entity_uid
+                        ->or(0 as handle as je::entity::internal::euid_t) as handle as int);
+            }
+            
+            return option::value(EntityData { m_data = dat });
         }
         public func dump(saving_entity: je::entity, need_euid: bool)=> option<EntityData>
         {
@@ -434,32 +478,32 @@ namespace jeapi::serialize
                 ;
         }
         
-        func restore_shader_of_entity<ResourceT>(shad: ResourceT, uname: string, val: array<dynamic>)
+        func restore_shader_of_entity<ResourceT>(shad: ResourceT, uname: string, val: toml::Toml)
         {
             assert(val->len > 0);
-            if (val[0] is int)
+            if (val[0]->is_int())
             {
                 if (val->len == 1)
-                    _restore_shader_of_entity(shad, uname, val[0]: int);
+                    _restore_shader_of_entity(shad, uname, val[0]->as_int()->unwrap);
                 else if (val->len == 2)
-                    _restore_shader_of_entity(shad, uname, (val[0]: int, val[1]: int));
+                    _restore_shader_of_entity(shad, uname, (val[0]->as_int()->unwrap, val[1]->as_int()->unwrap));
                 else if (val->len == 3)
-                    _restore_shader_of_entity(shad, uname, (val[0]: int, val[1]: int, val[2]: int));
+                    _restore_shader_of_entity(shad, uname, (val[0]->as_int()->unwrap, val[1]->as_int()->unwrap, val[2]->as_int()->unwrap));
                 else if (val->len == 4)
-                    _restore_shader_of_entity(shad, uname, (val[0]: int, val[1]: int, val[2]: int, val[3]: int));
+                    _restore_shader_of_entity(shad, uname, (val[0]->as_int()->unwrap, val[1]->as_int()->unwrap, val[2]->as_int()->unwrap, val[3]->as_int()->unwrap));
                 else
                     std::panic("invalid uniform value length when restore.");
             }
-            else if (val[0] is real)
+            else if (val[0]->is_float())
             {
                 if (val->len == 1)
-                    _restore_shader_of_entity(shad, uname, val[0]: real);
+                    _restore_shader_of_entity(shad, uname, val[0]->as_float()->unwrap);
                 else if (val->len == 2)
-                    _restore_shader_of_entity(shad, uname, (val[0]: real, val[1]: real));
+                    _restore_shader_of_entity(shad, uname, (val[0]->as_float()->unwrap, val[1]->as_float()->unwrap));
                 else if (val->len == 3)
-                    _restore_shader_of_entity(shad, uname, (val[0]: real, val[1]: real, val[2]: real));
+                    _restore_shader_of_entity(shad, uname, (val[0]->as_float()->unwrap, val[1]->as_float()->unwrap, val[2]->as_float()->unwrap));
                 else if (val->len == 4)
-                    _restore_shader_of_entity(shad, uname, (val[0]: real, val[1]: real, val[2]: real, val[3]: real));
+                    _restore_shader_of_entity(shad, uname, (val[0]->as_float()->unwrap, val[1]->as_float()->unwrap, val[2]->as_float()->unwrap, val[3]->as_float()->unwrap));
                 else
                     std::panic("invalid uniform value length when restore.");
             }
@@ -481,21 +525,22 @@ namespace jeapi::serialize
             in_editor: bool,
             f: (je::world, array<je::typeinfo>)=> je::entity)=> option<je::entity>
         {
-            let prefab_path = entity_dat as EntityData::EntityDataRawType->get("prefab")->>\path = path as string;;
+            let prefab_path = entity_dat.m_data->get("prefab")=>>\path = path->as_string();;
             match (prefab_path=>>\path = prefab::load(path);)
             {
                 value(prefab_data)?
                     entity_dat = prefab::combine_prefab_data(prefab_data, entity_dat);
                 none?;
             }
-            let component_types_dat = entity_dat as EntityData::EntityDataRawType
+            let component_types_dat = entity_dat.m_data
                 ->  get("components")
-                ->> \cs = cs: dict<dynamic, dynamic>
+                ->> \cs = cs->as_table()->or({})
                     ->  unmapping
-                    ->> \kv = (kv[0]: string, kv[1]: dict<dynamic, dynamic>);
+                    ->> \kv = (kv[0]: string, kv[1]: toml::Toml);
                     ->> \td = (_typeinfo_or_warning(td[0]),
-                            td[1]->unmapping
-                                ->> \p = (p[0]: string, p[1]: string);
+                            td[1]->as_table()->or({})
+                                ->  unmapping
+                                ->> \p = (p[0]: string, p[1]->as_string()->or("<?>"));
                                 ->  mapping)
                         ;
                     ->  forall(\td = td[0]->is_value;)
@@ -507,15 +552,15 @@ namespace jeapi::serialize
                 return option::none;
                 
             // 开始加载shader
-            let shaders_and_dat = entity_dat as EntityData::EntityDataRawType->get("shaders")
-                ->> func(shaders: dynamic)
+            let shaders_and_dat = entity_dat.m_data->get("shaders")
+                ->> func(shaders: toml::Toml)
                 {
-                    let shads = []mut as vec<(option<graphic::shader>, string, dict<dynamic, dynamic>)>;
-                    for (let shader_path_dat_pair : shaders as array<dynamic>)
+                    let shads = []mut as vec<(option<graphic::shader>, string, dict<string, toml::Toml>)>;
+                    for (let shader_path_dat_pair : shaders->as_array()->or([]))
                     {
-                        let spath = shader_path_dat_pair as array<dynamic>[0]: string;
+                        let spath = shader_path_dat_pair[0]->as_string()->or("");
                         let s = graphic::shader::load(w->get_universe->option::value, spath);
-                        shads->add((s, spath, shader_path_dat_pair as array<dynamic>[1]: dict<dynamic, dynamic>));
+                        shads->add((s, spath, shader_path_dat_pair[1]->as_table()->or({})));
                     }
                     return shads->to_array;
                 }
@@ -566,7 +611,7 @@ namespace jeapi::serialize
                     for (let (shad, uniform_vars) : dats)
                     {
                         for (let (uname, uval): uniform_vars)
-                            restore_shader_of_entity(shad, uname: string, uval: array<dynamic>);
+                            restore_shader_of_entity(shad, uname, uval);
                     }
                     entity_instance->set_shaders(dats->>\shad_and_uvars = shad_and_uvars[0];);
                 }
@@ -578,35 +623,35 @@ namespace jeapi::serialize
                             let badshad = entity_instance->internal::store_name_for_bad_shader_update(path);
                             
                             for (let (uname, uval): uniform_vars)
-                                restore_shader_of_entity(badshad, uname: string, uval: array<dynamic>);
+                                restore_shader_of_entity(badshad, uname, uval);
                         }
                     }
             }
             
             // 开始加载texture
-            do entity_dat as EntityData::EntityDataRawType->get("textures")
-                ->> func(textures)
+            do entity_dat.m_data->get("textures")
+                ->> func(textures: toml::Toml)
                 {
-                    for (let (passid, path) : textures as dict<dynamic, dynamic>)
-                        do graphic::texture::load(w->get_universe->option::value, path: string)
-                            ->> \tex = entity_instance->bind_texture(passid: int, option::value(tex));
+                    for (let (passid_str, path) : textures->as_table()->or({}))
+                        do graphic::texture::load(w->get_universe->option::value, path->as_string()->or(""))
+                            ->> \tex = entity_instance->bind_texture(passid_str as int, option::value(tex));
                             ;
                 };
                 
             // 加载vertex
-            do entity_dat as EntityData::EntityDataRawType->get("shape")
+            do entity_dat.m_data->get("shape")
                 =>> \shape = vertex_path != ""
                     ? graphic::vertex::load(w->get_universe->option::value, vertex_path)
                     | option::none
-                        where vertex_path = shape: string
+                        where vertex_path = shape->as_string()->or("")
                     ;
                 ->> \vertex = entity_instance->set_shape(option::value(vertex));
                 ;
                 
             if (in_editor)
-                do entity_dat as EntityData::EntityDataRawType
+                do entity_dat.m_data
                     ->  get("name")
-                    ->> \n = entity_instance->internal::set_name(n: string);;
+                    ->> \n = entity_instance->internal::set_name(n->as_string()->or(""));;
                     
             return option::value(entity_instance);
         }
@@ -638,8 +683,6 @@ namespace jeapi::serialize
                 
             static let INVISABLE = je::typeinfo::load("Editor::Invisable")->unwrap;
             
-            alias entity_info_t = dict<string, dynamic>;
-            
             let entities_json_list =
                 w->get_all_entities([])
                     // 跳过编辑器上的不可见实体
@@ -653,19 +696,21 @@ namespace jeapi::serialize
                     ->  forall(\n = !n->begin_with("Editor::");)
                     ;
                     
-            return result::ok({
-                    ["name"] = w->name as dynamic,
-                    ["entities"] = entities_json_list as dynamic,
-                    ["systems"] = editing_systems_type_list as dynamic,
-                // ["runtime_systems"] = runtime_systems_type_list: dynamic,
-                } as WorldData);
+            let world_dat = toml::new_table();
+            world_dat->set("name", w->name);
+            world_dat->set("entities",
+                toml::from <| entities_json_list->>\e = e.m_data;);
+            world_dat->set("systems", toml::from <| editing_systems_type_list);
+            // ["runtime_systems"] = runtime_systems_type_list
+            
+            return result::ok(WorldData { m_data = world_dat });
         }
         public func instantiate_entities(w: je::world, dat: WorldData, in_editor: bool)
         {
-            do dat as WorldData::WorldDataRawType->get("entities")
-                ->> \es = es: array<dynamic>
+            do dat.m_data->get("entities")
+                ->> \es = es->as_array()->or([])
                     ->> \edat = entity::instantiate(w, entity_dat, in_editor)
-                        where entity_dat = edat->trycast:<EntityData::EntityDataRawType>->unwrap as EntityData;
+                        where entity_dat = EntityData { m_data = edat };
                     ;
                 ;
             ;
@@ -674,28 +719,28 @@ namespace jeapi::serialize
         {
             if (in_editor)
             {
-                do dat as WorldData::WorldDataRawType->get("name")->>\name = w->set_name(name: string);;
+                do dat.m_data->get("name")->>\name = w->set_name(name->as_string()->or(""));;
                 // 仅用于检查
-                do dat as WorldData::WorldDataRawType->get("runtime_systems")
-                    ->> \d = d: array<dynamic>
-                        ->> \tname = _typeinfo_or_warning(tname: string);
+                do dat.m_data->get("runtime_systems")
+                    ->> \d = d->as_array()->or([])
+                        ->> \tname = _typeinfo_or_warning(tname->as_string()->or(""));
                         ;
                     ;
             }
             else
-                do dat as WorldData::WorldDataRawType->get("runtime_systems")
-                    ->> \d = d: array<dynamic>
+                do dat.m_data->get("runtime_systems")
+                    ->> \d = d->as_array()->or([])
                         ->> \tname = type_may_none
                             ->> \type = w->add_system(type);
-                                where type_may_none = _typeinfo_or_warning(tname: string)
+                                where type_may_none = _typeinfo_or_warning(tname->as_string()->or(""))
                             ;
                         ;
                     ;
-            do dat as WorldData::WorldDataRawType->get("systems")
-                ->> \d = d: array<dynamic>
+            do dat.m_data->get("systems")
+                ->> \d = d->as_array()->or([])
                     ->> \tname = type_may_none
                         ->> \type = w->add_system(type);
-                            where type_may_none = _typeinfo_or_warning(tname: string)
+                            where type_may_none = _typeinfo_or_warning(tname->as_string()->or(""))
                         ;
                     ;
                 ;

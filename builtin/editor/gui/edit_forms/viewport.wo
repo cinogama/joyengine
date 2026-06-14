@@ -11,6 +11,7 @@ import je::towoo::types;
 
 import pkg::fsys;
 import pkg::math;
+import pkg::toml;
 
 import builtin::editor::gui::form::input;
 import builtin::editor::gui::form::ask;
@@ -463,15 +464,15 @@ namespace editor::gui::edit_forms
                                         let filepath = proj->parse_path_normalize(path);
                                         if (fsys::extension(filepath)->lower == ".je4entity")
                                         {
-                                            if (debug_world
-                                                =>> func(w)
-                                                {
-                                                    let e = jeapi::serialize::entity::instantiate(
-                                                        w,
-                                                        {
-                                                            ["prefab"] = proj->make_path_normalize(filepath) as dynamic
-                                                        } as jeapi::serialize::EntityData,
-                                                        true);
+                                        if (debug_world
+                                            =>> func(w)
+                                            {
+                                                let prefab_dat = toml::new_table();
+                                                prefab_dat->set("prefab", proj->make_path_normalize(filepath));
+                                                let e = jeapi::serialize::entity::instantiate(
+                                                    w,
+                                                    jeapi::serialize::EntityData { m_data = prefab_dat },
+                                                    true);
                                                         
                                                     do e->>\e = set_new_created_entity_pos(w, e);;
                                                     return e;

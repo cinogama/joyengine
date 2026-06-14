@@ -10,6 +10,7 @@ import je::towoo::types;
 import pkg::image;
 import pkg::fsys;
 import pkg::worst;
+import pkg::toml;
 import pkg::thread;
 import pkg::buffer;
 import pkg::try;
@@ -893,7 +894,7 @@ namespace workflow::nodes
                                     if (context->get_project()->serialize_world(w, true)
                                         ->> \wdat = write_file_if_not_exist(
                                                 fsys::normalize(F"{cur_creating_path}/{new_world_name}.je4world"),
-                                                wdat: jeapi::serialize::WorldData as string)
+                                                (wdat.m_data)->to_toml())
                                             ;
                                         ->  or(false)
                                         == false)
@@ -1716,7 +1717,7 @@ namespace $$MODULE_NAME$$
                 {
                     let eid = drag_uid: string as handle as jeapi::debug::Eeid;
                     eid->justdo(func(e){
-                            match (jeapi::serialize::entity::dump(e, false)->>\dat = dat as string;)
+                            match (jeapi::serialize::entity::dump(e, false)->>\dat = (dat.m_data)->to_toml();)
                             {
                                 value(entity_json)?
                                 {

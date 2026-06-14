@@ -337,6 +337,7 @@ namespace editor::gui::edit_forms
                                 
                                 import builtin::api::gui::panic;
                                 import builtin::api::serialize::main;
+                                import pkg::toml;
 
                                 je::internal::register_panic_hook(jeapi::gui::form::panic);
 
@@ -344,16 +345,15 @@ namespace editor::gui::edit_forms
                                 func LOAD_WORLD(path: string)
                                 {
                                     let world_dat = je::file::readall(path)
-                                        =>> \dat = dict::deserialize(dat);
+                                        =>> \dat = toml::parse(dat)->okay
                                         ->  unwrap
-                                        ->> \k, v = (k: string, v);
                                         ;
                                     
                                     LOADED_WORLDS_MAPPING->set(
                                         path, 
                                         jeapi::serialize::world::instantiate(
                                             RUNTIME_UNIVERSE, 
-                                            world_dat as jeapi::serialize::WorldData,
+                                            jeapi::serialize::WorldData { m_data = world_dat },
                                             false));
                                 }
 
