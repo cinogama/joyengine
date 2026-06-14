@@ -15,10 +15,11 @@ namespace jeapi::loader
         {
             return je::file::readall(wpath)
                 =>> \dat = toml::parse(dat)->okay
-                ->> \dat = worldloader{
-                        __m_world = je::world::create(u),
-                        __m_data = serialize::WorldData { m_data = dat },
-                    }
+                    ->> \dat = worldloader{
+                            __m_world = je::world::create(u),
+                            __m_data = serialize::WorldData { m_data = dat },
+                        }
+                        ;
                     ;
                 ;
         }

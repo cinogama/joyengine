@@ -476,6 +476,7 @@ func copy_engine_and_editor_builtin_files()
     try! _ = copy_entier_dir(current_workpath / "builtin", build_path, \_ = true;);
     try! _ = copy_entier_dir(current_workpath / "include", build_path / "builtin", \_ = true;);
     try! _ = copy_entier_dir(current_workpath / "3rd" / "woolang" / "include", build_path / "builtin", \_ = true;);
+    try! _ = copy_entier_dir(current_workpath / "3rd" / "woolang" / "3rd" / "woort" / "include", build_path / "builtin", \_ = true;);
     try! _ = copy_file_consider_last_modified_time(
         current_workpath / "3rd" / "rcedit-x64.exe",
         build_path / "builtin",

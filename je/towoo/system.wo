@@ -101,7 +101,7 @@ namespace je::towoo::system
     public func register_work_function<FT>(jobfunc: FT)
         where std::declval:<nothing>() is typeof(jobfunc([]...));
     {
-        let j = ToWooSystemFuncJob::create(jobfunc: dynamic, true);
+        let j = ToWooSystemFuncJob::create(jobfunc as dynamic, true);
         regitered_works->add(j);
     }
 }

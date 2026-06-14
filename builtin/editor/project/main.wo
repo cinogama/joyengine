@@ -1036,18 +1036,35 @@ namespace editor
             
             let camera_local_rotation = camera->towoo::get_component :<Transform::LocalRotation>->unwrap;
             
-            let rpos = cameradat["root_position"]->as_array()->or([])->>\e = e->as_float()->or(0.0);;
+            let rpos = cameradat["root_position"]->as_array()
+                ->> \a = a
+                    ->> \e = e->as_float()->or(0.0);
+                    ;
+                -> or([0., 0., 0.])
+                ;
             root_translation->set_global_pos(
                 (rpos[0], rpos[1], rpos[2]) as vec3,
                 option::value(root_local_position),
                 option::value(root_local_rotation));
                 
-            let rrot = cameradat["root_rotation"]->as_array()->or([])->>\e = e->as_float()->or(0.0);;
+            let rrot = cameradat["root_rotation"]->as_array()
+                ->> \a = a
+                    ->> \e = e->as_float()->or(0.0);
+                    ;
+                -> or([0., 0., 0., 0.])
+                ;
+                
             root_translation->set_global_rot(
                 (rrot[0], rrot[1], rrot[2], rrot[3]) as quat,
                 option::value(root_local_rotation));
                 
-            let crot = cameradat["camera_rotation"]->as_array()->or([])->>\e = e->as_float()->or(0.0);;
+            let crot = cameradat["camera_rotation"]->as_array()
+                ->> \a = a
+                    ->> \e = e->as_float()->or(0.0);
+                    ;
+                -> or([0., 0., 0., 0.])
+                ;
+                
             camera_local_rotation.rot->set((crot[0], crot[1], crot[2], crot[3]) as quat);
             
             if (cameradat["camera_in_2d_mode"]->as_bool()->or(false))

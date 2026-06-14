@@ -447,34 +447,51 @@ func open_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict
     if (! fsys::exist(proj_path))
         return jeapi::gui::form::errmsg("失败", F"加载项目失败，找不到项目文件{proj_path}");
             
+    let on_loaded = func(dat)
+    {
+        // OK, 关闭当前universe，关闭编辑器导航窗口，打开项目
+        u->close();
+        f->set(false);
+        
+        je::internal::set_runtime_path(path->to_string());
+        
+        action_after_guide_form_closed =
+            func()
+            {
+                try! p = editor::Project::load(path, dat);
+                
+                apply_editor_data_when_start_up_project(editordat);
+                
+                je::gui::register_exit_callback(\=ask_for_saving_proj_when_exit(p););
+                editor::gui::edit_project(p);
+                save_editor_data_after_exit(editordat, p->get_name, p->get_path);
+                je::gui::unregister_exit_callback();
+                
+                return result::ok(\=p->get_towoo_context_for_exit->close;);
+            };
+    };
+    
     match (toml::load(proj_path))
     {
-        ok(dat)?
-        {
-            // OK, 关闭当前universe，关闭编辑器导航窗口，打开项目
-            u->close();
-            f->set(false);
-            
-            je::internal::set_runtime_path(path->to_string());
-            
-            action_after_guide_form_closed =
-                func()
-                {
-                    try! p = editor::Project::load(path, dat);
-                    
-                    apply_editor_data_when_start_up_project(editordat);
-                    
-                    je::gui::register_exit_callback(\=ask_for_saving_proj_when_exit(p););
-                    editor::gui::edit_project(p);
-                    save_editor_data_after_exit(editordat, p->get_name, p->get_path);
-                    je::gui::unregister_exit_callback();
-                    
-                    return result::ok(\=p->get_towoo_context_for_exit->close;);
-                };
-        }
+        ok(dat)? on_loaded(dat);
         err(msg)?
-            return do jeapi::gui::form::errmsg(
-                "失败", F"打开项目失败: {msg}");
+            return do jeapi::gui::form::ask(
+                "打开项目失败",
+                F"打开项目失败: {msg}\n这可能是由于项目版本过旧导致的，是否尝试升级项目？\n（警告：该操作不可逆，将修改项目内的文件）",
+                func(opt)
+                {
+                    if (opt)
+                    {
+                        editor::Project::uprade_project(path);
+                        
+                        match (toml::load(proj_path))
+                        {
+                            ok(dat)? on_loaded(dat);
+                            err(_)? do jeapi::gui::form::errmsg("失败", "升级后仍无法打开项目");
+                        }
+                    }
+                }
+            );
     }
     
 }

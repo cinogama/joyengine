@@ -45,8 +45,7 @@ namespace jeecs
 
                 towoo_system_info(woort_CodeEnv* cenv)
                     : m_code_env(cenv)
-                {
-                }
+                {}
                 ~towoo_system_info()
                 {
                     woort_CodeEnv_drop(m_code_env);
@@ -344,7 +343,7 @@ namespace jeecs
                 {
                     result = woort_invoke(WOORT_IGNORE, func.value());
                 }
-                woort_vm_swap(last);
+                (void)woort_vm_swap(last);
 
                 if (result != WOORT_VM_CALL_STATUS_NORMAL)
                 {
@@ -754,7 +753,7 @@ import je::towoo::types;
     };
 
     std::pair<std::vector<_member_info>, std::pair<size_t, size_t>>
-    _parse_member_defs(woort_value members)
+        _parse_member_defs(woort_value members)
     {
         const size_t member_count = woort_vec_len(members);
 
@@ -764,7 +763,10 @@ import je::towoo::types;
 
         woort_value stack_base;
         if (!woort_push_reserve(3, &stack_base))
+        {
+            woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow.");
             return { {}, { component_size, component_align } };
+        }
 
         const woort_value member_def = stack_base + 0;
         const woort_value member_info = stack_base + 1;
@@ -799,7 +801,7 @@ import je::towoo::types;
                 member_name, member_wooval_type, member_typeinfo, component_size });
 
             component_size += member_typeinfo->m_chunk_size;
-            component_align = std::max(component_align, member_typeinfo->m_chunk_size);
+            component_align = std::max(component_align, member_typeinfo->m_align);
         }
 
         return { member_defs, { component_size, component_align } };
@@ -810,17 +812,20 @@ import je::towoo::types;
         const std::vector<_member_info>& member_defs)
     {
         woort_value wooval_init;
-        woort_push_reserve(1, &wooval_init);
+        if (!woort_push_reserve(1, &wooval_init))
+        {
+            woort_panic(WOORT_PANIC_STACK_OVERFLOW, "Stack overflow.");
+            return;
+        }
 
         for (auto& memberinfo : member_defs)
         {
-            _wooval_type* wooval = nullptr;
+            const _wooval_type* wooval = memberinfo.m_wooval_type.has_value()
+                ? &memberinfo.m_wooval_type.value()
+                : nullptr;
 
-            if (memberinfo.m_wooval_type.has_value())
-            {
-                *woort_internal_value(wooval_init) =
-                    memberinfo.m_wooval_type.value().m_wooval_val;
-            }
+            if (wooval != nullptr)
+                *woort_internal_value(wooval_init) = wooval->m_wooval_val;
 
             je_register_member(
                 towoo_component_tinfo,
@@ -1019,14 +1024,14 @@ const jeecs::typing::type_info* je_towoo_register_system(
             const woort_value on_disable_function = stack_base + 5;
 
             if (_load_system_functions(cenv, initfunc, create_function, close_function,
-                    on_enable_function, on_disable_function, system_name, script_path)
+                on_enable_function, on_disable_function, system_name, script_path)
                 && _boot_and_extract_functions(vmm, cenv, create_function, close_function,
                     on_enable_function, on_disable_function, sysinfo_ptr, system_name))
             {
                 created_system_type_info = _register_system_type(system_name);
 
                 assert(jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems.find(
-                           created_system_type_info)
+                    created_system_type_info)
                     == jeecs::towoo::ToWooBaseSystem::_registered_towoo_base_systems.end());
 
                 {
