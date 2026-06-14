@@ -26,7 +26,7 @@ func readall(path: fsys::path_t)=> option<string>
     defer do fs->close();
     
     let buf = fs->readbuf(fs->len);
-    return option::value(buf: string);
+    return option::value(buf: buffer as string);
 }
 func writeall(path: fsys::path_t, content: buffer)=> bool
 {
@@ -291,7 +291,7 @@ void je_extern_lib_woo_api_finish_impl(woort_Dylib* handle_to_free)
 }
 "@;
         
-    if (!writeall(current_workpath / "src" / "jeecs_extern_library_woo_api.hpp", result: buffer))
+    if (!writeall(current_workpath / "src" / "jeecs_extern_library_woo_api.hpp", result as buffer))
         throw! F"Failed to update jeecs_extern_library_woo_api.hpp.";
     return_ok!;
 }
@@ -365,7 +365,7 @@ void je_extern_lib_module_finish_impl(std::vector<woort_Dylib*>* inout_lib_handl
 }
 "@;
         
-    if (!writeall(current_workpath / "src" / "jeecs_extern_library_module.hpp", result: buffer))
+    if (!writeall(current_workpath / "src" / "jeecs_extern_library_module.hpp", result as buffer))
         throw! F"Failed to update jeecs_extern_library_module.hpp.";
         
     return result::ok(do nil);
@@ -460,7 +460,7 @@ void je_extern_lib_3rd_pkgs_finish_impl(std::vector<woort_Dylib*>* inout_lib_han
 }
 "@;
         
-    if (!writeall(current_workpath / "src" / "jeecs_extern_library_3rd_pkg.hpp", result: buffer))
+    if (!writeall(current_workpath / "src" / "jeecs_extern_library_3rd_pkg.hpp", result as buffer))
         throw! F"Failed to update jeecs_extern_library_3rd_pkg.hpp.";
     return_ok!;
 }

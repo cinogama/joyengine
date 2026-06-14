@@ -28,6 +28,7 @@ import builtin::editor::environment::main;
 import builtin::editor::project::main;
 import builtin::editor::gui::main;
 import builtin::editor::project::towoomgr;
+import builtin::editor::project::upgrader;
 import builtin::editor::gui::inputmgr;
 import builtin::editor::cpp::main;
 import builtin::editor::tools::file;
@@ -445,9 +446,7 @@ func open_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict
     // 确保目录存在
     if (! fsys::exist(proj_path))
         return jeapi::gui::form::errmsg("失败", F"加载项目失败，找不到项目文件{proj_path}");
-        
-
-    
+            
     match (toml::load(proj_path))
     {
         ok(dat)?
