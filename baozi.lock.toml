@@ -1,4 +1,4 @@
-woolang = "8dabf75765f8d999efb40fc7a2389f1d7eac26bc"
+woolang = "f3969ec9488f62549a555eba41cadda301cf320d"
 iterator = "599d5e877757cc4d09489eeeb22f69eec638a64d"
 dumpling = "695d98e75a1de5ac5edc7e75d759f9e43cbeff0f"
 async = "df91728368d792432f8af437e277da00da624681"
@@ -25,5 +25,5 @@ woshader = "f0823edaac6b123ef5c3a5da38d5c85634349381"
 singleton = "ec08ffa5aeb5c5deb22ad3f40caaae82415e4874"
 node_editor = "cc59e08c907ba0682a0e1dc5dacbbadf808e1b15"
 any = "8773c1f28b7624e9df4151f3ee3b1f270117f08c"
-toml = "1714485cc2ac3801837e6c2e29dc2875786c07b7"
+toml = "5055fc11e84e0717d2105253ec4143a023d3b2b3"
 

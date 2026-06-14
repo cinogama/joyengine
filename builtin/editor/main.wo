@@ -11,6 +11,7 @@ import pkg::worst;
 import pkg::singleton;
 import pkg::buffer;
 import pkg::platform;
+import pkg::toml;
 
 import je;
 import je::gui;
@@ -394,6 +395,9 @@ func create_project_at(path: fsys::path_t, u: editor::Environment, editordat: di
 
 # Ignore cache files.
 *.je4cache
+
+# Ignore style file.
+/editor.je4style
 "@
                                 as buffer);
                             do editor::file::writeall(p->get_path / ".gitattributes", 
@@ -442,11 +446,11 @@ func open_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict
     if (! fsys::exist(proj_path))
         return jeapi::gui::form::errmsg("失败", F"加载项目失败，找不到项目文件{proj_path}");
         
-    match (editor::file::readall(proj_path)
-        =>> \d = dict::deserialize(d: buffer as string);
-        =>> \d = d as dynamic->trycast:<dict<string, dynamic>>;)
+
+    
+    match (toml::load(proj_path))
     {
-        value(dat)?
+        ok(dat)?
         {
             // OK, 关闭当前universe，关闭编辑器导航窗口，打开项目
             u->close();
@@ -469,8 +473,9 @@ func open_project_at(path: fsys::path_t, u: editor::Environment, editordat: dict
                     return result::ok(\=p->get_towoo_context_for_exit->close;);
                 };
         }
-        none?
-            return do jeapi::gui::form::errmsg("失败", F"打开项目失败，找不到或无效的项目文件");
+        err(msg)?
+            return do jeapi::gui::form::errmsg(
+                "失败", F"打开项目失败: {msg}");
     }
     
 }

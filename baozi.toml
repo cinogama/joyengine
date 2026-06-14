@@ -103,5 +103,6 @@ src = "3rd/pkg"
 
 [dependence.toml]
 path = "pkg"
+src = "3rd/pkg"
 
 [test_dependence]

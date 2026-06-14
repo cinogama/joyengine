@@ -17,6 +17,7 @@ import pkg::iterator;
 import pkg::singleton;
 import pkg::buffer;
 import pkg::makenew;
+import pkg::toml;
 
 import config;
 
@@ -604,22 +605,26 @@ namespace editor
                 none?;
             }
         }
-        public func load(path: fsys::path_t, dat: dict<string, dynamic>)
+        public func load(path: fsys::path_t, dat: toml::Toml)
         {
-            try! self = create(dat["name"]: string, path);
+            try! self = create(dat["name"]->as_string->unwrap, path);
             
             // 先加载配置！这非常重要！
-            for (let (name, val) : dat["configs"]: dict<dynamic, dynamic>->> \k, v = (k: string, v: string);)
+            for (let (name, val) : dat["configs"]->as_table->or({})->> \k, v = (k: string, v->as_string());)
             {
-                if (! self.m_configs->get(name)->> \config = config->parse(val);->or(false))
-                    je::logerr(F"选项 {name} = {val} 未在项目中找到或设置失败");
+                match (val)
+                {
+                    value(option_val)?
+                        if (! self.m_configs->get(name)->> \config = config->parse(option_val);->or(false))
+                            je::logerr(F"选项 {name} = {val} 未在项目中找到或设置失败");
+                    none?;
+                }
+                
             }
             
             // TODO: 加载失败和二进制文件怎么git还需考虑一下
-            for (let module_name : dat->get("modules")
-                =>> \p = p->trycast:<array<string>>();
-                ->> \p = p->iter;
-                -> iterator::iter_option)
+            for (let module_name : dat["modules"]->as_array()->or([])->iter
+                |> iterator::filter_map(\v = v->as_string;))
             {
                 let module_path = path / module_name;
                 match (CxxProject::load(module_path, self))
@@ -663,13 +668,16 @@ namespace editor
             // launch出去自动执行
             je::gui::launch_coroutine(func()
                 {
-                    do je::file::readall("@/editor.je4style")
-                        =>> \style_dat = style_dat->dict::deserialize;
-                        ->> \style_dat = style_dat
-                            ->> \k, v = (k: int as je::gui::ImGuiCol, v: array<dynamic>->>\e = e as real;);
+                    do try!
+                    {
+                        do je::file::readall("@/editor.je4style")
+                            =>> \style_dat = style_dat->dict::deserialize;
+                            ->> \style_dat = style_dat
+                                ->> \k, v = (k: int as je::gui::ImGuiCol, v: array<dynamic>->>\e = e as real;);
+                                ;
+                            ->> \style_dat = jeapi::gui::style::restore_config(style_dat);
                             ;
-                        ->> \style_dat = jeapi::gui::style::restore_config(style_dat);
-                        ;
+                    };
                 });
                 
             self->restore_dump();
@@ -693,12 +701,14 @@ namespace editor
                 none?;
             }
             
-            let dat = {
-                ["name"] = self.m_name as dynamic,
-                ["configs"] = self.m_configs->> \k, v = (k, v->to_string()); as dynamic,
-                ["modules"] = self.m_modules->unmapping->>\kv = kv[0]->to_string->sub(self.m_path->to_string->len); as dynamic,
-            };
+            let dat = toml::new_table();
             
+            dat->set("name", self.m_name);
+            dat->set("modules",
+                toml::from <| self.m_modules->unmapping->>\kv = kv[0]->to_string->sub(self.m_path->to_string->len););
+            dat->set("configs",
+                toml::from <| self.m_configs->> \k, v = (k, v->to_string()););
+                
             // 编辑中的世界保存到 .temporary 目录内
             do fsys::mkdir(self.m_path / ".temporary" / "jeeditor");
             
@@ -737,9 +747,7 @@ namespace editor
                 jeapi::gui::form::errmsg("错误", F"项目中的一些世界保存失败:\n{failed_file_list}\n项目保存未能完成");
                 return false;
             }
-            else if (!file::writeall(
-                    self.m_path/"project.je4project",
-                    dat: dict<string, dynamic> as string as buffer))
+            else if (toml::save(dat, self.m_path/"project.je4project")->is_err)
             {
                 jeapi::gui::form::errmsg("错误", F"保存项目文件失败");
                 return false;
