@@ -2,6 +2,7 @@ import woo::std;
 import je;
 import pkg::worst;
 import pkg::try;
+import pkg::toml;
 import builtin::api::serialize::main;
 
 using je;
@@ -45,17 +46,14 @@ namespace jeapi::loader
                 func create(chunk_layer_path: string, layer: int)
                 {
                     match (file::readall(chunk_layer_path)
-                        =>> \dat = dat->dict::deserialize;)
+                        =>> \dat = toml::parse(dat)->okay;)
                     {
                         value(dat)?
                         {
-                            try! sz = dat->get("size" as dynamic)=>> \v = v->trycast:<int>;;
-                            try! tex = dat->get("texture" as dynamic)=>> \v = v->trycast:<string>;;
-                            try! wkable = dat->get("walkable" as dynamic)
-                                =>> \v = v->trycast:<array<dynamic>>;
-                                ->> \v = v
-                                    ->> \e = e->or(false);
-                                    ;
+                            try! sz = dat["size"]->as_int();
+                            try! tex = dat["texture"]->as_string();
+                            try! wkable = dat["walkable"]->as_array()
+                                ->> \arr = arr->>\e = e->as_bool()->or(false);
                                 ;
                                 
                             let parent_path = _get_located_path(chunk_layer_path);
@@ -127,9 +125,9 @@ namespace jeapi::loader
             func create(chunk_path: string)
             {
                 match (file::readall(chunk_path)
-                    =>> \dat = dat->dict::deserialize;
-                    =>> \dat = dat->get("layers" as dynamic);
-                    =>> \dat = dat->trycast:<dict<dynamic, dynamic>>;)
+                    =>> \dat = toml::parse(dat)->okay;
+                    =>> \dat = dat->get("layers");
+                    =>> \dat = dat->as_table();)
                 {
                     value(dat)?
                     {
@@ -140,8 +138,8 @@ namespace jeapi::loader
                         {
                             do try!
                             {
-                                try! id = layer_id->trycast:<int>;
-                                try! path = layer_path->trycast:<string>;
+                                try! id = layer_id as int;
+                                try! path = layer_path->as_string();
                                 
                                 try! layer = layer::create(parent_path + path, id);
                                 
@@ -182,7 +180,9 @@ namespace jeapi::loader
         public func create(path: string)
         {
             let parent_path = _get_located_path(path);
-            match (file::readall(path)=>>\dat = dat->dict::deserialize;)
+            match (file::readall(path)
+                =>> \dat = toml::parse(dat)->okay;
+                =>> \dat = dat->as_table();)
             {
                 value(dat)?
                 {
@@ -192,8 +192,8 @@ namespace jeapi::loader
                     {
                         for (let (dx, dv) : dat)
                         {
-                            try! x = dx->trycast:<int>;
-                            try! v = dv->trycast:<dict<dynamic, dynamic>>;
+                            try! x = dx as int;
+                            try! v = dv->as_table();
                             
                             let chunk_line = {}mut: map<int, chunk>;
                             
@@ -201,8 +201,8 @@ namespace jeapi::loader
                             {
                                 do try!
                                 {
-                                    try! y = dy->trycast:<int>;
-                                    try! path = cpath->trycast:<string>;
+                                    try! y = dy as int;
+                                    try! path = cpath->as_string();
                                     try! newchunk = chunk::create(parent_path + path);
                                     
                                     chunk_line->set(y, newchunk);

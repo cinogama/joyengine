@@ -378,8 +378,7 @@ namespace editor::gui
                     func (p: PathInfo, context: EditorContext)
                     {
                         match (file::readall(p.path)
-                            =>>\dat = dat: buffer as string->dict::deserialize
-                                ->>\dat = dat->>\k, v = (k: string, v);;;)
+                            =>>\dat = toml::parse(dat: buffer as string)->okay;)
                         {
                             value(tilemap_data)?
                             {
@@ -913,7 +912,7 @@ namespace workflow::nodes
                     jeapi::gui::form::input("新建瓦片地图", F"在{cur_creating_path}新建瓦片地图", "NewTileMap",
                         \filename: string = fsys::exist(file_path)
                             ? jeapi::gui::form::errmsg("新建瓦片地图失败", "同名文件已经存在")
-                            | write_file_if_not_exist(file_path, "{}")
+                            | write_file_if_not_exist(file_path, "")
                             ? func(){context->get_project->try_update_towoo(false);force_update();}()
                             | jeapi::gui::form::errmsg("新建瓦片地图失败失败", "无法创建文件，可能是文件名非法或磁盘已满")
                                 where file_path = fsys::normalize(cur_creating_path) / (filename + ".je4tilemap"););
