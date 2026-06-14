@@ -4,6 +4,7 @@ import je::gui;
 
 import pkg::fsys;
 import pkg::iterator;
+import pkg::toml;
 import pkg::try;
 import pkg::buffer;
 import pkg::worst;
@@ -62,7 +63,10 @@ namespace editor::gui::edit_forms
                     try! dat = editor::file::readall(p)
                         -> ok_or(F"无法读取 Workflow 文件 {p->to_string}")
                         ;
-                    try! (graph, dyn) = jeapi::statements::load_graph_and_extra_data(dat: buffer as string)
+                    try! root = toml::parse(dat: buffer as string)->okay
+                        -> ok_or(F"无法解析 Workflow 文件 {p->to_string}")
+                        ;
+                    try! (graph, extra) = jeapi::statements::load_graph_and_extra_data(root)
                         -> ok_or(F"无法解析 Workflow 文件 {p->to_string}")
                         ;
                         
@@ -71,7 +75,7 @@ namespace editor::gui::edit_forms
                         {
                             workflow_path = p,
                             graph = graph,
-                            graph_edit_context = jeapi::statements::GraphEditor::create(graph, option::value(dyn)),
+                            graph_edit_context = jeapi::statements::GraphEditor::create(graph, extra),
                         };
                 }
                 else
@@ -90,13 +94,13 @@ namespace editor::gui::edit_forms
             }
             func save(self: WorkContext)
             {
-                let dat = jeapi::statements::save_with_extra_data(
+                let root = jeapi::statements::save_with_extra_data(
                     self.graph,
                     self.graph_edit_context);
                     
                 if (!editor::file::writeall(
                         self.workflow_path,
-                        dat as buffer))
+                        root->to_toml() as buffer))
                     throw! F"无法保存 Workflow 文件到 {self.workflow_path->to_string}";
                     
                 return_ok!;

@@ -23,7 +23,7 @@ thread = "e24fce19530a7a880f14a24d729555f98c29a04e"
 platform = "66823c415c860dc1a5fe937e44b8e2cb5c985989"
 woshader = "f0823edaac6b123ef5c3a5da38d5c85634349381"
 singleton = "ec08ffa5aeb5c5deb22ad3f40caaae82415e4874"
-node_editor = "cc59e08c907ba0682a0e1dc5dacbbadf808e1b15"
 any = "8773c1f28b7624e9df4151f3ee3b1f270117f08c"
 toml = "0f2ff3af6583ea312434d2d0eb2752ddf0c5f101"
+node_editor = "9e347d48ea624030de044719d04769fe4d3c5c43"
 

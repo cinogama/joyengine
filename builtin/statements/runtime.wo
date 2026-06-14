@@ -7,6 +7,7 @@ import pkg::try;
 import pkg::buffer;
 import pkg::fsys;
 import pkg::node_editor;
+import pkg::toml;
 import pkg::interface;
 import pkg::guid;
 import pkg::singleton;
@@ -157,9 +158,9 @@ namespace jeapi
         }
         extern func dispatch(name: string, graph_data: string, ...)=> option<async<void>>
         {
-            let (graph, _) = load_graph_and_extra_data(graph_data)
-                ->ok_or("无法解析图数据")
-                ->unwrap;
+            try! (graph, _) = toml::parse(graph_data)->okay
+                =>> \root = load_graph_and_extra_data(root);
+                ;
                 
             try! f = registered_dispathchers->get(name);
             return_value! f(graph, ......);

@@ -4,6 +4,7 @@ import je;
 import je::gui;
 
 import pkg::node_editor;
+import pkg::toml;
 import pkg::guid;
 import pkg::iterator;
 import pkg::try;
@@ -51,17 +52,22 @@ namespace jeapi
             mouse_on_canvas_pos_when_context_menu_before_opened: mut (real, real),
         }
         {
-            public func save_extra_data(self: GraphEditor)
+            public func save_extra_data(self: GraphEditor)=> toml::Toml
             {
-                let result = {}mut as map<string, mut array<real>>;
+                let result = toml::new_table();
                 
                 for (let (uid, state) : self.generated_node_id_for_node)
                 {
                     if (self.graph_context->query_eval_node_uid(uid)->is_value
                         || self.graph_context->query_flow_node_uid(uid)->is_value)
-                        result[uid as string] = [state.position.0, state.position.1];
+                    {
+                        let pos = toml::new_array();
+                        pos->push(state.position.0);
+                        pos->push(state.position.1);
+                        result->set(uid as string, pos);
+                    }
                 }
-                return result as dynamic;
+                return result;
             }
             
             using NodeTree = struct{
@@ -190,7 +196,7 @@ namespace jeapi
                 }
             }
             
-            public func create(graph_context: GraphContext, extra_data: option<dynamic>)
+            public func create(graph_context: GraphContext, extra_data: option<toml::Toml>)
             {
                 let self = GraphEditor{
                     graph_context = graph_context,
@@ -224,15 +230,21 @@ namespace jeapi
                     mouse_on_canvas_pos_when_context_menu_before_opened = mut (0.0, 0.0),
                 };
                 
-                match (extra_data=>>\d = d->trycast:<dict<string, array<real>>>;)
+                match (extra_data=>>\t = t->as_table;)
                 {
                     none?;
                     value(dat)?
                     {
-                        for (let (uidstr, pos) : dat)
+                        for (let (uidstr, pos_t) : dat)
                         {
-                            self->get_node(uidstr as guid::GUID)->set_position(
-                                (pos->get_or(0, 0.), pos->get_or(1, 0.)));
+                            let pos = pos_t->as_array->or([]);
+                            let px = pos->get(0)
+                                =>> \e = e->as_float;
+                                ->or(0.);
+                            let py = pos->get(1)
+                                =>> \e = e->as_float;
+                                ->or(0.);
+                            self->get_node(uidstr as guid::GUID)->set_position((px, py));
                         }
                     }
                 }

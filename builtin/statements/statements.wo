@@ -1,6 +1,7 @@
 import woo::std;
 
 import pkg::node_editor;
+import pkg::toml;
 import pkg::worst;
 import pkg::try;
 
@@ -26,33 +27,26 @@ namespace jeapi
             public let can_be_extra_saving<T> =
                 std::type_traits::is_same:<T, void>
                     || concept!(t: T){
-                        t->save_extra_data: dynamic;
+                        t->save_extra_data: toml::Toml;
                     };
         }
         
-        public func save_with_extra_data<T>(graph: GraphContext, extra: T)=> string
+        public func save_with_extra_data<T>(graph: GraphContext, extra: T)=> toml::Toml
             where type_traits::can_be_extra_saving:<T>;
         {
-            return {
-                ["graph"] = graph->dump()->save_to_dict as dynamic,
-                ["extra"] = (extra is void ? nil | extra->save_extra_data) as dynamic,
-
-            } as string;
+            let root = toml::new_table();
+            root->set("graph", graph->dump->save_to_toml);
+            root->set("extra", (extra is void ? toml::new_table() | extra->save_extra_data));
+            return root;
         }
         public func load_graph_and_extra_data(
-            str: string)=> option<(GraphContext, dynamic)>
+            root: toml::Toml)=> option<(GraphContext, option<toml::Toml>)>
         {
-            try! d = dict::deserialize(str)
-                =>> \d = d as dynamic->trycast:<dict<string, dynamic>>();
-                ;
-
-            try! graph_dump = d->get("graph")
-                =>> \graph_dict = graph_dict as dynamic->trycast:<dict<string, dynamic>>();
-                =>> \graph_dict = node_editor::Graph::GraphDumpData::load_from_dict(graph_dict);
-                ;
-
+            try! graph_root = root->get("graph");
+            try! graph_dump = node_editor::Graph::GraphDumpData::load_from_toml(graph_root);
+            
             let graph = node_editor::Graph::restore(_node_types, graph_dump);
-            return_value! (graph, d->get_or("extra", nil as dynamic));
+            return_value! (graph, root->get("extra"));
         }
 
         do save_with_extra_data:<void>;
