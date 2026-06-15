@@ -95,7 +95,7 @@ namespace jeecs
                 m_dependences = base_info->m_works;
                 m_late_dependences = base_info->m_lateworks;
 
-                _init_job_vm(*base_info);
+                _init_job_vm(*base_info, w);
             }
 
             ~ToWooBaseSystem()
@@ -160,7 +160,7 @@ namespace jeecs
             }
 
         private:
-            void _init_job_vm(towoo_system_info& base_info)
+            void _init_job_vm(towoo_system_info& base_info, const game_world& w)
             {
                 m_job_vm = woort_vm_create();
                 if (m_job_vm == nullptr)
@@ -183,7 +183,7 @@ namespace jeecs
                     else
                     {
                         m_context = stack_base + 0;
-                        woort_set_pointer(m_context, m_job_vm);
+                        woort_set_pointer(m_context, w.handle());
 
                         m_create_function = stack_base + 1;
                         *woort_internal_value(m_create_function) = base_info.m_create_function;
