@@ -28,11 +28,11 @@ add_compile_options(-pthread)
 # WASM64 is not supported well, so we use WASM32 as default.
 if (OFF)
     add_compile_options(-m64)
-    set(WO_SPECIFY_PLATFORM_TYPE "WO_PLATFORM_64" CACHE STRING "Specify platform type." FORCE)
+    set(WOORT_SPECIFY_PLATFORM_TYPE "WOORT_PLATFORM_64" CACHE STRING "Specify platform type." FORCE)
     set(JE4WEBGL_MEMORY64 1)
 else()
     add_compile_options(-m32)
-    set(WO_SPECIFY_PLATFORM_TYPE "WO_PLATFORM_32" CACHE STRING "Specify platform type." FORCE)
+    set(WOORT_SPECIFY_PLATFORM_TYPE "WOORT_PLATFORM_32" CACHE STRING "Specify platform type." FORCE)
     set(JE4WEBGL_MEMORY64 0)
 endif()
 
